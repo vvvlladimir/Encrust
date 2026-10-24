@@ -229,7 +229,7 @@ impl<'a> Forest<'a> {
             grid: Buckets::new(cell_mm),
         };
 
-        // A tip leaves the surface square on, so the contact and the neck under it are
+        // A tip leaves the surface along its face's normal, so the contact and the neck are
         // two nodes, and what merges is the neck; see `docs/decisions/0125`.
         for column in columns {
             let radius_mm = profiles.of(column.group).pillar_radius_mm();

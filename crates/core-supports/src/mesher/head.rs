@@ -1,7 +1,7 @@
 use super::tube::{Ring, ball, dome, push, sweep};
 use super::{Style, strut};
 use crate::Landing;
-use crate::column::SURFACE_EPSILON_MM;
+use crate::column::{SURFACE_EPSILON_MM, pin_mm};
 use crate::placed::Placed;
 use crate::tree::{SupportTree, TreeNode};
 use core_geometry::{Mesh, Ray, Scalar, Vec2, Vec3};
@@ -58,11 +58,12 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
     mesh
 }
 
-/// The rings a tube starts with: the tip and widening top segment at a contact, else the joint's
-/// width; the top segment is no longer than `length`, so a short neck does not run through the pad.
+/// The rings a tube along `direction` starts with: the tip and widening top segment at a contact,
+/// else the joint's width; the top segment no longer than `length`, so it does not run through the pad.
 pub(super) fn head(
     rings: &mut Vec<Ring>,
     node: &TreeNode,
+    direction: Vec3,
     profile: &SupportProfile,
     style: Style,
     length: Scalar,
@@ -88,9 +89,12 @@ pub(super) fn head(
     }
 
     // A half ball of the contact's width on the contact, pushed in by the bite, so the face cuts
-    // it in a circle of the contact's width however the head leans (ADR 0345).
+    // it in a circle of the contact's width; a pin keeps a leaning cone off it (ADR 0345, 0350).
     let centre_mm = cap_centre_mm(style, profile, length);
     cap(rings, -centre_mm, contact_mm);
+    if let Some(face) = style.face {
+        push(rings, pin_mm(contact_mm, direction, face), contact_mm);
+    }
     push(rings, top_mm - centre_mm, body_mm);
 }
 

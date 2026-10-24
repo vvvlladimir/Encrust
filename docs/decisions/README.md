@@ -203,7 +203,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0343](0343-supports-are-drawn-round-and-filleted.md) | Draw supports with 24 sides and round joints, and fillet a pillar into its pad | Accepted |
 | [0344](0344-a-head-leans-up-to-60-degrees.md) | Let a tip's head lean up to 60 degrees off vertical | Superseded by 0346 |
 | [0345](0345-a-plane-tip-ends-in-a-half-ball.md) | End a plane tip in a half ball of its contact, centred on the contact | Accepted |
-| [0346](0346-a-head-meets-its-face-square-on-or-the-support-is-not-placed.md) | Meet every face square on with the head, or leave the support out | Accepted; a contact with no room for a head is left to a small pillar by 0348 |
+| [0346](0346-a-head-meets-its-face-square-on-or-the-support-is-not-placed.md) | Meet every face square on with the head, or leave the support out | Accepted; a contact with no room for a head is left to a small pillar by 0348, the head along the normal whatever way it looks is superseded by 0350 |
 | [0347](0347-a-merge-drops-past-the-part-and-a-tree-is-held-to-its-reach.md) | Keep a tree near its tips: merge onto a lower front, drop past the part, and hold a strut's length and a trunk's tips | Accepted |
 | [0348](0348-a-contact-a-head-cannot-reach-is-held-by-a-small-pillar-square-on-both-faces.md) | Hold a contact a head cannot reach with a small pillar, square on both faces | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
@@ -302,6 +302,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0290](0290-the-window-and-the-command-line-orient-through-one-entry-point.md) | The window and the command line orient through one entry point | Accepted |
 | [0291](0291-the-window-orients-for-auto-at-the-models-own-lift.md) | The window orients for auto, at the model's own lift, on one plate raft | Accepted |
 | [0349](0349-a-proof-stands-supports-to-the-plan-the-window-builds-them-to.md) | A proof stands supports to the plan the window builds them to, automatic sizing included | Accepted |
+| [0350](0350-a-head-lying-over-is-turned-down-behind-a-pin.md) | Turn a head lying past 45 degrees back down, by at most 33, behind a pin | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |

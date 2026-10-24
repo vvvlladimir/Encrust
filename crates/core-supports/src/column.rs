@@ -40,6 +40,14 @@ pub(crate) const MAX_LEAN_PER_DROP: Scalar = 1.0;
 /// foot has no surface under it: the column runs down the face instead of onto it.
 pub(crate) const MAX_LANDING_SLOPE_DEG: Scalar = 45.0;
 
+/// How far off straight down a head leaves its face square on, degrees: past it the head
+/// lies over, as a strut does past 45 degrees (ADR 0249, 0350).
+pub(crate) const STEEPEST_SQUARE_HEAD_DEG: Scalar = 45.0;
+
+/// The most a head lying over is turned off its face's normal, degrees: behind a pin its
+/// mark grows by (1 + 1/cos) / 2, 9 per cent here (ADR 0350).
+pub(crate) const MAX_HEAD_LEAN_DEG: Scalar = 33.0;
+
 /// Where a support touches the model, in the model's own space, and how it is built.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SupportPoint {
@@ -135,7 +143,7 @@ pub(crate) fn swept_bottom_z(
     landing.base.z + (radius_mm + profile.clearance_mm) * lean + SURFACE_EPSILON_MM
 }
 
-/// One support resolved against the model: a tip square on its face and a vertical column
+/// One support resolved against the model: a tip on its face and a vertical column
 /// below it down to what it stands on, in plate coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Column {
@@ -145,8 +153,8 @@ pub struct Column {
     /// to one profile per support.
     pub group: u16,
     pub contact: Vec3,
-    /// Where the body begins: one `[top]` out from the contact along the normal of the
-    /// face it holds, so the tip meets that face square on (ADR 0125).
+    /// Where the body begins: one `[top]` out from the contact, along the normal of the face
+    /// it holds leaned towards straight down (ADR 0125, 0350).
     pub neck: Vec3,
     /// Where a column straight down from the neck comes to rest, or `None` when one
     /// cannot: the tip then only stands if a branch carries it somewhere that can.
@@ -162,7 +170,7 @@ impl Column {
 }
 
 /// Resolves model-space points to plate-coordinate columns, in order, on every core (ADR 0346).
-/// No landing: kept for [`crate::grow`] to carry; no head square on its face: dropped.
+/// No landing: kept for [`crate::grow`] to carry; no head clear of the model: dropped.
 pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> Vec<Column> {
     let matrix = placed.transform.to_matrix();
     points
@@ -182,7 +190,7 @@ pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> 
 }
 
 /// The column of point `point` of `group`, touching the model at `contact` in plate
-/// coordinates, or `None` when its head cannot leave its face square on.
+/// coordinates, or `None` when its head cannot leave its face clear.
 pub(crate) fn column(
     placed: &Placed,
     point: usize,
@@ -202,8 +210,8 @@ pub(crate) fn column(
     })
 }
 
-/// The contact a support put down at `contact` holds and the neck of its head square on
-/// its face, whether or not that head is clear: what a hand is shown before it places one.
+/// The contact a support put down at `contact` holds and the neck of its head off its
+/// face, whether or not that head is clear: what a hand is shown before it places one.
 pub(crate) fn square_head(
     placed: &Placed,
     contact: Vec3,
@@ -338,21 +346,21 @@ pub(crate) fn landing_within(
     stands_clear(placed, &body, profile).then_some(landing)
 }
 
-/// Where the body of a support at `contact` begins: one `[top]` out along the face normal (ADR 0125,
-/// 0346); with no room for a head, the contact, for a small pillar (ADR 0348), or else `None`.
+/// Where the body of a support at `contact` begins: one `[top]` out along the leaned normal
+/// (ADR 0125, 0350); with no room for a head, the contact for a small pillar (ADR 0348), or `None`.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
     let (direction, normal) = tip_direction(placed, contact);
     let neck = neck_along(contact, direction, profile);
-    if normal.is_none() {
+    let Some(normal) = normal else {
         return Some(neck);
-    }
-    if has_head(contact, neck) && head_clear(placed, contact, neck, profile) {
+    };
+    if has_head(contact, neck) && head_clear(placed, contact, neck, normal, profile) {
         return (!over_its_contact(contact, neck, profile)).then_some(neck);
     }
     profile.small_pillar.enabled.then_some(contact)
 }
 
-/// Whether a head leaving `contact` square on its face has room, as [`neck_of`] reads it.
+/// Whether a head leaving `contact` off its face has room, as [`neck_of`] reads it.
 pub(crate) fn has_room(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
     neck_of(placed, contact, profile).is_some_and(|neck| has_head(contact, neck))
 }
@@ -386,16 +394,50 @@ fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 
     contact + direction * length_mm
 }
 
-/// Whether the head from `contact` to `neck`, widening from the contact to the pillar,
-/// meets nothing once it is a hair off the face it leaves square on.
-fn head_clear(placed: &Placed, contact: Vec3, neck: Vec3, profile: &SupportProfile) -> bool {
+/// Whether the head from `contact` to `neck`, its pin then widening to the pillar, meets
+/// nothing once it is a hair off the face with outward normal `normal` it leaves.
+fn head_clear(
+    placed: &Placed,
+    contact: Vec3,
+    neck: Vec3,
+    normal: Vec3,
+    profile: &SupportProfile,
+) -> bool {
+    let axis = neck - contact;
+    let pin_mm = pin_mm(profile.contact_radius_mm(), axis, normal);
+    let off_mm = pin_mm + 10.0 * SURFACE_EPSILON_MM;
     let head = Beam {
-        from: contact,
+        from: contact + axis.normalize_or_zero() * off_mm.min(axis.length()),
         to: neck,
         from_radius_mm: profile.contact_radius_mm(),
         to_radius_mm: profile.pillar_radius_mm(),
     };
-    clear(placed, &head.trimmed(10.0 * SURFACE_EPSILON_MM))
+    clear(placed, &head)
+}
+
+/// How far a head leaving along `axis` a face with outward normal `face` runs at the contact's
+/// width before it widens, mm: where that width leaves the face's plane (ADR 0350).
+pub(crate) fn pin_mm(contact_radius_mm: Scalar, axis: Vec3, face: Vec3) -> Scalar {
+    let cos = axis
+        .normalize_or_zero()
+        .dot(face)
+        .max(MAX_HEAD_LEAN_DEG.to_radians().cos());
+    contact_radius_mm * (1.0 - cos * cos).max(0.0).sqrt() / cos
+}
+
+/// `normal`, or past [`STEEPEST_SQUARE_HEAD_DEG`] off straight down turned back towards it by at
+/// most [`MAX_HEAD_LEAN_DEG`]; a normal straight up has no way down and is kept.
+fn leaned(normal: Vec3) -> Vec3 {
+    let down = -Vec3::Z;
+    let off = normal.dot(down).clamp(-1.0, 1.0).acos();
+    let lean = (off - STEEPEST_SQUARE_HEAD_DEG.to_radians()).min(MAX_HEAD_LEAN_DEG.to_radians());
+    if lean <= 0.0 {
+        return normal;
+    }
+    let Some(across) = (down - normal * normal.dot(down)).try_normalize() else {
+        return normal;
+    };
+    normal * lean.cos() + across * lean.sin()
 }
 
 /// The outward normal of the face a tip at `contact` sits on and leaves, if it sits on
@@ -404,8 +446,8 @@ pub(crate) fn face_normal(placed: &Placed, contact: Vec3) -> Option<Vec3> {
     tip_direction(placed, contact).1
 }
 
-/// Which way a tip leaves the surface at `contact`: the outward normal of a face looking down
-/// or sat on, else straight down; on an edge the most downward-looking face wins.
+/// Which way a tip leaves the surface at `contact`, and the face's outward normal: [`leaned`]
+/// for a face looking down or sat on, else straight down; on an edge the lowest face wins.
 fn tip_direction(placed: &Placed, contact: Vec3) -> (Vec3, Option<Vec3>) {
     let Some(inverse) = placed.transform.inverse_matrix() else {
         return (-Vec3::Z, None);
@@ -447,7 +489,7 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> (Vec3, Option<Vec3>) {
             );
     }
     if normal.z < 0.0 || on_surface {
-        (normal, Some(normal))
+        (leaned(normal), Some(normal))
     } else {
         (-Vec3::Z, None)
     }

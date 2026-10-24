@@ -391,7 +391,7 @@ fn a_point_with_nowhere_to_stand_keeps_its_place_and_has_no_landing() {
 }
 
 #[test]
-fn a_tip_placed_on_a_face_looking_up_leaves_it_along_its_normal() {
+fn a_tip_placed_on_a_face_looking_up_is_turned_down_as_far_as_it_may() {
     let model = ramp(4.0, 10.0);
     let bvh = Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
@@ -400,10 +400,7 @@ fn a_tip_placed_on_a_face_looking_up_leaves_it_along_its_normal() {
     let contact = Vec3::new(2.0, 0.0, 5.0);
     let neck = neck_of(&placed, contact, &profile()).expect("open air above the slope");
     let normal = Vec3::new(-10.0, 0.0, 4.0).normalize();
-    assert!(
-        (neck - contact).normalize().abs_diff_eq(normal, 1e-4),
-        "only a head square on its face touches it with no more than its tip, got {neck}"
-    );
+    assert_leans_off(neck - contact, normal);
 }
 
 #[test]
@@ -480,14 +477,23 @@ fn a_tip_leaves_a_sloping_face_along_its_normal() {
 }
 
 #[test]
-fn a_tip_under_a_face_near_vertical_meets_it_square_on() {
-    // Rising 10 over a run of 4: the normal is 68 degrees off straight down, past
-    // the 60 degrees a head was once held to.
-    let along = tip_under_a_turned_ramp(4.0, 10.0).normalize();
-    let expected = Vec3::new(-10.0, 0.0, -4.0).normalize();
+fn a_tip_under_a_face_near_vertical_is_turned_down_to_the_steepest_square_head() {
+    // Rising 10 over a run of 4: the normal is 68 degrees off straight down, so the
+    // head is turned 23 degrees, within the most it may, to 45.
+    let along = tip_under_a_turned_ramp(4.0, 10.0);
+    assert_leans_off(along, Vec3::new(-10.0, 0.0, -4.0).normalize());
+}
+
+/// Asserts `along` leaves `normal` turned back to [`STEEPEST_SQUARE_HEAD_DEG`] off straight
+/// down, by no more than [`MAX_HEAD_LEAN_DEG`].
+fn assert_leans_off(along: Vec3, normal: Vec3) {
+    let off = normal.dot(-Vec3::Z).acos();
+    let turned = (off - MAX_HEAD_LEAN_DEG.to_radians()).max(STEEPEST_SQUARE_HEAD_DEG.to_radians());
+    let expected = Vec3::new(normal.x.signum() * turned.sin(), 0.0, -turned.cos());
     assert!(
-        along.abs_diff_eq(expected, 1e-4),
-        "the head follows the normal however steep the face, got {along}"
+        along.normalize().abs_diff_eq(expected, 1e-4),
+        "the head off {normal} is turned down to {expected}, got {}",
+        along.normalize()
     );
 }
 

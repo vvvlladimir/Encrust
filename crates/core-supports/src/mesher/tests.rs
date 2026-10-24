@@ -504,12 +504,12 @@ fn branching_uses_less_material_than_two_columns() {
 }
 
 #[test]
-fn a_head_leaning_off_its_face_marks_it_with_a_circle_of_the_contact() {
+fn a_head_leaning_off_its_face_marks_it_no_further_than_its_pin_reaches() {
     use core_geometry::Quat;
     use std::f32::consts::PI;
 
-    // A steep ramp turned over: its face's normal is 68 degrees off straight down, so
-    // the head leaves it at 60 and leans 8 degrees off the normal.
+    // A steep ramp turned over: its face's normal is 68 degrees off straight down, so the
+    // head is turned 23 degrees down off it, and its pin meets the face r / cos 23 away.
     let model = ramp(4.0, 10.0);
     let transform = Transform {
         rotation: Quat::from_rotation_x(PI),
@@ -528,6 +528,8 @@ fn a_head_leaning_off_its_face_marks_it_with_a_circle_of_the_contact() {
 
     let normal = Vec3::new(-10.0, 0.0, -4.0).normalize();
     let radius_mm = fixture.contact_radius_mm();
+    let lean = normal.dot(-Vec3::Z).acos() - crate::column::STEEPEST_SQUARE_HEAD_DEG.to_radians();
+    let reach_mm = radius_mm / lean.cos();
     let mut deepest: Scalar = 0.0;
     for vertex in mesh
         .vertices
@@ -536,9 +538,26 @@ fn a_head_leaning_off_its_face_marks_it_with_a_circle_of_the_contact() {
     {
         deepest = deepest.min((*vertex - contact).dot(normal));
         assert!(
-            (*vertex - contact).length() <= radius_mm + 1e-4,
-            "what reaches the face is a ball of the contact's radius on it, got {vertex}"
+            (*vertex - contact).length() <= reach_mm + 1e-4,
+            "what reaches the face is the contact's ball and pin, within {reach_mm} mm, got {vertex}"
         );
+    }
+    let off = |v: Vec3| (v - contact).dot(normal);
+    for face in &mesh.faces {
+        for (a, b) in [(0, 1), (1, 2), (2, 0)] {
+            let (a, b) = (
+                mesh.vertices[face[a] as usize],
+                mesh.vertices[face[b] as usize],
+            );
+            if off(a) * off(b) >= 0.0 {
+                continue;
+            }
+            let crossing = a + (b - a) * (off(a) / (off(a) - off(b)));
+            assert!(
+                (crossing - contact).length() <= reach_mm + 1e-4,
+                "the face's plane cuts the head within {reach_mm} mm, got {crossing}"
+            );
+        }
     }
     assert!(
         deepest < -0.9 * radius_mm,

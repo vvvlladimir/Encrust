@@ -335,8 +335,9 @@ whole-surface fill is Cmd-Shift-click.
   longer than **Longest strut** (6 mm as shipped) and no trunk carries more than **Tips
   per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
   Trunks are cones sized by their height and load, and nothing carrying a load leans more
-  than 45°. A tip's head always
-  meets its face square on, however steep the face; only what is under it leans and bends.
+  than 45°. A tip's head meets its face square on wherever that is within 45° of straight
+  down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under
+  a wall no longer runs out level. What is under it leans and bends.
 - The trunks are built in the background after every change, so the window keeps
   answering on a dense model; until they are, the supports shown last stay, and slicing
   and the preview wait for them.
@@ -344,8 +345,8 @@ whole-surface fill is Cmd-Shift-click.
   unless set (1–15 mm): each tip leans to its nearest node at 45°, the tips of one node
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
-- Only the tip touches the model, and its mark is never wider than the contact: a support
-  whose head, square on its face, would run into the part beside its contact or rise
+- Only the tip touches the model, and its mark is the contact's width, at most 9 % wider on
+  one side under a turned head: a support whose head would run into the part beside its contact or rise
   from a face looking up with nowhere to come down is not placed — by Grow or by a click —
   and is counted among those with no room to stand. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a

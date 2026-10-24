@@ -21,12 +21,14 @@ churning. Landing is one ray per point through the scene's `Bvh`, on every core 
 
 ## Where a column lands
 
-A tip leaves the surface square on: `columns` reads the normal of the face nearest the
-contact and puts the **neck** — the far end of the `[top]` segment — one `top.length_mm`
-out along it, and shorter where a full one would eat the room the body needs over the plate
-(ADR 0125). The head follows that normal however the face leans — down, level off a wall,
-or up off a slope — so the tip meets its face square on and leaves a mark of exactly the
-contact's width; only what is under the neck leans and bends (ADR 0346). A contact off the
+A tip leaves the surface along its face's normal: `columns` reads the normal of the face
+nearest the contact and puts the **neck** — the far end of the `[top]` segment — one
+`top.length_mm` out along it, and shorter where a full one would eat the room the body needs
+over the plate (ADR 0125). A normal more than 45 degrees off straight down is turned back to
+45, by at most 33. Behind the tip's half ball a turned head runs at the contact's width for
+`r · tan θ` before it widens, so a face cut slantwise meets only the ball and that pin: the
+mark reaches `r / cos θ` on one side, 9 per cent wider at most; only what is under the neck
+leans and bends (ADR 0346, 0350). A contact off the
 surface sends it straight down. A knee
 and the strut into a thicker support are held to 45 degrees, whatever the branch
 angle; a trunk is swept for clearance from its own width below its top; and a tip that can
@@ -35,7 +37,7 @@ steep, and failing that run on one strut straight onto the model under it — on
 that looks up at it, so a contact inside the model is not run out through its skin. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Only the tip may meet the model: the whole head, contact to pillar
-width, is swept from a hair off its face, and a support whose head meets the model there,
+width, is swept from a hair past its pin, and a support whose head meets the model there,
 or rises so nearly straight up that a trunk from its neck would come down on its own
 contact, is not placed: `columns` leaves it out and the panel counts it with those that have
 no room to stand (ADR 0346). First it is moved to the nearest spot of a face looking down

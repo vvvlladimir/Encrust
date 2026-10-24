@@ -275,7 +275,7 @@ fn strut(
     // One width down to a dome on the joint, under which the next, no narrower, tube
     // starts: every end is inside what it meets. See `docs/decisions/0238`.
     let mut rings = Vec::with_capacity(8);
-    head(&mut rings, &nodes[child], profile, style, length);
+    head(&mut rings, &nodes[child], direction, profile, style, length);
     round_off(&mut rings, length, body_mm);
 
     Tube {
@@ -315,7 +315,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     };
 
     let mut rings = Vec::with_capacity(8);
-    head(&mut rings, root, profile, style, length);
+    head(&mut rings, root, direction, profile, style, length);
     let end = TrunkEnd {
         length,
         base_mm,
