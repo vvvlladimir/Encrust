@@ -26,7 +26,7 @@ when `cargo fmt --all` passes and clippy and the tests pass for each crate it to
 changed, followed by `cargo hakari generate` and `cargo sweep` — `.claude/rules/workflow.md`.
 
 **The rules bind every edit and live in [`.claude/rules/`](.claude/rules/):**
-`architecture.md`, `code-style.md`, `testing.md`, `documentation.md`, `workflow.md`. Read
+`architecture.md`, `code-style.md`, `testing.md`, `documentation.md`, `workflow.md`, `review.md`. Read
 them before changing anything, and [`CLAUDE.md`](CLAUDE.md) for the one rule above them. An
 ADR citing "rule N of `AGENTS.md`" means the numbered rule in
 `.claude/rules/architecture.md`.

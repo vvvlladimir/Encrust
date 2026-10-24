@@ -18,7 +18,8 @@
    geometry queries through the `Bvh`, neighbourhood searches through a grid or a `FastMap`,
    never a loop over every face or voxel. Anything proportional to triangles, layers or tiles
    runs on `rayon`. Peak memory must not grow with the layer count — stream layers and free as
-   you go. Sparse data stays sparse.
+   you go. Sparse data stays sparse. A search walks by bisection or a closed form, not a fixed
+   step to a far bound; a retry loop names its bound; a pass over pairs goes through a grid.
 8. **Optimise on evidence.** Write for clarity, then let a `criterion` benchmark decide, and
    keep that benchmark.
 

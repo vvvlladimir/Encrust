@@ -45,3 +45,14 @@ one sentence a message, never joined from pieces in the code. See docs/design/i1
   declares modules and re-exports; it holds no logic.
 - Functions fit on a screen, roughly 40 lines. Longer means a named helper, not denser code.
   Delete dead code rather than keeping it behind a flag or a comment.
+- A file is one responsibility in about 400 lines of non-test code. Past that it becomes
+  `foo/` with a file per part, as `core-supports/src/branch/` does; a data table splits by section.
+- Never grow what is already over a limit. A function past 40 lines or a file past 400 is
+  split first, in its own commit, then extended — never "one more branch" on a long one.
+
+## Reuse before writing
+
+- Before writing a helper, look for it: the re-exports in `core-geometry/src/lib.rs` are the
+  catalogue of geometry (`Buckets::cell_of`, `inverse_matrix`, `cuboid`, …), then the crate itself.
+- The second copy of a computation is extracted, not written: into the lowest crate that owns
+  the concept (architecture rule 5), so a tolerance or epsilon has one home.

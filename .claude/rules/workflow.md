@@ -30,7 +30,8 @@ with `tail`, never a `grep` that hides `Blocking` and `Compiling`. All of it
 runs on the compiler `rust-toolchain.toml` pins: never `rustup update` or move that pin to
 clear a lint, and never because a check is slow. Then update
 `docs/architecture.md` if a crate changed, make sure each architectural decision has its ADR,
-and propose a commit message. Do not commit or push unless asked.
+read your own diff by `.claude/rules/review.md` and fix what it finds, and propose a commit
+message. Do not commit or push unless asked.
 
 ## ADRs ship with their code
 

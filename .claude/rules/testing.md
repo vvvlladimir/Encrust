@@ -3,6 +3,8 @@
 - Unit tests sit next to the code in `#[cfg(test)] mod tests`, moved to `foo/tests.rs` past
   about 150 lines; integration tests live in the crate's `tests/` and use only the public
   API. Fixtures resolve through `env!("CARGO_MANIFEST_DIR")`, never a relative path.
+- Test bodies come from `core_geometry`'s primitives (`cuboid`, `ball`, …) and a crate's
+  shared `#[cfg(test)] mod fixtures`, never rebuilt by hand in a test and never in `lib.rs`.
 - Name a test after the behaviour it pins down: `empty_mesh_has_no_aabb`, not `test_aabb`.
 - Every error variant a function can return has a test that triggers it, matching on the
   variant and never on the text of a message.
