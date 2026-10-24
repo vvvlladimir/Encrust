@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
+use core_engine::SupportPlan;
 use core_geometry::{Adjacency, Mesh, Region, Vec2, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
-use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -155,18 +156,18 @@ impl OrientTool {
     /// set. Asked the same of the same models still standing as the last run left them,
     /// it stands each the next good way that run found instead of searching again.
     ///
-    /// Each model is judged as standing on supports built to `support_of` unless it needs
+    /// Each model is judged as standing on supports built to `plan_of` unless it needs
     /// none. With a `machine` the search's best few are printed for it and the best taken.
     pub fn start(
         &mut self,
         scene: &mut Scene,
         plate: &BuildPlate,
         only: Option<ObjectId>,
-        support_of: impl Fn(&SceneObject) -> SupportProfile,
+        plan_of: impl Fn(&SceneObject) -> SupportPlan,
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
         status: &mut Status,
     ) -> Result<()> {
-        let tasks = orient_tasks(scene, only, support_of);
+        let tasks = orient_tasks(scene, only, plan_of);
         if tasks.is_empty() {
             bail!(tr!("orient-nothing-visible-error"));
         }

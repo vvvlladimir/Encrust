@@ -12,7 +12,7 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use core_engine::Trial;
+use core_engine::{SupportPlan, Trial};
 use core_geometry::{Mesh, orient_outward, weld};
 use core_plate::OrientPreset;
 use encrust_cli::pipeline;
@@ -68,6 +68,7 @@ struct Setup {
     printer: PrinterProfile,
     material: MaterialProfile,
     support: SupportProfile,
+    plan: SupportPlan,
     full_finalists: Option<OrientPreset>,
 }
 
@@ -77,7 +78,7 @@ impl Setup {
             trial: Trial {
                 printer: &self.printer,
                 material: &self.material,
-                support: &self.support,
+                support: &self.plan,
                 raster_window: rayon::current_num_threads(),
             },
             support: &self.support,
@@ -104,14 +105,13 @@ enum MeshSource {
 fn main() -> Result<ExitCode> {
     let args = Args::parse();
     let catalogue = Catalogue::bundled().context("the bundled profiles do not load")?;
+    let mut support = catalogue.support(&args.support)?.profile.clone();
+    support.raft.enabled |= args.raft;
     let setup = Setup {
         printer: catalogue.printer(&args.printer)?.profile.clone(),
         material: MaterialProfile::default(),
-        support: {
-            let mut support = catalogue.support(&args.support)?.profile.clone();
-            support.raft.enabled |= args.raft;
-            support
-        },
+        plan: SupportPlan::of(support.clone()),
+        support,
         full_finalists: args
             .full_finalists
             .as_deref()

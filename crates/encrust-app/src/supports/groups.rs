@@ -1,7 +1,9 @@
 use super::{FIRST_GROUP, ISLANDS_GROUP, SupportGroup, SupportTool};
 use crate::scene::{OwnSettings, Scene, SceneObject};
+use anyhow::Result;
 use core_engine::project::own_table;
-use printer_profiles::{Raft, SupportProfile};
+use core_engine::{SupportPlan, SupportShapes};
+use printer_profiles::{Catalogue, Raft, SupportProfile};
 
 /// The raft the first picked model keeps of its own, which only a project can give it.
 pub fn own_raft_shown(scene: &Scene) -> Option<Raft> {
@@ -67,12 +69,31 @@ impl SupportTool {
         }
     }
 
-    /// The active group's profile as `object` is built to, with the raft it stands on, its
-    /// own or the plate's: what orienting it weighs its supports by.
-    pub fn built_for(&self, object: &SceneObject) -> SupportProfile {
-        let mut profile = self.profile_for(object).clone();
-        profile.raft = object.own.raft.unwrap_or(self.raft);
-        profile
+    /// What orienting weighs each model's supports by, as a run would build them: the
+    /// automatic profile's sizes where one is chosen, else the active group's profile, on
+    /// the model's own raft or the plate's.
+    pub fn orient_plans<'a>(
+        &'a self,
+        catalogue: &Catalogue,
+    ) -> Result<impl Fn(&SceneObject) -> SupportPlan + 'a> {
+        let sized = self.sized(catalogue)?;
+        Ok(move |object: &SceneObject| {
+            let mut plan = match &sized {
+                Some((auto, shapes)) => SupportPlan {
+                    shapes: SupportShapes::Sized {
+                        auto: Box::new(auto.clone()),
+                        shapes: Box::new(shapes.clone()),
+                    },
+                    cavity: false,
+                },
+                None => SupportPlan::of(self.profile_for(object).clone()),
+            };
+            let raft = object.own.raft.unwrap_or(self.raft);
+            for profile in plan.profiles_mut() {
+                profile.raft = raft;
+            }
+            plan
+        })
     }
 
     /// The active group's profile as `object` is built to.

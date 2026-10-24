@@ -58,6 +58,14 @@ impl SupportPlan {
         }
     }
 
+    /// Every profile of [`Self::table`], to set what all of them share, a raft or a lift.
+    pub fn profiles_mut(&mut self) -> &mut [SupportProfile] {
+        match &mut self.shapes {
+            SupportShapes::One(profile) => std::slice::from_mut(profile.as_mut()),
+            SupportShapes::Sized { shapes, .. } => shapes.as_mut_slice(),
+        }
+    }
+
     /// The automatic profile supports are sized by, if any.
     pub fn sizing(&self) -> Option<&AutoProfile> {
         match &self.shapes {

@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_engine::{Trial, orient_for_print};
+use core_engine::{SupportPlan, Trial, orient_for_print};
 use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
 use core_plate::{OrientSettings, Printed};
 use core_volume::ModelHollow;
-use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
+#[cfg(test)]
+use printer_profiles::SupportProfile;
+use printer_profiles::{MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
 
 use crate::i18n::tr;
@@ -31,9 +33,9 @@ pub struct OrientTask {
     /// The way down the model stands now, in the sized model's space, which a tilt is
     /// measured from.
     pub down_now: Vec3,
-    /// The support profile this model is built to, which the search counts overhangs and
-    /// contacts by and a proof prints it on.
-    pub support: SupportProfile,
+    /// What this model's supports are built to, as a run in the window builds them: the
+    /// search counts overhangs and contacts by its placing profile, and a proof prints it.
+    pub support: SupportPlan,
 }
 
 impl OrientTask {
@@ -48,7 +50,9 @@ impl OrientTask {
             vents: Vec::new(),
             sizing: Transform::default(),
             down_now: Vec3::NEG_Z,
-            support: SupportProfile::shipped("medium").expect("the medium preset ships"),
+            support: SupportPlan::of(
+                SupportProfile::shipped("medium").expect("the medium preset ships"),
+            ),
         }
     }
 
@@ -162,11 +166,11 @@ impl OrientJob {
 }
 
 /// The models a run covers, each in its own space: one when `only` names it, everything
-/// on the plate being edited otherwise. `support_of` is the profile each is built to.
+/// on the plate being edited otherwise. `plan_of` is what each one's supports are built to.
 pub fn orient_tasks(
     scene: &Scene,
     only: Option<ObjectId>,
-    support_of: impl Fn(&SceneObject) -> SupportProfile,
+    plan_of: impl Fn(&SceneObject) -> SupportPlan,
 ) -> Vec<OrientTask> {
     scene
         .targets()
@@ -179,17 +183,19 @@ pub fn orient_tasks(
             vents: vents_of(&object.hollow),
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
-            support: lifted(support_of(object), object.lift_mm),
+            support: lifted(plan_of(object), object.lift_mm),
         })
         .collect()
 }
 
-/// `support` standing a model `lift_mm` clear of the plate where the user asked for that.
-fn lifted(support: SupportProfile, lift_mm: Option<f32>) -> SupportProfile {
-    SupportProfile {
-        z_lift_mm: lift_mm.unwrap_or(support.z_lift_mm),
-        ..support
+/// `plan` standing a model `lift_mm` clear of the plate where the user asked for that.
+fn lifted(mut plan: SupportPlan, lift_mm: Option<f32>) -> SupportPlan {
+    if let Some(lift_mm) = lift_mm {
+        for profile in plan.profiles_mut() {
+            profile.z_lift_mm = lift_mm;
+        }
     }
+    plan
 }
 
 /// The good ways to stand one model, best first: proven by printing where there is a
@@ -197,7 +203,7 @@ fn lifted(support: SupportProfile, lift_mm: Option<f32>) -> SupportProfile {
 fn choose(
     printed: &Printed,
     settings: &OrientSettings,
-    support: &SupportProfile,
+    support: &SupportPlan,
     proof: Option<&Proof>,
 ) -> Result<Vec<Pose>, String> {
     let trial = proof.map(|proof| Trial {
@@ -260,11 +266,12 @@ fn run(request: &OrientRequest) -> OrientOutcome {
             .tasks
             .par_iter()
             .map(|task| {
+                let placing = task.support.placing();
                 let settings = OrientSettings {
                     down_now: task.down_now,
-                    max_overhang_deg: task.support.max_overhang_deg,
-                    contact_spacing_mm: task.support.contact_spacing_mm,
-                    lift_mm: task.support.lift_mm(),
+                    max_overhang_deg: placing.max_overhang_deg,
+                    contact_spacing_mm: placing.contact_spacing_mm,
+                    lift_mm: placing.lift_mm(),
                     ..request.settings
                 };
                 let outer = task.sized(&task.mesh);
@@ -285,7 +292,7 @@ fn run(request: &OrientRequest) -> OrientOutcome {
                 Ok(Turn {
                     id: task.id,
                     poses,
-                    lift_mm: task.support.z_lift_mm,
+                    lift_mm: placing.z_lift_mm,
                 })
             })
             .collect();
@@ -363,7 +370,7 @@ mod tests {
         });
 
         let tasks = orient_tasks(&scene, None, |_| {
-            SupportProfile::shipped("medium").expect("the medium preset ships")
+            SupportPlan::of(SupportProfile::shipped("medium").expect("the medium preset ships"))
         });
         let judged = tasks[0].shell.as_ref().expect("the task carries the shell");
         assert!(Arc::ptr_eq(judged, &shell));

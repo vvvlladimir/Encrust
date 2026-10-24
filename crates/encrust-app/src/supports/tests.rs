@@ -135,9 +135,11 @@ fn a_model_is_oriented_by_the_overhang_of_its_own_profile() {
     let wanted = own.max_overhang_deg;
     scene.objects_mut()[0].own.supports.insert(tool.active, own);
 
-    let tasks = crate::job::orient_tasks(&scene, None, |object| tool.profile_for(object).clone());
+    let tasks = crate::job::orient_tasks(&scene, None, |object| {
+        core_engine::SupportPlan::of(tool.profile_for(object).clone())
+    });
     assert!(
-        (tasks[0].support.max_overhang_deg - wanted).abs() < f32::EPSILON,
+        (tasks[0].support.placing().max_overhang_deg - wanted).abs() < f32::EPSILON,
         "not the angle of the plate's profile"
     );
 }
@@ -148,16 +150,52 @@ fn a_model_is_oriented_on_the_raft_it_stands_on() {
     let mut tool = SupportTool::default();
     tool.raft.enabled = true;
 
-    let tasks = crate::job::orient_tasks(&scene, None, |object| tool.built_for(object));
-    assert!(tasks[0].support.raft.enabled, "the plate's raft is weighed");
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let plans = tool
+        .orient_plans(&catalogue)
+        .expect("no automatic profile to read");
+    let tasks = crate::job::orient_tasks(&scene, None, &plans);
+    assert!(
+        tasks[0].support.placing().raft.enabled,
+        "the plate's raft is weighed"
+    );
 
     let own = Raft {
         enabled: false,
         ..tool.raft
     };
     scene.objects_mut()[0].own.raft = Some(own);
-    let tasks = crate::job::orient_tasks(&scene, None, |object| tool.built_for(object));
-    assert!(!tasks[0].support.raft.enabled, "its own raft wins");
+    let tasks = crate::job::orient_tasks(&scene, None, &plans);
+    assert!(
+        !tasks[0].support.placing().raft.enabled,
+        "its own raft wins"
+    );
+}
+
+#[test]
+fn with_sizing_on_a_model_is_oriented_on_the_shapes_a_run_sizes_its_supports_into() {
+    let scene = one_cube();
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut tool = SupportTool::default();
+    tool.set_automatic(true, &catalogue);
+    tool.raft.enabled = true;
+
+    let plans = tool
+        .orient_plans(&catalogue)
+        .expect("the shipped shapes are found");
+    let tasks = crate::job::orient_tasks(&scene, None, &plans);
+    let auto = tool.auto.as_ref().expect("sizing is on");
+    let plan = &tasks[0].support;
+    assert_eq!(plan.sizing(), Some(auto), "sized as a run sizes them");
+    assert_eq!(
+        plan.table()[0].name,
+        super::run::shapes_of(auto, &catalogue).expect("the shipped shapes are found")[0].name,
+        "built to the profile's own shapes, not the group in hand"
+    );
+    assert!(
+        plan.table().iter().all(|profile| profile.raft.enabled),
+        "every shape stands on the plate's raft"
+    );
 }
 
 #[test]

@@ -16,7 +16,7 @@ use core_plate::{
     LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Readings, Ruling,
     finalists, rank, rulings,
 };
-use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
 
 use crate::cut::Cutting;
@@ -72,7 +72,9 @@ fn coarse(trial: &Trial, reach_mm: Scalar) -> (PrinterProfile, MaterialProfile) 
 pub struct Trial<'a> {
     pub printer: &'a PrinterProfile,
     pub material: &'a MaterialProfile,
-    pub support: &'a SupportProfile,
+    /// What the pose is supported with, as the window would stand it: one profile, or an
+    /// automatic one sizing each support.
+    pub support: &'a SupportPlan,
     /// Layers rasterised at once, as `Plate::raster_window`.
     pub raster_window: usize,
 }
@@ -336,7 +338,7 @@ fn print_held(
         cuts: &mut cuts,
         drill_exactly: false,
     };
-    let stood = stand(model, &SupportPlan::of(trial.support.clone()), layer_mm)?;
+    let stood = stand(model, trial.support, layer_mm)?;
     let mut held = Held {
         contacts: stood.contacts.len(),
         supports_mm3: signed_volume(&stood.supports).abs(),

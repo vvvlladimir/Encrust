@@ -1,7 +1,7 @@
 use crate::args::ImportArgs;
 use crate::profiles::Chosen;
 use anyhow::{Context, Result};
-use core_engine::{Trial, orient_for_print};
+use core_engine::{SupportPlan, Trial, orient_for_print};
 use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     transform_mesh,
@@ -128,7 +128,8 @@ pub(super) fn orientation(
             .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
         ..orient_settings(supports)
     };
-    let trial = profile.zip(supports).map(|(printer, support)| Trial {
+    let plan = supports.map(|support| SupportPlan::of(support.clone()));
+    let trial = profile.zip(plan.as_ref()).map(|(printer, support)| Trial {
         printer,
         material: &chosen.material,
         support,

@@ -91,7 +91,8 @@ whole-surface fill is Cmd-Shift-click.
   stands the model the next of them, round to the first, without searching again. A
   change to the model, its supports, its lift, the preset, the printer or the resin
   searches again. With a printer chosen, the notice shows each pose's supports, pull and
-  height, green where it beats the pose before and red where it loses. Auto offers every
+  height (the supports built as the plate builds them, by the automatic profile's sizes
+  where one is chosen), green where it beats the pose before and red where it loses. Auto offers every
   trade that no other pose beats on all three; a single goal offers the poses it reads as
   just as good.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0

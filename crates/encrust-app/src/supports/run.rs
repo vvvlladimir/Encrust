@@ -30,6 +30,18 @@ pub(super) fn shapes_of(
 }
 
 impl SupportTool {
+    /// The automatic profile chosen and the shapes it sizes supports into, or `None` while
+    /// supports are built to the group in hand.
+    pub(super) fn sized(
+        &self,
+        catalogue: &Catalogue,
+    ) -> Result<Option<(AutoProfile, [SupportProfile; SHAPES])>> {
+        self.auto
+            .as_ref()
+            .map(|auto| Ok((auto.clone(), shapes_of(auto, catalogue)?)))
+            .transpose()
+    }
+
     /// Starts an automatic placement run over everything visible on the plate: by the
     /// group in hand, or by the automatic profile chosen, whose shapes are read from
     /// `catalogue`.
@@ -46,11 +58,7 @@ impl SupportTool {
         catalogue: &Catalogue,
         side: Side,
     ) -> Result<()> {
-        self.sizing = self
-            .auto
-            .as_ref()
-            .map(|auto| Ok::<_, anyhow::Error>((auto.clone(), shapes_of(auto, catalogue)?)))
-            .transpose()?;
+        self.sizing = self.sized(catalogue)?;
         if side == Side::Inside {
             Self::clear_inside(scene);
             // A frozen tree taken away renumbers the ones after it.

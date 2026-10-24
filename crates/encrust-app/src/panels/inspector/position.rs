@@ -456,14 +456,18 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         .as_ref()
         .map(|printer| (printer, &window.machine.slicing.material));
     if oriented
-        && let Err(error) = window.tools.orient.start(
-            &mut window.doc.scene,
-            &window.doc.plate,
-            Some(id),
-            |object| supports.built_for(object),
-            machine,
-            &mut window.machine.status,
-        )
+        && let Err(error) = supports
+            .orient_plans(&window.machine.slicing.catalogue)
+            .and_then(|plans| {
+                window.tools.orient.start(
+                    &mut window.doc.scene,
+                    &window.doc.plate,
+                    Some(id),
+                    plans,
+                    machine,
+                    &mut window.machine.status,
+                )
+            })
     {
         window.machine.status = crate::status::Status::failed(&error);
     }

@@ -2,11 +2,17 @@ use super::*;
 use crate::scene::{ImportSummary, Imported};
 use crate::status::Change;
 use core_geometry::{Mesh, Orientation, Quat, Transform, Vec3, diagnose};
+use printer_profiles::SupportProfile;
 use std::sync::Arc;
 
 /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
 fn cuboid(size: Vec3) -> Mesh {
     core_geometry::cuboid(Vec3::ZERO, size)
+}
+
+/// Supports built to the shipped medium profile alone.
+fn medium() -> SupportPlan {
+    SupportPlan::of(SupportProfile::shipped("medium").expect("the medium preset ships"))
 }
 
 fn scene_with(mesh: Mesh) -> Scene {
@@ -39,15 +45,8 @@ fn settle(tool: &mut OrientTool, scene: &mut Scene, status: &mut Status) {
 /// Presses Auto-orient over the whole plate and waits for what it does.
 fn press(tool: &mut OrientTool, scene: &mut Scene, status: &mut Status) {
     let plate = BuildPlate::default();
-    tool.start(
-        scene,
-        &plate,
-        None,
-        |_| SupportProfile::shipped("medium").expect("the medium preset ships"),
-        None,
-        status,
-    )
-    .expect("a visible model can be oriented");
+    tool.start(scene, &plate, None, |_| medium(), None, status)
+        .expect("a visible model can be oriented");
     settle(tool, scene, status);
 }
 
@@ -73,27 +72,13 @@ fn pressed_again_with_nothing_changed_it_steps_rather_than_searches() {
     press(&mut tool, &mut scene, &mut status);
     let plate = BuildPlate::default();
 
-    tool.start(
-        &mut scene,
-        &plate,
-        None,
-        |_| SupportProfile::shipped("medium").expect("the medium preset ships"),
-        None,
-        &mut status,
-    )
-    .expect("a visible slab can be oriented");
+    tool.start(&mut scene, &plate, None, |_| medium(), None, &mut status)
+        .expect("a visible slab can be oriented");
     assert!(!tool.is_running(), "nothing new to ask, so no run");
 
     scene.objects_mut()[0].lift_to(3.0);
-    tool.start(
-        &mut scene,
-        &plate,
-        None,
-        |_| SupportProfile::shipped("medium").expect("the medium preset ships"),
-        None,
-        &mut status,
-    )
-    .expect("a visible slab can be oriented");
+    tool.start(&mut scene, &plate, None, |_| medium(), None, &mut status)
+        .expect("a visible slab can be oriented");
     assert!(tool.is_running(), "a new lift is a new question");
     settle(&mut tool, &mut scene, &mut status);
 }
@@ -253,17 +238,13 @@ fn stepping_through_the_offered_poses_turns_the_model_and_wraps_round() {
 fn a_lift_the_user_asked_for_stands_a_supported_pose_on_it() {
     let mut scene = scene_with(cuboid(Vec3::splat(10.0)));
     scene.objects_mut()[0].lift_to(2.5);
-    let tasks = orient_tasks(&scene, None, |_| {
-        SupportProfile::shipped("medium").expect("the medium preset ships")
-    });
-    assert_eq!(tasks[0].support.z_lift_mm, 2.5);
+    let tasks = orient_tasks(&scene, None, |_| medium());
+    assert_eq!(tasks[0].support.placing().z_lift_mm, 2.5);
 
     scene.objects_mut()[0].lift_to(0.0);
-    let tasks = orient_tasks(&scene, None, |_| {
-        SupportProfile::shipped("medium").expect("the medium preset ships")
-    });
+    let tasks = orient_tasks(&scene, None, |_| medium());
     assert_eq!(
-        tasks[0].support.z_lift_mm,
+        tasks[0].support.placing().z_lift_mm,
         SupportProfile::shipped("medium")
             .expect("the medium preset ships")
             .z_lift_mm,
@@ -278,8 +259,7 @@ fn an_empty_plate_has_nothing_to_orient() {
     assert!(tool.blocker(&scene).is_some());
     let mut scene = scene;
     let plate = BuildPlate::default();
-    let none =
-        |_: &SceneObject| SupportProfile::shipped("medium").expect("the medium preset ships");
+    let none = |_: &SceneObject| medium();
     let mut status = Status::default();
     assert!(
         tool.start(&mut scene, &plate, None, none, None, &mut status)
