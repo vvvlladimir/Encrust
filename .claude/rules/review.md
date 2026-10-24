@@ -6,8 +6,8 @@ or `rustfmt` enforce is not reported. Check these first:
 
 1. **Structure:** a core reaching a UI crate, an edge `docs/architecture.md` does not draw, a
    type copied instead of moved down, logic or test scaffolding in `lib.rs`.
-2. **Size:** a function taken past 40 lines, a file past 400 of non-test code, an inline test
-   module past 150, anything added to what is already over.
+2. **Size:** a function past ~40 lines that could split at a named step, a file past ~400
+   holding two concerns, anything added to what is already over; the hard limits are xtask's.
 3. **Repetition:** a grid cell, a matrix inverse, a test body or any computation the
    workspace has, written again.
 4. **Scale:** a loop over every face, voxel or support, a pass over pairs, a fixed-step walk or

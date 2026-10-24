@@ -1,5 +1,5 @@
-use super::{Errand, Picture};
 use super::reach::Trouble;
+use super::{Errand, Picture};
 use super::{Network, RESCAN_S, WATCH_PERIOD};
 use printer_link::{State, Wire};
 use std::collections::BTreeMap;

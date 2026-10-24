@@ -163,8 +163,6 @@ impl SupportProfile {
         self.tip.contact_diameter_mm / 2.0
     }
 
-
-
     pub fn pillar_radius_mm(&self) -> f32 {
         self.middle.diameter_mm / 2.0
     }
@@ -172,7 +170,6 @@ impl SupportProfile {
     pub fn base_radius_mm(&self) -> f32 {
         self.bottom.platform_diameter_mm / 2.0
     }
-
 
     /// How high a support standing on the plate starts, millimetres: the top of its pad,
     /// or of the raft that takes the pad's place. See `docs/decisions/0266`.
