@@ -547,31 +547,41 @@ fn a_head_that_would_run_into_a_wall_across_from_it_is_not_placed() {
     let bvh = Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
 
-    let neck = neck_of(&placed, Vec3::new(1.0, 0.0, 10.0), &profile());
+    let contact = Vec3::new(1.0, 0.0, 10.0);
+    let mut fixture = profile();
+    fixture.small_pillar.enabled = false;
     assert_eq!(
-        neck, None,
+        neck_of(&placed, contact, &fixture),
+        None,
         "turned away, the head would meet its wall slantwise"
     );
+    assert_eq!(
+        neck_of(&placed, contact, &profile()),
+        Some(contact),
+        "with small pillars the contact is left headless for one to hold"
+    );
+}
+
+/// A slab's underside at z = 10, and a lip 1.5 mm deep hanging from it at x = 10.
+fn slab_with_lip() -> Mesh {
+    let mut model = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(10.0, 5.0, 12.0));
+    model.append(&box_mesh(
+        Vec3::new(10.0, -5.0, 8.5),
+        Vec3::new(11.0, 5.0, 12.0),
+    ));
+    model
 }
 
 #[test]
 fn a_head_beside_a_lip_is_not_placed_rather_than_turned() {
-    // A slab's underside at z = 10, and a lip 1.5 mm deep hanging from it at x = 10:
-    // straight down from 0.3 mm short of the lip, the widening head runs into it.
-    let mut model = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(10.0, 5.0, 12.0));
-    let lip = box_mesh(Vec3::new(10.0, -5.0, 8.5), Vec3::new(11.0, 5.0, 12.0));
-    let offset = model.vertices.len() as u32;
-    model.vertices.extend_from_slice(&lip.vertices);
-    model
-        .faces
-        .extend(lip.faces.iter().map(|face| face.map(|at| at + offset)));
+    // Straight down from 0.3 mm short of the lip, the widening head runs into it.
+    let model = slab_with_lip();
     let bvh = Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
 
-    assert_eq!(
-        neck_of(&placed, Vec3::new(9.7, 0.0, 10.0), &profile()),
-        None
-    );
+    let mut fixture = profile();
+    fixture.small_pillar.enabled = false;
+    assert_eq!(neck_of(&placed, Vec3::new(9.7, 0.0, 10.0), &fixture), None);
     let clear = neck_of(&placed, Vec3::new(5.0, 0.0, 10.0), &profile())
         .expect("away from the lip the underside is open");
     assert!(clear.abs_diff_eq(Vec3::new(5.0, 0.0, 10.0 - profile().top.length_mm), 1e-4));
@@ -625,4 +635,34 @@ fn the_pillar_height_is_the_neck_above_the_foot() {
         .pillar_height_mm(&profile)
         .expect("the column stands on the plate");
     assert!((height - expected).abs() < 1e-5);
+}
+
+#[test]
+fn a_contact_with_no_room_for_a_head_moves_along_its_face_to_where_one_has() {
+    // 0.4 mm short of the lip the head, 0.5 mm wide where the lip ends, runs into it; from
+    // 0.15 mm further back it clears, which is inside the reach a contact may move.
+    let model = slab_with_lip();
+    let contact = Vec3::new(9.6, 0.0, 10.0);
+    let columns = columns_on(
+        &[SupportPoint::new(contact)],
+        &model,
+        Transform::default(),
+        Profiles::single(&profile()),
+    );
+    let column = columns.first().expect("the contact is kept");
+    assert!(
+        has_head(column.contact, column.neck),
+        "it stands on a head, from {}",
+        column.contact
+    );
+    let moved = column.contact - contact;
+    assert!(
+        moved.length() <= crate::islands::MOVE_REACH_MM + 1e-4 && moved.z.abs() < 1e-3,
+        "along the underside and no further than the reach, moved by {moved}"
+    );
+    assert!(
+        column.contact.x < contact.x,
+        "away from the lip, to {}",
+        column.contact
+    );
 }

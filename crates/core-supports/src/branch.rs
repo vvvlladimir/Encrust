@@ -17,8 +17,10 @@ mod carriers;
 mod ground;
 mod harvest;
 mod merge;
+mod small;
 mod sound;
 use carriers::{Carriers, THICKER_BY_MM};
+use small::tidy_small_pillars;
 use sound::{only_sound, stand_small_pillars_on_supports};
 
 /// Two tips this close together stand in the same place, and the direction between them
@@ -52,6 +54,7 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
         forest.extend(trees);
     }
     stand_small_pillars_on_supports(&mut forest, &carriers, placed, profiles);
+    tidy_small_pillars(&mut forest, placed, profiles);
     forest.sort_by_key(SupportTree::group);
     forest
 }

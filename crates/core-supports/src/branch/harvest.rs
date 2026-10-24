@@ -1,4 +1,5 @@
 use super::ground::{BRIDGE_MAX_MM, escape, search_for_ground};
+use super::small::small_pillar;
 use super::{Forest, Front};
 use crate::Landing;
 use crate::column::{
@@ -71,13 +72,10 @@ impl Forest<'_> {
         children: &[Vec<usize>],
         placed: &Placed,
     ) -> Vec<SupportTree> {
-        // A contact with no head has the model too near under it for one: it is the small
-        // pillar onto that model it was left headless for (ADR 0331), before any lean.
+        // A contact with no head had no room for one: a small pillar holds it or nothing
+        // does, since a trunk from the contact would meet its face askew (ADR 0346, 0348).
         if self.nodes[front.node].is_leaf() {
-            let straight = self.bridges(front, children, placed);
-            if !straight.is_empty() {
-                return straight;
-            }
+            return self.bridges(front, children, placed);
         }
         let profile = self.profiles.of(front.group);
         let steeper = [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG];
@@ -164,8 +162,8 @@ impl Forest<'_> {
             .collect()
     }
 
-    /// Last resort for tips under a front with nowhere to stand: each on one strut straight down
-    /// onto the model, a one-node tree meshed as a small pillar where the profile has one.
+    /// Last resort for tips under a front with nowhere to stand: each a small pillar where one
+    /// fits (ADR 0348), else one strut straight down onto the model, a one-node tree.
     pub(super) fn bridges(
         &self,
         front: &Front,
@@ -184,34 +182,44 @@ impl Forest<'_> {
             .filter(TreeNode::is_leaf)
             .filter_map(|tip| {
                 let group = tip.head.unwrap_or(front.group);
-                if !self.profiles.of(group).land_on_model {
-                    return None;
-                }
-                // From just under the contact: one placed by hand sits on the face itself.
-                let ray = Ray::new(tip.position - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
-                let under = placed
-                    .raycast(&ray)
-                    // A face looking up at the contact: one looking away is the inside of
-                    // the model, and a strut to it is built in the solid and pokes out.
-                    .filter(|hit| hit.normal.z > 0.0)
-                    .filter(|hit| hit.point.z > PLATE_Z_MM && !placed.blocks_at(hit.point))
-                    .filter(|hit| (MIN_PILLAR_HEIGHT_MM..=BRIDGE_MAX_MM).contains(&hit.distance))?;
-                let node = TreeNode {
-                    parent: None,
-                    ..tip
-                };
-                let landing = Landing {
-                    base: under.point,
-                    on_model: true,
-                    pad_offset: Vec2::ZERO,
-                    pad_cut: None,
-                    on_support: false,
-                };
-                let mut tree = SupportTree::new(vec![node], 0, landing);
-                tree.settle(group);
-                Some(tree)
+                tip.point
+                    .and_then(|point| {
+                        small_pillar(tip.position, point, group, placed, self.profiles)
+                    })
+                    .or_else(|| self.bridge(tip, group, placed))
             })
             .collect()
+    }
+
+    /// One strut from `tip` straight down onto a face of the model looking up at it, as a
+    /// one-node tree built to `group`, if one is in reach.
+    fn bridge(&self, tip: TreeNode, group: u16, placed: &Placed) -> Option<SupportTree> {
+        if !self.profiles.of(group).land_on_model {
+            return None;
+        }
+        // From just under the contact: one placed by hand sits on the face itself.
+        let ray = Ray::new(tip.position - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
+        let under = placed
+            .raycast(&ray)
+            // A face looking up at the contact: one looking away is the inside of
+            // the model, and a strut to it is built in the solid and pokes out.
+            .filter(|hit| hit.normal.z > 0.0)
+            .filter(|hit| hit.point.z > PLATE_Z_MM && !placed.blocks_at(hit.point))
+            .filter(|hit| (MIN_PILLAR_HEIGHT_MM..=BRIDGE_MAX_MM).contains(&hit.distance))?;
+        let node = TreeNode {
+            parent: None,
+            ..tip
+        };
+        let landing = Landing {
+            base: under.point,
+            on_model: true,
+            pad_offset: Vec2::ZERO,
+            pad_cut: None,
+            on_support: false,
+        };
+        let mut tree = SupportTree::new(vec![node], 0, landing);
+        tree.settle(group);
+        Some(tree)
     }
 
     /// The tree hanging off `front`, with its nodes renumbered from zero, built to the

@@ -13,9 +13,9 @@ const FINE_PITCH_MM: Scalar = 0.02;
 /// pixels fall apart from these cells; smaller reads as not there.
 const DUST_MM2: Scalar = 0.005;
 
-/// How far a placed contact is moved onto an island, mm across the plate and down: under a pillar
-/// width, so what it held is still held; higher landed on the lobe the coarse grid first saw.
-const MOVE_REACH_MM: Scalar = 0.3;
+/// How far a contact is moved onto an island, across the plate and down, or along its face to room
+/// for a head, mm: under a pillar width, so what it held is still held (ADR 0330, 0348).
+pub(crate) const MOVE_REACH_MM: Scalar = 0.3;
 
 /// How far inside an island a contact stands to hold it, mm: half the thinnest tip's radius; an
 /// island too thin for that is held by a contact anywhere on it.

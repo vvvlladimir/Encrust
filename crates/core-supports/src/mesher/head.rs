@@ -75,10 +75,9 @@ pub(super) fn head(
     let contact_mm = profile.contact_radius_mm();
     let top_mm = profile.top.length_mm.min(length);
     let body_mm = style.body_radius_mm(node.radius_mm, profile);
-    // A small pillar has no tip: it is one width from the face it holds to the one it
-    // stands on, sunk into each.
+    // A small pillar is one width throughout, its end the half ball a plane tip ends in (ADR 0348).
     if style.small {
-        push(rings, -style.bite_mm(profile), body_mm);
+        cap(rings, -cap_centre_mm(style, profile, length), body_mm);
         return;
     }
     if profile.tip.shape == ContactShape::Sphere {
@@ -95,15 +94,21 @@ pub(super) fn head(
     push(rings, top_mm - centre_mm, body_mm);
 }
 
-/// How far into the part a plane tip's half ball is centred on a tube `length` long,
-/// millimetres: its bite, held to the half wall behind it and to the tube's top segment.
+/// How far into the part a plane tip's or a small pillar's half ball is centred on a tube
+/// `length` long, millimetres: its bite, held to the half wall behind it and to the room it has.
 pub(super) fn cap_centre_mm(style: Style, profile: &SupportProfile, length: Scalar) -> Scalar {
-    let radius_mm = profile.contact_radius_mm();
-    let top_mm = profile.top.length_mm.min(length);
+    let (radius_mm, room_mm) = if style.small {
+        (profile.small_pillar.radius_mm(), length)
+    } else {
+        (
+            profile.contact_radius_mm(),
+            profile.top.length_mm.min(length),
+        )
+    };
     style
         .bite_mm(profile)
         .min(style.bite_limit_mm - radius_mm)
-        .min(top_mm)
+        .min(room_mm)
 }
 
 /// The rings of a half ball of `radius_mm` centred `centre_mm` along the axis, down to its
@@ -124,7 +129,7 @@ pub(super) const CAP_RINGS: u32 = 4;
 
 /// The outward normal of the face of the model `landing` stands on, if it stands on the
 /// model itself.
-pub(super) fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
+pub(crate) fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
     if !landing.on_model || landing.on_support {
         return None;
     }
@@ -135,32 +140,24 @@ pub(super) fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
         .map(|hit| hit.normal)
 }
 
-/// The face a small pillar is laid onto, for a tube that starts at one; a tip ends round
-/// and a joint in a dome, with no flat end to lay.
-pub(super) fn seat_of(node: &TreeNode, style: Style) -> Option<Vec3> {
-    (node.is_leaf() && style.small)
-        .then_some(style.face)
-        .flatten()
-}
-
 /// Where a tube `length` long pokes into the model at a contact, back up its own axis,
-/// or the pole of the dome at a joint; a small pillar has none (ADR 0125, 0345).
+/// or the pole of the dome at a joint (ADR 0125, 0345, 0348).
 pub(super) fn apex_of(
     node: &TreeNode,
     direction: Vec3,
     profile: &SupportProfile,
     style: Style,
     length: Scalar,
-) -> Option<Vec3> {
-    if !node.is_leaf() {
-        return Some(node.position - direction * style.body_radius_mm(node.radius_mm, profile));
-    }
-    if style.small {
-        return None;
-    }
-    if profile.tip.shape == ContactShape::Plane {
-        let depth_mm = cap_centre_mm(style, profile, length) + profile.contact_radius_mm();
-        return Some(node.position - direction * depth_mm);
-    }
-    Some(node.position - direction * style.bite_mm(profile))
+) -> Vec3 {
+    let body_mm = style.body_radius_mm(node.radius_mm, profile);
+    let depth_mm = if !node.is_leaf() {
+        body_mm
+    } else if style.small {
+        cap_centre_mm(style, profile, length) + body_mm
+    } else if profile.tip.shape == ContactShape::Plane {
+        cap_centre_mm(style, profile, length) + profile.contact_radius_mm()
+    } else {
+        style.bite_mm(profile)
+    };
+    node.position - direction * depth_mm
 }

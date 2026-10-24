@@ -1,6 +1,6 @@
 # 0331. Keep short supports between two faces of the part small pillars, laid on both faces
 
-- **Status:** Accepted; the headless strut is kept to profiles with small pillars by 0346
+- **Status:** Accepted; the headless strut is kept to profiles with small pillars by 0346, laying the ends on their faces is superseded by 0348
 - **Date:** 2026-10-23
 
 ## Context

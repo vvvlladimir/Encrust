@@ -19,8 +19,9 @@ mod sound;
 pub(crate) use foot::footing_radius_mm;
 pub use foot::{FOOT_BEVEL, FOOT_TAPER};
 use foot::{FOOT_BITE, flare, foot, foot_tip, trunk_base_mm, trunk_bottom};
+pub(crate) use head::ground_normal;
 pub(crate) use head::mesh_head;
-use head::{apex_of, head, seat_of};
+use head::{apex_of, head};
 pub(crate) use sound::{Fault, bodies, faults, sound};
 
 /// Which set of measurements a support is built from.
@@ -46,7 +47,7 @@ impl Style {
                 && tree.landing().on_model
                 && !tree.landing().on_support
                 && tree.tip_count() == 1
-                && run_mm(tree) <= profile.small_pillar.max_length_mm,
+                && run_mm(tree) <= longest_run_mm(profile),
             bite_limit_mm: Scalar::INFINITY,
             face: None,
             ground: None,
@@ -73,9 +74,22 @@ impl Style {
     }
 }
 
+/// How many of its own diameters long a small pillar may run: a resin wire about 35 times as long
+/// as it is wide starts to wave as it prints, and the peel pulls on it too (ADR 0348).
+const SLENDER: Scalar = 30.0;
+
+/// The longest run a small pillar is built thin over, millimetres: the profile's, held to
+/// [`SLENDER`] of its diameters so a thin strut stays stiff enough to print.
+pub(crate) fn longest_run_mm(profile: &SupportProfile) -> Scalar {
+    profile
+        .small_pillar
+        .max_length_mm
+        .min(SLENDER * profile.small_pillar.diameter_mm)
+}
+
 /// How far a one-tip tree runs from its contact to where it stands, along its struts,
 /// millimetres.
-fn run_mm(tree: &SupportTree) -> Scalar {
+pub(crate) fn run_mm(tree: &SupportTree) -> Scalar {
     let nodes = tree.nodes();
     let struts: Scalar = tree
         .struts()
@@ -237,8 +251,6 @@ fn brace(from: Vec3, to: Vec3, radius_mm: Scalar, profile: &SupportProfile) -> T
         sides: profile.facets as usize,
         apex: None,
         tail: None,
-        seat: None,
-        sole: None,
     }
 }
 
@@ -271,10 +283,8 @@ fn strut(
         direction,
         rings,
         sides: profile.facets as usize,
-        apex: apex_of(&nodes[child], direction, profile, style, length),
+        apex: Some(apex_of(&nodes[child], direction, profile, style, length)),
         tail: Some(to + direction * body_mm),
-        seat: seat_of(&nodes[child], style),
-        sole: None,
     }
 }
 
@@ -311,16 +321,14 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         base_mm,
         into_foot,
     };
-    let (tail_mm, sole) = end.close(&mut rings, landing, profile, style);
+    let tail_mm = end.close(&mut rings, landing, profile, style);
     Tube {
         top,
         direction,
         rings,
         sides: profile.facets as usize,
-        apex: apex_of(root, direction, profile, style, length),
+        apex: Some(apex_of(root, direction, profile, style, length)),
         tail: tail_mm.map(|along| top + direction * along),
-        seat: seat_of(root, style),
-        sole,
     }
 }
 
@@ -333,15 +341,14 @@ struct TrunkEnd {
 }
 
 impl TrunkEnd {
-    /// Ends the trunk's rings, and answers how far along its tail pole is and the face its
-    /// sole is laid on, where it has either.
+    /// Ends the trunk's rings, and answers how far along its tail pole is, where it has one.
     fn close(
         &self,
         rings: &mut Vec<Ring>,
         landing: Landing,
         profile: &SupportProfile,
         style: Style,
-    ) -> (Option<Scalar>, Option<Vec3>) {
+    ) -> Option<Scalar> {
         let on_part = landing.on_model && !landing.on_support;
         if on_part && !style.small {
             let pointed = foot_tip(rings, self.length, self.base_mm, profile);
@@ -350,16 +357,19 @@ impl TrunkEnd {
             } else {
                 profile.contact_radius_mm()
             };
-            return (Some(self.length + pole_mm), None);
+            return Some(self.length + pole_mm);
+        }
+        if on_part {
+            // A half ball of its own width sunk by the lower depth, as its upper end is (ADR 0348).
+            let centre_mm = self.length + profile.small_pillar.lower_depth_mm;
+            push(rings, centre_mm, self.base_mm);
+            round_off(rings, centre_mm, self.base_mm);
+            return Some(centre_mm + self.base_mm);
         }
         push(rings, self.length, self.base_mm);
-        if on_part {
-            // One ring, so the whole of it can be laid onto the face it stands on.
-            return (None, style.ground);
-        }
         // A trunk run into another support ends plain, inside the trunk it joins.
         push(rings, self.length + self.into_foot, self.base_mm);
-        (None, None)
+        None
     }
 }
 

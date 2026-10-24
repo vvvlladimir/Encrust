@@ -104,8 +104,8 @@ pub fn regular(ui: &mut Ui, profile: &SupportProfile, picked: Part) {
     }
 }
 
-/// Draws the thin strut between two parts of the model, both ends sunk into a wall, the
-/// stretch between them cut out.
+/// Draws the thin strut between two parts of the model, both rounded ends sunk into a wall,
+/// the stretch between them cut out.
 pub fn small_pillar(ui: &mut Ui, profile: &SupportProfile) {
     clean_sheet();
     let frame = canvas(ui);
@@ -119,10 +119,7 @@ pub fn small_pillar(ui: &mut Ui, profile: &SupportProfile) {
     let view = View::fit(frame, along, half, vec![(shown, length - shown)]);
     model_wall(&painter, &view);
     far_wall(&painter, &view, length);
-    let stations = [
-        station(-upper, half, Part::Body),
-        station(length + lower, half, Part::Body),
-    ];
+    let stations = rounded(-upper, length + lower, half);
     let pen = |_| Pen::Picked;
     draw_revolved(&painter, &view, &stations, 0.0, &pen, !pillar.enabled);
     breaks(&painter, &view, &stations);
@@ -145,6 +142,21 @@ pub fn small_pillar(ui: &mut Ui, profile: &SupportProfile) {
     let over = view.lane(thick, 2);
     let longest = tr!("diagram-max", value = mm(pillar.max_length_mm));
     dimension(&painter, pos2(left, over), pos2(right, over), &longest);
+}
+
+/// A strut `half` wide from `from` to `to`, each end a half ball centred there (ADR 0348).
+fn rounded(from: f32, to: f32, half: f32) -> Vec<column::Station> {
+    let steps = BALL_STEPS / 2;
+    let quarter = |step: u32| std::f32::consts::FRAC_PI_2 * step as f32 / steps as f32;
+    let upper = (0..=steps).map(|step| {
+        let angle = quarter(step);
+        station(from - half * angle.cos(), half * angle.sin(), Part::Body)
+    });
+    let lower = (0..=steps).rev().map(|step| {
+        let angle = quarter(step);
+        station(to + half * angle.cos(), half * angle.sin(), Part::Body)
+    });
+    upper.chain(lower).collect()
 }
 
 thread_local! {

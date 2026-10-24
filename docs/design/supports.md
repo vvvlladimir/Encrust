@@ -38,11 +38,11 @@ shaped like the rest. Only the tip may meet the model: the whole head, contact t
 width, is swept from a hair off its face, and a support whose head meets the model there,
 or rises so nearly straight up that a trunk from its neck would come down on its own
 contact, is not placed: `columns` leaves it out and the panel counts it with those that have
-no room to stand (ADR 0346). The one exception is a contact with the model nearer under it
-than a head is long, in a profile with small pillars: it has no head, and `grow` runs it as
-one small pillar from the contact
-itself, straight onto what is under it (ADR 0331). Everything below is measured from the neck, not
-from the contact.
+no room to stand (ADR 0346). First it is moved to the nearest spot of a face looking down
+within 0.3 mm across and 0.05 mm up or down where a head has room, on rings 0.05 mm apart
+every 30 degrees; failing that, in a profile with small pillars it has no head, and `grow`
+holds it with a small pillar or not at all (ADR 0348). Everything below
+is measured from the neck, not from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface
 itself would report the contact's own face at zero distance.
@@ -101,8 +101,8 @@ of a 3 mm pillar, and a joint's domes take six rings so a bend reads round (ADR 
 bite of nought half the ball is in the part, and the face cuts it in a circle of the
 contact's width however the head leans. Its pole is held to half the wall, the centre
 coming back out where the ball would reach further (ADR 0345). The tip a trunk standing on
-the part ends in is rounded the same way; only the plain ends of a small pillar are laid
-on their faces, whatever the tip shape (ADR 0331). `sphere` is a
+the part ends in is rounded the same way, and so is each end of a small pillar, to its own
+diameter whatever the tip shape (ADR 0348). `sphere` is a
 ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
 its rings run past the contact and rings never climb, so the neck is shorter than
 `top.length_mm`.
@@ -142,9 +142,13 @@ never leaned (ADR 0043).
 
 **Small pillar.** `[small_pillar]` is the strut between two parts of a model: a diameter
 and a depth per end, no foot and no tip — one width from the face it holds to the one it
-stands on, whatever the profile's tip is. Which supports use it is derived — landing on the model,
-carrying one tip, running no further than `max_length_mm` from contact to landing, section
-enabled — never marked; a longer one keeps the regular width (ADR 0255). A trunk keeps its width whatever it
+stands on, each end a half ball of that width sunk by its depth, whatever the profile's tip
+is. An end meeting its face more than 20 degrees off the normal first leaves it along the
+normal for one diameter and bends there, so a face meets it in a circle of the diameter, at
+most 6 % longer one way (ADR 0348). Which supports use it is derived —
+landing on the model, carrying one tip, running no further than `max_length_mm` nor 30
+diameters from contact to landing, section enabled — never marked; a longer one keeps the
+regular width (ADR 0255, 0348). A trunk keeps its width whatever it
 stands on, because it carries the tips' weight (ADR 0042).
 
 **Standing on the part.** Any other support that lands on the model ends in `[top]` and
@@ -471,8 +475,13 @@ horizontal is not a landing: there is nothing under a foot on it.
 standing on nothing at harvest bends a **knee**: eight directions and a reach every
 `ESCAPE_STEP_MM` (1 mm), shortest first, at the branch angle and no further than the merge
 distance or than the height left under it allows (ADR 0078, 0347). A contact with no head
-is not bent at all: it is run straight onto the model under it as a small pillar before
-any lean is tried, which is what it was left headless for (ADR 0331, 0347). Both the lean and the trunk under it go through
+is not bent at all: it is held by a small pillar or by nothing (ADR 0348). From a diameter
+out along its normal, the pillar looks along the normal, straight down, and 16 ways round at
+15, 30 and 45 degrees for a face of the part looking back at it, no steeper than 75 degrees,
+and of the sound runs whose struts lean no more than 45 degrees takes the one that turns
+least at its joints, then the shortest. The same search
+is the last resort of any tip that cannot stand, before a strut straight down, and of a tip
+whose support stays unsound. Both the lean and the trunk under it go through
 the same beam. What still cannot stand is dropped, and the panel's
 standing-against-placed count is where that shows.
 
@@ -521,7 +530,10 @@ carrier. A tree built as a small pillar carries only as wide as that, and its tr
 carries nothing, since it may yet be moved from under what stood on it; once every group
 is grown each one with a neck is itself run into a wider carrier in its reach, by a strut
 no longer than its own drop to the part, and built that thin all the way up, so a small
-pillar stands on a support and never the other way round (ADR 0251, 0331). `grow` hands the forest back in group order.
+pillar stands on a support and never the other way round (ADR 0251, 0331). Last, every small
+pillar on the part is replaced by what that search finds from its contact where that turns
+five degrees less, and squared onto both its faces where that is sound and leans no strut
+past 45 degrees (ADR 0348). `grow` hands the forest back in group order.
 
 Any group can be dropped but the last, and the one after the first takes its place and the
 raft with it. A secondary click on a group's row builds the whole group to another saved

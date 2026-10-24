@@ -148,16 +148,24 @@ impl SupportTree {
     /// Bends the tree onto a knee: a new root at `position` that the old one hangs from,
     /// for a support that had to lean before it found room to stand.
     pub(crate) fn stand_on_knee(&mut self, position: Vec3, radius_mm: Scalar) {
+        self.bend_under(self.root, position, radius_mm);
+    }
+
+    /// Bends the strut under `node` at a new joint at `position`, which hangs from what
+    /// `node` hung from; under the root, the joint becomes the root.
+    pub(crate) fn bend_under(&mut self, node: usize, position: Vec3, radius_mm: Scalar) {
         let knee = self.nodes.len();
         self.nodes.push(TreeNode {
             position,
             radius_mm,
-            parent: None,
+            parent: self.nodes[node].parent,
             point: None,
             head: None,
         });
-        self.nodes[self.root].parent = Some(knee);
-        self.root = knee;
+        self.nodes[node].parent = Some(knee);
+        if node == self.root {
+            self.root = knee;
+        }
     }
 
     /// Bends the tree onto a knee at `position` and stands it on `landing` from there.

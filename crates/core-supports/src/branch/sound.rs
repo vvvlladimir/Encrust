@@ -1,5 +1,6 @@
 use super::carriers::{Carriers, THICKER_BY_MM, meeting_on};
 use super::grow_one;
+use super::small::small_pillar;
 use crate::Landing;
 use crate::clear::{Beam, clear};
 use crate::column::Column;
@@ -138,10 +139,21 @@ impl Mender<'_> {
         grow_one(&columns, self.placed, self.profiles, self.carriers)
     }
 
-    /// The column of `point` grown on its own, if that is sound.
+    /// The column of `point` grown on its own if that is sound, else a small pillar holding it.
     fn alone(&self, point: usize) -> Vec<SupportTree> {
         let mut grown = self.grow(&[point]);
         grown.retain(|tree| sound(tree, self.profiles, self.placed));
+        if grown.is_empty()
+            && let Some(column) = self.columns.get(&point)
+        {
+            grown.extend(small_pillar(
+                column.contact,
+                point,
+                column.group,
+                self.placed,
+                self.profiles,
+            ));
+        }
         grown
     }
 }

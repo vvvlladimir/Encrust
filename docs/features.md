@@ -406,7 +406,13 @@ whole-surface fill is Cmd-Shift-click.
 - **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
   longest strut, tips per trunk, maximum length, standing on the model on or off.
 - **Small pillar:** a separate thin shape for short supports from the part to the part.
-  Tips that could each stand as one are not merged into a full support on the part.
+  Tips that could each stand as one are not merged into a full support on the part. Each
+  end is rounded and meets the part square on, leaving a round mark of the pillar's
+  diameter, and a small pillar runs as one straight strut wherever one fits. A small pillar
+  is at most 30 of its diameters long; a longer one keeps the regular width.
+- **No room for a head:** a contact a hair too near a wall moves up to 0.3 mm along the face
+  to where a regular support fits. Where it has no room even so — in a crevice, beside a lip
+  — a small pillar holds the spot instead, leaning up to 45 degrees to find a face to stand on.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a
   pad under each foot, joined by strips), drawn to the model's outline (hull) or a

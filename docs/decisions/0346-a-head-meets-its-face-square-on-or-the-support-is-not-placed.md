@@ -1,6 +1,6 @@
 # 0346. Meet every face square on with the head, or leave the support out
 
-- **Status:** Accepted
+- **Status:** Accepted; a contact with no room for a head is left to a small pillar by 0348
 - **Date:** 2026-10-24
 
 ## Context

@@ -979,9 +979,9 @@ fn a_support_between_two_surfaces_longer_than_the_small_pillar_keeps_its_width()
 }
 
 #[test]
-fn a_small_pillar_meets_sloping_faces_with_the_whole_of_each_end() {
+fn a_small_pillar_meets_sloping_faces_only_in_a_circle_of_its_width() {
     // Underside z = 12 - x / 2 over top z = 11 - x / 2: faces at 26.6 degrees a
-    // millimetre apart, too near for a head, so the strut runs straight down.
+    // millimetre apart, too near for a head, so the strut runs across along their normal.
     let mut model = Mesh::default();
     let ramp = ramp(10.0, 5.0);
     for place in [
@@ -1000,72 +1000,78 @@ fn a_small_pillar_meets_sloping_faces_with_the_whole_of_each_end() {
         );
     }
     let fixture = profile();
-    let points = [SupportPoint::new(Vec3::new(5.0, 0.0, 9.5))];
+    let contact = Vec3::new(5.0, 0.0, 9.5);
     let trees = trees_on(
-        &points,
+        &[SupportPoint::new(contact)],
         &model,
         Transform::default(),
         Profiles::single(&fixture),
     );
-    assert!(
-        trees[0].root().is_leaf(),
-        "one strut, from the contact itself"
-    );
+    assert_eq!(trees.len(), 1, "the contact is held");
     assert!(Style::of(&trees[0], &fixture).small, "it runs face to face");
 
     let bvh = core_geometry::Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
     let mesh = mesh_trees(&trees, &placed, Profiles::single(&fixture));
-    // Each end is laid on its face and then sunk along the axis, so every point of
-    // it stands the same height off that face.
-    for (name, upper) in [("top", true), ("bottom", false)] {
-        let heights: Vec<Scalar> = mesh
-            .vertices
-            .iter()
-            .filter(|vertex| (vertex.z > 9.0) == upper)
-            .map(|v| {
-                if upper {
-                    12.0 - v.x / 2.0 - v.z
-                } else {
-                    v.z - 11.0 + v.x / 2.0
-                }
-            })
-            .collect();
-        let low = heights.iter().copied().fold(Scalar::INFINITY, Scalar::min);
-        let high = heights
-            .iter()
-            .copied()
-            .fold(Scalar::NEG_INFINITY, Scalar::max);
-        assert!(
-            !heights.is_empty() && high - low < 1e-3,
-            "the {name} end lies along its face, got {low}..{high} off it"
-        );
+    let radius_mm = fixture.small_pillar.radius_mm();
+    // The faces' outward normals, the underside's looking down, the top's up.
+    let down = Vec3::new(-0.5, 0.0, -1.0).normalize();
+    let base = trees[0].landing().base;
+    let tree = &trees[0];
+    let tip = tree
+        .nodes()
+        .iter()
+        .find(|node| node.is_leaf())
+        .expect("one tip");
+    let next = tip
+        .parent
+        .map_or(base, |parent| tree.nodes()[parent].position);
+    assert!(
+        (next - contact).normalize().dot(down) > 0.999,
+        "it leaves the underside along the normal, towards {next}"
+    );
+    for (name, at, normal, plane) in [("upper", contact, down, 12.0), ("lower", base, -down, 11.0)]
+    {
+        let inside = |v: &Vec3| {
+            let height = v.z + v.x / 2.0 - plane;
+            if normal.z < 0.0 { height } else { -height }
+        };
+        for vertex in mesh.vertices.iter().filter(|v| inside(v) > 1e-4) {
+            let off = *vertex - at;
+            let across = (off - normal * off.dot(normal)).length();
+            assert!(
+                across <= radius_mm + 1e-3,
+                "inside the {name} face the pillar is its half ball, {radius_mm} mm in radius \
+                 round the contact; {vertex} is {across} mm off its normal"
+            );
+        }
     }
     assert_eq!(diagnose(&mesh).boundary_edges, 0, "it is closed");
 }
 
 #[test]
-fn a_small_pillar_has_no_tip_and_is_one_width_from_end_to_end() {
+fn a_small_pillar_is_one_width_and_ends_in_a_half_ball_of_it() {
     for shape in [ContactShape::Plane, ContactShape::Sphere] {
         let mut profile = profile();
         profile.tip.shape = shape;
         let trees = model_to_model(&profile);
         let mesh = meshed(&trees, Profiles::single(&profile));
         let radius_mm = profile.small_pillar.radius_mm();
+        // The contact at z = 20 in the air, the shelf's top at z = 10, each ball sunk by its depth.
+        let upper = Vec3::new(5.0, 5.0, 20.0 + profile.small_pillar.upper_depth_mm);
+        let lower = Vec3::new(5.0, 5.0, 10.0 - profile.small_pillar.lower_depth_mm);
 
-        // Within a millimetre of either face: the joint under the neck is a dome
-        // inside the body, and is not what touches the model.
-        let ends = mesh
-            .vertices
-            .iter()
-            .filter(|vertex| vertex.z > 19.0 || vertex.z < 11.0);
-        for vertex in ends {
+        for vertex in mesh.vertices.iter().filter(|v| v.z > 19.0 || v.z < 11.0) {
             let off_axis = Vec2::new(vertex.x - 5.0, vertex.y - 5.0).length();
-            // The middle of each flat end sits on the axis; everything else is wall.
             assert!(
-                off_axis < 1e-3 || (off_axis - radius_mm).abs() < 1e-3,
-                "{shape:?}: a vertex {off_axis} mm off the axis of a pillar \
-                     {radius_mm} mm in radius is a tip or a taper"
+                off_axis <= radius_mm + 1e-3,
+                "{shape:?}: a vertex {off_axis} mm off the axis of a pillar {radius_mm} mm \
+                 in radius is a tip or a taper"
+            );
+            let centre = if vertex.z > 15.0 { upper } else { lower };
+            assert!(
+                off_axis > radius_mm - 1e-3 || vertex.distance(centre) <= radius_mm + 1e-3,
+                "{shape:?}: narrower than the body only on its half ball, got {vertex}"
             );
         }
         assert_eq!(diagnose(&mesh).boundary_edges, 0, "{shape:?}: it is closed");

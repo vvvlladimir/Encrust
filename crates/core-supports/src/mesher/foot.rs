@@ -55,9 +55,13 @@ pub(super) fn trunk_base_mm(tree: &SupportTree, profile: &SupportProfile, style:
     style.body_radius_mm(base.max(root.radius_mm), profile)
 }
 
-/// Where the trunk under the root comes to rest, in plate coordinates.
+/// Where the trunk under the root comes to rest, in plate coordinates: on the face itself for
+/// a small pillar, whose half ball takes the depth along its own axis (ADR 0348).
 pub(super) fn trunk_bottom(tree: &SupportTree, profile: &SupportProfile) -> Vec3 {
     let landing = tree.landing();
+    if landing.on_model && !landing.on_support && Style::of(tree, profile).small {
+        return landing.base;
+    }
     Vec3::new(
         landing.base.x,
         landing.base.y,
@@ -107,8 +111,6 @@ pub(super) fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -
         sides: shape.sides(facets) as usize,
         apex: None,
         tail: None,
-        seat: None,
-        sole: None,
     })
 }
 
@@ -169,8 +171,6 @@ pub(super) fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) 
         sides: profile.facets as usize,
         apex: None,
         tail: None,
-        seat: None,
-        sole: None,
     })
 }
 

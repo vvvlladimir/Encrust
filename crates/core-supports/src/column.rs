@@ -10,6 +10,9 @@ use crate::clear::{Beam, MIN_BODY_MM, clear};
 use crate::mesher::FOOT_BEVEL;
 use crate::pad::{PadCut, pad_clear, pad_cut};
 
+mod room;
+use room::roomier;
+
 /// Plate coordinates put the plate surface at z = 0; see `docs/architecture.md`.
 pub(crate) const PLATE_Z_MM: Scalar = 0.0;
 
@@ -188,6 +191,7 @@ pub(crate) fn column(
     profile: &SupportProfile,
 ) -> Option<Column> {
     let contact = onto_surface(placed, contact, profile);
+    let contact = roomier(placed, contact, profile).unwrap_or(contact);
     let neck = neck_of(placed, contact, profile)?;
     Some(Column {
         point,
@@ -334,8 +338,8 @@ pub(crate) fn landing_within(
     stands_clear(placed, &body, profile).then_some(landing)
 }
 
-/// Where the body of a support at `contact` begins: one `[top]` out along the face normal so
-/// only the tip meets the face (ADR 0125, 0346); `None` if a head along it would hit the model.
+/// Where the body of a support at `contact` begins: one `[top]` out along the face normal (ADR 0125,
+/// 0346); with no room for a head, the contact, for a small pillar (ADR 0348), or else `None`.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
     let (direction, normal) = tip_direction(placed, contact);
     let neck = neck_along(contact, direction, profile);
@@ -345,7 +349,12 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Opti
     if has_head(contact, neck) && head_clear(placed, contact, neck, profile) {
         return (!over_its_contact(contact, neck, profile)).then_some(neck);
     }
-    (profile.small_pillar.enabled && no_room_below(placed, contact, profile)).then_some(contact)
+    profile.small_pillar.enabled.then_some(contact)
+}
+
+/// Whether a head leaving `contact` square on its face has room, as [`neck_of`] reads it.
+pub(crate) fn has_room(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
+    neck_of(placed, contact, profile).is_some_and(|neck| has_head(contact, neck))
 }
 
 /// Whether a head rises so nearly straight up that the trunk dropped from its neck would
@@ -354,15 +363,6 @@ fn over_its_contact(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> bool
     neck.z > contact.z
         && (neck - contact).truncate().length()
             < profile.pillar_radius_mm() + profile.contact_radius_mm()
-}
-
-/// Whether the model under `contact` is nearer than a head is long, so a head straight
-/// down would run through it.
-fn no_room_below(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
-    let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
-    placed
-        .raycast(&ray)
-        .is_some_and(|hit| hit.distance < profile.top.length_mm && hit.normal.z > 0.0)
 }
 
 /// Whether a support at `contact` leaves it by a head to `neck`. One without is a single

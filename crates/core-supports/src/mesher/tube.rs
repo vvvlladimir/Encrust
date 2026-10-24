@@ -30,11 +30,6 @@ pub struct Tube {
     pub apex: Option<Vec3>,
     /// The pole of a rounded bottom, for a tube that ends at a joint.
     pub tail: Option<Vec3>,
-    /// The outward normal of the face a plane tip sits on: its first ring is laid along
-    /// the axis onto that face, so the whole disc meets it however the head leans.
-    pub seat: Option<Vec3>,
-    /// The same for the face a tube standing on the model ends on, laying its last ring.
-    pub sole: Option<Vec3>,
 }
 
 /// A tube with nothing in it, for a strut of no length.
@@ -46,8 +41,6 @@ pub fn empty_tube(top: Vec3) -> Tube {
         sides: 3,
         apex: None,
         tail: None,
-        seat: None,
-        sole: None,
     }
 }
 
@@ -114,36 +107,6 @@ pub fn frame(direction: Vec3) -> (Vec3, Vec3) {
     (across, (-direction).cross(across))
 }
 
-/// The least a head may lean off the face its tip sits on, as the cosine between axis and face
-/// normal, for the disc to lie on it; past it the disc would stretch further than the head is wide.
-const SEAT_MIN_COS: Scalar = 0.25;
-
-/// How far along the axis each point of ring `index` moves to lie on the face `normal`, given its
-/// offset from the axis; at most halfway to the next ring so the band never turns over.
-fn laid(tube: &Tube, index: usize, normal: Option<Vec3>) -> impl Fn(Vec3) -> Scalar {
-    let rings = &tube.rings;
-    let beside = if index == 0 {
-        1
-    } else {
-        index.saturating_sub(1)
-    };
-    let room_mm = match (rings.get(index), rings.get(beside)) {
-        (Some(ring), Some(other)) if beside != index => {
-            (ring.along_mm - other.along_mm).abs() / 2.0
-        }
-        _ => 0.0,
-    };
-    let direction = tube.direction;
-    let face = normal
-        .map(|normal| (normal, direction.dot(normal)))
-        .filter(|(_, cos)| cos.abs() >= SEAT_MIN_COS);
-    move |offset: Vec3| {
-        face.map_or(0.0, |(normal, cos)| {
-            (-offset.dot(normal) / cos).clamp(-room_mm, room_mm)
-        })
-    }
-}
-
 /// Turns one tube into a closed solid: a cap on top, a band between each pair of rings,
 /// and a flat disc or a rounded end underneath. Every edge ends up in exactly two faces.
 pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
@@ -163,18 +126,12 @@ pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
             .unwrap_or(tube.top + tube.direction * tube.rings[0].along_mm),
     );
     let last = tube.rings.len() - 1;
-    let (seated, soled) = (laid(tube, 0, tube.seat), laid(tube, last, tube.sole));
-    for (index, ring) in tube.rings.iter().enumerate() {
+    for ring in &tube.rings {
         let center = tube.top + tube.direction * ring.along_mm;
         for facet in 0..facets {
             let angle = std::f32::consts::TAU * facet as Scalar / facets as Scalar;
             let offset = (across * angle.cos() + up * angle.sin()) * ring.radius_mm;
-            let along = match index {
-                0 => seated(offset),
-                at if at == last => soled(offset),
-                _ => 0.0,
-            };
-            mesh.vertices.push(center + offset + tube.direction * along);
+            mesh.vertices.push(center + offset);
         }
     }
     let bottom_center = mesh.vertices.len() as u32;
@@ -214,110 +171,5 @@ pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
             ring_at(last, facet + 1),
             ring_at(last, facet),
         ]);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use core_geometry::diagnose;
-
-    /// A tip leaving a face looking straight down at `lean_deg` off vertical, its disc
-    /// laid on that face.
-    fn leaning_tip(lean_deg: Scalar) -> Mesh {
-        let lean = lean_deg.to_radians();
-        let mut mesh = Mesh::default();
-        sweep(
-            &mut mesh,
-            &Tube {
-                top: Vec3::new(0.0, 0.0, 10.0),
-                direction: Vec3::new(lean.sin(), 0.0, -lean.cos()),
-                rings: vec![
-                    Ring {
-                        along_mm: 0.0,
-                        radius_mm: 0.12,
-                    },
-                    Ring {
-                        along_mm: 2.0,
-                        radius_mm: 0.6,
-                    },
-                ],
-                sides: 12,
-                apex: None,
-                tail: None,
-                seat: Some(-Vec3::Z),
-                sole: None,
-            },
-        );
-        mesh
-    }
-
-    #[test]
-    fn a_leaning_tip_meets_its_face_with_the_whole_disc() {
-        let mesh = leaning_tip(45.0);
-        // The cap's centre and the first ring: one vertex, then twelve.
-        for vertex in &mesh.vertices[..13] {
-            assert!(
-                (vertex.z - 10.0).abs() < 1e-5,
-                "the face the tip sits on is z = 10, got {vertex}"
-            );
-        }
-        assert_eq!(diagnose(&mesh).boundary_edges, 0, "the tip is still closed");
-    }
-
-    #[test]
-    fn a_leaning_trunk_stands_on_its_face_with_the_whole_disc() {
-        let lean = 45f32.to_radians();
-        let mut mesh = Mesh::default();
-        let direction = Vec3::new(lean.sin(), 0.0, -lean.cos());
-        let top = Vec3::new(0.0, 0.0, 10.0);
-        sweep(
-            &mut mesh,
-            &Tube {
-                top,
-                direction,
-                rings: vec![
-                    Ring {
-                        along_mm: 0.0,
-                        radius_mm: 0.6,
-                    },
-                    Ring {
-                        along_mm: 2.0,
-                        radius_mm: 0.12,
-                    },
-                ],
-                sides: 12,
-                apex: None,
-                tail: None,
-                seat: None,
-                sole: Some(Vec3::Z),
-            },
-        );
-        let floor_z = (top + direction * 2.0).z;
-        // The cap's centre, the first ring, then the last ring of twelve.
-        for vertex in &mesh.vertices[13..25] {
-            assert!(
-                (vertex.z - floor_z).abs() < 1e-5,
-                "the face the trunk stands on is z = {floor_z}, got {vertex}"
-            );
-        }
-        assert_eq!(
-            diagnose(&mesh).boundary_edges,
-            0,
-            "the trunk is still closed"
-        );
-    }
-
-    #[test]
-    fn a_tip_leaning_along_its_face_keeps_its_disc_square() {
-        let mesh = leaning_tip(80.0);
-        let lowest = mesh.vertices[1..13]
-            .iter()
-            .map(|vertex| vertex.z)
-            .fold(Scalar::INFINITY, Scalar::min);
-        assert!(
-            lowest < 10.0 - 1e-3,
-            "past the seat's angle the disc stays across the axis, got {lowest}"
-        );
     }
 }
