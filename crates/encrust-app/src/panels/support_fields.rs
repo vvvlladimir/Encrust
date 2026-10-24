@@ -374,6 +374,22 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
             1.0..=40.0,
             1,
         );
+        mm(
+            ui,
+            &tr!("support-longest-strut"),
+            was(saved, |p| p.branching.max_strut_length_mm),
+            &mut branching.max_strut_length_mm,
+            COARSE_STEP,
+            1.0..=40.0,
+        );
+        count_row(
+            ui,
+            &tr!("support-tips-per-trunk"),
+            &mut branching.max_tips_per_trunk,
+            "",
+            0.05,
+            1..=MAX_TIPS_PER_TRUNK,
+        );
     });
 }
 
@@ -458,6 +474,10 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
 
 /// The most levels a bracing zone may take: past that the middle has nothing left to fill.
 const MAX_BRACE_LEVELS: u32 = 6;
+
+/// The most tips the field lets one trunk carry; past this a profile merges without a
+/// limit in all but name.
+const MAX_TIPS_PER_TRUNK: u32 = 64;
 
 /// The struts tying tall trunks together: a ready preset, or every number of it once the
 /// user asks to fine-tune. Which of the two shows is the window's, not the profile's; a

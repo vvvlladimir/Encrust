@@ -583,7 +583,7 @@ fn strut(
         sides: profile.facets as usize,
         apex: apex_of(&nodes[child], direction, profile, style),
         tail: Some(to + direction * body_mm),
-        seat: seat_of(&nodes[child], profile, style),
+        seat: seat_of(&nodes[child], style),
         sole: None,
     }
 }
@@ -620,8 +620,12 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     let mut sole = None;
     let tail = if landing.on_model && !landing.on_support && !style.small {
         let pointed = foot_tip(&mut rings, length, base_mm, profile);
-        sole = style.ground.filter(|_| !pointed);
-        pointed.then(|| top + direction * length)
+        let pole_mm = if pointed {
+            length
+        } else {
+            length + profile.contact_radius_mm()
+        };
+        Some(top + direction * pole_mm)
     } else if style.small && landing.on_model && !landing.on_support {
         // One ring, so the whole of it can be laid onto the face it stands on.
         push(&mut rings, length, base_mm);
@@ -640,7 +644,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         sides: profile.facets as usize,
         apex: apex_of(root, direction, profile, style),
         tail,
-        seat: seat_of(root, profile, style),
+        seat: seat_of(root, style),
         sole,
     }
 }
@@ -670,6 +674,9 @@ fn foot_tip(
 
     push(rings, end_mm - taper_mm, body_mm);
     push(rings, end_mm, contact_mm);
+    if !pointed {
+        round_off(rings, end_mm, contact_mm);
+    }
     pointed
 }
 
@@ -885,12 +892,36 @@ fn head(
         return;
     }
 
-    // The whole tip is pushed its bite into the face, the cone with it; the disc it ends
-    // in is what grips. See `docs/decisions/0243`.
-    let bite_mm = style.bite_mm(profile).min(top_mm);
-    push(rings, -bite_mm, contact_mm);
-    push(rings, top_mm - bite_mm, body_mm);
+    // A half ball of the contact's width centred on the contact, pushed in by the bite:
+    // half of it is in the part at a bite of nought, and the face cuts it in a circle of
+    // the contact's width however the head leans. See `docs/decisions/0345`.
+    let centre_mm = cap_centre_mm(style, profile).min(top_mm);
+    cap(rings, -centre_mm, contact_mm);
+    push(rings, top_mm - centre_mm, body_mm);
 }
+
+/// How far into the part a plane tip's half ball is centred, millimetres: its bite, and
+/// out of the part again where the ball would reach past the half wall it is held to.
+fn cap_centre_mm(style: Style, profile: &SupportProfile) -> Scalar {
+    let radius_mm = profile.contact_radius_mm();
+    style.bite_mm(profile).min(style.bite_limit_mm - radius_mm)
+}
+
+/// The rings of a half ball of `radius_mm` centred `centre_mm` along the axis, down to its
+/// full width there; its pole, `radius_mm` further back, is the tube's apex.
+fn cap(rings: &mut Vec<Ring>, centre_mm: Scalar, radius_mm: Scalar) {
+    for step in 1..=CAP_RINGS {
+        let angle = std::f32::consts::FRAC_PI_2 * step as Scalar / CAP_RINGS as Scalar;
+        push(
+            rings,
+            centre_mm - radius_mm * angle.cos(),
+            radius_mm * angle.sin(),
+        );
+    }
+}
+
+/// How many rings the half ball a plane tip ends in is drawn with.
+const CAP_RINGS: u32 = 4;
 
 /// The outward normal of the face of the model `landing` stands on, if it stands on the
 /// model itself.
@@ -905,11 +936,10 @@ fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
         .map(|hit| hit.normal)
 }
 
-/// The face a plane tip or a small pillar is laid onto, for a tube that starts at one; a
-/// sphere and a joint have no flat end to lay.
-fn seat_of(node: &TreeNode, profile: &SupportProfile, style: Style) -> Option<Vec3> {
-    let plane = profile.tip.shape == ContactShape::Plane;
-    (node.is_leaf() && (plane || style.small))
+/// The face a small pillar is laid onto, for a tube that starts at one; a tip ends round
+/// and a joint in a dome, with no flat end to lay.
+fn seat_of(node: &TreeNode, style: Style) -> Option<Vec3> {
+    (node.is_leaf() && style.small)
         .then_some(style.face)
         .flatten()
 }
@@ -930,8 +960,12 @@ fn apex_of(
     if !node.is_leaf() {
         return Some(node.position - direction * style.body_radius_mm(node.radius_mm, profile));
     }
-    if style.small || profile.tip.shape == ContactShape::Plane {
+    if style.small {
         return None;
+    }
+    if profile.tip.shape == ContactShape::Plane {
+        let depth_mm = cap_centre_mm(style, profile) + profile.contact_radius_mm();
+        return Some(node.position - direction * depth_mm);
     }
     Some(node.position - direction * style.bite_mm(profile))
 }
@@ -1445,6 +1479,49 @@ mod tests {
     }
 
     #[test]
+    fn a_head_leaning_off_its_face_marks_it_with_a_circle_of_the_contact() {
+        use core_geometry::Quat;
+        use std::f32::consts::PI;
+
+        // A steep ramp turned over: its face's normal is 68 degrees off straight down, so
+        // the head leaves it at 60 and leans 8 degrees off the normal.
+        let model = ramp(4.0, 10.0);
+        let transform = Transform {
+            rotation: Quat::from_rotation_x(PI),
+            translation: Vec3::new(0.0, 0.0, 30.0),
+            ..Transform::default()
+        };
+        let mut fixture = profile();
+        fixture.tip.contact_depth_mm = 0.0;
+        fixture.branching.enabled = false;
+        let profiles = Profiles::single(&fixture);
+        let local = Vec3::new(2.0, 0.0, 5.0);
+        let contact = transform.to_matrix().transform_point3(local);
+        let trees = trees_on(&[SupportPoint::new(local)], &model, transform, profiles);
+        let bvh = core_geometry::Bvh::build(&model);
+        let mesh = mesh_trees(&trees, &Placed::new(&model, &bvh, transform), profiles);
+
+        let normal = Vec3::new(-10.0, 0.0, -4.0).normalize();
+        let radius_mm = fixture.contact_radius_mm();
+        let mut deepest: Scalar = 0.0;
+        for vertex in mesh
+            .vertices
+            .iter()
+            .filter(|v| (**v - contact).dot(normal) <= 1e-4)
+        {
+            deepest = deepest.min((*vertex - contact).dot(normal));
+            assert!(
+                (*vertex - contact).length() <= radius_mm + 1e-4,
+                "what reaches the face is a ball of the contact's radius on it, got {vertex}"
+            );
+        }
+        assert!(
+            deepest < -0.9 * radius_mm,
+            "half the ball is in the part at a bite of nought, got {deepest}"
+        );
+    }
+
+    #[test]
     fn a_tip_on_a_sloping_face_bites_into_it_along_the_normal() {
         use core_geometry::Quat;
         use std::f32::consts::PI;
@@ -1481,20 +1558,21 @@ mod tests {
             })
             .expect("the support was meshed");
         let depth = profile.contact_depth_mm();
+        let radius_mm = profile.contact_radius_mm();
         assert!(
-            ((apex - contact).dot(-normal) - depth).abs() < 1e-3,
-            "the tip goes its bite into the face, got {}",
+            ((apex - contact).dot(-normal) - depth - radius_mm).abs() < 1e-3,
+            "the half ball is centred its bite into the face, got its pole at {}",
             (apex - contact).dot(-normal)
         );
         let centre = contact - normal * depth;
-        let disc = mesh
+        for vertex in mesh
             .vertices
             .iter()
-            .filter(|vertex| ((**vertex - contact).dot(-normal) - depth).abs() < 1e-3);
-        for vertex in disc {
+            .filter(|v| (**v - contact).dot(-normal) > depth)
+        {
             assert!(
-                (*vertex - centre).length() <= profile.contact_radius_mm() + 1e-3,
-                "the disc it ends in lies square across the normal, got {vertex}"
+                (*vertex - centre).length() <= radius_mm + 1e-3,
+                "past its centre the tip is a ball of the contact's radius, got {vertex}"
             );
         }
     }
@@ -1632,19 +1710,20 @@ mod tests {
     }
 
     #[test]
-    fn a_plane_tip_is_pushed_its_bite_into_the_model_and_ends_flat() {
+    fn a_plane_tip_ends_in_a_half_ball_of_its_contact_pushed_its_bite_in() {
         let flat = with_tip(ContactShape::Plane);
         let mesh = one_column(&flat);
-        let sunk = 20.0 + flat.contact_depth_mm();
+        let centre = 20.0 + flat.contact_depth_mm();
         assert!(
-            (ceiling(&mesh) - sunk).abs() < 1e-4,
-            "the tip goes its bite into the face at z = 20, got {}",
+            (ceiling(&mesh) - (centre + flat.contact_radius_mm())).abs() < 1e-4,
+            "the half ball's pole is a contact radius past its bite into the face at z = 20, \
+             got {}",
             ceiling(&mesh)
         );
         let axis = Vec3::new(10.0, 10.0, 0.0);
         assert!(
-            (widest_above(&mesh, axis, sunk - 2e-3) - flat.contact_radius_mm()).abs() < 1e-3,
-            "it ends on a disc as wide as its contact, not on a point"
+            (widest_above(&mesh, axis, centre - 2e-3) - flat.contact_radius_mm()).abs() < 1e-3,
+            "it is as wide as its contact where it is centred, and no wider"
         );
     }
 
@@ -1837,8 +1916,8 @@ mod tests {
     fn a_tip_under_a_thick_wall_bites_its_whole_depth() {
         let top = tip_top_under_slab(10.0, 5.0);
         assert!(
-            (top - 10.2).abs() < 0.01,
-            "the fixture's 0.2 mm bite, got {top}"
+            (top - 10.4).abs() < 0.01,
+            "the fixture's 0.2 mm bite and the half ball's 0.2 mm radius, got {top}"
         );
     }
 
@@ -1980,14 +2059,14 @@ mod tests {
             .expect("a support has vertices");
         let sunk = 10.0 - profile.landing_depth_mm();
         assert!(
-            (lowest.z - sunk).abs() < 1e-3,
-            "the bite goes the tip's own depth into the 10 mm shelf, got {}",
+            (lowest.z - (sunk - profile.contact_radius_mm())).abs() < 1e-3,
+            "the half ball is centred the bite into the 10 mm shelf, got {}",
             lowest.z
         );
         let widest = widest_below(&mesh, Vec3::new(5.0, 5.0, 0.0), sunk);
         assert!(
-            (widest - profile.contact_radius_mm()).abs() < 1e-3,
-            "it ends flat on its contact's disc, as the plane tip at the top does, got {widest}"
+            widest <= profile.contact_radius_mm() + 1e-3,
+            "it ends in a half ball of its contact, as the plane tip at the top does, got {widest}"
         );
         assert_eq!(diagnose(&mesh).boundary_edges, 0);
     }

@@ -1,6 +1,6 @@
 # 0330. Touch every island where it begins, and sit every tip on its face
 
-- **Status:** Accepted
+- **Status:** Accepted; laying a plane tip's disc onto its face is superseded by 0345
 - **Date:** 2026-10-22
 
 ## Context

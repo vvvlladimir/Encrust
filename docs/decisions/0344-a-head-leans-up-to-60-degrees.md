@@ -1,6 +1,6 @@
 # 0344. Let a tip's head lean up to 60 degrees off vertical
 
-- **Status:** Accepted
+- **Status:** Superseded by 0346
 - **Date:** 2026-10-24
 
 ## Context

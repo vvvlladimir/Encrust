@@ -307,7 +307,9 @@ whole-surface fill is Cmd-Shift-click.
 - A point or a needle hanging down is held at its very tip, however thin, and every
   island Check would name is touched where it begins, even with a bite of nought; a speck
   too small for Check to name is left alone. Small islands are held closer than large
-  ones, by areas and shares the support profile sets. A flat tip meets its face with its whole end, however its head leans.
+  ones, by areas and shares the support profile sets. A tip ends in a half ball as wide as
+  its contact, centred on the surface, so even with a bite of nought half of it is in the
+  part and its mark is a circle of the contact's width, however its head leans.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.
@@ -325,9 +327,15 @@ whole-surface fill is Cmd-Shift-click.
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
   one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
   added.
-- Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
-  height and load, and nothing carrying a load leans more than 45°; a tip's head may lean
-  up to 60° to meet its face square on.
+- Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
+  trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
+  straight down past it and merge lower. A support that has to step aside for room steps
+  the least it can, a millimetre at a time. No strut of a merge runs
+  longer than **Longest strut** (6 mm as shipped) and no trunk carries more than **Tips
+  per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
+  Trunks are cones sized by their height and load, and nothing carrying a load leans more
+  than 45°. A tip's head always
+  meets its face square on, however steep the face; only what is under it leans and bends.
 - The trunks are built in the background after every change, so the window keeps
   answering on a dense model; until they are, the supports shown last stay, and slicing
   and the preview wait for them.
@@ -335,13 +343,15 @@ whole-surface fill is Cmd-Shift-click.
   unless set (1–15 mm): each tip leans to its nearest node at 45°, the tips of one node
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
-- Only the tip touches the model: a head that would run into the part beside its contact
-  turns away, and a pad beside a part that cannot be moved aside is cut back on that side.
+- Only the tip touches the model, and its mark is never wider than the contact: a support
+  whose head, square on its face, would run into the part beside its contact or rise
+  from a face looking up with nowhere to come down is not placed — by Grow or by a click —
+  and is counted among those with no room to stand. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a
-  merged one that meets the part is stood again tip by tip.
+  merged one whose trunk meets the part is split into its two halves, each grown again.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
   A support that still has no room is reported and left out of the print, never forced
-  into the model — not even a head in a crevice too narrow to turn in.
+  into the model.
 - Supports are drawn round, 24 sides to a pillar, with rounded joints, and widen into
   their pad on a curved fillet.
 - Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
@@ -385,16 +395,16 @@ whole-surface fill is Cmd-Shift-click.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
   to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy differ in
   thickness only: all three place contacts 1.8 mm apart, hold surfaces leaning past 40°,
-  lift a part 5 mm and touch the part without biting into it. Duplicate one, edit it, save it under a new name,
+  lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand.
 - Each model remembers the profile it was edited with.
 
 ### What a profile lets you shape
 - **Tip:** a plane or a sphere contact, with its diameter, contact spacing, how deep it
-  bites into the part (nought touches the surface only), and clearance.
+  bites into the part (nought centres the tip's rounded end on the surface), and clearance.
 - **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
-  maximum length, standing on the model on or off.
+  longest strut, tips per trunk, maximum length, standing on the model on or off.
 - **Small pillar:** a separate thin shape for short supports from the part to the part.
   Tips that could each stand as one are not merged into a full support on the part.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.

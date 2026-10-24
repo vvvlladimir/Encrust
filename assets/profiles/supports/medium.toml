@@ -65,6 +65,9 @@ max_angle_deg = 45.0
 max_merge_distance_mm = 10.0
 trunk_exponent = 2.5
 max_trunk_diameter_mm = 1.7
+# The longest a leaning strut of a merge runs before its tips get trunks of their own.
+max_strut_length_mm = 6.0
+max_tips_per_trunk = 6
 
 # The slab the supports stand on instead of standing on the plate.
 [raft]

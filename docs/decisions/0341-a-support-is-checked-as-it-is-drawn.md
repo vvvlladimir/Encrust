@@ -1,6 +1,6 @@
 # 0341. Check a support as it is drawn, fill a beam with balls, and leave out what still meets the part
 
-- **Status:** Accepted
+- **Status:** Accepted; standing a merged tree tip by tip is superseded by 0347
 - **Date:** 2026-10-24
 
 ## Context

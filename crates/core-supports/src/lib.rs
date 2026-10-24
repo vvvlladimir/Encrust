@@ -77,13 +77,8 @@ mod tests {
     ) -> Option<Landing> {
         let bvh = Bvh::build(model);
         let placed = Placed::new(model, &bvh, transform);
-        crate::landing(
-            &placed,
-            crate::neck_of(&placed, contact, profile),
-            profile.pillar_radius_mm(),
-            1,
-            profile,
-        )
+        let neck = crate::neck_of(&placed, contact, profile)?;
+        crate::landing(&placed, neck, profile.pillar_radius_mm(), 1, profile)
     }
 
     /// The same for a whole set of points.
@@ -158,7 +153,12 @@ mod tests {
             },
             land_on_model: true,
             small_pillar: SmallPillar::default(),
-            branching: Branching::default(),
+            // Struts as long as the merge distance lets them run, so a test of how tips
+            // merge is not one of the limit on a strut.
+            branching: Branching {
+                max_strut_length_mm: 10.0,
+                ..Branching::default()
+            },
             raft: Raft::default(),
             bracing: Bracing::default(),
             z_lift_mm: 5.0,

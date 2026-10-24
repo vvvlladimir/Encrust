@@ -122,7 +122,7 @@ pub fn tip_carried(
     let inverse = matrix.inverse();
     let node = tree.nodes().get(tip).filter(|node| node.is_leaf())?;
     let contact = on_model(placed, to)?;
-    let neck = neck_of(placed, contact, profile);
+    let neck = neck_of(placed, contact, profile)?;
 
     let mut carried = tree.clone();
     carried.move_node(tip, inverse.transform_point3(contact));

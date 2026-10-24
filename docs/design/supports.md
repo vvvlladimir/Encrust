@@ -24,24 +24,23 @@ churning. Landing is one ray per point through the scene's `Bvh`, on every core 
 A tip leaves the surface square on: `columns` reads the normal of the face nearest the
 contact and puts the **neck** — the far end of the `[top]` segment — one `top.length_mm`
 out along it, and shorter where a full one would eat the room the body needs over the plate
-(ADR 0125). The head follows the normal while that is within 60 degrees of straight
-down; a steeper face, a wall or a slope looking up sends it out the way the face looks at
-60 degrees (ADR 0344), and a head that would meet the model within its own length goes
-straight down (ADR 0249). A flat top, or a contact off the surface, sends it straight down. A knee
-and the strut into a thicker support are held to 45 degrees too, whatever the branch
+(ADR 0125). The head follows that normal however the face leans — down, level off a wall,
+or up off a slope — so the tip meets its face square on and leaves a mark of exactly the
+contact's width; only what is under the neck leans and bends (ADR 0346). A contact off the
+surface sends it straight down. A knee
+and the strut into a thicker support are held to 45 degrees, whatever the branch
 angle; a trunk is swept for clearance from its own width below its top; and a tip that can
 neither stand nor lean is first let stand, or lean and stand, on a face up to 75 degrees
 steep, and failing that run on one strut straight onto the model under it — onto a face
-that looks up at it, so a contact inside the model is not run out through its skin. A head
-is not sent straight down where down is into the solid. A contact on an edge or a corner sits on every face meeting there
+that looks up at it, so a contact inside the model is not run out through its skin. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Only the tip may meet the model: the whole head, contact to pillar
-width with `clearance_mm` round it, is swept once it has left its own face's plane, and a
-head that meets the model there turns — straight down, then 15, 30, 45 and 60 degrees off its
-direction in eight ways — to the first that is clear, with its clearance and then bare,
-and keeps its direction where none is, for the check below to refuse (ADR 0328, 0341) — unless the model under the contact is
-nearer than a head is long, where that head would run through it and stand its trunk
-underneath: such a contact has no head, and `grow` runs it as one strut from the contact
+width, is swept from a hair off its face, and a support whose head meets the model there,
+or rises so nearly straight up that a trunk from its neck would come down on its own
+contact, is not placed: `columns` leaves it out and the panel counts it with those that have
+no room to stand (ADR 0346). The one exception is a contact with the model nearer under it
+than a head is long, in a profile with small pillars: it has no head, and `grow` runs it as
+one small pillar from the contact
 itself, straight onto what is under it (ADR 0331). Everything below is measured from the neck, not
 from the contact.
 
@@ -69,7 +68,10 @@ each face the `Bvh` offers, exactly, on the plate (ADR 0341). Once a family has 
 tree is held to its drawn bodies: `mesher::bodies` hands back the tubes the mesher sweeps,
 and `sound` tests each ring-to-ring frustum, a 0.05 mm graze narrower, from where the
 tube stands that graze off the face its tip — or the foot it stands on the part with —
-was built to meet. A merged tree that fails is stood again tip by tip; a support of one
+was built to meet. A merged tree whose own branches fail stands those tips alone and
+grows the rest again; one whose trunk or an inner strut fails is split at its lowest
+joint and each half grown again (ADR 0347), and after three rounds what still fails is
+stood tip by tip; a support of one
 tip that fails is left unstood, and the inspector counts it. A dragged support is held to
 the same test.
 
@@ -94,13 +96,13 @@ top as layers of nothing but tips. `facets`
 sides are used for every ring; the default of 24 puts the flats 0.013 mm inside the circle
 of a 3 mm pillar, and a joint's domes take six rings so a bend reads round (ADR 0343).
 
-**Tips.** `plane`, the default, is the whole tip moved `bite_mm` along its axis into the
-model, ending on the sweep's flat disc of the contact's width (ADR 0243). The disc is
-laid along the axis onto the face the tip sits on, so a head that leans off that face's
-normal still meets it with the whole disc, an ellipse as wide as the contact across the
-lean; past 75 degrees it stays square to the axis. The tip a trunk standing on the part
-ends in is laid on the face it lands on the same way (ADR 0330), and so are both plain
-ends of a small pillar, whatever the tip shape (ADR 0331). `sphere` is a
+**Tips.** `plane`, the default, ends in a half ball of the contact's radius centred
+`bite_mm` into the face along the head's axis, the cone running from its equator: at a
+bite of nought half the ball is in the part, and the face cuts it in a circle of the
+contact's width however the head leans. Its pole is held to half the wall, the centre
+coming back out where the ball would reach further (ADR 0345). The tip a trunk standing on
+the part ends in is rounded the same way; only the plain ends of a small pillar are laid
+on their faces, whatever the tip shape (ADR 0331). `sphere` is a
 ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
 its rings run past the contact and rings never climb, so the neck is shorter than
 `top.length_mm`.
@@ -425,8 +427,16 @@ the case where one front reaches the other's column outright.
 
 Candidates sit in a max-heap on `z`, so the highest meeting point — the merge that saves
 most — is taken first, and only when the two are within
-`branching.max_merge_distance_mm`, neither strut is zero length, each strut's body clears
-the model, and the meeting point can land. The joint
+`branching.max_merge_distance_mm`, together carry no more than `max_tips_per_trunk` tips,
+neither strut is longer than `max_strut_length_mm`, each strut's body clears the model,
+and the meeting point can land. Where the higher front reaches the lower one's column at
+or above it, the meeting point is the lower front itself and only the higher one leans:
+it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
+at its own height further off (ADR 0347). A pair refused for its bodies or its
+landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
+first, and again lower, until the meeting point reaches the plate: what blocks a strut is
+mostly the part right beside the tips, and dropping past it is how two columns under a
+crowded part still share a trunk (ADR 0347). The joint
 keeps the branches' own width; only the trunk under the root widens, as a cone from that
 width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `carried` folds
 `(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
@@ -458,9 +468,11 @@ horizontal is not a landing: there is nothing under a foot on it.
 
 **When there is no room.** A tip whose own column is refused is not thrown away.
 `columns` hands it over with no landing, merging gets its chance at it, and a front still
-standing on nothing at harvest bends a **knee**: eight directions and three reaches,
-shortest first, at the branch angle and no further than the merge distance or than the
-height left under it allows (ADR 0078). Both the lean and the trunk under it go through
+standing on nothing at harvest bends a **knee**: eight directions and a reach every
+`ESCAPE_STEP_MM` (1 mm), shortest first, at the branch angle and no further than the merge
+distance or than the height left under it allows (ADR 0078, 0347). A contact with no head
+is not bent at all: it is run straight onto the model under it as a small pillar before
+any lean is tried, which is what it was left headless for (ADR 0331, 0347). Both the lean and the trunk under it go through
 the same beam. What still cannot stand is dropped, and the panel's
 standing-against-placed count is where that shows.
 

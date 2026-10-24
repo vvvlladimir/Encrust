@@ -227,6 +227,21 @@ pub struct Branching {
     /// The widest a trunk's base grows, however tall it stands or much it carries,
     /// millimetres. See `docs/decisions/0242`.
     pub max_trunk_diameter_mm: f32,
+    /// The longest a leaning strut of a merge runs, millimetres: a longer one sways on the
+    /// peel, so its tips stand on trunks of their own. See `docs/decisions/0347`.
+    #[serde(default = "default_max_strut_length_mm")]
+    pub max_strut_length_mm: f32,
+    /// The most tips one trunk carries before its neighbours get trunks of their own.
+    #[serde(default = "default_max_tips_per_trunk")]
+    pub max_tips_per_trunk: u32,
+}
+
+fn default_max_strut_length_mm() -> f32 {
+    6.0
+}
+
+fn default_max_tips_per_trunk() -> u32 {
+    6
 }
 
 impl Default for Branching {
@@ -237,6 +252,8 @@ impl Default for Branching {
             max_merge_distance_mm: 12.0,
             trunk_exponent: 2.5,
             max_trunk_diameter_mm: 3.0,
+            max_strut_length_mm: default_max_strut_length_mm(),
+            max_tips_per_trunk: default_max_tips_per_trunk(),
         }
     }
 }
@@ -853,6 +870,11 @@ impl SupportProfile {
             (
                 "max_merge_distance_mm",
                 self.branching.max_merge_distance_mm,
+            ),
+            ("max_strut_length_mm", self.branching.max_strut_length_mm),
+            (
+                "max_tips_per_trunk",
+                self.branching.max_tips_per_trunk as f32,
             ),
         ];
         let shares = self.islands.share.map(|share| ("islands share", share));
