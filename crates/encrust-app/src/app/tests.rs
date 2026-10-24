@@ -367,6 +367,55 @@ fn a_plate_with_nothing_to_print_on_is_set_up_from_its_notice() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A copy of a shipped profile that no longer reads is offered back to the shipped one
+/// from the start page, and goes once the question is answered.
+#[test]
+fn a_broken_copy_is_reset_from_the_start_page() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::Queryable as _;
+
+    let dir = std::env::temp_dir().join(format!("encrust-unreadable-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let broken = dir.join("supports/medium.toml");
+    std::fs::create_dir_all(dir.join("supports")).expect("a writable temporary directory");
+    std::fs::write(&broken, "name = ").expect("a writable file");
+    let mut app = SlicerApp::default();
+    app.machine.slicing.catalogue = printer_profiles::Catalogue::with_root(&dir)
+        .expect("a broken copy cannot fail the catalogue");
+    let mut dressed = false;
+    let mut harness = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1280.0, 900.0))
+        .build_ui_state(
+            move |ui, app: &mut SlicerApp| {
+                if dressed {
+                    app.window().show(ui);
+                } else {
+                    crate::ui::theme::apply(ui.ctx());
+                    dressed = true;
+                }
+            },
+            app,
+        );
+    harness.run_steps(3);
+
+    for step in ["Reset to shipped", "Reset"] {
+        harness.get_by_role_and_label(Role::Button, step).click();
+        harness.run_steps(3);
+    }
+    assert!(!broken.exists(), "the broken copy is thrown away");
+    assert!(
+        harness
+            .state()
+            .machine
+            .slicing
+            .catalogue
+            .unreadable()
+            .is_empty()
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A file dropped on Machine and resin is a profile rather than a model: a machine while
 /// the library is in view, a resin once its machine's resins are, and either goes under
 /// the plate that had none (ADR 0299).

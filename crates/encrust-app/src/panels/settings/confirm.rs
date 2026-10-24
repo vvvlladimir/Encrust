@@ -1,7 +1,7 @@
 //! The question asked before a profile is thrown away. Undo reaches a form's numbers and
 //! never a deleted file (ADR 0268), so a deletion is asked about first; see ADR 0196.
 
-use printer_profiles::{Catalogue, Kind};
+use printer_profiles::{Catalogue, Kind, Unreadable};
 
 use crate::i18n::tr;
 use crate::settings::{Deleting, is_thrown_away_with_the_printer, other_printers};
@@ -87,7 +87,7 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
             }
         }
         Deleting::ResinOff { printer, resin } => {
-            let name = resin_name(catalogue, resin);
+            let name = profile_name(catalogue, Kind::Resin, resin);
             let others = other_printers(catalogue, printer, resin).unwrap_or_default();
             let thrown_away =
                 is_thrown_away_with_the_printer(catalogue, printer, resin).unwrap_or(false);
@@ -112,7 +112,7 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
             }
         }
         Deleting::Resin(resin) => {
-            let name = resin_name(catalogue, resin);
+            let name = profile_name(catalogue, Kind::Resin, resin);
             let others = other_printers(catalogue, "", resin).unwrap_or_default();
             Question {
                 title: tr!("confirm-delete-resin"),
@@ -133,23 +133,47 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
             gone: true,
             cost: None,
         },
+        Deleting::Unreadable => reset_question(catalogue),
     }
 }
 
-/// What a support profile or a tool's preset is called, or its id when it has gone.
+/// Resetting the files that would not read: the copies of shipped profiles go, and a file
+/// under an id of the user's own stays, as nothing ships to put in its place.
+fn reset_question(catalogue: &Catalogue) -> Question {
+    let (copies, own): (Vec<&Unreadable>, Vec<&Unreadable>) = catalogue
+        .unreadable()
+        .iter()
+        .partition(|file| catalogue.resets_to_shipped(file));
+    let names = |files: &[&Unreadable]| {
+        let names: Vec<String> = files
+            .iter()
+            .map(|file| profile_name(catalogue, file.kind, &file.id))
+            .collect();
+        names.join(", ")
+    };
+    Question {
+        title: tr!("confirm-reset-unreadable"),
+        what: tr!("confirm-reset-named", names = names(&copies)),
+        verb: tr!("confirm-reset"),
+        gone: true,
+        cost: (!own.is_empty()).then(|| tr!("confirm-reset-own-stay", names = names(&own))),
+    }
+}
+
+/// What a profile is called, or its id when it has gone or never read.
 fn profile_name(catalogue: &Catalogue, kind: Kind, id: &str) -> String {
     let name = match kind {
+        Kind::Printer => catalogue.printer(id).ok().map(|entry| &entry.profile.name),
+        Kind::Resin => catalogue.resin(id).ok().map(|entry| &entry.profile.name),
         Kind::Support => catalogue.support(id).ok().map(|entry| &entry.profile.name),
-        _ => catalogue
+        Kind::Auto => catalogue
+            .autos()
+            .find(|entry| entry.id == id)
+            .map(|entry| &entry.profile.name),
+        Kind::Hollow | Kind::Drain => catalogue
             .presets(kind)
             .find(|entry| entry.id == id)
             .map(|entry| &entry.profile.name),
     };
     name.map_or_else(|| id.to_owned(), Clone::clone)
-}
-
-fn resin_name(catalogue: &Catalogue, id: &str) -> String {
-    catalogue
-        .resin(id)
-        .map_or_else(|_| id.to_owned(), |entry| entry.profile.name.clone())
 }

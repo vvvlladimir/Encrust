@@ -160,6 +160,8 @@ pub enum Deleting {
     Resin(String),
     /// A support profile or a tool's preset of the user's own, from the Settings window.
     Profile(Kind, String),
+    /// Every copy of a shipped profile that would not read, the shipped one in use instead.
+    Unreadable,
 }
 
 /// What the machine library has open: a brand, and what its models are filtered by.

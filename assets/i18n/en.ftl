@@ -356,6 +356,7 @@ settings-shortcuts = Shortcuts
 settings-import = Import
 settings-cannot-export = cannot export the profile
 settings-cannot-delete = cannot delete the profile
+settings-cannot-reset = cannot reset the profiles that would not read
 settings-name = Name
 
 ## panels/settings/machines.rs
@@ -1536,6 +1537,16 @@ start-test-print = Test print
 start-gone = { $path } is no longer there
 start-project = Project
 
+## panels/unreadable_profiles.rs
+
+notice-unreadable =
+    { $count ->
+        [one] One of your profiles would not read and was left out
+       *[other] { $count } of your profiles would not read and were left out
+    }
+notice-unreadable-file = { $path }: { $reason }
+notice-reset-profiles = Reset to shipped
+
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Cutting the layers to preview
@@ -1602,6 +1613,10 @@ confirm-delete-resin = Delete this resin
 confirm-delete-resin-named = Delete { $name } and the exposures measured for it?
 confirm-comes-off = It comes off { $printers } as well.
 confirm-delete-profile = Delete this profile
+confirm-reset-unreadable = Reset the profiles that would not read
+confirm-reset-named = Throw away your copies of { $names } and use the ones this version ships?
+confirm-reset = Reset
+confirm-reset-own-stay = Profiles of your own that would not read stay as they are, as nothing ships in their place: { $names }.
 
 ## panels/report.rs
 

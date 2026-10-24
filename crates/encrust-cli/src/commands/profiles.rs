@@ -16,6 +16,9 @@ pub enum ProfilesCommand {
     /// Import an exported profile, a resin from another program, or the resin a sliced file was
     /// printed with, under a new id of its own; an import never overwrites.
     Import(ImportArgs),
+    /// Throw away your copies of shipped profiles that no longer read, so the shipped ones are
+    /// used; a file under an id of your own is kept.
+    ResetUnreadable,
 }
 
 #[derive(clap::Args, Debug)]
@@ -85,6 +88,7 @@ impl ProfilesCommand {
             }
             Self::Show(args) => show(args, global)?,
             Self::Import(args) => import(args, global)?,
+            Self::ResetUnreadable => reset_unreadable(global)?,
         }
         Ok(Exit::Success)
     }
@@ -146,6 +150,23 @@ fn import_resin_of(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
             "resin of {} imported as {id}, set up on {printer}",
             args.file.display()
         );
+    }
+    Ok(())
+}
+
+fn reset_unreadable(global: &GlobalArgs) -> Result<()> {
+    let (reset, kept) = profiles::reset_unreadable()?;
+    if global.json {
+        return json::print(&serde_json::json!({ "reset": reset, "kept": kept }));
+    }
+    if global.talks() {
+        println!("{reset} profiles reset to the shipped ones");
+        for path in &kept {
+            println!(
+                "{} would not read and is yours, so it stays",
+                path.display()
+            );
+        }
     }
     Ok(())
 }

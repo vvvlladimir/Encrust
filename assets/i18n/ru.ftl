@@ -377,6 +377,7 @@ settings-shortcuts = Горячие клавиши
 settings-import = Импорт
 settings-cannot-export = не удалось экспортировать профиль
 settings-cannot-delete = не удалось удалить профиль
+settings-cannot-reset = не удалось сбросить нечитаемые профили
 settings-name = Название
 
 ## panels/settings/machines.rs
@@ -1625,6 +1626,17 @@ start-test-print = Пробная печать
 start-gone = { $path } больше не существует
 start-project = Проект
 
+## panels/unreadable_profiles.rs
+
+notice-unreadable =
+    { $count ->
+        [one] { $count } ваш профиль не читается и пропущен
+        [few] { $count } ваших профиля не читаются и пропущены
+       *[many] { $count } ваших профилей не читаются и пропущены
+    }
+notice-unreadable-file = { $path }: { $reason }
+notice-reset-profiles = Сбросить на стандартные
+
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Нарезка слоёв для предпросмотра
@@ -1696,6 +1708,10 @@ confirm-delete-resin = Удалить эту смолу
 confirm-delete-resin-named = Удалить «{ $name }» и подобранные для неё экспозиции?
 confirm-comes-off = Она также убирается с: { $printers }.
 confirm-delete-profile = Удалить этот профиль
+confirm-reset-unreadable = Сбросить нечитаемые профили
+confirm-reset-named = Удалить ваши копии профилей { $names } и использовать те, что поставляются с этой версией?
+confirm-reset = Сбросить
+confirm-reset-own-stay = Ваши собственные нечитаемые профили останутся как есть, потому что заменить их нечем: { $names }.
 
 ## panels/report.rs
 

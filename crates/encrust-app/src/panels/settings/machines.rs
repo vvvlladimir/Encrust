@@ -469,7 +469,7 @@ fn delete(window: &mut Window, deleting: Deleting) {
             None
         }
         // Asked from the Settings window, which answers it itself.
-        Deleting::Profile(..) => None,
+        Deleting::Profile(..) | Deleting::Unreadable => None,
     };
     window.machine.slicing.reload_resin();
     pick(window, picked);
@@ -568,6 +568,10 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
     let Some(deleting) = window.machine.settings.confirm.clone() else {
         return;
     };
+    // Asked from outside this window, so `settings::window` answers it whether or not it is open.
+    if deleting == Deleting::Unreadable {
+        return;
+    }
     let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
         return;
     };

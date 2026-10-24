@@ -348,7 +348,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 
 | # | Decision | Status |
 |---|---|---|
-| [0049](0049-profiles-ship-in-the-binary-with-a-user-directory-over-them.md) | Profiles ship inside the binary, with a user directory over them by id | Accepted |
+| [0049](0049-profiles-ship-in-the-binary-with-a-user-directory-over-them.md) | Profiles ship inside the binary, with a user directory over them by id | Accepted; a file that does not parse failing the catalogue is superseded by 0353 |
+| [0353](0353-an-unreadable-profile-gives-way-to-the-shipped-one.md) | Leave an unreadable profile out, use the shipped one in its place, and offer a reset | Accepted |
 | [0050](0050-one-resin-catalogue-retuned-per-printer.md) | One resin catalogue, retuned per printer by a `[printers.<id>]` table | Accepted |
 | [0051](0051-a-printer-profile-names-its-file-format.md) | A printer profile names the sliced-file format its firmware reads | Accepted |
 | [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |

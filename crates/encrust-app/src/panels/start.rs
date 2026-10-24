@@ -5,7 +5,7 @@ use egui::{Align, Align2, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, 
 
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
-use crate::panels::Window;
+use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
 use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone};
@@ -60,6 +60,10 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                     &window.machine.status.text(),
                     theme::colors().danger,
                 );
+            }
+            if unreadable_profiles::any(window) {
+                page.add_space(8.0);
+                unreadable_profiles::row(&mut page, window);
             }
             page.add_space(28.0);
             actions(&mut page, window, width);

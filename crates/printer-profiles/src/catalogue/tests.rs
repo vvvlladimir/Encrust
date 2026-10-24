@@ -11,8 +11,79 @@ fn a_broken_preset_is_left_out_and_the_rest_of_the_catalogue_reads() {
         let catalogue = Catalogue::with_root(dir).expect("a preset cannot fail the catalogue");
         assert!(catalogue.printer("elegoo-mars-4-ultra").is_ok());
         assert_eq!(catalogue.presets(Kind::Drain).count(), 0);
-        assert_eq!(catalogue.unreadable(), [drain.join("broken.toml")]);
+        let left_out: Vec<&Path> = catalogue
+            .unreadable()
+            .iter()
+            .map(|file| file.path.as_path())
+            .collect();
+        assert_eq!(left_out, [drain.join("broken.toml")]);
     });
+}
+
+#[test]
+fn a_broken_copy_of_a_shipped_profile_gives_way_to_the_shipped_one() {
+    in_its_own_dir("broken-copy", |dir, _| {
+        write_broken(dir, "supports/medium.toml");
+
+        let catalogue = Catalogue::with_root(dir).expect("a broken copy cannot fail the catalogue");
+        let entry = catalogue
+            .support("medium")
+            .expect("the shipped one stands in");
+        assert_eq!(entry.source, Source::Bundled);
+        let [file] = catalogue.unreadable() else {
+            panic!("one file left out, got {:?}", catalogue.unreadable());
+        };
+        assert_eq!((file.kind, file.id.as_str()), (Kind::Support, "medium"));
+        assert!(matches!(*file.error, ProfileError::Parse { .. }));
+        assert!(catalogue.resets_to_shipped(file));
+    });
+}
+
+#[test]
+fn resetting_throws_away_broken_copies_and_keeps_the_users_own_files() {
+    in_its_own_dir("reset-broken", |dir, _| {
+        write_broken(dir, "supports/medium.toml");
+        write_broken(dir, "resins/my-resin.toml");
+        let mut catalogue = Catalogue::with_root(dir).expect("the directory reads");
+
+        assert_eq!(catalogue.reset_unreadable().expect("removable"), 1);
+        assert!(!dir.join("supports/medium.toml").exists());
+        assert!(
+            dir.join("resins/my-resin.toml").exists(),
+            "never shipped, so kept"
+        );
+        let left: Vec<&str> = catalogue
+            .unreadable()
+            .iter()
+            .map(|file| file.id.as_str())
+            .collect();
+        assert_eq!(left, ["my-resin"]);
+    });
+}
+
+#[test]
+fn saving_over_a_broken_copy_makes_it_readable_again() {
+    in_its_own_dir("save-over-broken", |dir, _| {
+        write_broken(dir, "supports/medium.toml");
+        let mut catalogue = Catalogue::with_root(dir).expect("the directory reads");
+        let shipped = catalogue
+            .support("medium")
+            .expect("shipped")
+            .profile
+            .clone();
+
+        catalogue
+            .save_support("medium", &shipped)
+            .expect("writable");
+        assert!(catalogue.unreadable().is_empty());
+    });
+}
+
+/// A file under `dir` that is not TOML at all.
+fn write_broken(dir: &Path, file: &str) {
+    let path = dir.join(file);
+    std::fs::create_dir_all(path.parent().expect("a file in a folder")).expect("writable");
+    std::fs::write(path, "name = ").expect("writable");
 }
 
 #[test]

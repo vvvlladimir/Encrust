@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use core_engine::project::{Manifest, load};
 use core_engine::{Machine, Opening, open_plate};
-use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
+use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::JobArgs;
 use crate::pipeline::raster_window;
+use crate::profiles::catalogue;
 use crate::sliced_file::now_unix_s;
 use crate::stage::{Part, Staged};
 
@@ -114,11 +115,6 @@ fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
         printer_id,
         resin,
     })
-}
-
-/// The user's catalogue, read only when an id has to be looked up in it.
-fn catalogue() -> Result<Catalogue> {
-    Catalogue::load().context("cannot read the profile catalogue")
 }
 
 fn printer_of(id: &str, why: &str) -> Result<PrinterProfile> {

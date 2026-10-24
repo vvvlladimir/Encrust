@@ -10,6 +10,10 @@ use crate::{
     ProfileStore, SupportProfile,
 };
 
+mod unreadable;
+
+pub use unreadable::Unreadable;
+
 include!(concat!(env!("OUT_DIR"), "/bundled_profiles.rs"));
 
 /// Environment variable holding a profile directory, used in place of the platform one.
@@ -82,9 +86,8 @@ pub struct Catalogue {
     /// Named tool settings, which nothing ships: each is the user's own.
     hollows: BTreeMap<String, Entry<Preset>>,
     drains: BTreeMap<String, Entry<Preset>>,
-    /// Preset files that would not read, left out rather than failing the catalogue: a
-    /// tool's settings are never what a slice depends on.
-    unreadable: Vec<PathBuf>,
+    /// The user's files that would not read, left out rather than failing the catalogue.
+    unreadable: Vec<Unreadable>,
     /// Where an edited profile is written. `None` until a store is laid over the
     /// catalogue, which is what makes a bundled-only catalogue read-only.
     store: Option<Arc<dyn ProfileStore>>,
@@ -131,47 +134,60 @@ impl Catalogue {
 
     /// Lays what `store` keeps over what is already loaded, by id, and writes edits there.
     pub fn overlay_store(&mut self, store: Arc<dyn ProfileStore>) -> Result<(), ProfileError> {
-        overlay(
+        let printers = overlay(
             &mut self.printers,
             &*store,
             Kind::Printer,
             PrinterProfile::from_toml_str,
+            Adds::Yes,
         )?;
+        self.unreadable.extend(printers);
         let copies = self.printers.values_mut();
         for entry in copies.filter(|entry| matches!(entry.source, Source::User(_))) {
             entry.profile.locked = shipped_locks(&entry.id, &entry.profile);
         }
-        overlay(
+        let resins = overlay(
             &mut self.resins,
             &*store,
             Kind::Resin,
             MaterialProfile::from_toml_str,
+            Adds::Yes,
         )?;
-        overlay(
+        let supports = overlay(
             &mut self.supports,
             &*store,
             Kind::Support,
             SupportProfile::from_toml_str,
+            Adds::Yes,
         )?;
-        overlay_shipped(
+        let autos = overlay(
             &mut self.autos,
             &*store,
             Kind::Auto,
             AutoProfile::from_toml_str,
+            Adds::No,
         )?;
-        for kind in [Kind::Hollow, Kind::Drain] {
-            if let Some(table) = self.preset_table_mut(kind) {
-                let skipped = overlay_presets(table, &*store, kind)?;
-                self.unreadable.extend(skipped);
-            }
-        }
+        let hollows = overlay(
+            &mut self.hollows,
+            &*store,
+            Kind::Hollow,
+            Preset::from_toml_str,
+            Adds::Yes,
+        )?;
+        let drains = overlay(
+            &mut self.drains,
+            &*store,
+            Kind::Drain,
+            Preset::from_toml_str,
+            Adds::Yes,
+        )?;
+        self.unreadable.extend(
+            [resins, supports, autos, hollows, drains]
+                .into_iter()
+                .flatten(),
+        );
         self.store = Some(store);
         Ok(())
-    }
-
-    /// The preset files left out of the catalogue because they would not read.
-    pub fn unreadable(&self) -> &[PathBuf] {
-        &self.unreadable
     }
 
     /// Whether edits have somewhere to be written.
@@ -316,7 +332,7 @@ impl Catalogue {
 
     /// Writes `toml` as the profile of `kind` and `id`, and says where it went.
     fn keep(
-        &self,
+        &mut self,
         kind: Kind,
         id: &str,
         toml: impl FnOnce(&Path) -> Result<String, ProfileError>,
@@ -324,6 +340,7 @@ impl Catalogue {
         let store = self.store_for(id)?;
         let path = store.path_of(kind, id);
         store.write(kind, id, &toml(&path)?)?;
+        self.readable_again(kind, id);
         Ok(path)
     }
 
@@ -411,6 +428,7 @@ impl Catalogue {
     /// back; an id that was only ever theirs leaves the catalogue.
     pub fn forget_user_copy(&mut self, kind: Kind, id: &str) -> Result<(), ProfileError> {
         self.store_for(id)?.remove(kind, id)?;
+        self.readable_again(kind, id);
         match kind {
             Kind::Printer => restore_bundled(
                 &mut self.printers,
@@ -538,35 +556,28 @@ pub(crate) fn shipped_support(id: &str) -> Option<SupportProfile> {
     SupportProfile::from_toml_str(source, &path).ok()
 }
 
+/// Whether the user's directory may hold ids nothing ships, or only copies of shipped ones.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Adds {
+    Yes,
+    No,
+}
+
+/// Lays the user's files of `kind` over `map` by id, and answers those that would not read:
+/// each leaves in place whatever was there before it.
 fn overlay<T>(
     map: &mut BTreeMap<String, Entry<T>>,
     store: &dyn ProfileStore,
     kind: Kind,
     parse: Parse<T>,
-) -> Result<(), ProfileError> {
-    for (id, path, toml) in store.read_all(kind)? {
-        let profile = parse(&toml, &path)?;
-        map.insert(
-            id.clone(),
-            Entry {
-                id,
-                profile,
-                source: Source::User(path),
-            },
-        );
-    }
-    Ok(())
-}
-
-/// Lays the presets of `kind` over `map`, and answers the files that would not read.
-fn overlay_presets(
-    map: &mut BTreeMap<String, Entry<Preset>>,
-    store: &dyn ProfileStore,
-    kind: Kind,
-) -> Result<Vec<PathBuf>, ProfileError> {
+    adds: Adds,
+) -> Result<Vec<Unreadable>, ProfileError> {
     let mut unreadable = Vec::new();
     for (id, path, toml) in store.read_all(kind)? {
-        match Preset::from_toml_str(&toml, &path) {
+        if adds == Adds::No && !map.contains_key(&id) {
+            continue;
+        }
+        match parse(&toml, &path) {
             Ok(profile) => {
                 let source = Source::User(path);
                 map.insert(
@@ -578,35 +589,15 @@ fn overlay_presets(
                     },
                 );
             }
-            Err(_) => unreadable.push(path),
+            Err(error) => unreadable.push(Unreadable {
+                kind,
+                id,
+                path,
+                error: Arc::new(error),
+            }),
         }
     }
     Ok(unreadable)
-}
-
-/// Lays the user's copies over `map` for the ids it already holds and no others: a kind
-/// the user may retune but never add to.
-fn overlay_shipped<T>(
-    map: &mut BTreeMap<String, Entry<T>>,
-    store: &dyn ProfileStore,
-    kind: Kind,
-    parse: Parse<T>,
-) -> Result<(), ProfileError> {
-    for (id, path, toml) in store.read_all(kind)? {
-        if !map.contains_key(&id) {
-            continue;
-        }
-        let profile = parse(&toml, &path)?;
-        map.insert(
-            id.clone(),
-            Entry {
-                id,
-                profile,
-                source: Source::User(path),
-            },
-        );
-    }
-    Ok(())
 }
 
 #[cfg(test)]

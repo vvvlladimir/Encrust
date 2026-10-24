@@ -1,7 +1,7 @@
 use egui::{Align, Align2, Id, Layout, Rect, RichText, pos2};
 
 use crate::i18n::tr;
-use crate::panels::Window;
+use crate::panels::{Window, unreadable_profiles};
 use crate::scene::ObjectId;
 use crate::status::{Change, Status};
 use crate::ui::{card, icon, icon_button, inline_button, progress_bar, theme};
@@ -34,6 +34,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     message(&mut stack, &mut window.machine.status, running, width);
     unready(&mut stack, window);
     broken(&mut stack, window);
+    unreadable(&mut stack, window);
     waiting_to_print(&mut stack, window);
     jobs(&mut stack, window);
 }
@@ -162,6 +163,18 @@ fn waiting_to_print(stack: &mut Stack, window: &mut Window) {
 
 /// A model that will not print as it stands, with the repair beside it. Nothing waits on
 /// the answer, so it is offered here rather than in a dialog, until it is taken or put by.
+/// The user's profile files that would not read, and the way to reset them.
+fn unreadable(stack: &mut Stack, window: &mut Window) {
+    if !unreadable_profiles::any(window) {
+        return;
+    }
+    stack.card("unreadable-profiles", |ui| {
+        card()
+            .inner_margin(theme::CARD_MARGIN)
+            .show(ui, |ui| unreadable_profiles::row(ui, window));
+    });
+}
+
 fn broken(stack: &mut Stack, window: &mut Window) {
     let offered: Vec<(ObjectId, String, Vec<String>)> = window
         .doc

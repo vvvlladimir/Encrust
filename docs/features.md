@@ -594,6 +594,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   being ignored.
 - Your own profiles live in a folder of their own, layered over the bundled ones. Open it
   from Settings.
+- A profile file of yours that no longer reads, after an update for instance, is left out
+  and the bundled one of the same name is used. The start page and the stage say so and
+  offer to reset those files to the bundled profiles; your own profiles are never deleted.
 - Export and import any profile as a file. An import never overwrites one you already have.
 - Profile forms have undo.
 - A project names its printer and resin by id, so it opens with your own profiles.

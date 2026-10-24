@@ -336,6 +336,14 @@ one you have; `--printer ID` sets an imported resin up on that machine (ADR 0233
 encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
 ```
 
+A file in your folder that no longer reads is left out with a warning, and the shipped
+profile of its id is used. `profiles reset-unreadable` throws away those copies of shipped
+profiles; a file under an id of your own is kept (ADR 0353):
+
+```sh
+encrust profiles reset-unreadable
+```
+
 Without `--kind`, `FILE` is a sliced file and its resin is taken in: whatever the file states
 of exposure, transition, waits, lifts and light power, our defaults for the rest, set up on
 the machine the file was cut for. That machine is found by the panel and the name the file

@@ -24,24 +24,23 @@ use crate::status::Status;
 use crate::ui::{focus_ring, hairline, icon, inline_button, theme};
 use frame::{child, scrolled, with_header};
 
-/// The window, while it is open, and the question over it.
+/// The window, while it is open, and the question over it, which may be asked without it.
 pub fn window(ctx: &egui::Context, window: &mut Window) {
-    if !window.machine.settings.open {
-        return;
-    }
-    let close = frame::show(
-        ctx,
-        "settings",
-        icon::SETTINGS,
-        &tr!("settings-title"),
-        |ui, list, side| {
-            pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
-            page(ui, side, window);
-        },
-    );
-    if close {
-        window.machine.settings.close();
-        return;
+    if window.machine.settings.open {
+        let close = frame::show(
+            ctx,
+            "settings",
+            icon::SETTINGS,
+            &tr!("settings-title"),
+            |ui, list, side| {
+                pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
+                page(ui, side, window);
+            },
+        );
+        if close {
+            window.machine.settings.close();
+            return;
+        }
     }
     ask(ctx, window);
 }
@@ -265,8 +264,16 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
         return;
     };
     settings.confirm = None;
-    if let (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) = (answer, deleting) {
-        forget_profile(window.machine, kind, &id);
+    match (answer, deleting) {
+        (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) => {
+            forget_profile(window.machine, kind, &id);
+        }
+        (confirm::Answer::Confirmed, Deleting::Unreadable) => {
+            let machine = &mut *window.machine;
+            let outcome = machine.slicing.catalogue.reset_unreadable();
+            report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
+        }
+        _ => {}
     }
 }
 
