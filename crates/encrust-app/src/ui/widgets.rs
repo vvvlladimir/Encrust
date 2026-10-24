@@ -9,7 +9,7 @@ mod layout;
 mod list;
 mod toggle;
 
-pub use bin::{BinLook, bin_button, confirm_bin, instant_bin};
+pub use bin::{BinLook, bin_button, confirm_bin};
 pub use button::{
     blocked_hover, compact_button, companion_button, filter_chip, focus_ring, icon_button,
     icon_toggle, inline_button, picker, primary_button, quiet_button, rail_button,

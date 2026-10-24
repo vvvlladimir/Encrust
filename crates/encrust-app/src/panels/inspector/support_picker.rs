@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use egui::{Sense, vec2};
-use printer_profiles::{Catalogue, SupportProfile};
+use printer_profiles::Catalogue;
 
 use super::scope;
 use crate::i18n::tr;
@@ -646,27 +646,25 @@ fn save_new(window: &mut Window) {
 fn take(window: &mut Window, pick: Option<Pick>) {
     let catalogue = &window.machine.slicing.catalogue;
     let tool = &mut window.tools.supports;
-    let support = |id: &str| -> Option<SupportProfile> {
-        catalogue
-            .support(id)
-            .ok()
-            .map(|entry| entry.profile.clone())
-    };
-    match pick {
+    let found = match pick {
         Some(Pick::Auto(id)) => {
             if let Some(entry) = catalogue.autos().find(|entry| entry.id == id) {
                 tool.set_automatic(true, catalogue);
                 tool.auto = Some(entry.profile.clone());
             }
+            Ok(())
         }
-        Some(Pick::Preset(id)) => {
-            if let Some(profile) = support(&id) {
-                tool.set_automatic(false, catalogue);
-                tool.chosen = Some(profile);
-            }
-        }
-        Some(Pick::Shape(id)) => tool.chosen = support(&id),
-        None => {}
+        Some(Pick::Preset(id)) => catalogue.support(&id).map(|entry| {
+            tool.set_automatic(false, catalogue);
+            tool.chosen = Some(entry.profile.clone());
+        }),
+        Some(Pick::Shape(id)) => catalogue.support(&id).map(|entry| {
+            tool.chosen = Some(entry.profile.clone());
+        }),
+        None => Ok(()),
+    };
+    if let Err(error) = found {
+        window.machine.status = Status::failed(&error.into());
     }
 }
 
@@ -693,7 +691,7 @@ fn apply(window: &mut Window, acts: Vec<Act>) {
                 entry.hidden = !entry.hidden;
             }
             Act::Clear(group) => {
-                for object in scene.targets_mut() {
+                for object in scene.objects_mut() {
                     object.supports.clear_group(group);
                 }
                 tool.picked.clear();

@@ -156,23 +156,11 @@ pub fn raycast_placed(
     if matrix.determinant().abs() < SINGULAR {
         return None;
     }
-    raycast_placed_by(mesh, bvh, matrix, matrix.inverse(), ray)
+    raycast_placed_within(mesh, bvh, matrix, matrix.inverse(), ray, Scalar::INFINITY)
 }
 
-/// [`raycast_placed`] with the placement given as its matrix and that matrix's inverse,
-/// for a caller casting many rays at one placement. `matrix` must not be singular.
-pub fn raycast_placed_by(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    matrix: Mat4,
-    inverse: Mat4,
-    ray: &Ray,
-) -> Option<PlacedHit> {
-    raycast_placed_within(mesh, bvh, matrix, inverse, ray, Scalar::INFINITY)
-}
-
-/// [`raycast_placed_by`] looking no further than `max_distance` along `ray`, in the
-/// ray's own space.
+/// [`raycast_placed`] with the placement given as its non-singular matrix and that
+/// matrix's inverse, looking no further than `max_distance` along `ray`.
 pub fn raycast_placed_within(
     mesh: &Mesh,
     bvh: &Bvh,

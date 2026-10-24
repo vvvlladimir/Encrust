@@ -382,14 +382,18 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
             COARSE_STEP,
             1.0..=40.0,
         );
-        count_row(
+        let mut tips = branching.max_tips_per_trunk as f32;
+        number(
             ui,
             &tr!("support-tips-per-trunk"),
-            &mut branching.max_tips_per_trunk,
+            was(saved, |p| p.branching.max_tips_per_trunk as f32),
+            &mut tips,
             "",
             0.05,
-            1..=MAX_TIPS_PER_TRUNK,
+            1.0..=MAX_TIPS_PER_TRUNK as f32,
+            0,
         );
+        branching.max_tips_per_trunk = tips.round() as u32;
     });
 }
 

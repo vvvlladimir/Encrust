@@ -738,6 +738,12 @@ impl Scene {
         self.on_plate(plate).filter(|object| object.visible)
     }
 
+    /// Whether a model sliced off `plate` still waits on its supports, which a stack cut
+    /// now would leave out.
+    pub fn supports_pending(&self, plate: u32) -> bool {
+        self.printable(plate).any(SceneObject::supports_pending)
+    }
+
     /// Whether anything at all would be sliced off `plate`.
     pub fn has_printable(&self, plate: u32) -> bool {
         self.printable(plate).next().is_some()

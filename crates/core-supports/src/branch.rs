@@ -272,12 +272,16 @@ struct Carrier {
     radius_mm: Scalar,
     /// How far above `bottom` it has to be met: the foot under a trunk is not the trunk.
     floor_mm: Scalar,
+    /// The tree it is part of, an index into [`Carriers::trunks`].
+    tree: usize,
 }
 
 /// Every carrier stood so far, bucketed by the squares of plate it passes over, so a
 /// front asks nine buckets rather than every strut of every group before it.
 struct Carriers {
     all: Vec<Carrier>,
+    /// The tips each tree stood so far carries, and the most its group lets it carry.
+    trunks: Vec<(usize, usize)>,
     grid: HashMap<(i32, i32), Vec<usize>>,
     cell_mm: Scalar,
 }
@@ -287,6 +291,7 @@ impl Carriers {
     fn new(cell_mm: Scalar) -> Self {
         Self {
             all: Vec::new(),
+            trunks: Vec::new(),
             grid: HashMap::new(),
             cell_mm,
         }
@@ -308,6 +313,11 @@ impl Carriers {
         for tree in trees {
             let profile = profiles.of(tree.group());
             let small = is_small(tree, profile);
+            let index = self.trunks.len();
+            self.trunks.push((
+                tree.tip_count(),
+                profile.branching.max_tips_per_trunk as usize,
+            ));
             let widest_mm = if small {
                 profile.small_pillar.radius_mm()
             } else {
@@ -320,6 +330,7 @@ impl Carriers {
                     bottom: nodes[parent].position,
                     radius_mm: nodes[child].radius_mm.min(widest_mm),
                     floor_mm: 0.0,
+                    tree: index,
                 });
             }
             let (root, landing) = (tree.root(), tree.landing());
@@ -330,6 +341,7 @@ impl Carriers {
                     bottom: Vec3::new(landing.base.x, landing.base.y, bottom_z),
                     radius_mm: root.radius_mm.min(widest_mm),
                     floor_mm: MIN_PILLAR_HEIGHT_MM,
+                    tree: index,
                 });
             }
         }
@@ -406,8 +418,10 @@ fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option
     let leans_within = from.z - meet.z >= across / reach - SAME_PLACE_MM;
     let in_reach = across <= profile.branching.max_merge_distance_mm / 2.0;
     let on_it = meet.z - bottom.z >= carrier.floor_mm;
-    let long_enough = (from - meet).length() >= MIN_PILLAR_HEIGHT_MM;
-    (leans_within && in_reach && on_it && long_enough).then_some(meet)
+    let strut_mm = (from - meet).length();
+    let long_enough = strut_mm >= MIN_PILLAR_HEIGHT_MM;
+    let short_enough = strut_mm <= profile.branching.max_strut_length_mm;
+    (leans_within && in_reach && on_it && long_enough && short_enough).then_some(meet)
 }
 
 /// The grid a family's trunks stand on: the first group's, where every group of it has
@@ -580,6 +594,8 @@ struct Forest<'a> {
     /// The fronts that ran into a carrier, each with where: trees with no trunk of their
     /// own.
     landed: Vec<(usize, Landing)>,
+    /// Tips landed on each tree of `carriers` so far, on top of its own.
+    carried: HashMap<usize, usize>,
     /// Fronts bucketed by the square of plate they stand over, so a new one asks nine
     /// buckets rather than every front placed so far. Dead fronts stay in their bucket
     /// and are skipped; there are never more entries than twice the number of tips.
@@ -601,6 +617,7 @@ impl<'a> Forest<'a> {
             fronts: Vec::with_capacity(columns.len()),
             carriers,
             landed: Vec::new(),
+            carried: HashMap::new(),
             grid: HashMap::new(),
             cell_mm,
         };
@@ -694,7 +711,10 @@ impl<'a> Forest<'a> {
 
         while let Some(candidate) = heap.pop() {
             if candidate.onto_carrier {
-                if self.fronts[candidate.a].alive && self.reaches(&candidate, placed) {
+                if self.fronts[candidate.a].alive
+                    && self.has_room(candidate.a, candidate.b)
+                    && self.reaches(&candidate, placed)
+                {
                     self.land_on_carrier(&candidate);
                 }
                 continue;
@@ -725,7 +745,7 @@ impl<'a> Forest<'a> {
         let profile = self.profile(a);
         for b in self.carriers.near(front.position) {
             let carrier = &self.carriers.all[b];
-            if carrier.radius_mm < front.radius_mm + THICKER_BY_MM {
+            if carrier.radius_mm < front.radius_mm + THICKER_BY_MM || !self.has_room(a, b) {
                 continue;
             }
             if let Some(meet) = meeting_on(front.position, carrier, profile) {
@@ -754,8 +774,20 @@ impl<'a> Forest<'a> {
         clear(placed, &strut)
     }
 
+    /// Whether the trunk under `carrier` can take on the tips of front `a` within both
+    /// groups' tips a trunk carries.
+    fn has_room(&self, a: usize, carrier: usize) -> bool {
+        let tree = self.carriers.all[carrier].tree;
+        let (own, most) = self.carriers.trunks[tree];
+        let mine = self.profile(a).branching.max_tips_per_trunk as usize;
+        let landed = self.carried.get(&tree).copied().unwrap_or(0);
+        own + landed + self.fronts[a].tips <= most.min(mine)
+    }
+
     /// Ends a front on the carrier of `candidate`: it needs no trunk and no foot.
     fn land_on_carrier(&mut self, candidate: &Candidate) {
+        let tree = self.carriers.all[candidate.b].tree;
+        *self.carried.entry(tree).or_default() += self.fronts[candidate.a].tips;
         self.fronts[candidate.a].alive = false;
         self.landed.push((
             candidate.a,
@@ -1604,20 +1636,28 @@ mod tests {
     /// A thick support of group 0 at x = 10 and a thin one of group 1 `apart` along x,
     /// both 20 mm over an empty plate.
     fn thick_and_thin(apart: Scalar) -> Vec<SupportTree> {
-        let mut thin = profile();
-        thin.middle.diameter_mm *= 0.5;
-        let table = [profile(), thin];
         let points = [
             SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
             SupportPoint::new(Vec3::new(10.0 + apart, 10.0, 20.0)).in_group(1),
         ];
+        grown_over_plate(&points, &[profile(), thinner()])
+    }
 
+    /// The profile of the fixture with its pillar half as wide.
+    fn thinner() -> SupportProfile {
+        let mut thin = profile();
+        thin.middle.diameter_mm *= 0.5;
+        thin
+    }
+
+    /// The trees `points` grow over an empty plate, each built to its group in `table`.
+    fn grown_over_plate(points: &[SupportPoint], table: &[SupportProfile]) -> Vec<SupportTree> {
         let model = Mesh::default();
         let bvh = Bvh::build(&model);
         let placed = Placed::new(&model, &bvh, Transform::default());
-        let profiles = Profiles::new(&table).expect("two groups");
+        let profiles = Profiles::new(table).expect("a group at least");
         grow(
-            &crate::columns(&points, &placed, profiles),
+            &crate::columns(points, &placed, profiles),
             &placed,
             profiles,
         )
@@ -2078,6 +2118,38 @@ mod tests {
         assert!(
             forest.iter().all(|tree| !tree.landing().on_model),
             "the thin one stands on the plate rather than reach {far} mm across"
+        );
+    }
+
+    #[test]
+    fn a_strut_into_a_thicker_support_is_held_to_the_longest_strut() {
+        // 4 mm across at 45 degrees from the neck: the strut is 5.7 mm long.
+        let points = [
+            SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
+            SupportPoint::new(Vec3::new(14.0, 10.0, 20.0)).in_group(1),
+        ];
+        let mut thin = thinner();
+        thin.branching.max_strut_length_mm = 5.0;
+        let forest = grown_over_plate(&points, &[profile(), thin]);
+        assert!(
+            forest.iter().all(|tree| !tree.landing().on_support),
+            "a 5.7 mm strut is past a 5 mm limit, so the thin one stands on the plate"
+        );
+    }
+
+    #[test]
+    fn a_thicker_trunk_takes_on_no_more_tips_than_the_profile_allows() {
+        let mut thick = profile();
+        thick.branching.max_tips_per_trunk = 2;
+        let points = [
+            SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
+            SupportPoint::new(Vec3::new(12.0, 10.0, 20.0)),
+            SupportPoint::new(Vec3::new(11.0, 14.0, 20.0)).in_group(1),
+        ];
+        let forest = grown_over_plate(&points, &[thick, thinner()]);
+        assert!(
+            forest.iter().all(|tree| !tree.landing().on_support),
+            "the thick trunk already carries its two tips, so the thin one stands alone"
         );
     }
 

@@ -198,12 +198,7 @@ impl SlicerApp {
         }
         // A stack cut before the supports land would be cut without them.
         let plate = self.doc.scene.active_plate();
-        if self
-            .doc
-            .scene
-            .printable(plate)
-            .any(SceneObject::supports_pending)
-        {
+        if self.doc.scene.supports_pending(plate) {
             return;
         }
         let fingerprint = stack_fingerprint(&self.doc.scene, self.machine.slicing.cutting());

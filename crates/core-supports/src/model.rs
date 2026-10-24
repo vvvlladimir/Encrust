@@ -188,11 +188,6 @@ impl ModelSupports {
                 .is_some_and(|forest| forest.grown_for(transform, table, &self.blocked))
     }
 
-    /// The revision a [`Growth`] taken now carries.
-    pub fn revision(&self) -> u64 {
-        self.revision
-    }
-
     /// Takes on trees grown from a [`Growth`], and answers whether they were still wanted:
     /// nothing they grow from has changed since it was taken.
     pub fn take_grown(&mut self, grown: Grown) -> bool {

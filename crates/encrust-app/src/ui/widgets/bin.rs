@@ -24,13 +24,6 @@ pub fn bin_button(ui: &mut Ui, side: f32, look: BinLook, tooltip: &str, enabled:
     confirm_bin(ui, response, look, tooltip, enabled)
 }
 
-/// The bin without the second click, where what it takes is cheap to make again.
-pub fn instant_bin(ui: &mut Ui, side: f32, look: BinLook, tooltip: &str) -> bool {
-    let (_, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
-    paint(ui, response.rect, look, false, response.hovered(), true);
-    response.on_hover_text(tooltip).clicked()
-}
-
 /// The same bin over a response already laid out, as a row's own icon.
 pub fn confirm_bin(
     ui: &Ui,

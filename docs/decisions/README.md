@@ -177,7 +177,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0032](0032-layer-areas-are-read-as-grid-spans.md) | Layer areas are read as spans on a raster grid, not as polygons | Accepted |
 | [0033](0033-placement-reads-layers-in-parallel-blocks.md) | Placement reads and examines layers in parallel blocks | Accepted |
 | [0034](0034-overhangs-are-shaded-in-the-viewport.md) | Overhangs are shaded in the viewport shader, by face angle | Accepted |
-| [0040](0040-nearby-tips-merge-into-shared-trunks.md) | Nearby tips merge into shared trunks, greedily, highest meeting point first | Accepted; the width of a merged trunk is superseded by 0242, and merging is held to a strut length and a tip count by 0347 |
+| [0040](0040-nearby-tips-merge-into-shared-trunks.md) | Nearby tips merge into shared trunks, greedily, highest meeting point first | Superseded by 0242 (the width of a merged trunk only); merging is held to a strut length and a tip count by 0347 |
 | [0041](0041-a-support-is-a-set-of-overlapping-tubes.md) | A support is meshed as overlapping closed tubes, not one welded solid | Accepted |
 | [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted; the tip shapes are superseded by 0243 |
 | [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted; supports passing through the raft superseded by 0266 |
@@ -220,7 +220,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
-| [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, and the disc is laid on its face by 0330; the flat disc is superseded by 0345 |
+| [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0345 |
 | [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0337 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
@@ -232,7 +232,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0328](0328-only-a-tip-meets-the-model.md) | Let only a tip meet the model: turn a head for room and cut a pad back | Accepted; a head with no room under it is dropped by 0331, one with no clear direction is left out by 0341, and turning a head is superseded by 0346 |
 | [0329](0329-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0330](0330-every-island-is-touched-and-a-tip-sits-on-its-face.md) | Touch every island where it begins, and sit every tip on its face | Accepted; laying a plane tip's disc onto its face is superseded by 0345 |
-| [0331](0331-short-model-to-model-supports-are-small-pillars-laid-on-their-faces.md) | Keep short supports between two faces of the part small pillars, laid on both faces | Accepted |
+| [0331](0331-short-model-to-model-supports-are-small-pillars-laid-on-their-faces.md) | Keep short supports between two faces of the part small pillars, laid on both faces | Accepted; the headless strut is kept to profiles with small pillars by 0346 |
 | [0255](0255-a-small-pillar-has-a-longest-run.md) | Thin a support between two surfaces only up to a longest run | Accepted |
 
 ### Volume: hollowing, infill and relief
@@ -309,7 +309,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0246](0246-a-model-keeps-the-support-profile-it-was-edited-to.md) | Keep an edited support profile on the picked models until it is saved | Accepted; what choosing another profile from the list does is superseded by 0247 |
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
 | [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325 |
-| [0249](0249-nothing-that-carries-a-support-leans-past-45-degrees.md) | Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut | Accepted; the head's 45 degrees is superseded by 0344 |
+| [0249](0249-nothing-that-carries-a-support-leans-past-45-degrees.md) | Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut | Accepted; the head's 45 degrees is superseded by 0344, itself superseded by 0346 |
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted; only a support no further than the part, by 0331 |
 | [0252](0252-a-brace-is-built-to-the-groups-it-ties.md) | Build a brace to the groups of the trunks it ties | Accepted |

@@ -409,7 +409,7 @@ impl Slicing {
         if !scene.has_printable(scene.active_plate()) {
             return Some(tr!("slicing-nothing-visible"));
         }
-        if supports_pending(scene, scene.active_plate()) {
+        if scene.supports_pending(scene.active_plate()) {
             return Some(tr!("slicing-supports-growing"));
         }
         if !self.exposure.is_empty() && !self.printer_reads_per_layer() {
@@ -433,7 +433,7 @@ impl Slicing {
         if models.is_empty() {
             bail!(tr!("slicing-nothing-visible-error"));
         }
-        if supports_pending(scene, plate) {
+        if scene.supports_pending(plate) {
             bail!(tr!("slicing-supports-growing-error"));
         }
         // The output name has the last word on the container, and only the profile knows
@@ -582,14 +582,6 @@ impl Slicing {
 /// Where one plate of a whole-project run is written: the name the user typed with the
 /// plate's own name on the end, so a project of six plates comes out named rather than
 /// numbered.
-/// Whether a model of `plate` is still waiting on its supports, which a stack cut now
-/// would leave out.
-fn supports_pending(scene: &Scene, plate: u32) -> bool {
-    scene
-        .printable(plate)
-        .any(crate::scene::SceneObject::supports_pending)
-}
-
 fn per_plate_path(output: &Path, scene: &Scene, plate: u32) -> PathBuf {
     let name = scene.plates()[plate as usize]
         .replace(' ', "-")

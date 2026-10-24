@@ -1,6 +1,6 @@
 use core_geometry::{
     Bvh, Mat3, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Triangle, Vec3, point_triangle,
-    raycast_placed_by, raycast_placed_within,
+    raycast_placed_within,
 };
 
 use crate::region::Blocked;
@@ -40,8 +40,7 @@ impl<'a> Placed<'a> {
     /// The nearest face of the model `ray`, in plate coordinates, hits: `raycast_placed`
     /// without working the placement's inverse out again for every ray.
     pub fn raycast(&self, ray: &Ray) -> Option<PlacedHit> {
-        let (matrix, inverse) = self.matrices?;
-        raycast_placed_by(self.model, self.bvh, matrix, inverse, ray)
+        self.raycast_within(ray, Scalar::INFINITY)
     }
 
     /// [`Self::raycast`] looking no further than `max_mm` along the ray.

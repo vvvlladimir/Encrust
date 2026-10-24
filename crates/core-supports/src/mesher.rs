@@ -581,7 +581,7 @@ fn strut(
         direction,
         rings,
         sides: profile.facets as usize,
-        apex: apex_of(&nodes[child], direction, profile, style),
+        apex: apex_of(&nodes[child], direction, profile, style, length),
         tail: Some(to + direction * body_mm),
         seat: seat_of(&nodes[child], style),
         sole: None,
@@ -642,7 +642,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         direction,
         rings,
         sides: profile.facets as usize,
-        apex: apex_of(root, direction, profile, style),
+        apex: apex_of(root, direction, profile, style, length),
         tail,
         seat: seat_of(root, style),
         sole,
@@ -895,16 +895,20 @@ fn head(
     // A half ball of the contact's width centred on the contact, pushed in by the bite:
     // half of it is in the part at a bite of nought, and the face cuts it in a circle of
     // the contact's width however the head leans. See `docs/decisions/0345`.
-    let centre_mm = cap_centre_mm(style, profile).min(top_mm);
+    let centre_mm = cap_centre_mm(style, profile, length);
     cap(rings, -centre_mm, contact_mm);
     push(rings, top_mm - centre_mm, body_mm);
 }
 
-/// How far into the part a plane tip's half ball is centred, millimetres: its bite, and
-/// out of the part again where the ball would reach past the half wall it is held to.
-fn cap_centre_mm(style: Style, profile: &SupportProfile) -> Scalar {
+/// How far into the part a plane tip's half ball is centred on a tube `length` long,
+/// millimetres: its bite, held to the half wall behind it and to the tube's top segment.
+fn cap_centre_mm(style: Style, profile: &SupportProfile, length: Scalar) -> Scalar {
     let radius_mm = profile.contact_radius_mm();
-    style.bite_mm(profile).min(style.bite_limit_mm - radius_mm)
+    let top_mm = profile.top_length_mm().min(length);
+    style
+        .bite_mm(profile)
+        .min(style.bite_limit_mm - radius_mm)
+        .min(top_mm)
 }
 
 /// The rings of a half ball of `radius_mm` centred `centre_mm` along the axis, down to its
@@ -944,18 +948,14 @@ fn seat_of(node: &TreeNode, style: Style) -> Option<Vec3> {
         .flatten()
 }
 
-/// Where the tip pokes into the model, for a tube that starts at a contact, and the pole
-/// of the dome for one that starts at a joint.
-///
-/// It goes back up the tube's own axis, which at a tip is the normal of the face it
-/// holds, so the bite drives into the surface square on (ADR 0125). A sphere's upper pole
-/// is `bite_mm` in. A plane tip has no apex: the sweep closes it with the flat disc its
-/// first ring makes, already pushed in (ADR 0243).
+/// Where a tube `length` long pokes into the model at a contact, back up its own axis,
+/// or the pole of the dome at a joint; a small pillar has none (ADR 0125, 0345).
 fn apex_of(
     node: &TreeNode,
     direction: Vec3,
     profile: &SupportProfile,
     style: Style,
+    length: Scalar,
 ) -> Option<Vec3> {
     if !node.is_leaf() {
         return Some(node.position - direction * style.body_radius_mm(node.radius_mm, profile));
@@ -964,7 +964,7 @@ fn apex_of(
         return None;
     }
     if profile.tip.shape == ContactShape::Plane {
-        let depth_mm = cap_centre_mm(style, profile) + profile.contact_radius_mm();
+        let depth_mm = cap_centre_mm(style, profile, length) + profile.contact_radius_mm();
         return Some(node.position - direction * depth_mm);
     }
     Some(node.position - direction * style.bite_mm(profile))
@@ -1724,6 +1724,20 @@ mod tests {
         assert!(
             (widest_above(&mesh, axis, centre - 2e-3) - flat.contact_radius_mm()).abs() < 1e-3,
             "it is as wide as its contact where it is centred, and no wider"
+        );
+    }
+
+    #[test]
+    fn a_plane_tip_biting_past_its_top_segment_keeps_its_pole_on_the_half_ball() {
+        let mut deep = with_tip(ContactShape::Plane);
+        deep.tip.contact_depth_mm = deep.top.length_mm + 1.0;
+        let mesh = one_column(&deep);
+        let pole = 20.0 + deep.top.length_mm + deep.contact_radius_mm();
+        assert!(
+            (ceiling(&mesh) - pole).abs() < 1e-4,
+            "the ball is centred no deeper than the top segment, and its pole a contact \
+             radius past that: expected {pole}, got {}",
+            ceiling(&mesh)
         );
     }
 

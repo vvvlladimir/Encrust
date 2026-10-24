@@ -14,8 +14,7 @@ use crate::status::Status;
 use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
     BinLook, bin_button, compact_button, companion_button, describe, hint, icon, icon_toggle,
-    instant_bin, number_row, primary_button, progress_bar, secondary_button, section, stats, theme,
-    tone,
+    number_row, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -158,8 +157,8 @@ fn lift_row(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// What has no room, Fill painted areas while there is paint or the brush is in hand, and
-/// the run: the cavity's button over Grow for a hollow model, or the run's progress.
+/// What has no room, then the run's progress, or the cavity's button for a hollow model
+/// over Fill painted areas over Grow (ADR 0338).
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let (points, columns) = standing(window.doc);
     // Trees still growing stand nothing yet, which is not a want of room.
@@ -167,7 +166,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         .doc
         .scene
         .targets()
-        .any(crate::scene::SceneObject::supports_pending);
+        .any(SceneObject::supports_pending);
     if points != columns && !growing {
         let line = tr!("supports-without-room", count = points - columns);
         tone(
@@ -180,8 +179,8 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         running(ui, job);
         return;
     }
-    fill(ui, window);
     cavity(ui, window);
+    fill(ui, window);
     grow(ui, window, points);
 }
 
@@ -317,7 +316,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         regroup = compact_button(ui, &tr!("supports-move-to-group"), width).clicked();
         regrow = compact_button(ui, &tr!("supports-grow-these-again"), width).clicked();
         let tip = tr!("supports-remove-these");
-        remove = instant_bin(ui, theme::BUTTON_H, BinLook::Quiet, &tip);
+        remove = bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, true);
     });
     if regroup {
         let active = window.tools.supports.active;

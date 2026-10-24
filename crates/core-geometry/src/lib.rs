@@ -36,8 +36,7 @@ pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use primitives::{ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for};
 pub use ray::{
-    PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_by,
-    raycast_placed_within,
+    PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
 };
 pub use region::Region;
 pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
