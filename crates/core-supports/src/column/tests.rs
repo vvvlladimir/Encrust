@@ -1,6 +1,6 @@
 use super::*;
 use crate::fixtures::{box_mesh, columns_on, landing_on, profile, ramp, under_a_gap_over_a_bar};
-use core_geometry::{Bvh, Mesh, Transform};
+use core_geometry::{Bvh, Mesh, Quat, Transform};
 
 /// A wall filling 0..1 on x, standing on the plate.
 fn wall() -> Mesh {
@@ -670,5 +670,57 @@ fn a_contact_with_no_room_for_a_head_moves_along_its_face_to_where_one_has() {
         column.contact.x < contact.x,
         "away from the lip, to {}",
         column.contact
+    );
+}
+
+/// [`ramp`] turned over and lifted, so its sloping face looks down and out along -x from
+/// z = 20 at x = 0 to z = 10 at x = 4, between its sides at y = ±5.
+fn ramp_overhead() -> (Mesh, Transform) {
+    let turned = Quat::from_rotation_x(std::f32::consts::PI);
+    let transform =
+        Transform::from_scale_rotation_translation(Vec3::ONE, turned, Vec3::new(0.0, 0.0, 20.0));
+    (ramp(4.0, 10.0), transform)
+}
+
+#[test]
+fn a_tip_on_the_side_edge_of_a_slope_moves_in_until_its_contact_lies_on_the_face() {
+    let profile = profile();
+    let radius_mm = profile.contact_radius_mm();
+    let (model, transform) = ramp_overhead();
+    // The sloping face is at z = 20 - 2.5 x; a contact 0.05 mm in from its side.
+    let points = [SupportPoint::new(Vec3::new(2.0, -4.95, 15.0))];
+    let columns = columns_on(&points, &model, transform, Profiles::single(&profile));
+
+    let contact = columns.first().expect("the slope has room for a head").contact;
+    let in_mm = 5.0 - contact.y.abs();
+    assert!(
+        (radius_mm - 1e-3..=radius_mm + 0.05 + 1e-3).contains(&in_mm),
+        "a tip half over the side cures onto the wall past it: {in_mm} mm in, expected \
+         {radius_mm} mm, the contact's radius"
+    );
+    let on_face_mm = (contact.z - (20.0 - 2.5 * contact.x)).abs() / Scalar::hypot(1.0, 2.5);
+    assert!(on_face_mm < 1e-3, "{on_face_mm} mm off the sloping face");
+}
+
+#[test]
+fn a_tip_under_a_rib_narrower_than_its_contact_keeps_its_place() {
+    let profile = profile();
+    let rib = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(0.3, 5.0, 12.0));
+    let contact = Vec3::new(0.15, 0.0, 10.0);
+    let columns = columns_on(
+        &[SupportPoint::new(contact)],
+        &rib,
+        Transform::default(),
+        Profiles::single(&profile),
+    );
+
+    assert!(
+        profile.contact_radius_mm() * 2.0 > 0.3,
+        "the rib is narrower than the contact"
+    );
+    let kept = columns.first().expect("a rib has room for a head").contact;
+    assert!(
+        kept.abs_diff_eq(contact, 1e-5),
+        "nowhere on a 0.3 mm rib holds the whole tip, so the contact stays at {contact}, got {kept}"
     );
 }
