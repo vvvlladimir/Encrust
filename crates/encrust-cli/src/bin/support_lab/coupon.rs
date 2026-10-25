@@ -1,5 +1,5 @@
 //! A print answering what the bench can only assume: what tears a tip off and what it leaves.
-//! A spec file lays it out; 
+//! A spec file lays it out.
 
 use std::path::Path;
 

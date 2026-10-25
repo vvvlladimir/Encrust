@@ -1714,6 +1714,7 @@ confirm-delete-resin-named = Удалить «{ $name }» и подобранн�
 confirm-comes-off = Она также убирается с: { $printers }.
 confirm-delete-profile = Удалить этот профиль
 confirm-reset-unreadable = Сбросить нечитаемые профили
+confirm-delete-unreadable = Удалить нечитаемые профили
 confirm-reset-named = Удалить ваши копии профилей { $names } и использовать те, что поставляются с этой версией?
 confirm-reset = Сбросить
 confirm-reset-own-gone = Ваши собственные нечитаемые профили тоже будут удалены, потому что заменить их нечем: { $names }.

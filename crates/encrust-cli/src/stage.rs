@@ -37,11 +37,6 @@ pub struct Shaping {
 impl Shaping {
     /// What the flags ask of every model.
     pub fn of(job: &JobArgs) -> Result<Self> {
-        if job.supports.support_cavity && !job.hollow.wanted() {
-            bail!(
-                "--support-cavity holds up the cavity --hollow leaves, and --hollow was not given"
-            );
-        }
         Ok(Self {
             import: job.import.clone(),
             hollow: job.hollow.clone(),
@@ -178,6 +173,7 @@ pub fn models(
     watch: &Watch,
 ) -> Result<Staged> {
     let shaping = Shaping::of(job)?;
+    refuse_idle_cavity(job, &shaping)?;
     if paths.len() > 1 {
         refuse_one_model_flags(&shaping)?;
         let one_spot = job.model.label.is_some() || job.model.part_off.is_some();
@@ -203,6 +199,20 @@ pub fn refuse_one_model_flags(shaping: &Shaping) -> Result<()> {
     }
     if shaping.hollow.cutting() {
         bail!("--drain-at and --channel point at one model; a plate file places them per model");
+    }
+    Ok(())
+}
+
+/// Refuses `--support-cavity` where it would hold nothing up: no supports, or no cavity.
+fn refuse_idle_cavity(job: &JobArgs, shaping: &Shaping) -> Result<()> {
+    if !job.supports.support_cavity {
+        return Ok(());
+    }
+    if shaping.supports.is_none() {
+        bail!("--support-cavity stands supports in the cavity, and --supports was not given");
+    }
+    if !shaping.hollow.wanted() {
+        bail!("--support-cavity holds up the cavity --hollow leaves, and --hollow was not given");
     }
     Ok(())
 }

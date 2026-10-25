@@ -412,6 +412,18 @@ fn a_cavity_is_held_up_from_inside_only_when_asked() {
 }
 
 #[test]
+fn holding_up_a_cavity_without_supports_is_refused() {
+    let path = write_box_stl("cavity-unsupported", 10.0, 12, 0);
+    let output = slice(&[path.to_str().unwrap(), "--hollow", "2", "--support-cavity"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("--supports"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn holding_up_a_cavity_without_hollowing_is_refused() {
     let path = write_box_stl("no-cavity", 10.0, 12, 0);
     let output = slice(&[

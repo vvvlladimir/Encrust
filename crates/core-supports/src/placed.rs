@@ -42,6 +42,11 @@ impl<'a> Placed<'a> {
         self.raycast_within(ray, Scalar::INFINITY)
     }
 
+    /// From plate coordinates into the model's own, or `None` where the placement flattens it.
+    pub(crate) fn inverse_matrix(&self) -> Option<Mat4> {
+        self.matrices.map(|(_, inverse)| inverse)
+    }
+
     /// [`Self::raycast`] looking no further than `max_mm` along the ray.
     pub fn raycast_within(&self, ray: &Ray, max_mm: Scalar) -> Option<PlacedHit> {
         let (matrix, inverse) = self.matrices?;

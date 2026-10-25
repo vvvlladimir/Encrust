@@ -1623,6 +1623,7 @@ confirm-delete-resin-named = Delete { $name } and the exposures measured for it?
 confirm-comes-off = It comes off { $printers } as well.
 confirm-delete-profile = Delete this profile
 confirm-reset-unreadable = Reset the profiles that would not read
+confirm-delete-unreadable = Delete the profiles that would not read
 confirm-reset-named = Throw away your copies of { $names } and use the ones this version ships?
 confirm-reset = Reset
 confirm-reset-own-gone = Profiles of your own that would not read are deleted too, as nothing ships in their place: { $names }.

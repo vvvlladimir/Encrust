@@ -1,4 +1,4 @@
-use core_geometry::{Scalar, Vec3};
+use core_geometry::{Mat4, Scalar, Vec3};
 
 use crate::edit::on_model;
 use crate::placed::Placed;
@@ -28,12 +28,13 @@ pub fn inline(
         return Vec::new();
     }
     let steps = ((to - from).length() / spacing_mm).ceil().max(1.0) as usize;
+    let side = side.map(|side| (side, side.into_model.inverse()));
     let mut last = from;
     let mut points = Vec::with_capacity(steps);
     for step in 1..=steps {
         let at = from.lerp(to, step as Scalar / steps as Scalar);
         let point = match side {
-            Some(side) => on_side(placed, side, at),
+            Some((side, out_of_model)) => on_side(placed, side, out_of_model, at),
             None => on_model(placed, at),
         };
         let Some(point) = point else {
@@ -47,12 +48,13 @@ pub fn inline(
     points
 }
 
-/// [`on_model`], kept to the faces on `side` of the wall.
-fn on_side(placed: &Placed, side: &WallSide, at: Vec3) -> Option<Vec3> {
+/// [`on_model`], kept to the faces on `side` of the wall; `out_of_model` undoes its
+/// `into_model`.
+fn on_side(placed: &Placed, side: &WallSide, out_of_model: Mat4, at: Vec3) -> Option<Vec3> {
     let local = side.into_model.transform_point3(at);
     let kept = |face: usize| side.inner.contains(&face) == side.inside;
     let closest = side.bvh.closest_where(local, kept)?.point;
-    let closest = side.into_model.inverse().transform_point3(closest);
+    let closest = out_of_model.transform_point3(closest);
     (!placed.blocks_at(closest)).then_some(closest)
 }
 

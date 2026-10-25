@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use core_engine::SupportPlan;
 use core_geometry::{Scalar, Vec2, Vec3};
 use serde::Deserialize;
 
@@ -104,14 +105,23 @@ pub fn stage(path: &Path, arrange: bool, job: &JobArgs, watch: &Watch) -> Result
     let entries: Vec<_> = plate
         .models
         .iter()
-        .map(|model| Ok((beside.join(&model.path), shaping_of(&base, model)?)))
+        .map(|model| {
+            let shaping = shaping_of(&base, model, job.supports.support_cavity)?;
+            Ok((beside.join(&model.path), shaping))
+        })
         .collect::<Result<_>>()?;
+    let held_inside = |shaping: &Shaping| shaping.hollow.wanted() && shaping.supports.is_some();
+    if job.supports.support_cavity && !entries.iter().any(|(_, shaping)| held_inside(shaping)) {
+        bail!(
+            "--support-cavity holds up a hollowed model's cavity, and no model is both hollowed and supported"
+        );
+    }
     plate_of(&entries, arrange, layer_height, job, &chosen, watch)
 }
 
 /// What the flags ask of every model, with this entry's own settings where a flag was not
-/// given.
-fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Result<Shaping> {
+/// given; supports the entry names hold up its cavity with `cavity`.
+fn shaping_of(flags: &Shaping, model: &ModelEntry, cavity: bool) -> Result<Shaping> {
     let mut shaping = flags.clone();
     let transform = &mut shaping.import.transform;
     transform.rotate = transform.rotate.or(model.rotate.map(Vec3::from_array));
@@ -122,7 +132,10 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Result<Shaping> {
     if shaping.supports.is_none()
         && let Some(id) = model.supports.as_deref()
     {
-        shaping.supports = Some(crate::profiles::plan_of(id)?);
+        shaping.supports = Some(SupportPlan {
+            cavity,
+            ..crate::profiles::plan_of(id)?
+        });
     }
     if !shaping.hollow.wanted()
         && let Some(wall) = model.hollow

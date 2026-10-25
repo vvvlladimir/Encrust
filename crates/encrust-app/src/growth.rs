@@ -91,6 +91,8 @@ impl SupportGrowth {
                         || tr!("supports-growth-stopped"),
                         |reason| tr!("supports-cannot-grow", reason = reason),
                     ));
+                    // Only a model's last failure is kept: dragged on, it fails anew at each place.
+                    failed.retain(|asked| asked.model != run.asked.model);
                     failed.push(run.asked.clone());
                 }
             }
@@ -218,5 +220,31 @@ mod tests {
         growth.poll(&mut scene, &mut status);
         growth.start(&scene.objects()[0], &table);
         assert_eq!(growth.runs.len(), 1, "an edit is grown again");
+    }
+
+    #[test]
+    fn a_model_failing_at_one_place_after_another_keeps_only_its_last_failure() {
+        let mut scene = supported_cube();
+        let table = [SupportProfile::shipped("medium").expect("the medium preset ships")];
+        let (model, revision) = (
+            scene.objects()[0].id,
+            scene.objects()[0].supports.revision(),
+        );
+        let mut growth = SupportGrowth::default();
+        for x_mm in [0.0, 20.0, 40.0] {
+            growth.runs.push(Run {
+                asked: Asked {
+                    model,
+                    revision,
+                    transform: Transform::from_translation(Vec3::new(x_mm, 0.0, 10.0)),
+                    table: table.to_vec(),
+                },
+                job: Worker::spawn(|_, _| Err(Some("out of memory".to_owned())), || Err(None)),
+            });
+            while growth.poll(&mut scene, &mut Status::Idle) {
+                std::thread::yield_now();
+            }
+        }
+        assert_eq!(growth.failed.len(), 1, "a drag does not pile failures up");
     }
 }

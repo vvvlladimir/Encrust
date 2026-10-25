@@ -227,8 +227,8 @@ default), `least-peel`, `shortest-print` or `auto`, which balances the three, an
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
 into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), and
-`--support-cavity` holds up the cavity `--hollow` leaves as well as the outside, as the
-window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
+`--support-cavity` holds up the cavity `--hollow`, or a plate file's `hollow`, leaves as well
+as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
 (ADR 0290). A turned model is stood on the plate over the middle it stood over in x and y.

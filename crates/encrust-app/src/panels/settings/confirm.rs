@@ -153,7 +153,7 @@ fn reset_question(catalogue: &Catalogue) -> Question {
     };
     if copies.is_empty() {
         return Question {
-            title: tr!("confirm-reset-unreadable"),
+            title: tr!("confirm-delete-unreadable"),
             what: tr!("confirm-delete-own-named", names = names(&own)),
             verb: tr!("confirm-delete"),
             gone: true,

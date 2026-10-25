@@ -256,7 +256,7 @@ fn onto_surface(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec
 
 /// Whether `contact`, in plate coordinates, already sits on the model's surface.
 fn on_surface(placed: &Placed, contact: Vec3) -> bool {
-    let Some(inverse) = placed.transform.inverse_matrix() else {
+    let Some(inverse) = placed.inverse_matrix() else {
         return false;
     };
     let local = inverse.transform_point3(contact);
@@ -463,7 +463,7 @@ pub(crate) fn face_normal(placed: &Placed, contact: Vec3) -> Option<Vec3> {
 /// Which way a tip leaves the surface at `contact`, and the face's outward normal: [`leaned`]
 /// for a face looking down or sat on, else straight down; on an edge the lowest face wins.
 fn tip_direction(placed: &Placed, contact: Vec3) -> (Vec3, Option<Vec3>) {
-    let Some(inverse) = placed.transform.inverse_matrix() else {
+    let Some(inverse) = placed.inverse_matrix() else {
         return (-Vec3::Z, None);
     };
     let local = inverse.transform_point3(contact);
