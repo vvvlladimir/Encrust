@@ -148,17 +148,30 @@ fn the_preview_of_an_empty_plate() {
     picture("preview", app);
 }
 
+/// The app with the Settings window open, on the first support profile.
+fn with_settings() -> SlicerApp {
+    let mut app = app(false);
+    app.view.options.started = true;
+    crate::panels::toggle_settings(&mut app.machine);
+    app
+}
+
 #[test]
 fn the_settings_window() {
     let mut results = SnapshotResults::new();
-    let mut supports = app(false);
-    supports.view.options.started = true;
-    crate::panels::toggle_settings(&mut supports.machine);
-    results.extend(picture("settings", supports));
+    results.extend(picture("settings", with_settings()));
+    let mut form = with_settings();
+    let settings = &mut form.machine.settings;
+    settings.pick_support(&form.machine.slicing.catalogue, "heavy");
+    settings.editing_support = true;
+    results.extend(picture("settings_support_form", form));
+    let mut auto = with_settings();
+    let settings = &mut auto.machine.settings;
+    settings.pick_auto(&auto.machine.slicing.catalogue, "default");
+    settings.editing_support = true;
+    results.extend(picture("settings_auto_form", auto));
     // Not General: it names the profile folder, which is a different path on every desk.
-    let mut hollow = app(false);
-    hollow.view.options.started = true;
-    crate::panels::toggle_settings(&mut hollow.machine);
+    let mut hollow = with_settings();
     hollow
         .machine
         .settings

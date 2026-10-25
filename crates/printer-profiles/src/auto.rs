@@ -46,6 +46,11 @@ pub struct AutoProfile {
 }
 
 impl AutoProfile {
+    /// The automatic profile this build ships under `id`, whatever the user's copy says.
+    pub fn shipped(id: &str) -> Result<Self, ProfileError> {
+        crate::catalogue::shipped_auto(id)
+    }
+
     /// Which shape holds an island of `area_mm2`, as an index into `shapes`.
     pub fn island_size(&self, area_mm2: f32) -> usize {
         size_of(&self.island_area_mm2, area_mm2)
@@ -179,6 +184,19 @@ mod tests {
     fn with(edit: &str) -> Result<AutoProfile, ProfileError> {
         let source = SHIPPED.replace("island_area_mm2 = [2.4, 3.2]", edit);
         AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml"))
+    }
+
+    #[test]
+    fn the_shipped_profile_is_read_by_its_id() {
+        assert_eq!(AutoProfile::shipped("default").ok(), Some(shipped()));
+    }
+
+    #[test]
+    fn an_id_nothing_ships_is_unknown() {
+        assert!(matches!(
+            AutoProfile::shipped("nobodys"),
+            Err(ProfileError::Unknown { .. })
+        ));
     }
 
     #[test]

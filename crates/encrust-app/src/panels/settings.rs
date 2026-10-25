@@ -304,12 +304,49 @@ pub(super) fn form_card<R>(
     title: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
+    switched_card(ui, title, None, add)
+}
+
+/// A form card whose title carries the switch turning its fields on, where `on` is given.
+pub(super) fn switched_card<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    on: Option<&mut bool>,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let inner = card_cell(ui, title, on, add);
+    close_cards(ui);
+    inner
+}
+
+/// Cards side by side in `columns`, each title level with its neighbours' and one hairline
+/// under the tallest, so a title never lines up with another card's field.
+pub(super) fn card_row(
+    ui: &mut egui::Ui,
+    columns: usize,
+    mut add: impl FnMut(&mut egui::Ui, usize),
+) {
+    ui.columns(columns, |cells| {
+        for (column, ui) in cells.iter_mut().enumerate() {
+            add(ui, column);
+        }
+    });
+    close_cards(ui);
+}
+
+/// A card's title and fields, open below for [`close_cards`].
+pub(super) fn card_cell<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    on: Option<&mut bool>,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
     let id = ui.id().with(("form-card", title));
     let texts = crate::ui::described(ui, id);
     let beside = theme::BLOCK_TITLE_W + theme::BLOCK_GAP + theme::FIELD_W * 2.0;
     ui.add_space(BLOCK_PAD);
-    let inner = if ui.available_width() < beside {
-        card_title(ui, title, &texts);
+    if ui.available_width() < beside {
+        card_title(ui, title, &texts, on);
         ui.add_space(4.0);
         crate::ui::describing(ui, id, add)
     } else {
@@ -320,7 +357,7 @@ pub(super) fn form_card<R>(
                 |ui| {
                     ui.set_width(theme::BLOCK_TITLE_W);
                     ui.add_space(4.0);
-                    card_title(ui, title, &texts);
+                    card_title(ui, title, &texts, on);
                 },
             );
             ui.add_space(theme::BLOCK_GAP);
@@ -332,14 +369,17 @@ pub(super) fn form_card<R>(
             .inner
         })
         .inner
-    };
-    ui.add_space(BLOCK_PAD);
-    hairline(ui);
-    inner
+    }
 }
 
-/// A form card's title, and the question mark that reads out what its fields described.
-fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String]) {
+fn close_cards(ui: &mut egui::Ui) {
+    ui.add_space(BLOCK_PAD);
+    hairline(ui);
+}
+
+/// A form card's title, the question mark that reads out what its fields described, and at
+/// the right the card's switch when it has one.
+fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String], on: Option<&mut bool>) {
     let title_text = egui::RichText::new(title)
         .font(theme::block_title())
         .color(theme::colors().text_mid);
@@ -348,6 +388,11 @@ fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String]) {
         ui.label(title_text);
         if !texts.is_empty() {
             crate::ui::help_mark(ui, texts);
+        }
+        if let Some(on) = on {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                crate::ui::bare_switch(ui, on, title);
+            });
         }
     });
 }

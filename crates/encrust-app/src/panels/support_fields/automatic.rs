@@ -119,6 +119,70 @@ pub fn sizes(
     );
 }
 
+/// How far above a step of each size its neighbourhood is held, and how far a face there
+/// may lean first; see `docs/decisions/0326`.
+pub fn steps(
+    ui: &mut egui::Ui,
+    auto: &mut AutoProfile,
+    shipped: Option<&AutoProfile>,
+    shapes: &[String; AUTO_SIZES],
+) {
+    describe(ui, &tr!("support-steps-help"));
+    let height = Measure {
+        label: |shape| tr!("support-step-height", shape = shape),
+        unit: tr!("unit-mm"),
+        step: COARSE_STEP,
+        max: MAX_STEP_HEIGHT_MM,
+        decimals: 2,
+    };
+    height.show(
+        ui,
+        shapes,
+        0.0,
+        &mut auto.step_height_mm,
+        shipped.map(|auto| &auto.step_height_mm[..]),
+    );
+    degrees(
+        ui,
+        &tr!("support-step-lean"),
+        shipped.map(|auto| auto.step_lean_deg),
+        &mut auto.step_lean_deg,
+        1.0..=auto.max_overhang_deg,
+    );
+    auto.step_lean_deg = auto.step_lean_deg.min(auto.max_overhang_deg);
+}
+
+/// The light supports that steady a part on a slope too gentle to sag.
+pub fn steadying(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&AutoProfile>) {
+    describe(ui, &tr!("support-steadying-help"));
+    degrees(
+        ui,
+        &tr!("support-steady-lean"),
+        shipped.map(|auto| auto.steady_lean_deg),
+        &mut auto.steady_lean_deg,
+        1.0..=auto.step_lean_deg,
+    );
+    auto.steady_lean_deg = auto.steady_lean_deg.min(auto.step_lean_deg);
+    mm(
+        ui,
+        &tr!("support-steady-spacing"),
+        shipped.map(|auto| auto.steady_spacing_mm),
+        &mut auto.steady_spacing_mm,
+        COARSE_STEP,
+        0.5..=40.0,
+    );
+    number(
+        ui,
+        &tr!("support-steady-area"),
+        shipped.map(|auto| auto.steady_area_mm2),
+        &mut auto.steady_area_mm2,
+        &tr!("unit-mm2"),
+        COARSE_STEP,
+        0.0..=MAX_ISLAND_MM2,
+        1,
+    );
+}
+
 /// One measure an automatic profile sizes by, shown as the least of it each heavier shape
 /// takes.
 pub(super) struct Measure {
@@ -169,5 +233,8 @@ pub(super) const MAX_ISLAND_MM2: f32 = 100.0;
 pub(super) const MAX_LOAD_MM3: f32 = 100_000.0;
 
 pub(super) const MAX_STEP_MM3: f32 = 1_000.0;
+
+/// How far above a step its neighbourhood may be held: past a model's own tip, nothing.
+pub(super) const MAX_STEP_HEIGHT_MM: f32 = 20.0;
 
 pub(super) const LOAD_STEP: f64 = 10.0;

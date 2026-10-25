@@ -100,6 +100,11 @@ impl<T: Clone + PartialEq> Draft<T> {
             .as_ref()
             .filter(|shipped| **shipped != self.saved)
     }
+
+    /// The profile the build ships under this id, whether the user's copy differs or not.
+    pub fn as_shipped(&self) -> Option<&T> {
+        self.shipped.as_ref()
+    }
 }
 
 /// A resin as one printer needs it, beside the resin with every printer's table.

@@ -12,7 +12,7 @@ mod automatic;
 mod bracing;
 mod sections;
 use automatic::automatic;
-pub use automatic::{held_up, sizes};
+pub use automatic::{held_up, sizes, steadying, steps};
 use bracing::bracing;
 use sections::{bottom, branching, grid, main, raft, small_pillar, top};
 
@@ -53,18 +53,6 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Self; 9] = [
-        Self::Top,
-        Self::Main,
-        Self::Bottom,
-        Self::SmallPillar,
-        Self::Branching,
-        Self::Grid,
-        Self::Raft,
-        Self::Bracing,
-        Self::Automatic,
-    ];
-
     pub fn label(self) -> String {
         match self {
             Self::Top => tr!("support-group-top"),

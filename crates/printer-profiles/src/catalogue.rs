@@ -551,15 +551,37 @@ fn shipped_printer(id: &str) -> Option<PrinterProfile> {
 }
 
 pub(crate) fn shipped_support(id: &str) -> Result<SupportProfile, ProfileError> {
-    let (_, source) = BUNDLED_SUPPORTS
-        .iter()
-        .find(|(name, _)| *name == id)
-        .ok_or_else(|| ProfileError::Unknown {
-            kind: Kind::Support.label(),
-            id: id.to_owned(),
-        })?;
-    let path = PathBuf::from(format!("<bundled>/supports/{id}.toml"));
-    SupportProfile::from_toml_str(source, &path)
+    shipped_in(
+        BUNDLED_SUPPORTS,
+        Kind::Support,
+        id,
+        SupportProfile::from_toml_str,
+    )
+}
+
+pub(crate) fn shipped_auto(id: &str) -> Result<AutoProfile, ProfileError> {
+    shipped_in(BUNDLED_AUTOS, Kind::Auto, id, AutoProfile::from_toml_str)
+}
+
+/// The profile of `kind` that `table` ships under `id`, read by `parse`.
+fn shipped_in<T>(
+    table: &[(&str, &str)],
+    kind: Kind,
+    id: &str,
+    parse: Parse<T>,
+) -> Result<T, ProfileError> {
+    let (_, source) =
+        table
+            .iter()
+            .find(|(name, _)| *name == id)
+            .ok_or_else(|| ProfileError::Unknown {
+                kind: kind.label(),
+                id: id.to_owned(),
+            })?;
+    parse(
+        source,
+        &PathBuf::from(format!("<bundled>/{}/{id}.toml", kind.dir())),
+    )
 }
 
 /// Whether the user's directory may hold ids nothing ships, or only copies of shipped ones.

@@ -399,7 +399,13 @@ whole-surface fill is Cmd-Shift-click.
   place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
   lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
-  shapes apart from the profiles chosen by hand.
+  shapes apart from the profiles chosen by hand. In a profile's form every group is there,
+  in rows whose titles stand level, branching and the grid turned on or off in their titles;
+  a number changed from the bundled one is marked with an arrow putting it back, and
+  **Reset to defaults** puts back them all, undoably. The automatic profile opens in a form
+  of its own: where its supports go, the island, load and step that move a support to a
+  heavier shape, how far above a step it reaches, and how gentle slopes are steadied; it
+  is edited in place, never duplicated or exported.
 - Each model remembers the profile it was edited with.
 
 ### What a profile lets you shape

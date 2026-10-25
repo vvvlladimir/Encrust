@@ -2,7 +2,7 @@
 //! being edited, which is written back as it changes. See `docs/design/profiles.md`.
 
 pub use printer_profiles::unique_id;
-use printer_profiles::{Catalogue, Kind, PrinterProfile, SupportProfile};
+use printer_profiles::{AutoProfile, Catalogue, Kind, PrinterProfile, SupportProfile};
 
 use crate::i18n::tr;
 use crate::undo::Frame;
@@ -177,6 +177,7 @@ enum Form {
     Printer,
     Resin,
     Support,
+    Auto,
 }
 
 /// What the Settings window and the Machine and resin window are showing.
@@ -204,6 +205,8 @@ pub struct Settings {
     pub printer: Option<Draft<PrinterProfile>>,
     pub resin: Option<ResinDraft>,
     pub support: Option<Draft<SupportProfile>>,
+    /// The automatic profile picked on the Supports page, in the support profile's place.
+    pub auto: Option<Draft<AutoProfile>>,
     pub calculators: Calculators,
     /// The deletion the window is waiting for an answer on.
     pub confirm: Option<Deleting>,
@@ -268,9 +271,10 @@ impl Settings {
         let entry = catalogue
             .supports()
             .find(|entry| entry.profile == *profile)
-            .or_else(|| catalogue.supports().next());
-        if let Some(entry) = entry {
-            self.support = Some(Draft::new(entry.id.clone(), entry.profile.clone()));
+            .or_else(|| catalogue.supports().next())
+            .map(|entry| entry.id.clone());
+        if let Some(id) = entry {
+            self.pick_support(catalogue, &id);
         }
     }
 
@@ -290,8 +294,11 @@ impl Settings {
                 Tab::Machine | Tab::Network => Some(Form::Printer),
             };
         }
-        (self.open && self.section == Section::Supports && self.editing_support)
-            .then_some(Form::Support)
+        let form = match self.auto {
+            Some(_) => Form::Auto,
+            None => Form::Support,
+        };
+        (self.open && self.section == Section::Supports && self.editing_support).then_some(form)
     }
 
     /// Records the edit of the form in view once its gesture is over.
@@ -300,6 +307,7 @@ impl Settings {
             Some(Form::Printer) => self.printer.as_mut().map(|draft| draft.observe(frame)),
             Some(Form::Resin) => self.resin.as_mut().map(|resin| resin.draft.observe(frame)),
             Some(Form::Support) => self.support.as_mut().map(|draft| draft.observe(frame)),
+            Some(Form::Auto) => self.auto.as_mut().map(|draft| draft.observe(frame)),
             None => None,
         };
     }
@@ -310,6 +318,7 @@ impl Settings {
             Some(Form::Printer) => self.printer.as_mut().is_some_and(Draft::undo),
             Some(Form::Resin) => self.resin.as_mut().is_some_and(ResinDraft::undo),
             Some(Form::Support) => self.support.as_mut().is_some_and(Draft::undo),
+            Some(Form::Auto) => self.auto.as_mut().is_some_and(Draft::undo),
             None => false,
         }
     }
@@ -320,6 +329,7 @@ impl Settings {
             Some(Form::Printer) => self.printer.as_mut().is_some_and(Draft::redo),
             Some(Form::Resin) => self.resin.as_mut().is_some_and(ResinDraft::redo),
             Some(Form::Support) => self.support.as_mut().is_some_and(Draft::redo),
+            Some(Form::Auto) => self.auto.as_mut().is_some_and(Draft::redo),
             None => false,
         }
     }
@@ -331,12 +341,27 @@ impl Settings {
         self.confirm = None;
     }
 
-    /// Loads a support profile into the form.
+    /// Loads a support profile into the form, over what the build ships under its id.
     pub fn pick_support(&mut self, catalogue: &Catalogue, id: &str) {
+        let shipped = SupportProfile::shipped(id).ok();
         self.support = catalogue
             .support(id)
             .ok()
-            .map(|entry| Draft::new(id.to_owned(), entry.profile.clone()));
+            .map(|entry| Draft::over_shipped(id.to_owned(), entry.profile.clone(), shipped));
+        self.auto = None;
+    }
+
+    /// Loads an automatic profile into the form, over what the build ships under its id.
+    pub fn pick_auto(&mut self, catalogue: &Catalogue, id: &str) {
+        let Some(entry) = catalogue.autos().find(|entry| entry.id == id) else {
+            return;
+        };
+        let shipped = AutoProfile::shipped(id).ok();
+        self.auto = Some(Draft::over_shipped(
+            id.to_owned(),
+            entry.profile.clone(),
+            shipped,
+        ));
     }
 
     /// Opens a printer or one of its resins in the form.

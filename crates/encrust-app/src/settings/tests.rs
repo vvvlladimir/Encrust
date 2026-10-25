@@ -397,3 +397,36 @@ fn the_support_page_opens_on_the_profile_a_group_was_taken_from() {
     assert_eq!(settings.section, Section::Supports);
     assert_eq!(settings.support.as_ref().expect("open").id, "heavy");
 }
+
+#[test]
+fn a_shipped_support_profile_opens_over_what_the_build_ships() {
+    let mut catalogue = writable("supports-shipped");
+    let mut settings = Settings::default();
+    settings.pick_support(&catalogue, "heavy");
+    let shipped = SupportProfile::shipped("heavy").expect("the heavy preset ships");
+    let draft = settings.support.as_ref().expect("open");
+    assert_eq!(draft.as_shipped(), Some(&shipped));
+
+    let own = new_support(&mut catalogue, Some("heavy")).expect("writable");
+    settings.pick_support(&catalogue, &own);
+    let draft = settings.support.as_ref().expect("open");
+    assert!(draft.as_shipped().is_none(), "a copy ships nothing");
+}
+
+#[test]
+fn the_automatic_profile_opens_in_the_support_profiles_place() {
+    let catalogue = writable("supports-auto");
+    let mut settings = Settings::default();
+    settings.pick_auto(&catalogue, "default");
+    let draft = settings
+        .auto
+        .as_ref()
+        .expect("the default automatic profile ships");
+    assert_eq!(
+        draft.as_shipped(),
+        AutoProfile::shipped("default").ok().as_ref()
+    );
+
+    settings.pick_support(&catalogue, "heavy");
+    assert!(settings.auto.is_none(), "a support profile takes its place");
+}

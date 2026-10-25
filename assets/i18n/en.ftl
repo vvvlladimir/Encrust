@@ -334,6 +334,15 @@ supports-place = Place
 support-size-island = Island for { $shape }
 support-size-load = Load for { $shape }
 support-size-step = Step for { $shape }
+support-group-steps = Steps
+support-group-steadying = Steadying
+support-steps-help = A step is a shelf put out in one layer, sized by the resin it puts out. The faces rising from a step's edge are held as part of it up to its reach, where they lean from vertical past the lean near a step.
+support-step-height = Reach for { $shape }
+support-step-lean = Lean near a step
+support-steadying-help = A part rising on faces too gentle to sag is steadied by a few thin supports, so the peel does not rock it. Lean is how far from vertical a face leans before it is steadied, spacing how far apart those supports go, and the least slope how large a face must be to get any.
+support-steady-lean = Lean
+support-steady-spacing = Spacing
+support-steady-area = Least slope
 supports-remove-all-tooltip = Take every support away
 supports-preset = Support preset
 supports-mode-pick = Pick supports
@@ -923,6 +932,10 @@ support-table-tip = Tip
 support-table-spacing = Spacing
 support-cannot-add = cannot add a support profile
 support-pick-profile = Pick a support profile.
+support-reset = Reset to defaults
+support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
+support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
+support-reset-stock-help = Reset to defaults puts back the numbers a new profile starts with and keeps its name. Undo takes a reset back.
 support-cannot-save = cannot save the support profile
 
 ## panels/inspector/shape.rs

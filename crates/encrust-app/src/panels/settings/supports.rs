@@ -1,20 +1,22 @@
 //! The Supports page: every support profile as a table, the picked one opened in its form.
 //! A group on the plate picks one and tunes its own copy.
 
+mod auto;
+mod form;
+
 use egui::{Rect, Ui, pos2};
-use printer_profiles::{Catalogue, ContactShape, Kind, SupportProfile};
+use printer_profiles::{AutoProfile, Catalogue, ContactShape, Kind, SupportProfile};
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
-use crate::panels::settings::{export_profile, form_card, name_row, report, settled};
-use crate::panels::support_fields::Group;
-use crate::settings::{Deleting, can_delete, new_support};
+use crate::panels::settings::{export_profile, report};
+use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
-use crate::ui::{describe, icon, quiet_button, subheading};
+use crate::ui::{describe, icon, quiet_button, secondary_button, subheading};
 
 /// Below this a form has no room for two columns of cards.
-const TWO_COLUMNS_W: f32 = 720.0;
+pub(super) const TWO_COLUMNS_W: f32 = 720.0;
 
 const TABLE: Table = Table {
     heads: || {
@@ -33,17 +35,26 @@ const TABLE: Table = Table {
 
 /// What a click on the page asked for, carried out once the page has been drawn.
 enum Action {
-    Pick(String),
-    Edit(String),
+    Pick(Kind, String),
+    Edit(Kind, String),
     Duplicate(String),
     Export(String),
     Ask(String),
 }
 
+/// The profile picked on the page: an automatic one, or a support profile.
+fn picked(settings: &Settings) -> Option<(Kind, String)> {
+    match (&settings.auto, &settings.support) {
+        (Some(auto), _) => Some((Kind::Auto, auto.id.clone())),
+        (None, Some(support)) => Some((Kind::Support, support.id.clone())),
+        (None, None) => None,
+    }
+}
+
 /// The page, laid out in `content`: the form of the profile being edited, or the table.
 pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     let settings = &window.machine.settings;
-    let picked = settings.support.as_ref().map(|draft| draft.id.clone());
+    let picked = picked(settings);
     let editing = settings.editing_support && picked.is_some();
     let (mut body, mut bar) = with_footer(ui, content);
     let mut action = None;
@@ -52,7 +63,10 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
             if quiet_button(ui, icon::BACK, &tr!("profiles-every"), false, true).clicked() {
                 window.machine.settings.editing_support = false;
             }
-            form(ui, window);
+            match picked {
+                Some((Kind::Auto, _)) => auto::form(ui, window),
+                _ => form::form(ui, window),
+            }
         });
     } else {
         let top = body.max_rect();
@@ -63,14 +77,14 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
         table(
             &mut child(&mut body, rows),
             window.machine,
-            picked.as_deref(),
+            picked.as_ref(),
             &mut action,
         );
     }
     actions(
         &mut bar,
         window.machine,
-        picked.as_deref(),
+        picked.as_ref(),
         editing,
         &mut action,
     );
@@ -79,9 +93,14 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     }
 }
 
-/// Every support profile, by name, with the measurements that tell them apart: the shapes
-/// automatic sizing builds to first, under what each is for, then those chosen by hand.
-fn table(ui: &mut Ui, machine: &Machine, picked: Option<&str>, action: &mut Option<Action>) {
+/// Every support profile, by name, with the measurements that tell them apart: the
+/// automatic profiles and the shapes they build to first, then those chosen by hand.
+fn table(
+    ui: &mut Ui,
+    machine: &Machine,
+    picked: Option<&(Kind, String)>,
+    action: &mut Option<Action>,
+) {
     let catalogue = &machine.slicing.catalogue;
     TABLE.head_row(ui);
     let scroll = egui::ScrollArea::vertical().id_salt("support-table");
@@ -105,22 +124,32 @@ fn table(ui: &mut Ui, machine: &Machine, picked: Option<&str>, action: &mut Opti
                     tr!("support-table-manual")
                 },
             );
+            if automatic {
+                for entry in catalogue.autos() {
+                    let row = (Kind::Auto, entry.id.clone());
+                    let name = &entry.profile.name;
+                    let clicked =
+                        TABLE.row(ui, name, picked == Some(&row), &auto_cells(&entry.profile));
+                    on_row(clicked, row, action);
+                }
+            }
             for entry in entries {
                 let profile = &entry.profile;
-                let row = TABLE.row(
-                    ui,
-                    &profile.name,
-                    picked == Some(&entry.id),
-                    &cells(profile),
-                );
-                if row.double_clicked() {
-                    *action = Some(Action::Edit(entry.id.clone()));
-                } else if row.clicked() {
-                    *action = Some(Action::Pick(entry.id.clone()));
-                }
+                let row = (Kind::Support, entry.id.clone());
+                let clicked = TABLE.row(ui, &profile.name, picked == Some(&row), &cells(profile));
+                on_row(clicked, row, action);
             }
         }
     });
+}
+
+/// A double click opens the row's profile in the form, a click picks it.
+fn on_row(response: egui::Response, (kind, id): (Kind, String), action: &mut Option<Action>) {
+    if response.double_clicked() {
+        *action = Some(Action::Edit(kind, id));
+    } else if response.clicked() {
+        *action = Some(Action::Pick(kind, id));
+    }
 }
 
 /// Where `id` stands among the shapes of the automatic profiles, lightest first, and after
@@ -137,6 +166,21 @@ fn part_heading(ui: &mut Ui, title: &str) {
     ui.add_space(12.0);
     subheading(ui, title);
     ui.add_space(4.0);
+}
+
+/// An automatic profile's row: no shape of its own, and the spacing it places by.
+fn auto_cells(auto: &AutoProfile) -> [String; 5] {
+    let none = || "—".to_owned();
+    [
+        auto.name.clone(),
+        none(),
+        none(),
+        none(),
+        tr!(
+            "value-mm",
+            value = format!("{:.1}", auto.contact_spacing_mm)
+        ),
+    ]
 }
 
 fn cells(profile: &SupportProfile) -> [String; 5] {
@@ -163,34 +207,50 @@ fn cells(profile: &SupportProfile) -> [String; 5] {
 }
 
 /// What the bar offers for the profile picked. A shipped profile would only come back, so
-/// it cannot be deleted.
+/// it cannot be deleted, and an automatic profile is only ever the shipped one's copy, so it
+/// is neither copied nor exported.
 fn actions(
     ui: &mut Ui,
     machine: &Machine,
-    picked: Option<&str>,
+    picked: Option<&(Kind, String)>,
     editing: bool,
     action: &mut Option<Action>,
 ) {
     let some = picked.is_some();
-    let owned = |id: &str| id.to_owned();
+    let picked = picked.cloned();
     if !editing && quiet_button(ui, icon::EDIT, &tr!("profiles-edit"), false, some).clicked() {
-        *action = picked.map(owned).map(Action::Edit);
+        *action = picked.clone().map(|(kind, id)| Action::Edit(kind, id));
     }
-    if quiet_button(ui, icon::DUPLICATE, &tr!("action-duplicate"), false, some).clicked() {
-        *action = picked.map(owned).map(Action::Duplicate);
+    let support = picked
+        .clone()
+        .filter(|(kind, _)| *kind == Kind::Support)
+        .map(|(_, id)| id);
+    let copyable = support.is_some();
+    if quiet_button(
+        ui,
+        icon::DUPLICATE,
+        &tr!("action-duplicate"),
+        false,
+        copyable,
+    )
+    .clicked()
+    {
+        *action = support.clone().map(Action::Duplicate);
     }
-    if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
-        *action = picked.map(owned).map(Action::Export);
+    if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, copyable).clicked() {
+        *action = support.clone().map(Action::Export);
     }
     let catalogue = &machine.slicing.catalogue;
-    let deletable = picked.is_some_and(|id| can_delete(catalogue, Kind::Support, id));
+    let deletable = support
+        .as_deref()
+        .is_some_and(|id| can_delete(catalogue, Kind::Support, id));
     let delete = quiet_button(ui, icon::REMOVE, &tr!("profiles-delete"), true, deletable);
     let delete = match deletable {
         true => delete,
         false => delete.on_disabled_hover_text(tr!("profiles-shipped")),
     };
     if delete.clicked() {
-        *action = picked.map(owned).map(Action::Ask);
+        *action = support.map(Action::Ask);
     }
 }
 
@@ -198,14 +258,21 @@ fn apply(machine: &mut Machine, action: Action) {
     let settings = &mut machine.settings;
     let catalogue = &machine.slicing.catalogue;
     match action {
-        Action::Pick(id) => settings.pick_support(catalogue, &id),
-        Action::Edit(id) => {
-            settings.pick_support(catalogue, &id);
+        Action::Pick(kind, id) => pick(settings, catalogue, kind, &id),
+        Action::Edit(kind, id) => {
+            pick(settings, catalogue, kind, &id);
             settings.editing_support = true;
         }
         Action::Duplicate(id) => add(machine, Some(&id)),
         Action::Export(id) => export_profile(machine, Kind::Support, &id),
         Action::Ask(id) => settings.confirm = Some(Deleting::Profile(Kind::Support, id)),
+    }
+}
+
+fn pick(settings: &mut Settings, catalogue: &Catalogue, kind: Kind, id: &str) {
+    match kind {
+        Kind::Auto => settings.pick_auto(catalogue, id),
+        _ => settings.pick_support(catalogue, id),
     }
 }
 
@@ -220,53 +287,15 @@ pub(super) fn add(machine: &mut Machine, from: Option<&str>) {
     }
 }
 
-/// The profile open in the form, written back as it is edited.
-fn form(ui: &mut Ui, window: &mut Window) {
-    let Some(draft) = window.machine.settings.support.as_mut() else {
-        describe(ui, &tr!("support-pick-profile"));
-        return;
-    };
-
-    form_card(ui, &tr!("table-profile"), |ui| {
-        if let Some(name) = name_row(ui, "support", &draft.values.name) {
-            draft.values.name = name;
+/// Puts every number of `profile` back as `stock` has them, explained by `help`; undo in
+/// the form takes it back.
+fn reset_row<T: PartialEq>(ui: &mut Ui, profile: &mut T, stock: T, help: &str) {
+    describe(ui, help);
+    ui.add_space(4.0);
+    let changed = stock != *profile;
+    ui.add_enabled_ui(changed, |ui| {
+        if secondary_button(ui, icon::RESET, &tr!("support-reset")).clicked() {
+            *profile = stock;
         }
     });
-
-    let profile = &mut draft.values;
-    if ui.available_width() < TWO_COLUMNS_W {
-        for group in Group::ALL {
-            form_card(ui, &group.label(), |ui| group.show(ui, profile, None));
-        }
-    } else {
-        let (left, right) = Group::ALL.split_at(Group::ALL.len().div_ceil(2));
-        ui.spacing_mut().item_spacing.x = 12.0;
-        ui.columns(2, |columns| {
-            for (ui, groups) in columns.iter_mut().zip([left, right]) {
-                for group in groups {
-                    form_card(ui, &group.label(), |ui| group.show(ui, profile, None));
-                }
-            }
-        });
-    }
-
-    if settled(ui) {
-        autosave(window.machine);
-    }
-}
-
-fn autosave(machine: &mut Machine) {
-    let Some(draft) = machine.settings.support.as_mut() else {
-        return;
-    };
-    if !draft.is_dirty() {
-        return;
-    }
-    let outcome = machine
-        .slicing
-        .catalogue
-        .save_support(&draft.id, &draft.values);
-    if report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some() {
-        draft.mark_saved();
-    }
 }

@@ -125,6 +125,18 @@ profile's form in the table's place. Either way every edit is written to the use
 directory as soon as the value settles — no Save. ADR 0120, 0220, 0233. Its General and
 Updates pages hold no profile: see `docs/design/updates.md` for the second.
 
+- A support profile's form lays its groups in rows of two, the shape from the tip down on
+  the left beside how supports are placed and joined; each row ends in one hairline under
+  its taller card, so a title never stands level with a field of its neighbour. A group
+  that can be off carries its switch in its title. A shipped profile's number that leaves
+  the shipped one is marked, with an arrow putting it back. **Reset to defaults** puts back
+  every number — the shipped profile's, or a new profile's for one nobody shipped — and
+  keeps the name; the form's undo takes it back.
+- The automatic profiles head the table's automatic part, over the shapes they build to,
+  and open in the same form: where supports go, the sizes, the steps and the steadying of
+  ADR 0325 and 0326. Each only ever is the shipped one's copy, so it is reset, never
+  duplicated or deleted.
+
 - The window lists the machines the user has installed down its left, over a search line.
   The one picked has three tabs. **Resins** is a table of the resins set up on it, their
   layer and exposures as this machine has them, narrowed by type; a double click or
