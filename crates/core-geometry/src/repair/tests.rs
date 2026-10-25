@@ -1,5 +1,8 @@
+use super::holes::fan;
 use super::*;
-use crate::{DEFAULT_WELD_TOLERANCE, diagnose, orient_outward, signed_volume, weld};
+use crate::{
+    DEFAULT_WELD_TOLERANCE, Mesh, Scalar, Vec3, diagnose, orient_outward, signed_volume, weld,
+};
 
 /// A 2 mm cube, twelve triangles, wound outwards, standing on the origin.
 fn cube() -> Mesh {
