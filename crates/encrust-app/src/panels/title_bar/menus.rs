@@ -100,6 +100,8 @@ pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         project::save_dialog(window);
     }
     ui.separator();
+    slice_items(ui, window);
+    ui.separator();
     if item(ui, &tr!("menu-open-model"), Action::OpenModel).clicked() {
         ui.close();
         crate::import::open_dialog(window);
@@ -130,6 +132,23 @@ pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         if ui.button(tr!("menu-quit")).clicked() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
+    }
+}
+
+/// Slicing into a file whatever the plate's press is set to, and every plate at once.
+fn slice_items(ui: &mut egui::Ui, window: &mut Window) {
+    let free = crate::panels::can_slice(window);
+    let extension = window.machine.slicing.format.extension();
+    let label = tr!("slice-to", extension = extension);
+    if item_enabled(ui, &label, Action::Slice, free).clicked() {
+        ui.close();
+        crate::panels::slice_this_plate(window);
+    }
+    let plates = window.doc.scene.plates().len();
+    let every = egui::Button::new(tr!("slice-all", count = plates, extension = extension));
+    if plates > 1 && ui.add_enabled(free, every).clicked() {
+        ui.close();
+        crate::panels::slice_every_plate(window);
     }
 }
 

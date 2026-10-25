@@ -13,17 +13,6 @@ pub enum Reach {
     Unasked,
 }
 
-impl Reach {
-    /// What the dot beside the Send button says on hover.
-    pub fn hint(self, name: &str) -> String {
-        match self {
-            Self::Answered => tr!("reach-answered", name = name.to_owned()),
-            Self::Silent => tr!("reach-silent", name = name.to_owned()),
-            Self::Unasked => tr!("reach-unasked", name = name.to_owned()),
-        }
-    }
-}
-
 /// Why a printer could not be asked, as the window words it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trouble {

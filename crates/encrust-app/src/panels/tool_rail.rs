@@ -2,102 +2,130 @@ use egui::Color32;
 
 use crate::panels::Window;
 use crate::shortcuts::{self, Action};
-use crate::ui::{hairline, rail_button, theme};
+use crate::ui::{rail_button, theme, vertical_hairline};
 use crate::workspace::Tool;
 
-/// Points between the rail's edge and its buttons.
-const RAIL_PAD: f32 = 6.0;
-/// The room between two buttons of a group, and either side of the rule between groups:
-/// the least the rail squeezes them to, and the most a tall screen spreads them to.
-const BUTTON_GAP: (f32, f32) = (2.0, 8.0);
-const GROUP_GAP: (f32, f32) = (4.0, 14.0);
+/// Points a tool's name keeps clear of either side of its button.
+const NAME_PAD: f32 = 3.0;
 
-/// How the rail fits the height it has: whether the tools' names show, and how far apart
-/// the buttons stand.
+/// The widths the rail stands at in full, points: with the tools' names under their
+/// glyphs, and with the glyphs alone in squares. See `docs/design/ui-design-system.md`.
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RailWidths {
+    pub named: f32,
+    pub glyphs: f32,
+}
+
+impl RailWidths {
+    /// The widths for these names, `names` points wide in the rail's order.
+    fn of(names: &[f32]) -> Self {
+        let named: f32 = names.iter().copied().map(named_button_w).sum();
+        Self {
+            named: chrome() + named,
+            glyphs: chrome() + names.len() as f32 * theme::RAIL_ICON_H,
+        }
+    }
+}
+
+/// The rail's widths in the language the window is written in.
+pub fn widths(ctx: &egui::Context) -> RailWidths {
+    RailWidths::of(&name_widths(ctx))
+}
+
+fn name_widths(ctx: &egui::Context) -> Vec<f32> {
+    ctx.fonts_mut(|fonts| {
+        Tool::on_rail()
+            .map(|tool| {
+                fonts
+                    .layout_no_wrap(tool.label(), theme::rail_name(), Color32::WHITE)
+                    .size()
+                    .x
+            })
+            .collect()
+    })
+}
+
+/// A named button is as wide as its name, and never narrower than a glyph's square.
+fn named_button_w(name_w: f32) -> f32 {
+    (name_w + 2.0 * NAME_PAD).max(theme::RAIL_ICON_H)
+}
+
+/// What the rail takes besides its buttons: its padding, the gaps and the rules.
+fn chrome() -> f32 {
+    let tools: usize = Tool::RAIL.iter().map(|group| group.len()).sum();
+    let rules = Tool::RAIL.len() - 1;
+    2.0 * theme::TOOLBAR_PAD
+        + (tools - 1 - rules) as f32 * theme::ICON_GAP
+        + rules as f32 * (2.0 * theme::BUTTON_GAP + 1.0)
+}
+
+/// How the rail fits `width`: each button's width, their height, and whether the names
+/// show. Named buttons share what is over their need; glyphs stand in squares.
+#[derive(Debug, Clone, PartialEq)]
 struct Fit {
+    buttons_w: Vec<f32>,
+    button_h: f32,
     labelled: bool,
-    button_gap: f32,
-    group_gap: f32,
 }
 
 impl Fit {
-    /// The roomiest fit in `room` points: names first, then gaps to their most; short of room the
-    /// names go, then the gaps close, then the rail scrolls.
-    fn into(room: f32) -> Self {
-        let tight = |labelled| Self {
-            labelled,
-            button_gap: BUTTON_GAP.0,
-            group_gap: GROUP_GAP.0,
-        };
-        for labelled in [true, false] {
-            let least = tight(labelled).height();
-            let most = Self {
-                button_gap: BUTTON_GAP.1,
-                group_gap: GROUP_GAP.1,
-                ..tight(labelled)
-            }
-            .height();
-            if least <= room {
-                let t = ((room - least) / (most - least)).clamp(0.0, 1.0);
-                return Self {
-                    labelled,
-                    button_gap: egui::lerp(BUTTON_GAP.0..=BUTTON_GAP.1, t),
-                    group_gap: egui::lerp(GROUP_GAP.0..=GROUP_GAP.1, t),
-                };
-            }
+    fn into(width: f32, names: &[f32]) -> Self {
+        let widths = RailWidths::of(names);
+        let count = names.len() as f32;
+        // Half a point of slack, so a column sized to the names keeps them under rounding.
+        if width + 0.5 >= widths.named {
+            let over = (width - widths.named).max(0.0) / count;
+            return Self {
+                buttons_w: names.iter().map(|&w| named_button_w(w) + over).collect(),
+                button_h: theme::RAIL_BUTTON_H,
+                labelled: true,
+            };
         }
-        tight(false)
+        let side = ((width - chrome()) / count).clamp(0.0, theme::RAIL_ICON_H);
+        Self {
+            buttons_w: vec![side; names.len()],
+            button_h: side,
+            labelled: false,
+        }
     }
 
-    /// How tall the tools stand at this fit, the rail's padding included.
-    fn height(&self) -> f32 {
-        let tools: usize = Tool::RAIL.iter().map(|group| group.len()).sum();
-        let rules = Tool::RAIL.len() - 1;
-        let button_h = if self.labelled {
-            theme::RAIL_BUTTON_H
-        } else {
-            theme::RAIL_ICON_H
-        };
-        2.0 * RAIL_PAD
-            + tools as f32 * button_h
-            + (tools - 1 - rules) as f32 * self.button_gap
-            + rules as f32 * (2.0 * self.group_gap + 1.0)
+    /// What is left of `width` once the buttons stand, split either side of them.
+    fn margin(&self, width: f32) -> f32 {
+        let used: f32 = chrome() + self.buttons_w.iter().sum::<f32>();
+        ((width - used) / 2.0).max(0.0)
     }
 }
 
-/// The card at the stage's left edge, `max_h` points tall whatever it holds: every tool,
-/// one column, in the order a plate is worked, a rule between each group.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
-    let fit = Fit::into(max_h);
-    ui.set_width(theme::RAIL_W);
-    ui.set_height(max_h);
-    egui::ScrollArea::vertical()
-        .max_height(max_h)
-        .auto_shrink([false, true])
-        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-        .show(ui, |ui| {
-            egui::Frame::new()
-                .inner_margin(RAIL_PAD)
-                .show(ui, |ui| tools(ui, window, fit));
-        });
+/// The card over the inspector, `width` points wide: every tool in one row, in the order a
+/// plate is worked, a rule between each group (ADR 0348).
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, width: f32) {
+    let fit = Fit::into(width, &name_widths(ui.ctx()));
+    ui.set_width(width);
+    egui::Frame::new()
+        .inner_margin(theme::TOOLBAR_PAD)
+        .show(ui, |ui| tools(ui, window, &fit, fit.margin(width)));
 }
 
-fn tools(ui: &mut egui::Ui, window: &mut Window, fit: Fit) {
-    ui.spacing_mut().item_spacing.y = 0.0;
-    for (index, group) in Tool::RAIL.into_iter().enumerate() {
-        if index > 0 {
-            ui.add_space(fit.group_gap);
-            hairline(ui);
-            ui.add_space(fit.group_gap);
-        }
-        for (place, tool) in group.iter().enumerate() {
-            if place > 0 {
-                ui.add_space(fit.button_gap);
+fn tools(ui: &mut egui::Ui, window: &mut Window, fit: &Fit, margin: f32) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.add_space(margin);
+        let mut widths = fit.buttons_w.iter();
+        for (index, group) in Tool::RAIL.into_iter().enumerate() {
+            if index > 0 {
+                ui.add_space(theme::BUTTON_GAP);
+                vertical_hairline(ui, fit.button_h);
+                ui.add_space(theme::BUTTON_GAP);
             }
-            button(ui, window, *tool, fit.labelled);
+            for (place, (tool, &w)) in group.iter().zip(&mut widths).enumerate() {
+                if place > 0 {
+                    ui.add_space(theme::ICON_GAP);
+                }
+                let size = egui::vec2(w, fit.button_h);
+                ui.allocate_ui(size, |ui| button(ui, window, *tool, fit.labelled));
+            }
         }
-    }
+    });
 }
 
 fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
@@ -110,8 +138,8 @@ fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
     }
 }
 
-/// The dot a tool carries while it has something the user must deal with. Only the tools
-/// that finish a plate carry one, so a dot is never noise; see `docs/decisions/0218`.
+/// The dot a tool carries while it has something the user must deal with. Only Drain and
+/// Check carry one, so a dot is never noise; see `docs/decisions/0218`.
 fn badge(window: &Window, tool: Tool) -> Option<Color32> {
     let colors = theme::colors();
     match tool {
@@ -125,12 +153,6 @@ fn badge(window: &Window, tool: Tool) -> Option<Color32> {
             .measured()
             .and_then(core_analysis::Measured::worst)
             .map(|worst| super::inspector::risk_tint(&worst)),
-        Tool::Export => window
-            .machine
-            .network
-            .sent
-            .is_some()
-            .then_some(colors.accent),
         _ => None,
     }
 }
@@ -139,32 +161,93 @@ fn badge(window: &Window, tool: Tool) -> Option<Color32> {
 mod tests {
     use super::*;
 
+    /// Eight names as wide as the English ones, in points.
+    const NAMES: [f32; 8] = [28.0, 40.0, 33.0, 26.0, 17.0, 28.0, 43.0, 30.0];
+
     #[test]
-    fn a_tall_screen_spreads_the_tools_no_further_than_the_widest_gaps() {
-        let fit = Fit::into(5000.0);
+    fn a_rail_as_wide_as_its_names_shows_them_and_shares_what_is_over() {
+        let named = RailWidths::of(&NAMES).named;
+        let fit = Fit::into(named + 16.0, &NAMES);
         assert!(fit.labelled);
-        assert_eq!((fit.button_gap, fit.group_gap), (BUTTON_GAP.1, GROUP_GAP.1));
+        let used = chrome() + fit.buttons_w.iter().sum::<f32>();
+        assert!(
+            (used - (named + 16.0)).abs() < 1e-3,
+            "expected the buttons to fill {} points, they take {used}",
+            named + 16.0
+        );
+        assert_eq!(fit.button_h, theme::RAIL_BUTTON_H);
     }
 
     #[test]
-    fn a_short_screen_drops_the_names_before_the_rail_scrolls() {
-        let named = Fit {
-            labelled: true,
-            button_gap: BUTTON_GAP.0,
-            group_gap: GROUP_GAP.0,
-        };
-        let fit = Fit::into(named.height() - 1.0);
-        assert!(!fit.labelled, "one point short of the names fitting");
+    fn a_rail_short_of_its_names_stands_its_glyphs_in_squares() {
+        let widths = RailWidths::of(&NAMES);
+        let fit = Fit::into(widths.named - 1.0, &NAMES);
+        assert!(!fit.labelled);
         assert!(
-            fit.height() <= named.height() - 1.0,
-            "and the bare glyphs fit"
+            fit.buttons_w
+                .iter()
+                .all(|&w| (w - fit.button_h).abs() < 1e-4),
+            "every button a square, got {:?} by {}",
+            fit.buttons_w,
+            fit.button_h
+        );
+        let squeezed = Fit::into(widths.glyphs - 16.0, &NAMES);
+        let side = theme::RAIL_ICON_H - 2.0;
+        assert!(
+            (squeezed.button_h - side).abs() < 1e-4,
+            "16 points short of eight glyphs takes 2 off each: {side} expected, {} got",
+            squeezed.button_h
         );
     }
 
+    /// The rail's names, as the window's own fonts set them in `language`.
+    fn widths_in(language: crate::i18n::Language) -> RailWidths {
+        let keys = [
+            "tool-select",
+            "tool-measure",
+            "tool-hollow",
+            "tool-drain",
+            "tool-cut",
+            "tool-relief",
+            "tool-supports",
+            "tool-check",
+        ];
+        let ctx = egui::Context::default();
+        ctx.set_fonts(crate::ui::fonts::definitions());
+        let mut names = Vec::new();
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            names = keys
+                .iter()
+                .map(|key| {
+                    let name = crate::i18n::message(language, key, None);
+                    ui.painter()
+                        .layout_no_wrap(name, theme::rail_name(), Color32::WHITE)
+                        .size()
+                        .x
+                })
+                .collect();
+        });
+        output.textures_delta.clear();
+        RailWidths::of(&names)
+    }
+
     #[test]
-    fn past_the_tightest_fit_the_rail_stays_at_it() {
-        let fit = Fit::into(10.0);
-        assert!(!fit.labelled);
-        assert_eq!((fit.button_gap, fit.group_gap), (BUTTON_GAP.0, GROUP_GAP.0));
+    fn every_language_names_its_tools_within_the_widest_column() {
+        for language in crate::i18n::Language::ALL {
+            let named = widths_in(language).named;
+            let widest = *theme::INSPECTOR_W_RANGE.end();
+            assert!(
+                named <= widest,
+                "{language:?} needs {named} points for the rail's names, the column takes {widest}"
+            );
+        }
+    }
+
+    #[test]
+    fn glyphs_with_room_to_spare_stand_centred() {
+        let widths = RailWidths::of(&NAMES);
+        let fit = Fit::into(widths.glyphs + 20.0, &NAMES);
+        assert_eq!(fit.button_h, theme::RAIL_ICON_H);
+        assert!((fit.margin(widths.glyphs + 20.0) - 10.0).abs() < 1e-4);
     }
 }

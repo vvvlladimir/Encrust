@@ -2,28 +2,29 @@ use std::ops::RangeInclusive;
 
 use core_geometry::Scalar;
 use egui::emath::Numeric;
-use egui::{
-    Align, Color32, DragValue, Layout, Rect, RichText, Sense, TextStyle, Ui, UiBuilder, pos2, vec2,
-};
+use egui::{Align, Color32, DragValue, Layout, Rect, Sense, TextStyle, Ui, UiBuilder, pos2, vec2};
 
 use super::{compact_button, icon_button};
 use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
 /// What a field is called, in `color`, with its unit in brackets after it: the one way
-/// a number is labelled anywhere in the window.
+/// a number is labelled anywhere in the window. Cut short with an ellipsis, never wider
+/// than the room it is given.
 pub fn field_label(ui: &mut Ui, text: &str, color: Color32, unit: &str) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(RichText::new(text).font(theme::label()).color(color));
-        if !unit.is_empty() {
-            ui.label(
-                RichText::new(format!("({unit})"))
-                    .font(theme::small())
-                    .color(theme::colors().text_low),
-            );
-        }
-    });
+    let mut job = egui::text::LayoutJob::default();
+    let format = |font_id, color| egui::TextFormat {
+        font_id,
+        color,
+        valign: Align::Center,
+        ..Default::default()
+    };
+    job.append(text, 0.0, format(theme::label(), color));
+    if !unit.is_empty() {
+        let unit = format!("({unit})");
+        job.append(&unit, 4.0, format(theme::small(), theme::colors().text_low));
+    }
+    ui.add(egui::Label::new(job).truncate());
 }
 
 /// The letter of an axis in its colour, labelled like any other field.
@@ -218,28 +219,22 @@ pub fn stepped_row(
         width: theme::FIELD_W - 2.0 * theme::FIELD_H,
     };
     let (least, most) = (*range.start(), *range.end());
-    ui.horizontal(|ui| {
-        field_label(ui, label, theme::colors().text_mid, unit);
-        let right = Layout::right_to_left(Align::Center);
-        ui.with_layout(right, |ui| {
-            let more = compact_button(ui, "+", theme::FIELD_H)
-                .on_hover_text(tr!("field-step-more", step = step, unit = unit))
-                .clicked();
-            let typed = boxed_field(ui, &field, value, speed, range, Some(decimals));
-            let less = compact_button(ui, "\u{2212}", theme::FIELD_H)
-                .on_hover_text(tr!("field-step-less", step = step, unit = unit))
-                .clicked();
-            if more {
-                *value = (*value + step).min(most);
-            }
-            if less {
-                *value = (*value - step).max(least);
-            }
-            typed || more || less
-        })
-        .inner
+    labelled(ui, label, theme::colors().text_mid, unit, |ui| {
+        let more = compact_button(ui, "+", theme::FIELD_H)
+            .on_hover_text(tr!("field-step-more", step = step, unit = unit))
+            .clicked();
+        let typed = boxed_field(ui, &field, value, speed, range, Some(decimals));
+        let less = compact_button(ui, "\u{2212}", theme::FIELD_H)
+            .on_hover_text(tr!("field-step-less", step = step, unit = unit))
+            .clicked();
+        if more {
+            *value = (*value + step).min(most);
+        }
+        if less {
+            *value = (*value - step).max(least);
+        }
+        typed || more || less
     })
-    .inner
 }
 
 /// What was done to a number the window had changed on the user's behalf.
@@ -273,26 +268,23 @@ pub fn carried_row(
         };
     };
     let mut carried = Carried::Untouched;
-    ui.horizontal(|ui| {
-        field_label(ui, label, colors.warn, "");
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let field = Field {
-                name: label,
-                unit,
-                width: theme::FIELD_W,
-            };
-            if boxed_field(ui, &field, value, speed, range, Some(decimals)) {
-                carried = Carried::Edited;
-            }
-            let back = tr!(
-                "field-back-to",
-                value = format!("{was:.decimals$}"),
-                unit = unit
-            );
-            if icon_button(ui, icon::RESET, &back).clicked() {
-                carried = Carried::Reverted;
-            }
-        });
+    labelled(ui, label, colors.warn, "", |ui| {
+        let field = Field {
+            name: label,
+            unit,
+            width: theme::FIELD_W,
+        };
+        if boxed_field(ui, &field, value, speed, range, Some(decimals)) {
+            carried = Carried::Edited;
+        }
+        let back = tr!(
+            "field-back-to",
+            value = format!("{was:.decimals$}"),
+            unit = unit
+        );
+        if icon_button(ui, icon::RESET, &back).clicked() {
+            carried = Carried::Reverted;
+        }
     });
     carried
 }
@@ -316,11 +308,35 @@ pub fn count_row(
     })
 }
 
+/// A `picker` under a `field_label` of its own, for a choice too long for a `FIELD_W` box.
+pub fn picker_row(ui: &mut Ui, label: &str, glyph: &str, chosen: &str) -> egui::Response {
+    field_label(ui, label, theme::colors().text_mid, "");
+    ui.add_space(4.0);
+    super::picker(ui, glyph, chosen)
+}
+
 fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
+    labelled(ui, label, theme::colors().text_mid, "", field)
+}
+
+/// A `field_label` and what `right` lays out from the row's right edge; `right` goes first so
+/// a long label is cut to the room it leaves rather than pushing it past the card.
+fn labelled<R>(
+    ui: &mut Ui,
+    label: &str,
+    color: Color32,
+    unit: &str,
+    right: impl FnOnce(&mut Ui) -> R,
+) -> R {
     ui.horizontal(|ui| {
-        field_label(ui, label, theme::colors().text_mid, "");
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), field)
-            .inner
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let inner = right(ui);
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                field_label(ui, label, color, unit);
+            });
+            inner
+        })
+        .inner
     })
     .inner
 }

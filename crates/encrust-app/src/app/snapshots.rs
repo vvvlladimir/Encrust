@@ -201,10 +201,33 @@ fn the_machine_and_resin_window() {
     results.extend(picture("machines_no_resin", with_nothing(app(false), true)));
 }
 
-/// The Export tool with two boards on the network: a profile listing one names it on a
-/// plain row, one listing both offers the other, and the ring opens the first's sheet.
+/// This plate's card with two boards on the network: a profile listing one names it on a
+/// plain row, one listing both offers the other, an idle one puts Slice and send over the
+/// press and Start print once the file landed, and the ring opens the first's sheet.
 #[test]
 fn the_printers_on_the_network() {
+    let (bench_a, bench_b) = (("Bench A", 133, "aa"), ("Bench B", 140, "bb"));
+    let mut results = SnapshotResults::new();
+    results.extend(picture("plate_send_bound", on_the_network(&[bench_a])));
+    results.extend(picture(
+        "plate_send_list",
+        on_the_network(&[bench_a, bench_b]),
+    ));
+    results.extend(picture("plate_send_idle", on_the_network(&[bench_b])));
+    let mut landed = on_the_network(&[bench_b]);
+    landed.machine.network.sent = Some(crate::network::Sent {
+        printer: "Bench B".to_owned(),
+        filename: "Cube.goo".to_owned(),
+    });
+    results.extend(picture("plate_send_landed", landed));
+    let mut sheet = on_the_network(&[bench_a]);
+    sheet.machine.network.open = Some("sdcp:aa".to_owned());
+    results.extend(picture("printer_sheet", sheet));
+}
+
+/// The pictured window with Workshop printing and Studio idle on the network, the profile
+/// listing `listing` as (name, address's last byte, board).
+fn on_the_network(listing: &[(&str, u8, &str)]) -> SlicerApp {
     use crate::network::{Picture, Reading};
     use printer_link::State;
 
@@ -242,49 +265,39 @@ fn the_printers_on_the_network() {
         uv_led_c: Some(22.0),
         ..State::default()
     };
-    let on_the_network = |listed: usize| {
-        let mut app = app(true);
-        app.tool = Tool::Export;
-        let listing = [("Bench A", 133, "aa"), ("Bench B", 140, "bb")];
-        let profile = app
-            .machine
-            .slicing
-            .printer
-            .as_mut()
-            .expect("the pictured printer is in hand");
-        profile.connection = printer_profiles::Connection::Sdcp;
-        profile.machines = listing[..listed]
-            .iter()
-            .map(|(name, last, board)| printer_profiles::NetworkMachine {
-                name: (*name).to_owned(),
-                address: format!("192.168.1.{last}"),
-                board: Some((*board).to_owned()),
-            })
-            .collect();
-        let profile = profile.clone();
-        app.machine
-            .network
-            .bind_to(Some(super::states::PRINTER.to_owned()), Some(&profile));
-        app.machine.network.learn_names([&profile]);
-        let network = &mut app.machine.network;
-        network.printers = vec![board("Workshop", "aa", 133), board("Studio", "bb", 140)];
-        network.hear("sdcp:aa", Reading::State(printing.clone()));
-        network.hear("sdcp:bb", Reading::State(idle.clone()));
-        let extras = network.extras_mut("sdcp:aa");
-        extras
-            .pictures
-            .insert("0e8a".to_owned(), Picture::Decoded(a_plate_picture()));
-        extras.camera = Some("rtsp://192.168.1.133:554/video".to_owned());
-        extras.history_asked = true;
-        extras.history = Some(remembered());
-        app
-    };
-    let mut results = SnapshotResults::new();
-    results.extend(picture("tool_export_bound", on_the_network(1)));
-    results.extend(picture("tool_export_list", on_the_network(2)));
-    let mut sheet = on_the_network(1);
-    sheet.machine.network.open = Some("sdcp:aa".to_owned());
-    results.extend(picture("printer_sheet", sheet));
+    let mut app = app(true);
+    let profile = app
+        .machine
+        .slicing
+        .printer
+        .as_mut()
+        .expect("the pictured printer is in hand");
+    profile.connection = printer_profiles::Connection::Sdcp;
+    profile.machines = listing
+        .iter()
+        .map(|(name, last, board)| printer_profiles::NetworkMachine {
+            name: (*name).to_owned(),
+            address: format!("192.168.1.{last}"),
+            board: Some((*board).to_owned()),
+        })
+        .collect();
+    let profile = profile.clone();
+    app.machine
+        .network
+        .bind_to(Some(super::states::PRINTER.to_owned()), Some(&profile));
+    app.machine.network.learn_names([&profile]);
+    let network = &mut app.machine.network;
+    network.printers = vec![board("Workshop", "aa", 133), board("Studio", "bb", 140)];
+    network.hear("sdcp:aa", Reading::State(printing));
+    network.hear("sdcp:bb", Reading::State(idle));
+    let extras = network.extras_mut("sdcp:aa");
+    extras
+        .pictures
+        .insert("0e8a".to_owned(), Picture::Decoded(a_plate_picture()));
+    extras.camera = Some("rtsp://192.168.1.133:554/video".to_owned());
+    extras.history_asked = true;
+    extras.history = Some(remembered());
+    app
 }
 
 /// A plate as a board pictures it: a dark field with a lit model in the middle.

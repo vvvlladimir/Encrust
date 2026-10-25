@@ -73,9 +73,9 @@ pub struct Preferences {
     #[serde(default)]
     mask_split: Option<f32>,
     /// How wide the inspector and the plate panel were dragged, points, or `None` for the
-    /// defaults.
+    /// defaults; `left_w` is new so a width saved before ADR 0348 is not taken for a drag.
     #[serde(default)]
-    inspector_w: Option<f32>,
+    left_w: Option<f32>,
     #[serde(default)]
     plate_w: Option<f32>,
     #[serde(default)]
@@ -168,7 +168,7 @@ impl Preferences {
             relief: tools.relief.choice(),
             recent: Recent::default(),
             mask_split: None,
-            inspector_w: None,
+            left_w: None,
             plate_w: None,
             general: General::default(),
             modes: Modes::of(tools, Axes::default()),
@@ -211,7 +211,7 @@ impl Preferences {
     pub fn with_layout(self, options: &ViewOptions) -> Self {
         Self {
             mask_split: Some(options.mask_split),
-            inspector_w: Some(options.inspector_w),
+            left_w: options.inspector_w,
             plate_w: Some(options.plate_w),
             ..self
         }
@@ -257,17 +257,17 @@ impl Preferences {
                 &mut options.mask_split,
                 theme::MASK_SPLIT_RANGE,
             ),
-            (
-                self.inspector_w,
-                &mut options.inspector_w,
-                theme::INSPECTOR_W_RANGE,
-            ),
             (self.plate_w, &mut options.plate_w, theme::SCENE_W_RANGE),
         ] {
             if let Some(stored) = stored.filter(|stored| stored.is_finite()) {
                 *value = stored.clamp(*range.start(), *range.end());
             }
         }
+        let range = theme::INSPECTOR_W_RANGE;
+        options.inspector_w = self
+            .left_w
+            .filter(|stored| stored.is_finite())
+            .map(|stored| stored.clamp(*range.start(), *range.end()));
         // Before the printer, so that applying it points the window at the machine this
         // profile was last sent to.
         window.machine.network.manual.clone_from(&self.addresses);

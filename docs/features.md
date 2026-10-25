@@ -131,7 +131,7 @@ whole-surface fill is Cmd-Shift-click.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.
   A copy is cut and hollowed once, not once per copy.
 - **Several plates in one project.** Move models between plates, duplicate a plate, slice
-  one plate or all of them at once.
+  one plate or all of them at once (**File > Slice all N plates**).
 
 **Measure tool:**
 - Distance between two points, angle, or the gap between two flat faces.
@@ -512,7 +512,8 @@ smoothing, not the original model.
 - **Drill the suction cups.**
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
-Resin is counted from what is actually cured.
+Resin is counted from what is actually cured. Before slicing, the plate's summary states
+them from the meshes, and the time, marked ≈, from the plate's height.
 
 ---
 
@@ -632,7 +633,11 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
 
 - Printer cards in the window show each printer's status, a picture of the plate, and its
   controls. Stop needs a second press, because a stopped print cannot be resumed.
-- Slice and send in one press, or slice now and start later.
+- Slice to a file from the plate's card, or, while the printer answers and is free, slice
+  and send in one press from the button over it: a bar shows the slicing and the upload,
+  then the same button starts the print. The card names the printer and what it is doing,
+  with a button to scan again. **File > Slice to .goo** (Cmd Enter, named for the
+  format in hand) writes a file too.
 - A Prusa login is kept in the window's settings, never in the profile.
 
 **You cannot:** send from the browser build, or watch the camera inside Encrust (open the
@@ -652,7 +657,10 @@ address in a video player).
 ## Working in the window
 
 - **Find (⌘K):** search every tool, action and model on the plate by name.
-- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
+- **Tool rail:** shows each tool's name under its icon whenever the window has room, and
+  icons alone when it does not. Drag the column's edge to set your own width; double-click
+  it to go back to fitting the names. The plate column's edge resets the same way.
+- **Keyboard:** digits 1 to 8 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.

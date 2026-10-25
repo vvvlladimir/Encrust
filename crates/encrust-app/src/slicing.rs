@@ -81,9 +81,6 @@ pub struct Slicing {
     /// runs at a time: the machine's cores go into the layers of one plate, not into two
     /// plates at once.
     queued: Vec<(u32, PathBuf)>,
-    /// The name the file is offered under, without its extension; empty offers the
-    /// selected model's.
-    pub file_stem: String,
 }
 
 /// A file a job wrote, and what it was written for.
@@ -119,7 +116,6 @@ impl Default for Slicing {
             job: None,
             written: None,
             to_send: false,
-            file_stem: String::new(),
             chosen: 0,
             queued: Vec::new(),
         }
@@ -528,6 +524,11 @@ impl Slicing {
     /// Takes the file the last job wrote, once.
     pub fn take_written(&mut self) -> Option<Written> {
         self.written.take()
+    }
+
+    /// Whether the running job writes a file to be sent on to the machine.
+    pub fn is_sending(&self) -> bool {
+        self.job.is_some() && self.to_send
     }
 
     /// Says the next file written is for the machine rather than for a name the user

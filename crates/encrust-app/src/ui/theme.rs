@@ -311,9 +311,7 @@ pub const ICON_GAP: f32 = 2.0;
 pub const NOTE_GAP: f32 = 4.0;
 /// Height of a section's heading row, which folds it.
 pub const SECTION_H: f32 = 36.0;
-pub const RAIL_W: f32 = 60.0;
 pub const SCENE_W: f32 = 272.0;
-pub const INSPECTOR_W: f32 = 328.0;
 /// The inspector's heading row, which names the open tool.
 pub const INSPECTOR_HEAD_H: f32 = 48.0;
 /// How far either column may be dragged.
@@ -334,9 +332,11 @@ pub const TOP_BAR_H: f32 = 44.0;
 pub const WINDOW_MIN_W: f32 = 900.0;
 pub const WINDOW_MIN_H: f32 = 560.0;
 pub const LAYER_STRIP_W: f32 = 56.0;
-/// A rail button holds a glyph over its name, or the glyph alone on a short screen.
+/// A rail button holds a glyph over its name, or stands a square of the glyph alone.
 pub const RAIL_BUTTON_H: f32 = 46.0;
 pub const RAIL_ICON_H: f32 = 34.0;
+/// Between a card of buttons, the rail or the layer strip, and its buttons.
+pub const TOOLBAR_PAD: f32 = 4.0;
 /// The chips and buttons standing in the top bar and the layer strip.
 pub const CHIP_H: f32 = 32.0;
 pub const ICON_SIZE: f32 = 28.0;

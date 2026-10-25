@@ -137,7 +137,7 @@ const fn bind(group: Group, action: Action, keys: &'static [KeyboardShortcut]) -
 
 /// The table, in the order the sheet lists it.
 pub const BINDINGS: &[Binding] = &[
-    // The first ten tools of the rail, in its order. The rest are reached by the pointer.
+    // The tools of the rail, in its order.
     bind(
         Group::Tools,
         Action::Pick(Tool::Position),
@@ -166,11 +166,6 @@ pub const BINDINGS: &[Binding] = &[
         &[plain(Key::Num7)],
     ),
     bind(Group::Tools, Action::Pick(Tool::Check), &[plain(Key::Num8)]),
-    bind(
-        Group::Tools,
-        Action::Pick(Tool::Export),
-        &[plain(Key::Num9)],
-    ),
     bind(Group::Plate, Action::SelectAll, &[cmd(Key::A)]),
     bind(Group::Plate, Action::Deselect, &[plain(Key::Escape)]),
     bind(Group::Plate, Action::Duplicate, &[cmd(Key::D)]),

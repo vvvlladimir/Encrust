@@ -423,9 +423,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Superseded by 0294 |
-| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262 |
+| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262, the caret by 0348 |
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231, the jobs top centre by 0263 |
-| [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336 |
+| [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336, Export and the column of tools by 0348 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |
 | [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |
@@ -433,6 +433,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
 | [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
+| [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted |
 | [0312](0312-the-command-line-shapes-models-before-it-slices-them.md) | Combine, label, cut and split models on the command line before slicing them | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |

@@ -6,151 +6,184 @@ use crate::job::SlicedFormat;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::job::{applied_to, label_of};
 use crate::network::{Reach, temporary_path};
-use crate::panels::Window;
+use crate::panels::{Window, destination};
 use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{companion_button, icon, primary_button, theme, tone};
+use crate::ui::{companion_button, hint, icon, primary_button, progress_bar, theme, tone};
 
-/// The dot that says whether the bound machine answered.
-const DOT_W: f32 = 14.0;
-
-/// What the keyboard shortcut does: the primary button's own action, a file, refused for
-/// the same reasons that button is greyed out.
+/// What the keyboard shortcut and the File menu do: this plate into a file, refused for the
+/// same reasons the press is greyed out.
 pub fn slice_this_plate(window: &mut Window) {
-    if window.machine.slicing.job.is_some()
-        || window.machine.slicing.blocker(&window.doc.scene).is_some()
-    {
+    slice_to_file(window, Run::ThisPlate);
+}
+
+/// Every plate of the project, each into a file of its own beside the one the user names.
+pub fn slice_every_plate(window: &mut Window) {
+    slice_to_file(window, Run::EveryPlate);
+}
+
+fn slice_to_file(window: &mut Window, run: Run) {
+    if !can_slice(window) {
         return;
     }
     start(
         &window.doc.scene,
         &mut window.machine.slicing,
         &mut window.machine.status,
-        Run::ThisPlate,
+        run,
         Via::File,
         window.machine.general.sliced_dir.as_deref(),
     );
 }
 
-/// The one action the window is for, at the foot of the plate column: Slice, and beside it
-/// a caret for every plate at once and for the bound machine.
+/// Whether a slice into a file may start: the press, the File menu and the key ask alike.
+pub fn can_slice(window: &Window) -> bool {
+    let slicing = &window.machine.slicing;
+    slicing.job.is_none() && slicing.blocker(&window.doc.scene).is_none()
+}
+
+/// The one action the window is for, at the foot of the plate's card: Slice and send over
+/// Slice to a file while the bound machine can take the file, its bar over it while it
+/// runs, then Start print once the file has landed. See `docs/decisions/0348`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let blocker = window.machine.slicing.blocker(&window.doc.scene);
     // Nothing on the plate means nothing to start either.
     if blocker.is_none() {
         broken_reminder(ui, &window.doc.scene);
     }
-    let busy = window.machine.slicing.job.is_some() || window.machine.network.job.is_some();
-    let bound = bound_machine(window.machine, ui.input(|input| input.time));
-    let plates = window.doc.scene.plates().len();
-    let more = bound.is_some() || plates > 1;
-
-    let mut pressed = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        let beside = if more { theme::PRIMARY_H + 2.0 } else { 0.0 };
-        let label = tr!(
-            "slice-to",
-            extension = window.machine.slicing.format.extension()
-        );
-        let hint = blocker.clone().unwrap_or_else(|| tr!("slice-tooltip"));
-        ui.allocate_ui(
-            egui::vec2(ui.available_width() - beside, theme::PRIMARY_H),
-            |ui| {
-                let enabled = blocker.is_none() && !busy;
-                if primary_button(ui, icon::SLICE, &label, enabled)
-                    .on_hover_text(hint)
-                    .clicked()
-                {
-                    pressed = Some((Run::ThisPlate, Via::File));
-                }
-            },
-        );
-        if more {
-            pressed = pressed.or(more_menu(
-                ui,
-                window,
-                bound.as_ref(),
-                blocker.as_deref(),
-                busy,
-            ));
-        }
-    });
-    if let Some((run, via)) = pressed {
-        start(
+    let free = can_slice(window);
+    let slot = send_slot(window.machine);
+    let mut press = None;
+    if let Some(slot) = &slot {
+        press = send_button(ui, slot, free, blocker.as_deref());
+        ui.add_space(theme::BUTTON_GAP);
+    }
+    let label = tr!(
+        "slice-to",
+        extension = window.machine.slicing.format.extension()
+    );
+    let tooltip = tr!("slice-tooltip");
+    let file = match slot {
+        Some(_) => companion_button(ui, icon::SLICE, &label, free),
+        None => primary_button(ui, icon::SLICE, &label, free),
+    };
+    if file
+        .on_hover_text(blocker.as_deref().unwrap_or(&tooltip))
+        .clicked()
+    {
+        press = Some(Press::Slice(Via::File));
+    }
+    match press {
+        Some(Press::Slice(via)) => start(
             &window.doc.scene,
             &mut window.machine.slicing,
             &mut window.machine.status,
-            run,
+            Run::ThisPlate,
             via,
             window.machine.general.sliced_dir.as_deref(),
-        );
+        ),
+        Some(Press::StartPrint) => window
+            .machine
+            .network
+            .start_print(&mut window.machine.status),
+        None => {}
+    }
+    if let Some(why) = blocker {
+        ui.add_space(4.0);
+        hint(ui, &why);
     }
 }
 
-/// The caret beside Slice: every plate at once, and the machine this printer is bound
-/// to, with whether it answered. See `docs/decisions/0157`.
-fn more_menu(
+/// The button over the press, with the running errand's bar over it.
+fn send_button(
     ui: &mut egui::Ui,
-    window: &mut Window,
-    bound: Option<&Bound>,
+    slot: &SendSlot,
+    free: bool,
     blocker: Option<&str>,
-    busy: bool,
-) -> Option<(Run, Via)> {
-    let response = ui
-        .allocate_ui(egui::vec2(theme::PRIMARY_H, theme::PRIMARY_H), |ui| {
-            companion_button(ui, "", icon::CARET_DOWN, true)
-        })
-        .inner
-        .on_hover_text(tr!("slice-more-tooltip"));
-    let mut pressed = None;
-    let mut rescan = false;
-    egui::Popup::menu(&response).show(|ui| {
-        let plates = window.doc.scene.plates().len();
-        let free = blocker.is_none() && !busy;
-        if plates > 1
-            && ui
-                .add_enabled(free, egui::Button::new(tr!("slice-all", count = plates)))
-                .clicked()
-        {
-            pressed = Some((Run::EveryPlate, Via::File));
-        }
-        let Some(bound) = bound else {
-            return;
-        };
-        let hint_send = tr!("slice-send", name = bound.name.clone());
-        let hint = bound
-            .blocker
-            .clone()
-            .unwrap_or_else(|| tr!("slice-send", name = bound.name.clone()));
-        let send = egui::Button::new(format!("{}  {hint_send}", icon::SEND));
-        if ui
-            .add_enabled(free && bound.blocker.is_none(), send)
-            .on_hover_text(&hint)
-            .on_disabled_hover_text(blocker.unwrap_or(&hint).to_owned())
-            .clicked()
-        {
-            pressed = Some((Run::ThisPlate, Via::Printer));
-        }
-        ui.horizontal(|ui| {
-            reach_dot(ui, bound.reach);
-            rescan = ui
-                .button(tr!("connection-scan-again"))
-                .on_hover_text(bound.reach.hint(&bound.name))
-                .clicked();
-        });
-    });
-    if rescan {
-        window.machine.network.scan();
+) -> Option<Press> {
+    if let SendStep::Running(fraction) = slot.step {
+        progress_bar(ui, fraction);
+        ui.add_space(theme::BUTTON_GAP);
     }
-    pressed
+    let (glyph, label, tooltip, enabled, press) = match slot.step {
+        SendStep::Start => (
+            icon::PLAY,
+            tr!("slice-start-print"),
+            tr!("slice-start-tooltip", name = slot.name.clone()),
+            true,
+            Press::StartPrint,
+        ),
+        SendStep::Offer | SendStep::Running(_) => (
+            icon::SEND,
+            tr!("slice-send", name = slot.name.clone()),
+            tr!("slice-send-tooltip"),
+            free && slot.step == SendStep::Offer,
+            Press::Slice(Via::Printer),
+        ),
+    };
+    let hover = match slot.step {
+        SendStep::Offer => blocker.unwrap_or(&tooltip),
+        _ => &tooltip,
+    };
+    primary_button(ui, glyph, &label, enabled)
+        .on_hover_text(hover)
+        .clicked()
+        .then_some(press)
+}
+
+/// What the plate's card offers the bound machine, and how far that errand has gone.
+struct SendSlot {
+    name: String,
+    step: SendStep,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum SendStep {
+    /// Slice and send: the machine answered and is free.
+    Offer,
+    /// Slicing for it, uploading, or starting; the share done when the job counts.
+    Running(Option<f32>),
+    /// The file landed and waits for a deliberate press to print.
+    Start,
+}
+
+/// What the card's buttons were pressed for.
+enum Press {
+    Slice(Via),
+    StartPrint,
+}
+
+fn send_slot(machine: &Machine) -> Option<SendSlot> {
+    let bound = bound_machine(machine)?;
+    let network = &machine.network;
+    let running = match (&machine.slicing.job, &network.job) {
+        (Some(job), _) if machine.slicing.is_sending() => Some(job.fraction()),
+        (_, Some(job)) => Some(job.fraction()),
+        _ => None,
+    };
+    Some(SendSlot {
+        step: step(&bound, running, network.sent.is_some())?,
+        name: bound.name,
+    })
+}
+
+/// The send slot's step: an errand running wins, then a file waiting to print, then an
+/// offer to a machine that answered and is free, for one not asked yet may be switched off.
+fn step(bound: &Bound, running: Option<Option<f32>>, sent: bool) -> Option<SendStep> {
+    match running {
+        Some(fraction) => Some(SendStep::Running(fraction)),
+        None if sent => Some(SendStep::Start),
+        None => {
+            (bound.reach == Reach::Answered && bound.blocker.is_none()).then_some(SendStep::Offer)
+        }
+    }
 }
 
 /// A model left broken is a reminder here rather than a blocker: what is sliced from it
 /// may be nothing like the model, and this is the last place to turn back.
-pub(super) fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
+fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
     let broken = crate::repair::broken_on_the_plate(scene);
     if broken == 0 {
         return;
@@ -162,68 +195,55 @@ pub(super) fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
 
 /// The machine the printer in hand is bound to, as the row needs it: a profile that
 /// states no connection, or names no machine, offers no sending at all.
-pub(super) struct Bound {
-    pub name: String,
-    pub reach: Reach,
+struct Bound {
+    name: String,
+    reach: Reach,
     /// Why this machine cannot take what the window is set to write, or not now.
-    pub blocker: Option<String>,
+    blocker: Option<String>,
 }
 
-/// `now_s` is the window's clock, which says when the network is due to be asked again.
-pub(super) fn bound_machine(machine: &mut Machine, now_s: f64) -> Option<Bound> {
-    // A browser reaches no printer, so the file is only ever downloaded (ADR 0182).
-    if cfg!(target_arch = "wasm32") {
-        return None;
-    }
-    let connection = machine
-        .slicing
-        .printer
-        .as_ref()
-        .map_or(Connection::None, |profile| profile.connection);
-    if connection == Connection::None || machine.network.target().is_none() {
-        return None;
-    }
-    machine.network.keep_fresh(now_s);
-
+/// The bound machine once found, the network kept fresh by the printer row over the press.
+fn bound_machine(machine: &Machine) -> Option<Bound> {
+    let connection = destination::connection(machine);
     let network = &machine.network;
-    let target = network.target()?;
-    target.speaks(connection).then(|| Bound {
-        name: network.label(&target),
+    if connection == Connection::None {
+        return None;
+    }
+    let listed = network.chosen_machine()?;
+    let target = network.resolve(listed)?;
+    if !target.speaks(connection) {
+        return None;
+    }
+    let name = network.label(&target);
+    let sending = network
+        .job
+        .as_ref()
+        .map(|_| tr!("network-sending", name = name.clone()));
+    Some(Bound {
         reach: network.reach(&target),
-        blocker: network
-            .blocker(machine.slicing.format)
+        blocker: sending
+            .or_else(|| network.blocker(machine.slicing.format))
             .or_else(|| network.busy()),
+        name,
     })
-}
-
-/// Whether the bound machine answered the last scan, as a dot.
-fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(DOT_W, DOT_W), egui::Sense::hover());
-    let colors = theme::colors();
-    let colour = match reach {
-        Reach::Answered => colors.ok,
-        Reach::Silent => colors.danger,
-        Reach::Unasked => colors.text_low,
-    };
-    ui.painter().circle_filled(rect.center(), 4.0, colour);
 }
 
 /// Where what the press writes goes.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Via {
+enum Via {
     File,
     Printer,
 }
 
 /// Whether the Slice button cuts what is in front of the user or the whole project.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Run {
+enum Run {
     ThisPlate,
     EveryPlate,
 }
 
 /// Slices into a file the user names, the dialog opening in `folder` when there is one.
-pub(super) fn start(
+fn start(
     scene: &Scene,
     slicing: &mut Slicing,
     status: &mut Status,
@@ -233,7 +253,7 @@ pub(super) fn start(
 ) {
     let format = slicing.format;
     if via == Via::Printer {
-        let path = temporary_path(&default_file_name(scene, format, &slicing.file_stem));
+        let path = temporary_path(&default_file_name(scene, format));
         slicing.send_when_written();
         let started = slicing
             .start(scene, scene.active_plate(), path)
@@ -241,7 +261,7 @@ pub(super) fn start(
         let _ = status.report(&tr!("slice-slicing"), started);
         return;
     }
-    let name = default_file_name(scene, format, &slicing.file_stem);
+    let name = default_file_name(scene, format);
     let Some(path) = save_path(&name, format, slicing.printer.as_ref(), folder) else {
         return;
     };
@@ -301,17 +321,14 @@ fn save_path(
     Some(name.into())
 }
 
-/// The name typed in Export, or else the selected model's, or the first one's, so the
-/// dialog opens on something recognisable.
-pub(super) fn default_file_name(scene: &Scene, format: SlicedFormat, typed: &str) -> String {
-    let named = scene
+/// The selected model's name, or the first one's, so the dialog opens on something
+/// recognisable.
+fn default_file_name(scene: &Scene, format: SlicedFormat) -> String {
+    let stem = scene
         .selected()
         .and_then(|id| scene.get(id))
-        .or_else(|| scene.objects().first());
-    let stem = match typed.trim() {
-        "" => named.map_or("model", |object| object.name.as_str()),
-        typed => typed,
-    };
+        .or_else(|| scene.objects().first())
+        .map_or("model", |object| object.name.as_str());
     format!("{stem}.{}", format.extension())
 }
 
@@ -353,27 +370,46 @@ mod tests {
     #[test]
     fn the_save_dialog_opens_on_the_selected_models_name() {
         let scene = scene_with_a_model("bracket");
+        assert_eq!(default_file_name(&scene, SlicedFormat::Goo), "bracket.goo");
         assert_eq!(
-            default_file_name(&scene, SlicedFormat::Goo, ""),
-            "bracket.goo"
-        );
-        assert_eq!(
-            default_file_name(&scene, SlicedFormat::Ctb(core_pipeline::CtbVersion::V5), ""),
+            default_file_name(&scene, SlicedFormat::Ctb(core_pipeline::CtbVersion::V5)),
             "bracket.ctb",
             "the chosen format names the file the dialog opens on"
         );
         assert_eq!(
-            default_file_name(&Scene::default(), SlicedFormat::Goo, ""),
+            default_file_name(&Scene::default(), SlicedFormat::Goo),
             "model.goo"
         );
     }
 
+    fn bound(reach: Reach, blocker: Option<&str>) -> Bound {
+        Bound {
+            name: "Bench A".to_owned(),
+            reach,
+            blocker: blocker.map(str::to_owned),
+        }
+    }
+
     #[test]
-    fn a_name_typed_in_export_wins_over_the_models() {
-        let scene = scene_with_a_model("bracket");
-        assert_eq!(
-            default_file_name(&scene, SlicedFormat::Goo, " Bench plate "),
-            "Bench plate.goo"
+    fn only_a_free_machine_that_answered_offers_sending() {
+        let offer = |bound: &Bound| step(bound, None, false) == Some(SendStep::Offer);
+        assert!(offer(&bound(Reach::Answered, None)));
+        assert!(
+            !offer(&bound(Reach::Unasked, None)),
+            "a machine not asked yet may be switched off"
         );
+        assert!(!offer(&bound(Reach::Silent, None)));
+        assert!(step(&bound(Reach::Answered, Some("printing")), None, false).is_none());
+    }
+
+    #[test]
+    fn a_running_errand_shows_its_bar_and_a_landed_file_offers_start() {
+        let busy = bound(Reach::Answered, Some("sending"));
+        assert!(step(&busy, Some(Some(0.5)), false) == Some(SendStep::Running(Some(0.5))));
+        assert!(
+            step(&busy, Some(None), true) == Some(SendStep::Running(None)),
+            "starting the print runs too"
+        );
+        assert!(step(&bound(Reach::Answered, None), None, true) == Some(SendStep::Start));
     }
 }

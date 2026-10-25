@@ -186,7 +186,6 @@ tool-supports = Supports
 tool-paint = Paint
 tool-shape = Shape
 tool-check = Check
-tool-export = Export
 tool-print-settings = Print settings
 
 ## shortcuts.rs
@@ -523,6 +522,7 @@ summary-volume = Volume
 summary-weight = Weight
 summary-measuring = measuring
 summary-time = Time
+summary-estimate = ≈ { $value }
 summary-block-bottom = bottom block
 summary-block-transition = transition
 summary-block-body = body
@@ -1164,9 +1164,6 @@ printer-output-note = What this machine is sliced into, dialog and printer alike
 
 ## network.rs
 
-reach-answered = { $name } answered the last scan
-reach-silent = { $name } did not answer the last scan
-reach-unasked = { $name } has not been asked yet
 network-advice-app = If it is switched on, macOS may be keeping Encrust off the local network: allow it under System Settings, Privacy & Security, Local Network.
 network-advice-terminal = If it is switched on, macOS may be keeping this window off the local network. Started from a terminal, it has that terminal's permission: start it from Terminal.app, allow your terminal or editor under System Settings, Privacy & Security, Local Network, or run it as an app with `cargo xtask app`.
 network-not-reached = not reached yet
@@ -1233,9 +1230,11 @@ card-time-left = { $hours } h { $minutes } min left
 
 slice-to = Slice to .{ $extension }
 slice-tooltip = Rasterise the plate into a printable file
-slice-more-tooltip = Slice every plate, or slice and send
-slice-all = Slice all { $count } plates
+slice-send-tooltip = Rasterise the plate and send the file to the printer
+slice-all = Slice all { $count } plates to .{ $extension }
 slice-send = Slice and send to { $name }
+slice-start-tooltip = Start printing the file that landed on { $name }
+slice-start-print = Start print
 slice-broken =
     { $count ->
         [one] { $count } model on this plate is broken; what is sliced from it may not print
@@ -1266,23 +1265,9 @@ slicing-clipped = , { $count } layers cut off at the edge of the panel
 slicing-wrote = Wrote { $path } : { $layers } layers, { $volume } ml, { $weight } g{ $cost }{ $clipped }
 slicing-cancelled = Slicing cancelled
 
-## panels/inspector/export.rs
+## panels/destination.rs
 
-export-on = on { $printer }
-export-on-machine = The file is on the machine. Nobody is standing at it yet.
-export-start-print = Start the print
-export-slice-all-to = Slice all { $count } plates to .{ $extension }
-export-the-file = The file
-export-file-name = File name
-export-print-settings = Layers, exposure and edges
-export-all-plates = All { $count } plates
-export-this-plate = This plate
-export-send-to-printer = Send to a printer
-export-look-again = Look again
-export-usb-only = This printer's profile takes files on a stick; choose its network in its settings to send from here.
-export-none-listed = No printer of this model is listed to send to yet.
-export-choose-them = Choose them in its network settings
-export-speaks-other = { $name } speaks { $theirs }, but this profile sends over { $ours }: set its network in the printer's settings.
+slice-speaks-other = { $name } speaks { $theirs }, but this profile sends over { $ours }: set its network in the printer's settings.
 
 ## hollow.rs
 
@@ -1573,7 +1558,6 @@ notice-delete-profiles = Delete them
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Cutting the layers to preview
-notice-start-print = Start print
 notice-broken-one = { $name } is broken
 notice-broken-several = { $count } models on this plate are broken
 notice-repair = Repair
@@ -1739,7 +1723,6 @@ inspector-about-cut = Split a model along a plane.
 inspector-about-relief = Press a texture into a model's surface, write text on it, or combine models into one.
 inspector-about-supports = Hold up what hangs over nothing.
 inspector-about-check = What will fail on the machine, with the layer it fails on.
-inspector-about-export = From the plate to a file, and from the file to a printer.
 inspector-about-print-settings = How this plate is cut and exposed.
 
 ## web/files.rs

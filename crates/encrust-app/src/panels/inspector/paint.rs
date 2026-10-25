@@ -5,7 +5,8 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::supports::Placing;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, nested, number_row, secondary_button, section, switch,
+    Segment, Segmented, describe, hint, icon, nested, number_row, picker_row, secondary_button,
+    section, switch,
 };
 
 /// Millimetres per point of drag on the brush and the fill.
@@ -136,7 +137,6 @@ fn rim_rows(ui: &mut egui::Ui, window: &mut Window) {
         let catalogue = &window.machine.slicing.catalogue;
         profile_row(
             ui,
-            "fill-rim-profile",
             catalogue,
             &mut window.tools.supports.fill_profiles.rim,
             tr!("paint-profile-in-hand"),
@@ -168,7 +168,6 @@ fn inside_rows(ui: &mut egui::Ui, window: &mut Window) {
         let catalogue = &window.machine.slicing.catalogue;
         profile_row(
             ui,
-            "fill-inside-profile",
             catalogue,
             &mut window.tools.supports.fill_profiles.inside,
             tr!("paint-profile-in-hand"),
@@ -215,7 +214,6 @@ fn offset_row(ui: &mut egui::Ui, label: &str, offset_mm: &mut Scalar) {
 /// to with none chosen.
 pub(super) fn profile_row(
     ui: &mut egui::Ui,
-    id: &str,
     catalogue: &printer_profiles::Catalogue,
     chosen: &mut Option<String>,
     in_hand: String,
@@ -224,9 +222,11 @@ pub(super) fn profile_row(
         .as_deref()
         .and_then(|id| catalogue.supports().find(|entry| entry.id == id))
         .map_or(in_hand.clone(), |entry| entry.profile.name.clone());
-    super::export::picker_row(ui, id, &tr!("paint-profile"), &shown, |ui| {
+    let response = picker_row(ui, &tr!("paint-profile"), icon::SUPPORTS, &shown);
+    egui::Popup::menu(&response).show(|ui| {
         if ui.selectable_label(chosen.is_none(), &in_hand).clicked() {
             *chosen = None;
+            ui.close();
         }
         let offered = catalogue
             .supports()
@@ -235,6 +235,7 @@ pub(super) fn profile_row(
             let picked = chosen.as_deref() == Some(entry.id.as_str());
             if ui.selectable_label(picked, &entry.profile.name).clicked() {
                 *chosen = Some(entry.id.clone());
+                ui.close();
             }
         }
     });

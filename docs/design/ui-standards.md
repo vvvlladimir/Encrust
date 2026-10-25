@@ -42,6 +42,8 @@ disabled with one sentence why; the way to change that is offered once per panel
 - **Tooltips:** every icon-only control has its name and key; an action's says what it does.
 - **Voice:** a resin printer user's words, actions as verbs, no internals, no "please" or "!".
 - **Typography:** `×`, `µm`, `°`, `–` for ranges; figures through `theme::figures`.
+- **Length:** a card is its column's width in every language; a name longer than its room
+  is cut with an ellipsis and read whole on hover, never widening the card.
 
 ## Numbers
 

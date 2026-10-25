@@ -683,48 +683,42 @@ fn a_switch_back_to_prepare_without_a_stack_keeps_its_own_height() {
     assert_eq!(app.view.section.height_mm, Some(3.5));
 }
 
-/// Check and Export read their figures off the stack, so opening either cuts it
-/// without the user having to look at a layer first.
+/// Check reads its figures off the stack, so opening it cuts one without the user having
+/// to look at a layer first.
 #[test]
-fn opening_check_or_export_cuts_the_stack_in_the_model_view() {
-    for tool in [Tool::Check, Tool::Export] {
-        let fixture =
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cube.stl");
-        let mut app = SlicerApp::default();
-        let profile = app
-            .machine
-            .slicing
-            .catalogue
-            .printer("elegoo-saturn-4-ultra")
-            .expect("the printer ships")
-            .profile
-            .clone();
-        let id = Some("elegoo-saturn-4-ultra".to_owned());
-        crate::profiles::apply_printer(&mut app.window(), profile, id);
-        app.open_model(Handed::Path(fixture));
-        while app.doc.imports.poll(
-            &mut app.doc.scene,
-            &app.doc.plate,
-            &mut app.view.camera,
-            &mut app.machine.status,
-        ) {
-            std::thread::yield_now();
-        }
-
-        app.refresh_preview();
-        assert!(
-            !app.machine.preview.is_building(),
-            "the model view alone cuts nothing"
-        );
-        app.tool = tool;
-        app.refresh_preview();
-        assert!(
-            app.machine.preview.is_building(),
-            "{} cuts the stack",
-            tool.label()
-        );
-        assert_eq!(app.mode, Mode::Prepare, "and the view stays on the model");
+fn opening_check_cuts_the_stack_in_the_model_view() {
+    let fixture =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cube.stl");
+    let mut app = SlicerApp::default();
+    let profile = app
+        .machine
+        .slicing
+        .catalogue
+        .printer("elegoo-saturn-4-ultra")
+        .expect("the printer ships")
+        .profile
+        .clone();
+    let id = Some("elegoo-saturn-4-ultra".to_owned());
+    crate::profiles::apply_printer(&mut app.window(), profile, id);
+    app.open_model(Handed::Path(fixture));
+    while app.doc.imports.poll(
+        &mut app.doc.scene,
+        &app.doc.plate,
+        &mut app.view.camera,
+        &mut app.machine.status,
+    ) {
+        std::thread::yield_now();
     }
+
+    app.refresh_preview();
+    assert!(
+        !app.machine.preview.is_building(),
+        "the model view alone cuts nothing"
+    );
+    app.tool = Tool::Check;
+    app.refresh_preview();
+    assert!(app.machine.preview.is_building(), "Check cuts the stack");
+    assert_eq!(app.mode, Mode::Prepare, "and the view stays on the model");
 }
 
 #[test]

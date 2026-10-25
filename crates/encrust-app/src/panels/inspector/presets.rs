@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use crate::i18n::tr;
 use crate::settings::unique_id;
 use crate::status::Status;
-use crate::ui::{field_label, icon, icon_button, inline_button, theme};
+use crate::ui::{field_label, icon, icon_button, inline_button, picker, theme};
 
 /// The named settings of one tool: which one the panel matches, the way to load another,
 /// to keep the panel as a new one, and to throw the one in use away. See ADR 0226.
@@ -48,17 +48,16 @@ pub fn bar<T>(
             {
                 forget = Some(id.clone());
             }
-            egui::ComboBox::from_id_salt(("tool-preset", kind.dir()))
-                .width(ui.available_width())
-                .selected_text(shown)
-                .show_ui(ui, |ui| {
-                    for entry in catalogue.presets(kind) {
-                        let on = matching.as_ref().is_some_and(|(id, _)| *id == entry.id);
-                        if ui.selectable_label(on, &entry.profile.name).clicked() {
-                            picked = read(entry);
-                        }
+            let response = picker(ui, icon::PARAMETERS, &shown);
+            egui::Popup::menu(&response).show(|ui| {
+                for entry in catalogue.presets(kind) {
+                    let on = matching.as_ref().is_some_and(|(id, _)| *id == entry.id);
+                    if ui.selectable_label(on, &entry.profile.name).clicked() {
+                        picked = read(entry);
+                        ui.close();
                     }
-                });
+                }
+            });
         });
     });
     if let Some(settings) = picked {

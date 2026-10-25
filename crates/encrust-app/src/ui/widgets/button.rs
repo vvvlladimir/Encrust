@@ -59,8 +59,8 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
     )
 }
 
-/// A rail button: a glyph over the tool's name, or the glyph alone where the rail is short
-/// of room, raised in the accent while it is the tool in use, and a dot in `badge` at its
+/// A rail button filling the room it is given: a glyph over the tool's name, or the glyph
+/// alone, raised in the accent while it is the tool in use, and a dot in `badge` at its
 /// corner while the tool needs attention.
 pub fn rail_button(
     ui: &mut Ui,
@@ -71,13 +71,7 @@ pub fn rail_button(
     active: bool,
     badge: Option<Color32>,
 ) -> Response {
-    let height = if labelled {
-        theme::RAIL_BUTTON_H
-    } else {
-        theme::RAIL_ICON_H
-    };
-    let size = vec2(ui.available_width(), height);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click());
     response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
     let colors = theme::colors();
     let (fill, foreground) = match (active, response.hovered()) {

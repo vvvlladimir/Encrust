@@ -14,7 +14,7 @@ pub enum Mode {
     Preview,
 }
 
-/// What a click in the viewport does, and what the inspector beside the rail shows.
+/// What a click in the viewport does, and what the inspector under the rail shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tool {
     /// Picking models and placing what is picked; the rail calls it Select.
@@ -33,14 +33,13 @@ pub enum Tool {
     /// The shape of one support, part by part: a mode of the Supports card as well.
     Shape,
     Check,
-    Export,
     /// A form rather than a tool: opened from the top bar, never from the rail.
     PrintSettings,
 }
 
 impl Tool {
     /// The groups of the rail, in the order it draws them, with a rule between each; see
-    /// `docs/decisions/0218`.
+    /// `docs/decisions/0218` and `0348`.
     pub const RAIL: [&'static [Self]; 3] = [
         &[Self::Position, Self::Measure],
         &[
@@ -50,7 +49,7 @@ impl Tool {
             Self::Relief,
             Self::Supports,
         ],
-        &[Self::Check, Self::Export],
+        &[Self::Check],
     ];
 
     /// The tool whose card and rail button this one is shown under: Paint and Shape are
@@ -64,7 +63,7 @@ impl Tool {
 
     /// Every variant, which is what a test walks to prove none was left unplaced.
     #[cfg(test)]
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 11] = [
         Self::Position,
         Self::Measure,
         Self::Hollow,
@@ -75,12 +74,10 @@ impl Tool {
         Self::Paint,
         Self::Shape,
         Self::Check,
-        Self::Export,
         Self::PrintSettings,
     ];
 
-    /// The tools of the rail, top to bottom.
-    #[cfg(test)]
+    /// The tools of the rail, left to right.
     pub fn on_rail() -> impl Iterator<Item = Self> {
         Self::RAIL.into_iter().flatten().copied()
     }
@@ -97,7 +94,6 @@ impl Tool {
             Self::Paint => tr!("tool-paint"),
             Self::Shape => tr!("tool-shape"),
             Self::Check => tr!("tool-check"),
-            Self::Export => tr!("tool-export"),
             Self::PrintSettings => tr!("tool-print-settings"),
         }
     }
@@ -114,7 +110,6 @@ impl Tool {
             Self::Paint => icon::PAINT,
             Self::Shape => icon::SHAPE,
             Self::Check => icon::CHECK,
-            Self::Export => icon::EXPORT,
             Self::PrintSettings => icon::PARAMETERS,
         }
     }
@@ -166,7 +161,8 @@ pub struct ViewOptions {
     /// Width of the plate panel and of the inspector, points, kept between runs: a column
     /// that sized itself to its contents would jump whenever a tool changed.
     pub plate_w: f32,
-    pub inspector_w: f32,
+    /// `None` until dragged: as wide as the rail with its tools' names (ADR 0348).
+    pub inspector_w: Option<f32>,
     /// Where Preview divides the model from the mask, as a fraction of the stage's width
     /// from its left. Remembered between runs.
     pub mask_split: f32,
@@ -191,7 +187,7 @@ impl Default for ViewOptions {
             mask_only: false,
             issues: false,
             plate_w: theme::SCENE_W,
-            inspector_w: theme::INSPECTOR_W,
+            inspector_w: None,
             mask_split: theme::MASK_SPLIT,
         }
     }

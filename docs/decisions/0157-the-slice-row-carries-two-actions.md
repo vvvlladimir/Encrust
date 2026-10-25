@@ -1,6 +1,6 @@
 # 0157. The Slice row carries two actions, not a destination
 
-- **Status:** Accepted, the Send button superseded by 0217, the stale dot by 0262
+- **Status:** Accepted, the Send button superseded by 0217, the stale dot by 0262, the caret by 0348
 - **Date:** 2026-10-01
 
 ## Context

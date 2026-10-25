@@ -538,6 +538,13 @@ pub fn hairline(ui: &mut Ui) {
         .rect_filled(rect, 0.0, theme::colors().hairline);
 }
 
+/// A one pixel divider standing `height` points tall, between groups laid out in a row.
+pub fn vertical_hairline(ui: &mut Ui, height: f32) {
+    let (rect, _) = ui.allocate_exact_size(vec2(1.0, height), Sense::hover());
+    ui.painter()
+        .rect_filled(rect, 0.0, theme::colors().hairline);
+}
+
 /// The title row of a window over the plate: its glyph, its name, and the way out.
 /// Answers whether the way out was taken.
 pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {

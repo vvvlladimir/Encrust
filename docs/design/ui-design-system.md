@@ -84,8 +84,8 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
-section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool rail 60 with 46 point buttons, 34 without their names, plate
-panel 272, inspector 328, top bar 44, layer strip 56, a chip 32.
+section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool rail as wide as the inspector, padded 4 like the layer strip, buttons 2 apart and 6 either side of a rule, 46 point buttons, 34 point squares without their names, plate
+panel 272, inspector as wide as the rail's names until dragged, top bar 44, layer strip 56, a chip 32.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
 fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
 the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
@@ -114,6 +114,7 @@ paints from tokens only.
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `notice` | A verdict: a glyph in its colour, the verdict in plain ink, what to do under it |
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret |
+| `picker_row` | A `picker` under a `field_label` of its own, for a choice too long for a field box |
 | `primary_button` | The one action a screen is for. There is never a second in view |
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
@@ -126,6 +127,7 @@ paints from tokens only.
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `rail_button` | A rail button, a glyph over the tool's name, raised in `accent_soft` when it is the tool in use, with a dot while the tool needs attention |
+| `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
 | `Segmented` | Mutually exclusive choices in one bordered box, split by hairlines, the chosen one washed |
 | `switch` | A labelled toggle with an animated knob |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
@@ -170,10 +172,10 @@ them first. A printer that stops answering leaves the ring until a scan hears it
 tool, every action of the key table and every model on the plate (`panels/find.rs`,
 `docs/decisions/0230`).
 
-The tools are a rail at the stage's left edge with the inspector beside it: what is picked
-opens next to where it was picked. The rail is always the stage's height; a tall screen
-spreads its gaps up to a ceiling, a short one drops the names, then closes the gaps, and
-only then scrolls. The plates are a row of numbered squares at the head of
+The tools are a rail in one row over the inspector, at the stage's left edge: what is picked
+opens under where it was picked. The column stands as wide as the rail with its names until
+dragged, a double click on its edge giving it back; a window too narrow squeezes it to the
+glyphs alone in squares, centred, and the names return when it widens (ADR 0348). The plates are a row of numbered squares at the head of
 the models card; a right click on one duplicates,
 removes or gathers the selection onto it. The open project's name stands in the
 card's Models heading, left of its +. The sheet of keys and the gear stand at the top bar's right end.
@@ -181,8 +183,10 @@ card's Models heading, left of its +. The sheet of keys and the gear stand at th
 A side card past the room it has scrolls its list — the tool's sections, the plate's
 models — and keeps its foot in view (`ui::body_and_foot`). Both side cards are dragged by
 their inner edge, between a floor and a ceiling; neither folds away. Under the models, standing on the stage's foot, a card of
-its own states the plate's figures, or the layer's own in Preview, over Slice; the caret beside Slice holds
-every plate at once and the bound machine.
+its own states the plate's figures, or the layer's own in Preview, then the printer the file
+goes to, over Slice and send while that printer can take the file — its bar over it while
+it runs, Start print once the file landed — over Slice to a file. Every plate at once is in
+the File menu (ADR 0348).
 
 The layer strip stands the stage's full height at its right edge, in every view, its top
 the top of the print. It switches the view — the model, the model beside its layer, the
@@ -196,8 +200,8 @@ Everything over the stage is an `egui::Area` anchored to a rectangle by its corn
 the side cards stand the view cube and the home view at the top right
 (`panels/view_cube.rs`), the view tools at the bottom right beside this plate's card
 (`panels/view_column.rs`), and at the bottom centre, clear of the view tools, every notice
-in one stack (`panels/stage_notice.rs`, ADR 0263): the running jobs with their Cancel, a
-sent file waiting to be started, and nearest the edge the last message. A failure stays
+in one stack (`panels/stage_notice.rs`, ADR 0263): the running jobs with their Cancel, and
+nearest the edge the last message. A failure stays
 there until it is put away; any other message stands for four seconds. There is no status
 line.
 
@@ -249,7 +253,7 @@ height: a switch into Preview parks on
 the layer nearest where Prepare was cut, and a switch back cuts Prepare at the layer shown.
 
 `workspace::Tool` is what a click in the viewport does and what the inspector shows, in
-every view. `Tool::RAIL` groups eleven of them as Place, Modify, Supports and Finish; the
+every view. `Tool::RAIL` groups eight of them as Place, Modify and Finish; the
 print settings are a form the top bar opens. The first, `Tool::Position`, is named Select on
 the rail: it picks, and carries the gizmo and the transform fields. See `docs/decisions/0218`.
 A Global | Local pair over its fields sets whose axes the handles, the ±45° turns and the

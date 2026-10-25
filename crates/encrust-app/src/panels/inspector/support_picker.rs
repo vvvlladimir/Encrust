@@ -4,7 +4,7 @@ use super::scope;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::status::Status;
-use crate::ui::{BinLook, bin_button, hairline, theme};
+use crate::ui::{BinLook, bin_button, hairline, icon, theme};
 use crate::workspace::Tool;
 
 mod list;
@@ -95,15 +95,13 @@ fn closed(ui: &egui::Ui, response: &egui::Response, row: &Row, label: &str) {
         visuals.bg_stroke,
         egui::StrokeKind::Inside,
     );
-    let caret = egui::Rect::from_center_size(
+    let caret = painter.text(
         egui::pos2(rect.right() - 16.0, rect.center().y),
-        vec2(9.0, 6.0),
+        egui::Align2::CENTER_CENTER,
+        icon::CARET_DOWN,
+        theme::icon(14.0),
+        theme::colors().text_low,
     );
-    painter.add(egui::Shape::convex_polygon(
-        vec![caret.left_top(), caret.right_top(), caret.center_bottom()],
-        visuals.fg_stroke.color,
-        egui::Stroke::NONE,
-    ));
     let mut right = caret.left() - 10.0;
     let mut left = rect.left() + 10.0;
     if row.holds > 0 {

@@ -200,7 +200,6 @@ tool-supports = Поддержки
 tool-paint = Разметка
 tool-shape = Форма
 tool-check = Проверка
-tool-export = Экспорт
 tool-print-settings = Параметры печати
 
 ## shortcuts.rs
@@ -565,6 +564,7 @@ summary-volume = Объём
 summary-weight = Масса
 summary-measuring = замер
 summary-time = Время
+summary-estimate = ≈ { $value }
 summary-block-bottom = нижние слои
 summary-block-transition = переход
 summary-block-body = основная часть
@@ -1221,9 +1221,6 @@ printer-output-note = Формат, в который нарезается дл�
 
 ## network.rs
 
-reach-answered = { $name } ответил при последнем сканировании
-reach-silent = { $name } не ответил при последнем сканировании
-reach-unasked = { $name } пока не опрашивался
 network-advice-app = Если принтер включён, возможно, macOS не пускает Encrust в локальную сеть: разрешите это в разделе «Системные настройки», «Конфиденциальность и безопасность», «Локальная сеть».
 network-advice-terminal = Если принтер включён, возможно, macOS не пускает это окно в локальную сеть. При запуске из терминала у окна права этого терминала: запустите его из Terminal.app, разрешите свой терминал или редактор в разделе «Системные настройки», «Конфиденциальность и безопасность», «Локальная сеть» либо запустите его как приложение командой `cargo xtask app`.
 network-not-reached = пока недоступен
@@ -1295,9 +1292,11 @@ card-time-left = осталось { $hours } ч { $minutes } мин
 
 slice-to = Нарезать в .{ $extension }
 slice-tooltip = Растеризовать платформу в файл для печати
-slice-more-tooltip = Нарезать все платформы или нарезать и отправить
-slice-all = Нарезать все платформы ({ $count })
+slice-send-tooltip = Растеризовать платформу и отправить файл на принтер
+slice-all = Нарезать все платформы ({ $count }) в .{ $extension }
 slice-send = Нарезать и отправить на { $name }
+slice-start-tooltip = Начать печать файла, загруженного на { $name }
+slice-start-print = Начать печать
 slice-broken =
     { $count ->
         [one] { $count } модель на этой платформе повреждена; нарезанное из неё может не напечататься
@@ -1334,23 +1333,9 @@ slicing-clipped =
 slicing-wrote = Записан { $path }: слоёв — { $layers }, { $volume } мл, { $weight } г{ $cost }{ $clipped }
 slicing-cancelled = Нарезка отменена
 
-## panels/inspector/export.rs
+## panels/destination.rs
 
-export-on = на { $printer }
-export-on-machine = Файл на принтере. Рядом с ним пока никого нет.
-export-start-print = Начать печать
-export-slice-all-to = Нарезать все платформы ({ $count }) в .{ $extension }
-export-the-file = Файл
-export-file-name = Имя файла
-export-print-settings = Слои, экспозиция и края
-export-all-plates = Все платформы ({ $count })
-export-this-plate = Эта платформа
-export-send-to-printer = Отправить на принтер
-export-look-again = Искать снова
-export-usb-only = Профиль этого принтера принимает файлы только с флешки; выберите его сеть в его настройках, чтобы отправлять отсюда.
-export-none-listed = Принтеров этой модели для отправки пока нет в списке.
-export-choose-them = Выберите их в сетевых настройках
-export-speaks-other = { $name } работает по { $theirs }, а этот профиль отправляет по { $ours }: настройте сеть в настройках принтера.
+slice-speaks-other = { $name } работает по { $theirs }, а этот профиль отправляет по { $ours }: настройте сеть в настройках принтера.
 
 ## hollow.rs
 
@@ -1659,7 +1644,6 @@ notice-delete-profiles = Удалить их
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Нарезка слоёв для предпросмотра
-notice-start-print = Начать печать
 notice-broken-one = { $name } повреждена
 notice-broken-several =
     { $count ->
@@ -1830,7 +1814,6 @@ inspector-about-cut = Разделите модель плоскостью.
 inspector-about-relief = Вдавите текстуру в поверхность модели, напишите на ней текст или объедините модели в одну.
 inspector-about-supports = Поддержите то, что нависает над пустотой.
 inspector-about-check = Что не получится на принтере, с указанием слоя, на котором это происходит.
-inspector-about-export = От платформы до файла и от файла до принтера.
 inspector-about-print-settings = Как эта платформа нарезается и экспонируется.
 
 ## web/files.rs

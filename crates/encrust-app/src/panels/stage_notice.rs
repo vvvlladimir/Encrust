@@ -35,7 +35,6 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     unready(&mut stack, window);
     broken(&mut stack, window);
     unreadable(&mut stack, window);
-    waiting_to_print(&mut stack, window);
     jobs(&mut stack, window);
 }
 
@@ -127,38 +126,6 @@ fn job_card(
         })
     });
     cancel
-}
-
-/// A stack that reached the printer is not printing yet: starting it is a second,
-/// deliberate press, because nobody is standing at the machine when the first one lands.
-fn waiting_to_print(stack: &mut Stack, window: &mut Window) {
-    let Some(sent) = window.machine.network.sent.clone() else {
-        return;
-    };
-    let mut start = false;
-    stack.card("sent", |ui| {
-        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(tr!(
-                        "network-sent",
-                        file = sent.filename.clone(),
-                        printer = sent.printer.clone()
-                    ))
-                    .font(theme::label())
-                    .color(theme::colors().text_high),
-                );
-                start =
-                    inline_button(ui, icon::PLAY, &tr!("notice-start-print"), true, true).clicked();
-            });
-        })
-    });
-    if start {
-        window
-            .machine
-            .network
-            .start_print(&mut window.machine.status);
-    }
 }
 
 /// The user's profile files that would not read, and the way to reset them.

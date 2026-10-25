@@ -190,12 +190,10 @@ impl SlicerApp {
     }
 
     /// The preview shows the plate as it is, so entering the mode with a stale stack, or
-    /// none, cuts one; so does opening Check or Export, which read their figures off the
-    /// stack. Nothing to cut, or nothing to cut it for, and it stays empty: the transport
-    /// says which.
+    /// none, cuts one; so does opening Check, which reads its figures off the stack. Nothing
+    /// to cut, or nothing to cut it for, and it stays empty: the transport says which.
     fn refresh_preview(&mut self) {
-        let reads_the_stack =
-            self.mode == Mode::Preview || matches!(self.tool, Tool::Check | Tool::Export);
+        let reads_the_stack = self.mode == Mode::Preview || self.tool == Tool::Check;
         if !reads_the_stack || self.machine.preview.is_building() {
             return;
         }

@@ -171,7 +171,7 @@ fn a_file_written_before_machines_existed_still_reads() {
 fn the_preview_divide_and_the_card_widths_survive_the_round_trip() {
     let options = ViewOptions {
         mask_split: 0.62,
-        inspector_w: 400.0,
+        inspector_w: Some(400.0),
         plate_w: 200.0,
         ..ViewOptions::default()
     };
@@ -179,7 +179,7 @@ fn the_preview_divide_and_the_card_widths_survive_the_round_trip() {
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");
     let read: Preferences = serde_json::from_str(&text).expect("and read back");
     assert_eq!(read.mask_split, Some(0.62));
-    assert_eq!(read.inspector_w, Some(400.0));
+    assert_eq!(read.left_w, Some(400.0));
     assert_eq!(read.plate_w, Some(200.0));
 }
 

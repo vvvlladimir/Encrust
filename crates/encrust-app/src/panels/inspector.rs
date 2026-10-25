@@ -2,7 +2,6 @@ mod check;
 mod combine;
 mod cut;
 pub(super) mod drain;
-mod export;
 mod hollow;
 mod layers;
 mod measure;
@@ -63,7 +62,6 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         Tool::Relief => relief::ui(ui, window),
         Tool::Supports | Tool::Paint | Tool::Shape => supports::ui(ui, window),
         Tool::Check => check::ui(ui, window),
-        Tool::Export => export::ui(ui, window),
         Tool::PrintSettings => print_settings::ui(ui, window.machine),
     }
 }
@@ -73,7 +71,7 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
 fn has_action(tool: Tool) -> bool {
     matches!(
         tool,
-        Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports | Tool::Export
+        Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports
     )
 }
 
@@ -84,7 +82,6 @@ fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         Tool::Cut => cut::action(ui, window),
         Tool::Relief => relief::action(ui, window),
         Tool::Supports => supports::action(ui, window),
-        Tool::Export => export::action(ui, window),
         _ => {}
     }
 }
@@ -102,7 +99,6 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
         )),
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
         Tool::Check => check::fact(window),
-        Tool::Export => export::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
         Tool::Measure => match window.tools.measure.target {
             crate::measure::Target::Points => window
@@ -133,7 +129,6 @@ fn help(tool: Tool) -> String {
         Tool::Relief => tr!("inspector-about-relief"),
         Tool::Supports | Tool::Paint | Tool::Shape => tr!("inspector-about-supports"),
         Tool::Check => tr!("inspector-about-check"),
-        Tool::Export => tr!("inspector-about-export"),
         Tool::PrintSettings => tr!("inspector-about-print-settings"),
     }
 }

@@ -1,4 +1,4 @@
-//! A printer on the network as the window shows it: a row in the Export tool, the ring in the
+//! A printer on the network as the window shows it: a row in the plate's card, the ring in the
 //! top bar and the sheet the ring opens. See `docs/decisions/0264`.
 
 mod controls;
@@ -43,17 +43,19 @@ struct Job {
     detail: String,
 }
 
-/// What the Export tool's row was pressed for.
+/// What the plate card's printer row was pressed for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Chosen {
     /// Send this profile's files to the listed printer at that address from now on.
     Pick(String),
+    /// Ask the network again, for a printer switched on since the last scan.
+    Scan,
     /// Open the sheet of the printer under that key.
     Open(String),
 }
 
 /// Where the printer in hand sends its files, as one row: its name and state, the others the
-/// profile lists, and its sheet. Failures wait behind the status word.
+/// profile lists, a new scan and its sheet. Failures wait behind the status word.
 pub fn destination(
     ui: &mut egui::Ui,
     network: &Network,
@@ -71,6 +73,12 @@ pub fn destination(
                 && icon_button(ui, icon::OPEN_SHEET, &tr!("card-open-printer")).clicked()
             {
                 chosen = Some(Chosen::Open(target.key()));
+            }
+            let scan = ui.add_enabled_ui(!network.is_scanning(), |ui| {
+                icon_button(ui, icon::RESCAN, &tr!("connection-scan-again"))
+            });
+            if scan.inner.clicked() {
+                chosen = Some(Chosen::Scan);
             }
             let face = machine_face(network, chosen_machine);
             let row = destination_row(ui, chosen_machine.label(), &face, several, &notes);
@@ -292,7 +300,7 @@ fn trouble_lines(ui: &mut egui::Ui, trouble: &Trouble) {
 }
 
 /// What the last scan could not do: a broadcast that went nowhere, an address that kept
-/// quiet. Drawn under a list of printers, in the Export tool and the printer settings.
+/// quiet. Drawn under a list of printers in the printer settings.
 pub fn scan_notes(ui: &mut egui::Ui, network: &Network) {
     if let Some(trouble) = &network.trouble {
         tone(ui, &tr!("card-search-failed"), theme::colors().warn);

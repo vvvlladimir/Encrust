@@ -4,7 +4,7 @@ use core_geometry::{Vec2, Vec3};
 
 use crate::i18n::tr;
 use crate::panels::plate_summary;
-use crate::panels::{Window, plate_strip, slice};
+use crate::panels::{Window, destination, plate_strip, slice};
 use crate::project;
 use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
@@ -37,8 +37,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     body_and_foot(ui, max_h, window, rows, actions);
 }
 
-/// What the plate comes to, and the button that makes the file: a card of its own on the
-/// stage's foot, under the models.
+/// What the plate comes to, the printer it goes to and the button that makes the file: a
+/// card of its own on the stage's foot, under the models.
 pub fn this_plate(ui: &mut egui::Ui, window: &mut Window) {
     egui::Frame::new()
         .inner_margin(theme::PANEL_MARGIN)
@@ -46,6 +46,7 @@ pub fn this_plate(ui: &mut egui::Ui, window: &mut Window) {
             ui.set_width(ui.available_width());
             plate_summary::ui(ui, window);
             ui.add_space(theme::ITEM_GAP);
+            destination::ui(ui, window);
             slice::ui(ui, window);
         });
 }
