@@ -2,7 +2,7 @@
 //! project the window saved.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 
 use crate::support::*;
@@ -251,8 +251,12 @@ fn a_flag_that_shapes_a_model_is_refused_for_a_project() {
 }
 
 #[test]
-fn blur_and_samples_per_layer_are_refused_for_a_project_too() {
-    for flags in [["--blur", "2"], ["--samples-per-layer", "3"]] {
+fn blur_samples_and_infill_are_refused_for_a_project_too() {
+    for flags in [
+        ["--blur", "2"],
+        ["--samples-per-layer", "3"],
+        ["--infill", "hive"],
+    ] {
         let output = estimate(&[&[project_fixture().to_str().unwrap()][..], &flags].concat());
         assert_eq!(output.status.code(), Some(1), "{flags:?}");
         assert!(stderr(&output).contains(flags[0]), "{}", stderr(&output));
@@ -269,4 +273,98 @@ fn a_project_is_sliced_on_its_own() {
         "{}",
         stderr(&output)
     );
+}
+
+/// The cube fixture with a second plate, "Small parts", holding a copy of the cube.
+fn two_plate_project(name: &str) -> PathBuf {
+    let load = || core_engine::project::load(&project_fixture()).expect("a fixture");
+    let mut project = load();
+    let mut copy = load().manifest.objects.remove(0);
+    copy.plate = 1;
+    copy.name = "copy".to_owned();
+    project.manifest.objects.push(copy);
+    project.models.push(project.models[0].clone());
+    project.manifest.plates.push("Small parts".to_owned());
+    let path = output_file(&format!("{name}.encrust"));
+    core_engine::project::save(&path, &project).expect("the temp dir is writable");
+    path
+}
+
+fn slice_project(project: &Path, extra: &[&str]) -> Output {
+    let panel = project_fixture().with_file_name("project-panel.toml");
+    let resin = test_resin();
+    let mut args = vec![
+        project.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--material",
+        resin.to_str().unwrap(),
+    ];
+    args.extend_from_slice(extra);
+    slice(&args)
+}
+
+#[test]
+fn a_project_of_several_plates_says_which_it_slices() {
+    let project = two_plate_project("plates-warned");
+    let out = output_file("plates-warned.goo");
+    let output = slice_project(&project, &["-o", out.to_str().unwrap()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("--all-plates"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn plate_picks_one_plate_of_a_project() {
+    let project = two_plate_project("plates-picked");
+    let out = output_file("plates-picked.goo");
+    let output = slice_project(
+        &project,
+        &["--plate", "2", "-o", out.to_str().unwrap(), "--json"],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(json(&output)["models"][0]["input"].as_str(), Some("copy"));
+}
+
+#[test]
+fn a_plate_the_project_lacks_is_refused() {
+    let project = two_plate_project("plates-missing");
+    let out = output_file("plates-missing.goo");
+    let output = slice_project(&project, &["--plate", "3", "-o", out.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("has 2"), "{}", stderr(&output));
+}
+
+#[test]
+fn all_plates_writes_each_plate_beside_the_output() {
+    let project = two_plate_project("plates-all");
+    let out = output_file("plates-all.goo");
+    let output = slice_project(
+        &project,
+        &["--all-plates", "-o", out.to_str().unwrap(), "--json"],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    for plate in ["plate-1", "small-parts"] {
+        let written = out.with_file_name(format!("encrust-cli-out-plates-all-{plate}.goo"));
+        assert!(written.exists(), "{} was written", written.display());
+    }
+    let plates = json(&output)["plates"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(plates.len(), 2, "one report a plate");
+}
+
+#[test]
+fn plate_and_all_plates_are_for_a_project_only() {
+    let cube = write_box_stl("plate-of-a-model", 10.0, 12, 0);
+    let output = estimate(&[cube.to_str().unwrap(), "--plate", "1"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("project"), "{}", stderr(&output));
+    let output = slice(&[cube.to_str().unwrap(), "--all-plates"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("project"), "{}", stderr(&output));
 }

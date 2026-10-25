@@ -133,6 +133,11 @@ fn given(inputs: &[PathBuf]) -> Result<Given<'_>> {
     }
 }
 
+/// Whether `path` names a project saved by the window.
+pub fn describes_a_project(path: &Path) -> bool {
+    extension_of(path).as_deref() == Some("encrust")
+}
+
 /// Whether `path` names a whole plate, a plate file or a project, rather than a model.
 pub fn describes_a_plate(path: &Path) -> bool {
     matches!(extension_of(path).as_deref(), Some("toml" | "encrust"))
@@ -144,24 +149,45 @@ fn extension_of(path: &Path) -> Option<String> {
         .map(str::to_ascii_lowercase)
 }
 
-/// Stages whatever `inputs` name. `arrange` spreads several models over the plate.
-pub fn stage(inputs: &[PathBuf], arrange: bool, job: &JobArgs, watch: &Watch) -> Result<Staged> {
-    match given(inputs)? {
+/// Stages whatever `inputs` name. `arrange` spreads several models over the plate; `plate`
+/// picks one of a project's, counted from one.
+pub fn stage(
+    inputs: &[PathBuf],
+    arrange: bool,
+    plate: Option<u32>,
+    job: &JobArgs,
+    watch: &Watch,
+) -> Result<Staged> {
+    let given = given(inputs)?;
+    if plate.is_some() && !matches!(given, Given::Project(_)) {
+        bail!("--plate picks a plate of a project (.encrust)");
+    }
+    match given {
         Given::Models(paths) => {
             let chosen = profiles::resolve(&job.profile.selection())?;
             models(paths, arrange, job, &chosen, watch)
         }
         Given::PlateFile(path) => plate_file::stage(path, arrange, job, watch),
         Given::Project(path) => {
-            if job.model.wanted() {
-                bail!("a project's models are combined, cut and split in the window");
-            }
-            if arrange {
-                bail!("a project stands where it was saved; arrange it in the window");
-            }
-            project::stage(path, job)
+            refuse_for_a_project(arrange, job)?;
+            let project = project::open(path, job)?;
+            let plate = plate
+                .map(|number| project::chosen_plate(&project.manifest, number))
+                .transpose()?;
+            project::stage(path, &project, plate, job)
         }
     }
+}
+
+/// The flags of a plate made here, which a project saved by the window answers for itself.
+pub fn refuse_for_a_project(arrange: bool, job: &JobArgs) -> Result<()> {
+    if job.model.wanted() {
+        bail!("a project's models are combined, cut and split in the window");
+    }
+    if arrange {
+        bail!("a project stands where it was saved; arrange it in the window");
+    }
+    Ok(())
 }
 
 /// Every model in `paths`, shaped as the flags ask.

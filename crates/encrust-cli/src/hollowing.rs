@@ -186,9 +186,13 @@ impl HollowArgs {
         })
     }
 
-    /// Refuses an open floor on anything but a shell, and plugs with no hole to close or a
-    /// gap that would make them wider than it.
-    pub(crate) fn check_floor_and_plugs(&self) -> Result<()> {
+    /// Refuses an infill or an open floor on anything but a shell, and plugs with no hole to
+    /// close or a gap that would make them wider than it.
+    pub(crate) fn check_flags(&self) -> Result<()> {
+        self.check_infill()?;
+        if self.infill.is_some() && !self.wanted() {
+            bail!("--infill fills a shell's cavity, and --hollow was not given");
+        }
         if self.open_floor && !self.wanted() {
             bail!("--hollow-open-floor opens a shell's floor, and --hollow was not given");
         }
@@ -262,6 +266,8 @@ impl HollowArgs {
             .iter()
             .map(|near| {
                 hole_at(mesh, bvh, *near, self.hole_size())
+                    .map(|hole| refuse_off_a_face(*near, hole))
+                    .transpose()?
                     .map(|hole| DrainHole {
                         kind: if self.walled {
                             HoleKind::Walled
@@ -276,6 +282,38 @@ impl HollowArgs {
     }
 }
 
+/// Past this, the point is off an edge or corner rather than over the face the hole is
+/// drilled into: a cube's edge is 45 degrees off, a 12-sided pillar's facets 15.
+const OFF_A_FACE_DEG: Scalar = 20.0;
+
+/// Nearer than this a point is on the surface: the f32 closest point lands a few ulps off it
+/// in any direction, so the offset says nothing of which way the point lies.
+const ON_THE_SURFACE_MM: Scalar = 1e-3;
+
+/// Refuses a hole a point off an edge or a corner put there, centred on it and half off the
+/// model, where the window's click always lands on a face. A point over or under a face is
+/// off it along its normal, either way.
+fn refuse_off_a_face(near: Vec3, hole: DrainHole) -> Result<DrainHole> {
+    let off = near - hole.at;
+    let Some(inward) = hole
+        .axis
+        .try_normalize()
+        .filter(|_| off.length() > ON_THE_SURFACE_MM)
+    else {
+        return Ok(hole);
+    };
+    let off = off.normalize();
+    let off_normal_deg = off.dot(inward).abs().min(1.0).acos().to_degrees();
+    if off_normal_deg > OFF_A_FACE_DEG {
+        bail!(
+            "--drain-at {near} is nearest an edge or corner of the model, at {}, where a hole \
+             would sit half off it; give a point over a face",
+            hole.at
+        );
+    }
+    Ok(hole)
+}
+
 /// Hollows the mesh, keeping the cavity off the walled ones of `holes`, and says what that
 /// cost and saved. `stop` is asked while the field is built, so a Ctrl-C lands inside it.
 pub fn run(
@@ -286,7 +324,6 @@ pub fn run(
     stop: &Stop,
 ) -> Result<(Mesh, Range<usize>, HollowReport)> {
     let started = Instant::now();
-    args.check_infill()?;
     let bvh = Bvh::build(mesh);
     let Some(settings) = args.settings(precision, holes) else {
         bail!("--hollow was not given, so there is nothing to hollow");

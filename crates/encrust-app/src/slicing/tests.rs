@@ -336,43 +336,6 @@ fn a_priced_resin_puts_what_the_print_cost_in_the_report() {
 }
 
 #[test]
-fn each_plate_is_written_beside_the_name_that_was_typed() {
-    let mut scene = Scene::default();
-    scene.add_plate();
-    scene.rename_plate(1, "Small parts".to_owned());
-
-    let output = PathBuf::from("/tmp/batch.goo");
-    assert_eq!(
-        per_plate_path(&output, &scene, 0),
-        PathBuf::from("/tmp/batch-plate-1.goo")
-    );
-    assert_eq!(
-        per_plate_path(&output, &scene, 1),
-        PathBuf::from("/tmp/batch-small-parts.goo"),
-        "a renamed plate is named in the file, not numbered"
-    );
-}
-
-#[test]
-fn two_plates_of_one_name_do_not_write_to_one_file() {
-    let mut scene = Scene::default();
-    scene.add_plate();
-    scene.rename_plate(0, "Body".to_owned());
-    scene.rename_plate(1, "Body".to_owned());
-
-    let output = PathBuf::from("/tmp/batch.goo");
-    assert_eq!(
-        per_plate_path(&output, &scene, 0),
-        per_plate_path(&output, &scene, 1),
-        "the names agree, which is what start_all has to break"
-    );
-    assert_eq!(
-        numbered(&output, 1),
-        PathBuf::from("/tmp/batch-plate-2.goo")
-    );
-}
-
-#[test]
 fn a_run_over_the_project_queues_only_the_plates_with_something_on_them() {
     let mut scene = Scene::default();
     scene.add_plate();

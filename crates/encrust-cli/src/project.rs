@@ -1,10 +1,10 @@
-//! A `.encrust` project saved by the window, sliced without one. Flags that shape a model are
-//! refused; printer and resin are named by id only (ADR 0261) and flags may still change them.
+//! A `.encrust` project saved by the window, sliced a plate at a time. Flags that shape a model
+//! are refused; printer and resin are named by id only (ADR 0261) and flags may change them.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::project::{Manifest, load};
+use core_engine::project::{Manifest, Project, load};
 use core_engine::{Machine, Opening, open_plate};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -14,22 +14,78 @@ use crate::profiles::catalogue;
 use crate::sliced_file::now_unix_s;
 use crate::stage::{Part, Staged};
 
-/// Stages the plate the project was left on.
-pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
-    refuse_shaping_flags(job)?;
+/// Opens a project to stage its plates from, at the layer height `job` may override.
+pub fn open(path: &Path, job: &JobArgs) -> Result<Project> {
     let mut project =
         load(path).with_context(|| format!("cannot open the project {}", path.display()))?;
     if let Some(height_mm) = job.slicing.layer_height {
         project.manifest.slicing.layer_height_mm = height_mm;
     }
-    let machine = machine(&project.manifest, job)?;
+    Ok(project)
+}
 
+/// The plates holding a model to print, by index and name, as the window slices them all.
+pub fn printable_plates(manifest: &Manifest) -> Vec<(u32, &str)> {
+    (0..manifest.plates.len() as u32)
+        .filter(|&plate| {
+            manifest
+                .objects
+                .iter()
+                .any(|object| object.printable_on(plate))
+        })
+        .map(|plate| (plate, manifest.plates[plate as usize].as_str()))
+        .collect()
+}
+
+/// The plate `--plate` names, counted from one as the window's plate bar shows them.
+pub fn chosen_plate(manifest: &Manifest, number: u32) -> Result<u32> {
+    let count = manifest.plates.len() as u32;
+    if !(1..=count).contains(&number) {
+        bail!("--plate {number} is not a plate of this project, which has {count}");
+    }
+    let plate = number - 1;
+    if !printable_plates(manifest)
+        .iter()
+        .any(|(index, _)| *index == plate)
+    {
+        bail!("plate {number} holds nothing to print");
+    }
+    Ok(plate)
+}
+
+/// The plate the project was left on, said aloud when other plates hold models too.
+fn saved_plate(path: &Path, manifest: &Manifest) -> u32 {
+    let active = manifest.active_plate;
+    let others = printable_plates(manifest)
+        .iter()
+        .filter(|(plate, _)| *plate != active)
+        .count();
+    if others > 0 {
+        let name = manifest
+            .plates
+            .get(active as usize)
+            .map_or("", String::as_str);
+        tracing::warn!(
+            "{} has {others} more plate(s) with models; slicing plate {} \"{name}\", the one it \
+             was saved on. --plate N or --all-plates slices the others",
+            path.display(),
+            active + 1
+        );
+    }
+    active
+}
+
+/// Stages `plate` of the project, or the plate it was left on.
+pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) -> Result<Staged> {
+    refuse_shaping_flags(job)?;
     let manifest = &project.manifest;
-    let plate = open_plate(
-        &project,
+    let plate = plate.unwrap_or_else(|| saved_plate(path, manifest));
+    let machine = machine(manifest, job)?;
+    let built = open_plate(
+        project,
         &machine,
         &Opening {
-            plate: manifest.active_plate,
+            plate,
             raster_window: raster_window(&job.raster),
             created_unix_s: now_unix_s(),
         },
@@ -39,7 +95,7 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
     let on_plate: Vec<_> = manifest
         .objects
         .iter()
-        .filter(|object| object.plate == manifest.active_plate && object.visible)
+        .filter(|object| object.printable_on(plate))
         .collect();
     let drainage = job.slicing.check_drainage
         || on_plate.iter().any(|object| {
@@ -57,18 +113,18 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
                 supports: None,
             })
             .collect(),
-        models: plate.models,
-        printer: Some(plate.printer),
-        material: plate.material,
+        models: built.models,
+        printer: Some(built.printer),
+        material: built.material,
         // How many layers are cut at once trades memory for time and shapes nothing.
         cutting: core_engine::Cutting {
             slice_window: job.slicing.slice_window,
-            ..plate.cutting
+            ..built.cutting
         },
-        panel: plate.panel,
-        exposure: plate.exposure,
-        remove_islands: plate.remove_islands,
-        hanging_passes: plate.hanging_passes,
+        panel: built.panel,
+        exposure: built.exposure,
+        remove_islands: built.remove_islands,
+        hanging_passes: built.hanging_passes,
         drainage,
     })
 }
@@ -135,6 +191,7 @@ fn resin_of(id: &str, why: &str) -> Result<MaterialProfile> {
 
 /// The flags a project already answers for itself.
 fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
+    job.hollow.check_flags()?;
     let import = &job.import;
     let transform = &import.transform;
     let given = [
@@ -199,7 +256,8 @@ mod tests {
             "--material".into(),
             fixtures.join("test-resin.toml"),
         ]);
-        let staged = stage(&path, &flags.job).expect("it stages");
+        let project = open(&path, &flags.job).expect("the project was just saved");
+        let staged = stage(&path, &project, None, &flags.job).expect("it stages");
         assert!(staged.remove_islands);
         assert_eq!(staged.hanging_passes, 2, "as the window would slice it");
     }

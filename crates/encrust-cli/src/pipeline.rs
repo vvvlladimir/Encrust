@@ -143,7 +143,7 @@ pub fn hollow_and_cut(
     watch: &Watch,
 ) -> Result<Shelled> {
     let talk = watch.talk;
-    args.check_floor_and_plugs()?;
+    args.check_flags()?;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
     let placed = args

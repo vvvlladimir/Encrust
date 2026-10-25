@@ -361,6 +361,11 @@ pub struct ObjectState {
 }
 
 impl ObjectState {
+    /// Whether slicing `plate` takes this model: it stands there and is not hidden.
+    pub fn printable_on(&self, plate: u32) -> bool {
+        self.plate == plate && self.visible
+    }
+
     /// The plate's `table` of group profiles as this model is built to it: its own
     /// profile in place of a group's wherever it keeps one, and under them the raft that
     /// is its own, or `plate_raft`, or failing both the first group's.

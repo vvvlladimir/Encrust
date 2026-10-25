@@ -10,8 +10,15 @@ catalogue ships machines and support profiles but **no resin**: an exposure is m
 your own machine, so the first resin is yours to make, in the window or as a TOML file
 (ADR 0196). `my-grey` below is one of yours; `profiles list` says what you have. A machine
 named without a resin is refused rather than given stock numbers.
-`--slice-window` trades memory for time on a dense stack (ADR 0066). The dev profile is
-optimised (ADR 0037); every quoted timing is a release timing.
+`--slice-window` and `--raster-window` trade memory for time on a dense stack (ADR 0066).
+The dev profile is optimised (ADR 0037); every quoted timing is a release timing.
+
+A model is welded as it is read, vertices nearer than `--weld-tolerance` mm merged;
+`--no-validate` skips the topology check and the orientation fix. `--samples-per-layer N`
+cuts N planes inside each layer, so a feature thinner than a layer is kept. A mask is
+shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
+at all, `--grey-levels N` rounds its edges to N greys, `--grey-floor V` sets the dimmest
+grey written or `--blur PX` fades every edge.
 
 ```sh
 encrust profiles list
@@ -148,9 +155,12 @@ encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --drain 4 --drain-at 30,30,60 -o model.goo
 ```
 
-A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
+A point off an edge or a corner of the model, rather than over a face, is refused: the hole
+would be centred on the edge, half off the model, and reach no cavity. `--drain-depth` is how
+far past the surface a hole reaches and `--drain-taper` its far end's share of its mouth, 1 a
+cylinder. A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
 diameter, turned `--drain-turn` degrees from the level; a `--channel` takes the same
-outline. Once the model is hollow a hole is carried on through the wall into the cavity;
+outline, `--channel-size` millimetres across. Once the model is hollow a hole is carried on through the wall into the cavity;
 `--drain-walled` drills it before hollowing instead, a recess at its depth with the wall
 kept around it, which drains nothing (ADR 0346). `--drain-support-at X,Y,Z` drills into the
 supports or raft nearest the point once they stand, sized as `--drain`, with no plug (ADR 0347).
@@ -293,11 +303,19 @@ support trees, and nothing is built again (ADR 0191). It carries its own models,
 `--rotate`, `--blur` and the rest — is refused; `--printer`, `--resin` and `--layer-height`
 replace the project's own, and `--slice-window` applies as to a model. The project names
 its printer and resin by id only (ADR 0261): one that is not among your profiles has to be
-named by a flag, `--profile` and `--material` included:
+named by a flag, `--profile` and `--material` included.
+
+A project of several plates slices the plate it was saved on and says so; `--plate N`
+picks another, counted from one as the plate bar shows them, for `slice` and `estimate`.
+`slice --all-plates` writes every plate holding a model into a file of its own named after
+it, `plate-small-parts.goo` beside `plate.goo`, as the window's Slice all plates does; its
+`--json` is one document with a report per plate under `plates`:
 
 ```sh
 encrust slice plate.toml -o plate.goo
 encrust slice plate.encrust --resin my-grey -o plate.goo
+encrust slice plate.encrust --plate 2 -o small.goo
+encrust slice plate.encrust --all-plates -o plate.goo
 ```
 
 A flag wins over the plate file or project, which wins over the profiles' own numbers.
@@ -414,7 +432,7 @@ encrust printer send model.goo 192.168.1.42 --start
 ```
 
 A Prusa machine answers no broadcast and takes only `.sl1` and `.sl1s`. It is named by host
-with `--prusalink`, and lets in a key, or a password under `--user` (`maker` unless set). Pass
+with `--prusalink`, and lets in a `--key`, or a `--password` under `--user` (`maker` unless set). Pass
 them as `ENCRUST_PRUSALINK_KEY` or `ENCRUST_PRUSALINK_PASSWORD` rather than as flags, so they
 stay out of the shell's history. Its upload is one request, so it has no bar and Ctrl-C lands
 only before it starts (ADR 0152).
@@ -423,9 +441,25 @@ only before it starts (ADR 0152).
 ENCRUST_PRUSALINK_PASSWORD=… encrust printer send model.sl1 sl1.local --prusalink --start
 ```
 
+`pause`, `resume` and `stop` act on the print under way, as the printer card's buttons do;
+a stopped print cannot be resumed, and this asks nothing first. `history` lists the last
+prints an Elegoo board remembers (`--count`, 10 by default); a Prusa machine keeps none.
+`camera on` prints the RTSP address an Elegoo board streams to, for a video player; `camera
+off` turns it off. `picture -o FILE` saves the picture of the plate the printer keeps for the
+print under way.
+
+```sh
+encrust printer pause 192.168.1.42
+encrust printer history 192.168.1.42 --count 5
+encrust printer camera 192.168.1.42 on
+```
+
 Under `--json`, `status` prints `printer`, `protocol` (`sdcp-3`, `sdcp-1` or `prusalink`),
 `state`, `file`, `progress` from 0 to 1, `remaining_s` and `error`; `send` prints
-`printer`, `protocol`, `file` as it landed and `started`; `discover` prints `printers`.
+`printer`, `protocol`, `file` as it landed and `started`; `discover` prints `printers`;
+`pause`, `resume` and `stop` print `command`; `history` prints `prints`, each with `file`,
+`ending`, `begin_unix_s`, `end_unix_s`, `layers_printed` and `layer_count`; `camera` prints
+`on` and `url`; `picture` prints `output`.
 
 ## Batch
 

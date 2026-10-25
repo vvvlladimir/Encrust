@@ -500,6 +500,18 @@ fn an_open_floor_with_no_shell_is_refused() {
 }
 
 #[test]
+fn an_infill_with_no_shell_is_refused() {
+    let path = write_box_stl("infill-solid", 16.0, 12, 0);
+    for extra in [&["--infill", "hive"][..], &["--infill-cell", "6"]] {
+        let mut args = vec![path.to_str().unwrap()];
+        args.extend_from_slice(extra);
+        let output = estimate(&args);
+        assert!(!output.status.success(), "{extra:?} on a solid model");
+        assert!(stderr(&output).contains(extra[0]), "the refusal names it");
+    }
+}
+
+#[test]
 fn a_negative_plug_gap_is_refused() {
     let path = write_box_stl("plugs-negative", 8.0, 12, 0);
     let output = estimate(&[
@@ -622,4 +634,33 @@ fn a_hole_into_supports_with_none_asked_for_is_refused() {
         "{}",
         stderr(&output)
     );
+}
+
+#[test]
+fn a_drain_point_off_a_corner_is_refused() {
+    let path = write_box_stl("drain-corner", 16.0, 12, 0);
+    let drain = |at: &str| {
+        let flag = format!("--drain-at={at}");
+        estimate(&[path.to_str().unwrap(), "--hollow", "2", &flag])
+    };
+    // The second lies in the plane of the floor, square to its normal.
+    for corner in ["-20,-20,-20", "-20,-20,0"] {
+        let output = drain(corner);
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{corner}: {}",
+            stderr(&output)
+        );
+        assert!(
+            stderr(&output).contains("edge or corner"),
+            "{}",
+            stderr(&output)
+        );
+    }
+    // The last two lie on a face, where the closest point lands a few ulps off the point.
+    for face in ["-20,8,8", "8,8,3", "5.3,7.7,16", "7.77,0,3.33"] {
+        let output = drain(face);
+        assert!(output.status.success(), "{face}: {}", stderr(&output));
+    }
 }

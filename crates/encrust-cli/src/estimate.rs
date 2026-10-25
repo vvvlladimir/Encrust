@@ -123,7 +123,7 @@ impl fmt::Display for Estimate {
     }
 }
 
-fn hours_minutes(seconds: u32) -> String {
+pub(crate) fn hours_minutes(seconds: u32) -> String {
     let minutes = seconds.div_ceil(60);
     match (minutes / 60, minutes % 60) {
         (0, minutes) => format!("{minutes} min"),

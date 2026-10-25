@@ -189,3 +189,33 @@ fn a_printer_that_does_not_answer_fails_with_one_json_document() {
     );
     fs::remove_file(file).ok();
 }
+
+/// A machine that answers the job query with an empty 204, as one printing nothing does.
+#[test]
+fn pausing_a_printer_that_prints_nothing_says_so() {
+    use std::io::{Read as _, Write as _};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("loopback binds");
+    let host = listener
+        .local_addr()
+        .expect("a bound socket has an address");
+    let machine = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("the client connects");
+        let mut request = [0u8; 1024];
+        let _ = stream.read(&mut request).expect("the client asks");
+        stream
+            .write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
+            .expect("the client is listening");
+    });
+    let output = Command::new(env!("CARGO_BIN_EXE_encrust"))
+        .env("ENCRUST_PRUSALINK_KEY", "k3y")
+        .args(["printer", "pause", &host.to_string(), "--prusalink"])
+        .output()
+        .expect("the encrust binary runs");
+    machine.join().expect("the machine answered");
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("not printing anything"),
+        "{}",
+        stderr(&output)
+    );
+}

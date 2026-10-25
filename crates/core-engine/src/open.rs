@@ -77,7 +77,7 @@ pub fn open_plate(
         .objects
         .iter()
         .zip(&project.models)
-        .filter(|(object, _)| object.plate == opening.plate && object.visible)
+        .filter(|(object, _)| object.printable_on(opening.plate))
         .map(|(object, meshes)| model(object, meshes, &table, manifest.supports.raft))
         .collect();
 

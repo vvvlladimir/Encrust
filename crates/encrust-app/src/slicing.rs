@@ -540,19 +540,11 @@ impl Slicing {
     /// Cuts every plate that has anything on it, each into its own file beside `output`.
     /// Returns how many were queued, which is zero when the project is empty.
     pub fn start_all(&mut self, scene: &Scene, output: &Path, status: &mut Status) -> usize {
-        let mut queued: Vec<(u32, PathBuf)> = Vec::new();
-        for plate in 0..scene.plates().len() as u32 {
-            if !scene.has_printable(plate) {
-                continue;
-            }
-            let mut path = per_plate_path(output, scene, plate);
-            // Two plates may carry one name. Writing both to it would leave only the
-            // second, so the loser takes its number instead.
-            if queued.iter().any(|(_, taken)| *taken == path) {
-                path = numbered(output, plate);
-            }
-            queued.push((plate, path));
-        }
+        let printable: Vec<(u32, &str)> = (0..scene.plates().len() as u32)
+            .filter(|&plate| scene.has_printable(plate))
+            .map(|plate| (plate, scene.plates()[plate as usize].as_str()))
+            .collect();
+        let mut queued = core_engine::plate_outputs(output, &printable);
         // Popped from the end, so the first plate has to be the last in.
         queued.reverse();
         self.queued = queued;
@@ -578,30 +570,6 @@ impl Slicing {
         }
         true
     }
-}
-
-/// Where one plate of a whole-project run is written: the name the user typed with the
-/// plate's own name on the end, so a project of six plates comes out named rather than
-/// numbered.
-fn per_plate_path(output: &Path, scene: &Scene, plate: u32) -> PathBuf {
-    let name = scene.plates()[plate as usize]
-        .replace(' ', "-")
-        .to_lowercase();
-    beside(output, &name)
-}
-
-/// Where a plate goes when its name is already spoken for.
-fn numbered(output: &Path, plate: u32) -> PathBuf {
-    beside(output, &format!("plate-{}", plate + 1))
-}
-
-fn beside(output: &Path, suffix: &str) -> PathBuf {
-    let stem = output.file_stem().unwrap_or_default().to_string_lossy();
-    let mut path = output.with_file_name(format!("{stem}-{suffix}"));
-    if let Some(extension) = output.extension() {
-        path.set_extension(extension);
-    }
-    path
 }
 
 /// Turns a finished job into the line the stage notice shows.

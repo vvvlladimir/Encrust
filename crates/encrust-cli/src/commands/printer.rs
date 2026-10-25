@@ -5,22 +5,36 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use net_prusalink::Link;
 use net_sdcp::{Printer, Transport};
-use printer_link::{SendError, State, Wire};
+use printer_link::{Command, SendError, State, Wire};
 use serde::Serialize;
 
 use crate::commands::GlobalArgs;
 use crate::exit::{Cancelled, Exit, Stop};
 use crate::{json, progress};
 
+mod control;
+
 #[derive(clap::Subcommand, Debug)]
 pub enum PrinterCommand {
     /// Ask every Elegoo board on the network, and each --address, to introduce itself. A
-    /// Prusa machine does not answer; it is named by host in `status` and `send`.
+    /// Prusa machine does not answer; every other command names it by host with --prusalink.
     Discover(DiscoverArgs),
     /// What a printer is doing now.
     Status(MachineArgs),
     /// Send a sliced file to a printer, and start it with --start.
     Send(SendArgs),
+    /// Pause the print under way.
+    Pause(MachineArgs),
+    /// Resume a paused print.
+    Resume(MachineArgs),
+    /// Stop the print under way; it cannot be resumed.
+    Stop(MachineArgs),
+    /// The last prints an Elegoo board remembers: how each ended and how far it got.
+    History(control::HistoryArgs),
+    /// Turn an Elegoo board's camera on, printing the RTSP address it streams to, or off.
+    Camera(control::CameraArgs),
+    /// Save the picture of the plate the printer keeps for the print under way.
+    Picture(control::PictureArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -91,6 +105,12 @@ impl PrinterCommand {
             Self::Discover(args) => discover(args, global),
             Self::Status(machine) => status(machine, global),
             Self::Send(args) => send(args, global, stop),
+            Self::Pause(machine) => control::control(machine, Command::Pause, global),
+            Self::Resume(machine) => control::control(machine, Command::Resume, global),
+            Self::Stop(machine) => control::control(machine, Command::Stop, global),
+            Self::History(args) => control::history(args, global),
+            Self::Camera(args) => control::camera(args, global),
+            Self::Picture(args) => control::picture(args, global),
         }
         .map(|()| Exit::Success)
     }
