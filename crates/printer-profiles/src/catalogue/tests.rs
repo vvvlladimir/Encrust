@@ -62,6 +62,24 @@ fn resetting_throws_away_broken_copies_and_keeps_the_users_own_files() {
 }
 
 #[test]
+fn discarding_throws_away_the_users_own_broken_files_as_well() {
+    in_its_own_dir("discard-broken", |dir, _| {
+        write_broken(dir, "supports/medium.toml");
+        write_broken(dir, "resins/my-resin.toml");
+        let mut catalogue = Catalogue::with_root(dir).expect("the directory reads");
+
+        assert_eq!(catalogue.discard_unreadable().expect("removable"), 2);
+        assert!(!dir.join("supports/medium.toml").exists());
+        assert!(!dir.join("resins/my-resin.toml").exists());
+        assert!(catalogue.unreadable().is_empty(), "nothing is left out now");
+        assert_eq!(
+            catalogue.support("medium").expect("shipped").source,
+            Source::Bundled
+        );
+    });
+}
+
+#[test]
 fn saving_over_a_broken_copy_makes_it_readable_again() {
     in_its_own_dir("save-over-broken", |dir, _| {
         write_broken(dir, "supports/medium.toml");

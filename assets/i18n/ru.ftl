@@ -1640,6 +1640,7 @@ notice-unreadable =
     }
 notice-unreadable-file = { $path }: { $reason }
 notice-reset-profiles = Сбросить на стандартные
+notice-delete-profiles = Удалить их
 
 ## panels/stage_notice.rs
 
@@ -1715,7 +1716,9 @@ confirm-delete-profile = Удалить этот профиль
 confirm-reset-unreadable = Сбросить нечитаемые профили
 confirm-reset-named = Удалить ваши копии профилей { $names } и использовать те, что поставляются с этой версией?
 confirm-reset = Сбросить
-confirm-reset-own-stay = Ваши собственные нечитаемые профили останутся как есть, потому что заменить их нечем: { $names }.
+confirm-reset-own-gone = Ваши собственные нечитаемые профили тоже будут удалены, потому что заменить их нечем: { $names }.
+confirm-delete-own-named = Удалить { $names }? Это ваши собственные профили, они не читаются, и заменить их нечем.
+confirm-delete = Удалить
 
 ## panels/report.rs
 

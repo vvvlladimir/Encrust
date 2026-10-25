@@ -61,7 +61,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                     theme::colors().danger,
                 );
             }
-            if unreadable_profiles::any(window) {
+            if unreadable_profiles::any(ui.ctx(), window) {
                 page.add_space(theme::ITEM_GAP);
                 unreadable_profiles::row(&mut page, window);
             }

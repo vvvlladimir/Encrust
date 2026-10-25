@@ -233,12 +233,14 @@ fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
 
 /// What a click is about to put down, drawn over the plate in `colour` and never capped:
 /// it is not part of the print yet.
+#[derive(Clone)]
 pub struct Ghost {
     pub shape: GhostShape,
     pub colour: Color32,
 }
 
 /// What a ghost is: a body drawn as it stands, or a hole drawn cut.
+#[derive(Clone)]
 pub enum GhostShape {
     /// A body standing on a model: a support, a blocker, the point of a channel.
     /// `mesh` is placed by `transform`: the identity for one already in plate coordinates.
@@ -456,20 +458,18 @@ impl Draws {
         }
 
         let groups = object.supports.drawn();
-        for (group, mesh) in groups
+        for (group, shaded) in groups
             .iter()
             .enumerate()
-            .filter(|(group, mesh)| !mesh.is_empty() && hidden.get(*group) != Some(&true))
+            .filter(|(group, shaded)| !shaded.mesh.is_empty() && hidden.get(*group) != Some(&true))
         {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
             let instance =
                 ModelInstance::new(Transform::default(), theme::support_tint(group), NOT_MARKED)
-                    .pulled(GROUP_PULL * (groups.len() - group) as f32)
-                    .smoothed();
-            self.models
-                .push(ModelDraw::whole(Arc::clone(mesh), instance));
-            self.solid(Arc::clone(mesh), Transform::default());
+                    .pulled(GROUP_PULL * (groups.len() - group) as f32);
+            self.models.push(ModelDraw::smooth(shaded, instance));
+            self.solid(Arc::clone(&shaded.mesh), Transform::default());
         }
     }
 

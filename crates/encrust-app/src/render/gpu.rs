@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use bytemuck::{Pod, Zeroable};
-use core_geometry::{Mesh, Scalar};
+use core_geometry::{Mesh, Scalar, SmoothNormals};
 use wgpu::util::DeviceExt as _;
 
 use crate::render::frame_time::{CardTime, FrameLog};
@@ -464,7 +464,7 @@ impl ViewportResources {
             device,
             &draw.mesh,
             &splits[&(Arc::as_ptr(&draw.mesh) as usize)],
-            draw.instance.is_smooth(),
+            draw.normals.as_deref(),
         );
         Drawn {
             key,
@@ -530,9 +530,10 @@ impl ViewportResources {
         device: &wgpu::Device,
         mesh: &Arc<Mesh>,
         splits: &[usize],
-        smooth: bool,
+        normals: Option<&SmoothNormals>,
     ) -> usize {
         let key = Arc::as_ptr(mesh) as usize;
+        let smooth = normals.is_some();
         if self
             .meshes
             .get(&key)
@@ -545,7 +546,7 @@ impl ViewportResources {
             key,
             CachedMesh {
                 _mesh: Arc::clone(mesh),
-                pieces: pieces(device, mesh, splits, smooth),
+                pieces: pieces(device, mesh, splits, normals),
                 splits: splits.to_vec(),
                 smooth,
                 drawn_at: web_time::Instant::now(),

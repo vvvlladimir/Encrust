@@ -28,7 +28,9 @@ twice the model's, sent to the card on every growth.
   card with every corner carrying the normals of the faces round it, each weighted by its
   angle there. An edge whose faces turn more than 50 degrees is a crease, and the faces round a
   corner that smooth edges join share one normal, so a pad's rim stays sharp and a dome's pole
-  is one point; the fragment blends that normal across the face. Models stay flat.
+  is one point; the fragment blends that normal across the face. Models stay flat. The
+  normals are smoothed where a group's mesh is built, on the growth worker when it grows
+  there (ADR 0342), and travel with it as `core_supports::Shaded`; the upload lays them out.
 - **Twelve sides** stay the default `facets` and what every shipped profile has.
 
 This supersedes the straight cone of ADR 0130 and ADR 0238's dome at the end of every strut.
@@ -59,6 +61,6 @@ domes, flares and pads, and the section and drain passes taught them all again.
 
 ### The option that won, and what it costs
 
-A second normal carried through the model shader, an upload that averages normals and is
-slower than the flat one, a strut end that depends on the tube under it, and a flare that
+A second normal carried through the model shader, normals averaged beside every meshing of
+the supports and held with the meshes, an upload slower than the flat one, a strut end that depends on the tube under it, and a flare that
 widens every pad's foot.

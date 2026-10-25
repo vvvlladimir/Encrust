@@ -163,7 +163,7 @@ fn waiting_to_print(stack: &mut Stack, window: &mut Window) {
 
 /// The user's profile files that would not read, and the way to reset them.
 fn unreadable(stack: &mut Stack, window: &mut Window) {
-    if !unreadable_profiles::any(window) {
+    if !unreadable_profiles::any(&stack.ctx, window) {
         return;
     }
     stack.card("unreadable-profiles", |ui| {

@@ -363,7 +363,7 @@ fn covered(scene: &Scene, plate: u32) -> Vec<Rect> {
                 .supports
                 .drawn()
                 .iter()
-                .filter_map(|mesh| mesh.aabb());
+                .filter_map(|group| group.mesh.aabb());
             object.world_bounds().into_iter().chain(supports)
         })
         .map(rect)

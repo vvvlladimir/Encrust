@@ -270,7 +270,7 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
         }
         (confirm::Answer::Confirmed, Deleting::Unreadable) => {
             let machine = &mut *window.machine;
-            let outcome = machine.slicing.catalogue.reset_unreadable();
+            let outcome = machine.slicing.catalogue.discard_unreadable();
             report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
         }
         _ => {}

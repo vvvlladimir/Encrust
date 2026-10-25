@@ -38,7 +38,7 @@ fn one_cube() -> Scene {
 }
 
 /// The cube with one support under it in the first group.
-fn one_supported_cube() -> Scene {
+pub(crate) fn one_supported_cube() -> Scene {
     let mut scene = one_cube();
     let object = &mut scene.objects_mut()[0];
     object.transform.translation.z = 10.0;

@@ -344,10 +344,12 @@ encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
 
 A file in your folder that no longer reads is left out with a warning, and the shipped
 profile of its id is used. `profiles reset-unreadable` throws away those copies of shipped
-profiles; a file under an id of your own is kept (ADR 0344):
+profiles; a file under an id of your own is kept unless `--with-own` deletes it too, as the
+window's Delete does (ADR 0344):
 
 ```sh
 encrust profiles reset-unreadable
+encrust profiles reset-unreadable --with-own
 ```
 
 Without `--kind`, `FILE` is a sliced file and its resin is taken in: whatever the file states

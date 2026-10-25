@@ -1554,6 +1554,7 @@ notice-unreadable =
     }
 notice-unreadable-file = { $path }: { $reason }
 notice-reset-profiles = Reset to shipped
+notice-delete-profiles = Delete them
 
 ## panels/stage_notice.rs
 
@@ -1624,7 +1625,9 @@ confirm-delete-profile = Delete this profile
 confirm-reset-unreadable = Reset the profiles that would not read
 confirm-reset-named = Throw away your copies of { $names } and use the ones this version ships?
 confirm-reset = Reset
-confirm-reset-own-stay = Profiles of your own that would not read stay as they are, as nothing ships in their place: { $names }.
+confirm-reset-own-gone = Profiles of your own that would not read are deleted too, as nothing ships in their place: { $names }.
+confirm-delete-own-named = Delete { $names }? They are your own, they would not read, and nothing ships in their place.
+confirm-delete = Delete
 
 ## panels/report.rs
 

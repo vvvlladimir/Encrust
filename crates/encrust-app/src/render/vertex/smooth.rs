@@ -4,10 +4,6 @@ use core_geometry::{Mesh, SmoothNormals};
 
 use super::ModelVertex;
 
-/// How far two faces across an edge may turn from each other and still be shaded as one
-/// surface, degrees: a tube's facets and rings blend, the rim of a pad stays a rim.
-pub const CREASE_DEG: f32 = 50.0;
-
 /// `faces` of a mesh as the corners of its [`SmoothNormals`] they reach, each laid out once,
 /// and the triangles over them; a face of no area is left out.
 pub fn smooth_vertices(

@@ -597,7 +597,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   from Settings.
 - A profile file of yours that no longer reads, after an update for instance, is left out
   and the bundled one of the same name is used. The start page and the stage say so and
-  offer to reset those files to the bundled profiles; your own profiles are never deleted.
+  offer to reset those files to the bundled profiles. A broken profile of your own, which
+  nothing replaces, is deleted with them after a question that names it. The note can be
+  put away for the session; it comes back if another file breaks.
 - Export and import any profile as a file. An import never overwrites one you already have.
 - Profile forms have undo.
 - A project names its printer and resin by id, so it opens with your own profiles.
@@ -644,6 +646,7 @@ address in a video player).
   after an undo is a new edit, so what could be redone before it can no longer be.
 - Tool values are remembered between runs, and so is how each panel was left: which
   sections are folded, which tab is open, what a click places, and what Measure snaps to.
+  A panel left unopened for twenty runs opens as it ships.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. You can skip a version. A copy from the Microsoft Store
   is updated by the Store instead: it says when the Store has a new version, and its button

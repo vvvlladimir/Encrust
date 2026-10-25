@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 
-use crate::{Clearances, SupportPoint, SupportTree};
+use crate::{Clearances, Shaded, SupportPoint, SupportTree};
 
 mod build;
 mod frozen;
@@ -44,7 +44,7 @@ pub struct ModelSupports {
     built: Option<Built>,
     /// The column meshes as they were last built. `built` is dropped by every edit and
     /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
-    drawn: Vec<Arc<Mesh>>,
+    drawn: Vec<Shaded>,
     /// How much of the height the model stands at is its raft's doing, millimetres: what
     /// has to be taken back when the raft goes. See `docs/decisions/0238`.
     raft_lift_mm: Scalar,
@@ -157,8 +157,15 @@ impl ModelSupports {
 
     /// The column meshes to draw: the ones last built, left standing until the rebuild an edit
     /// follows with; drawing [`Self::meshes`] instead blinks every support out for a frame.
-    pub fn drawn(&self) -> &[Arc<Mesh>] {
+    pub fn drawn(&self) -> &[Shaded] {
         &self.drawn
+    }
+
+    /// Draws `shaded` from now on and answers its meshes, for [`Built`] to keep.
+    fn draw(&mut self, shaded: Vec<Shaded>) -> Vec<Arc<Mesh>> {
+        let meshes = shaded.iter().map(|group| Arc::clone(&group.mesh)).collect();
+        self.drawn = shaded;
+        meshes
     }
 }
 

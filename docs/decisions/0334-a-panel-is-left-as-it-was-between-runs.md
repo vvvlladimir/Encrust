@@ -1,6 +1,6 @@
 # 0334. Leave every panel as it was between runs, and keep automatic sizing with the tools
 
-- **Status:** Accepted
+- **Status:** Accepted; keeping a widget's choice until the file is deleted is superseded by 0345
 - **Date:** 2026-10-23
 
 ## Context

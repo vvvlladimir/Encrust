@@ -7,7 +7,7 @@ use egui::Color32;
 use crate::ui::theme;
 
 mod smooth;
-pub use smooth::{CREASE_DEG, smooth_vertices};
+pub use smooth::smooth_vertices;
 
 /// One corner of a mesh, shared by the faces that meet at it, carrying the normal of the
 /// one face it leads; see `docs/design/viewport.md`.
@@ -237,11 +237,6 @@ impl ModelInstance {
     pub fn smoothed(mut self) -> Self {
         self.smooth = 1.0;
         self
-    }
-
-    /// Whether the mesh is shaded smooth, and so uploaded with normals at its corners.
-    pub fn is_smooth(&self) -> bool {
-        self.smooth > 0.5
     }
 
     /// The same instance drawn `share` of the way nearer the eye in depth, and nowhere

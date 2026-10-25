@@ -17,8 +17,16 @@ pub enum ProfilesCommand {
     /// printed with, under a new id of its own; an import never overwrites.
     Import(ImportArgs),
     /// Throw away your copies of shipped profiles that no longer read, so the shipped ones are
-    /// used; a file under an id of your own is kept.
-    ResetUnreadable,
+    /// used; a file under an id of your own is kept unless `--with-own` is given.
+    ResetUnreadable(ResetArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct ResetArgs {
+    /// Delete the files under ids of your own that would not read as well, as the window's
+    /// Delete does; nothing ships in their place.
+    #[arg(long)]
+    pub with_own: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -88,7 +96,7 @@ impl ProfilesCommand {
             }
             Self::Show(args) => show(args, global)?,
             Self::Import(args) => import(args, global)?,
-            Self::ResetUnreadable => reset_unreadable(global)?,
+            Self::ResetUnreadable(args) => reset_unreadable(args, global)?,
         }
         Ok(Exit::Success)
     }
@@ -154,8 +162,8 @@ fn import_resin_of(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
     Ok(())
 }
 
-fn reset_unreadable(global: &GlobalArgs) -> Result<()> {
-    let (reset, kept) = profiles::reset_unreadable()?;
+fn reset_unreadable(args: &ResetArgs, global: &GlobalArgs) -> Result<()> {
+    let (reset, kept) = profiles::reset_unreadable(args.with_own)?;
     if global.json {
         return json::print(&serde_json::json!({ "reset": reset, "kept": kept }));
     }

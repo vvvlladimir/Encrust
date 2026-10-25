@@ -219,7 +219,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0331](0331-a-fill-is-measured-in-from-its-footprint.md) | Measure a fill's rims and inside in from the patch's footprint, each to a profile of its own | Accepted |
 | [0332](0332-supports-stand-against-the-shell.md) | Stand supports against what prints, and hold a cavity up by a run of its own | Accepted |
 | [0333](0333-trunks-stand-on-a-grid.md) | Stand trunks on the nodes of a square grid when a profile asks for it | Accepted |
-| [0334](0334-a-panel-is-left-as-it-was-between-runs.md) | Leave every panel as it was between runs, and keep automatic sizing with the tools | Accepted |
+| [0334](0334-a-panel-is-left-as-it-was-between-runs.md) | Leave every panel as it was between runs, and keep automatic sizing with the tools | Accepted; keeping a widget's choice until the file is deleted is superseded by 0345 |
+| [0345](0345-a-kept-panel-choice-is-forgotten-when-no-widget-uses-it.md) | Forget a kept panel choice that no widget has used for twenty runs | Accepted |
 | [0335](0335-a-shipped-preset-lives-only-in-its-file.md) | Keep a shipped support preset only in its file | Accepted |
 | [0336](0336-one-card-makes-the-supports.md) | Make the supports in one card, its click modes in its heading | Accepted |
 | [0337](0337-a-support-is-checked-as-it-is-drawn.md) | Check a support as it is drawn, fill a beam with balls, and leave out what still meets the part | Accepted |

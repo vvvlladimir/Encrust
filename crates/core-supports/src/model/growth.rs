@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use super::{Built, ModelSupports};
 use crate::{
-    Blocked, Clearances, Placed, Profiles, SupportPoint, SupportTree, columns, grow, mesh_groups,
+    Blocked, Clearances, Placed, Profiles, Shaded, SupportPoint, SupportTree, columns, grow,
+    mesh_groups, shaded,
 };
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
@@ -33,8 +34,7 @@ impl Growth {
             Profiles::new(&self.table).map_or_else(Default::default, |profiles| {
                 let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
                 let all = with_frozen(&trees, &self.frozen, self.transform);
-                let meshes = mesh_groups(&all, &placed, profiles);
-                (trees, meshes.into_iter().map(Arc::new).collect())
+                (trees, shaded(mesh_groups(&all, &placed, profiles)))
             });
         Grown {
             forest: Forest {
@@ -69,7 +69,7 @@ pub struct Grown {
     pub(super) revision: u64,
     /// The frozen trees `meshes` were built with, which still hold if the model's still match.
     pub(super) frozen: Vec<SupportTree>,
-    pub(super) meshes: Vec<Arc<Mesh>>,
+    pub(super) meshes: Vec<Shaded>,
 }
 
 /// The trees grown from the points, in plate coordinates, and what they were grown against.
@@ -146,7 +146,7 @@ impl ModelSupports {
             ..
         } = grown;
         self.built = (frozen == self.frozen).then(|| {
-            self.drawn.clone_from(&meshes);
+            let meshes = self.draw(meshes);
             Built {
                 trees: with_frozen(&forest.trees, &frozen, forest.transform),
                 grown: forest.trees.len(),

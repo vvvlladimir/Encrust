@@ -137,8 +137,8 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
     }
 }
 
-/// Resetting the files that would not read: the copies of shipped profiles go, and a file
-/// under an id of the user's own stays, as nothing ships to put in its place.
+/// Throwing away the files that would not read: the copies of shipped profiles give way to
+/// them, and a file under an id of the user's own is deleted, as nothing ships in its place.
 fn reset_question(catalogue: &Catalogue) -> Question {
     let (copies, own): (Vec<&Unreadable>, Vec<&Unreadable>) = catalogue
         .unreadable()
@@ -151,12 +151,21 @@ fn reset_question(catalogue: &Catalogue) -> Question {
             .collect();
         names.join(", ")
     };
+    if copies.is_empty() {
+        return Question {
+            title: tr!("confirm-reset-unreadable"),
+            what: tr!("confirm-delete-own-named", names = names(&own)),
+            verb: tr!("confirm-delete"),
+            gone: true,
+            cost: None,
+        };
+    }
     Question {
         title: tr!("confirm-reset-unreadable"),
         what: tr!("confirm-reset-named", names = names(&copies)),
         verb: tr!("confirm-reset"),
         gone: true,
-        cost: (!own.is_empty()).then(|| tr!("confirm-reset-own-stay", names = names(&own))),
+        cost: (!own.is_empty()).then(|| tr!("confirm-reset-own-gone", names = names(&own))),
     }
 }
 

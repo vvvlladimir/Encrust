@@ -507,13 +507,16 @@ impl fmt::Display for Listing {
     }
 }
 
-/// Throws away the user's copies of shipped profiles that no longer read, and answers how many
-/// went and the files of their own ids that stay.
-pub fn reset_unreadable() -> Result<(usize, Vec<PathBuf>)> {
+/// Throws away the user's copies of shipped profiles that no longer read, with `with_own` their
+/// own files too, and answers how many went and the files of their own ids that stay.
+pub fn reset_unreadable(with_own: bool) -> Result<(usize, Vec<PathBuf>)> {
     let mut catalogue = catalogue()?;
-    let reset = catalogue
-        .reset_unreadable()
-        .context("cannot throw away the profiles that would not read")?;
+    let reset = if with_own {
+        catalogue.discard_unreadable()
+    } else {
+        catalogue.reset_unreadable()
+    }
+    .context("cannot throw away the profiles that would not read")?;
     let kept = catalogue
         .unreadable()
         .iter()

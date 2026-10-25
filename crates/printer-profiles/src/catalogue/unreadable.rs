@@ -50,16 +50,29 @@ impl Catalogue {
     /// Throws away every unreadable copy of a shipped profile, leaving the shipped one in
     /// use; a file under an id of the user's own stays. Answers how many went.
     pub fn reset_unreadable(&mut self) -> Result<usize, ProfileError> {
-        let copies: Vec<(Kind, String)> = self
+        self.throw_away_unreadable(Self::resets_to_shipped)
+    }
+
+    /// Throws away every file that would not read: a copy of a shipped profile gives way to
+    /// it, and one under an id of the user's own is deleted. Answers how many went.
+    pub fn discard_unreadable(&mut self) -> Result<usize, ProfileError> {
+        self.throw_away_unreadable(|_, _| true)
+    }
+
+    fn throw_away_unreadable(
+        &mut self,
+        goes: impl Fn(&Self, &Unreadable) -> bool,
+    ) -> Result<usize, ProfileError> {
+        let files: Vec<(Kind, String)> = self
             .unreadable
             .iter()
-            .filter(|file| self.resets_to_shipped(file))
+            .filter(|file| goes(self, file))
             .map(|file| (file.kind, file.id.clone()))
             .collect();
-        for (kind, id) in &copies {
+        for (kind, id) in &files {
             self.forget_user_copy(*kind, id)?;
         }
-        Ok(copies.len())
+        Ok(files.len())
     }
 
     /// Drops `id` from the unreadable files once it is written anew or thrown away.

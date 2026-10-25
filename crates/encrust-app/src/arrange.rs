@@ -22,7 +22,7 @@ pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar
         .filter_map(|object| {
             let supports = object.supports.drawn().iter();
             let parts: Vec<(&Mesh, Transform)> = std::iter::once((&*object.mesh, object.transform))
-                .chain(supports.map(|mesh| (&**mesh, Transform::default())))
+                .chain(supports.map(|group| (&*group.mesh, Transform::default())))
                 .collect();
             Footprint::of_parts(&parts, settings.cell_mm)
         })

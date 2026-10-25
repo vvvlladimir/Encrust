@@ -265,7 +265,10 @@ fn an_edit_leaves_the_last_columns_to_draw_until_they_are_rebuilt() {
     let transform = Transform::default();
     let mut supports = with_one_support(transform);
     let before = supports.drawn().to_vec();
-    assert!(before.iter().any(|mesh| !mesh.is_empty()), "one column");
+    assert!(
+        before.iter().any(|group| !group.mesh.is_empty()),
+        "one column"
+    );
 
     supports.add(Vec3::new(3.0, 3.0, 10.0), transform, 0);
     assert!(supports.meshes().is_none(), "what is built is out of date");
@@ -279,14 +282,26 @@ fn an_edit_leaves_the_last_columns_to_draw_until_they_are_rebuilt() {
             .drawn()
             .iter()
             .zip(&before)
-            .all(|(now, then)| Arc::ptr_eq(now, then))
+            .all(|(now, then)| Arc::ptr_eq(&now.mesh, &then.mesh))
     );
 
     refresh(&mut supports, &nothing(), transform);
-    let faces = |meshes: &[Arc<Mesh>]| meshes.iter().map(|mesh| mesh.faces.len()).sum::<usize>();
+    let faces = |groups: &[Shaded]| {
+        groups
+            .iter()
+            .map(|group| group.mesh.faces.len())
+            .sum::<usize>()
+    };
     assert!(
         faces(supports.drawn()) > faces(&before),
         "the rebuild draws the second column as well"
+    );
+    assert!(
+        supports
+            .drawn()
+            .iter()
+            .all(|group| group.normals.corners.len() == group.mesh.faces.len() * 3),
+        "each column comes with the normals of its own corners, three a face"
     );
 }
 

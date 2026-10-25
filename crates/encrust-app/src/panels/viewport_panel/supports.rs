@@ -76,7 +76,7 @@ pub(super) fn place_support_under_cursor(
     }
 }
 
-fn line_start(window: &Window, id: ObjectId) -> Option<Vec3> {
+pub(super) fn line_start(window: &Window, id: ObjectId) -> Option<Vec3> {
     window.tools.supports.line_start(&window.doc.scene, id)
 }
 

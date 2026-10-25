@@ -1,6 +1,6 @@
 use super::ModelSupports;
 use super::growth::{Forest, with_frozen};
-use crate::{Placed, Profiles, SupportTree, columns, grow, mesh_groups};
+use crate::{Placed, Profiles, SupportTree, columns, grow, mesh_groups, shaded};
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
 use std::sync::Arc;
@@ -69,11 +69,7 @@ impl ModelSupports {
         let placed = Placed::new(surface, bvh, transform)
             .blocking(keep_out.as_ref())
             .remembering(&self.clearances);
-        let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
-            .into_iter()
-            .map(Arc::new)
-            .collect();
-        self.drawn.clone_from(&meshes);
+        let meshes = self.draw(shaded(mesh_groups(&trees, &placed, profiles)));
         self.built = Some(Built {
             meshes,
             trees,
@@ -153,11 +149,7 @@ impl ModelSupports {
         // same way a point does; nothing else is asked of it.
         let trees = with_frozen(&grown_trees, &self.frozen, transform);
 
-        let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
-            .into_iter()
-            .map(Arc::new)
-            .collect();
-        self.drawn.clone_from(&meshes);
+        let meshes = self.draw(shaded(mesh_groups(&trees, &placed, profiles)));
         self.built = Some(Built {
             meshes,
             trees,

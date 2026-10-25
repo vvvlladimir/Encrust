@@ -107,8 +107,8 @@ fn a_support_pad_out_past_its_model_keeps_clear_of_the_next_model() {
             .supports
             .drawn()
             .iter()
-            .filter(|mesh| !mesh.is_empty())
-            .map(|mesh| bounds_of(mesh))
+            .filter(|group| !group.mesh.is_empty())
+            .map(|group| bounds_of(&group.mesh))
             .collect();
         assert!(!pads.is_empty(), "the support was built");
         for other in objects.iter().enumerate().filter(|(at, _)| *at != index) {

@@ -18,6 +18,7 @@ mod levels;
 mod overlays;
 mod paint;
 mod picking;
+mod support_ghost;
 mod supports;
 mod text;
 
@@ -35,10 +36,8 @@ use picking::{
     aims_elsewhere, lay_face_under_cursor, mark_part_under_cursor, material_under,
     measure_under_cursor, point_at_face, select_under_cursor, surface_under, takes_the_pick,
 };
-use supports::{
-    drag_support, line_ghost, place_support_under_cursor, remove_support_under_cursor,
-    support_ghost,
-};
+use support_ghost::cached_support_ghost;
+use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
 /// a little under a full turn.
@@ -221,14 +220,17 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
     if removing || !resting || !pointer.over_viewport {
         return None;
     }
+    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
+    if *window.tool == Tool::Paint && !window.tools.supports.placing.paints() {
+        let (id, hit) = surface_under(window, rect, cursor)?;
+        return faded(&window.doc.scene, id, || {
+            cached_support_ghost(ui.ctx(), window, id, &hit, line)
+        });
+    }
     type Under = fn(&Window, egui::Rect, egui::Pos2) -> Option<(ObjectId, PlacedHit)>;
     type Shows = fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost>;
     // A blocker is a volume, so it can be put inside the material through the cap of a cut.
     let (under, shows): (Under, Shows) = match *window.tool {
-        Tool::Paint if !window.tools.supports.placing.paints() && line => {
-            (surface_under, line_ghost)
-        }
-        Tool::Paint if !window.tools.supports.placing.paints() => (surface_under, support_ghost),
         Tool::Hollow => (material_under, blocker_ghost),
         Tool::Drain if window.tools.drain.placing == Placing::Channel => {
             (surface_under, channel_point_ghost)
@@ -239,13 +241,17 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
         }
         _ => return None,
     };
-    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
     let (id, hit) = under(window, rect, cursor)?;
-    // A click on a model outside the selection only picks it.
-    if aims_elsewhere(&window.doc.scene, Some(id)) {
+    faded(&window.doc.scene, id, || shows(window, id, &hit))
+}
+
+/// The ghost `shows` builds on `id`, see-through, or nothing on a model outside the
+/// selection: a click there only picks it.
+fn faded(scene: &Scene, id: ObjectId, shows: impl FnOnce() -> Option<Ghost>) -> Option<Ghost> {
+    if aims_elsewhere(scene, Some(id)) {
         return None;
     }
-    let mut ghost = shows(window, id, &hit)?;
+    let mut ghost = shows()?;
     ghost.colour = ghost.colour.gamma_multiply(GHOST_OPACITY);
     Some(ghost)
 }

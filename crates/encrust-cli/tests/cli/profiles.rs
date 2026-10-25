@@ -138,6 +138,25 @@ fn a_broken_copy_is_listed_past_and_reset_to_the_shipped_profile() {
 }
 
 #[test]
+fn a_broken_profile_of_your_own_goes_only_when_asked() {
+    let dir = resin_dir("broken-own");
+    let own = dir.join("resins/my-broken.toml");
+    fs::write(&own, "name = ").expect("a writable file");
+
+    let reset = encrust_with_profiles(&dir, &["profiles", "reset-unreadable"]);
+    assert!(reset.status.success(), "{}", stdout(&reset));
+    assert!(own.exists(), "nothing ships in its place, so it stays");
+
+    let reset = encrust_with_profiles(&dir, &["profiles", "reset-unreadable", "--with-own"]);
+    assert!(reset.status.success(), "{}", stdout(&reset));
+    assert!(!own.exists(), "{}", stdout(&reset));
+    assert!(
+        dir.join("resins/my-grey.toml").exists(),
+        "a readable file is never touched"
+    );
+}
+
+#[test]
 fn a_user_profile_overrides_the_catalogue_by_id() {
     let dir = std::env::temp_dir().join("encrust-cli-user-profiles");
     let printers = dir.join("printers");

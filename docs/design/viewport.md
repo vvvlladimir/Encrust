@@ -134,6 +134,7 @@ shaded smooth (ADR 0341): its mesh goes up with every corner carrying the faces 
 weighted by their angle there, apart across an edge turning more than 50 degrees and shared
 by every face that smooth edges join round it (`core_geometry::smooth_normals`, linear in
 the faces), and the fragment reads that normal blended across the face instead of the flat one.
+The normals come built with the mesh (`core_supports::Shaded`), off the drawing thread.
 
 | Buffer | Step | Contents |
 |---|---|---|

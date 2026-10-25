@@ -1,5 +1,6 @@
 use super::*;
 use core_geometry::{Vec3, cuboid, cylinder, smooth_normals};
+use core_supports::CREASE_DEG;
 
 #[test]
 fn a_box_lays_a_corner_once_for_each_face_meeting_there() {

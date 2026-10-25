@@ -1,4 +1,4 @@
-use core_geometry::{Mesh, Scalar, Vec3};
+use core_geometry::{Mesh, Quat, Scalar, Vec3};
 
 /// Rings closer together than this are the same ring, and the band between them would be
 /// a strip of zero-area faces. Well under the pitch of any printable panel.
@@ -96,15 +96,11 @@ pub fn push(rings: &mut Vec<Ring>, along_mm: Scalar, radius_mm: Scalar) {
     }
 }
 
-/// The two unit vectors a tube's circles are drawn in, so the polygon runs the same way round
-/// whichever way it points; straight down keeps the plate's own axes.
+/// The two unit vectors a tube's circles are drawn in: the plate's own axes turned the least
+/// way from straight down, so tubes meeting at a shallow angle line their facets up.
 pub fn frame(direction: Vec3) -> (Vec3, Vec3) {
-    let across = if direction.z.abs() > 0.999 {
-        Vec3::X
-    } else {
-        direction.cross(Vec3::Z).normalize()
-    };
-    (across, (-direction).cross(across))
+    let turn = Quat::from_rotation_arc(-Vec3::Z, direction);
+    (turn * Vec3::X, turn * Vec3::Y)
 }
 
 /// Turns one tube into a closed solid: a cap on top, a band between each pair of rings,
@@ -171,5 +167,28 @@ pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
             ring_at(last, facet + 1),
             ring_at(last, facet),
         ]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tube_leaning_a_little_any_way_keeps_its_facets_where_a_plumb_one_has_them() {
+        for step in 0..8 {
+            let azimuth = std::f32::consts::TAU * step as Scalar / 8.0;
+            let direction = Vec3::new(0.2 * azimuth.cos(), 0.2 * azimuth.sin(), -1.0).normalize();
+            let (across, up) = frame(direction);
+
+            assert!(
+                across.dot(Vec3::X) > 0.97 && up.dot(Vec3::Y) > 0.97,
+                "leaning 11 degrees towards {azimuth} rad turns the polygon by as little, got {across} {up}"
+            );
+            assert!(
+                (-direction).cross(across).distance(up) < 1e-5,
+                "and it still runs the same way round its axis"
+            );
+        }
     }
 }
