@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use core_format::ExposureRange;
-use core_geometry::{MeshDiagnostics, Orientation, Scalar, Vec3, Welded};
+use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Vec3, Welded};
 use printer_profiles::PrinterProfile;
 
 use crate::stats::MeshStats;
@@ -55,6 +55,8 @@ pub struct ImportReport {
     pub doubled: usize,
     pub diagnostics: Option<MeshDiagnostics>,
     pub orientation: Option<Orientation>,
+    /// What `--repair` changed, when it was asked for.
+    pub mended: Option<Mended>,
     pub fit: Option<FitCheck>,
 }
 
@@ -140,6 +142,10 @@ impl fmt::Display for ImportReport {
             writeln!(f, "  orientation   {}", describe_orientation(orientation))?;
         }
 
+        if let Some(mended) = &self.mended {
+            writeln!(f, "  repair        {}", describe_repair(mended))?;
+        }
+
         if let Some(fit) = &self.fit {
             writeln!(f, "  fits          {}", describe_fit(fit))?;
         }
@@ -199,6 +205,31 @@ fn describe_orientation(orientation: &Orientation) -> String {
         return format!("fixed {} inverted faces", orientation.flipped_faces);
     }
     "consistent".to_owned()
+}
+
+fn describe_repair(mended: &Mended) -> String {
+    if mended.kept_as_found {
+        return "left as found, since repairing would leave more wrong".to_owned();
+    }
+    let holes = |count: usize| if count == 1 { "hole" } else { "holes" };
+    let (closed, left) = (mended.filled.loops_filled, mended.filled.loops_left);
+    let mut done = Vec::new();
+    if closed > 0 {
+        done.push(format!("closed {closed} {}", holes(closed)));
+    }
+    if mended.duplicates_removed > 0 {
+        done.push(format!(
+            "dropped {} doubled faces",
+            mended.duplicates_removed
+        ));
+    }
+    if left > 0 {
+        done.push(format!("{left} {} left open", holes(left)));
+    }
+    if done.is_empty() {
+        return "nothing to repair".to_owned();
+    }
+    done.join(", ")
 }
 
 /// An axis the model is too big for is named as that; one it merely stands off is named

@@ -49,6 +49,45 @@ fn an_open_mesh_is_reported_but_still_succeeds() {
 }
 
 #[test]
+fn repair_closes_the_hole_an_open_box_has() {
+    let path = write_box_stl("repaired", 10.0, 10, 0);
+    let output = encrust(&["inspect", path.to_str().unwrap(), "--repair"]);
+    let text = stdout(&output);
+
+    assert!(output.status.success());
+    assert_eq!(field(&text, "repair"), "closed 1 hole");
+    assert_eq!(field(&text, "closed"), "yes (1 shell, euler 2)");
+    assert_eq!(field(&text, "volume"), "1000.000 mm^3");
+}
+
+#[test]
+fn repair_says_in_json_how_many_holes_it_closed() {
+    let path = write_box_stl("repaired-json", 10.0, 10, 0);
+    let report = json(&encrust(&[
+        "--json",
+        "inspect",
+        path.to_str().unwrap(),
+        "--repair",
+    ]));
+
+    assert_eq!(report["repair"]["holes_closed"], 1, "got {report}");
+    assert_eq!(report["repair"]["holes_left"], 0);
+    assert_eq!(report["repair"]["kept_as_found"], false);
+}
+
+#[test]
+fn repair_and_no_validate_cannot_be_asked_together() {
+    let path = write_box_stl("repair-unvalidated", 10.0, 10, 0);
+    let output = encrust(&[
+        "inspect",
+        path.to_str().unwrap(),
+        "--repair",
+        "--no-validate",
+    ]);
+    assert_eq!(output.status.code(), Some(2), "a usage error");
+}
+
+#[test]
 fn inspect_stops_after_the_import_report() {
     let path = write_box_stl("no-slice", 10.0, 12, 0);
     let output = encrust(&["inspect", path.to_str().unwrap()]);

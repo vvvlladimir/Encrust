@@ -146,6 +146,11 @@ pub struct Repair {
     pub closed: bool,
     pub boundary_edges: usize,
     pub shells: usize,
+    /// Holes `--repair` patched, and those it could not.
+    pub holes_closed: usize,
+    pub holes_left: usize,
+    /// `--repair` would have left more wrong, so the model is as it came.
+    pub kept_as_found: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -492,9 +497,12 @@ fn model_of(import: &ImportReport) -> Model {
 }
 
 fn repair_of(import: &ImportReport) -> Repair {
+    let mended = import.mended.filter(|mended| !mended.kept_as_found);
     Repair {
         vertices_merged: import.welded.vertices_merged,
-        faces_removed: import.welded.faces_removed() + import.doubled,
+        faces_removed: import.welded.faces_removed()
+            + import.doubled
+            + mended.map_or(0, |mended| mended.duplicates_removed),
         faces_flipped: import
             .orientation
             .as_ref()
@@ -508,6 +516,9 @@ fn repair_of(import: &ImportReport) -> Repair {
             .as_ref()
             .map_or(0, |found| found.boundary_edges),
         shells: import.diagnostics.as_ref().map_or(0, |found| found.shells),
+        holes_closed: mended.map_or(0, |mended| mended.filled.loops_filled),
+        holes_left: mended.map_or(0, |mended| mended.filled.loops_left),
+        kept_as_found: import.mended.is_some_and(|mended| mended.kept_as_found),
     }
 }
 

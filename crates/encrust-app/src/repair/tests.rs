@@ -1,6 +1,6 @@
 use super::*;
 use crate::scene::{ImportSummary, Imported};
-use core_geometry::{Mesh, MeshDiagnostics, Orientation, Transform, Vec3, diagnose};
+use core_geometry::{Mended, Mesh, MeshDiagnostics, Orientation, Transform, Vec3, diagnose};
 
 fn object(scene: &mut Scene, boundary_edges: usize) -> ObjectId {
     let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
@@ -141,10 +141,12 @@ fn a_model_that_came_back_closed_is_no_longer_called_broken() {
             id,
             name: "open.stl".to_owned(),
             shaped: crate::scene::Shaped::of(Arc::new(mesh)),
-            filled,
-            duplicates_removed: 0,
-            orientation,
-            kept_as_found: false,
+            mended: Mended {
+                filled,
+                duplicates_removed: 0,
+                orientation,
+                kept_as_found: false,
+            },
         },
     );
 
@@ -168,14 +170,16 @@ fn a_repair_of_a_model_that_has_been_deleted_is_reported_rather_than_applied() {
             id,
             name: "model.stl".to_owned(),
             shaped: crate::scene::Shaped::of(mesh),
-            filled: core_geometry::Filled::default(),
-            duplicates_removed: 0,
-            orientation: Orientation {
-                flipped_faces: 0,
-                inverted_shells: 0,
-                orientable: true,
+            mended: Mended {
+                filled: core_geometry::Filled::default(),
+                duplicates_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                kept_as_found: false,
             },
-            kept_as_found: false,
         },
     );
     assert!(status.is_error());
@@ -193,14 +197,16 @@ fn a_repair_that_would_worsen_the_model_leaves_it_as_it_came() {
             id,
             name: "open.stl".to_owned(),
             shaped: crate::scene::Shaped::of(Arc::new(Mesh::default())),
-            filled: core_geometry::Filled::default(),
-            duplicates_removed: 0,
-            orientation: Orientation {
-                flipped_faces: 0,
-                inverted_shells: 0,
-                orientable: true,
+            mended: Mended {
+                filled: core_geometry::Filled::default(),
+                duplicates_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                kept_as_found: true,
             },
-            kept_as_found: true,
         },
     );
 

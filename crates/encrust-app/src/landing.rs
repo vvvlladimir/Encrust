@@ -2,10 +2,9 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Mesh, Transform, diagnose};
+use core_geometry::{Mesh, Transform, diagnose, mend};
 
 use crate::i18n::tr;
-use crate::job::mend;
 use crate::scene::{ImportSummary, Imported, ObjectId, Scene, Taken};
 
 /// Takes the models `taken` off their plate, or answers why not when one of them has

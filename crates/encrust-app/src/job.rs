@@ -48,7 +48,7 @@ pub use relief::{
     Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting, relief_tasks,
     spawn_relief,
 };
-pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
+pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use split::{SplitJob, SplitOutcome, SplitRequest, spawn_split};
 pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};

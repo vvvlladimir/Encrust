@@ -100,16 +100,16 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let Some(object) = scene.get_mut(repaired.id) else {
         return Status::Error(tr!("repair-gone", name = repaired.name.clone()));
     };
-    if repaired.kept_as_found {
+    if repaired.mended.kept_as_found {
         return Status::Error(tr!("repair-kept", name = repaired.name.clone()));
     }
     object.reshape(repaired.shaped.clone());
     // What repair did is said in the stage notice; the summary keeps describing the file,
     // so a mended model carries no mark of its own.
-    object.summary.orientation = repaired.orientation;
+    object.summary.orientation = repaired.mended.orientation;
 
     let name = &repaired.name;
-    let left = repaired.filled.loops_left;
+    let left = repaired.mended.filled.loops_left;
     match (done(repaired), left) {
         (0, 0) => Status::Info(tr!("repair-nothing", name = name.clone())),
         (0, left) => Status::Error(tr!("repair-no-patch", name = name.clone(), count = left)),
@@ -130,22 +130,22 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
 /// How many things the repair actually changed, which is what decides whether it has
 /// anything to report.
 fn done(repaired: &Repaired) -> usize {
-    repaired.filled.loops_filled + repaired.duplicates_removed
+    repaired.mended.filled.loops_filled + repaired.mended.duplicates_removed
 }
 
 /// What it changed, in the words the stage notice says it in.
 fn what(repaired: &Repaired) -> Vec<String> {
     let mut lines = Vec::new();
-    if repaired.filled.loops_filled > 0 {
+    if repaired.mended.filled.loops_filled > 0 {
         lines.push(tr!(
             "repair-closed-holes",
-            count = repaired.filled.loops_filled
+            count = repaired.mended.filled.loops_filled
         ));
     }
-    if repaired.duplicates_removed > 0 {
+    if repaired.mended.duplicates_removed > 0 {
         lines.push(tr!(
             "repair-dropped-faces",
-            count = repaired.duplicates_removed
+            count = repaired.mended.duplicates_removed
         ));
     }
     lines

@@ -6,6 +6,7 @@ mod clip;
 mod closest;
 mod hash;
 mod hull;
+mod mend;
 mod mesh;
 mod orient;
 mod primitives;
@@ -30,6 +31,7 @@ pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
+pub use mend::{Mended, mend};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use primitives::{

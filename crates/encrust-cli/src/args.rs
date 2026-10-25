@@ -62,6 +62,11 @@ pub struct ImportArgs {
     #[arg(long)]
     pub no_validate: bool,
 
+    /// Repair the model as the window's Repair does: patch its holes, drop the faces left
+    /// over, and keep it as it came if that would leave more wrong.
+    #[arg(long, conflicts_with = "no_validate")]
+    pub repair: bool,
+
     #[command(flatten)]
     pub transform: TransformArgs,
 

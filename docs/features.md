@@ -54,7 +54,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   faces wound the wrong way.
 - Weld vertices together, with a tolerance you set.
 - Flip faces wound the wrong way, and drop faces that enclose nothing.
-- Close holes, but only when you ask for it.
+- Close holes, but only when you ask for it: Repair in the window, `--repair` on the
+  command line.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.

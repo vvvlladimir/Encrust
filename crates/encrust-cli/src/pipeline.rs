@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
-use core_geometry::{Mesh, Scalar, Welded, diagnose, orient_outward, remove_duplicate_faces, weld};
+use core_geometry::{
+    Mesh, Scalar, Welded, diagnose, mend, orient_outward, remove_duplicate_faces, weld,
+};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_raster::Shading;
@@ -384,8 +386,8 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     checked(&mut mesh, input, welded, args, profile)
 }
 
-/// Drops the doubled faces, fixes the winding and measures the model, unless validation
-/// is off, and says what import found.
+/// Drops the doubled faces, fixes the winding, mends the model when asked and measures it,
+/// unless validation is off, and says what import found.
 fn checked(
     mesh: &mut Mesh,
     input: &Path,
@@ -400,6 +402,7 @@ fn checked(
         remove_duplicate_faces(mesh).len()
     };
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
+    let mended = args.repair.then(|| mend(mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
     let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
@@ -412,6 +415,7 @@ fn checked(
         doubled,
         diagnostics,
         orientation,
+        mended,
         fit,
     })
 }
