@@ -35,5 +35,9 @@ harness = false
 name = "field_queries"
 harness = false
 
+[[bench]]
+name = "smooth_normals"
+harness = false
+
 [lints]
 workspace = true

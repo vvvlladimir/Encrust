@@ -131,8 +131,9 @@ different from one run to the next.
 
 Supports are a tube of few sides, not a sliceable model's facets, so an instance may ask to be
 shaded smooth (ADR 0341): its mesh goes up with every corner carrying the faces round it
-weighted by their angle there, apart across an edge turning more than 50 degrees, and the
-fragment reads that normal blended across the face instead of the flat one.
+weighted by their angle there, apart across an edge turning more than 50 degrees and shared
+by every face that smooth edges join round it (`core_geometry::smooth_normals`, linear in
+the faces), and the fragment reads that normal blended across the face instead of the flat one.
 
 | Buffer | Step | Contents |
 |---|---|---|

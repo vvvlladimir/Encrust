@@ -4,9 +4,11 @@
 use std::ops::Range;
 
 use bytemuck::Pod;
-use core_geometry::Mesh;
+use core_geometry::{Mesh, smooth_normals};
 
-use crate::render::vertex::{ModelVertex, indexed_vertices, lead_last, smooth_vertices};
+use crate::render::vertex::{
+    CREASE_DEG, ModelVertex, indexed_vertices, lead_last, smooth_vertices,
+};
 
 use super::*;
 
@@ -76,6 +78,9 @@ pub(super) fn pieces(
     let faces_per_piece = (ceiling / 3).max(1);
     // GL reads a flat input off a face's last corner and wgpu cannot ask it for the first.
     let leads_last = device.adapter_info().backend == wgpu::Backend::Gl;
+    // TODO(step-S1): ~35 ms a million triangles on the drawing thread; compute them where
+    // the support meshes are grown, on their worker, and hand them over with the meshes.
+    let smooth = smooth.then(|| smooth_normals(mesh, CREASE_DEG));
 
     let mut first = 0;
     let mut pieces = Vec::new();
@@ -87,8 +92,8 @@ pub(super) fn pieces(
             .filter(|split| (first + 1..ceiling).contains(split))
             .min()
             .unwrap_or(ceiling);
-        let (vertices, indices) = if smooth {
-            smooth_vertices(mesh, first..last)
+        let (vertices, indices) = if let Some(smooth) = &smooth {
+            smooth_vertices(mesh, smooth, first..last)
         } else {
             let (vertices, mut indices) = indexed_vertices(mesh, first..last);
             if leads_last {

@@ -26,8 +26,9 @@ twice the model's, sent to the card on every growth.
   Otherwise the dome stays.
 - **Supports are shaded smooth.** A `ModelInstance` can be `smoothed`: its mesh goes to the
   card with every corner carrying the normals of the faces round it, each weighted by its
-  angle there. Faces turning more than 50 degrees from each other are kept apart, so a pad's
-  rim stays sharp, and the fragment blends that normal across the face. Models stay flat.
+  angle there. An edge whose faces turn more than 50 degrees is a crease, and the faces round a
+  corner that smooth edges join share one normal, so a pad's rim stays sharp and a dome's pole
+  is one point; the fragment blends that normal across the face. Models stay flat.
 - **Twelve sides** stay the default `facets` and what every shipped profile has.
 
 This supersedes the straight cone of ADR 0130 and ADR 0238's dome at the end of every strut.

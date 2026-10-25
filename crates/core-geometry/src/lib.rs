@@ -13,6 +13,7 @@ mod ray;
 mod region;
 mod repair;
 mod ring;
+mod smooth;
 mod split;
 mod topology;
 mod transform;
@@ -40,6 +41,7 @@ pub use ray::{
 pub use region::Region;
 pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
 pub use ring::{ring_area, ring_contains};
+pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};
 pub use topology::{Adjacency, Components};
 pub use transform::{
