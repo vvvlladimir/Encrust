@@ -123,7 +123,7 @@ winresource.workspace = true
 [package.metadata.packager]
 product-name = "Encrust"
 identifier = "app.encrust"
-description = "Slicer for MSLA and SLA resin 3D printers"
+description = "Free, open-source resin slicer that checks every layer before you print"
 homepage = "https://github.com/vvvlladimir/Encrust"
 publisher = "Encrust contributors"
 license-file = "../../LICENSE"

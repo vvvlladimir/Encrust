@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         This is the most useful issue you can open. A profile is only trustworthy once somebody with
-        the machine has checked it, and five printers is all this project has.
+        the machine has checked it, and most have not been checked yet.
 
         Please **do not attach a model you did not make yourself** — a 10 mm cube is enough.
   - type: input

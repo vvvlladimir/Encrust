@@ -4,10 +4,11 @@
 
 # Encrust
 
-### The resin slicer that answers to you.
+### The fast resin slicer that checks every layer.
 
-Free and open source, for MSLA and SLA printers. Supports, hollowing and a layer-by-layer check
-that catches a failed print before it costs you resin — all of it on your own computer, with no
+Encrust is a free, open-source resin slicer that checks every layer of the file it writes for
+islands, suction cups and thin cross-sections before you print. Windows, macOS, Linux and browser.
+Supports, hollowing and 20-odd printer formats included — all of it on your own computer, with no
 account and no cloud.
 
 [**Download**](https://encrust.app/download/)
@@ -20,7 +21,7 @@ account and no cloud.
 &nbsp;·&nbsp; [Report a bug](https://github.com/vvvlladimir/Encrust/issues)
 
 [![Latest release](https://img.shields.io/github/v/release/vvvlladimir/Encrust?display_name=tag&color=brightgreen)](https://github.com/vvvlladimir/Encrust/releases/latest)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#where-it-stands)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Browser-lightgrey.svg)](#get-it)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
@@ -28,158 +29,77 @@ account and no cloud.
 
 ---
 
-> **Encrust is in alpha, and it is moving fast.** The whole pipeline works today — import,
-> orient, hollow, support, slice, analyse, write and send to the printer — and it has printed real
-> parts. It is also young, so keep a slicer you trust installed alongside it while it grows up.
-> [Here is exactly where it stands.](#where-it-stands)
-
-## What you get
-
-- **A sliced file your printer accepts** — 100 printer profiles, 20-odd container formats, written
-  and read back by the same code.
-- **Supports that hold** — automatic branching trunks, manual placement, painted patches, rafts.
-- **Hollowing that drains** — infill, drain holes, and a warning when resin would be trapped.
-- **A layer-by-layer check before you print** — islands, suction cups and thin cross-sections
-  found in what the file really cures, not in the model.
-- **A command line for the same pipeline** — slice a folder of models without opening a window.
-
 ## Get it
-
-**In a browser, with nothing to install:** open [**encrust.app/app**](https://encrust.app/app/).
-It is the same Rust core compiled to WebAssembly and drawn with WebGPU; your model is opened and
-sliced on your machine and nothing is uploaded. It needs a browser with WebGPU — a recent Chrome
-or Edge is the safe bet — and it keeps working offline after the first visit. This browser build
-is younger than the desktop one and still catching up to it; for a print you care about, use the
-desktop app.
-
-**On Windows, the easiest way in is the
-[Microsoft Store](https://apps.microsoft.com/detail/9NB0ZMB3M8H8):** the Store copy is signed,
-installs without a warning, and the Store keeps it up to date.
-
-**On your desktop**, from [encrust.app/download](https://encrust.app/download/) or the
-[latest release](https://github.com/vvvlladimir/Encrust/releases/latest):
 
 | System | Download |
 |---|---|
-| Windows 10/11, 64-bit | `Encrust-windows-x86_64-setup.exe`, or the [Microsoft Store](https://apps.microsoft.com/detail/9NB0ZMB3M8H8) |
-| macOS 12+, Apple silicon | `Encrust-macos-aarch64.dmg` |
-| macOS 12+, Intel | `Encrust-macos-x86_64.dmg` |
-| Linux, x86-64 | `Encrust-linux-x86_64.AppImage` or `encrust_amd64.deb` |
+| Browser, nothing to install | [![Open in browser](https://img.shields.io/badge/Open-encrust.app%2Fapp-2ea44f?style=for-the-badge)](https://encrust.app/app/) |
+| Windows 10/11, 64-bit | [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-Get_it-0078D4?style=for-the-badge)](https://apps.microsoft.com/detail/9NB0ZMB3M8H8) [![Installer](https://img.shields.io/badge/Installer-.exe-0078D4?style=for-the-badge)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-windows-x86_64-setup.exe) |
+| macOS 12+, Apple silicon | [![macOS Apple silicon](https://img.shields.io/badge/Download-.dmg-555555?style=for-the-badge&logo=apple)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-macos-aarch64.dmg) |
+| macOS 12+, Intel | [![macOS Intel](https://img.shields.io/badge/Download-.dmg-555555?style=for-the-badge&logo=apple)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-macos-x86_64.dmg) |
+| Linux, x86-64 | [![AppImage](https://img.shields.io/badge/Download-AppImage-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-linux-x86_64.AppImage) [![deb](https://img.shields.io/badge/Download-.deb-E95420?style=for-the-badge&logo=debian&logoColor=white)](https://github.com/vvvlladimir/Encrust/releases/latest/download/encrust_amd64.deb) |
 
-Install it like any other application. You'll need a GPU with Vulkan, Metal or DirectX 12 — anything
-from the last several years will do. Encrust looks for a new release once a day and updates itself
-from Settings › Updates, where that daily look is also turned off; a copy from the Microsoft Store
-is updated by the Store instead.
+> [!NOTE]
+> **First launch needs one extra step.** The downloaded builds aren't code-signed yet, so the
+> system warns about them. The Microsoft Store copy is signed and needs nothing.
+> - **Windows:** on the blue warning, click *More info › Run anyway*.
+> - **macOS:** move Encrust to Applications, then run once in Terminal:
+>   `xattr -dr com.apple.quarantine /Applications/Encrust.app`
 
-> **The downloaded builds aren't code-signed yet**, so the first launch needs one extra step. On
-> Windows, choose *More info › Run anyway* — or install from the Microsoft Store, which needs no
-> extra step. On macOS, drag Encrust to Applications, then run
-> `xattr -dr com.apple.quarantine /Applications/Encrust.app` in Terminal.
 
-## Your first print
+Every file of every version: [releases](https://github.com/vvvlladimir/Encrust/releases).
 
-1. Pick your printer and your resin — the printer from the list, the resin as one you make, since
-   Encrust ships none (an exposure is measured on the machine in your room).
-2. Load something small, orient it, add supports, hollow it if it is solid.
-3. **Open the analysis view before you send it** — islands and suction cups are cheaper to fix here
-   than on the plate.
-4. Unless your printer is [the one verified below](#printers), print a calibration piece first.
+## Features
 
-Step by step: [encrust.app/guides](https://encrust.app/guides/).
+**Check before you print.** Encrust reads back the file it wrote and walks every layer of what
+will really cure, after supports and hollowing:
+- islands, suction cups, thin sections and weak necks, each with its layer and measurement;
+- the layers that pull the film hardest, the widest step and the levers;
+- one press to support every island, remove them, or drill the suction cups;
+- print time, resin volume, weight and cost, counted from what actually cures.
+
+**Supports.** Automatic branching supports that go only under what hangs, stay out of the
+model and hold each island where it begins; manual placement, painted patches, rafts, bracing
+and support profiles you can save.
+
+**Hollowing and drainage.** Hollow inward, outward (a mould) or through the floor, with infill
+lattices, round or polygon drain holes, and a warning when resin would stay trapped.
+
+**Model preparation.** STL, OBJ and 3MF import with mesh repair (holes, non-manifold edges,
+flipped faces); auto-orient, auto-arrange, arrays and several plates per project; cut with
+dowels or other joints; textures and text pressed into the surface, and models combined.
+
+**Slicing and exposure.** Adaptive layer height, anti-aliasing with grey levels and blur,
+exposure by height, shrinkage compensation and wall tolerance.
+
+**Files and printers.** Writes `.goo`, `.ctb` v4/v5, `.cbddlp`, `.photon`, the `.pwmx` family,
+`.sl1`, `.sl1s`, `.cxdlp`, `.svgx`, `.cws` and the `.zip` of PNGs — and reads each one back,
+including files from other software. Sends, starts and watches prints over the network with
+SDCP (Elegoo and Chitu boards) and PrusaLink.
+
+**Runs where you are.** Desktop on Windows, macOS and Linux; the same core in the browser via
+WebAssembly and WebGPU, offline and with nothing uploaded; a command line for scripts and
+batches. Projects and profiles are plain TOML.
+
+Everything, with what it cannot do yet: [`docs/features.md`](docs/features.md).
 
 ## Printers
 
-Encrust ships with profiles for **100 printers** from 14 makers — the full list, searchable, is at
-[encrust.app/printers](https://encrust.app/printers/).
-
-| Maker | Printers | Formats |
-|---|---|---|
-| Anycubic | 19 | `.pwmx` family, `.photon` |
-| Elegoo | 16 | `.goo`, `.ctb` |
-| Creality | 15 | `.cxdlp`, `.ctb` |
-| Phrozen | 13 | `.ctb`, `.zip`, `.goo` |
-| EPAX | 8 | `.ctb` |
-| FlashForge | 8 | `.svgx` |
-| Nova3D | 5 | `.cws` |
-| Peopoly | 4 | `.ctb` |
-| QIDI | 4 | `.ctb` |
-| Wanhao | 3 | `.zip` |
-| Prusa | 2 | `.sl1`, `.sl1s` |
-| Kelant, UniFormation, Voxelab | 1 each | `.zip`, `.ctb`, `.svgx` |
-
-
-Every other profile is built from the printer's published specification, and its files are
-checked by reading them back — but nobody has cured resin with them yet. They are very
-likely close, so start with a small calibration piece and check the build area and mirroring.
-Encrypted `.ctb`, which some newer Chitu boards need, isn't supported yet.
-
-**Own one of these, or a printer that isn't listed?** A single test print is the most valuable
-thing you can give this project — see [Help it grow](#help-it-grow).
-
-## What it can do
-
-<details open>
-<summary><b>Slicing and exposure</b></summary>
-
-- Contour slicing with closed-contour guarantees, adaptive layer height by curvature, and several
-  cutting planes per layer
-- Exposure by height, anti-aliasing with grey levels and blur
-- Textures pressed into the surface as relief, using UVs from OBJ and 3MF
-
-</details>
-
-<details>
-<summary><b>Supports</b></summary>
-
-- Manual and automatic placement, branching trunks, rafts and bracing
-- Supports that stay out of the model and actually hold what they're under
-- Painted patches, per-part editing, and contact tuning
-
-</details>
-
-<details>
-<summary><b>Hollowing and mesh tools</b></summary>
-
-- Hollowing with infill, drain holes and trapped-resin detection
-- Diagnosis and repair: welding, holes, non-manifold edges, degenerate faces, winding
-- Cut and split, auto-orientation, auto-arrange, multi-plate layouts, batch preparation
-
-</details>
-
-<details>
-<summary><b>Print analysis</b></summary>
-
-- What the written file really cures, layer by layer, and where it is likely to fail
-- Island, suction and cross-section reports, with the measurements that produced them
-
-</details>
-
-<details>
-<summary><b>Files and printers</b></summary>
-
-- Reads STL, OBJ and 3MF, with UVs and one texture per material
-- Writes `.goo`, `.ctb` v4/v5, `.cbddlp`, `.photon`, `.pwmx` and sixteen more Anycubic
-  extensions, `.sl1`, `.sl1s`, the `.zip` of greyscale PNGs, `.cxdlp` v3/v4, `.svgx` and `.cws` —
-  and reads every one of them back
-- Sends over your local network: SDCP v3 and v1 (Elegoo and Chitu boards), and PrusaLink
-- Projects and printer, resin and support profiles are plain TOML files you can open and edit
-
-</details>
+Profiles for Anycubic, Elegoo, Creality, Phrozen, EPAX, FlashForge, Nova3D, Peopoly, QIDI,
+Wanhao, Prusa, Kelant, UniFormation and Voxelab — the full list is at
+[encrust.app/printers](https://encrust.app/printers/). Encrust ships no resin: an exposure is
+measured on your machine, so start with a calibration piece.
 
 ## From the command line
-
-The same pipeline without a window, for batches and scripts:
 
 ```sh
 encrust slice model.stl --printer elegoo-saturn-4-ultra --resin my-grey --center -o model.goo
 ```
 
-Every flag, with worked examples, is in [`docs/cli.md`](docs/cli.md).
+Every flag is in [`docs/cli.md`](docs/cli.md).
 
 <details>
 <summary><b>Building from source</b></summary>
-
-With the toolchain `rust-toolchain.toml` pins:
 
 ```sh
 git clone https://github.com/vvvlladimir/Encrust.git
@@ -188,54 +108,19 @@ cargo run --release -p encrust-app --bin encrust-gui   # the window
 cargo run --release -p encrust-cli --bin encrust -- --help
 ```
 
-[CONTRIBUTING.md](CONTRIBUTING.md#getting-set-up) covers the full development setup, and
+[CONTRIBUTING.md](CONTRIBUTING.md#getting-set-up) covers the setup,
 [`docs/design/web-build.md`](docs/design/web-build.md) the browser build.
 
 </details>
 
-## Where it stands
-
-**Alpha.** Every stage of the pipeline is in place and covered by around 1,500 unit, property and
-integration tests, which run on Windows, macOS and Linux for every change.
-
-Being honest about what alpha means here:
-
-- **One printer is proven.** Of the hundred profiles, only the ELEGOO Saturn 4 Ultra has printed a
-  file Encrust wrote. The rest are very likely close, but unconfirmed.
-- **Resin settings are a starting point.** Exposure and lift values in the bundled profiles aren't
-  calibrated for your bottle — run a calibration print first.
-- **The browser build trails the desktop one.** It runs the same core, and it is newer.
-- **There will be bugs.** Encrust hasn't yet had the thousands of hours of real-world use that
-  shake out the last ones. Before a long print, it's worth comparing its output with a slicer you
-  already trust.
-
-The worst case is a failed print: a few hours and a few millilitres of resin. If that sounds like a
-fair trade for trying something new, you're exactly who this release is for — and every report
-you send makes the next one better.
-
 ## Help it grow
 
-Encrust is actively developed, and right now the people who try it shape it the most.
-
-- **Test your printer.** Tell us which printer you have, attach a file its own software
-  produced, and say whether Encrust's file printed. This is the one thing the project can't do on
-  its own. [Open an issue](https://github.com/vvvlladimir/Encrust/issues/new/choose).
-- **Report what breaks.** A bug report or a mesh that trips it up is genuinely useful.
-- **Say what you'd want.** Ideas and questions are welcome in
-  [Discussions](https://github.com/vvvlladimir/Encrust/discussions).
-- **Send code.** Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md);
-  [`docs/decisions/`](docs/decisions/) explains the reasoning behind every structural choice.
-
-If Encrust looks useful to you, a ⭐ helps other resin printers find it.
+- **Test your printer** and say whether Encrust's file printed —
+  [open an issue](https://github.com/vvvlladimir/Encrust/issues/new/choose).
+- **Report what breaks**, or ask in [Discussions](https://github.com/vvvlladimir/Encrust/discussions).
+- **Send code:** start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
-[AGPL-3.0-only](LICENSE). You're free to run, study, change and share Encrust; if you distribute a
-modified version, or offer it to others over a network, you share its source too.
-
-## A word of care
-
-Encrust prepares files for machines that cure resin with ultraviolet light. It can't know whether
-your settings suit your resin, printer or model, and a wrong exposure or lift value can ruin a
-print and, occasionally, damage hardware. Check what it produces before a long job, and follow your
-printer's and resin's own instructions. Provided without warranty of any kind, as the licence says.
+[AGPL-3.0-only](LICENSE). Encrust prepares files for machines that cure resin with UV light; a
+wrong exposure or lift can ruin a print or damage hardware. Provided without warranty of any kind.

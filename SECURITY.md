@@ -48,7 +48,7 @@ what it does do is parse a great deal of untrusted binary data.
 - The absence of code signing on release builds (see below).
 - A print that fails, warps or damages hardware because of settings. Encrust cannot validate an
   exposure time against physical reality; that is what [the disclaimer in the
-  README](README.md#disclaimer) is for.
+  README](README.md#licence) is for.
 
 ## Hardening that is in place
 

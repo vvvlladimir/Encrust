@@ -557,7 +557,7 @@ rather than opened: as a resin while a printer's resins are in view, or when it 
 file or a resin profile, and as a printer otherwise. The first printer and resin you add
 are the ones the plate prints on, with no second click.
 
-**Printers:** 100 bundled profiles from 14 makers: Anycubic, Elegoo, Creality, Phrozen,
+**Printers:** bundled profiles from Anycubic, Elegoo, Creality, Phrozen,
 EPAX, FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab.
 Search the library by name or brand, or add a **custom printer**.
 
