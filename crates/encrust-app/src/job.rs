@@ -21,7 +21,10 @@ mod trapped;
 pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest, Method};
 pub use core_pipeline::SlicedFormat;
 pub use cut::{CutJob, CutOutcome, CutRequest, spawn_cut};
-pub use drill::{DrillJob, DrillRequest, spawn_drill};
+pub use drill::{
+    DrillJob, DrillRequest, PrintedSupportsJob, PrintedSupportsRequest, spawn_drill,
+    spawn_printed_supports,
+};
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;
 pub use format::label_of;

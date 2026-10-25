@@ -8,7 +8,9 @@ use core_geometry::{PlacedHit, Ray, Vec3};
 use crate::camera::OrbitCamera;
 use crate::measure;
 use crate::panels::{Window, section};
-use crate::pick::{pick, pick_material, pick_surface, ray_through, seen_along};
+use crate::pick::{
+    Printed, pick, pick_material, pick_printed, pick_surface, ray_through, seen_along,
+};
 use crate::scene::{ObjectId, Scene};
 
 /// The model under the cursor through the section this frame shows; see [`pick`].
@@ -19,6 +21,17 @@ pub(super) fn object_under(
 ) -> Option<ObjectId> {
     let (scene, camera) = (&window.doc.scene, &window.view.camera);
     pick(scene, camera, viewport, cursor, section::shown(window))
+}
+
+/// The printed surface under the cursor through the section this frame shows, a model's or
+/// its supports'; see [`pick_printed`].
+pub(super) fn printed_under(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) -> Option<(ObjectId, Printed, PlacedHit)> {
+    let (scene, camera) = (&window.doc.scene, &window.view.camera);
+    pick_printed(scene, camera, viewport, cursor, section::shown(window))
 }
 
 /// The drawn face under the cursor through the section this frame shows; see [`pick_surface`].

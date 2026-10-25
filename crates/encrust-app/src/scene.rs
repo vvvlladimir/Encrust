@@ -7,6 +7,7 @@ use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 
 use crate::drain::{PlugsLaid, Traps};
+use crate::drilling::PrintedSupports;
 
 mod import_summary;
 mod object;
@@ -167,10 +168,11 @@ impl Scene {
         kept
     }
 
-    /// Lets go of every model's cuts taken out exactly.
+    /// Lets go of every model's cuts taken out exactly, of it and of its supports.
     pub fn forget_drilled(&mut self) {
         for object in &mut self.objects {
             object.hollow.forget_drilled();
+            object.printed_supports = PrintedSupports::default();
         }
     }
 
@@ -180,6 +182,7 @@ impl Scene {
         for object in &mut self.objects {
             if let Some(was) = other.get(object.id) {
                 object.hollow.adopt_drilled(&was.hollow);
+                object.printed_supports.adopt(&was.printed_supports);
             }
         }
     }
@@ -212,6 +215,7 @@ impl Scene {
             visible: true,
             supports: ModelSupports::default(),
             hollow: ModelHollow::default(),
+            printed_supports: PrintedSupports::default(),
             traps: Traps::default(),
             mapped: imported.mapped,
             relief_painted: Region::default(),

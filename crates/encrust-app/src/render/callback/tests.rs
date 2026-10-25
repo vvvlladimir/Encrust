@@ -86,7 +86,7 @@ fn hole() -> DrainHole {
         lift_mm: 0.0,
         shape: core_volume::HoleShape::Round,
         turn_deg: 0.0,
-        walled: false,
+        kind: core_volume::HoleKind::Drain,
     }
 }
 
@@ -104,6 +104,7 @@ fn a_hole_about_to_be_drilled_is_cut_into_its_model_and_never_capped() {
         shape: GhostShape::Hole {
             id: scene.objects()[0].id,
             hole: hole(),
+            into: None,
         },
         colour: Color32::WHITE,
     };

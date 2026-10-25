@@ -152,7 +152,8 @@ A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners o
 diameter, turned `--drain-turn` degrees from the level; a `--channel` takes the same
 outline. Once the model is hollow a hole is carried on through the wall into the cavity;
 `--drain-walled` drills it before hollowing instead, a recess at its depth with the wall
-kept around it, which drains nothing (ADR 0346).
+kept around it, which drains nothing (ADR 0346). `--drain-support-at X,Y,Z` drills into the
+supports or raft nearest the point once they stand, sized as `--drain`, with no plug (ADR 0347).
 `--drain-plugs` prints a plug for each hole, standing on the plate past the model's
 right-hand side: what the hole took out of the wall, `--plug-gap` millimetres narrower a
 side (0.15 by default, never less than 0), its outer face flush with the surface (ADR 0313).

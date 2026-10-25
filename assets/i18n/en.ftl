@@ -106,6 +106,7 @@ cut-split = Split into its parts
 cut-nothing-selected = nothing is selected to cut
 cut-no-direction = the cut plane has no direction
 cut-misses = the plane misses { $name }, so there is nothing to cut
+cut-undrilled = the holes in { $name } cannot be cut into it exactly, so its halves would lose them
 cut-lower-name = { $name } (lower)
 cut-upper-name = { $name } (upper)
 cut-part-name = { $name } (part { $index })
@@ -1423,7 +1424,7 @@ paint-dropped =
 drain-hole-size = Hole size
 drain-trapped-resin = Trapped resin
 drain-opening = Opening
-drain-opening-note = Click the model to put one down, alt-click a hole to take it away. Each one is cut the moment it is placed, hollow or not.
+drain-opening-note = Click the model, its supports or its raft to put one down, alt-click a hole to take it away. Each one is cut the moment it is placed, hollow or not, and a click on the floor of a hole drills on through it.
 drain-fact = { $count } trapped
 drain-dig = Dig the channel ({ $count } points)
 drain-dig-tooltip = A tube of the hole size runs under every point, open at its two ends alone.
@@ -1470,7 +1471,7 @@ drain-clear-cuts =
         [one] Clear { $count } cut
        *[other] Clear { $count } cuts
     }
-drain-rehollowing = Hollowing again around the channels
+drain-rehollowing = Hollowing again around the channels and walled holes
 drain-nothing-trapped = Nothing is trapped: the resin can get out of every model on the plate.
 drain-not-checked = Not checked yet.
 drain-held = { $volume } ml cannot get out

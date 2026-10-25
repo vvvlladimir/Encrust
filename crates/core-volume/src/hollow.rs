@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
 use crate::cancel::{Cancel, Step};
 use crate::csg::assemble;
-use crate::drain::{Channel, DrainHole};
+use crate::drain::{Channel, DrainHole, HoleKind};
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::grid::tile_of;
@@ -101,8 +101,8 @@ impl HollowMode {
     }
 }
 
-/// A ball of `radius_mm` swept from `from` to `to`, inside which the wall stays solid, in
-/// the model's own space.
+/// A flat-ended rod of `core_mm` from `from` to `to`, grown by `radius_mm` and `wall_mm` all
+/// round — with no core, a ball swept between them —, inside which the wall stays solid.
 ///
 /// It is what keeps a cavity out of a thin spar, away from a detail that would print
 /// hollow and snap, or off a channel that is to come out as a pipe; the cavity has it
@@ -112,35 +112,70 @@ pub struct Blocker {
     pub from: Vec3,
     pub to: Vec3,
     pub radius_mm: Scalar,
+    /// The rod's own radius, millimetres: a walled hole's, so its wall is even at its end.
+    #[serde(default)]
+    pub core_mm: Scalar,
+    /// Solid past `radius_mm` in plate millimetres, which no scale changes: a sleeve's wall,
+    /// as thick as the shell's at any size of the model.
+    #[serde(default)]
+    pub wall_mm: Scalar,
 }
 
 impl Blocker {
     pub fn ball(center: Vec3, radius_mm: Scalar) -> Self {
-        Self {
-            from: center,
-            to: center,
-            radius_mm,
-        }
+        Self::rod(center, center, 0.0, radius_mm)
     }
 
     pub fn along(from: Vec3, to: Vec3, radius_mm: Scalar) -> Self {
+        Self::rod(from, to, 0.0, radius_mm)
+    }
+
+    /// A rod of `core_mm` from `from` to `to` with `radius_mm` of solid all round it.
+    pub fn rod(from: Vec3, to: Vec3, core_mm: Scalar, radius_mm: Scalar) -> Self {
         Self {
             from,
             to,
             radius_mm,
+            core_mm,
+            wall_mm: 0.0,
         }
+    }
+
+    /// This blocker with `wall_mm` of solid round it, in plate millimetres.
+    #[must_use]
+    pub fn walled(self, wall_mm: Scalar) -> Self {
+        Self { wall_mm, ..self }
+    }
+
+    /// This blocker carried by `shape`, its sizes by `least`, the least scale it holds; its
+    /// wall is already in plate millimetres.
+    #[must_use]
+    pub fn scaled(&self, shape: Mat3, least: Scalar) -> Self {
+        Self::rod(
+            shape * self.from,
+            shape * self.to,
+            self.core_mm * least,
+            self.radius_mm * least,
+        )
+        .walled(self.wall_mm)
     }
 
     /// How far inside this blocker `point` lies, in millimetres; negative outside it.
     pub fn depth_at(&self, point: Vec3) -> Scalar {
         let span = self.to - self.from;
-        let squared = span.length_squared();
-        let along = if squared > 0.0 {
-            ((point - self.from).dot(span) / squared).clamp(0.0, 1.0)
+        let length = span.length();
+        let offset = point - self.from;
+        let axis = if length > 0.0 {
+            span / length
         } else {
-            0.0
+            Vec3::ZERO
         };
-        self.radius_mm - (point - (self.from + span * along)).length()
+        let along = offset.dot(axis);
+        // The signed distance to the rod: across its side and past its flat ends.
+        let radial = (offset - axis * along).length() - self.core_mm;
+        let axial = (along - length / 2.0).abs() - length / 2.0;
+        let distance = radial.max(axial).min(0.0) + radial.max(0.0).hypot(axial.max(0.0));
+        self.radius_mm + self.wall_mm - distance
     }
 }
 
@@ -149,18 +184,20 @@ impl Blocker {
 /// in it (ADR 0076, 0346), so neither opens into the cavity. See `docs/design/hollowing.md`.
 pub fn sleeves(channels: &[Channel], holes: &[DrainHole], wall_mm: Scalar) -> Vec<Blocker> {
     let legs = channels.iter().flat_map(|channel| {
-        let radius = channel.diameter_mm / 2.0 + wall_mm;
+        let radius = channel.diameter_mm / 2.0;
         channel
             .points
             .windows(2)
-            .map(move |pair| Blocker::along(pair[0], pair[1], radius))
+            .map(move |pair| Blocker::along(pair[0], pair[1], radius).walled(wall_mm))
     });
-    // A ball ending at the tip leaves `wall_mm` past the rim of a flat end, and more on its axis.
-    let recesses = holes.iter().filter(|hole| hole.walled).map(|hole| {
-        let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
-        let widest = hole.diameter_mm * hole.taper.max(1.0);
-        Blocker::along(hole.at, tip, widest / 2.0 + wall_mm)
-    });
+    let recesses = holes
+        .iter()
+        .filter(|hole| hole.kind == HoleKind::Walled)
+        .map(|hole| {
+            let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
+            let widest = hole.diameter_mm * hole.taper.max(1.0);
+            Blocker::rod(hole.at, tip, widest / 2.0, 0.0).walled(wall_mm)
+        });
     legs.chain(recesses).collect()
 }
 
@@ -346,11 +383,7 @@ pub fn carve(
     let blockers: Vec<Blocker> = settings
         .blockers
         .iter()
-        .map(|blocker| Blocker {
-            from: field.shape * blocker.from,
-            to: field.shape * blocker.to,
-            radius_mm: blocker.radius_mm * smallest,
-        })
+        .map(|blocker| blocker.scaled(field.shape, smallest))
         .collect();
 
     let mut hollowed = match field.mode {
@@ -561,7 +594,7 @@ fn blocked(cavity: &Sdf, blockers: &[Blocker]) -> Option<Sdf> {
     let band_mm = cavity.band_mm();
     let mut candidates: HashSet<IVec3> = cavity.tile_keys().collect();
     for blocker in blockers {
-        let reach = Vec3::splat(blocker.radius_mm + band_mm);
+        let reach = Vec3::splat(blocker.core_mm + blocker.radius_mm + blocker.wall_mm + band_mm);
         let first = tile_of(grid.voxel(blocker.from.min(blocker.to) - reach));
         let last = tile_of(grid.voxel(blocker.from.max(blocker.to) + reach));
         for z in first.z..=last.z {

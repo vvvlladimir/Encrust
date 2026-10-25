@@ -14,7 +14,7 @@ use core_plate::{ArrangeSettings, Footprint, arrange};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
-use crate::hollowing::{HollowArgs, HollowReport};
+use crate::hollowing::{HollowArgs, HollowReport, support_holes};
 use crate::modelling::{self, ModelArgs};
 use crate::pipeline::{OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of};
 use crate::profiles::{self, Chosen};
@@ -357,6 +357,13 @@ fn put_down(
         })
         .transpose()?
         .filter(|(report, _)| !seated || !report.contacts.is_empty());
+    if !shaping.hollow.drain_support_at.is_empty() {
+        let Some((_, columns)) = &stood else {
+            bail!("--drain-support-at drills into the supports, and none stand under the model");
+        };
+        let drilled = support_holes(columns, &shaping.hollow)?;
+        cuts.get_or_insert_default().append(&drilled);
+    }
     let (supports, columns) = match stood {
         Some((report, mesh)) => (Some(report), vec![Arc::new(mesh)]),
         None => (None, Vec::new()),

@@ -106,9 +106,12 @@ fn cavity_last(drilled: Mesh, source: &Mesh, cavity: Range<usize>) -> (Mesh, Ran
 ///
 /// A piece the engine cannot cut is kept whole, so a tree it refuses still stands.
 pub fn drilled_pieces(mesh: &Mesh, cuts: &Mesh) -> Mesh {
-    let Ok(once) = once_over(cuts) else {
-        return mesh.clone();
-    };
+    drilled_reached(mesh, cuts).unwrap_or_else(|| mesh.clone())
+}
+
+/// [`drilled_pieces`], or `None` where `cuts` reach none of `mesh`'s pieces or cannot be read.
+pub fn drilled_reached(mesh: &Mesh, cuts: &Mesh) -> Option<Mesh> {
+    let once = once_over(cuts).ok()?;
     let bodies: Vec<Aabb> = split(&once).iter().filter_map(Mesh::aabb).collect();
     let reached = |piece: &Mesh| {
         piece
@@ -116,15 +119,13 @@ pub fn drilled_pieces(mesh: &Mesh, cuts: &Mesh) -> Mesh {
             .is_some_and(|bounds| bodies.iter().any(|body| meets(&bounds, body)))
     };
     if !reached(mesh) {
-        return mesh.clone();
+        return None;
     }
     let pieces = split(mesh);
     if !pieces.iter().any(reached) {
-        return mesh.clone();
+        return None;
     }
-    let Ok(cutter) = solid_of(&once) else {
-        return mesh.clone();
-    };
+    let cutter = solid_of(&once).ok()?;
     let pieces: Vec<Mesh> = pieces
         .into_par_iter()
         .map(|piece| {
@@ -139,7 +140,7 @@ pub fn drilled_pieces(mesh: &Mesh, cuts: &Mesh) -> Mesh {
     for piece in &pieces {
         whole.append(piece);
     }
-    whole
+    Some(whole)
 }
 
 /// The bodies of `cuts` once over and wound outward: [`crate::drill`] lays them

@@ -265,6 +265,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity |
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
+| [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |

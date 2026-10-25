@@ -34,7 +34,8 @@ use overlays::{
 use paint::{draw_brush, paint_stroke};
 use picking::{
     aims_elsewhere, lay_face_under_cursor, mark_part_under_cursor, material_under,
-    measure_under_cursor, point_at_face, select_under_cursor, surface_under, takes_the_pick,
+    measure_under_cursor, point_at_face, printed_under, select_under_cursor, surface_under,
+    takes_the_pick,
 };
 use support_ghost::cached_support_ghost;
 use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
@@ -227,6 +228,12 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
             cached_support_ghost(ui.ctx(), window, id, &hit, line)
         });
     }
+    if *window.tool == Tool::Drain && window.tools.drain.placing != Placing::Channel {
+        let (id, printed, hit) = printed_under(window, rect, cursor)?;
+        return faded(&window.doc.scene, id, || {
+            drain_ghost(window, id, printed, &hit)
+        });
+    }
     type Under = fn(&Window, egui::Rect, egui::Pos2) -> Option<(ObjectId, PlacedHit)>;
     type Shows = fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost>;
     // A blocker is a volume, so it can be put inside the material through the cap of a cut.
@@ -235,7 +242,6 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
         Tool::Drain if window.tools.drain.placing == Placing::Channel => {
             (surface_under, channel_point_ghost)
         }
-        Tool::Drain => (surface_under, drain_ghost),
         Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
             (surface_under, text::text_ghost)
         }

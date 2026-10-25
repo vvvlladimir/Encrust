@@ -146,6 +146,8 @@ whole-surface fill is Cmd-Shift-click.
 ### Cut
 - Cut a model with a plane. Position the plane by height from the plate or by an offset
   from the centre of mass, or click to place it on the model.
+- The cut only divides: the halves keep the model's drain holes and channels, cut into them.
+  A model whose holes cannot be cut into it exactly is left whole, and the window says so.
 - **Join the halves** so they glue back true, choosing one of four kinds:
   - **dowels**: sockets in both halves, with the dowels printed beside them, so both cut
     faces stay flat and can carry the supports where the glue hides them;
@@ -259,10 +261,13 @@ whole-surface fill is Cmd-Shift-click.
 - Undo with **Make solid again**.
 
 ### Drain
-- **Drill** a hole, with size, depth and taper, wherever you click. A click on a hole
-  already drilled at least as wide adds nothing; a wider hole over it is drilled.
-- A hole or a channel cuts only the model it was made in, and the supports under it: a
-  model set down in another's hole is printed whole. The cut is made for real in the
+- **Drill** a hole, with size, depth and taper, wherever you click: into a model, its
+  supports or its raft. A click on a hole already drilled at least as wide adds nothing; a
+  wider hole over it is drilled, and so is one drilled on from its floor or wall, a narrower
+  step for instance. A hole in the supports gets no plug.
+- A hole or a channel cuts only the model it was made in, and the supports and raft under
+  it, which the viewport shows open as they print: a model set down in another's hole is
+  printed whole. The cut is made for real in the
   background a moment after each change; a model that cannot be read as a solid, even
   mended, keeps an approximate cut that also reaches what stands in it, and the window
   says so.

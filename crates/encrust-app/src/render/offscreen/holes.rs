@@ -58,7 +58,7 @@ pub(super) fn holes() -> Vec<DrainHole> {
             lift_mm: 8.0,
             shape: core_volume::HoleShape::Round,
             turn_deg: 0.0,
-            walled: false,
+            kind: core_volume::HoleKind::Drain,
         },
         DrainHole {
             at: Vec3::new(114.7, 40.0, 50.0),
@@ -69,7 +69,7 @@ pub(super) fn holes() -> Vec<DrainHole> {
             lift_mm: 8.0,
             shape: core_volume::HoleShape::Round,
             turn_deg: 0.0,
-            walled: false,
+            kind: core_volume::HoleKind::Drain,
         },
     ]
 }

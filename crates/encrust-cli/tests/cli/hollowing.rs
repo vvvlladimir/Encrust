@@ -280,23 +280,32 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
 #[test]
 fn a_walled_hole_is_a_recess_that_drains_nothing() {
     let path = write_box_stl("walled-drain", 20.0, 12, 0);
-    let report = stdout(&estimate(&[
-        path.to_str().unwrap(),
-        "--hollow",
-        "2",
-        "--layer-height",
-        "0.5",
-        "--drain",
-        "4",
-        "--drain-at",
-        "10,10,20",
-        "--drain-depth",
-        "3",
-        "--drain-walled",
-    ]));
+    let report = |walled: &[&str]| {
+        let mut args = vec![
+            path.to_str().unwrap(),
+            "--hollow",
+            "2",
+            "--layer-height",
+            "0.5",
+            "--drain",
+            "4",
+            "--drain-at",
+            "10,10,20",
+            "--drain-depth",
+            "3",
+        ];
+        args.extend_from_slice(walled);
+        stdout(&estimate(&args))
+    };
+    let drained = report(&[]);
     assert!(
-        report.contains("trapped resin"),
-        "the cavity keeps a wall under the hole, so the resin stays in:\n{report}"
+        !drained.contains("trapped resin"),
+        "the same hole drilled into the shell drains the cavity:\n{drained}"
+    );
+    let walled = report(&["--drain-walled"]);
+    assert!(
+        walled.contains("trapped resin"),
+        "the cavity keeps a wall under the hole, so the resin stays in:\n{walled}"
     );
 }
 
@@ -561,5 +570,56 @@ fn a_square_hole_turned_on_its_corner_takes_a_plug() {
     assert!(
         (lit as f32 - 6_710.0).abs() < 100.0,
         "the box and one square plug beside it, about 6 710 pixels, got {lit}"
+    );
+}
+
+/// The first layer of a 12 mm block stood on supports and a raft, with whatever follows.
+fn raft_layer(name: &str, extra: &[&str]) -> Vec<u8> {
+    let path = write_boxes_stl(name, &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
+    let out = output_dir(name);
+    let panel = test_panel();
+    let mut args = vec![
+        path.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--layer-height",
+        "0.5",
+        "-o",
+        out.to_str().unwrap(),
+    ];
+    args.extend_from_slice(extra);
+    let output = slice(&args);
+    assert!(output.status.success(), "{}", stderr(&output));
+    layer_pixels(&out, 0).2
+}
+
+#[test]
+fn a_hole_drilled_into_the_raft_opens_its_first_layer() {
+    let whole = raft_layer("raft-whole", &[]);
+    // Under the raft's margin past the block, where no tree stands on it.
+    let drilled = raft_layer(
+        "raft-drilled",
+        &["--drain", "2", "--drain-support-at", "14,6,-1"],
+    );
+    let lit = |pixels: &[u8]| pixels.iter().filter(|pixel| **pixel > 0).count() as f32;
+    // A 2 mm hole is pi 1^2 = 3.14 mm2 of the raft, 314 pixels at 0.1 mm.
+    let opened = lit(&whole) - lit(&drilled);
+    assert!(
+        (opened - 314.0).abs() < 314.0 * 0.15,
+        "the hole takes 314 px out of the raft's first layer, got {opened}"
+    );
+}
+
+#[test]
+fn a_hole_into_supports_with_none_asked_for_is_refused() {
+    let path = write_box_stl("no-supports-to-drill", 10.0, 12, 0);
+    let output = estimate(&[path.to_str().unwrap(), "--drain-support-at", "5,5,-1"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("--drain-support-at"),
+        "{}",
+        stderr(&output)
     );
 }

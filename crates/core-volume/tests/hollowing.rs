@@ -1,14 +1,18 @@
 //! A solid becomes a shell. What has to hold is that the shell encloses the wall the
 //! thickness asked for, that the cavity never reaches outside the model, and that what
 //! fills it takes its own volume back.
+#![expect(
+    clippy::expect_used,
+    reason = "a shared check fails loudly on a body that will not hollow"
+)]
 
 use core_geometry::{
     Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, diagnose, signed_volume,
 };
 use core_volume::{
-    Blocker, CUT_WEIGHT, Cancel, Channel, DrainHole, HoleSize, HollowMode, HollowSettings,
-    Hollowed, InfillPattern, InfillSettings, Progress, Step, VolumeError, carve, cavity_field,
-    drill, hole_at, hollow, hollow_at_scale, pierce, plate_down, sleeves,
+    Blocker, CUT_WEIGHT, Cancel, Channel, DrainHole, HoleKind, HoleSize, HollowMode,
+    HollowSettings, Hollowed, InfillPattern, InfillSettings, Progress, Step, VolumeError, carve,
+    cavity_field, drill, hole_at, hollow, hollow_at_scale, pierce, plate_down, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -278,38 +282,98 @@ fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
 
 #[test]
 fn a_walled_hole_keeps_a_wall_between_it_and_the_cavity() {
-    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
+    walled_hole_wall(1.0);
+}
+
+#[test]
+fn a_walled_hole_in_a_scaled_model_keeps_the_wall_the_shell_was_asked_for() {
+    walled_hole_wall(2.0);
+}
+
+/// A 20 mm ball on the plate, built at `1 / scale` and scaled up, hollowed to 2 mm around a
+/// 4 mm hole 6 mm down from its top: the wall round the hole is 2 mm at any scale.
+fn walled_hole_wall(scale: Scalar) {
+    let mesh = ball(Vec3::ZERO, 10.0 / scale, 48, 48);
     let bvh = Bvh::build(&mesh);
     let hole = DrainHole {
-        walled: true,
+        kind: HoleKind::Walled,
         ..hole_at(
             &mesh,
             &bvh,
-            Vec3::new(0.0, 0.0, 12.0),
-            HoleSize::round(4.0, 6.0, 1.0),
+            Vec3::new(0.0, 0.0, 12.0 / scale),
+            HoleSize::round(4.0 / scale, 6.0 / scale, 1.0),
         )
         .expect("the ball has faces")
     };
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.blockers = sleeves(&[], &[hole], asked.thickness_mm);
-    let shell = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("a closed ball hollows");
-
-    // The hole is a 2 mm radius tube from the top down to z = 4.
-    let tube = |point: Vec3| {
-        let along = point.z.clamp(4.0, 10.0);
-        (point - Vec3::new(0.0, 0.0, along)).length() - 2.0
-    };
-    let cavity = &shell.mesh.faces[shell.cavity.clone()];
-    let nearest = cavity
+    let shape = Mat3::from_diagonal(Vec3::splat(scale));
+    let shell = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
+        .expect("a closed ball hollows");
+    let cavity: Vec<Vec3> = shell.mesh.faces[shell.cavity.clone()]
         .iter()
         .flatten()
-        .map(|&index| tube(shell.mesh.vertices[index as usize]))
-        .fold(Scalar::MAX, Scalar::min);
+        .map(|&index| shell.mesh.vertices[index as usize] * scale)
+        .collect();
+
+    // The hole is a 2 mm radius tube from the top down to a flat end at z = 4; the cavity
+    // stands under and around it, so only its side and that end are measured.
+    let tube = |point: &Vec3| {
+        let radial = (point.truncate().length() - 2.0).max(0.0);
+        let below = (4.0 - point.z).max(0.0);
+        radial.hypot(below)
+    };
+    let nearest = cavity.iter().map(tube).fold(Scalar::MAX, Scalar::min);
     // Surface nets cut the crease where the sleeve meets the cavity, so a voxel and a half.
+    let voxel_mm = shell.voxel_mm * scale;
     assert!(
-        nearest > 2.0 - 1.5 * shell.voxel_mm,
-        "the cavity stands the 2 mm wall off the hole, got {nearest}"
+        nearest > 2.0 - 1.5 * voxel_mm,
+        "the cavity stands the 2 mm wall off the hole at scale {scale}, got {nearest}"
     );
+    assert!(
+        nearest < 2.0 + 1.5 * voxel_mm,
+        "and no more than the 2 mm at scale {scale}, got {nearest}"
+    );
+    let under_the_end = cavity
+        .iter()
+        .filter(|vertex| vertex.truncate().length() < 1.0)
+        .map(|vertex| vertex.z)
+        .fold(Scalar::MIN, Scalar::max);
+    assert!(
+        (under_the_end - 2.0).abs() < 1.5 * voxel_mm,
+        "past the hole's flat end at z = 4 the wall is 2 mm too, so the cavity tops out at \
+         z = 2, got {under_the_end} at scale {scale}"
+    );
+}
+
+#[test]
+fn a_rod_blocker_is_its_wall_deep_past_its_side_and_its_flat_ends() {
+    let rod = Blocker::rod(Vec3::ZERO, Vec3::new(0.0, 0.0, 6.0), 2.0, 1.0);
+    let cases = [
+        (
+            Vec3::new(0.0, 0.0, 3.0),
+            3.0,
+            "on the axis, 2 mm from the side",
+        ),
+        (
+            Vec3::new(2.5, 0.0, 3.0),
+            0.5,
+            "half a millimetre off the side",
+        ),
+        (
+            Vec3::new(0.0, 0.0, 6.5),
+            0.5,
+            "half a millimetre past the flat end",
+        ),
+        (Vec3::new(5.0, 0.0, 3.0), -2.0, "2 mm beyond the wall"),
+    ];
+    for (point, expected, what) in cases {
+        let depth = rod.depth_at(point);
+        assert!(
+            (depth - expected).abs() < 1e-5,
+            "{what}: {expected} mm in, got {depth}"
+        );
+    }
 }
 
 #[test]

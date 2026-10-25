@@ -169,7 +169,7 @@ pub fn steadying(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&Aut
         shipped.map(|auto| auto.steady_spacing_mm),
         &mut auto.steady_spacing_mm,
         COARSE_STEP,
-        0.5..=40.0,
+        0.5..=MAX_STEADY_SPACING_MM,
     );
     number(
         ui,
@@ -238,3 +238,6 @@ pub(super) const MAX_STEP_MM3: f32 = 1_000.0;
 pub(super) const MAX_STEP_HEIGHT_MM: f32 = 20.0;
 
 pub(super) const LOAD_STEP: f64 = 10.0;
+
+/// How far apart steadying supports may stand: a plate's width holds only a few.
+const MAX_STEADY_SPACING_MM: f32 = 40.0;

@@ -2,6 +2,7 @@ use super::import_summary::{ImportSummary, Mapped};
 use super::support_surface::SupportShell;
 use super::{ObjectId, Scene, Shaped};
 use crate::drain::{PlugsLaid, Traps};
+use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
 use core_engine::project::{DrainState, HollowState};
 use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3};
@@ -37,6 +38,8 @@ pub struct SceneObject {
     pub supports: ModelSupports,
     /// The cavity inside this model, and where its wall is to stay solid.
     pub hollow: ModelHollow,
+    /// Its supports as they print, its cuts taken out, and their hierarchies.
+    pub printed_supports: PrintedSupports,
     /// What the last drainage check found in it.
     pub traps: Traps,
     /// The texture the file carried, until it is pressed in.
@@ -188,6 +191,26 @@ impl SceneObject {
     /// The mesh the model's cuts are taken out of: its shell once hollowed.
     pub fn uncut(&self) -> &Arc<Mesh> {
         self.hollow.shell().unwrap_or(&self.mesh)
+    }
+
+    /// What its printed supports are built from: its groups, its cuts and where it stands.
+    pub fn supports_under(&self) -> SupportsUnder<'_> {
+        SupportsUnder {
+            groups: self.supports.drawn(),
+            cuts: self.hollow.cut_bodies(),
+            transform: self.transform,
+        }
+    }
+
+    /// The support groups as they print: drilled by the model's cuts where that has been
+    /// done, as they stand otherwise.
+    pub fn supports_shown(&self) -> &[core_supports::Shaded] {
+        self.printed_supports.shown(self.supports_under())
+    }
+
+    /// The support groups as they print and their hierarchies, once built for them.
+    pub fn supports_built(&self) -> Option<(&[core_supports::Shaded], &[Arc<Bvh>])> {
+        self.printed_supports.built(self.supports_under())
     }
 
     /// The mesh the model prints as: its cuts taken out exactly where they have been, its

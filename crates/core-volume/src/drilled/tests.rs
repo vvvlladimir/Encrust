@@ -1,7 +1,7 @@
 use core_geometry::{Vec3, cuboid, signed_volume};
 
 use super::*;
-use crate::drain::{Channel, DrainHole, HoleShape, drill};
+use crate::drain::{Channel, DrainHole, HoleKind, HoleShape, drill};
 
 /// A square hole 2 mm a side straight down through the middle of a 20 by 20 by 10 slab.
 fn square_hole_through() -> DrainHole {
@@ -14,7 +14,7 @@ fn square_hole_through() -> DrainHole {
         lift_mm: 0.0,
         shape: HoleShape::Polygon { sides: 4 },
         turn_deg: 45.0,
-        walled: false,
+        kind: HoleKind::Drain,
     }
 }
 

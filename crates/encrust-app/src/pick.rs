@@ -1,7 +1,7 @@
-use core_geometry::{Mat4, PlacedHit, Ray, Scalar, Vec3, raycast_placed};
+use core_geometry::{Mat4, PlacedHit, Ray, Scalar, Transform, Vec3, raycast_placed};
 
 use crate::camera::OrbitCamera;
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// The ray under the cursor, in plate coordinates.
 ///
@@ -173,6 +173,59 @@ fn under(
         .filter(|(_, hit)| hit.distance <= far)
         .min_by(|(_, a), (_, b)| a.distance.total_cmp(&b.distance))
         .map(|(id, hit)| Under::Face(id, hit))
+}
+
+/// What a printed surface under the cursor belongs to: its model, or one of the support
+/// groups standing under that model, the raft among them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Printed {
+    Model,
+    Supports(usize),
+}
+
+/// The printed surface nearest the camera under the cursor, and where the ray met it in plate
+/// coordinates: a model as it prints, its holes and cavity included, or its supports as they
+/// print once built. Only a face the ray meets from outside counts, none the section cut away.
+pub fn pick_printed(
+    scene: &Scene,
+    camera: &OrbitCamera,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    shown: Shown,
+) -> Option<(ObjectId, Printed, PlacedHit)> {
+    let ray = ray_through(camera, viewport, cursor)?;
+    let (near, far) = shown.span(&ray)?;
+    let from_cut = Ray::new(ray.at(near), ray.direction);
+    scene
+        .printable(scene.active_plate())
+        .flat_map(|object| {
+            let (surface, bvh) = object.support_surface();
+            let model = raycast_placed(surface, bvh, object.transform, &from_cut)
+                .map(|hit| (Printed::Model, hit));
+            model
+                .into_iter()
+                .chain(support_hits(object, from_cut))
+                .map(|(printed, hit)| (object.id, printed, hit))
+        })
+        .map(|(id, printed, hit)| {
+            let distance = hit.distance + near;
+            (id, printed, PlacedHit { distance, ..hit })
+        })
+        .filter(|(_, _, hit)| hit.distance <= far)
+        .min_by(|(_, _, a), (_, _, b)| a.distance.total_cmp(&b.distance))
+        .filter(|(_, _, hit)| hit.normal.dot(ray.direction) < 0.0)
+}
+
+/// Where `ray` meets each of `object`'s support groups as they print, once built.
+fn support_hits(object: &SceneObject, ray: Ray) -> impl Iterator<Item = (Printed, PlacedHit)> {
+    let groups = object
+        .supports_built()
+        .into_iter()
+        .flat_map(|(groups, bvhs)| groups.iter().zip(bvhs).enumerate());
+    groups.filter_map(move |(index, (group, bvh))| {
+        raycast_placed(&group.mesh, bvh, Transform::default(), &ray)
+            .map(|hit| (Printed::Supports(index), hit))
+    })
 }
 
 /// Whether a visible model stands between `eye` and `point`, so that `point` is hidden

@@ -415,7 +415,7 @@ fn hole_shapes_an_open_floor_and_plugs_come_back_and_a_file_from_before_reads() 
     .expect("a hole written before ADR 0313 reads");
     assert_eq!(hole.shape, HoleShape::Round);
     assert!(
-        !hole.walled,
+        hole.kind == core_volume::HoleKind::Drain,
         "a hole written before ADR 0346 drains, as it was cut"
     );
 }

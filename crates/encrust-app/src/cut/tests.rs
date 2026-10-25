@@ -189,6 +189,49 @@ fn keeping_one_half_throws_the_other_away() {
 }
 
 #[test]
+fn a_hole_drilled_before_the_cut_stays_in_the_half_it_was_drilled_into() {
+    let (mut scene, id) = scene_with(cuboid(Vec3::splat(20.0)), Transform::default());
+    let object = scene.get_mut(id).expect("the cube");
+    let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
+    let size = core_volume::HoleSize::round(4.0, 6.0, 1.0);
+    let top = Vec3::new(10.0, 10.0, 20.0);
+    object
+        .hollow
+        .add_drain(&mesh, &bvh, top, Vec3::Z, size, Transform::default());
+    cut_now(at(Axis::Z, 10.0, Keep::Above), &mut scene, id);
+
+    // A 24-gon with its corners on 2 mm holds 12 r^2 sin(pi / 12), 6 mm deep.
+    let bore = 12.0 * 4.0 * (std::f32::consts::PI / 12.0).sin() * 6.0;
+    let volume = signed_volume(&scene.objects()[0].mesh);
+    let expected = 4000.0 - bore;
+    assert!(
+        (volume - expected).abs() < 1e-3 * expected,
+        "the upper half is 4000 mm3 less the {bore} mm3 bore, {expected}, got {volume}"
+    );
+}
+
+#[test]
+fn a_model_its_holes_cannot_be_cut_into_is_left_whole() {
+    let (mut scene, id) = scene_with(cuboid(Vec3::splat(2.0)), Transform::default());
+    let object = scene.get_mut(id).expect("the cube");
+    let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
+    // Wider and deeper than the cube, so taking it out leaves nothing.
+    let size = core_volume::HoleSize::round(8.0, 4.0, 1.0);
+    let top = Vec3::new(1.0, 1.0, 2.0);
+    object
+        .hollow
+        .add_drain(&mesh, &bvh, top, Vec3::Z, size, Transform::default());
+    let status = cut_now(at(Axis::Z, 1.0, Keep::Both), &mut scene, id);
+
+    assert!(
+        matches!(&status, Status::Error(said) if *said == tr!("cut-undrilled", name = "cube")),
+        "got {status:?}"
+    );
+    assert_eq!(scene.objects().len(), 1, "the model stays as it was");
+    assert!(scene.get(id).is_some());
+}
+
+#[test]
 fn cutting_across_the_other_axes_is_the_same_cut() {
     // The cube's centre of mass is at 5 mm, so 2 mm short of it is 3 mm into the cube.
     for (axis, expected) in [(Axis::X, 300.0), (Axis::Y, 300.0)] {

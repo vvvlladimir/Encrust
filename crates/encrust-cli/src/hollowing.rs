@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Cancel, Channel, DrainHole, HoleShape, HoleSize, HollowMode, HollowSettings, InfillPattern,
-    InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside, pierce,
-    plug_wall_mm, plugs, sleeves,
+    Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
+    InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside,
+    pierce, plug_wall_mm, plugs, sleeves,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -112,6 +112,11 @@ pub struct HollowArgs {
     /// around each and it keeps its depth, a recess in the shape rather than a drain.
     #[arg(long = "drain-walled")]
     pub walled: bool,
+
+    /// Drill a hole into the supports or raft nearest this point, plate mm, as they stand
+    /// once built, sized as --drain asks; needs supports. Repeat for more holes.
+    #[arg(long = "drain-support-at", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
+    pub drain_support_at: Vec<Vec3>,
 
     /// Print a plug for each drain hole, standing on the plate beside the model.
     #[arg(long = "drain-plugs")]
@@ -258,7 +263,11 @@ impl HollowArgs {
             .map(|near| {
                 hole_at(mesh, bvh, *near, self.hole_size())
                     .map(|hole| DrainHole {
-                        walled: self.walled,
+                        kind: if self.walled {
+                            HoleKind::Walled
+                        } else {
+                            HoleKind::Drain
+                        },
                         ..hole
                     })
                     .with_context(|| format!("no surface near {near} to drill a drain hole into"))
@@ -368,6 +377,25 @@ pub fn cut(
         },
         bodies,
     ))
+}
+
+/// The bodies a hole into the supports nearest each `--drain-support-at` takes out, wound
+/// inward like the model's own cuts so the two append (ADR 0071, 0347).
+pub fn support_holes(supports: &Mesh, args: &HollowArgs) -> Result<Mesh> {
+    let bvh = Bvh::build(supports);
+    let holes = args
+        .drain_support_at
+        .iter()
+        .map(|near| {
+            hole_at(supports, &bvh, *near, args.hole_size())
+                .map(|hole| DrainHole {
+                    kind: HoleKind::Support,
+                    ..hole
+                })
+                .with_context(|| format!("no support near {near} to drill a hole into"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    drill(&holes, &[]).context("drilling the supports")
 }
 
 /// What the cuts took out of the model.

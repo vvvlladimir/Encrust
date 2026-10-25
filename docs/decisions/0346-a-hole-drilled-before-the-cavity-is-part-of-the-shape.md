@@ -15,17 +15,21 @@ wall, and its plug was cut again from a 12.6 mm cylinder to a 2 mm disc.
 
 ## Decision
 
-`DrainHole::walled` marks a hole drilled into a model that was solid at the time;
-`ModelHollow::add_drain` sets it from `is_hollow`, and the CLI sets it for every
-`--drain-at` under `--drain-walled`. A walled hole is part of the shape:
+`DrainHole::kind` says what a hole is for; `HoleKind::Walled` marks one drilled into a model
+that was solid at the time. `ModelHollow::add_hole` sets it from `is_hollow`, and the CLI
+sets it for every `--drain-at` under `--drain-walled`. A walled hole is part of the shape:
 
-- `sleeves` turns it into a `Blocker` from its mouth to its tip, its widest radius plus the
-  wall, beside the channels' sleeves, so the cavity keeps a wall around it (ADR 0076);
+- `sleeves` turns it into a `Blocker` from its mouth to its tip, beside the channels'
+  sleeves, so the cavity keeps a wall around it (ADR 0076). A blocker is now a flat-ended rod
+  of `core_mm`, the hole's widest radius, grown by `wall_mm`: the wall is as thick past the
+  hole's end as along its side. The core scales with the model and the wall does not, so it
+  is the shell's thickness at any scale, a channel's sleeve too. A file without the fields
+  reads the capsule it was;
 - `pierce` leaves its depth alone;
 - its plug is as deep as the hole, never cut down to the wall.
 
-A hole drilled into a hollow model, or by `drill_into` into a pocket, is not walled and
-drains as before. The field is serialised with a default of `false`, so a project saved
+A hole drilled into a hollow model, or by `drill_into` into a pocket, is a `Drain` and
+drains as before. The field is serialised with a default of `Drain`, so a project saved
 before it reads every hole as a drain, which is what it was cut as, and needs no new
 format version. Clearing a walled hole from a hollow model moves its sleeve, so the shell
 is built again at once, as clearing a channel does.
@@ -36,10 +40,9 @@ The order of Drain and Hollow now matters, and the drainage check is what tells 
 that a hole drilled first does not empty the cavity. A walled hole costs a hollow run where
 it is added or cleared on a hollow model, as a channel does.
 
-The sleeve is a capsule, so past a hole's flat end it leaves the hole's radius plus the
-wall of solid on its axis rather than the wall alone; a few millilitres at most, and the
-wall is never thinner than asked. A user who wants a hole drilled first to drain anyway is
-the signal to reopen: it would need a way to turn the flag off on a placed hole.
+A tapered hole is walled as a cylinder of its widest radius, so the wall around its narrow
+end is thicker than asked by what the taper took in. A user who wants a hole drilled first
+to drain anyway is the signal to reopen: it would need a way to change a placed hole's kind.
 
 ## Alternatives considered
 
@@ -51,10 +54,14 @@ with every click, and rebuilds the whole field rather than carving a kept one (A
 
 ### Wall every hole, whenever it was drilled
 
-No flag and no order, but a hole would never drain unless typed deeper than the wall, and
+No new kind and no order, but a hole would never drain unless typed deeper than the wall, and
 every saved project would change what it prints.
+
+### A capsule of the hole's radius plus the wall
+
+What `sleeves` gave a channel already, and no new field. Past a flat end it leaves the hole's
+radius plus the wall on its axis: 12 mm of solid under a 20 mm hole in a 2 mm wall.
 
 ### The option that won, and what it costs
 
-A flag on a saved type and an order a user has to know about; the capsule's extra solid
-past a hole's end.
+A field on a saved type and an order a user has to know about, and two on `Blocker`.

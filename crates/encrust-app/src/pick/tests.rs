@@ -322,3 +322,89 @@ fn a_cut_through_the_wall_is_capped() {
         "the cap at the cut hides the wall's inside"
     );
 }
+
+/// A 10 mm block with a 3 mm hole 5 mm down into the middle of its top, taken out exactly,
+/// and the printed surface indexed, as the window has it a moment after the click.
+fn drilled_block(scene: &mut Scene) -> ObjectId {
+    let mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let id = scene.insert(crate::scene::Imported::new(
+        "block".to_owned(),
+        Arc::new(mesh.clone()),
+        Transform::default(),
+        summary(),
+    ));
+    let object = scene.get_mut(id).expect("the block is on the plate");
+    let bvh = core_geometry::Bvh::build(&mesh);
+    let size = core_volume::HoleSize::round(3.0, 5.0, 1.0);
+    let top = Vec3::new(5.0, 5.0, 10.0);
+    object
+        .hollow
+        .add_drain(&mesh, &bvh, top, Vec3::Z, size, Transform::default());
+    let cuts = Arc::clone(object.hollow.cut_bodies().expect("a hole is a cut"));
+    let source = Arc::clone(object.uncut());
+    let drilled = core_volume::Drilled::of(&source, None, &cuts).expect("a block drills");
+    object.hollow.keep_drilled(&source, &cuts, Some(drilled));
+    object.keep_support_surface();
+    id
+}
+
+fn straight_down_on(point: Vec3) -> OrbitCamera {
+    OrbitCamera {
+        target: point,
+        distance_mm: 40.0,
+        pitch_rad: std::f32::consts::FRAC_PI_2 - 1e-4,
+        ..OrbitCamera::default()
+    }
+}
+
+#[test]
+fn pointing_into_a_drilled_hole_meets_its_floor_not_the_mouth_it_took() {
+    let mut scene = Scene::default();
+    let id = drilled_block(&mut scene);
+    let camera = straight_down_on(Vec3::new(5.0, 5.0, 5.0));
+    let (hit_id, printed, hit) =
+        pick_printed(&scene, &camera, VIEWPORT, center(), Shown::default()).expect("the hole");
+    assert_eq!((hit_id, printed), (id, Printed::Model));
+    assert!(
+        (hit.point.z - 5.0).abs() < 1e-3,
+        "the floor stands 5 mm down at z = 5, got {}",
+        hit.point.z
+    );
+}
+
+#[test]
+fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
+    let mut scene = Scene::default();
+    let id = add(&mut scene, "cube", Vec3::new(0.0, 0.0, 2.0));
+    let raft = core_supports::shaded(vec![core_geometry::cuboid(
+        Vec3::new(-5.0, -5.0, 0.0),
+        Vec3::new(6.0, 6.0, 1.0),
+    )]);
+    let bvhs = vec![Arc::new(core_geometry::Bvh::build(&raft[0].mesh))];
+    let object = scene.get_mut(id).expect("the cube");
+    // Built for no groups of its own, so it stands for whatever the tool built.
+    let from = crate::drilling::BuiltFrom::of(crate::drilling::SupportsUnder {
+        groups: &[],
+        cuts: None,
+        transform: object.transform,
+    });
+    object.printed_supports.keep(from, raft, bvhs);
+
+    let beside = straight_down_on(Vec3::new(-3.0, -3.0, 1.0));
+    let (hit_id, printed, hit) =
+        pick_printed(&scene, &beside, VIEWPORT, center(), Shown::default()).expect("the raft");
+    assert_eq!((hit_id, printed), (id, Printed::Supports(0)));
+    assert!(
+        (hit.point.z - 1.0).abs() < 1e-3,
+        "on the raft's top, got {hit:?}"
+    );
+
+    let over = straight_down_on(Vec3::new(0.5, 0.5, 3.0));
+    let (_, printed, _) =
+        pick_printed(&scene, &over, VIEWPORT, center(), Shown::default()).expect("the cube");
+    assert_eq!(
+        printed,
+        Printed::Model,
+        "the model in front of the raft is met first"
+    );
+}

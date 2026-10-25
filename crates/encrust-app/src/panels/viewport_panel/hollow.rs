@@ -3,16 +3,17 @@
 
 use std::sync::Arc;
 
-use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
-use core_volume::{ModelHollow, PENDING_MARKER_MM, markers};
+use core_geometry::{Bvh, Mesh, PlacedHit, Scalar, Transform, Vec3};
+use core_volume::{DrainHole, ModelHollow, PENDING_MARKER_MM, markers};
 
 use crate::panels::Window;
 use crate::panels::inspector::drain::rebuild_around_cuts;
+use crate::pick::Printed;
 use crate::render::{Ghost, GhostShape};
-use crate::scene::ObjectId;
+use crate::scene::{ObjectId, SceneObject};
 use crate::ui::theme;
 
-use super::picking::{material_under, surface_under};
+use super::picking::{material_under, printed_under, surface_under};
 
 /// Keeps the wall solid where the model was clicked, and selects what it was put on so
 /// that the inspector is talking about the same object.
@@ -47,30 +48,56 @@ pub(super) fn remove_blocker_under_cursor(
     }
 }
 
-/// Drills a drain hole where the model was clicked, straight into the surface under the
-/// cursor, and selects what it was drilled into.
+/// Drills a drain hole straight into the printed surface under the cursor — a model's, an
+/// earlier hole's floor or wall among it, or its supports' — and selects the model.
 pub(super) fn place_drain_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
+    let Some((id, printed, hit)) = printed_under(window, viewport, cursor) else {
         return;
     };
     window.doc.scene.select(Some(id));
     window.tools.drain.stale();
-    if let Some(object) = window.doc.scene.get_mut(id) {
-        let size = window.tools.drain.size_for(object);
-        let transform = object.transform;
-        object.hollow.add_drain(
-            &object.mesh,
-            &object.bvh,
-            hit.point,
-            hit.normal,
-            size,
-            transform,
-        );
+    let hole = window
+        .doc
+        .scene
+        .get(id)
+        .and_then(|object| hole_under(window, object, printed, &hit));
+    if let (Some(hole), Some(object)) = (hole, window.doc.scene.get_mut(id)) {
+        object.hollow.add_hole(hole);
     }
+}
+
+/// The hole a click at `hit` on `printed` of `object` drills, in the model's own space.
+fn hole_under(
+    window: &Window,
+    object: &SceneObject,
+    printed: Printed,
+    hit: &PlacedHit,
+) -> Option<DrainHole> {
+    let size = window.tools.drain.size_for(object);
+    let (point, normal, transform) = (hit.point, hit.normal, object.transform);
+    match printed {
+        Printed::Model => {
+            let (surface, bvh) = object.support_surface();
+            ModelHollow::drain_at(surface, bvh, point, normal, size, transform)
+        }
+        Printed::Supports(group) => {
+            let (mesh, bvh) = support_group(object, group)?;
+            ModelHollow::support_drain_at(&mesh, &bvh, point, normal, size, transform)
+        }
+    }
+}
+
+/// Support group `group` of `object` as it prints, and its hierarchy, once built.
+fn support_group(object: &SceneObject, group: usize) -> Option<(Arc<Mesh>, Arc<Bvh>)> {
+    let (groups, bvhs) = object.supports_built()?;
+    Some((
+        Arc::clone(&groups.get(group)?.mesh),
+        Arc::clone(bvhs.get(group)?),
+    ))
 }
 
 /// Adds a point to the channel being laid out on the model under the cursor.
@@ -97,7 +124,7 @@ pub(super) fn remove_drain_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
+    let Some((id, _, hit)) = printed_under(window, viewport, cursor) else {
         return;
     };
     window.tools.drain.stale();
@@ -116,24 +143,26 @@ pub(super) fn blocker_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> O
     marker_ghost(blocker.from, blocker.radius_mm, object.transform)
 }
 
-/// The drain hole a click at `hit` on object `id` would drill, as deep as it would be cut;
-/// none over a hole already drilled that takes it in.
-pub(super) fn drain_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
+/// The drain hole a click at `hit` on `printed` of object `id` would drill, as deep as it
+/// would be cut; none inside a hole already drilled that takes it in.
+pub(super) fn drain_ghost(
+    window: &Window,
+    id: ObjectId,
+    printed: Printed,
+    hit: &PlacedHit,
+) -> Option<Ghost> {
     let object = window.doc.scene.get(id)?;
-    let size = window.tools.drain.size_for(object);
-    let hole = ModelHollow::drain_at(
-        &object.mesh,
-        &object.bvh,
-        hit.point,
-        hit.normal,
-        size,
-        object.transform,
-    )
-    .filter(|hole| !object.hollow.has_hole_over(hole))?;
+    let hole = hole_under(window, object, printed, hit)
+        .filter(|hole| !object.hollow.has_hole_over(hole))?;
+    let into = match printed {
+        Printed::Model => None,
+        Printed::Supports(group) => Some(support_group(object, group)?.0),
+    };
     Some(Ghost {
         shape: GhostShape::Hole {
             id,
             hole: object.hollow.as_cut(hole),
+            into,
         },
         colour: theme::colors().accent,
     })

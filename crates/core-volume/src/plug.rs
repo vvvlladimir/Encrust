@@ -2,7 +2,7 @@ use core_csg::Solid;
 use core_geometry::{Aabb, Bvh, Mesh, Quat, Ray, Scalar, Transform, Vec3, cuboid, transform_mesh};
 use rayon::prelude::*;
 
-use crate::drain::{DrainHole, MOUTH_LIFT_MM, Section, body_of};
+use crate::drain::{DrainHole, HoleKind, MOUTH_LIFT_MM, Section, body_of};
 use crate::drilled::meets;
 use crate::error::VolumeError;
 use crate::hollow::HollowMode;
@@ -113,7 +113,7 @@ fn reaches(holes: &[DrainHole], wall_mm: Option<Scalar>) -> impl Iterator<Item =
 /// The plugs cut for a model's holes, one a hole in their order.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Plugs {
-    /// One plug a hole, in the model's own space.
+    /// One plug a hole, in the model's own space; empty for a hole in the supports.
     pub meshes: Vec<Mesh>,
     /// How many of them had their outer face sampled rather than cut from the model, which
     /// the engine could not read even patched: they follow its surface only at the samples.
@@ -146,10 +146,14 @@ pub fn plugs(
         .enumerate()
         .map(|(index, hole)| Body::checked(hole, wall_mm, gap_mm, index))
         .collect::<Result<_, VolumeError>>()?;
-    let closed = bodies.iter().filter(|body| body.is_none()).count();
-    if closed == bodies.len() {
+    let closed = bodies
+        .iter()
+        .zip(holes)
+        .filter(|(body, hole)| body.is_none() && hole.kind != HoleKind::Support)
+        .count();
+    if bodies.iter().all(Option::is_none) {
         return Ok(Plugs {
-            meshes: vec![Mesh::default(); closed],
+            meshes: vec![Mesh::default(); bodies.len()],
             sampled: 0,
             closed,
         });
@@ -275,7 +279,7 @@ struct Body {
 
 impl Body {
     /// The body `hole`, `index` among the holes asked for, leaves a plug, `None` where the
-    /// gap closes its mouth, or why it cannot be drilled.
+    /// gap closes its mouth or the hole is in the supports, or why it cannot be drilled.
     fn checked(
         hole: &DrainHole,
         wall_mm: Option<Scalar>,
@@ -293,7 +297,10 @@ impl Body {
         if !sound || !gap_mm.is_finite() {
             return Err(VolumeError::BadDrain { index });
         }
-        let wall_mm = wall_mm.filter(|_| !hole.walled);
+        if hole.kind == HoleKind::Support {
+            return Ok(None);
+        }
+        let wall_mm = wall_mm.filter(|_| hole.kind == HoleKind::Drain);
         let body = Self::of(hole, axis, wall_mm.unwrap_or(hole.depth_mm), gap_mm);
         Ok((body.outer_mm.min(body.lifted_mm) > THINNEST_MM).then_some(body))
     }

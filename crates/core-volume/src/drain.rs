@@ -115,10 +115,23 @@ pub struct DrainHole {
     pub shape: HoleShape,
     #[serde(default)]
     pub turn_deg: Scalar,
-    /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
-    /// keeps a wall around it and it keeps its depth rather than draining (ADR 0346).
+    /// What the hole is for, which says how hollowing and plugs treat it (ADR 0346, 0347).
     #[serde(default)]
-    pub walled: bool,
+    pub kind: HoleKind,
+}
+
+/// What a hole is for. A file without it reads a drain, which every hole was before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HoleKind {
+    /// Lets the resin out of a cavity: carried on through the wall, closed by a plug.
+    #[default]
+    Drain,
+    /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
+    /// keeps a wall around it and it keeps its depth and its plug.
+    Walled,
+    /// Drilled into the supports or raft under the model: no plug, no wall, never deepened.
+    Support,
 }
 
 impl DrainHole {
@@ -133,7 +146,7 @@ impl DrainHole {
             lift_mm,
             shape: size.shape,
             turn_deg: size.turn_deg,
-            walled: false,
+            kind: HoleKind::Drain,
         }
     }
 
@@ -191,8 +204,8 @@ fn weighted(body: &Mesh) -> Mesh {
     whole
 }
 
-/// Every hole but a walled one deepened until it is through a wall of `thickness_mm` cut on
-/// a lattice of `voxel_mm`.
+/// Every drain deepened until it is through a wall of `thickness_mm` cut on a lattice of
+/// `voxel_mm`; other holes keep their depth.
 ///
 /// A hole is drilled along the surface's own normal, so the wall in front of it is the
 /// thickness the cavity was cut to; a hole left shorter than that is a dimple, not a
@@ -202,11 +215,11 @@ pub fn pierce(holes: &[DrainHole], thickness_mm: Scalar, voxel_mm: Scalar) -> Ve
     holes
         .iter()
         .map(|hole| DrainHole {
-            depth_mm: if hole.walled {
-                hole.depth_mm
-            } else {
+            depth_mm: if hole.kind == HoleKind::Drain {
                 hole.depth_mm
                     .max(hole.lift_mm + thickness_mm + 2.0 * voxel_mm)
+            } else {
+                hole.depth_mm
             },
             ..*hole
         })

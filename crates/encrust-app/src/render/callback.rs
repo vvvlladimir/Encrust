@@ -249,8 +249,13 @@ pub enum GhostShape {
         transform: Transform,
     },
     /// A hole about to be drilled into object `id`, in its own space, cut the way a
-    /// drilled one is.
-    Hole { id: ObjectId, hole: DrainHole },
+    /// drilled one is; `into` is the support group it goes into, in plate coordinates, where
+    /// it is not the model.
+    Hole {
+        id: ObjectId,
+        hole: DrainHole,
+        into: Option<Arc<Mesh>>,
+    },
 }
 
 /// What the objects on the plate come to on the GPU, gathered one object at a time.
@@ -302,7 +307,7 @@ impl Draws {
             GhostShape::Body { mesh, transform } => {
                 self.marker(Arc::clone(mesh), *transform, ghost.colour);
             }
-            GhostShape::Hole { id, hole } => {
+            GhostShape::Hole { id, hole, into } => {
                 let Some(object) = scene.get(*id) else {
                     return;
                 };
@@ -315,9 +320,16 @@ impl Draws {
                 // First, so a plate already holding `MAX_CUTS` cuts still opens this one.
                 let cut = cuts_of(std::slice::from_ref(hole), &[], object.transform);
                 self.cuts.splice(0..0, cut);
+                let solid = match into {
+                    Some(group) => ModelDraw::whole(
+                        Arc::clone(group),
+                        ModelInstance::new(Transform::default(), ghost.colour, NOT_MARKED),
+                    ),
+                    None => ModelDraw::whole(shown(object, light), instance),
+                };
                 self.cut_surfaces.push(CutDraw {
                     body: ModelDraw::part(Arc::new(body), wall, instance),
-                    solid: ModelDraw::whole(shown(object, light), instance),
+                    solid,
                 });
             }
         }
@@ -457,7 +469,7 @@ impl Draws {
             }
         }
 
-        let groups = object.supports.drawn();
+        let groups = object.supports_shown();
         for (group, shaded) in groups
             .iter()
             .enumerate()

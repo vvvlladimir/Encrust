@@ -73,11 +73,13 @@ a shell has a floor; a mould ignores the direction.
 
 ## Blockers
 
-A ball of radius `r` swept from `from` to `to` inside which the wall stays solid, kept in
-model space so it travels with the model, subtracted from the cavity before anything is
-meshed: `max(cavity, r - |p - segment|)` over the cavity's tiles and the capsule's own.
-They keep a cavity out of a thin spar or a spike that would print hollow and snap, and out
-of the sleeve around a channel. A click drops a ball at the inspector's radius — both ends
+A flat-ended rod of radius `core` from `from` to `to`, grown by `r` and a wall `w` all round
+— with no core, a ball of radius `r + w` swept between them — inside which the wall stays
+solid, kept in model space so it travels with the model, subtracted from the cavity before
+anything is meshed: `max(cavity, r + w - d(p, rod))` over the cavity's tiles and the rod's
+own. `core` and `r` scale with the model; `w` is plate millimetres, so a sleeve's wall is the
+shell's thickness at any scale. They keep a cavity out of a thin spar or a spike that would
+print hollow and snap, and out of the sleeve around a channel or a walled hole. A click drops a ball at the inspector's radius — both ends
 the same point — and an alt-click removes the one the click landed in.
 
 ## The lattice
@@ -248,10 +250,16 @@ And `pierce` deepens a hole standing on a hollowed model until it is through the
 dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
 model there is no wall to cross and the depth is what was typed.
 
-A hole drilled into a model that is still solid is `walled` (ADR 0346): part of the shape,
-not a drain. `sleeves` keeps the cavity a wall off it, from its mouth to its tip, as it does
-a channel; `pierce` leaves its depth, and its plug is as deep as the hole. Clearing one from
-a hollow model rebuilds the shell, as clearing a channel does.
+A hole drilled into a model that is still solid is `HoleKind::Walled` (ADR 0346): part of
+the shape, not a drain. `sleeves` keeps the cavity a wall off it, from its mouth to its tip,
+as it does a channel; `pierce` leaves its depth, and its plug is as deep as the hole.
+Clearing one from a hollow model rebuilds the shell, as clearing a channel does.
+
+A hole in the supports (ADR 0347) is kept with the model in its space, takes no plug and is
+never deepened or walled. The Drain tool meets what prints: the model's surface drilled and
+hollowed, and its support groups as they print, each with a hierarchy built on a worker
+(`PrintedSupports`). A click adds nothing only where its hole would lie wholly inside one
+drilled at least as wide, so a click on a hole's floor drills on through it.
 
 A polygon's corners lie on the hole's diameter and its turn is measured from the level line
 `frame` lays the first corner on wherever the axis is not upright, so a user turns a corner
@@ -273,7 +281,8 @@ measures a point off the nearest side, and stops a leg at the mitre planes it sh
 A plug is what a hole took out of the wall as it is cut, after `pierce` (ADR 0321): the
 model cut down to the hole's body, a convex frustum whose outline is moved in by the gap —
 by `gap / cos(π/n)` at a corner, so every side clears by the gap — and as long as the wall
-where the model is hollow, as deep as the hole otherwise or where it is walled. A taper the gap closes first ends
+where the model is hollow, as deep as the hole otherwise or where it is walled, and none for a
+hole in the supports. A taper the gap closes first ends
 the body where its radius is `THINNEST_MM`, and a mouth it closes leaves that hole an empty
 plug, counted in `Plugs::closed`, without failing the others. The model, read once as a solid
 with its shells unioned, is intersected with each body through `core-csg`, so its inner end
@@ -318,8 +327,9 @@ They may hold 512 MB together on the desktop and 128 MB in a browser, a field ov
 never kept, and in a browser they make way for a field being built or a plate being sliced
 (ADR 0260).
 
-The window drills each model on a worker a moment after its cuts or mesh change, draws
-what it gets with the cavity's faces found again on it — those within a micrometre of the
+The window drills each model on a worker a moment after its cuts or mesh change, and its
+support groups on another — only those a body's box reaches are cut and shaded again — and
+draws what it gets with the cavity's faces found again on it — those within a micrometre of the
 shell's cavity — and hands it to `bake`, which otherwise drills the model itself. Until it
 lands, and on a model the engine refuses, the cut is drawn as follows. Nothing meshes the
 surface of a hole: the bodies are already there, wound inward, so the face that survives culling is the

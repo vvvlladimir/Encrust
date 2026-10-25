@@ -4,8 +4,8 @@ use std::sync::{Arc, Weak};
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
-    Blocker, Channel, DrainHole, Drilled, HoleSize, HollowSettings, channel_under, drill, hole_at,
-    lift_for, pierce, sleeves, turn_in_model,
+    Blocker, Channel, DrainHole, Drilled, HoleKind, HoleSize, HollowSettings, channel_under, drill,
+    hole_at, lift_for, pierce, sleeves, turn_in_model,
 };
 
 /// How wide a point of a channel still being laid out is drawn, in millimetres.
@@ -344,19 +344,29 @@ impl ModelHollow {
         size: HoleSize,
         transform: Transform,
     ) {
-        let hole = Self::drain_at(mesh, bvh, point, normal, size, transform);
-        if let Some(hole) = hole.filter(|hole| !self.has_hole_over(hole)) {
-            self.drains.push(self.placed(hole));
+        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
+            self.add_hole(hole);
+        }
+    }
+
+    /// Drills `hole`, in the model's own space, as a click would — walled on a solid model —
+    /// unless one already drilled takes it in: what [`Self::drain_at`] or
+    /// [`Self::support_drain_at`] placed.
+    pub fn add_hole(&mut self, hole: DrainHole) {
+        let hole = self.placed(hole);
+        if !self.has_hole_over(&hole) {
+            self.drains.push(hole);
             self.recut();
         }
     }
 
-    /// Whether `hole`, in the model's own space, would land in one already drilled at least
-    /// as wide: a click on a hole adds nothing, a wider one over it is drilled.
+    /// Whether `hole`, in the model's own space, would lie wholly inside one already drilled
+    /// at least as wide: a click on a hole adds nothing, one reaching past it is drilled.
     pub fn has_hole_over(&self, hole: &DrainHole) -> bool {
-        self.drains
-            .iter()
-            .any(|old| within(old, hole.at) && hole.diameter_mm <= old.diameter_mm)
+        let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
+        self.drains.iter().any(|old| {
+            within(old, hole.at) && within(old, tip) && hole.diameter_mm <= old.diameter_mm
+        })
     }
 
     /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
@@ -369,21 +379,28 @@ impl ModelHollow {
         size: HoleSize,
         transform: Transform,
     ) -> Option<DrainHole> {
-        let inverse = transform.inverse_matrix()?;
-        let axis = inverse.transform_vector3(-normal).try_normalize()?;
-
-        // A hole is measured on the plate, like a blocker, and kept in the model's own
-        // space, so both its numbers come back through the scale the model stands at.
-        let smallest = transform.least_scale();
-        let at = inverse.transform_point3(point);
-        let size = HoleSize {
-            diameter_mm: size.diameter_mm / smallest,
-            depth_mm: size.depth_mm / smallest,
-            turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
-            ..size
-        };
+        let (at, axis, size) = in_model(point, normal, size, transform)?;
         let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm, size.depth_mm);
         Some(DrainHole::sized(at, axis, size, lift_mm))
+    }
+
+    /// The hole a click at `point` on a face of `normal` of the supports `mesh`, all in
+    /// plate coordinates, would drill, in the model's own space.
+    pub fn support_drain_at(
+        mesh: &Mesh,
+        bvh: &Bvh,
+        point: Vec3,
+        normal: Vec3,
+        size: HoleSize,
+        transform: Transform,
+    ) -> Option<DrainHole> {
+        let lift_mm = lift_for(mesh, bvh, point, -normal, size.diameter_mm, size.depth_mm);
+        let (at, axis, size) = in_model(point, normal, size, transform)?;
+        let lift_mm = lift_mm / transform.least_scale();
+        Some(DrainHole {
+            kind: HoleKind::Support,
+            ..DrainHole::sized(at, axis, size, lift_mm)
+        })
     }
 
     /// `hole` as it would be cut here: through the wall, once the model is hollow.
@@ -394,10 +411,14 @@ impl ModelHollow {
             .unwrap_or(hole)
     }
 
-    /// `hole` as a click drills it here: walled on a solid model (ADR 0346).
+    /// `hole` as a click drills it here: into a model, walled while it is solid (ADR 0346).
     fn placed(&self, hole: DrainHole) -> DrainHole {
         DrainHole {
-            walled: !self.is_hollow(),
+            kind: match hole.kind {
+                HoleKind::Support => HoleKind::Support,
+                _ if self.is_hollow() => HoleKind::Drain,
+                _ => HoleKind::Walled,
+            },
             ..hole
         }
     }
@@ -544,11 +565,7 @@ impl ModelHollow {
         let blockers = self
             .blockers
             .iter()
-            .map(|blocker| Blocker {
-                from: sizing * blocker.from,
-                to: sizing * blocker.to,
-                radius_mm: blocker.radius_mm * least,
-            })
+            .map(|blocker| blocker.scaled(sizing, least))
             .collect();
         let drains = self
             .drains
@@ -558,12 +575,17 @@ impl ModelHollow {
                 let axis = (sizing * hole.axis).try_normalize().unwrap_or(hole.axis);
                 let diameter_mm = hole.diameter_mm * least;
                 let depth_mm = hole.depth_mm * least;
+                // A support hole's lift was measured on the supports, which `mesh` is not.
+                let lift_mm = match hole.kind {
+                    HoleKind::Support => hole.lift_mm * least,
+                    _ => lift_for(mesh, bvh, at, axis, diameter_mm, depth_mm),
+                };
                 DrainHole {
                     at,
                     axis,
                     diameter_mm,
                     depth_mm,
-                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm, depth_mm),
+                    lift_mm,
                     ..*hole
                 }
             })
@@ -590,10 +612,33 @@ impl ModelHollow {
 
 /// Whether `point` is inside the tube `hole` cuts, in the model's own space.
 fn within(hole: &DrainHole, point: Vec3) -> bool {
-    let along = (point - hole.at).dot(hole.axis);
+    let axis = hole.axis.normalize_or_zero();
+    let along = (point - hole.at).dot(axis);
     let radius = hole.diameter_mm / 2.0;
     (-radius..=hole.depth_mm).contains(&along)
-        && (point - hole.at - hole.axis * along).length() <= radius
+        && (point - hole.at - axis * along).length() <= radius
+}
+
+/// Where a click at `point` on a face of `normal`, in plate coordinates, drills in the model's
+/// own space, along which axis, and `size` brought there.
+fn in_model(
+    point: Vec3,
+    normal: Vec3,
+    size: HoleSize,
+    transform: Transform,
+) -> Option<(Vec3, Vec3, HoleSize)> {
+    let inverse = transform.inverse_matrix()?;
+    let axis = inverse.transform_vector3(-normal).try_normalize()?;
+    // A hole is measured on the plate, like a blocker, and kept in the model's own space,
+    // so both its numbers come back through the scale the model stands at.
+    let smallest = transform.least_scale();
+    let size = HoleSize {
+        diameter_mm: size.diameter_mm / smallest,
+        depth_mm: size.depth_mm / smallest,
+        turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
+        ..size
+    };
+    Some((inverse.transform_point3(point), axis, size))
 }
 
 /// Balls of the given radii about the given centres, in one mesh, or `None` for none: how

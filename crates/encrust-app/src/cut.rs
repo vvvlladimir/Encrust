@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{Result, anyhow};
 use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, transform_mesh};
 use core_joint::{Dowel, JointKind, Joints};
@@ -116,7 +118,7 @@ impl CutTool {
     }
 
     /// Starts cutting one model in two off the drawing thread; [`CutTool::poll`] puts the
-    /// halves, new geometry with none of its supports, cavity or holes, in its place.
+    /// halves in its place: new geometry, its holes cut into it, with no supports.
     pub fn start(&mut self, scene: &Scene, id: ObjectId) -> Result<()> {
         let object = scene
             .get(id)
@@ -124,12 +126,16 @@ impl CutTool {
         let plane = self
             .plane(object)
             .ok_or_else(|| anyhow!(tr!("cut-no-direction")))?;
-        let shell = object.hollow.shell();
-        let printed = transform_mesh(shell.unwrap_or(&object.mesh), object.transform);
-        let solid = shell.map(|_| transform_mesh(&object.mesh, object.transform));
+        let uncut = object.uncut();
+        let drilled = object.hollow.drilled(uncut).map(|drilled| &drilled.mesh);
         let job = spawn_cut(CutRequest {
-            printed,
-            solid,
+            printed: Arc::clone(drilled.unwrap_or(uncut)),
+            cuts: drilled
+                .is_none()
+                .then(|| object.hollow.cut_bodies().cloned())
+                .flatten(),
+            solid: object.hollow.shell().map(|_| Arc::clone(&object.mesh)),
+            transform: object.transform,
             plane,
             keep: self.state.keep,
             joints: self.state.joints,
@@ -236,6 +242,7 @@ impl Running {
                 unjoined,
             } => (joined, open_loops, unjoined),
             CutOutcome::Missed => return Status::Error(tr!("cut-misses", name = name)),
+            CutOutcome::Undrilled => return Status::Error(tr!("cut-undrilled", name = name)),
             CutOutcome::Failed(message) => return Status::Error(message),
         };
         if let Err(changed) = landing::take_off(scene, std::slice::from_ref(&self.taken)) {

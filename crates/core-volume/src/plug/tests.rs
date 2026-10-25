@@ -1,5 +1,5 @@
 use super::*;
-use crate::drain::HoleShape;
+use crate::drain::{HoleKind, HoleShape};
 use core_geometry::{cuboid, signed_volume};
 
 /// A slab 20 mm square and 10 mm thick, its top face at z = 10.
@@ -19,7 +19,7 @@ fn hole_in_the_top() -> DrainHole {
         lift_mm: 0.0,
         shape: HoleShape::Round,
         turn_deg: 0.0,
-        walled: false,
+        kind: HoleKind::Drain,
     }
 }
 
@@ -378,7 +378,7 @@ fn a_plug_is_flush_with_the_surface_it_closes() {
 #[test]
 fn a_walled_hole_takes_a_plug_as_deep_as_itself_through_any_wall() {
     let walled = DrainHole {
-        walled: true,
+        kind: HoleKind::Walled,
         ..hole_in_the_top()
     };
     let plug = the_plug(walled, Some(2.0), 0.1);
@@ -387,6 +387,18 @@ fn a_walled_hole_takes_a_plug_as_deep_as_itself_through_any_wall() {
         (bounds.maxs.z - 10.0).abs() < 1e-4 && (bounds.mins.z - 4.0).abs() < 1e-4,
         "the plug fills the hole's 6 mm, not the 2 mm wall, got {bounds:?}"
     );
+}
+
+#[test]
+fn a_hole_in_the_supports_takes_no_plug_and_is_not_counted_closed() {
+    let (mesh, bvh) = slab();
+    let support = DrainHole {
+        kind: HoleKind::Support,
+        ..hole_in_the_top()
+    };
+    let made = cut_plugs(&mesh, &bvh, &[support], Some(2.0), 0.1).expect("the hole is sound");
+    assert!(made.meshes[0].is_empty());
+    assert_eq!(made.closed, 0);
 }
 
 #[test]

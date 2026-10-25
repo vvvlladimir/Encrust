@@ -189,6 +189,57 @@ fn a_click_on_a_hole_drills_nothing_more_but_a_wider_one_over_it_is_drilled() {
 }
 
 #[test]
+fn a_narrower_hole_on_the_floor_of_one_already_drilled_is_drilled_through_it() {
+    let mut hollow = ModelHollow::default();
+    let (mesh, bvh) = (lid(), Bvh::build(&lid()));
+    let mut click = |at: Vec3, diameter_mm: Scalar, depth_mm: Scalar| {
+        let size = drain_tool(diameter_mm, depth_mm);
+        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+    };
+    click(Vec3::ZERO, 6.0, 2.0);
+    // On the 6 mm hole's floor, 2 mm down, and on to 4 mm.
+    click(Vec3::new(0.0, 0.0, -2.0), 3.0, 2.0);
+    // At the old mouth and no deeper than its floor: wholly inside it.
+    click(Vec3::ZERO, 3.0, 1.0);
+    assert_eq!(
+        hollow.drains().len(),
+        2,
+        "the hole reaching past the floor is drilled, the one inside the old hole is not"
+    );
+}
+
+#[test]
+fn a_hole_in_the_supports_is_kept_with_the_model_and_neither_deepened_nor_walled() {
+    let raft = core_geometry::cuboid(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(10.0, 10.0, 2.0));
+    let bvh = Bvh::build(&raft);
+    let placed = Transform::from_translation(Vec3::new(0.0, 0.0, 5.0));
+    let mut hollow = ModelHollow::default();
+    let top = Vec3::new(1.0, 2.0, 2.0);
+    let hole =
+        ModelHollow::support_drain_at(&raft, &bvh, top, Vec3::Z, drain_tool(3.0, 1.0), placed)
+            .expect("a raft takes a hole");
+    hollow.add_hole(hole);
+
+    let hole = hollow.drains()[0];
+    assert_eq!(hole.kind, HoleKind::Support);
+    assert!(
+        hole.at.abs_diff_eq(Vec3::new(1.0, 2.0, -3.0), 1e-5),
+        "kept in the model's space, 5 mm under its origin, got {:?}",
+        hole.at
+    );
+    let asked = HollowSettings::default();
+    assert!(
+        hollow.asking(&asked).blockers.is_empty(),
+        "the cavity keeps no wall off it"
+    );
+    hollow.take(shell(Mat3::IDENTITY, asked));
+    assert!(
+        (hollow.cut().0[0].depth_mm - 1.0).abs() < 1e-6,
+        "a hollow model leaves it at the 1 mm it was asked for"
+    );
+}
+
+#[test]
 fn what_was_drilled_holds_only_for_the_cuts_and_mesh_it_was_drilled_from() {
     let (mesh, bvh) = (Arc::new(lid()), Bvh::build(&lid()));
     let mut hollow = ModelHollow::default();
@@ -352,11 +403,10 @@ fn a_hole_drilled_into_a_solid_model_asks_for_a_wall_around_it() {
     let walled = hollow.asking(&asked);
     assert_eq!(
         walled.blockers,
-        vec![Blocker::along(
-            Vec3::ZERO,
-            Vec3::new(0.0, 0.0, -4.0),
-            1.5 + asked.thickness_mm
-        )],
+        vec![
+            Blocker::rod(Vec3::ZERO, Vec3::new(0.0, 0.0, -4.0), 1.5, 0.0)
+                .walled(asked.thickness_mm)
+        ],
         "the cavity keeps a wall's width off the hole's whole length"
     );
 
@@ -465,7 +515,8 @@ fn digging_a_channel_makes_the_shell_stale_and_asks_for_a_sleeve_of_wall() {
         wanted
             .blockers
             .iter()
-            .all(|blocker| { (blocker.radius_mm - (1.0 + asked.thickness_mm)).abs() < 1e-4 }),
+            .all(|blocker| (blocker.radius_mm - 1.0).abs() < 1e-4
+                && (blocker.wall_mm - asked.thickness_mm).abs() < 1e-6),
         "the sleeve is the tube's radius and the wall around it"
     );
 }
@@ -576,4 +627,27 @@ fn cuts_carried_onto_a_pressed_surface_stand_where_they_printed_and_the_model_is
         "the cavity is cut again into the new surface"
     );
     assert!(carried.cut_bodies().is_some(), "the hole is cut at once");
+}
+
+#[test]
+fn a_support_hole_carried_onto_a_pressed_surface_keeps_the_lift_its_supports_gave_it() {
+    let placed = Transform {
+        scale: Vec3::splat(2.0),
+        ..Transform::default()
+    };
+    let under_the_lid = Vec3::new(0.0, 0.0, -10.0);
+    let mut hollow = ModelHollow::default();
+    hollow.add_hole(DrainHole {
+        kind: HoleKind::Support,
+        ..DrainHole::sized(under_the_lid, Vec3::NEG_Z, drain_tool(3.0, 2.0), 0.25)
+    });
+    let (lid, bvh) = (lid(), Bvh::build(&lid()));
+
+    let carried = hollow.carried_onto(&lid, &bvh, placed.sizing().linear());
+
+    let lift_mm = carried.drains()[0].lift_mm;
+    assert!(
+        (lift_mm - 0.5).abs() < 1e-5,
+        "the 0.25 mm measured on the supports, doubled, not one measured on the model, got {lift_mm}"
+    );
 }

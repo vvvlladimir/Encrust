@@ -1,18 +1,35 @@
-//! Every model's cuts taken out of it exactly, off the drawing thread (ADR 0322).
+//! Every model's cuts taken out of it and its supports exactly, off the drawing thread
+//! (ADR 0322).
 
 use std::sync::{Arc, Weak};
 
 use core_geometry::Mesh;
 
 use crate::i18n::tr;
-use crate::job::{DrillJob, DrillRequest, spawn_drill};
+use crate::job::{
+    DrillJob, DrillRequest, PrintedSupportsJob, PrintedSupportsRequest, spawn_drill,
+    spawn_printed_supports,
+};
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 
-/// The cuts being taken out, one run a model at a time.
+mod supports;
+
+pub use supports::{BuiltFrom, PrintedSupports, SupportsUnder};
+
+/// The cuts being taken out, one run a model and one for its supports at a time.
 #[derive(Debug, Default)]
 pub struct Drilling {
     runs: Vec<Run>,
+    support_runs: Vec<SupportRun>,
+}
+
+/// A run for one model's printed supports, and what it was started for.
+#[derive(Debug)]
+struct SupportRun {
+    model: ObjectId,
+    from: BuiltFrom,
+    job: PrintedSupportsJob,
 }
 
 /// A run for one model, and the meshes it took, held weakly so a replaced one is let go.
@@ -53,6 +70,51 @@ impl Drilling {
                 job,
             });
         }
+        self.start_supports(scene);
+    }
+
+    /// Starts building the printed supports of every model whose groups, cuts or placement
+    /// changed since they last were and that has no such run under way.
+    fn start_supports(&mut self, scene: &Scene) {
+        for object in scene.objects() {
+            let under = object.supports_under();
+            let busy = self.support_runs.iter().any(|run| run.model == object.id);
+            if busy || !object.printed_supports.wants(under) {
+                continue;
+            }
+            self.support_runs.push(SupportRun {
+                model: object.id,
+                from: BuiltFrom::of(under),
+                job: spawn_printed_supports(PrintedSupportsRequest {
+                    groups: under.groups.to_vec(),
+                    cuts: under.cuts.cloned(),
+                    transform: under.transform,
+                }),
+            });
+        }
+    }
+
+    /// Keeps what each supports run that has ended built, where its model still stands as it
+    /// was started for. A lost run is noted, and not started again for the same groups.
+    fn poll_supports(&mut self, scene: &mut Scene) {
+        let mut index = 0;
+        while index < self.support_runs.len() {
+            let Some(outcome) = self.support_runs[index].job.poll() else {
+                index += 1;
+                continue;
+            };
+            let run = self.support_runs.swap_remove(index);
+            let Some(object) = scene.get_mut(run.model) else {
+                continue;
+            };
+            if !run.from.matches(object.supports_under()) {
+                continue;
+            }
+            match outcome {
+                Some((shaded, bvhs)) => object.printed_supports.keep(run.from, shaded, bvhs),
+                None => object.printed_supports.lose(run.from),
+            }
+        }
     }
 
     /// Keeps what each run that has ended took out, where its model still has the mesh and
@@ -83,12 +145,13 @@ impl Drilling {
             }
             object.hollow.keep_drilled(&source, &cuts, outcome.ok());
         }
+        self.poll_supports(scene);
         self.is_running()
     }
 
-    /// Whether any model's cuts are being taken out.
+    /// Whether any model's cuts are being taken out, or its printed supports built.
     pub fn is_running(&self) -> bool {
-        !self.runs.is_empty()
+        !self.runs.is_empty() || !self.support_runs.is_empty()
     }
 }
 
