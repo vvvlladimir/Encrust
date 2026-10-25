@@ -13,7 +13,7 @@ const SHARDS: usize = 16;
 /// half a million beams, about 20 MB, more than a dense model's forest asks about.
 const MAX_ANSWERS_PER_SHARD: usize = 1 << 15;
 
-/// Whether a beam clears the model, as [`crate::clear::clear`] last answered it, kept between
+/// Whether a beam clears the model, as the clearance test last answered it, kept between
 /// growths of one model: grown again after one edit, a forest re-asks only new beams.
 #[derive(Debug, Default)]
 pub struct Clearances {
