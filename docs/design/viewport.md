@@ -130,7 +130,7 @@ which would halve it again: on the machine this was built on the same frame came
 different from one run to the next.
 
 Supports are a tube of few sides, not a sliceable model's facets, so an instance may ask to be
-shaded smooth (ADR 0352): its mesh goes up with every corner carrying the faces round it
+shaded smooth (ADR 0341): its mesh goes up with every corner carrying the faces round it
 weighted by their angle there, apart across an edge turning more than 50 degrees, and the
 fragment reads that normal blended across the face instead of the flat one.
 

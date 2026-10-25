@@ -1,4 +1,4 @@
-# 0333. Measure a fill's rims and inside in from the patch's footprint, each to a profile of its own
+# 0331. Measure a fill's rims and inside in from the patch's footprint, each to a profile of its own
 
 - **Status:** Accepted
 - **Date:** 2026-10-23

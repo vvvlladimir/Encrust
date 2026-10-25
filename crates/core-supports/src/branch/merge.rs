@@ -14,7 +14,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 /// How far both fronts of a refused merge first drop straight down before a retry, mm, each
-/// retry twice the last: what blocks a strut is mostly just under the tips (ADR 0347).
+/// retry twice the last: what blocks a strut is mostly just under the tips (ADR 0338).
 pub(super) const DROP_STEP_MM: Scalar = 1.0;
 
 /// The drop a refused merge at `drop_mm` is tried again at: doubling, so a pair standing

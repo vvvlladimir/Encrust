@@ -1,5 +1,5 @@
 //! The hierarchy of every surface supports stand against, built off the drawing thread: a
-//! dense shell takes a while, and a frame waiting on it freezes the window (ADR 0334).
+//! dense shell takes a while, and a frame waiting on it freezes the window (ADR 0332).
 
 use std::sync::{Arc, Weak};
 

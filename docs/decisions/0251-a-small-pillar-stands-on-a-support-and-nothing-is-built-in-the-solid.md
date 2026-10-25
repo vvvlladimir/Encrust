@@ -1,6 +1,6 @@
 # 0251. Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model
 
-- **Status:** Accepted; superseded in part by 0331 (only a support no further than the part)
+- **Status:** Accepted; superseded in part by 0340 (only a support no further than the part)
 - **Date:** 2026-10-13
 
 ## Context

@@ -17,7 +17,7 @@ const PAD_HEIGHTS: usize = 3;
 const PAD_LEFT_MM: Scalar = 0.05;
 
 /// A pad cut back where the model stands beside it: how far it reaches from its middle in each of
-/// [`PAD_SECTORS`] directions, from +x counter-clockwise, mm (ADR 0328).
+/// [`PAD_SECTORS`] directions, from +x counter-clockwise, mm (ADR 0327).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PadCut {
     pub reach_mm: [Scalar; PAD_SECTORS],

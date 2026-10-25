@@ -20,7 +20,7 @@ pub struct Unsupported {
     /// where a step under them reaches. Found only when steps are asked for.
     pub gentle: Vec<Field>,
     /// Pieces leaning past the steadying angle and not past the step's: a slope a part is steadied
-    /// on, sparsely; found only when steps are asked for (ADR 0327).
+    /// on, sparsely; found only when steps are asked for (ADR 0326).
     pub slopes: Vec<Field>,
 }
 

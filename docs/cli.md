@@ -228,7 +228,7 @@ default), `least-peel`, `shortest-print` or `auto`, which balances the three, an
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
 into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), and
 `--support-cavity` holds up the cavity `--hollow` leaves as well as the outside, as the
-window's **Support the cavity** does (ADR 0334). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
+window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
 (ADR 0290). A turned model is stood on the plate over the middle it stood over in x and y.
@@ -344,7 +344,7 @@ encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
 
 A file in your folder that no longer reads is left out with a warning, and the shipped
 profile of its id is used. `profiles reset-unreadable` throws away those copies of shipped
-profiles; a file under an id of your own is kept (ADR 0353):
+profiles; a file under an id of your own is kept (ADR 0344):
 
 ```sh
 encrust profiles reset-unreadable

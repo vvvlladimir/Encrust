@@ -54,7 +54,7 @@ impl Tool {
     ];
 
     /// The tool whose card and rail button this one is shown under: Paint and Shape are
-    /// modes of the Supports card. See `docs/decisions/0338`.
+    /// modes of the Supports card. See `docs/decisions/0336`.
     pub fn card(self) -> Self {
         match self {
             Self::Paint | Self::Shape => Self::Supports,

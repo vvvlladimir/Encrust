@@ -322,7 +322,7 @@ the bodies into the depth plane, the object itself counted into the stencil agai
 depth, the bodies again wherever the count says material stood in front of them, and once
 more to take their depth back out where it did not. The opening is therefore closed by a
 silhouette resolved per pixel, and nothing approximates where the tube meets the surface.
-See ADR 0201, and `local-docs/PLAN-viewport-cuts.md` for what the alternatives cost.
+See ADR 0201 for what the alternatives cost.
 
 ## Trapped resin
 

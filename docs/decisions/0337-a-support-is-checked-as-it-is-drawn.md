@@ -1,6 +1,6 @@
-# 0341. Check a support as it is drawn, fill a beam with balls, and leave out what still meets the part
+# 0337. Check a support as it is drawn, fill a beam with balls, and leave out what still meets the part
 
-- **Status:** Accepted; standing a merged tree tip by tip is superseded by 0347
+- **Status:** Accepted
 - **Date:** 2026-10-24
 
 ## Context
@@ -11,8 +11,8 @@ A beam is sampled by nine rays (ADR 0077), and a rib or a needle thinner than th
 between two of them, inside the body, is never met. Five places — the column, the merge,
 the lean, the hand's carry and the pad — each test their own idea of a body, while the
 mesher draws another: a trunk widening to its base, a dome round each joint, a head built
-to the group that carries it. And a head that cannot turn clear is kept where it is
-(ADR 0328), so it is built into the model by design.
+to the group that carries it. And a head that could not turn clear was kept where it
+was, so it was built into the model by design.
 
 ## Decision
 
@@ -29,27 +29,27 @@ sweeps, struts and trunk, with the outward normal of the face each end is built 
 and `mesher::sound` tests every ring-to-ring frustum of them, 0.05 mm narrower (a graze one
 layer deep is two facets touching), starting from where the tube stands that graze off its
 tip's face and ending where it stands as far off the face its foot stands on. A tube that
-never leaves its face lies along it and fails. The pad is not in it: ADR 0328 and 0340
-already place it against the model, and a cut pad is not a ring tube.
+never leaves its face lies along it and fails. The pad is not in it: ADR 0327
+already places it against the model, and a cut pad is not a ring tube.
 
 **What fails is left out, not cured in.** After each family has grown and before thinner
 groups can run into it, a tree that is not sound is mended: the tips whose own branches
-meet the model are grown alone and the rest are grown together again, up to three times;
-a tree whose trunk or an inner strut meets it is grown again tip by tip. A tip that
-still fails on its own is left unstood, and the inspector counts it with the others that
-have no room. Taking a whole tree apart for one bad head turned a figurine's 12 trees into
-43 pillars; mending keeps it at 15. A small pillar is moved onto a support only when the moved
-tree is sound. A dragged support is held to the same test.
+meet the model are grown alone and the rest together again; a tree whose trunk or an inner
+strut meets it is split at its lowest joint and each half grown again. After three rounds
+what still fails is grown tip by tip; a tip that still fails on its own is left unstood,
+and the inspector counts it with the others that have no room. Taking a whole tree apart
+for one bad head turned a figurine's 12 trees into 43 pillars; mending keeps it at 15. A
+small pillar is moved onto a support only when the moved tree is sound. A dragged support
+is held to the same test.
 
-This supersedes the sampling of ADR 0077 by rays alone and the clause of ADR 0328 that
-lets a head with no clear direction stand anyway.
+This supersedes the sampling of ADR 0077 by rays alone.
 
 ## Consequences
 
 No support of a grown forest meets the part beyond its tip, to the graze, whatever the
-placement checks predicted; a head in a crevice too narrow to turn in is now reported
-rather than printed into the model. More points can show as having no room on a cramped
-model; the longer search of ADR 0342 wins some back.
+placement checks predicted; a head in a crevice is reported rather than printed into the
+model (ADR 0339). More points can show as having no room on a cramped model; the longer
+search of ADR 0338 wins some back.
 
 `cargo bench -p core-supports --bench branch`: growing the lifted 40 mm ball went from
 2.72 ms to 6.48 ms and the one on the plate from 70.5 ms to 81.8 ms, the same 10 trunks for

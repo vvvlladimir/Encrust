@@ -11,7 +11,7 @@ use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
 /// How far off its face's normal a small pillar may meet that face unbent, as the cosine: 20
-/// degrees, where its mark is 6 % longer one way than round, under a pixel at 0.24 mm (ADR 0348).
+/// degrees, where its mark is 6 % longer one way than round, under a pixel at 0.24 mm (ADR 0340).
 const SQUARE_ENOUGH_COS: Scalar = 0.94;
 
 /// The leans off straight down a small pillar looks along for a face, degrees, each
@@ -21,13 +21,13 @@ const LEANS_DEG: [Scalar; 3] = [15.0, 30.0, 45.0];
 const AROUND: usize = 16;
 
 /// How far a small pillar runs out along the normal of each face it meets before it bends,
-/// mm: one diameter, so the bend's dome keeps a radius off the face (ADR 0348).
+/// mm: one diameter, so the bend's dome keeps a radius off the face (ADR 0340).
 fn square_mm(profile: &SupportProfile) -> Scalar {
     profile.small_pillar.diameter_mm
 }
 
 /// The straightest sound small pillar holding `contact` for `point`, the shortest of those: square
-/// off its face, then down within 45 degrees onto a face looking back at it (ADR 0348).
+/// off its face, then down within 45 degrees onto a face looking back at it (ADR 0340).
 pub(super) fn small_pillar(
     contact: Vec3,
     point: usize,

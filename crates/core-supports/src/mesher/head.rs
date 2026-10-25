@@ -76,7 +76,7 @@ pub(super) fn head(
     let contact_mm = profile.contact_radius_mm();
     let top_mm = profile.top.length_mm.min(length);
     let body_mm = style.body_radius_mm(node.radius_mm, profile);
-    // A small pillar is one width throughout, its end the half ball a plane tip ends in (ADR 0348).
+    // A small pillar is one width throughout, its end the half ball a plane tip ends in (ADR 0340).
     if style.small {
         cap(rings, -cap_centre_mm(style, profile, length), body_mm);
         return;
@@ -89,7 +89,7 @@ pub(super) fn head(
     }
 
     // A half ball of the contact's width on the contact, pushed in by the bite, so the face cuts
-    // it in a circle of the contact's width; a pin keeps a leaning cone off it (ADR 0345, 0350).
+    // it in a circle of the contact's width; a pin keeps a leaning cone off it (ADR 0339).
     let centre_mm = cap_centre_mm(style, profile, length);
     cap(rings, -centre_mm, contact_mm);
     if let Some(face) = style.face {
@@ -145,7 +145,7 @@ pub(crate) fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
 }
 
 /// Where a tube `length` long pokes into the model at a contact, back up its own axis,
-/// or the pole of the dome at a joint (ADR 0125, 0345, 0348).
+/// or the pole of the dome at a joint (ADR 0125, 0339, 0340).
 pub(super) fn apex_of(
     node: &TreeNode,
     direction: Vec3,

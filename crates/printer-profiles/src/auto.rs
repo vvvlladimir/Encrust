@@ -34,7 +34,7 @@ pub struct AutoProfile {
     /// than the overhang angle, since the step is what it would sag from.
     pub step_lean_deg: f32,
     /// The support profile, by catalogue id, a support that steadies a part is built to:
-    /// the lightest of all. See `docs/decisions/0327`.
+    /// the lightest of all. See `docs/decisions/0326`.
     pub steady_shape: String,
     /// How far from vertical a face may lean before a part is steadied on it, degrees:
     /// less than a step's angle, since nothing here would sag without it.

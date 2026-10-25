@@ -38,7 +38,7 @@ impl SupportTool {
     }
 
     /// Starts placement over everything visible, by the group in hand or the automatic profile;
-    /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0334).
+    /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0332).
     pub fn start(
         &mut self,
         scene: &mut Scene,

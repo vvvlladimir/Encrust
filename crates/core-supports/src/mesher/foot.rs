@@ -56,7 +56,7 @@ pub(super) fn trunk_base_mm(tree: &SupportTree, profile: &SupportProfile, style:
 }
 
 /// Where the trunk under the root comes to rest, in plate coordinates: on the face itself for
-/// a small pillar, whose half ball takes the depth along its own axis (ADR 0348).
+/// a small pillar, whose half ball takes the depth along its own axis (ADR 0340).
 pub(super) fn trunk_bottom(tree: &SupportTree, profile: &SupportProfile) -> Vec3 {
     let landing = tree.landing();
     if landing.on_model && !landing.on_support && Style::of(tree, profile).small {
@@ -125,7 +125,7 @@ pub(super) fn plate_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Sca
 pub(super) const FLARE_RINGS: u32 = 4;
 
 /// The fillet widening the pillar out into the pad or raft, or `None` on the model or with no
-/// room, drawn with the pillar's facets (ADR 0130, 0343).
+/// room, drawn with the pillar's facets (ADR 0130, 0341).
 pub(super) fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tube> {
     let landing = tree.landing();
     let trunk_mm = trunk_base_mm(tree, profile, style);
@@ -148,7 +148,7 @@ pub(super) fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) 
     }
 
     // A quarter circle, tangent to the pillar at its top and to the pad at its foot, so
-    // the joint carries no notch for the peel to start a crack in; see ADR 0343.
+    // the joint carries no notch for the peel to start a crack in; see ADR 0341.
     let mut rings = Vec::with_capacity(FLARE_RINGS as usize + 2);
     for step in 0..=FLARE_RINGS {
         let angle = std::f32::consts::FRAC_PI_2 * step as Scalar / FLARE_RINGS as Scalar;

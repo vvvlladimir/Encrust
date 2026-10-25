@@ -1,6 +1,6 @@
 # Thick supports for heavy parts and large flat overhangs, at the cost of scarring.
 #
-# Why the presets look like this: ADR 0323, retuned by 0355.
+# Why the presets look like this: ADR 0323.
 
 name = "Heavy"
 

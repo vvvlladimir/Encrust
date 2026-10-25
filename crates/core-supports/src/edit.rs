@@ -11,7 +11,7 @@ use crate::placed::Placed;
 use crate::tree::SupportTree;
 
 /// Whether every body of `tree` (plate coordinates) keeps out of the model, tip apart: swept as
-/// beams with the profile's clearance (ADR 0077), then drawn bodies are tested too (ADR 0341).
+/// beams with the profile's clearance (ADR 0077), then drawn bodies are tested too (ADR 0337).
 pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bool {
     let head_mm = profile.top.length_mm + profile.tip.contact_depth_mm;
     let struts = tree.struts().all(|(child, parent)| {

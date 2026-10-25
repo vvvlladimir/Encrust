@@ -106,7 +106,7 @@ impl ModelSupports {
     }
 
     /// [`Self::refresh`] against `surface`, hierarchy `bvh`, rather than `model`, which the
-    /// patches are painted on: a hollowed model's drilled shell (ADR 0334).
+    /// patches are painted on: a hollowed model's drilled shell (ADR 0332).
     pub fn refresh_on(
         &mut self,
         model: &Mesh,

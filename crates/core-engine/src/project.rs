@@ -217,7 +217,7 @@ pub struct SupportState {
     pub brush_radius_mm: Scalar,
     pub flood_angle_deg: Scalar,
     /// How far apart a line of supports drawn with shift stands; a file without it reads
-    /// the default (ADR 0332).
+    /// the default (ADR 0330).
     #[serde(default = "inline_spacing")]
     pub inline_spacing_mm: Scalar,
     #[serde(default)]
@@ -227,13 +227,13 @@ pub struct SupportState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raft: Option<Raft>,
     /// The automatic profile supports are sized by; `None`, and a file without it, never
-    /// had one chosen (ADR 0336).
+    /// had one chosen (ADR 0334).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sizing: Option<AutoSizing>,
 }
 
 /// The automatic profile a run sizes supports by, numbers as edited, and whether a run uses
-/// it or builds to the group in hand (ADR 0325, 0336).
+/// it or builds to the group in hand (ADR 0325, 0334).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AutoSizing {
     pub on: bool,
@@ -241,7 +241,7 @@ pub struct AutoSizing {
 }
 
 /// Which saved support profile a fill builds its rim and its inside to, by id; `None`, and
-/// a file without it, builds to the group in hand (ADR 0333).
+/// a file without it, builds to the group in hand (ADR 0331).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FillProfiles {
     #[serde(default)]

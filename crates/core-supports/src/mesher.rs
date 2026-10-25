@@ -76,7 +76,7 @@ impl Style {
 }
 
 /// How many of its own diameters long a small pillar may run: a resin wire about 35 times as long
-/// as it is wide starts to wave as it prints, and the peel pulls on it too (ADR 0348).
+/// as it is wide starts to wave as it prints, and the peel pulls on it too (ADR 0340).
 const SLENDER: Scalar = 30.0;
 
 /// The longest run a small pillar is built thin over, millimetres: the profile's, held to
@@ -296,7 +296,7 @@ fn strut(
     let body_mm = style.body_radius_mm(nodes[child].radius_mm, profile);
 
     // One width down to the joint, under which the next, no narrower, tube starts: every end
-    // is inside what it meets, so one buried in it ends flat (ADR 0238, 0352).
+    // is inside what it meets, so one buried in it ends flat (ADR 0238, 0341).
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, &nodes[child], direction, profile, style, length);
     let tail = if buried(tree, parent, body_mm, profile, style) {
@@ -318,7 +318,7 @@ fn strut(
 }
 
 /// Whether a strut of radius `body_mm` ending at node `joint` ends inside the tube leaving it:
-/// that tube starts in a dome no narrower and runs on twice the strut's width (ADR 0352).
+/// that tube starts in a dome no narrower and runs on twice the strut's width (ADR 0341).
 fn buried(
     tree: &SupportTree,
     joint: usize,
@@ -407,7 +407,7 @@ impl TrunkEnd {
             return Some(self.length + pole_mm);
         }
         if on_part {
-            // A half ball of its own width sunk by the lower depth, as its upper end is (ADR 0348).
+            // A half ball of its own width sunk by the lower depth, as its upper end is (ADR 0340).
             let centre_mm = self.length + profile.small_pillar.lower_depth_mm;
             push(rings, centre_mm, self.base_mm);
             round_off(rings, centre_mm, self.base_mm);

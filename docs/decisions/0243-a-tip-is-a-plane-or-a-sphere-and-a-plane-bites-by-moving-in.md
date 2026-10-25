@@ -1,6 +1,6 @@
 # 0243. Offer a plane or a sphere tip, and bite a plane tip by pushing it in
 
-- **Status:** Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0345
+- **Status:** Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0339
 - **Date:** 2026-10-13
 
 ## Context

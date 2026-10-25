@@ -33,7 +33,7 @@ impl SupportTool {
 
     /// What a run found, each placement keeping only the contacts on the side of the wall
     /// the run was started for. A contact is inside when the surface nearest it bounds the
-    /// cavity (ADR 0334).
+    /// cavity (ADR 0332).
     pub(super) fn on_its_side(
         &self,
         mut placements: Vec<Placement>,

@@ -1,5 +1,5 @@
 //! The support trees of every model, grown off the drawing thread: merging a thousand tips
-//! into trunks takes a second or more on a dense model (ADR 0340).
+//! into trunks takes a second or more on a dense model (ADR 0342).
 
 use std::sync::Arc;
 

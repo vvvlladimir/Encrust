@@ -65,7 +65,7 @@ pub(super) fn stand_small_pillars_on_supports(
 }
 
 /// `trees` with every tree whose bodies meet the model past their tips mended: faulty heads stand
-/// alone, a trunk splits at its lowest joint, after [`MAX_REGROWS`] tip by tip (ADR 0341, 0347).
+/// alone, a trunk splits at its lowest joint, after [`MAX_REGROWS`] tip by tip (ADR 0337).
 pub(super) fn only_sound(
     trees: Vec<SupportTree>,
     columns: &[Column],

@@ -304,7 +304,7 @@ fn restore_objects(
         };
         object.hollow = hollow_of(&state.hollow, meshes);
         // Stood against the shell now, or the first frame would take it for a new surface
-        // and grow the saved trees again (ADR 0334).
+        // and grow the saved trees again (ADR 0332).
         object.keep_support_surface();
         let (surface, surface_bvh) = object.support_surface();
         let (surface, surface_bvh) = (Arc::clone(surface), Arc::clone(surface_bvh));

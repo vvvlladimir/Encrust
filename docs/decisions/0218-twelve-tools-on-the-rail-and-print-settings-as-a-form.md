@@ -1,6 +1,6 @@
 # 0218. Twelve tools on the rail, and the print settings as a form
 
-- **Status:** Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0338
+- **Status:** Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336
 - **Date:** 2026-10-10
 
 ## Context

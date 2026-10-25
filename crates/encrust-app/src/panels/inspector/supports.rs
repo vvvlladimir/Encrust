@@ -19,7 +19,7 @@ use crate::ui::{
 use crate::workspace::Tool;
 
 /// The one card the supports are made in: grown, placed, painted and shaped, each a mode
-/// of it under its heading. See `docs/decisions/0338`.
+/// of it under its heading. See `docs/decisions/0336`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     match mode(window) {
         Mode::Pick => {
@@ -152,7 +152,7 @@ fn lift_row(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
 }
 
 /// What has no room, then the run's progress, or the cavity's button for a hollow model
-/// over Fill painted areas over Grow (ADR 0338).
+/// over Fill painted areas over Grow (ADR 0336).
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let (points, columns) = standing(window.doc);
     // Trees still growing stand nothing yet, which is not a want of room.
@@ -349,7 +349,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// Holding the cavities of the hollow models aimed at up, or, once something stands in
-/// them, taking that away again; see `docs/decisions/0334`.
+/// them, taking that away again; see `docs/decisions/0332`.
 fn cavity(ui: &mut egui::Ui, window: &mut Window) {
     if !window
         .doc

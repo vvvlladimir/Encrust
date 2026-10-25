@@ -120,7 +120,7 @@ fn default_max_overhang_deg() -> f32 {
 }
 
 /// Twelve sides, shaded smooth, read as round on the screen, as every shipped preset has;
-/// see ADR 0352.
+/// see ADR 0341.
 fn default_facets() -> u32 {
     12
 }

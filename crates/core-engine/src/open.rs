@@ -169,7 +169,7 @@ fn model(
     let hollow = hollow_of(&object.hollow, meshes);
     let drilled = drilled_of(&hollow, meshes);
     // Against what prints, as the window stood them, so a cavity's supports are swept
-    // against the cavity and a drilled hole's against its bore (ADR 0322, 0334).
+    // against the cavity and a drilled hole's against its bore (ADR 0322, 0332).
     let surface = drilled.as_ref().unwrap_or(meshes.printed());
     let bvh = Bvh::build(surface);
     let supports = supports_of(

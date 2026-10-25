@@ -1,4 +1,4 @@
-# 0336. Leave every panel as it was between runs, and keep automatic sizing with the tools
+# 0334. Leave every panel as it was between runs, and keep automatic sizing with the tools
 
 - **Status:** Accepted
 - **Date:** 2026-10-23

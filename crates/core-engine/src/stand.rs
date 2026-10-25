@@ -25,7 +25,7 @@ pub enum SupportShapes {
 }
 
 /// What a run stands under a model: the shapes it builds to, and whether it holds up a
-/// hollowed model's cavity as well as its outside, as the window's two runs do (ADR 0334).
+/// hollowed model's cavity as well as its outside, as the window's two runs do (ADR 0332).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SupportPlan {
     pub shapes: SupportShapes,

@@ -1,4 +1,4 @@
-# 0332. Draw a line of supports from the last one placed, along the chord taken to the surface
+# 0330. Draw a line of supports from the last one placed, along the chord taken to the surface
 
 - **Status:** Accepted
 - **Date:** 2026-10-23

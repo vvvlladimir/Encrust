@@ -28,7 +28,7 @@ const PLATE_GRAZE: f32 = 1e-3;
 const LINE_DOT_MM: Scalar = 0.4;
 
 /// Stands a support where the model was clicked and selects it; one that would not stand is
-/// skipped. With `line`, a line of them runs from the last placed (`docs/decisions/0332`).
+/// skipped. With `line`, a line of them runs from the last placed (`docs/decisions/0330`).
 pub(super) fn place_support_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,

@@ -20,7 +20,7 @@ pub struct BraceZone {
 }
 
 /// Legs propping a tall trunk the bracing leaves free at the top: a strut out and down, then a
-/// column to the plate (`docs/decisions/0329`).
+/// column to the plate (`docs/decisions/0328`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Buttress {
     pub enabled: bool,
@@ -43,7 +43,7 @@ impl Default for Buttress {
 }
 
 /// Struts tying tall trunks together so neither sways on the peel. A pair's levels fall in three
-/// zones, `bottom`, `middle` and `top`; see `docs/decisions/0329`.
+/// zones, `bottom`, `middle` and `top`; see `docs/decisions/0328`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Bracing {
     pub enabled: bool,
@@ -88,7 +88,7 @@ impl Bracing {
 }
 
 /// Trunks stood on a square grid on the plate, tips leant to their node at 45 degrees. Off, trunks
-/// stand where the tips merge. See `docs/decisions/0335`.
+/// stand where the tips merge. See `docs/decisions/0333`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Grid {
     pub enabled: bool,

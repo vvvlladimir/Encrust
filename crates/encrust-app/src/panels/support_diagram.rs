@@ -144,7 +144,7 @@ pub fn small_pillar(ui: &mut Ui, profile: &SupportProfile) {
     dimension(&painter, pos2(left, over), pos2(right, over), &longest);
 }
 
-/// A strut `half` wide from `from` to `to`, each end a half ball centred there (ADR 0348).
+/// A strut `half` wide from `from` to `to`, each end a half ball centred there (ADR 0340).
 fn rounded(from: f32, to: f32, half: f32) -> Vec<column::Station> {
     let steps = BALL_STEPS / 2;
     let quarter = |step: u32| std::f32::consts::FRAC_PI_2 * step as f32 / steps as f32;

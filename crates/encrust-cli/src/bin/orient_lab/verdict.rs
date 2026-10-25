@@ -1,5 +1,5 @@
 //! What counts as a goal succeeding against the best pose measured for the same model.
-//! Why each number is what it is: `local-docs/orientation/README.md`.
+//! Why each number is what it is: 
 
 use core_engine::Printout;
 use core_plate::{OrientGoal, OrientPreset};

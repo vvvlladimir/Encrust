@@ -10,7 +10,7 @@ pub(crate) const MIN_BODY_MM: Scalar = 1e-4;
 const BEAM_RAYS: usize = 8;
 
 /// How far apart the balls filling a beam stand, as a share of their radius: at half a
-/// radius their union covers the beam to within 3% of its radius. See ADR 0341.
+/// radius their union covers the beam to within 3% of its radius. See ADR 0337.
 const BALL_STEP: Scalar = 0.5;
 
 /// The smallest ball a beam is filled with, millimetres: nearer an end than this the
@@ -56,7 +56,7 @@ impl Beam {
 }
 
 /// Whether `beam` reaches its far end without meeting `model`: a ring of rays down its surface
-/// (ADR 0077) and a row of balls down its axis kept inside its ends (ADR 0341).
+/// (ADR 0077) and a row of balls down its axis kept inside its ends (ADR 0337).
 pub(crate) fn clear(placed: &Placed, beam: &Beam) -> bool {
     let sweep = || rays_clear(placed, beam) && balls_clear(placed, beam);
     match placed.clearances {

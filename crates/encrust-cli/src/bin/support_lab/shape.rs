@@ -29,7 +29,6 @@ const REFERENCE_RISE_MM: Scalar = 1.0;
 /// How far off a face its outside is probed, millimetres: under a pixel, over rounding.
 const BURIED_PROBE_MM: Scalar = 1e-3;
 /// An underside whose normal is within this of straight down is flat: all of it appears on
-/// one layer and the film holds it hardest (local-docs/supports/experiments.md, №2).
 const FLAT_COS: Scalar = 0.966;
 /// How finely the rim of a flat underside is walked, millimetres.
 const RIM_STEP_MM: Scalar = 0.25;

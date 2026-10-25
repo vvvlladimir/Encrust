@@ -1,7 +1,7 @@
 use core_geometry::{Buckets, Scalar, Vec3};
 
 /// The steps a run has held that still reach the layer; faces within a step's height are held
-/// as part of it (ADR 0326), steadying supports likewise (ADR 0327); bucketed, dropped when passed.
+/// as part of it, steadying supports likewise (ADR 0326); bucketed, dropped when passed.
 pub(crate) struct Zones {
     buckets: Buckets<Zone>,
     /// The lowest height any zone still reaches up to.

@@ -8,7 +8,7 @@ use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
 
 /// What the trees of one model are grown from, taken off it so that they can be grown on
-/// another thread while the window keeps drawing; see `docs/decisions/0340`.
+/// another thread while the window keeps drawing; see `docs/decisions/0342`.
 #[derive(Debug, Clone)]
 pub struct Growth {
     pub(super) points: Vec<SupportPoint>,

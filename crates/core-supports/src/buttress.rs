@@ -17,7 +17,7 @@ use rayon::prelude::*;
 const PAIR_TURN_DEG: Scalar = 20.0;
 
 /// The buttresses `trees` want, each a tree of its own: a trunk standing over `pair_above_mm`
-/// above its highest brace gets two, over `one_above_mm` above its second gets one (ADR 0329).
+/// above its highest brace gets two, over `one_above_mm` above its second gets one (ADR 0328).
 pub(crate) fn buttresses(
     trees: &[SupportTree],
     placed: &Placed,

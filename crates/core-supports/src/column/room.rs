@@ -26,7 +26,7 @@ const RIM_DEPTH: Scalar = 0.5;
 const RIM_SAME_FACE_COS: Scalar = 0.5;
 
 /// The nearest spot at `contact`'s height where a head has room and the contact's circle lies
-/// wholly on its face, else where a head has room alone; `None` when none or no move (ADR 0354).
+/// wholly on its face, else where a head has room alone; `None` when none or no move (ADR 0339).
 pub(super) fn roomier(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
     let room = has_room(placed, contact, profile);
     if room && seated(placed, contact, profile) {

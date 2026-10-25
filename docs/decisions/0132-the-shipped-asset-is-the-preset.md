@@ -1,6 +1,6 @@
 # 0132. The shipped TOML is the preset, and the constructor mirrors it
 
-- **Status:** Superseded by 0337
+- **Status:** Superseded by 0335
 - **Date:** 2026-09-29
 
 ## Context

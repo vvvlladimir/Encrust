@@ -1,4 +1,4 @@
-# 0337. A shipped support preset lives only in its file
+# 0335. A shipped support preset lives only in its file
 
 - **Status:** Accepted
 - **Date:** 2026-10-23

@@ -1,6 +1,6 @@
 # 0255. Thin a support between two surfaces only up to a longest run
 
-- **Status:** Accepted; held to 30 diameters by 0348
+- **Status:** Accepted; held to 30 diameters by 0340
 - **Date:** 2026-10-13
 
 ## Context

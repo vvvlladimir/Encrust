@@ -16,7 +16,7 @@ pub struct Blocked {
 }
 
 /// One side of a hollow model's wall, which an automatic run keeps its contacts to: the
-/// face of the printed surface nearest a point says which side it is on. See ADR 0334.
+/// face of the printed surface nearest a point says which side it is on. See ADR 0332.
 #[derive(Debug, Clone)]
 pub struct WallSide {
     /// The printed surface in the model's own space.

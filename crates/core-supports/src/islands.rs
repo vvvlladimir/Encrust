@@ -14,7 +14,7 @@ const FINE_PITCH_MM: Scalar = 0.02;
 const DUST_MM2: Scalar = 0.005;
 
 /// How far a contact is moved onto an island, across the plate and down, or along its face to room
-/// for a head, mm: under a pillar width, so what it held is still held (ADR 0330, 0348).
+/// for a head, mm: under a pillar width, so what it held is still held (ADR 0329, 0339).
 pub(crate) const MOVE_REACH_MM: Scalar = 0.3;
 
 /// How far inside an island a contact stands to hold it, mm: half the thinnest tip's radius; an
@@ -28,7 +28,7 @@ const BUCKET_MM: Scalar = 1.0;
 const READ_BLOCK: usize = 32;
 
 /// Holds every island `stack` begins that no contact touches: moves the nearest of `placed` onto
-/// it or returns a new contact and the island's area in mm2 (ADR 0330); `skip` bars places.
+/// it or returns a new contact and the island's area in mm2 (ADR 0329); `skip` bars places.
 pub(crate) fn hold_islands(
     stack: &Sliced,
     layer_height_mm: Scalar,

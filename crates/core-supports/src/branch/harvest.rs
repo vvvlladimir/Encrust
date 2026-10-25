@@ -80,7 +80,7 @@ impl Forest<'_> {
         placed: &Placed,
     ) -> Vec<SupportTree> {
         // A contact with no head had no room for one: a small pillar holds it or nothing
-        // does, since a trunk from the contact would meet its face askew (ADR 0346, 0348).
+        // does, since a trunk from the contact would meet its face askew (ADR 0339, 0340).
         if self.nodes[front.node].is_leaf() {
             return self.bridges(front, children, placed);
         }
@@ -170,7 +170,7 @@ impl Forest<'_> {
     }
 
     /// Last resort for tips under a front with nowhere to stand: each a small pillar where one
-    /// fits (ADR 0348), else one strut straight down onto the model, a one-node tree.
+    /// fits (ADR 0340), else one strut straight down onto the model, a one-node tree.
     pub(super) fn bridges(
         &self,
         front: &Front,

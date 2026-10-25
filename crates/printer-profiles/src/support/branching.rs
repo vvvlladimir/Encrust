@@ -29,7 +29,7 @@ pub struct Branching {
     /// millimetres. See `docs/decisions/0242`.
     pub max_trunk_diameter_mm: f32,
     /// The longest a leaning strut of a merge runs, millimetres: a longer one sways on the
-    /// peel, so its tips stand on trunks of their own. See `docs/decisions/0347`.
+    /// peel, so its tips stand on trunks of their own. See `docs/decisions/0338`.
     #[serde(default = "default_max_strut_length_mm")]
     pub max_strut_length_mm: f32,
     /// The most tips one trunk carries before its neighbours get trunks of their own.

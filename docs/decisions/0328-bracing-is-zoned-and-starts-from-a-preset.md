@@ -1,6 +1,6 @@
-# 0329. Zone the bracing up a pair, prop a free top, and start from a preset
+# 0328. Zone the bracing up a pair, prop a free top, and start from a preset
 
-- **Status:** Accepted; the shipped profiles' bracing is superseded by 0355
+- **Status:** Accepted
 - **Date:** 2026-10-22
 
 ## Context
@@ -60,9 +60,9 @@ meets it (ADR 0242), so Tall's 2 mm is a ceiling the trunk usually sets lower.
 ## Consequences
 
 A zigzag middle halves the braces between the two ends that need them. The top level now
-meets the trunk at its joint, where before it stopped up to one rise short. The presets
-brace more densely than the shipped profiles' own numbers, which are left as they were and
-show as numbers. Meshing ties the trunks twice, once to find what is left free and once
+meets the trunk at its joint, where before it stopped up to one rise short. Medium ships
+Standard; the other shipped profiles brace by numbers of their own (ADR 0323) and show as
+numbers. Meshing ties the trunks twice, once to find what is left free and once
 with the legs, and a leg cannot be picked or moved by hand. Eight more fields in the
 profile file, all optional.
 

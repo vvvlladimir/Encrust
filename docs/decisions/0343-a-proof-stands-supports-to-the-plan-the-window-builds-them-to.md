@@ -1,4 +1,4 @@
-# 0349. A proof stands supports to the plan the window builds them to
+# 0343. A proof stands supports to the plan the window builds them to
 
 - **Status:** Accepted
 - **Date:** 2026-10-24

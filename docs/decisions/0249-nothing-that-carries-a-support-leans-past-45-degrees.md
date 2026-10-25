@@ -1,6 +1,6 @@
 # 0249. Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut
 
-- **Status:** Accepted; the head's 45 degrees is superseded by 0344, itself superseded by 0346
+- **Status:** Accepted; the head's 45 degrees is superseded by 0339
 - **Date:** 2026-10-13
 
 ## Context

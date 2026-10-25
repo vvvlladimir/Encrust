@@ -1,6 +1,6 @@
-# 0330. Touch every island where it begins, and sit every tip on its face
+# 0329. Touch every island where it begins, and hold a contact inside the part on its underside
 
-- **Status:** Accepted; laying a plane tip's disc onto its face is superseded by 0345
+- **Status:** Accepted
 - **Date:** 2026-10-22
 
 ## Context
@@ -14,16 +14,10 @@ surface above the lobe's first layer, which cures on the film. One figure stood 
 islands of 0.01 to 0.14 mm², each with a contact 0.3 to 0.9 mm away; the check the window
 runs found every one.
 
-The supports that steady a part held at too few places (ADR 0327) go on the outline of the
+The supports that steady a part held at too few places (ADR 0326) go on the outline of the
 part's whole section, a layer under it: inside the part wherever its wall stands straight
 or leans out. A contact inside never reaches a face over it, so ADR 0323's move up leaves
 it there, and the head and pillar are built through the part.
-
-A plane tip ends in a disc square to its head (ADR 0243), and a head leaves its face along
-the normal only where nothing is in the way (ADR 0249, 0328). On that figure half the
-heads lean more than 15 degrees off their face, a fifth more than 30: with no bite, such a
-disc meets the face along an edge. A trunk standing on the part at 45 degrees ends the same
-way, and the check read one such landing as a 0.02 mm² neck under 27 MPa.
 
 An island a few tenths across that begins whole, a lip with no low point, was held by
 one support at the end of it: the check is content with any pixel under it, and the rest
@@ -53,20 +47,11 @@ its room instead, or of itself where it has none.
 ray straight down leaves the model through a face looking down is moved to that face,
 whatever the bite. ADR 0323's move up is asked only of a contact outside.
 
-**A plane tip's disc is laid on its face.** The mesher moves each point of the tip's first
-ring along the head's axis onto the plane of the face the contact sits on, the one
-`tip_direction` leaves; the disc becomes an ellipse as wide as the contact across the lean
-and lies on the face whole. The tip a trunk standing on the model ends in is laid the
-same way on the face its landing ray met. An axis leaning past 75 degrees off the normal
-keeps its disc square, and no point moves further than halfway to the ring beside it.
-
 ## Consequences
 
 The figure that stood eleven islands stands none in five poses, for about one more contact
-an island; the steadying supports on its fingers meet their underside instead of curing
-through it, and a leaning tip meets its face over its whole end. The ellipse is larger than
-the contact by one over the cosine of the lean, 1.4 times at 45 degrees, and so is its
-scar. A lobe beside another may take two tips a quarter of a millimetre apart.
+an island, and the steadying supports on its fingers meet their underside instead of curing
+through it. A lobe beside another may take two tips a quarter of a millimetre apart.
 Placement costs about 2.5 times what it did on the `place` benchmark (tables 8 to 23 ms,
 ball 12 to 30 ms): the fine read is the coarse one's order again, layer by layer in
 parallel, with a layer whose new material all stands beside the old skipped. Reopen if a
@@ -92,13 +77,7 @@ Tried first. Along a level lip the lowest vertex is an accident of the mesh, and
 moved half a millimetre there left the end of the lip it held; moved only to the nearest
 cell, it stayed on the rim, which holds a lip by its end.
 
-### Lift the bite for biteless tips, or keep every head on its normal
-
-A bite hides the lean, but nought means nought. A head kept on its normal runs into the
-model wherever ADR 0328 turns it.
-
 ### The option that won, and what it costs
 
-A second pass over the stack at five times the coarse grid's rows, supports placed by a
-rule the climb does not know about, which a second run then counts as seeds, and tips
-whose scar grows with their lean.
+A second pass over the stack at five times the coarse grid's rows, and supports placed by a
+rule the climb does not know about, which a second run then counts as seeds.

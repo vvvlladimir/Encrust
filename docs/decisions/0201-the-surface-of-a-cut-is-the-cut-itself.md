@@ -74,8 +74,7 @@ resolved before the models.
 The signal to reopen is a cut whose body is not convex, or one the fragment test cannot
 express. The surface would still be drawn, but the model's own material would stand in front
 of it; that is the point at which a real boolean (Manifold) or a subtraction in the field
-with a re-extraction has to be taken on. See `local-docs/PLAN-viewport-cuts.md` for what
-other slicers do there.
+with a re-extraction has to be taken on.
 
 ## Alternatives considered
 

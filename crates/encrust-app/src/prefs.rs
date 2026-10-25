@@ -89,7 +89,7 @@ pub struct Preferences {
 
 /// What each tool's panel was switched to that is neither a value of the tool nor undone,
 /// like a view: what a click puts down, what Measure catches, which axes the handles
-/// follow. See `docs/decisions/0336`.
+/// follow. See `docs/decisions/0334`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Modes {

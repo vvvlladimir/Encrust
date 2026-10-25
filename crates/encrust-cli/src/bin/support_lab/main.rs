@@ -1,5 +1,5 @@
 //! A bench for automatic supports: a corpus supported as Generate supports it, cut and read.
-//! See `docs/design/supports.md`; the corpus and rules of success live in local-docs/supports/.
+//! See `docs/design/supports.md`;
 
 mod corpus;
 mod coupon;
@@ -70,7 +70,6 @@ struct Args {
     #[arg(long)]
     baseline: Option<PathBuf>,
     /// Flat underside a tip holds per square millimetre of its section, as the coupons
-    /// measured it (local-docs/supports/experiments.md).
     #[arg(long, default_value_t = 50.0)]
     flat_ratio: f32,
     /// The same for underside that leans.

@@ -1,5 +1,5 @@
 //! The note that some of the user's profile files would not read, and the way to give them
-//! up for the shipped ones. See `docs/decisions/0353`.
+//! up for the shipped ones. See `docs/decisions/0344`.
 
 use egui::Ui;
 

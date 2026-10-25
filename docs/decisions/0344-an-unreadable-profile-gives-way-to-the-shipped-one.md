@@ -1,4 +1,4 @@
-# 0353. Leave an unreadable profile out, use the shipped one in its place, and offer a reset
+# 0344. Leave an unreadable profile out, use the shipped one in its place, and offer a reset
 
 - **Status:** Accepted
 - **Date:** 2026-10-24

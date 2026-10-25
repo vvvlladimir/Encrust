@@ -21,7 +21,7 @@ pub(super) fn underside(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<
 
 impl SupportTool {
     /// Fills every painted patch on the plate with supports, and returns how many were
-    /// put down: the rim and the inside each in the group of its chosen profile (ADR 0333).
+    /// put down: the rim and the inside each in the group of its chosen profile (ADR 0331).
     pub fn fill(&mut self, scene: &mut Scene, catalogue: &Catalogue) -> usize {
         let filled: Vec<(ObjectId, Projected)> = scene
             .targets()

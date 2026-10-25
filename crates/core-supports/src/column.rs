@@ -41,11 +41,11 @@ pub(crate) const MAX_LEAN_PER_DROP: Scalar = 1.0;
 pub(crate) const MAX_LANDING_SLOPE_DEG: Scalar = 45.0;
 
 /// How far off straight down a head leaves its face square on, degrees: past it the head
-/// lies over, as a strut does past 45 degrees (ADR 0249, 0350).
+/// lies over, as a strut does past 45 degrees (ADR 0249, 0339).
 pub(crate) const STEEPEST_SQUARE_HEAD_DEG: Scalar = 45.0;
 
 /// The most a head lying over is turned off its face's normal, degrees: behind a pin its
-/// mark grows by (1 + 1/cos) / 2, 9 per cent here (ADR 0350).
+/// mark grows by (1 + 1/cos) / 2, 9 per cent here (ADR 0339).
 pub(crate) const MAX_HEAD_LEAN_DEG: Scalar = 33.0;
 
 /// Where a support touches the model, in the model's own space, and how it is built.
@@ -81,7 +81,7 @@ pub struct Landing {
     /// the trunk (ADR 0239).
     #[serde(default)]
     pub pad_offset: Vec2,
-    /// The pad cut back where the model stands beside it, or `None` for a whole one (ADR 0328).
+    /// The pad cut back where the model stands beside it, or `None` for a whole one (ADR 0327).
     #[serde(default)]
     pub pad_cut: Option<PadCut>,
     /// Landed on the trunk of a thicker support of another group at `base`; `on_model` is set with
@@ -165,7 +165,7 @@ pub struct Column {
     pub group: u16,
     pub contact: Vec3,
     /// Where the body begins: one `[top]` out from the contact, along the normal of the face
-    /// it holds leaned towards straight down (ADR 0125, 0350).
+    /// it holds leaned towards straight down (ADR 0125, 0339).
     pub neck: Vec3,
     /// Where a column straight down from the neck comes to rest, or `None` when one
     /// cannot: the tip then only stands if a branch carries it somewhere that can.
@@ -180,7 +180,7 @@ impl Column {
     }
 }
 
-/// Resolves model-space points to plate-coordinate columns, in order, on every core (ADR 0346).
+/// Resolves model-space points to plate-coordinate columns, in order, on every core (ADR 0339).
 /// No landing: kept for [`crate::grow`] to carry; no head clear of the model: dropped.
 pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> Vec<Column> {
     let matrix = placed.transform.to_matrix();
@@ -234,7 +234,7 @@ pub(crate) fn square_head(
 }
 
 /// `contact` moved down onto the underside under it when inside the model, else up onto the
-/// face over it when the tip does not bite (ADR 0323, 0330).
+/// face over it when the tip does not bite (ADR 0323, 0329).
 fn onto_surface(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3 {
     if on_surface(placed, contact) {
         return contact;
@@ -358,7 +358,7 @@ pub(crate) fn landing_within(
 }
 
 /// Where the body of a support at `contact` begins: one `[top]` out along the leaned normal
-/// (ADR 0125, 0350); with no room for a head, the contact for a small pillar (ADR 0348), or `None`.
+/// (ADR 0125, 0339); with no room for a head, the contact for a small pillar (ADR 0340), or `None`.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
     let (direction, normal) = tip_direction(placed, contact);
     let neck = neck_along(contact, direction, profile);
@@ -427,7 +427,7 @@ fn head_clear(
 }
 
 /// How far a head leaving along `axis` a face with outward normal `face` runs at the contact's
-/// width before it widens, mm: where that width leaves the face's plane (ADR 0350).
+/// width before it widens, mm: where that width leaves the face's plane (ADR 0339).
 pub(crate) fn pin_mm(contact_radius_mm: Scalar, axis: Vec3, face: Vec3) -> Scalar {
     let cos = axis
         .normalize_or_zero()
@@ -515,7 +515,7 @@ const PAD_DIRECTIONS: u32 = 8;
 const PAD_REACHES: u32 = 3;
 
 /// Where the pad of a trunk of `radius_mm` at `base` goes and how it is cut: whole, moved aside
-/// or cut back where the model stands, `None` if none fits (ADR 0239, 0328).
+/// or cut back where the model stands, `None` if none fits (ADR 0239, 0327).
 fn pad_offset(
     placed: &Placed,
     base: Vec3,
@@ -557,7 +557,7 @@ fn pad_offset(
 }
 
 /// Whether the foot on the plate has the model out of its way: a pad is wider than anything
-/// above it and can hit a part beside it that the column's rays pass by (ADR 0328).
+/// above it and can hit a part beside it that the column's rays pass by (ADR 0327).
 pub(crate) fn foot_clear(placed: &Placed, base: Vec3, profile: &SupportProfile) -> bool {
     pad_clear(placed, base, profile)
 }
@@ -570,7 +570,7 @@ fn lean_of(normal: Vec3, steepest_deg: Scalar) -> Option<Scalar> {
 }
 
 /// Whether `body`, a trunk dropped from its joint, has the model out of its way; the sweep
-/// starts below the top so a head off a steep face is not refused, that stretch bare (ADR 0328).
+/// starts below the top so a head off a steep face is not refused, that stretch bare (ADR 0339).
 pub(crate) fn stands_clear(placed: &Placed, body: &Beam, profile: &SupportProfile) -> bool {
     let height_mm = body.from.z - body.to.z;
     if height_mm < MIN_BODY_MM {

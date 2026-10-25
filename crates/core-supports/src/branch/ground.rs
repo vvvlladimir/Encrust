@@ -34,7 +34,7 @@ pub(super) fn escape(
 }
 
 /// The longest strut a support with nowhere nearer to stand leans down to find ground,
-/// millimetres along it; see ADR 0342.
+/// millimetres along it; see ADR 0338.
 pub(super) const GROUND_SEARCH_MM: Scalar = 25.0;
 
 /// How far apart the reaches of the long search for ground are, millimetres across the
@@ -44,7 +44,7 @@ pub(super) const GROUND_SEARCH_STEP_MM: Scalar = 1.5;
 pub(super) const GROUND_SEARCH_DIRECTIONS: u32 = 16;
 
 /// [`escape`] carried past the merge reach to a strut [`GROUND_SEARCH_MM`] long, finer round:
-/// the last lean offered before running onto the model or being left unstood (ADR 0342).
+/// the last lean offered before running onto the model or being left unstood (ADR 0338).
 pub(super) fn search_for_ground(
     front: &Front,
     placed: &Placed,

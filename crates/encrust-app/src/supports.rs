@@ -34,7 +34,7 @@ fn frozen_inside(object: &SceneObject, tree: &SupportTree) -> bool {
 }
 
 /// Which side of a hollow model's wall an automatic run holds up: everything outside it,
-/// or only its cavity; see `docs/decisions/0334`.
+/// or only its cavity; see `docs/decisions/0332`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
     Outside,
@@ -124,7 +124,7 @@ pub struct SupportTool {
     /// How far apart a line of supports drawn with shift stands, millimetres.
     pub inline_spacing_mm: Scalar,
     /// The support Place last put down, in its model's own space: where a line drawn with
-    /// shift starts from. See `docs/decisions/0332`.
+    /// shift starts from. See `docs/decisions/0330`.
     pub last_placed: Option<(ObjectId, Vec3)>,
     /// The brush has hold of the pointer: the press that started this drag landed on a
     /// model, so the stroke paints instead of turning the camera.

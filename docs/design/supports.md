@@ -1,7 +1,7 @@
 # Supports
 
 How a support gets from a click into the printed file. Why it is built this way:
-ADR 0026–0029, 0031–0034, 0036, 0040–0044, 0092–0095, 0330.
+ADR 0026–0029, 0031–0034, 0036, 0040–0044, 0092–0095, 0329.
 
 ## The pipeline
 
@@ -29,7 +29,7 @@ over the plate (ADR 0125). A normal more than 45 degrees off straight down is tu
 `r · tan θ` before it widens, so a face cut slantwise meets only the ball and that pin: the
 mark reaches `r / cos θ` on one side, 9 per cent wider at most. The pin is at most
 `r · tan 33°`: 0.32 mm on Heavy's 1 mm contact, 0.19 mm on Medium's; only what is under the neck
-leans and bends (ADR 0346, 0350). A contact off the
+leans and bends (ADR 0339). A contact off the
 surface sends it straight down. A knee
 and the strut into a thicker support are held to 45 degrees, whatever the branch
 angle; a trunk is swept for clearance from its own width below its top; and a tip that can
@@ -41,11 +41,11 @@ shaped like the rest. Only the tip may meet the model: the whole head, contact t
 width, is swept from a hair past its pin, and a support whose head meets the model there,
 or rises so nearly straight up that a trunk from its neck would come down on its own
 contact, is not placed: `columns` leaves it out and the panel counts it with those that have
-no room to stand (ADR 0346). First it is moved to the nearest spot of a face looking down
+no room to stand (ADR 0339). First it is moved to the nearest spot of a face looking down
 within 0.3 mm across and 0.05 mm up or down where a head has room, on rings 0.05 mm apart
 every 30 degrees — out to its radius and a ring where that brings its whole circle onto its
-face, which a contact with room moves for too (ADR 0354); failing that, in a profile with small pillars it has no head, and `grow`
-holds it with a small pillar or not at all (ADR 0348). Everything below
+face, which a contact with room moves for too (ADR 0339); failing that, in a profile with small pillars it has no head, and `grow`
+holds it with a small pillar or not at all (ADR 0340). Everything below
 is measured from the neck, not from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface
@@ -61,20 +61,20 @@ model may move up — and the inspector reports standing against placed.
 
 A front that cannot stand, nor lean within a merge's reach, searches further before it
 is run onto the model: out to where a 25 mm strut at the profile's lean ends, every
-1.5 mm across and 16 ways round, onto a gentle face and then a steeper one (ADR 0342).
+1.5 mm across and 16 ways round, onto a gentle face and then a steeper one (ADR 0338).
 
 ## Checking a body against the model
 
 Every placement question sweeps a `Beam` — a cone with its clearance — by the nine rays of
 ADR 0077 and a row of balls down its axis, each as wide as the beam where it stands, no
 wider than its distance to either end, half a radius apart; a ball is measured against
-each face the `Bvh` offers, exactly, on the plate (ADR 0341). Once a family has grown, each
+each face the `Bvh` offers, exactly, on the plate (ADR 0337). Once a family has grown, each
 tree is held to its drawn bodies: `mesher::bodies` hands back the tubes the mesher sweeps,
 and `sound` tests each ring-to-ring frustum, a 0.05 mm graze narrower, from where the
 tube stands that graze off the face its tip — or the foot it stands on the part with —
 was built to meet. A merged tree whose own branches fail stands those tips alone and
 grows the rest again; one whose trunk or an inner strut fails is split at its lowest
-joint and each half grown again (ADR 0347), and after three rounds what still fails is
+joint and each half grown again (ADR 0337), and after three rounds what still fails is
 stood tip by tip; a support of one
 tip that fails is left unstood, and the inspector counts it. A dragged support is held to
 the same test.
@@ -87,7 +87,7 @@ The profile is grouped as MSLA slicers group it, so numbers tuned elsewhere carr
 
 | Piece | From | To | Radius |
 |---|---|---|---|
-| top segment | a half ball of the contact's radius, `tip.contact_depth_mm` into the model (ADR 0345) | `top.length_mm` along the face normal, leaned back towards straight down by at most 33 degrees behind a pin (ADR 0350) | `tip.contact_diameter_mm / 2` to the pillar's radius |
+| top segment | a half ball of the contact's radius, `tip.contact_depth_mm` into the model (ADR 0339) | `top.length_mm` along the face normal, leaned back towards straight down by at most 33 degrees behind a pin (ADR 0339) | `tip.contact_diameter_mm / 2` to the pillar's radius |
 | pillar | the top segment | the top of the flare | the node's radius, `middle.diameter_mm / 2` unless it is a trunk |
 | flare | the pillar | the top of the foot | the pillar's radius to `bottom.lower_diameter_mm / 2` |
 | foot | the top of the foot | `z = 0` | `bottom.platform_diameter_mm / 2` in to the bevelled rim |
@@ -98,15 +98,15 @@ deeper than half the wall behind the contact, measured by one ray along that axi
 on a thin edge would otherwise come out of its far side as a nub, and above the model's
 top as layers of nothing but tips. `facets`
 sides are used for every ring; the default of 12, shaded smooth, reads as round, and a
-joint's domes take six rings so a bend reads round (ADR 0343, 0352).
+joint's domes take six rings so a bend reads round (ADR 0341).
 
 **Tips.** `plane`, the default, ends in a half ball of the contact's radius centred
 `bite_mm` into the face along the head's axis, the cone running from its equator: at a
 bite of nought half the ball is in the part, and the face cuts it in a circle of the
 contact's width however the head leans. Its pole is held to half the wall, the centre
-coming back out where the ball would reach further (ADR 0345). The tip a trunk standing on
+coming back out where the ball would reach further (ADR 0339). The tip a trunk standing on
 the part ends in is rounded the same way, and so is each end of a small pillar, to its own
-diameter whatever the tip shape (ADR 0348). `sphere` is a
+diameter whatever the tip shape (ADR 0340). `sphere` is a
 ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
 its rings run past the contact and rings never climb, so the neck is shorter than
 `top.length_mm`.
@@ -121,8 +121,8 @@ still leaves the flare inside its sole. Where that is not room enough the pad is
 back instead, `Landing::pad_cut`: the nearest model along each of 16 sectors' edges and
 middle, at its sole, middle and top, less `clearance_mm`, as long as no sector bares the
 flare; each look stops at the pad's reach, and one ray per height says whether the pad sets
-off inside the model (ADR 0340). The mesher pulls the foot's vertices in to it. Failing that the support has no
-landing there and leans for one like any other blocked front (ADR 0239, 0328). The foot is a tube of its own, because a
+off inside the model (ADR 0327). The mesher pulls the foot's vertices in to it. Failing that the support has no
+landing there and leans for one like any other blocked front (ADR 0239, 0327). The foot is a tube of its own, because a
 tube has one side count, and the trunk runs down through it — the same overlap rule as
 every joint (ADR 0041).
 
@@ -134,7 +134,7 @@ foot keeps its rim as a middle ring, so it narrows towards the support and still
 plate on the bevel.
 
 **The flare.** The pillar widens out into the pad over a quarter-circle fillet, tangent
-to the pillar above and the pad below, that rises as far as it widens (ADR 0343). It leaves the pillar at the pillar's own width, so
+to the pillar above and the pad below, that rises as far as it widens (ADR 0341). It leaves the pillar at the pillar's own width, so
 its height is `(lower - pillar) / 2` rather than a field of its own (ADR 0238), it is drawn with the pillar's facets rather than the pad's, and it sinks
 `FOOT_BITE` into the pad the way the trunk does. It never reaches above the root it widens,
 never narrower than the trunk standing in it, and never wider than the narrowest ring of
@@ -149,10 +149,10 @@ and a depth per end, no foot and no tip — one width from the face it holds to 
 stands on, each end a half ball of that width sunk by its depth, whatever the profile's tip
 is. An end meeting its face more than 20 degrees off the normal first leaves it along the
 normal for one diameter and bends there, so a face meets it in a circle of the diameter, at
-most 6 % longer one way (ADR 0348). Which supports use it is derived —
+most 6 % longer one way (ADR 0340). Which supports use it is derived —
 landing on the model, carrying one tip, running no further than `max_length_mm` nor 30
 diameters from contact to landing, section enabled — never marked; a longer one keeps the
-regular width (ADR 0255, 0348). A trunk keeps its width whatever it
+regular width (ADR 0255, 0340). A trunk keeps its width whatever it
 stands on, because it carries the tips' weight (ADR 0042).
 
 **Standing on the part.** Any other support that lands on the model ends in `[top]` and
@@ -189,12 +189,12 @@ between them is built to the finer of the two and meshed with that group. It tie
 neighbours one level every `rise_mm` from `start_height_mm`, as high as both still stand —
 the lower of the two trunk tops: the root node, above which a trunk has split, or under the
 head of a column holding its one tip. The levels fall into
-zones (ADR 0329): `bottom` takes its levels up from the start, `top` its levels down from
+zones (ADR 0328): `bottom` takes its levels up from the start, `top` its levels down from
 that ceiling, and `middle` the whole rises between; a zone short of room gives way, the
 bottom last. A level is a cross or a zigzag's one leaning brace, never a rung; a pair
 without room for one level is not tied. A trunk left free above its highest brace by more than
 `buttress.pair_above_mm`, or above its second-highest by more than `one_above_mm`, is
-propped by two legs or one (ADR 0329): each leans 45 degrees out from the trunk's top for one
+propped by two legs or one (ADR 0328): each leans 45 degrees out from the trunk's top for one
 rise, away from the middle of the part, and stands on the plate. Legs are made from the
 trees each time they are meshed, then braced like any trunk. A brace is no wider than either trunk
 where it meets it (ADR 0242). Each brace is one more tube, and one the
@@ -254,7 +254,7 @@ like the slicing job (ADR 0018). Supports already under the model are handed in 
 they hold what is near them and are never moved, so a run only adds.
 
 **What prints.** A model is cut, landed and swept as it prints: drilled where its holes
-have been taken out exactly, else as its shell once hollowed (ADR 0334). The cavity's
+have been taken out exactly, else as its shell once hollowed (ADR 0332). The cavity's
 ceiling and the crown of a hole are then undersides like any other, and the faces under
 them faces a column lands on. The patches stay the model's: a fill reads its faces, and a
 blocked patch is asked by point, within 0.01 mm of it, so it holds on a surface numbered
@@ -308,7 +308,7 @@ under 0.005 mm² aside, which the layer above does not stand on either — must 
 contact on its seat, 0.06 mm in from its rim, within two layers under its plane. One
 without is held at the lowest low point on its seat, else the seat's cell nearest its
 middle: a placed contact on its rim is moved there, else the nearest within 0.3 mm, else
-one is added (ADR 0330). So a speck that never grows prints loose
+one is added (ADR 0329). So a speck that never grows prints loose
 only if it is too small for the check to name.
 
 A contact goes a whole layer below the plane that was cut, because the surface is somewhere
@@ -317,7 +317,7 @@ holds. The tip then sinks `contact_depth_mm` back in. A tip with no bite would n
 the surface from there, so building its column moves the contact up onto the face over it,
 when that face looks down and is no more than 0.5 mm above (ADR 0323). A contact inside the
 model — a steadying support on the outline of a part's section — is moved down onto the
-underside its ray leaves through, whatever the bite (ADR 0330).
+underside its ray leaves through, whatever the bite (ADR 0329).
 
 **Where the points go.** The outline first, because a corner is where a ledge lifts and the
 edge is where the peel starts. Corners are the vertices of the piece's convex hull where it
@@ -330,7 +330,7 @@ grid of a quarter of that into the gaps the rim's supports opened, both keeping 
 quarters of a spacing from what is taken; anchoring is what lets the coverage check thin a
 slope to one support per place rather than one per layer. A piece too small for two
 supports gets one at its middle, where a corner would leave it a lever, so sampling never
-returns nothing (ADR 0330). An island is sampled closer
+returns nothing (ADR 0329). An island is sampled closer
 than an overhang, by its area, as the profile's `[islands]` says: as shipped, under 2.4 mm²
 at 13/18 of the spacing, under 3.2 mm² at 15/18, and at the spacing itself above that, each
 keeping three quarters of its own spacing clear. Automatic sizing takes the two areas from
@@ -404,7 +404,7 @@ height and dropped once the climb passes them. An overhang or a gentle face insi
 is held as a step of the largest one reaching it. A gentle face outside every ball, and a
 slope past `steady_lean_deg` across at least the side of `steady_area_mm2`, is steadied on:
 sampled at `steady_spacing_mm`, last, each one kept in a second set of balls that keeps
-only its own kind away, so an overhang above it is still held (ADR 0327).
+only its own kind away, so an overhang above it is still held (ADR 0326).
 
 **Cost.** The stack is walked in blocks of 32: read and examined in parallel, since what a
 layer needs depends only on the layers under it, with only the coverage check in order,
@@ -440,11 +440,11 @@ neither strut is longer than `max_strut_length_mm`, each strut's body clears the
 and the meeting point can land. Where the higher front reaches the lower one's column at
 or above it, the meeting point is the lower front itself and only the higher one leans:
 it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
-at its own height further off (ADR 0347). A pair refused for its bodies or its
+at its own height further off (ADR 0338). A pair refused for its bodies or its
 landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
 first, then twice as far each time, until the meeting point reaches the plate: what blocks a strut is
 mostly the part right beside the tips, and dropping past it is how two columns under a
-crowded part still share a trunk (ADR 0347). The joint
+crowded part still share a trunk (ADR 0338). The joint
 keeps the branches' own width; only the trunk under the root widens, as a cone from that
 width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `carried` folds
 `(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
@@ -453,10 +453,10 @@ Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Surv
 a vertical trunk to their landing. A merged front that stands on the model is split again
 where every tip under it stands on the model as a small pillar of its own — from its neck,
 or straight from its contact — since two thin struts snap off where a joint between two
-faces has to be cut away (ADR 0331). `branching.enabled = false` gives back step 7a's column exactly.
+faces has to be cut away (ADR 0340). `branching.enabled = false` gives back step 7a's column exactly.
 
 **On a grid.** Where every group of a family has `[grid]` on, nothing is merged: each tip
-goes to a node of a square grid `spacing_mm` across anchored to the plate (ADR 0335) — the
+goes to a node of a square grid `spacing_mm` across anchored to the plate (ADR 0333) — the
 nearest of the 25 nodes round it whose strut from the neck, leaning 45 degrees, clears the
 model, and under which a trunk lands straight down. The tips of a node hang one above
 another on one vertical trunk, each from a joint where its strut meets it; the lowest joint
@@ -467,10 +467,10 @@ no gridded trunk is leant towards a neighbour.
 landing — is swept as a beam of its own radius plus `clearance_mm` and tested with nine
 rays: its axis and eight on the ring (ADR 0077). A foot on the plate is tested from its
 middle out instead, 48 rays across the plate at three heights, so a toe standing inside
-it is found too (ADR 0328). A first hit on a back face is a body that set off inside
+it is found too (ADR 0327). A first hit on a back face is a body that set off inside
 the solid, which a forward ray otherwise reports as clear air out to the far wall. Where a
 body belongs in the surface it is exempt: the head at a tip is swept on its own (ADR
-0328), the top of a trunk under it bare, and a landing stops the beam `(radius + clearance) · tan(slope)` above the
+0339), the top of a trunk under it bare, and a landing stops the beam `(radius + clearance) · tan(slope)` above the
 face, which is where the beam already reaches it. A face leaning more than 45 degrees from
 horizontal is not a landing: there is nothing under a foot on it.
 
@@ -478,8 +478,8 @@ horizontal is not a landing: there is nothing under a foot on it.
 `columns` hands it over with no landing, merging gets its chance at it, and a front still
 standing on nothing at harvest bends a **knee**: eight directions and a reach every
 `ESCAPE_STEP_MM` (1 mm), shortest first, at the branch angle and no further than the merge
-distance or than the height left under it allows (ADR 0078, 0347). A contact with no head
-is not bent at all: it is held by a small pillar or by nothing (ADR 0348). From a diameter
+distance or than the height left under it allows (ADR 0078, 0338). A contact with no head
+is not bent at all: it is held by a small pillar or by nothing (ADR 0340). From a diameter
 out along its normal, the pillar casts 50 rays — along the normal, straight down, and 16
 ways round at 15, 30 and 45 degrees off straight down — for a face of the part looking back at it, no steeper than 75 degrees,
 and of the sound runs whose struts lean no more than 45 degrees takes the one that turns
@@ -494,7 +494,7 @@ standing-against-placed count is where that shows.
 node starts under a dome of its own. A trunk is never thinner than a branch, so every end lies
 inside what it meets: nothing covers the joint and nothing is wider there than the trunk
 itself (ADR 0238). A strut ends flat where that tube runs on twice the strut's width, and in a
-dome of its own width elsewhere (ADR 0352). Ring
+dome of its own width elsewhere (ADR 0341). Ring
 frames come from the tube's direction, chosen so a vertical tube uses the plate's own X
 and Y.
 `tests/branching_prints.rs` checks the point of all this: through a joint the layer has
@@ -535,10 +535,10 @@ carrier. A tree built as a small pillar carries only as wide as that, and its tr
 carries nothing, since it may yet be moved from under what stood on it; once every group
 is grown each one with a neck is itself run into a wider carrier in its reach, by a strut
 no longer than its own drop to the part, and built that thin all the way up, so a small
-pillar stands on a support and never the other way round (ADR 0251, 0331). Last, every small
+pillar stands on a support and never the other way round (ADR 0251, 0340). Last, every small
 pillar on the part is replaced by what that search finds from its contact where that turns
 five degrees less, and squared onto both its faces where that is sound and leans no strut
-past 45 degrees (ADR 0348). `grow` hands the forest back in group order.
+past 45 degrees (ADR 0340). `grow` hands the forest back in group order.
 
 Any group can be dropped but the last, and the one after the first takes its place and the
 raft with it. A secondary click on a group's row builds the whole group to another saved
@@ -559,20 +559,20 @@ and what stands keeps the group it stands in (ADR 0247). A group nothing stands 
 retuned instead. So two kinds of support on one part are two choices from one list, and a
 support changes kind by being picked and moved to the group in hand. The list shows only
 the groups that hold supports, each under its preset's name, on the line of that preset
-(ADR 0338).
+(ADR 0336).
 
 Choosing **Auto** in that list sizes supports automatically, any other preset by hand.
 Under Auto the list shows the shapes it built; in the Shape mode it shows every shape it
 builds to, since each is edited there like any support profile. Sizing automatically, the
 card's placement and size fields edit the automatic profile's own numbers, which Save
-writes over the shipped one (ADR 0339), and a run is placed by them on its lightest shape;
+writes over the shipped one (ADR 0325), and a run is placed by them on its lightest shape;
 each contact then goes into the group built to the shape its `Reason` sizes it into — a
 group of that profile's name, else one nothing stands in, retuned, else a new one — and a
 shape nothing is sized into gets no group (ADR 0325).
 
 Dropping a group takes every support built to it away — a group is a shape, so its supports
 do not survive it to be rebuilt to another group's numbers — and shifts the groups above it
-down into its number. Its bin asks twice rather than a dialog (ADR 0338), and the history
+down into its number. Its bin asks twice rather than a dialog (ADR 0336), and the history
 takes the whole thing back. Group 0 cannot go: it holds the raft's and the bracing's
 numbers.
 
@@ -600,7 +600,7 @@ The part a press would take is drawn fainter than what is held before the button
 A part met further along the ray than the first printed surface is behind that model and is
 not taken, hover or press: `grab_along` answers how far along the part stands. The ray is
 measured from where the section lets it in, and a cut standing in material is a cap that
-hides what is behind it, so a part inside a cavity the section opens is taken (ADR 0334).
+hides what is behind it, so a part inside a cavity the section opens is taken (ADR 0332).
 
 A press picks a part and the same drag carries it, by the step the cursor takes on the
 plane through it facing the camera, measured from where the cursor was pressed and not from
@@ -637,7 +637,7 @@ that reads the drag (ADR 0208).
 ## A line of supports
 
 Shift-click with Place in hand stands a row from the last support placed on the same model
-to the click (ADR 0332). `inline` cuts the chord between them into the fewest equal steps
+to the click (ADR 0330). `inline` cuts the chord between them into the fewest equal steps
 no longer than the line spacing and takes each step to the nearest surface, the way a
 carried tip is pulled back onto its model; a point on a blocked face or within half a
 spacing of the one before is dropped, and each one left goes through `stands` like a click.
@@ -665,7 +665,7 @@ left.
   it — walked at a spacing of its own (ADR 0092). Otherwise a ring that far in, and a
   second ring its gap further in if one is asked for.
 
-Anything measured in from the outline is read off the **footprint** (ADR 0333): the lowest
+Anything measured in from the outline is read off the **footprint** (ADR 0331): the lowest
 surface over cells a quarter of the finest spacing across, 0.1 to 0.5 mm, and each cell's
 distance to the nearest cell the patch is not over, by the two-pass 8SSEDT sweep. A ring at
 depth `d` is the band of cells in `[d - cell/2, d + cell/2)`, walked from its first cell
@@ -699,7 +699,7 @@ its hierarchy, its placement and this patch — travel together as `Placed`.
 
 The trees are grown and meshed on a worker, against the clearance answers the model kept
 from its last growth; until they land the supports drawn last stay, and slicing and the
-preview wait (ADR 0340, 0351).
+preview wait (ADR 0342).
 Supports are drawn as a second mesh per object with an identity transform — they are
 already in plate coordinates — in a cooler, darker colour; a painted patch is drawn the
 same way, lifted 0.05 mm off the faces it covers, green for a fill and violet for a
@@ -716,7 +716,7 @@ The Hollow and Drain tools show their blocker, hole or channel point the same wa
 the cursor drew rather than only where the frames fell, and the brush itself is drawn as a
 ring lying on the surface under the cursor, in the colour of the patch it paints: drag to
 paint, Cmd-Shift-click for the whole surface, alt to erase. The Supports card's modes and blocks are
-ADR 0338's. Editing any field marks the preset edited; fields are
+ADR 0336's. Editing any field marks the preset edited; fields are
 independent, so the order a profile must keep — every ring at least as wide as the one
 above, the small pillar no wider than the pillar it replaces — is restored after an edit
 rather than forbidden during one.

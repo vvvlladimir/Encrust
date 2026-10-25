@@ -14,7 +14,7 @@ pub struct Ring {
 }
 
 /// How many rings a rounded end is drawn with, the tube's own last ring among them. At a
-/// bend the outside of the joint is these ends, so they are drawn round; see ADR 0343.
+/// bend the outside of the joint is these ends, so they are drawn round; see ADR 0341.
 pub const DOME_RINGS: u32 = 6;
 
 /// A straight run of a support: an axis, the circles along it and what closes its top.

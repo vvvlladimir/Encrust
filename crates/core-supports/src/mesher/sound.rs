@@ -102,7 +102,7 @@ impl Style {
 pub(super) const GRAZE_MM: Scalar = 0.05;
 
 /// Whether every body of `tree`, as it is drawn, keeps out of the model past the ends
-/// built to meet it: the one test a finished support is held to. See ADR 0341.
+/// built to meet it: the one test a finished support is held to. See ADR 0337.
 pub(crate) fn sound(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> bool {
     bodies(tree, profiles, placed)
         .iter()

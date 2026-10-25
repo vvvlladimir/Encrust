@@ -1,4 +1,4 @@
-# 0334. Stand supports against what prints, and hold a cavity up by a run of its own
+# 0332. Stand supports against what prints, and hold a cavity up by a run of its own
 
 - **Status:** Accepted
 - **Date:** 2026-10-23
@@ -33,7 +33,7 @@ its faces afresh. A cavity often wants holding up apart from the outside, after 
 - **A run keeps to its side while it places**, as a blocked patch keeps it off: a contact
   on the far side is never taken, so it holds up nothing near it, and a support already
   standing there is no seed.
-- **A line keeps to its side too.** A line drawn with shift (ADR 0332) takes each point to
+- **A line keeps to its side too.** A line drawn with shift (ADR 0330) takes each point to
   the nearest face on the side of the wall its first support stands on, so a chord that
   dips into a thin wall is not taken through it onto the cavity.
 - **Seen through the section.** A part of a support is taken by a click between where the

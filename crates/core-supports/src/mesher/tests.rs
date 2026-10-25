@@ -275,7 +275,7 @@ fn the_volume_matches_the_cones_and_cylinders_it_is_made_of() {
     let neck = PI * profile.top.length_mm / 3.0
         * (contact_r * contact_r + contact_r * pillar_r + pillar_r * pillar_r);
     // The neck ends flat inside the pillar, which starts under a dome inside the neck: a cone
-    // on its pole and frustums, counted on top of the tube it sits in (ADR 0352).
+    // on its pole and frustums, counted on top of the tube it sits in (ADR 0341).
     let pillar = PI * pillar_r * pillar_r * (height - profile.top.length_mm - trunk_bottom);
     let rings = tube::DOME_RINGS as f32;
     let ring = |step: f32| (PI / 2.0 * step / rings).sin() * pillar_r;

@@ -1,4 +1,4 @@
-# 0335. Stand trunks on the nodes of a square grid when a profile asks for it
+# 0333. Stand trunks on the nodes of a square grid when a profile asks for it
 
 - **Status:** Accepted
 - **Date:** 2026-10-23

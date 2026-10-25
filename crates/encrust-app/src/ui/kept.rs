@@ -1,5 +1,5 @@
 //! What a panel chose about itself — a section folded, one of a few tabs picked — kept
-//! between runs by the preferences file; see `docs/decisions/0336`.
+//! between runs by the preferences file; see `docs/decisions/0334`.
 
 use std::collections::BTreeMap;
 

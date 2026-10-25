@@ -1,4 +1,4 @@
-# 0338. Make the supports in one card, its click modes in its heading
+# 0336. Make the supports in one card, its click modes in its heading
 
 - **Status:** Accepted
 - **Date:** 2026-10-24
@@ -7,7 +7,7 @@
 
 Supports were made in three tools of the rail (ADR 0218): Supports grew and picked them, Paint
 placed, painted and held the groups, Shape held the profile's parts. Each repeated the
-automatic-or-by-hand switch and the profile with its two save buttons (ADR 0325), and none
+automatic-or-by-hand switch and the profile with its two save buttons, and none
 worked without another: moving picked supports to a group meant choosing the group in Paint
 and pressing the button in Supports, and tuning a tip and growing again meant Shape, then
 Supports, then Shape. On a short screen every switch also meant scrolling past the repeated

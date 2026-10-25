@@ -16,7 +16,7 @@ pub(super) struct SupportShell {
 
 impl SceneObject {
     /// The surface supports stand against, as the model prints, drilled and hollowed, and its
-    /// hierarchy; the model itself until that hierarchy is built (ADR 0334).
+    /// hierarchy; the model itself until that hierarchy is built (ADR 0332).
     pub fn support_surface(&self) -> (&Arc<Mesh>, &Arc<Bvh>) {
         match (&self.support_shell, self.wanted_surface()) {
             (Some(kept), Some((wanted, _))) if Arc::ptr_eq(&kept.mesh, wanted) => {
@@ -44,7 +44,7 @@ impl SceneObject {
     }
 
     /// Whether the supports have changed and what is printed of them has not been built
-    /// again yet: their trees may still be growing on a worker (ADR 0340).
+    /// again yet: their trees may still be growing on a worker (ADR 0342).
     pub fn supports_pending(&self) -> bool {
         self.supports.meshes().is_none()
             && !(self.supports.is_empty() && self.supports.drawn().is_empty())

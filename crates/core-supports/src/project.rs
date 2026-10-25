@@ -79,7 +79,7 @@ pub struct Projected {
 }
 
 /// Where supports go to hold up `region`, in plate coordinates; blocked faces and faces leaning
-/// past `max_overhang_deg` are left out. A rim at nought walks the fill's edges (ADR 0092, 0333).
+/// past `max_overhang_deg` are left out. A rim at nought walks the fill's edges (ADR 0092, 0331).
 pub fn project(
     placed: &Placed,
     adjacency: &Adjacency,

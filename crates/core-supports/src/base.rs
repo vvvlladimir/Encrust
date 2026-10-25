@@ -318,7 +318,7 @@ pub struct BraceLevel {
 }
 
 /// The levels of `bracing` between `floor_mm` and `ceiling_mm`, lowest first; each zone takes
-/// only the levels there is room for, the bottom first (ADR 0329).
+/// only the levels there is room for, the bottom first (ADR 0328).
 pub fn brace_levels(bracing: &Bracing, floor_mm: Scalar, ceiling_mm: Scalar) -> Vec<BraceLevel> {
     let rise = bracing.rise_mm;
     if rise <= SAME_PLACE_MM {

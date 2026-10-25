@@ -22,7 +22,7 @@ struct Hung {
 
 impl Forest<'_> {
     /// Stands every front on a node of a plate-anchored square grid `grid.spacing_mm` across: the
-    /// nearest a 45 degree strut reaches clear of the model; unplaced fronts stay (ADR 0335).
+    /// nearest a 45 degree strut reaches clear of the model; unplaced fronts stay (ADR 0333).
     pub(super) fn snap_to_grid(&mut self, placed: &Placed, grid: Grid) {
         let spacing_mm = grid
             .spacing_mm

@@ -238,7 +238,7 @@ pub(super) fn branching(
 }
 
 /// The square grid trunks stand on, in place of where the tips merge; see
-/// `docs/decisions/0335`.
+/// `docs/decisions/0333`.
 pub(super) fn grid(
     ui: &mut egui::Ui,
     profile: &mut SupportProfile,

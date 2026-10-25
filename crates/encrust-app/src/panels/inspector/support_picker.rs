@@ -20,7 +20,7 @@ const LINE_H: f32 = 26.0;
 const SHAPE_INDENT: f32 = 16.0;
 
 /// The preset in hand on one line under the card's heading: the picker that is also the
-/// list of groups standing, Save, and the bin. See `docs/decisions/0338`.
+/// list of groups standing, Save, and the bin. See `docs/decisions/0336`.
 pub(super) fn line(ui: &mut egui::Ui, window: &mut Window) {
     let mut acts = Vec::new();
     egui::Frame::new()

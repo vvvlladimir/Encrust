@@ -78,7 +78,7 @@ never both, never neither. A typed value is clamped to its range; no error popup
 |---|---|---|
 | The plate: a tool value | `ToolSettings` | project, `preferences.json`, undo — for free |
 | The window: machine, resin, behaviour, widths, a panel's mode | `Preferences` | `preferences.json` |
-| A widget: fold, tab, lock | `ui::kept` by id (ADR 0336) | `preferences.json` |
+| A widget: fold, tab, lock | `ui::kept` by id (ADR 0334) | `preferences.json` |
 | A named set: machine, resin, preset | profile catalogue | the user's profile directory |
 
 Everything not transient (hover, drag in progress, one-shot action) is remembered; never in a

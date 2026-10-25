@@ -1,5 +1,5 @@
 //! The user's files that would not read: left out so the rest of the catalogue loads, the
-//! shipped profile of the same id standing in. See docs/decisions/0353.
+//! shipped profile of the same id standing in. See docs/decisions/0344.
 
 use std::path::PathBuf;
 use std::sync::Arc;
