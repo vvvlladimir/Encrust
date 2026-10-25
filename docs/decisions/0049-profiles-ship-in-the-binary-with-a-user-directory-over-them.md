@@ -1,6 +1,6 @@
 # 0049. Ship the profile catalogue inside the binary, with a user directory over it
 
-- **Status:** Accepted
+- **Status:** Accepted; a file that does not parse failing the catalogue is superseded by 0344
 - **Date:** 2026-09-20
 
 ## Context

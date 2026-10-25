@@ -1,6 +1,5 @@
-//! The Network card of the printer form: what the machine speaks, and the printers of
-//! this model on the network its files go to, each under a name of its own. See
-//! `docs/decisions/0265`.
+//! The Network card of the printer form: what the machine speaks and the printers of this
+//! model its files go to, each named. See `docs/decisions/0265`.
 
 use net_prusalink::Link;
 use net_sdcp::Printer;
@@ -93,9 +92,8 @@ fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) 
     printer_card::scan_notes(ui, network);
 }
 
-/// The printers this profile sends to, each named, with what it is doing and a way to
-/// take it off the list. A board listed by its address learns its id once it answers, so
-/// it is still found after it moves to another address.
+/// The printers this profile sends to, each named, with its state and a way to remove it. A
+/// board listed by address learns its id once it answers, so a new address still finds it.
 fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
     subheading(ui, &tr!("connection-listed"));
     if profile.machines.is_empty() {

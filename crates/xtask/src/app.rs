@@ -1,7 +1,5 @@
-//! `cargo xtask app`: the window as a macOS app bundle, under an id of its own, opened.
-//! macOS lets a bundle that states why onto the local network; a binary started from a
-//! terminal other than Terminal.app is never asked and never let on. See
-//! `docs/decisions/0262`.
+//! `cargo xtask app`: the window as a macOS app bundle under an id of its own, opened, since only a
+//! bundle stating why may use the local network. See `docs/decisions/0262`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

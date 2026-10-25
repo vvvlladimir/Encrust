@@ -13,10 +13,8 @@ pub(crate) struct ZBins {
 const MAX_BINS: usize = 1024;
 
 impl ZBins {
-    /// Buckets the faces of `mesh` over `[z_min, z_max]` for a run of `planes` layers.
-    ///
-    /// A face outside the range is left out, so a window's index costs a window; see
-    /// `docs/decisions/0066-a-stack-is-sliced-a-window-at-a-time.md`.
+    /// Buckets the faces of `mesh` over `[z_min, z_max]` for a run of `planes` layers. A face
+    /// outside the range is left out, so a window's index costs a window (ADR 0066).
     pub(crate) fn build(mesh: &Mesh, z_min: Scalar, z_max: Scalar, planes: usize) -> Self {
         let count = planes.clamp(1, MAX_BINS);
         let bin_height = ((z_max - z_min) / count as Scalar).max(Scalar::MIN_POSITIVE);
@@ -45,10 +43,8 @@ impl ZBins {
         }
     }
 
-    /// Every face that can possibly cross the plane at height `z`.
-    ///
-    /// The top of the range reads the last bucket: a window's index spans its own planes,
-    /// so the topmost plane lands exactly on the edge.
+    /// Every face that can possibly cross the plane at height `z`. The top of the range reads the
+    /// last bucket: a window's topmost plane lands on the edge.
     pub(crate) fn faces_near(&self, z: Scalar) -> &[u32] {
         if self.bins.is_empty() || z < self.z_min || z > self.z_max {
             return &[];

@@ -79,8 +79,14 @@ pub struct ViewportInput {
 }
 
 impl ViewportInput {
-    /// Advances the gesture by one frame.
-    pub fn update(&mut self, pointer: &Pointer, gizmo_focused: bool) -> Gesture {
+    /// Advances the gesture by one frame. `shift_clicks` is whether the tool in hand reads
+    /// a shift press that stays put as a click; everywhere else shift only pans.
+    pub fn update(
+        &mut self,
+        pointer: &Pointer,
+        gizmo_focused: bool,
+        shift_clicks: bool,
+    ) -> Gesture {
         if !pointer.any_button_down() {
             return self.release();
         }
@@ -97,7 +103,7 @@ impl ViewportInput {
             } else {
                 Drag::Orbit
             };
-            self.candidate_click = pointer.primary_down && !pointer.shift;
+            self.candidate_click = pointer.primary_down && (shift_clicks || !pointer.shift);
             self.travel_points = 0.0;
         }
 
@@ -157,13 +163,13 @@ mod tests {
     fn the_left_button_orbits_and_the_right_one_pans() {
         let mut input = ViewportInput::default();
         assert_eq!(
-            input.update(&press(Drag::Orbit, false), false).drag,
+            input.update(&press(Drag::Orbit, false), false, false).drag,
             Drag::Orbit
         );
 
         let mut input = ViewportInput::default();
         assert_eq!(
-            input.update(&press(Drag::Pan, false), false).drag,
+            input.update(&press(Drag::Pan, false), false, false).drag,
             Drag::Pan
         );
     }
@@ -172,7 +178,7 @@ mod tests {
     fn shift_turns_a_left_drag_into_a_pan() {
         let mut input = ViewportInput::default();
         assert_eq!(
-            input.update(&press(Drag::Orbit, true), false).drag,
+            input.update(&press(Drag::Orbit, true), false, false).drag,
             Drag::Pan
         );
     }
@@ -181,12 +187,12 @@ mod tests {
     fn a_press_on_a_gizmo_handle_never_moves_the_camera() {
         let mut input = ViewportInput::default();
         let pressed = press(Drag::Orbit, false);
-        assert_eq!(input.update(&pressed, true).drag, Drag::None);
+        assert_eq!(input.update(&pressed, true, false).drag, Drag::None);
 
         // The handle stops being focused the moment the gizmo takes the drag, and the
         // camera must not pick it up on the next frame.
         let held = hold(&pressed, Vec2::new(20.0, 0.0));
-        assert_eq!(input.update(&held, false).drag, Drag::None);
+        assert_eq!(input.update(&held, false, false).drag, Drag::None);
     }
 
     #[test]
@@ -198,33 +204,33 @@ mod tests {
             primary_down: true,
             ..Pointer::default()
         };
-        assert_eq!(input.update(&outside, false).drag, Drag::None);
+        assert_eq!(input.update(&outside, false, false).drag, Drag::None);
 
         let entering = Pointer {
             over_viewport: true,
             ..hold(&outside, Vec2::new(5.0, 5.0))
         };
-        assert_eq!(input.update(&entering, false).drag, Drag::None);
+        assert_eq!(input.update(&entering, false, false).drag, Drag::None);
     }
 
     #[test]
     fn a_drag_survives_the_cursor_leaving_the_viewport() {
         let mut input = ViewportInput::default();
         let pressed = press(Drag::Orbit, false);
-        input.update(&pressed, false);
+        input.update(&pressed, false, false);
 
         let outside = Pointer {
             over_viewport: false,
             ..hold(&pressed, Vec2::new(50.0, 0.0))
         };
-        assert_eq!(input.update(&outside, false).drag, Drag::Orbit);
+        assert_eq!(input.update(&outside, false, false).drag, Drag::Orbit);
     }
 
     #[test]
     fn a_press_and_release_on_the_spot_is_a_click() {
         let mut input = ViewportInput::default();
-        input.update(&press(Drag::Orbit, false), false);
-        let gesture = input.update(&released(), false);
+        input.update(&press(Drag::Orbit, false), false, false);
+        let gesture = input.update(&released(), false, false);
         assert!(gesture.clicked);
         assert_eq!(gesture.drag, Drag::None);
     }
@@ -233,21 +239,44 @@ mod tests {
     fn a_release_after_an_orbit_selects_nothing() {
         let mut input = ViewportInput::default();
         let pressed = press(Drag::Orbit, false);
-        input.update(&pressed, false);
-        input.update(&hold(&pressed, Vec2::new(30.0, 0.0)), false);
-        assert!(!input.update(&released(), false).clicked);
+        input.update(&pressed, false, false);
+        input.update(&hold(&pressed, Vec2::new(30.0, 0.0)), false, false);
+        assert!(!input.update(&released(), false, false).clicked);
+    }
+
+    #[test]
+    fn a_shift_press_released_on_the_spot_is_a_click_where_the_tool_reads_one() {
+        let mut input = ViewportInput::default();
+        input.update(&press(Drag::Orbit, true), false, true);
+        assert!(input.update(&released(), false, true).clicked);
+    }
+
+    #[test]
+    fn a_shift_press_released_on_the_spot_is_no_click_where_the_tool_reads_none() {
+        let mut input = ViewportInput::default();
+        input.update(&press(Drag::Orbit, true), false, false);
+        assert!(!input.update(&released(), false, false).clicked);
+    }
+
+    #[test]
+    fn a_shift_drag_pans_and_ends_in_no_click() {
+        let mut input = ViewportInput::default();
+        let pressed = press(Drag::Orbit, true);
+        input.update(&pressed, false, false);
+        input.update(&hold(&pressed, Vec2::new(30.0, 0.0)), false, false);
+        assert!(!input.update(&released(), false, false).clicked);
     }
 
     #[test]
     fn a_pan_never_ends_in_a_selection() {
         let mut input = ViewportInput::default();
-        input.update(&press(Drag::Pan, false), false);
-        assert!(!input.update(&released(), false).clicked);
+        input.update(&press(Drag::Pan, false), false, false);
+        assert!(!input.update(&released(), false, false).clicked);
     }
 
     #[test]
     fn a_release_without_a_press_reports_nothing() {
         let mut input = ViewportInput::default();
-        assert_eq!(input.update(&released(), false), Gesture::default());
+        assert_eq!(input.update(&released(), false, false), Gesture::default());
     }
 }

@@ -1,8 +1,4 @@
-//! A directory of models, sliced against one profile, with a report per model.
-//!
-//! One model is one job: it is oriented, hollowed, supported and cut on its own, and
-//! comes out as its own file and its own JSON beside it. Packing several models onto one
-//! plate is what the window is for; a farm wants one file per part.
+//! A directory of models, sliced against one profile, one job, file and JSON report per model.
 
 mod report;
 
@@ -95,10 +91,8 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
     Ok(summary)
 }
 
-/// One model, and its report written beside its output. A model that fails does not stop
-/// the run: an overnight batch reports the bad one in the morning rather than at 2 a.m.
-/// `None` once Ctrl-C is pressed: a model not started is skipped, and one stopped is not a
-/// failure to report.
+/// One model, and its report written beside its output; a failing model does not stop the run.
+/// `None` once Ctrl-C is pressed: a model not started is skipped, one stopped is not a failure.
 fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> Option<ModelReport> {
     if stop.requested() {
         return None;
@@ -126,9 +120,8 @@ fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> Option<Mode
     Some(report)
 }
 
-/// Where one model's output goes: its own name in the output directory, with the
-/// extension the printer's firmware reads. A run with no printer writes a PNG stack, and
-/// a stack is a directory rather than a file.
+/// Where one model's output goes: its name in the output directory, with the printer's extension.
+/// A run with no printer writes a PNG stack, which is a directory.
 fn output_for(model: &Path, out_dir: &Path, chosen: &Chosen) -> PathBuf {
     let stem = model.file_stem().unwrap_or_default();
     let path = out_dir.join(stem);

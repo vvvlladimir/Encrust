@@ -1,7 +1,5 @@
-//! The Settings window: the support profiles, the presets of the Hollow and Drain tools,
-//! how the window behaves and the updates, a page each down its left. It is drawn in the
-//! frame the Machine and resin window is, and every edit is written as it is made. See
-//! `docs/decisions/0233` and `docs/design/profiles.md`.
+//! The Settings window: support profiles, Hollow and Drain presets, behaviour and updates,
+//! a page each. Edits are written as made; see `docs/decisions/0233`, `docs/design/profiles.md`.
 
 mod compensation;
 mod confirm;
@@ -26,24 +24,23 @@ use crate::status::Status;
 use crate::ui::{focus_ring, hairline, icon, inline_button, theme};
 use frame::{child, scrolled, with_header};
 
-/// The window, while it is open, and the question over it.
+/// The window, while it is open, and the question over it, which may be asked without it.
 pub fn window(ctx: &egui::Context, window: &mut Window) {
-    if !window.machine.settings.open {
-        return;
-    }
-    let close = frame::show(
-        ctx,
-        "settings",
-        icon::SETTINGS,
-        &tr!("settings-title"),
-        |ui, list, side| {
-            pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
-            page(ui, side, window);
-        },
-    );
-    if close {
-        window.machine.settings.close();
-        return;
+    if window.machine.settings.open {
+        let close = frame::show(
+            ctx,
+            "settings",
+            icon::SETTINGS,
+            &tr!("settings-title"),
+            |ui, list, side| {
+                pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
+                page(ui, side, window);
+            },
+        );
+        if close {
+            window.machine.settings.close();
+            return;
+        }
     }
     ask(ctx, window);
 }
@@ -216,7 +213,7 @@ pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
             settings.pick_support(catalogue, &id);
         }
         (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
-        (Kind::Resin, None) => {}
+        (Kind::Resin, None) | (Kind::Auto, _) => {}
     }
     // A plate with no resin takes the first one its machine now has.
     if matches!(kind, Kind::Printer | Kind::Resin) {
@@ -267,8 +264,16 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
         return;
     };
     settings.confirm = None;
-    if let (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) = (answer, deleting) {
-        forget_profile(window.machine, kind, &id);
+    match (answer, deleting) {
+        (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) => {
+            forget_profile(window.machine, kind, &id);
+        }
+        (confirm::Answer::Confirmed, Deleting::Unreadable) => {
+            let machine = &mut *window.machine;
+            let outcome = machine.slicing.catalogue.discard_unreadable();
+            report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
+        }
+        _ => {}
     }
 }
 
@@ -292,9 +297,8 @@ fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
 /// Room above and below the fields of a block.
 const BLOCK_PAD: f32 = 18.0;
 
-/// One category of a form: its title in a column of its own beside its fields, over a
-/// hairline. Where the form is too narrow for both, the title stands over the fields.
-/// What the fields `describe` is a question mark beside the title.
+/// One category of a form: its title in a column beside its fields over a hairline, or above
+/// them when narrow. What the fields `describe` is a question mark beside the title.
 pub(super) fn form_card<R>(
     ui: &mut egui::Ui,
     title: &str,

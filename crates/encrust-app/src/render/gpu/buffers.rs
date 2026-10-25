@@ -4,9 +4,9 @@
 use std::ops::Range;
 
 use bytemuck::Pod;
-use core_geometry::Mesh;
+use core_geometry::{Mesh, SmoothNormals};
 
-use crate::render::vertex::{ModelVertex, indexed_vertices, lead_last};
+use crate::render::vertex::{ModelVertex, indexed_vertices, lead_last, smooth_vertices};
 
 use super::*;
 
@@ -65,7 +65,12 @@ fn allocate(device: &wgpu::Device, label: &'static str, size: u64) -> wgpu::Buff
 /// Laid out a piece at a time as well as uploaded a piece at a time: a cavity of eleven
 /// million triangles is hundreds of megabytes even shared, and holding all of it to hand
 /// one buffer over is the same wall from the other side.
-pub(super) fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Vec<Piece> {
+pub(super) fn pieces(
+    device: &wgpu::Device,
+    mesh: &Mesh,
+    splits: &[usize],
+    smooth: Option<&SmoothNormals>,
+) -> Vec<Piece> {
     // A piece whose faces share no corner is the largest its vertices can come to.
     let ceiling = device.limits().max_buffer_size as usize / size_of::<ModelVertex>();
     let faces_per_piece = (ceiling / 3).max(1);
@@ -82,10 +87,15 @@ pub(super) fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Ve
             .filter(|split| (first + 1..ceiling).contains(split))
             .min()
             .unwrap_or(ceiling);
-        let (vertices, mut indices) = indexed_vertices(mesh, first..last);
-        if leads_last {
-            lead_last(&mut indices);
-        }
+        let (vertices, indices) = if let Some(smooth) = smooth {
+            smooth_vertices(mesh, smooth, first..last)
+        } else {
+            let (vertices, mut indices) = indexed_vertices(mesh, first..last);
+            if leads_last {
+                lead_last(&mut indices);
+            }
+            (vertices, indices)
+        };
         if !indices.is_empty() {
             pieces.push(Piece {
                 vertices: upload(device, "viewport_mesh", &vertices),

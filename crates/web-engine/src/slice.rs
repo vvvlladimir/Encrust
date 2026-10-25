@@ -28,11 +28,8 @@ pub struct Profiles<'a> {
     pub resin: &'a str,
 }
 
-/// Slices the active plate of the project in `project` into the container it names, on
-/// the printer and resin in `profiles`.
-///
-/// The project carries its own geometry, so nothing here is built again: `raster_window`
-/// layers are drawn at once, one per thread there is to draw them on.
+/// Slices the active plate of `project` into the container it names, on the printer and resin in
+/// `profiles`, drawing `raster_window` layers at once.
 pub fn slice_project(
     project: &[u8],
     profiles: Profiles<'_>,

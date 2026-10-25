@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// What a print comes out as against what was sliced, and the corrections that close the
-/// gap: size, tolerance and the estimate's own clock.
-///
-/// Every field is neutral by default, so a resin that states nothing prints exactly what
-/// it did before; see `docs/design/compensation.md`.
+/// What a print comes out as against what was sliced, and the corrections that close the gap.
+/// Every field is neutral by default; see `docs/design/compensation.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Compensation {
@@ -84,11 +81,8 @@ impl Compensation {
             .all(|factor| (factor - 1.0).abs() < f32::EPSILON)
     }
 
-    /// The scale and the translation that apply this shrinkage to a part whose footprint
-    /// is centred on `centre_x_mm`, `centre_y_mm`.
-    ///
-    /// XY is taken about that centre and Z about the plate, so a correction resizes the
-    /// part without moving it off where it stands or off the plate it is held to.
+    /// The scale and translation applying this shrinkage to a part centred on `centre_x_mm`,
+    /// `centre_y_mm`: XY about that centre, Z about the plate, so the part does not move.
     pub fn placement(&self, centre_x_mm: f32, centre_y_mm: f32) -> ([f32; 3], [f32; 3]) {
         let scale = self.scale();
         let anchor = [centre_x_mm, centre_y_mm, 0.0];
@@ -100,10 +94,8 @@ impl Compensation {
         (scale, translation)
     }
 
-    /// The offsets layer `index` takes: the hole wall and the outer wall, millimetres.
-    ///
-    /// The parity offset lands on even layers, counting the first layer off the plate as
-    /// layer one, so it is the layers at an odd `index` that take it.
+    /// The offsets layer `index` takes: the hole wall and the outer wall, mm.
+    /// The parity offset lands on even layers counting from one, so layers at an odd `index`.
     pub fn offsets_of_layer_mm(&self, index: u32, is_bottom: bool) -> [f32; 2] {
         let (on, hole, outer) = if is_bottom {
             (
@@ -124,10 +116,8 @@ impl Compensation {
         [hole + parity, outer + parity]
     }
 
-    /// How much wider, millimetres a side, a fit between a hole and a part slid into it
-    /// prints than it was drawn: the hole's offset and the outer wall's, which this resin
-    /// would have moved them by, while its tolerance is off. Nothing while it is on, since
-    /// the slicer moves them then (ADR 0313).
+    /// How much wider, mm a side, a hole-and-part fit prints than drawn, by this resin's
+    /// offsets while its tolerance is off; nothing while on, as the slicer moves them (ADR 0313).
     pub fn fit_drift_mm(&self) -> f32 {
         if self.tolerance_on {
             return 0.0;
@@ -149,9 +139,7 @@ impl Compensation {
     }
 }
 
-/// The percentage a part came out at, for a feature that should have measured
-/// `nominal_mm` and measured `printed_mm` instead.
-///
+/// The percentage a part came out at, for a feature of `nominal_mm` measured as `printed_mm`.
 /// Printing larger than nominal wants a figure under 100, which shrinks the next slice.
 pub fn shrink_pct_between(nominal_mm: f32, printed_mm: f32) -> Option<f32> {
     (printed_mm > 0.0 && nominal_mm > 0.0).then(|| 100.0 * nominal_mm / printed_mm)

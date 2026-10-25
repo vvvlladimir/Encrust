@@ -164,6 +164,34 @@ fn a_flag_wins_over_the_plate_file() {
 }
 
 #[test]
+fn a_cavity_the_plate_file_hollows_is_held_up_when_asked() {
+    let plate = plate_file(
+        "cavity-held",
+        r#"
+        layer_height_mm = 0.05
+        [[model]]
+        path = "CUBE"
+        position = [30, 30]
+        hollow = { wall_mm = 1.0 }
+        supports = "medium"
+        "#,
+    );
+    let contacts = |more: &[&str]| {
+        let output = estimate(&[&[plate.to_str().unwrap(), "--json"][..], more].concat());
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["models"][0]["supports"]["contacts"]
+            .as_u64()
+            .unwrap_or(0)
+    };
+    let outside = contacts(&[]);
+    let inside = contacts(&["--support-cavity"]);
+    assert!(
+        inside > outside,
+        "the 8 mm cavity has a flat ceiling to hold: {inside} contacts against {outside}"
+    );
+}
+
+#[test]
 fn a_plate_both_arranged_and_placed_is_refused() {
     let plate = plate_file(
         "arranged-and-placed",

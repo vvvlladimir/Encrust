@@ -1,6 +1,6 @@
 # 0078. Let a blocked tip lean until it finds room
 
-- **Status:** Accepted
+- **Status:** Accepted; the three reaches are superseded by 0338, with a further search for ground
 - **Date:** 2026-09-23
 
 ## Context

@@ -16,14 +16,14 @@ use core_plate::{
     LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Readings, Ruling,
     finalists, rank, rulings,
 };
-use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
 
 use crate::cut::Cutting;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 use crate::run::Run;
-use crate::stand::{stand_seated, stand_under};
+use crate::stand::{SupportPlan, ToStand, stand_seated, stand_under};
 use crate::trial::islands::islands_born;
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
@@ -72,7 +72,9 @@ fn coarse(trial: &Trial, reach_mm: Scalar) -> (PrinterProfile, MaterialProfile) 
 pub struct Trial<'a> {
     pub printer: &'a PrinterProfile,
     pub material: &'a MaterialProfile,
-    pub support: &'a SupportProfile,
+    /// What the pose is supported with, as the window would stand it: one profile, or an
+    /// automatic one sizing each support.
+    pub support: &'a SupportPlan,
     /// Layers rasterised at once, as `Plate::raster_window`.
     pub raster_window: usize,
 }
@@ -330,7 +332,13 @@ fn print_held(
 
     let layer_mm = print.unwrap_or(trial).material.layer_height_mm;
     let stand = if on_plate { stand_seated } else { stand_under };
-    let stood = stand(&mut placed, &mut cuts, trial.support, layer_mm)?;
+    let model = ToStand {
+        mesh: &mut placed,
+        cavity: None,
+        cuts: &mut cuts,
+        drill_exactly: false,
+    };
+    let stood = stand(model, trial.support, layer_mm)?;
     let mut held = Held {
         contacts: stood.contacts.len(),
         supports_mm3: signed_volume(&stood.supports).abs(),

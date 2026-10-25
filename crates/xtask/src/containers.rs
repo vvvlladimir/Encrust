@@ -3,9 +3,8 @@
 
 use printer_profiles::{AnycubicExtension as Ext, OutputFormat, PhotonRevision as Rev};
 
-/// Every Photon Workshop target `format-anycubic` writes: the keyword a source profile
-/// names, the revision beside it, and the extension and revision we write for it. One
-/// extension appears twice, read at two revisions by two machines.
+/// Every Photon Workshop target `format-anycubic` writes: source keyword, revision, and the
+/// extension and revision we write. One extension appears twice, at two revisions.
 const PHOTON_WORKSHOP: [(&str, u32, Ext, Rev); 18] = [
     ("PWX", 1, Ext::Pwx, Rev::V1),
     ("PW0", 1, Ext::Pw0, Rev::V1),

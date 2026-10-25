@@ -8,14 +8,8 @@ pub const CHITU_DISCLAIMER: &str = "Layout and record format for the ctb and cbd
 /// The bytes the format gives the notice.
 pub const CHITU_DISCLAIMER_BYTES: u32 = 320;
 
-/// Applies the `.ctb` layer cipher to one layer's run-length data, in place.
-///
-/// A four-byte keystream word is derived from the header's key and the layer's index and
-/// exhausted a byte at a time, then advanced. It is an exclusive or, so the one function
-/// both enciphers and deciphers. See `docs/formats/chitu.md`.
-///
-/// A key of zero means the data is in the clear and nothing is done, which is what we
-/// write; see `docs/decisions/0046-ctb-layer-data-is-written-in-the-clear.md`.
+/// Applies the `.ctb` layer cipher to one layer's run-length data in place. A key of zero means
+/// clear data (ADR 0046); see `docs/formats/chitu.md`.
 pub fn chitu_layer_crypt(key: u32, layer_index: u32, data: &mut [u8]) {
     if key == 0 {
         return;

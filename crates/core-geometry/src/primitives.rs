@@ -87,11 +87,15 @@ pub fn extrude(
     Mesh::new(vertices, faces)
 }
 
+/// `count` unit directions evenly round a circle, anticlockwise from +x.
+pub fn turns(count: usize) -> impl Iterator<Item = Vec2> {
+    (0..count)
+        .map(move |step| Vec2::from_angle(std::f32::consts::TAU * step as Scalar / count as Scalar))
+}
+
 /// A round bar of `radius` from `from` to `to`, its round side cut into `segments` flats.
 pub fn cylinder(from: Vec3, to: Vec3, radius: Scalar, segments: usize) -> Mesh {
-    let circle: Vec<Vec2> = (0..segments)
-        .map(|step| Vec2::from_angle(std::f32::consts::TAU * step as Scalar / segments as Scalar))
-        .collect();
+    let circle: Vec<Vec2> = turns(segments).collect();
     let length = from.distance(to);
     revolve(from, to - from, &[(0.0, radius), (length, radius)], &circle)
 }
@@ -193,6 +197,16 @@ pub fn segments_for(radius: Scalar, tolerance: Scalar) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn four_turns_are_the_four_axes_anticlockwise_from_x() {
+        let turns: Vec<Vec2> = turns(4).collect();
+        let axes = [Vec2::X, Vec2::Y, -Vec2::X, -Vec2::Y];
+        for (turn, axis) in turns.iter().zip(axes) {
+            assert!(turn.abs_diff_eq(axis, 1e-6), "expected {axis}, got {turn}");
+        }
+        assert_eq!(turns.len(), 4);
+    }
     use crate::{diagnose, signed_volume};
 
     fn closed_with_volume(mesh: &Mesh, expected: Scalar, what: &str) {

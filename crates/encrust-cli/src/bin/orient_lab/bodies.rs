@@ -25,31 +25,7 @@ pub fn all() -> Vec<(&'static str, Mesh)> {
 
 /// Axis-aligned box from `min` to `max`, twelve triangles wound outward.
 fn cuboid(min: Vec3, max: Vec3) -> Mesh {
-    let vertices = vec![
-        Vec3::new(min.x, min.y, min.z),
-        Vec3::new(max.x, min.y, min.z),
-        Vec3::new(max.x, max.y, min.z),
-        Vec3::new(min.x, max.y, min.z),
-        Vec3::new(min.x, min.y, max.z),
-        Vec3::new(max.x, min.y, max.z),
-        Vec3::new(max.x, max.y, max.z),
-        Vec3::new(min.x, max.y, max.z),
-    ];
-    let faces = vec![
-        [0, 2, 1],
-        [0, 3, 2],
-        [4, 5, 6],
-        [4, 6, 7],
-        [0, 1, 5],
-        [0, 5, 4],
-        [1, 2, 6],
-        [1, 6, 5],
-        [2, 3, 7],
-        [2, 7, 6],
-        [3, 0, 4],
-        [3, 4, 7],
-    ];
-    Mesh::new(vertices, faces)
+    core_geometry::cuboid(min, max)
 }
 
 /// Bodies laid into one mesh. They may overlap: the stack is filled by winding, so an

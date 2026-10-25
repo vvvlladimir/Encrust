@@ -7,10 +7,12 @@
 
 use std::path::Path;
 
-use core_engine::{Choice, EngineError, Printout, Trial, orient_for_print, print_out, prove};
+use core_engine::{
+    Choice, EngineError, Printout, SupportPlan, Trial, orient_for_print, print_out, prove,
+};
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, Printed, Ruling, finalists};
-use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
 /// Panel of 600 x 400 pixels at a 0.1 mm pitch: 60 x 40 mm of build area.
 const PROFILE: &str = r#"
@@ -33,7 +35,7 @@ z = 80.0
 struct Bench {
     printer: PrinterProfile,
     material: MaterialProfile,
-    support: SupportProfile,
+    support: SupportPlan,
 }
 
 impl Bench {
@@ -42,7 +44,9 @@ impl Bench {
             printer: PrinterProfile::from_toml_str(PROFILE, Path::new("inline.toml"))
                 .expect("the inline profile parses"),
             material: MaterialProfile::default(),
-            support: SupportProfile::medium(),
+            support: SupportPlan::of(
+                SupportProfile::shipped("medium").expect("the medium preset ships"),
+            ),
         }
     }
 
@@ -56,10 +60,11 @@ impl Bench {
     }
 
     fn settings(&self, preset: impl Into<OrientPreset>) -> OrientSettings {
+        let placing = self.support.placing();
         OrientSettings {
             preset: preset.into(),
-            max_overhang_deg: self.support.max_overhang_deg,
-            contact_spacing_mm: self.support.contact_spacing_mm,
+            max_overhang_deg: placing.max_overhang_deg,
+            contact_spacing_mm: placing.contact_spacing_mm,
             on_supports: true,
             rest_on_plate: true,
             ..OrientSettings::default()
@@ -332,6 +337,46 @@ fn a_trial_stands_the_contacts_and_supports_the_print_does() {
             "a trial stands the very supports the print does"
         );
     }
+}
+
+/// The first automatic profile shipped, sizing supports into the shapes it names.
+fn sized_plan() -> SupportPlan {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
+    let auto = catalogue
+        .autos()
+        .next()
+        .expect("an automatic profile ships")
+        .profile
+        .clone();
+    SupportPlan::sized(auto, &catalogue).expect("every shape an automatic profile names ships")
+}
+
+#[test]
+fn a_trial_builds_each_support_to_the_shape_an_automatic_profile_sizes_it_to() {
+    let bench = Bench::new();
+    let sized = sized_plan();
+    let lightest = SupportPlan::of(sized.placing());
+    let mesh = mushroom();
+    let printed = Printed::solid(&mesh);
+    let print = |support: &SupportPlan| {
+        let trial = Trial {
+            support,
+            ..bench.trial()
+        };
+        print_out(&printed, Quat::IDENTITY, false, &trial).expect("a mushroom prints")
+    };
+
+    let (sized, lightest) = (print(&sized), print(&lightest));
+    assert_eq!(
+        sized.contacts, lightest.contacts,
+        "sizing changes what a support is built to, not where it goes"
+    );
+    assert!(
+        sized.supports_ml > lightest.supports_ml,
+        "the cap's weight sizes some supports past the lightest shape: {} ml against {} ml",
+        sized.supports_ml,
+        lightest.supports_ml
+    );
 }
 
 #[test]

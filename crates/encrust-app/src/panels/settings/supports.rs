@@ -1,9 +1,8 @@
-//! The Supports page: every support profile as a table, and the one picked opened in its
-//! form, every measurement in the groups the Supports tool folds them into. A group on the
-//! plate picks one of these and tunes its own copy.
+//! The Supports page: every support profile as a table, the picked one opened in its form.
+//! A group on the plate picks one and tunes its own copy.
 
 use egui::{Rect, Ui, pos2};
-use printer_profiles::{ContactShape, Kind, SupportProfile};
+use printer_profiles::{Catalogue, ContactShape, Kind, SupportProfile};
 
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -12,7 +11,7 @@ use crate::panels::settings::{export_profile, form_card, name_row, report, settl
 use crate::panels::support_fields::Group;
 use crate::settings::{Deleting, can_delete, new_support};
 use crate::state::Machine;
-use crate::ui::{describe, icon, quiet_button};
+use crate::ui::{describe, icon, quiet_button, subheading};
 
 /// Below this a form has no room for two columns of cards.
 const TWO_COLUMNS_W: f32 = 720.0;
@@ -80,27 +79,64 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     }
 }
 
-/// Every support profile, by name, with the measurements that tell them apart.
+/// Every support profile, by name, with the measurements that tell them apart: the shapes
+/// automatic sizing builds to first, under what each is for, then those chosen by hand.
 fn table(ui: &mut Ui, machine: &Machine, picked: Option<&str>, action: &mut Option<Action>) {
+    let catalogue = &machine.slicing.catalogue;
     TABLE.head_row(ui);
     let scroll = egui::ScrollArea::vertical().id_salt("support-table");
     scroll.auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        for entry in machine.slicing.catalogue.supports() {
-            let profile = &entry.profile;
-            let row = TABLE.row(
+        for automatic in [true, false] {
+            let mut entries: Vec<_> = catalogue
+                .supports()
+                .filter(|entry| catalogue.is_auto_shape(&entry.id) == automatic)
+                .collect();
+            if entries.is_empty() {
+                continue;
+            }
+            // Lightest first, as automatic sizing reaches for them.
+            entries.sort_by_key(|entry| auto_rank(catalogue, &entry.id));
+            part_heading(
                 ui,
-                &profile.name,
-                picked == Some(&entry.id),
-                &cells(profile),
+                &if automatic {
+                    tr!("support-table-auto")
+                } else {
+                    tr!("support-table-manual")
+                },
             );
-            if row.double_clicked() {
-                *action = Some(Action::Edit(entry.id.clone()));
-            } else if row.clicked() {
-                *action = Some(Action::Pick(entry.id.clone()));
+            for entry in entries {
+                let profile = &entry.profile;
+                let row = TABLE.row(
+                    ui,
+                    &profile.name,
+                    picked == Some(&entry.id),
+                    &cells(profile),
+                );
+                if row.double_clicked() {
+                    *action = Some(Action::Edit(entry.id.clone()));
+                } else if row.clicked() {
+                    *action = Some(Action::Pick(entry.id.clone()));
+                }
             }
         }
     });
+}
+
+/// Where `id` stands among the shapes of the automatic profiles, lightest first, and after
+/// all of them when it is none of theirs.
+fn auto_rank(catalogue: &Catalogue, id: &str) -> usize {
+    catalogue
+        .autos()
+        .find_map(|auto| auto.profile.every_shape().position(|shape| shape == id))
+        .unwrap_or(usize::MAX)
+}
+
+/// The heading over one part of the table.
+fn part_heading(ui: &mut Ui, title: &str) {
+    ui.add_space(12.0);
+    subheading(ui, title);
+    ui.add_space(4.0);
 }
 
 fn cells(profile: &SupportProfile) -> [String; 5] {

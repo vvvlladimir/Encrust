@@ -22,9 +22,8 @@ const ARRAY_MAX: u32 = 20;
 /// How wide the import report is allowed to get before it wraps.
 const POPUP_W: f32 = 230.0;
 
-/// The models card at the right of the stage: which plate, what stands on it and what can
-/// be done to it. As tall as the list, which scrolls once the card would pass `max_h`
-/// points; see `docs/decisions/0221`.
+/// The models card at the right of the stage: which plate, what stands on it, what can be
+/// done to it. Scrolls past `max_h` points; see `docs/decisions/0221`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     egui::Frame::new()
         .inner_margin(PLATES_MARGIN)
@@ -175,9 +174,7 @@ pub fn duplicate_selection(window: &mut Window) {
 }
 
 /// The grid and the gap it leaves, behind the button that lays it out.
-///
-/// The popup stays open on a click inside it, unlike a menu of actions: a click on one of
-/// its fields opens that field for typing, which closing would take away.
+/// The popup stays open on a click inside, which a field needs to open for typing.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let response = icon_button(ui, icon::ARRAY, &tr!("models-array"));
     egui::Popup::menu(&response)
@@ -435,9 +432,8 @@ enum Mark {
     Broken,
 }
 
-/// The mark at the end of the row, with what import found behind a click, and the repair
-/// beside it on a model that is broken. Returns where it starts, and whether the repair
-/// was asked for.
+/// The mark at the end of the row, with what import found behind a click, and the repair on a
+/// broken model. Returns where it starts, and whether repair was asked for.
 fn import_mark(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -496,9 +492,8 @@ fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
     painter.text(spot.center(), Align2::CENTER_CENTER, text, font, color);
 }
 
-/// What is wrong with a model, what is merely odd about it and what repair already did,
-/// and how loudly to say it.
-/// `None` when the mesh came in clean, which is most of them.
+/// What is wrong with a model, what is odd about it and what repair did, and how loudly.
+/// `None` when the mesh came in clean.
 fn trouble(summary: &ImportSummary) -> Option<(Mark, Vec<String>)> {
     let defects = summary.defects();
     let mark = if defects.is_empty() {

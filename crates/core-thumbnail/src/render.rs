@@ -20,10 +20,8 @@ impl<'m> Part<'m> {
     }
 }
 
-/// Where the plate is looked at from, in plate coordinates with Z up.
-///
-/// The front right corner, a little above the part: the angle every slicer's thumbnail
-/// uses, because it shows a silhouette, a top and a side at once.
+/// Where the plate is looked at from, in plate coordinates with Z up. The front right corner, a
+/// little above the part: it shows a silhouette, a top and a side.
 const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
 
 /// Direction the light comes from, in view coordinates: over the camera's left shoulder.
@@ -36,10 +34,8 @@ const AMBIENT: f32 = 0.28;
 /// Fraction of the image left empty around the part on each side.
 const MARGIN: f32 = 0.06;
 
-/// Renders every part into one shaded image, framed so the whole plate fits.
-///
-/// The view fits what it is given rather than the build volume: a thumbnail is looked at
-/// a centimetre wide, and a part drawn to scale inside a 200 mm plate is a speck.
+/// Renders every part into one shaded image, framed so the whole plate fits. The view fits the
+/// parts, not the build volume, as a thumbnail is a centimetre wide.
 pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
     let (width, height) = (settings.width_px, settings.height_px);
     let mut colours = vec![settings.background; (width as usize) * (height as usize)];
@@ -90,10 +86,8 @@ fn corners(vertices: &[Vec3], face: [u32; 3]) -> Option<[Vec3; 3]> {
     ])
 }
 
-/// Flat Lambert shading of one face, two-sided.
-///
-/// The sign of the normal is dropped rather than trusted: a repaired mesh points its
-/// faces outwards, but a thumbnail of an unrepaired one should still show a solid.
+/// Flat Lambert shading of one face, two-sided. The normal's sign is dropped so an unrepaired mesh
+/// still shows a solid.
 fn shade(corners: &[Vec3; 3], model: Rgb) -> Rgb {
     let normal = (corners[1] - corners[0])
         .cross(corners[2] - corners[0])
@@ -212,31 +206,7 @@ mod tests {
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
     fn unit_cube() -> Mesh {
-        let vertices = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(1.0, 1.0, 0.0),
-            Vec3::new(0.0, 1.0, 0.0),
-            Vec3::new(0.0, 0.0, 1.0),
-            Vec3::new(1.0, 0.0, 1.0),
-            Vec3::new(1.0, 1.0, 1.0),
-            Vec3::new(0.0, 1.0, 1.0),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(vertices, faces)
+        core_geometry::cuboid(Vec3::ZERO, Vec3::ONE)
     }
 
     fn settings() -> ThumbnailSettings {

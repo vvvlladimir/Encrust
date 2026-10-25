@@ -98,7 +98,10 @@ fn support_state(supports: &SupportTool) -> SupportState {
         fill: supports.fill,
         brush_radius_mm: supports.brush_radius_mm,
         flood_angle_deg: supports.flood_angle_deg,
+        inline_spacing_mm: supports.inline_spacing_mm,
+        fill_profiles: supports.fill_profiles.clone(),
         raft: Some(supports.raft),
+        sizing: supports.sizing(),
     }
 }
 
@@ -142,6 +145,9 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
     supports.fill = state.fill;
     supports.brush_radius_mm = state.brush_radius_mm;
     supports.flood_angle_deg = state.flood_angle_deg;
+    supports.inline_spacing_mm = state.inline_spacing_mm;
+    supports.fill_profiles = state.fill_profiles;
+    supports.set_sizing(state.sizing);
     supports.picked.clear();
 }
 
@@ -165,7 +171,13 @@ mod tests {
         tools.text.state.depth_mm = 1.5;
         tools.boolean.op = Boolean::Difference;
         tools.supports.brush_radius_mm = 6.0;
+        tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
+        let catalogue = printer_profiles::Catalogue::bundled().expect("the bundle reads");
+        tools.supports.set_automatic(true, &catalogue);
+        if let Some(auto) = tools.supports.auto.as_mut() {
+            auto.density = 1.75;
+        }
         tools
     }
 
@@ -179,9 +191,30 @@ mod tests {
 
         assert_eq!(ToolSettings::of(&tools, &slicing), settings);
         assert_eq!(tools.supports.profile.name, "Heavy");
+        assert!((tools.supports.inline_spacing_mm - 2.5).abs() < f32::EPSILON);
         assert_eq!(tools.array.columns, 5);
         assert_eq!(tools.text.state.family, "Serif");
         assert_eq!(tools.boolean.op, Boolean::Difference);
+        assert_eq!(
+            tools.supports.auto.map(|auto| auto.density),
+            Some(1.75),
+            "automatic sizing comes back on, with its numbers as edited"
+        );
+    }
+
+    #[test]
+    fn automatic_sizing_turned_off_keeps_its_numbers_for_when_it_is_turned_on() {
+        let catalogue = printer_profiles::Catalogue::bundled().expect("the bundle reads");
+        let mut slicing = Slicing::default();
+        let mut tools = edited();
+        tools.supports.set_automatic(false, &catalogue);
+        let settings = ToolSettings::of(&tools, &slicing);
+
+        let mut restored = Tools::default();
+        settings.apply(&mut restored, &mut slicing);
+        assert!(restored.supports.auto.is_none(), "it comes back off");
+        restored.supports.set_automatic(true, &catalogue);
+        assert_eq!(restored.supports.auto.map(|auto| auto.density), Some(1.75));
     }
 
     #[test]

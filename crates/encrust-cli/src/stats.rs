@@ -37,9 +37,7 @@ impl MeshStats {
 }
 
 /// Whether any two shells that both enclose material have boxes that meet.
-///
-/// A box is all the test needs: the figure it qualifies is a sum, and a sum is only
-/// certain to be right where nothing can overlap at all.
+/// A box suffices: the figure it qualifies is a sum, certain only where nothing can overlap.
 fn overlapping(mesh: &Mesh) -> bool {
     let solid: Vec<_> = split(mesh)
         .iter()
@@ -69,32 +67,7 @@ mod tests {
 
     /// Axis-aligned box of 10 mm, twelve triangles, its lower corner at `at`.
     fn cuboid(at: Vec3) -> Mesh {
-        let corner = |x: Scalar, y: Scalar, z: Scalar| at + Vec3::new(x, y, z);
-        let vertices = vec![
-            corner(0.0, 0.0, 0.0),
-            corner(10.0, 0.0, 0.0),
-            corner(10.0, 10.0, 0.0),
-            corner(0.0, 10.0, 0.0),
-            corner(0.0, 0.0, 10.0),
-            corner(10.0, 0.0, 10.0),
-            corner(10.0, 10.0, 10.0),
-            corner(0.0, 10.0, 10.0),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(vertices, faces)
+        core_geometry::cuboid(at, at + Vec3::splat(10.0))
     }
 
     /// The meshes as one, each keeping its own vertices, so they stay separate shells.

@@ -20,12 +20,8 @@ pub struct Rle7Layer {
 }
 
 impl Rle7Layer {
-    /// Compresses a layer.
-    ///
-    /// The format carries seven bits of grey, so each run's value is halved on the way in.
-    /// Two runs whose eight-bit values differ can land on the same seven-bit value, and
-    /// they have to be merged rather than written as two chunks: the decoder cannot tell
-    /// them apart and a reader that compares run counts would disagree with us.
+    /// Compresses a layer; each run's value is halved to the format's seven bits of grey. Runs
+    /// colliding on one seven-bit value must merge, or run counts disagree with readers'.
     pub fn encode(layer: &LayerRuns) -> Self {
         let mut data = Vec::new();
         let mut open: Option<(u8, u32)> = None;

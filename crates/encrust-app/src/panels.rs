@@ -17,6 +17,7 @@ mod support_diagram;
 mod support_fields;
 mod title_bar;
 mod tool_rail;
+mod unreadable_profiles;
 mod view_column;
 mod view_cube;
 mod viewport_panel;

@@ -1,47 +1,40 @@
 # Code style rules
 
-## Comments
+## Comments and rustdoc
 
-Default is none. Write one only where the code cannot carry the fact itself: a tolerance or
-epsilon and why that value, a geometric edge case, a library bug with a link, a required
-operation order, a clause of an external format specification.
-
-- One line wherever one line will do. **Two lines is the hard limit.** Longer material goes to
-  `docs/` and the code keeps a pointer: `// Traversal order is fixed by the specification, see
-  docs/formats/goo.md`
-- Never a restatement of the code, a section banner, commented-out code, or a bare `TODO`. A
-  TODO reads `TODO(step-N): what is missing and where it goes`.
-- Delete comments breaking these rules in the code you are already touching.
-
-## Rustdoc
-
-One or two lines on every public item of a library crate: what it is and what it is for, never
-how it is implemented. Field docs only where a unit or convention is not obvious from the
-name; state units explicitly (mm, seconds, pixels). Code, rustdoc, `docs/`, `.claude/rules/`
-and `CLAUDE.md` are English.
+- None by default. One only for what code cannot say: a tolerance and why, a geometric edge
+  case, a library bug with its link, a required order, a clause of an external spec.
+- **Two lines at most.** Longer goes to `docs/`, the code keeps a pointer: `// see docs/x.md`.
+- Never a restatement, a banner, commented-out code or a bare `TODO`; a TODO is
+  `TODO(step-N): what is missing and where it goes`. Fix offending comments in code you touch.
+- Every public item of a library: one or two lines of English rustdoc on what it is for, never
+  how. Field docs only for a non-obvious unit or convention, the unit stated (mm, s, px).
 
 ## Errors
 
-- Library crates define a `thiserror` enum whose variants carry what the caller needs to act:
-  the path, the index, the offending value.
-- Binaries use `anyhow` and add `.context(...)` at every boundary a user would recognise.
-- No `unwrap()` or `expect()` in library code outside `#[cfg(test)]`; in tests prefer
-  `expect("why this cannot fail")`. `clippy::unwrap_used` and `clippy::expect_used` enforce it,
-  so a target that may panic — a build script, an integration test, a benchmark — carries one
-  file-level `#![expect(clippy::expect_used, reason = "...")]`.
-- Never swallow an error into an `Option`.
+- Libraries: a `thiserror` enum whose variants carry what the caller acts on — path, index,
+  value, never swallowed into an `Option`. Binaries: `anyhow`, `.context(...)` at each
+  boundary a user recognises.
+- No `unwrap`/`expect` in library code outside `#[cfg(test)]`; tests use
+  `expect("why it cannot fail")`. A target that may panic (build script, integration test,
+  bench) carries one file-level `#![expect(clippy::expect_used, reason = "...")]`.
 
-## Text a user reads
+## Naming, modules, size
 
-Every string the window shows is `tr!("key", ...)`, its English in `assets/i18n/en.ftl`;
-one sentence a message, never joined from pieces in the code. See docs/design/i18n.md.
+- Names say what it does, with the unit when the type lacks it: `ScanlineRasterizer` not
+  `RasterizerImpl`, `layer_height_mm`. Abbreviations: `aabb`, `bvh`, `rle`, `px`, `mm` only.
+- A module is `foo.rs`, or `foo/` beside `foo.rs`; no `mod.rs`. `lib.rs` declares and
+  re-exports, nothing else.
+- A function aims at a screen, ~40 lines; past 80 code lines it fails. Split where a step has
+  a name, never straight-line code into `part_1`/`part_2`; nesting past three levels is a helper.
+- A file is one responsibility, ~400 code lines, failing past 600: then `foo/` with a file per
+  part, like `core-supports/src/branch/`. A new concept is a new file, not an appendix.
+- `cargo xtask hygiene` holds both by a ratchet; after a split, `--bless`. What is over a limit
+  is split first, in its own commit, then extended. Dead code is deleted, never kept.
 
-## Naming, modules and size
+## Reuse
 
-- Units in the name when the type lacks them: `layer_height_mm`, `exposure_s`, `width_px`.
-- Implementations named for what they do: `ScanlineRasterizer`, not `RasterizerImpl`. Only
-  established abbreviations: `aabb`, `bvh`, `rle`, `px`, `mm`.
-- No `mod.rs` grab bags: a module is `foo.rs`, or `foo/` with `foo.rs` beside it. `lib.rs`
-  declares modules and re-exports; it holds no logic.
-- Functions fit on a screen, roughly 40 lines. Longer means a named helper, not denser code.
-  Delete dead code rather than keeping it behind a flag or a comment.
+- Look before writing a helper: the `core-geometry/src/lib.rs` re-exports are the geometry
+  catalogue (`Buckets::cell_of`, `inverse_matrix`, `cuboid`, …), then the crate itself.
+- A second copy of a computation is extracted into the lowest crate owning the concept, so a
+  tolerance has one home.

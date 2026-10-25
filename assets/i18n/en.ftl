@@ -25,6 +25,7 @@ unit-g-ml = g/ml
 unit-h = h
 unit-m = m
 unit-mm = mm
+unit-mm2 = mm²
 unit-mm3 = mm³
 unit-mm-min = mm/min
 unit-px = px
@@ -282,7 +283,17 @@ supports-placed =
        *[other] Placed { $count } supports
     }
 supports-cancelled = Placement cancelled
+supports-placed-sized =
+    { $count ->
+        [one] Placed 1 support: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
+       *[other] Placed { $count } supports: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
+    }
+supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
 supports-group-name = Group { $index }
+supports-cannot-grow = The supports could not be built: { $reason }
+supports-growth-stopped = Building the supports stopped without an answer
+surfaces-cannot-build = The surface supports stand on could not be prepared: { $reason }
+surfaces-build-stopped = Preparing the surface supports stand on stopped without an answer
 
 ## measure.rs
 
@@ -292,26 +303,59 @@ measure-snapped-free = free
 
 ## panels/inspector/supports.rs
 
+supports-grow-inside = Support the cavity
+supports-grow-inside-tooltip = Takes away the supports inside the cavities of hollow models and grows them again by the profile above. Grow the supports holds a model up only from outside.
+supports-remove-inside = Delete the cavity supports
+supports-remove-inside-tooltip =
+    { $count ->
+        [one] Takes away the { $count } support standing inside the cavities of hollow models, one edited by hand included.
+       *[other] Takes away the { $count } supports standing inside the cavities of hollow models, ones edited by hand included.
+    }
+supports-removed-inside =
+    { $count ->
+        [one] Took { $count } support out of the cavities
+       *[other] Took { $count } supports out of the cavities
+    }
 supports-where = Where
 supports-picked = Picked
-supports-already-done = Already done
 supports-pick-hint = Click a tip, a strut, a joint, the trunk or the foot to pick it. Drag to carry it, shift adds, alt removes.
-supports-picked-help = Grow these again hands the picked supports back to the automatic run, and the next growth builds them afresh. Move to the group in hand builds them to that group's profile.
+supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
 supports-stat-parts = Parts
 supports-stat-supports = Supports
-supports-stat-standing = Standing
-supports-move-to-group = Move to the group in hand
-supports-grow-these-again = Grow these again
+supports-move-to-group = To the group
+supports-grow-these-again = Grow again
 supports-remove-these = Remove these supports
 supports-grow-again = Grow them again
 supports-grow = Grow the supports
 supports-grow-tooltip = Cuts { $scope } to find what hangs over nothing.
 supports-placing = Placing supports
-supports-no-room = Some supports have no room to stand and are not printed.
-supports-remove-all = Remove all
+supports-sizes = Sizes
+supports-place = Place
+support-size-island = Island for { $shape }
+support-size-load = Load for { $shape }
+support-size-step = Step for { $shape }
 supports-remove-all-tooltip = Take every support away
-supports-remove-group = Only { $name }
-supports-remove-group-tooltip = Take away the { $count } of the group in hand and leave the rest
+supports-preset = Support preset
+supports-mode-pick = Pick supports
+supports-mode-place = Place supports
+supports-mode-area = Paint or block an area
+supports-mode-shape = Shape of the supports
+supports-without-room =
+    { $count ->
+        [one] { $count } support has no room to stand
+       *[other] { $count } supports have no room to stand
+    }
+supports-drop-preset =
+    { $count ->
+        [one] Remove { $name } and its { $count } support
+       *[other] Remove { $name } and its { $count } supports
+    }
+supports-clear-preset =
+    { $count ->
+        [one] Remove its { $count } support
+       *[other] Remove its { $count } supports
+    }
+bin-click-again = Click again to remove
 
 ## panels/settings.rs
 
@@ -320,6 +364,7 @@ settings-shortcuts = Shortcuts
 settings-import = Import
 settings-cannot-export = cannot export the profile
 settings-cannot-delete = cannot delete the profile
+settings-cannot-reset = cannot reset the profiles that would not read
 settings-name = Name
 
 ## panels/settings/machines.rs
@@ -797,6 +842,8 @@ support-lower-depth = Lower depth
 support-max-length = Max length
 support-branch-angle = Branch angle
 support-merge-within = Merge within
+support-longest-strut = Longest strut
+support-tips-per-trunk = Tips per trunk
 support-margin = Margin
 support-wall-slope = Wall slope
 support-span = Span
@@ -805,12 +852,14 @@ support-every = Every
 support-lift = Lift
 support-overhang = Overhang
 support-contact-spacing = Contact spacing
+support-steep-contact-spacing = Spacing on steep faces
 support-density = Density
 support-group-top = Top
 support-group-pillar = Pillar
 support-group-bottom = Bottom
 support-group-small-pillar = Small pillar
 support-group-branching = Branching
+support-group-grid = Grid
 support-group-raft = Raft
 support-group-bracing = Cross bracing
 support-group-automatic = Automatic
@@ -827,13 +876,16 @@ support-thin-down = Thin these down
 support-thin-down-off = A support that lands on the model keeps the regular pillar's width.
 support-small-pillar-note = Used where a support runs from one part of the model to another. Both ends sink into a surface; a longer run keeps the regular width.
 support-no-branching = Every tip stands on a column of its own.
+support-no-grid = Trunks stand where the tips merge, wherever that is.
 support-tip-help = The only part that touches the model. A wider contact holds better but leaves a bigger mark; the bite sinks it in so it does not tear off mid-print. Length is the cone from the tip to the column, and a sphere grips a heavy overhang harder than a plane.
 support-body-help = Diameter is how thick the column is: thicker is stiffer and takes more resin. Clearance is the air the column keeps from the model, so it never cures onto the part. Trunk cap is the widest a trunk may grow at its base.
 support-foot-help = The foot holds the support to the plate. Wider and thicker grips harder and is harder to take off; Tapered and Skate leave an edge a scraper gets under. Flare is how wide the column spreads before it meets the foot.
 support-branching-help = Nearby tips merge into shared trunks, like a tree: fewer columns, less resin and fewer marks on the plate. A wider branch angle merges more but leans the branches further; tips farther apart than Merge within keep columns of their own.
+support-grid-help = Every trunk stands on a node of a square grid on the plate, each tip leaning to its nearest node at 45 degrees and the tips of one node sharing one trunk. The forest comes out regular, braces evenly and cuts away in rows. A tip no node can take stands as it would without the grid.
+support-grid-spacing = Spacing
 support-raft-help = A slab the supports stand on instead of the plate: it spreads the peel over one footprint and comes off in one piece. Grid sucks less on the plate, Connected joins a pad under each foot. Margin is how far it reaches past the model, and a sloped wall grips harder yet still pries off.
-support-bracing-help = Struts that tie tall trunks together so they do not sway when a layer peels. Span is the widest gap they bridge; First at and Every set the height of the first one and the step between them.
-support-held-up-help = Overhang is how far a surface may lean from vertical before it gets supports: 90° is a ceiling, and a lower number supports more. Contact spacing is the distance between tips over an overhang, and density multiplies how many go down: 1 is what Encrust reckons is enough.
+support-bracing-help = Struts that tie tall trunks together so they do not sway when a layer peels. Span is the widest gap they bridge; First at and Every set the height of the first one and the step between them. Up each pair the top and bottom zones take a few levels and the middle fills the rest: a zigzag is one strut a level, a cross is two. A tall trunk left free at the top gets buttresses: a pair once it stands Pair above its highest brace, one once it stands One above its second.
+support-held-up-help = Overhang is how far a surface may lean from vertical before it gets supports: 90° is a ceiling, and a lower number supports more. Contact spacing is the distance between tips under a face looking straight down, and spacing on steep faces is the distance under one leaning just past the overhang angle; between them it follows the angle. Density multiplies how many go down: 1 is what Encrust reckons is enough.
 support-lift-help = How high the model stands off the plate. Supports need room under it, and the first layers stick to the plate hardest, so a part printed straight on it is hard to free.
 support-raft = Raft under the feet
 support-raft-skates = Skates
@@ -842,9 +894,31 @@ support-raft-connected = Connected
 support-raft-hull = Hull
 support-raft-rectangle = Rectangle
 support-bracing = Brace tall trunks
+support-bracing-fine-tune = Fine-tune: every number instead of the presets
+support-bracing-preset-none = These numbers are your own. Pick a preset to start over from one.
+support-bracing-standard = Standard
+support-bracing-strong = Strong
+support-bracing-tall = Tall
+support-bracing-small = Small
+support-bracing-standard-help = Zigzags all the way up, crossed once at the top. Enough for most parts.
+support-bracing-strong-help = Crossed all the way up, from the very foot. For heavy parts.
+support-bracing-tall-help = Zigzags between two crossed levels at the top and one at the bottom, as thick as the trunks allow. For tall parts.
+support-bracing-small-help = Crossed all the way up with thin struts. For small parts.
+support-brace-top = Top
+support-brace-top-levels = Top levels
+support-brace-middle = Middle
+support-brace-bottom = Bottom
+support-brace-bottom-levels = Bottom levels
+support-brace-zigzag = Zigzag
+support-brace-cross = Cross
+support-buttress = Buttress tall trunks
+support-buttress-pair-above = Pair above
+support-buttress-one-above = One above
 
 ## panels/settings/supports.rs
 
+support-table-auto = Automatic sizing
+support-table-manual = By hand
 support-table-tip = Tip
 support-table-spacing = Spacing
 support-cannot-add = cannot add a support profile
@@ -860,13 +934,10 @@ shape-raft-plate = The raft is the plate's: every model stands on it.
 shape-use-plate-raft = Use the plate's raft
 shape-use-profile-raft = Use the raft of { $name }
 shape-edited = { $name } (edited)
-shape-edit-profiles = Edit support profiles
 shape-save = Save
 shape-save-tooltip = Save over the profile these numbers were taken from
 shape-save-as-new = Save as new
-shape-save-as-new-tooltip = Keep these numbers as a profile of their own
 shape-saved = Saved the support profile
-shape-profile-help = A profile is a saved set of support sizes. Picking another changes what grows next; supports already standing keep their shape. Changed numbers mark it as edited until Save writes over it or Save as new keeps a copy.
 
 ## panels/support_diagram.rs
 
@@ -880,6 +951,9 @@ diagram-no-raft = no raft
 diagram-every = every { $value }
 diagram-first = first { $value }
 diagram-no-bracing = no bracing
+diagram-brace-bottom = bottom
+diagram-brace-middle = middle
+diagram-brace-top = top
 diagram-max = max { $value }
 diagram-model = model
 diagram-plate = plate
@@ -1167,10 +1241,12 @@ slicing-select-resin = Select a resin
 slicing-pick-machine = Pick a machine to know the panel to slice for.
 slicing-add-resin = Add a resin to this printer: an exposure is measured on your machine.
 slicing-nothing-visible = Nothing visible on the plate to slice.
+slicing-supports-growing = The supports are still being built.
 slicing-steps-by-header = This printer steps the plate by the header's layer height.
 slicing-no-printer = no printer profile is loaded
 slicing-no-resin = no resin is chosen, and an exposure is measured rather than shipped
 slicing-nothing-visible-error = nothing visible on the plate to slice
+slicing-supports-growing-error = the supports are still being built
 slicing-no-format = { $path } names no sliced-file format
 slicing-clipped = , { $count } layers cut off at the edge of the panel
 slicing-wrote = Wrote { $path } : { $layers } layers, { $volume } ml, { $weight } g{ $cost }{ $clipped }
@@ -1298,15 +1374,21 @@ position-place-help = On the plate stands the model on it, Centre moves it to th
 paint-brush = Brush
 paint-surface-angle = Surface angle
 paint-inside = Inside
-paint-hint-point = Click to place, alt-click to remove.
+paint-hint-point = Click to place, shift-click for a line from the last one, alt-click to remove.
 paint-hint-paint = Drag to paint, Cmd-Shift-click a surface, alt to erase.
 paint-hint-block = Drag to block, Cmd-Shift-click a surface, alt to erase.
 paint-hint-erase = Drag to take paint and blocks off, Cmd-Shift-click a surface.
-paint-brush-help = Place puts one support where you click. Fill paints an area that gets supports when you press Fill painted areas; Block paints where no support may stand. Surface angle is how far a Cmd-Shift-click spreads: over every face turned less than that from the one clicked.
-paint-fill-help = How far apart the supports of a filled area stand: Rim along its edge, Inside across the rest. Smaller is denser and holds better, but leaves more marks.
-paint-groups-help = A group is a set of supports built to one profile, so one model can carry thick supports under heavy parts and thin ones under details. New supports join the group in hand.
+paint-fill-help = How a filled area is held: Rim along its edge, Inside across the rest. Offset is how far in each starts — the rim from the edge, the inside from the rim. A second rim stands inside the first for large flat areas. The inside is laid on a grid, in rings that follow the rim, or scattered. Each can be built to a profile of its own, or to the group in hand. Smaller spacing is denser and holds better, but leaves more marks.
 paint-rim = Rim
-paint-groups = Groups
+paint-line-spacing = Line spacing
+paint-offset = Offset
+paint-second-rim = Second rim
+paint-second-rim-gap = Inside the first
+paint-pattern-grid = Grid
+paint-pattern-rings = Rings
+paint-pattern-random = Random
+paint-profile = Profile
+paint-profile-in-hand = Group in hand
 paint-fill = Fill painted areas
 paint-filled =
     { $count ->
@@ -1317,21 +1399,11 @@ paint-filled =
 paint-clear-blocked = Clear blocked areas
 paint-clear-both = Clear painted and blocked areas
 paint-clear-painted = Clear painted areas
-paint-drop-group = Drop this group
-paint-build-to = Build this group to
-paint-group-holds =
-    { $count ->
-        [one] { $name } holds { $count } support, which goes with it.
-       *[other] { $name } holds { $count } supports, which go with it.
-    }
-paint-drop-the-group = Drop the group
 paint-dropped =
     { $count ->
         [one] Dropped { $name } and { $count } support
        *[other] Dropped { $name } and { $count } supports
     }
-paint-keep-it = Keep it
-paint-new-group = New group
 
 ## panels/inspector/drain.rs
 
@@ -1473,6 +1545,17 @@ start-test-print = Test print
 start-gone = { $path } is no longer there
 start-project = Project
 
+## panels/unreadable_profiles.rs
+
+notice-unreadable =
+    { $count ->
+        [one] One of your profiles would not read and was left out
+       *[other] { $count } of your profiles would not read and were left out
+    }
+notice-unreadable-file = { $path }: { $reason }
+notice-reset-profiles = Reset to shipped
+notice-delete-profiles = Delete them
+
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Cutting the layers to preview
@@ -1539,6 +1622,13 @@ confirm-delete-resin = Delete this resin
 confirm-delete-resin-named = Delete { $name } and the exposures measured for it?
 confirm-comes-off = It comes off { $printers } as well.
 confirm-delete-profile = Delete this profile
+confirm-reset-unreadable = Reset the profiles that would not read
+confirm-delete-unreadable = Delete the profiles that would not read
+confirm-reset-named = Throw away your copies of { $names } and use the ones this version ships?
+confirm-reset = Reset
+confirm-reset-own-gone = Profiles of your own that would not read are deleted too, as nothing ships in their place: { $names }.
+confirm-delete-own-named = Delete { $names }? They are your own, they would not read, and nothing ships in their place.
+confirm-delete = Delete
 
 ## panels/report.rs
 
@@ -1634,8 +1724,6 @@ inspector-about-drain = Let resin out of a hollow model.
 inspector-about-cut = Split a model along a plane.
 inspector-about-relief = Press a texture into a model's surface, write text on it, or combine models into one.
 inspector-about-supports = Hold up what hangs over nothing.
-inspector-about-paint = Tell the supports where to go and where not to.
-inspector-about-shape = The shape of one support, part by part.
 inspector-about-check = What will fail on the machine, with the layer it fails on.
 inspector-about-export = From the plate to a file, and from the file to a printer.
 inspector-about-print-settings = How this plate is cut and exposed.

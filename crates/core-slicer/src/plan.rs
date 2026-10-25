@@ -2,12 +2,7 @@ use core_geometry::Scalar;
 
 use crate::SliceSettings;
 
-/// Where every layer of a stack starts and stops, lowest first.
-///
-/// One plan covers a uniform stack and an adaptive one: `bounds[i]` to `bounds[i + 1]` is
-/// layer `i`, in plate millimetres. A layer is sampled at the middle of its own band,
-/// which is what keeps the top and bottom of a model whose faces sit exactly on a
-/// boundary; see `docs/design/slicing.md`.
+/// Where every layer of a stack starts and stops, lowest first: `bounds[i]` to `bounds[i + 1]`, mm.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerPlan {
     bounds: Vec<Scalar>,
@@ -15,12 +10,8 @@ pub struct LayerPlan {
 }
 
 impl LayerPlan {
-    /// A plan from the boundaries between layers, lowest first, and the height the model
-    /// itself stops at. Fewer than two boundaries is an empty stack.
-    ///
-    /// The last boundary may stand above the ceiling: the plate travels a whole layer
-    /// whether or not there is material all the way up, and only the sampling stops
-    /// inside the mesh.
+    /// A plan from layer boundaries, lowest first, and the height the model stops at; under two is
+    /// empty.
     pub fn from_bounds(bounds: Vec<Scalar>, ceiling: Scalar) -> Self {
         if bounds.len() < 2 {
             return Self {

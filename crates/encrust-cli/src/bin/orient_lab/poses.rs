@@ -339,8 +339,7 @@ fn sits(mesh: &Mesh, rotation: Quat) -> bool {
 }
 
 /// Whether `mesh` turned by `rotation` and stood `lift_mm` off the plate fits `volume`.
-/// The plate is free to turn it about the vertical, so its two widths are matched with the
-/// plate's sorted.
+/// The plate may turn it about the vertical, so its two widths are matched sorted.
 fn fits(mesh: &Mesh, rotation: Quat, lift_mm: f32, volume: &BuildVolume) -> bool {
     let (mins, maxs) = mesh.vertices.iter().fold(
         (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),

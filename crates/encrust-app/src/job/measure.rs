@@ -95,30 +95,7 @@ mod tests {
 
     /// A 2 mm cube standing on the plate.
     fn cube() -> Mesh {
-        let corner = |i: usize| {
-            Vec3::new(
-                if i & 1 == 0 { 1.0 } else { 3.0 },
-                if i & 2 == 0 { 1.0 } else { 3.0 },
-                if i & 4 == 0 { 0.0 } else { 2.0 },
-            )
-        };
-        Mesh::new(
-            (0..8).map(corner).collect(),
-            vec![
-                [0, 2, 1],
-                [1, 2, 3],
-                [4, 5, 6],
-                [5, 7, 6],
-                [0, 1, 4],
-                [1, 5, 4],
-                [2, 6, 3],
-                [3, 6, 7],
-                [0, 4, 2],
-                [2, 4, 6],
-                [1, 3, 5],
-                [3, 7, 5],
-            ],
-        )
+        core_geometry::cuboid(Vec3::new(1.0, 1.0, 0.0), Vec3::new(3.0, 3.0, 2.0))
     }
 
     fn panel() -> RasterSettings {

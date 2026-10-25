@@ -1,26 +1,27 @@
 use core_geometry::Scalar;
+use core_supports::InfillPattern;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::status::Status;
 use crate::supports::Placing;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, list, list_row, nested, number_row, primary_button,
-    secondary_button, section, switch, theme,
+    Segment, Segmented, describe, hint, icon, nested, number_row, secondary_button, section, switch,
 };
 
 /// Millimetres per point of drag on the brush and the fill.
 pub(super) const COARSE_STEP: f64 = 0.05;
 const ANGLE_STEP: f64 = 0.5;
 
-/// Bounds on the brush and on the fill, millimetres of plate. A brush finer than a tenth
-/// of a millimetre paints one triangle at a time; one wider than the plate paints all of
-/// it.
+/// Bounds on the brush and the fill, millimetres of plate: finer than 0.1 paints one
+/// triangle at a time, wider than the plate paints all of it.
 pub(super) const MIN_BRUSH_MM: f32 = 0.1;
 pub(super) const MAX_BRUSH_MM: f32 = 25.0;
 const MIN_SPACING_MM: f32 = 0.5;
 const MAX_SPACING_MM: f32 = 20.0;
 const DEFAULT_SPACING_MM: f32 = 3.0;
+const DEFAULT_SECOND_RIM_MM: f32 = 1.0;
+/// The furthest in a rim or the inside may be asked to start, millimetres.
+const MAX_OFFSET_MM: f32 = 10.0;
 
 /// Bounds on how far a painted surface may turn from the face that was clicked.
 const MIN_FLOOD_DEG: f32 = 1.0;
@@ -37,46 +38,64 @@ fn paint_hint(placing: Placing) -> String {
     }
 }
 
-/// Supports by hand: placed one at a time, or filled into a painted patch, in the group
-/// the next ones join.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    super::shape::profile_section(ui, window);
-    section(ui, &tr!("paint-brush"), None, |ui| {
-        describe(ui, &tr!("paint-brush-help"));
-        painting(ui, window);
-    });
-    section(ui, &tr!("supports-placing-fill"), None, |ui| {
-        describe(ui, &tr!("paint-fill-help"));
-        // How dense a fill comes out is worth reading whichever brush is in hand.
-        spacing_row(
-            ui,
-            &tr!("paint-rim"),
-            &mut window.tools.supports.fill.border_spacing_mm,
-        );
-        spacing_row(
-            ui,
-            &tr!("paint-inside"),
-            &mut window.tools.supports.fill.infill_spacing_mm,
-        );
-        clear(ui, window);
-    });
-    section(ui, &tr!("paint-groups"), None, |ui| {
-        describe(ui, &tr!("paint-groups-help"));
-        groups(ui, window);
-    });
+/// The place mode: a click puts one support down, a shift-click a line of them.
+pub(super) fn place_fields(ui: &mut egui::Ui, window: &mut Window) {
+    hint(ui, &paint_hint(Placing::Point));
+    ui.add_space(4.0);
+    number_row(
+        ui,
+        &tr!("paint-line-spacing"),
+        &mut window.tools.supports.inline_spacing_mm,
+        &tr!("unit-mm"),
+        COARSE_STEP,
+        MIN_SPACING_MM..=MAX_SPACING_MM,
+        2,
+    );
 }
 
-/// Filling what is painted with supports.
-pub fn action(ui: &mut egui::Ui, window: &mut Window) {
-    let painted = window
-        .doc
-        .scene
-        .targets()
-        .any(|object| !object.supports.painted().is_empty());
-    if primary_button(ui, icon::SUPPORTS, &tr!("paint-fill"), painted).clicked() {
-        let added = window.tools.supports.fill(&mut window.doc.scene);
-        window.machine.status = Status::Info(tr!("paint-filled", count = added));
+/// The area mode: paint or block, the brush, and the way to take that layer off again.
+/// Alt erases whichever is in hand, so an eraser left from before reads as paint.
+pub(super) fn area_fields(ui: &mut egui::Ui, window: &mut Window) {
+    let tool = &mut window.tools.supports;
+    if tool.placing == Placing::Erase {
+        tool.placing = Placing::Paint;
     }
+    let segments =
+        [Placing::Paint, Placing::Block].map(|placing| Segment::new(placing, placing.label()));
+    Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, &mut tool.placing);
+    ui.add_space(4.0);
+    hint(ui, &paint_hint(tool.placing));
+    ui.add_space(4.0);
+    number_row(
+        ui,
+        &tr!("paint-brush"),
+        &mut tool.brush_radius_mm,
+        &tr!("unit-mm"),
+        COARSE_STEP,
+        MIN_BRUSH_MM..=MAX_BRUSH_MM,
+        2,
+    );
+    number_row(
+        ui,
+        &tr!("paint-surface-angle"),
+        &mut tool.flood_angle_deg,
+        &tr!("unit-deg"),
+        ANGLE_STEP,
+        MIN_FLOOD_DEG..=MAX_FLOOD_DEG,
+        0,
+    );
+    clear(ui, window);
+}
+
+/// How a painted area is filled: its rim and its inside.
+pub(super) fn fill_section(ui: &mut egui::Ui, window: &mut Window) {
+    section(ui, &tr!("supports-placing-fill"), None, |ui| {
+        describe(ui, &tr!("paint-fill-help"));
+        rim_rows(ui, window);
+        inside_rows(ui, window);
+    });
 }
 
 /// Taking the paint, or the blocking, off again; with the eraser in hand, both.
@@ -95,247 +114,128 @@ fn clear(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Whether a click places a support or a stroke paints a patch, and how wide the brush is.
-fn painting(ui: &mut egui::Ui, window: &mut Window) {
-    let segments = Placing::ALL.map(|placing| Segment::new(placing, placing.label()));
-    let width = ui.available_width();
-    let mut chosen = window.tools.supports.placing;
-    if Segmented::new(&segments).width(width).show(ui, &mut chosen) {
-        window.tools.supports.placing = chosen;
+/// The fill's rim: its spacing, how far in it stands, a second rim inside it and the
+/// profile it is built to.
+fn rim_rows(ui: &mut egui::Ui, window: &mut Window) {
+    let fill = &mut window.tools.supports.fill;
+    if !half_switch(ui, &tr!("paint-rim"), &mut fill.border_spacing_mm) {
+        return;
     }
-
-    ui.add_space(4.0);
-    hint(ui, &paint_hint(window.tools.supports.placing));
-
-    if window.tools.supports.placing.paints() {
-        ui.add_space(4.0);
-        number_row(
+    nested(ui, |ui| {
+        if let Some(spacing_mm) = fill.border_spacing_mm.as_mut() {
+            spacing_row(ui, spacing_mm);
+        }
+        offset_row(ui, &tr!("paint-offset"), &mut fill.border_offset_mm);
+        let mut second = fill.second_border_mm.is_some();
+        if switch(ui, &mut second, &tr!("paint-second-rim")).changed() {
+            fill.second_border_mm = second.then_some(DEFAULT_SECOND_RIM_MM);
+        }
+        if let Some(gap_mm) = fill.second_border_mm.as_mut() {
+            offset_row(ui, &tr!("paint-second-rim-gap"), gap_mm);
+        }
+        let catalogue = &window.machine.slicing.catalogue;
+        profile_row(
             ui,
-            &tr!("paint-brush"),
-            &mut window.tools.supports.brush_radius_mm,
-            &tr!("unit-mm"),
-            COARSE_STEP,
-            MIN_BRUSH_MM..=MAX_BRUSH_MM,
-            2,
+            "fill-rim-profile",
+            catalogue,
+            &mut window.tools.supports.fill_profiles.rim,
+            tr!("paint-profile-in-hand"),
         );
-        number_row(
-            ui,
-            &tr!("paint-surface-angle"),
-            &mut window.tools.supports.flood_angle_deg,
-            &tr!("unit-deg"),
-            ANGLE_STEP,
-            MIN_FLOOD_DEG..=MAX_FLOOD_DEG,
-            0,
-        );
-    }
+    });
 }
 
-/// One spacing of the fill, with the switch that leaves that half of it out.
-fn spacing_row(ui: &mut egui::Ui, label: &str, spacing_mm: &mut Option<Scalar>) {
+/// The fill's inside: its spacing, its pattern, how far inside the rim it begins and the
+/// profile it is built to.
+fn inside_rows(ui: &mut egui::Ui, window: &mut Window) {
+    let fill = &mut window.tools.supports.fill;
+    if !half_switch(ui, &tr!("paint-inside"), &mut fill.infill_spacing_mm) {
+        return;
+    }
+    nested(ui, |ui| {
+        if let Some(spacing_mm) = fill.infill_spacing_mm.as_mut() {
+            spacing_row(ui, spacing_mm);
+        }
+        let segments = [
+            Segment::new(InfillPattern::Grid, tr!("paint-pattern-grid")),
+            Segment::new(InfillPattern::Concentric, tr!("paint-pattern-rings")),
+            Segment::new(InfillPattern::Random, tr!("paint-pattern-random")),
+        ];
+        let width = ui.available_width();
+        Segmented::new(&segments)
+            .width(width)
+            .show(ui, &mut fill.pattern);
+        offset_row(ui, &tr!("paint-offset"), &mut fill.infill_offset_mm);
+        let catalogue = &window.machine.slicing.catalogue;
+        profile_row(
+            ui,
+            "fill-inside-profile",
+            catalogue,
+            &mut window.tools.supports.fill_profiles.inside,
+            tr!("paint-profile-in-hand"),
+        );
+    });
+}
+
+/// The switch that leaves one half of the fill out. Answers whether that half is on.
+fn half_switch(ui: &mut egui::Ui, label: &str, spacing_mm: &mut Option<Scalar>) -> bool {
     let mut on = spacing_mm.is_some();
     if switch(ui, &mut on, label).changed() {
         *spacing_mm = on.then_some(DEFAULT_SPACING_MM);
     }
-    if let Some(value) = spacing_mm.as_mut() {
-        nested(ui, |ui| {
-            number_row(
-                ui,
-                &tr!("support-table-spacing"),
-                value,
-                &tr!("unit-mm"),
-                COARSE_STEP,
-                MIN_SPACING_MM..=MAX_SPACING_MM,
-                2,
-            );
-        });
-    }
+    on
 }
 
-/// Which group the fields below belong to, and the two ways the list of them changes.
-///
-/// A group is a set of supports built to one profile: every field of this panel edits the
-/// group in hand, and a support is retuned by being moved to another one.
-fn groups(ui: &mut egui::Ui, window: &mut Window) {
-    let active = window.tools.supports.active;
-    let mut chosen = active;
-    let mut drop = None;
-    let mut renamed = None;
-    let mut toggled = None;
-    let mut retuned = None;
-    let saved: Vec<printer_profiles::SupportProfile> = window
-        .machine
-        .slicing
-        .catalogue
-        .supports()
-        .map(|entry| entry.profile.clone())
-        .collect();
-
-    let names: Vec<String> = window
-        .tools
-        .supports
-        .groups
-        .iter()
-        .map(|entry| entry.name.clone())
-        .collect();
-    list(ui, |ui| {
-        for (group, name) in names.iter().enumerate() {
-            let group = group as u16;
-            // The last group cannot go: something has to hold the raft's numbers.
-            let drop_label = tr!("paint-drop-group");
-            let remove = (names.len() > 1).then_some((icon::CANCEL, drop_label.as_str()));
-            let tint = Some(theme::support_tint(group as usize));
-            let rename = Some(egui::Id::new(("support-group-name", group)));
-            let holds = window.tools.supports.group_holds(group, &window.doc.scene);
-            let count = holds.to_string();
-            let shown = !window.tools.supports.groups[group as usize].hidden;
-            let action = list_row(
-                ui,
-                name,
-                tint,
-                group == active,
-                remove,
-                rename,
-                Some(&count),
-                Some(shown),
-            );
-            if action.toggled {
-                toggled = Some(group);
-            }
-            // The secondary click builds the whole group to another saved profile.
-            if let Some(row) = &action.row {
-                let tool = &window.tools.supports;
-                let built_to = if group == tool.active {
-                    &tool.profile.name
-                } else {
-                    &tool.groups[group as usize].profile.name
-                };
-                row.context_menu(|ui| {
-                    if let Some(profile) = profile_menu(ui, &saved, built_to) {
-                        retuned = Some((group, profile));
-                        ui.close();
-                    }
-                });
-            }
-            if action.picked {
-                chosen = group;
-            }
-            if let Some(name) = action.renamed {
-                renamed = Some((group, name));
-            }
-            if action.removed {
-                drop = Some(group);
-            }
-        }
-    });
-
-    if secondary_button(ui, icon::ADD, &tr!("paint-new-group")).clicked() {
-        window.tools.supports.add_group();
-    }
-    if let Some((group, profile)) = retuned {
-        window
-            .tools
-            .supports
-            .retune_group(group, profile, &mut window.doc.scene);
-    }
-    if let Some(group) = toggled {
-        let group = &mut window.tools.supports.groups[group as usize];
-        group.hidden = !group.hidden;
-    }
-    if let Some((group, name)) = renamed {
-        window.tools.supports.groups[group as usize].name = name;
-    }
-    window.tools.supports.choose_group(chosen);
-    if let Some(group) = drop {
-        let holds = window.tools.supports.group_holds(group, &window.doc.scene);
-        if holds == 0 {
-            window
-                .tools
-                .supports
-                .remove_group(group, &mut window.doc.scene);
-        } else {
-            window.tools.supports.dropping = Some((group, holds));
-        }
-    }
-    dropping(ui, window);
+/// How far apart the supports of one half of the fill stand.
+fn spacing_row(ui: &mut egui::Ui, spacing_mm: &mut Scalar) {
+    number_row(
+        ui,
+        &tr!("support-table-spacing"),
+        spacing_mm,
+        &tr!("unit-mm"),
+        COARSE_STEP,
+        MIN_SPACING_MM..=MAX_SPACING_MM,
+        2,
+    );
 }
 
-/// Width of the menu a group's row opens, points: wide enough for a profile's name and
-/// the mark beside the one in use.
-const PROFILE_MENU_W: f32 = 180.0;
+/// A distance measured in from the patch's outline, or in from the rim.
+fn offset_row(ui: &mut egui::Ui, label: &str, offset_mm: &mut Scalar) {
+    number_row(
+        ui,
+        label,
+        offset_mm,
+        &tr!("unit-mm"),
+        COARSE_STEP,
+        0.0..=MAX_OFFSET_MM,
+        2,
+    );
+}
 
-/// The saved profiles a group can be built to, the one it is built to now marked, and
-/// answers the one chosen.
-fn profile_menu(
+/// The saved profile a kind of support is built to, or `in_hand` naming what it is built
+/// to with none chosen.
+pub(super) fn profile_row(
     ui: &mut egui::Ui,
-    saved: &[printer_profiles::SupportProfile],
-    built_to: &str,
-) -> Option<printer_profiles::SupportProfile> {
-    let colors = theme::colors();
-    // Both: a menu is as wide as the widest thing in it asks for, and a row that asks
-    // for all the width there is gets the width of the window.
-    ui.set_min_width(PROFILE_MENU_W);
-    ui.set_max_width(PROFILE_MENU_W);
-    ui.spacing_mut().item_spacing.y = 2.0;
-    ui.spacing_mut().button_padding = egui::vec2(8.0, 5.0);
-    let heading = egui::RichText::new(tr!("paint-build-to"))
-        .font(theme::small())
-        .color(colors.text_low);
-    ui.add(egui::Label::new(heading).selectable(false));
-    ui.add_space(2.0);
-    ui.separator();
-
-    let mut chosen = None;
-    for profile in saved {
-        let current = profile.name == built_to;
-        let colour = if current {
-            colors.accent_soft
-        } else {
-            colors.text_high
-        };
-        let name = egui::RichText::new(&profile.name)
-            .font(theme::label())
-            .color(colour);
-        let mark = if current { icon::IN_HAND } else { "" };
-        let item = egui::Button::new(name)
-            .right_text(egui::RichText::new(mark).color(colors.accent))
-            .selected(current)
-            .frame_when_inactive(false)
-            .min_size(egui::vec2(ui.available_width(), theme::ROW_H - 6.0));
-        if ui.add(item).clicked() && !current {
-            chosen = Some(profile.clone());
+    id: &str,
+    catalogue: &printer_profiles::Catalogue,
+    chosen: &mut Option<String>,
+    in_hand: String,
+) {
+    let shown = chosen
+        .as_deref()
+        .and_then(|id| catalogue.supports().find(|entry| entry.id == id))
+        .map_or(in_hand.clone(), |entry| entry.profile.name.clone());
+    super::export::picker_row(ui, id, &tr!("paint-profile"), &shown, |ui| {
+        if ui.selectable_label(chosen.is_none(), &in_hand).clicked() {
+            *chosen = None;
         }
-    }
-    chosen
-}
-
-/// The question a group holding supports is taken away behind: they go with it, and only
-/// `Cmd+Z` brings them back.
-fn dropping(ui: &mut egui::Ui, window: &mut Window) {
-    let Some((group, holds)) = window.tools.supports.dropping else {
-        return;
-    };
-    // An undo under the open question can take the group away itself.
-    let Some(entry) = window.tools.supports.groups.get(group as usize) else {
-        window.tools.supports.dropping = None;
-        return;
-    };
-    let name = entry.name.clone();
-    egui::Modal::new(egui::Id::new("drop-support-group")).show(ui.ctx(), |ui| {
-        ui.label(tr!("paint-group-holds", name = name.clone(), count = holds));
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            if ui.button(tr!("paint-drop-the-group")).clicked() {
-                let gone = window
-                    .tools
-                    .supports
-                    .remove_group(group, &mut window.doc.scene);
-                window.machine.status =
-                    Status::Info(tr!("paint-dropped", name = name.clone(), count = gone));
-                window.tools.supports.dropping = None;
+        let offered = catalogue
+            .supports()
+            .filter(|entry| !catalogue.is_auto_shape(&entry.id));
+        for entry in offered {
+            let picked = chosen.as_deref() == Some(entry.id.as_str());
+            if ui.selectable_label(picked, &entry.profile.name).clicked() {
+                *chosen = Some(entry.id.clone());
             }
-            if ui.button(tr!("paint-keep-it")).clicked() {
-                window.tools.supports.dropping = None;
-            }
-        });
+        }
     });
 }

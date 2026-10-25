@@ -1,7 +1,5 @@
-//! The `encrust` command line: its subcommands, their flags, and the runs they drive.
-//!
-//! `main.rs` is argument parsing, Ctrl-C and an exit code; everything else is here so that a
-//! test can drive a run without spawning a process. Worked examples: `docs/cli.md`.
+//! The `encrust` command line: subcommands, flags and the runs they drive, testable in process.
+//! `main.rs` is argument parsing, Ctrl-C and an exit code. Worked examples: `docs/cli.md`.
 
 mod args;
 mod batch;

@@ -1,6 +1,5 @@
-//! The machine library: every profile there is, as brand cards that open onto a model
-//! list. It stands in the form's place rather than hanging off the `+` as a menu, because
-//! a catalogue of a hundred and fifty machines is a page, not a dropdown.
+//! The machine library: every profile as brand cards opening onto a model list. It takes the
+//! form's place, not a menu, because a catalogue of 150 machines is a page.
 
 use egui::{RichText, Ui};
 use printer_profiles::{Catalogue, Entry, PrinterProfile};

@@ -274,37 +274,47 @@ fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
 
 #[test]
 fn the_overhang_an_orientation_is_scored_on_is_the_support_profiles_own() {
-    // A wall hanging 50 degrees from vertical: past the 45 the medium profile holds up
-    // from, inside the 55 the light one does.
+    // A wall hanging 50 degrees from vertical: past the 40 the medium profile holds up
+    // from, inside the 55 a profile of its own asks for.
     let lean = 10.0 * 50.0_f32.to_radians().tan();
     let path = write_leaning_box_stl("leaning", 10.0, lean, 12, 0);
-    let overhang = |profile: &str| {
-        let output = slice(&[
+    let medium = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/profiles/supports/medium.toml"
+    ))
+    .expect("the shipped medium profile");
+    let lenient = std::env::temp_dir()
+        .join("encrust-cli-tests")
+        .join("lenient.toml");
+    std::fs::write(
+        &lenient,
+        medium.replace("max_overhang_deg = 40.0", "max_overhang_deg = 55.0"),
+    )
+    .expect("write the lenient profile");
+    let overhang = |profile: &[&str]| {
+        let mut args = vec![
             path.to_str().unwrap(),
             "--orient",
             "--max-tilt",
             "0",
-            "--supports",
-            profile,
             "--json",
-        ]);
+        ];
+        args.extend_from_slice(profile);
+        let output = slice(&args);
         assert!(output.status.success(), "{}", stderr(&output));
         json(&output)["oriented"]["overhang_mm2"]
             .as_f64()
             .expect("an oriented run reports its overhang")
     };
 
-    // 155.6 mm2 of wall, weighted by how far past the angle it leans: sin 50 - sin 45.
+    // 155.6 mm2 of wall, weighted by how far past the angle it leans: sin 50 - sin 40.
+    let held = overhang(&["--supports", "medium"]);
     assert!(
-        overhang("medium") > 5.0,
-        "the wall is 9 mm2 of weighted overhang at 45 degrees, got {}",
-        overhang("medium")
+        held > 5.0,
+        "the wall is 19 mm2 of weighted overhang at 40 degrees, got {held}"
     );
-    assert!(
-        overhang("light") < 0.01,
-        "and none at the 55 degrees the light profile asks for, got {}",
-        overhang("light")
-    );
+    let lenient = overhang(&["--support-profile", lenient.to_str().unwrap()]);
+    assert!(lenient < 0.01, "and none at 55 degrees, got {lenient}");
 }
 
 #[test]
@@ -356,4 +366,72 @@ fn an_oriented_model_stands_on_the_plate_without_centring() {
         "{}",
         stderr(&output)
     );
+}
+
+#[test]
+fn supports_sized_by_what_they_hold_stand_from_the_command_line() {
+    let path = write_boxes_stl(
+        "ledge-auto",
+        &[
+            ([0.0, 0.0, 0.0], [20.0, 20.0, 20.0]),
+            ([20.0, 8.0, 18.0], [24.0, 12.0, 20.0]),
+        ],
+    );
+    let output = slice(&[path.to_str().unwrap(), "--supports", "auto", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let report = json(&output);
+    assert!(
+        report["supports"]["contacts"].as_u64().unwrap_or(0) > 0,
+        "the automatic profile holds the model up: {report}"
+    );
+}
+
+#[test]
+fn a_cavity_is_held_up_from_inside_only_when_asked() {
+    let path = write_box_stl("cavity", 20.0, 12, 0);
+    let contacts = |more: &[&str]| {
+        let mut args = vec![
+            path.to_str().unwrap(),
+            "--hollow",
+            "2",
+            "--supports",
+            "medium",
+            "--json",
+        ];
+        args.extend_from_slice(more);
+        let output = slice(&args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["supports"]["contacts"].as_u64().unwrap_or(0)
+    };
+    let outside = contacts(&[]);
+    let inside = contacts(&["--support-cavity"]);
+    assert!(
+        inside > outside,
+        "a 16 mm cavity has a flat ceiling to hold: {inside} contacts against {outside}"
+    );
+}
+
+#[test]
+fn holding_up_a_cavity_without_supports_is_refused() {
+    let path = write_box_stl("cavity-unsupported", 10.0, 12, 0);
+    let output = slice(&[path.to_str().unwrap(), "--hollow", "2", "--support-cavity"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("--supports"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn holding_up_a_cavity_without_hollowing_is_refused() {
+    let path = write_box_stl("no-cavity", 10.0, 12, 0);
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--support-cavity",
+    ]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
 }

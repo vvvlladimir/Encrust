@@ -111,6 +111,8 @@ struct ModelVertex {
     // Share of the way to the eye the depth is taken from, so that of two coplanar faces
     // of different meshes the same one wins every frame.
     @location(14) pull: f32,
+    // 1.0 where every corner carries a normal smoothed over its faces, which it is shaded by.
+    @location(15) smoothed: f32,
 };
 
 struct ModelFragment {
@@ -124,6 +126,9 @@ struct ModelFragment {
     // is compared against, and the whole point is what a drain cut is.
     @location(3) world: vec3<f32>,
     @location(4) surface: f32,
+    // The corners' normals blended across the face, read where `smoothed` is set.
+    @location(5) smooth_normal: vec3<f32>,
+    @location(6) @interpolate(flat) smoothed: f32,
 };
 
 // How much lean it takes to go from unmarked to fully marked. A band rather than a step,
@@ -214,6 +219,8 @@ fn model_vertex(in: ModelVertex) -> ModelFragment {
     let seen = mix(world.xyz, globals.eye.xyz, in.pull);
     out.clip_position = globals.view_projection * vec4<f32>(seen, 1.0);
     out.normal = normal_matrix * in.normal;
+    out.smooth_normal = out.normal;
+    out.smoothed = in.smoothed;
     out.color = in.color;
     out.overhang = in.overhang;
     out.world = world.xyz;
@@ -418,7 +425,7 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
 
     // Back faces are shaded as if they faced the camera. An imported mesh may still have
     // inverted faces, and a black hole reads as a rendering bug rather than as a defect.
-    let outward = normalize(in.normal);
+    let outward = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
     var normal = outward;
     if (!front_facing) {
         normal = -normal;

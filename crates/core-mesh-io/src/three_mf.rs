@@ -16,23 +16,14 @@ use crate::{Loaded, MeshIoError, MeshLoader, ModelFile, ReadSeek, Texture};
 /// specification forbids a cycle; nothing in a file stops one.
 const MAX_DEPTH: usize = 64;
 
-/// Most bytes one part of the container may say it expands to.
-///
-/// A 3MF is a zip, and every reader of one — ours and the one under it — sizes a buffer
-/// from the uncompressed length an entry states about itself. A model of a hundred
-/// million triangles is well under this; see `docs/design/hostile-files.md`.
+/// Most bytes one part of the container may say it expands to. Every zip reader sizes a buffer from
+/// the stated length; see `docs/design/hostile-files.md`.
 const MAX_PART_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Most bytes deflate can expand one byte into; a 3MF package stores or deflates its parts.
 const MAX_DEFLATE_RATIO: u64 = 1032;
 
-/// Reads 3MF: the zip container's `3D/3dmodel.model`, its build items, and the objects
-/// they reference through any depth of components.
-///
-/// The whole build becomes one mesh, placed where the file says and scaled from the
-/// model's `unit` into millimetres. The materials extension's `texture2dgroup` becomes the
-/// UVs beside it and the image part it names becomes the texture; see
-/// `docs/decisions/0115-uvs-are-a-sidecar-beside-the-mesh.md`.
+/// Texture groups become UVs and textures (ADR 0115).
 pub struct ThreeMfLoader;
 
 impl MeshLoader for ThreeMfLoader {
@@ -80,12 +71,8 @@ impl MeshLoader for ThreeMfLoader {
     }
 }
 
-/// Refuses an archive that claims a part larger than `MAX_PART_BYTES`, or larger than the
-/// whole file could inflate to.
-///
-/// Every claim is read before any part is, because the reader under us reserves a buffer
-/// from it: a kilobyte of zip stating a two-gigabyte part is a bomb, not a model. The
-/// entries are opened raw, so this costs a seek each and decompresses nothing.
+/// Refuses an archive claiming a part larger than `MAX_PART_BYTES` or than the file could inflate
+/// to. Claims are read before any part because the zip reader reserves a buffer from them.
 fn refuse_oversized_parts(path: &Path, source: &mut dyn ReadSeek) -> Result<(), MeshIoError> {
     let io = |source| MeshIoError::Io {
         path: path.to_owned(),

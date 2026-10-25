@@ -1,6 +1,6 @@
 # 0092. Paint a patch as a set of faces, fill it on the plate's grid
 
-- **Status:** Accepted
+- **Status:** Accepted; offsets, a second rim, rings and a scatter are read off the footprint by 0331
 - **Date:** 2026-09-25
 
 ## Context

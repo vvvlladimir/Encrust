@@ -1,11 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
 
-/// `FxHash`, the hash `rustc` uses for keys of its own making.
-///
-/// The standard hasher is `SipHash`, which is built to resist collisions chosen by an
-/// attacker. A grid cell or a lattice edge worked out from geometry of our own is not
-/// that, and there are millions of them to hash.
+/// `FxHash`, the hash `rustc` uses for keys of its own making. `SipHash` resists attacker-chosen
+/// collisions, which geometry-derived keys are not, and there are millions.
 #[derive(Default)]
 pub struct FastHasher {
     hash: u64,
@@ -39,12 +36,7 @@ impl Hasher for FastHasher {
         self.add(value as u64);
     }
 
-    /// The state, with its high bits folded into its low ones.
-    ///
-    /// A hash map takes the bucket from the low bits, and multiplying by an odd constant
-    /// leaves bit `n` of the product depending only on bits `0..=n` of the input: a key
-    /// whose low bits barely move — a lattice edge inside one layer of tiles — would pile
-    /// into a handful of buckets without this.
+    /// Hash maps bucket by low bits, and an odd multiply makes bit `n` depend only on bits `0..=n`.
     fn finish(&self) -> u64 {
         (self.hash ^ (self.hash >> 32)).wrapping_mul(SEED)
     }

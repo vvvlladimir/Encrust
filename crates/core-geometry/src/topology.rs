@@ -16,11 +16,8 @@ pub(crate) struct EdgeUse {
     pub forward: bool,
 }
 
-/// Every edge use in the mesh, sorted so uses of the same edge are adjacent.
-///
-/// Sorted by counting the uses of each lower vertex first and ordering only within each
-/// of those runs, which is the same order a full sort gives and linear in the face count
-/// rather than n log n. Both mesh checks were spending nearly all their time in that sort.
+/// Every edge use in the mesh, sorted so uses of the same edge are adjacent. Counted by lower
+/// vertex and sorted within runs: linear in the face count, not n log n.
 pub(crate) fn edge_uses(mesh: &Mesh) -> Vec<EdgeUse> {
     let buckets = mesh
         .faces
@@ -161,11 +158,8 @@ impl Adjacency {
     }
 }
 
-/// Union-find over indices — of faces, vertices or corners — that gathers them into the
-/// groups the unions joined.
-///
-/// Each parent is atomic so that `joined` can join from every thread; alone,
-/// a relaxed atomic reads and writes as a plain integer does.
+/// Union-find over indices of faces, vertices or corners that gathers them into the joined groups.
+/// Parents are atomic so `joined` can join from every thread; relaxed, they cost a plain integer.
 #[derive(Debug)]
 pub struct Components {
     parent: Vec<AtomicU32>,

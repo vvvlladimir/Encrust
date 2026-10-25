@@ -22,8 +22,7 @@ pub struct ConvertCommand {
     pub output: PathBuf,
 
     /// The printer must be given, and its panel must be the one the masks were drawn for.
-    /// The resin gives the lifts, waits and price; layer heights and exposures are the
-    /// file's own.
+    /// The resin gives lifts, waits and price; layer heights and exposures are the file's own.
     #[command(flatten)]
     pub profile: ProfileArgs,
 

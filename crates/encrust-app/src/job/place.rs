@@ -4,8 +4,8 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::Region;
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, generate_supports, low_points};
-use printer_profiles::SupportProfile;
+use core_supports::{Blocked, Need, WallSide, generate_supports, low_points};
+use printer_profiles::{AutoProfile, SupportProfile};
 
 use crate::i18n::tr;
 use crate::job::pipeline::{slice_mesh, thread_pool, worker_threads};
@@ -19,8 +19,11 @@ const REPORT_STEP: f32 = 0.005;
 /// One model to stand supports under, owned so that it can cross to the worker thread.
 pub struct SupportTask {
     pub id: ObjectId,
-    /// The model in its own space, and where it stands.
+    /// The model in its own space, which the blocked faces are painted on, and where it
+    /// stands.
     pub mesh: Arc<Mesh>,
+    /// What the model prints as, in the same space: what is cut and read for undersides.
+    pub surface: Arc<Mesh>,
     pub transform: Transform,
     /// Contacts of the supports already under this model, in plate coordinates. They
     /// hold up what is near them, and the run never returns or moves them.
@@ -29,12 +32,17 @@ pub struct SupportTask {
     pub blocked: Region,
     /// What this model's supports are placed by: its own profile where it keeps one.
     pub profile: SupportProfile,
+    /// The side of a hollow model's wall the run holds up, or `None` for a solid one.
+    pub side: Option<WallSide>,
 }
 
 /// Everything one automatic placement run needs.
 pub struct SupportRequest {
     pub tasks: Vec<SupportTask>,
     pub layer_height_mm: Scalar,
+    /// The automatic profile the run sizes its supports by, which holds steps apart from
+    /// overhangs; `None` for a run built to the group in hand.
+    pub sizing: Option<AutoProfile>,
 }
 
 /// Where the run wants supports under one model, in the plate coordinates that model
@@ -46,7 +54,7 @@ pub struct Placement {
     /// since, so the contacts are mapped back into its own space through this rather than
     /// through where it stands now.
     pub transform: Transform,
-    pub contacts: Vec<Vec3>,
+    pub needs: Vec<Need>,
 }
 
 /// How an automatic placement run ended.
@@ -56,19 +64,6 @@ pub enum SupportOutcome {
     Cancelled,
     /// The whole error chain flattened into one line, as the window has no terminal.
     Failed(String),
-}
-
-impl SupportOutcome {
-    /// How many supports the run wants to add.
-    pub fn count(&self) -> usize {
-        match self {
-            Self::Placed(placements) => placements
-                .iter()
-                .map(|placement| placement.contacts.len())
-                .sum(),
-            Self::Cancelled | Self::Failed(_) => 0,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -172,10 +167,12 @@ pub fn tasks_of(
         .map(|object| SupportTask {
             id: object.id,
             mesh: Arc::clone(&object.mesh),
+            surface: Arc::clone(object.support_surface().0),
             transform: object.transform,
             seeds: object.supports.contacts(object.transform),
             blocked: object.supports.blocked().clone(),
             profile: profile_of(object),
+            side: None,
         })
         .collect()
 }
@@ -210,9 +207,9 @@ fn place(
         }
 
         let placed = if task.transform == Transform::default() {
-            task.mesh.as_ref().clone()
+            task.surface.as_ref().clone()
         } else {
-            transform_mesh(&task.mesh, task.transform)
+            transform_mesh(&task.surface, task.transform)
         };
         let stack = match slice_mesh(&placed, request.layer_height_mm) {
             Ok(stack) => stack,
@@ -230,13 +227,25 @@ fn place(
         let layers = stack.layers.len().max(1) as f32;
         let done = index as f32 / models;
         let mut last = done;
-        let blocked = Blocked::new(&task.mesh, &task.blocked, task.transform);
-        let contacts = generate_supports(
+        let painted = Blocked::new(&task.mesh, &task.blocked, task.transform);
+        let blocked = Blocked::keeping(painted, task.side.clone());
+        // A support on the far side of the wall holds up nothing on this one.
+        let seeds: Vec<Vec3> = match &task.side {
+            Some(side) => task
+                .seeds
+                .iter()
+                .copied()
+                .filter(|seed| side.keeps(*seed))
+                .collect(),
+            None => task.seeds.clone(),
+        };
+        let needs = generate_supports(
             &stack,
             request.layer_height_mm,
             &task.profile,
-            &task.seeds,
-            &low_points(&task.mesh, task.transform),
+            request.sizing.as_ref(),
+            &seeds,
+            &low_points(&task.surface, task.transform),
             blocked.as_ref(),
             &mut |layer| {
                 let fraction = done + layer as f32 / layers / models;
@@ -254,7 +263,7 @@ fn place(
         placements.push(Placement {
             id: task.id,
             transform: task.transform,
-            contacts,
+            needs,
         });
     }
 
@@ -263,229 +272,4 @@ fn place(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::scene::ImportSummary;
-    use core_geometry::{Orientation, diagnose};
-
-    /// An axis-aligned box spanning `min`..`max`, wound outwards.
-    fn box_mesh(min: Vec3, max: Vec3) -> Mesh {
-        let vertices = vec![
-            Vec3::new(min.x, min.y, min.z),
-            Vec3::new(max.x, min.y, min.z),
-            Vec3::new(max.x, max.y, min.z),
-            Vec3::new(min.x, max.y, min.z),
-            Vec3::new(min.x, min.y, max.z),
-            Vec3::new(max.x, min.y, max.z),
-            Vec3::new(max.x, max.y, max.z),
-            Vec3::new(min.x, max.y, max.z),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(vertices, faces)
-    }
-
-    fn summary(mesh: &Mesh) -> ImportSummary {
-        ImportSummary {
-            vertices_merged: 0,
-            faces_removed: 0,
-            orientation: Orientation {
-                flipped_faces: 0,
-                inverted_shells: 0,
-                orientable: true,
-            },
-            diagnostics: diagnose(mesh),
-        }
-    }
-
-    /// A scene holding one 10 mm cube, standing wherever `transform` puts it.
-    fn scene_with_a_cube(transform: Transform) -> Scene {
-        let mesh = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
-        let mut scene = Scene::default();
-        scene.insert(crate::scene::Imported::new(
-            "cube".to_owned(),
-            Arc::new(mesh.clone()),
-            transform,
-            summary(&mesh),
-        ));
-        scene
-    }
-
-    fn request(scene: &Scene) -> SupportRequest {
-        SupportRequest {
-            tasks: tasks_of(scene, |_| SupportProfile::medium()),
-            layer_height_mm: 0.1,
-        }
-    }
-
-    /// Runs a request to its end on this thread, with nothing cancelling it.
-    fn placed(request: &SupportRequest) -> SupportOutcome {
-        place(request, &AtomicBool::new(false), &mut |_| {})
-    }
-
-    #[test]
-    fn a_cube_on_the_plate_needs_nothing_standing_under_it() {
-        let scene = scene_with_a_cube(Transform::default());
-        let outcome = placed(&request(&scene));
-
-        assert_eq!(outcome.count(), 0);
-        let SupportOutcome::Placed(placements) = outcome else {
-            panic!("a sound cube places");
-        };
-        assert_eq!(placements.len(), 1, "the model was still looked at");
-    }
-
-    #[test]
-    fn a_cube_lifted_off_the_plate_is_held_up_from_underneath() {
-        let lift = Transform::from_translation(Vec3::new(0.0, 0.0, 10.0));
-        let scene = scene_with_a_cube(lift);
-        let outcome = placed(&request(&scene));
-
-        assert!(outcome.count() > 0, "a floating cube is an island");
-        let SupportOutcome::Placed(placements) = outcome else {
-            panic!("a sound cube places");
-        };
-        assert_eq!(placements[0].transform, lift, "the placement it was cut in");
-        for contact in &placements[0].contacts {
-            assert!(
-                (contact.z - 10.0).abs() < 0.2,
-                "{contact} is not under the lifted cube"
-            );
-        }
-    }
-
-    #[test]
-    fn a_hidden_model_is_not_worked_on() {
-        let mut scene = scene_with_a_cube(Transform::from_translation(Vec3::new(0.0, 0.0, 10.0)));
-        scene.objects_mut()[0].visible = false;
-        assert!(tasks_of(&scene, |_| SupportProfile::medium()).is_empty());
-    }
-
-    #[test]
-    fn the_patch_painted_out_of_bounds_is_handed_over_with_the_model() {
-        let mut scene = scene_with_a_cube(Transform::default());
-        let mesh = Arc::clone(&scene.objects()[0].mesh);
-        let adjacency = core_geometry::Adjacency::of(&mesh);
-        scene.objects_mut()[0]
-            .supports
-            .paint_face(&mesh, &adjacency, 0, 30.0, true, true);
-
-        let tasks = tasks_of(&scene, |_| SupportProfile::medium());
-        assert!(
-            !tasks[0].blocked.is_empty(),
-            "the run has to know what it may not put a support on"
-        );
-    }
-
-    #[test]
-    fn the_supports_already_under_a_model_are_handed_over_as_seeds() {
-        let lift = Transform::from_translation(Vec3::new(0.0, 0.0, 10.0));
-        let mut scene = scene_with_a_cube(lift);
-        scene.objects_mut()[0]
-            .supports
-            .add(Vec3::new(5.0, 5.0, 10.0), lift, 0);
-
-        let tasks = tasks_of(&scene, |_| SupportProfile::medium());
-        assert_eq!(tasks.len(), 1);
-        assert!(
-            tasks[0].seeds[0].abs_diff_eq(Vec3::new(5.0, 5.0, 10.0), 1e-4),
-            "a seed stands in plate coordinates, got {}",
-            tasks[0].seeds[0]
-        );
-    }
-
-    #[test]
-    fn a_cancelled_run_hands_back_no_points() {
-        let scene = scene_with_a_cube(Transform::from_translation(Vec3::new(0.0, 0.0, 10.0)));
-        let cancel = AtomicBool::new(true);
-        assert_eq!(
-            place(&request(&scene), &cancel, &mut |_| {}),
-            SupportOutcome::Cancelled
-        );
-    }
-
-    #[test]
-    fn a_layer_height_of_zero_comes_back_as_a_failure() {
-        let scene = scene_with_a_cube(Transform::default());
-        let broken = SupportRequest {
-            layer_height_mm: 0.0,
-            ..request(&scene)
-        };
-        let SupportOutcome::Failed(message) = placed(&broken) else {
-            panic!("a layer height of zero cannot cut a stack");
-        };
-        assert!(message.contains("cannot slice the model"), "got {message}");
-    }
-
-    #[test]
-    fn a_run_reports_its_way_to_the_end() {
-        let scene = scene_with_a_cube(Transform::from_translation(Vec3::new(0.0, 0.0, 10.0)));
-        let mut fractions = Vec::new();
-        place(&request(&scene), &AtomicBool::new(false), &mut |fraction| {
-            fractions.push(fraction);
-        });
-
-        assert_eq!(fractions.last(), Some(&1.0), "the run finishes at the end");
-        assert!(
-            fractions.windows(2).all(|pair| pair[0] <= pair[1]),
-            "progress never runs backwards"
-        );
-    }
-
-    #[test]
-    fn a_worker_that_dies_without_an_outcome_is_a_failure() {
-        let (sender, reports) = mpsc::channel();
-        let mut job = SupportJob {
-            reports,
-            cancel: Arc::new(AtomicBool::new(false)),
-            fraction: None,
-        };
-        assert_eq!(job.poll(), None, "an empty channel means still running");
-
-        drop(sender);
-        let Some(SupportOutcome::Failed(message)) = job.poll() else {
-            panic!("a dead worker must end the run");
-        };
-        assert!(message.contains("stopped"), "got {message}");
-    }
-
-    #[test]
-    fn a_cancelling_job_says_so_instead_of_a_percentage() {
-        let (_sender, reports) = mpsc::channel();
-        let job = SupportJob {
-            reports,
-            cancel: Arc::new(AtomicBool::new(false)),
-            fraction: Some(0.5),
-        };
-        assert_eq!(job.label(), "Placing supports, 50 %");
-
-        job.cancel();
-        assert!(job.is_cancelling());
-        assert_eq!(job.label(), "Cancelling");
-    }
-
-    /// The bar runs rather than standing at nought while the first stack is cut.
-    #[test]
-    fn a_run_with_nothing_reported_yet_has_no_share_to_show() {
-        let (_sender, reports) = mpsc::channel();
-        let job = SupportJob {
-            reports,
-            cancel: Arc::new(AtomicBool::new(false)),
-            fraction: None,
-        };
-        assert_eq!(job.fraction(), None);
-        assert_eq!(job.label(), "Cutting the plate...");
-    }
-}
+mod tests;

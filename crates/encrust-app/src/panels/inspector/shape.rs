@@ -1,70 +1,50 @@
-use anyhow::Context as _;
 use printer_profiles::{Raft, SupportProfile};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use super::scope;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::{Group, saved_as};
-use crate::settings::keep_support;
 use crate::supports::own_raft_shown;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, icon_button, secondary_button, section, subheading,
-    subheading_with_switch, theme,
+    Segment, Segmented, hint, icon, kept, secondary_button, section, subheading,
+    subheading_with_switch,
 };
 
 /// The groups of the profile's fields a part is drawn from, tip down to plate.
 fn groups(part: Part) -> &'static [Group] {
     match part {
         Part::Tip => &[Group::Top],
-        Part::Body => &[Group::Main, Group::Branching],
+        Part::Body => &[Group::Main, Group::Branching, Group::Grid],
         Part::Base => &[Group::Bottom],
         Part::Raft => &[Group::Raft],
         Part::Brace => &[Group::Bracing],
     }
 }
 
-/// The shape of the supports in the group in hand, part by part, and the saved profile it
-/// is built to.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    scope::editing_supports(window, |window| shape(ui, window));
-}
-
-/// The profile the picked models' supports are built to, to be chosen, saved and opened
-/// for editing from any tool that places supports.
-pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
+/// The shape of the supports in the group in hand, part by part. The raft shown is lent to
+/// the profile while drawn so the profile's own never moves (`docs/decisions/0253`).
+pub(super) fn sections(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
-        section(ui, &tr!("table-profile"), None, |ui| {
-            describe(ui, &tr!("shape-profile-help"));
-            profile_picker(ui, window, false);
+        section(ui, &tr!("shape-part"), None, |ui| {
+            let raft = own_raft_shown(&window.doc.scene).unwrap_or(window.tools.supports.raft);
+            let profiles_own = std::mem::replace(&mut window.tools.supports.profile.raft, raft);
+            parts(ui, window, profiles_own);
+            let edited = std::mem::replace(&mut window.tools.supports.profile.raft, profiles_own);
+            if edited != raft {
+                window
+                    .tools
+                    .supports
+                    .keep_raft(edited, &mut window.doc.scene);
+            }
         });
     });
 }
 
-fn shape(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, &tr!("table-profile"), None, |ui| {
-        describe(ui, &tr!("shape-profile-help"));
-        profile_picker(ui, window, true);
-    });
-    section(ui, &tr!("shape-part"), None, |ui| {
-        // The picked model's raft, or the plate's, lent to the profile while it is drawn so
-        // the profile's own never moves. See `docs/decisions/0253`.
-        let raft = window.tools.supports.raft_shown(&window.doc.scene);
-        let profiles_own = std::mem::replace(&mut window.tools.supports.profile.raft, raft);
-        parts(ui, window, profiles_own);
-        let edited = std::mem::replace(&mut window.tools.supports.profile.raft, profiles_own);
-        if edited != raft {
-            window
-                .tools
-                .supports
-                .keep_raft(edited, &mut window.doc.scene);
-        }
-    });
-}
-
 /// The parts of a support, one at a time, and the numbers each is built to.
-/// `profiles_raft` is the raft the profile in hand was saved with, which the one being
-/// shown can be set back to.
+/// `profiles_raft` is the raft the profile was saved with, which the shown one can reset to.
 fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
     {
         let plate = own_raft_shown(&window.doc.scene).map(|_| window.tools.supports.raft);
@@ -139,10 +119,10 @@ fn raft_owner(
 /// plate, under `key`.
 fn kept_switch<T>(ui: &mut egui::Ui, key: &str, choices: &[(T, String)]) -> T
 where
-    T: Copy + Default + PartialEq + Send + Sync + 'static,
+    T: Copy + Default + PartialEq + Serialize + DeserializeOwned,
 {
     let id = ui.id().with(key);
-    let mut chosen = ui.data(|data| data.get_temp::<T>(id)).unwrap_or_default();
+    let mut chosen = kept::get::<T>(ui.ctx(), id).unwrap_or_default();
     let segments: Vec<Segment<'_, T>> = choices
         .iter()
         .map(|(value, label)| Segment::new(*value, label.as_str()))
@@ -150,113 +130,6 @@ where
     Segmented::new(&segments)
         .width(ui.available_width())
         .show(ui, &mut chosen);
-    ui.data_mut(|data| data.insert_temp(id, chosen));
+    kept::set(ui.ctx(), id, &chosen);
     chosen
-}
-
-/// Which saved profile the group in hand is built to, and the way to the screen where
-/// profiles are made, edited and thrown away.
-fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
-    let catalogue = &window.machine.slicing.catalogue;
-    let current = &window.tools.supports.profile;
-    let matching = catalogue
-        .supports()
-        .find(|entry| entry.profile == *current)
-        .map(|entry| entry.id.clone());
-    let shown = match &matching {
-        Some(_) => current.name.clone(),
-        None => tr!("shape-edited", name = current.name.clone()),
-    };
-
-    let mut picked = None;
-    let mut manage = false;
-    // The way to the profiles' own screen is on the Shape tool, where they are edited.
-    let beside = if with_manage {
-        theme::ICON_SIZE + theme::ITEM_GAP
-    } else {
-        0.0
-    };
-    ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("support-profile")
-            .width((ui.available_width() - beside).max(80.0))
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                for entry in catalogue.supports() {
-                    let chosen = matching.as_deref() == Some(entry.id.as_str());
-                    if ui.selectable_label(chosen, &entry.profile.name).clicked() {
-                        picked = Some(entry.profile.clone());
-                    }
-                }
-            });
-        if with_manage {
-            manage = icon_button(ui, icon::SETTINGS, &tr!("shape-edit-profiles")).clicked();
-        }
-    });
-
-    // Not the numbers in hand: another profile is another kind of support, and what
-    // stands stays as it was built. See `docs/decisions/0247`.
-    if picked.is_some() {
-        window.tools.supports.chosen = picked;
-    }
-    // Both always there, and dead while there is nothing to save: a button that comes and
-    // goes moves everything under it.
-    let edited = matching.is_none();
-    let source = saved_as(
-        &window.machine.slicing.catalogue,
-        &window.tools.supports.profile,
-    )
-    .map(|entry| entry.id.clone());
-    let (mut save, mut save_as) = (false, false);
-    ui.columns(2, |columns| {
-        save = columns[0]
-            .add_enabled_ui(edited && source.is_some(), |ui| {
-                secondary_button(ui, icon::SAVE, &tr!("shape-save"))
-                    .on_hover_text(tr!("shape-save-tooltip"))
-                    .clicked()
-            })
-            .inner;
-        save_as = columns[1]
-            .add_enabled_ui(edited, |ui| {
-                secondary_button(ui, icon::SAVE, &tr!("shape-save-as-new"))
-                    .on_hover_text(tr!("shape-save-as-new-tooltip"))
-                    .clicked()
-            })
-            .inner;
-    });
-
-    let profile = window.tools.supports.profile.clone();
-    if let Some(id) = source.filter(|_| save) {
-        let kept = window
-            .machine
-            .slicing
-            .catalogue
-            .save_support(&id, &profile)
-            .context(tr!("support-cannot-save"));
-        if window
-            .machine
-            .status
-            .report(&tr!("shape-saved"), kept)
-            .is_some()
-        {
-            window.tools.supports.saved = Some(profile.clone());
-        }
-    }
-    if save_as {
-        let kept = keep_support(&mut window.machine.slicing.catalogue, &profile)
-            .context(tr!("support-cannot-save"));
-        if window
-            .machine
-            .status
-            .report(&tr!("shape-saved"), kept)
-            .is_some()
-        {
-            manage = true;
-        }
-    }
-    if manage {
-        window
-            .machine
-            .settings
-            .open_supports(&window.machine.slicing.catalogue, &profile);
-    }
 }

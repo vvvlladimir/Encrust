@@ -107,39 +107,7 @@ mod tests {
 
     /// An axis-aligned box from `low` to `high`, wound outward.
     fn cube(low: Vec3, high: Vec3) -> Mesh {
-        let corner = |x: bool, y: bool, z: bool| {
-            Vec3::new(
-                if x { high.x } else { low.x },
-                if y { high.y } else { low.y },
-                if z { high.z } else { low.z },
-            )
-        };
-        Mesh::new(
-            vec![
-                corner(false, false, false),
-                corner(true, false, false),
-                corner(true, true, false),
-                corner(false, true, false),
-                corner(false, false, true),
-                corner(true, false, true),
-                corner(true, true, true),
-                corner(false, true, true),
-            ],
-            vec![
-                [0, 2, 1],
-                [0, 3, 2],
-                [4, 5, 6],
-                [4, 6, 7],
-                [0, 1, 5],
-                [0, 5, 4],
-                [1, 2, 6],
-                [1, 6, 5],
-                [2, 3, 7],
-                [2, 7, 6],
-                [3, 0, 4],
-                [3, 4, 7],
-            ],
-        )
+        core_geometry::cuboid(low, high)
     }
 
     fn joined(parts: &[Mesh]) -> Mesh {

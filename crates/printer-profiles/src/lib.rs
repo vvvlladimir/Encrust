@@ -1,6 +1,7 @@
 //! Printer hardware descriptions, material exposure settings, support shapes and named
 //! tool settings, stored as TOML.
 
+mod auto;
 mod catalogue;
 mod compensation;
 mod error;
@@ -15,7 +16,10 @@ mod stated;
 mod store;
 mod support;
 
-pub use catalogue::{Catalogue, Entry, Kind, PROFILE_DIR_VAR, Source, is_valid_id, user_dir};
+pub use auto::{AUTO_SIZES, AutoProfile};
+pub use catalogue::{
+    Catalogue, Entry, Kind, PROFILE_DIR_VAR, Source, Unreadable, is_valid_id, user_dir,
+};
 pub use compensation::{Compensation, layer_time_between, shrink_pct_between};
 pub use error::ProfileError;
 pub use exchange::unique_id;
@@ -33,6 +37,7 @@ pub use stated::{
 };
 pub use store::{DirStore, ProfileStore};
 pub use support::{
-    BottomSegment, Bracing, Branching, ContactShape, MiddleSegment, PlatformShape, Raft, RaftShape,
-    RaftStyle, SmallPillar, SupportProfile, TipSegment, TopSegment,
+    BottomSegment, BracePattern, BraceZone, Bracing, BracingPreset, Branching, ContactShape, Grid,
+    IslandSpacing, MiddleSegment, PlatformShape, Raft, RaftShape, RaftStyle, STOCK_SUPPORT,
+    SmallPillar, SupportProfile, TipSegment, TopSegment,
 };

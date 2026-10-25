@@ -96,7 +96,9 @@ pub fn import(
     match kind {
         Kind::Hollow => catalogue.import_preset::<HollowState>(kind, text, path),
         Kind::Drain => catalogue.import_preset::<DrainState>(kind, text, path),
-        Kind::Printer | Kind::Resin | Kind::Support => catalogue.import(kind, text, path, printer),
+        Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => {
+            catalogue.import(kind, text, path, printer)
+        }
     }
 }
 

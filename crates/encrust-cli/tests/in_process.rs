@@ -1,8 +1,5 @@
-//! The CLI driven through its library rather than by spawning the binary.
-//!
-//! What this pins down is that the flags a user types reach the same
-//! `core_pipeline::write` the window calls; `cli.rs` covers the process surface — exit
-//! codes, stdout, and what a broken invocation prints.
+//! The CLI driven through its library: flags reach the `core_pipeline::write` the window calls.
+//! `cli.rs` covers the process surface.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -63,9 +60,8 @@ fn temp(name: &str, extension: &str) -> PathBuf {
     ))
 }
 
-/// `encrust slice` as a user would type it, parsed the way `main` parses it and run
-/// until `stop` is asked for. Every run names a resin of its own: the catalogue ships
-/// none, so a machine without one is refused (ADR 0196).
+/// `encrust slice` as a user would type it, run until `stop` is asked for. Every run names its own
+/// resin: the catalogue ships none (ADR 0196).
 fn slice_until(arguments: &[&str], stop: &Stop) -> anyhow::Result<Exit> {
     let resin = test_resin();
     let mut argv = vec!["encrust", "slice"];

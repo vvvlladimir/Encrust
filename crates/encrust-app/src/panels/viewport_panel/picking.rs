@@ -3,12 +3,12 @@
 
 use core_supports::{Grab, Profiles, SupportTree, grab_along};
 
-use core_geometry::{PlacedHit, Ray, Vec3, raycast_placed};
+use core_geometry::{PlacedHit, Ray, Vec3};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
 use crate::panels::{Window, section};
-use crate::pick::{pick, pick_material, pick_surface, ray_through};
+use crate::pick::{pick, pick_material, pick_surface, ray_through, seen_along};
 use crate::scene::{ObjectId, Scene};
 
 /// The model under the cursor through the section this frame shows; see [`pick`].
@@ -175,12 +175,8 @@ pub(super) fn select_under_cursor(
     }
 }
 
-/// Whether this click only picks the model it landed on, which is what a click outside
-/// the selection does: a tool works on what is picked, so the first click on another part
-/// changes what is aimed at and the next one acts on it. See `docs/decisions/0193`.
-///
-/// With nothing picked a tool has the whole plate (ADR 0101), so there is nothing to aim
-/// and the click goes through.
+/// Whether this click only picks the model it landed on (outside the selection), so the next
+/// click acts on it (`docs/decisions/0193`). With nothing picked the click goes through (ADR 0101).
 pub(super) fn takes_the_pick(
     window: &mut Window,
     viewport: egui::Rect,
@@ -200,9 +196,8 @@ pub(super) fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
     hit.is_some_and(|id| scene.has_selection() && !scene.is_selected(id))
 }
 
-/// How much further along the ray than the model's surface a part may be met and still
-/// be in front of it, millimetres: a part is met on its axis, half its width behind the
-/// side that faces the camera, and a tip is sunk into the surface it holds.
+/// How far past the model's surface along the ray a part may be met and still be in front,
+/// millimetres: parts are met on their axis, and a tip is sunk into its surface.
 const BEHIND_MM: f32 = 1.0;
 
 /// How far a ray through `cursor` may pass a part of a support and still take it,
@@ -224,22 +219,18 @@ pub(super) fn grab_under_cursor(
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
     let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
-    // A support behind a model is not under the cursor, and one of a group left out of
-    // the view is not there to be aimed at.
-    let wall_mm = window
-        .doc
-        .scene
-        .here()
-        .filter_map(|object| raycast_placed(&object.mesh, &object.bvh, object.transform, &ray))
-        .map(|hit| hit.distance)
-        .fold(f32::INFINITY, f32::min);
+    // Only what is seen can be aimed at: not behind a model, cut away or in a hidden group,
+    // but inside a cavity the section opens.
+    let (near_mm, wall_mm) = seen_along(&window.doc.scene, &ray, section::shown(window))?;
     window.doc.scene.here().find_map(|object| {
         let table = window.tools.supports.table_for(object);
         let profiles = Profiles::new(&table)?;
         let hidden = window.tools.supports.hidden();
         let (hit, along_mm) =
             grab_shown(object.supports.trees(), &hidden, &ray, profiles, slack_mm)?;
-        (along_mm <= wall_mm + BEHIND_MM).then_some((object.id, hit))
+        (near_mm - BEHIND_MM..=wall_mm + BEHIND_MM)
+            .contains(&along_mm)
+            .then_some((object.id, hit))
     })
 }
 

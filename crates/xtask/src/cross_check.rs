@@ -1,7 +1,5 @@
-//! The published machine list, read as a check on what was transcribed.
-//!
-//! The list is generated from the same source profiles, so it is a cross-check and never
-//! the source: a panel that disagrees with it is a transcription slip.
+//! The published machine list, read as a check on what was transcribed; it is generated from the
+//! same source profiles, so a disagreeing panel is a transcription slip.
 
 use std::collections::HashMap;
 use std::path::Path;

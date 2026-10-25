@@ -1,23 +1,30 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use core_geometry::{Adjacency, Bvh, Mesh, Region, Scalar, Transform, Vec3};
-use printer_profiles::SupportProfile;
+use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 
-use crate::{
-    Blocked, Part, Placed, Profiles, SupportPoint, SupportTree, columns, grow, mesh_groups,
-};
+use crate::{Clearances, Shaded, SupportPoint, SupportTree};
 
-/// A transform this close to singular has flattened its model, and a click on it cannot
-/// be mapped back into the model's own space.
-const SINGULAR: f32 = 1e-12;
+mod build;
+mod frozen;
+mod growth;
+mod paint;
+mod points;
+use build::Built;
+use growth::Forest;
+pub use growth::{Grown, Growth};
+use paint::Patches;
 
-/// The supports of one model: where they touch it, what is painted on it, and the trees
-/// and meshes built from that; see `docs/decisions/0129`.
-///
-/// Points are kept in the model's own space so that they stay on the surface when the
-/// model is moved, turned or scaled. Everything derived from them is rebuilt whenever the
-/// points, the placement or the profile change, and the mesh is kept behind an `Arc` so
-/// that a viewport caches it on the GPU by address.
+/// The next revision any model's supports take, shared by all of them so that no two
+/// states, even one put back by an undo, are ever stamped alike.
+static REVISIONS: AtomicU64 = AtomicU64::new(1);
+
+fn next_revision() -> u64 {
+    REVISIONS.fetch_add(1, Ordering::Relaxed)
+}
+
+/// The supports of one model: points in model space, paint, and the trees and meshes built
+/// from them (ADR 0129); trees regrow only when points, placement, profile or block change.
 #[derive(Debug, Clone, Default)]
 pub struct ModelSupports {
     points: Vec<SupportPoint>,
@@ -28,49 +35,26 @@ pub struct ModelSupports {
     /// The supports the hand has taken hold of, kept as the trees they are, in the
     /// model's own space. Nothing regrows them; see `docs/decisions/0095`.
     frozen: Vec<SupportTree>,
-    /// The two patches as geometry, kept apart from the columns because a stroke of the
-    /// brush has to show up in the frame it was painted in, and the columns take too long
-    /// to be rebuilt per frame of a drag.
+    /// The two patches as geometry, apart from the columns so a stroke shows in its own frame;
+    /// columns take too long to rebuild per frame.
     patches: Patches,
+    /// The trees last grown from the points, which outlive `built`: growing is the costly
+    /// part of a rebuild, meshing is not.
+    forest: Option<Forest>,
     built: Option<Built>,
     /// The column meshes as they were last built. `built` is dropped by every edit and
     /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
-    drawn: Vec<Arc<Mesh>>,
+    drawn: Vec<Shaded>,
     /// How much of the height the model stands at is its raft's doing, millimetres: what
     /// has to be taken back when the raft goes. See `docs/decisions/0238`.
     raft_lift_mm: Scalar,
+    /// What the trees grow from as it last changed: the points, the blocked patch or the
+    /// surface. Trees grown elsewhere for another revision are stale.
+    revision: u64,
+    /// What the model's clearance sweeps answered, shared with every growth of it so one
+    /// edit re-asks only the beams it moved.
+    clearances: Arc<Clearances>,
 }
-
-#[derive(Debug, Clone)]
-struct Built {
-    /// Every tree standing under the model: the ones grown from the points first, the
-    /// frozen ones after them.
-    trees: Vec<SupportTree>,
-    /// How many of `trees` were grown rather than frozen, which is where the frozen ones
-    /// start and what turns a picked tree into an index into `frozen`.
-    grown: usize,
-    /// One mesh per group, in group order, so that each is drawn in a colour of its own.
-    meshes: Vec<Arc<Mesh>>,
-    transform: Transform,
-    /// The profile of every group as it stood when this was built.
-    table: Vec<SupportProfile>,
-    painted: Region,
-    blocked: Region,
-}
-
-/// The painted patches as they were last drawn, and what they were built from.
-#[derive(Debug, Clone, Default)]
-struct Patches {
-    painted: Option<Arc<Mesh>>,
-    blocked: Option<Arc<Mesh>>,
-    painted_of: Region,
-    blocked_of: Region,
-    transform: Transform,
-}
-
-/// Millimetres a painted patch is drawn off the surface it covers, so that it is not
-/// fighting the model's own faces for the same depth.
-const PATCH_LIFT_MM: Scalar = 0.05;
 
 impl ModelSupports {
     /// The supports a project file was saved with. Everything built from them is left
@@ -88,6 +72,13 @@ impl ModelSupports {
             frozen,
             ..Self::default()
         }
+    }
+
+    /// Drops what was built, so the next refresh builds against a surface that changed
+    /// under the supports: a model hollowed, or solid again.
+    pub fn surface_changed(&mut self) {
+        self.clearances = Arc::default();
+        self.points_changed();
     }
 
     pub fn is_empty(&self) -> bool {
@@ -124,9 +115,9 @@ impl ModelSupports {
             + self
                 .frozen
                 .iter()
-                .filter(|tree| tree.group() == group)
-                .map(SupportTree::tip_count)
-                .sum::<usize>()
+                .flat_map(SupportTree::tip_groups)
+                .filter(|tip| *tip == group)
+                .count()
     }
 
     /// Where every support touches the model, in plate coordinates: the points and the
@@ -152,162 +143,6 @@ impl ModelSupports {
         self.built.as_ref().map_or(&[], |built| &built.trees)
     }
 
-    /// The trees the automatic run grew, in the model's own space: what a project keeps
-    /// so that opening it stands them up again rather than deciding where they go anew.
-    pub fn grown(&self, transform: Transform) -> Vec<SupportTree> {
-        let matrix = transform.to_matrix();
-        let Some(built) = self.built.as_ref() else {
-            return Vec::new();
-        };
-        if matrix.determinant().abs() < SINGULAR {
-            return Vec::new();
-        }
-        let inverse = matrix.inverse();
-        built.trees[..built.grown]
-            .iter()
-            .map(|tree| tree.moved(inverse))
-            .collect()
-    }
-
-    /// Stands `grown` back up beside the frozen trees and meshes them, without growing
-    /// anything: a project carries what the run decided, so opening it decides nothing.
-    pub fn stand(
-        &mut self,
-        grown: &[SupportTree],
-        model: &Mesh,
-        bvh: &Bvh,
-        transform: Transform,
-        table: &[SupportProfile],
-    ) {
-        self.refresh_patches(model, transform);
-        let Some(profiles) = Profiles::new(table) else {
-            return;
-        };
-        let matrix = transform.to_matrix();
-        let standing = grown.len();
-        let mut trees: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
-        trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
-
-        let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(model, bvh, transform).blocking(keep_out.as_ref());
-        let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
-            .into_iter()
-            .map(Arc::new)
-            .collect();
-        self.drawn.clone_from(&meshes);
-        self.built = Some(Built {
-            meshes,
-            trees,
-            grown: standing,
-            transform,
-            table: table.to_vec(),
-            painted: self.painted.clone(),
-            blocked: self.blocked.clone(),
-        });
-    }
-
-    /// Which frozen tree a tree of [`ModelSupports::trees`] is, or `None` when it was
-    /// grown from a point and is nobody's to edit until it has been frozen.
-    pub fn frozen_of(&self, tree: usize) -> Option<usize> {
-        let built = self.built.as_ref()?;
-        tree.checked_sub(built.grown)
-            .filter(|frozen| *frozen < self.frozen.len())
-    }
-
-    /// The trees the hand has taken hold of, in the model's own space.
-    pub fn frozen(&self) -> &[SupportTree] {
-        &self.frozen
-    }
-
-    /// Takes a grown tree out of the automatic run and keeps it as it stands, so that the
-    /// next rebuild cannot undo what is about to be done to it. Answers where it landed
-    /// in [`ModelSupports::frozen`], or `None` when there was nothing to freeze.
-    ///
-    /// The points its tips grew from go with it: a frozen tree carries its own contacts
-    /// and is regrown by nobody.
-    pub fn freeze(&mut self, tree: usize, transform: Transform) -> Option<usize> {
-        if let Some(frozen) = self.frozen_of(tree) {
-            return Some(frozen);
-        }
-        let matrix = transform.to_matrix();
-        if matrix.determinant().abs() < SINGULAR {
-            return None;
-        }
-        let standing = self.built.as_ref()?.trees.get(tree)?.clone();
-
-        let mut taken: Vec<usize> = standing.points().collect();
-        taken.sort_unstable();
-        for point in taken.into_iter().rev() {
-            if point < self.points.len() {
-                self.points.remove(point);
-            }
-        }
-
-        self.frozen.push(standing.moved(matrix.inverse()));
-        self.built = None;
-        Some(self.frozen.len() - 1)
-    }
-
-    /// The frozen tree `frozen`, to be edited in the model's own space.
-    pub fn frozen_mut(&mut self, frozen: usize) -> Option<&mut SupportTree> {
-        self.built = None;
-        self.frozen.get_mut(frozen)
-    }
-
-    /// Hands a frozen tree back to the automatic run: its tips become points again and
-    /// the next rebuild grows them afresh.
-    pub fn thaw(&mut self, frozen: usize, transform: Transform) {
-        if frozen >= self.frozen.len() {
-            return;
-        }
-        let matrix = transform.to_matrix();
-        if matrix.determinant().abs() < SINGULAR {
-            return;
-        }
-        let tree = self.frozen.remove(frozen);
-        for contact in tree.contacts() {
-            self.points
-                .push(SupportPoint::new(contact).in_group(tree.group()));
-        }
-        self.built = None;
-    }
-
-    /// Takes a frozen support away for good.
-    pub fn remove_frozen(&mut self, frozen: usize) {
-        if frozen < self.frozen.len() {
-            self.frozen.remove(frozen);
-            self.built = None;
-        }
-    }
-
-    /// Takes `parts` of a frozen support away with everything they hold up, and the
-    /// whole support when that leaves it nothing to hold or its trunk or foot was named.
-    /// Answers whether the support is still there.
-    pub fn remove_parts(&mut self, frozen: usize, parts: &[Part]) -> bool {
-        let Some(tree) = self.frozen.get(frozen) else {
-            return false;
-        };
-        let whole = parts
-            .iter()
-            .any(|part| matches!(part, Part::Trunk | Part::Foot));
-        let cut: Vec<usize> = parts
-            .iter()
-            .filter_map(|part| match part {
-                Part::Node(node) | Part::Strut(node) => Some(*node),
-                Part::Trunk | Part::Foot => None,
-            })
-            .collect();
-        let left = if whole { None } else { tree.without(&cut) };
-
-        self.built = None;
-        if let Some(left) = left {
-            self.frozen[frozen] = left;
-            return true;
-        }
-        self.frozen.remove(frozen);
-        false
-    }
-
     /// How many tips are being carried. Fewer than the points when one of them has no
     /// room under it.
     pub fn standing(&self) -> usize {
@@ -320,505 +155,19 @@ impl ModelSupports {
         self.built.as_ref().map(|built| built.meshes.as_slice())
     }
 
-    /// The column meshes to draw: the ones last built, which an edit leaves standing
-    /// until the rebuild that follows it. Drawing [`Self::meshes`] instead blinks every
-    /// support out for the frame of each click, and for as long as nothing repaints.
-    pub fn drawn(&self) -> &[Arc<Mesh>] {
+    /// The column meshes to draw: the ones last built, left standing until the rebuild an edit
+    /// follows with; drawing [`Self::meshes`] instead blinks every support out for a frame.
+    pub fn drawn(&self) -> &[Shaded] {
         &self.drawn
     }
 
-    /// The patch painted to be supported, and the patch painted to be left alone, both in
-    /// plate coordinates and both `None` until they have been built.
-    pub fn patches(&self) -> (Option<&Arc<Mesh>>, Option<&Arc<Mesh>>) {
-        (self.patches.painted.as_ref(), self.patches.blocked.as_ref())
-    }
-
-    /// Rebuilds the geometry of the two patches if the paint or the placement has moved
-    /// under them. Cheap next to [`ModelSupports::refresh`]: it copies the painted
-    /// triangles and nothing else, which is what lets a brush stroke show as it is drawn.
-    pub fn refresh_patches(&mut self, model: &Mesh, transform: Transform) {
-        let fresh = self.patches.transform == transform
-            && self.patches.painted_of == self.painted
-            && self.patches.blocked_of == self.blocked;
-        if fresh {
-            return;
-        }
-
-        self.patches = Patches {
-            painted: self
-                .painted
-                .submesh(model, transform, PATCH_LIFT_MM)
-                .map(Arc::new),
-            blocked: self
-                .blocked
-                .submesh(model, transform, PATCH_LIFT_MM)
-                .map(Arc::new),
-            painted_of: self.painted.clone(),
-            blocked_of: self.blocked.clone(),
-            transform,
-        };
-    }
-
-    /// The faces painted to be supported.
-    pub fn painted(&self) -> &Region {
-        &self.painted
-    }
-
-    /// The faces painted to be left alone.
-    pub fn blocked(&self) -> &Region {
-        &self.blocked
-    }
-
-    /// Paints or unpaints the faces within `radius_mm` of `at`, in plate coordinates.
-    /// `blocking` paints the patch supports keep out of rather than the one they fill.
-    pub fn paint(
-        &mut self,
-        placed: &Placed,
-        at: Vec3,
-        radius_mm: Scalar,
-        blocking: bool,
-        marked: bool,
-    ) -> usize {
-        let region = if blocking {
-            &mut self.blocked
-        } else {
-            &mut self.painted
-        };
-        let changed = region.brush(
-            (placed.model, placed.bvh, placed.transform),
-            at,
-            radius_mm,
-            marked,
-        );
-        if changed > 0 {
-            self.built = None;
-        }
-        changed
-    }
-
-    /// Paints the surface the face `seed` belongs to, out to `max_angle_deg` of turn.
-    pub fn paint_face(
-        &mut self,
-        model: &Mesh,
-        adjacency: &Adjacency,
-        seed: usize,
-        max_angle_deg: Scalar,
-        blocking: bool,
-        marked: bool,
-    ) -> usize {
-        let region = if blocking {
-            &mut self.blocked
-        } else {
-            &mut self.painted
-        };
-        let changed = region.flood(model, adjacency, seed, max_angle_deg, marked);
-        if changed > 0 {
-            self.built = None;
-        }
-        changed
-    }
-
-    /// Takes the paint off one of the two patches.
-    pub fn clear_paint(&mut self, blocking: bool) {
-        let region = if blocking {
-            &mut self.blocked
-        } else {
-            &mut self.painted
-        };
-        if !region.is_empty() {
-            region.clear();
-            // Dropped rather than rebuilt: an object with nothing left on it is not asked
-            // to refresh, so a stale patch would stay on screen.
-            self.patches = Patches::default();
-            self.built = None;
-        }
-    }
-
-    /// What placement has to keep out of, or `None` when nothing is painted out of
-    /// bounds.
-    pub fn keep_out(&self, model: &Mesh, transform: Transform) -> Option<Blocked> {
-        Blocked::new(model, &self.blocked, transform)
-    }
-
-    /// Puts a support where the model was clicked. `contact` is in plate coordinates.
-    pub fn add(&mut self, contact: Vec3, transform: Transform, group: u16) {
-        let matrix = transform.to_matrix();
-        if matrix.determinant().abs() < SINGULAR {
-            return;
-        }
-        self.points
-            .push(SupportPoint::new(matrix.inverse().transform_point3(contact)).in_group(group));
-        self.built = None;
-    }
-
-    /// Takes every support built to `group` away with it, and shifts the groups above it
-    /// down. Returns how many supports went.
-    ///
-    /// A group is a shape, so its supports go with it rather than being handed to another
-    /// group to be rebuilt in a shape nobody asked for; the window asks first and the
-    /// history takes it back.
-    pub fn drop_group(&mut self, group: u16) -> usize {
-        let before = self.point_count();
-        self.points.retain(|support| support.group != group);
-        self.frozen.retain(|tree| tree.group() != group);
-        let mut moved = false;
-        for support in &mut self.points {
-            if support.group > group {
-                support.group -= 1;
-                moved = true;
-            }
-        }
-        for tree in &mut self.frozen {
-            if tree.group() > group {
-                tree.set_group(tree.group() - 1);
-                moved = true;
-            }
-        }
-        let gone = before - self.point_count();
-        if gone > 0 || moved {
-            self.built = None;
-        }
-        gone
-    }
-
-    /// Takes away the point a support grew from. Out of range does nothing, which is what
-    /// a click on a support that has since been rebuilt away amounts to.
-    pub fn remove(&mut self, point: usize) {
-        if point < self.points.len() {
-            self.points.remove(point);
-            self.built = None;
-        }
-    }
-
-    /// Takes every support of `group` away and leaves the group itself, and every other
-    /// group's number, as it was. Returns how many supports went.
-    pub fn clear_group(&mut self, group: u16) -> usize {
-        let before = self.point_count();
-        self.points.retain(|support| support.group != group);
-        self.frozen.retain(|tree| tree.group() != group);
-        let gone = before - self.point_count();
-        if gone > 0 {
-            self.built = None;
-        }
-        gone
-    }
-
-    /// Takes every support away: the points and the trees a hand has frozen alike.
-    pub fn clear(&mut self) {
-        self.points.clear();
-        self.frozen.clear();
-        self.built = None;
-    }
-
-    /// Rebuilds the supports if anything they depend on has changed.
-    ///
-    /// Every point is dropped down the model again, which is one ray each through `bvh`,
-    /// the hierarchy of `model`; see `docs/decisions/0036`. The tips that came through
-    /// are then merged into shared trunks; see `docs/decisions/0040`.
-    pub fn refresh(
-        &mut self,
-        model: &Mesh,
-        bvh: &Bvh,
-        transform: Transform,
-        table: &[SupportProfile],
-    ) {
-        self.refresh_patches(model, transform);
-        let Some(profiles) = Profiles::new(table) else {
-            return;
-        };
-        let fresh = self.built.as_ref().is_some_and(|built| {
-            built.transform == transform
-                && built.table == table
-                && built.painted == self.painted
-                && built.blocked == self.blocked
-        });
-        if fresh {
-            return;
-        }
-
-        let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(model, bvh, transform).blocking(keep_out.as_ref());
-        let columns = columns(&self.points, &placed, profiles);
-        let mut trees = grow(&columns, &placed, profiles);
-        let grown = trees.len();
-
-        // A frozen tree is kept in the model's own space, so it rides the placement the
-        // same way a point does; nothing else is asked of it.
-        let matrix = transform.to_matrix();
-        trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
-
-        let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
-            .into_iter()
-            .map(Arc::new)
-            .collect();
-        self.drawn.clone_from(&meshes);
-        self.built = Some(Built {
-            meshes,
-            trees,
-            grown,
-            transform,
-            table: table.to_vec(),
-            painted: self.painted.clone(),
-            blocked: self.blocked.clone(),
-        });
+    /// Draws `shaded` from now on and answers its meshes, for [`Built`] to keep.
+    fn draw(&mut self, shaded: Vec<Shaded>) -> Vec<Arc<Mesh>> {
+        let meshes = shaded.iter().map(|group| Arc::clone(&group.mesh)).collect();
+        self.drawn = shaded;
+        meshes
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use core_geometry::Quat;
-    use std::f32::consts::FRAC_PI_2;
-
-    fn profile() -> SupportProfile {
-        crate::tests::profile()
-    }
-
-    /// An empty model, so every column runs all the way to the plate.
-    fn nothing() -> Mesh {
-        Mesh::default()
-    }
-
-    /// Rebuilds against a model, building its hierarchy the way the scene does.
-    fn refresh(supports: &mut ModelSupports, model: &Mesh, transform: Transform) {
-        supports.refresh(
-            model,
-            &Bvh::build(model),
-            transform,
-            std::slice::from_ref(&profile()),
-        );
-    }
-
-    /// Where the one support of `supports` meets the model, in plate coordinates.
-    fn contact_of(supports: &ModelSupports) -> Vec3 {
-        supports.trees()[0]
-            .nodes()
-            .iter()
-            .find(|node| node.is_leaf())
-            .expect("a support carries a tip")
-            .position
-    }
-
-    fn with_one_support(transform: Transform) -> ModelSupports {
-        let mut supports = ModelSupports::default();
-        supports.add(Vec3::new(10.0, 10.0, 20.0), transform, 0);
-        refresh(&mut supports, &nothing(), transform);
-        supports
-    }
-
-    #[test]
-    fn a_new_object_has_no_supports_and_no_mesh() {
-        let supports = ModelSupports::default();
-        assert!(supports.is_empty());
-        assert!(supports.meshes().is_none());
-        assert!(supports.trees().is_empty());
-    }
-
-    #[test]
-    fn clearing_one_group_leaves_the_others_and_their_numbers() {
-        let mut supports = ModelSupports::default();
-        for (x, group) in [(1.0, 0), (2.0, 1), (3.0, 2), (4.0, 1)] {
-            supports.add(Vec3::new(x, 0.0, 10.0), Transform::default(), group);
-        }
-
-        assert_eq!(supports.clear_group(1), 2);
-
-        let left: Vec<u16> = supports.points().iter().map(|point| point.group).collect();
-        assert_eq!(left, vec![0, 2], "group 2 is still group 2");
-        assert_eq!(supports.clear_group(1), 0, "nothing is left in it to take");
-    }
-
-    #[test]
-    fn clearing_takes_the_supports_a_hand_froze_as_well() {
-        let mut supports = with_one_support(Transform::default());
-        supports
-            .freeze(0, Transform::default())
-            .expect("the one tree is there to freeze");
-        assert_eq!(supports.frozen().len(), 1);
-
-        supports.clear();
-        refresh(&mut supports, &nothing(), Transform::default());
-
-        assert!(supports.frozen().is_empty());
-        assert_eq!(supports.standing(), 0, "nothing is left standing");
-    }
-
-    #[test]
-    fn a_placed_support_becomes_a_column_with_geometry() {
-        let supports = with_one_support(Transform::default());
-        assert_eq!(supports.point_count(), 1);
-        assert_eq!(supports.standing(), 1);
-        assert!(!supports.meshes().expect("a column was built")[0].is_empty());
-    }
-
-    #[test]
-    fn a_contact_is_stored_in_the_models_own_space() {
-        let transform = Transform::from_translation(Vec3::new(50.0, 0.0, 0.0));
-        let supports = with_one_support(transform);
-
-        // Clicked at x = 10 on a model standing at x = 50, so the anchor is 40 mm back
-        // along the model's own x, and comes out at x = 10 again when it is rebuilt.
-        assert!(contact_of(&supports).abs_diff_eq(Vec3::new(10.0, 10.0, 20.0), 1e-4));
-    }
-
-    #[test]
-    fn a_support_follows_the_model_that_is_moved_under_it() {
-        let mut supports = with_one_support(Transform::default());
-        let moved = Transform::from_translation(Vec3::new(5.0, 0.0, 0.0));
-        refresh(&mut supports, &nothing(), moved);
-
-        assert!(
-            (contact_of(&supports).x - 15.0).abs() < 1e-4,
-            "the anchor travelled with the model"
-        );
-    }
-
-    #[test]
-    fn a_support_follows_the_model_that_is_turned_under_it() {
-        let mut supports = with_one_support(Transform::default());
-        let turned = Transform {
-            rotation: Quat::from_rotation_z(FRAC_PI_2),
-            ..Transform::default()
-        };
-        refresh(&mut supports, &nothing(), turned);
-
-        // A quarter turn about z maps (10, 10) onto (-10, 10).
-        let contact = contact_of(&supports);
-        assert!(
-            contact.abs_diff_eq(Vec3::new(-10.0, 10.0, 20.0), 1e-4),
-            "expected the anchor to turn with the model, got {contact}"
-        );
-    }
-
-    #[test]
-    fn a_thicker_profile_rebuilds_the_mesh() {
-        let mut supports = with_one_support(Transform::default());
-        let thin = supports.meshes().expect("built")[0].clone();
-
-        supports.refresh(
-            &nothing(),
-            &Bvh::default(),
-            Transform::default(),
-            std::slice::from_ref(&SupportProfile::heavy()),
-        );
-        let thick = &supports.meshes().expect("rebuilt")[0];
-        assert!(
-            !Arc::ptr_eq(&thin, thick),
-            "a new profile must produce a new mesh"
-        );
-    }
-
-    #[test]
-    fn an_edit_leaves_the_last_columns_to_draw_until_they_are_rebuilt() {
-        let transform = Transform::default();
-        let mut supports = with_one_support(transform);
-        let before = supports.drawn().to_vec();
-        assert!(before.iter().any(|mesh| !mesh.is_empty()), "one column");
-
-        supports.add(Vec3::new(3.0, 3.0, 10.0), transform, 0);
-        assert!(supports.meshes().is_none(), "what is built is out of date");
-        assert_eq!(
-            supports.drawn().len(),
-            before.len(),
-            "and the viewport still has the last columns to draw"
-        );
-        assert!(
-            supports
-                .drawn()
-                .iter()
-                .zip(&before)
-                .all(|(now, then)| Arc::ptr_eq(now, then))
-        );
-
-        refresh(&mut supports, &nothing(), transform);
-        let faces =
-            |meshes: &[Arc<Mesh>]| meshes.iter().map(|mesh| mesh.faces.len()).sum::<usize>();
-        assert!(
-            faces(supports.drawn()) > faces(&before),
-            "the rebuild draws the second column as well"
-        );
-    }
-
-    #[test]
-    fn nothing_changing_keeps_the_mesh_the_viewport_has_cached() {
-        let mut supports = with_one_support(Transform::default());
-        let first = supports.meshes().expect("built")[0].clone();
-
-        refresh(&mut supports, &nothing(), Transform::default());
-        assert!(
-            Arc::ptr_eq(&first, &supports.meshes().expect("still built")[0]),
-            "an unchanged object must not churn the GPU cache every frame"
-        );
-    }
-
-    #[test]
-    fn dropping_a_group_takes_its_supports_with_it() {
-        let mut supports = ModelSupports::default();
-        supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 0);
-        supports.add(Vec3::new(20.0, 10.0, 20.0), Transform::default(), 1);
-
-        assert_eq!(supports.drop_group(1), 1, "the group held one support");
-        assert_eq!(supports.point_count(), 1);
-        assert!(
-            supports.points().iter().all(|point| point.group == 0),
-            "the support of the group that stayed is untouched"
-        );
-    }
-
-    #[test]
-    fn dropping_a_group_shifts_the_groups_above_it_down() {
-        let mut supports = ModelSupports::default();
-        supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 1);
-        supports.add(Vec3::new(20.0, 10.0, 20.0), Transform::default(), 2);
-
-        assert_eq!(supports.drop_group(1), 1);
-        assert_eq!(
-            supports.points()[0].group,
-            1,
-            "the group above the one taken away moved down into its number"
-        );
-    }
-
-    #[test]
-    fn removing_a_point_drops_its_support() {
-        let mut supports = with_one_support(Transform::default());
-        supports.remove(0);
-        refresh(&mut supports, &nothing(), Transform::default());
-
-        assert!(supports.is_empty());
-        assert!(supports.trees().is_empty());
-        assert!(
-            supports
-                .meshes()
-                .expect("an empty mesh is still built")
-                .iter()
-                .all(|mesh| mesh.is_empty())
-        );
-    }
-
-    #[test]
-    fn removing_a_point_that_is_not_there_changes_nothing() {
-        let mut supports = with_one_support(Transform::default());
-        supports.remove(7);
-        assert_eq!(supports.point_count(), 1);
-    }
-
-    #[test]
-    fn clearing_takes_every_support_away() {
-        let mut supports = with_one_support(Transform::default());
-        supports.add(Vec3::new(20.0, 20.0, 20.0), Transform::default(), 0);
-        supports.clear();
-        assert!(supports.is_empty());
-    }
-
-    #[test]
-    fn a_click_on_a_flattened_model_places_nothing() {
-        let flat = Transform {
-            scale: Vec3::new(1.0, 1.0, 0.0),
-            ..Transform::default()
-        };
-        let mut supports = ModelSupports::default();
-        supports.add(Vec3::new(10.0, 10.0, 20.0), flat, 0);
-        assert!(supports.is_empty());
-    }
-}
+mod tests;

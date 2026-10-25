@@ -4,10 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Landing;
 
-/// One joint of a support, in plate coordinates.
-///
-/// A node hangs from the node below it, so the parent link always points downwards and
-/// the tree has its root at the bottom.
+/// One joint of a support, in plate coordinates, hanging from the node below it, so the parent
+/// link points down and the root is at the bottom.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TreeNode {
     pub position: Vec3,
@@ -17,6 +15,10 @@ pub struct TreeNode {
     pub parent: Option<usize>,
     /// Index of the `SupportPoint` this node is the contact of, when it is one.
     pub point: Option<usize>,
+    /// The group this tip's head is built to when it is not the tree's own: a tip merged
+    /// into the trunk of a group with a heavier head. See `docs/decisions/0325`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<u16>,
 }
 
 impl TreeNode {
@@ -25,11 +27,8 @@ impl TreeNode {
     }
 }
 
-/// One support: the tips it holds, the struts that carry them down, and where the trunk
-/// underneath them comes to rest.
-///
-/// A support with no branching is a tree of one node, which is the vertical column of
-/// step 7a. See `docs/decisions/0040` and `docs/design/supports.md`.
+/// One support: the tips it holds, the struts carrying them down and where the trunk rests;
+/// without branching a tree of one node (ADR 0040, `docs/design/supports.md`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupportTree {
     nodes: Vec<TreeNode>,
@@ -50,27 +49,123 @@ impl SupportTree {
         }
     }
 
+    /// Builds the whole tree to `group`, every head of it included.
     pub fn set_group(&mut self, group: u16) {
         self.group = group;
+        for node in &mut self.nodes {
+            node.head = None;
+        }
     }
 
-    /// Which group's profile the tree is built to.
+    /// Builds the trunk to `group` and leaves each head to the group it names, forgetting
+    /// the names that are now the tree's own.
+    pub(crate) fn settle(&mut self, group: u16) {
+        self.group = group;
+        for node in &mut self.nodes {
+            node.head = node.head.filter(|head| *head != group);
+        }
+    }
+
+    /// Which group's profile the tree is built to: its trunk, its foot and every head
+    /// that names no other.
     pub fn group(&self) -> u16 {
         self.group
+    }
+
+    /// Which group the head on `node` is built to.
+    pub fn head_group(&self, node: usize) -> u16 {
+        self.nodes
+            .get(node)
+            .and_then(|node| node.head)
+            .unwrap_or(self.group)
+    }
+
+    /// The group of every tip the tree carries, in the order its nodes are stored.
+    pub fn tip_groups(&self) -> impl Iterator<Item = u16> + '_ {
+        self.nodes
+            .iter()
+            .filter(|node| node.is_leaf())
+            .map(|node| node.head.unwrap_or(self.group))
+    }
+
+    /// The group each node is drawn in: a tip its own head's, any other the heaviest head hanging
+    /// from it, so a lighter branch keeps its colour down to a heavier one.
+    pub(crate) fn node_groups(&self, profiles: crate::Profiles) -> Vec<u16> {
+        let mut groups: Vec<Option<u16>> = vec![None; self.nodes.len()];
+        for (leaf, node) in self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.is_leaf())
+        {
+            let head = node.head.unwrap_or(self.group);
+            let mut at = Some(leaf);
+            // No longer than the tree is deep; the count guards a file with a loop in it.
+            for _ in 0..=self.nodes.len() {
+                let Some(here) = at else {
+                    break;
+                };
+                groups[here] = Some(groups[here].map_or(head, |was| profiles.heavier(was, head)));
+                at = self.nodes[here].parent;
+            }
+        }
+        groups
+            .into_iter()
+            .map(|group| group.unwrap_or(self.group))
+            .collect()
+    }
+
+    /// The tree without the tips built to `group`, or `None` when its trunk is that
+    /// group's or nothing is left to hold.
+    #[must_use]
+    pub fn without_group(&self, group: u16) -> Option<Self> {
+        if self.group == group {
+            return None;
+        }
+        let cut: Vec<usize> = (0..self.nodes.len())
+            .filter(|node| self.nodes[*node].is_leaf() && self.head_group(*node) == group)
+            .collect();
+        self.without(&cut)
+    }
+
+    /// Moves every group the tree names above `group` one down, as dropping `group`
+    /// does. Answers whether anything moved.
+    pub fn close_up_over(&mut self, group: u16) -> bool {
+        let mut moved = false;
+        if self.group > group {
+            self.group -= 1;
+            moved = true;
+        }
+        for head in self.nodes.iter_mut().filter_map(|node| node.head.as_mut()) {
+            if *head > group {
+                *head -= 1;
+                moved = true;
+            }
+        }
+        moved
     }
 
     /// Bends the tree onto a knee: a new root at `position` that the old one hangs from,
     /// for a support that had to lean before it found room to stand.
     pub(crate) fn stand_on_knee(&mut self, position: Vec3, radius_mm: Scalar) {
+        self.bend_under(self.root, position, radius_mm);
+    }
+
+    /// Bends the strut under `node` at a new joint at `position`, which hangs from what
+    /// `node` hung from; under the root, the joint becomes the root.
+    pub(crate) fn bend_under(&mut self, node: usize, position: Vec3, radius_mm: Scalar) {
         let knee = self.nodes.len();
         self.nodes.push(TreeNode {
             position,
             radius_mm,
-            parent: None,
+            parent: self.nodes[node].parent,
             point: None,
+            head: None,
         });
-        self.nodes[self.root].parent = Some(knee);
-        self.root = knee;
+        self.nodes[node].parent = Some(knee);
+        if node == self.root {
+            self.root = knee;
+        }
     }
 
     /// Bends the tree onto a knee at `position` and stands it on `landing` from there.
@@ -102,16 +197,21 @@ impl SupportTree {
         self.nodes.iter().filter_map(|node| node.point)
     }
 
+    /// Renumbers the points this tree holds as the points list reads once `taken`, sorted,
+    /// have gone from it.
+    pub(crate) fn close_up_points(&mut self, taken: &[usize]) {
+        for point in self.nodes.iter_mut().filter_map(|node| node.point.as_mut()) {
+            *point -= taken.partition_point(|before| *before < *point);
+        }
+    }
+
     /// How many tips the tree carries. One for a plain vertical column.
     pub fn tip_count(&self) -> usize {
         self.nodes.iter().filter(|node| node.is_leaf()).count()
     }
 
-    /// The same tree with every position put through `matrix`, which is what carries a
-    /// tree the hand has edited between the model's own space and the plate.
-    ///
-    /// Radii are left alone: a support keeps the thickness its profile asks for however
-    /// the model it stands under is scaled.
+    /// The same tree with every position put through `matrix`, between model space and plate;
+    /// radii are left alone so profile thickness survives model scaling.
     #[must_use]
     pub fn moved(&self, matrix: Mat4) -> Self {
         let mut moved = self.clone();
@@ -122,6 +222,7 @@ impl SupportTree {
         moved.landing.pad_offset = matrix
             .transform_vector3(moved.landing.pad_offset.extend(0.0))
             .truncate();
+        moved.landing.pad_cut = moved.landing.pad_cut.map(|cut| cut.moved(matrix));
         moved
     }
 
@@ -139,6 +240,7 @@ impl SupportTree {
             base,
             on_model: false,
             pad_offset: Vec2::ZERO,
+            pad_cut: None,
             on_support: false,
         };
     }
@@ -157,11 +259,8 @@ impl SupportTree {
         self.landing = landing;
     }
 
-    /// The tree without the nodes in `cut` and everything they hold up, or `None` when
-    /// that leaves it nothing to hold: the root went, or every tip did.
-    ///
-    /// A joint left with nothing above it goes too, and so on down, so no stub is left
-    /// reaching for a tip that is not there.
+    /// The tree without the nodes in `cut` and everything they hold up, or `None` when nothing is
+    /// left to hold: the root went or every tip did; a joint left with nothing above goes too.
     #[must_use]
     pub fn without(&self, cut: &[usize]) -> Option<Self> {
         let mut kept: Vec<bool> = (0..self.nodes.len())
@@ -252,7 +351,7 @@ impl SupportTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{profile, trees_on};
+    use crate::fixtures::{profile, trees_on};
     use crate::{Profiles, SupportPoint};
     use core_geometry::{Mesh, Transform};
 
@@ -319,6 +418,43 @@ mod tests {
             .expect("the neck hangs from the joint the pair meets at");
         let left = tree.without(&[joint]).expect("the third tip is still held");
         assert_eq!(left.points().collect::<Vec<_>>(), vec![2]);
+    }
+
+    /// A tip of group 0 and a tip of group 1, which has the heavier head and the same
+    /// width, grown into one trunk built to group 1.
+    fn mixed() -> SupportTree {
+        let mut heavy = profile();
+        heavy.tip.contact_diameter_mm += 0.2;
+        let table = [profile(), heavy];
+        let points = [
+            SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
+            SupportPoint::new(Vec3::new(13.0, 10.0, 20.0)).in_group(1),
+        ];
+        let profiles = Profiles::new(&table).expect("two groups");
+        let mut trees = trees_on(&points, &Mesh::default(), Transform::default(), profiles);
+        assert_eq!(trees.len(), 1, "the two tips share a trunk");
+        trees.remove(0)
+    }
+
+    #[test]
+    fn dropping_the_group_of_a_merged_tip_takes_that_tip_alone() {
+        let tree = mixed();
+        let mut left = tree.without_group(0).expect("the heavy tip still stands");
+        assert_eq!(left.tip_groups().collect::<Vec<_>>(), vec![1]);
+        assert!(left.close_up_over(0), "group 1 moves down into the gap");
+        assert_eq!(left.group(), 0);
+        assert_eq!(left.tip_groups().collect::<Vec<_>>(), vec![0]);
+        assert!(
+            tree.without_group(1).is_none(),
+            "the trunk goes with the group it is built to"
+        );
+    }
+
+    #[test]
+    fn a_tree_moved_to_a_group_takes_every_head_with_it() {
+        let mut tree = mixed();
+        tree.set_group(3);
+        assert_eq!(tree.tip_groups().collect::<Vec<_>>(), vec![3, 3]);
     }
 
     #[test]

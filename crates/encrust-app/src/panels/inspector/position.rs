@@ -10,12 +10,12 @@ use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
     Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, icon,
-    icon_toggle, inline_button, number_field, picker, progress_bar, secondary_button, section,
-    section_with_action, stepped_row, switch, theme,
+    icon_toggle, inline_button, kept, number_field, picker, progress_bar, secondary_button,
+    section, section_with_action, stepped_row, switch, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
-const POSITION_DRAG: f64 = 0.1;
+pub(super) const POSITION_DRAG: f64 = 0.1;
 const ANGLE_DRAG: f64 = 0.5;
 const PERCENT_DRAG: f64 = 0.5;
 /// The column the axis letters and their units stand in, in every block, so the fields
@@ -32,7 +32,7 @@ const MIN_SCALE: f32 = 1e-3;
 
 /// The highest a model may be lifted off the plate by typing, and how far a press of
 /// either button beside it moves it, millimetres.
-const MAX_LIFT_MM: f32 = 100.0;
+pub(super) const MAX_LIFT_MM: f32 = 100.0;
 const LIFT_STEP_MM: f32 = 1.0;
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
@@ -105,9 +105,8 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
     }
 }
 
-/// Euler angles are written back only on the frames the user actually changed one.
-/// Round-tripping the quaternion every frame would let rounding accumulate, and near
-/// gimbal lock the three numbers would drift on their own.
+/// Euler angles are written back only on frames the user changed one: round-tripping the
+/// quaternion every frame accumulates rounding and drifts near gimbal lock.
 fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
     let tooltip = tr!("position-rotation-reset");
     let (reset, _) = section_with_action(
@@ -130,9 +129,8 @@ fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
     }
 }
 
-/// The angles the model is turned to, and the buttons that turn it further. Answers the
-/// turn about the plate's axes a frame asked for, which every turn is, so a stretch the
-/// model carries turns with it.
+/// The angles the model is turned to, and the buttons that turn it further, about the
+/// plate's axes, so a stretch the model carries turns with it.
 fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> {
     let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
     // Rounded to what the field shows, plus zero, so float dust never reads as "-0.00".
@@ -182,7 +180,7 @@ fn about_plate(rotation: Quat, turn: Quat, axes: Axes) -> Quat {
 /// The model's size and stretch along the plate's axes or along its own.
 fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
     let linked_id = ui.id().with("scale-linked");
-    let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
+    let mut linked = kept::get(ui.ctx(), linked_id).unwrap_or(true);
     let tooltip = tr!("position-scale-reset");
     let (reset, _) =
         section_with_action(ui, &tr!("position-scale"), (icon::RESET, &tooltip), |ui| {
@@ -190,7 +188,7 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
                 scale_rows(ui, object, &mut linked, axes);
             }
         });
-    ui.memory_mut(|memory| memory.data.insert_temp(linked_id, linked));
+    kept::set(ui.ctx(), linked_id, &linked);
     if reset && let Some(object) = scene.get_mut(id) {
         let pivot = object.pivot();
         object.settle(Transform {
@@ -325,9 +323,8 @@ fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Optio
     }
 }
 
-/// `pivot` with `axis` grown `grow` times — along the model's own axis or the plate's, as
-/// `axes` says — or all three when `together`. Nothing is drawn out to under the smallest
-/// scale, from `ratio`, what each axis reads now.
+/// `pivot` with `axis` grown `grow` times (model or plate axes per `axes`), or all three when
+/// `together`. Never drawn out below the smallest scale, from `ratio`.
 fn grown(
     pivot: Transform,
     ratio: Vec3,
@@ -402,9 +399,8 @@ fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     });
 }
 
-/// How high the model stands over the plate, a millimetre a press either way. The height
-/// typed is the one auto-orient stands it on supports at; nought hands that back to the
-/// support profile. Supports shows the same row.
+/// How high the model stands over the plate, a millimetre a press. The height typed is the
+/// one auto-orient stands it on supports at; nought hands that back to the support profile.
 pub fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     let Some(object) = scene.get_mut(id) else {
         return;
@@ -452,24 +448,8 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         .inner
         .clicked();
 
-    let supports = &window.tools.supports;
-    let machine = window
-        .machine
-        .slicing
-        .printer
-        .as_ref()
-        .map(|printer| (printer, &window.machine.slicing.material));
-    if oriented
-        && let Err(error) = window.tools.orient.start(
-            &mut window.doc.scene,
-            &window.doc.plate,
-            Some(id),
-            |object| supports.built_for(object),
-            machine,
-            &mut window.machine.status,
-        )
-    {
-        window.machine.status = crate::status::Status::failed(&error);
+    if oriented {
+        auto_orient(window, Some(id));
     }
     if laid {
         let orient = &mut window.tools.orient;
@@ -538,7 +518,7 @@ fn preset_hint(preset: OrientPreset) -> String {
 /// button pressed four times. Keeping the original flips a copy stood beside it instead.
 fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
     let keep_id = ui.id().with("mirror-keep");
-    let mut keep = ui.data(|data| data.get_temp(keep_id).unwrap_or(false));
+    let mut keep = kept::get(ui.ctx(), keep_id).unwrap_or(false);
     section(ui, &tr!("position-mirror"), None, |ui| {
         let picked = scene.selection().to_vec();
         let mut flipped = None;
@@ -559,7 +539,7 @@ fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
         switch(ui, &mut keep, &tr!("position-keep-original"));
         describe(ui, &tr!("position-keep-original-note"));
     });
-    ui.data_mut(|data| data.insert_temp(keep_id, keep));
+    kept::set(ui.ctx(), keep_id, &keep);
 }
 
 /// A copy of each of `ids` stood clear of it to the right, all of them selected.
@@ -601,6 +581,33 @@ fn keeping_mirror(scale: Vec3, sizes: Vec3) -> Vec3 {
 fn recentre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     if let Some(index) = scene.objects().iter().position(|object| object.id == id) {
         recenter(scene, plate, index);
+    }
+}
+
+/// Starts Auto-orient on `only`, or on the whole plate, and says so on the stage if it cannot.
+pub(crate) fn auto_orient(window: &mut Window, only: Option<ObjectId>) {
+    let machine = window
+        .machine
+        .slicing
+        .printer
+        .as_ref()
+        .map(|printer| (printer, &window.machine.slicing.material));
+    let started = window
+        .tools
+        .supports
+        .orient_plans(&window.machine.slicing.catalogue)
+        .and_then(|plans| {
+            window.tools.orient.start(
+                &mut window.doc.scene,
+                &window.doc.plate,
+                only,
+                plans,
+                machine,
+                &mut window.machine.status,
+            )
+        });
+    if let Err(error) = started {
+        window.machine.status = crate::status::Status::failed(&error);
     }
 }
 

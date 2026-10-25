@@ -18,6 +18,7 @@ mod levels;
 mod overlays;
 mod paint;
 mod picking;
+mod support_ghost;
 mod supports;
 mod text;
 
@@ -35,9 +36,8 @@ use picking::{
     aims_elsewhere, lay_face_under_cursor, mark_part_under_cursor, material_under,
     measure_under_cursor, point_at_face, select_under_cursor, surface_under, takes_the_pick,
 };
-use supports::{
-    drag_support, place_support_under_cursor, remove_support_under_cursor, support_ghost,
-};
+use support_ghost::cached_support_ghost;
+use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
 /// a little under a full turn.
@@ -65,16 +65,16 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     } else {
         pointer_state(ui, rect)
     };
-    // What the gizmo reports is one frame old, because it is drawn after the input that
-    // has to yield to it is read. That only matters on the frame a handle is crossed.
+    // The gizmo's report is one frame old, which matters only on the frame a handle is crossed.
+    // Only Place reads a shift-click, as a line of supports; elsewhere shift pans.
+    let shift_clicks = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
     let gesture = window
         .view
         .input
-        .update(&pointer, window.view.gizmo.is_focused());
+        .update(&pointer, window.view.gizmo.is_focused(), shift_clicks);
 
-    // The brush and the tip being dragged take the primary button only for a gesture that
-    // began on something of theirs, so a drag that starts on empty plate still turns the
-    // camera while either is out.
+    // The brush and the dragged tip take the primary button only for a gesture begun on them,
+    // so a drag from empty plate still turns the camera.
     let painting = paint_stroke(ui, window, rect, &pointer);
     // A support in hand has the whole gesture, shift and all: it neither turns the camera
     // nor slides it.
@@ -166,15 +166,17 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         return;
     }
     match *window.tool {
-        // Alt is what every modelling tool uses for "the opposite of this click", and
-        // the other buttons are already spoken for by the camera.
-        // A stroke of the brush has already painted whatever the click landed on.
+        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
+        // A brush stroke has already painted whatever the click landed on.
         Tool::Paint if window.tools.supports.placing.paints() => {}
         Tool::Relief if window.tools.relief.paints() => {}
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
             remove_support_under_cursor(window, rect, cursor);
         }
-        Tool::Paint => place_support_under_cursor(window, rect, cursor),
+        Tool::Paint => {
+            let line = ui.input(|input| input.modifiers.shift);
+            place_support_under_cursor(window, rect, cursor, line);
+        }
         // The drag has already taken hold of whatever part the press landed on.
         Tool::Supports => {}
         Tool::Hollow if ui.input(|input| input.modifiers.alt) => {
@@ -188,11 +190,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        // Shift picks the model as Cmd does anywhere, so it can be picked without a stamp.
-        Tool::Relief
-            if window.tools.relief.mode == ReliefMode::Text
-                && !ui.input(|input| input.modifiers.shift) =>
-        {
+        Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
             text::stamp_text_under_cursor(window, rect, cursor);
         }
         Tool::Measure => {
@@ -203,10 +201,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             lay_face_under_cursor(window, rect, cursor);
         }
         Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
-        _ => {
-            let adding = ui.input(|input| input.modifiers.shift);
-            select_under_cursor(window, rect, cursor, adding);
-        }
+        _ => select_under_cursor(window, rect, cursor, false),
     }
 }
 
@@ -216,20 +211,26 @@ fn picks_instead(ui: &egui::Ui) -> bool {
     ui.input(|input| input.modifiers.command)
 }
 
-/// What a click would put down under a resting cursor, for every tool that puts something
-/// down on a model, drawn see-through so it reads as not placed yet. Alt shows nothing:
-/// it takes away instead.
+/// What a click would put down under a resting cursor, drawn see-through as not placed yet.
+/// Alt shows nothing: it takes away instead.
 fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) -> Option<Ghost> {
     let removing = ui.input(|input| input.modifiers.alt) || picks_instead(ui);
+    let line = ui.input(|input| input.modifiers.shift);
     let resting = !pointer.primary_down && !pointer.pan_button_down;
     if removing || !resting || !pointer.over_viewport {
         return None;
+    }
+    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
+    if *window.tool == Tool::Paint && !window.tools.supports.placing.paints() {
+        let (id, hit) = surface_under(window, rect, cursor)?;
+        return faded(&window.doc.scene, id, || {
+            cached_support_ghost(ui.ctx(), window, id, &hit, line)
+        });
     }
     type Under = fn(&Window, egui::Rect, egui::Pos2) -> Option<(ObjectId, PlacedHit)>;
     type Shows = fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost>;
     // A blocker is a volume, so it can be put inside the material through the cap of a cut.
     let (under, shows): (Under, Shows) = match *window.tool {
-        Tool::Paint if !window.tools.supports.placing.paints() => (surface_under, support_ghost),
         Tool::Hollow => (material_under, blocker_ghost),
         Tool::Drain if window.tools.drain.placing == Placing::Channel => {
             (surface_under, channel_point_ghost)
@@ -240,13 +241,17 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
         }
         _ => return None,
     };
-    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
     let (id, hit) = under(window, rect, cursor)?;
-    // A click on a model outside the selection only picks it.
-    if aims_elsewhere(&window.doc.scene, Some(id)) {
+    faded(&window.doc.scene, id, || shows(window, id, &hit))
+}
+
+/// The ghost `shows` builds on `id`, see-through, or nothing on a model outside the
+/// selection: a click there only picks it.
+fn faded(scene: &Scene, id: ObjectId, shows: impl FnOnce() -> Option<Ghost>) -> Option<Ghost> {
+    if aims_elsewhere(scene, Some(id)) {
         return None;
     }
-    let mut ghost = shows(window, id, &hit)?;
+    let mut ghost = shows()?;
     ghost.colour = ghost.colour.gamma_multiply(GHOST_OPACITY);
     Some(ghost)
 }
@@ -380,11 +385,8 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
     })
 }
 
-/// Whether the pointer is on the model rather than on something drawn over it.
-///
-/// A card, a popup, a menu or a floating window is its own egui layer above the
-/// viewport's, and whatever egui has at this point owns the pointer: the camera must not
-/// read a drag meant for a field in a popup. See `docs/decisions/0193`.
+/// Whether the pointer is on the model rather than on a card, popup, menu or window over it,
+/// whose egui layer owns the pointer. See `docs/decisions/0193`.
 fn over_the_model(
     rect: egui::Rect,
     position: Option<egui::Pos2>,

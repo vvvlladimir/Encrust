@@ -20,13 +20,8 @@ impl Mapping {
     }
 }
 
-/// Texture coordinates for a mesh, one pair per corner of each face.
-///
-/// Kept beside a [`Mesh`] rather than inside it: [`crate::weld`] merges vertices, and two
-/// faces meeting at one vertex may name different corners of a texture, so a UV belongs to
-/// a corner of a face and not to a vertex. Entry `i` matches `Mesh::faces[i]`, and is
-/// `None` for a face the file left unmapped. A model built from materials carries one image
-/// per material, so a face names its own.
+/// Texture coordinates for a mesh, one pair per face corner; entry `i` matches `Mesh::faces[i]`.
+/// Kept beside a [`Mesh`] because [`crate::weld`] merges vertices; `None` for an unmapped face.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct UvMap {
     faces: Vec<Option<Mapping>>,
@@ -73,11 +68,8 @@ impl UvMap {
         self.faces.get(face).copied().flatten()
     }
 
-    /// The same map over a mesh [`crate::weld`] has dropped faces from.
-    ///
-    /// `dropped` is [`crate::Welded::dropped`]: ascending indices into the original face
-    /// list. Welding is the first thing done to an imported mesh, and it is the only step
-    /// that renumbers faces under a map.
+    /// The same map over a mesh [`crate::weld`] has dropped faces from. `dropped` is
+    /// [`crate::Welded::dropped`]: ascending original face indices.
     #[must_use]
     pub fn without(&self, dropped: &[u32]) -> Self {
         let mut gone = dropped.iter().copied().peekable();
@@ -111,11 +103,8 @@ impl UvMap {
         Self::new(faces)
     }
 
-    /// Which image `point` is textured from and where it lands on it, taking the point to
-    /// lie on `face` of `mesh`.
-    ///
-    /// This is how a point found by [`crate::closest_point`] gets its UV: the barycentric
-    /// weights of the point in the triangle weight the face's three corners.
+    /// Which image `point` is textured from and where it lands, taking it to lie on `face` of
+    /// `mesh`. Barycentric weights of the point weight the face's three corners.
     pub fn at(&self, mesh: &Mesh, face: usize, point: Vec3) -> Option<(usize, Vec2)> {
         let mapping = self.of_face(face)?;
         let triangle = mesh.triangle(face)?;
@@ -127,11 +116,8 @@ impl UvMap {
     }
 }
 
-/// The image a [`UvMap`] addresses, as one height per pixel.
-///
-/// Heights run from 0 to 1 and are what a texture means to a printer: how far the surface
-/// moves where the coordinate lands. Rows run from the top of the image, the way every
-/// image format stores them, while a texture coordinate's V runs up from the bottom.
+/// The image a [`UvMap`] addresses, as one height per pixel, 0 to 1. Rows run from the top of the
+/// image while a texture coordinate's V runs up from the bottom.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Heightmap {
     width: usize,

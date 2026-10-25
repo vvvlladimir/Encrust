@@ -9,10 +9,8 @@ pub struct Layer {
     /// build plate.
     pub z: Scalar,
     pub contours: Vec<Contour>,
-    /// Contours of the other planes sampled inside this layer's band, when more than one
-    /// was asked for. Only a rasteriser reads them, and it takes their union with
-    /// `contours`: a feature thinner than a layer stands on one plane and not the next.
-    /// See `docs/design/slicing.md`.
+    /// Contours of the other planes sampled inside this layer's band, when more than one was asked
+    /// for. Only a rasteriser reads them, as a union with `contours`; see `docs/design/slicing.md`.
     pub extra: Vec<Vec<Contour>>,
 }
 

@@ -1,6 +1,6 @@
 # 0238. Give a support one width, round its joints, and let a raft lift the part
 
-- **Status:** Accepted
+- **Status:** Accepted; the dome at the end of every strut is superseded by 0341
 - **Date:** 2026-10-12
 
 ## Context

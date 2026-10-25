@@ -321,33 +321,7 @@ mod tests {
 
     /// A cube from the origin to `(size, size, size)`, wound outward.
     fn cube(size: Scalar) -> Mesh {
-        let s = size;
-        Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(s, 0.0, 0.0),
-                Vec3::new(s, s, 0.0),
-                Vec3::new(0.0, s, 0.0),
-                Vec3::new(0.0, 0.0, s),
-                Vec3::new(s, 0.0, s),
-                Vec3::new(s, s, s),
-                Vec3::new(0.0, s, s),
-            ],
-            vec![
-                [0, 2, 1],
-                [0, 3, 2],
-                [4, 5, 6],
-                [4, 6, 7],
-                [0, 1, 5],
-                [0, 5, 4],
-                [1, 2, 6],
-                [1, 6, 5],
-                [2, 3, 7],
-                [2, 7, 6],
-                [3, 0, 4],
-                [3, 4, 7],
-            ],
-        )
+        core_geometry::cuboid(Vec3::ZERO, Vec3::splat(size))
     }
 
     fn inside_by(mesh: &Mesh, mode: SignMode, point: Vec3) -> bool {

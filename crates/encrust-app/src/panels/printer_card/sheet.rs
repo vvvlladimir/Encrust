@@ -1,7 +1,5 @@
-//! One printer over the window, everything about it at once: what it is printing with a
-//! picture of the plate, the buttons that pause or stop it, its readings and camera, and
-//! the prints it remembers. Opened from the ring in the top bar; see
-//! `docs/decisions/0264`.
+//! One printer over the window, everything about it at once, opened from the ring in the top
+//! bar. See `docs/decisions/0264`.
 
 use egui::RichText;
 

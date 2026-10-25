@@ -45,6 +45,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/hygiene.sh",
+            "timeout": 30,
+            "statusMessage": "Holding the file to the size limits"
+          }
+        ]
+      }
     ]
   }
 }

@@ -6,7 +6,8 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use core_geometry::{Aabb, Mat4, Mesh, Scalar, Vec2, Vec3};
+use core_geometry::{Aabb, Mat4, Mesh, Scalar, SmoothNormals, Vec2, Vec3};
+use core_supports::Shaded;
 
 use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance};
 use crate::scene::Mapped;
@@ -155,6 +156,8 @@ pub struct CutLine {
 pub struct ModelDraw {
     pub mesh: Arc<Mesh>,
     pub instance: ModelInstance,
+    /// The normals smoothed over the mesh's corners where it is shaded round, built with it.
+    pub(super) normals: Option<Arc<SmoothNormals>>,
     pub(super) faces: Range<usize>,
     /// A range some later frame may ask for on its own. Declared here so the pieces break
     /// at its ends from the first upload: a shell reaches the card before the drainage
@@ -170,8 +173,17 @@ impl ModelDraw {
         Self {
             mesh,
             instance,
+            normals: None,
             faces,
             breaks: None,
+        }
+    }
+
+    /// The whole of a mesh shaded round by the normals it was built with.
+    pub fn smooth(shaded: &Shaded, instance: ModelInstance) -> Self {
+        Self {
+            normals: Some(Arc::clone(&shaded.normals)),
+            ..Self::whole(Arc::clone(&shaded.mesh), instance.smoothed())
         }
     }
 
@@ -195,6 +207,7 @@ impl ModelDraw {
         Self {
             mesh,
             instance,
+            normals: None,
             faces,
             breaks: None,
         }

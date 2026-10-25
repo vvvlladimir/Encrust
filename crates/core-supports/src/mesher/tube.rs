@@ -1,4 +1,4 @@
-use core_geometry::{Mesh, Scalar, Vec3};
+use core_geometry::{Mesh, Quat, Scalar, Vec3};
 
 /// Rings closer together than this are the same ring, and the band between them would be
 /// a strip of zero-area faces. Well under the pitch of any printable panel.
@@ -13,9 +13,9 @@ pub struct Ring {
     pub radius_mm: Scalar,
 }
 
-/// How many rings a rounded end is drawn with, the tube's own last ring among them. An end
-/// is hidden inside the joint it meets, so it needs a silhouette and no more.
-const DOME_RINGS: u32 = 3;
+/// How many rings a rounded end is drawn with, the tube's own last ring among them. At a
+/// bend the outside of the joint is these ends, so they are drawn round; see ADR 0341.
+pub const DOME_RINGS: u32 = 6;
 
 /// A straight run of a support: an axis, the circles along it and what closes its top.
 pub struct Tube {
@@ -66,10 +66,8 @@ pub fn round_off(rings: &mut Vec<Ring>, along_mm: Scalar, radius_mm: Scalar) {
     }
 }
 
-/// Rings of a ball whose top sits `bite_mm` above the contact, along the tube's axis.
-///
-/// The poles are left out: the cap vertex the sweep puts above the first ring is the top
-/// pole, and the bottom one is inside the segment underneath.
+/// Rings of a ball whose top sits `bite_mm` above the contact along the tube's axis; the poles
+/// are left out: the sweep's cap is the top and the bottom is inside the segment under it.
 pub fn ball(rings: &mut Vec<Ring>, bite_mm: Scalar, radius_mm: Scalar, steps: u32) {
     for step in 1..steps {
         let angle = std::f32::consts::PI * step as Scalar / steps as Scalar;
@@ -98,17 +96,11 @@ pub fn push(rings: &mut Vec<Ring>, along_mm: Scalar, radius_mm: Scalar) {
     }
 }
 
-/// The two unit vectors a tube's circles are drawn in, so that the polygon runs the same
-/// way round whichever way the tube points.
-///
-/// Straight down is the common case and keeps the axes the plate itself is measured in.
+/// The two unit vectors a tube's circles are drawn in: the plate's own axes turned the least
+/// way from straight down, so tubes meeting at a shallow angle line their facets up.
 pub fn frame(direction: Vec3) -> (Vec3, Vec3) {
-    let across = if direction.z.abs() > 0.999 {
-        Vec3::X
-    } else {
-        direction.cross(Vec3::Z).normalize()
-    };
-    (across, (-direction).cross(across))
+    let turn = Quat::from_rotation_arc(-Vec3::Z, direction);
+    (turn * Vec3::X, turn * Vec3::Y)
 }
 
 /// Turns one tube into a closed solid: a cap on top, a band between each pair of rings,
@@ -129,12 +121,13 @@ pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
         tube.apex
             .unwrap_or(tube.top + tube.direction * tube.rings[0].along_mm),
     );
+    let last = tube.rings.len() - 1;
     for ring in &tube.rings {
         let center = tube.top + tube.direction * ring.along_mm;
         for facet in 0..facets {
             let angle = std::f32::consts::TAU * facet as Scalar / facets as Scalar;
-            mesh.vertices
-                .push(center + (across * angle.cos() + up * angle.sin()) * ring.radius_mm);
+            let offset = (across * angle.cos() + up * angle.sin()) * ring.radius_mm;
+            mesh.vertices.push(center + offset);
         }
     }
     let bottom_center = mesh.vertices.len() as u32;
@@ -168,12 +161,34 @@ pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
         }
     }
 
-    let last = tube.rings.len() - 1;
     for facet in 0..facets {
         mesh.faces.push([
             bottom_center,
             ring_at(last, facet + 1),
             ring_at(last, facet),
         ]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tube_leaning_a_little_any_way_keeps_its_facets_where_a_plumb_one_has_them() {
+        for step in 0..8 {
+            let azimuth = std::f32::consts::TAU * step as Scalar / 8.0;
+            let direction = Vec3::new(0.2 * azimuth.cos(), 0.2 * azimuth.sin(), -1.0).normalize();
+            let (across, up) = frame(direction);
+
+            assert!(
+                across.dot(Vec3::X) > 0.97 && up.dot(Vec3::Y) > 0.97,
+                "leaning 11 degrees towards {azimuth} rad turns the polygon by as little, got {across} {up}"
+            );
+            assert!(
+                (-direction).cross(across).distance(up) < 1e-5,
+                "and it still runs the same way round its axis"
+            );
+        }
     }
 }

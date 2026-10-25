@@ -24,9 +24,7 @@ fn be_f32(bytes: &[u8], offset: usize) -> f32 {
     ])
 }
 
-/// Walks the layer contents of a `.goo` file, returning each layer's exposure and pixels.
-///
-/// Field offsets come from `docs/formats/goo.md`.
+/// Walks the layer contents of a `.goo` file; field offsets: `docs/formats/goo.md`.
 fn goo_layers(file: &[u8]) -> Vec<(f32, Vec<u8>)> {
     const HEADER_SIZE: usize = 0x0002_FB95;
     const DEFINITION_SIZE: usize = 2 + 15 * 4 + 2 + 2;
@@ -85,9 +83,7 @@ fn le_f32(bytes: &[u8], offset: usize) -> f32 {
     ])
 }
 
-/// Walks the layer table of a `.ctb` file, returning each layer's Z, exposure and pixels.
-///
-/// Field offsets come from `docs/formats/chitu.md`.
+/// Walks the layer table of a `.ctb` file; field offsets: `docs/formats/chitu.md`.
 fn ctb_layers(file: &[u8]) -> Vec<(f32, f32, Vec<u8>)> {
     const LAYER_DEF_BYTES: usize = 36;
     const LAYER_DEF_EX_BYTES: u32 = 84;

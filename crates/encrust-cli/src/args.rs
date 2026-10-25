@@ -4,6 +4,7 @@ use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use core_engine::SupportPlan;
 use core_format::ExposureRange;
 use core_geometry::{DEFAULT_WELD_TOLERANCE, Scalar, Vec3};
 use core_plate::{OrientGoal, OrientPreset};
@@ -64,9 +65,8 @@ pub struct ImportArgs {
     #[command(flatten)]
     pub transform: TransformArgs,
 
-    /// Press the file's own texture into the model as relief, this many millimetres deep.
-    /// Negative sinks it in. Needs a model carrying UVs and an image beside it, or
-    /// --relief-image.
+    /// Press the file's own texture into the model as relief, this many mm deep; negative sinks it.
+    /// Needs a model carrying UVs and an image beside it, or --relief-image.
     #[arg(long, value_name = "MM", allow_hyphen_values = true)]
     pub relief: Option<Scalar>,
 
@@ -174,27 +174,37 @@ impl From<Goal> for OrientPreset {
 #[command(next_help_heading = "Supports")]
 pub struct SupportArgs {
     /// Stand supports under the model before slicing it, built to a profile of the
-    /// catalogue: light, medium, heavy or one saved in the window.
+    /// catalogue: light, medium, heavy or one saved in the window; `auto` sizes each one by
+    /// what it holds, as the window's Auto does.
     #[arg(long, value_name = "ID")]
     pub supports: Option<String>,
 
     /// Support profile as a TOML file. Wins over --supports.
     #[arg(long, value_name = "PATH")]
     pub support_profile: Option<PathBuf>,
+
+    /// Hold up the cavity --hollow leaves as well as the outside.
+    #[arg(long)]
+    pub support_cavity: bool,
 }
 
 impl SupportArgs {
-    /// The support profile this run builds to, or `None` for a run that stands none.
-    pub fn profile(&self) -> Result<Option<SupportProfile>> {
-        if let Some(path) = &self.support_profile {
-            return SupportProfile::load(path)
-                .with_context(|| format!("cannot load {}", path.display()))
-                .map(Some);
-        }
-        self.supports
-            .as_deref()
-            .map(crate::profiles::support)
-            .transpose()
+    /// What this run stands supports to, or `None` for a run that stands none.
+    pub fn plan(&self) -> Result<Option<SupportPlan>> {
+        let plan = if let Some(path) = &self.support_profile {
+            let profile = SupportProfile::load(path)
+                .with_context(|| format!("cannot load {}", path.display()))?;
+            Some(SupportPlan::of(profile))
+        } else {
+            self.supports
+                .as_deref()
+                .map(crate::profiles::plan_of)
+                .transpose()?
+        };
+        Ok(plan.map(|plan| SupportPlan {
+            cavity: self.support_cavity,
+            ..plan
+        }))
     }
 }
 

@@ -49,9 +49,8 @@ const TRAVEL_MM: [(&str, f32, &str); 1] = [(
     "the vendor and the machine list both state 260 mm; the source profile carries 200",
 )];
 
-/// Which machines answer on the network, and on what. The source says nothing about it,
-/// so these are the generations named in `docs/formats/sdcp.md` and
-/// `docs/formats/prusalink.md` and no others.
+/// Which machines answer on the network, and on what: the generations in `docs/formats/sdcp.md`
+/// and `docs/formats/prusalink.md` only, as the source says nothing.
 const CONNECTIONS: [(&str, Connection); 4] = [
     ("elegoo-mars-5", Connection::Sdcp),
     ("elegoo-saturn-3-ultra", Connection::Sdcp),

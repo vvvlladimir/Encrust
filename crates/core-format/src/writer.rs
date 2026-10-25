@@ -2,19 +2,12 @@ use core_raster::LayerRuns;
 
 use crate::{FormatError, PrintJob, WriteSeek};
 
-/// Bytes to hold before they go to the file.
-///
-/// A layer of a real print is tens of kilobytes and a whole file is hundreds of
-/// megabytes, so the eight kilobytes a `BufWriter` takes by default turn one file into
-/// tens of thousands of writes. A megabyte is a handful per layer.
+/// Bytes to hold before they go to the file. A layer is tens of kilobytes; the default 8 KB
+/// `BufWriter` makes tens of thousands of writes, 1 MB a few per layer.
 pub const WRITE_BUFFER_BYTES: usize = 1 << 20;
 
-/// Opens a sliced file and hands back the sink its layers go into.
-///
-/// Layers arrive one at a time because a full stack does not fit in memory; see
-/// `docs/decisions/0012-streaming-sliced-file-writer.md`. The sink is seekable so that a
-/// format whose header points forward at a table can fill that field in afterwards; see
-/// `docs/decisions/0045-sliced-files-are-written-to-a-seekable-sink.md`.
+/// Opens a sliced file and hands back the sink its layers go into, one at a time.
+/// Streaming and a seekable sink: `docs/decisions/0012`, `docs/decisions/0045`.
 pub trait SlicedFileWriter {
     /// What this writer's layers go into.
     type Sink<'w>: LayerSink
@@ -44,12 +37,8 @@ pub trait LayerSink {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError>;
 
-    /// Writes whatever closes the file, with the resin volume the stack came to.
-    ///
-    /// The header states that volume and is written before the first layer, so a caller
-    /// that only learns it by slicing hands it over here and the header is rewritten; see
-    /// `docs/decisions/0067-the-resin-volume-is-patched-in-at-finish.md`. Fails when
-    /// fewer layers arrived than promised.
+    /// Writes whatever closes the file, with the resin volume the stack came to. The header is
+    /// rewritten with the volume (ADR 0067); fails when layers are missing.
     fn finish(self, volume_mm3: f32) -> Result<(), FormatError>
     where
         Self: Sized;

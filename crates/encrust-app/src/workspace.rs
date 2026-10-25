@@ -27,9 +27,10 @@ pub enum Tool {
     Relief,
     /// Growing supports automatically, and picking the parts of those already standing.
     Supports,
-    /// Placing supports by hand, painting where they go and where they must not.
+    /// Placing supports by hand, painting where they go and where they must not: a mode
+    /// of the Supports card, not a button of the rail.
     Paint,
-    /// The shape of one support, part by part, in the profile of the group in hand.
+    /// The shape of one support, part by part: a mode of the Supports card as well.
     Shape,
     Check,
     Export,
@@ -40,12 +41,26 @@ pub enum Tool {
 impl Tool {
     /// The groups of the rail, in the order it draws them, with a rule between each; see
     /// `docs/decisions/0218`.
-    pub const RAIL: [&'static [Self]; 4] = [
+    pub const RAIL: [&'static [Self]; 3] = [
         &[Self::Position, Self::Measure],
-        &[Self::Hollow, Self::Drain, Self::Cut, Self::Relief],
-        &[Self::Supports, Self::Paint, Self::Shape],
+        &[
+            Self::Hollow,
+            Self::Drain,
+            Self::Cut,
+            Self::Relief,
+            Self::Supports,
+        ],
         &[Self::Check, Self::Export],
     ];
+
+    /// The tool whose card and rail button this one is shown under: Paint and Shape are
+    /// modes of the Supports card. See `docs/decisions/0336`.
+    pub fn card(self) -> Self {
+        match self {
+            Self::Paint | Self::Shape => Self::Supports,
+            other => other,
+        }
+    }
 
     /// Every variant, which is what a test walks to prove none was left unplaced.
     #[cfg(test)]
@@ -197,14 +212,14 @@ mod tests {
     }
 
     /// A variant added and not placed would silently never be reachable; the print
-    /// settings alone are opened from the top bar instead.
+    /// settings are opened from the top bar, and the modes of a card from that card.
     #[test]
-    fn every_tool_but_the_print_settings_is_on_the_rail() {
+    fn every_tool_with_a_card_of_its_own_is_on_the_rail() {
         for tool in Tool::ALL {
             let on_rail = Tool::on_rail().any(|placed| placed == tool);
             assert_eq!(
                 on_rail,
-                tool != Tool::PrintSettings,
+                tool != Tool::PrintSettings && tool.card() == tool,
                 "{} is in the wrong place",
                 tool.label()
             );

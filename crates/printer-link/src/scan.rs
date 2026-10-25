@@ -20,12 +20,8 @@ pub struct Found {
     pub silent: Vec<(IpAddr, Option<SendError>)>,
 }
 
-/// Asks every board on the segment and each of `addresses` to introduce itself for
-/// `window`, and each Prusa machine in `links` what it is.
-///
-/// A board answers a broadcast; a Prusa machine is set up rather than found (ADR 0153), so
-/// only the machines already described are asked. A failed broadcast finds no boards and
-/// says why.
+/// Asks every board on the segment and each of `addresses` to introduce itself for `window`,
+/// and each Prusa machine in `links` what it is (set up, not found: ADR 0153).
 pub fn scan(window: Duration, addresses: &[IpAddr], links: &[Link]) -> Found {
     let (mut boards, broadcast) = match net_sdcp::discover(window) {
         Ok(boards) => (boards, None),

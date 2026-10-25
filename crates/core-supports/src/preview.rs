@@ -1,10 +1,10 @@
 use core_geometry::{Mesh, Vec3};
 
-use crate::column::column;
+use crate::column::{column, square_head};
 use crate::group::Profiles;
 use crate::mesher::{mesh_alone, mesh_head};
 use crate::placed::Placed;
-use crate::{Column, SupportTree, grow};
+use crate::{SupportTree, grow};
 
 /// A support shown where the hand is about to put one, before it is put down.
 #[derive(Debug, Clone)]
@@ -16,49 +16,41 @@ pub struct Preview {
     pub stands: bool,
 }
 
-/// What a support of `group` touching the model at `contact` would be built as.
-///
-/// It is grown by the same rule a placed point is (ADR 0040), but alone: what it would
-/// merge with or be braced to among the supports already standing is left out, so the
-/// rebuild a hover asks for stays one column. `contact` is in plate coordinates.
+/// What a support of `group` touching the model at `contact` (plate coordinates) would be built
+/// as, grown by the placed-point rule (ADR 0040) alone, so a hover rebuilds one column.
 pub fn preview(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> Preview {
-    let (column, tree) = alone(placed, contact, group, profiles);
-    match tree {
-        Some(tree) => Preview {
-            mesh: mesh_alone(&tree, profiles.of(tree.group()), placed),
+    if let Some(tree) = alone(placed, contact, group, profiles) {
+        return Preview {
+            mesh: mesh_alone(&tree, profiles, placed),
             stands: true,
-        },
-        None => Preview {
-            mesh: mesh_head(column.contact, column.neck, profiles.of(group)),
-            stands: false,
-        },
+        };
+    }
+    let profile = profiles.of(group);
+    let (contact, neck) = square_head(placed, contact, profile);
+    Preview {
+        mesh: mesh_head(contact, neck, profile),
+        stands: false,
     }
 }
 
 /// Whether a support of `group` put down at `contact` alone is built at all, which is
 /// what a hand placing one is refused by. `contact` is in plate coordinates.
 pub fn stands(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> bool {
-    alone(placed, contact, group, profiles).1.is_some()
+    alone(placed, contact, group, profiles).is_some()
 }
 
-/// The column of a lone support at `contact`, and the tree it grows into if it stands.
-fn alone(
-    placed: &Placed,
-    contact: Vec3,
-    group: u16,
-    profiles: Profiles,
-) -> (Column, Option<SupportTree>) {
-    let column = column(placed, 0, group, contact, profiles.of(group));
-    let tree = grow(&[column], placed, profiles)
+/// The tree a lone support at `contact` grows into, if it stands.
+fn alone(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> Option<SupportTree> {
+    let column = column(placed, 0, group, contact, profiles.of(group))?;
+    grow(&[column], placed, profiles)
         .into_iter()
-        .find(|tree| tree.points().next().is_some());
-    (column, tree)
+        .find(|tree| tree.points().next().is_some())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{box_mesh, profile};
+    use crate::fixtures::{box_mesh, profile};
     use core_geometry::{Bvh, Transform};
 
     #[test]

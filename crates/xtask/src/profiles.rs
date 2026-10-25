@@ -1,6 +1,5 @@
-//! `gen-profiles`: a directory of source printer profiles read into the shipped
-//! catalogue. What it may take from the source and what it may not invent is in
-//! `docs/design/profiles.md`.
+//! `gen-profiles`: a directory of source printer profiles read into the shipped catalogue.
+//! What it may take and not invent: `docs/design/profiles.md`.
 
 use std::path::{Path, PathBuf};
 

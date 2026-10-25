@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use core_engine::{Cutting, Model, Plate};
+use core_engine::{Cutting, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{ArrangeSettings, Footprint, arrange};
-use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
 use crate::hollowing::{HollowArgs, HollowReport};
@@ -28,7 +28,7 @@ use crate::{plate_file, project};
 pub struct Shaping {
     pub import: ImportArgs,
     pub hollow: HollowArgs,
-    pub supports: Option<SupportProfile>,
+    pub supports: Option<SupportPlan>,
     /// Where the middle of the model's footprint goes, plate millimetres, standing on the
     /// plate; `None` leaves it where the file and the flags put it.
     pub position: Option<Vec2>,
@@ -40,7 +40,7 @@ impl Shaping {
         Ok(Self {
             import: job.import.clone(),
             hollow: job.hollow.clone(),
-            supports: job.supports.profile()?,
+            supports: job.supports.plan()?,
             position: None,
         })
     }
@@ -83,11 +83,8 @@ pub struct Staged {
 }
 
 impl Staged {
-    /// The run's input for a file of `format`, or `None` without a printer to draw for.
-    /// With no format, the one the printer reads.
-    ///
-    /// The models move into the plate, so that once the run has baked them the caller can
-    /// let them go rather than hold a second copy of the plate through the write.
+    /// The run's input for a file of `format` (default: the printer's), or `None` with no printer.
+    /// The models move into the plate so the caller can free them before the write.
     pub fn take_plate(
         &mut self,
         format: Option<SlicedFormat>,
@@ -176,6 +173,7 @@ pub fn models(
     watch: &Watch,
 ) -> Result<Staged> {
     let shaping = Shaping::of(job)?;
+    refuse_idle_cavity(job, &shaping)?;
     if paths.len() > 1 {
         refuse_one_model_flags(&shaping)?;
         let one_spot = job.model.label.is_some() || job.model.part_off.is_some();
@@ -201,6 +199,20 @@ pub fn refuse_one_model_flags(shaping: &Shaping) -> Result<()> {
     }
     if shaping.hollow.cutting() {
         bail!("--drain-at and --channel point at one model; a plate file places them per model");
+    }
+    Ok(())
+}
+
+/// Refuses `--support-cavity` where it would hold nothing up: no supports, or no cavity.
+fn refuse_idle_cavity(job: &JobArgs, shaping: &Shaping) -> Result<()> {
+    if !job.supports.support_cavity {
+        return Ok(());
+    }
+    if shaping.supports.is_none() {
+        bail!("--support-cavity stands supports in the cavity, and --supports was not given");
+    }
+    if !shaping.hollow.wanted() {
+        bail!("--support-cavity holds up the cavity --hollow leaves, and --hollow was not given");
     }
     Ok(())
 }
@@ -317,7 +329,7 @@ fn put_down(
         drift_mm,
         watch,
     )?;
-    let (hollow, mut cuts) = (shelled.report, shelled.cuts);
+    let (hollow, cavity, mut cuts) = (shelled.report, shelled.cavity, shelled.cuts);
     let plugs = shelled
         .plugs
         .into_iter()
@@ -333,7 +345,16 @@ fn put_down(
     let stood = shaping
         .supports
         .as_ref()
-        .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height, seated))
+        .map(|plan| {
+            stand_under(
+                &mut mesh,
+                cavity.clone(),
+                &mut cuts,
+                plan,
+                layer_height,
+                seated,
+            )
+        })
         .transpose()?
         .filter(|(report, _)| !seated || !report.contacts.is_empty());
     let (supports, columns) = match stood {
@@ -415,9 +436,8 @@ struct PutDown {
     supports: Option<SupportReport>,
 }
 
-/// Refuses what the modelling flags leave that the rest of the run cannot take: several
-/// pieces of one model to hollow or support, which is reported once a model, or halves of a
-/// cut standing on one another's spot.
+/// Refuses what the rest of the run cannot take: several pieces of one model to hollow or support,
+/// or halves of a cut standing on one another's spot.
 fn check_pieces(
     pieces: &[Vec<Mesh>],
     entries: &[(PathBuf, Shaping)],

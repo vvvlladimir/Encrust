@@ -1,6 +1,7 @@
 # The window's design system
 
-The tokens, the widgets made of them, and the layout they sit in. Why not stock egui:
+The tokens, the widgets made of them, and the layout they sit in; how a panel must use them
+is [`ui-standards.md`](ui-standards.md). Why not stock egui:
 ADR 0024; why the layout is fixed: ADR 0025.
 
 Everything here is `crates/encrust-app/src/ui/`, and the rule the module exists for is:
@@ -83,7 +84,7 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
-section heading 36, panel padding 12, item gap 8. Tool rail 60 with 46 point buttons, 34 without their names, plate
+section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool rail 60 with 46 point buttons, 34 without their names, plate
 panel 272, inspector 328, top bar 44, layer strip 56, a chip 32.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
 fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
@@ -156,23 +157,6 @@ only the reason it cannot run is written under it (ADR 0230).
 `panels::Window::show` builds the window in a fixed order. Nothing is dockable. Under the
 top bar the viewport takes the whole window, and every column is a card floating over it,
 as tall as what it holds; see `docs/decisions/0221`.
-
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ top 44:  ● ● ●  File Edit View     printer / resin │ 50 µm   Find   ⌨  ⚙   │
-├──────────────────────────────────────────────────────────────────────────┤
-│ ╭────╮╭─────────────╮                       ╭cube╮ ╭────────────╮ ╭────╮ │
-│ │rail││ the open    │   ╭ job, notice ╮     ╰────╯ │ 1  2  +    │ │view│ │
-│ │ 60 ││ tool 328    │                              │ Models   + │ │ 650│ │
-│ │    ││ action      │                              │ list 272   │ │  ▲ │ │
-│ │    │╰─────────────╯                              │ ⧉ ⊞ ≡ ␡    │ │  ┃ │ │
-│ │    │                                             ╰────────────╯ │  ● │ │
-│ │    │            the stage, everywhere            ╭────────────╮ │  ┃ │ │
-│ │    │                                      ╭view╮ │ This plate │ │  ▼ │ │
-│ │    │                                      ╰────╯ │ Slice  ⌄   │ │  ▶ │ │
-│ ╰────╯                                             ╰────────────╯ ╰────╯ │
-└──────────────────────────────────────────────────────────────────────────┘
-```
 
 The top bar is the window's own title bar rather than a band under one: it drags the
 window, double-clicks to maximise, and on every platform but macOS draws its own window

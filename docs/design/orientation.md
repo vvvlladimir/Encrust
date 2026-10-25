@@ -260,7 +260,8 @@ lighter one under 200 mm, which prints as many in the same time.
 The supports are placed on the print's own layer (ADR 0279): how many contacts placement
 puts down follows the layer it reads, and on a stack three times coarser a figure leaned
 45° read 189 contacts where the print stands 442. Placed on the print's layer, a trial's
-contacts, hanging contacts and support resin are the print's exactly. The cure that
+contacts, hanging contacts and support resin are the print's exactly. They are built to
+the plan the window builds them to, an automatic profile's sizes included (ADR 0343). The cure that
 follows is cut coarse: the tallest pose into about 160 layers, none thicker than 0.15 mm,
 cured at a 0.2 mm pixel, and all of them at once. It reads the cups and tearing pulls a
 print does.

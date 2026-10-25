@@ -1,10 +1,6 @@
-//! Geometric primitives shared by the whole slicing pipeline, plus the mesh repair and
-//! inspection that every consumer needs before it can trust a mesh.
-//!
-//! Types here are plain data; the operations on them are free functions. Vector types
-//! come from `glam` so that meshes reach the GPU without a conversion pass; see
-//! `docs/decisions/0003-math-library.md`.
+//! Types are plain data, operations free functions; `glam` vectors, see ADR 0003.
 
+mod buckets;
 mod bvh;
 mod clip;
 mod closest;
@@ -17,6 +13,7 @@ mod ray;
 mod region;
 mod repair;
 mod ring;
+mod smooth;
 mod split;
 mod topology;
 mod transform;
@@ -27,6 +24,7 @@ mod validate;
 mod weld;
 mod winding;
 
+pub use buckets::Buckets;
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
@@ -34,11 +32,16 @@ pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
-pub use primitives::{ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for};
-pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed};
+pub use primitives::{
+    ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for, turns,
+};
+pub use ray::{
+    PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
+};
 pub use region::Region;
 pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
 pub use ring::{ring_area, ring_contains};
+pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};
 pub use topology::{Adjacency, Components};
 pub use transform::{

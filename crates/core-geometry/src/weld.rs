@@ -12,12 +12,8 @@ pub const DEFAULT_WELD_TOLERANCE: Scalar = 1e-5;
 /// Smallest usable grid cell, so that a zero tolerance still hashes finitely.
 const MIN_CELL: Scalar = 1e-7;
 
-/// Cell side as a multiple of the tolerance.
-///
-/// Two and a half, so that the eight cells nearest a vertex are the only ones worth
-/// looking in: a match in any of the nineteen left out would have to be at least 1.25
-/// tolerances away, which is further than a match can be. A cell of exactly one tolerance
-/// would need all twenty-seven.
+/// 2.5 so the eight nearest cells suffice: matches in the other nineteen are over 1.25 tolerances
+/// off.
 const CELL_SCALE: Scalar = 2.5;
 
 /// Outcome of merging coincident vertices.
@@ -37,11 +33,8 @@ impl Welded {
     }
 }
 
-/// Merges vertices closer together than `tolerance` and drops the faces that collapse.
-///
-/// STL stores each triangle's three vertices independently and exporters round them
-/// per face, so an unwelded mesh has no usable topology at all: every edge looks like a
-/// boundary. Welding is what makes the checks in [`crate::diagnose`] mean anything.
+/// Merges vertices closer together than `tolerance` and drops the faces that collapse. STL stores
+/// vertices per face, so unwelded every edge looks like a boundary.
 pub fn weld(mesh: &Mesh, tolerance: Scalar) -> Welded {
     let first = first_copies(&mesh.vertices);
     let (vertices, remap) = merge_nearby(&mesh.vertices, &first, tolerance);
@@ -95,11 +88,8 @@ fn first_copies(vertices: &[Vec3]) -> Vec<u32> {
     first
 }
 
-/// Merges points closer together than `tolerance` into the first of them a grid finds,
-/// and returns what is left and where each point went.
-///
-/// A distinct point with no other in the eight cells a match could be in merges with
-/// nothing; those are told apart in parallel, and only the rest go through the grid.
+/// Merges points closer than `tolerance` into the first a grid finds; returns the rest and a map.
+/// Points with no other in the eight possible cells are told apart in parallel.
 fn merge_nearby(points: &[Vec3], first: &[u32], tolerance: Scalar) -> (Vec<Vec3>, Vec<u32>) {
     let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
     let is_first = |at: usize| first[at] as usize == at;
@@ -188,11 +178,8 @@ fn remap_face(face: [u32; 3], remap: &[u32]) -> Option<[u32; 3]> {
     Some([a, b, c])
 }
 
-/// The eight cells a match for `v` could be in, its own cell first.
-///
-/// Only cell representatives are stored, so a match lies within one cell of the query on
-/// every axis. Which side of the query that is is decided by which half of its own cell
-/// it sits in; see `CELL_SCALE` for why the other nineteen cells cannot hold one.
+/// The eight cells a match for `v` could be in, its own cell first. Only representatives are
+/// stored; the other nineteen cannot hold a match, see `CELL_SCALE`.
 fn probe_cells(v: Vec3, cell: Scalar) -> [[i64; 3]; 8] {
     let scaled = v / cell;
     let mut home = [0i64; 3];

@@ -304,6 +304,11 @@ pub const FIELD_H: f32 = BUTTON_H;
 pub const FIELD_W: f32 = 128.0;
 pub const PANEL_PAD: f32 = 12.0;
 pub const ITEM_GAP: f32 = 8.0;
+/// Between buttons sharing one row, and between a tool heading's mode icons.
+pub const BUTTON_GAP: f32 = 6.0;
+pub const ICON_GAP: f32 = 2.0;
+/// Between a reading and the row of buttons under it.
+pub const NOTE_GAP: f32 = 4.0;
 /// Height of a section's heading row, which folds it.
 pub const SECTION_H: f32 = 36.0;
 pub const RAIL_W: f32 = 60.0;

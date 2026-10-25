@@ -15,12 +15,8 @@ pub(crate) struct Stitched {
     pub unlinked: usize,
 }
 
-/// Chains crossings into closed contours by following the mesh edges they sit on.
-///
-/// On a closed, consistently wound mesh every crossed edge is used once as an entry and
-/// once as an exit, so the chain is a permutation and every loop closes exactly. Where two
-/// sheets of surface share an edge it is entered and left twice, and the chain takes the
-/// sharpest left turn there, which keeps two loops touching at a point two loops.
+/// Where two sheets share an edge the chain takes the sharpest left turn, so touching loops stay
+/// two.
 pub(crate) fn stitch(crossings: Vec<Crossing>) -> Stitched {
     let mut result = Stitched::default();
     let mut pending = Pending::of(crossings);
