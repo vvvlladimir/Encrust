@@ -142,6 +142,7 @@ fn drilled_slab() -> Model {
         lift_mm: 0.0,
         shape: HoleShape::Polygon { sides: 4 },
         turn_deg: 45.0,
+        walled: false,
     };
     Model {
         cuts: Some(Arc::new(drill(&[hole], &[]).expect("the hole drills"))),

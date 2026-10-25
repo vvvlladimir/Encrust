@@ -7,6 +7,7 @@ use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
 use core_volume::{ModelHollow, PENDING_MARKER_MM, markers};
 
 use crate::panels::Window;
+use crate::panels::inspector::drain::rebuild_around_cuts;
 use crate::render::{Ghost, GhostShape};
 use crate::scene::ObjectId;
 use crate::ui::theme;
@@ -104,6 +105,7 @@ pub(super) fn remove_drain_under_cursor(
         let transform = object.transform;
         object.hollow.remove_drain(hit.point, transform);
     }
+    rebuild_around_cuts(window);
 }
 
 /// The blocker a click at `hit` on object `id` would put down.

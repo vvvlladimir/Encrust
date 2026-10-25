@@ -6,9 +6,9 @@ use core_geometry::{
     Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, diagnose, signed_volume,
 };
 use core_volume::{
-    Blocker, CUT_WEIGHT, Cancel, Channel, HoleSize, HollowMode, HollowSettings, Hollowed,
-    InfillPattern, InfillSettings, Progress, Step, VolumeError, carve, cavity_field, drill,
-    hole_at, hollow, hollow_at_scale, pierce, plate_down, sleeves,
+    Blocker, CUT_WEIGHT, Cancel, Channel, DrainHole, HoleSize, HollowMode, HollowSettings,
+    Hollowed, InfillPattern, InfillSettings, Progress, Step, VolumeError, carve, cavity_field,
+    drill, hole_at, hollow, hollow_at_scale, pierce, plate_down, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -262,7 +262,7 @@ fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
         ..Channel::default()
     };
     let mut asked = settings(2.0, HollowMode::Internal);
-    asked.blockers = sleeves(&[channel], asked.thickness_mm);
+    asked.blockers = sleeves(&[channel], &[], asked.thickness_mm);
     let piped = hollow(&mesh, &bvh, &asked, Cancel::never())
         .expect("a closed ball hollows")
         .cavity_mm3;
@@ -273,6 +273,42 @@ fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
     assert!(
         (kept - rod).abs() / rod < 0.1,
         "the wall around the tube keeps {rod} mm3 of resin, got {kept}"
+    );
+}
+
+#[test]
+fn a_walled_hole_keeps_a_wall_between_it_and_the_cavity() {
+    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
+    let bvh = Bvh::build(&mesh);
+    let hole = DrainHole {
+        walled: true,
+        ..hole_at(
+            &mesh,
+            &bvh,
+            Vec3::new(0.0, 0.0, 12.0),
+            HoleSize::round(4.0, 6.0, 1.0),
+        )
+        .expect("the ball has faces")
+    };
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.blockers = sleeves(&[], &[hole], asked.thickness_mm);
+    let shell = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("a closed ball hollows");
+
+    // The hole is a 2 mm radius tube from the top down to z = 4.
+    let tube = |point: Vec3| {
+        let along = point.z.clamp(4.0, 10.0);
+        (point - Vec3::new(0.0, 0.0, along)).length() - 2.0
+    };
+    let cavity = &shell.mesh.faces[shell.cavity.clone()];
+    let nearest = cavity
+        .iter()
+        .flatten()
+        .map(|&index| tube(shell.mesh.vertices[index as usize]))
+        .fold(Scalar::MAX, Scalar::min);
+    // Surface nets cut the crease where the sleeve meets the cavity, so a voxel and a half.
+    assert!(
+        nearest > 2.0 - 1.5 * shell.voxel_mm,
+        "the cavity stands the 2 mm wall off the hole, got {nearest}"
     );
 }
 

@@ -1,7 +1,7 @@
 mod check;
 mod combine;
 mod cut;
-mod drain;
+pub(super) mod drain;
 mod export;
 mod hollow;
 mod layers;

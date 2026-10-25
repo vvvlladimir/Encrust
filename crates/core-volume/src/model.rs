@@ -276,11 +276,11 @@ impl ModelHollow {
     }
 
     /// What the tool is asking for, with what this model carries laid over it: its own
-    /// blockers, and a sleeve of wall around every channel so the cavity keeps off the
-    /// pipe. A channel placed on a hollow model therefore makes its shell stale.
+    /// blockers, and a sleeve of wall around every channel and walled hole so the cavity
+    /// keeps off them. A channel placed on a hollow model therefore makes its shell stale.
     pub fn asking(&self, asked: &HollowSettings) -> HollowSettings {
         let mut blockers = self.blockers.clone();
-        blockers.extend(sleeves(&self.channels, asked.thickness_mm));
+        blockers.extend(sleeves(&self.channels, &self.drains, asked.thickness_mm));
         HollowSettings {
             blockers,
             ..asked.clone()
@@ -333,8 +333,8 @@ impl ModelHollow {
     }
 
     /// Drills a hole where the model was clicked, straight into the surface it was
-    /// clicked on, unless one already drilled there takes it in. `point` and `normal` are
-    /// in plate coordinates.
+    /// clicked on, unless one already drilled there takes it in; walled on a solid model
+    /// (ADR 0346). `point` and `normal` are in plate coordinates.
     pub fn add_drain(
         &mut self,
         mesh: &Mesh,
@@ -346,7 +346,7 @@ impl ModelHollow {
     ) {
         let hole = Self::drain_at(mesh, bvh, point, normal, size, transform);
         if let Some(hole) = hole.filter(|hole| !self.has_hole_over(hole)) {
-            self.drains.push(hole);
+            self.drains.push(self.placed(hole));
             self.recut();
         }
     }
@@ -388,9 +388,18 @@ impl ModelHollow {
 
     /// `hole` as it would be cut here: through the wall, once the model is hollow.
     pub fn as_cut(&self, hole: DrainHole) -> DrainHole {
+        let hole = self.placed(hole);
         self.pierced(std::slice::from_ref(&hole))
             .pop()
             .unwrap_or(hole)
+    }
+
+    /// `hole` as a click drills it here: walled on a solid model (ADR 0346).
+    fn placed(&self, hole: DrainHole) -> DrainHole {
+        DrainHole {
+            walled: !self.is_hollow(),
+            ..hole
+        }
     }
 
     /// Takes away the hole the click landed in, if any, and says whether it did.

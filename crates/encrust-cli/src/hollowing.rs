@@ -108,6 +108,11 @@ pub struct HollowArgs {
     )]
     pub drain_turn_deg: Scalar,
 
+    /// Drill the drain holes into the model before it is hollowed: the cavity keeps a wall
+    /// around each and it keeps its depth, a recess in the shape rather than a drain.
+    #[arg(long = "drain-walled")]
+    pub walled: bool,
+
     /// Print a plug for each drain hole, standing on the plate beside the model.
     #[arg(long = "drain-plugs")]
     pub plugs: bool,
@@ -161,15 +166,15 @@ impl HollowArgs {
     }
 
     /// What was asked for, cut on the lattice `precision` picks, or `None` without `--hollow`.
-    /// Every channel keeps a solid wall around it, so it comes out as a pipe through the part.
-    fn settings(&self, precision: Scalar) -> Option<HollowSettings> {
+    /// Every channel and walled hole of `holes` keeps a solid wall around it.
+    fn settings(&self, precision: Scalar, holes: &[DrainHole]) -> Option<HollowSettings> {
         let thickness_mm = self.thickness_mm?;
         Some(HollowSettings {
             thickness_mm,
             mode: self.mode.into(),
             precision,
             infill: self.infill.map(|pattern| self.infill_settings(pattern)),
-            blockers: sleeves(&self.dug(), thickness_mm),
+            blockers: sleeves(&self.dug(), holes, thickness_mm),
             // The model already stands where it prints, so the plate is straight down.
             open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()
@@ -252,16 +257,21 @@ impl HollowArgs {
             .iter()
             .map(|near| {
                 hole_at(mesh, bvh, *near, self.hole_size())
+                    .map(|hole| DrainHole {
+                        walled: self.walled,
+                        ..hole
+                    })
                     .with_context(|| format!("no surface near {near} to drill a drain hole into"))
             })
             .collect()
     }
 }
 
-/// Hollows the mesh and says what that cost and what it saved. `stop` is asked while the
-/// field is built, so a Ctrl-C lands inside the cavity rather than after it.
+/// Hollows the mesh, keeping the cavity off the walled ones of `holes`, and says what that
+/// cost and saved. `stop` is asked while the field is built, so a Ctrl-C lands inside it.
 pub fn run(
     mesh: &Mesh,
+    holes: &[DrainHole],
     args: &HollowArgs,
     precision: Scalar,
     stop: &Stop,
@@ -269,7 +279,7 @@ pub fn run(
     let started = Instant::now();
     args.check_infill()?;
     let bvh = Bvh::build(mesh);
-    let Some(settings) = args.settings(precision) else {
+    let Some(settings) = args.settings(precision, holes) else {
         bail!("--hollow was not given, so there is nothing to hollow");
     };
     let asked = || stop.requested();

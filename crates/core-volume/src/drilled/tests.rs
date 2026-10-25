@@ -14,6 +14,7 @@ fn square_hole_through() -> DrainHole {
         lift_mm: 0.0,
         shape: HoleShape::Polygon { sides: 4 },
         turn_deg: 45.0,
+        walled: false,
     }
 }
 

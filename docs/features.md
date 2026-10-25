@@ -270,7 +270,8 @@ whole-surface fill is Cmd-Shift-click.
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.
 - Once the model is hollow, a hole is carried on through the wall into the cavity, however
-  shallow you set it.
+  shallow you set it. A hole drilled before hollowing is part of the model's shape: it keeps
+  its depth and its plug, the cavity keeps a wall around it, and it does not drain.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
   cut, at the nearest spot clear of every model, support and raft, and on the plate wherever
   there is room left on it; where there is none, it stays beside its model and the window

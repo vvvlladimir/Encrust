@@ -155,7 +155,8 @@ pub fn hollow_and_cut(
     let mut shell = None;
     let mut cavity = None;
     if args.wanted() {
-        let (shelled, faces, report) = hollowing::run(mesh, args, precision, watch.stop)?;
+        let holes = placed.as_ref().map_or(&[][..], |(holes, _)| holes);
+        let (shelled, faces, report) = hollowing::run(mesh, holes, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }

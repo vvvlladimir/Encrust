@@ -278,6 +278,29 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
 }
 
 #[test]
+fn a_walled_hole_is_a_recess_that_drains_nothing() {
+    let path = write_box_stl("walled-drain", 20.0, 12, 0);
+    let report = stdout(&estimate(&[
+        path.to_str().unwrap(),
+        "--hollow",
+        "2",
+        "--layer-height",
+        "0.5",
+        "--drain",
+        "4",
+        "--drain-at",
+        "10,10,20",
+        "--drain-depth",
+        "3",
+        "--drain-walled",
+    ]));
+    assert!(
+        report.contains("trapped resin"),
+        "the cavity keeps a wall under the hole, so the resin stays in:\n{report}"
+    );
+}
+
+#[test]
 fn a_hive_in_a_cavity_drains_through_one_hole() {
     // A cell with no way into the next would be a sealed box, so a hole in the lid would
     // drain the one under it and leave every other cell full.

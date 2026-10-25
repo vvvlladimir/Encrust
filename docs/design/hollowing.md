@@ -5,7 +5,8 @@ blockers and assembly, `infill.rs` and `infill/` the lattices. Both stand on `vo
 
 Why: ADR 0058 (band on the isosurface), 0059 (cavity appended, not welded), 0063 (the
 budget), 0083 (the precision ceiling), 0189 (a hole is what drains a cavity), 0260 (kept
-fields), 0302 (the lattice is cut exactly from the cavity's mesh).
+fields), 0302 (the lattice is cut exactly from the cavity's mesh), 0346 (a hole drilled
+first is part of the shape).
 
 ## What comes out
 
@@ -247,6 +248,11 @@ And `pierce` deepens a hole standing on a hollowed model until it is through the
 dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
 model there is no wall to cross and the depth is what was typed.
 
+A hole drilled into a model that is still solid is `walled` (ADR 0346): part of the shape,
+not a drain. `sleeves` keeps the cavity a wall off it, from its mouth to its tip, as it does
+a channel; `pierce` leaves its depth, and its plug is as deep as the hole. Clearing one from
+a hollow model rebuilds the shell, as clearing a channel does.
+
 A polygon's corners lie on the hole's diameter and its turn is measured from the level line
 `frame` lays the first corner on wherever the axis is not upright, so a user turns a corner
 to the top of a hole in a side wall and the roof prints as a point rather than a flat span.
@@ -267,7 +273,7 @@ measures a point off the nearest side, and stops a leg at the mitre planes it sh
 A plug is what a hole took out of the wall as it is cut, after `pierce` (ADR 0321): the
 model cut down to the hole's body, a convex frustum whose outline is moved in by the gap —
 by `gap / cos(π/n)` at a corner, so every side clears by the gap — and as long as the wall
-where the model is hollow, as deep as the hole otherwise. A taper the gap closes first ends
+where the model is hollow, as deep as the hole otherwise or where it is walled. A taper the gap closes first ends
 the body where its radius is `THINNEST_MM`, and a mouth it closes leaves that hole an empty
 plug, counted in `Plugs::closed`, without failing the others. The model, read once as a solid
 with its shells unioned, is intersected with each body through `core-csg`, so its inner end

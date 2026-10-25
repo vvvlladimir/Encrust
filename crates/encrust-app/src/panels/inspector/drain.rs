@@ -286,9 +286,9 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// A channel dug or cleared on a hollow model moves the sleeve its cavity keeps off it, so
-/// the shell is built again on the spot rather than left open into the pipe.
-fn rebuild_around_cuts(window: &mut Window) {
+/// A channel or walled hole dug or cleared on a hollow model moves the sleeve its cavity keeps
+/// off it, so the shell is built again on the spot rather than left open into the pipe.
+pub(in crate::panels) fn rebuild_around_cuts(window: &mut Window) {
     if window.tools.hollow.rebuild(&window.doc.scene) {
         window.machine.status = crate::status::Status::Info(tr!("drain-rehollowing"));
     }

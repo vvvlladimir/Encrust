@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
 use crate::cancel::{Cancel, Step};
 use crate::csg::assemble;
-use crate::drain::Channel;
+use crate::drain::{Channel, DrainHole};
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::grid::tile_of;
@@ -144,22 +144,24 @@ impl Blocker {
     }
 }
 
-/// A sleeve of solid `wall_mm` thick around every leg of every channel, as blockers.
-///
-/// A channel is a pipe through the part, not a slot in it: without this the cavity opens
-/// into the tube wherever the two cross, and what was dug as a duct comes out as a gap in
-/// the infill. See `docs/design/hollowing.md`.
-pub fn sleeves(channels: &[Channel], wall_mm: Scalar) -> Vec<Blocker> {
-    channels
-        .iter()
-        .flat_map(|channel| {
-            let radius = channel.diameter_mm / 2.0 + wall_mm;
-            channel
-                .points
-                .windows(2)
-                .map(move |pair| Blocker::along(pair[0], pair[1], radius))
-        })
-        .collect()
+/// A sleeve of solid `wall_mm` thick around every leg of every channel and along every
+/// walled hole, as blockers: a channel is a pipe through the part and a walled hole a recess
+/// in it (ADR 0076, 0346), so neither opens into the cavity. See `docs/design/hollowing.md`.
+pub fn sleeves(channels: &[Channel], holes: &[DrainHole], wall_mm: Scalar) -> Vec<Blocker> {
+    let legs = channels.iter().flat_map(|channel| {
+        let radius = channel.diameter_mm / 2.0 + wall_mm;
+        channel
+            .points
+            .windows(2)
+            .map(move |pair| Blocker::along(pair[0], pair[1], radius))
+    });
+    // A ball ending at the tip leaves `wall_mm` past the rim of a flat end, and more on its axis.
+    let recesses = holes.iter().filter(|hole| hole.walled).map(|hole| {
+        let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
+        let widest = hole.diameter_mm * hole.taper.max(1.0);
+        Blocker::along(hole.at, tip, widest / 2.0 + wall_mm)
+    });
+    legs.chain(recesses).collect()
 }
 
 /// Everything one hollowing run needs.

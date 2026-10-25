@@ -11,6 +11,7 @@ fn hole() -> DrainHole {
         lift_mm: 1.0,
         shape: HoleShape::Round,
         turn_deg: 0.0,
+        walled: false,
     }
 }
 

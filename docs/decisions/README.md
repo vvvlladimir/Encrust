@@ -78,7 +78,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0053](0053-nearest-surface-queries-live-beside-the-ray-ones.md) | Nearest-surface queries live beside the ray ones, in `core-geometry` | Accepted |
 | [0054](0054-inside-is-decided-by-the-generalised-winding-number.md) | Inside is decided by the generalised winding number | Accepted |
 | [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted |
-| [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted |
+| [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
 | [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted; the triangulator and the question on import superseded by 0270 |
@@ -262,8 +262,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted; its sizes for walls and holes superseded by 0320 |
 | [0320](0320-an-infill-is-a-cell-and-a-density.md) | State an infill by its cell and its density, and derive its walls and holes | Accepted |
 | [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted; the plug's shape superseded by 0321 |
-| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted |
+| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity |
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
+| [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |

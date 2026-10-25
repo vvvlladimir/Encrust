@@ -115,6 +115,10 @@ pub struct DrainHole {
     pub shape: HoleShape,
     #[serde(default)]
     pub turn_deg: Scalar,
+    /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
+    /// keeps a wall around it and it keeps its depth rather than draining (ADR 0346).
+    #[serde(default)]
+    pub walled: bool,
 }
 
 impl DrainHole {
@@ -129,6 +133,7 @@ impl DrainHole {
             lift_mm,
             shape: size.shape,
             turn_deg: size.turn_deg,
+            walled: false,
         }
     }
 
@@ -186,8 +191,8 @@ fn weighted(body: &Mesh) -> Mesh {
     whole
 }
 
-/// Every hole deepened until it is through a wall of `thickness_mm` cut on a lattice of
-/// `voxel_mm`.
+/// Every hole but a walled one deepened until it is through a wall of `thickness_mm` cut on
+/// a lattice of `voxel_mm`.
 ///
 /// A hole is drilled along the surface's own normal, so the wall in front of it is the
 /// thickness the cavity was cut to; a hole left shorter than that is a dimple, not a
@@ -197,9 +202,12 @@ pub fn pierce(holes: &[DrainHole], thickness_mm: Scalar, voxel_mm: Scalar) -> Ve
     holes
         .iter()
         .map(|hole| DrainHole {
-            depth_mm: hole
-                .depth_mm
-                .max(hole.lift_mm + thickness_mm + 2.0 * voxel_mm),
+            depth_mm: if hole.walled {
+                hole.depth_mm
+            } else {
+                hole.depth_mm
+                    .max(hole.lift_mm + thickness_mm + 2.0 * voxel_mm)
+            },
             ..*hole
         })
         .collect()

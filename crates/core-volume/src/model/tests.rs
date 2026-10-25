@@ -280,7 +280,7 @@ fn a_channel_is_dug_only_once_it_has_two_points_to_run_between() {
 }
 
 #[test]
-fn a_hole_is_cut_the_moment_it_is_placed_and_deepened_once_there_is_a_wall() {
+fn a_hole_is_cut_the_moment_it_is_placed() {
     let mut hollow = ModelHollow::default();
     hollow.add_drain(
         &lid(),
@@ -307,17 +307,65 @@ fn a_hole_is_cut_the_moment_it_is_placed_and_deepened_once_there_is_a_wall() {
         hollow.markers().is_none(),
         "a hole is geometry from the first click, never a marker"
     );
+}
 
+#[test]
+fn a_hole_drilled_before_the_cavity_keeps_its_depth_and_one_after_goes_through_the_wall() {
+    let (mesh, size) = (lid(), drain_tool(3.0, 0.5));
+    let bvh = Bvh::build(&mesh);
+    let mut hollow = ModelHollow::default();
+    hollow.add_drain(&mesh, &bvh, Vec3::ZERO, Vec3::Z, size, Transform::default());
     // Two millimetres of wall on a 0.2 mm lattice, which a half-millimetre dimple
     // cannot reach through.
     hollow.take(shell(
         Mat3::IDENTITY,
         hollow.asking(&HollowSettings::default()),
     ));
+    let at = Vec3::new(20.0, 0.0, 0.0);
+    hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+
+    let (before, after) = (hollow.cut().0[0], hollow.cut().0[1]);
     assert!(
-        hollow.cut().0[0].depth_mm >= 2.0,
-        "once there is a cavity the hole is re-cut through the wall, got {}",
-        hollow.cut().0[0].depth_mm
+        (before.depth_mm - 0.5).abs() < 1e-6,
+        "a hole drilled into the solid model is its shape, still 0.5 mm deep, got {}",
+        before.depth_mm
+    );
+    assert!(
+        after.depth_mm >= 2.0,
+        "a hole drilled into the shell is re-cut through the 2 mm wall, got {}",
+        after.depth_mm
+    );
+}
+
+#[test]
+fn a_hole_drilled_into_a_solid_model_asks_for_a_wall_around_it() {
+    let asked = HollowSettings::default();
+    let mut hollow = ModelHollow::default();
+    hollow.add_drain(
+        &lid(),
+        &Bvh::build(&lid()),
+        Vec3::ZERO,
+        Vec3::Z,
+        drain_tool(3.0, 4.0),
+        Transform::default(),
+    );
+    let walled = hollow.asking(&asked);
+    assert_eq!(
+        walled.blockers,
+        vec![Blocker::along(
+            Vec3::ZERO,
+            Vec3::new(0.0, 0.0, -4.0),
+            1.5 + asked.thickness_mm
+        )],
+        "the cavity keeps a wall's width off the hole's whole length"
+    );
+
+    hollow.take(shell(Mat3::IDENTITY, walled));
+    hollow.clear_drains();
+    assert_eq!(
+        hollow.rebuild(),
+        Some(asked),
+        "a walled hole filled in leaves the cavity to be rebuilt without its wall"
     );
 }
 

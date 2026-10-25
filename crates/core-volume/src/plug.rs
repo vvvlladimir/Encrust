@@ -132,7 +132,7 @@ pub fn plug_wall_mm(mode: HollowMode, thickness_mm: Scalar) -> Option<Scalar> {
 /// space: what the hole took out of the wall, `gap_mm` narrower all round (ADR 0321).
 ///
 /// Its outer face is the very surface the hole took, its inner end flat, `wall_mm` in, or at
-/// the hole's depth without one. `source` is the model as last read, kept for the next call.
+/// the hole's depth without one or for a walled hole. `source` is the model as last read.
 pub fn plugs(
     source: &mut Option<PlugSource>,
     model: &Mesh,
@@ -293,6 +293,7 @@ impl Body {
         if !sound || !gap_mm.is_finite() {
             return Err(VolumeError::BadDrain { index });
         }
+        let wall_mm = wall_mm.filter(|_| !hole.walled);
         let body = Self::of(hole, axis, wall_mm.unwrap_or(hole.depth_mm), gap_mm);
         Ok((body.outer_mm.min(body.lifted_mm) > THINNEST_MM).then_some(body))
     }

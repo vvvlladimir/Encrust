@@ -19,6 +19,7 @@ fn hole_in_the_top() -> DrainHole {
         lift_mm: 0.0,
         shape: HoleShape::Round,
         turn_deg: 0.0,
+        walled: false,
     }
 }
 
@@ -371,6 +372,20 @@ fn a_plug_is_flush_with_the_surface_it_closes() {
     assert!(
         (bounds.maxs.z - 10.0).abs() < 1e-4 && (bounds.mins.z - 8.0).abs() < 1e-4,
         "the plug runs from the slab's top down through the 2 mm wall, got {bounds:?}"
+    );
+}
+
+#[test]
+fn a_walled_hole_takes_a_plug_as_deep_as_itself_through_any_wall() {
+    let walled = DrainHole {
+        walled: true,
+        ..hole_in_the_top()
+    };
+    let plug = the_plug(walled, Some(2.0), 0.1);
+    let bounds = plug.aabb().expect("a plug has vertices");
+    assert!(
+        (bounds.maxs.z - 10.0).abs() < 1e-4 && (bounds.mins.z - 4.0).abs() < 1e-4,
+        "the plug fills the hole's 6 mm, not the 2 mm wall, got {bounds:?}"
     );
 }
 
