@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use core_engine::SupportPlan;
 use core_format::ExposureRange;
-use core_geometry::{DEFAULT_WELD_TOLERANCE, Scalar, Vec3};
+use core_geometry::{
+    DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, DEFAULT_WELD_TOLERANCE, MendMethod, Scalar,
+    Vec3,
+};
 use core_plate::{OrientGoal, OrientPreset};
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
@@ -62,10 +65,20 @@ pub struct ImportArgs {
     #[arg(long)]
     pub no_validate: bool,
 
-    /// Repair the model as the window's Repair does: patch its holes, drop the faces left
-    /// over, and keep it as it came if that would leave more wrong.
-    #[arg(long, conflicts_with = "no_validate")]
-    pub repair: bool,
+    /// Repair the model as the window's Repair does, by `repair` unless another method is
+    /// named; it is kept as it came if that would leave more wrong.
+    #[arg(long, value_name = "METHOD", num_args = 0..=1, require_equals = true,
+          default_missing_value = "repair", conflicts_with = "no_validate")]
+    pub repair: Option<RepairMethod>,
+
+    /// How far a vertex may stand off an open edge for --repair to stitch it in, millimetres.
+    #[arg(long, value_name = "MM", default_value_t = DEFAULT_SEAM_TOLERANCE, requires = "repair")]
+    pub seam_tolerance: Scalar,
+
+    /// Smallest area a shell enclosing nothing keeps under --repair, square millimetres.
+    #[arg(long, value_name = "MM2", default_value_t = DEFAULT_SMALLEST_SHELL_MM2,
+          requires = "repair")]
+    pub smallest_shell: Scalar,
 
     #[command(flatten)]
     pub transform: TransformArgs,
@@ -151,6 +164,30 @@ pub struct TransformArgs {
 }
 
 /// What an orientation is searched for, as [`OrientPreset`] names it.
+/// Which repair `--repair` runs.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum RepairMethod {
+    /// Collapse, stitch seams, drop specks, patch holes and turn the patches outward.
+    Repair,
+    /// Patch every hole and turn the patches outward.
+    CloseHoles,
+    /// Patch only the holes a single missing face leaves.
+    CloseSmallHoles,
+    /// Turn the faces wound the wrong way, and add nothing.
+    Turn,
+}
+
+impl From<RepairMethod> for MendMethod {
+    fn from(method: RepairMethod) -> Self {
+        match method {
+            RepairMethod::Repair => Self::Repair,
+            RepairMethod::CloseHoles => Self::CloseHoles,
+            RepairMethod::CloseSmallHoles => Self::CloseSmallHoles,
+            RepairMethod::Turn => Self::Turn,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Goal {
     /// The least resin in the supports.

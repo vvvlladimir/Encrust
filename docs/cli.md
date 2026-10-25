@@ -14,9 +14,12 @@ named without a resin is refused rather than given stock numbers.
 The dev profile is optimised (ADR 0037); every quoted timing is a release timing.
 
 A model is welded as it is read, vertices nearer than `--weld-tolerance` mm merged;
-`--no-validate` skips the topology check and the orientation fix; `--repair` patches holes
-and drops doubled faces as the window's Repair does, keeping the model as it came if that
-would leave more wrong (ADR 0349). `--samples-per-layer N` cuts N planes inside each layer,
+`--no-validate` skips the topology check and the orientation fix; `--repair` stitches seams,
+drops specks, patches holes and drops doubled faces as the window's Repair does, keeping the
+model as it came if that would leave more wrong (ADR 0349). `--repair=close-holes`,
+`=close-small-holes` or `=turn` runs part of it (ADR 0351). `--seam-tolerance MM` (0.01) is
+how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
+MM2` (1) the least area an open shell keeps. `--samples-per-layer N` cuts N planes inside each layer,
 so a feature thinner than a layer is kept. A mask is
 shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
 at all, `--grey-levels N` rounds its edges to N greys, `--grey-floor V` sets the dimmest
@@ -28,6 +31,7 @@ encrust profiles show elegoo-mars-4-ultra -o my-printer.toml   # a profile to st
 encrust info plate.ctb                       # open a sliced file
 encrust inspect model.stl --printer elegoo-mars-4-ultra
 encrust inspect broken.stl --repair            # what closing its holes would do
+encrust slice broken.stl --repair=close-small-holes -o out   # only the missing faces
 encrust slice model.stl -o out               # PNG stack
 
 encrust slice model.stl \

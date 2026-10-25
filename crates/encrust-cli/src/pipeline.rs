@@ -8,7 +8,8 @@ use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
 use core_geometry::{
-    Mesh, Scalar, Welded, diagnose, mend, orient_outward, remove_duplicate_faces, weld,
+    MendSettings, Mesh, Scalar, Welded, diagnose, mend, orient_outward, remove_duplicate_faces,
+    weld,
 };
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
@@ -402,7 +403,13 @@ fn checked(
         remove_duplicate_faces(mesh).len()
     };
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
-    let mended = args.repair.then(|| mend(mesh));
+    let settings = MendSettings {
+        seam_tolerance_mm: args.seam_tolerance,
+        smallest_shell_mm2: args.smallest_shell,
+    };
+    let mended = args
+        .repair
+        .map(|method| mend(mesh, method.into(), settings));
     let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
     let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;

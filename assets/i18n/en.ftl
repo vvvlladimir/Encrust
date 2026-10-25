@@ -1777,6 +1777,16 @@ repair-dropped-faces =
         [one] dropped { $count } face drawn twice
        *[other] dropped { $count } faces drawn twice
     }
+repair-stitched-seams =
+    { $count ->
+        [one] stitched { $count } seam
+       *[other] stitched { $count } seams
+    }
+repair-dropped-shells =
+    { $count ->
+        [one] dropped { $count } speck enclosing nothing
+       *[other] dropped { $count } specks enclosing nothing
+    }
 
 ## panels/view_cube.rs
 

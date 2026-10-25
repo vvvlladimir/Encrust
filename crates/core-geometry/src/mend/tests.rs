@@ -1,6 +1,11 @@
 use super::*;
 use crate::{DEFAULT_WELD_TOLERANCE, Transform, Vec3, cuboid, signed_volume, weld};
 
+/// Runs the repair a Repair press runs.
+fn repaired(mesh: &mut Mesh) -> Mended {
+    mend(mesh, MendMethod::Repair, MendSettings::default())
+}
+
 /// The unit cube standing on the origin, wound outwards.
 fn unit_cube() -> Mesh {
     cuboid(Vec3::ZERO, Vec3::ONE)
@@ -23,7 +28,7 @@ fn open_cube() -> Mesh {
 #[test]
 fn an_open_cube_comes_back_closed_with_its_volume() {
     let mut mesh = open_cube();
-    let mended = mend(&mut mesh);
+    let mended = repaired(&mut mesh);
 
     assert_eq!(mended.filled.loops_filled, 1);
     assert!(!mended.kept_as_found);
@@ -48,7 +53,7 @@ fn a_face_drawn_twice_beside_a_hole_comes_back_sound() {
     mesh.faces.push(beside);
     assert!(!diagnose(&mesh).is_sound());
 
-    let mended = mend(&mut mesh);
+    let mended = repaired(&mut mesh);
 
     assert_eq!(mended.duplicates_removed, 1);
     assert_eq!(mended.filled.loops_filled, 1);
@@ -75,7 +80,7 @@ fn a_seam_two_solids_share_is_not_something_to_repair() {
     let mut mesh = weld(&mesh, DEFAULT_WELD_TOLERANCE).mesh;
     assert_eq!(diagnose(&mesh).non_manifold_edges, 1, "the shared edge");
 
-    let mended = mend(&mut mesh);
+    let mended = repaired(&mut mesh);
 
     assert_eq!(mended.duplicates_removed, 0, "a seam costs no face");
     assert!(!mended.kept_as_found);
@@ -97,7 +102,7 @@ fn a_fin_is_cancelled_by_its_patch_and_the_model_comes_back_as_it_was() {
     mesh.vertices.push(Vec3::new(0.5, 0.5, 2.0));
     mesh.faces.push([top[0], top[1], tip]);
 
-    let mended = mend(&mut mesh);
+    let mended = repaired(&mut mesh);
 
     assert_eq!(mended.duplicates_removed, 2, "the fin and its reverse");
     assert_eq!(mesh.faces, unit_cube().faces);
@@ -106,7 +111,7 @@ fn a_fin_is_cancelled_by_its_patch_and_the_model_comes_back_as_it_was() {
 #[test]
 fn a_model_that_is_one_sheet_is_kept_rather_than_cancelled_away() {
     let mut mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
-    let mended = mend(&mut mesh);
+    let mended = repaired(&mut mesh);
 
     assert!(mended.kept_as_found);
     assert_eq!(mesh.faces, vec![[0, 1, 2]]);
@@ -126,8 +131,83 @@ fn a_face_with_no_area_between_two_corners_on_one_point_is_repaired() {
             [2, 0, 3],
         ],
     );
-    let mended = mend(&mut mesh);
+    let mended = repaired(&mut mesh);
 
     assert!(!mended.kept_as_found);
     assert_eq!(wrong(&diagnose(&mesh)), 0, "got {:?}", diagnose(&mesh));
+}
+
+#[test]
+fn a_seam_is_stitched_rather_than_patched() {
+    let mut mesh = crate::fixtures::cube_with_a_finer_top(2, 0.0);
+    let mended = repaired(&mut mesh);
+
+    assert_eq!(mended.stitched.edges_split, 4);
+    assert_eq!(mended.filled.loops_filled, 0, "no hole is left to patch");
+    assert!(diagnose(&mesh).is_sound(), "got {:?}", diagnose(&mesh));
+    let volume = signed_volume(&mesh);
+    assert!((volume - 1.0).abs() < 1e-6, "expected 1 mm^3, got {volume}");
+}
+
+#[test]
+fn a_speck_beside_the_model_goes() {
+    let mut mesh = crate::fixtures::cube_and_a_speck();
+    let mended = repaired(&mut mesh);
+
+    assert_eq!(mended.shells_dropped, 1);
+    assert_eq!(
+        mended.filled.loops_filled, 0,
+        "the speck is not patched shut"
+    );
+    assert_eq!(diagnose(&mesh).shells, 1);
+}
+
+#[test]
+fn close_holes_patches_a_seam_rather_than_stitching_it() {
+    let mut mesh = crate::fixtures::cube_with_a_finer_top(2, 0.0);
+    let mended = mend(&mut mesh, MendMethod::CloseHoles, MendSettings::default());
+
+    assert_eq!(mended.stitched, Stitched::default());
+    assert!(mended.filled.loops_filled > 0);
+}
+
+#[test]
+fn close_small_holes_leaves_a_square_hole_open() {
+    // One face of the floor missing, and the whole top.
+    let mut mesh = open_cube();
+    let floor = mesh
+        .faces
+        .iter()
+        .position(|face| {
+            face.iter()
+                .all(|&corner| mesh.vertices[corner as usize].z < 0.5)
+        })
+        .expect("the cube has a floor");
+    mesh.faces.remove(floor);
+
+    let mended = mend(
+        &mut mesh,
+        MendMethod::CloseSmallHoles,
+        MendSettings::default(),
+    );
+
+    assert_eq!(mended.filled.loops_filled, 1);
+    assert_eq!(mended.orientation, None, "nothing is turned");
+    assert_eq!(diagnose(&mesh).boundary_edges, 4, "the top is still open");
+}
+
+#[test]
+fn turn_flips_what_is_wound_wrong_and_adds_nothing() {
+    let mut mesh = open_cube();
+    mesh.faces[0].swap(1, 2);
+    let faces = mesh.faces.len();
+
+    let mended = mend(&mut mesh, MendMethod::Turn, MendSettings::default());
+
+    assert_eq!(
+        mended.orientation.map(|turned| turned.flipped_faces),
+        Some(1)
+    );
+    assert_eq!(mended.filled, Filled::default());
+    assert_eq!(mesh.faces.len(), faces);
 }

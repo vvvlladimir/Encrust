@@ -2,7 +2,7 @@ use rayon::prelude::*;
 
 use super::remove_duplicate_faces;
 use crate::hash::FastMap;
-use crate::{Mesh, Scalar};
+use crate::{Mesh, Scalar, Triangle};
 
 /// How near two corners of a face with no area must stand to be one point, mm. Two cells'
 /// vertices on one lattice point differ in the last bits of an `f32`, far under this; a
@@ -54,7 +54,7 @@ fn flat_faces(mesh: &Mesh) -> Vec<[u32; 3]> {
         .par_iter()
         .filter(|face| {
             let [a, b, c] = face.map(|corner| mesh.vertices[corner as usize]);
-            (b - a).cross(c - a).length_squared() == 0.0
+            Triangle::new(a, b, c).is_degenerate()
         })
         .copied()
         .collect()

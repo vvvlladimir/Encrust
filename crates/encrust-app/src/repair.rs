@@ -106,7 +106,9 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     object.reshape(repaired.shaped.clone());
     // What repair did is said in the stage notice; the summary keeps describing the file,
     // so a mended model carries no mark of its own.
-    object.summary.orientation = repaired.mended.orientation;
+    if let Some(orientation) = repaired.mended.orientation {
+        object.summary.orientation = orientation;
+    }
 
     let name = &repaired.name;
     let left = repaired.mended.filled.loops_left;
@@ -130,7 +132,11 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
 /// How many things the repair actually changed, which is what decides whether it has
 /// anything to report.
 fn done(repaired: &Repaired) -> usize {
-    repaired.mended.filled.loops_filled + repaired.mended.duplicates_removed
+    let mended = &repaired.mended;
+    mended.filled.loops_filled
+        + mended.duplicates_removed
+        + mended.stitched.edges_split
+        + mended.shells_dropped
 }
 
 /// What it changed, in the words the stage notice says it in.
@@ -140,6 +146,18 @@ fn what(repaired: &Repaired) -> Vec<String> {
         lines.push(tr!(
             "repair-closed-holes",
             count = repaired.mended.filled.loops_filled
+        ));
+    }
+    if repaired.mended.stitched.edges_split > 0 {
+        lines.push(tr!(
+            "repair-stitched-seams",
+            count = repaired.mended.stitched.edges_split
+        ));
+    }
+    if repaired.mended.shells_dropped > 0 {
+        lines.push(tr!(
+            "repair-dropped-shells",
+            count = repaired.mended.shells_dropped
         ));
     }
     if repaired.mended.duplicates_removed > 0 {

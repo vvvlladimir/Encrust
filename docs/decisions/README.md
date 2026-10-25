@@ -87,6 +87,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0269](0269-orientation-never-worsens-and-a-fold-is-only-noted.md) | Orientation never worsens a file, and a fold is noted rather than asked about | Accepted |
 | [0270](0270-repair-cancels-what-encloses-nothing-and-never-worsens.md) | Repair cancels what encloses nothing, patches by least area, and never worsens | Accepted |
 | [0349](0349-repair-is-a-core-call-the-command-line-reaches.md) | Repair is a core call the command line reaches | Accepted |
+| [0350](0350-repair-stitches-a-seam-before-it-patches.md) | Repair stitches a seam before it patches | Accepted |
+| [0351](0351-repair-has-methods-and-drops-open-specks.md) | Repair has methods, and drops open specks but never a closed shell | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |

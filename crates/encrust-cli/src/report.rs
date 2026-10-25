@@ -217,6 +217,19 @@ fn describe_repair(mended: &Mended) -> String {
     if closed > 0 {
         done.push(format!("closed {closed} {}", holes(closed)));
     }
+    let seams = mended.stitched.edges_split;
+    if seams > 0 {
+        let plural = if seams == 1 { "seam" } else { "seams" };
+        done.push(format!("stitched {seams} {plural}"));
+    }
+    if mended.shells_dropped > 0 {
+        let plural = if mended.shells_dropped == 1 {
+            "shell"
+        } else {
+            "shells"
+        };
+        done.push(format!("dropped {} small {plural}", mended.shells_dropped));
+    }
     if mended.duplicates_removed > 0 {
         done.push(format!(
             "dropped {} doubled faces",

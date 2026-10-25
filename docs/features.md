@@ -56,6 +56,12 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Flip faces wound the wrong way, and drop faces that enclose nothing.
 - Close holes, but only when you ask for it: Repair in the window, `--repair` on the
   command line.
+- Stitch the seams where a finer patch of surface meets a coarser one, as part of the same
+  repair, without moving or adding a vertex.
+- Drop specks: open shells under 1 mm² floating apart from the model. A closed shell is
+  never dropped, however small.
+- On the command line, run only part of the repair: close holes, close only the holes a
+  missing face leaves, or turn faces.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.

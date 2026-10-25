@@ -133,8 +133,9 @@ keyed by sorted corners.
 
 Repair adds surface the file never had, so it runs only when the user presses Repair
 (ADR 0194, 0270). The order is collapse the faces with no area whose corners stand on one
-point (ADR 0310), drop the doubled faces, orient, fill, drop the doubled
-faces again, orient. If the result has more boundary edges, degenerate faces and
+point (ADR 0310), drop the doubled faces, stitch the seams (ADR 0350), drop the specks,
+orient, fill, drop the doubled faces again, orient. A speck goes before the fill, which
+would otherwise close it into a shell that looks kept. If the result has more boundary edges, degenerate faces and
 duplicates between them than the input had, the input stands.
 
 An edge used an odd number of times cannot pair off without one more face. A hole's edge
@@ -152,9 +153,41 @@ the tightest skin across it, not a fair continuation of the surface.
 
 A longer loop, or one every triangulation of which holds a sliver, is flattened into the
 plane of its Newell normal and ear clipped by `triangulate`, the `earcutr` call a plane cut
-caps its halves with (ADR 0089). If that comes back short of `n - 2` triangles, the loop is
+caps its halves with (ADR 0089). If that comes back short of `n - 2` triangles, or with a
+face of no area — corners in a row that the projection rounded into an ear — the loop is
 fanned from one new vertex at its middle. A Newell normal of zero means the loop is a line,
 which is left open and counted in `loops_left`.
+
+Other methods run part of it (ADR 0351): *close holes* drops the doubled faces and
+patches, without collapsing, stitching or dropping specks; *close small holes* patches only
+the loops of three corners a single missing face leaves, and turns nothing; *turn* only
+orients. Each keeps the never-worse rule.
+
+## Dropping specks
+
+`drop_small_shells(mesh, smallest_mm2)` drops a shell, faces joined across shared edges, when
+it has an edge an odd number of faces use and its faces add up to under `smallest_mm2`
+(1 mm² by default). A closed shell stays however small: a thin pin is part of the model,
+and only the user can say it is not.
+
+## Stitching seams
+
+Two patches of one surface meshed at different densities meet in a seam: the coarse side's
+edge `a → b` has the fine side's vertices standing on it, and both are open. Patching it
+lays slivers along the crack; `stitch_seams(mesh, tolerance)` closes it instead by fanning
+the coarse face from its far corner through those vertices. No vertex is made or moved.
+
+A vertex is laid into an open edge when it lies strictly between its ends, within the
+tolerance of it, and ends an open edge walked the other way along the same line. The last
+condition keeps a sheet merely standing on an edge from being sewn into it. A split that
+would leave a face with no area is skipped. The open corners are hashed on a grid with
+cells of the mean open edge, at least two tolerances, and each edge is walked in half-cell
+steps over the 27 cells around each, so the cost follows the open edges' total length.
+A face has one edge split a pass; four passes cover its three edges.
+
+`DEFAULT_SEAM_TOLERANCE` is 0.01 mm. On the test models it closes every crack of one
+statuette with no patch at all, and on a 4-million-face colour mix it stitches about 1 900
+edges the fill would otherwise have bridged.
 
 ## Placement
 

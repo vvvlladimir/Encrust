@@ -30,7 +30,12 @@ fn a_repaired_model_comes_back_closed() {
     assert_eq!(repaired.id, ObjectId::for_test(7));
     assert_eq!(repaired.mended.filled.loops_filled, 1);
     assert!(diagnose(&repaired.shaped.mesh).is_closed());
-    assert!(repaired.mended.orientation.orientable);
+    assert!(
+        repaired
+            .mended
+            .orientation
+            .is_some_and(|turned| turned.orientable)
+    );
 }
 
 #[test]

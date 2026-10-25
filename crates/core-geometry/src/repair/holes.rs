@@ -29,12 +29,18 @@ impl Filled {
 /// Run [`crate::weld`] first: on an unwelded mesh every edge is a boundary. A loop with no
 /// plane at all is left open and counted; see `docs/design/mesh-repair.md`.
 pub fn fill_holes(mesh: &mut Mesh) -> Filled {
+    fill_holes_within(mesh, usize::MAX)
+}
+
+/// Closes the boundary loops of at most `most_corners` corners as [`fill_holes`] does, and
+/// leaves the longer ones open without counting them.
+pub fn fill_holes_within(mesh: &mut Mesh, most_corners: usize) -> Filled {
     let (rings, loops_left) = boundary_loops(mesh);
     let mut filled = Filled {
         loops_left,
         ..Filled::default()
     };
-    for ring in rings {
+    for ring in rings.into_iter().filter(|ring| ring.len() <= most_corners) {
         let added = patch(mesh, &ring);
         if added > 0 {
             filled.loops_filled += 1;

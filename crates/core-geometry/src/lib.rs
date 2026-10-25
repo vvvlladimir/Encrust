@@ -4,6 +4,8 @@ mod buckets;
 mod bvh;
 mod clip;
 mod closest;
+#[cfg(test)]
+mod fixtures;
 mod hash;
 mod hull;
 mod mend;
@@ -31,7 +33,7 @@ pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
-pub use mend::{Mended, mend};
+pub use mend::{MendMethod, MendSettings, Mended, mend};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use primitives::{
@@ -41,7 +43,10 @@ pub use ray::{
     PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
 };
 pub use region::Region;
-pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
+pub use repair::{
+    DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, Filled, Stitched, collapse_flat_faces,
+    drop_small_shells, fill_holes, fill_holes_within, remove_duplicate_faces, stitch_seams,
+};
 pub use ring::{ring_area, ring_contains};
 pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};

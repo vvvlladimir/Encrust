@@ -73,6 +73,34 @@ fn repair_says_in_json_how_many_holes_it_closed() {
     assert_eq!(report["repair"]["holes_closed"], 1, "got {report}");
     assert_eq!(report["repair"]["holes_left"], 0);
     assert_eq!(report["repair"]["kept_as_found"], false);
+    assert_eq!(report["repair"]["seams_stitched"], 0, "a box has no seam");
+}
+
+#[test]
+fn close_small_holes_patches_a_missing_face_and_leaves_a_missing_side() {
+    let one_face = write_box_stl("one-face-missing", 10.0, 11, 0);
+    let one_side = write_box_stl("one-side-missing", 10.0, 10, 0);
+    let run = |path: &std::path::Path| {
+        stdout(&encrust(&[
+            "inspect",
+            path.to_str().unwrap(),
+            "--repair=close-small-holes",
+        ]))
+    };
+
+    assert_eq!(field(&run(&one_face), "repair"), "closed 1 hole");
+    assert_eq!(field(&run(&one_side), "defect"), "4 open edges");
+}
+
+#[test]
+fn a_seam_tolerance_without_repair_is_a_usage_error() {
+    let path = write_box_stl("seam-unrepaired", 10.0, 10, 0);
+    let output = encrust(&["inspect", path.to_str().unwrap(), "--seam-tolerance", "0.1"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "it does nothing without --repair"
+    );
 }
 
 #[test]

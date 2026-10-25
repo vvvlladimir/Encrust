@@ -21,6 +21,11 @@ impl Triangle {
     pub fn area(&self) -> Scalar {
         self.normal_unnormalized().length() / 2.0
     }
+
+    /// Whether its corners enclose no area at all, which is what a face counts as broken for.
+    pub fn is_degenerate(&self) -> bool {
+        self.normal_unnormalized().length_squared() == 0.0
+    }
 }
 
 #[cfg(test)]

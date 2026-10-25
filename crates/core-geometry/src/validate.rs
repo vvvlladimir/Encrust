@@ -7,7 +7,7 @@ use rayon::iter::{
 };
 use rayon::slice::ParallelSlice;
 
-use crate::topology::{Components, EdgeUse, counted_out, edge_uses, sort_runs};
+use crate::topology::{EdgeUse, counted_out, edge_uses, shells, sort_runs};
 use crate::{Mesh, Scalar, Vec3};
 
 /// What is structurally wrong, or right, with a mesh.
@@ -64,10 +64,7 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
     let shells = if mesh.faces.is_empty() {
         0
     } else {
-        let joins = uses
-            .par_chunk_by(|a, b| a.edge == b.edge)
-            .flat_map_iter(|group| group[1..].iter().map(|other| [group[0].face, other.face]));
-        Components::joined(mesh.faces.len(), joins).count()
+        shells(mesh.faces.len(), &uses).count()
     };
     let referenced = referenced_vertices(mesh);
 
@@ -207,9 +204,7 @@ pub(crate) fn degenerate_faces(mesh: &Mesh) -> Vec<bool> {
             face[0] == face[1]
                 || face[1] == face[2]
                 || face[0] == face[2]
-                || mesh
-                    .triangle(index)
-                    .is_none_or(|t| t.normal_unnormalized().length_squared() == 0.0)
+                || mesh.triangle(index).is_none_or(|t| t.is_degenerate())
         })
         .collect()
 }

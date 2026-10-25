@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Mended, Mesh, mend};
+use core_geometry::{MendMethod, MendSettings, Mended, Mesh, mend};
 
 use crate::i18n::tr;
 use crate::scene::{ObjectId, Shaped};
@@ -77,7 +77,7 @@ impl RepairJob {
 
 fn run(request: RepairRequest) -> RepairOutcome {
     let mut mesh = (*request.mesh).clone();
-    let mended = mend(&mut mesh);
+    let mended = mend(&mut mesh, MendMethod::Repair, MendSettings::default());
     RepairOutcome::Done(Box::new(Repaired {
         id: request.id,
         name: request.name,

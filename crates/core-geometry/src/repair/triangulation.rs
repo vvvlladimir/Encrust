@@ -1,5 +1,5 @@
 use crate::triangulate::triangulate;
-use crate::{Scalar, Vec2, Vec3};
+use crate::{Scalar, Triangle, Vec2, Vec3};
 
 /// Smallest cross product treated as a direction, mm². Below it the loop is a line and
 /// has no plane to be triangulated in.
@@ -61,8 +61,8 @@ fn weight(a: Vec3, b: Vec3, c: Vec3) -> Option<f64> {
     (twice > MIN_ASPECT * f64::from(longest)).then_some(twice / 2.0)
 }
 
-/// The loop ear clipped in its own plane, or `None` when it has none or its projection
-/// folds over itself.
+/// The loop ear clipped in its own plane, or `None` when it has none, its projection
+/// folds over itself or a face would have no area.
 pub(super) fn ear_clipped(points: &[Vec3]) -> Option<Vec<[u32; 3]>> {
     let normal = newell(points);
     if normal.length_squared() < MIN_NORMAL {
@@ -76,7 +76,12 @@ pub(super) fn ear_clipped(points: &[Vec3]) -> Option<Vec<[u32; 3]>> {
         .collect();
     let corners: Vec<u32> = (0..points.len() as u32).collect();
     let faces = triangulate(&corners, &[], &flat);
-    (faces.len() + 2 == points.len()).then_some(faces)
+    // Corners in a row can round into an ear in the plane; such a face has no area.
+    let with_area = faces.iter().all(|face| {
+        let [a, b, c] = face.map(|corner| points[corner as usize]);
+        !Triangle::new(a, b, c).is_degenerate()
+    });
+    (faces.len() + 2 == points.len() && with_area).then_some(faces)
 }
 
 /// Newell's normal: the area-weighted normal of a loop that need not be flat, and

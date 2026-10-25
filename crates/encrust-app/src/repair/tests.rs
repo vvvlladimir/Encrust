@@ -142,9 +142,11 @@ fn a_model_that_came_back_closed_is_no_longer_called_broken() {
             name: "open.stl".to_owned(),
             shaped: crate::scene::Shaped::of(Arc::new(mesh)),
             mended: Mended {
+                stitched: core_geometry::Stitched::default(),
+                shells_dropped: 0,
                 filled,
                 duplicates_removed: 0,
-                orientation,
+                orientation: Some(orientation),
                 kept_as_found: false,
             },
         },
@@ -171,13 +173,11 @@ fn a_repair_of_a_model_that_has_been_deleted_is_reported_rather_than_applied() {
             name: "model.stl".to_owned(),
             shaped: crate::scene::Shaped::of(mesh),
             mended: Mended {
+                stitched: core_geometry::Stitched::default(),
+                shells_dropped: 0,
                 filled: core_geometry::Filled::default(),
                 duplicates_removed: 0,
-                orientation: Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
+                orientation: None,
                 kept_as_found: false,
             },
         },
@@ -198,13 +198,11 @@ fn a_repair_that_would_worsen_the_model_leaves_it_as_it_came() {
             name: "open.stl".to_owned(),
             shaped: crate::scene::Shaped::of(Arc::new(Mesh::default())),
             mended: Mended {
+                stitched: core_geometry::Stitched::default(),
+                shells_dropped: 0,
                 filled: core_geometry::Filled::default(),
                 duplicates_removed: 0,
-                orientation: Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
+                orientation: None,
                 kept_as_found: true,
             },
         },
@@ -215,5 +213,39 @@ fn a_repair_that_would_worsen_the_model_leaves_it_as_it_came() {
     assert!(
         Arc::ptr_eq(&object.mesh, &before),
         "the mesh is the one it had"
+    );
+}
+
+#[test]
+fn a_repair_that_only_stitched_seams_says_so() {
+    let mut scene = Scene::default();
+    let id = open_box(&mut scene);
+    let mesh = Arc::clone(&scene.get(id).expect("the box is there").mesh);
+
+    let status = apply(
+        &mut scene,
+        &Repaired {
+            id,
+            name: "seamed.stl".to_owned(),
+            shaped: crate::scene::Shaped::of(mesh),
+            mended: Mended {
+                stitched: core_geometry::Stitched {
+                    edges_split: 4,
+                    vertices_inserted: 4,
+                },
+                shells_dropped: 0,
+                filled: core_geometry::Filled::default(),
+                duplicates_removed: 0,
+                orientation: None,
+                kept_as_found: false,
+            },
+        },
+    );
+
+    assert!(!status.is_error());
+    assert!(
+        status.text().contains("stitched 4 seams"),
+        "got {}",
+        status.text()
     );
 }

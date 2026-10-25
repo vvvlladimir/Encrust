@@ -149,6 +149,10 @@ pub struct Repair {
     /// Holes `--repair` patched, and those it could not.
     pub holes_closed: usize,
     pub holes_left: usize,
+    /// Open edges `--repair` split where the other side of a seam stood on them.
+    pub seams_stitched: usize,
+    /// Shells enclosing nothing `--repair` dropped as too small to keep.
+    pub shells_dropped: usize,
     /// `--repair` would have left more wrong, so the model is as it came.
     pub kept_as_found: bool,
 }
@@ -518,6 +522,8 @@ fn repair_of(import: &ImportReport) -> Repair {
         shells: import.diagnostics.as_ref().map_or(0, |found| found.shells),
         holes_closed: mended.map_or(0, |mended| mended.filled.loops_filled),
         holes_left: mended.map_or(0, |mended| mended.filled.loops_left),
+        seams_stitched: mended.map_or(0, |mended| mended.stitched.edges_split),
+        shells_dropped: mended.map_or(0, |mended| mended.shells_dropped),
         kept_as_found: import.mended.is_some_and(|mended| mended.kept_as_found),
     }
 }
