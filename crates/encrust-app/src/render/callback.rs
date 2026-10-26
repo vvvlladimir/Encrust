@@ -737,5 +737,7 @@ impl CallbackTrait for ViewportCallback {
     }
 }
 
+mod highlight;
+
 #[cfg(test)]
 mod tests;

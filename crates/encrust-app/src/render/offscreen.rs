@@ -5,6 +5,7 @@
 use core_geometry::Scalar;
 
 mod cavity;
+mod faults;
 mod holes;
 mod marks;
 mod paint;

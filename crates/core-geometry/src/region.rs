@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Adjacency, Bvh, Mesh, Scalar, Transform, Vec3, point_triangle, transform_mesh};
+use crate::{
+    Adjacency, Bvh, Components, FastMap, Mesh, Scalar, Transform, Vec3, point_triangle,
+    transform_mesh,
+};
 
 /// A patch of a model's surface, as the set of faces it covers. Faces survive moving and scaling
 /// and match what the slicer reads (ADR 0092, ADR 0318).
@@ -194,6 +197,33 @@ impl Region {
         }
         Some(patch)
     }
+
+    /// The marked faces of `model` in pieces, two faces in one piece when they share a
+    /// vertex; the pieces in the order of their first face.
+    pub fn parts(&self, model: &Mesh) -> Vec<Vec<usize>> {
+        let mut joined = Components::new(model.vertices.len());
+        let marked: Vec<usize> = self
+            .faces()
+            .filter(|&face| face < model.faces.len())
+            .collect();
+        for &face in &marked {
+            let [a, b, c] = model.faces[face];
+            joined.union(a, b);
+            joined.union(b, c);
+        }
+        let mut part_of: FastMap<u32, usize> = FastMap::default();
+        let mut parts: Vec<Vec<usize>> = Vec::new();
+        for face in marked {
+            let at = *part_of
+                .entry(joined.find(model.faces[face][0]))
+                .or_insert_with(|| {
+                    parts.push(Vec::new());
+                    parts.len() - 1
+                });
+            parts[at].push(face);
+        }
+        parts
+    }
 }
 
 #[cfg(test)]
@@ -298,5 +328,17 @@ mod tests {
             model.faces.len() - 2,
             "the bottom and the four walls are within 95 degrees of the bottom; the top is 180 from it"
         );
+    }
+
+    #[test]
+    fn faces_of_two_cubes_far_apart_come_in_two_parts() {
+        let mut mesh = cuboid(Vec3::ZERO, Vec3::ONE);
+        mesh.append(&cuboid(Vec3::splat(5.0), Vec3::splat(6.0)));
+        let mut region = Region::default();
+        for face in [0, 1, 12, 13] {
+            region.set(face, true);
+        }
+
+        assert_eq!(region.parts(&mesh), vec![vec![0, 1], vec![12, 13]]);
     }
 }

@@ -1804,7 +1804,8 @@ repair-not-wrapped = not wrapped, as the surface would have been worse
 ## panels/inspector/repair.rs
 
 repair-found = Found
-repair-found-note = What import found in the models the tool works on: those picked, or every model on the plate. Faces crossing each other are counted by the magnifier, which takes a while on a large model.
+repair-found-note = What import found in the models the tool works on: those picked, or every model on the plate. A press on a row marks it on the models and brings the camera to the first of them, each press after to the next, and the press after the last puts the marks away. Faces crossing each other are counted by the magnifier, which takes a while on a large model.
+repair-nothing-found = Nothing to repair.
 repair-count-crossings = Count crossing faces
 repair-nothing-on-plate = No model on the plate.
 repair-holes = Holes

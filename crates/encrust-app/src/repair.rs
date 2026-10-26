@@ -14,9 +14,13 @@ use core_volume::{RepairMethod, RepairSettings};
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
-use crate::job::{Counted, CrossingJob, RepairJob, RepairOutcome, RepairRequest, Repaired};
+use crate::job::{Counted, RepairJob, RepairOutcome, RepairRequest, Repaired};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
+
+mod found;
+
+pub use found::{Finding, Found};
 
 /// What the Repair tool is set to: the repair its button runs and the lengths it works to.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -42,16 +46,8 @@ pub struct Repairs {
     /// Each with the model it took, so that a mesh replaced since is not mended over.
     jobs: Vec<(RepairJob, Taken)>,
     kept: Vec<ObjectId>,
-    /// The faces found crossing in each model they were counted on, counting or counted.
-    crossings: Vec<(Taken, Crossings)>,
-}
-
-/// Where counting one model's crossing faces has got.
-#[derive(Debug)]
-enum Crossings {
-    Counting(CrossingJob),
-    /// Pairs of faces; `None` where the count stopped without an answer.
-    Counted(Option<usize>),
+    /// Where the Repair tool's findings lie on the models.
+    pub found: Found,
 }
 
 impl Repairs {
@@ -111,43 +107,10 @@ impl Repairs {
         }
     }
 
-    /// Starts counting the crossing faces of every model in `ids` not counted as it stands.
-    pub fn count_crossings(&mut self, scene: &Scene, ids: &[ObjectId]) {
-        for object in ids.iter().filter_map(|id| scene.get(*id)) {
-            if self.crossings_of(object).is_some() {
-                continue;
-            }
-            self.crossings.retain(|(taken, _)| taken.id != object.id);
-            let job = CrossingJob::spawn(Arc::clone(&object.mesh), Arc::clone(&object.bvh));
-            self.crossings
-                .push((Taken::of(object), Crossings::Counting(job)));
-        }
-    }
-
-    /// The crossing pairs counted on the model as it stands: `None` while uncounted,
-    /// `Some(None)` while counting or where the count gave no answer.
-    pub fn crossings_of(&self, object: &SceneObject) -> Option<Option<usize>> {
-        let (_, crossings) = self
-            .crossings
-            .iter()
-            .find(|(taken, _)| taken.is_model(object))?;
-        Some(match crossings {
-            Crossings::Counting(_) => None,
-            Crossings::Counted(count) => *count,
-        })
-    }
-
-    /// Whether a count of crossing faces is still going.
-    pub fn is_counting(&self) -> bool {
-        self.crossings
-            .iter()
-            .any(|(_, crossings)| matches!(crossings, Crossings::Counting(_)))
-    }
-
     /// Puts every repair that has finished into the scene. Returns whether one is still
     /// running, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
-        self.poll_crossings(scene);
+        let working = self.found.poll(scene);
         let mut done = Vec::new();
         self.jobs.retain_mut(|(job, taken)| match job.poll() {
             None => true,
@@ -175,21 +138,7 @@ impl Repairs {
                 self.keep_as_it_is(id);
             }
         }
-        self.is_busy() || self.is_counting()
-    }
-
-    /// Takes in the counts that have finished, and forgets those of models replaced since.
-    fn poll_crossings(&mut self, scene: &Scene) {
-        self.crossings.retain_mut(|(taken, crossings)| {
-            if let Crossings::Counting(job) = crossings
-                && let Some(count) = job.poll()
-            {
-                *crossings = Crossings::Counted(count);
-            }
-            scene
-                .get(taken.id)
-                .is_some_and(|object| taken.is_model(object))
-        });
+        self.is_busy() || working
     }
 }
 

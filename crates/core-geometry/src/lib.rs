@@ -4,6 +4,7 @@ mod buckets;
 mod bvh;
 mod clip;
 mod closest;
+mod faults;
 #[cfg(test)]
 mod fixtures;
 mod hash;
@@ -32,6 +33,7 @@ pub use buckets::Buckets;
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
+pub use faults::{Faults, faults};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
 pub use intersect::self_intersections;

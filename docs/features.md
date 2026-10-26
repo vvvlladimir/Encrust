@@ -61,6 +61,11 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   press, how many pairs of faces cross. Pick the method, set the seam tolerance, the
   smallest speck and the wrap lattice, and repair with progress and Cancel. The rail's
   Repair button carries a dot while a model on the plate is broken.
+- Click a finding to mark it on the models while the Repair tool is open: the rims of the
+  holes as lines, faces without area, drawn twice or crossing others as patches. The
+  camera flies to the first place and frames it face on from outside the model, round any
+  model in the way; each click after goes to the next, and the click after the last puts
+  the marks away. The place in view is bright, the rest darker.
 - Stitch the seams where a finer patch of surface meets a coarser one, as part of the same
   repair, without moving or adding a vertex.
 - Drop specks: open shells under 1 mm² floating apart from the model. A closed shell is
@@ -72,8 +77,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - See how many holes a model has, and how many pairs of faces cross.
 
 **You cannot:**
-- See the findings marked on the model, list a model's shells and drop the ones you pick,
-  or flip, delete and bridge faces by hand.
+- List a model's shells and drop the ones you pick, or flip, delete and bridge faces by
+  hand.
+- See an open edge thicker than one pixel: on a large model zoomed out, a hole's rim is
+  a thin line.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.

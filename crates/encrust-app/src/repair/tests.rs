@@ -378,37 +378,3 @@ fn a_cancelled_repair_leaves_the_model_as_it_was() {
         "the mesh is the one it had"
     );
 }
-
-#[test]
-fn two_crossing_cubes_count_their_crossings_until_the_mesh_changes() {
-    let mut scene = Scene::default();
-    // Pushed in off the diagonals, so no edge of one lies along a face's own seam.
-    let shift = Vec3::new(0.5, 0.3, 0.4);
-    let mut crossing = cuboid(Vec3::ZERO, Vec3::ONE);
-    crossing.append(&cuboid(shift, shift + Vec3::ONE));
-    let id = scene.insert(Imported::new(
-        "crossing.stl".to_owned(),
-        Arc::new(crossing.clone()),
-        Transform::default(),
-        ImportSummary::made(diagnose(&crossing)),
-    ));
-    let mut repairs = Repairs::default();
-    let object = scene.get(id).expect("inserted");
-    assert_eq!(repairs.crossings_of(object), None, "nothing counted yet");
-
-    repairs.count_crossings(&scene, &[id]);
-    settle(&mut repairs, &mut scene);
-    let object = scene.get(id).expect("still there");
-    let counted = repairs.crossings_of(object).flatten();
-    assert!(counted.is_some_and(|pairs| pairs > 0), "got {counted:?}");
-
-    let reshaped = crate::scene::Shaped::of(Arc::new(cuboid(Vec3::ZERO, Vec3::ONE)));
-    scene.get_mut(id).expect("still there").reshape(reshaped);
-    settle(&mut repairs, &mut scene);
-    let object = scene.get(id).expect("still there");
-    assert_eq!(
-        repairs.crossings_of(object),
-        None,
-        "the count was of the old mesh"
-    );
-}

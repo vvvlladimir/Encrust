@@ -29,12 +29,19 @@ on a broken mesh is thrown away when the mesh is repaired (`SceneObject::reshape
   Repair button keep running the plain repair, to the lengths the tool is set to.
 - The rail's Repair carries a dot in `warn` while a model on the plate is broken, beside
   Drain's and Check's (ADR 0218).
-- The Faces mode, the Shells list and highlighting the findings on the model wait for the
-  core calls and command-line flags they need (`flip_faces`, `--drop-shells`, edge lists).
+- A press on a finding marks it on the targets while the tool is open and brings the
+  camera to it, one place a press (ADR 0355). Where they lie is `core_geometry::faults` and
+  `self_intersections`, worked out off the drawing thread and forgotten with the mesh;
+  nothing of it is saved.
+- The Faces mode and the Shells list wait for the core calls and command-line flags they
+  need (`flip_faces`, `--drop-shells`).
 
 ## Consequences
 
 - Every repair the command line runs is one press in the window, with the same lengths.
+- A mark is a picture of what the command line already counts, so it has no flag.
+- An open edge is a one-pixel line, the only width the card draws lines at: on a large
+  model zoomed out a rim is thin. Reopen if users miss holes; a ribbon is the next step.
 - The digit of every tool after Measure changes; a user used to 3 for Hollow presses 4.
 - The rail is nine names wide: the Russian names had to fit the widest column, so the tool
   is "Ремонт" there. A tenth tool would take the last digit, 0.

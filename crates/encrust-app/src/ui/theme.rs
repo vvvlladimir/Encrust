@@ -178,6 +178,11 @@ pub struct Scene {
     /// The patch painted to keep supports off. Violet, not red: an overhang is already
     /// washed red, and what is closed to supports has to read apart from what hangs.
     pub blocked: Color32,
+    /// What the Repair tool marks on a model: an open edge, a face without area, drawn
+    /// twice or crossing another. Acid yellow-green, apart from every other mark and pick.
+    pub fault: Color32,
+    /// The same marks where the camera is not: a darker olive, so the one in view leads.
+    pub fault_rest: Color32,
     /// The face a cut leaves behind, flat-lit. See `docs/decisions/0062`.
     pub section_cap: Color32,
     /// What the inside of a model shows as, through a cut or a drain hole.
@@ -240,6 +245,8 @@ const ENCRUST_SCENE: Scene = Scene {
     trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
     blocked: Color32::from_rgb(0xa7, 0x64, 0xd6),
+    fault: Color32::from_rgb(0xc8, 0xf0, 0x3c),
+    fault_rest: Color32::from_rgb(0x7d, 0x92, 0x2c),
     section_cap: Color32::from_rgb(0xff, 0xb1, 0x84),
     section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
     overhang: Color32::from_rgb(0xf0, 0x61, 0x40),

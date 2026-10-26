@@ -2,7 +2,7 @@ use crate::relief::ReliefMode;
 use core_geometry::{PlacedHit, Vec2};
 use egui::{PointerButton, Sense};
 
-use crate::camera::OrbitCamera;
+use crate::camera::{CameraTurn, OrbitCamera};
 use crate::drain::Placing;
 use crate::panels::{Window, section};
 use crate::plate::BuildPlate;
@@ -82,6 +82,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     let carrying = !painting && drag_support(window, rect, &pointer);
     let drag = if carrying { Drag::None } else { gesture.drag };
 
+    fly_to_found(ui, window, rect);
     follow_turn(ui, window.view);
     let invert = window.machine.general.invert_zoom;
     steer_camera(window.view, rect, &pointer, drag, painting, invert);
@@ -307,10 +308,37 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
         },
         rect,
     )
+    .highlighting(&found_highlight(window))
     .timed(window.view.ui_ms, window.view.budget.report(), levels.faces);
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
     draw_axis_letters(ui, window, rect);
+}
+
+/// What the Repair tool found, marked on the models only while it is the tool in hand.
+fn found_highlight(window: &Window) -> crate::highlight::Highlight {
+    if *window.tool != Tool::Repair {
+        return crate::highlight::Highlight::default();
+    }
+    window.doc.repairs.found.highlight(&window.doc.scene)
+}
+
+/// Flies the camera to the place of a finding the Repair tool's last press went to, on
+/// the frame that place is worked out.
+fn fly_to_found(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
+    if *window.tool != Tool::Repair {
+        return;
+    }
+    let scene = &window.doc.scene;
+    let Some(spot) = window.doc.repairs.found.take_flight(scene) else {
+        return;
+    };
+    let aspect = rect.width() / rect.height().max(1.0);
+    let hidden = |eye, point| crate::pick::occluded(scene, eye, point);
+    let to = window.view.camera.focusing(&spot, aspect, hidden);
+    let now = ui.input(|input| input.time);
+    window.view.turn = Some(CameraTurn::flight(window.view.camera, to, now));
+    ui.ctx().request_repaint();
 }
 
 /// The chrome each tool draws over the 3D pass: bounds, gizmo, measurement, brush.

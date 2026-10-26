@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use core_geometry::{Bvh, Mended, Mesh, Scalar, self_intersections};
+use core_geometry::{Mended, Mesh, Scalar};
 use core_volume::{Cancel, Progress, RepairMethod, RepairSettings, repair};
 
 use crate::i18n::tr;
@@ -98,30 +98,6 @@ fn run(request: RepairRequest, (stop, progress): (&AtomicBool, &Progress)) -> Re
             name = request.name,
             reason = error.to_string()
         )),
-    }
-}
-
-/// The pairs of faces of one model that cross each other, counted on their own thread:
-/// on a model of millions of faces that is longer than a frame.
-#[derive(Debug)]
-pub struct CrossingJob {
-    worker: Worker<Option<usize>>,
-}
-
-impl CrossingJob {
-    /// Starts counting over the model's own hierarchy.
-    pub fn spawn(mesh: Arc<Mesh>, bvh: Arc<Bvh>) -> Self {
-        let worker = Worker::spawn(
-            move |_, _| Some(self_intersections(&mesh, &bvh).len()),
-            || None,
-        );
-        Self { worker }
-    }
-
-    /// The count on the frame it is done, `Some(None)` where the thread stopped without one,
-    /// and `None` while it is going.
-    pub fn poll(&mut self) -> Option<Option<usize>> {
-        self.worker.poll()
     }
 }
 

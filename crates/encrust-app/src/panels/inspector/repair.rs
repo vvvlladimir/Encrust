@@ -3,11 +3,11 @@ use core_volume::RepairMethod;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::repair::RepairState;
-use crate::scene::ObjectId;
+use crate::repair::{Finding, Found, RepairState};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    blocked_hover, busy, describe, icon, list, list_row, number_row, picker, primary_button,
-    readings, section, section_with_action, theme, tone,
+    blocked_hover, busy, describe, icon, issue_row, list, list_row, number_row, picker,
+    primary_button, readings, section, section_with_action, theme, tone,
 };
 
 /// Every repair the Method picker offers, in the order it lists them.
@@ -43,6 +43,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 /// What import found in the models, summed, with the crossing faces counted on demand.
 fn found(ui: &mut egui::Ui, window: &mut Window) {
     let ids: Vec<ObjectId> = window.doc.scene.targets().map(|object| object.id).collect();
+    if window.doc.repairs.found.shown().is_some() {
+        window.doc.repairs.found.place(&window.doc.scene, &ids);
+    }
     let action = (icon::FIND, tr!("repair-count-crossings"));
     let (pressed, _) = section_with_action(ui, &tr!("repair-found"), (action.0, &action.1), |ui| {
         describe(ui, &tr!("repair-found-note"));
@@ -54,53 +57,118 @@ fn found(ui: &mut egui::Ui, window: &mut Window) {
             );
             return;
         }
-        readings(ui, &rows(window, &ids));
+        let objects: Vec<&SceneObject> = ids
+            .iter()
+            .filter_map(|id| window.doc.scene.get(*id))
+            .collect();
+        let crossings = crossings(&window.doc.repairs.found, &objects);
+        let rows = faults(&objects, crossings);
+        let shells = sum(&objects, |found| found.shells).to_string();
+        let crossed = match crossings {
+            Crossings::Counted(0) => Some("0".to_owned()),
+            Crossings::Counted(_) => None,
+            Crossings::Counting => Some(tr!("repair-counting")),
+            Crossings::Uncounted => Some(tr!("repair-uncounted")),
+        };
+        marking(ui, &mut window.doc.repairs.found, &window.doc.scene, &rows);
+        let mut readings_rows = vec![(tr!("repair-shells"), shells)];
+        readings_rows.extend(crossed.map(|crossed| (tr!("repair-crossing-faces"), crossed)));
+        readings(ui, &readings_rows);
     });
     if pressed {
-        window.doc.repairs.count_crossings(&window.doc.scene, &ids);
+        window
+            .doc
+            .repairs
+            .found
+            .count_crossings(&window.doc.scene, &ids);
     }
 }
 
-/// One reading per kind of fault, summed over the models in `ids`.
-fn rows(window: &Window, ids: &[ObjectId]) -> Vec<(String, String)> {
-    let scene = &window.doc.scene;
-    let objects: Vec<_> = ids.iter().filter_map(|id| scene.get(*id)).collect();
-    let sum = |count: fn(&MeshDiagnostics) -> usize| -> String {
-        let total: usize = objects
-            .iter()
-            .map(|object| count(&object.summary.diagnostics))
-            .sum();
-        total.to_string()
+/// One row per kind of fault the models have, each press going to its next place and the
+/// one after the last putting the marks away; a verdict where they have none.
+fn marking(ui: &mut egui::Ui, found: &mut Found, scene: &Scene, rows: &[(String, usize, Finding)]) {
+    if rows.is_empty() {
+        tone(ui, &tr!("repair-nothing-found"), theme::colors().ok);
+        return;
+    }
+    list(ui, |ui| {
+        for (name, count, finding) in rows {
+            let shown = found.shown() == Some(*finding);
+            let tint = theme::scene().fault;
+            if issue_row(ui, tint, name, &count.to_string(), shown).clicked() {
+                found.press(scene, *finding);
+            }
+        }
+    });
+}
+
+/// The kinds of fault the models have, each with its count and what marks it.
+fn faults(objects: &[&SceneObject], crossings: Crossings) -> Vec<(String, usize, Finding)> {
+    let crossing = match crossings {
+        Crossings::Counted(pairs) => pairs,
+        Crossings::Counting | Crossings::Uncounted => 0,
     };
-    vec![
-        (tr!("repair-holes"), sum(|found| found.holes)),
-        (tr!("repair-open-edges"), sum(|found| found.boundary_edges)),
+    [
+        (
+            tr!("repair-holes"),
+            sum(objects, |found| found.holes),
+            Finding::OpenEdges,
+        ),
+        (
+            tr!("repair-open-edges"),
+            sum(objects, |found| found.boundary_edges),
+            Finding::OpenEdges,
+        ),
         (
             tr!("repair-flat-faces"),
-            sum(|found| found.degenerate_faces),
+            sum(objects, |found| found.degenerate_faces),
+            Finding::FlatFaces,
         ),
         (
             tr!("repair-doubled-faces"),
-            sum(|found| found.duplicate_faces),
+            sum(objects, |found| found.duplicate_faces),
+            Finding::DoubledFaces,
         ),
-        (tr!("repair-shells"), sum(|found| found.shells)),
-        (tr!("repair-crossing-faces"), crossings(window, &objects)),
+        (
+            tr!("repair-crossing-faces"),
+            crossing,
+            Finding::CrossingFaces,
+        ),
     ]
+    .into_iter()
+    .filter(|(_, count, _)| *count > 0)
+    .collect()
 }
 
-/// The crossing pairs summed, a dash until every model is counted, an ellipsis while one is.
-fn crossings(window: &Window, objects: &[&crate::scene::SceneObject]) -> String {
+fn sum(objects: &[&SceneObject], count: fn(&MeshDiagnostics) -> usize) -> usize {
+    objects
+        .iter()
+        .map(|object| count(&object.summary.diagnostics))
+        .sum()
+}
+
+/// How far counting the crossing faces of the models has got.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Crossings {
+    /// Pairs over every model.
+    Counted(usize),
+    Counting,
+    /// A model not counted as it stands, or whose count gave no answer.
+    Uncounted,
+}
+
+fn crossings(found: &Found, objects: &[&SceneObject]) -> Crossings {
     let counts: Vec<_> = objects
         .iter()
-        .map(|object| window.doc.repairs.crossings_of(object))
+        .map(|object| found.crossings_of(object))
         .collect();
     if counts.iter().any(Option::is_none) {
-        return tr!("repair-uncounted");
+        return Crossings::Uncounted;
     }
     match counts.into_iter().flatten().sum::<Option<usize>>() {
-        Some(total) => total.to_string(),
-        None if window.doc.repairs.is_counting() => tr!("repair-counting"),
-        None => tr!("repair-uncounted"),
+        Some(total) => Crossings::Counted(total),
+        None if found.is_working() => Crossings::Counting,
+        None => Crossings::Uncounted,
     }
 }
 
