@@ -875,3 +875,143 @@ fn a_resin_another_program_exported_goes_on_the_machine_it_names() {
     assert!(kept.is_tuned_for(IMPORTED_ON));
     assert_eq!(kept.for_printer(IMPORTED_ON).light_pwm, 211);
 }
+
+/// The whole window path of the Repair tool's Edges picking on `mesh` placed by
+/// `transform`: the camera brought to its first hole, then a press and release over the
+/// middle of an edge of that hole's rim, as a mouse gives them. Answers the edges picked.
+fn click_a_rim(mesh: core_geometry::Mesh, transform: core_geometry::Transform, tap: bool) -> usize {
+    use super::states::{SETTLE_FRAMES, app};
+
+    let mut app = app(true);
+    app.view.options.started = true;
+    let shaped = crate::scene::Shaped::of(std::sync::Arc::new(mesh));
+    let object = &mut app.doc.scene.objects_mut()[0];
+    object.reshape(shaped);
+    object.transform = transform;
+    app.tool = crate::workspace::Tool::Repair;
+    app.tools.repair.mode = crate::repair::RepairMode::Faces;
+    app.tools.repair.picking = crate::repair::Picking::Edges;
+    let size = egui::vec2(1280.0, 800.0);
+    let mut dressed = false;
+    let mut harness = egui_kittest::Harness::builder()
+        .with_size(size)
+        .build_ui_state(
+            move |ui, app: &mut SlicerApp| {
+                if dressed {
+                    app.poll_jobs(ui.ctx());
+                    app.window().show(ui);
+                    app.finish_frame(ui.ctx());
+                } else {
+                    crate::ui::theme::apply(ui.ctx());
+                    dressed = true;
+                }
+            },
+            app,
+        );
+    let placed = |harness: &egui_kittest::Harness<'_, SlicerApp>| {
+        let app = harness.state();
+        let object = &app.doc.scene.objects()[0];
+        app.doc
+            .repairs
+            .found
+            .open_edges(object)
+            .map(|open| (open.ends.to_vec(), open.vertices.len()))
+    };
+    let mut open = None;
+    for _ in 0..400 {
+        harness.run_steps(2);
+        open = placed(&harness);
+        if open.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let (ends, _) = open.expect("the open edges are found");
+    let viewport = egui::Rect::from_min_max(
+        egui::pos2(0.0, crate::ui::theme::TOP_BAR_H),
+        egui::pos2(size.x, size.y),
+    );
+    let object = harness.state().doc.scene.objects()[0].clone();
+    let matrix = object.transform.to_matrix();
+    let [a, b] = ends[0].map(|end| matrix.transform_point3(end));
+    let middle = (a + b) / 2.0;
+    // Brought to the rim as Repair's own flight would, from where the camera stands.
+    let spot = crate::highlight::Spot {
+        center: middle,
+        radius_mm: a.distance(b),
+        normal: core_geometry::Vec3::ZERO,
+    };
+    let camera = {
+        let app = harness.state_mut();
+        app.view.camera =
+            app.view
+                .camera
+                .focusing(&spot, viewport.width() / viewport.height(), |_, _| false);
+        app.view.camera
+    };
+    harness.run_steps(SETTLE_FRAMES);
+    let clip = camera.view_projection(viewport.width() / viewport.height()) * middle.extend(1.0);
+    let ndc = clip.truncate() / clip.w;
+    let at = egui::pos2(
+        viewport.left() + (ndc.x * 0.5 + 0.5) * viewport.width(),
+        viewport.top() + (0.5 - ndc.y * 0.5) * viewport.height(),
+    );
+    harness.hover_at(at);
+    harness.run_steps(2);
+    let press = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    harness.event(press(true));
+    // A tap gives the press and the release in one frame; a click holds across a few.
+    if !tap {
+        harness.run_steps(2);
+    }
+    harness.event(press(false));
+    harness.run_steps(2);
+    let app = harness.state();
+    app.doc.repairs.hand.picked_edges(&app.doc.scene).len()
+}
+
+#[test]
+fn a_click_on_the_rim_of_a_hole_in_the_window_picks_its_edge() {
+    use core_geometry::{Vec3, cuboid};
+
+    let mut mesh = cuboid(Vec3::ZERO, Vec3::splat(20.0));
+    let vertices = mesh.vertices.clone();
+    mesh.faces.retain(|face| {
+        !face
+            .iter()
+            .all(|&corner| (vertices[corner as usize].z - 20.0).abs() < 1e-4)
+    });
+    assert_eq!(
+        click_a_rim(mesh.clone(), core_geometry::Transform::default(), false),
+        1
+    );
+    assert_eq!(
+        click_a_rim(mesh, core_geometry::Transform::default(), true),
+        1,
+        "a tap on a trackpad picks as a click does"
+    );
+}
+
+#[test]
+fn a_click_on_the_rim_of_a_hole_in_a_turned_model_of_a_million_faces_picks_its_edge() {
+    use core_geometry::{Quat, Transform, Vec3, ball};
+
+    let mut mesh = ball(Vec3::ZERO, 50.0, 700, 720);
+    let mut at = 0;
+    mesh.faces.retain(|_| {
+        at += 1;
+        at % 140_000 >= 3
+    });
+    let transform = Transform {
+        translation: Vec3::new(60.0, 40.0, 30.0),
+        rotation: Quat::from_rotation_x(0.7) * Quat::from_rotation_z(1.1),
+        scale: Vec3::splat(0.6),
+        ..Transform::default()
+    };
+    assert_eq!(click_a_rim(mesh, transform, false), 1);
+}

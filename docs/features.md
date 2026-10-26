@@ -76,9 +76,15 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   repair, wrap, repair. A wrap that would leave the model worse is left out and said so.
 - See how many holes a model has, and how many pairs of faces cross.
 
+- List the shells of one model, pick them by hand or every one under a hundredth of the
+  largest, fly to the one picked and drop it, or drop the picked ones together.
+- Edit by hand in the Repair tool's Faces mode: pick faces with a brush, a whole surface
+  with Cmd and Shift, then flip or delete them; or pick two open edges and bridge them
+  with faces wound as the ones beside them. On the command line, `--flip-faces`,
+  `--drop-faces`, `--drop-shells` and `--bridge` do the same by number, and
+  `inspect --shells` lists the shells.
+
 **You cannot:**
-- List a model's shells and drop the ones you pick, or flip, delete and bridge faces by
-  hand.
 - See an open edge thicker than one pixel: on a large model zoomed out, a hole's rim is
   a thin line.
 

@@ -2,9 +2,10 @@ use std::fmt;
 use std::path::PathBuf;
 
 use core_format::ExposureRange;
-use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Vec3, Welded};
+use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec3, Welded};
 use printer_profiles::PrinterProfile;
 
+use crate::edits::{Edited, describe as describe_edits};
 use crate::stats::MeshStats;
 
 /// Whether the model fits the machine it is meant for, and whether it stands inside it.
@@ -77,6 +78,16 @@ fn describe_wrap(wrapped: Wrapped) -> String {
     }
 }
 
+/// One shell as `inspect --shells` lists it.
+fn describe_shell(shell: &Shell) -> String {
+    let closed = if shell.closed { "closed" } else { "open" };
+    format!(
+        "{} faces, {:.2} mm^2, {closed}",
+        shell.faces.len(),
+        shell.area_mm2
+    )
+}
+
 /// Everything import learned about a model, ready to print.
 pub struct ImportReport {
     pub path: PathBuf,
@@ -92,10 +103,25 @@ pub struct ImportReport {
     pub wrapped: Option<Wrapped>,
     /// Pairs of faces crossing each other, when `--intersections` asked for them.
     pub crossing_pairs: Option<usize>,
+    /// What `--flip-faces`, `--drop-faces`, `--drop-shells` and `--bridge` did, when named.
+    pub edited: Option<Edited>,
+    /// The shells as import left the model, when `--shells` asked for them.
+    pub shells: Option<Vec<Shell>>,
     pub fit: Option<FitCheck>,
 }
 
 impl ImportReport {
+    /// The shells `--shells` listed and what the changes by hand did.
+    fn fmt_by_hand(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (number, shell) in self.shells.iter().flatten().enumerate() {
+            writeln!(f, "  shell {:<7} {}", number + 1, describe_shell(shell))?;
+        }
+        if let Some(edited) = &self.edited {
+            writeln!(f, "  by hand       {}", describe_edits(edited))?;
+        }
+        Ok(())
+    }
+
     /// True when nothing found would stop the model printing correctly.
     pub fn is_clean(&self) -> bool {
         let sound = self
@@ -180,6 +206,8 @@ impl fmt::Display for ImportReport {
         if let Some(pairs) = self.crossing_pairs {
             writeln!(f, "  crossings     {pairs} pairs of faces")?;
         }
+
+        self.fmt_by_hand(f)?;
 
         if let Some(mended) = &self.mended {
             writeln!(f, "  repair        {}", describe_repair(mended))?;

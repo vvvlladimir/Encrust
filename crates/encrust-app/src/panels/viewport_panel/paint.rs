@@ -4,6 +4,7 @@ use core_geometry::{Adjacency, Scalar, Vec2};
 use core_supports::Placed;
 
 use crate::panels::Window;
+use crate::repair::{Picking, RepairMode};
 use crate::supports::Placing;
 use crate::ui::theme;
 use crate::viewport_input::Pointer;
@@ -55,12 +56,13 @@ pub(super) fn draw_brush(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
 /// takes the paint off.
 fn brush(ui: &egui::Ui, window: &Window) -> (Scalar, egui::Color32) {
     let colors = theme::colors();
+    let alt = ui.input(|input| input.modifiers.alt);
+    let erasing = |alt: bool| if alt { colors.text_mid } else { colors.accent };
     if *window.tool == Tool::Relief {
-        let colour = match ui.input(|input| input.modifiers.alt) {
-            true => colors.text_mid,
-            false => colors.accent,
-        };
-        return (window.tools.relief.state.brush_radius_mm, colour);
+        return (window.tools.relief.state.brush_radius_mm, erasing(alt));
+    }
+    if *window.tool == Tool::Repair {
+        return (window.tools.repair.state.brush_radius_mm, erasing(alt));
     }
     let colour = match window.tools.supports.placing {
         Placing::Block => colors.danger,
@@ -80,6 +82,9 @@ pub(super) fn paint_stroke(
 ) -> bool {
     if *window.tool == Tool::Relief {
         return relief_stroke(ui, window, viewport, pointer);
+    }
+    if *window.tool == Tool::Repair {
+        return repair_stroke(ui, window, viewport, pointer);
     }
     let out = *window.tool == Tool::Paint && window.tools.supports.placing.paints();
     let Some(position) = pointer.position.filter(|_| {
@@ -179,6 +184,67 @@ fn relief_stroke(
         }
     }
     window.tools.relief.last_daub = Some(position);
+    true
+}
+
+/// Whether the Repair tool's brush is in hand: the Faces mode picking faces.
+pub(super) fn picks_faces(window: &Window) -> bool {
+    let tool = &window.tools.repair;
+    *window.tool == Tool::Repair && tool.mode == RepairMode::Faces && tool.picking == Picking::Faces
+}
+
+/// Whether a click picks an open edge: the Repair tool's Faces mode picking edges.
+pub(super) fn picks_edges(window: &Window) -> bool {
+    let tool = &window.tools.repair;
+    *window.tool == Tool::Repair && tool.mode == RepairMode::Faces && tool.picking == Picking::Edges
+}
+
+/// The Repair brush for this frame, picking faces and letting them go under alt, a whole
+/// surface at a time under Cmd and Shift; whether it has the pointer. Decided on the press.
+fn repair_stroke(
+    ui: &egui::Ui,
+    window: &mut Window,
+    viewport: egui::Rect,
+    pointer: &Pointer,
+) -> bool {
+    let out = picks_faces(window);
+    let Some(position) = pointer.position.filter(|_| {
+        out && pointer.primary_down
+            && pointer.over_viewport
+            && pointer.shift == pointer.command
+            && !window.view.gizmo.is_focused()
+    }) else {
+        window.tools.repair.stroke = false;
+        window.tools.repair.last_daub = None;
+        return false;
+    };
+    let cursor = egui::Pos2::new(position.x, position.y);
+    if pointer.pressed {
+        window.tools.repair.stroke = surface_under(window, viewport, cursor).is_some();
+        window.tools.repair.last_daub = None;
+    }
+    if !window.tools.repair.stroke {
+        return false;
+    }
+    let modifiers = ui.input(|input| input.modifiers);
+    let (marked, whole) = (!modifiers.alt, modifiers.command);
+    let state = window.tools.repair.state;
+    let from = window.tools.repair.last_daub.unwrap_or(position);
+    for along in daubs(from, position) {
+        let Some((id, hit)) = surface_under(window, viewport, along) else {
+            continue;
+        };
+        let (scene, hand) = (&window.doc.scene, &mut window.doc.repairs.hand);
+        let Some(object) = scene.get(id) else {
+            continue;
+        };
+        match whole {
+            true => hand.flood(object, hit.face, state.flood_angle_deg, marked),
+            false => hand.brush(object, hit.point, state.brush_radius_mm, marked),
+        }
+    }
+    window.tools.repair.last_daub = Some(position);
+    window.doc.repairs.hand.refresh(&window.doc.scene);
     true
 }
 

@@ -100,7 +100,7 @@ paints from tokens only.
 | Widget | What it is |
 |---|---|
 | `section` | An inspector block: a caret and title that fold it, optional hint, body, hairline under it; rows spaced `ITEM_GAP` |
-| `section_with_action` | A `section` with one icon button in its heading, such as a reset |
+| `section_with_action`, `section_with_actions` | A `section` with one icon button in its heading, such as a reset, or a few, left to right |
 | `subheading` | A group of fields inside a block, named in the quietest tone |
 | `describe` | What a block or a setting is for, kept out of the panel and read from a question mark beside the block's title |
 | `nested` | What a switch reveals, set in under it with a rule down its left edge |

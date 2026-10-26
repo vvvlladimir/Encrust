@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
 use core_geometry::{
-    Bvh, MendSettings, Mended, Mesh, Scalar, Welded, diagnose, orient_outward,
+    Bvh, MendSettings, Mended, Mesh, Scalar, Welded, diagnose, list_shells, orient_outward,
     remove_duplicate_faces, self_intersections, weld,
 };
 use core_mesh_io::{Loaded, loader_for_extension};
@@ -19,6 +19,7 @@ use core_volume::{Cancel, RepairSettings, repair};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs, RepairMethod};
+use crate::edits;
 use crate::exit::Stop;
 use crate::hollowing::{self, HollowArgs, HollowReport};
 use crate::png_stack::write_stack;
@@ -118,7 +119,7 @@ pub fn import(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    let import = checked(&mut mesh, input, welded, args, profile)?;
+    let import = checked(&mut mesh, input, welded, args, profile, false)?;
     if talk {
         print!("{import}");
     }
@@ -374,13 +375,21 @@ fn talk_mapping(loaded: &Loaded) {
     );
 }
 
-/// Loads and repairs a model without slicing it, for `inspect`, counting the faces that
-/// cross when asked.
+/// What `inspect` counts beyond what import always reports.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Inspect {
+    /// The pairs of faces that cross.
+    pub intersections: bool,
+    /// The shells, as import leaves the model, which is how `--drop-shells` numbers them.
+    pub shells: bool,
+}
+
+/// Loads and repairs a model without slicing it, for `inspect`, counting what `asked` names.
 pub fn inspect(
     input: &Path,
     args: &ImportArgs,
     chosen: &Chosen,
-    intersections: bool,
+    asked: Inspect,
 ) -> Result<ImportReport> {
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
@@ -391,21 +400,22 @@ pub fn inspect(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    let mut report = checked(&mut mesh, input, welded, args, profile)?;
-    if intersections {
+    let mut report = checked(&mut mesh, input, welded, args, profile, asked.shells)?;
+    if asked.intersections {
         report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
     }
     Ok(report)
 }
 
-/// Drops the doubled faces, fixes the winding, mends the model when asked and measures it,
-/// unless validation is off, and says what import found.
+/// Drops the doubled faces, fixes the winding, makes the changes by hand, mends the model
+/// when asked and measures it, unless validation is off, and says what import found.
 fn checked(
     mesh: &mut Mesh,
     input: &Path,
     welded: Welded,
     args: &ImportArgs,
     profile: Option<&PrinterProfile>,
+    list: bool,
 ) -> Result<ImportReport> {
     // Before the orientation fix: a face laid over another reads as a branch to it.
     let doubled = if args.no_validate {
@@ -414,6 +424,8 @@ fn checked(
         remove_duplicate_faces(mesh).len()
     };
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
+    let listed = list.then(|| list_shells(mesh));
+    let edited = edits::apply(mesh, args)?;
     let repaired = args
         .repair
         .map(|method| repaired(mesh, method, args))
@@ -435,6 +447,8 @@ fn checked(
         mended,
         wrapped,
         crossing_pairs: None,
+        edited,
+        shells: listed,
         fit,
     })
 }

@@ -3,11 +3,11 @@ use core_volume::RepairMethod;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::repair::{Finding, Found, RepairState};
+use crate::repair::{Finding, Found, RepairMode, RepairState};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    blocked_hover, busy, describe, icon, issue_row, list, list_row, number_row, picker,
-    primary_button, readings, section, section_with_action, theme, tone,
+    blocked_hover, busy, describe, icon, icon_toggle, issue_row, list, list_row, number_row,
+    picker, primary_button, readings, section, section_with_action, theme, tone,
 };
 
 /// Every repair the Method picker offers, in the order it lists them.
@@ -29,15 +29,35 @@ const MAX_SEAM_MM: f32 = 1.0;
 const MAX_SHELL_MM2: f32 = 100.0;
 const WRAP_MM: std::ops::RangeInclusive<f32> = 0.05..=2.0;
 
-// TODO(step-9): the Shells section, listing each shell with its faces and dropping those
-// picked, lands with `--drop-shells` so the command line can do it too.
+mod faces;
+mod shells;
 
 /// What is wrong with the models the tool works on, how to repair them, and the lengths
-/// the repair works to.
+/// the repair works to; or, in the Faces mode, what is picked to change by hand.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    if window.tools.repair.mode == RepairMode::Faces {
+        faces::ui(ui, window);
+        return;
+    }
     found(ui, window);
-    method(ui, &mut window.tools.repair);
-    settings(ui, &mut window.tools.repair);
+    method(ui, &mut window.tools.repair.state);
+    settings(ui, &mut window.tools.repair.state);
+    shells::listed(ui, window);
+}
+
+/// The card's two modes, in its heading.
+pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
+    let modes = [
+        (RepairMode::Faces, icon::PAINT, tr!("repair-mode-faces")),
+        (RepairMode::Model, icon::MODEL, tr!("repair-mode-model")),
+    ];
+    ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
+    let tool = &mut window.tools.repair;
+    for (mode, glyph, name) in modes {
+        if icon_toggle(ui, glyph, &name, tool.mode == mode).clicked() {
+            tool.mode = mode;
+        }
+    }
 }
 
 /// What import found in the models, summed, with the crossing faces counted on demand.
@@ -239,8 +259,14 @@ fn settings(ui: &mut egui::Ui, state: &mut RepairState) {
     });
 }
 
-/// Repairing the models the tool works on, or the progress of the repairs that are.
+/// Repairing the models the tool works on, or the progress of the repairs that are; in
+/// the Faces mode, the change by hand.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+    if window.tools.repair.mode == RepairMode::Faces {
+        faces::action(ui, window);
+        return;
+    }
+    shells::drop_picked(ui, window);
     let repairs = &mut window.doc.repairs;
     if repairs.is_busy() {
         let step = repairs
@@ -256,22 +282,10 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let blocked = ids.is_empty().then(|| tr!("repair-nothing-on-plate"));
     let button = primary_button(ui, icon::REPAIR, &tr!("repair-repair"), blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
-        let state = window.tools.repair;
+        let state = window.tools.repair.state;
         for id in ids {
             repairs.start(&window.doc.scene, id, state, &mut window.machine.status);
         }
-    }
-}
-
-/// How many of the models the tool works on will not slice as they stand, in the colour
-/// that says so; nothing while there is no model.
-pub fn fact(window: &Window) -> Option<(String, egui::Color32)> {
-    let colors = theme::colors();
-    let mut targets = window.doc.scene.targets().peekable();
-    targets.peek()?;
-    match targets.filter(|object| !object.summary.is_sound()).count() {
-        0 => Some((tr!("repair-sound"), colors.ok)),
-        broken => Some((tr!("repair-broken", count = broken), colors.warn)),
     }
 }
 

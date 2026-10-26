@@ -1887,6 +1887,85 @@ repair-not-wrapped = не обёрнуто: поверхность стала б
 
 ## panels/inspector/repair.rs
 
+repair-mode-model = Модель: найти, что не так, и починить
+repair-mode-faces = Грани: развернуть, удалить и соединить вручную
+repair-shells-title = Оболочки
+repair-shells-one = Выберите одну модель, чтобы увидеть её оболочки.
+repair-shells-note = Каждая часть модели, грани которой соединены друг с другом. Нажатие выбирает оболочку и подводит к ней камеру; корзина удаляет её сразу. Кнопки в заголовке выбирают все оболочки площадью меньше сотой доли самой большой или обращают выбор.
+repair-listing = Перечисляем оболочки
+repair-shell = Оболочка { $number }
+repair-shell-faces =
+    { $count ->
+        [one] { $count } грань
+        [few] { $count } грани
+       *[many] { $count } граней
+    }
+repair-shell-faces-open =
+    { $count ->
+        [one] { $count } грань, открыта
+        [few] { $count } грани, открыта
+       *[many] { $count } граней, открыта
+    }
+repair-drop-shell = Удалить эту оболочку
+repair-drop-shells =
+    { $count ->
+        [one] Удалить { $count } оболочку
+        [few] Удалить { $count } оболочки
+       *[many] Удалить { $count } оболочек
+    }
+repair-pick-small = Выбрать мелкие оболочки
+repair-pick-invert = Обратить выбор
+repair-pick = Выбор
+repair-pick-faces = Грани
+repair-pick-edges = Рёбра
+repair-pick-faces-note = Проведите кистью по модели, чтобы выбрать грани, с Alt — чтобы снять выбор; Cmd и Shift вместе выбирают всю поверхность, пока она поворачивает не больше угла. «Развернуть» переворачивает их, «Удалить» убирает.
+repair-pick-edges-note = Щёлкните по двум открытым рёбрам вокруг дыр, и «Соединить» положит между ними грани, обойдённые как соседние. Третий щелчок снимает первый.
+repair-brush = Кисть
+repair-brush-radius = Радиус
+repair-flood-angle = Угол поверхности
+repair-picked = Выбрано
+repair-picked-model = Модель
+repair-picked-faces = Грани
+repair-picked-edges = Открытые рёбра
+repair-of-two = { $count } из 2
+repair-nothing-picked = Ничего не выбрано.
+repair-no-edge-near = Рядом с указателем нет открытого ребра: щёлкните по контуру дыры
+repair-finding-edges = Ищем открытые рёбра
+repair-clear-picks = Снять выбор
+repair-flip-faces = Развернуть
+repair-delete-faces = Удалить
+repair-bridge = Соединить
+repair-pick-faces-first = Сначала выберите грани кистью.
+repair-pick-two-edges = Сначала выберите два открытых ребра.
+repair-editing = Меняем грани
+edit-editing = Меняем грани { $name }
+edit-flipped =
+    { $count ->
+        [one] Развёрнута { $count } грань { $name }
+        [few] Развёрнуто { $count } грани { $name }
+       *[many] Развёрнуто { $count } граней { $name }
+    }
+edit-removed =
+    { $count ->
+        [one] Удалена { $count } грань { $name }
+        [few] Удалено { $count } грани { $name }
+       *[many] Удалено { $count } граней { $name }
+    }
+edit-bridged =
+    { $count ->
+        [one] Соединено { $count } гранью на { $name }
+       *[other] Соединено гранями ({ $count }) на { $name }
+    }
+edit-dropped-shells =
+    { $count ->
+        [one] Удалена { $count } оболочка { $name }
+        [few] Удалено { $count } оболочки { $name }
+       *[many] Удалено { $count } оболочек { $name }
+    }
+edit-bridge-not-open = Одно из рёбер уже не открыто, соединять нечего
+edit-bridge-same = Ребро нельзя соединить с самим собой
+edit-bridge-in-line = Рёбра лежат на одной прямой, грань между ними не ляжет
+job-thread-stopped-edit = поток правки граней остановился, не закончив
 repair-found = Найдено
 repair-found-note = Что импорт нашёл в моделях, с которыми работает инструмент: выбранных или всех на платформе. Нажатие на строку отмечает найденное на моделях и подводит камеру к первому месту, каждое следующее — к следующему, а нажатие после последнего убирает отметки. Пересекающиеся грани считаются по лупе: на большой модели это занимает время.
 repair-nothing-found = Чинить нечего.
@@ -1920,13 +1999,6 @@ repair-smallest-shell = Наименьшая соринка
 repair-wrap-lattice = Решётка обёртки
 repair-repair = Починить
 repair-repairing = Починка
-repair-sound = Целая
-repair-broken =
-    { $count ->
-        [one] { $count } сломана
-        [few] { $count } сломаны
-       *[many] { $count } сломано
-    }
 
 ## panels/view_cube.rs
 

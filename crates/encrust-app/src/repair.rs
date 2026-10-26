@@ -19,14 +19,66 @@ use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 mod found;
+mod hand;
+mod pending;
+mod shells;
 
 pub use found::{Finding, Found};
+pub use hand::{Hand, HandEdit};
+pub use shells::Shells;
 
-/// What the Repair tool is set to: the repair its button runs and the lengths it works to.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+/// The Repair tool: what it is set to, and the mode its card is in.
+#[derive(Debug, Default)]
+pub struct RepairTool {
+    pub state: RepairState,
+    pub mode: RepairMode,
+    pub picking: Picking,
+    /// The brush has the pointer: the press landed on a model.
+    pub stroke: bool,
+    /// Where the brush was last put down, so a drag picks along the line it drew.
+    pub last_daub: Option<core_geometry::Vec2>,
+}
+
+/// Whether the Repair card runs the repairs on whole models or edits their faces by hand.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RepairMode {
+    #[default]
+    Model,
+    Faces,
+}
+
+/// What a click picks in the Faces mode.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Picking {
+    /// Faces, under a brush or a whole surface at a time, to turn or drop.
+    #[default]
+    Faces,
+    /// Open edges, two of them to bridge.
+    Edges,
+}
+
+/// What the Repair tool is set to: the repair its button runs, the lengths it works to,
+/// and the brush the Faces mode picks with.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RepairState {
     pub method: RepairMethod,
     pub settings: RepairSettings,
+    /// How far the brush reaches, mm.
+    pub brush_radius_mm: f32,
+    /// How far a surface may turn and still be picked whole, degrees.
+    pub flood_angle_deg: f32,
+}
+
+impl Default for RepairState {
+    fn default() -> Self {
+        Self {
+            method: RepairMethod::default(),
+            settings: RepairSettings::default(),
+            brush_radius_mm: 2.0,
+            flood_angle_deg: 20.0,
+        }
+    }
 }
 
 impl RepairState {
@@ -48,6 +100,10 @@ pub struct Repairs {
     kept: Vec<ObjectId>,
     /// Where the Repair tool's findings lie on the models.
     pub found: Found,
+    /// The Faces mode's picks and its changes by hand.
+    pub hand: Hand,
+    /// The shells of the one model the tool works on.
+    pub shells: Shells,
 }
 
 impl Repairs {
@@ -110,7 +166,8 @@ impl Repairs {
     /// Puts every repair that has finished into the scene. Returns whether one is still
     /// running, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
-        let working = self.found.poll(scene);
+        let working =
+            self.found.poll(scene) | self.shells.poll(scene) | self.hand.poll(scene, status);
         let mut done = Vec::new();
         self.jobs.retain_mut(|(job, taken)| match job.poll() {
             None => true,

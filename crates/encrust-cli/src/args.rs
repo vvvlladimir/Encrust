@@ -85,6 +85,37 @@ pub struct ImportArgs {
     #[arg(long, value_name = "MM", default_value_t = DEFAULT_WRAP_MM, requires = "repair")]
     pub wrap_mm: Scalar,
 
+    /// Turn these faces the other way, numbered from 0 on the model as import leaves it.
+    #[arg(
+        long,
+        value_name = "FACES",
+        value_delimiter = ',',
+        conflicts_with = "no_validate"
+    )]
+    pub flip_faces: Vec<usize>,
+
+    /// Drop these faces, numbered as for --flip-faces.
+    #[arg(
+        long,
+        value_name = "FACES",
+        value_delimiter = ',',
+        conflicts_with = "no_validate"
+    )]
+    pub drop_faces: Vec<usize>,
+
+    /// Drop these shells, numbered from 1 as `inspect --shells` lists them.
+    #[arg(
+        long,
+        value_name = "SHELLS",
+        value_delimiter = ',',
+        conflicts_with = "no_validate"
+    )]
+    pub drop_shells: Vec<usize>,
+
+    /// Lay faces between two open edges, each as its two vertices: A-B:C-D. May repeat.
+    #[arg(long, value_name = "A-B:C-D", conflicts_with = "no_validate")]
+    pub bridge: Vec<crate::edits::BridgeEdges>,
+
     #[command(flatten)]
     pub transform: TransformArgs,
 

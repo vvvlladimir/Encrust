@@ -101,7 +101,6 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
             value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
         )),
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
-        Tool::Repair => repair::fact(window),
         Tool::Check => check::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
         Tool::Measure => match window.tools.measure.target {
@@ -117,8 +116,10 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
                 .filter(crate::measure::PlaneGap::is_parallel)
                 .and_then(|_| plain(tr!("inspector-parallel"))),
         },
-        // The Supports card has its click modes where the fact would stand.
-        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape => None,
+        // The Supports and Repair cards have their modes where the fact would stand.
+        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape | Tool::Repair => {
+            None
+        }
     }
 }
 
@@ -163,6 +164,8 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
         if tool == Tool::Supports {
             supports::modes(ui, window);
+        } else if tool == Tool::Repair {
+            repair::modes(ui, window);
         } else if let Some((text, color)) = fact(window, tool) {
             ui.add(
                 egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))

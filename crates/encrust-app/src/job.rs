@@ -2,6 +2,7 @@ use crate::i18n::tr;
 mod boolean;
 mod cut;
 mod drill;
+mod edit;
 mod format;
 mod hollow;
 mod import;
@@ -25,6 +26,7 @@ pub use drill::{
     DrillJob, DrillRequest, PrintedSupportsJob, PrintedSupportsRequest, spawn_drill,
     spawn_printed_supports,
 };
+pub use edit::{Edit, EditJob, EditOutcome};
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;
 pub use format::label_of;

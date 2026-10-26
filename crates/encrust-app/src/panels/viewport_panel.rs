@@ -18,6 +18,7 @@ mod levels;
 mod overlays;
 mod paint;
 mod picking;
+mod repair;
 mod support_ghost;
 mod supports;
 mod text;
@@ -203,6 +204,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             lay_face_under_cursor(window, rect, cursor);
         }
         Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
+        Tool::Repair if paint::picks_edges(window) => repair::pick_edge(window, rect, cursor),
+        // The brush has already picked whatever faces the click landed on.
+        Tool::Repair if paint::picks_faces(window) => {}
         _ => select_under_cursor(window, rect, cursor, false),
     }
 }
@@ -308,7 +312,11 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
         },
         rect,
     )
-    .highlighting(&marked(window, section_mm))
+    .highlighting(&marked(
+        window,
+        section_mm,
+        (rect, ui.input(|i| i.pointer.hover_pos())),
+    ))
     .timed(window.view.ui_ms, window.view.budget.report(), levels.faces);
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
@@ -317,9 +325,13 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
 
 /// What the Repair tool found, or the issues Check went to while the plate and the cut at
 /// `section_mm` stay as they were, marked only while that tool is in hand.
-fn marked(window: &Window, section_mm: Option<Scalar>) -> crate::highlight::Highlight {
+fn marked(
+    window: &Window,
+    section_mm: Option<Scalar>,
+    (rect, cursor): (egui::Rect, Option<egui::Pos2>),
+) -> crate::highlight::Highlight {
     match *window.tool {
-        Tool::Repair => window.doc.repairs.found.highlight(&window.doc.scene),
+        Tool::Repair => repair::marked(window, rect, cursor),
         Tool::Check => window.tools.check.highlight(crate::check::Stage {
             plate: crate::preview::plate_fingerprint(&window.doc.scene),
             cut_mm: section_mm,
@@ -332,7 +344,7 @@ fn marked(window: &Window, section_mm: Option<Scalar>) -> crate::highlight::High
 /// the frame that place is worked out, seen past what the section leaves drawn.
 fn fly_to_marked(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
     let spot = match *window.tool {
-        Tool::Repair => window.doc.repairs.found.take_flight(&window.doc.scene),
+        Tool::Repair => repair::flight(window),
         Tool::Check => window.tools.check.take_flight(),
         _ => None,
     };
@@ -371,6 +383,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
         || (*window.tool == Tool::Relief && window.tools.relief.paints())
+        || paint::picks_faces(window)
     {
         draw_brush(ui, window, rect);
     }

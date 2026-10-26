@@ -253,7 +253,7 @@ fn rows(ui: &mut egui::Ui, window: &mut Window) {
             }
         }
         Some((id, Clicked::Repair)) => {
-            let state = window.tools.repair.plain();
+            let state = window.tools.repair.state.plain();
             window
                 .doc
                 .repairs

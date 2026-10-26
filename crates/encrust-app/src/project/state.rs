@@ -201,7 +201,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
         array: manifest.array,
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
-        repair: tools.repair,
+        repair: tools.repair.state,
     }
     .apply(tools, slicing);
 

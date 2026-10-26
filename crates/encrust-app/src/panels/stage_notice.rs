@@ -178,7 +178,7 @@ fn broken(stack: &mut Stack, window: &mut Window) {
     });
     for (id, _, _) in &offered {
         if repair {
-            let (repairs, state) = (&mut window.doc.repairs, window.tools.repair.plain());
+            let (repairs, state) = (&mut window.doc.repairs, window.tools.repair.state.plain());
             repairs.start(&window.doc.scene, *id, state, &mut window.machine.status);
         } else if keep {
             window.doc.repairs.keep_as_it_is(*id);

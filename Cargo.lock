@@ -1068,6 +1068,7 @@ dependencies = [
  "proptest",
  "rayon",
  "serde",
+ "thiserror 2.0.21",
  "workspace-hack",
 ]
 
@@ -6485,7 +6486,6 @@ dependencies = [
  "smallvec",
  "syn 2.0.119",
  "syn 3.0.6",
- "thiserror 2.0.21",
  "tinystr",
  "toml_datetime",
  "toml_parser",

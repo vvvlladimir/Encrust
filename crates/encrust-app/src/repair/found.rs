@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use core_geometry::{FastMap, FastSet, Faults, Mesh, Region, Vec3, faults, self_intersections};
 
+use super::pending::{Pending, done, running, settle, start};
 use crate::highlight::{EdgeMark, FaceMark, Highlight, LIFT_MM, Spot, patch};
-use crate::job::{Worker, pooled};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::ui::theme;
 
@@ -18,6 +18,12 @@ pub enum Finding {
     FlatFaces,
     DoubledFaces,
     CrossingFaces,
+}
+
+/// One model's open edges, in its own space and as their vertices, in the same order.
+pub struct OpenEdges<'a> {
+    pub ends: &'a [[Vec3; 2]],
+    pub vertices: &'a [[u32; 2]],
 }
 
 /// One hole, in its model's space: where it is, and the edges round it.
@@ -39,6 +45,8 @@ struct Faces {
 #[derive(Debug, Default)]
 struct Placed {
     open_edges: Vec<[Vec3; 2]>,
+    /// The same edges as their two vertices, for a bridge between two of them.
+    open_ids: Vec<[u32; 2]>,
     holes: Vec<Hole>,
     flat_faces: Faces,
     doubled_faces: Faces,
@@ -49,13 +57,6 @@ struct Placed {
 struct Crossed {
     pairs: usize,
     faces: Faces,
-}
-
-/// A piece of work on one model: running, or done with an answer or without one.
-#[derive(Debug)]
-enum Pending<T> {
-    Running(Worker<Option<T>>),
-    Done(Option<T>),
 }
 
 /// The findings worked out on each model, kept while its mesh is the one they were of,
@@ -135,6 +136,15 @@ impl Found {
             let mesh = Arc::clone(&object.mesh);
             start(&mut self.placed, object, move || placed(&mesh));
         }
+    }
+
+    /// The open edges of `object` as it stands, once placed.
+    pub fn open_edges(&self, object: &SceneObject) -> Option<OpenEdges<'_>> {
+        let placed = done(&self.placed, object).flatten()?;
+        Some(OpenEdges {
+            ends: &placed.open_edges,
+            vertices: &placed.open_ids,
+        })
     }
 
     /// Whether some work is still running.
@@ -314,6 +324,7 @@ fn placed(mesh: &Mesh) -> Placed {
     let at = |corner: u32| mesh.vertices[corner as usize];
     Placed {
         open_edges: found.open_edges.iter().map(|edge| edge.map(at)).collect(),
+        open_ids: found.open_edges.clone(),
         holes: holes(mesh, &found),
         flat_faces: Faces::of(mesh, &found.flat_faces),
         doubled_faces: Faces::of(mesh, &found.doubled_faces),
@@ -356,49 +367,6 @@ fn holes(mesh: &Mesh, found: &Faults) -> Vec<Hole> {
             Some(Hole { spot, rim })
         })
         .collect()
-}
-
-/// Starts `work` on `object` unless what is kept for it is of its mesh as it stands.
-fn start<T: Send + 'static>(
-    kept: &mut Vec<(Taken, Pending<T>)>,
-    object: &SceneObject,
-    work: impl FnOnce() -> T + Send + 'static,
-) {
-    if kept.iter().any(|(taken, _)| taken.is_model(object)) {
-        return;
-    }
-    kept.retain(|(taken, _)| taken.id != object.id);
-    let worker = Worker::spawn(move |_, _| pooled(|| Some(work()), |_| None), || None);
-    kept.push((Taken::of(object), Pending::Running(worker)));
-}
-
-/// What is kept for `object` as it stands: `None` when nothing, `Some(None)` while it runs
-/// or where it ended without an answer.
-fn done<'a, T>(kept: &'a [(Taken, Pending<T>)], object: &SceneObject) -> Option<Option<&'a T>> {
-    let (_, pending) = kept.iter().find(|(taken, _)| taken.is_model(object))?;
-    Some(match pending {
-        Pending::Running(_) => None,
-        Pending::Done(answer) => answer.as_ref(),
-    })
-}
-
-fn running<T>(kept: &[(Taken, Pending<T>)]) -> bool {
-    kept.iter()
-        .any(|(_, pending)| matches!(pending, Pending::Running(_)))
-}
-
-/// Takes in the answers that have come, and drops what was of a mesh no longer on the plate.
-fn settle<T: Send + 'static>(kept: &mut Vec<(Taken, Pending<T>)>, scene: &Scene) {
-    kept.retain_mut(|(taken, pending)| {
-        if let Pending::Running(worker) = pending
-            && let Some(answer) = worker.poll()
-        {
-            *pending = Pending::Done(answer);
-        }
-        scene
-            .get(taken.id)
-            .is_some_and(|object| taken.is_model(object))
-    });
 }
 
 #[cfg(test)]

@@ -30,7 +30,19 @@ pub fn section_with_action<R>(
     action: (&str, &str),
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (bool, Option<R>) {
-    block(ui, title, None, Trailing::Action(action), add)
+    let (pressed, inner) = block(ui, title, None, Trailing::Actions(&[action]), add);
+    (pressed.is_some(), inner)
+}
+
+/// A block like `section` with a few icon buttons at the right of its heading, left to
+/// right as listed, for the actions over the whole block. Returns which was pressed.
+pub fn section_with_actions<R>(
+    ui: &mut Ui,
+    title: &str,
+    actions: &[(&str, &str)],
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (Option<usize>, Option<R>) {
+    block(ui, title, None, Trailing::Actions(actions), add)
 }
 
 /// A block whose heading carries the switch that turns the whole of it on, so the switch
@@ -41,14 +53,15 @@ pub fn section_with_switch<R>(
     on: &mut bool,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (bool, Option<R>) {
-    block(ui, title, None, Trailing::Switch(on), add)
+    let (flipped, inner) = block(ui, title, None, Trailing::Switch(on), add);
+    (flipped.is_some(), inner)
 }
 
 /// What stands at the right end of a block's heading.
 enum Trailing<'a> {
     Nothing,
-    /// An icon button: its glyph and its tooltip.
-    Action((&'a str, &'a str)),
+    /// Icon buttons, each its glyph and its tooltip, left to right.
+    Actions(&'a [(&'a str, &'a str)]),
     Switch(&'a mut bool),
 }
 
@@ -66,7 +79,7 @@ fn block<R>(
     hint_text: Option<&str>,
     trailing: Trailing<'_>,
     add: impl FnOnce(&mut Ui) -> R,
-) -> (bool, Option<R>) {
+) -> (Option<usize>, Option<R>) {
     let id = ui.id().with(("section", title));
     let open = kept::get::<bool>(ui.ctx(), id.with("open")) != Some(false);
     let pressed = block_heading(ui, id, title, open, hint_text, trailing);
@@ -104,7 +117,7 @@ fn block_heading(
     open: bool,
     hint_text: Option<&str>,
     trailing: Trailing<'_>,
-) -> bool {
+) -> Option<usize> {
     let colors = theme::colors();
     let (rect, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::SECTION_H), Sense::hover());
@@ -145,14 +158,22 @@ fn block_heading(
     child
         .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let pressed = match trailing {
-                Trailing::Nothing => false,
-                Trailing::Action((glyph, tooltip)) => {
-                    crate::ui::icon_button(ui, glyph, tooltip).clicked()
+                Trailing::Nothing => None,
+                Trailing::Actions(actions) => {
+                    ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
+                    // Laid right to left, so the last listed stands at the end.
+                    let mut pressed = None;
+                    for (at, (glyph, tooltip)) in actions.iter().enumerate().rev() {
+                        if crate::ui::icon_button(ui, glyph, tooltip).clicked() {
+                            pressed = Some(at);
+                        }
+                    }
+                    pressed
                 }
                 Trailing::Switch(on) => {
                     // In line with the switches of the body, which sit a full pad in.
                     ui.add_space(4.0);
-                    super::bare_switch(ui, on, title).changed()
+                    super::bare_switch(ui, on, title).changed().then_some(0)
                 }
             };
             if let Some(hint_text) = hint_text {

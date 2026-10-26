@@ -22,8 +22,8 @@ pub use field::{
 pub use layout::{
     body_and_foot, busy, card, card_foot, describe, described, describing, dialog_frame,
     dialog_head, hairline, heading, help_mark, hint, meta, nested, notice, progress_bar, readings,
-    section, section_with_action, section_with_switch, stats, subheading, subheading_with_switch,
-    vertical_hairline,
+    section, section_with_action, section_with_actions, section_with_switch, stats, subheading,
+    subheading_with_switch, vertical_hairline,
 };
 pub use list::{issue_row, list, list_row, two_lines};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};

@@ -166,6 +166,29 @@ pub struct Repair {
     pub wrap_voxel_mm: Option<Scalar>,
     /// `--repair` would have left more wrong, so the model is as it came.
     pub kept_as_found: bool,
+    /// What the changes by hand did, when one was named.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub by_hand: Option<ByHand>,
+    /// Each shell as import left the model, when `--shells` asked for them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shell_list: Option<Vec<ShellFacts>>,
+}
+
+/// What `--flip-faces`, `--drop-faces`, `--drop-shells` and `--bridge` did.
+#[derive(Debug, Serialize)]
+pub struct ByHand {
+    pub faces_turned: usize,
+    pub faces_added: usize,
+    pub faces_dropped: usize,
+    pub shells_dropped: usize,
+}
+
+/// One shell, numbered from 1 by its place in the list.
+#[derive(Debug, Serialize)]
+pub struct ShellFacts {
+    pub faces: usize,
+    pub area_mm2: Scalar,
+    pub closed: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -542,6 +565,22 @@ fn repair_of(import: &ImportReport) -> Repair {
             .map(|wrapped| wrapped != crate::report::Wrapped::LeftOut),
         wrap_voxel_mm: import.wrapped.and_then(crate::report::Wrapped::voxel_mm),
         kept_as_found: import.mended.is_some_and(|mended| mended.kept_as_found),
+        by_hand: import.edited.map(|edited| ByHand {
+            faces_turned: edited.faces_flipped,
+            faces_added: edited.faces_added,
+            faces_dropped: edited.faces_dropped,
+            shells_dropped: edited.shells_dropped,
+        }),
+        shell_list: import.shells.as_ref().map(|shells| {
+            shells
+                .iter()
+                .map(|shell| ShellFacts {
+                    faces: shell.faces.len(),
+                    area_mm2: shell.area_mm2,
+                    closed: shell.closed,
+                })
+                .collect()
+        }),
     }
 }
 

@@ -1,0 +1,176 @@
+//! The shells of the one model the Repair tool works on: listed off the drawing thread,
+//! picked from the list, flown to and marked, and dropped.
+
+use std::sync::Arc;
+
+use core_geometry::{Mesh, Vec3, list_shells};
+
+use super::pending::{Pending, done, settle, start};
+use crate::highlight::{FaceMark, Highlight, LIFT_MM, Spot, patch};
+use crate::scene::{Scene, SceneObject, Taken};
+use crate::ui::theme;
+
+/// The share of the largest shell's area under which a shell is small: a loose bit beside
+/// the model rather than a part of it.
+const SMALL_SHARE: f32 = 0.01;
+
+/// Faces past which a picked shell is flown to but not marked: its patch would be laid on
+/// the drawing thread, and a shell that size is the model itself.
+const MARKED_FACES: usize = 100_000;
+
+/// One shell as the list shows it, in its model's space.
+#[derive(Debug, Clone)]
+pub struct ShellRow {
+    pub faces: Vec<u32>,
+    pub area_mm2: f32,
+    pub closed: bool,
+    spot: Option<Spot>,
+}
+
+/// The shells listed, those picked, and the camera's next flight to one.
+#[derive(Debug, Default)]
+pub struct Shells {
+    listed: Vec<(Taken, Pending<Vec<ShellRow>>)>,
+    picked: Option<(Taken, Vec<usize>, Vec<Arc<Mesh>>)>,
+    flight: Option<Spot>,
+}
+
+impl Shells {
+    /// Starts listing the shells of `object`, unless they are listed as it stands.
+    pub fn list(&mut self, object: &SceneObject) {
+        let mesh = Arc::clone(&object.mesh);
+        start(&mut self.listed, object, move || rows(&mesh));
+    }
+
+    /// The shells of `object` as it stands, once listed.
+    pub fn rows(&self, object: &SceneObject) -> Option<&[ShellRow]> {
+        done(&self.listed, object).flatten().map(Vec::as_slice)
+    }
+
+    /// The shells of `object` picked, by their place in the list.
+    pub fn picked(&self, object: &SceneObject) -> &[usize] {
+        match &self.picked {
+            Some((taken, picked, _)) if taken.is_model(object) => picked,
+            _ => &[],
+        }
+    }
+
+    /// Picks the shell at `at` in the list of `object` and sends the camera to it, or lets
+    /// it go if it was picked.
+    pub fn toggle(&mut self, object: &SceneObject, at: usize) {
+        let mut picked = self.picked(object).to_vec();
+        match picked.iter().position(|&shell| shell == at) {
+            Some(index) => {
+                picked.remove(index);
+            }
+            None => {
+                picked.push(at);
+                self.flight = self.rows(object).and_then(|rows| rows.get(at)?.spot);
+                self.flight = self.flight.map(|spot| spot.placed(object.transform));
+            }
+        }
+        self.set(object, picked);
+    }
+
+    /// Picks the shells of `object` whose area is under a hundredth of the largest one's.
+    pub fn pick_small(&mut self, object: &SceneObject) {
+        let rows = self.rows(object).unwrap_or_default();
+        let largest = rows.iter().map(|row| row.area_mm2).fold(0.0, f32::max);
+        let small = self.matching(object, |row| row.area_mm2 < largest * SMALL_SHARE);
+        self.set(object, small);
+    }
+
+    /// Picks every shell of `object` not picked, and lets the picked ones go.
+    pub fn invert(&mut self, object: &SceneObject) {
+        let picked = self.picked(object).to_vec();
+        let rest = self.matching(object, |_| true);
+        self.set(
+            object,
+            rest.into_iter().filter(|at| !picked.contains(at)).collect(),
+        );
+    }
+
+    /// Lets every pick go, as a drop of them has been asked for.
+    pub fn clear(&mut self) {
+        self.picked = None;
+    }
+
+    /// Where the camera is to go, once on the frame a shell was picked.
+    pub fn take_flight(&mut self) -> Option<Spot> {
+        self.flight.take()
+    }
+
+    /// Takes in the lists that are done, and forgets those of a mesh replaced since.
+    /// Returns whether one is still being made.
+    pub fn poll(&mut self, scene: &Scene) -> bool {
+        settle(&mut self.listed, scene);
+        super::pending::running(&self.listed)
+    }
+
+    /// The picked shells of the model they were picked on, marked in `fault`.
+    pub fn highlight(&self, scene: &Scene) -> Highlight {
+        let mut highlight = Highlight::default();
+        let Some((taken, _, patches)) = &self.picked else {
+            return highlight;
+        };
+        let Some(object) = scene.get(taken.id).filter(|object| taken.is_model(object)) else {
+            return highlight;
+        };
+        highlight.faces = patches
+            .iter()
+            .map(|mesh| FaceMark {
+                mesh: Arc::clone(mesh),
+                transform: object.transform,
+                colour: theme::scene().fault,
+            })
+            .collect();
+        highlight
+    }
+
+    fn matching(&self, object: &SceneObject, keep: impl Fn(&ShellRow) -> bool) -> Vec<usize> {
+        let rows = self.rows(object).unwrap_or_default();
+        (0..rows.len()).filter(|&at| keep(&rows[at])).collect()
+    }
+
+    /// Puts `picked` down as the picks of `object`, with the patches they are marked by.
+    fn set(&mut self, object: &SceneObject, picked: Vec<usize>) {
+        let rows = self.rows(object).unwrap_or_default();
+        let patches = picked
+            .iter()
+            .filter_map(|&at| rows.get(at))
+            .filter(|row| row.faces.len() <= MARKED_FACES)
+            .filter_map(|row| {
+                let faces = row.faces.iter().map(|&face| face as usize);
+                patch(&object.mesh, faces, LIFT_MM)
+            })
+            .collect();
+        self.picked = Some((Taken::of(object), picked, patches));
+    }
+}
+
+/// The shells of `mesh` as the list shows them, each with where it is.
+fn rows(mesh: &Mesh) -> Vec<ShellRow> {
+    list_shells(mesh)
+        .into_iter()
+        .map(|shell| {
+            let corners = shell
+                .faces
+                .iter()
+                .flat_map(|&face| mesh.faces[face as usize]);
+            // A shell faces every way, so it is framed from wherever the camera stands.
+            let spot = Spot::around(
+                corners.map(|corner| mesh.vertices[corner as usize]),
+                Vec3::ZERO,
+            );
+            ShellRow {
+                faces: shell.faces,
+                area_mm2: shell.area_mm2,
+                closed: shell.closed,
+                spot,
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;

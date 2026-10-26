@@ -53,7 +53,7 @@ impl ToolSettings {
             array: tools.array,
             text: tools.text.state.clone(),
             combine: tools.boolean.op,
-            repair: tools.repair,
+            repair: tools.repair.state,
         }
     }
 
@@ -69,7 +69,7 @@ impl ToolSettings {
         tools.array = self.array;
         tools.text.state = self.text;
         tools.boolean.op = self.combine;
-        tools.repair = self.repair;
+        tools.repair.state = self.repair;
     }
 }
 
@@ -175,8 +175,8 @@ mod tests {
         tools.text.state.family = "Serif".to_owned();
         tools.text.state.depth_mm = 1.5;
         tools.boolean.op = Boolean::Difference;
-        tools.repair.method = core_volume::RepairMethod::Wrap;
-        tools.repair.settings.wrap_mm = 0.35;
+        tools.repair.state.method = core_volume::RepairMethod::Wrap;
+        tools.repair.state.settings.wrap_mm = 0.35;
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
@@ -202,7 +202,7 @@ mod tests {
         assert_eq!(tools.array.columns, 5);
         assert_eq!(tools.text.state.family, "Serif");
         assert_eq!(tools.boolean.op, Boolean::Difference);
-        assert_eq!(tools.repair.method, core_volume::RepairMethod::Wrap);
+        assert_eq!(tools.repair.state.method, core_volume::RepairMethod::Wrap);
         assert_eq!(
             tools.supports.auto.map(|auto| auto.density),
             Some(1.75),

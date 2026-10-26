@@ -48,8 +48,9 @@ pub use ray::{
 };
 pub use region::Region;
 pub use repair::{
-    DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, Filled, Stitched, collapse_flat_faces,
-    drop_small_shells, fill_holes, fill_holes_within, remove_duplicate_faces, stitch_seams,
+    BridgeError, DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, Filled, Shell, Stitched,
+    bridge, collapse_flat_faces, drop_small_shells, fill_holes, fill_holes_within, flip_faces,
+    list_shells, remove_duplicate_faces, remove_faces, remove_shells, stitch_seams,
 };
 pub use ring::{ring_area, ring_contains};
 pub use smooth::{SmoothNormals, smooth_normals};

@@ -1803,6 +1803,79 @@ repair-not-wrapped = not wrapped, as the surface would have been worse
 
 ## panels/inspector/repair.rs
 
+repair-mode-model = Model: find what is wrong and repair it
+repair-mode-faces = Faces: turn, drop and bridge by hand
+repair-shells-title = Shells
+repair-shells-one = Pick one model to list its shells.
+repair-shells-note = Every part of the model whose faces join each other. A press on one picks it and brings the camera to it; the bin drops it at once. The buttons in the heading pick every shell under a hundredth of the largest one's area, or turn the pick over.
+repair-listing = Listing the shells
+repair-shell = Shell { $number }
+repair-shell-faces =
+    { $count ->
+        [one] { $count } face
+       *[other] { $count } faces
+    }
+repair-shell-faces-open =
+    { $count ->
+        [one] { $count } face, open
+       *[other] { $count } faces, open
+    }
+repair-drop-shell = Drop this shell
+repair-drop-shells =
+    { $count ->
+        [one] Drop { $count } shell
+       *[other] Drop { $count } shells
+    }
+repair-pick-small = Pick the small shells
+repair-pick-invert = Invert the pick
+repair-pick = Pick
+repair-pick-faces = Faces
+repair-pick-edges = Edges
+repair-pick-faces-note = Drag the brush over a model to pick faces, with alt to let them go; Cmd and Shift together pick a whole surface, as far as it turns no more than the angle. Flip turns them over, Delete drops them.
+repair-pick-edges-note = Click two open edges, drawn round the holes, and Bridge lays faces between them, wound as the faces beside them. A third click lets the first go.
+repair-brush = Brush
+repair-brush-radius = Radius
+repair-flood-angle = Surface angle
+repair-picked = Picked
+repair-picked-model = Model
+repair-picked-faces = Faces
+repair-picked-edges = Open edges
+repair-of-two = { $count } of 2
+repair-nothing-picked = Nothing picked.
+repair-no-edge-near = No open edge near the pointer: click on the outline of a hole
+repair-finding-edges = Finding the open edges
+repair-clear-picks = Clear
+repair-flip-faces = Flip
+repair-delete-faces = Delete
+repair-bridge = Bridge
+repair-pick-faces-first = Pick faces with the brush first.
+repair-pick-two-edges = Pick two open edges first.
+repair-editing = Changing the faces
+edit-editing = Changing the faces of { $name }
+edit-flipped =
+    { $count ->
+        [one] Turned { $count } face of { $name }
+       *[other] Turned { $count } faces of { $name }
+    }
+edit-removed =
+    { $count ->
+        [one] Dropped { $count } face of { $name }
+       *[other] Dropped { $count } faces of { $name }
+    }
+edit-bridged =
+    { $count ->
+        [one] Bridged with { $count } face on { $name }
+       *[other] Bridged with { $count } faces on { $name }
+    }
+edit-dropped-shells =
+    { $count ->
+        [one] Dropped { $count } shell of { $name }
+       *[other] Dropped { $count } shells of { $name }
+    }
+edit-bridge-not-open = One of the edges is not open any more, so there is nothing to bridge
+edit-bridge-same = An edge cannot be bridged to itself
+edit-bridge-in-line = The two edges lie on one line, so no face spans them
+job-thread-stopped-edit = the thread changing the faces stopped without finishing
 repair-found = Found
 repair-found-note = What import found in the models the tool works on: those picked, or every model on the plate. A press on a row marks it on the models and brings the camera to the first of them, each press after to the next, and the press after the last puts the marks away. Faces crossing each other are counted by the magnifier, which takes a while on a large model.
 repair-nothing-found = Nothing to repair.
@@ -1836,8 +1909,6 @@ repair-smallest-shell = Smallest speck
 repair-wrap-lattice = Wrap lattice
 repair-repair = Repair
 repair-repairing = Repairing
-repair-sound = Sound
-repair-broken = { $count } broken
 
 ## panels/view_cube.rs
 
