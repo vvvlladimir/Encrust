@@ -1,0 +1,31 @@
+# Anycubic Photon Mono 4.
+
+name = "Photon Mono 4"
+manufacturer = "Anycubic"
+machine_name = "Anycubic Photon Mono 4"
+mirror_x = true
+mirror_y = false
+connection = "none"
+
+[display]
+width_px = 9024
+height_px = 5120
+width_mm = 153.408
+height_mm = 87.04
+grey_floor = 0
+
+[build_volume]
+x = 153.408
+y = 87.04
+z = 165.0
+
+[output.anycubic]
+extension = "pm4n"
+revision = "v518"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"

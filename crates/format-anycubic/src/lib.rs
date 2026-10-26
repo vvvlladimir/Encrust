@@ -1,6 +1,5 @@
-//! The Anycubic Photon Workshop containers: one table container under seventeen
-//! extensions, at version 1 and at revisions 516 and 517. Layout is in
-//! `docs/formats/anycubic.md`.
+//! The Anycubic Photon Workshop containers: one table container under twenty extensions,
+//! at version 1 and at revisions 516, 517 and 518. Layout is in `docs/formats/anycubic.md`.
 
 mod bit_planes;
 mod blocks;

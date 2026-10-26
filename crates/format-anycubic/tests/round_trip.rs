@@ -12,7 +12,8 @@ use core_format::{
 };
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
 use format_anycubic::{
-    AnycubicFlavour, AnycubicSink, AnycubicVersion, AnycubicWriter, PwsReader, decode,
+    AnycubicFlavour, AnycubicReader, AnycubicSink, AnycubicVersion, AnycubicWriter, PwsReader,
+    decode,
 };
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -423,6 +424,84 @@ fn revision_517_adds_the_slicer_and_model_blocks() {
 }
 
 #[test]
+fn revision_518_repeats_the_layer_table_behind_the_model_block() {
+    let layers: Vec<_> = (0..3)
+        .map(|index| layer_from(&vec![index * 40 + 40; (WIDTH_PX * HEIGHT_PX) as usize]))
+        .collect();
+    let file = write_version(
+        AnycubicWriter::new(AnycubicFlavour::Pm5s, AnycubicVersion::V518),
+        &job(3),
+        &layers,
+        0.0,
+    );
+
+    assert_eq!(u32_at(&file, 0x0C), 518);
+    assert_eq!(u32_at(&file, 0x10), 11, "eleven blocks carry a 518 file");
+    let header = u32_at(&file, HEADER_ADDRESS) as usize;
+    assert_eq!(
+        header, 64,
+        "the mark gains the second table and the second preview"
+    );
+    assert_eq!(u32_at(&file, header + 12), 96, "518 adds intelligent mode");
+
+    let machine = u32_at(&file, MACHINE_ADDRESS) as usize;
+    assert_eq!(
+        u32_at(&file, machine + 12),
+        224,
+        "the machine block grows to 224"
+    );
+    assert_eq!(
+        u32_at(&file, machine + 16 + 96 + 16 + 4),
+        15,
+        "fifteen properties"
+    );
+    let pixel_um = (f32_at(&file, machine + 0x9C), f32_at(&file, machine + 0xA0));
+    assert!(
+        (pixel_um.0 - 100.0).abs() < 1e-3 && (pixel_um.1 - 100.0).abs() < 1e-3,
+        "a 0.1 mm pixel is 100 um along each axis, got {pixel_um:?}"
+    );
+    assert_eq!(u32_at(&file, machine + 0xC4), 1, "one panel");
+    assert_eq!(
+        u32_at(&file, machine + 0xCC),
+        WIDTH_PX | HEIGHT_PX << 16,
+        "the panel's resolution as two u16"
+    );
+
+    let sub_layers = u32_at(&file, 0x38) as usize;
+    assert_eq!(
+        u32_at(&file, 0x3C),
+        0,
+        "no second preview, as the vendor writes it"
+    );
+    assert_eq!(table_name(&file, sub_layers), "SUBIMGS");
+    assert_eq!(u32_at(&file, sub_layers + 12), 24 + 44 * 3);
+    assert_eq!(u32_at(&file, sub_layers + 16), 3);
+
+    let table = u32_at(&file, LAYER_TABLE_ADDRESS) as usize + 20;
+    for index in 0..3 {
+        let row = table + index * LAYER_DEF_BYTES;
+        let sub_row = sub_layers + 24 + index * 44;
+        assert_eq!(
+            (u32_at(&file, sub_row), u32_at(&file, sub_row + 4)),
+            (u32_at(&file, row), u32_at(&file, row + 4)),
+            "layer {index} is the same data in both tables"
+        );
+        assert_eq!(u32_at(&file, sub_row + 8), u32_at(&file, row + 24));
+    }
+
+    let data = u32_at(&file, 0x30) as usize;
+    assert_eq!(
+        data,
+        sub_layers + 24 + 44 * 3,
+        "the layers follow the second table"
+    );
+    let open = AnycubicReader
+        .open(std::io::Cursor::new(file))
+        .expect("a 518 file reads back");
+    assert_eq!(open.facts().version, Some(518));
+}
+
+#[test]
 fn an_extension_names_the_newest_revision_its_machines_read() {
     assert_eq!(AnycubicFlavour::Pwx.newest_version(), AnycubicVersion::V1);
     assert_eq!(
@@ -430,6 +509,17 @@ fn an_extension_names_the_newest_revision_its_machines_read() {
         AnycubicVersion::V516
     );
     assert_eq!(AnycubicFlavour::Pm5.newest_version(), AnycubicVersion::V517);
+    for flavour in [
+        AnycubicFlavour::Pm5s,
+        AnycubicFlavour::M5sp,
+        AnycubicFlavour::Pm4n,
+    ] {
+        assert_eq!(
+            flavour.newest_version(),
+            AnycubicVersion::V518,
+            "{flavour:?}"
+        );
+    }
 }
 
 /// A one-layer V1 file made a `.pws`: `levels` passes in the header and `passes` as the

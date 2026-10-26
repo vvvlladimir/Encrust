@@ -23,10 +23,11 @@ const MACHINE_ADDRESS: u64 = 0x2C;
 const GREY_STEPS: u16 = 16;
 
 /// The revisions this reader knows, which are the ones the writer produces.
-const READ_VERSIONS: [AnycubicVersion; 3] = [
+const READ_VERSIONS: [AnycubicVersion; 4] = [
     AnycubicVersion::V1,
     AnycubicVersion::V516,
     AnycubicVersion::V517,
+    AnycubicVersion::V518,
 ];
 
 /// Reads the Anycubic containers at the revisions this crate writes. Layout is in

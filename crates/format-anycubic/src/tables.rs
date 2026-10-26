@@ -3,7 +3,8 @@ use std::io;
 use core_format::{Fields, PrintJob, Rgb, rgb565};
 
 use crate::blocks::{
-    self, COLOUR_TABLE_BYTES, EXTRA_BYTES, MACHINE_BYTES, MODEL_BYTES, SOFTWARE_BYTES,
+    self, COLOUR_TABLE_BYTES, EXTRA_BYTES, MODEL_BYTES, SOFTWARE_BYTES, machine_bytes,
+    sub_layer_table_bytes,
 };
 use crate::writer::{AnycubicFlavour, AnycubicVersion};
 
@@ -41,6 +42,7 @@ pub(crate) struct Offsets {
     pub machine: u32,
     pub software: u32,
     pub model: u32,
+    pub sub_layers: u32,
     pub layer_data: u32,
 }
 
@@ -63,7 +65,7 @@ impl Offsets {
         let mut at = after_layers;
         let (extra, machine) = if version.has_machine_block() {
             let blocks = (at, at + EXTRA_BYTES);
-            at += EXTRA_BYTES + MACHINE_BYTES;
+            at += EXTRA_BYTES + machine_bytes(version);
             blocks
         } else {
             (0, 0)
@@ -75,6 +77,13 @@ impl Offsets {
         } else {
             (0, 0)
         };
+        let sub_layers = if version.has_sub_layer_table() {
+            let table = at;
+            at += sub_layer_table_bytes(layer_count);
+            table
+        } else {
+            0
+        };
 
         Self {
             header,
@@ -85,6 +94,7 @@ impl Offsets {
             machine,
             software,
             model,
+            sub_layers,
             layer_data: at,
         }
     }
@@ -125,6 +135,11 @@ pub(crate) fn write_file_mark(
     if version.has_model_block() {
         fields.u32_le(offsets.model)?;
     }
+    if version.has_sub_layer_table() {
+        fields.u32_le(offsets.sub_layers)?;
+        // The second preview's address: the vendor's own writer leaves it out, and so do we.
+        fields.u32_le(0)?;
+    }
     Ok(())
 }
 
@@ -156,6 +171,9 @@ pub(crate) fn write_back(
     if version.has_model_block() {
         blocks::write_software(fields)?;
         blocks::write_model(fields, job)?;
+    }
+    if version.has_sub_layer_table() {
+        blocks::write_sub_layer_head(fields, job.layer_count())?;
     }
     Ok(())
 }
@@ -202,7 +220,7 @@ pub(crate) fn write_header(
     write_header_tail(fields, version)
 }
 
-/// The fields revisions 516 and 517 append to the header.
+/// The fields revisions 516 to 518 append to the header.
 fn write_header_tail(fields: &mut Fields<'_>, version: AnycubicVersion) -> io::Result<()> {
     if !version.has_machine_block() {
         return Ok(());
@@ -219,6 +237,12 @@ fn write_header_tail(fields: &mut Fields<'_>, version: AnycubicVersion) -> io::R
     // does not: nothing here can state them, so they are left at zero.
     fields.u16_le(0)?;
     fields.u16_le(0)?;
+    fields.u32_le(0)?;
+    if !version.has_sub_layer_table() {
+        return Ok(());
+    }
+
+    // Intelligent mode lets a machine set the exposure itself; the resin states its own.
     fields.u32_le(0)
 }
 
@@ -286,6 +310,14 @@ impl LayerDef {
         fields.u32_le(self.lit_pixels)?;
         fields.u32_le(0)
     }
+
+    /// This layer's row of the second layer table, which revision 518 adds.
+    pub(crate) fn write_sub_layer(&self, fields: &mut Fields<'_>) -> io::Result<()> {
+        fields.u32_le(self.data_address)?;
+        fields.u32_le(self.data_size)?;
+        fields.u32_le(self.lit_pixels)?;
+        fields.zeros(8 * 4)
+    }
 }
 
 #[cfg(test)]
@@ -306,9 +338,10 @@ mod tests {
                 offsets.colour,
                 offsets.extra,
                 offsets.machine,
-                offsets.model
+                offsets.model,
+                offsets.sub_layers
             ),
-            (0, 0, 0, 0),
+            (0, 0, 0, 0, 0),
             "version 1 carries none of the later blocks and says so with a zero"
         );
     }
@@ -321,11 +354,27 @@ mod tests {
         assert_eq!(five.colour, five.layer_table - COLOUR_TABLE_BYTES);
         assert_eq!(five.extra, five.layer_table + 0x14 + 32 * 10);
         assert_eq!(five.machine, five.extra + EXTRA_BYTES);
-        assert_eq!(five.layer_data, five.machine + MACHINE_BYTES);
+        assert_eq!(
+            five.layer_data,
+            five.machine + machine_bytes(AnycubicVersion::V516)
+        );
 
         let seven = Offsets::of(10, AnycubicVersion::V517);
-        assert_eq!(seven.software, seven.machine + MACHINE_BYTES);
+        assert_eq!(
+            seven.software,
+            seven.machine + machine_bytes(AnycubicVersion::V517)
+        );
         assert_eq!(seven.model, seven.software + SOFTWARE_BYTES);
         assert_eq!(seven.layer_data, seven.model + MODEL_BYTES);
+
+        let eight = Offsets::of(10, AnycubicVersion::V518);
+        assert_eq!(
+            eight.header,
+            seven.header + 8,
+            "two more addresses in the mark"
+        );
+        assert_eq!(eight.software, eight.machine + 224);
+        assert_eq!(eight.sub_layers, eight.model + MODEL_BYTES);
+        assert_eq!(eight.layer_data, eight.sub_layers + 24 + 44 * 10);
     }
 }

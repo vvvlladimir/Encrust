@@ -97,6 +97,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0357](0357-wrap-has-no-sampled-fallback.md) | Wrap unions exactly or leaves the repair alone, with no sampled fallback | Accepted |
 | [0358](0358-a-shell-inside-another-follows-its-holder.md) | A closed shell inside another follows its holder's turning | Accepted |
 | [0359](0359-the-printer-catalogue-is-kept-by-hand.md) | Keep the printer catalogue by hand, checked against the vendor's own profiles | Accepted |
+| [0360](0360-write-photon-workshop-revision-518.md) | Write revision 518 of the Photon Workshop container, without its second preview | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |

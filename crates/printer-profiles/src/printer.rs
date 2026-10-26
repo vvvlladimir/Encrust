@@ -66,6 +66,9 @@ pub enum AnycubicExtension {
     Pm3m,
     Pm3r,
     Pm5,
+    Pm5s,
+    M5sp,
+    Pm4n,
 }
 
 impl AnycubicExtension {
@@ -89,6 +92,9 @@ impl AnycubicExtension {
             Self::Pm3m => ".pm3m",
             Self::Pm3r => ".pm3r",
             Self::Pm5 => ".pm5",
+            Self::Pm5s => ".pm5s",
+            Self::M5sp => ".m5sp",
+            Self::Pm4n => ".pm4n",
         }
     }
 
@@ -107,6 +113,7 @@ pub enum PhotonRevision {
     V1,
     V516,
     V517,
+    V518,
 }
 
 impl OutputFormat {

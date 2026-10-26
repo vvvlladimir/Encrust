@@ -1,6 +1,6 @@
 //! The blocks the Photon Workshop container gained after version 1: the grey table, the
-//! two-stage motion block, the machine, the slicer and the model's bounding box. Layout is
-//! in `docs/formats/anycubic.md`.
+//! two-stage motion block, the machine, the slicer, the model's bounding box and the second
+//! layer table. Layout is in `docs/formats/anycubic.md`.
 
 use std::io;
 
@@ -25,7 +25,13 @@ const EXTRA_STATED_BYTES: u32 = 24;
 pub(crate) const EXTRA_BYTES: u32 = NAME_BYTES as u32 + 4 + EXTRA_FIELD_BYTES;
 
 /// Bytes of the machine block, which counts its own head in.
-pub(crate) const MACHINE_BYTES: u32 = 156;
+pub(crate) fn machine_bytes(version: AnycubicVersion) -> u32 {
+    if version.has_sub_layer_table() {
+        224
+    } else {
+        156
+    }
+}
 
 /// Bytes of the machine's name and of the name of its layer-data codec.
 pub(crate) const MACHINE_NAME_BYTES: usize = 96;
@@ -36,6 +42,18 @@ pub(crate) const SOFTWARE_BYTES: u32 = 32 + 4 + 32 + 64 + 32;
 
 /// Bytes of the model block, which counts its own head in.
 pub(crate) const MODEL_BYTES: u32 = NAME_BYTES as u32 + 4 + 8 * 4;
+
+/// Bytes the second layer table spends in front of its rows: name, length, count, index.
+pub(crate) const SUB_LAYER_HEAD_BYTES: u32 = NAME_BYTES as u32 + 4 + 4 + 4;
+
+/// Bytes of one row of the second layer table: where a layer is, how long, how lit, and
+/// eight floats nobody has identified.
+pub(crate) const SUB_LAYER_ROW_BYTES: u32 = 3 * 4 + 8 * 4;
+
+/// Bytes of the second layer table, which counts its own head in.
+pub(crate) fn sub_layer_table_bytes(layer_count: u32) -> u32 {
+    SUB_LAYER_HEAD_BYTES + SUB_LAYER_ROW_BYTES * layer_count
+}
 
 /// Writes the grey table.
 ///
@@ -83,7 +101,7 @@ pub(crate) fn write_machine(
     version: AnycubicVersion,
 ) -> io::Result<()> {
     let printer = &job.printer;
-    write_table_head(fields, "MACHINE", MACHINE_BYTES)?;
+    write_table_head(fields, "MACHINE", machine_bytes(version))?;
 
     fields.text(printer.machine_name(), MACHINE_NAME_BYTES)?;
     fields.text("pw0Img", CODEC_NAME_BYTES)?;
@@ -96,7 +114,44 @@ pub(crate) fn write_machine(
 
     // The colour the machine paints behind a preview; the reference writer states this one
     // whatever the file holds.
-    fields.u32_le(6_506_241)
+    fields.u32_le(6_506_241)?;
+    if version.has_sub_layer_table() {
+        write_machine_panel(fields, job)?;
+    }
+    Ok(())
+}
+
+/// The fields revision 518 appends to the machine block: the pixel along each axis, how
+/// many panels there are, and the panel's resolution.
+fn write_machine_panel(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    let (pitch_x_mm, pitch_y_mm) = job.printer.display.pixel_pitch_mm();
+    fields.f32_le(pitch_x_mm * 1000.0)?;
+    fields.f32_le(pitch_y_mm * 1000.0)?;
+    fields.zeros(8 * 4)?;
+    fields.u32_le(1)?;
+    fields.zeros(4)?;
+    fields.u16_le(panel_px(job.raster.width_px)?)?;
+    fields.u16_le(panel_px(job.raster.height_px)?)?;
+    fields.zeros(4 * 4)
+}
+
+/// One side of the panel in the sixteen bits revision 518 gives it.
+fn panel_px(side_px: u32) -> io::Result<u16> {
+    u16::try_from(side_px).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("a {side_px} px panel side does not fit revision 518's 16-bit field"),
+        )
+    })
+}
+
+/// Writes the second layer table's head and leaves its rows blank; they are filled in once
+/// the layers are written, like the first table's.
+pub(crate) fn write_sub_layer_head(fields: &mut Fields<'_>, layer_count: u32) -> io::Result<()> {
+    write_table_head(fields, "SUBIMGS", sub_layer_table_bytes(layer_count))?;
+    fields.u32_le(layer_count)?;
+    fields.u32_le(1)?;
+    fields.zeros((SUB_LAYER_ROW_BYTES * layer_count) as usize)
 }
 
 /// Writes the slicer block: which program wrote the file.
@@ -155,15 +210,22 @@ mod tests {
             written(|fields| write_extra(fields, &sample_job(1))).len(),
             EXTRA_BYTES as usize
         );
+        for version in [AnycubicVersion::V516, AnycubicVersion::V518] {
+            assert_eq!(
+                written(|fields| write_machine(
+                    fields,
+                    &sample_job(1),
+                    AnycubicFlavour::Pwmx,
+                    version
+                ))
+                .len(),
+                machine_bytes(version) as usize,
+                "{version:?}"
+            );
+        }
         assert_eq!(
-            written(|fields| write_machine(
-                fields,
-                &sample_job(1),
-                AnycubicFlavour::Pwmx,
-                AnycubicVersion::V516
-            ))
-            .len(),
-            MACHINE_BYTES as usize
+            written(|fields| write_sub_layer_head(fields, 3)).len(),
+            sub_layer_table_bytes(3) as usize
         );
         assert_eq!(written(write_software).len(), SOFTWARE_BYTES as usize);
         assert_eq!(

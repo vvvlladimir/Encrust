@@ -576,7 +576,7 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | |
 | `.ctb` encrypted | the newer Chitu boards that take nothing else | yes | Written when the printer profile says `output = "ctb-encrypted"`; no shipped profile does yet. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
-| `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. |
+| `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. The `.pm5s`, `.m5sp` and `.pm4n` of the Photon Mono M5s, M5s Pro and Mono 4 have not yet been printed from. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip` (PNG layers + G-code) | Phrozen, Wanhao, Kelant | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. |
 | `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |

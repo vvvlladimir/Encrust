@@ -3,6 +3,7 @@ use core_format::{
 };
 use core_raster::LayerRuns;
 
+use crate::blocks;
 use crate::rle::EncodedLayer;
 use crate::tables::{self, LAYER_DEF_BYTES, LayerDef, NAME_BYTES, Offsets};
 
@@ -16,6 +17,7 @@ pub enum AnycubicVersion {
     V1,
     V516,
     V517,
+    V518,
 }
 
 impl AnycubicVersion {
@@ -24,6 +26,7 @@ impl AnycubicVersion {
             Self::V1 => 1,
             Self::V516 => 516,
             Self::V517 => 517,
+            Self::V518 => 518,
         }
     }
 
@@ -42,6 +45,11 @@ impl AnycubicVersion {
         self >= Self::V517
     }
 
+    /// Whether it carries the second layer table, which arrived at 518.
+    pub(crate) fn has_sub_layer_table(self) -> bool {
+        self >= Self::V518
+    }
+
     /// How many blocks the file mark claims. The number is not the count of addresses it
     /// writes and the reference states these, so they are transcribed.
     pub(crate) fn table_count(self) -> u32 {
@@ -49,6 +57,7 @@ impl AnycubicVersion {
             Self::V1 => 4,
             Self::V516 => 8,
             Self::V517 => 9,
+            Self::V518 => 11,
         }
     }
 
@@ -58,6 +67,7 @@ impl AnycubicVersion {
             Self::V1 => 7,
             Self::V516 => 8,
             Self::V517 => 9,
+            Self::V518 => 11,
         };
         NAME_BYTES as u32 + 8 + 4 * addresses
     }
@@ -68,6 +78,7 @@ impl AnycubicVersion {
             Self::V1 => 80,
             Self::V516 => 84,
             Self::V517 => 92,
+            Self::V518 => 96,
         }
     }
 
@@ -75,6 +86,7 @@ impl AnycubicVersion {
     pub(crate) fn machine_property_fields(self) -> u32 {
         match self {
             Self::V517 => 7,
+            Self::V518 => 15,
             _ => 1,
         }
     }
@@ -122,11 +134,17 @@ pub enum AnycubicFlavour {
     Pm3r,
     /// Photon Mono M5.
     Pm5,
+    /// Photon Mono M5s.
+    Pm5s,
+    /// Photon Mono M5s Pro.
+    M5sp,
+    /// Photon Mono 4.
+    Pm4n,
 }
 
 impl AnycubicFlavour {
     /// Every extension this writer offers, in the order a front end offers them.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 20] = [
         Self::Pwmx,
         Self::Pwmo,
         Self::Pwms,
@@ -144,6 +162,9 @@ impl AnycubicFlavour {
         Self::Pm3m,
         Self::Pm3r,
         Self::Pm5,
+        Self::Pm5s,
+        Self::M5sp,
+        Self::Pm4n,
     ];
 
     /// What the extension is called where a user would see it named.
@@ -166,6 +187,9 @@ impl AnycubicFlavour {
             Self::Pm3m => ".pm3m",
             Self::Pm3r => ".pm3r",
             Self::Pm5 => ".pm5",
+            Self::Pm5s => ".pm5s",
+            Self::M5sp => ".m5sp",
+            Self::Pm4n => ".pm4n",
         }
     }
 
@@ -193,6 +217,7 @@ impl AnycubicFlavour {
             | Self::Pwma
             | Self::Pm3
             | Self::Pm3m => AnycubicVersion::V516,
+            Self::Pm5s | Self::M5sp | Self::Pm4n => AnycubicVersion::V518,
             _ => AnycubicVersion::V517,
         }
     }
@@ -327,6 +352,14 @@ impl LayerSink for AnycubicSink<'_> {
             .seek_to(u64::from(self.offsets.layer_table) + tables::LAYER_TABLE_HEAD_BYTES)?;
         for def in &self.defs {
             def.write(&mut self.fields)?;
+        }
+        if self.version.has_sub_layer_table() {
+            self.fields.seek_to(
+                u64::from(self.offsets.sub_layers) + u64::from(blocks::SUB_LAYER_HEAD_BYTES),
+            )?;
+            for def in &self.defs {
+                def.write_sub_layer(&mut self.fields)?;
+            }
         }
 
         // The header states the resin the stack came to, which is only known now; see

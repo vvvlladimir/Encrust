@@ -206,6 +206,9 @@ fn anycubic_flavour(extension: AnycubicExtension) -> AnycubicFlavour {
         AnycubicExtension::Pm3m => AnycubicFlavour::Pm3m,
         AnycubicExtension::Pm3r => AnycubicFlavour::Pm3r,
         AnycubicExtension::Pm5 => AnycubicFlavour::Pm5,
+        AnycubicExtension::Pm5s => AnycubicFlavour::Pm5s,
+        AnycubicExtension::M5sp => AnycubicFlavour::M5sp,
+        AnycubicExtension::Pm4n => AnycubicFlavour::Pm4n,
     }
 }
 
@@ -228,6 +231,9 @@ fn anycubic_extension(flavour: AnycubicFlavour) -> AnycubicExtension {
         AnycubicFlavour::Pm3m => AnycubicExtension::Pm3m,
         AnycubicFlavour::Pm3r => AnycubicExtension::Pm3r,
         AnycubicFlavour::Pm5 => AnycubicExtension::Pm5,
+        AnycubicFlavour::Pm5s => AnycubicExtension::Pm5s,
+        AnycubicFlavour::M5sp => AnycubicExtension::M5sp,
+        AnycubicFlavour::Pm4n => AnycubicExtension::Pm4n,
     }
 }
 
@@ -236,6 +242,7 @@ fn anycubic_version(revision: PhotonRevision) -> AnycubicVersion {
         PhotonRevision::V1 => AnycubicVersion::V1,
         PhotonRevision::V516 => AnycubicVersion::V516,
         PhotonRevision::V517 => AnycubicVersion::V517,
+        PhotonRevision::V518 => AnycubicVersion::V518,
     }
 }
 
@@ -244,6 +251,7 @@ fn photon_revision(version: AnycubicVersion) -> PhotonRevision {
         AnycubicVersion::V1 => PhotonRevision::V1,
         AnycubicVersion::V516 => PhotonRevision::V516,
         AnycubicVersion::V517 => PhotonRevision::V517,
+        AnycubicVersion::V518 => PhotonRevision::V518,
     }
 }
 
