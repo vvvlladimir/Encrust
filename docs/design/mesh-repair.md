@@ -111,10 +111,19 @@ order is the only trustworthy signal.
 5. If the turning leaves as many seam edges in conflict as the file had, or more, the
    file's winding stands. Orientation never makes a file worse (ADR 0269).
 6. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
-   exactly when the shell is wound inwards, so the shell is flipped. Open components are
-   skipped — with a hole there is no inside to be on the wrong side of.
+   exactly when the shell is wound inwards. Open components are skipped — with a hole
+   there is no inside to be on the wrong side of.
+7. A closed shell inside no other is flipped when its volume is negative. One inside
+   another follows its holder, the smallest closed shell around it: flipped when the
+   holder was, kept otherwise. So a cavity wound inward stays a cavity, a body inside a
+   body stays a body, and a hollow model inside out turns with its cavity (ADR 0358).
 
-Step 6 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
+The holder is found only where some closed shell is wound inwards, as with every one wound
+outwards nothing turns. Shells boxed inside another's bounds, found by a sweep along x, cast
+a ray along each axis from a point on them through a hierarchy of the boxing shells' faces;
+an odd count of crossings with a shell on two of the three rays puts them inside it.
+
+Steps 6 and 7 are why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
 entirely inside out is a different problem from a few stray faces. `orientable` is false
 when a conflict is left, which is a note and not a defect: the fill rule takes what each
 body encloses (ADR 0269).
@@ -206,9 +215,9 @@ result is taken if it is sound and crosses nothing; else only the repair stands 
 report says the wrap was left out. One sound shell crossing nothing is already its own wrap
 and stands as it is. A shell crossing itself skips the engine, which returns it still
 crossing. *Deep* is repair, wrap, repair, and reports what both repairs did; unwrapped, the
-second repair would meet the first one's mesh, so it is not run. Repair turns every closed
-shell outward (see Orientation), so a shell inside another is a body the wrap swallows, not
-a cavity it keeps.
+second repair would meet the first one's mesh, so it is not run. A shell inside another
+wound outward is a body the wrap swallows; one wound inward is a cavity, the engine reads
+the mesh whole and keeps it (see Orientation).
 
 There is no sampled fallback (ADR 0357): on all 31 test models the field's surface pinched
 thin parts into branches and was refused. Exact unions of separate closed shells are what

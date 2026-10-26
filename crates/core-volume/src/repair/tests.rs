@@ -48,14 +48,33 @@ fn wrapping_two_crossing_cubes_is_their_union() {
 }
 
 #[test]
+fn wrapping_keeps_a_cavity_wound_inward() {
+    let outer = ball(Vec3::ZERO, 10.0, 32, 64);
+    let inner = ball(Vec3::ZERO, 5.0, 32, 64);
+    let expected = signed_volume(&outer) - signed_volume(&inner);
+    let wrapped = wrap(
+        &joined(outer, &inverted(&inner)),
+        RepairSettings::default(),
+        Cancel::never(),
+    )
+    .expect("a hollow ball reads exactly");
+
+    assert!(wrapped.wrapped);
+    let volume = signed_volume(&wrapped.mesh);
+    assert!(
+        (volume - expected).abs() < 1e-3 * expected,
+        "expected {expected} mm^3, the shell between the balls, got {volume}"
+    );
+    assert_eq!(diagnose(&wrapped.mesh).shells, 2);
+}
+
+#[test]
 fn wrapping_swallows_a_ball_inside_a_ball() {
-    // Repair turns every closed shell outward (ADR 0269), so the inner ball is a body and
-    // the outer surface holds it.
     let outer = ball(Vec3::ZERO, 10.0, 32, 64);
     let inner = ball(Vec3::ZERO, 5.0, 32, 64);
     let expected = signed_volume(&outer);
     let wrapped = wrap(
-        &joined(outer, &inverted(&inner)),
+        &joined(outer, &inner),
         RepairSettings::default(),
         Cancel::never(),
     )

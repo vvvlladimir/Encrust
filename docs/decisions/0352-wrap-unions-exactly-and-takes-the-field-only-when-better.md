@@ -1,6 +1,6 @@
 # 0352. Wrap unions a model's shells exactly, and takes the field only when it is better
 
-- **Status:** Accepted; the field fallback is superseded by 0357
+- **Status:** Accepted; the field fallback is superseded by 0357, the swallowed cavity by 0358
 - **Date:** 2026-10-26
 
 ## Context

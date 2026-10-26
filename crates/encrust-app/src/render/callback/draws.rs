@@ -13,7 +13,7 @@ use crate::render::gpu::{
 };
 use crate::render::lod::Light;
 use crate::render::vertex::{ModelInstance, NOT_MARKED};
-use crate::scene::{Mapped, Scene, SceneObject};
+use crate::scene::{Mapped, ObjectId, Scene, SceneObject};
 use crate::ui::theme;
 
 use super::{GROUP_PULL, Ghost, GhostShape};
@@ -41,17 +41,24 @@ pub(super) struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    /// `light` holds the lighter levels drawn in place of heavy meshes.
+    /// `light` holds the lighter levels drawn in place of heavy meshes, `stand_in` a mesh
+    /// one model is drawn as in place of its own.
     pub(super) fn of(
         scene: &Scene,
         mark: f32,
         textures: Option<&Textures>,
         hidden: &[bool],
         light: Option<&Light>,
+        stand_in: Option<(ObjectId, &Arc<Mesh>)>,
     ) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
+            if let Some((_, mesh)) = stand_in.filter(|(id, _)| *id == object.id) {
+                draws.stand_in(object, mesh, colour, mark);
+                draws.supports(object, hidden);
+                continue;
+            }
             let texture = textures.and_then(|textures| textures.get(&object.id));
             // A texture is mapped onto the model's own faces, so its holes stay shader cuts.
             let (shown, drilled) = match texture {
@@ -156,6 +163,17 @@ impl Draws {
         // as open rather than as a cap spilling out into the air beside it (ADR 0195).
         if object.summary.is_sound() {
             self.solid(mesh, object.transform);
+        }
+    }
+
+    /// A model drawn and capped as `mesh` alone: its faces are not the model's own, so no
+    /// texture, hollow or cut of the model's is laid on it.
+    fn stand_in(&mut self, object: &SceneObject, mesh: &Arc<Mesh>, colour: Color32, mark: f32) {
+        let instance = ModelInstance::new(object.transform, colour, mark);
+        self.models
+            .push(ModelDraw::whole(Arc::clone(mesh), instance));
+        if object.summary.is_sound() {
+            self.solid(Arc::clone(mesh), object.transform);
         }
     }
 

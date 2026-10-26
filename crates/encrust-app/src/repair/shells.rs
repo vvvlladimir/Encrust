@@ -1,13 +1,13 @@
 //! The shells of the one model the Repair tool works on: listed off the drawing thread,
-//! picked from the list, flown to and marked, and dropped.
+//! picked from the list, flown to and marked, hidden from view, and dropped.
 
 use std::sync::Arc;
 
 use core_geometry::{FastSet, Mesh, Vec3, list_shells};
 
-use super::pending::{Pending, done, settle, start};
+use super::pending::{Pending, done, running, settle, start};
 use crate::highlight::{FaceMark, Highlight, LIFT_MM, Spot, patch};
-use crate::scene::{Scene, SceneObject, Taken};
+use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::ui::theme;
 
 /// The share of the largest shell's area under which a shell is small: a loose bit beside
@@ -27,11 +27,14 @@ pub struct ShellRow {
     spot: Option<Spot>,
 }
 
-/// The shells listed, those picked, and the camera's next flight to one.
+/// The shells listed, those picked, those hidden, and the camera's next flight to one.
 #[derive(Debug, Default)]
 pub struct Shells {
     listed: Vec<(Taken, Pending<Vec<ShellRow>>)>,
     picked: Option<(Taken, Vec<usize>, Option<Arc<Mesh>>)>,
+    hidden: Option<(Taken, Vec<usize>)>,
+    /// The model drawn without its hidden shells, made off the drawing thread.
+    stand_in: Vec<(Taken, Pending<Arc<Mesh>>)>,
     flight: Option<Spot>,
 }
 
@@ -90,6 +93,55 @@ impl Shells {
         );
     }
 
+    /// The shells of `object` left out of the view, by their place in the list.
+    pub fn hidden(&self, object: &SceneObject) -> &[usize] {
+        match &self.hidden {
+            Some((taken, hidden)) if taken.is_model(object) => hidden,
+            _ => &[],
+        }
+    }
+
+    /// Hides the shell at `at` in the list of `object` from the view, or shows it again.
+    pub fn toggle_hidden(&mut self, object: &SceneObject, at: usize) {
+        let mut hidden = self.hidden(object).to_vec();
+        match hidden.iter().position(|&shell| shell == at) {
+            Some(index) => {
+                hidden.remove(index);
+            }
+            None => hidden.push(at),
+        }
+        self.stand_in.clear();
+        self.hidden = (!hidden.is_empty()).then(|| (Taken::of(object), hidden));
+        let going: Vec<u32> = self
+            .hidden(object)
+            .iter()
+            .filter_map(|&at| self.rows(object)?.get(at))
+            .flat_map(|row| row.faces.iter().copied())
+            .collect();
+        if !going.is_empty() {
+            let mesh = Arc::clone(&object.mesh);
+            start(&mut self.stand_in, object, move || {
+                Arc::new(without(&mesh, &going))
+            });
+        }
+        // A hidden shell is not marked either, or its mark would still stand where it was.
+        self.set(object, self.picked(object).to_vec());
+    }
+
+    /// The one model drawn without its hidden shells, and what it is drawn as, once made;
+    /// only while it is the one model the list is of.
+    pub fn stand_in(&self, scene: &Scene) -> Option<(ObjectId, Arc<Mesh>)> {
+        let (taken, _) = self.hidden.as_ref()?;
+        let mut targets = scene.targets();
+        let (Some(object), None) = (targets.next(), targets.next()) else {
+            return None;
+        };
+        let mesh = done(&self.stand_in, object)
+            .filter(|_| object.id == taken.id)
+            .flatten()?;
+        Some((object.id, Arc::clone(mesh)))
+    }
+
     /// Lets every pick go, as a drop of them has been asked for.
     pub fn clear(&mut self) {
         self.picked = None;
@@ -104,7 +156,16 @@ impl Shells {
     /// Returns whether one is still being made.
     pub fn poll(&mut self, scene: &Scene) -> bool {
         settle(&mut self.listed, scene);
-        super::pending::running(&self.listed)
+        settle(&mut self.stand_in, scene);
+        let stale = self.hidden.as_ref().is_some_and(|(taken, _)| {
+            !scene
+                .get(taken.id)
+                .is_some_and(|object| taken.is_model(object))
+        });
+        if stale {
+            self.hidden = None;
+        }
+        running(&self.listed) || running(&self.stand_in)
     }
 
     /// The picked shells of the model they were picked on, marked in `fault`.
@@ -132,14 +193,33 @@ impl Shells {
     /// Puts `picked` down as the picks of `object`, with the one patch they are marked by.
     fn set(&mut self, object: &SceneObject, picked: Vec<usize>) {
         let rows = self.rows(object).unwrap_or_default();
+        let hidden = self.hidden(object);
         let faces = picked
             .iter()
+            .filter(|at| !hidden.contains(at))
             .filter_map(|&at| rows.get(at))
             .filter(|row| row.faces.len() <= MARKED_FACES)
             .flat_map(|row| row.faces.iter().map(|&face| face as usize));
         let marked = patch(&object.mesh, faces, LIFT_MM);
         self.picked = Some((Taken::of(object), picked, marked));
     }
+}
+
+/// `mesh` with the faces `going` left out, its vertices as they are.
+fn without(mesh: &Mesh, going: &[u32]) -> Mesh {
+    let mut kept = vec![true; mesh.faces.len()];
+    for &face in going {
+        if let Some(kept) = kept.get_mut(face as usize) {
+            *kept = false;
+        }
+    }
+    let faces = mesh
+        .faces
+        .iter()
+        .zip(&kept)
+        .filter_map(|(face, kept)| kept.then_some(*face))
+        .collect();
+    Mesh::new(mesh.vertices.clone(), faces)
 }
 
 /// The shells of `mesh` as the list shows them, each with where it is.

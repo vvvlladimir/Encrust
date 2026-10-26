@@ -143,6 +143,8 @@ pub struct Shading<'a> {
     pub ghost: Option<&'a Ghost>,
     /// The lighter levels drawn in place of heavy meshes.
     pub light: Option<&'a Light>,
+    /// One model drawn as another mesh: the Repair tool's, with some shells hidden.
+    pub stand_in: Option<(ObjectId, &'a Arc<Mesh>)>,
 }
 
 impl ViewportCallback {
@@ -155,29 +157,17 @@ impl ViewportCallback {
         shading: Shading<'_>,
         rect: egui::Rect,
     ) -> Self {
+        let draws = drawn(scene, &shading);
         let Shading {
-            overhang_deg,
             section_mm,
             bottom_cut_mm,
             banding,
-            textures,
             cut_line,
-            hidden_groups,
-            ghost,
             light,
+            ..
         } = shading;
         let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
         let bottom_cut_mm = bottom_cut_mm.map(|height| height + SECTION_INSET_MM);
-        let mut draws = Draws::of(
-            scene,
-            overhang_deg.map_or(NOT_MARKED, marking),
-            textures,
-            hidden_groups,
-            light,
-        );
-        if let Some(ghost) = ghost {
-            draws.ghost(scene, light, ghost);
-        }
         let Draws {
             models,
             markers,
@@ -237,6 +227,22 @@ impl ViewportCallback {
         self.faces = faces;
         self
     }
+}
+
+/// What the objects on the plate come to this frame, the ghost of a click included.
+fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
+    let mut draws = Draws::of(
+        scene,
+        shading.overhang_deg.map_or(NOT_MARKED, marking),
+        shading.textures,
+        shading.hidden_groups,
+        shading.light,
+        shading.stand_in,
+    );
+    if let Some(ghost) = shading.ghost {
+        draws.ghost(scene, shading.light, ghost);
+    }
+    draws
 }
 
 /// What a click is about to put down, drawn over the plate in `colour` and never capped:

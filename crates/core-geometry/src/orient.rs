@@ -5,6 +5,8 @@ use rayon::iter::{
 };
 use serde::{Deserialize, Serialize};
 
+mod nesting;
+
 use crate::topology::{Components, agree, edge_groups, edge_uses};
 use crate::{Mesh, Scalar};
 
@@ -13,7 +15,8 @@ use crate::{Mesh, Scalar};
 pub struct Orientation {
     /// Faces whose winding differs from the input.
     pub flipped_faces: usize,
-    /// Closed shells that were wound inwards and got turned inside out as a whole.
+    /// Closed shells turned inside out as a whole: wound inwards with nothing around them,
+    /// or inside a shell that was turned.
     pub inverted_shells: usize,
     /// False when some edge is still walked the same way by both its faces: a Mobius
     /// strip, or two bodies whose surfaces were written folded onto each other.
@@ -26,7 +29,8 @@ impl Orientation {
     }
 }
 
-/// Makes every face wind the same way and turns closed shells outwards; STL normals are ignored.
+/// Makes every face wind the same way and turns closed shells outwards, a cavity's inwards;
+/// STL normals are ignored.
 /// Run [`crate::weld`] first; see `docs/design/mesh-repair.md`.
 pub fn orient_outward(mesh: &mut Mesh) -> Orientation {
     if mesh.faces.is_empty() {
@@ -221,7 +225,8 @@ impl Parity {
     }
 }
 
-/// Closed shells whose volume came out negative, meaning they are wound inwards.
+/// Closed shells to turn inside out: one with nothing around it when it is wound inwards,
+/// one inside another whenever that one is turned, so a cavity stays a cavity.
 fn shells_to_invert(
     mesh: &Mesh,
     shell: &[u32],
@@ -242,112 +247,24 @@ fn shells_to_invert(
         }
     }
 
-    (0..shells).map(|s| !open[s] && volume[s] < 0.0).collect()
+    let closed: Vec<bool> = open.iter().map(|open| !open).collect();
+    // With every closed shell wound outwards, nesting turns none of them.
+    if !(0..shells).any(|s| closed[s] && volume[s] < 0.0) {
+        return vec![false; shells];
+    }
+    let holder = nesting::holders(mesh, shell, &closed, &volume);
+    // A holder encloses more than what it holds, so it is decided first.
+    let mut order: Vec<usize> = (0..shells).filter(|&s| closed[s]).collect();
+    order.sort_by(|a, b| volume[*b].abs().total_cmp(&volume[*a].abs()));
+    let mut invert = vec![false; shells];
+    for s in order {
+        invert[s] = match holder[s] {
+            Some(around) => invert[around as usize],
+            None => volume[s] < 0.0,
+        };
+    }
+    invert
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{Vec3, signed_volume};
-
-    /// Corner tetrahedron with every face wound outwards. Volume is 1/6.
-    fn tetrahedron() -> Mesh {
-        Mesh::new(
-            vec![Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::Z],
-            vec![[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]],
-        )
-    }
-
-    #[test]
-    fn an_already_correct_mesh_is_left_alone() {
-        let mut mesh = tetrahedron();
-        let report = orient_outward(&mut mesh);
-
-        assert!(report.unchanged());
-        assert!(report.orientable);
-        assert_eq!(report.inverted_shells, 0);
-        assert!((signed_volume(&mesh) - 1.0 / 6.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn a_single_inverted_face_is_flipped_back() {
-        let mut mesh = tetrahedron();
-        mesh.faces[2].swap(1, 2);
-        let report = orient_outward(&mut mesh);
-
-        assert_eq!(report.flipped_faces, 1);
-        assert_eq!(report.inverted_shells, 0);
-        assert_eq!(mesh.faces, tetrahedron().faces);
-    }
-
-    #[test]
-    fn a_wholly_inverted_shell_is_turned_outwards() {
-        let mut mesh = tetrahedron();
-        for face in &mut mesh.faces {
-            face.swap(1, 2);
-        }
-        let report = orient_outward(&mut mesh);
-
-        assert_eq!(report.inverted_shells, 1);
-        assert_eq!(report.flipped_faces, 4);
-        assert!(signed_volume(&mesh) > 0.0);
-    }
-
-    #[test]
-    fn two_neighbouring_inverted_faces_are_turned_back_together() {
-        let mut mesh = tetrahedron();
-        mesh.faces[2].swap(1, 2);
-        mesh.faces[3].swap(1, 2);
-        let report = orient_outward(&mut mesh);
-
-        assert!(report.orientable);
-        assert_eq!(report.flipped_faces, 2);
-        assert_eq!(mesh.faces, tetrahedron().faces);
-    }
-
-    /// A band of `segments` quads with a half twist, wound consistently everywhere but at
-    /// the seam where its ends meet turned over.
-    fn mobius_strip(segments: usize) -> Mesh {
-        let mut vertices = Vec::new();
-        for at in 0..segments {
-            let around = std::f32::consts::TAU * at as f32 / segments as f32;
-            let radial = Vec3::new(around.cos(), around.sin(), 0.0);
-            let across = radial * (around / 2.0).cos() + Vec3::Z * (around / 2.0).sin();
-            vertices.push(radial * 10.0 - across);
-            vertices.push(radial * 10.0 + across);
-        }
-        let mut faces = Vec::new();
-        for at in 0..segments as u32 {
-            let (inner, outer) = (2 * at, 2 * at + 1);
-            let (next_inner, next_outer) = if at + 1 == segments as u32 {
-                (1, 0)
-            } else {
-                (2 * at + 2, 2 * at + 3)
-            };
-            faces.push([inner, outer, next_outer]);
-            faces.push([inner, next_outer, next_inner]);
-        }
-        Mesh::new(vertices, faces)
-    }
-
-    /// No turning mends a half twist; a walk that tried would move the seam round the band
-    /// and turn half of it on the way.
-    #[test]
-    fn a_conflict_no_turning_can_mend_is_left_where_the_file_put_it() {
-        let mut mesh = mobius_strip(12);
-        let before = crate::diagnose(&mesh).unbalanced_edges;
-        let report = orient_outward(&mut mesh);
-
-        assert!(!report.orientable);
-        assert!(report.unchanged(), "turned {} faces", report.flipped_faces);
-        assert_eq!(crate::diagnose(&mesh).unbalanced_edges, before);
-        assert_eq!(mesh.faces, mobius_strip(12).faces);
-    }
-
-    #[test]
-    fn an_empty_mesh_is_trivially_oriented() {
-        let report = orient_outward(&mut Mesh::default());
-        assert!(report.unchanged());
-        assert!(report.orientable);
-    }
-}
+mod tests;

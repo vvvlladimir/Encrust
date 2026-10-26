@@ -54,6 +54,9 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   faces wound the wrong way.
 - Weld vertices together, with a tolerance you set.
 - Flip faces wound the wrong way, and drop faces that enclose nothing.
+- Keep the cavity of a model hollowed before it was exported: a shell wound inward inside
+  another stays a hollow on import and through every repair, and a hollow model written
+  inside out is turned with its cavity.
 - Close holes, but only when you ask for it: Repair in the window, `--repair` on the
   command line.
 - Open the **Repair** tool: what was found in the picked models (or every model on the
@@ -75,10 +78,12 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   or turn faces.
 - Wrap a model made of overlapping parts into one outer surface, or run a deep repair:
   repair, wrap, repair. Shells are joined exactly; a model whose shells do not union
-  exactly, such as one crossing itself, keeps the repair alone and says so.
+  exactly, such as one crossing itself, keeps the repair alone and says so. A part wholly
+  inside another is lost in the wrap; a cavity is kept.
 - See how many holes a model has, and how many pairs of faces cross.
 - List the shells of one model, pick them by hand or every one under a hundredth of the
-  largest, fly to the one picked and drop it, or drop the picked ones together.
+  largest, fly to the one picked and drop it, or drop the picked ones together. Hide a
+  shell from view by its eye to see what lies behind or inside it, while the list is open.
 - Edit by hand in the Repair tool's Faces mode: pick faces with a brush, a whole surface
   with Cmd and Shift, then flip or delete them; or pick two open edges, marked magenta
   over the rest, and bridge them with faces wound as the ones beside them. On the command

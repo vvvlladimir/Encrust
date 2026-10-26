@@ -73,3 +73,74 @@ fn shells_under_a_hundredth_of_the_largest_are_small_and_inverting_picks_the_res
     shells.invert(object);
     assert_eq!(shells.picked(object), &[0]);
 }
+
+#[test]
+fn a_hidden_shell_is_left_out_of_what_the_model_is_drawn_as_until_shown_again() {
+    let mut scene = Scene::default();
+    let id = cube_and_a_crumb(&mut scene);
+    let mut shells = listed(&scene, id);
+    let object = scene.get(id).expect("there");
+    shells.toggle_hidden(object, 0);
+    while shells.poll(&scene) {
+        std::thread::yield_now();
+    }
+
+    assert_eq!(shells.hidden(object), &[0]);
+    let (drawn, mesh) = shells.stand_in(&scene).expect("the stand-in is made");
+    assert_eq!(drawn, id);
+    assert_eq!(
+        mesh.faces,
+        object.mesh.faces[12..],
+        "only the crumb is drawn"
+    );
+    shells.toggle_hidden(object, 0);
+    assert!(shells.hidden(object).is_empty() && shells.stand_in(&scene).is_none());
+}
+
+#[test]
+fn hidden_shells_are_forgotten_once_the_mesh_is_replaced() {
+    let mut scene = Scene::default();
+    let id = cube_and_a_crumb(&mut scene);
+    let mut shells = listed(&scene, id);
+    shells.toggle_hidden(scene.get(id).expect("there"), 1);
+    let replaced = Arc::new(cuboid(Vec3::ZERO, Vec3::ONE));
+    scene.get_mut(id).expect("there").mesh = replaced;
+    shells.poll(&scene);
+
+    let object = scene.get(id).expect("there");
+    assert!(shells.hidden(object).is_empty() && shells.stand_in(&scene).is_none());
+}
+
+#[test]
+fn a_picked_shell_hidden_is_no_longer_marked() {
+    let mut scene = Scene::default();
+    let id = cube_and_a_crumb(&mut scene);
+    let mut shells = listed(&scene, id);
+    let object = scene.get(id).expect("there");
+    shells.toggle(object, 1);
+    shells.toggle_hidden(object, 1);
+
+    assert_eq!(shells.picked(object), &[1], "it stays picked");
+    assert!(shells.highlight(&scene).faces.is_empty());
+    shells.toggle_hidden(object, 1);
+    assert_eq!(shells.highlight(&scene).faces.len(), 1);
+}
+
+#[test]
+fn a_model_is_drawn_without_its_hidden_shells_only_while_its_list_is_open() {
+    let mut scene = Scene::default();
+    let id = cube_and_a_crumb(&mut scene);
+    let other = cube_and_a_crumb(&mut scene);
+    scene.select(Some(id));
+    let mut shells = listed(&scene, id);
+    shells.toggle_hidden(scene.get(id).expect("there"), 0);
+    while shells.poll(&scene) {
+        std::thread::yield_now();
+    }
+    assert!(shells.stand_in(&scene).is_some());
+
+    scene.select(Some(other));
+    assert!(shells.stand_in(&scene).is_none(), "the list is of another");
+    scene.select(None);
+    assert!(shells.stand_in(&scene).is_none(), "no list is open");
+}

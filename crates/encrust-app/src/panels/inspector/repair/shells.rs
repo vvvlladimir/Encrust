@@ -1,4 +1,5 @@
-//! The Model mode's Shells section: the one model's shells, picked, flown to and dropped.
+//! The Model mode's Shells section: the one model's shells, picked, flown to, hidden and
+//! dropped.
 
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -12,12 +13,14 @@ use crate::ui::{
 /// What a press in the list asked for, done once the list has let the scene go.
 enum Asked {
     Toggle(usize),
+    Hide(usize),
     Drop(usize),
     Small,
     Invert,
 }
 
-/// The shells of the one model the tool works on, each a row to pick and a bin to drop it.
+/// The shells of the one model the tool works on, each a row to pick, an eye to hide it and
+/// a bin to drop it.
 pub fn listed(ui: &mut egui::Ui, window: &mut Window) {
     let targets: Vec<ObjectId> = window.doc.scene.targets().map(|object| object.id).collect();
     let title = tr!("repair-shells-title");
@@ -46,7 +49,7 @@ pub fn listed(ui: &mut egui::Ui, window: &mut Window) {
             busy(ui, &tr!("repair-listing"), None, false);
             return;
         };
-        asked = rows_listed(ui, rows, shells.picked(object));
+        asked = rows_listed(ui, rows, shells.picked(object), shells.hidden(object));
     });
     match pressed {
         Some(0) => asked = Some(Asked::Small),
@@ -59,7 +62,12 @@ pub fn listed(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// A row per shell, picked ones lit; what a press on one asked for.
-fn rows_listed(ui: &mut egui::Ui, rows: &[ShellRow], picked: &[usize]) -> Option<Asked> {
+fn rows_listed(
+    ui: &mut egui::Ui,
+    rows: &[ShellRow],
+    picked: &[usize],
+    hidden: &[usize],
+) -> Option<Asked> {
     let mut asked = None;
     list(ui, |ui| {
         for (at, row) in rows.iter().enumerate() {
@@ -77,10 +85,12 @@ fn rows_listed(ui: &mut egui::Ui, rows: &[ShellRow], picked: &[usize]) -> Option
                 Some((bin.0, &bin.1)),
                 None,
                 Some(&aside),
-                None,
+                Some(!hidden.contains(&at)),
             );
             if pressed.removed {
                 asked = Some(Asked::Drop(at));
+            } else if pressed.toggled {
+                asked = Some(Asked::Hide(at));
             } else if pressed.picked {
                 asked = Some(Asked::Toggle(at));
             }
@@ -97,6 +107,7 @@ fn answer(window: &mut Window, id: ObjectId, asked: Asked) {
     let (repairs, status) = (&mut window.doc.repairs, &mut window.machine.status);
     match asked {
         Asked::Toggle(at) => repairs.shells.toggle(object, at),
+        Asked::Hide(at) => repairs.shells.toggle_hidden(object, at),
         Asked::Small => repairs.shells.pick_small(object),
         Asked::Invert => repairs.shells.invert(object),
         Asked::Drop(at) => {

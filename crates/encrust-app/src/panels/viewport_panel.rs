@@ -295,6 +295,11 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
     let capped = section_mm.is_some() || bottom_cut_mm.is_some();
     let height_px = rect.height() * ui.ctx().pixels_per_point();
     let levels = levels::levels(ui, window, capped, height_px);
+    // Shells are hidden from the list of the Model mode, and only while it is in view.
+    let stand_in = (*window.tool == Tool::Repair
+        && window.tools.repair.mode == crate::repair::RepairMode::Model)
+        .then(|| window.doc.repairs.shells.stand_in(&window.doc.scene))
+        .flatten();
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -313,6 +318,7 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
             hidden_groups: &hidden_groups,
             ghost,
             light: Some(&levels.light),
+            stand_in: stand_in.as_ref().map(|(id, mesh)| (*id, mesh)),
         },
         rect,
     )
