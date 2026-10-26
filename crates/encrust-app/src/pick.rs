@@ -195,10 +195,23 @@ pub fn pick_printed(
 ) -> Option<(ObjectId, Printed, PlacedHit)> {
     let ray = ray_through(camera, viewport, cursor)?;
     let (near, far) = shown.span(&ray)?;
+    drawn_hits(scene, &ray, near)
+        .filter(|(_, _, hit)| hit.distance <= far)
+        .min_by(|(_, _, a), (_, _, b)| a.distance.total_cmp(&b.distance))
+        .filter(|(_, _, hit)| hit.normal.dot(ray.direction) < 0.0)
+}
+
+/// Where `ray`, let in at `near` by the section, meets each model as it prints and its
+/// built supports, as distances along `ray`.
+fn drawn_hits(
+    scene: &Scene,
+    ray: &Ray,
+    near: Scalar,
+) -> impl Iterator<Item = (ObjectId, Printed, PlacedHit)> {
     let from_cut = Ray::new(ray.at(near), ray.direction);
     scene
         .printable(scene.active_plate())
-        .flat_map(|object| {
+        .flat_map(move |object| {
             let (surface, bvh) = object.support_surface();
             let model = raycast_placed(surface, bvh, object.transform, &from_cut)
                 .map(|hit| (Printed::Model, hit));
@@ -207,13 +220,10 @@ pub fn pick_printed(
                 .chain(support_hits(object, from_cut))
                 .map(|(printed, hit)| (object.id, printed, hit))
         })
-        .map(|(id, printed, hit)| {
+        .map(move |(id, printed, hit)| {
             let distance = hit.distance + near;
             (id, printed, PlacedHit { distance, ..hit })
         })
-        .filter(|(_, _, hit)| hit.distance <= far)
-        .min_by(|(_, _, a), (_, _, b)| a.distance.total_cmp(&b.distance))
-        .filter(|(_, _, hit)| hit.normal.dot(ray.direction) < 0.0)
 }
 
 /// Where `ray` meets each of `object`'s support groups as they print, once built.
@@ -233,12 +243,30 @@ fn support_hits(object: &SceneObject, ray: Ray) -> impl Iterator<Item = (Printed
 pub fn occluded(scene: &Scene, eye: Vec3, point: Vec3) -> bool {
     let reach = point - eye;
     let ray = Ray::new(eye, reach);
-    // Bounds touch the model they box, so a hit this close to `point` is that touch.
-    let short_of = reach.length() * (1.0 - 1e-3) - 1e-3;
+    let short_of = short_of(reach);
     scene.printable(scene.active_plate()).any(|object| {
         raycast_placed(&object.mesh, &object.bvh, object.transform, &ray)
             .is_some_and(|hit| hit.distance < short_of)
     })
+}
+
+/// As [`occluded`], for what is drawn: a model as it prints only between the cuts, the cap
+/// across its material included, and its supports once built.
+pub fn sight_blocked(scene: &Scene, eye: Vec3, point: Vec3, shown: Shown) -> bool {
+    let reach = point - eye;
+    let ray = Ray::new(eye, reach);
+    let Some((near, far)) = shown.span(&ray) else {
+        return false;
+    };
+    let end = far.min(short_of(reach));
+    // The first face past a cut being one the ray leaves through is the cap's doing.
+    drawn_hits(scene, &ray, near).any(|(_, _, hit)| hit.distance < end)
+}
+
+/// How far along a sight line of `reach` a hit still stands in front of its end: bounds
+/// touch the model they box, so a hit this close to the end is that touch.
+fn short_of(reach: Vec3) -> Scalar {
+    reach.length() * (1.0 - 1e-3) - 1e-3
 }
 
 #[cfg(test)]

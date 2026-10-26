@@ -531,7 +531,8 @@ smoothing, not the original model.
   section's pull follows its area, less for a thin strip than for a disc of the same area.
 
 **It lets you:**
-- Jump to the layer of each issue.
+- Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
+  on the cut, and the camera flies to it past the models and supports in the way.
 - **Support every island** in one press.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.

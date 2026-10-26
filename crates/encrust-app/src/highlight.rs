@@ -1,8 +1,6 @@
 //! Marks laid over the models in the viewport, each in a colour of its own, and the places
 //! on them the camera can be brought to: whatever a tool points at on a model.
 
-// TODO(step-10): Check's islands marked through this, each a `Spot` the camera flies to.
-
 use std::sync::Arc;
 
 use core_geometry::{Mesh, Region, Transform, Vec3};
@@ -49,6 +47,18 @@ pub fn patch(
     region
         .submesh(model, Transform::default(), lift_mm)
         .map(Arc::new)
+}
+
+/// Sides of the polygon a [`ring`] is drawn as: round at any size it is framed at.
+const RING_SIDES: usize = 32;
+
+/// A level circle of `radius_mm` round `centre`, as edges in plate millimetres.
+pub fn ring(centre: Vec3, radius_mm: f32) -> impl Iterator<Item = [Vec3; 2]> {
+    let at = move |side: usize| {
+        let (sin, cos) = (std::f32::consts::TAU * side as f32 / RING_SIDES as f32).sin_cos();
+        centre + Vec3::new(cos, sin, 0.0) * radius_mm
+    };
+    (0..RING_SIDES).map(move |side| [at(side), at(side + 1)])
 }
 
 /// A place on a model the camera can be brought to.
@@ -118,6 +128,24 @@ mod tests {
         );
         assert_eq!(spot.normal, Vec3::Z, "the normal comes back unit length");
         assert!(Spot::around([], Vec3::Z).is_none());
+    }
+
+    #[test]
+    fn a_ring_closes_level_at_its_radius() {
+        let centre = Vec3::new(1.0, 2.0, 3.0);
+        let edges: Vec<[Vec3; 2]> = ring(centre, 0.5).collect();
+        assert_eq!(edges.len(), RING_SIDES);
+        for end in edges.iter().flatten() {
+            assert!(
+                (end.distance(centre) - 0.5).abs() < 1e-5,
+                "0.5 mm out; got {end}"
+            );
+            assert_eq!(end.z, 3.0, "level at the centre's height");
+        }
+        assert!(
+            edges[RING_SIDES - 1][1].distance(edges[0][0]) < 1e-5,
+            "closed"
+        );
     }
 
     #[test]

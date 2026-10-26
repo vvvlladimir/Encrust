@@ -2,9 +2,11 @@ use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use core_geometry::Vec3;
 use egui::{Color32, RichText};
 
+use crate::check::{Place, Stage, covered_mm2};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::preview::on_plate;
+use crate::panels::section::{cut_height, height_range};
+use crate::preview::{on_plate, plate_fingerprint};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::supports::ISLANDS_GROUP;
@@ -12,7 +14,7 @@ use crate::ui::{
     Segment, Segmented, describe, focus_ring, hint, icon, issue_row, kept, list, readings,
     secondary_button, section, theme,
 };
-use crate::workspace::Tool;
+use crate::workspace::{Mode, Tool};
 
 /// Rows listed before the rest are only counted: a stack with hundreds of islands needs
 /// supports, not scrolling.
@@ -83,8 +85,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     };
 
     section(ui, &tr!("check-verdict"), None, |ui| {
-        if let Some(layer) = verdict(ui, worst.as_ref()) {
-            go_to(window.machine, layer);
+        if verdict(ui, worst.as_ref())
+            && let Some(worst) = worst
+        {
+            go_to(window, &[worst]);
         }
         islands_action(ui, window.machine, &risks, removed);
         let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
@@ -107,8 +111,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         section(ui, &tr!("check-issues"), Some(&found), |ui| {
             describe(ui, &tr!("check-issues-help"));
             let filter = filter(ui, &risks);
-            if let Some(layer) = listing(ui, window.machine.preview.layer(), &risks, filter) {
-                go_to(window.machine, layer);
+            if let Some(picked) = listing(ui, window.machine.preview.layer(), &risks, filter) {
+                go_to(window, &picked);
             }
         });
     }
@@ -232,8 +236,8 @@ pub fn tint(risk: &Risk) -> Color32 {
 }
 
 /// The worst issue, where it is and what to do about it, on a card that goes there when
-/// clicked. Answers the layer to go to.
-fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
+/// clicked. Answers whether it was clicked.
+fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> bool {
     let colors = theme::colors();
     let (glyph, tint, wash, title, why) = match worst {
         None => (
@@ -281,14 +285,16 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
                 });
             });
         });
-    let layer = worst.map(|risk| risk.layer)?;
+    if worst.is_none() {
+        return false;
+    }
     let response = card
         .response
         .interact(egui::Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
     focus_ring(ui, &response, theme::R_SURFACE);
-    response.clicked().then_some(layer)
+    response.clicked()
 }
 
 /// Taking every island out of the written file, or putting them back.
@@ -389,32 +395,35 @@ struct Row {
     width_mm: f32,
 }
 
+impl Row {
+    /// Whether `risk` is one of the issues folded into this row.
+    fn holds(&self, risk: &Risk) -> bool {
+        risk.layer == self.layer
+            && Filter::of(&risk.kind) == self.filter
+            && matches!(risk.kind, RiskKind::Floating { .. }) == self.hanging
+    }
+}
+
 /// The issues folded into rows. They arrive sorted by layer, and within a layer by kind.
 fn rows(risks: &[Risk]) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
     for risk in risks {
         let filter = Filter::of(&risk.kind);
         let hanging = matches!(risk.kind, RiskKind::Floating { .. });
-        let (area_mm2, worst, lever_mm, width_mm) = match risk.kind {
-            RiskKind::Island { area_mm2 } | RiskKind::Floating { area_mm2 } => {
-                (area_mm2, 0.0, 0.0, 0.0)
-            }
+        let area_mm2 = covered_mm2(&risk.kind).unwrap_or(0.0);
+        let (worst, lever_mm, width_mm) = match risk.kind {
+            RiskKind::Island { .. } | RiskKind::Floating { .. } => (0.0, 0.0, 0.0),
             RiskKind::Lever {
                 stress_mpa,
                 lever_mm,
                 ..
-            } => (0.0, stress_mpa, lever_mm, 0.0),
-            RiskKind::Peel { force_n } => (0.0, force_n, 0.0, 0.0),
-            RiskKind::SuctionCup {
-                area_mm2,
-                volume_mm3,
-            } => (area_mm2, volume_mm3, 0.0, 0.0),
-            RiskKind::Thin { width_mm } => (0.0, 1.0 / width_mm.max(f32::EPSILON), 0.0, width_mm),
+            } => (stress_mpa, lever_mm, 0.0),
+            RiskKind::Peel { force_n } => (force_n, 0.0, 0.0),
+            RiskKind::SuctionCup { volume_mm3, .. } => (volume_mm3, 0.0, 0.0),
+            RiskKind::Thin { width_mm } => (1.0 / width_mm.max(f32::EPSILON), 0.0, width_mm),
         };
         match rows.last_mut() {
-            Some(row)
-                if row.layer == risk.layer && row.filter == filter && row.hanging == hanging =>
-            {
+            Some(row) if row.holds(risk) => {
                 row.count += 1;
                 row.area_mm2 += area_mm2;
                 if worst > row.worst {
@@ -484,8 +493,8 @@ fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
     chosen
 }
 
-/// The rows `filter` admits. Answers the layer of the row clicked.
-fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> Option<usize> {
+/// The rows `filter` admits. Answers the issues of the row clicked.
+fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> Option<Vec<Risk>> {
     let rows: Vec<Row> = rows(risks)
         .into_iter()
         .filter(|row| filter == Filter::All || row.filter == filter)
@@ -496,7 +505,13 @@ fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> O
             let place = tr!("check-layer", layer = row.layer + 1);
             let selected = row.layer == shown;
             if issue_row(ui, row.tint, &place, &detail(row), selected).clicked() {
-                picked = Some(row.layer);
+                picked = Some(
+                    risks
+                        .iter()
+                        .filter(|risk| row.holds(risk))
+                        .copied()
+                        .collect(),
+                );
             }
         }
         picked
@@ -507,9 +522,38 @@ fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> O
     picked
 }
 
-fn go_to(machine: &mut Machine, layer: usize) {
-    machine.preview.set_layer(layer);
-    machine.preview.set_playing(false);
+/// Goes to the layer `risks` lie on: the slider there, the view cut at it, and the camera
+/// flown to them ringed on the cut.
+fn go_to(window: &mut Window, risks: &[Risk]) {
+    let Some(first) = risks.first() else {
+        return;
+    };
+    window.tools.check.clear();
+    let preview = &mut window.machine.preview;
+    preview.set_layer(first.layer);
+    preview.set_playing(false);
+    let Some(layer_mm) = preview.section_z() else {
+        return;
+    };
+    if *window.mode == Mode::Prepare
+        && let Some((_, top)) = height_range(window.doc)
+    {
+        // As the strip has it, a cut at the top or past it is no cut.
+        window.view.section.height_mm = Some(layer_mm).filter(|z| *z < top);
+        window.view.section.playing = false;
+    }
+    let Some(settings) = window.machine.slicing.raster_settings() else {
+        return;
+    };
+    let places: Vec<Place> = risks
+        .iter()
+        .map(|risk| Place::of(risk, &settings))
+        .collect();
+    let stage = Stage {
+        plate: plate_fingerprint(&window.doc.scene),
+        cut_mm: cut_height(*window.mode, &window.view.section, &window.machine.preview),
+    };
+    window.tools.check.go(&places, layer_mm, stage, tint(first));
 }
 
 /// What one row holds, short enough for the right of it.

@@ -304,7 +304,10 @@ round in yaw. Any drag or scroll of the camera ends it where it stands.
 What a tool points at on a model is a `highlight::Highlight`: faces as patches of their own
 stood `LIFT_MM` off the surface, edges as lines, each mark in its own colour and drawn in
 the order listed, so a mark over another stands further off or comes later. The Repair
-tool's findings are the first; Check's islands are to follow (ADR 0355).
+tool's findings are the first (ADR 0355). A Check row cuts the view at its layer, in
+Prepare by moving the section there, and rings each issue on the cut, as wide as a disc of
+its area and at least 0.5 mm; the rings go once the cut or a model moves. The camera looks down on
+them, seen through the cut, so its `Spot` faces +Z.
 
 A place to look at is a `Spot`: centre, radius and the side it faces. `OrbitCamera::focusing`
 frames it so the sphere of `radius / 0.35`, at least 3 mm, touches the frustum along the
@@ -312,7 +315,8 @@ narrower side: `r / sin(half angle)` back, `r / tan` without perspective, where 
 half height at the target is what the distance sets. The defect fills about a third of the
 view and the rest shows what it lies in. It is seen from its own side unless the view
 already faces it within 45°, when only the target and distance move. A side
-`pick::occluded` finds a surface in front of is passed over for rings tilted 30° then 60°
+`pick::sight_blocked` finds drawn in front of — a model between the cuts, the cap across
+its material, its built supports — is passed over for rings tilted 30° then 60°
 round it, the one above first, then the current view if that is still outside; never from
 behind, which is from inside the model. With every side blocked it takes its own, and the
 x-ray shows through. A spot with no side of its own, a branching rim or faces drawn both

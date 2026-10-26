@@ -97,6 +97,7 @@ pub struct Tools {
     pub cut: CutTool,
     pub relief: ReliefTool,
     pub repair: crate::repair::RepairState,
+    pub check: crate::check::Visit,
     pub boolean: crate::boolean::BooleanTool,
     pub text: crate::text::TextTool,
     pub orient: OrientTool,

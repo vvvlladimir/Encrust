@@ -372,10 +372,9 @@ fn pointing_into_a_drilled_hole_meets_its_floor_not_the_mouth_it_took() {
     );
 }
 
-#[test]
-fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
-    let mut scene = Scene::default();
-    let id = add(&mut scene, "cube", Vec3::new(0.0, 0.0, 2.0));
+/// The unit cube 2 mm up on a raft spanning -5..6 across and 0..1 up, built as its supports.
+fn on_a_raft(scene: &mut Scene) -> ObjectId {
+    let id = add(scene, "cube", Vec3::new(0.0, 0.0, 2.0));
     let raft = core_supports::shaded(vec![core_geometry::cuboid(
         Vec3::new(-5.0, -5.0, 0.0),
         Vec3::new(6.0, 6.0, 1.0),
@@ -389,6 +388,13 @@ fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
         transform: object.transform,
     });
     object.printed_supports.keep(from, raft, bvhs);
+    id
+}
+
+#[test]
+fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
+    let mut scene = Scene::default();
+    let id = on_a_raft(&mut scene);
 
     let beside = straight_down_on(Vec3::new(-3.0, -3.0, 1.0));
     let (hit_id, printed, hit) =
@@ -406,5 +412,58 @@ fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
         printed,
         Printed::Model,
         "the model in front of the raft is met first"
+    );
+}
+
+#[test]
+fn what_the_cut_takes_away_hides_nothing_and_its_cap_does() {
+    let mut scene = Scene::default();
+    add(&mut scene, "cube", Vec3::ZERO);
+    let eye = Vec3::new(0.5, 0.5, 10.0);
+    let below_top = Shown {
+        top_mm: Some(-1.0),
+        ..Shown::default()
+    };
+    assert!(
+        !sight_blocked(&scene, eye, Vec3::new(0.5, 0.5, -5.0), below_top),
+        "cut under it, the cube is not drawn"
+    );
+    let through = Shown {
+        top_mm: Some(0.5),
+        ..Shown::default()
+    };
+    assert!(
+        !sight_blocked(&scene, eye, Vec3::new(0.5, 0.5, 0.5), through),
+        "a point on the cap is seen"
+    );
+    assert!(
+        sight_blocked(&scene, eye, Vec3::new(0.5, 0.5, -5.0), through),
+        "the cap across the cube hides what stands under it"
+    );
+}
+
+#[test]
+fn built_supports_hide_what_stands_behind_them() {
+    let mut scene = Scene::default();
+    on_a_raft(&mut scene);
+    let (eye, under_raft) = (Vec3::new(-3.0, -3.0, 10.0), Vec3::new(-3.0, -3.0, -5.0));
+    assert!(
+        sight_blocked(&scene, eye, under_raft, Shown::default()),
+        "the raft spanning -5..6 stands over it"
+    );
+    assert!(
+        !occluded(&scene, eye, under_raft),
+        "the models alone leave it in sight"
+    );
+}
+
+#[test]
+fn the_floor_of_a_drilled_hole_is_in_sight_down_its_mouth() {
+    let mut scene = Scene::default();
+    drilled_block(&mut scene);
+    let (eye, floor) = (Vec3::new(5.0, 5.0, 30.0), Vec3::new(5.0, 5.0, 5.0));
+    assert!(
+        !sight_blocked(&scene, eye, floor, Shown::default()),
+        "the hole takes the top away over its floor at z = 5"
     );
 }

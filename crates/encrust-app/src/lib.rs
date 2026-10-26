@@ -6,6 +6,7 @@ mod app;
 mod arrange;
 mod boolean;
 mod camera;
+mod check;
 mod cut;
 mod drain;
 mod drilling;
