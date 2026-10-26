@@ -6,7 +6,7 @@ use core_analysis::Measured;
 use core_format::{LayerSink, PrintJob, SlicedFileWriter, WRITE_BUFFER_BYTES, WriteSeek};
 use core_raster::RasterSettings;
 use core_slicer::{Sliced, Source, Windows};
-use format_anycubic::AnycubicWriter;
+use format_anycubic::{AnycubicWriter, PwszWriter};
 use format_chitu::{CbddlpWriter, CtbWriter};
 use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter};
 use format_ctb_encrypted::CtbEncryptedWriter;
@@ -140,6 +140,9 @@ impl Destination<'_> {
             }
             SlicedFormat::Svgx => self.with(&SvgxWriter, sink, feed, observer),
             SlicedFormat::Cws => self.with(&CwsWriter, sink, feed, observer),
+            SlicedFormat::Pwsz(flavour) => {
+                self.with(&PwszWriter::new(flavour), sink, feed, observer)
+            }
         }
     }
 

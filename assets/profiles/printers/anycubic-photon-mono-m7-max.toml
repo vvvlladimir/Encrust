@@ -1,0 +1,30 @@
+# Anycubic Photon Mono M7 Max.
+
+name = "Photon Mono M7 Max"
+manufacturer = "Anycubic"
+machine_name = "Anycubic Photon Mono M7 Max"
+mirror_x = true
+mirror_y = false
+connection = "none"
+
+[display]
+width_px = 6480
+height_px = 3600
+width_mm = 297.5
+height_mm = 164.0
+grey_floor = 0
+
+[build_volume]
+x = 297.5
+y = 164.0
+z = 300.0
+
+[output.pwsz]
+extension = "pm7m"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"

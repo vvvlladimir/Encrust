@@ -36,6 +36,7 @@ fn the_extension_decides_what_is_written() {
     );
     assert_eq!(of("cube.svgx"), Some(SlicedFormat::Svgx));
     assert_eq!(of("cube.cws"), Some(SlicedFormat::Cws));
+    assert_eq!(of("cube.PM7"), Some(SlicedFormat::Pwsz(PwszFlavour::Pm7)));
     assert_eq!(of("cube.sl1s"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1s)));
     assert_eq!(
         SlicedFormat::of(Path::new("cube.ctb"), CtbVersion::V5),

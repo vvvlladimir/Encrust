@@ -1,0 +1,30 @@
+# Anycubic Photon P1 Max.
+
+name = "Photon P1 Max"
+manufacturer = "Anycubic"
+machine_name = "Anycubic Photon P1 Max"
+mirror_x = true
+mirror_y = false
+connection = "none"
+
+[display]
+width_px = 11520
+height_px = 8640
+width_mm = 285.5
+height_mm = 214.0
+grey_floor = 0
+
+[build_volume]
+x = 285.5
+y = 214.0
+z = 300.0
+
+[output.pwsz]
+extension = "pp1m"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"

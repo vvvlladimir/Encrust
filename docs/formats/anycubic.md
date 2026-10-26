@@ -28,6 +28,9 @@ same table container at some revision. We write **version 1**, **516**, **517** 
 | `.m5sp` | Photon Mono M5s Pro | 518 |
 | `.pm4n` | Photon Mono 4 | 518 |
 
+The M7 line, the Mono 4 Ultra and the P1 read another container with these layers inside:
+`docs/formats/pwsz.md`.
+
 `.pwmb` is read at two revisions by two machines, which is why the revision is a field of
 the printer profile and not a property of the extension (ADR 0166).
 

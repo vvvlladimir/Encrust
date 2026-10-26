@@ -1,11 +1,13 @@
 use std::path::Path;
 
-use printer_profiles::{AnycubicExtension, OutputFormat, PhotonRevision, PrinterProfile};
+use printer_profiles::{
+    AnycubicExtension, OutputFormat, PhotonRevision, PrinterProfile, PwszExtension,
+};
 
 // The variants below carry them, so a front end naming a container gets the type from
 // here and takes no dependency on the crate that writes it; the same reason
 // `core-format` re-exports `LayerPlan` (ADR 0091, 0209).
-pub use format_anycubic::{AnycubicFlavour, AnycubicVersion};
+pub use format_anycubic::{AnycubicFlavour, AnycubicVersion, PwszFlavour};
 pub use format_chitu::{CbddlpFlavour, CtbVersion};
 pub use format_creality::CxdlpVersion;
 pub use format_sl1::Sl1Flavour;
@@ -26,12 +28,13 @@ pub enum SlicedFormat {
     Cxdlp(CxdlpVersion),
     Svgx,
     Cws,
+    Pwsz(PwszFlavour),
 }
 
 impl SlicedFormat {
-    /// The fourteen a front end offers, in the order it offers them. Only `.pwmx` of the Anycubic
-    /// family is on the picker; the others are renames (ADR 0047).
-    pub const CHOICES: [Self; 14] = [
+    /// The fifteen a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
+    /// the Anycubic families are on the picker; the others are renames (ADR 0047).
+    pub const CHOICES: [Self; 15] = [
         Self::Goo,
         Self::Ctb(CtbVersion::V4),
         Self::Ctb(CtbVersion::V5),
@@ -46,6 +49,7 @@ impl SlicedFormat {
         Self::Cxdlp(CxdlpVersion::V4),
         Self::Svgx,
         Self::Cws,
+        Self::Pwsz(PwszFlavour::Pwsz),
     ];
 
     /// The format `path` names, at `version` when it names a `.ctb`, or `None` when it
@@ -80,6 +84,7 @@ impl SlicedFormat {
                     AnycubicFlavour::of_extension(&extension)
                         .map(|flavour| Self::Anycubic(flavour, flavour.newest_version()))
                 })
+                .or_else(|| PwszFlavour::of_extension(&extension).map(Self::Pwsz))
         }
     }
 
@@ -135,6 +140,7 @@ impl SlicedFormat {
             Self::Cxdlp(_) => "cxdlp",
             Self::Svgx => "svgx",
             Self::Cws => "cws",
+            Self::Pwsz(flavour) => flavour.extension(),
         }
     }
 }
@@ -159,6 +165,7 @@ impl From<OutputFormat> for SlicedFormat {
             OutputFormat::Cxdlp4 => Self::Cxdlp(CxdlpVersion::V4),
             OutputFormat::Svgx => Self::Svgx,
             OutputFormat::Cws => Self::Cws,
+            OutputFormat::Pwsz { extension } => Self::Pwsz(pwsz_flavour(extension)),
         }
     }
 }
@@ -183,6 +190,9 @@ impl From<SlicedFormat> for OutputFormat {
             SlicedFormat::Cxdlp(CxdlpVersion::V4) => Self::Cxdlp4,
             SlicedFormat::Svgx => Self::Svgx,
             SlicedFormat::Cws => Self::Cws,
+            SlicedFormat::Pwsz(flavour) => Self::Pwsz {
+                extension: pwsz_extension(flavour),
+            },
         }
     }
 }
@@ -234,6 +244,26 @@ fn anycubic_extension(flavour: AnycubicFlavour) -> AnycubicExtension {
         AnycubicFlavour::Pm5s => AnycubicExtension::Pm5s,
         AnycubicFlavour::M5sp => AnycubicExtension::M5sp,
         AnycubicFlavour::Pm4n => AnycubicExtension::Pm4n,
+    }
+}
+
+fn pwsz_flavour(extension: PwszExtension) -> PwszFlavour {
+    match extension {
+        PwszExtension::Pwsz => PwszFlavour::Pwsz,
+        PwszExtension::Pm7 => PwszFlavour::Pm7,
+        PwszExtension::Pm7m => PwszFlavour::Pm7m,
+        PwszExtension::Pm4u => PwszFlavour::Pm4u,
+        PwszExtension::Pp1m => PwszFlavour::Pp1m,
+    }
+}
+
+fn pwsz_extension(flavour: PwszFlavour) -> PwszExtension {
+    match flavour {
+        PwszFlavour::Pwsz => PwszExtension::Pwsz,
+        PwszFlavour::Pm7 => PwszExtension::Pm7,
+        PwszFlavour::Pm7m => PwszExtension::Pm7m,
+        PwszFlavour::Pm4u => PwszExtension::Pm4u,
+        PwszFlavour::Pp1m => PwszExtension::Pp1m,
     }
 }
 

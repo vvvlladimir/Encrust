@@ -30,7 +30,7 @@ pub use own_ids::{Renamed, own_id};
 pub use preset::Preset;
 pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, NetworkMachine, OutputFormat,
-    PhotonRevision, PrinterProfile,
+    PhotonRevision, PrinterProfile, PwszExtension,
 };
 pub use stated::{
     stated_distance_mm, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,

@@ -2131,13 +2131,16 @@ dependencies = [
 name = "format-anycubic"
 version = "0.5.0"
 dependencies = [
+ "core-analysis",
  "core-format",
  "core-raster",
  "criterion",
  "printer-profiles",
+ "serde_json",
  "thiserror 2.0.21",
  "tracing",
  "workspace-hack",
+ "zip 9.0.3",
 ]
 
 [[package]]

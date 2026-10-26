@@ -83,7 +83,7 @@ it are in `.claude/rules/architecture.md`.
 | `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one `Baked` — each model's holes taken out of it and its supports exactly (ADR 0322), a `Solid` with the resin's shrinkage applied and each group of copies held once (ADR 0258), and the height the material in it reaches, which is what the stack stops at (ADR 0199) — and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, and `Run::measuring` for a plate only measured, `EngineError`; `stand_under` with `Stood`, automatic supports under one model, and `stand_seated`, supports only under what hangs over a model left on the plate; `orient_for_print` with `Choice`, the one way the window and the command line orient, printing the search's finalists where a machine is known and taking the search's answer where not (ADR 0290), over `prove`/`print_out` with `Trial`, `Printout`, `Proven` and `Tried`, supports placed on the print's own layer, each with what decided its place (ADR 0277, 0278, 0279); `open_plate` with `Opening`, one plate of a project as the file holds it, and `plate_outputs`, the file each plate of a whole-project run goes to; and `project` — the `.encrust` manifest with each model's `BuiltCavity` and trees, its source and shell blobs, `read_from`/`write_to`, `hollow_of`/`supports_of`, `digest`, `Axis`/`Keep`/`Array` (ADR 0191), and a model's own Hollow and Drain numbers (ADR 0227) support profiles (ADR 0246) and raft (ADR 0253) |
 | `format-goo` | `GooWriter`, `GooReader` and the `.goo` codec |
 | `format-chitu` | `CtbWriter`, `CtbVersion` v4/v5; `CbddlpWriter`, `CbddlpFlavour` and the eight-pass RLE1 codec (ADR 0146); `ChituReader` (ADR 0149) |
-| `format-anycubic` | `AnycubicWriter`, `AnycubicFlavour` over twenty extensions, `AnycubicVersion` v1/516/517/518, `AnycubicReader` and the four-bit PW0 codec (ADR 0147, 0166), `PwsReader` and its one-bit passes (ADR 0297) |
+| `format-anycubic` | `AnycubicWriter`, `AnycubicFlavour` over twenty extensions, `AnycubicVersion` v1/516/517/518, `AnycubicReader` and the four-bit PW0 codec (ADR 0147, 0166), `PwsReader` and its one-bit passes (ADR 0297), `PwszWriter` and `PwszFlavour` for the PWSZ archive over five extensions (ADR 0361) |
 | `format-sl1` | `Sl1Writer`, `Sl1Reader`, `Sl1Flavour`: a zip of settings files and PNGs (ADR 0148) |
 | `format-gcode-zip` | `GcodeZipWriter`, `GcodeZipReader`, `claims`: a zip of PNGs whose `run.gcode` is the program the board runs, every value of it per layer (ADR 0167) |
 | `format-creality` | `CxdlpWriter`/`CxdlpReader` and `CxdlpVersion`: version 3's vertical lines and version 4's Chitu-shaped tables under one magic, with the checksum both end with (ADR 0168) |
@@ -130,7 +130,8 @@ core-engine ──> core-pipeline, core-plate, core-analysis, core-format, core-
                serde, serde_json, zip
 core-pipeline ──> core-analysis, core-format, core-geometry, core-raster, core-slicer,
                printer-profiles, every format-*, rayon
-format-goo, format-chitu, format-anycubic, format-creality ──> core-format, core-raster
+format-goo, format-chitu, format-creality ──> core-format, core-raster
+format-anycubic ──> core-format, core-raster, core-analysis, serde_json, zip
 format-sl1, format-gcode-zip, format-cws ──> core-format, core-raster, zip
 format-ctb-encrypted ──> core-format, core-raster, aes, cbc, sha2
 format-svgx ──> core-format, core-raster, core-slicer, glam

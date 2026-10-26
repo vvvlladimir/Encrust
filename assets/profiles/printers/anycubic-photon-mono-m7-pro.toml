@@ -1,0 +1,30 @@
+# Anycubic Photon Mono M7 Pro.
+
+name = "Photon Mono M7 Pro"
+manufacturer = "Anycubic"
+machine_name = "Anycubic Photon Mono M7 Pro"
+mirror_x = true
+mirror_y = false
+connection = "none"
+
+[display]
+width_px = 13312
+height_px = 5120
+width_mm = 223.642
+height_mm = 126.48
+grey_floor = 0
+
+[build_volume]
+x = 223.642
+y = 126.48
+z = 230.0
+
+[output.pwsz]
+extension = "pwsz"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"

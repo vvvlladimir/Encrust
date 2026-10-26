@@ -41,6 +41,8 @@ pub enum OutputFormat {
     Svgx,
     /// The `.cws` archive of greyscale PNGs and the gcode that runs them.
     Cws,
+    /// Anycubic's PWSZ archive, under the extension of the machine that reads it.
+    Pwsz { extension: PwszExtension },
 }
 
 /// Which extension an Anycubic machine's firmware looks for; all are one container,
@@ -104,6 +106,32 @@ impl AnycubicExtension {
     }
 }
 
+/// Which extension a machine reading the PWSZ archive looks for; see
+/// `docs/formats/pwsz.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PwszExtension {
+    #[default]
+    Pwsz,
+    Pm7,
+    Pm7m,
+    Pm4u,
+    Pp1m,
+}
+
+impl PwszExtension {
+    /// What the extension is called where a user would see it named.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Pwsz => ".pwsz",
+            Self::Pm7 => ".pm7",
+            Self::Pm7m => ".pm7m",
+            Self::Pm4u => ".pm4u",
+            Self::Pp1m => ".pp1m",
+        }
+    }
+}
+
 /// Which revision of the Photon Workshop container a machine's firmware reads, stated per machine
 /// as one extension can be read at two revisions (ADR 0166).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,6 +161,7 @@ impl OutputFormat {
             Self::Cxdlp3 | Self::Cxdlp4 => ".cxdlp",
             Self::Svgx => ".svgx",
             Self::Cws => ".cws",
+            Self::Pwsz { extension } => extension.label(),
         }
     }
 }
