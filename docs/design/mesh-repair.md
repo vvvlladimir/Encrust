@@ -189,6 +189,31 @@ A face has one edge split a pass; four passes cover its three edges.
 statuette with no patch at all, and on a 4-million-face colour mix it stitches about 1 900
 edges the fill would otherwise have bridged.
 
+## Crossing faces
+
+`self_intersections(mesh, bvh)` lists the pairs of faces that cross. Each face asks the
+hierarchy for the faces whose bounds meet its own (`Bvh::faces_meeting`), on rayon, and
+keeps those after it that share no corner and pass a strict test in `f64`: an edge of one
+goes through the inside of the other, or, all in one plane, two edges cross or a corner
+stands inside. Faces that only touch are not a pair, so neither is a crossing that lies
+exactly along an edge. It is reported, never fixed: wrapping is what removes crossings.
+200 k faces take 25 ms (`benches/mesh_repair.rs`).
+
+## Wrapping
+
+`core-volume::wrap` repairs the mesh, then unions its shells with the exact engine. The
+result is taken if it is sound and crosses nothing. Otherwise the repaired mesh is sampled
+into a winding-number field on `wrap_mm` (0.2 mm) and its surface extracted. That surface
+is taken only if it is sound, crosses itself less than the repaired mesh and branches no
+more; else only the repair stands and the report says the wrap was left out. *Deep* is
+repair, wrap, repair. Repair turns every closed shell outward (see Orientation), so a shell
+inside another is a body the wrap swallows, not a cavity it keeps.
+
+On the test models the field never passes that check. A shell that crosses itself
+(a statuette with 3 crossing pairs) goes through the engine still crossing, and the surface
+the field gives pinches thin parts into branches. Exact unions of separate closed shells
+are what wrapping does well today.
+
 ## Placement
 
 `transform_mesh` applies scale, then rotation, then translation. A mirroring scale — an

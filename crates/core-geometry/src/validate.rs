@@ -7,6 +7,7 @@ use rayon::iter::{
 };
 use rayon::slice::ParallelSlice;
 
+use crate::repair::boundary_loops;
 use crate::topology::{EdgeUse, counted_out, edge_uses, shells, sort_runs};
 use crate::{Mesh, Scalar, Vec3};
 
@@ -26,6 +27,9 @@ pub struct MeshDiagnostics {
     pub unreferenced_vertices: usize,
     /// Edges used by exactly one face: the mesh is open there.
     pub boundary_edges: usize,
+    /// Loops of open edges, each a hole a patch would close; 0 in a project written before.
+    #[serde(default)]
+    pub holes: usize,
     /// Edges used by three or more faces: the surface branches there.
     pub non_manifold_edges: usize,
     /// Edges more faces walk one way than the other: the surface does not close there.
@@ -67,6 +71,7 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
         shells(mesh.faces.len(), &uses).count()
     };
     let referenced = referenced_vertices(mesh);
+    let (rings, branching) = boundary_loops(&uses);
 
     MeshDiagnostics {
         vertices: mesh.vertices.len(),
@@ -75,6 +80,7 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
         duplicate_faces: count_duplicates(mesh),
         unreferenced_vertices: mesh.vertices.len() - referenced,
         boundary_edges: edges.boundary,
+        holes: rings.len() + branching,
         non_manifold_edges: edges.non_manifold,
         unbalanced_edges: edges.unbalanced,
         shells,

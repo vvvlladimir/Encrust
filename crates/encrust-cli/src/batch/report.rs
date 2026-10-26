@@ -145,7 +145,12 @@ pub struct Repair {
     pub faces_flipped: usize,
     pub closed: bool,
     pub boundary_edges: usize,
+    /// Loops of open edges, each a hole.
+    pub holes: usize,
     pub shells: usize,
+    /// Pairs of faces crossing each other, when `--intersections` asked for them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crossing_pairs: Option<usize>,
     /// Holes `--repair` patched, and those it could not.
     pub holes_closed: usize,
     pub holes_left: usize,
@@ -153,6 +158,12 @@ pub struct Repair {
     pub seams_stitched: usize,
     /// Shells enclosing nothing `--repair` dropped as too small to keep.
     pub shells_dropped: usize,
+    /// Whether `--repair=wrap` or `=deep` wrapped the model; absent when not asked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wrapped: Option<bool>,
+    /// The lattice the wrap was sampled on, mm, where it could not cut exactly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wrap_voxel_mm: Option<Scalar>,
     /// `--repair` would have left more wrong, so the model is as it came.
     pub kept_as_found: bool,
 }
@@ -519,11 +530,17 @@ fn repair_of(import: &ImportReport) -> Repair {
             .diagnostics
             .as_ref()
             .map_or(0, |found| found.boundary_edges),
+        holes: import.diagnostics.as_ref().map_or(0, |found| found.holes),
         shells: import.diagnostics.as_ref().map_or(0, |found| found.shells),
+        crossing_pairs: import.crossing_pairs,
         holes_closed: mended.map_or(0, |mended| mended.filled.loops_filled),
         holes_left: mended.map_or(0, |mended| mended.filled.loops_left),
         seams_stitched: mended.map_or(0, |mended| mended.stitched.edges_split),
         shells_dropped: mended.map_or(0, |mended| mended.shells_dropped),
+        wrapped: import
+            .wrapped
+            .map(|wrapped| wrapped != crate::report::Wrapped::LeftOut),
+        wrap_voxel_mm: import.wrapped.and_then(crate::report::Wrapped::voxel_mm),
         kept_as_found: import.mended.is_some_and(|mended| mended.kept_as_found),
     }
 }

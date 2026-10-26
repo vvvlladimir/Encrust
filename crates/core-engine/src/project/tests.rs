@@ -100,6 +100,7 @@ fn object(index: usize) -> ObjectState {
                 duplicate_faces: 0,
                 unreferenced_vertices: 0,
                 boundary_edges: 3,
+                holes: 1,
                 non_manifold_edges: 0,
                 unbalanced_edges: 3,
                 shells: 1,
@@ -251,6 +252,19 @@ fn a_support_tool_written_before_lines_reads_the_default_spacing() {
     let older: SupportState =
         serde_json::from_value(state).expect("a tool written before lines reads");
     assert!((older.inline_spacing_mm - core_supports::INLINE_SPACING_MM).abs() < f32::EPSILON);
+}
+
+#[test]
+fn a_summary_written_before_holes_were_counted_reads_none() {
+    let mut diagnostics = serde_json::to_value(&project(1).manifest.objects[0].summary.diagnostics)
+        .expect("the diagnostics serialise");
+    diagnostics
+        .as_object_mut()
+        .expect("the diagnostics are an object")
+        .remove("holes");
+    let older: MeshDiagnostics =
+        serde_json::from_value(diagnostics).expect("a summary written before holes reads");
+    assert_eq!(older.holes, 0);
 }
 
 #[test]

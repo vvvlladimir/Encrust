@@ -8,22 +8,23 @@ use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
 use core_geometry::{
-    MendSettings, Mesh, Scalar, Welded, diagnose, mend, orient_outward, remove_duplicate_faces,
-    weld,
+    Bvh, MendSettings, Mended, Mesh, Scalar, Welded, diagnose, orient_outward,
+    remove_duplicate_faces, self_intersections, weld,
 };
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
+use core_volume::{Cancel, RepairSettings, repair};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
-use crate::args::{ImportArgs, JobArgs, RasterArgs};
+use crate::args::{ImportArgs, JobArgs, RasterArgs, RepairMethod};
 use crate::exit::Stop;
 use crate::hollowing::{self, HollowArgs, HollowReport};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
-use crate::report::{FitCheck, ImportReport};
+use crate::report::{FitCheck, ImportReport, Wrapped};
 use crate::slice_report::SliceReport;
 use crate::sliced_file::{format_of, write_plate};
 use crate::stage::{self, Part, Staged};
@@ -373,8 +374,14 @@ fn talk_mapping(loaded: &Loaded) {
     );
 }
 
-/// Loads and repairs a model without slicing it, for `inspect`.
-pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<ImportReport> {
+/// Loads and repairs a model without slicing it, for `inspect`, counting the faces that
+/// cross when asked.
+pub fn inspect(
+    input: &Path,
+    args: &ImportArgs,
+    chosen: &Chosen,
+    intersections: bool,
+) -> Result<ImportReport> {
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
@@ -384,7 +391,11 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    checked(&mut mesh, input, welded, args, profile)
+    let mut report = checked(&mut mesh, input, welded, args, profile)?;
+    if intersections {
+        report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
+    }
+    Ok(report)
 }
 
 /// Drops the doubled faces, fixes the winding, mends the model when asked and measures it,
@@ -403,13 +414,12 @@ fn checked(
         remove_duplicate_faces(mesh).len()
     };
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
-    let settings = MendSettings {
-        seam_tolerance_mm: args.seam_tolerance,
-        smallest_shell_mm2: args.smallest_shell,
-    };
-    let mended = args
+    let repaired = args
         .repair
-        .map(|method| mend(mesh, method.into(), settings));
+        .map(|method| repaired(mesh, method, args))
+        .transpose()?;
+    let (mended, wrapped) =
+        repaired.map_or((None, None), |(mended, wrapped)| (Some(mended), wrapped));
     let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
     let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
@@ -423,8 +433,36 @@ fn checked(
         diagnostics,
         orientation,
         mended,
+        wrapped,
+        crossing_pairs: None,
         fit,
     })
+}
+
+/// Runs the repair `--repair` named on `mesh` in place: what it changed, and how a wrap went.
+fn repaired(
+    mesh: &mut Mesh,
+    method: RepairMethod,
+    args: &ImportArgs,
+) -> Result<(Mended, Option<Wrapped>)> {
+    let settings = RepairSettings {
+        mend: MendSettings {
+            seam_tolerance_mm: args.seam_tolerance,
+            smallest_shell_mm2: args.smallest_shell,
+        },
+        wrap_mm: args.wrap_mm,
+    };
+    let done = repair(mesh, method.into(), settings, Cancel::never())
+        .context("could not repair the model")?;
+    *mesh = done.mesh;
+    let wrapped = matches!(method, RepairMethod::Wrap | RepairMethod::Deep).then_some(
+        match (done.wrapped, done.voxel_mm) {
+            (false, _) => Wrapped::LeftOut,
+            (true, None) => Wrapped::Exactly,
+            (true, Some(voxel_mm)) => Wrapped::OnLattice(voxel_mm),
+        },
+    );
+    Ok((done.mended, wrapped))
 }
 
 /// What an adaptive run is allowed to do: the layer height becomes its ceiling.

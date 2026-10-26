@@ -116,6 +116,63 @@ fn repair_and_no_validate_cannot_be_asked_together() {
 }
 
 #[test]
+fn an_open_mesh_names_its_holes() {
+    let path = write_box_stl("one-hole", 10.0, 10, 0);
+    let text = stdout(&encrust(&["inspect", path.to_str().unwrap()]));
+    assert!(text.contains("defect        1 hole\n"), "got {text}");
+}
+
+#[test]
+fn intersections_count_the_faces_two_crossing_boxes_cross() {
+    let apart = write_boxes_stl("apart", &[([0.0; 3], [1.0; 3]), ([2.0; 3], [3.0; 3])]);
+    let crossing = write_boxes_stl(
+        "crossing",
+        &[([0.0; 3], [1.0; 3]), ([0.5, 0.3, 0.4], [1.5, 1.3, 1.4])],
+    );
+    let pairs = |path: &std::path::Path| {
+        let text = stdout(&encrust(&[
+            "inspect",
+            path.to_str().unwrap(),
+            "--intersections",
+        ]));
+        field(&text, "crossings")
+            .split(' ')
+            .next()
+            .and_then(|count| count.parse::<usize>().ok())
+            .expect("a count of pairs")
+    };
+
+    assert_eq!(pairs(&apart), 0);
+    assert!(pairs(&crossing) > 0);
+}
+
+#[test]
+fn wrapping_two_crossing_boxes_leaves_one_shell_crossing_nothing() {
+    let crossing = write_boxes_stl(
+        "wrap-crossing",
+        &[([0.0; 3], [10.0; 3]), ([5.0, 3.0, 4.0], [15.0, 13.0, 14.0])],
+    );
+    let text = stdout(&encrust(&[
+        "inspect",
+        crossing.to_str().unwrap(),
+        "--repair=wrap",
+        "--intersections",
+    ]));
+
+    assert_eq!(
+        field(&text, "closed"),
+        "yes (1 shell, euler 2)",
+        "got {text}"
+    );
+    assert_eq!(field(&text, "crossings"), "0 pairs of faces");
+    assert_eq!(
+        field(&text, "volume"),
+        "1790.000 mm^3",
+        "2000 less the 210 they share"
+    );
+}
+
+#[test]
 fn inspect_stops_after_the_import_report() {
     let path = write_box_stl("no-slice", 10.0, 12, 0);
     let output = encrust(&["inspect", path.to_str().unwrap()]);

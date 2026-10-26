@@ -62,6 +62,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   never dropped, however small.
 - On the command line, run only part of the repair: close holes, close only the holes a
   missing face leaves, or turn faces.
+- On the command line, wrap a model made of overlapping parts into one outer surface, or
+  run a deep repair: repair, wrap, repair. A wrap that would leave the model worse is left
+  out and said so.
+- See how many holes a model has, and, on the command line, how many pairs of faces cross.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.

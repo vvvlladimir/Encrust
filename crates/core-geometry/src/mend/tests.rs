@@ -69,14 +69,7 @@ fn a_seam_two_solids_share_is_not_something_to_repair() {
         &unit_cube(),
         Transform::from_translation(Vec3::new(1.0, 1.0, 0.0)),
     );
-    let offset = mesh.vertices.len() as u32;
-    mesh.vertices.extend(other.vertices);
-    mesh.faces.extend(
-        other
-            .faces
-            .iter()
-            .map(|face| face.map(|index| index + offset)),
-    );
+    mesh.append(&other);
     let mut mesh = weld(&mesh, DEFAULT_WELD_TOLERANCE).mesh;
     assert_eq!(diagnose(&mesh).non_manifold_edges, 1, "the shared edge");
 

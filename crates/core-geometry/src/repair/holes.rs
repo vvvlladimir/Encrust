@@ -1,6 +1,6 @@
 use super::triangulation::{MIN_NORMAL, ear_clipped, least_area, newell};
 use crate::hash::FastMap;
-use crate::topology::{edge_groups, edge_uses};
+use crate::topology::{EdgeUse, edge_groups, edge_uses};
 use crate::{Mesh, Scalar, Vec3};
 
 /// Longest loop whose patch is chosen by area. The choice costs the cube of the corner
@@ -35,7 +35,7 @@ pub fn fill_holes(mesh: &mut Mesh) -> Filled {
 /// Closes the boundary loops of at most `most_corners` corners as [`fill_holes`] does, and
 /// leaves the longer ones open without counting them.
 pub fn fill_holes_within(mesh: &mut Mesh, most_corners: usize) -> Filled {
-    let (rings, loops_left) = boundary_loops(mesh);
+    let (rings, loops_left) = boundary_loops(&edge_uses(mesh));
     let mut filled = Filled {
         loops_left,
         ..Filled::default()
@@ -54,11 +54,10 @@ pub fn fill_holes_within(mesh: &mut Mesh, most_corners: usize) -> Filled {
 
 /// The mesh's boundary loops, wound as a closing patch is, and how many ends never came back round.
 /// An odd-use edge cannot pair off without one more face; a fin is closed by its own reverse.
-fn boundary_loops(mesh: &Mesh) -> (Vec<Vec<u32>>, usize) {
-    let uses = edge_uses(mesh);
+pub(crate) fn boundary_loops(uses: &[EdgeUse]) -> (Vec<Vec<u32>>, usize) {
     let mut onwards: FastMap<u32, Vec<u32>> = FastMap::default();
     let mut starts = Vec::new();
-    for group in edge_groups(&uses).filter(|group| group.len() % 2 == 1) {
+    for group in edge_groups(uses).filter(|group| group.len() % 2 == 1) {
         let forward = group.iter().filter(|edge_use| edge_use.forward).count();
         let backward = group.len() - forward;
         let (low, high) = group[0].edge;

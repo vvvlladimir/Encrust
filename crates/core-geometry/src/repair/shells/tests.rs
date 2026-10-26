@@ -32,13 +32,7 @@ fn a_closed_pin_under_the_limit_stays() {
         0.1,
         16,
     );
-    let first = mesh.vertices.len() as u32;
-    mesh.vertices.extend(pin.vertices);
-    mesh.faces.extend(
-        pin.faces
-            .iter()
-            .map(|face| face.map(|corner| corner + first)),
-    );
+    mesh.append(&pin);
 
     assert_eq!(drop_small_shells(&mut mesh, DEFAULT_SMALLEST_SHELL_MM2), 0);
     assert_eq!(diagnose(&mesh).shells, 2);

@@ -17,7 +17,10 @@ A model is welded as it is read, vertices nearer than `--weld-tolerance` mm merg
 `--no-validate` skips the topology check and the orientation fix; `--repair` stitches seams,
 drops specks, patches holes and drops doubled faces as the window's Repair does, keeping the
 model as it came if that would leave more wrong (ADR 0349). `--repair=close-holes`,
-`=close-small-holes` or `=turn` runs part of it (ADR 0351). `--seam-tolerance MM` (0.01) is
+`=close-small-holes` or `=turn` runs part of it (ADR 0351), `=wrap` wraps every shell in one
+outer surface and `=deep` repairs, wraps and repairs again, falling back to a field on a
+`--wrap-mm` lattice (0.2) where the exact union fails (ADR 0352). `inspect --intersections`
+counts the pairs of faces that cross (ADR 0353). `--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
 MM2` (1) the least area an open shell keeps. `--samples-per-layer N` cuts N planes inside each layer,
 so a feature thinner than a layer is kept. A mask is
@@ -32,6 +35,7 @@ encrust info plate.ctb                       # open a sliced file
 encrust inspect model.stl --printer elegoo-mars-4-ultra
 encrust inspect broken.stl --repair            # what closing its holes would do
 encrust slice broken.stl --repair=close-small-holes -o out   # only the missing faces
+encrust inspect parts.stl --repair=wrap --intersections   # one surface, crossing nothing
 encrust slice model.stl -o out               # PNG stack
 
 encrust slice model.stl \

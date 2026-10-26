@@ -219,3 +219,24 @@ fn an_empty_mesh_has_no_shells() {
     assert_eq!(diagnostics.shells, 0);
     assert_eq!(diagnostics.euler_characteristic, 0);
 }
+
+#[test]
+fn each_loop_of_open_edges_is_one_hole() {
+    let cube = crate::cuboid(Vec3::ZERO, Vec3::ONE);
+    // The cube's corners stand at 0 or 1, so a face of its top has every corner over 0.5.
+    let without = |mesh: &Mesh, top: bool| {
+        let mut mesh = mesh.clone();
+        let vertices = mesh.vertices.clone();
+        mesh.faces.retain(|face| {
+            !face
+                .iter()
+                .all(|&corner| (vertices[corner as usize].z > 0.5) == top)
+        });
+        mesh
+    };
+    let open_top = without(&cube, true);
+
+    assert_eq!(diagnose(&cube).holes, 0);
+    assert_eq!(diagnose(&open_top).holes, 1);
+    assert_eq!(diagnose(&without(&open_top, false)).holes, 2);
+}

@@ -46,6 +46,37 @@ fn past(amount: Vec3) -> Vec3 {
     )
 }
 
+/// How a wrap went.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Wrapped {
+    /// Every shell unioned by the exact engine; no face moved but where they crossed.
+    Exactly,
+    /// Through the field, on this lattice, mm: sharp edges rounded to it.
+    OnLattice(Scalar),
+    /// The field would have left the model worse, so only the repair stands.
+    LeftOut,
+}
+
+impl Wrapped {
+    /// The lattice it was sampled on, mm, where it was.
+    pub fn voxel_mm(self) -> Option<Scalar> {
+        match self {
+            Self::OnLattice(voxel_mm) => Some(voxel_mm),
+            Self::Exactly | Self::LeftOut => None,
+        }
+    }
+}
+
+fn describe_wrap(wrapped: Wrapped) -> String {
+    match wrapped {
+        Wrapped::Exactly => "exactly".to_owned(),
+        Wrapped::OnLattice(voxel_mm) => {
+            format!("on a {voxel_mm:.3} mm lattice, edges rounded to it")
+        }
+        Wrapped::LeftOut => "left out: it would have left the model worse".to_owned(),
+    }
+}
+
 /// Everything import learned about a model, ready to print.
 pub struct ImportReport {
     pub path: PathBuf,
@@ -57,6 +88,10 @@ pub struct ImportReport {
     pub orientation: Option<Orientation>,
     /// What `--repair` changed, when it was asked for.
     pub mended: Option<Mended>,
+    /// How `--repair=wrap` or `=deep` went, when asked.
+    pub wrapped: Option<Wrapped>,
+    /// Pairs of faces crossing each other, when `--intersections` asked for them.
+    pub crossing_pairs: Option<usize>,
     pub fit: Option<FitCheck>,
 }
 
@@ -142,8 +177,15 @@ impl fmt::Display for ImportReport {
             writeln!(f, "  orientation   {}", describe_orientation(orientation))?;
         }
 
+        if let Some(pairs) = self.crossing_pairs {
+            writeln!(f, "  crossings     {pairs} pairs of faces")?;
+        }
+
         if let Some(mended) = &self.mended {
             writeln!(f, "  repair        {}", describe_repair(mended))?;
+            if let Some(wrapped) = self.wrapped {
+                writeln!(f, "  wrapped       {}", describe_wrap(wrapped))?;
+            }
         }
 
         if let Some(fit) = &self.fit {
@@ -186,6 +228,10 @@ fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
         .into_iter()
         .filter(|(count, _)| *count > 0)
         .map(|(count, label)| format!("{count} {label}"))
+        .chain((diagnostics.holes > 0).then(|| match diagnostics.holes {
+            1 => "1 hole".to_owned(),
+            holes => format!("{holes} holes"),
+        }))
         .collect()
 }
 
