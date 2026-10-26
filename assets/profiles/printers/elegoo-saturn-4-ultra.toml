@@ -1,8 +1,4 @@
 # Elegoo Saturn 4 Ultra.
-#
-# UNVERIFIED: these numbers come from published specifications, not from measurement.
-# Check them against the actual machine before trusting a print, especially the
-# illuminated area and the mirroring flags.
 
 name = "Saturn 4 Ultra"
 manufacturer = "Elegoo"

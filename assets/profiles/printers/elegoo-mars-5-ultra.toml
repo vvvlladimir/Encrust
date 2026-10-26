@@ -1,8 +1,4 @@
 # Elegoo Mars 5 Ultra.
-#
-# UNVERIFIED: the panel and the machine name are read off a file the vendor's own slicer
-# wrote for this machine, not measured. Check them against the actual machine before
-# trusting a print, especially the illuminated area and the mirroring flags.
 
 name = "Mars 5 Ultra"
 manufacturer = "Elegoo"

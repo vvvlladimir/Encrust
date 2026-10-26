@@ -1,11 +1,8 @@
 # Phrozen Sonic Mini 8K.
-#
-# UNVERIFIED: these numbers come from published specifications, not from measurement.
-# Check them against the actual machine before trusting a print, especially the
-# illuminated area and the mirroring flags.
 
 name = "Sonic Mini 8K"
 manufacturer = "Phrozen"
+machine_name = "Phrozen Sonic Mini 8K"
 mirror_x = true
 mirror_y = false
 output = "ctb4"

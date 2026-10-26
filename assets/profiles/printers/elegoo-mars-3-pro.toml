@@ -1,11 +1,8 @@
 # Elegoo Mars 3 Pro.
-#
-# UNVERIFIED: these numbers come from published specifications, not from measurement.
-# Check them against the actual machine before trusting a print, especially the
-# illuminated area and the mirroring flags.
 
 name = "Mars 3 Pro"
 manufacturer = "Elegoo"
+machine_name = "ELEGOO Mars 3 Pro"
 mirror_x = true
 mirror_y = false
 output = "ctb4"

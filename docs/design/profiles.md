@@ -21,9 +21,8 @@ catalogue ships none and the first resin is the user's own (ADR 0196).
 Every file under `printers/` and `supports/` is embedded into `printer-profiles` by its
 build script, which emits an `include_str!` table sorted by id; a kind with no directory
 ships an empty table. Adding a machine is adding
-a file; nothing else has to be edited. Most of `printers/` is written by the generator at
-the end of this page; a file without its marker line was written by hand and the generator
-leaves it alone.
+a file; nothing else has to be edited. Where the numbers in it come from is at the end of
+this page.
 
 The user's own directory has the same shape:
 
@@ -247,65 +246,14 @@ measure it: `docs/design/compensation.md` (ADR 0144).
 
 ## Where the numbers come from
 
-Every shipped file is transcribed from a vendor specification or a public machine list and
-carries an `UNVERIFIED` header. They are a starting point. An exposure test on the
+Every shipped file is kept by hand. A machine the vendor's own slicer has a profile for
+carries that profile's panel, travel, mirroring and machine name; the rest are transcribed
+from a published specification (ADR 0359). None is a measurement: an exposure test on the
 actual machine is what replaces them, and a corrected file in the user directory is how it
 is kept.
 
-## Growing the catalogue
-
-```sh
-cargo xtask gen-profiles --source <dir of .ini profiles> \
-  [--cross-check <machine list>] [--out assets/profiles/printers] [--dry-run]
-```
-
-The source is a public set of printer profiles, one `.ini` per machine — about 150 machines
-across 21 manufacturers. The machine list published beside them is generated from the same
-files, so `--cross-check` holds a transcription against it rather than taking anything from
-it. It is run by hand against a local checkout, never from a `build.rs`: the build has no
-network, and a catalogue that changes under a rebuild is not reviewable (ADR 0165).
-
-An `.ini` carries everything a printer file of ours needs but the container:
-
-| `.ini` | our file |
-|---|---|
-| `display_pixels_x`, `display_pixels_y` | `[display] width_px`, `height_px` |
-| `display_width`, `display_height` | `[display] width_mm`, `height_mm`, and `[build_volume] x`, `y` |
-| `max_print_height` | `[build_volume] z` |
-| `display_mirror_x`, `display_mirror_y` | `mirror_x`, `mirror_y` |
-| `printer_notes: FILEFORMAT_<ext>`, `FILEVERSION_<n>` | `output` |
-
-The brand is the first word of the file name that names one of the twenty the generator
-knows, and the model is the rest; the id is the two in kebab case, which is the file stem.
-`connection` is not in the source and is a table in the generator, holding only the
-generations `docs/formats/sdcp.md` and `docs/formats/prusalink.md` name. `[locked]` is not in
-the source either: it is written into the catalogue file itself, and a run keeps a generated
-file's table when it rewrites the rest. `machine_name` is
-only known from a file the vendor's own slicer wrote, so it is left out until one is read.
-There are no exposures in the source — the `CUSTOM_VALUES` block carries lift, speed and
-PWM, not a measured cure — and none is invented here.
-
-Five rules the generator keeps:
-
-1. **Facts, not files.** A resolution, a panel size and a travel are measurements, and
-   they are transcribed into our own schema. The `.ini` files are not vendored, and the
-   judgements made about them are recorded in the generator. Our own licence binds code,
-   not measurements.
-2. **Ship nothing we cannot write.** A machine whose container has no writer is reported
-   with the step that brings its codec, and no file is written for it. The one exception
-   is a `.ctb` below version 4: version 4 is the oldest we write, so the profile points at
-   it, says so in its header and clears `firmware.per_layer_settings`.
-3. **Own only what you generated.** A catalogue file carrying the generator's marker line
-   is rewritten; one without it was written by hand and is kept, so a profile corrected
-   against a real machine survives every later run. A generated file the source no longer
-   names is reported, not deleted.
-4. **Every file stays `UNVERIFIED`** until somebody prints the exposure test. The user
-   directory is where a corrected machine lives.
-5. **Tests over verification.** Nobody owns 150 machines. Every shipped profile has to
-   load and resolve, its pixel pitch has to be plausible, the extension its container
-   writes has to route back to the same writer, and its panel has to match the published
-   machine list — which is what catches a transcription slip. Where the list is the stale
-   one, that is a line in the generator naming what settles it.
-
-A run prints what it wrote, what is waiting on a later step, what it kept, where it took
-the source over the list, and what it refused; it fails on a refusal.
+Adding a machine is writing one file: facts, not the vendor's file, in our own schema, and
+only for a container we write. A `.ctb` older than version 4 points at version 4, the
+oldest we write, says so in its header and clears `firmware.per_layer_settings`. Every
+shipped profile has to load and resolve, its pixel pitch has to be plausible, and it has to
+name the format its firmware reads.

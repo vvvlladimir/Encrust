@@ -1,11 +1,8 @@
 # UniFormation GKtwo.
-#
-# UNVERIFIED: these numbers come from published specifications, not from measurement.
-# Check them against the actual machine before trusting a print, especially the
-# illuminated area and the mirroring flags.
 
 name = "GKtwo"
 manufacturer = "UniFormation"
+machine_name = "UniFormation GKtwo"
 mirror_x = true
 mirror_y = false
 output = "ctb4"

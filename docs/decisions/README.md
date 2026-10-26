@@ -96,6 +96,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0356](0356-faces-and-shells-are-edited-by-hand-and-by-number.md) | Faces and shells are edited by hand in the window and by number on the command line | Accepted |
 | [0357](0357-wrap-has-no-sampled-fallback.md) | Wrap unions exactly or leaves the repair alone, with no sampled fallback | Accepted |
 | [0358](0358-a-shell-inside-another-follows-its-holder.md) | A closed shell inside another follows its holder's turning | Accepted |
+| [0359](0359-the-printer-catalogue-is-kept-by-hand.md) | Keep the printer catalogue by hand, checked against the vendor's own profiles | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
@@ -373,7 +374,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0301](0301-a-printer-locks-the-settings-its-firmware-runs-itself.md) | A printer locks the settings its firmware runs itself, and a shipped machine's locks are the build's | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
-| [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted |
+| [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359 |
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |

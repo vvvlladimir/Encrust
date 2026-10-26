@@ -96,7 +96,7 @@ it are in `.claude/rules/architecture.md`.
 | `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or one plate of a project (`project`, ADR 0191), or every plate in turn; `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks, sends and controls through `printer-link`; `profiles show`; `completions`; `config`, the flags a `--config` file holds; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
 | `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
-| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165); `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183); `arch`, the dependency graph below against every crate's manifest |
+| `xtask` | `xtask` binary: `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183); `arch`, the dependency graph below against every crate's manifest |
 | `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`, `report` — the markdown a user hands to an issue themselves (ADR 0212); `i18n`, the window's text in the user's language (ADR 0300); `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
@@ -122,7 +122,7 @@ encrust-cli ──> core-engine, core-analysis, core-format, core-geometry, core
                net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json,
                toml, indicatif, ctrlc
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
-xtask ──> printer-profiles, encrust-cli, toml, clap, clap_mangen
+xtask ──> encrust-cli, toml, clap, clap_mangen
 
 core-engine ──> core-pipeline, core-plate, core-analysis, core-format, core-geometry,
                core-joint, core-raster, core-slicer, core-supports, core-thumbnail,

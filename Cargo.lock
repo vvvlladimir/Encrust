@@ -6582,7 +6582,6 @@ dependencies = [
  "clap",
  "clap_mangen",
  "encrust-cli",
- "printer-profiles",
  "toml",
  "workspace-hack",
 ]

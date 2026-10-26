@@ -153,28 +153,3 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
         "the rests stay the resin's"
     );
 }
-
-#[test]
-fn every_shipped_printer_says_its_numbers_are_unverified() {
-    let dir = asset("printers");
-    let files = std::fs::read_dir(&dir).expect("the shipped catalogue is a directory");
-    let mut machines = 0;
-
-    for file in files {
-        let path = file.expect("a readable directory entry").path();
-        if path.extension().is_none_or(|extension| extension != "toml") {
-            continue;
-        }
-        let source = std::fs::read_to_string(&path).expect("a readable profile");
-        assert!(
-            source.contains("UNVERIFIED"),
-            "{} ships numbers without saying nobody measured them",
-            path.display()
-        );
-        machines += 1;
-    }
-
-    // The catalogue is generated from a source of about 150 machines, of which the
-    // containers we write cover roughly a third; see docs/design/profiles.md.
-    assert!(machines >= 40, "only {machines} machines are shipped");
-}

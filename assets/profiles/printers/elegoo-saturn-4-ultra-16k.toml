@@ -1,8 +1,4 @@
 # Elegoo Saturn 4 Ultra 16K.
-#
-# UNVERIFIED: the panel and the machine name are read off a file the vendor's own slicer
-# wrote for this machine, not measured. Check them against the actual machine before
-# trusting a print, especially the illuminated area and the mirroring flags.
 
 name = "Saturn 4 Ultra 16K"
 manufacturer = "Elegoo"
