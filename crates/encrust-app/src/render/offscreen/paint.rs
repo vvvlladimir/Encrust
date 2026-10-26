@@ -52,6 +52,7 @@ pub(super) fn paint_after<'a>(
         xray,
         floor,
         lines,
+        wide_lines,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -63,6 +64,7 @@ pub(super) fn paint_after<'a>(
         eye: camera.eye(),
         section_mm,
         lines,
+        wide_lines,
         models,
         markers,
         solids,

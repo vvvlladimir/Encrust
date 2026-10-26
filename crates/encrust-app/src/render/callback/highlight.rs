@@ -3,12 +3,14 @@ use std::sync::Arc;
 use super::ViewportCallback;
 use crate::highlight::Highlight;
 use crate::render::gpu::ModelDraw;
-use crate::render::vertex::{LineVertex, ModelInstance, NOT_MARKED};
+use crate::render::vertex::{ModelInstance, NOT_MARKED, WideLine};
+use crate::ui::theme;
 
 impl ViewportCallback {
     /// The same frame with `highlight` marked over the models: faces in patches of their
-    /// own, edges as lines, each in its own colour, in the order it lists them.
+    /// own, edges as wide lines, each in its own colour, in the order it lists them.
     pub fn highlighting(mut self, highlight: &Highlight) -> Self {
+        let size = core_geometry::Vec2::new(self.rect.width(), self.rect.height());
         for mark in &highlight.faces {
             self.models.push(ModelDraw::whole(
                 Arc::clone(&mark.mesh),
@@ -16,11 +18,10 @@ impl ViewportCallback {
             ));
         }
         for mark in &highlight.edges {
-            self.lines.extend(
+            self.lines.wide.extend(
                 mark.edges
                     .iter()
-                    .flatten()
-                    .map(|&end| LineVertex::new(end, mark.colour)),
+                    .map(|&ends| WideLine::new(ends, mark.colour, theme::MARK_LINE_W, size)),
             );
         }
         self
@@ -36,7 +37,6 @@ mod tests {
     use crate::highlight::{EdgeMark, FaceMark};
     use crate::plate::BuildPlate;
     use crate::scene::Scene;
-    use crate::ui::theme;
     use crate::workspace::ViewOptions;
 
     #[test]
@@ -74,14 +74,13 @@ mod tests {
         let marked = frame().highlighting(&highlight);
 
         assert_eq!(marked.models.len(), plain.models.len() + 1);
+        let size = core_geometry::Vec2::splat(100.0);
         let ends = [
-            LineVertex::new(Vec3::ZERO, rest),
-            LineVertex::new(Vec3::X, rest),
-            LineVertex::new(Vec3::Y, focus),
-            LineVertex::new(Vec3::Z, focus),
+            WideLine::new([Vec3::ZERO, Vec3::X], rest, theme::MARK_LINE_W, size),
+            WideLine::new([Vec3::Y, Vec3::Z], focus, theme::MARK_LINE_W, size),
         ];
         assert_eq!(
-            bytemuck::cast_slice::<_, u8>(&marked.lines[plain.lines.len()..]),
+            bytemuck::cast_slice::<_, u8>(&marked.lines.wide),
             bytemuck::cast_slice::<_, u8>(&ends),
             "each edge runs end to end in the colour of its mark, in order"
         );

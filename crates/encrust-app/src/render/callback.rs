@@ -19,7 +19,7 @@ use crate::render::gpu::{
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::lod::Light;
-use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
+use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED, WideLine};
 use crate::scene::{Mapped, ObjectId, Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
@@ -48,7 +48,7 @@ pub struct ViewportCallback {
     eye: Vec3,
     section_mm: Option<Scalar>,
     bottom_cut_mm: Option<Scalar>,
-    lines: Vec<LineVertex>,
+    lines: Lines,
     models: Vec<ModelDraw>,
     markers: Vec<ModelDraw>,
     /// What the cut is capped against: the same solids that are drawn, counted into the
@@ -90,6 +90,27 @@ pub struct ViewportCallback {
     /// Where the card's time over each frame goes, with the models' faces it drew.
     report: Option<Sender<CardTime>>,
     faces: Option<usize>,
+}
+
+/// Lines in plate millimetres: the plate's own, one pixel across, and the edges
+/// `highlighting` marks over the models, wider.
+struct Lines {
+    thin: Vec<LineVertex>,
+    wide: Vec<WideLine>,
+}
+
+impl Lines {
+    /// The plate's outline, grid and volume, with its outline again at each cut height.
+    fn of_plate(plate: &BuildPlate, cuts_mm: impl Iterator<Item = Scalar>) -> Self {
+        let mut thin = plate_lines(plate);
+        for height in cuts_mm {
+            thin.extend(section_frame(plate, height));
+        }
+        Self {
+            thin,
+            wide: Vec::new(),
+        }
+    }
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -168,17 +189,13 @@ impl ViewportCallback {
         } = draws;
 
         let (label, atlas) = label::front(plate);
-        let mut lines = plate_lines(plate);
-        for height in section_mm.into_iter().chain(bottom_cut_mm) {
-            lines.extend(section_frame(plate, height));
-        }
         Self {
             rect,
             view_projection: camera.view_projection(rect.width() / rect.height()),
             eye: camera.eye(),
             section_mm,
             bottom_cut_mm,
-            lines,
+            lines: Lines::of_plate(plate, section_mm.into_iter().chain(bottom_cut_mm)),
             models,
             markers,
             solids,
@@ -689,7 +706,8 @@ impl CallbackTrait for ViewportCallback {
                     view_projection: self.view_projection,
                     eye: self.eye,
                     section_mm: self.section_mm,
-                    lines: &self.lines,
+                    lines: &self.lines.thin,
+                    wide_lines: &self.lines.wide,
                     models: &self.models,
                     markers: &self.markers,
                     solids: &self.solids,

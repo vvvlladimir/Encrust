@@ -302,7 +302,9 @@ round in yaw. Any drag or scroll of the camera ends it where it stands.
 ## Marks and flying to a spot
 
 What a tool points at on a model is a `highlight::Highlight`: faces as patches of their own
-stood `LIFT_MM` off the surface, edges as lines, each mark in its own colour and drawn in
+stood `LIFT_MM` off the surface, edges as wide lines — a quad per edge the shader lays
+across the screen `theme::MARK_LINE_W` points wide, its depth pulled toward the eye so the
+faces beside the edge never cover it — each mark in its own colour and drawn in
 the order listed, so a mark over another stands further off or comes later. The Repair
 tool's findings are the first (ADR 0355). A Check row cuts the view at its layer, in
 Prepare by moving the section there, and rings each issue on the cut, as wide as a disc of

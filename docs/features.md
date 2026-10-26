@@ -65,7 +65,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   holes as lines, faces without area, drawn twice or crossing others as patches. The
   camera flies to the first place and frames it face on from outside the model, round any
   model in the way; each click after goes to the next, and the click after the last puts
-  the marks away. The place in view is bright, the rest darker.
+  the marks away. The place in view is bright, the rest darker. Marked edges are drawn
+  3 points wide at any zoom, wide enough to aim a click at.
 - Stitch the seams where a finer patch of surface meets a coarser one, as part of the same
   repair, without moving or adding a vertex.
 - Drop specks: open shells under 1 mm² floating apart from the model. A closed shell is
@@ -79,14 +80,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - List the shells of one model, pick them by hand or every one under a hundredth of the
   largest, fly to the one picked and drop it, or drop the picked ones together.
 - Edit by hand in the Repair tool's Faces mode: pick faces with a brush, a whole surface
-  with Cmd and Shift, then flip or delete them; or pick two open edges and bridge them
-  with faces wound as the ones beside them. On the command line, `--flip-faces`,
+  with Cmd and Shift, then flip or delete them; or pick two open edges, marked magenta
+  over the rest, and bridge them with faces wound as the ones beside them. On the command line, `--flip-faces`,
   `--drop-faces`, `--drop-shells` and `--bridge` do the same by number, and
   `inspect --shells` lists the shells.
-
-**You cannot:**
-- See an open edge thicker than one pixel: on a large model zoomed out, a hole's rim is
-  a thin line.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.

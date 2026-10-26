@@ -252,6 +252,7 @@ mod tests {
             eye: Vec3::Z,
             section_mm: None,
             lines: &[],
+            wide_lines: &[],
             models,
             markers: &[],
             solids: &[],

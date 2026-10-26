@@ -3,7 +3,7 @@ use super::marks::Marks;
 use super::paint::paint;
 use crate::camera::OrbitCamera;
 use crate::render::gpu::ModelDraw;
-use crate::render::vertex::{LineVertex, ModelInstance, NOT_MARKED};
+use crate::render::vertex::{LineVertex, ModelInstance, NOT_MARKED, WideLine};
 use crate::ui::theme;
 use core_geometry::{Mesh, Region, Transform, Vec3, cuboid};
 use std::sync::Arc;
@@ -22,16 +22,20 @@ fn cube_and_top() -> (Arc<Mesh>, Region) {
 }
 
 fn frame(models: &[ModelDraw], lines: &[LineVertex]) -> Option<Vec<u8>> {
-    let camera = OrbitCamera {
-        target: Vec3::new(75.0, 40.0, 45.0),
-        distance_mm: 170.0,
-        ..OrbitCamera::default()
-    };
     let marks = Marks {
         lines,
         ..Marks::default()
     };
-    paint(camera, None, models, &[], marks)
+    paint(camera(), None, models, &[], marks)
+}
+
+/// A camera with the whole cube in view, from above the front.
+fn camera() -> OrbitCamera {
+    OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 45.0),
+        distance_mm: 170.0,
+        ..OrbitCamera::default()
+    }
 }
 
 /// The pixels that differ between two frames, and how many of those are the fault's
@@ -111,6 +115,88 @@ fn a_marked_edge_shows_along_the_face_it_bounds() {
     assert!(
         marked_px > 300,
         "{marked_px} of the rim's pixels show, {changed} changed"
+    );
+}
+
+/// The same rim drawn as wide lines covers about its width in pixels along each side,
+/// against the one pixel a plain line takes, and the faces beside it hide none of it.
+#[test]
+fn a_wide_marked_edge_covers_its_width_along_the_face_it_bounds() {
+    let (mesh, _) = cube_and_top();
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let cube = [ModelDraw::whole(mesh, object)];
+    let corners = [
+        (55.0, 20.0),
+        (95.0, 20.0),
+        (95.0, 60.0),
+        (55.0, 60.0),
+        (55.0, 20.0),
+    ];
+    let at = |(x, y)| Vec3::new(x, y, 65.0);
+    let colour = theme::scene().fault;
+    let size = core_geometry::Vec2::splat(SIZE as f32);
+    let thin: Vec<LineVertex> = corners
+        .windows(2)
+        .flat_map(|ends| ends.iter().map(|&end| LineVertex::new(at(end), colour)))
+        .collect();
+    let wide: Vec<WideLine> = corners
+        .windows(2)
+        .map(|ends| WideLine::new([at(ends[0]), at(ends[1])], colour, 4.0, size))
+        .collect();
+    let Some(plain) = frame(&cube, &[]) else {
+        return;
+    };
+    let hairline = frame(&cube, &thin).expect("the adapter drew once");
+    let marks = Marks {
+        wide_lines: &wide,
+        ..Marks::default()
+    };
+    let bold = paint(camera(), None, &cube, &[], marks).expect("the adapter drew once");
+
+    let (_, thin_px) = changed_and_marked(&plain, &hairline);
+    let (_, wide_px) = changed_and_marked(&plain, &bold);
+    assert!(
+        wide_px > thin_px * 3,
+        "4 px wide covers some four times the hairline: {wide_px} against {thin_px} px"
+    );
+}
+
+/// An edge marked twice, as a picked open edge is over the rest, shows in the later mark's
+/// colour: the marks are drawn in the order listed, and the later wins the depth they share.
+#[test]
+fn a_later_wide_mark_on_the_same_edge_shows_over_the_earlier() {
+    let (mesh, _) = cube_and_top();
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let cube = [ModelDraw::whole(mesh, object)];
+    let ends = [Vec3::new(55.0, 20.0, 65.0), Vec3::new(95.0, 20.0, 65.0)];
+    let size = core_geometry::Vec2::splat(SIZE as f32);
+    let (rest, picked) = (theme::scene().fault_rest, theme::scene().fault_picked);
+    let wide = [
+        WideLine::new(ends, rest, 4.0, size),
+        WideLine::new(ends, picked, 4.0, size),
+    ];
+    let Some(plain) = frame(&cube, &[]) else {
+        return;
+    };
+    let marks = Marks {
+        wide_lines: &wide,
+        ..Marks::default()
+    };
+    let marked = paint(camera(), None, &cube, &[], marks).expect("the adapter drew once");
+
+    let changed: Vec<&[u8; 4]> = plain
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(marked.as_chunks::<4>().0)
+        .filter(|(a, b)| a != b)
+        .map(|(_, b)| b)
+        .collect();
+    let picked_px = changed.iter().filter(|pixel| pixel[0] > pixel[1]).count();
+    assert!(
+        !changed.is_empty() && picked_px * 100 >= changed.len() * 95,
+        "{picked_px} of {} changed pixels are the picked colour, red over green",
+        changed.len()
     );
 }
 

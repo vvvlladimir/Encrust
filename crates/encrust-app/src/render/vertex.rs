@@ -331,5 +331,42 @@ impl LineVertex {
     }
 }
 
+/// One line drawn wider than the card's own one pixel: a quad the shader lays across the
+/// screen between its two ends.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct WideLine {
+    from: [f32; 3],
+    to: [f32; 3],
+    color: [f32; 4],
+    /// How far each side of the line its border stands, in clip units across and up.
+    half_width: [f32; 2],
+}
+
+impl WideLine {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2
+    ];
+
+    pub const fn layout() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: size_of::<Self>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &Self::ATTRIBUTES,
+        }
+    }
+
+    /// The line from `ends[0]` to `ends[1]`, `width` across on a view `size` large, both
+    /// in the same unit.
+    pub fn new(ends: [Vec3; 2], color: Color32, width: f32, size: Vec2) -> Self {
+        Self {
+            from: ends[0].to_array(),
+            to: ends[1].to_array(),
+            color: theme::gamma(color),
+            half_width: (width / size.max(Vec2::ONE)).to_array(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;

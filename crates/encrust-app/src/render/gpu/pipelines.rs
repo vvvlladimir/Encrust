@@ -5,6 +5,8 @@ use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, ModelVertex,
 
 use super::*;
 
+mod wide;
+
 /// Half the stencil's range, which the counting below wraps around: a pixel whose count
 /// ran negative — the plane inside material — lands above it, one whose count ran positive
 /// lands below. See `docs/decisions/0074-the-section-cap-counts-material-not-crossings.md`.

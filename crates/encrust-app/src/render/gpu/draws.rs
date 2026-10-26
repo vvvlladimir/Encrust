@@ -9,7 +9,7 @@ use bytemuck::{Pod, Zeroable};
 use core_geometry::{Aabb, Mat4, Mesh, Scalar, SmoothNormals, Vec2, Vec3};
 use core_supports::Shaded;
 
-use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance};
+use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, WideLine};
 use crate::scene::Mapped;
 use crate::ui::theme;
 
@@ -73,6 +73,8 @@ pub struct FrameInput<'a> {
     /// Height the models are cut at, plate millimetres, or `None` to draw them whole.
     pub section_mm: Option<Scalar>,
     pub lines: &'a [LineVertex],
+    /// The marks a tool lays on the models' edges, drawn wider than `lines`.
+    pub wide_lines: &'a [WideLine],
     pub models: &'a [ModelDraw],
     /// What a tool puts on a model or is about to: blockers, the points of a channel, a
     /// ghost. Drawn after the cap, so what stands in the material shows through the cut.

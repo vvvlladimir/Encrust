@@ -195,7 +195,7 @@ impl Hand {
         self.is_busy()
     }
 
-    /// The picked faces and edges, marked in `fault` over the models.
+    /// The picked faces in `fault` and the picked edges in `fault_picked`, over the models.
     pub fn highlight(&self, scene: &Scene) -> Highlight {
         let colour = theme::scene().fault;
         let mut highlight = Highlight::default();
@@ -219,7 +219,7 @@ impl Hand {
                     .iter()
                     .map(|edge| edge.map(at))
                     .collect(),
-                colour,
+                colour: theme::scene().fault_picked,
             });
         }
         highlight

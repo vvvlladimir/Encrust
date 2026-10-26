@@ -40,6 +40,11 @@ impl ViewportResources {
             render_pass.set_vertex_buffer(0, self.lines.buffer.slice(..));
             render_pass.draw(0..self.frame.line_vertices, 0..1);
         }
+        if self.frame.wide_lines > 0 {
+            render_pass.set_pipeline(&self.wide_line_pipeline);
+            render_pass.set_vertex_buffer(0, self.wide_lines.buffer.slice(..));
+            render_pass.draw(0..6, 0..self.frame.wide_lines);
+        }
 
         render_pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
 

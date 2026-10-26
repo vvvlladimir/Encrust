@@ -163,6 +163,7 @@ pub struct ViewportResources {
     xray_pipeline: Facing,
     marker_pipelines: Markers,
     line_pipeline: wgpu::RenderPipeline,
+    wide_line_pipeline: wgpu::RenderPipeline,
     /// What caps the section cut.
     capping: Capping,
     /// What draws the inside of every cut.
@@ -180,6 +181,7 @@ pub struct ViewportResources {
     atlas: Option<(usize, wgpu::BindGroup)>,
     instances: DynamicBuffer,
     lines: DynamicBuffer,
+    wide_lines: DynamicBuffer,
     cap: DynamicBuffer,
     label: DynamicBuffer,
     meshes: HashMap<usize, CachedMesh>,
@@ -205,6 +207,7 @@ pub struct ViewportResources {
 #[derive(Default)]
 struct Frame {
     line_vertices: u32,
+    wide_lines: u32,
     label_vertices: u32,
     /// Each mesh with whether its placement mirrors it, which picks the pipeline.
     models: Vec<Drawn>,
@@ -330,6 +333,7 @@ impl ViewportResources {
             xray_pipeline: solid.xray,
             marker_pipelines: solid.markers,
             line_pipeline: solid.line,
+            wide_line_pipeline: build.wide_line(),
             capping: solid.capping,
             cutting: solid.cutting,
             label_pipeline: label.pipelines,
@@ -342,6 +346,7 @@ impl ViewportResources {
             atlas: None,
             instances: DynamicBuffer::new(device, "viewport_instances"),
             lines: DynamicBuffer::new(device, "viewport_lines"),
+            wide_lines: DynamicBuffer::new(device, "viewport_wide_lines"),
             cap: DynamicBuffer::new(device, "viewport_section_cap"),
             label: DynamicBuffer::new(device, "viewport_label"),
             meshes: HashMap::new(),
@@ -379,6 +384,7 @@ impl ViewportResources {
         frame: &FrameInput<'_>,
     ) {
         self.lines.write(device, queue, frame.lines);
+        self.wide_lines.write(device, queue, frame.wide_lines);
         let caps: Vec<LineVertex> = frame.cap.iter().chain(frame.bottom_cap).copied().collect();
         self.cap.write(device, queue, &caps);
         self.label.write(device, queue, frame.label);
@@ -401,6 +407,7 @@ impl ViewportResources {
     /// plate geometry was written.
     fn count_frame(&mut self, frame: &FrameInput<'_>) {
         self.frame.line_vertices = frame.lines.len() as u32;
+        self.frame.wide_lines = frame.wide_lines.len() as u32;
         self.frame.label_vertices = frame.label.len() as u32;
         self.frame.cap_vertices = frame.cap.len() as u32;
         // A cap counts the crossings on its far side, which stand in front of it only for an
