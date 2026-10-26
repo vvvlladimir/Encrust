@@ -1,0 +1,30 @@
+# Wanhao D7.
+
+name = "D7"
+manufacturer = "Wanhao"
+machine_name = "WanHao D7"
+mirror_x = true
+mirror_y = false
+output = "zip"
+connection = "none"
+
+[display]
+width_px = 2560
+height_px = 1440
+width_mm = 120.96
+height_mm = 68.5
+grey_floor = 0
+
+[build_volume]
+x = 120.96
+y = 68.5
+z = 180.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+bottom_light_pwm = 255
+light_pwm = 255

@@ -2,7 +2,6 @@
 
 name = "Halot One CL-60"
 manufacturer = "Creality"
-machine_name = "HALOT-ONE"
 mirror_x = false
 mirror_y = false
 output = "cxdlp3"

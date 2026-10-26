@@ -1,0 +1,26 @@
+# Peopoly Phenom Prime.
+
+name = "Phenom Prime"
+manufacturer = "Peopoly"
+machine_name = "Peopoly Phenom Prime"
+mirror_x = true
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 5448
+height_px = 3064
+width_mm = 277.848
+height_mm = 156.264
+grey_floor = 0
+
+[build_volume]
+x = 277.848
+y = 156.264
+z = 400.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false

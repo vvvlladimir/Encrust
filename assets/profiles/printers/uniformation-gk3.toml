@@ -1,0 +1,30 @@
+# UniFormation GK3.
+
+name = "GK3"
+manufacturer = "UniFormation"
+machine_name = "UniFormation GK3"
+mirror_x = true
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 15120
+height_px = 6230
+width_mm = 211.68
+height_mm = 118.37
+grey_floor = 0
+
+[build_volume]
+x = 211.68
+y = 118.37
+z = 240.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+bottom_light_pwm = 255
+light_pwm = 255

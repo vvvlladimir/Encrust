@@ -1,0 +1,26 @@
+# Newbie Box Phoenix One.
+
+name = "Phoenix One"
+manufacturer = "Newbie Box"
+machine_name = "Phoenix One"
+mirror_x = true
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 13320
+height_px = 5120
+width_mm = 223.78
+height_mm = 126.98
+grey_floor = 0
+
+[build_volume]
+x = 223.78
+y = 126.98
+z = 260.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false

@@ -1,0 +1,25 @@
+# Carima LM1.
+
+name = "LM1"
+manufacturer = "Carima"
+machine_name = "Carima LM1"
+mirror_x = true
+mirror_y = false
+output = "cws"
+connection = "none"
+
+[display]
+width_px = 2560
+height_px = 1620
+width_mm = 130.0
+height_mm = 80.0
+grey_floor = 0
+
+[build_volume]
+x = 130.0
+y = 80.0
+z = 150.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false

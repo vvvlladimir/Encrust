@@ -1,0 +1,30 @@
+# Elegoo Mars 3.
+
+name = "Mars 3"
+manufacturer = "Elegoo"
+machine_name = "ELEGOO Mars 3"
+mirror_x = true
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 4098
+height_px = 2560
+width_mm = 143.43
+height_mm = 89.6
+grey_floor = 0
+
+[build_volume]
+x = 143.43
+y = 89.6
+z = 175.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+bottom_light_pwm = 255
+light_pwm = 255

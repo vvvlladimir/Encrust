@@ -1,0 +1,26 @@
+# EPAX X1-4K.
+
+name = "X1-4K"
+manufacturer = "EPAX"
+machine_name = "EPAX X1-4K"
+mirror_x = true
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 2160
+height_px = 3840
+width_mm = 68.04
+height_mm = 120.96
+grey_floor = 0
+
+[build_volume]
+x = 68.04
+y = 120.96
+z = 155.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false

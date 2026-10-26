@@ -2,7 +2,6 @@
 
 name = "Halot Ray CL925"
 manufacturer = "Creality"
-machine_name = "HALOT-RAY"
 mirror_x = false
 mirror_y = false
 output = "cxdlp3"

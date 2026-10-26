@@ -1,0 +1,31 @@
+# QIDI 6.08 mono.
+
+name = "6.08 mono"
+manufacturer = "QIDI"
+machine_name = "6.08 mono"
+mirror_x = true
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 1620
+height_px = 2560
+width_mm = 82.62
+height_mm = 130.56
+grey_floor = 0
+
+[build_volume]
+x = 82.62
+y = 130.56
+z = 150.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+bottom_light_pwm = 255
+light_pwm = 255

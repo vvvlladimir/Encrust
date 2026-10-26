@@ -1,0 +1,26 @@
+# Phrozen Sonic Mega 8K.
+
+name = "Sonic Mega 8K"
+manufacturer = "Phrozen"
+machine_name = "Phrozen Sonic Mega 8K"
+mirror_x = false
+mirror_y = false
+# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
+output = "ctb4"
+connection = "none"
+
+[display]
+width_px = 7680
+height_px = 4320
+width_mm = 330.24
+height_mm = 185.76
+grey_floor = 0
+
+[build_volume]
+x = 330.24
+y = 185.76
+z = 400.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
