@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use core_geometry::{Mended, Mesh, Scalar};
+use core_geometry::{Mended, Mesh};
 use core_volume::{Cancel, Progress, RepairMethod, RepairSettings, repair};
 
 use crate::i18n::tr;
@@ -25,8 +25,6 @@ pub struct Repaired {
     pub shaped: Shaped,
     pub mended: Mended,
     pub method: RepairMethod,
-    /// The lattice a wrap was sampled on, mm; `None` where it was cut exactly or not wrapped.
-    pub voxel_mm: Option<Scalar>,
     /// Whether the mesh is the wrap's surface rather than the repair's alone.
     pub wrapped: bool,
 }
@@ -90,7 +88,6 @@ fn run(request: RepairRequest, (stop, progress): (&AtomicBool, &Progress)) -> Re
             shaped: Shaped::of(Arc::new(done.mesh)),
             mended: done.mended,
             method: request.method,
-            voxel_mm: done.voxel_mm,
             wrapped: done.wrapped,
         })),
         Err(error) => RepairOutcome::Failed(tr!(

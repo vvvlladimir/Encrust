@@ -176,7 +176,7 @@ mod tests {
         tools.text.state.depth_mm = 1.5;
         tools.boolean.op = Boolean::Difference;
         tools.repair.state.method = core_volume::RepairMethod::Wrap;
-        tools.repair.state.settings.wrap_mm = 0.35;
+        tools.repair.state.settings.mend.smallest_shell_mm2 = 2.5;
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
@@ -277,6 +277,18 @@ mod tests {
         assert!(
             (read.hollow.thickness_mm - 3.5).abs() < f32::EPSILON,
             "and keeps the rest"
+        );
+    }
+
+    #[test]
+    fn a_record_carrying_the_old_wrap_lattice_still_reads() {
+        let settings = ToolSettings::of(&edited(), &Slicing::default());
+        let mut written = serde_json::to_value(&settings).expect("the settings serialise");
+        written["repair"]["settings"]["wrap_mm"] = serde_json::json!(0.35);
+        let read: ToolSettings = serde_json::from_value(written).expect("an older record reads");
+        assert_eq!(
+            read.repair, settings.repair,
+            "the lattice is dropped, the rest kept"
         );
     }
 }

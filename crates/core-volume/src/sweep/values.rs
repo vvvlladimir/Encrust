@@ -69,23 +69,7 @@ pub(super) fn block_values<T>(
     // The surface crossing a lattice edge leaves one of its ends within half a voxel of
     // itself, so nothing nearer than a voxel means nothing crossed and one side for all.
     let reach_mm = grid.voxel_mm;
-    found.clear();
-    let mut nearest = Scalar::INFINITY;
-
-    for z in 0..SIDED {
-        for y in 0..SIDED {
-            for x in 0..SIDED {
-                let voxel = block + IVec3::new(x, y, z);
-                let slot = index_in_tile(voxel);
-                let point = grid.position(voxel);
-                let Some(on_face) = faces.closest(work[slot], point) else {
-                    continue;
-                };
-                nearest = nearest.min(on_face.distance);
-                found.push((slot, point, on_face));
-            }
-        }
-    }
+    let (nearest, placed) = nearest_in_block(faces, grid, block, work, found);
 
     let Some((_, first, on_first)) = found.first() else {
         return false;
@@ -99,9 +83,14 @@ pub(super) fn block_values<T>(
         })
     });
 
+    let linked = one_sided.is_none() && signer.is_costly();
+    let sides = linked.then(|| sides(mesh, signer, reach_mm, found, &placed));
+
     let mut crosses = false;
-    for (slot, point, on_face) in found.iter() {
-        let inside = one_sided.unwrap_or_else(|| signer.is_inside(mesh, *point, on_face));
+    for (index, (slot, point, on_face)) in found.iter().enumerate() {
+        let inside = one_sided
+            .or_else(|| sides.map(|sides| sides[index]))
+            .unwrap_or_else(|| signer.is_inside(mesh, *point, on_face));
         let signed = if inside {
             -on_face.distance
         } else {
@@ -113,12 +102,108 @@ pub(super) fn block_values<T>(
     crosses
 }
 
+const BLOCK_VOXELS: usize = (SIDED * SIDED * SIDED) as usize;
+const UNPLACED: u8 = u8::MAX;
+
+/// Fills `found` with the block's voxels a carried face reaches, and says the nearest
+/// distance and where in `found` each voxel of the block went.
+fn nearest_in_block(
+    faces: &Faces,
+    grid: VoxelGrid,
+    block: IVec3,
+    work: &[Nearest],
+    found: &mut Vec<(usize, Vec3, ClosestPoint)>,
+) -> (Scalar, [u8; BLOCK_VOXELS]) {
+    found.clear();
+    let mut nearest = Scalar::INFINITY;
+    let mut placed = [UNPLACED; BLOCK_VOXELS];
+    for local in cube_voxels(SIDED) {
+        let voxel = block + local;
+        let slot = index_in_tile(voxel);
+        let point = grid.position(voxel);
+        let Some(on_face) = faces.closest(work[slot], point) else {
+            continue;
+        };
+        nearest = nearest.min(on_face.distance);
+        placed[index_in(SIDED, local)] = found.len() as u8;
+        found.push((slot, point, on_face));
+    }
+    (nearest, placed)
+}
+
+/// The side of each of `found`, asked once per group of voxels no surface can part: two
+/// neighbours `spacing_mm` apart share a side when either stands further than that off it.
+fn sides(
+    mesh: &Mesh,
+    signer: &Signer,
+    spacing_mm: Scalar,
+    found: &[(usize, Vec3, ClosestPoint)],
+    placed: &[u8; BLOCK_VOXELS],
+) -> [bool; BLOCK_VOXELS] {
+    let mut parent: [u8; BLOCK_VOXELS] = std::array::from_fn(|index| index as u8);
+    for local in cube_voxels(SIDED) {
+        let here = placed[index_in(SIDED, local)];
+        if here == UNPLACED {
+            continue;
+        }
+        for step in [IVec3::X, IVec3::Y, IVec3::Z] {
+            let next = local + step;
+            if next.max_element() >= SIDED {
+                continue;
+            }
+            let there = placed[index_in(SIDED, next)];
+            let apart = |at: u8| found[at as usize].2.distance > spacing_mm;
+            if there != UNPLACED && (apart(here) || apart(there)) {
+                let (one, other) = (root(&mut parent, here), root(&mut parent, there));
+                parent[one as usize] = other;
+            }
+        }
+    }
+
+    // The side is asked where the group stands furthest off the mesh, where it is surest.
+    let mut asked: [u8; BLOCK_VOXELS] = std::array::from_fn(|index| index as u8);
+    for index in 0..found.len() as u8 {
+        let group = root(&mut parent, index) as usize;
+        if found[index as usize].2.distance > found[asked[group] as usize].2.distance {
+            asked[group] = index;
+        }
+    }
+    let mut answer = [None; BLOCK_VOXELS];
+    let mut inside = [false; BLOCK_VOXELS];
+    for (index, side) in inside.iter_mut().enumerate().take(found.len()) {
+        let group = root(&mut parent, index as u8) as usize;
+        *side = *answer[group].get_or_insert_with(|| {
+            let (_, point, on_face) = &found[asked[group] as usize];
+            signer.is_inside(mesh, *point, on_face)
+        });
+    }
+    inside
+}
+
+fn root(parent: &mut [u8; BLOCK_VOXELS], mut index: u8) -> u8 {
+    while parent[index as usize] != index {
+        let up = parent[parent[index as usize] as usize];
+        parent[index as usize] = up;
+        index = up;
+    }
+    index
+}
+
 /// Every voxel of a tile, as an offset from its lowest corner.
 pub(super) fn tile_voxels() -> impl Iterator<Item = IVec3> {
-    (0..TILE).flat_map(|z| (0..TILE).flat_map(move |y| (0..TILE).map(move |x| IVec3::new(x, y, z))))
+    cube_voxels(TILE)
 }
 
 /// Where a block voxel sits in the block's own values.
 pub(super) fn at(local: IVec3) -> usize {
-    ((local.z * SIDE + local.y) * SIDE + local.x) as usize
+    index_in(SIDE, local)
+}
+
+fn cube_voxels(side: i32) -> impl Iterator<Item = IVec3> {
+    (0..side)
+        .flat_map(move |z| (0..side).flat_map(move |y| (0..side).map(move |x| IVec3::new(x, y, z))))
+}
+
+fn index_in(side: i32, local: IVec3) -> usize {
+    ((local.z * side + local.y) * side + local.x) as usize
 }

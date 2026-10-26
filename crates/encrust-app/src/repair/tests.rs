@@ -12,7 +12,6 @@ fn mended_alone() -> Repaired {
         shaped: crate::scene::Shaped::of(Arc::new(Mesh::default())),
         mended: Mended::default(),
         method: RepairMethod::default(),
-        voxel_mm: None,
         wrapped: false,
     }
 }
@@ -294,14 +293,13 @@ fn a_wrap_stands_even_where_the_repair_under_it_was_kept_as_found() {
                 ..Mended::default()
             },
             method: RepairMethod::Wrap,
-            voxel_mm: Some(0.2),
             wrapped: true,
         },
     );
 
     assert!(!status.is_error(), "{status:?}");
     assert!(
-        status.text().contains("0.20 mm lattice"),
+        status.text().contains(&tr!("repair-wrapped")),
         "got {}",
         status.text()
     );
@@ -313,7 +311,7 @@ fn a_wrap_stands_even_where_the_repair_under_it_was_kept_as_found() {
 }
 
 #[test]
-fn a_wrap_the_field_would_have_worsened_says_so() {
+fn a_wrap_left_out_says_so() {
     let mut scene = Scene::default();
     let id = open_box(&mut scene);
     let mesh = Arc::clone(&scene.get(id).expect("the box is there").mesh);

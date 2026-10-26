@@ -285,12 +285,10 @@ fn what(repaired: &Repaired) -> Vec<String> {
         lines.push(tr!("repair-turned-faces", count = turned(repaired)));
     }
     if repaired.method.wraps() {
-        lines.push(match (repaired.wrapped, repaired.voxel_mm) {
-            (false, _) => tr!("repair-not-wrapped"),
-            (true, None) => tr!("repair-wrapped"),
-            (true, Some(voxel_mm)) => {
-                tr!("repair-wrapped-sampled", lattice = format!("{voxel_mm:.2}"))
-            }
+        lines.push(if repaired.wrapped {
+            tr!("repair-wrapped")
+        } else {
+            tr!("repair-not-wrapped")
         });
     }
     lines

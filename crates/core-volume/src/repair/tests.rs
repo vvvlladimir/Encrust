@@ -36,7 +36,6 @@ fn wrapping_two_crossing_cubes_is_their_union() {
     )
     .expect("two closed cubes union exactly");
 
-    assert_eq!(wrapped.voxel_mm, None, "cut exactly");
     assert!(wrapped.wrapped);
     let found = diagnose(&wrapped.mesh);
     assert!(found.is_sound() && found.shells == 1, "got {found:?}");
@@ -84,28 +83,31 @@ fn cube_through_itself() -> Mesh {
 }
 
 #[test]
-fn a_surface_crossing_itself_is_wrapped_through_the_field() {
+fn a_surface_crossing_itself_is_left_as_the_repair_made_it() {
     let mesh = cube_through_itself();
-    assert!(!self_intersections(&mesh, &Bvh::build(&mesh)).is_empty());
+    let wrapped =
+        wrap(&mesh, RepairSettings::default(), Cancel::never()).expect("the cube repairs");
 
-    let wrapped = wrap(&mesh, RepairSettings::default(), Cancel::never())
-        .expect("the field reads what the engine leaves crossing");
-
-    assert_eq!(wrapped.voxel_mm, Some(DEFAULT_WRAP_MM));
-    let found = diagnose(&wrapped.mesh);
-    assert!(found.is_sound() && found.shells == 1, "got {found:?}");
-    assert!(self_intersections(&wrapped.mesh, &Bvh::build(&wrapped.mesh)).is_empty());
+    assert!(
+        !wrapped.wrapped,
+        "the engine returns a shell crossing itself still crossing"
+    );
+    assert_eq!(
+        wrapped.mesh, mesh,
+        "nothing to repair, so the cube stands as it came"
+    );
 }
 
 #[test]
 fn deep_repair_leaves_the_wrapped_model_sound() {
+    let (one, other) = crossing_cubes();
     let deep = repair(
-        &cube_through_itself(),
+        &joined(one, &inverted(&other)),
         RepairMethod::Deep,
         RepairSettings::default(),
         Cancel::never(),
     )
-    .expect("the cube wraps");
+    .expect("the cubes wrap");
 
     assert!(
         diagnose(&deep.mesh).is_sound(),
@@ -143,16 +145,15 @@ fn an_empty_mesh_has_nothing_to_wrap() {
 }
 
 #[test]
-fn a_lone_sheet_wraps_into_nothing() {
+fn an_open_surface_is_left_as_the_repair_made_it() {
     let sheet = Mesh::new(
         vec![Vec3::ZERO, Vec3::X * 10.0, Vec3::Y * 10.0],
         vec![[0, 1, 2]],
     );
-    let refused = wrap(&sheet, RepairSettings::default(), Cancel::never());
-    assert!(
-        matches!(refused, Err(VolumeError::NothingLeft)),
-        "got {refused:?}"
-    );
+    let wrapped = wrap(&sheet, RepairSettings::default(), Cancel::never())
+        .expect("the repair stands where nothing can be unioned");
+
+    assert!(!wrapped.wrapped);
 }
 
 #[test]
@@ -171,16 +172,30 @@ fn a_stopped_wrap_says_so() {
 }
 
 #[test]
-fn a_surface_from_the_field_is_taken_only_when_it_is_better() {
-    let crossing = cube_through_itself();
-    let clean = cuboid(Vec3::ZERO, Vec3::splat(10.0));
-    let mut open = clean.clone();
-    open.faces.pop();
+fn one_sound_shell_crossing_nothing_is_wrapped_as_it_is() {
+    let cube = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let wrapped = wrap(&cube, RepairSettings::default(), Cancel::never()).expect("a cube wraps");
 
-    assert!(better(&clean, &crossing), "sound and crossing nothing");
-    assert!(!better(&open, &crossing), "a hole is worse than a crossing");
+    assert!(wrapped.wrapped);
+    assert_eq!(
+        wrapped.mesh, cube,
+        "nothing to union, so the repaired cube stands"
+    );
+}
+
+#[test]
+fn a_shell_crossing_itself_is_told_from_shells_crossing_each_other() {
+    let crossings_of = |mesh: &Mesh| self_intersections(mesh, &Bvh::build(mesh));
+    let through = cube_through_itself();
+    let (one, other) = crossing_cubes();
+    let pair = joined(one, &other);
+
+    assert!(crosses_itself(
+        &list_shells(&through),
+        &crossings_of(&through)
+    ));
     assert!(
-        !better(&crossing, &crossing),
-        "crossing as much is no better"
+        !crosses_itself(&list_shells(&pair), &crossings_of(&pair)),
+        "two cubes cross each other, and neither itself"
     );
 }

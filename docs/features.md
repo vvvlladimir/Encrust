@@ -58,8 +58,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   command line.
 - Open the **Repair** tool: what was found in the picked models (or every model on the
   plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
-  press, how many pairs of faces cross. Pick the method, set the seam tolerance, the
-  smallest speck and the wrap lattice, and repair with progress and Cancel. The rail's
+  press, how many pairs of faces cross. Pick the method, set the seam tolerance and the
+  smallest speck, and repair with progress and Cancel. The rail's
   Repair button carries a dot while a model on the plate is broken.
 - Click a finding to mark it on the models while the Repair tool is open: the rims of the
   holes as lines, faces without area, drawn twice or crossing others as patches. The
@@ -74,7 +74,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Run only part of the repair: close holes, close only the holes a missing face leaves,
   or turn faces.
 - Wrap a model made of overlapping parts into one outer surface, or run a deep repair:
-  repair, wrap, repair. A wrap that would leave the model worse is left out and said so.
+  repair, wrap, repair. Shells are joined exactly; a model whose shells do not union
+  exactly, such as one crossing itself, keeps the repair alone and says so.
 - See how many holes a model has, and how many pairs of faces cross.
 - List the shells of one model, pick them by hand or every one under a hundredth of the
   largest, fly to the one picked and drop it, or drop the picked ones together.

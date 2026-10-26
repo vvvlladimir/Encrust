@@ -36,9 +36,6 @@ pub struct Repair {
     /// Whether `--repair=wrap` or `=deep` wrapped the model; absent when not asked.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wrapped: Option<bool>,
-    /// The lattice the wrap was sampled on, mm, where it could not cut exactly.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wrap_voxel_mm: Option<Scalar>,
     /// `--repair` would have left more wrong, so the model is as it came.
     pub kept_as_found: bool,
     /// What the changes by hand did, when one was named.
@@ -114,7 +111,6 @@ pub(super) fn repair_of(import: &ImportReport) -> Repair {
         wrapped: import
             .wrapped
             .map(|wrapped| wrapped != crate::report::Wrapped::LeftOut),
-        wrap_voxel_mm: import.wrapped.and_then(crate::report::Wrapped::voxel_mm),
         kept_as_found: import.mended.is_some_and(|mended| mended.kept_as_found),
         by_hand: import.edited.map(|edited| ByHand {
             faces_turned: edited.faces_flipped,

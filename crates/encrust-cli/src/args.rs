@@ -12,7 +12,6 @@ use core_geometry::{
 };
 use core_plate::{OrientGoal, OrientPreset};
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
-use core_volume::DEFAULT_WRAP_MM;
 use core_volume::Tiling;
 use printer_profiles::SupportProfile;
 
@@ -80,10 +79,6 @@ pub struct ImportArgs {
     #[arg(long, value_name = "MM2", default_value_t = DEFAULT_SMALLEST_SHELL_MM2,
           requires = "repair")]
     pub smallest_shell: Scalar,
-
-    /// The lattice --repair=wrap falls back to where it cannot cut exactly, millimetres.
-    #[arg(long, value_name = "MM", default_value_t = DEFAULT_WRAP_MM, requires = "repair")]
-    pub wrap_mm: Scalar,
 
     /// Turn these faces the other way, numbered from 0 on the model as import leaves it.
     #[arg(

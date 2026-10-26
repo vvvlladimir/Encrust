@@ -23,11 +23,10 @@ const METHODS: [RepairMethod; 6] = [
 /// Per point of drag, mm or mm².
 const STEP: f64 = 0.01;
 
-/// Bounds on the lengths the panel edits: a seam wider than a millimetre is a gap, a speck
-/// past a square centimetre a part, and a lattice under 0.05 mm more than memory holds.
+/// Bounds on the lengths the panel edits: a seam wider than a millimetre is a gap, and a
+/// speck past a square centimetre a part.
 const MAX_SEAM_MM: f32 = 1.0;
 const MAX_SHELL_MM2: f32 = 100.0;
-const WRAP_MM: std::ops::RangeInclusive<f32> = 0.05..=2.0;
 
 mod faces;
 mod shells;
@@ -226,7 +225,6 @@ fn settings(ui: &mut egui::Ui, state: &mut RepairState) {
         state.method,
         RepairMethod::Mend(MendMethod::Repair) | RepairMethod::Wrap | RepairMethod::Deep
     );
-    let wraps = state.method.wraps();
     if !mends {
         return;
     }
@@ -251,17 +249,6 @@ fn settings(ui: &mut egui::Ui, state: &mut RepairState) {
             0.0..=MAX_SHELL_MM2,
             2,
         );
-        if wraps {
-            number_row(
-                ui,
-                &tr!("repair-wrap-lattice"),
-                &mut settings.wrap_mm,
-                &tr!("unit-mm"),
-                STEP,
-                WRAP_MM,
-                2,
-            );
-        }
     });
 }
 

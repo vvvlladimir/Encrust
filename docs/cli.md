@@ -18,9 +18,10 @@ A model is welded as it is read, vertices nearer than `--weld-tolerance` mm merg
 drops specks, patches holes and drops doubled faces as the window's Repair does, keeping the
 model as it came if that would leave more wrong (ADR 0349). `--repair=close-holes`,
 `=close-small-holes` or `=turn` runs part of it (ADR 0351), `=wrap` wraps every shell in one
-outer surface and `=deep` repairs, wraps and repairs again, falling back to a field on a
-`--wrap-mm` lattice (0.2) where the exact union fails (ADR 0352). `inspect --intersections`
-counts the pairs of faces that cross (ADR 0353). `--seam-tolerance MM` (0.01) is
+outer surface by the exact union of its shells and `=deep` repairs, wraps and repairs
+again, leaving the repair alone where the shells do not union exactly (ADR 0352, 0357).
+`inspect --intersections` counts the pairs of faces that cross (ADR 0353).
+`--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
 MM2` (1) the least area an open shell keeps. By hand, as the window's Faces mode and Shells
 list do (ADR 0356): `--flip-faces 3,4` turns faces and `--drop-faces` drops them, numbered

@@ -52,29 +52,14 @@ fn past(amount: Vec3) -> Vec3 {
 pub enum Wrapped {
     /// Every shell unioned by the exact engine; no face moved but where they crossed.
     Exactly,
-    /// Through the field, on this lattice, mm: sharp edges rounded to it.
-    OnLattice(Scalar),
-    /// The field would have left the model worse, so only the repair stands.
+    /// The shells could not be unioned exactly, so only the repair stands.
     LeftOut,
-}
-
-impl Wrapped {
-    /// The lattice it was sampled on, mm, where it was.
-    pub fn voxel_mm(self) -> Option<Scalar> {
-        match self {
-            Self::OnLattice(voxel_mm) => Some(voxel_mm),
-            Self::Exactly | Self::LeftOut => None,
-        }
-    }
 }
 
 fn describe_wrap(wrapped: Wrapped) -> String {
     match wrapped {
         Wrapped::Exactly => "exactly".to_owned(),
-        Wrapped::OnLattice(voxel_mm) => {
-            format!("on a {voxel_mm:.3} mm lattice, edges rounded to it")
-        }
-        Wrapped::LeftOut => "left out: it would have left the model worse".to_owned(),
+        Wrapped::LeftOut => "left out: the shells do not union exactly".to_owned(),
     }
 }
 

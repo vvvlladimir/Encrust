@@ -49,6 +49,11 @@ impl Signer {
         }
     }
 
+    /// Whether a question costs a traversal, so a field should ask as few as it can.
+    pub(crate) fn is_costly(&self) -> bool {
+        matches!(self, Self::Winding(_))
+    }
+
     /// Whether `point` is inside the surface. `found` is its nearest point, which the
     /// pseudonormal needs and the winding number ignores.
     pub(crate) fn is_inside(&self, mesh: &Mesh, point: Vec3, found: &ClosestPoint) -> bool {

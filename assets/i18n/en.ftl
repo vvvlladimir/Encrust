@@ -1798,8 +1798,7 @@ repair-turned-faces =
        *[other] turned { $count } faces
     }
 repair-wrapped = wrapped in one surface
-repair-wrapped-sampled = wrapped in one surface on a { $lattice } mm lattice
-repair-not-wrapped = not wrapped, as the surface would have been worse
+repair-not-wrapped = not wrapped, as the shells do not union exactly
 
 ## panels/inspector/repair.rs
 
@@ -1901,13 +1900,12 @@ repair-method-repair-note = Stitches seams, drops faces drawn twice and specks e
 repair-method-close-holes-note = Closes every hole and turns the patches outward, and nothing else.
 repair-method-close-small-holes-note = Closes only the holes one missing face leaves, and turns nothing.
 repair-method-turn-note = Turns the faces wound the wrong way so every shell faces outward, and adds nothing.
-repair-method-wrap-note = Repairs, then wraps the model in one outer surface: overlapping shells are joined exactly, or where they cannot be, sampled on the wrap lattice, which rounds sharp edges to it. A wrap that would leave the model worse is not taken.
+repair-method-wrap-note = Repairs, then wraps the model in one outer surface: overlapping shells are joined exactly. Where they cannot be, as where a shell crosses itself, only the repair is kept.
 repair-method-deep-note = Repairs, wraps and repairs again, for a model the other methods leave broken.
 repair-settings = Settings
-repair-settings-note = A vertex standing off an open edge within the seam tolerance is stitched into it. A shell enclosing nothing with less area than the smallest speck is dropped. The wrap lattice is how fine a wrap that cannot join the shells exactly samples the model.
+repair-settings-note = A vertex standing off an open edge within the seam tolerance is stitched into it. A shell enclosing nothing with less area than the smallest speck is dropped.
 repair-seam-tolerance = Seam tolerance
 repair-smallest-shell = Smallest speck
-repair-wrap-lattice = Wrap lattice
 repair-repair = Repair
 repair-repairing = Repairing
 

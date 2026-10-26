@@ -202,17 +202,17 @@ exactly along an edge. It is reported, never fixed: wrapping is what removes cro
 ## Wrapping
 
 `core-volume::wrap` repairs the mesh, then unions its shells with the exact engine. The
-result is taken if it is sound and crosses nothing. Otherwise the repaired mesh is sampled
-into a winding-number field on `wrap_mm` (0.2 mm) and its surface extracted. That surface
-is taken only if it is sound, crosses itself less than the repaired mesh and branches no
-more; else only the repair stands and the report says the wrap was left out. *Deep* is
-repair, wrap, repair, and reports what both repairs did. Repair turns every closed shell outward (see Orientation), so a shell
-inside another is a body the wrap swallows, not a cavity it keeps.
+result is taken if it is sound and crosses nothing; else only the repair stands and the
+report says the wrap was left out. One sound shell crossing nothing is already its own wrap
+and stands as it is. A shell crossing itself skips the engine, which returns it still
+crossing. *Deep* is repair, wrap, repair, and reports what both repairs did; unwrapped, the
+second repair would meet the first one's mesh, so it is not run. Repair turns every closed
+shell outward (see Orientation), so a shell inside another is a body the wrap swallows, not
+a cavity it keeps.
 
-On the test models the field never passes that check. A shell that crosses itself
-(a statuette with 3 crossing pairs) goes through the engine still crossing, and the surface
-the field gives pinches thin parts into branches. Exact unions of separate closed shells
-are what wrapping does well today.
+There is no sampled fallback (ADR 0357): on all 31 test models the field's surface pinched
+thin parts into branches and was refused. Exact unions of separate closed shells are what
+wrapping does well today.
 
 ## Placement
 

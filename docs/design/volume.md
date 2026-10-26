@@ -144,6 +144,13 @@ mesh is never nearer than that. That is what keeps the winding number affordable
 question is asked at the true nearest point, not the carried face: near a thin wall the
 carrier hands over the wall's far side, close enough for a distance and wrong for a side.
 
+In a block the surface does cross, the winding number is not asked voxel by voxel. Two
+neighbours a voxel apart share a side when either stands further than a voxel from the
+mesh, since no surface is that near it; the block's voxels fall into a few such groups,
+and each group is asked once, at its voxel furthest off. The `field` bench's 0.4 mm
+winding field went from 400 ms to 293 ms, its wall from 520 ms to 555 ms; a 4.1 M-face
+model of 55 crossing shells at 0.2 mm from 110 s to 34 s.
+
 Most tiles are not asked at all. The walk already knows the signed distance at each tile's
 centre, and no surface is nearer a point than its distance, so a tile whose centre stands
 further from the mesh than its own radius takes that side for every voxel; the walk passes

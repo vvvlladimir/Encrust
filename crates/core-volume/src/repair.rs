@@ -1,21 +1,15 @@
 use core_geometry::{
-    Bvh, MendMethod, MendSettings, Mended, Mesh, Scalar, diagnose, mend, self_intersections,
+    Bvh, MendMethod, MendSettings, Mended, Mesh, Shell, diagnose, list_shells, mend,
+    self_intersections,
 };
 
 use serde::{Deserialize, Serialize};
 
-use crate::boolean::{Combined, solid_of};
-use crate::build::{FieldSettings, build};
+use crate::boolean::solid_of;
 use crate::cancel::Cancel;
 use crate::error::VolumeError;
-use crate::extract::extract;
-use crate::hollow::coarsening;
-use crate::sign::SignMode;
 
-/// The lattice a wrap falls back to the field on unless asked otherwise, mm.
-pub const DEFAULT_WRAP_MM: Scalar = 0.2;
-
-/// Which repair to run, the ones a field may be needed for among them.
+/// Which repair to run, on the mesh alone or wrapping it in one surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepairMethod {
     /// One of the repairs on the mesh alone.
@@ -27,15 +21,13 @@ pub enum RepairMethod {
 }
 
 /// The lengths a repair works to.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct RepairSettings {
     pub mend: MendSettings,
-    /// The lattice a wrap falls back to, mm.
-    pub wrap_mm: Scalar,
 }
 
 impl RepairMethod {
-    /// Whether the method wraps the mesh, and so may sample it on the wrap lattice.
+    /// Whether the method wraps the mesh in one outer surface.
     pub fn wraps(self) -> bool {
         matches!(self, Self::Wrap | Self::Deep)
     }
@@ -47,25 +39,14 @@ impl Default for RepairMethod {
     }
 }
 
-impl Default for RepairSettings {
-    fn default() -> Self {
-        Self {
-            mend: MendSettings::default(),
-            wrap_mm: DEFAULT_WRAP_MM,
-        }
-    }
-}
-
 /// A mesh as a repair left it, and what was done to it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Repaired {
     pub mesh: Mesh,
     /// What the repairs on the mesh alone changed, together.
     pub mended: Mended,
-    /// The lattice a wrap was sampled on, mm; `None` where it was cut exactly or not wrapped.
-    pub voxel_mm: Option<Scalar>,
-    /// False where no wrap was asked for, or the one the field gave would have left the
-    /// model worse, so only the repair stands.
+    /// False where no wrap was asked for, or the exact union could not give one, so only
+    /// the repair stands.
     pub wrapped: bool,
 }
 
@@ -85,7 +66,6 @@ pub fn repair(
         Repaired {
             mesh,
             mended,
-            voxel_mm: None,
             wrapped: false,
         }
     };
@@ -94,19 +74,22 @@ pub fn repair(
         RepairMethod::Wrap => wrap(mesh, settings, cancel),
         RepairMethod::Deep => {
             let wrapped = wrap(mesh, settings, cancel)?;
+            // Unwrapped, the mesh is the first repair's own, which a second one leaves be.
+            if !wrapped.wrapped {
+                return Ok(wrapped);
+            }
             let again = mended_alone(wrapped.mesh, MendMethod::Repair);
             Ok(Repaired {
                 mended: wrapped.mended.then(again.mended),
-                voxel_mm: wrapped.voxel_mm,
-                wrapped: wrapped.wrapped,
+                wrapped: true,
                 ..again
             })
         }
     }
 }
 
-/// `mesh` repaired, then wrapped in one outer surface: unioned exactly, or sampled into a
-/// winding field at `settings.wrap_mm`; see `docs/design/mesh-repair.md`.
+/// `mesh` repaired, then its shells unioned exactly into one outer surface; see
+/// `docs/design/mesh-repair.md`.
 pub fn wrap(
     mesh: &Mesh,
     settings: RepairSettings,
@@ -120,51 +103,35 @@ pub fn wrap(
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
-    let wrapped = if let Some(mesh) = exact(&repaired) {
-        Some(Combined {
-            mesh,
-            voxel_mm: None,
-        })
-    } else {
-        through_field(&repaired, settings.wrap_mm, cancel)?
-    };
-    Ok(match wrapped {
-        Some(wrapped) => Repaired {
-            mesh: wrapped.mesh,
-            mended,
-            voxel_mm: wrapped.voxel_mm,
-            wrapped: true,
-        },
-        None => Repaired {
-            mesh: repaired,
-            mended,
-            voxel_mm: None,
-            wrapped: false,
-        },
+    let crossings = self_intersections(&repaired, &Bvh::build(&repaired));
+    let shells = list_shells(&repaired);
+    // One sound shell crossing nothing is its own outer surface.
+    let alone = shells.len() == 1 && crossings.is_empty() && diagnose(&repaired).is_sound();
+    let united = (!alone && !crosses_itself(&shells, &crossings))
+        .then(|| exact(&repaired))
+        .flatten();
+    let wrapped = alone || united.is_some();
+    Ok(Repaired {
+        mesh: united.unwrap_or(repaired),
+        mended,
+        wrapped,
     })
 }
 
-/// The field's surface of `repaired`, or `None` where it would leave the model worse.
-fn through_field(
-    repaired: &Mesh,
-    wrap_mm: Scalar,
-    cancel: Cancel<'_>,
-) -> Result<Option<Combined>, VolumeError> {
-    let sampled = sampled(repaired, wrap_mm, cancel)?;
-    if sampled.mesh.faces.is_empty() {
-        return Err(VolumeError::NothingLeft);
+/// Whether a shell crosses itself, which the exact engine returns still crossing (ADR 0352).
+fn crosses_itself(shells: &[Shell], crossings: &[[u32; 2]]) -> bool {
+    if crossings.is_empty() {
+        return false;
     }
-    Ok(better(&sampled.mesh, repaired).then_some(sampled))
-}
-
-/// Whether a surface out of the field is worth having over `before`: sound, crossing itself
-/// less, and branching no more. The lattice can pinch a thin part into a branch.
-fn better(sampled: &Mesh, before: &Mesh) -> bool {
-    let crossings = |mesh: &Mesh| self_intersections(mesh, &Bvh::build(mesh)).len();
-    let (found, was) = (diagnose(sampled), diagnose(before));
-    found.is_sound()
-        && found.non_manifold_edges <= was.non_manifold_edges
-        && crossings(sampled) < crossings(before)
+    let mut shell_of = vec![0u32; shells.iter().map(|shell| shell.faces.len()).sum()];
+    for (index, shell) in shells.iter().enumerate() {
+        for &face in &shell.faces {
+            shell_of[face as usize] = index as u32;
+        }
+    }
+    crossings
+        .iter()
+        .any(|[one, other]| shell_of[*one as usize] == shell_of[*other as usize])
 }
 
 /// The shells unioned by the exact engine, or `None` where it refuses them or leaves a
@@ -177,27 +144,6 @@ fn exact(mesh: &Mesh) -> Option<Mesh> {
     let united = solid.mesh();
     let crosses = !self_intersections(&united, &Bvh::build(&united)).is_empty();
     (diagnose(&united).is_sound() && !crosses).then_some(united)
-}
-
-/// The surface of the winding field, which reads through holes and crossings alike.
-fn sampled(mesh: &Mesh, voxel_mm: Scalar, cancel: Cancel<'_>) -> Result<Combined, VolumeError> {
-    let bvh = Bvh::build(mesh);
-    let (field, voxel_mm) = coarsening(voxel_mm, |voxel_mm| {
-        let settings = FieldSettings {
-            voxel_mm,
-            sign: SignMode::Winding,
-            ..FieldSettings::default()
-        };
-        build(mesh, &bvh, &settings, cancel)
-    })?;
-    let mesh = extract(&field, cancel);
-    if cancel.asked() {
-        return Err(VolumeError::Cancelled);
-    }
-    Ok(Combined {
-        mesh,
-        voxel_mm: Some(voxel_mm),
-    })
 }
 
 #[cfg(test)]

@@ -73,18 +73,15 @@ fn repaired(
             seam_tolerance_mm: args.seam_tolerance,
             smallest_shell_mm2: args.smallest_shell,
         },
-        wrap_mm: args.wrap_mm,
     };
     let method = core_volume::RepairMethod::from(method);
     let done =
         repair(mesh, method, settings, Cancel::never()).context("could not repair the model")?;
     *mesh = done.mesh;
-    let wrapped = method
-        .wraps()
-        .then_some(match (done.wrapped, done.voxel_mm) {
-            (false, _) => Wrapped::LeftOut,
-            (true, None) => Wrapped::Exactly,
-            (true, Some(voxel_mm)) => Wrapped::OnLattice(voxel_mm),
-        });
+    let wrapped = method.wraps().then_some(if done.wrapped {
+        Wrapped::Exactly
+    } else {
+        Wrapped::LeftOut
+    });
     Ok((done.mended, wrapped))
 }
