@@ -3,7 +3,7 @@ use super::holes::{drilled_ball, hollowed_ball};
 use super::paint::{paint, paint_after};
 use crate::camera::OrbitCamera;
 use crate::render::gpu::{CutDraw, CutLine, DrainCut, ExposureBand, Floor, ModelDraw, TrapBox};
-use crate::render::vertex::{ModelInstance, NOT_MARKED};
+use crate::render::vertex::{LineVertex, ModelInstance, NOT_MARKED, WideLine};
 use crate::ui::theme;
 use core_geometry::{Mesh, Transform, Vec3};
 use core_volume::CUT_WEIGHT;
@@ -156,4 +156,8 @@ pub(super) struct Marks<'a> {
     /// Whether the models are drawn seen through; see `docs/design/viewport.md`.
     pub(super) xray: bool,
     pub(super) floor: Option<Floor>,
+    /// Lines in plate millimetres, as the plate's outline and an open edge are drawn.
+    pub(super) lines: &'a [LineVertex],
+    /// Lines drawn wider than those, as a tool marks an edge.
+    pub(super) wide_lines: &'a [WideLine],
 }

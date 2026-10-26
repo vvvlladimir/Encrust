@@ -178,8 +178,8 @@ fn broken(stack: &mut Stack, window: &mut Window) {
     });
     for (id, _, _) in &offered {
         if repair {
-            let repairs = &mut window.doc.repairs;
-            repairs.start(&window.doc.scene, *id, &mut window.machine.status);
+            let (repairs, state) = (&mut window.doc.repairs, window.tools.repair.state.plain());
+            repairs.start(&window.doc.scene, *id, state, &mut window.machine.status);
         } else if keep {
             window.doc.repairs.keep_as_it_is(*id);
         }
@@ -324,6 +324,12 @@ fn changed_at(ctx: &egui::Context, status: &Status, now: f64) -> f64 {
             now
         }
     }
+}
+
+/// Shows the message for its moment again, though it is the one shown before: a second
+/// click that misses says so as the first did.
+pub(super) fn show_again(ctx: &egui::Context) {
+    ctx.data_mut(|data| data.remove_temp::<(u64, f64)>(Id::new(SEEN)));
 }
 
 /// Counts the message's moment from `now`.

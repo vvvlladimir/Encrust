@@ -74,6 +74,12 @@ pub struct EdgeCache {
     adjacency: Option<(usize, Arc<Adjacency>)>,
 }
 
+impl std::fmt::Debug for EdgeCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EdgeCache").finish_non_exhaustive()
+    }
+}
+
 impl EdgeCache {
     pub fn of(&mut self, mesh: &Arc<Mesh>) -> Arc<Adjacency> {
         let key = Arc::as_ptr(mesh) as usize;

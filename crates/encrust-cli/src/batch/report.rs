@@ -15,6 +15,11 @@ use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
 use crate::stage::Part;
 
+mod import;
+
+pub use import::{Fit, Model, Repair};
+use import::{fit_of, model_of, repair_of};
+
 /// One model's run, from its file to what came out.
 #[derive(Debug, Serialize)]
 pub struct ModelReport {
@@ -128,33 +133,6 @@ pub enum Status {
     /// a model that does not fit the plate.
     Unclean,
     Failed,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Model {
-    pub vertices: usize,
-    pub faces: usize,
-    pub size_mm: [Scalar; 3],
-    pub volume_mm3: Scalar,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Repair {
-    pub vertices_merged: usize,
-    pub faces_removed: usize,
-    pub faces_flipped: usize,
-    pub closed: bool,
-    pub boundary_edges: usize,
-    pub shells: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Fit {
-    pub printer: String,
-    pub fits: bool,
-    pub overflow_mm: [Scalar; 3],
-    /// How far the model reaches past the envelope where it stands, per axis.
-    pub outside_mm: [Scalar; 3],
 }
 
 #[derive(Debug, Serialize)]
@@ -479,46 +457,6 @@ impl Summary {
             path.display()
         )
     }
-}
-
-fn model_of(import: &ImportReport) -> Model {
-    let size = import.stats.size();
-    Model {
-        vertices: import.stats.vertices,
-        faces: import.stats.faces,
-        size_mm: [size.x, size.y, size.z],
-        volume_mm3: import.stats.volume,
-    }
-}
-
-fn repair_of(import: &ImportReport) -> Repair {
-    Repair {
-        vertices_merged: import.welded.vertices_merged,
-        faces_removed: import.welded.faces_removed() + import.doubled,
-        faces_flipped: import
-            .orientation
-            .as_ref()
-            .map_or(0, |found| found.flipped_faces),
-        closed: import
-            .diagnostics
-            .as_ref()
-            .is_some_and(core_geometry::MeshDiagnostics::is_closed),
-        boundary_edges: import
-            .diagnostics
-            .as_ref()
-            .map_or(0, |found| found.boundary_edges),
-        shells: import.diagnostics.as_ref().map_or(0, |found| found.shells),
-    }
-}
-
-fn fit_of(import: &ImportReport) -> Option<Fit> {
-    let fit = import.fit.as_ref()?;
-    Some(Fit {
-        printer: fit.printer.clone(),
-        fits: fit.fits(),
-        overflow_mm: [fit.overflow.x, fit.overflow.y, fit.overflow.z],
-        outside_mm: [fit.outside.x, fit.outside.y, fit.outside.z],
-    })
 }
 
 pub fn write<T: Serialize>(path: &Path, report: &T) -> Result<()> {

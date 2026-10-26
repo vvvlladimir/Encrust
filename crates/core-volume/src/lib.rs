@@ -20,6 +20,7 @@ mod model;
 mod parts;
 mod plug;
 mod relief;
+mod repair;
 mod scatter;
 mod sdf;
 mod shells;
@@ -51,6 +52,7 @@ pub use relief::{
     AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_painted,
     press_painted_tiled, press_reusing, press_tiled, press_tiled_reusing,
 };
+pub use repair::{RepairMethod, RepairSettings, Repaired, repair, wrap};
 pub use sdf::Sdf;
 pub use sign::SignMode;
 pub use stack::{Panel, StackField};

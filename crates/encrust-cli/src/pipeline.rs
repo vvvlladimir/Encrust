@@ -7,12 +7,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
-use core_geometry::{Mesh, Scalar, Welded, diagnose, orient_outward, remove_duplicate_faces, weld};
+use core_geometry::{Bvh, Mesh, Scalar, self_intersections, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
+use printer_profiles::{Compensation, MaterialProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
@@ -20,14 +20,15 @@ use crate::hollowing::{self, HollowArgs, HollowReport};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
-use crate::report::{FitCheck, ImportReport};
+use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
 use crate::sliced_file::{format_of, write_plate};
 use crate::stage::{self, Part, Staged};
-use crate::stats::MeshStats;
 
+mod checked;
 mod place;
 mod relief;
+use checked::checked;
 pub use place::{OrientSummary, orient_settings};
 use place::{centred, place};
 use relief::press_relief;
@@ -114,7 +115,7 @@ pub fn import(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    let import = checked(&mut mesh, input, welded, args, profile)?;
+    let import = checked(&mut mesh, input, welded, args, profile, false)?;
     if talk {
         print!("{import}");
     }
@@ -370,8 +371,22 @@ fn talk_mapping(loaded: &Loaded) {
     );
 }
 
-/// Loads and repairs a model without slicing it, for `inspect`.
-pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<ImportReport> {
+/// What `inspect` counts beyond what import always reports.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Inspect {
+    /// The pairs of faces that cross.
+    pub intersections: bool,
+    /// The shells, as import leaves the model, which is how `--drop-shells` numbers them.
+    pub shells: bool,
+}
+
+/// Loads and repairs a model without slicing it, for `inspect`, counting what `asked` names.
+pub fn inspect(
+    input: &Path,
+    args: &ImportArgs,
+    chosen: &Chosen,
+    asked: Inspect,
+) -> Result<ImportReport> {
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
@@ -381,39 +396,11 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    checked(&mut mesh, input, welded, args, profile)
-}
-
-/// Drops the doubled faces, fixes the winding and measures the model, unless validation
-/// is off, and says what import found.
-fn checked(
-    mesh: &mut Mesh,
-    input: &Path,
-    welded: Welded,
-    args: &ImportArgs,
-    profile: Option<&PrinterProfile>,
-) -> Result<ImportReport> {
-    // Before the orientation fix: a face laid over another reads as a branch to it.
-    let doubled = if args.no_validate {
-        0
-    } else {
-        remove_duplicate_faces(mesh).len()
-    };
-    let orientation = (!args.no_validate).then(|| orient_outward(mesh));
-    let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
-    let shells = diagnostics.as_ref().map(|found| found.shells);
-    let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
-    let fit = profile.map(|p| FitCheck::of(&stats, p));
-
-    Ok(ImportReport {
-        path: input.to_path_buf(),
-        stats,
-        welded,
-        doubled,
-        diagnostics,
-        orientation,
-        fit,
-    })
+    let mut report = checked(&mut mesh, input, welded, args, profile, asked.shells)?;
+    if asked.intersections {
+        report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
+    }
+    Ok(report)
 }
 
 /// What an adaptive run is allowed to do: the layer height becomes its ceiling.

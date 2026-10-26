@@ -16,7 +16,8 @@ pub use widgets::{
     dialog_head, duration, field_label, filter_chip, focus_ring, hairline, heading, help_mark,
     hint, icon_button, icon_toggle, inline_button, issue_row, list, list_row, meta, nested, notice,
     number_field, number_row, picker, picker_row, primary_button, progress_bar, quiet_button,
-    rail_button, readings, secondary_button, section, section_with_action, section_with_switch,
-    stats, stepped_row, subheading, subheading_with_switch, summary_button, swatch, switch,
-    text_box, text_row, toggle_button, tone, two_lines, unit_field, vertical_hairline, zone_button,
+    rail_button, readings, secondary_button, section, section_with_action, section_with_actions,
+    section_with_switch, stats, stepped_row, subheading, subheading_with_switch, summary_button,
+    swatch, switch, text_box, text_row, toggle_button, tone, two_lines, unit_field,
+    vertical_hairline, zone_button,
 };

@@ -23,13 +23,25 @@ pub struct InspectCommand {
     /// Exit with code 3 when the model has defects or does not fit.
     #[arg(long)]
     pub strict: bool,
+
+    /// Count the pairs of faces that cross each other, which only wrapping mends.
+    #[arg(long)]
+    pub intersections: bool,
+
+    /// List the shells, numbered as --drop-shells takes them.
+    #[arg(long)]
+    pub shells: bool,
 }
 
 impl InspectCommand {
     pub fn run(&self, global: &GlobalArgs) -> Result<Exit> {
         let chosen = profiles::resolve(&self.profile.selection())?;
         let started = Instant::now();
-        let report = pipeline::inspect(&self.input, &self.import, &chosen)?;
+        let asked = pipeline::Inspect {
+            intersections: self.intersections,
+            shells: self.shells,
+        };
+        let report = pipeline::inspect(&self.input, &self.import, &chosen, asked)?;
         if global.json {
             json::print(&ModelReport::inspected(&report, started.elapsed()))?;
         } else if !global.quiet {

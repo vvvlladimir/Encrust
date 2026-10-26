@@ -178,6 +178,7 @@ cut-keep-upper = Upper
 
 tool-select = Select
 tool-measure = Measure
+tool-repair = Repair
 tool-hollow = Hollow
 tool-drain = Drain
 tool-cut = Cut
@@ -1722,6 +1723,7 @@ inspector-about-drain = Let resin out of a hollow model.
 inspector-about-cut = Split a model along a plane.
 inspector-about-relief = Press a texture into a model's surface, write text on it, or combine models into one.
 inspector-about-supports = Hold up what hangs over nothing.
+inspector-about-repair = What is wrong with the surface of the models, and the repair that closes, turns or wraps it.
 inspector-about-check = What will fail on the machine, with the layer it fails on.
 inspector-about-print-settings = How this plate is cut and exposed.
 
@@ -1777,6 +1779,135 @@ repair-dropped-faces =
         [one] dropped { $count } face drawn twice
        *[other] dropped { $count } faces drawn twice
     }
+repair-stitched-seams =
+    { $count ->
+        [one] stitched { $count } seam
+       *[other] stitched { $count } seams
+    }
+repair-dropped-shells =
+    { $count ->
+        [one] dropped { $count } speck enclosing nothing
+       *[other] dropped { $count } specks enclosing nothing
+    }
+
+repair-cancelled = Repair cancelled
+repair-failed = { $name } could not be repaired: { $reason }
+repair-turned-faces =
+    { $count ->
+        [one] turned { $count } face
+       *[other] turned { $count } faces
+    }
+repair-wrapped = wrapped in one surface
+repair-not-wrapped = not wrapped, as the shells do not union exactly
+
+## panels/inspector/repair.rs
+
+repair-mode-model = Model: find what is wrong and repair it
+repair-mode-faces = Faces: turn, drop and bridge by hand
+repair-shells-title = Shells
+repair-shells-one = Pick one model to list its shells.
+repair-shells-note = Every part of the model whose faces join each other. A press on one picks it and brings the camera to it; the eye hides it from view while this list is open, to see what lies behind or inside it; the bin drops it at once. The buttons in the heading pick every shell under a hundredth of the largest one's area, or turn the pick over.
+repair-listing = Listing the shells
+repair-shell = Shell { $number }
+repair-shell-faces =
+    { $count ->
+        [one] { $count } face
+       *[other] { $count } faces
+    }
+repair-shell-faces-open =
+    { $count ->
+        [one] { $count } face, open
+       *[other] { $count } faces, open
+    }
+repair-drop-shell = Drop this shell
+repair-drop-shells =
+    { $count ->
+        [one] Drop { $count } shell
+       *[other] Drop { $count } shells
+    }
+repair-pick-small = Pick the small shells
+repair-pick-invert = Invert the pick
+repair-pick = Pick
+repair-pick-faces = Faces
+repair-pick-edges = Edges
+repair-pick-faces-note = Drag the brush over a model to pick faces, with alt to let them go; Cmd and Shift together pick a whole surface, as far as it turns no more than the angle. Flip turns them over, Delete drops them.
+repair-pick-edges-note = Click two open edges, drawn round the holes, and Bridge lays faces between them, wound as the faces beside them. A third click lets the first go.
+repair-brush = Brush
+repair-brush-radius = Radius
+repair-flood-angle = Surface angle
+repair-picked = Picked
+repair-picked-model = Model
+repair-picked-faces = Faces
+repair-picked-edges = Open edges
+repair-of-two = { $count } of 2
+repair-nothing-picked = Nothing picked.
+repair-no-edge-near = No open edge near the pointer: click on the outline of a hole
+repair-no-open-edges = No open edges: the models are closed, with no hole to bridge
+repair-finding-edges = Finding the open edges
+repair-clear-picks = Clear
+repair-flip-faces = Flip
+repair-delete-faces = Delete
+repair-bridge = Bridge
+repair-pick-faces-first = Pick faces with the brush first.
+repair-pick-two-edges = Pick two open edges first.
+repair-editing = Changing the faces
+edit-editing = Changing the faces of { $name }
+edit-flipped =
+    { $count ->
+        [one] Turned { $count } face of { $name }
+       *[other] Turned { $count } faces of { $name }
+    }
+edit-removed =
+    { $count ->
+        [one] Dropped { $count } face of { $name }
+       *[other] Dropped { $count } faces of { $name }
+    }
+edit-bridged =
+    { $count ->
+        [one] Bridged with { $count } face on { $name }
+       *[other] Bridged with { $count } faces on { $name }
+    }
+edit-dropped-shells =
+    { $count ->
+        [one] Dropped { $count } shell of { $name }
+       *[other] Dropped { $count } shells of { $name }
+    }
+edit-bridge-not-open = One of the edges is not open any more, so there is nothing to bridge
+edit-bridge-same = An edge cannot be bridged to itself
+edit-bridge-in-line = The two edges lie on one line, so no face spans them
+job-thread-stopped-edit = the thread changing the faces stopped without finishing
+repair-found = Found
+repair-found-note = What import found in the models the tool works on: those picked, or every model on the plate. A press on a row marks it on the models and brings the camera to the first of them, each press after to the next, and the press after the last puts the marks away. Faces crossing each other are counted by the magnifier, which takes a while on a large model.
+repair-nothing-found = Nothing to repair.
+repair-count-crossings = Count crossing faces
+repair-nothing-on-plate = No model on the plate.
+repair-holes = Holes
+repair-open-edges = Open edges
+repair-flat-faces = Faces without area
+repair-doubled-faces = Faces drawn twice
+repair-shells = Shells
+repair-crossing-faces = Crossing faces
+repair-uncounted = –
+repair-counting = …
+repair-method = Method
+repair-method-repair = Repair
+repair-method-close-holes = Close holes
+repair-method-close-small-holes = Close small holes
+repair-method-turn = Turn faces
+repair-method-wrap = Wrap
+repair-method-deep = Deep repair
+repair-method-repair-note = Stitches seams, drops faces drawn twice and specks enclosing nothing, closes every hole and turns the patches outward. Leaves the model as it came if that would leave more wrong.
+repair-method-close-holes-note = Closes every hole and turns the patches outward, and nothing else.
+repair-method-close-small-holes-note = Closes only the holes one missing face leaves, and turns nothing.
+repair-method-turn-note = Turns the faces wound the wrong way so every shell faces outward, and adds nothing.
+repair-method-wrap-note = Repairs, then wraps the model in one outer surface: overlapping shells are joined exactly, and a part standing wholly inside another is lost in it. A hollow inside keeps its cavity. Where shells cannot be joined, as where one crosses itself, only the repair is kept.
+repair-method-deep-note = Repairs, wraps and repairs again, for a model the other methods leave broken. As with Wrap, a part wholly inside another is lost in it.
+repair-settings = Settings
+repair-settings-note = A vertex standing off an open edge within the seam tolerance is stitched into it. A shell enclosing nothing with less area than the smallest speck is dropped.
+repair-seam-tolerance = Seam tolerance
+repair-smallest-shell = Smallest speck
+repair-repair = Repair
+repair-repairing = Repairing
 
 ## panels/view_cube.rs
 
@@ -1876,7 +2007,7 @@ job-thread-stopped-drainage = the drainage thread stopped without finishing
 
 ## job/repair.rs
 
-job-thread-stopped-repair = the thread repairing { $name } stopped without finishing
+job-thread-stopped-repair = the repair thread stopped without finishing
 job-repairing = Repairing { $name }
 
 ## arrange.rs

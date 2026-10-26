@@ -2,71 +2,20 @@ use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use core_geometry::Vec3;
 use egui::{Color32, RichText};
 
+use crate::check::{Place, Stage};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::preview::on_plate;
+use crate::panels::section::{cut_height, height_range};
+use crate::preview::{on_plate, plate_fingerprint};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::supports::ISLANDS_GROUP;
-use crate::ui::{
-    Segment, Segmented, describe, focus_ring, hint, icon, issue_row, kept, list, readings,
-    secondary_button, section, theme,
-};
-use crate::workspace::Tool;
+use crate::ui::{describe, focus_ring, hint, icon, readings, secondary_button, section, theme};
+use crate::workspace::{Mode, Tool};
 
-/// Rows listed before the rest are only counted: a stack with hundreds of islands needs
-/// supports, not scrolling.
-const LISTED: usize = 200;
+mod issues;
 
-/// Which kind of issue the list shows.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-enum Filter {
-    #[default]
-    All,
-    Islands,
-    Levers,
-    Peel,
-    Cups,
-    Thin,
-}
-
-impl Filter {
-    fn of(kind: &RiskKind) -> Self {
-        match kind {
-            RiskKind::Island { .. } | RiskKind::Floating { .. } => Self::Islands,
-            RiskKind::Lever { .. } => Self::Levers,
-            RiskKind::Peel { .. } => Self::Peel,
-            RiskKind::SuctionCup { .. } => Self::Cups,
-            RiskKind::Thin { .. } => Self::Thin,
-        }
-    }
-
-    fn name(self) -> String {
-        match self {
-            Self::All => tr!("check-filter-all"),
-            Self::Islands => tr!("check-filter-islands"),
-            Self::Levers => tr!("check-filter-levers"),
-            Self::Peel => tr!("check-filter-peel"),
-            Self::Cups => tr!("check-filter-cups"),
-            Self::Thin => tr!("check-filter-thin"),
-        }
-    }
-
-    fn admits(self, kind: &RiskKind) -> bool {
-        matches!(
-            (self, kind),
-            (Self::All, _)
-                | (
-                    Self::Islands,
-                    RiskKind::Island { .. } | RiskKind::Floating { .. }
-                )
-                | (Self::Levers, RiskKind::Lever { .. })
-                | (Self::Peel, RiskKind::Peel { .. })
-                | (Self::Cups, RiskKind::SuctionCup { .. })
-                | (Self::Thin, RiskKind::Thin { .. })
-        )
-    }
-}
+use issues::{Filter, explain, filter, issue_name, listing, rows};
 
 /// What the stack will fail on: the verdict, a way to take the islands out, every issue a
 /// click away from its layer, and what pulls hardest on the film.
@@ -83,8 +32,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     };
 
     section(ui, &tr!("check-verdict"), None, |ui| {
-        if let Some(layer) = verdict(ui, worst.as_ref()) {
-            go_to(window.machine, layer);
+        if verdict(ui, worst.as_ref())
+            && let Some(worst) = worst
+        {
+            go_to(window, &[worst]);
         }
         islands_action(ui, window.machine, &risks, removed);
         let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
@@ -107,8 +58,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         section(ui, &tr!("check-issues"), Some(&found), |ui| {
             describe(ui, &tr!("check-issues-help"));
             let filter = filter(ui, &risks);
-            if let Some(layer) = listing(ui, window.machine.preview.layer(), &risks, filter) {
-                go_to(window.machine, layer);
+            if let Some(picked) = listing(ui, window.machine.preview.layer(), &risks, filter) {
+                go_to(window, &picked);
             }
         });
     }
@@ -232,8 +183,8 @@ pub fn tint(risk: &Risk) -> Color32 {
 }
 
 /// The worst issue, where it is and what to do about it, on a card that goes there when
-/// clicked. Answers the layer to go to.
-fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
+/// clicked. Answers whether it was clicked.
+fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> bool {
     let colors = theme::colors();
     let (glyph, tint, wash, title, why) = match worst {
         None => (
@@ -281,14 +232,16 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
                 });
             });
         });
-    let layer = worst.map(|risk| risk.layer)?;
+    if worst.is_none() {
+        return false;
+    }
     let response = card
         .response
         .interact(egui::Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
     focus_ring(ui, &response, theme::R_SURFACE);
-    response.clicked().then_some(layer)
+    response.clicked()
 }
 
 /// Taking every island out of the written file, or putting them back.
@@ -373,312 +326,40 @@ fn removed_block(ui: &mut egui::Ui, removed: usize) {
         });
 }
 
-/// Every issue of one kind on one layer, which is one row of the list.
-struct Row {
-    layer: usize,
-    filter: Filter,
-    /// What stood on an island taken out, rather than an island itself.
-    hanging: bool,
-    tint: Color32,
-    count: usize,
-    area_mm2: f32,
-    /// The worst reading among them: stress for a lever, force for a peel, resin held
-    /// for a cup, and the inverse of the width for a thin section.
-    worst: f32,
-    lever_mm: f32,
-    width_mm: f32,
-}
-
-/// The issues folded into rows. They arrive sorted by layer, and within a layer by kind.
-fn rows(risks: &[Risk]) -> Vec<Row> {
-    let mut rows: Vec<Row> = Vec::new();
-    for risk in risks {
-        let filter = Filter::of(&risk.kind);
-        let hanging = matches!(risk.kind, RiskKind::Floating { .. });
-        let (area_mm2, worst, lever_mm, width_mm) = match risk.kind {
-            RiskKind::Island { area_mm2 } | RiskKind::Floating { area_mm2 } => {
-                (area_mm2, 0.0, 0.0, 0.0)
-            }
-            RiskKind::Lever {
-                stress_mpa,
-                lever_mm,
-                ..
-            } => (0.0, stress_mpa, lever_mm, 0.0),
-            RiskKind::Peel { force_n } => (0.0, force_n, 0.0, 0.0),
-            RiskKind::SuctionCup {
-                area_mm2,
-                volume_mm3,
-            } => (area_mm2, volume_mm3, 0.0, 0.0),
-            RiskKind::Thin { width_mm } => (0.0, 1.0 / width_mm.max(f32::EPSILON), 0.0, width_mm),
-        };
-        match rows.last_mut() {
-            Some(row)
-                if row.layer == risk.layer && row.filter == filter && row.hanging == hanging =>
-            {
-                row.count += 1;
-                row.area_mm2 += area_mm2;
-                if worst > row.worst {
-                    (row.worst, row.lever_mm, row.width_mm) = (worst, lever_mm, width_mm);
-                }
-            }
-            _ => rows.push(Row {
-                layer: risk.layer,
-                filter,
-                hanging,
-                tint: tint(risk),
-                count: 1,
-                area_mm2,
-                worst,
-                lever_mm,
-                width_mm,
-            }),
-        }
-    }
-    rows
-}
-
-/// The chips that narrow the list to one kind, shown only when there is more than one
-/// kind to choose between.
-fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
-    let id = ui.id().with("issue-filter");
-    let tally = |filter: Filter| {
-        risks
-            .iter()
-            .filter(|risk| filter.admits(&risk.kind))
-            .count()
+/// Goes to the layer `risks` lie on: the slider there, the view cut at it, and the camera
+/// flown to them ringed on the cut.
+fn go_to(window: &mut Window, risks: &[Risk]) {
+    let Some(first) = risks.first() else {
+        return;
     };
-    let kinds = [
-        Filter::Islands,
-        Filter::Levers,
-        Filter::Peel,
-        Filter::Cups,
-        Filter::Thin,
-    ];
-    let present: Vec<(Filter, usize)> = kinds
-        .into_iter()
-        .map(|filter| (filter, tally(filter)))
-        .filter(|(_, count)| *count > 0)
-        .collect();
-    let mut chosen = kept::get::<Filter>(ui.ctx(), id)
-        .filter(|chosen| present.iter().any(|(filter, _)| filter == chosen))
-        .unwrap_or_default();
-    if present.len() < 2 {
-        return Filter::All;
+    window.tools.check.clear();
+    let preview = &mut window.machine.preview;
+    preview.set_layer(first.layer);
+    preview.set_playing(false);
+    let Some(layer_mm) = preview.section_z() else {
+        return;
+    };
+    if *window.mode == Mode::Prepare
+        && let Some((_, top)) = height_range(window.doc)
+    {
+        // As the strip has it, a cut at the top or past it is no cut.
+        window.view.section.height_mm = Some(layer_mm).filter(|z| *z < top);
+        window.view.section.playing = false;
     }
-
-    let labels: Vec<(Filter, String)> = std::iter::once((Filter::All, Filter::All.name()))
-        .chain(
-            present
-                .iter()
-                .map(|(filter, count)| (*filter, format!("{} {count}", filter.name()))),
-        )
-        .collect();
-    let segments: Vec<Segment<'_, Filter>> = labels
+    let Some(settings) = window.machine.slicing.raster_settings() else {
+        return;
+    };
+    let places: Vec<Place> = risks
         .iter()
-        .map(|(filter, label)| Segment::new(*filter, label.as_str()))
+        .map(|risk| Place::of(risk, &settings))
         .collect();
-    Segmented::new(&segments)
-        .width(ui.available_width())
-        .show(ui, &mut chosen);
-    kept::set(ui.ctx(), id, &chosen);
-    chosen
-}
-
-/// The rows `filter` admits. Answers the layer of the row clicked.
-fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> Option<usize> {
-    let rows: Vec<Row> = rows(risks)
-        .into_iter()
-        .filter(|row| filter == Filter::All || row.filter == filter)
-        .collect();
-    let picked = list(ui, |ui| {
-        let mut picked = None;
-        for row in rows.iter().take(LISTED) {
-            let place = tr!("check-layer", layer = row.layer + 1);
-            let selected = row.layer == shown;
-            if issue_row(ui, row.tint, &place, &detail(row), selected).clicked() {
-                picked = Some(row.layer);
-            }
-        }
-        picked
-    });
-    if rows.len() > LISTED {
-        hint(ui, &tr!("check-more-layers", count = rows.len() - LISTED));
-    }
-    picked
-}
-
-fn go_to(machine: &mut Machine, layer: usize) {
-    machine.preview.set_layer(layer);
-    machine.preview.set_playing(false);
-}
-
-/// What one row holds, short enough for the right of it.
-fn detail(row: &Row) -> String {
-    if row.hanging {
-        let area = format!("{:.2}", row.area_mm2);
-        return tr!("check-row-hanging", area = area);
-    }
-    let count = row.count;
-    match (row.filter, count) {
-        (Filter::Islands, _) => tr!(
-            "check-row-islands",
-            count = count,
-            area = format!("{:.2}", row.area_mm2)
-        ),
-        (Filter::Levers, 1) => tr!(
-            "check-row-lever",
-            lever = format!("{:.1}", row.lever_mm),
-            stress = format!("{:.0}", row.worst)
-        ),
-        (Filter::Levers, _) => tr!(
-            "check-row-levers",
-            count = count,
-            stress = format!("{:.0}", row.worst)
-        ),
-        (Filter::Cups, 1) => tr!("check-row-cup", area = format!("{:.0}", row.area_mm2)),
-        (Filter::Cups, _) => tr!(
-            "check-row-cups",
-            count = count,
-            area = format!("{:.1}", row.area_mm2)
-        ),
-        (Filter::Thin, _) => tr!(
-            "check-row-thin",
-            count = count,
-            width = format!("{:.2}", row.width_mm)
-        ),
-        _ => tr!("check-row-peel", force = format!("{:.0}", row.worst)),
-    }
-}
-
-/// What the worst issue is, named plainly rather than as a failure.
-fn issue_name(risk: &Risk) -> String {
-    match risk.kind {
-        RiskKind::Island { .. } => tr!("check-issue-island"),
-        RiskKind::Floating { .. } => tr!("check-issue-hanging"),
-        RiskKind::Lever { .. } => tr!("check-issue-lever"),
-        RiskKind::Peel { .. } => tr!("check-issue-peel"),
-        RiskKind::SuctionCup { .. } => tr!("check-issue-cup"),
-        RiskKind::Thin { .. } => tr!("check-issue-thin"),
-    }
-}
-
-/// Why the worst issue fails the print, in a sentence.
-fn explain(risk: &Risk) -> String {
-    match risk.kind {
-        RiskKind::Floating { area_mm2 } => {
-            tr!("check-explain-hanging", area = format!("{area_mm2:.2}"))
-        }
-        RiskKind::Island { area_mm2 } => {
-            tr!("check-explain-island", area = format!("{area_mm2:.2}"))
-        }
-        RiskKind::Lever {
-            stress_mpa,
-            lever_mm,
-            neck_mm2,
-        } => tr!(
-            "check-explain-lever",
-            neck = format!("{neck_mm2:.2}"),
-            stress = format!("{stress_mpa:.0}"),
-            lever = format!("{lever_mm:.1}")
-        ),
-        RiskKind::Peel { force_n } => {
-            tr!("check-explain-peel", force = format!("{force_n:.0}"))
-        }
-        RiskKind::SuctionCup {
-            area_mm2,
-            volume_mm3,
-        } => tr!(
-            "check-explain-cup",
-            area = format!("{area_mm2:.0}"),
-            volume = format!("{:.2}", volume_mm3 / 1000.0)
-        ),
-        RiskKind::Thin { width_mm } => {
-            tr!("check-explain-thin", width = format!("{width_mm:.2}"))
-        }
-    }
+    let stage = Stage {
+        plate: plate_fingerprint(&window.doc.scene),
+        cut_mm: cut_height(*window.mode, &window.view.section, &window.machine.preview),
+    };
+    window.tools.check.go(&places, layer_mm, stage, tint(first));
 }
 
 fn removed_note(removed: usize) -> Option<String> {
     (removed > 0).then(|| tr!("check-removed", count = removed))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn island(layer: usize, area_mm2: f32) -> Risk {
-        Risk {
-            layer,
-            at_mm: [0.0; 2],
-            kind: RiskKind::Island { area_mm2 },
-        }
-    }
-
-    #[test]
-    fn islands_on_one_layer_are_one_row_with_their_area_summed() {
-        let peel = Risk {
-            layer: 515,
-            at_mm: [0.0; 2],
-            kind: RiskKind::Peel { force_n: 60.0 },
-        };
-        let risks = [
-            island(464, 0.01),
-            island(464, 0.01),
-            island(515, 1.8),
-            island(515, 2.5),
-            peel,
-        ];
-        let rows = rows(&risks);
-        let described: Vec<(usize, String)> = rows
-            .iter()
-            .map(|row| (row.layer + 1, detail(row)))
-            .collect();
-        assert_eq!(
-            described,
-            vec![
-                (465, "2 islands · 0.02 mm2".to_owned()),
-                (516, "2 islands · 4.30 mm2".to_owned()),
-                (516, "peel · 60 N".to_owned()),
-            ]
-        );
-    }
-
-    #[test]
-    fn what_hangs_over_a_removed_island_is_its_own_row_and_asks_for_supports() {
-        let hanging = Risk {
-            layer: 40,
-            at_mm: [0.0; 2],
-            kind: RiskKind::Floating { area_mm2: 3.5 },
-        };
-        let rows = rows(&[island(40, 1.0), hanging]);
-        let described: Vec<String> = rows.iter().map(detail).collect();
-        assert_eq!(
-            described,
-            ["island · 1.00 mm2", "hangs over nothing · 3.50 mm2"]
-        );
-        assert!(
-            Filter::Islands.admits(&hanging.kind),
-            "Support every island takes it in"
-        );
-        assert_eq!(issue_name(&hanging), "Part left hanging");
-    }
-
-    #[test]
-    fn a_cup_and_a_thin_section_read_as_what_they_measure() {
-        let cup = Risk {
-            layer: 9,
-            at_mm: [0.0; 2],
-            kind: RiskKind::SuctionCup {
-                area_mm2: 25.0,
-                volume_mm3: 1800.0,
-            },
-        };
-        let thin = Risk {
-            layer: 20,
-            at_mm: [0.0; 2],
-            kind: RiskKind::Thin { width_mm: 0.08 },
-        };
-        let described: Vec<String> = rows(&[cup, thin]).iter().map(detail).collect();
-        assert_eq!(described, ["suction cup · 25 mm2", "thin · 0.08 mm"]);
-    }
 }

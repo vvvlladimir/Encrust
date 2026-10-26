@@ -51,7 +51,7 @@ on `accent`.
 `theme::Scene` is the other half of the tokens: the cool resin of the model (`object`), the
 warm grey `support` and a `support_tint` per group after it, `selected`, `unsound`,
 the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
-with, `painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
+with, `painted` and `blocked`, the `fault` the Repair tool marks the finding in view with and the darker `fault_rest` the others, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
 volume, the `gizmo` handles, the plate's `grid_minor` and `grid_major`, the translucent
 `plate_border` and `volume`, the `plate` the plate is filled with, the dashed `section_frame`, the three `plate_axis` arrows, the
@@ -59,8 +59,9 @@ volume, the `gizmo` handles, the plate's `grid_minor` and `grid_major`, the tran
 fill, with the directions the two lights travel. It is separate from the `Palette` because
 none of it is window chrome and the luminance ladder above does not apply.
 
-`SEEN_THROUGH` is the one number beside them: how much of itself a surface keeps at most
-when the viewport is drawing the models through, which is the x-ray view in `viewport.md`.
+Two numbers stand beside them: `SEEN_THROUGH`, how much of itself a surface keeps at most
+when the viewport is drawing the models through, which is the x-ray view in `viewport.md`;
+and `MARK_LINE_W`, the points across an edge a tool marks on a model.
 
 It reaches the GPU through `theme::gamma`, which is `Color32::to_normalized_gamma_f32` and
 deliberately does **not** decode to linear: `egui-wgpu` writes gamma to a non-sRGB target
@@ -100,7 +101,7 @@ paints from tokens only.
 | Widget | What it is |
 |---|---|
 | `section` | An inspector block: a caret and title that fold it, optional hint, body, hairline under it; rows spaced `ITEM_GAP` |
-| `section_with_action` | A `section` with one icon button in its heading, such as a reset |
+| `section_with_action`, `section_with_actions` | A `section` with one icon button in its heading, such as a reset, or a few, left to right |
 | `subheading` | A group of fields inside a block, named in the quietest tone |
 | `describe` | What a block or a setting is for, kept out of the panel and read from a question mark beside the block's title |
 | `nested` | What a switch reveals, set in under it with a rule down its left edge |
@@ -253,7 +254,7 @@ height: a switch into Preview parks on
 the layer nearest where Prepare was cut, and a switch back cuts Prepare at the layer shown.
 
 `workspace::Tool` is what a click in the viewport does and what the inspector shows, in
-every view. `Tool::RAIL` groups eight of them as Place, Modify and Finish; the
+every view. `Tool::RAIL` groups nine of them as Place, Modify and Finish; the
 print settings are a form the top bar opens. The first, `Tool::Position`, is named Select on
 the rail: it picks, and carries the gizmo and the transform fields. See `docs/decisions/0218`.
 A Global | Local pair over its fields sets whose axes the handles, the ±45° turns and the

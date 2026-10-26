@@ -2,7 +2,11 @@ use super::*;
 use core_geometry::{Bvh, Quat, diagnose};
 use core_supports::Trapped;
 
-use crate::scene::{ImportSummary, Imported};
+use core_volume::{Channel, Drilled};
+
+use super::draws::color_for;
+use crate::render::gpu::MAX_CUTS;
+use crate::scene::{ImportSummary, Imported, Mapped};
 
 /// A ball hollowed the way the window hollows one, with resin reported trapped in it.
 fn a_hollowed_ball_with_resin_in_it() -> Scene {
@@ -60,7 +64,7 @@ fn a_model_with_resin_trapped_in_it_has_its_cavity_drawn_in_its_own_colour() {
         .expect("the ball is hollow");
     assert!(!cavity.is_empty(), "and the cavity has faces of its own");
 
-    let draws = Draws::of(&scene, NOT_MARKED, None, &[], None);
+    let draws = Draws::of(&scene, NOT_MARKED, None, &[], None, None);
     let painted = draws
         .models
         .iter()
@@ -69,7 +73,7 @@ fn a_model_with_resin_trapped_in_it_has_its_cavity_drawn_in_its_own_colour() {
     assert_eq!(painted, 1, "the cavity is drawn once over the shell");
 
     scene.objects_mut()[0].traps.set(Vec::new());
-    let drained = Draws::of(&scene, NOT_MARKED, None, &[], None);
+    let drained = Draws::of(&scene, NOT_MARKED, None, &[], None, None);
     assert!(
         drained.models.iter().all(|draw| draw.faces() != cavity),
         "and not at all once the resin can get out"
@@ -93,7 +97,7 @@ fn hole() -> DrainHole {
 #[test]
 fn a_hole_about_to_be_drilled_is_cut_into_its_model_and_never_capped() {
     let scene = a_hollowed_ball_with_resin_in_it();
-    let mut draws = Draws::of(&scene, NOT_MARKED, None, &[], None);
+    let mut draws = Draws::of(&scene, NOT_MARKED, None, &[], None, None);
     let (cuts, surfaces, solids) = (
         draws.cuts.len(),
         draws.cut_surfaces.len(),
@@ -148,7 +152,7 @@ fn a_textured_model_drilled_exactly_still_has_its_holes_cut_on_screen() {
     let drilled = Drilled::of(&source, None, &cuts).expect("a block drills");
     object.hollow.keep_drilled(&source, &cuts, Some(drilled));
 
-    let plain = Draws::of(&scene, NOT_MARKED, None, &[], None);
+    let plain = Draws::of(&scene, NOT_MARKED, None, &[], None, None);
     assert!(
         plain.cuts.is_empty(),
         "drilled, the hole is faces of the mesh"
@@ -160,7 +164,7 @@ fn a_textured_model_drilled_exactly_still_has_its_holes_cut_on_screen() {
         heights: Vec::new(),
     });
     let textures = crate::relief::Textures::from([(id, mapped)]);
-    let textured = Draws::of(&scene, NOT_MARKED, Some(&textures), &[], None);
+    let textured = Draws::of(&scene, NOT_MARKED, Some(&textures), &[], None, None);
     assert_eq!(
         textured.cuts.len(),
         1,
@@ -350,7 +354,7 @@ fn an_open_box() -> Scene {
 #[test]
 fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
     let scene = an_open_box();
-    let draws = Draws::of(&scene, NOT_MARKED, None, &[], None);
+    let draws = Draws::of(&scene, NOT_MARKED, None, &[], None, None);
 
     assert_eq!(draws.models.len(), 1, "an open model is still drawn");
     assert!(
@@ -359,8 +363,8 @@ fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
     );
 }
 
-#[test]
-fn a_closed_model_is_counted_into_the_cap() {
+/// The open box with its hole patched: one sound model.
+fn a_closed_box() -> Scene {
     let mut scene = an_open_box();
     let id = scene.objects()[0].id;
     let mut mesh = (*scene.get(id).expect("the box is there").mesh).clone();
@@ -369,10 +373,63 @@ fn a_closed_model_is_counted_into_the_cap() {
         .get_mut(id)
         .expect("the box is there")
         .reshape(crate::scene::Shaped::of(Arc::new(mesh)));
+    scene
+}
 
+#[test]
+fn a_closed_model_is_counted_into_the_cap() {
+    let scene = a_closed_box();
     assert_eq!(
-        Draws::of(&scene, NOT_MARKED, None, &[], None).solids.len(),
+        Draws::of(&scene, NOT_MARKED, None, &[], None, None)
+            .solids
+            .len(),
         1
+    );
+}
+
+#[test]
+fn a_model_standing_in_is_capped_as_its_stand_in() {
+    let scene = a_closed_box();
+    let id = scene.objects()[0].id;
+    let stand_in = Arc::new(core_geometry::cuboid(Vec3::ZERO, Vec3::ONE));
+    let draws = Draws::of(&scene, NOT_MARKED, None, &[], None, Some((id, &stand_in)));
+
+    assert_eq!(draws.solids.len(), 1);
+    assert!(
+        Arc::ptr_eq(&draws.solids[0].mesh, &stand_in),
+        "a hidden shell is not filled in where the section cuts it"
+    );
+}
+
+#[test]
+fn a_model_standing_in_is_drawn_as_its_stand_in_and_the_rest_as_their_own() {
+    let mut scene = an_open_box();
+    let other = an_open_box().objects()[0].mesh.clone();
+    let second = scene.insert(Imported::new(
+        "second".to_owned(),
+        other,
+        Transform::default(),
+        scene.objects()[0].summary.clone(),
+    ));
+    let stand_in = Arc::new(core_geometry::cuboid(Vec3::ZERO, Vec3::ONE));
+    let draws = Draws::of(
+        &scene,
+        NOT_MARKED,
+        None,
+        &[],
+        None,
+        Some((second, &stand_in)),
+    );
+
+    let standing_in = draws
+        .models
+        .iter()
+        .filter(|draw| Arc::ptr_eq(&draw.mesh, &stand_in))
+        .count();
+    assert_eq!(draws.models.len(), 2);
+    assert_eq!(
+        standing_in, 1,
+        "only the second model is drawn as the stand-in"
     );
 }
 

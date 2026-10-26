@@ -111,10 +111,19 @@ order is the only trustworthy signal.
 5. If the turning leaves as many seam edges in conflict as the file had, or more, the
    file's winding stands. Orientation never makes a file worse (ADR 0269).
 6. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
-   exactly when the shell is wound inwards, so the shell is flipped. Open components are
-   skipped — with a hole there is no inside to be on the wrong side of.
+   exactly when the shell is wound inwards. Open components are skipped — with a hole
+   there is no inside to be on the wrong side of.
+7. A closed shell inside no other is flipped when its volume is negative. One inside
+   another follows its holder, the smallest closed shell around it: flipped when the
+   holder was, kept otherwise. So a cavity wound inward stays a cavity, a body inside a
+   body stays a body, and a hollow model inside out turns with its cavity (ADR 0358).
 
-Step 6 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
+The holder is found only where some closed shell is wound inwards, as with every one wound
+outwards nothing turns. Shells boxed inside another's bounds, found by a sweep along x, cast
+a ray along each axis from a point on them through a hierarchy of the boxing shells' faces;
+an odd count of crossings with a shell on two of the three rays puts them inside it.
+
+Steps 6 and 7 are why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
 entirely inside out is a different problem from a few stray faces. `orientable` is false
 when a conflict is left, which is a note and not a defect: the fill rule takes what each
 body encloses (ADR 0269).
@@ -133,8 +142,9 @@ keyed by sorted corners.
 
 Repair adds surface the file never had, so it runs only when the user presses Repair
 (ADR 0194, 0270). The order is collapse the faces with no area whose corners stand on one
-point (ADR 0310), drop the doubled faces, orient, fill, drop the doubled
-faces again, orient. If the result has more boundary edges, degenerate faces and
+point (ADR 0310), drop the doubled faces, stitch the seams (ADR 0350), drop the specks,
+orient, fill, drop the doubled faces again, orient. A speck goes before the fill, which
+would otherwise close it into a shell that looks kept. If the result has more boundary edges, degenerate faces and
 duplicates between them than the input had, the input stands.
 
 An edge used an odd number of times cannot pair off without one more face. A hole's edge
@@ -152,9 +162,66 @@ the tightest skin across it, not a fair continuation of the surface.
 
 A longer loop, or one every triangulation of which holds a sliver, is flattened into the
 plane of its Newell normal and ear clipped by `triangulate`, the `earcutr` call a plane cut
-caps its halves with (ADR 0089). If that comes back short of `n - 2` triangles, the loop is
+caps its halves with (ADR 0089). If that comes back short of `n - 2` triangles, or with a
+face of no area — corners in a row that the projection rounded into an ear — the loop is
 fanned from one new vertex at its middle. A Newell normal of zero means the loop is a line,
 which is left open and counted in `loops_left`.
+
+Other methods run part of it (ADR 0351): *close holes* drops the doubled faces and
+patches, without collapsing, stitching or dropping specks; *close small holes* patches only
+the loops of three corners a single missing face leaves, and turns nothing; *turn* only
+orients. Each keeps the never-worse rule.
+
+## Dropping specks
+
+`drop_small_shells(mesh, smallest_mm2)` drops a shell, faces joined across shared edges, when
+it has an edge an odd number of faces use and its faces add up to under `smallest_mm2`
+(1 mm² by default). A closed shell stays however small: a thin pin is part of the model,
+and only the user can say it is not.
+
+## Stitching seams
+
+Two patches of one surface meshed at different densities meet in a seam: the coarse side's
+edge `a → b` has the fine side's vertices standing on it, and both are open. Patching it
+lays slivers along the crack; `stitch_seams(mesh, tolerance)` closes it instead by fanning
+the coarse face from its far corner through those vertices. No vertex is made or moved.
+
+A vertex is laid into an open edge when it lies strictly between its ends, within the
+tolerance of it, and ends an open edge walked the other way along the same line. The last
+condition keeps a sheet merely standing on an edge from being sewn into it. A split that
+would leave a face with no area is skipped. The open corners are hashed on a grid with
+cells of the mean open edge, at least two tolerances, and each edge is walked in half-cell
+steps over the 27 cells around each, so the cost follows the open edges' total length.
+A face has one edge split a pass; four passes cover its three edges.
+
+`DEFAULT_SEAM_TOLERANCE` is 0.01 mm. On the test models it closes every crack of one
+statuette with no patch at all, and on a 4-million-face colour mix it stitches about 1 900
+edges the fill would otherwise have bridged.
+
+## Crossing faces
+
+`self_intersections(mesh, bvh)` lists the pairs of faces that cross. Each face asks the
+hierarchy for the faces whose bounds meet its own (`Bvh::faces_meeting`), on rayon, and
+keeps those after it that share no corner and pass a strict test in `f64`: an edge of one
+goes through the inside of the other, or, all in one plane, two edges cross or a corner
+stands inside. Faces that only touch are not a pair, so neither is a crossing that lies
+exactly along an edge. It is reported, never fixed: wrapping is what removes crossings.
+200 k faces take 25 ms (`benches/mesh_repair.rs`).
+
+## Wrapping
+
+`core-volume::wrap` repairs the mesh, then unions its shells with the exact engine. The
+result is taken if it is sound and crosses nothing; else only the repair stands and the
+report says the wrap was left out. One sound shell crossing nothing is already its own wrap
+and stands as it is. A shell crossing itself skips the engine, which returns it still
+crossing. *Deep* is repair, wrap, repair, and reports what both repairs did; unwrapped, the
+second repair would meet the first one's mesh, so it is not run. A shell inside another
+wound outward is a body the wrap swallows; one wound inward is a cavity, the engine reads
+the mesh whole and keeps it (see Orientation).
+
+There is no sampled fallback (ADR 0357): on all 31 test models the field's surface pinched
+thin parts into branches and was refused. Exact unions of separate closed shells are what
+wrapping does well today.
 
 ## Placement
 

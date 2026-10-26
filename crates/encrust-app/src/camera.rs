@@ -6,6 +6,9 @@ use core_geometry::{Aabb, Mat4, Vec2, Vec3};
 
 use crate::plate::BuildPlate;
 
+mod flight;
+mod focus;
+
 /// Kept away from straight up and straight down, where the view direction becomes
 /// parallel to the up vector and the look-at basis is undefined.
 const PITCH_LIMIT_RAD: f32 = FRAC_PI_2 - 0.01;
@@ -187,11 +190,34 @@ pub struct CameraTurn {
 }
 
 impl CameraTurn {
-    /// Where the camera stands at `now_s`, and whether the turn is over.
+    /// A flight from `from` to `to` starting at `started_s`, as long as its path asks.
+    pub fn flight(from: OrbitCamera, to: OrbitCamera, started_s: f64) -> Self {
+        Self {
+            from,
+            to,
+            started_s,
+            length_s: flight::seconds(&from, &to),
+        }
+    }
+
+    /// Where the camera stands at `now_s`, and whether the turn is over. The target and
+    /// distance take the path that zooms out over a long way; see `flight`.
     pub fn at(&self, now_s: f64) -> (OrbitCamera, bool) {
         let share = ((now_s - self.started_s) / self.length_s.max(1e-6)).clamp(0.0, 1.0) as f32;
+        // The ends are the two views exactly, not as the path's arithmetic rounds them.
+        match share {
+            0.0 => return (self.from, false),
+            1.0 => return (self.to, true),
+            _ => {}
+        }
         let eased = share * share * (3.0 - 2.0 * share);
-        (self.from.toward(&self.to, eased), share >= 1.0)
+        let (target, distance_mm) = flight::along(&self.from, &self.to, eased);
+        let camera = OrbitCamera {
+            target,
+            distance_mm,
+            ..self.from.toward(&self.to, eased)
+        };
+        (camera, share >= 1.0)
     }
 }
 

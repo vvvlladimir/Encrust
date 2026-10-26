@@ -14,8 +14,23 @@ named without a resin is refused rather than given stock numbers.
 The dev profile is optimised (ADR 0037); every quoted timing is a release timing.
 
 A model is welded as it is read, vertices nearer than `--weld-tolerance` mm merged;
-`--no-validate` skips the topology check and the orientation fix. `--samples-per-layer N`
-cuts N planes inside each layer, so a feature thinner than a layer is kept. A mask is
+`--no-validate` skips the topology check and the orientation fix; `--repair` stitches seams,
+drops specks, patches holes and drops doubled faces as the window's Repair does, keeping the
+model as it came if that would leave more wrong (ADR 0349). `--repair=close-holes`,
+`=close-small-holes` or `=turn` runs part of it (ADR 0351), `=wrap` wraps every shell in one
+outer surface by the exact union of its shells and `=deep` repairs, wraps and repairs
+again, leaving the repair alone where the shells do not union exactly (ADR 0352, 0357); a
+cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358).
+`inspect --intersections` counts the pairs of faces that cross (ADR 0353).
+`--seam-tolerance MM` (0.01) is
+how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
+MM2` (1) the least area an open shell keeps. By hand, as the window's Faces mode and Shells
+list do (ADR 0356): `--flip-faces 3,4` turns faces and `--drop-faces` drops them, numbered
+from 0; `--drop-shells 2` drops shells numbered from 1 as `inspect --shells` lists them;
+`--bridge A-B:C-D` lays faces between two open edges given by their vertices. Every number
+is of the model as import leaves it; turns and bridges go first, drops last, before
+`--repair`. `--samples-per-layer N` cuts N planes inside each layer,
+so a feature thinner than a layer is kept. A mask is
 shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
 at all, `--grey-levels N` rounds its edges to N greys, `--grey-floor V` sets the dimmest
 grey written or `--blur PX` fades every edge.
@@ -25,6 +40,11 @@ encrust profiles list
 encrust profiles show elegoo-mars-4-ultra -o my-printer.toml   # a profile to start from
 encrust info plate.ctb                       # open a sliced file
 encrust inspect model.stl --printer elegoo-mars-4-ultra
+encrust inspect broken.stl --repair            # what closing its holes would do
+encrust slice broken.stl --repair=close-small-holes -o out   # only the missing faces
+encrust inspect parts.stl --repair=wrap --intersections   # one surface, crossing nothing
+encrust inspect parts.stl --shells             # every shell, numbered from 1
+encrust slice parts.stl --drop-shells 2,3 -o out   # without the two loose pieces
 encrust slice model.stl -o out               # PNG stack
 
 encrust slice model.stl \

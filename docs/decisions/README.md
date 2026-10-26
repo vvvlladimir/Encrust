@@ -86,6 +86,16 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted; an unbalanced edge making a model unsound superseded by 0269, dropping unbalanced faces by 0270 |
 | [0269](0269-orientation-never-worsens-and-a-fold-is-only-noted.md) | Orientation never worsens a file, and a fold is noted rather than asked about | Accepted |
 | [0270](0270-repair-cancels-what-encloses-nothing-and-never-worsens.md) | Repair cancels what encloses nothing, patches by least area, and never worsens | Accepted |
+| [0349](0349-repair-is-a-core-call-the-command-line-reaches.md) | Repair is a core call the command line reaches | Accepted |
+| [0350](0350-repair-stitches-a-seam-before-it-patches.md) | Repair stitches a seam before it patches | Accepted |
+| [0351](0351-repair-has-methods-and-drops-open-specks.md) | Repair has methods, and drops open specks but never a closed shell | Accepted |
+| [0352](0352-wrap-unions-exactly-and-takes-the-field-only-when-better.md) | Wrap unions a model's shells exactly, and takes the field only when it is better | Accepted; the field fallback is superseded by 0357, the swallowed cavity by 0358 |
+| [0353](0353-a-summary-counts-holes-and-inspect-counts-crossings.md) | A summary counts holes, and inspect counts crossing faces | Accepted |
+| [0354](0354-repair-is-a-tool-of-the-rail.md) | Repair is a tool of the rail, first of Modify | Accepted |
+| [0355](0355-the-camera-flies-to-what-a-tool-points-at.md) | The camera flies to what a tool points at, face on and round what is in the way | Accepted |
+| [0356](0356-faces-and-shells-are-edited-by-hand-and-by-number.md) | Faces and shells are edited by hand in the window and by number on the command line | Accepted |
+| [0357](0357-wrap-has-no-sampled-fallback.md) | Wrap unions exactly or leaves the repair alone, with no sampled fallback | Accepted |
+| [0358](0358-a-shell-inside-another-follows-its-holder.md) | A closed shell inside another follows its holder's turning | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |

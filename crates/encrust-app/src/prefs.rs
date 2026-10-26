@@ -23,6 +23,7 @@ use crate::panels::Window;
 use crate::profiles;
 use crate::recent::Recent;
 use crate::relief::ReliefChoice;
+use crate::repair::{Picking, RepairMode};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::status::Status;
@@ -99,6 +100,8 @@ pub struct Modes {
     target: Target,
     show_axes: bool,
     axes: Axes,
+    repair: RepairMode,
+    picking: Picking,
 }
 
 impl Modes {
@@ -111,6 +114,8 @@ impl Modes {
             target: tools.measure.target,
             show_axes: tools.measure.show_axes,
             axes,
+            repair: tools.repair.mode,
+            picking: tools.repair.picking,
         }
     }
 
@@ -121,6 +126,8 @@ impl Modes {
         tools.measure.target = self.target;
         tools.measure.show_axes = self.show_axes;
         *axes = self.axes;
+        tools.repair.mode = self.repair;
+        tools.repair.picking = self.picking;
     }
 }
 

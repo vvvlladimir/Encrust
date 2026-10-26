@@ -4,8 +4,13 @@ mod buckets;
 mod bvh;
 mod clip;
 mod closest;
+mod faults;
+#[cfg(test)]
+mod fixtures;
 mod hash;
 mod hull;
+mod intersect;
+mod mend;
 mod mesh;
 mod orient;
 mod primitives;
@@ -24,12 +29,15 @@ mod validate;
 mod weld;
 mod winding;
 
-pub use buckets::Buckets;
+pub use buckets::{Buckets, cell_of_point, cells_around};
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
+pub use faults::{Faults, faults};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
+pub use intersect::self_intersections;
+pub use mend::{MendMethod, MendSettings, Mended, mend};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use primitives::{
@@ -39,7 +47,11 @@ pub use ray::{
     PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
 };
 pub use region::Region;
-pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
+pub use repair::{
+    BridgeError, DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, Filled, Shell, Stitched,
+    bridge, collapse_flat_faces, drop_small_shells, fill_holes, fill_holes_within, flip_faces,
+    list_shells, remove_duplicate_faces, remove_faces, remove_shells, stitch_seams,
+};
 pub use ring::{ring_area, ring_contains};
 pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};

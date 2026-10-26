@@ -243,6 +243,33 @@ impl Bvh {
     }
 }
 
+impl Bvh {
+    /// Every face whose bounds meet `bounds`, conservative as leaves are taken whole.
+    pub fn faces_meeting(&self, bounds: &Aabb, found: &mut Vec<u32>) {
+        found.clear();
+        let mut stack = [0u32; STACK];
+        let mut depth = usize::from(!self.nodes.is_empty());
+
+        while depth > 0 {
+            depth -= 1;
+            let node = &self.nodes[stack[depth] as usize];
+            let apart = (node.bounds.mins - bounds.maxs).max_element() > 0.0
+                || (bounds.mins - node.bounds.maxs).max_element() > 0.0;
+            if apart {
+                continue;
+            }
+            if node.count == 0 {
+                stack[depth] += 1;
+                stack[depth + 1] = node.at;
+                depth += 2;
+                continue;
+            }
+            let leaf = node.at as usize..(node.at + node.count) as usize;
+            found.extend_from_slice(&self.faces[leaf]);
+        }
+    }
+}
+
 /// One face as the build sees it, or `None` for a face naming a vertex that is not there.
 fn item(mesh: &Mesh, face: usize) -> Option<Item> {
     let triangle = mesh.triangle(face)?;

@@ -195,12 +195,13 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
         hollow: manifest.hollow,
         drain: manifest.drain,
         cut: manifest.cut,
-        // The manifest has no entry for the Relief, Text or Combine tools, so they keep
-        // what they are set to.
+        // The manifest has no entry for the Relief, Text, Combine or Repair tools, so they
+        // keep what they are set to.
         relief: tools.relief.state,
         array: manifest.array,
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
+        repair: tools.repair.state,
     }
     .apply(tools, slicing);
 

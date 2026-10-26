@@ -15,9 +15,12 @@ use crate::workspace::Tool;
 
 mod hollow;
 mod levels;
+mod marks;
+use marks::{fly_to_marked, marked};
 mod overlays;
 mod paint;
 mod picking;
+mod repair;
 mod support_ghost;
 mod supports;
 mod text;
@@ -82,6 +85,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     let carrying = !painting && drag_support(window, rect, &pointer);
     let drag = if carrying { Drag::None } else { gesture.drag };
 
+    fly_to_marked(ui, window, rect);
     follow_turn(ui, window.view);
     let invert = window.machine.general.invert_zoom;
     steer_camera(window.view, rect, &pointer, drag, painting, invert);
@@ -202,6 +206,11 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             lay_face_under_cursor(window, rect, cursor);
         }
         Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
+        Tool::Repair if paint::picks_edges(window) => {
+            repair::pick_edge(ui.ctx(), window, rect, cursor)
+        }
+        // The brush has already picked whatever faces the click landed on.
+        Tool::Repair if paint::picks_faces(window) => {}
         _ => select_under_cursor(window, rect, cursor, false),
     }
 }
@@ -286,6 +295,11 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
     let capped = section_mm.is_some() || bottom_cut_mm.is_some();
     let height_px = rect.height() * ui.ctx().pixels_per_point();
     let levels = levels::levels(ui, window, capped, height_px);
+    // Shells are hidden from the list of the Model mode, and only while it is in view.
+    let stand_in = (*window.tool == Tool::Repair
+        && window.tools.repair.mode == crate::repair::RepairMode::Model)
+        .then(|| window.doc.repairs.shells.stand_in(&window.doc.scene))
+        .flatten();
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -304,9 +318,15 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
             hidden_groups: &hidden_groups,
             ghost,
             light: Some(&levels.light),
+            stand_in: stand_in.as_ref().map(|(id, mesh)| (*id, mesh)),
         },
         rect,
     )
+    .highlighting(&marked(
+        window,
+        section_mm,
+        (rect, ui.input(|i| i.pointer.hover_pos())),
+    ))
     .timed(window.view.ui_ms, window.view.budget.report(), levels.faces);
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
@@ -335,6 +355,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
         || (*window.tool == Tool::Relief && window.tools.relief.paints())
+        || paint::picks_faces(window)
     {
         draw_brush(ui, window, rect);
     }

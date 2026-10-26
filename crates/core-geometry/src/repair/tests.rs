@@ -1,5 +1,8 @@
+use super::holes::fan;
 use super::*;
-use crate::{DEFAULT_WELD_TOLERANCE, diagnose, orient_outward, signed_volume, weld};
+use crate::{
+    DEFAULT_WELD_TOLERANCE, Mesh, Scalar, Vec3, diagnose, orient_outward, signed_volume, weld,
+};
 
 /// A 2 mm cube, twelve triangles, wound outwards, standing on the origin.
 fn cube() -> Mesh {
@@ -270,4 +273,31 @@ fn corners_a_rounding_apart_are_one_point() {
     let diagnostics = diagnose(&split);
     assert_eq!(diagnostics.degenerate_faces, 0, "got {diagnostics:?}");
     assert!(diagnostics.is_closed(), "got {diagnostics:?}");
+}
+
+#[test]
+fn ear_clipping_lays_no_face_without_area_across_a_thin_crack() {
+    // Two rows of corners 0.1 µm apart, one finer than the other, which is what a seam
+    // stitched part of the way leaves: in the plane, three in a row round into an ear.
+    let along = Vec3::new(-0.6, 0.79, -0.25).normalize();
+    let across = along.any_orthonormal_vector();
+    let start = Vec3::new(255.6, 169.4, 133.8);
+    let mut points: Vec<Vec3> = (0..30)
+        .map(|step| start + along * (step as Scalar * 1.25e-3))
+        .collect();
+    points.extend(
+        (0..23)
+            .rev()
+            .map(|step| start + along * (step as Scalar * 1.6e-3 + 2e-4) + across * 1e-4),
+    );
+
+    let faces = super::triangulation::ear_clipped(&points);
+
+    for face in faces.iter().flatten() {
+        let [a, b, c] = face.map(|corner| points[corner as usize]);
+        assert!(
+            (b - a).cross(c - a).length_squared() > 0.0,
+            "face {face:?} has no area"
+        );
+    }
 }

@@ -192,6 +192,7 @@ cut-keep-upper = Верхняя
 
 tool-select = Выбор
 tool-measure = Замер
+tool-repair = Ремонт
 tool-hollow = Полость
 tool-drain = Дренаж
 tool-cut = Разрез
@@ -1813,6 +1814,7 @@ inspector-about-drain = Дайте смоле вытечь из полой мо�
 inspector-about-cut = Разделите модель плоскостью.
 inspector-about-relief = Вдавите текстуру в поверхность модели, напишите на ней текст или объедините модели в одну.
 inspector-about-supports = Поддержите то, что нависает над пустотой.
+inspector-about-repair = Что не так с поверхностью моделей, и починка, которая её закрывает, разворачивает или оборачивает.
 inspector-about-check = Что не получится на принтере, с указанием слоя, на котором это происходит.
 inspector-about-print-settings = Как эта платформа нарезается и экспонируется.
 
@@ -1870,6 +1872,144 @@ repair-dropped-faces =
         [few] отброшено { $count } дважды нарисованные грани
        *[many] отброшено { $count } дважды нарисованных граней
     }
+repair-stitched-seams =
+    { $count ->
+        [one] сшит { $count } шов
+        [few] сшито { $count } шва
+       *[many] сшито { $count } швов
+    }
+repair-dropped-shells =
+    { $count ->
+        [one] отброшена { $count } соринка, ничего не охватывающая
+        [few] отброшено { $count } соринки, ничего не охватывающие
+       *[many] отброшено { $count } соринок, ничего не охватывающих
+    }
+
+repair-cancelled = Починка отменена
+repair-failed = { $name } не удалось починить: { $reason }
+repair-turned-faces =
+    { $count ->
+        [one] развёрнута { $count } грань
+        [few] развёрнуто { $count } грани
+       *[many] развёрнуто { $count } граней
+    }
+repair-wrapped = обёрнуто одной поверхностью
+repair-not-wrapped = не обёрнуто: оболочки не объединяются точно
+
+## panels/inspector/repair.rs
+
+repair-mode-model = Модель: найти, что не так, и починить
+repair-mode-faces = Грани: развернуть, удалить и соединить вручную
+repair-shells-title = Оболочки
+repair-shells-one = Выберите одну модель, чтобы увидеть её оболочки.
+repair-shells-note = Каждая часть модели, грани которой соединены друг с другом. Нажатие выбирает оболочку и подводит к ней камеру; глаз скрывает её из вида, пока открыт этот список, чтобы увидеть, что за ней или внутри; корзина удаляет её сразу. Кнопки в заголовке выбирают все оболочки площадью меньше сотой доли самой большой или обращают выбор.
+repair-listing = Перечисляем оболочки
+repair-shell = Оболочка { $number }
+repair-shell-faces =
+    { $count ->
+        [one] { $count } грань
+        [few] { $count } грани
+       *[many] { $count } граней
+    }
+repair-shell-faces-open =
+    { $count ->
+        [one] { $count } грань, открыта
+        [few] { $count } грани, открыта
+       *[many] { $count } граней, открыта
+    }
+repair-drop-shell = Удалить эту оболочку
+repair-drop-shells =
+    { $count ->
+        [one] Удалить { $count } оболочку
+        [few] Удалить { $count } оболочки
+       *[many] Удалить { $count } оболочек
+    }
+repair-pick-small = Выбрать мелкие оболочки
+repair-pick-invert = Обратить выбор
+repair-pick = Выбор
+repair-pick-faces = Грани
+repair-pick-edges = Рёбра
+repair-pick-faces-note = Проведите кистью по модели, чтобы выбрать грани, с Alt — чтобы снять выбор; Cmd и Shift вместе выбирают всю поверхность, пока она поворачивает не больше угла. «Развернуть» переворачивает их, «Удалить» убирает.
+repair-pick-edges-note = Щёлкните по двум открытым рёбрам вокруг дыр, и «Соединить» положит между ними грани, обойдённые как соседние. Третий щелчок снимает первый.
+repair-brush = Кисть
+repair-brush-radius = Радиус
+repair-flood-angle = Угол поверхности
+repair-picked = Выбрано
+repair-picked-model = Модель
+repair-picked-faces = Грани
+repair-picked-edges = Открытые рёбра
+repair-of-two = { $count } из 2
+repair-nothing-picked = Ничего не выбрано.
+repair-no-edge-near = Рядом с указателем нет открытого ребра: щёлкните по контуру дыры
+repair-no-open-edges = Открытых рёбер нет: модели замкнуты, соединять нечего
+repair-finding-edges = Ищем открытые рёбра
+repair-clear-picks = Снять выбор
+repair-flip-faces = Развернуть
+repair-delete-faces = Удалить
+repair-bridge = Соединить
+repair-pick-faces-first = Сначала выберите грани кистью.
+repair-pick-two-edges = Сначала выберите два открытых ребра.
+repair-editing = Меняем грани
+edit-editing = Меняем грани { $name }
+edit-flipped =
+    { $count ->
+        [one] Развёрнута { $count } грань { $name }
+        [few] Развёрнуто { $count } грани { $name }
+       *[many] Развёрнуто { $count } граней { $name }
+    }
+edit-removed =
+    { $count ->
+        [one] Удалена { $count } грань { $name }
+        [few] Удалено { $count } грани { $name }
+       *[many] Удалено { $count } граней { $name }
+    }
+edit-bridged =
+    { $count ->
+        [one] Соединено { $count } гранью на { $name }
+       *[other] Соединено гранями ({ $count }) на { $name }
+    }
+edit-dropped-shells =
+    { $count ->
+        [one] Удалена { $count } оболочка { $name }
+        [few] Удалено { $count } оболочки { $name }
+       *[many] Удалено { $count } оболочек { $name }
+    }
+edit-bridge-not-open = Одно из рёбер уже не открыто, соединять нечего
+edit-bridge-same = Ребро нельзя соединить с самим собой
+edit-bridge-in-line = Рёбра лежат на одной прямой, грань между ними не ляжет
+job-thread-stopped-edit = поток правки граней остановился, не закончив
+repair-found = Найдено
+repair-found-note = Что импорт нашёл в моделях, с которыми работает инструмент: выбранных или всех на платформе. Нажатие на строку отмечает найденное на моделях и подводит камеру к первому месту, каждое следующее — к следующему, а нажатие после последнего убирает отметки. Пересекающиеся грани считаются по лупе: на большой модели это занимает время.
+repair-nothing-found = Чинить нечего.
+repair-count-crossings = Посчитать пересекающиеся грани
+repair-nothing-on-plate = На платформе нет моделей.
+repair-holes = Дыры
+repair-open-edges = Открытые рёбра
+repair-flat-faces = Грани без площади
+repair-doubled-faces = Дважды нарисованные грани
+repair-shells = Оболочки
+repair-crossing-faces = Пересекающиеся грани
+repair-uncounted = –
+repair-counting = …
+repair-method = Метод
+repair-method-repair = Починка
+repair-method-close-holes = Закрыть дыры
+repair-method-close-small-holes = Закрыть мелкие дыры
+repair-method-turn = Развернуть грани
+repair-method-wrap = Обернуть
+repair-method-deep = Глубокая починка
+repair-method-repair-note = Сшивает стыки, убирает дважды нарисованные грани и соринки без объёма, закрывает все дыры и разворачивает заплатки наружу. Оставляет модель как была, если стало бы хуже.
+repair-method-close-holes-note = Закрывает все дыры и разворачивает заплатки наружу, и больше ничего.
+repair-method-close-small-holes-note = Закрывает только дыры от одной недостающей грани и ничего не разворачивает.
+repair-method-turn-note = Разворачивает неверно обойдённые грани, чтобы каждая оболочка смотрела наружу, и ничего не добавляет.
+repair-method-wrap-note = Чинит, затем оборачивает модель одной внешней поверхностью: перекрытые оболочки объединяются точно, а деталь, целиком лежащая внутри другой, пропадает в ней. Полость внутри сохраняется. Где оболочки объединить нельзя, например если одна пересекает саму себя, остаётся только починка.
+repair-method-deep-note = Чинит, оборачивает и чинит снова — для модели, которую другие методы оставляют сломанной. Как и при обёртке, деталь целиком внутри другой пропадает в ней.
+repair-settings = Настройки
+repair-settings-note = Вершина ближе допуска стыка к открытому ребру вшивается в него. Оболочка без объёма с площадью меньше наименьшей соринки удаляется.
+repair-seam-tolerance = Допуск стыка
+repair-smallest-shell = Наименьшая соринка
+repair-repair = Починить
+repair-repairing = Починка
 
 ## panels/view_cube.rs
 
@@ -1969,7 +2109,7 @@ job-thread-stopped-drainage = поток проверки дренажа ост�
 
 ## job/repair.rs
 
-job-thread-stopped-repair = поток починки { $name } остановился, не закончив
+job-thread-stopped-repair = поток починки остановился, не закончив
 job-repairing = Починка { $name }
 
 ## arrange.rs

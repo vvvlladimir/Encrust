@@ -90,6 +90,7 @@ pub(super) fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<V
             eye: camera.eye(),
             section_mm: None,
             lines: &[],
+            wide_lines: &[],
             models: &[],
             markers: &[],
             solids: &[],

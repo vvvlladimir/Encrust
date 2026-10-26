@@ -21,6 +21,8 @@ pub enum Tool {
     #[default]
     Position,
     Measure,
+    /// Finding what is wrong with a mesh and repairing it, by one of several methods.
+    Repair,
     Hollow,
     Drain,
     Cut,
@@ -39,10 +41,11 @@ pub enum Tool {
 
 impl Tool {
     /// The groups of the rail, in the order it draws them, with a rule between each; see
-    /// `docs/decisions/0218` and `0348`.
+    /// `docs/decisions/0218`, `0348` and `0354`.
     pub const RAIL: [&'static [Self]; 3] = [
         &[Self::Position, Self::Measure],
         &[
+            Self::Repair,
             Self::Hollow,
             Self::Drain,
             Self::Cut,
@@ -63,9 +66,10 @@ impl Tool {
 
     /// Every variant, which is what a test walks to prove none was left unplaced.
     #[cfg(test)]
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Position,
         Self::Measure,
+        Self::Repair,
         Self::Hollow,
         Self::Drain,
         Self::Cut,
@@ -86,6 +90,7 @@ impl Tool {
         match self {
             Self::Position => tr!("tool-select"),
             Self::Measure => tr!("tool-measure"),
+            Self::Repair => tr!("tool-repair"),
             Self::Hollow => tr!("tool-hollow"),
             Self::Drain => tr!("tool-drain"),
             Self::Cut => tr!("tool-cut"),
@@ -102,6 +107,7 @@ impl Tool {
         match self {
             Self::Position => icon::SELECT,
             Self::Measure => icon::MEASURE,
+            Self::Repair => icon::REPAIR,
             Self::Hollow => icon::HOLLOW,
             Self::Drain => icon::DRAIN,
             Self::Cut => icon::CUT,

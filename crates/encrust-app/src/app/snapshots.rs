@@ -109,6 +109,69 @@ fn the_hollow_tool_with_each_kind_of_infill() {
 }
 
 #[test]
+fn the_repair_tool_wrapping() {
+    let mut app = app(true);
+    app.tool = Tool::Repair;
+    app.tools.repair.state.method = core_volume::RepairMethod::Wrap;
+    let mut results = SnapshotResults::new();
+    results.extend(picture("tool_repair_wrap", app));
+}
+
+#[test]
+fn the_repair_tool_picking_faces_and_edges_by_hand() {
+    let mut results = SnapshotResults::new();
+    for (name, picking) in [
+        ("tool_repair_faces", crate::repair::Picking::Faces),
+        ("tool_repair_edges", crate::repair::Picking::Edges),
+    ] {
+        let mut app = app(true);
+        app.tool = Tool::Repair;
+        app.tools.repair.mode = crate::repair::RepairMode::Faces;
+        app.tools.repair.picking = picking;
+        results.extend(picture(name, app));
+    }
+}
+
+#[test]
+fn the_repair_tool_listing_two_shells_one_picked() {
+    let mut app = app(true);
+    app.tool = Tool::Repair;
+    let mut two =
+        core_geometry::cuboid(core_geometry::Vec3::ZERO, core_geometry::Vec3::splat(20.0));
+    let crumb = (
+        core_geometry::Vec3::splat(25.0),
+        core_geometry::Vec3::splat(26.0),
+    );
+    two.append(&core_geometry::cuboid(crumb.0, crumb.1));
+    let shaped = crate::scene::Shaped::of(std::sync::Arc::new(two));
+    app.doc.scene.objects_mut()[0].reshape(shaped);
+    let object = &app.doc.scene.objects()[0];
+    let shells = &mut app.doc.repairs.shells;
+    shells.list(object);
+    while shells.poll(&app.doc.scene) {
+        std::thread::yield_now();
+    }
+    shells.toggle(object, 1);
+    let mut results = SnapshotResults::new();
+    results.extend(picture("tool_repair_shells", app));
+}
+
+#[test]
+fn the_repair_tool_marking_what_it_found() {
+    let mut app = app(true);
+    app.tool = Tool::Repair;
+    let found = &mut app.doc.scene.objects_mut()[0].summary.diagnostics;
+    (found.holes, found.boundary_edges, found.duplicate_faces) = (2, 12, 4);
+    let scene = &app.doc.scene;
+    app.doc
+        .repairs
+        .found
+        .press(scene, crate::repair::Finding::OpenEdges);
+    let mut results = SnapshotResults::new();
+    results.extend(picture("tool_repair_found", app));
+}
+
+#[test]
 fn the_relief_tool_in_each_mode() {
     let mut results = SnapshotResults::new();
     for (name, mode) in [

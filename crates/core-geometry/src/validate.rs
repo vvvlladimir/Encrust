@@ -7,7 +7,8 @@ use rayon::iter::{
 };
 use rayon::slice::ParallelSlice;
 
-use crate::topology::{Components, EdgeUse, counted_out, edge_uses, sort_runs};
+use crate::repair::boundary_loops;
+use crate::topology::{EdgeUse, counted_out, edge_uses, shells, sort_runs};
 use crate::{Mesh, Scalar, Vec3};
 
 /// What is structurally wrong, or right, with a mesh.
@@ -26,6 +27,9 @@ pub struct MeshDiagnostics {
     pub unreferenced_vertices: usize,
     /// Edges used by exactly one face: the mesh is open there.
     pub boundary_edges: usize,
+    /// Loops of open edges, each a hole a patch would close; 0 in a project written before.
+    #[serde(default)]
+    pub holes: usize,
     /// Edges used by three or more faces: the surface branches there.
     pub non_manifold_edges: usize,
     /// Edges more faces walk one way than the other: the surface does not close there.
@@ -64,12 +68,10 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
     let shells = if mesh.faces.is_empty() {
         0
     } else {
-        let joins = uses
-            .par_chunk_by(|a, b| a.edge == b.edge)
-            .flat_map_iter(|group| group[1..].iter().map(|other| [group[0].face, other.face]));
-        Components::joined(mesh.faces.len(), joins).count()
+        shells(mesh.faces.len(), &uses).count()
     };
     let referenced = referenced_vertices(mesh);
+    let (rings, branching) = boundary_loops(&uses);
 
     MeshDiagnostics {
         vertices: mesh.vertices.len(),
@@ -78,6 +80,7 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
         duplicate_faces: count_duplicates(mesh),
         unreferenced_vertices: mesh.vertices.len() - referenced,
         boundary_edges: edges.boundary,
+        holes: rings.len() + branching,
         non_manifold_edges: edges.non_manifold,
         unbalanced_edges: edges.unbalanced,
         shells,
@@ -207,9 +210,7 @@ pub(crate) fn degenerate_faces(mesh: &Mesh) -> Vec<bool> {
             face[0] == face[1]
                 || face[1] == face[2]
                 || face[0] == face[2]
-                || mesh
-                    .triangle(index)
-                    .is_none_or(|t| t.normal_unnormalized().length_squared() == 0.0)
+                || mesh.triangle(index).is_none_or(|t| t.is_degenerate())
         })
         .collect()
 }

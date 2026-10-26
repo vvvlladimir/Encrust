@@ -49,6 +49,130 @@ fn an_open_mesh_is_reported_but_still_succeeds() {
 }
 
 #[test]
+fn repair_closes_the_hole_an_open_box_has() {
+    let path = write_box_stl("repaired", 10.0, 10, 0);
+    let output = encrust(&["inspect", path.to_str().unwrap(), "--repair"]);
+    let text = stdout(&output);
+
+    assert!(output.status.success());
+    assert_eq!(field(&text, "repair"), "closed 1 hole");
+    assert_eq!(field(&text, "closed"), "yes (1 shell, euler 2)");
+    assert_eq!(field(&text, "volume"), "1000.000 mm^3");
+}
+
+#[test]
+fn repair_says_in_json_how_many_holes_it_closed() {
+    let path = write_box_stl("repaired-json", 10.0, 10, 0);
+    let report = json(&encrust(&[
+        "--json",
+        "inspect",
+        path.to_str().unwrap(),
+        "--repair",
+    ]));
+
+    assert_eq!(report["repair"]["holes_closed"], 1, "got {report}");
+    assert_eq!(report["repair"]["holes_left"], 0);
+    assert_eq!(report["repair"]["kept_as_found"], false);
+    assert_eq!(report["repair"]["seams_stitched"], 0, "a box has no seam");
+}
+
+#[test]
+fn close_small_holes_patches_a_missing_face_and_leaves_a_missing_side() {
+    let one_face = write_box_stl("one-face-missing", 10.0, 11, 0);
+    let one_side = write_box_stl("one-side-missing", 10.0, 10, 0);
+    let run = |path: &std::path::Path| {
+        stdout(&encrust(&[
+            "inspect",
+            path.to_str().unwrap(),
+            "--repair=close-small-holes",
+        ]))
+    };
+
+    assert_eq!(field(&run(&one_face), "repair"), "closed 1 hole");
+    assert_eq!(field(&run(&one_side), "defect"), "4 open edges");
+}
+
+#[test]
+fn a_seam_tolerance_without_repair_is_a_usage_error() {
+    let path = write_box_stl("seam-unrepaired", 10.0, 10, 0);
+    let output = encrust(&["inspect", path.to_str().unwrap(), "--seam-tolerance", "0.1"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "it does nothing without --repair"
+    );
+}
+
+#[test]
+fn repair_and_no_validate_cannot_be_asked_together() {
+    let path = write_box_stl("repair-unvalidated", 10.0, 10, 0);
+    let output = encrust(&[
+        "inspect",
+        path.to_str().unwrap(),
+        "--repair",
+        "--no-validate",
+    ]);
+    assert_eq!(output.status.code(), Some(2), "a usage error");
+}
+
+#[test]
+fn an_open_mesh_names_its_holes() {
+    let path = write_box_stl("one-hole", 10.0, 10, 0);
+    let text = stdout(&encrust(&["inspect", path.to_str().unwrap()]));
+    assert!(text.contains("defect        1 hole\n"), "got {text}");
+}
+
+#[test]
+fn intersections_count_the_faces_two_crossing_boxes_cross() {
+    let apart = write_boxes_stl("apart", &[([0.0; 3], [1.0; 3]), ([2.0; 3], [3.0; 3])]);
+    let crossing = write_boxes_stl(
+        "crossing",
+        &[([0.0; 3], [1.0; 3]), ([0.5, 0.3, 0.4], [1.5, 1.3, 1.4])],
+    );
+    let pairs = |path: &std::path::Path| {
+        let text = stdout(&encrust(&[
+            "inspect",
+            path.to_str().unwrap(),
+            "--intersections",
+        ]));
+        field(&text, "crossings")
+            .split(' ')
+            .next()
+            .and_then(|count| count.parse::<usize>().ok())
+            .expect("a count of pairs")
+    };
+
+    assert_eq!(pairs(&apart), 0);
+    assert!(pairs(&crossing) > 0);
+}
+
+#[test]
+fn wrapping_two_crossing_boxes_leaves_one_shell_crossing_nothing() {
+    let crossing = write_boxes_stl(
+        "wrap-crossing",
+        &[([0.0; 3], [10.0; 3]), ([5.0, 3.0, 4.0], [15.0, 13.0, 14.0])],
+    );
+    let text = stdout(&encrust(&[
+        "inspect",
+        crossing.to_str().unwrap(),
+        "--repair=wrap",
+        "--intersections",
+    ]));
+
+    assert_eq!(
+        field(&text, "closed"),
+        "yes (1 shell, euler 2)",
+        "got {text}"
+    );
+    assert_eq!(field(&text, "crossings"), "0 pairs of faces");
+    assert_eq!(
+        field(&text, "volume"),
+        "1790.000 mm^3",
+        "2000 less the 210 they share"
+    );
+}
+
+#[test]
 fn inspect_stops_after_the_import_report() {
     let path = write_box_stl("no-slice", 10.0, 12, 0);
     let output = encrust(&["inspect", path.to_str().unwrap()]);

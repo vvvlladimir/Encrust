@@ -10,6 +10,7 @@ mod position;
 mod presets;
 mod print_settings;
 mod relief;
+mod repair;
 mod scope;
 mod select;
 mod shape;
@@ -56,6 +57,7 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     match tool {
         Tool::Position => position::ui(ui, window),
         Tool::Measure => measure::ui(ui, window.tools),
+        Tool::Repair => repair::ui(ui, window),
         Tool::Hollow => hollow::ui(ui, window),
         Tool::Drain => drain::ui(ui, window),
         Tool::Cut => cut::ui(ui, window),
@@ -71,12 +73,13 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
 fn has_action(tool: Tool) -> bool {
     matches!(
         tool,
-        Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports
+        Tool::Repair | Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports
     )
 }
 
 fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     match tool {
+        Tool::Repair => repair::action(ui, window),
         Tool::Hollow => hollow::action(ui, window),
         Tool::Drain => drain::action(ui, window),
         Tool::Cut => cut::action(ui, window),
@@ -113,8 +116,10 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
                 .filter(crate::measure::PlaneGap::is_parallel)
                 .and_then(|_| plain(tr!("inspector-parallel"))),
         },
-        // The Supports card has its click modes where the fact would stand.
-        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape => None,
+        // The Supports and Repair cards have their modes where the fact would stand.
+        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape | Tool::Repair => {
+            None
+        }
     }
 }
 
@@ -123,6 +128,7 @@ fn help(tool: Tool) -> String {
     match tool {
         Tool::Position => tr!("inspector-about-select"),
         Tool::Measure => tr!("inspector-about-measure"),
+        Tool::Repair => tr!("inspector-about-repair"),
         Tool::Hollow => tr!("inspector-about-hollow"),
         Tool::Drain => tr!("inspector-about-drain"),
         Tool::Cut => tr!("inspector-about-cut"),
@@ -158,6 +164,8 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
         if tool == Tool::Supports {
             supports::modes(ui, window);
+        } else if tool == Tool::Repair {
+            repair::modes(ui, window);
         } else if let Some((text, color)) = fact(window, tool) {
             ui.add(
                 egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))

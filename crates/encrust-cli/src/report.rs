@@ -2,9 +2,10 @@ use std::fmt;
 use std::path::PathBuf;
 
 use core_format::ExposureRange;
-use core_geometry::{MeshDiagnostics, Orientation, Scalar, Vec3, Welded};
+use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec3, Welded};
 use printer_profiles::PrinterProfile;
 
+use crate::edits::{Edited, describe as describe_edits};
 use crate::stats::MeshStats;
 
 /// Whether the model fits the machine it is meant for, and whether it stands inside it.
@@ -46,6 +47,32 @@ fn past(amount: Vec3) -> Vec3 {
     )
 }
 
+/// How a wrap went.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Wrapped {
+    /// Every shell unioned by the exact engine; no face moved but where they crossed.
+    Exactly,
+    /// The shells could not be unioned exactly, so only the repair stands.
+    LeftOut,
+}
+
+fn describe_wrap(wrapped: Wrapped) -> String {
+    match wrapped {
+        Wrapped::Exactly => "exactly".to_owned(),
+        Wrapped::LeftOut => "left out: the shells do not union exactly".to_owned(),
+    }
+}
+
+/// One shell as `inspect --shells` lists it.
+fn describe_shell(shell: &Shell) -> String {
+    let closed = if shell.closed { "closed" } else { "open" };
+    format!(
+        "{} faces, {:.2} mm^2, {closed}",
+        shell.faces.len(),
+        shell.area_mm2
+    )
+}
+
 /// Everything import learned about a model, ready to print.
 pub struct ImportReport {
     pub path: PathBuf,
@@ -55,10 +82,31 @@ pub struct ImportReport {
     pub doubled: usize,
     pub diagnostics: Option<MeshDiagnostics>,
     pub orientation: Option<Orientation>,
+    /// What `--repair` changed, when it was asked for.
+    pub mended: Option<Mended>,
+    /// How `--repair=wrap` or `=deep` went, when asked.
+    pub wrapped: Option<Wrapped>,
+    /// Pairs of faces crossing each other, when `--intersections` asked for them.
+    pub crossing_pairs: Option<usize>,
+    /// What `--flip-faces`, `--drop-faces`, `--drop-shells` and `--bridge` did, when named.
+    pub edited: Option<Edited>,
+    /// The shells as import left the model, when `--shells` asked for them.
+    pub shells: Option<Vec<Shell>>,
     pub fit: Option<FitCheck>,
 }
 
 impl ImportReport {
+    /// The shells `--shells` listed and what the changes by hand did.
+    fn fmt_by_hand(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (number, shell) in self.shells.iter().flatten().enumerate() {
+            writeln!(f, "  shell {:<7} {}", number + 1, describe_shell(shell))?;
+        }
+        if let Some(edited) = &self.edited {
+            writeln!(f, "  by hand       {}", describe_edits(edited))?;
+        }
+        Ok(())
+    }
+
     /// True when nothing found would stop the model printing correctly.
     pub fn is_clean(&self) -> bool {
         let sound = self
@@ -140,6 +188,19 @@ impl fmt::Display for ImportReport {
             writeln!(f, "  orientation   {}", describe_orientation(orientation))?;
         }
 
+        if let Some(pairs) = self.crossing_pairs {
+            writeln!(f, "  crossings     {pairs} pairs of faces")?;
+        }
+
+        self.fmt_by_hand(f)?;
+
+        if let Some(mended) = &self.mended {
+            writeln!(f, "  repair        {}", describe_repair(mended))?;
+            if let Some(wrapped) = self.wrapped {
+                writeln!(f, "  wrapped       {}", describe_wrap(wrapped))?;
+            }
+        }
+
         if let Some(fit) = &self.fit {
             writeln!(f, "  fits          {}", describe_fit(fit))?;
         }
@@ -180,6 +241,10 @@ fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
         .into_iter()
         .filter(|(count, _)| *count > 0)
         .map(|(count, label)| format!("{count} {label}"))
+        .chain((diagnostics.holes > 0).then(|| match diagnostics.holes {
+            1 => "1 hole".to_owned(),
+            holes => format!("{holes} holes"),
+        }))
         .collect()
 }
 
@@ -199,6 +264,44 @@ fn describe_orientation(orientation: &Orientation) -> String {
         return format!("fixed {} inverted faces", orientation.flipped_faces);
     }
     "consistent".to_owned()
+}
+
+fn describe_repair(mended: &Mended) -> String {
+    if mended.kept_as_found {
+        return "left as found, since repairing would leave more wrong".to_owned();
+    }
+    let holes = |count: usize| if count == 1 { "hole" } else { "holes" };
+    let (closed, left) = (mended.filled.loops_filled, mended.filled.loops_left);
+    let mut done = Vec::new();
+    if closed > 0 {
+        done.push(format!("closed {closed} {}", holes(closed)));
+    }
+    let seams = mended.stitched.edges_split;
+    if seams > 0 {
+        let plural = if seams == 1 { "seam" } else { "seams" };
+        done.push(format!("stitched {seams} {plural}"));
+    }
+    if mended.shells_dropped > 0 {
+        let plural = if mended.shells_dropped == 1 {
+            "shell"
+        } else {
+            "shells"
+        };
+        done.push(format!("dropped {} small {plural}", mended.shells_dropped));
+    }
+    if mended.duplicates_removed > 0 {
+        done.push(format!(
+            "dropped {} doubled faces",
+            mended.duplicates_removed
+        ));
+    }
+    if left > 0 {
+        done.push(format!("{left} {} left open", holes(left)));
+    }
+    if done.is_empty() {
+        return "nothing to repair".to_owned();
+    }
+    done.join(", ")
 }
 
 /// An axis the model is too big for is named as that; one it merely stands off is named

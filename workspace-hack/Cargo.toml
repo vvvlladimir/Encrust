@@ -36,7 +36,6 @@ serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 simd-adler32 = { version = "0.3" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
-thiserror = { version = "2" }
 tracing-core = { version = "0.1" }
 
 [build-dependencies]

@@ -2,7 +2,8 @@
 mod bodies;
 
 use core_geometry::{
-    DEFAULT_WELD_TOLERANCE, Mesh, diagnose, orient_outward, remove_duplicate_faces, split, weld,
+    Bvh, DEFAULT_SEAM_TOLERANCE, DEFAULT_WELD_TOLERANCE, Mesh, diagnose, orient_outward,
+    remove_duplicate_faces, self_intersections, split, stitch_seams, weld,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -51,6 +52,22 @@ fn benchmarks(c: &mut Criterion) {
         );
     });
 
+    // Inside out with a cavity: the one case orientation has to find which shell holds which.
+    let mut hollow = clean.clone();
+    hollow.append(&bodies::uv_sphere(10.0, 320, 320));
+    hollow
+        .faces
+        .iter_mut()
+        .take(clean.faces.len())
+        .for_each(|face| face.swap(1, 2));
+    c.bench_function("orient 400k triangles hollow inside out", |b| {
+        b.iter_batched(
+            || hollow.clone(),
+            |mut mesh| orient_outward(&mut mesh),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+
     c.bench_function("remove duplicates from 200k triangles", |b| {
         b.iter_batched(
             || clean.clone(),
@@ -61,6 +78,23 @@ fn benchmarks(c: &mut Criterion) {
 
     c.bench_function("split 200k triangles", |b| {
         b.iter(|| split(std::hint::black_box(&clean)));
+    });
+
+    // Every edge open and every corner a candidate: the most the seam search can be asked.
+    let mut seams = c.benchmark_group("seams");
+    seams.sample_size(10);
+    seams.bench_function("stitch over 200k unwelded triangles", |b| {
+        b.iter_batched(
+            || raw.clone(),
+            |mut mesh| stitch_seams(&mut mesh, DEFAULT_SEAM_TOLERANCE),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+    seams.finish();
+
+    let bvh = Bvh::build(&clean);
+    c.bench_function("self intersections of 200k triangles", |b| {
+        b.iter(|| self_intersections(std::hint::black_box(&clean), &bvh));
     });
 
     let dense = dense_sample();

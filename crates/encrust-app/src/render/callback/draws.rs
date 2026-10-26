@@ -1,0 +1,410 @@
+//! What the objects on the plate come to on the GPU: models, their cuts and pockets,
+//! supports and the ghost of what a click puts down.
+
+use std::sync::Arc;
+
+use core_geometry::{Mesh, Scalar, Transform, Vec3};
+use core_volume::{CUT_WEIGHT, Channel, DrainHole, Drilled, MOUTH_LIFT_MM, drill};
+use egui::Color32;
+
+use crate::relief::Textures;
+use crate::render::gpu::{
+    CutDraw, DrainCut, MAX_CUTS, MAX_POCKETS, ModelDraw, ReliefDraw, TrapBox,
+};
+use crate::render::lod::Light;
+use crate::render::vertex::{ModelInstance, NOT_MARKED};
+use crate::scene::{Mapped, ObjectId, Scene, SceneObject};
+use crate::ui::theme;
+
+use super::{GROUP_PULL, Ghost, GhostShape};
+
+/// What `object` is drawn as: its shell or its own mesh, or a lighter level of that.
+fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
+    let mesh = object.printed();
+    light
+        .and_then(|light| light.meshes.get(&object.id))
+        .unwrap_or(mesh)
+        .clone()
+}
+
+/// What the objects on the plate come to on the GPU, gathered one object at a time.
+#[derive(Default)]
+pub(super) struct Draws {
+    pub(super) models: Vec<ModelDraw>,
+    pub(super) markers: Vec<ModelDraw>,
+    pub(super) solids: Vec<ModelDraw>,
+    pub(super) cuts: Vec<DrainCut>,
+    pub(super) cut_surfaces: Vec<CutDraw>,
+    pub(super) pockets: Vec<TrapBox>,
+    pub(super) reliefs: Vec<ReliefDraw>,
+}
+
+impl Draws {
+    /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
+    /// `light` holds the lighter levels drawn in place of heavy meshes, `stand_in` a mesh
+    /// one model is drawn as in place of its own.
+    pub(super) fn of(
+        scene: &Scene,
+        mark: f32,
+        textures: Option<&Textures>,
+        hidden: &[bool],
+        light: Option<&Light>,
+        stand_in: Option<(ObjectId, &Arc<Mesh>)>,
+    ) -> Self {
+        let mut draws = Self::default();
+        for object in scene.printable(scene.active_plate()) {
+            let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
+            if let Some((_, mesh)) = stand_in.filter(|(id, _)| *id == object.id) {
+                draws.stand_in(object, mesh, colour, mark);
+                draws.supports(object, hidden);
+                continue;
+            }
+            let texture = textures.and_then(|textures| textures.get(&object.id));
+            // A texture is mapped onto the model's own faces, so its holes stay shader cuts.
+            let (shown, drilled) = match texture {
+                Some(_) => (Arc::clone(object.uncut()), None),
+                None => (shown(object, light), object.hollow.drilled(object.uncut())),
+            };
+            draws.model(object, &shown, colour, mark, texture, drilled);
+            draws.hollowing(object, &shown, colour, drilled);
+            draws.supports(object, hidden);
+        }
+        // Last, so that the resin inside one model is still seen when another stands in
+        // front of it: nothing hides anything under the x-ray, but what is drawn later
+        // washes over what came before.
+        for object in scene.printable(scene.active_plate()) {
+            draws.traps(object);
+        }
+        draws
+    }
+
+    pub(super) fn ghost(&mut self, scene: &Scene, light: Option<&Light>, ghost: &Ghost) {
+        match &ghost.shape {
+            GhostShape::Body { mesh, transform } => {
+                self.marker(Arc::clone(mesh), *transform, ghost.colour);
+            }
+            GhostShape::Hole { id, hole, into } => {
+                let Some(object) = scene.get(*id) else {
+                    return;
+                };
+                let Ok(body) = drill(std::slice::from_ref(hole), &[]) else {
+                    return;
+                };
+                // The body is laid down `CUT_WEIGHT` deep; its wall is the first copy alone.
+                let wall = 0..body.faces.len() / CUT_WEIGHT;
+                let instance = ModelInstance::new(object.transform, ghost.colour, NOT_MARKED);
+                // First, so a plate already holding `MAX_CUTS` cuts still opens this one.
+                let cut = cuts_of(std::slice::from_ref(hole), &[], object.transform);
+                self.cuts.splice(0..0, cut);
+                let solid = match into {
+                    Some(group) => ModelDraw::whole(
+                        Arc::clone(group),
+                        ModelInstance::new(Transform::default(), ghost.colour, NOT_MARKED),
+                    ),
+                    None => ModelDraw::whole(shown(object, light), instance),
+                };
+                self.cut_surfaces.push(CutDraw {
+                    body: ModelDraw::part(Arc::new(body), wall, instance),
+                    solid,
+                });
+            }
+        }
+    }
+
+    /// `shown` is what the model is drawn as: its own mesh, or a lighter level of it.
+    fn model(
+        &mut self,
+        object: &SceneObject,
+        shown: &Arc<Mesh>,
+        colour: Color32,
+        mark: f32,
+        texture: Option<&Arc<Mapped>>,
+        drilled: Option<&Drilled>,
+    ) {
+        // A model drilled exactly carries its holes as faces; until then the shader cuts them.
+        if drilled.is_none() {
+            let (drains, channels) = object.hollow.cut();
+            self.cuts
+                .extend(cuts_of(drains, channels, object.transform));
+        }
+        // A hollowed model is drawn as its shell: the cavity faces inward, so it is
+        // culled from outside and only shows once the camera is in the wall.
+        let mesh = Arc::clone(drilled.map_or(object.uncut(), |drilled| &drilled.mesh));
+        let cavity = match drilled {
+            Some(drilled) => drilled.cavity.clone(),
+            None => object.hollow.cavity_faces(),
+        };
+        let instance = ModelInstance::new(object.transform, colour, mark);
+        match texture {
+            // The map is indexed by the model's own faces, so a hollowed model is drawn as
+            // its outer surface while it carries a texture: the cavity is not pressed.
+            Some(mapped) => self.reliefs.push(ReliefDraw {
+                mesh: Arc::clone(&object.mesh),
+                mapped: Arc::clone(mapped),
+                instance,
+            }),
+            // The cavity's own faces are declared even while nothing is trapped in it, so
+            // that the frame which does paint them finds the mesh already cut to suit.
+            None => self.models.push(match cavity {
+                Some(cavity) if Arc::ptr_eq(shown, &mesh) => {
+                    ModelDraw::whole_around(Arc::clone(&mesh), cavity, instance)
+                }
+                _ => ModelDraw::whole(Arc::clone(shown), instance),
+            }),
+        }
+
+        // The cap is counted against the same mesh that is drawn, cavity and lattice
+        // included: the inward-wound cavity subtracts itself from the count exactly as it
+        // does from the fill rule, so the face is filled where there is material and left
+        // open where the cut runs through the hollow.
+        //
+        // A surface with a hole in it has no inside for the count to be inside of, so a
+        // model that is not sound is left out of it and gets no cap: an open model reads
+        // as open rather than as a cap spilling out into the air beside it (ADR 0195).
+        if object.summary.is_sound() {
+            self.solid(mesh, object.transform);
+        }
+    }
+
+    /// A model drawn and capped as `mesh` alone: its faces are not the model's own, so no
+    /// texture, hollow or cut of the model's is laid on it.
+    fn stand_in(&mut self, object: &SceneObject, mesh: &Arc<Mesh>, colour: Color32, mark: f32) {
+        let instance = ModelInstance::new(object.transform, colour, mark);
+        self.models
+            .push(ModelDraw::whole(Arc::clone(mesh), instance));
+        if object.summary.is_sound() {
+            self.solid(Arc::clone(mesh), object.transform);
+        }
+    }
+
+    fn hollowing(
+        &mut self,
+        object: &SceneObject,
+        shown: &Arc<Mesh>,
+        colour: Color32,
+        drilled: Option<&Drilled>,
+    ) {
+        // Only while the cuts are not yet taken out exactly: then they are faces of the mesh.
+        let cuts = object.hollow.cut_bodies().filter(|_| drilled.is_none());
+        // Counted but never drawn: a cut is wound inward, so it takes itself back out of
+        // the count and the cap opens over the bore. See ADR 0074, 0075.
+        if let Some(cuts) = cuts
+            && object.summary.is_sound()
+        {
+            self.solid(Arc::clone(cuts), object.transform);
+        }
+        // The inside of every hole: the far wall of the cut's own body, drawn where the
+        // object stands in front of it. Nothing meshes what that looks like; see ADR 0201.
+        // Against what the model is drawn as, so the hole's inside meets its surface.
+        if let Some(cuts) = cuts {
+            let mesh = shown;
+            self.cut_surfaces.push(CutDraw {
+                body: ModelDraw::part(
+                    Arc::clone(cuts),
+                    0..cuts.faces.len() / CUT_WEIGHT,
+                    ModelInstance::new(object.transform, colour, NOT_MARKED),
+                ),
+                solid: ModelDraw::whole(
+                    Arc::clone(mesh),
+                    ModelInstance::new(object.transform, colour, NOT_MARKED),
+                ),
+            });
+        }
+        // Blockers are kept in the model's own space, so they ride its placement.
+        if let Some(markers) = object.hollow.markers() {
+            self.marker(
+                Arc::clone(markers),
+                object.transform,
+                theme::scene().blocker,
+            );
+        }
+    }
+
+    /// The cavity of a model the last drainage check found resin in, painted in its own
+    /// red where a pocket stands in it: that space fills with resin unless a hole is
+    /// drilled into it. It is the shell's own cavity faces rather than a mesh of its own,
+    /// so nothing is uploaded twice, and the x-ray never washes it down; which part of
+    /// them paints is the shader's own test against the pockets. See ADR 0190, 0200.
+    fn traps(&mut self, object: &SceneObject) {
+        if object.traps.found().is_empty() {
+            return;
+        }
+        let (Some(shell), Some(cavity)) = (object.hollow.shell(), object.hollow.cavity_faces())
+        else {
+            return;
+        };
+        self.pockets
+            .extend(pockets_of(object.traps.found(), object.transform));
+        self.pockets.truncate(MAX_POCKETS);
+        self.models.push(ModelDraw::part(
+            Arc::clone(shell),
+            cavity,
+            ModelInstance::new(object.transform, theme::scene().trapped, NOT_MARKED).as_volume(),
+        ));
+    }
+
+    /// Patches and columns are already in plate coordinates: they were built against the
+    /// placed model, not alongside it.
+    fn supports(&mut self, object: &SceneObject, hidden: &[bool]) {
+        let (painted, blocked) = object.supports.patches();
+        for (patch, colour) in [
+            (painted, theme::scene().painted),
+            (blocked, theme::scene().blocked),
+        ] {
+            if let Some(patch) = patch {
+                self.flat(Arc::clone(patch), Transform::default(), colour);
+            }
+        }
+
+        let groups = object.supports_shown();
+        for (group, shaded) in groups
+            .iter()
+            .enumerate()
+            .filter(|(group, shaded)| !shaded.mesh.is_empty() && hidden.get(*group) != Some(&true))
+        {
+            // A column holds nothing up but the model, so marking its own overhangs would
+            // only paint the scaffolding red.
+            let instance =
+                ModelInstance::new(Transform::default(), theme::support_tint(group), NOT_MARKED)
+                    .pulled(GROUP_PULL * (groups.len() - group) as f32);
+            self.models.push(ModelDraw::smooth(shaded, instance));
+            self.solid(Arc::clone(&shaded.mesh), Transform::default());
+        }
+    }
+
+    /// Drawn in one flat colour and never marked for overhangs.
+    fn flat(&mut self, mesh: Arc<Mesh>, transform: Transform, colour: Color32) {
+        self.models.push(ModelDraw::whole(
+            mesh,
+            ModelInstance::new(transform, colour, NOT_MARKED),
+        ));
+    }
+
+    /// Drawn after the cap, so it shows through the cut it stands under.
+    fn marker(&mut self, mesh: Arc<Mesh>, transform: Transform, colour: Color32) {
+        self.markers.push(ModelDraw::whole(
+            mesh,
+            ModelInstance::new(transform, colour, NOT_MARKED),
+        ));
+    }
+
+    /// Counted into the stencil for the section cap, never drawn.
+    fn solid(&mut self, mesh: Arc<Mesh>, transform: Transform) {
+        self.solids.push(ModelDraw::whole(
+            mesh,
+            ModelInstance::new(transform, theme::scene().section_cap, NOT_MARKED),
+        ));
+    }
+}
+
+/// The holes and channels of one model, in plate millimetres, ready for the shader.
+///
+/// A channel is handed over a leg at a time with its mitres, the same prism `core-volume`
+/// meshes it as. Past `MAX_CUTS` a plate is drawn with its later holes uncut.
+pub(crate) fn cuts_of(
+    drains: &[DrainHole],
+    channels: &[Channel],
+    transform: Transform,
+) -> Vec<DrainCut> {
+    let matrix = transform.to_matrix();
+    let smallest = transform.least_scale();
+    let place = |point: Vec3, radius_mm: Scalar| {
+        let at = matrix.transform_point3(point);
+        [at.x, at.y, at.z, radius_mm * smallest]
+    };
+
+    let mut cuts = Vec::new();
+    for hole in drains {
+        let Some(axis) = hole.axis.try_normalize() else {
+            continue;
+        };
+        let radius = hole.diameter_mm / 2.0;
+        cuts.push(DrainCut {
+            mouth: place(hole.at - axis * hole.lift_mm.max(MOUTH_LIFT_MM), radius),
+            tip: place(hole.at + axis * hole.depth_mm, radius * hole.taper),
+            corner: corner_of(hole.corner(), hole.axis, transform),
+            ..DrainCut::default()
+        });
+    }
+    for channel in channels {
+        let radius = channel.diameter_mm / 2.0;
+        let sides = channel.shape.corners();
+        for leg in channel.legs() {
+            let axis = leg.to - leg.from;
+            let mut cut = DrainCut {
+                mouth: place(leg.from, radius),
+                tip: place(leg.to, radius),
+                corner: corner_of(sides.map(|sides| (leg.corner, sides)), axis, transform),
+                start: mitre_of(leg.start, transform),
+                end: mitre_of(leg.end, transform),
+            };
+            // A channel is open at both ends, which the shader reads off the sign of the far
+            // radius; its legs meet at their mitres.
+            cut.tip[3] = -cut.tip[3];
+            cuts.push(cut);
+        }
+    }
+    cuts.truncate(MAX_CUTS);
+    cuts
+}
+
+/// A channel leg's mitre plane carried onto the plate: a plane's normal goes by the inverse
+/// transpose; all zero for an end that opens.
+fn mitre_of(normal: Option<Vec3>, transform: Transform) -> [f32; 4] {
+    let linear = transform.linear();
+    let Some(placed) =
+        normal.and_then(|normal| (linear.inverse().transpose() * normal).try_normalize())
+    else {
+        return [0.0; 4];
+    };
+    [placed.x, placed.y, placed.z, 1.0]
+}
+
+/// A polygonal cut's first corner about `axis` carried onto the plate, square to the axis
+/// there, and its sides; all zero for a round one, which the shader cuts as a circle.
+fn corner_of(corner: Option<(Vec3, usize)>, axis: Vec3, transform: Transform) -> [f32; 4] {
+    let linear = transform.linear();
+    let Some((corner, sides)) = corner else {
+        return [0.0; 4];
+    };
+    let axis = (linear * axis).normalize_or_zero();
+    let placed = linear * corner;
+    let Some(across) = (placed - axis * placed.dot(axis)).try_normalize() else {
+        return [0.0; 4];
+    };
+    [across.x, across.y, across.z, sides as f32]
+}
+
+/// The boxes of the pockets found in one model, carried onto the plate: a pocket travels
+/// with the model it was found in, the way a hole does.
+fn pockets_of(found: &[core_supports::Trapped], transform: Transform) -> Vec<TrapBox> {
+    let matrix = transform.to_matrix();
+    found
+        .iter()
+        .map(|pocket| {
+            let mut placed = core_geometry::Aabb::new(
+                matrix.transform_point3(pocket.bounds.mins),
+                matrix.transform_point3(pocket.bounds.mins),
+            );
+            for index in 1..8 {
+                let pick = |axis: usize| match index >> axis & 1 {
+                    0 => pocket.bounds.mins[axis],
+                    _ => pocket.bounds.maxs[axis],
+                };
+                placed.take_point(matrix.transform_point3(Vec3::new(pick(0), pick(1), pick(2))));
+            }
+            TrapBox {
+                low: placed.mins.extend(0.0).to_array(),
+                high: placed.maxs.extend(0.0).to_array(),
+            }
+        })
+        .collect()
+}
+
+pub(super) fn color_for(selected: bool, sound: bool) -> Color32 {
+    match (selected, sound) {
+        (true, _) => theme::scene().selected,
+        (false, true) => theme::scene().object,
+        (false, false) => theme::scene().unsound,
+    }
+}

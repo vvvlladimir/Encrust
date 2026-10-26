@@ -54,7 +54,41 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   faces wound the wrong way.
 - Weld vertices together, with a tolerance you set.
 - Flip faces wound the wrong way, and drop faces that enclose nothing.
-- Close holes, but only when you ask for it.
+- Keep the cavity of a model hollowed before it was exported: a shell wound inward inside
+  another stays a hollow on import and through every repair, and a hollow model written
+  inside out is turned with its cavity.
+- Close holes, but only when you ask for it: Repair in the window, `--repair` on the
+  command line.
+- Open the **Repair** tool: what was found in the picked models (or every model on the
+  plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
+  press, how many pairs of faces cross. Pick the method, set the seam tolerance and the
+  smallest speck, and repair with progress and Cancel. The rail's
+  Repair button carries a dot while a model on the plate is broken.
+- Click a finding to mark it on the models while the Repair tool is open: the rims of the
+  holes as lines, faces without area, drawn twice or crossing others as patches. The
+  camera flies to the first place and frames it face on from outside the model, round any
+  model in the way; each click after goes to the next, and the click after the last puts
+  the marks away. The place in view is bright, the rest darker. Marked edges are drawn
+  3 points wide at any zoom, wide enough to aim a click at.
+- Stitch the seams where a finer patch of surface meets a coarser one, as part of the same
+  repair, without moving or adding a vertex.
+- Drop specks: open shells under 1 mm² floating apart from the model. A closed shell is
+  never dropped, however small.
+- Run only part of the repair: close holes, close only the holes a missing face leaves,
+  or turn faces.
+- Wrap a model made of overlapping parts into one outer surface, or run a deep repair:
+  repair, wrap, repair. Shells are joined exactly; a model whose shells do not union
+  exactly, such as one crossing itself, keeps the repair alone and says so. A part wholly
+  inside another is lost in the wrap; a cavity is kept.
+- See how many holes a model has, and how many pairs of faces cross.
+- List the shells of one model, pick them by hand or every one under a hundredth of the
+  largest, fly to the one picked and drop it, or drop the picked ones together. Hide a
+  shell from view by its eye to see what lies behind or inside it, while the list is open.
+- Edit by hand in the Repair tool's Faces mode: pick faces with a brush, a whole surface
+  with Cmd and Shift, then flip or delete them; or pick two open edges, marked magenta
+  over the rest, and bridge them with faces wound as the ones beside them. On the command
+  line, `--flip-faces`, `--drop-faces`, `--drop-shells` and `--bridge` do the same by
+  number, and `inspect --shells` lists the shells.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.
@@ -505,7 +539,8 @@ smoothing, not the original model.
   section's pull follows its area, less for a thin strip than for a disc of the same area.
 
 **It lets you:**
-- Jump to the layer of each issue.
+- Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
+  on the cut, and the camera flies to it past the models and supports in the way.
 - **Support every island** in one press.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
@@ -660,7 +695,7 @@ address in a video player).
 - **Tool rail:** shows each tool's name under its icon whenever the window has room, and
   icons alone when it does not. Drag the column's edge to set your own width; double-click
   it to go back to fitting the names. The plate column's edge resets the same way.
-- **Keyboard:** digits 1 to 8 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
+- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.

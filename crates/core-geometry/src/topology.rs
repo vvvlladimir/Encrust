@@ -4,6 +4,8 @@ use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
 };
 
+use rayon::slice::ParallelSlice;
+
 use crate::Mesh;
 
 /// One face's use of one undirected edge.
@@ -104,6 +106,14 @@ pub(crate) fn sort_runs<T: Ord + Send>(items: &mut [T], starts: &[usize]) {
 /// Groups a sorted [`edge_uses`] result into one slice per distinct edge.
 pub(crate) fn edge_groups(uses: &[EdgeUse]) -> impl Iterator<Item = &[EdgeUse]> {
     uses.chunk_by(|a, b| a.edge == b.edge)
+}
+
+/// The faces grouped into shells, two faces joined when they share an edge.
+pub(crate) fn shells(face_count: usize, uses: &[EdgeUse]) -> Components {
+    let joins = uses
+        .par_chunk_by(|a, b| a.edge == b.edge)
+        .flat_map_iter(|group| group[1..].iter().map(|other| [group[0].face, other.face]));
+    Components::joined(face_count, joins)
 }
 
 /// Two faces sharing an edge agree on orientation when they walk it in opposite

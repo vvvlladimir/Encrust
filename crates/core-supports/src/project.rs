@@ -1,4 +1,6 @@
-use core_geometry::{Adjacency, FastMap, Mat3, Mesh, Region, Scalar, Vec2, Vec3};
+use core_geometry::{
+    Adjacency, FastMap, Mat3, Mesh, Region, Scalar, Vec2, Vec3, cell_of_point, cells_around,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -331,15 +333,11 @@ fn border_points(
 /// Takes `point` unless something already taken is within `spacing_mm` of it, keeping the
 /// taken points in buckets that size so the question reads twenty-seven of them.
 fn take_apart(taken: &mut FastMap<[i32; 3], Vec<Vec3>>, point: Vec3, spacing_mm: Scalar) -> bool {
-    let cell = (point / spacing_mm).floor().as_ivec3().to_array();
-    let crowded = (-1..=1).any(|x| {
-        (-1..=1).any(|y| {
-            (-1..=1).any(|z| {
-                taken
-                    .get(&[cell[0] + x, cell[1] + y, cell[2] + z])
-                    .is_some_and(|near| near.iter().any(|other| other.distance(point) < spacing_mm))
-            })
-        })
+    let cell = cell_of_point(point, spacing_mm);
+    let crowded = cells_around(cell).any(|around| {
+        taken
+            .get(&around)
+            .is_some_and(|near| near.iter().any(|other| other.distance(point) < spacing_mm))
     });
     if crowded {
         return false;

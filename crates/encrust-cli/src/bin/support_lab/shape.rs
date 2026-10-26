@@ -2,7 +2,8 @@
 //! each tip carries, what is left bare, and what a tip will scar or break when it comes off.
 
 use core_geometry::{
-    Bvh, FastMap, Mesh, Quat, Ray, Scalar, Triangle, Vec3, Winding, diagnose, signed_volume,
+    Bvh, FastMap, Mesh, Quat, Ray, Scalar, Triangle, Vec3, Winding, cell_of_point, cells_around,
+    diagnose, signed_volume,
 };
 use core_plate::LOOKS_UP;
 use printer_profiles::{ContactShape, SupportProfile};
@@ -211,22 +212,18 @@ impl Grid {
     fn new(points: &[Vec3], cell: Scalar) -> Self {
         let mut buckets: FastMap<[i32; 3], Vec<usize>> = FastMap::default();
         for (at, point) in points.iter().enumerate() {
-            buckets.entry(Self::key(*point, cell)).or_default().push(at);
+            buckets
+                .entry(cell_of_point(*point, cell))
+                .or_default()
+                .push(at);
         }
         Self { cell, buckets }
     }
 
-    fn key(point: Vec3, cell: Scalar) -> [i32; 3] {
-        (point / cell).floor().as_ivec3().to_array()
-    }
-
     /// The nearest of `points` to `at` within one cell, and how far it is.
     fn nearest(&self, points: &[Vec3], at: Vec3) -> Option<(usize, Scalar)> {
-        let [x, y, z] = Self::key(at, self.cell);
         let mut best: Option<(usize, Scalar)> = None;
-        for key in (-1..=1).flat_map(|dx| {
-            (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))
-        }) {
+        for key in cells_around(cell_of_point(at, self.cell)) {
             for &index in self.buckets.get(&key).into_iter().flatten() {
                 let distance = points[index].distance(at);
                 if distance <= self.cell && best.is_none_or(|(_, d)| distance < d) {
@@ -285,7 +282,7 @@ fn underside(
                 Some((tip, _)) => load[tip] += piece * -normal.z,
                 None if carried_below(&bvh, point, normal, profile.max_overhang_deg) => {}
                 None => {
-                    let patch = bare.entry(Grid::key(point, spacing)).or_default();
+                    let patch = bare.entry(cell_of_point(point, spacing)).or_default();
                     patch.0 += piece;
                     patch.1 = point;
                 }

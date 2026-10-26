@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use core_engine::SupportPlan;
 use core_format::ExposureRange;
-use core_geometry::{DEFAULT_WELD_TOLERANCE, Scalar, Vec3};
+use core_geometry::{
+    DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, DEFAULT_WELD_TOLERANCE, MendMethod, Scalar,
+    Vec3,
+};
 use core_plate::{OrientGoal, OrientPreset};
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
@@ -61,6 +64,52 @@ pub struct ImportArgs {
     /// Skip the topology check, dropping faces laid over others, and the orientation fix.
     #[arg(long)]
     pub no_validate: bool,
+
+    /// Repair the model as the window's Repair does, by `repair` unless another method is
+    /// named; it is kept as it came if that would leave more wrong.
+    #[arg(long, value_name = "METHOD", num_args = 0..=1, require_equals = true,
+          default_missing_value = "repair", conflicts_with = "no_validate")]
+    pub repair: Option<RepairMethod>,
+
+    /// How far a vertex may stand off an open edge for --repair to stitch it in, millimetres.
+    #[arg(long, value_name = "MM", default_value_t = DEFAULT_SEAM_TOLERANCE, requires = "repair")]
+    pub seam_tolerance: Scalar,
+
+    /// Smallest area a shell enclosing nothing keeps under --repair, square millimetres.
+    #[arg(long, value_name = "MM2", default_value_t = DEFAULT_SMALLEST_SHELL_MM2,
+          requires = "repair")]
+    pub smallest_shell: Scalar,
+
+    /// Turn these faces the other way, numbered from 0 on the model as import leaves it.
+    #[arg(
+        long,
+        value_name = "FACES",
+        value_delimiter = ',',
+        conflicts_with = "no_validate"
+    )]
+    pub flip_faces: Vec<usize>,
+
+    /// Drop these faces, numbered as for --flip-faces.
+    #[arg(
+        long,
+        value_name = "FACES",
+        value_delimiter = ',',
+        conflicts_with = "no_validate"
+    )]
+    pub drop_faces: Vec<usize>,
+
+    /// Drop these shells, numbered from 1 as `inspect --shells` lists them.
+    #[arg(
+        long,
+        value_name = "SHELLS",
+        value_delimiter = ',',
+        conflicts_with = "no_validate"
+    )]
+    pub drop_shells: Vec<usize>,
+
+    /// Lay faces between two open edges, each as its two vertices: A-B:C-D. May repeat.
+    #[arg(long, value_name = "A-B:C-D", conflicts_with = "no_validate")]
+    pub bridge: Vec<crate::edits::BridgeEdges>,
 
     #[command(flatten)]
     pub transform: TransformArgs,
@@ -143,6 +192,36 @@ pub struct TransformArgs {
     /// How far --orient may turn the model from the way its file stands it, degrees.
     #[arg(long, value_name = "DEG", requires = "orient")]
     pub max_tilt: Option<Scalar>,
+}
+
+/// Which repair `--repair` runs.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum RepairMethod {
+    /// Collapse, stitch seams, drop specks, patch holes and turn the patches outward.
+    Repair,
+    /// Patch every hole and turn the patches outward.
+    CloseHoles,
+    /// Patch only the holes a single missing face leaves.
+    CloseSmallHoles,
+    /// Turn the faces wound the wrong way, and add nothing.
+    Turn,
+    /// Repair, then wrap every shell in one outer surface.
+    Wrap,
+    /// Repair, wrap and repair again.
+    Deep,
+}
+
+impl From<RepairMethod> for core_volume::RepairMethod {
+    fn from(method: RepairMethod) -> Self {
+        match method {
+            RepairMethod::Repair => Self::Mend(MendMethod::Repair),
+            RepairMethod::CloseHoles => Self::Mend(MendMethod::CloseHoles),
+            RepairMethod::CloseSmallHoles => Self::Mend(MendMethod::CloseSmallHoles),
+            RepairMethod::Turn => Self::Mend(MendMethod::Turn),
+            RepairMethod::Wrap => Self::Wrap,
+            RepairMethod::Deep => Self::Deep,
+        }
+    }
 }
 
 /// What an orientation is searched for, as [`OrientPreset`] names it.

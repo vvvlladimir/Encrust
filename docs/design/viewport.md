@@ -296,8 +296,41 @@ be a hairline down the cube's side. Under the cube, while the pointer is over it
 swings back to the view an empty window opens with; its room is kept whether it shows or
 not, so it does not vanish on the way down to it.
 
-The swing is a `CameraTurn` on `View`, eased with a smoothstep over 0.35 s and taking the
-short way round in yaw. Any drag or scroll of the camera ends it where it stands.
+The swing is a `CameraTurn` on `View`, eased with a smoothstep and taking the short way
+round in yaw. Any drag or scroll of the camera ends it where it stands.
+
+## Marks and flying to a spot
+
+What a tool points at on a model is a `highlight::Highlight`: faces as patches of their own
+stood `LIFT_MM` off the surface, edges as wide lines — a quad per edge the shader lays
+across the screen `theme::MARK_LINE_W` points wide, its depth pulled toward the eye so the
+faces beside the edge never cover it — each mark in its own colour and drawn in
+the order listed, so a mark over another stands further off or comes later. The Repair
+tool's findings are the first (ADR 0355). A Check row cuts the view at its layer, in
+Prepare by moving the section there, and rings each issue on the cut, as wide as a disc of
+its area and at least 0.5 mm; the rings go once the cut or a model moves. The camera looks down on
+them, seen through the cut, so its `Spot` faces +Z.
+
+A place to look at is a `Spot`: centre, radius and the side it faces. `OrbitCamera::focusing`
+frames it so the sphere of `radius / 0.35`, at least 3 mm, touches the frustum along the
+narrower side: `r / sin(half angle)` back, `r / tan` without perspective, where the view's
+half height at the target is what the distance sets. The defect fills about a third of the
+view and the rest shows what it lies in. It is seen from its own side unless the view
+already faces it within 45°, when only the target and distance move. A side
+`pick::sight_blocked` finds drawn in front of — a model between the cuts, the cap across
+its material, its built supports — is passed over for rings tilted 30° then 60°
+round it, the one above first, then the current view if that is still outside; never from
+behind, which is from inside the model. With every side blocked it takes its own, and the
+x-ray shows through. A spot with no side of its own, a branching rim or faces drawn both
+ways, tries the current view and then the axes and diagonals nearest to it. A hole's side
+is its loop's, as its patch would face, or for a branching rim the faces along it summed.
+
+Every swing, the view cube's included, moves the target and the distance along the path
+van Wijk and Nuij derive ("Smooth and efficient zooming and panning", 2003) with ρ = √2: a
+long way pulls back, crosses and closes in, a short one hardly zooms, and zooming in place
+scales evenly. Its length S sets a flight's time, 0.35 s a unit between 0.35 and 1.2 s; the
+view cube keeps its own 0.35 s. The angles ease along the same smoothstep, and the two ends
+are the views themselves, not the path's rounding of them.
 
 ## Without perspective
 

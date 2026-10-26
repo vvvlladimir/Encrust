@@ -5,81 +5,12 @@ use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, ModelVertex,
 
 use super::*;
 
-/// Half the stencil's range, which the counting below wraps around: a pixel whose count
-/// ran negative — the plane inside material — lands above it, one whose count ran positive
-/// lands below. See `docs/decisions/0074-the-section-cap-counts-material-not-crossings.md`.
-pub(super) const MATERIAL_ABOVE: u32 = 127;
+mod section;
+mod shadow;
+mod wide;
 
-/// Counting the crossings: a ray leaving a solid above the cut counts up, one entering it
-/// counts down, so the plane is inside material wherever the count ran negative. Back
-/// faces are the ones a ray leaves through, and a body wound inward counts the other way
-/// round, which is what takes a drain hole back out of the count.
-fn counting_stencil() -> wgpu::StencilState {
-    let face = |pass_op| wgpu::StencilFaceState {
-        compare: wgpu::CompareFunction::Always,
-        fail_op: wgpu::StencilOperation::Keep,
-        depth_fail_op: wgpu::StencilOperation::Keep,
-        pass_op,
-    };
-    wgpu::StencilState {
-        front: face(wgpu::StencilOperation::DecrementWrap),
-        back: face(wgpu::StencilOperation::IncrementWrap),
-        read_mask: 0xff,
-        write_mask: 0xff,
-    }
-}
-
-/// Drawing only where the count says the plane is inside material, and leaving the count
-/// alone while doing it. Negative counts wrap past [`MATERIAL_ABOVE`]; a positive one is a
-/// body wound inward standing in the air, which encloses nothing.
-fn inside_only_stencil() -> wgpu::StencilState {
-    let face = wgpu::StencilFaceState {
-        compare: wgpu::CompareFunction::Less,
-        fail_op: wgpu::StencilOperation::Keep,
-        depth_fail_op: wgpu::StencilOperation::Keep,
-        pass_op: wgpu::StencilOperation::Keep,
-    };
-    wgpu::StencilState {
-        front: face,
-        back: face,
-        read_mask: 0xff,
-        write_mask: 0x00,
-    }
-}
-
-/// The other half of [`inside_only_stencil`]: drawing only where the count says there was
-/// no material in front of the cut, which is where its own depth has to go back out.
-fn outside_only_stencil() -> wgpu::StencilState {
-    let face = wgpu::StencilFaceState {
-        compare: wgpu::CompareFunction::GreaterEqual,
-        fail_op: wgpu::StencilOperation::Keep,
-        depth_fail_op: wgpu::StencilOperation::Keep,
-        pass_op: wgpu::StencilOperation::Keep,
-    };
-    wgpu::StencilState {
-        front: face,
-        back: face,
-        read_mask: 0xff,
-        write_mask: 0x00,
-    }
-}
-
-/// Putting the count back to nothing, so the next object counts from zero and the section
-/// cap after them counts from zero too.
-fn clearing_stencil() -> wgpu::StencilState {
-    let face = wgpu::StencilFaceState {
-        compare: wgpu::CompareFunction::Always,
-        fail_op: wgpu::StencilOperation::Keep,
-        depth_fail_op: wgpu::StencilOperation::Keep,
-        pass_op: wgpu::StencilOperation::Zero,
-    };
-    wgpu::StencilState {
-        front: face,
-        back: face,
-        read_mask: 0xff,
-        write_mask: 0xff,
-    }
-}
+pub(super) use section::{Capping, Cutting, MATERIAL_ABOVE};
+pub(super) use shadow::{SHADOW_FORMAT, Shadowing};
 
 /// The one uniform every pipeline reads: the camera, the light and the section.
 pub(super) fn globals_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -116,21 +47,6 @@ impl Facing {
     }
 }
 
-/// The passes that resolve the surface of a cut: the far wall of the cut body, kept where
-/// material stands in front of it. See ADR 0201.
-pub(super) struct Cutting {
-    /// Lays that far wall into the depth plane, painting nothing.
-    pub(super) candidate: Facing,
-    /// Counts the material standing in front of it, into the stencil plane.
-    pub(super) counting: Facing,
-    /// Draws it where the count says there was material.
-    pub(super) surface: Facing,
-    /// Takes its depth back out where the count says there was none.
-    pub(super) wipe: Facing,
-    /// Puts the stencil back to zero between one object and the next.
-    pub(super) reset: wgpu::RenderPipeline,
-}
-
 /// The pipelines that draw the plate and the models in their own flat colours.
 pub(super) struct Solid {
     pub(super) cutting: Cutting,
@@ -149,33 +65,6 @@ pub(super) struct Markers {
     pub(super) far: Facing,
     pub(super) near: Facing,
 }
-
-/// The two passes that fill the section cut with a flat face.
-pub(super) struct Capping {
-    /// Counts, in the stencil plane, how often a view ray crosses a solid above the cut.
-    pub(super) crossing: Facing,
-    /// The same count under the bottom cut, which its cap is filled from.
-    pub(super) bottom_crossing: Facing,
-    /// Fills the cut wherever that count says the plane is inside a solid.
-    pub(super) cap: wgpu::RenderPipeline,
-}
-
-/// The contact shadow: the passes that bake it into a texture over the plate, and the one
-/// that lays it on the plate every frame.
-pub(super) struct Shadowing {
-    /// Lays every model flat onto the texture, from the flat and the textured vertices.
-    pub(super) silhouette: wgpu::RenderPipeline,
-    pub(super) silhouette_relief: wgpu::RenderPipeline,
-    /// Softens what the silhouette pass laid down into the second texture.
-    pub(super) blur: wgpu::RenderPipeline,
-    /// Darkens the plate by what the blur left.
-    pub(super) floor: Textured<wgpu::RenderPipeline>,
-    /// Fills the plate's surface under everything else.
-    pub(super) plate: wgpu::RenderPipeline,
-}
-
-/// What the shadow is baked into: one channel, enough for how dark the plate goes.
-pub(super) const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
 
 /// A pipeline that samples one texture, with the layout its bind group is built against
 /// and the sampler it reads through.
@@ -289,110 +178,6 @@ impl<'a> Builder<'a> {
         }
     }
 
-    /// Four passes over one object's cut bodies and the object itself; see ADR 0201. The
-    /// bodies are wound inward, so the face that survives culling is the far wall of the
-    /// tube — the one a hole is looked at through.
-    pub(super) fn cutting(&self) -> Cutting {
-        let body = |label, fragment_entry, kind: PipelineKind<'_>| {
-            self.facing(PipelineKind {
-                label,
-                vertex_entry: "model_vertex",
-                fragment_entry,
-                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
-                cull: Some(wgpu::Face::Back),
-                ..kind
-            })
-        };
-        Cutting {
-            candidate: body(
-                "viewport_cut_candidate",
-                "cut_candidate_fragment",
-                PipelineKind {
-                    writes_color: false,
-                    ..PipelineKind::default()
-                },
-            ),
-            counting: self.facing(PipelineKind {
-                label: "viewport_cut_crossings",
-                vertex_entry: "model_vertex",
-                fragment_entry: "cut_crossing_fragment",
-                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
-                writes_color: false,
-                // Only what stands in front of the cut's own surface counts, and the
-                // counting leaves that surface where it is.
-                depth_write: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: counting_stencil(),
-                ..PipelineKind::default()
-            }),
-            surface: body(
-                "viewport_cut_surface",
-                "model_fragment",
-                PipelineKind {
-                    // The candidate pass already wrote this depth, so only the fragment
-                    // that laid it down is drawn.
-                    depth_compare: wgpu::CompareFunction::Equal,
-                    stencil: inside_only_stencil(),
-                    ..PipelineKind::default()
-                },
-            ),
-            wipe: body(
-                "viewport_cut_wipe",
-                "cut_wipe_fragment",
-                PipelineKind {
-                    writes_color: false,
-                    // The shader writes the depth, so the test cannot be made against the
-                    // fragment's own: the stencil is what picks the pixels to wipe.
-                    depth_compare: wgpu::CompareFunction::Always,
-                    stencil: outside_only_stencil(),
-                    ..PipelineKind::default()
-                },
-            ),
-            reset: self.plain(PipelineKind {
-                label: "viewport_cut_stencil_reset",
-                vertex_entry: "screen_vertex",
-                fragment_entry: "screen_fragment",
-                writes_color: false,
-                depth_write: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                stencil: clearing_stencil(),
-                ..PipelineKind::default()
-            }),
-        }
-    }
-
-    pub(super) fn capping(&self) -> Capping {
-        let crossing = |label, fragment_entry| {
-            self.facing(PipelineKind {
-                label,
-                vertex_entry: "model_vertex",
-                fragment_entry,
-                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
-                writes_color: false,
-                // Every crossing counts, whatever is in front of it, so the depth buffer
-                // takes no part in this pass.
-                depth_write: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                stencil: counting_stencil(),
-                ..PipelineKind::default()
-            })
-        };
-        Capping {
-            crossing: crossing("viewport_section_crossings", "section_crossing_fragment"),
-            bottom_crossing: crossing("viewport_bottom_crossings", "bottom_crossing_fragment"),
-            cap: self.plain(PipelineKind {
-                label: "viewport_section_cap",
-                vertex_entry: "line_vertex",
-                fragment_entry: "line_fragment",
-                buffers: &[Some(LineVertex::layout())],
-                // No depth, so the markers drawn after it show what stands in the material.
-                depth_write: false,
-                stencil: inside_only_stencil(),
-                ..PipelineKind::default()
-            }),
-        }
-    }
-
     /// Draws the word in front of the plate, sampled out of the font atlas.
     pub(super) fn label(&self) -> Textured<wgpu::RenderPipeline> {
         self.textured(
@@ -410,88 +195,6 @@ impl<'a> Builder<'a> {
                 ..PipelineKind::default()
             },
         )
-    }
-
-    /// The contact shadow's passes. The floor is drawn over the plate and under nothing
-    /// that stands on it, so it takes no depth of its own.
-    pub(super) fn shadowing(&self) -> Shadowing {
-        let floor = self.textured(
-            wgpu::TextureViewDimension::D2,
-            wgpu::AddressMode::ClampToEdge,
-            Self::on,
-            PipelineKind {
-                label: "viewport_shadow_floor",
-                vertex_entry: "floor_vertex",
-                fragment_entry: "floor_fragment",
-                depth_write: false,
-                ..PipelineKind::default()
-            },
-        );
-        let sampled = self
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("viewport_shadow_blur"),
-                bind_group_layouts: &[Some(self.globals_layout), Some(&floor.layout)],
-                immediate_size: 0,
-            });
-        // The nearest surface over a texel decides how dark it goes, whatever order the
-        // models arrive in.
-        let nearest = wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::One,
-            dst_factor: wgpu::BlendFactor::One,
-            operation: wgpu::BlendOperation::Max,
-        };
-        let bake = |label, layout, vertex_entry, fragment_entry, buffers, blend| {
-            baking(
-                self.device,
-                &self.shader,
-                Baking {
-                    label,
-                    layout,
-                    vertex_entry,
-                    fragment_entry,
-                    buffers,
-                    blend,
-                },
-            )
-        };
-        Shadowing {
-            silhouette: bake(
-                "viewport_shadow_silhouette",
-                &self.layout,
-                "silhouette_vertex",
-                "silhouette_fragment",
-                &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
-                Some(nearest),
-            ),
-            silhouette_relief: bake(
-                "viewport_shadow_silhouette_relief",
-                &self.layout,
-                "silhouette_vertex",
-                "silhouette_fragment",
-                &[Some(ReliefVertex::layout()), Some(ModelInstance::layout())],
-                Some(nearest),
-            ),
-            blur: bake(
-                "viewport_shadow_blur",
-                &sampled,
-                "blur_vertex",
-                "blur_fragment",
-                &[],
-                None,
-            ),
-            floor,
-            // First of all and taking no depth: the lines over it never tie with it, and a
-            // model seen through still shows over it.
-            plate: self.plain(PipelineKind {
-                label: "viewport_plate",
-                vertex_entry: "floor_vertex",
-                fragment_entry: "plate_fragment",
-                depth_write: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                ..PipelineKind::default()
-            }),
-        }
     }
 
     /// Draws a model with its own texture washed over it, for the Relief tool.
@@ -570,54 +273,6 @@ fn texture_layout(
                 count: None,
             },
         ],
-    })
-}
-
-/// A pass that draws into the shadow's texture rather than the viewport's planes.
-struct Baking<'a> {
-    label: &'a str,
-    layout: &'a wgpu::PipelineLayout,
-    vertex_entry: &'a str,
-    fragment_entry: &'a str,
-    buffers: &'a [Option<wgpu::VertexBufferLayout<'a>>],
-    /// How a texel takes what is drawn over it, or `None` to replace it.
-    blend: Option<wgpu::BlendComponent>,
-}
-
-/// Both faces drawn and no depth: the shadow wants every surface over a texel, and the
-/// blend is what picks among them.
-fn baking(
-    device: &wgpu::Device,
-    shader: &wgpu::ShaderModule,
-    kind: Baking<'_>,
-) -> wgpu::RenderPipeline {
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(kind.label),
-        layout: Some(kind.layout),
-        vertex: wgpu::VertexState {
-            module: shader,
-            entry_point: Some(kind.vertex_entry),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: kind.buffers,
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: shader,
-            entry_point: Some(kind.fragment_entry),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: SHADOW_FORMAT,
-                blend: kind.blend.map(|component| wgpu::BlendState {
-                    color: component,
-                    alpha: component,
-                }),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        cache: None,
-        multiview_mask: None,
     })
 }
 

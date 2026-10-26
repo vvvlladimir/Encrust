@@ -441,4 +441,47 @@ mod tests {
             "3.2 mm up is over the plate and outside its 3 mm offset, got {lowest}"
         );
     }
+
+    #[test]
+    fn a_field_signed_by_winding_agrees_with_the_winding_number_at_every_voxel() {
+        // Two cubes pushed into each other: walls cross inside the solid, and a side
+        // carried between voxels must never step through one.
+        let shift = Vec3::new(2.5, 1.5, 2.0);
+        let mut crossing = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(5.0));
+        crossing.append(&core_geometry::cuboid(shift, shift + Vec3::splat(5.0)));
+        // A wall thinner than a voxel, whose far side a carried face may hand over.
+        let thin = core_geometry::cuboid(Vec3::ZERO, Vec3::new(5.0, 5.0, 0.1));
+
+        for mesh in [crossing, thin] {
+            assert_signs_match_winding(&mesh);
+        }
+    }
+
+    fn assert_signs_match_winding(mesh: &Mesh) {
+        let settings = crate::FieldSettings {
+            voxel_mm: 0.25,
+            sign: SignMode::Winding,
+            ..crate::FieldSettings::default()
+        };
+        let field = crate::build(mesh, &Bvh::build(mesh), &settings, Cancel::never())
+            .expect("the body has faces");
+        let winding = core_geometry::Winding::build(mesh);
+
+        let grid = field.grid();
+        for tile in field.tile_keys() {
+            for local in tile_voxels() {
+                let voxel = tile * TILE + local;
+                let value = field.value(voxel);
+                if value.abs() < step_mm(field.band_mm()) {
+                    continue;
+                }
+                let inside = winding.is_inside(mesh, grid.position(voxel));
+                assert_eq!(
+                    value < 0.0,
+                    inside,
+                    "voxel {voxel} holds {value} mm, the winding number says inside {inside}"
+                );
+            }
+        }
+    }
 }

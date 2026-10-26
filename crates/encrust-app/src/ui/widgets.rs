@@ -7,6 +7,7 @@ mod button;
 mod field;
 mod layout;
 mod list;
+mod section;
 mod toggle;
 
 pub use bin::{BinLook, bin_button, confirm_bin};
@@ -22,10 +23,10 @@ pub use field::{
 pub use layout::{
     body_and_foot, busy, card, card_foot, describe, described, describing, dialog_frame,
     dialog_head, hairline, heading, help_mark, hint, meta, nested, notice, progress_bar, readings,
-    section, section_with_action, section_with_switch, stats, subheading, subheading_with_switch,
-    vertical_hairline,
+    stats, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use list::{issue_row, list, list_row, two_lines};
+pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};
 
 /// `6h36m39s`, as a printer's own screen states it.
