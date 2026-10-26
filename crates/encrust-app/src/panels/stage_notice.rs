@@ -326,6 +326,12 @@ fn changed_at(ctx: &egui::Context, status: &Status, now: f64) -> f64 {
     }
 }
 
+/// Shows the message for its moment again, though it is the one shown before: a second
+/// click that misses says so as the first did.
+pub(super) fn show_again(ctx: &egui::Context) {
+    ctx.data_mut(|data| data.remove_temp::<(u64, f64)>(Id::new(SEEN)));
+}
+
 /// Counts the message's moment from `now`.
 fn seen_now(ctx: &egui::Context, status: &Status, now: f64) {
     let key = Id::new(status).value();

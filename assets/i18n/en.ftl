@@ -1843,6 +1843,7 @@ repair-picked-edges = Open edges
 repair-of-two = { $count } of 2
 repair-nothing-picked = Nothing picked.
 repair-no-edge-near = No open edge near the pointer: click on the outline of a hole
+repair-no-open-edges = No open edges: the models are closed, with no hole to bridge
 repair-finding-edges = Finding the open edges
 repair-clear-picks = Clear
 repair-flip-faces = Flip

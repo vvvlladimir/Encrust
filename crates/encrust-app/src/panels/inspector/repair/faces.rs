@@ -74,6 +74,11 @@ fn picked(ui: &mut egui::Ui, window: &mut Window) {
         && scene
             .targets()
             .any(|object| repairs.found.open_edges(object).is_none());
+    let empty = if picking == Picking::Edges && repairs.found.all_closed(scene) {
+        tr!("repair-no-open-edges")
+    } else {
+        tr!("repair-nothing-picked")
+    };
     let hand = &mut repairs.hand;
     let mut clear = false;
     section(ui, &tr!("repair-picked"), None, |ui| {
@@ -104,7 +109,7 @@ fn picked(ui: &mut egui::Ui, window: &mut Window) {
                 clear = quiet_button(ui, icon::CANCEL, &tr!("repair-clear-picks"), false, true)
                     .clicked();
             }
-            None => tone(ui, &tr!("repair-nothing-picked"), theme::colors().text_low),
+            None => tone(ui, &empty, theme::colors().text_low),
         }
     });
     if clear {

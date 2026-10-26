@@ -1930,6 +1930,7 @@ repair-picked-edges = Открытые рёбра
 repair-of-two = { $count } из 2
 repair-nothing-picked = Ничего не выбрано.
 repair-no-edge-near = Рядом с указателем нет открытого ребра: щёлкните по контуру дыры
+repair-no-open-edges = Открытых рёбер нет: модели замкнуты, соединять нечего
 repair-finding-edges = Ищем открытые рёбра
 repair-clear-picks = Снять выбор
 repair-flip-faces = Развернуть

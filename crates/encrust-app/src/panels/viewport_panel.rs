@@ -204,7 +204,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             lay_face_under_cursor(window, rect, cursor);
         }
         Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
-        Tool::Repair if paint::picks_edges(window) => repair::pick_edge(window, rect, cursor),
+        Tool::Repair if paint::picks_edges(window) => {
+            repair::pick_edge(ui.ctx(), window, rect, cursor)
+        }
         // The brush has already picked whatever faces the click landed on.
         Tool::Repair if paint::picks_faces(window) => {}
         _ => select_under_cursor(window, rect, cursor, false),

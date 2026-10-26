@@ -147,6 +147,14 @@ impl Found {
         })
     }
 
+    /// Whether every target is placed and none of them has an open edge to pick.
+    pub fn all_closed(&self, scene: &Scene) -> bool {
+        scene.targets().all(|object| {
+            self.open_edges(object)
+                .is_some_and(|open| open.ends.is_empty())
+        })
+    }
+
     /// Whether some work is still running.
     pub fn is_working(&self) -> bool {
         running(&self.placed) || running(&self.crossed)
