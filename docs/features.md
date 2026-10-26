@@ -56,16 +56,24 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Flip faces wound the wrong way, and drop faces that enclose nothing.
 - Close holes, but only when you ask for it: Repair in the window, `--repair` on the
   command line.
+- Open the **Repair** tool: what was found in the picked models (or every model on the
+  plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
+  press, how many pairs of faces cross. Pick the method, set the seam tolerance, the
+  smallest speck and the wrap lattice, and repair with progress and Cancel. The rail's
+  Repair button carries a dot while a model on the plate is broken.
 - Stitch the seams where a finer patch of surface meets a coarser one, as part of the same
   repair, without moving or adding a vertex.
 - Drop specks: open shells under 1 mm² floating apart from the model. A closed shell is
   never dropped, however small.
-- On the command line, run only part of the repair: close holes, close only the holes a
-  missing face leaves, or turn faces.
-- On the command line, wrap a model made of overlapping parts into one outer surface, or
-  run a deep repair: repair, wrap, repair. A wrap that would leave the model worse is left
-  out and said so.
-- See how many holes a model has, and, on the command line, how many pairs of faces cross.
+- Run only part of the repair: close holes, close only the holes a missing face leaves,
+  or turn faces.
+- Wrap a model made of overlapping parts into one outer surface, or run a deep repair:
+  repair, wrap, repair. A wrap that would leave the model worse is left out and said so.
+- See how many holes a model has, and how many pairs of faces cross.
+
+**You cannot:**
+- See the findings marked on the model, list a model's shells and drop the ones you pick,
+  or flip, delete and bridge faces by hand.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.
@@ -671,7 +679,7 @@ address in a video player).
 - **Tool rail:** shows each tool's name under its icon whenever the window has room, and
   icons alone when it does not. Drag the column's edge to set your own width; double-click
   it to go back to fitting the names. The plate column's edge resets the same way.
-- **Keyboard:** digits 1 to 8 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
+- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.

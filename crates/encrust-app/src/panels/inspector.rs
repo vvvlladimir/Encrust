@@ -10,6 +10,7 @@ mod position;
 mod presets;
 mod print_settings;
 mod relief;
+mod repair;
 mod scope;
 mod select;
 mod shape;
@@ -56,6 +57,7 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     match tool {
         Tool::Position => position::ui(ui, window),
         Tool::Measure => measure::ui(ui, window.tools),
+        Tool::Repair => repair::ui(ui, window),
         Tool::Hollow => hollow::ui(ui, window),
         Tool::Drain => drain::ui(ui, window),
         Tool::Cut => cut::ui(ui, window),
@@ -71,12 +73,13 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
 fn has_action(tool: Tool) -> bool {
     matches!(
         tool,
-        Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports
+        Tool::Repair | Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports
     )
 }
 
 fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     match tool {
+        Tool::Repair => repair::action(ui, window),
         Tool::Hollow => hollow::action(ui, window),
         Tool::Drain => drain::action(ui, window),
         Tool::Cut => cut::action(ui, window),
@@ -98,6 +101,7 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
             value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
         )),
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
+        Tool::Repair => repair::fact(window),
         Tool::Check => check::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
         Tool::Measure => match window.tools.measure.target {
@@ -123,6 +127,7 @@ fn help(tool: Tool) -> String {
     match tool {
         Tool::Position => tr!("inspector-about-select"),
         Tool::Measure => tr!("inspector-about-measure"),
+        Tool::Repair => tr!("inspector-about-repair"),
         Tool::Hollow => tr!("inspector-about-hollow"),
         Tool::Drain => tr!("inspector-about-drain"),
         Tool::Cut => tr!("inspector-about-cut"),

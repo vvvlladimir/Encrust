@@ -138,11 +138,14 @@ fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
     }
 }
 
-/// The dot a tool carries while it has something the user must deal with. Only Drain and
-/// Check carry one, so a dot is never noise; see `docs/decisions/0218`.
+/// The dot a tool carries while it has something the user must deal with. Only Repair,
+/// Drain and Check carry one, so a dot is never noise; see `docs/decisions/0218`, `0354`.
 fn badge(window: &Window, tool: Tool) -> Option<Color32> {
     let colors = theme::colors();
     match tool {
+        Tool::Repair => {
+            (crate::repair::broken_on_the_plate(&window.doc.scene) > 0).then_some(colors.warn)
+        }
         Tool::Drain => window
             .doc
             .scene
@@ -161,8 +164,8 @@ fn badge(window: &Window, tool: Tool) -> Option<Color32> {
 mod tests {
     use super::*;
 
-    /// Eight names as wide as the English ones, in points.
-    const NAMES: [f32; 8] = [28.0, 40.0, 33.0, 26.0, 17.0, 28.0, 43.0, 30.0];
+    /// Nine names as wide as the English ones, in points.
+    const NAMES: [f32; 9] = [28.0, 40.0, 33.0, 33.0, 26.0, 17.0, 28.0, 43.0, 30.0];
 
     #[test]
     fn a_rail_as_wide_as_its_names_shows_them_and_shares_what_is_over() {
@@ -191,11 +194,11 @@ mod tests {
             fit.buttons_w,
             fit.button_h
         );
-        let squeezed = Fit::into(widths.glyphs - 16.0, &NAMES);
+        let squeezed = Fit::into(widths.glyphs - 18.0, &NAMES);
         let side = theme::RAIL_ICON_H - 2.0;
         assert!(
             (squeezed.button_h - side).abs() < 1e-4,
-            "16 points short of eight glyphs takes 2 off each: {side} expected, {} got",
+            "18 points short of nine glyphs takes 2 off each: {side} expected, {} got",
             squeezed.button_h
         );
     }
@@ -205,6 +208,7 @@ mod tests {
         let keys = [
             "tool-select",
             "tool-measure",
+            "tool-repair",
             "tool-hollow",
             "tool-drain",
             "tool-cut",

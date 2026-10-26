@@ -16,6 +16,8 @@ fn a_repaired_model_comes_back_closed() {
         id: ObjectId::for_test(7),
         name: "open.stl".to_owned(),
         mesh: Arc::new(open_box()),
+        method: RepairMethod::default(),
+        settings: RepairSettings::default(),
     });
     let outcome = loop {
         if let Some(outcome) = job.poll() {
@@ -44,6 +46,41 @@ fn a_running_repair_says_which_model_it_is_on() {
         id: ObjectId::for_test(1),
         name: "dragon.stl".to_owned(),
         mesh: Arc::new(open_box()),
+        method: RepairMethod::default(),
+        settings: RepairSettings::default(),
     });
     assert_eq!(job.label(), "Repairing dragon.stl");
+}
+
+#[test]
+fn turn_faces_turns_a_face_wound_the_wrong_way_and_adds_none() {
+    let mut mesh = cuboid(Vec3::ZERO, Vec3::ONE);
+    mesh.faces[0].swap(1, 2);
+    let faces = mesh.faces.len();
+    let mut job = RepairJob::spawn(RepairRequest {
+        id: ObjectId::for_test(3),
+        name: "turned.stl".to_owned(),
+        mesh: Arc::new(mesh),
+        method: RepairMethod::Mend(core_geometry::MendMethod::Turn),
+        settings: RepairSettings::default(),
+    });
+    let outcome = loop {
+        if let Some(outcome) = job.poll() {
+            break outcome;
+        }
+        std::thread::yield_now();
+    };
+
+    let RepairOutcome::Done(repaired) = outcome else {
+        panic!("a cube with one face turned is repaired");
+    };
+    assert_eq!(repaired.shaped.mesh.faces.len(), faces, "nothing added");
+    assert_eq!(
+        repaired
+            .mended
+            .orientation
+            .map(|turned| turned.flipped_faces),
+        Some(1)
+    );
+    assert!(diagnose(&repaired.shaped.mesh).is_closed());
 }

@@ -3,12 +3,13 @@ use crate::{
     Scalar, Stitched, collapse_flat_faces, diagnose, drop_small_shells, fill_holes,
     fill_holes_within, orient_outward, remove_duplicate_faces, stitch_seams,
 };
+use serde::{Deserialize, Serialize};
 
 /// Most corners a hole Close small holes patches: one face missing.
 const SMALL_HOLE_CORNERS: usize = 3;
 
 /// Which repair to run on a mesh.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MendMethod {
     /// Every step, in the order [`mend`] gives: what a Repair press runs.
     #[default]
@@ -22,7 +23,7 @@ pub enum MendMethod {
 }
 
 /// The lengths a repair works to.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MendSettings {
     /// How far a vertex may stand off an open edge to be stitched into it, mm.
     pub seam_tolerance_mm: Scalar,

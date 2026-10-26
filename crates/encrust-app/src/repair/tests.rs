@@ -1,6 +1,29 @@
 use super::*;
 use crate::scene::{ImportSummary, Imported};
-use core_geometry::{Mended, Mesh, MeshDiagnostics, Orientation, Transform, Vec3, diagnose};
+use core_geometry::{
+    Mended, Mesh, MeshDiagnostics, Orientation, Transform, Vec3, cuboid, diagnose,
+};
+
+/// What the fields a test does not set read as: a plain repair, not wrapped.
+fn mended_alone() -> Repaired {
+    Repaired {
+        id: ObjectId::for_test(0),
+        name: String::new(),
+        shaped: crate::scene::Shaped::of(Arc::new(Mesh::default())),
+        mended: Mended::default(),
+        method: RepairMethod::default(),
+        voxel_mm: None,
+        wrapped: false,
+    }
+}
+
+fn settle(repairs: &mut Repairs, scene: &mut Scene) -> Status {
+    let mut status = Status::default();
+    while repairs.poll(scene, &mut status) {
+        std::thread::yield_now();
+    }
+    status
+}
 
 fn object(scene: &mut Scene, boundary_edges: usize) -> ObjectId {
     let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
@@ -54,7 +77,7 @@ fn a_repair_that_could_not_mend_a_model_is_not_offered_again() {
     // A lone triangle would be closed by its own reverse and cancel away, so it is kept.
     let id = object(&mut scene, 3);
     let mut repairs = Repairs::default();
-    repairs.start(&scene, id, &mut Status::default());
+    repairs.start(&scene, id, RepairState::default(), &mut Status::default());
     while repairs.poll(&mut scene, &mut Status::default()) {
         std::thread::yield_now();
     }
@@ -68,7 +91,7 @@ fn a_model_under_repair_is_no_longer_offered() {
     let mut scene = Scene::default();
     let id = open_box(&mut scene);
     let mut repairs = Repairs::default();
-    repairs.start(&scene, id, &mut Status::default());
+    repairs.start(&scene, id, RepairState::default(), &mut Status::default());
 
     assert_eq!(repairs.offered(&scene).count(), 0);
 }
@@ -149,6 +172,7 @@ fn a_model_that_came_back_closed_is_no_longer_called_broken() {
                 orientation: Some(orientation),
                 kept_as_found: false,
             },
+            ..mended_alone()
         },
     );
 
@@ -180,6 +204,7 @@ fn a_repair_of_a_model_that_has_been_deleted_is_reported_rather_than_applied() {
                 orientation: None,
                 kept_as_found: false,
             },
+            ..mended_alone()
         },
     );
     assert!(status.is_error());
@@ -205,6 +230,7 @@ fn a_repair_that_would_worsen_the_model_leaves_it_as_it_came() {
                 orientation: None,
                 kept_as_found: true,
             },
+            ..mended_alone()
         },
     );
 
@@ -239,6 +265,7 @@ fn a_repair_that_only_stitched_seams_says_so() {
                 orientation: None,
                 kept_as_found: false,
             },
+            ..mended_alone()
         },
     );
 
@@ -247,5 +274,141 @@ fn a_repair_that_only_stitched_seams_says_so() {
         status.text().contains("stitched 4 seams"),
         "got {}",
         status.text()
+    );
+}
+
+#[test]
+fn a_wrap_stands_even_where_the_repair_under_it_was_kept_as_found() {
+    let mut scene = Scene::default();
+    let id = open_box(&mut scene);
+    let wrapped = Arc::new(cuboid(Vec3::ZERO, Vec3::ONE));
+
+    let status = apply(
+        &mut scene,
+        &Repaired {
+            id,
+            name: "open.stl".to_owned(),
+            shaped: crate::scene::Shaped::of(Arc::clone(&wrapped)),
+            mended: Mended {
+                kept_as_found: true,
+                ..Mended::default()
+            },
+            method: RepairMethod::Wrap,
+            voxel_mm: Some(0.2),
+            wrapped: true,
+        },
+    );
+
+    assert!(!status.is_error(), "{status:?}");
+    assert!(
+        status.text().contains("0.20 mm lattice"),
+        "got {}",
+        status.text()
+    );
+    let object = scene.get(id).expect("the box is still there");
+    assert!(
+        Arc::ptr_eq(&object.mesh, &wrapped),
+        "the wrap's surface stands"
+    );
+}
+
+#[test]
+fn a_wrap_the_field_would_have_worsened_says_so() {
+    let mut scene = Scene::default();
+    let id = open_box(&mut scene);
+    let mesh = Arc::clone(&scene.get(id).expect("the box is there").mesh);
+
+    let status = apply(
+        &mut scene,
+        &Repaired {
+            id,
+            name: "open.stl".to_owned(),
+            shaped: crate::scene::Shaped::of(mesh),
+            method: RepairMethod::Wrap,
+            ..mended_alone()
+        },
+    );
+
+    assert_eq!(
+        status,
+        Status::Info(tr!(
+            "repair-done",
+            name = "open.stl",
+            what = tr!("repair-not-wrapped")
+        ))
+    );
+}
+
+#[test]
+fn close_small_holes_leaves_a_hole_of_two_faces_open() {
+    let mut scene = Scene::default();
+    let id = open_box(&mut scene);
+    let mut repairs = Repairs::default();
+    let state = RepairState {
+        method: RepairMethod::Mend(MendMethod::CloseSmallHoles),
+        ..RepairState::default()
+    };
+    repairs.start(&scene, id, state, &mut Status::default());
+    settle(&mut repairs, &mut scene);
+
+    let object = scene.get(id).expect("the box is still there");
+    assert_eq!(
+        object.summary.diagnostics.holes, 1,
+        "the square hole is open"
+    );
+}
+
+#[test]
+fn a_cancelled_repair_leaves_the_model_as_it_was() {
+    let mut scene = Scene::default();
+    let id = open_box(&mut scene);
+    let before = Arc::clone(&scene.get(id).expect("the box is there").mesh);
+    let mut repairs = Repairs::default();
+    repairs.start(&scene, id, RepairState::default(), &mut Status::default());
+
+    let mut status = Status::default();
+    repairs.cancel(&mut status);
+
+    assert_eq!(status, Status::Info(tr!("repair-cancelled")));
+    assert!(!repairs.is_busy());
+    assert!(!settle(&mut repairs, &mut scene).is_error());
+    let object = scene.get(id).expect("the box is still there");
+    assert!(
+        Arc::ptr_eq(&object.mesh, &before),
+        "the mesh is the one it had"
+    );
+}
+
+#[test]
+fn two_crossing_cubes_count_their_crossings_until_the_mesh_changes() {
+    let mut scene = Scene::default();
+    // Pushed in off the diagonals, so no edge of one lies along a face's own seam.
+    let shift = Vec3::new(0.5, 0.3, 0.4);
+    let mut crossing = cuboid(Vec3::ZERO, Vec3::ONE);
+    crossing.append(&cuboid(shift, shift + Vec3::ONE));
+    let id = scene.insert(Imported::new(
+        "crossing.stl".to_owned(),
+        Arc::new(crossing.clone()),
+        Transform::default(),
+        ImportSummary::made(diagnose(&crossing)),
+    ));
+    let mut repairs = Repairs::default();
+    let object = scene.get(id).expect("inserted");
+    assert_eq!(repairs.crossings_of(object), None, "nothing counted yet");
+
+    repairs.count_crossings(&scene, &[id]);
+    settle(&mut repairs, &mut scene);
+    let object = scene.get(id).expect("still there");
+    let counted = repairs.crossings_of(object).flatten();
+    assert!(counted.is_some_and(|pairs| pairs > 0), "got {counted:?}");
+
+    let reshaped = crate::scene::Shaped::of(Arc::new(cuboid(Vec3::ZERO, Vec3::ONE)));
+    scene.get_mut(id).expect("still there").reshape(reshaped);
+    settle(&mut repairs, &mut scene);
+    let object = scene.get(id).expect("still there");
+    assert_eq!(
+        repairs.crossings_of(object),
+        None,
+        "the count was of the old mesh"
     );
 }

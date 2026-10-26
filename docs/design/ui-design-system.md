@@ -253,7 +253,7 @@ height: a switch into Preview parks on
 the layer nearest where Prepare was cut, and a switch back cuts Prepare at the layer shown.
 
 `workspace::Tool` is what a click in the viewport does and what the inspector shows, in
-every view. `Tool::RAIL` groups eight of them as Place, Modify and Finish; the
+every view. `Tool::RAIL` groups nine of them as Place, Modify and Finish; the
 print settings are a form the top bar opens. The first, `Tool::Position`, is named Select on
 the rail: it picks, and carries the gizmo and the transform fields. See `docs/decisions/0218`.
 A Global | Local pair over its fields sets whose axes the handles, the ±45° turns and the

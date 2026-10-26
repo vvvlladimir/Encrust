@@ -2,6 +2,8 @@ use core_geometry::{
     Bvh, MendMethod, MendSettings, Mended, Mesh, Scalar, diagnose, mend, self_intersections,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::boolean::{Combined, solid_of};
 use crate::build::{FieldSettings, build};
 use crate::cancel::Cancel;
@@ -14,7 +16,7 @@ use crate::sign::SignMode;
 pub const DEFAULT_WRAP_MM: Scalar = 0.2;
 
 /// Which repair to run, the ones a field may be needed for among them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepairMethod {
     /// One of the repairs on the mesh alone.
     Mend(MendMethod),
@@ -25,11 +27,24 @@ pub enum RepairMethod {
 }
 
 /// The lengths a repair works to.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RepairSettings {
     pub mend: MendSettings,
     /// The lattice a wrap falls back to, mm.
     pub wrap_mm: Scalar,
+}
+
+impl RepairMethod {
+    /// Whether the method wraps the mesh, and so may sample it on the wrap lattice.
+    pub fn wraps(self) -> bool {
+        matches!(self, Self::Wrap | Self::Deep)
+    }
+}
+
+impl Default for RepairMethod {
+    fn default() -> Self {
+        Self::Mend(MendMethod::Repair)
+    }
 }
 
 impl Default for RepairSettings {

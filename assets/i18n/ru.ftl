@@ -192,6 +192,7 @@ cut-keep-upper = Верхняя
 
 tool-select = Выбор
 tool-measure = Замер
+tool-repair = Ремонт
 tool-hollow = Полость
 tool-drain = Дренаж
 tool-cut = Разрез
@@ -1813,6 +1814,7 @@ inspector-about-drain = Дайте смоле вытечь из полой мо�
 inspector-about-cut = Разделите модель плоскостью.
 inspector-about-relief = Вдавите текстуру в поверхность модели, напишите на ней текст или объедините модели в одну.
 inspector-about-supports = Поддержите то, что нависает над пустотой.
+inspector-about-repair = Что не так с поверхностью моделей, и починка, которая её закрывает, разворачивает или оборачивает.
 inspector-about-check = Что не получится на принтере, с указанием слоя, на котором это происходит.
 inspector-about-print-settings = Как эта платформа нарезается и экспонируется.
 
@@ -1869,6 +1871,60 @@ repair-dropped-faces =
         [one] отброшена { $count } дважды нарисованная грань
         [few] отброшено { $count } дважды нарисованные грани
        *[many] отброшено { $count } дважды нарисованных граней
+    }
+
+repair-cancelled = Починка отменена
+repair-failed = { $name } не удалось починить: { $reason }
+repair-turned-faces =
+    { $count ->
+        [one] развёрнута { $count } грань
+        [few] развёрнуто { $count } грани
+       *[many] развёрнуто { $count } граней
+    }
+repair-wrapped = обёрнуто одной поверхностью
+repair-wrapped-sampled = обёрнуто одной поверхностью по решётке { $lattice } мм
+repair-not-wrapped = не обёрнуто: поверхность стала бы хуже
+
+## panels/inspector/repair.rs
+
+repair-found = Найдено
+repair-found-note = Что импорт нашёл в моделях, с которыми работает инструмент: выбранных или всех на платформе. Пересекающиеся грани считаются по лупе: на большой модели это занимает время.
+repair-count-crossings = Посчитать пересекающиеся грани
+repair-nothing-on-plate = На платформе нет моделей.
+repair-holes = Дыры
+repair-open-edges = Открытые рёбра
+repair-flat-faces = Грани без площади
+repair-doubled-faces = Дважды нарисованные грани
+repair-shells = Оболочки
+repair-crossing-faces = Пересекающиеся грани
+repair-uncounted = –
+repair-counting = …
+repair-method = Метод
+repair-method-repair = Починка
+repair-method-close-holes = Закрыть дыры
+repair-method-close-small-holes = Закрыть мелкие дыры
+repair-method-turn = Развернуть грани
+repair-method-wrap = Обернуть
+repair-method-deep = Глубокая починка
+repair-method-repair-note = Сшивает стыки, убирает дважды нарисованные грани и соринки без объёма, закрывает все дыры и разворачивает заплатки наружу. Оставляет модель как была, если стало бы хуже.
+repair-method-close-holes-note = Закрывает все дыры и разворачивает заплатки наружу, и больше ничего.
+repair-method-close-small-holes-note = Закрывает только дыры от одной недостающей грани и ничего не разворачивает.
+repair-method-turn-note = Разворачивает неверно обойдённые грани, чтобы каждая оболочка смотрела наружу, и ничего не добавляет.
+repair-method-wrap-note = Чинит, затем оборачивает модель одной внешней поверхностью: перекрытые оболочки объединяются точно, а где не выходит — по решётке обёртки, которая скругляет острые кромки до её шага. Обёртка, после которой модель стала бы хуже, не принимается.
+repair-method-deep-note = Чинит, оборачивает и чинит снова — для модели, которую другие методы оставляют сломанной.
+repair-settings = Настройки
+repair-settings-note = Вершина ближе допуска стыка к открытому ребру вшивается в него. Оболочка без объёма с площадью меньше наименьшей соринки удаляется. Решётка обёртки — шаг, с которым обёртка проходит модель, если оболочки не объединить точно.
+repair-seam-tolerance = Допуск стыка
+repair-smallest-shell = Наименьшая соринка
+repair-wrap-lattice = Решётка обёртки
+repair-repair = Починить
+repair-repairing = Починка
+repair-sound = Целая
+repair-broken =
+    { $count ->
+        [one] { $count } сломана
+        [few] { $count } сломаны
+       *[many] { $count } сломано
     }
 
 ## panels/view_cube.rs
@@ -1969,7 +2025,7 @@ job-thread-stopped-drainage = поток проверки дренажа ост�
 
 ## job/repair.rs
 
-job-thread-stopped-repair = поток починки { $name } остановился, не закончив
+job-thread-stopped-repair = поток починки остановился, не закончив
 job-repairing = Починка { $name }
 
 ## arrange.rs

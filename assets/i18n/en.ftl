@@ -178,6 +178,7 @@ cut-keep-upper = Upper
 
 tool-select = Select
 tool-measure = Measure
+tool-repair = Repair
 tool-hollow = Hollow
 tool-drain = Drain
 tool-cut = Cut
@@ -1722,6 +1723,7 @@ inspector-about-drain = Let resin out of a hollow model.
 inspector-about-cut = Split a model along a plane.
 inspector-about-relief = Press a texture into a model's surface, write text on it, or combine models into one.
 inspector-about-supports = Hold up what hangs over nothing.
+inspector-about-repair = What is wrong with the surface of the models, and the repair that closes, turns or wraps it.
 inspector-about-check = What will fail on the machine, with the layer it fails on.
 inspector-about-print-settings = How this plate is cut and exposed.
 
@@ -1787,6 +1789,54 @@ repair-dropped-shells =
         [one] dropped { $count } speck enclosing nothing
        *[other] dropped { $count } specks enclosing nothing
     }
+
+repair-cancelled = Repair cancelled
+repair-failed = { $name } could not be repaired: { $reason }
+repair-turned-faces =
+    { $count ->
+        [one] turned { $count } face
+       *[other] turned { $count } faces
+    }
+repair-wrapped = wrapped in one surface
+repair-wrapped-sampled = wrapped in one surface on a { $lattice } mm lattice
+repair-not-wrapped = not wrapped, as the surface would have been worse
+
+## panels/inspector/repair.rs
+
+repair-found = Found
+repair-found-note = What import found in the models the tool works on: those picked, or every model on the plate. Faces crossing each other are counted by the magnifier, which takes a while on a large model.
+repair-count-crossings = Count crossing faces
+repair-nothing-on-plate = No model on the plate.
+repair-holes = Holes
+repair-open-edges = Open edges
+repair-flat-faces = Faces without area
+repair-doubled-faces = Faces drawn twice
+repair-shells = Shells
+repair-crossing-faces = Crossing faces
+repair-uncounted = –
+repair-counting = …
+repair-method = Method
+repair-method-repair = Repair
+repair-method-close-holes = Close holes
+repair-method-close-small-holes = Close small holes
+repair-method-turn = Turn faces
+repair-method-wrap = Wrap
+repair-method-deep = Deep repair
+repair-method-repair-note = Stitches seams, drops faces drawn twice and specks enclosing nothing, closes every hole and turns the patches outward. Leaves the model as it came if that would leave more wrong.
+repair-method-close-holes-note = Closes every hole and turns the patches outward, and nothing else.
+repair-method-close-small-holes-note = Closes only the holes one missing face leaves, and turns nothing.
+repair-method-turn-note = Turns the faces wound the wrong way so every shell faces outward, and adds nothing.
+repair-method-wrap-note = Repairs, then wraps the model in one outer surface: overlapping shells are joined exactly, or where they cannot be, sampled on the wrap lattice, which rounds sharp edges to it. A wrap that would leave the model worse is not taken.
+repair-method-deep-note = Repairs, wraps and repairs again, for a model the other methods leave broken.
+repair-settings = Settings
+repair-settings-note = A vertex standing off an open edge within the seam tolerance is stitched into it. A shell enclosing nothing with less area than the smallest speck is dropped. The wrap lattice is how fine a wrap that cannot join the shells exactly samples the model.
+repair-seam-tolerance = Seam tolerance
+repair-smallest-shell = Smallest speck
+repair-wrap-lattice = Wrap lattice
+repair-repair = Repair
+repair-repairing = Repairing
+repair-sound = Sound
+repair-broken = { $count } broken
 
 ## panels/view_cube.rs
 
@@ -1886,7 +1936,7 @@ job-thread-stopped-drainage = the drainage thread stopped without finishing
 
 ## job/repair.rs
 
-job-thread-stopped-repair = the thread repairing { $name } stopped without finishing
+job-thread-stopped-repair = the repair thread stopped without finishing
 job-repairing = Repairing { $name }
 
 ## arrange.rs

@@ -96,6 +96,7 @@ pub struct Tools {
     pub drain: DrainTool,
     pub cut: CutTool,
     pub relief: ReliefTool,
+    pub repair: crate::repair::RepairState,
     pub boolean: crate::boolean::BooleanTool,
     pub text: crate::text::TextTool,
     pub orient: OrientTool,

@@ -109,6 +109,15 @@ fn the_hollow_tool_with_each_kind_of_infill() {
 }
 
 #[test]
+fn the_repair_tool_wrapping() {
+    let mut app = app(true);
+    app.tool = Tool::Repair;
+    app.tools.repair.method = core_volume::RepairMethod::Wrap;
+    let mut results = SnapshotResults::new();
+    results.extend(picture("tool_repair_wrap", app));
+}
+
+#[test]
 fn the_relief_tool_in_each_mode() {
     let mut results = SnapshotResults::new();
     for (name, mode) in [

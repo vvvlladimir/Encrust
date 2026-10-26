@@ -9,10 +9,32 @@
 
 use std::sync::Arc;
 
+use core_geometry::MendMethod;
+use core_volume::{RepairMethod, RepairSettings};
+use serde::{Deserialize, Serialize};
+
 use crate::i18n::tr;
-use crate::job::{RepairJob, RepairOutcome, RepairRequest, Repaired};
+use crate::job::{Counted, CrossingJob, RepairJob, RepairOutcome, RepairRequest, Repaired};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
+
+/// What the Repair tool is set to: the repair its button runs and the lengths it works to.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct RepairState {
+    pub method: RepairMethod,
+    pub settings: RepairSettings,
+}
+
+impl RepairState {
+    /// What the Repair button of a model's row and of the stage notice runs: the plain
+    /// repair, to the lengths the tool is set to.
+    pub fn plain(self) -> Self {
+        Self {
+            method: RepairMethod::Mend(MendMethod::Repair),
+            ..self
+        }
+    }
+}
 
 /// The repairs under way, and the broken models the user chose to keep as they came.
 #[derive(Debug, Default)]
@@ -20,6 +42,16 @@ pub struct Repairs {
     /// Each with the model it took, so that a mesh replaced since is not mended over.
     jobs: Vec<(RepairJob, Taken)>,
     kept: Vec<ObjectId>,
+    /// The faces found crossing in each model they were counted on, counting or counted.
+    crossings: Vec<(Taken, Crossings)>,
+}
+
+/// Where counting one model's crossing faces has got.
+#[derive(Debug)]
+enum Crossings {
+    Counting(CrossingJob),
+    /// Pairs of faces; `None` where the count stopped without an answer.
+    Counted(Option<usize>),
 }
 
 impl Repairs {
@@ -40,18 +72,23 @@ impl Repairs {
         }
     }
 
-    /// Starts closing the holes in one model.
+    /// Starts repairing one model as `state` asks, unless it is being repaired already.
     ///
     /// The mesh is replaced by the repaired one, so supports, a cavity and a texture
     /// placed on the model before this go with the mesh they were made for.
-    pub fn start(&mut self, scene: &Scene, id: ObjectId, status: &mut Status) {
+    pub fn start(&mut self, scene: &Scene, id: ObjectId, state: RepairState, status: &mut Status) {
         let Some(object) = scene.get(id) else {
             return;
         };
+        if self.jobs.iter().any(|(job, _)| job.id() == id) {
+            return;
+        }
         let job = RepairJob::spawn(RepairRequest {
             id,
             name: object.name.clone(),
             mesh: Arc::clone(&object.mesh),
+            method: state.method,
+            settings: state.settings,
         });
         *status = Status::Info(job.label());
         self.jobs.push((job, Taken::of(object)));
@@ -61,9 +98,56 @@ impl Repairs {
         !self.jobs.is_empty()
     }
 
+    /// How far the first repair that counts its work has got.
+    pub fn counted(&self) -> Option<Counted> {
+        self.jobs.iter().find_map(|(job, _)| job.counted())
+    }
+
+    /// Gives up on every repair going, which leaves the models as they are.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if !self.jobs.is_empty() {
+            self.jobs.clear();
+            *status = Status::Info(tr!("repair-cancelled"));
+        }
+    }
+
+    /// Starts counting the crossing faces of every model in `ids` not counted as it stands.
+    pub fn count_crossings(&mut self, scene: &Scene, ids: &[ObjectId]) {
+        for object in ids.iter().filter_map(|id| scene.get(*id)) {
+            if self.crossings_of(object).is_some() {
+                continue;
+            }
+            self.crossings.retain(|(taken, _)| taken.id != object.id);
+            let job = CrossingJob::spawn(Arc::clone(&object.mesh), Arc::clone(&object.bvh));
+            self.crossings
+                .push((Taken::of(object), Crossings::Counting(job)));
+        }
+    }
+
+    /// The crossing pairs counted on the model as it stands: `None` while uncounted,
+    /// `Some(None)` while counting or where the count gave no answer.
+    pub fn crossings_of(&self, object: &SceneObject) -> Option<Option<usize>> {
+        let (_, crossings) = self
+            .crossings
+            .iter()
+            .find(|(taken, _)| taken.is_model(object))?;
+        Some(match crossings {
+            Crossings::Counting(_) => None,
+            Crossings::Counted(count) => *count,
+        })
+    }
+
+    /// Whether a count of crossing faces is still going.
+    pub fn is_counting(&self) -> bool {
+        self.crossings
+            .iter()
+            .any(|(_, crossings)| matches!(crossings, Crossings::Counting(_)))
+    }
+
     /// Puts every repair that has finished into the scene. Returns whether one is still
     /// running, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
+        self.poll_crossings(scene);
         let mut done = Vec::new();
         self.jobs.retain_mut(|(job, taken)| match job.poll() {
             None => true,
@@ -91,7 +175,21 @@ impl Repairs {
                 self.keep_as_it_is(id);
             }
         }
-        self.is_busy()
+        self.is_busy() || self.is_counting()
+    }
+
+    /// Takes in the counts that have finished, and forgets those of models replaced since.
+    fn poll_crossings(&mut self, scene: &Scene) {
+        self.crossings.retain_mut(|(taken, crossings)| {
+            if let Crossings::Counting(job) = crossings
+                && let Some(count) = job.poll()
+            {
+                *crossings = Crossings::Counted(count);
+            }
+            scene
+                .get(taken.id)
+                .is_some_and(|object| taken.is_model(object))
+        });
     }
 }
 
@@ -100,7 +198,8 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let Some(object) = scene.get_mut(repaired.id) else {
         return Status::Error(tr!("repair-gone", name = repaired.name.clone()));
     };
-    if repaired.mended.kept_as_found {
+    // A wrap's surface stands whatever the repair under it did.
+    if repaired.mended.kept_as_found && !repaired.wrapped {
         return Status::Error(tr!("repair-kept", name = repaired.name.clone()));
     }
     object.reshape(repaired.shaped.clone());
@@ -137,6 +236,16 @@ fn done(repaired: &Repaired) -> usize {
         + mended.duplicates_removed
         + mended.stitched.edges_split
         + mended.shells_dropped
+        + turned(repaired)
+        + usize::from(repaired.method.wraps())
+}
+
+/// Faces a Turn repair turned; the other methods turn only the patches they add.
+fn turned(repaired: &Repaired) -> usize {
+    match (repaired.method, repaired.mended.orientation) {
+        (RepairMethod::Mend(MendMethod::Turn), Some(orientation)) => orientation.flipped_faces,
+        _ => 0,
+    }
 }
 
 /// What it changed, in the words the stage notice says it in.
@@ -165,6 +274,18 @@ fn what(repaired: &Repaired) -> Vec<String> {
             "repair-dropped-faces",
             count = repaired.mended.duplicates_removed
         ));
+    }
+    if turned(repaired) > 0 {
+        lines.push(tr!("repair-turned-faces", count = turned(repaired)));
+    }
+    if repaired.method.wraps() {
+        lines.push(match (repaired.wrapped, repaired.voxel_mm) {
+            (false, _) => tr!("repair-not-wrapped"),
+            (true, None) => tr!("repair-wrapped"),
+            (true, Some(voxel_mm)) => {
+                tr!("repair-wrapped-sampled", lattice = format!("{voxel_mm:.2}"))
+            }
+        });
     }
     lines
 }

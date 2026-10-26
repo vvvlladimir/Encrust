@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use core_volume::Boolean;
 
 use crate::relief::ReliefState;
+use crate::repair::RepairState;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::supports::{SupportGroup, SupportTool};
@@ -35,6 +36,8 @@ pub struct ToolSettings {
     pub text: TextState,
     #[serde(default)]
     pub combine: Boolean,
+    #[serde(default)]
+    pub repair: RepairState,
 }
 
 impl ToolSettings {
@@ -50,6 +53,7 @@ impl ToolSettings {
             array: tools.array,
             text: tools.text.state.clone(),
             combine: tools.boolean.op,
+            repair: tools.repair,
         }
     }
 
@@ -65,6 +69,7 @@ impl ToolSettings {
         tools.array = self.array;
         tools.text.state = self.text;
         tools.boolean.op = self.combine;
+        tools.repair = self.repair;
     }
 }
 
@@ -170,6 +175,8 @@ mod tests {
         tools.text.state.family = "Serif".to_owned();
         tools.text.state.depth_mm = 1.5;
         tools.boolean.op = Boolean::Difference;
+        tools.repair.method = core_volume::RepairMethod::Wrap;
+        tools.repair.settings.wrap_mm = 0.35;
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
@@ -195,6 +202,7 @@ mod tests {
         assert_eq!(tools.array.columns, 5);
         assert_eq!(tools.text.state.family, "Serif");
         assert_eq!(tools.boolean.op, Boolean::Difference);
+        assert_eq!(tools.repair.method, core_volume::RepairMethod::Wrap);
         assert_eq!(
             tools.supports.auto.map(|auto| auto.density),
             Some(1.75),
@@ -255,15 +263,17 @@ mod tests {
     }
 
     #[test]
-    fn a_record_from_before_the_text_and_combine_tools_still_reads() {
+    fn a_record_from_before_the_text_combine_and_repair_tools_still_reads() {
         let mut written = serde_json::to_value(ToolSettings::of(&edited(), &Slicing::default()))
             .expect("the settings serialise");
         let fields = written.as_object_mut().expect("the record is an object");
         fields.remove("text");
         fields.remove("combine");
+        fields.remove("repair");
         let read: ToolSettings = serde_json::from_value(written).expect("an older record reads");
         assert_eq!(read.text, TextState::default());
         assert_eq!(read.combine, Boolean::Union);
+        assert_eq!(read.repair, RepairState::default());
         assert!(
             (read.hollow.thickness_mm - 3.5).abs() < f32::EPSILON,
             "and keeps the rest"

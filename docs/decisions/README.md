@@ -91,6 +91,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0351](0351-repair-has-methods-and-drops-open-specks.md) | Repair has methods, and drops open specks but never a closed shell | Accepted |
 | [0352](0352-wrap-unions-exactly-and-takes-the-field-only-when-better.md) | Wrap unions a model's shells exactly, and takes the field only when it is better | Accepted |
 | [0353](0353-a-summary-counts-holes-and-inspect-counts-crossings.md) | A summary counts holes, and inspect counts crossing faces | Accepted |
+| [0354](0354-repair-is-a-tool-of-the-rail.md) | Repair is a tool of the rail, first of Modify | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
