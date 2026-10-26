@@ -199,7 +199,6 @@ pub struct TransformArgs {
     pub max_tilt: Option<Scalar>,
 }
 
-/// What an orientation is searched for, as [`OrientPreset`] names it.
 /// Which repair `--repair` runs.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum RepairMethod {
@@ -230,6 +229,7 @@ impl From<RepairMethod> for core_volume::RepairMethod {
     }
 }
 
+/// What an orientation is searched for, as [`OrientPreset`] names it.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Goal {
     /// The least resin in the supports.

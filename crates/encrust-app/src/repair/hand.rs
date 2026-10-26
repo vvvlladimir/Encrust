@@ -3,11 +3,12 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Adjacency, Mesh, Region, Vec3};
+use core_geometry::{Mesh, Region, Vec3};
 
 use crate::highlight::{EdgeMark, FaceMark, Highlight, LIFT_MM, patch};
 use crate::i18n::tr;
 use crate::job::{Edit, EditJob, EditOutcome};
+use crate::measure::EdgeCache;
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 use crate::ui::theme;
@@ -27,6 +28,7 @@ pub struct Hand {
     /// The open edges picked, at most two, on the one model they were picked on.
     edges: Option<(Taken, Vec<[u32; 2]>)>,
     jobs: Vec<(EditJob, Taken)>,
+    adjacency: EdgeCache,
 }
 
 /// A change by hand the Faces mode's foot asks for.
@@ -49,7 +51,7 @@ impl Hand {
     /// Marks the surface of `object` round `seed` that turns no more than `angle_deg`, or
     /// unmarks it.
     pub fn flood(&mut self, object: &SceneObject, seed: usize, angle_deg: f32, marked: bool) {
-        let adjacency = Adjacency::of(&object.mesh);
+        let adjacency = self.adjacency.of(&object.mesh);
         let faces = self.faces_of(object);
         faces
             .region

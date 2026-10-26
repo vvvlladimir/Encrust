@@ -44,9 +44,8 @@ pub fn remove_faces(mesh: &mut Mesh, faces: &Region) -> usize {
     before - mesh.faces.len()
 }
 
-/// Lays faces between the open edges `a` and `b`, each given as its two vertices in either
-/// order, wound as the faces beside them are; returns how many it added. Edges sharing a
-/// vertex take one face; apart, the quad takes the diagonal of less area.
+/// Lays faces between the open edges `a` and `b`, each as its two vertices in either order,
+/// wound as the faces beside them (ADR 0356); returns how many it added.
 pub fn bridge(mesh: &mut Mesh, a: [u32; 2], b: [u32; 2]) -> Result<usize, BridgeError> {
     let key = |[p, q]: [u32; 2]| [p.min(q), p.max(q)];
     if key(a) == key(b) {

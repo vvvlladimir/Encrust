@@ -40,11 +40,7 @@ pub fn patch(
     faces: impl IntoIterator<Item = usize>,
     lift_mm: f32,
 ) -> Option<Arc<Mesh>> {
-    let mut region = Region::default();
-    for face in faces {
-        region.set(face, true);
-    }
-    region
+    Region::from_iter(faces)
         .submesh(model, Transform::default(), lift_mm)
         .map(Arc::new)
 }

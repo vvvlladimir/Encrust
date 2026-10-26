@@ -19,7 +19,8 @@ on a broken mesh is thrown away when the mesh is repaired (`SceneObject::reshape
 - Its card is heading, sections, foot (`docs/design/ui-standards.md`): **Found** sums what
   import found in the targets — holes, open edges, faces without area, faces drawn twice,
   shells — with the crossing faces counted on the section's magnifier, off the drawing
-  thread, and forgotten once the mesh changes. **Method** picks one of the six
+  thread, and forgotten once the mesh changes. Holes are loops of open edges, so one row
+  marks both and the open edges are a count beside the shells. **Method** picks one of the six
   `core_volume::RepairMethod`s, **Settings** the seam tolerance, smallest speck and wrap
   lattice the method uses; a method that measures nothing has no Settings. The foot is
   Repair over every target, or the run's progress and Cancel.
@@ -33,15 +34,14 @@ on a broken mesh is thrown away when the mesh is repaired (`SceneObject::reshape
   camera to it, one place a press (ADR 0355). Where they lie is `core_geometry::faults` and
   `self_intersections`, worked out off the drawing thread and forgotten with the mesh;
   nothing of it is saved.
-- The Faces mode and the Shells list wait for the core calls and command-line flags they
-  need (`flip_faces`, `--drop-shells`).
+- Faces and shells edited by hand are ADR 0356's.
 
 ## Consequences
 
 - Every repair the command line runs is one press in the window, with the same lengths.
 - A mark is a picture of what the command line already counts, so it has no flag.
-- An open edge is a one-pixel line, the only width the card draws lines at: on a large
-  model zoomed out a rim is thin. Reopen if users miss holes; a ribbon is the next step.
+- An open edge is drawn as a line `theme::MARK_LINE_W` wide, so a rim stays visible on a
+  large model zoomed out.
 - The digit of every tool after Measure changes; a user used to 3 for Hollow presses 4.
 - The rail is nine names wide: the Russian names had to fit the widest column, so the tool
   is "Ремонт" there. A tenth tool would take the last digit, 0.

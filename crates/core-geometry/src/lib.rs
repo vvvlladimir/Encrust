@@ -29,7 +29,7 @@ mod validate;
 mod weld;
 mod winding;
 
-pub use buckets::Buckets;
+pub use buckets::{Buckets, cell_of_point, cells_around};
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};

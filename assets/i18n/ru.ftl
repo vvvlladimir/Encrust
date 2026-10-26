@@ -1872,6 +1872,18 @@ repair-dropped-faces =
         [few] отброшено { $count } дважды нарисованные грани
        *[many] отброшено { $count } дважды нарисованных граней
     }
+repair-stitched-seams =
+    { $count ->
+        [one] сшит { $count } шов
+        [few] сшито { $count } шва
+       *[many] сшито { $count } швов
+    }
+repair-dropped-shells =
+    { $count ->
+        [one] отброшена { $count } соринка, ничего не охватывающая
+        [few] отброшено { $count } соринки, ничего не охватывающие
+       *[many] отброшено { $count } соринок, ничего не охватывающих
+    }
 
 repair-cancelled = Починка отменена
 repair-failed = { $name } не удалось починить: { $reason }

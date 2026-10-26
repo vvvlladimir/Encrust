@@ -70,3 +70,10 @@ fn removing_a_shell_by_its_number_leaves_the_others() {
     assert_eq!(left.len(), 1);
     assert!(!left[0].closed, "the cube went and the speck stayed");
 }
+
+#[test]
+fn a_shell_named_twice_is_dropped_and_counted_once() {
+    let mut mesh = cube_and_a_speck();
+    assert_eq!(remove_shells(&mut mesh, &[0, 0]), 1);
+    assert_eq!(list_shells(&mesh).len(), 1, "the speck stays");
+}

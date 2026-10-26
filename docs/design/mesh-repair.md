@@ -206,7 +206,7 @@ result is taken if it is sound and crosses nothing. Otherwise the repaired mesh 
 into a winding-number field on `wrap_mm` (0.2 mm) and its surface extracted. That surface
 is taken only if it is sound, crosses itself less than the repaired mesh and branches no
 more; else only the repair stands and the report says the wrap was left out. *Deep* is
-repair, wrap, repair. Repair turns every closed shell outward (see Orientation), so a shell
+repair, wrap, repair, and reports what both repairs did. Repair turns every closed shell outward (see Orientation), so a shell
 inside another is a body the wrap swallows, not a cavity it keeps.
 
 On the test models the field never passes that check. A shell that crosses itself

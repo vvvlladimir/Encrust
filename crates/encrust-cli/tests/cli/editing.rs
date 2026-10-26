@@ -30,6 +30,13 @@ fn a_shell_dropped_by_its_number_leaves_the_other() {
 }
 
 #[test]
+fn a_shell_named_twice_is_said_dropped_once() {
+    let path = two_boxes_apart("dropped-twice");
+    let text = stdout(&inspect(&[path.to_str().unwrap(), "--drop-shells", "2,2"]));
+    assert_eq!(field(&text, "by hand"), "dropped 12 faces, dropped 1 shell");
+}
+
+#[test]
 fn faces_dropped_by_number_open_the_model_and_are_said() {
     let path = write_box_stl("faces-dropped", 10.0, 12, 0);
     let text = stdout(&inspect(&[path.to_str().unwrap(), "--drop-faces", "0,1"]));

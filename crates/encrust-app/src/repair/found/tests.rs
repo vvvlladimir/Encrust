@@ -209,3 +209,23 @@ fn a_finding_with_no_place_on_the_models_has_no_flight_and_a_second_press_puts_i
     found.press(&scene, Finding::OpenEdges);
     assert_eq!(found.shown(), None);
 }
+
+#[test]
+fn no_flight_is_taken_while_a_target_is_still_worked_out() {
+    let mut scene = Scene::default();
+    let first = placed_at_ten(&mut scene, topless(cuboid(Vec3::ZERO, Vec3::ONE), 1.0));
+    let mut found = pressed(&scene, first, Finding::OpenEdges);
+    let second = placed_at_ten(&mut scene, topless(cuboid(Vec3::ZERO, Vec3::ONE), 1.0));
+    found.place(&scene, &[second]);
+
+    assert_eq!(
+        found.take_flight(&scene),
+        None,
+        "the second model's holes come before the count is known"
+    );
+    settle_all(&mut found, &scene);
+    assert!(
+        found.take_flight(&scene).is_some(),
+        "both are worked out now"
+    );
+}

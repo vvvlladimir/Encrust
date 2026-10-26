@@ -76,14 +76,13 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Wrap a model made of overlapping parts into one outer surface, or run a deep repair:
   repair, wrap, repair. A wrap that would leave the model worse is left out and said so.
 - See how many holes a model has, and how many pairs of faces cross.
-
 - List the shells of one model, pick them by hand or every one under a hundredth of the
   largest, fly to the one picked and drop it, or drop the picked ones together.
 - Edit by hand in the Repair tool's Faces mode: pick faces with a brush, a whole surface
   with Cmd and Shift, then flip or delete them; or pick two open edges, marked magenta
-  over the rest, and bridge them with faces wound as the ones beside them. On the command line, `--flip-faces`,
-  `--drop-faces`, `--drop-shells` and `--bridge` do the same by number, and
-  `inspect --shells` lists the shells.
+  over the rest, and bridge them with faces wound as the ones beside them. On the command
+  line, `--flip-faces`, `--drop-faces`, `--drop-shells` and `--bridge` do the same by
+  number, and `inspect --shells` lists the shells.
 
 **Guarantees:** a repair never makes a model worse than it was. An open model is never
 capped silently.

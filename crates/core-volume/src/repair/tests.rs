@@ -116,6 +116,24 @@ fn deep_repair_leaves_the_wrapped_model_sound() {
 }
 
 #[test]
+fn deep_repair_reports_the_hole_its_first_pass_closed() {
+    let (one, mut other) = crossing_cubes();
+    other.faces.pop();
+    let deep = repair(
+        &joined(one, &other),
+        RepairMethod::Deep,
+        RepairSettings::default(),
+        Cancel::never(),
+    )
+    .expect("the cubes wrap");
+
+    assert_eq!(
+        deep.mended.filled.loops_filled, 1,
+        "one face was missing, so one hole was closed before the wrap"
+    );
+}
+
+#[test]
 fn an_empty_mesh_has_nothing_to_wrap() {
     let refused = wrap(&Mesh::default(), RepairSettings::default(), Cancel::never());
     assert!(

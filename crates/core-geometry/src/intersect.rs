@@ -4,10 +4,8 @@ use glam::{DVec2, DVec3};
 
 use crate::{Aabb, Bvh, Mesh};
 
-/// The pairs of faces of `mesh` that cross each other, lower face first, ascending.
-///
-/// Faces sharing a corner are never a pair, and faces only touching are not counted: the
-/// test is strict, in `f64`; see `docs/design/mesh-repair.md`.
+/// The pairs of faces of `mesh` that cross each other, lower face first, ascending; faces
+/// sharing a corner or only touching are not. See `docs/design/mesh-repair.md`.
 pub fn self_intersections(mesh: &Mesh, bvh: &Bvh) -> Vec<[u32; 2]> {
     let mut pairs: Vec<[u32; 2]> = (0..mesh.faces.len())
         .into_par_iter()

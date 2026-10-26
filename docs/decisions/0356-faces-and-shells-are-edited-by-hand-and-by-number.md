@@ -48,8 +48,8 @@ yet act on one place. The command line has to reach whatever the window does (ru
   laid on the drawing thread; a surface picked whole is laid there too. Reopen if either
   is felt as a hitch.
 - Picking an open edge looks at every open edge of the targets on each click, which is
-  far fewer than the faces; a model of millions of open edges, an unwelded one, would be
-  slow to click on.
+  far fewer than the faces; past 200 000 of them the edge under the pointer is not lit
+  while hovering, and a click on an unwelded model is slow.
 
 ## Alternatives considered
 

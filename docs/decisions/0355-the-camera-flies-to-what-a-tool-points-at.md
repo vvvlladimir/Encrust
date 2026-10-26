@@ -38,8 +38,8 @@ islands have the same need. The camera had one swing, the view cube's: a smooths
 - A finding is one press from being in view, and the next one is one press further.
 - Home and the view cube's faces now pull back on the way when the target moves far; a turn
   in place is as before.
-- Check's islands can be marked and visited with no new drawing or camera code: a
-  `TODO(step-10)` stands in `highlight.rs`.
+- Check's issues are marked and visited with the same drawing and camera code: ringed on
+  the slice plane, as `docs/design/viewport.md` gives.
 - A face whose normal points straight down is looked at from under the plate. Reopen if
   users find that disorienting; the plate's own side is the next candidate.
 - The occlusion test is one ray from the spot's centre for each of up to fourteen sides:

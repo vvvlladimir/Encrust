@@ -54,10 +54,8 @@ const TILTS_RAD: [f32; 2] = [std::f32::consts::FRAC_PI_6, std::f32::consts::FRAC
 /// Turns round the spot's side at each tilt, the first towards up.
 const TURNS: usize = 6;
 
-/// The sides to look from, best first. With a side of its own, a spot is seen from it, or
-/// within 45° of it the way the camera looks now, then from rings tilted round it, the one
-/// above first, and last the way it looks now if that is still outside; never from behind.
-/// Without, the way it looks now, then the axes and diagonals nearest to that.
+/// The sides to look from, best first, in the order `docs/design/viewport.md` gives; a spot
+/// with a side of its own is never seen from behind it.
 fn sides(now: Vec3, normal: Vec3) -> Vec<Vec3> {
     if normal == Vec3::ZERO {
         let mut round: Vec<Vec3> = [-1.0f32, 0.0, 1.0]

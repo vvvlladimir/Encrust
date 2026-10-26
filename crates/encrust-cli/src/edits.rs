@@ -55,7 +55,10 @@ pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
     let flipped = region(&args.flip_faces, faces).context("--flip-faces")?;
     let mut dropped = region(&args.drop_faces, faces).context("--drop-faces")?;
     let shells = list_shells(mesh);
-    for &number in &args.drop_shells {
+    let mut numbers = args.drop_shells.clone();
+    numbers.sort_unstable();
+    numbers.dedup();
+    for &number in &numbers {
         let Some(shell) = number.checked_sub(1).and_then(|at| shells.get(at)) else {
             bail!(
                 "--drop-shells: there is no shell {number}; the model has {}",
@@ -68,7 +71,7 @@ pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
     }
     let mut edited = Edited {
         faces_flipped: flip_faces(mesh, &flipped),
-        shells_dropped: args.drop_shells.len(),
+        shells_dropped: numbers.len(),
         ..Edited::default()
     };
     for BridgeEdges(a, b) in &args.bridge {
@@ -81,14 +84,10 @@ pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
 
 /// The faces `numbers` names, refusing one past the last of `faces`.
 fn region(numbers: &[usize], faces: usize) -> Result<Region> {
-    let mut region = Region::default();
-    for &face in numbers {
-        if face >= faces {
-            bail!("there is no face {face}; the model has {faces}, numbered from 0");
-        }
-        region.set(face, true);
+    if let Some(face) = numbers.iter().find(|&&face| face >= faces) {
+        bail!("there is no face {face}; the model has {faces}, numbered from 0");
     }
-    Ok(region)
+    Ok(numbers.iter().copied().collect())
 }
 
 /// What the changes by hand did, in the words the report says it in.

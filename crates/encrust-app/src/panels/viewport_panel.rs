@@ -1,8 +1,8 @@
 use crate::relief::ReliefMode;
-use core_geometry::{PlacedHit, Scalar, Vec2};
+use core_geometry::{PlacedHit, Vec2};
 use egui::{PointerButton, Sense};
 
-use crate::camera::{CameraTurn, OrbitCamera};
+use crate::camera::OrbitCamera;
 use crate::drain::Placing;
 use crate::panels::{Window, section};
 use crate::plate::BuildPlate;
@@ -15,6 +15,8 @@ use crate::workspace::Tool;
 
 mod hollow;
 mod levels;
+mod marks;
+use marks::{fly_to_marked, marked};
 mod overlays;
 mod paint;
 mod picking;
@@ -323,44 +325,6 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Opti
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
     draw_axis_letters(ui, window, rect);
-}
-
-/// What the Repair tool found, or the issues Check went to while the plate and the cut at
-/// `section_mm` stay as they were, marked only while that tool is in hand.
-fn marked(
-    window: &Window,
-    section_mm: Option<Scalar>,
-    (rect, cursor): (egui::Rect, Option<egui::Pos2>),
-) -> crate::highlight::Highlight {
-    match *window.tool {
-        Tool::Repair => repair::marked(window, rect, cursor),
-        Tool::Check => window.tools.check.highlight(crate::check::Stage {
-            plate: crate::preview::plate_fingerprint(&window.doc.scene),
-            cut_mm: section_mm,
-        }),
-        _ => crate::highlight::Highlight::default(),
-    }
-}
-
-/// Flies the camera to where the Repair tool's last press or Check's last pick went, on
-/// the frame that place is worked out, seen past what the section leaves drawn.
-fn fly_to_marked(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
-    let spot = match *window.tool {
-        Tool::Repair => repair::flight(window),
-        Tool::Check => window.tools.check.take_flight(),
-        _ => None,
-    };
-    let Some(spot) = spot else {
-        return;
-    };
-    let shown = section::shown(window);
-    let scene = &window.doc.scene;
-    let aspect = rect.width() / rect.height().max(1.0);
-    let hidden = |eye, point| crate::pick::sight_blocked(scene, eye, point, shown);
-    let to = window.view.camera.focusing(&spot, aspect, hidden);
-    let now = ui.input(|input| input.time);
-    window.view.turn = Some(CameraTurn::flight(window.view.camera, to, now));
-    ui.ctx().request_repaint();
 }
 
 /// The chrome each tool draws over the 3D pass: bounds, gizmo, measurement, brush.

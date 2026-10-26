@@ -28,14 +28,12 @@ pub fn faults(mesh: &Mesh) -> Faults {
         .map(|group| ([group[0].edge.0, group[0].edge.1], group[0].face))
         .unzip();
     let holes = holes(mesh, &uses, &open_edges);
-    let mut flat_faces = Region::default();
-    for (face, flat) in degenerate_faces(mesh).into_iter().enumerate() {
-        flat_faces.set(face, flat);
-    }
-    let mut doubled_faces = Region::default();
-    for face in duplicate_faces(mesh) {
-        doubled_faces.set(face, true);
-    }
+    let flat_faces: Region = degenerate_faces(mesh)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(face, flat)| flat.then_some(face))
+        .collect();
+    let doubled_faces: Region = duplicate_faces(mesh).into_iter().collect();
     Faults {
         open_edges,
         open_faces,

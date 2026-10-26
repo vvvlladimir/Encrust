@@ -64,9 +64,8 @@ pub(super) struct EdgeUnder {
     ends: [core_geometry::Vec3; 2],
 }
 
-/// The open edge nearest `cursor` on the screen within reach, the nearest of those no
-/// deeper than the surface under the cursor first: a ray to a rim that thin would graze
-/// the faces round it. `None` past `HOVER_EDGES` edges, which are too many to look over.
+/// The open edge nearest `cursor` within reach, those no deeper than the surface under it
+/// first: a ray to a rim that thin would graze the faces round it.
 pub(super) fn edge_under(
     window: &Window,
     viewport: egui::Rect,
@@ -78,9 +77,6 @@ pub(super) fn edge_under(
         let Some(open) = window.doc.repairs.found.open_edges(object) else {
             continue;
         };
-        if open.ends.len() > HOVER_EDGES {
-            continue;
-        }
         let matrix = object.transform.to_matrix();
         for (edge, vertices) in open.ends.iter().zip(open.vertices) {
             let ends = edge.map(|end| matrix.transform_point3(end));
@@ -136,12 +132,21 @@ pub(super) fn pick_edge(
 }
 
 /// The open edge a click would take, bright over the rest, while the pointer is on the
-/// viewport in the Edges picking.
+/// viewport in the Edges picking and the targets have no more than `HOVER_EDGES` of them.
 pub(super) fn hovered(
     window: &Window,
     viewport: egui::Rect,
     cursor: Option<egui::Pos2>,
 ) -> Highlight {
+    let found = &window.doc.repairs.found;
+    let open: usize = window
+        .doc
+        .scene
+        .targets()
+        .filter_map(|object| found.open_edges(object))
+        .map(|open| open.ends.len())
+        .sum();
+    let cursor = cursor.filter(|_| open <= HOVER_EDGES);
     let under = cursor.and_then(|cursor| edge_under(window, viewport, cursor));
     Highlight {
         faces: Vec::new(),

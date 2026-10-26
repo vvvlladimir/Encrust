@@ -34,6 +34,16 @@ impl From<Stored> for Region {
     }
 }
 
+impl FromIterator<usize> for Region {
+    fn from_iter<I: IntoIterator<Item = usize>>(faces: I) -> Self {
+        let mut region = Self::default();
+        for face in faces {
+            region.set(face, true);
+        }
+        region
+    }
+}
+
 impl Region {
     /// Whether no face is marked.
     pub fn is_empty(&self) -> bool {

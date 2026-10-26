@@ -1,5 +1,5 @@
 use crate::topology::{edge_groups, edge_uses, shells};
-use crate::{Mesh, Scalar};
+use crate::{Mesh, Region, Scalar, remove_faces};
 
 /// Smallest area a shell that encloses nothing keeps, mm²; under it a shell is a speck.
 pub const DEFAULT_SMALLEST_SHELL_MM2: Scalar = 1.0;
@@ -48,6 +48,9 @@ pub fn list_shells(mesh: &Mesh) -> Vec<Shell> {
 /// A number past the last shell drops nothing.
 pub fn remove_shells(mesh: &mut Mesh, which: &[usize]) -> usize {
     let listed = list_shells(mesh);
+    let mut which = which.to_vec();
+    which.sort_unstable();
+    which.dedup();
     let going: Vec<&Shell> = which.iter().filter_map(|&at| listed.get(at)).collect();
     drop_faces_of(mesh, &going);
     going.len()
@@ -69,19 +72,12 @@ pub fn drop_small_shells(mesh: &mut Mesh, smallest_mm2: Scalar) -> usize {
 }
 
 fn drop_faces_of(mesh: &mut Mesh, going: &[&Shell]) {
-    if going.is_empty() {
-        return;
-    }
-    let mut dropped = vec![false; mesh.faces.len()];
-    for face in going.iter().flat_map(|shell| &shell.faces) {
-        dropped[*face as usize] = true;
-    }
-    let mut at = 0;
-    mesh.faces.retain(|_| {
-        let keep = !dropped[at];
-        at += 1;
-        keep
-    });
+    let faces: Region = going
+        .iter()
+        .flat_map(|shell| &shell.faces)
+        .map(|&face| face as usize)
+        .collect();
+    remove_faces(mesh, &faces);
 }
 
 #[cfg(test)]

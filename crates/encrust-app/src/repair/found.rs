@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use core_geometry::{FastMap, FastSet, Faults, Mesh, Region, Vec3, faults, self_intersections};
 
-use super::pending::{Pending, done, running, settle, start};
+use super::pending::{Pending, done, finished, running, settle, start};
 use crate::highlight::{EdgeMark, FaceMark, Highlight, LIFT_MM, Spot, patch};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::ui::theme;
@@ -112,10 +112,7 @@ impl Found {
             let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
             start(&mut self.crossed, object, move || {
                 let pairs = self_intersections(&mesh, &bvh);
-                let mut faces = Region::default();
-                for face in pairs.iter().flatten() {
-                    faces.set(*face as usize, true);
-                }
+                let faces: Region = pairs.iter().flatten().map(|&face| face as usize).collect();
                 Crossed {
                     pairs: pairs.len(),
                     faces: Faces::of(&mesh, &faces),
@@ -168,16 +165,16 @@ impl Found {
         self.is_working()
     }
 
-    /// The places of `finding` on the plate over the targets in order, or `None` until
-    /// every target's are worked out.
+    /// The places of `finding` on the plate over the targets in order, or `None` while
+    /// some target's are not worked out.
     fn spots(&self, scene: &Scene, finding: Finding) -> Option<Vec<Spot>> {
         let mut spots = Vec::new();
         for object in scene.targets() {
             let local = match finding {
-                Finding::CrossingFaces => done(&self.crossed, object)?
+                Finding::CrossingFaces => finished(&self.crossed, object)?
                     .map(|crossed| crossed.faces.spots())
                     .unwrap_or_default(),
-                _ => done(&self.placed, object)?
+                _ => finished(&self.placed, object)?
                     .map(|placed| placed.spots(finding))
                     .unwrap_or_default(),
             };
@@ -198,8 +195,13 @@ impl Found {
             focused: Vec::new(),
             at: self.at,
             first: 0,
+            settled: true,
         };
         for object in scene.targets() {
+            marking.settled &= match shown {
+                Finding::CrossingFaces => finished(&self.crossed, object).is_some(),
+                _ => finished(&self.placed, object).is_some(),
+            };
             match shown {
                 Finding::OpenEdges => {
                     if let Some(placed) = done(&self.placed, object).flatten() {
@@ -241,6 +243,8 @@ struct Marking<'a> {
     at: usize,
     /// The number of the first place of the model being marked.
     first: usize,
+    /// Whether every target so far is worked out, so `first` counts all their places.
+    settled: bool,
 }
 
 impl Marking<'_> {
@@ -248,7 +252,7 @@ impl Marking<'_> {
     fn local(&mut self, count: usize) -> Option<usize> {
         let local = self.at.checked_sub(self.first).filter(|&at| at < count);
         self.first += count;
-        local
+        local.filter(|_| self.settled)
     }
 
     fn holes(&mut self, object: &SceneObject, placed: &Placed) {

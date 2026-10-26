@@ -2,7 +2,7 @@ use rayon::prelude::*;
 
 use crate::hash::{FastMap, FastSet};
 use crate::topology::{edge_groups, edge_uses};
-use crate::{Mesh, Scalar, Triangle, Vec3};
+use crate::{Mesh, Scalar, Triangle, Vec3, cell_of_point, cells_around};
 
 /// How far a vertex may stand off an open edge and still be stitched into it, mm. An
 /// exporter rounding to a micron leaves seams far inside it; see `docs/design/mesh-repair.md`.
@@ -124,7 +124,7 @@ impl OpenCorners {
             edges,
         };
         for &corner in grid.edges.keys() {
-            let cell = cell_of(mesh.vertices[corner as usize], cell_mm);
+            let cell = cell_of_point(mesh.vertices[corner as usize], cell_mm);
             grid.cells.entry(cell).or_default().push(corner);
         }
         grid
@@ -149,8 +149,8 @@ impl OpenCorners {
         let mut seen = FastSet::default();
         let mut inside: Vec<(Scalar, u32)> = Vec::new();
         for step in 0..=steps {
-            let centre = cell_of(a.lerp(b, step as Scalar / steps as Scalar), self.cell_mm);
-            for cell in neighbours(centre) {
+            let centre = cell_of_point(a.lerp(b, step as Scalar / steps as Scalar), self.cell_mm);
+            for cell in cells_around(centre) {
                 for &corner in self.cells.get(&cell).into_iter().flatten() {
                     if mesh.faces[face as usize].contains(&corner) || !seen.insert(corner) {
                         continue;
@@ -197,16 +197,6 @@ impl OpenCorners {
                 (end - start).dot(line) < 0.0 && off_line(far) <= tolerance_mm
             })
     }
-}
-
-fn cell_of(at: Vec3, cell_mm: Scalar) -> [i32; 3] {
-    (at / cell_mm).floor().as_ivec3().to_array()
-}
-
-fn neighbours([x, y, z]: [i32; 3]) -> impl Iterator<Item = [i32; 3]> {
-    (-1..=1).flat_map(move |dx| {
-        (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))
-    })
 }
 
 impl Split {

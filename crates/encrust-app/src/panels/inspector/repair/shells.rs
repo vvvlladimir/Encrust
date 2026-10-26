@@ -2,6 +2,7 @@
 
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::repair::ShellRow;
 use crate::scene::ObjectId;
 use crate::ui::{
     busy, companion_button, describe, icon, list, list_row, section, section_with_actions, theme,
@@ -45,50 +46,65 @@ pub fn listed(ui: &mut egui::Ui, window: &mut Window) {
             busy(ui, &tr!("repair-listing"), None, false);
             return;
         };
-        let picked = shells.picked(object);
-        list(ui, |ui| {
-            for (at, row) in rows.iter().enumerate() {
-                let name = tr!("repair-shell", number = at + 1);
-                let aside = match row.closed {
-                    true => tr!("repair-shell-faces", count = row.faces.len()),
-                    false => tr!("repair-shell-faces-open", count = row.faces.len()),
-                };
-                let bin = (icon::REMOVE, tr!("repair-drop-shell"));
-                let pressed = list_row(
-                    ui,
-                    &name,
-                    None,
-                    picked.contains(&at),
-                    Some((bin.0, &bin.1)),
-                    None,
-                    Some(&aside),
-                    None,
-                );
-                if pressed.removed {
-                    asked = Some(Asked::Drop(at));
-                } else if pressed.picked {
-                    asked = Some(Asked::Toggle(at));
-                }
-            }
-        });
+        asked = rows_listed(ui, rows, shells.picked(object));
     });
     match pressed {
         Some(0) => asked = Some(Asked::Small),
         Some(_) => asked = Some(Asked::Invert),
         None => {}
     }
+    if let Some(asked) = asked {
+        answer(window, id, asked);
+    }
+}
+
+/// A row per shell, picked ones lit; what a press on one asked for.
+fn rows_listed(ui: &mut egui::Ui, rows: &[ShellRow], picked: &[usize]) -> Option<Asked> {
+    let mut asked = None;
+    list(ui, |ui| {
+        for (at, row) in rows.iter().enumerate() {
+            let name = tr!("repair-shell", number = at + 1);
+            let aside = match row.closed {
+                true => tr!("repair-shell-faces", count = row.faces.len()),
+                false => tr!("repair-shell-faces-open", count = row.faces.len()),
+            };
+            let bin = (icon::REMOVE, tr!("repair-drop-shell"));
+            let pressed = list_row(
+                ui,
+                &name,
+                None,
+                picked.contains(&at),
+                Some((bin.0, &bin.1)),
+                None,
+                Some(&aside),
+                None,
+            );
+            if pressed.removed {
+                asked = Some(Asked::Drop(at));
+            } else if pressed.picked {
+                asked = Some(Asked::Toggle(at));
+            }
+        }
+    });
+    asked
+}
+
+/// Does what a press in the Shells section asked for on the model `id`.
+fn answer(window: &mut Window, id: ObjectId, asked: Asked) {
+    let Some(object) = window.doc.scene.get(id) else {
+        return;
+    };
     let (repairs, status) = (&mut window.doc.repairs, &mut window.machine.status);
     match asked {
-        Some(Asked::Toggle(at)) => repairs.shells.toggle(object, at),
-        Some(Asked::Small) => repairs.shells.pick_small(object),
-        Some(Asked::Invert) => repairs.shells.invert(object),
-        Some(Asked::Drop(at)) => {
+        Asked::Toggle(at) => repairs.shells.toggle(object, at),
+        Asked::Small => repairs.shells.pick_small(object),
+        Asked::Invert => repairs.shells.invert(object),
+        Asked::Drop(at) => {
             repairs.shells.clear();
             repairs
                 .hand
                 .drop_shells(&window.doc.scene, id, vec![at], status);
         }
-        None => {}
     }
 }
 

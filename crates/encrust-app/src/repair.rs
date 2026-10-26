@@ -25,7 +25,7 @@ mod shells;
 
 pub use found::{Finding, Found};
 pub use hand::{Hand, HandEdit};
-pub use shells::Shells;
+pub use shells::{ShellRow, Shells};
 
 /// The Repair tool: what it is set to, and the mode its card is in.
 #[derive(Debug, Default)]

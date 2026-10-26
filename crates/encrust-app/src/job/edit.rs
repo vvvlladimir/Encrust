@@ -6,7 +6,7 @@ use crate::i18n::tr;
 use crate::job::{Worker, pooled};
 use crate::scene::Shaped;
 
-/// A change made to one model's mesh by hand, the same calls the command line's flags make.
+/// A change made to one model's mesh by hand, as the command line's flags make it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Edit {
     Flip(Region),

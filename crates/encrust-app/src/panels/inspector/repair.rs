@@ -91,7 +91,12 @@ fn found(ui: &mut egui::Ui, window: &mut Window) {
             Crossings::Uncounted => Some(tr!("repair-uncounted")),
         };
         marking(ui, &mut window.doc.repairs.found, &window.doc.scene, &rows);
-        let mut readings_rows = vec![(tr!("repair-shells"), shells)];
+        let mut readings_rows = Vec::new();
+        if sum(&objects, |found| found.holes) > 0 {
+            let open = sum(&objects, |found| found.boundary_edges).to_string();
+            readings_rows.push((tr!("repair-open-edges"), open));
+        }
+        readings_rows.push((tr!("repair-shells"), shells));
         readings_rows.extend(crossed.map(|crossed| (tr!("repair-crossing-faces"), crossed)));
         readings(ui, &readings_rows);
     });
@@ -128,17 +133,18 @@ fn faults(objects: &[&SceneObject], crossings: Crossings) -> Vec<(String, usize,
         Crossings::Counted(pairs) => pairs,
         Crossings::Counting | Crossings::Uncounted => 0,
     };
-    [
-        (
-            tr!("repair-holes"),
-            sum(objects, |found| found.holes),
-            Finding::OpenEdges,
-        ),
-        (
+    // Holes are loops of the open edges, so one row marks both; the edges count is a
+    // reading then, and a row only where they close no loop.
+    let holes = sum(objects, |found| found.holes);
+    let (open, count) = match holes {
+        0 => (
             tr!("repair-open-edges"),
             sum(objects, |found| found.boundary_edges),
-            Finding::OpenEdges,
         ),
+        _ => (tr!("repair-holes"), holes),
+    };
+    [
+        (open, count, Finding::OpenEdges),
         (
             tr!("repair-flat-faces"),
             sum(objects, |found| found.degenerate_faces),

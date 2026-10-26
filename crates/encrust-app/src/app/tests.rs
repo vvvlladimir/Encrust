@@ -876,9 +876,8 @@ fn a_resin_another_program_exported_goes_on_the_machine_it_names() {
     assert_eq!(kept.for_printer(IMPORTED_ON).light_pwm, 211);
 }
 
-/// The whole window path of the Repair tool's Edges picking on `mesh` placed by
-/// `transform`: the camera brought to its first hole, then a press and release over the
-/// middle of an edge of that hole's rim, as a mouse gives them. Answers the edges picked.
+/// The window path of the Edges picking on `mesh` placed by `transform`: the camera at its
+/// first hole, a press and release over a rim edge's middle. Answers the edges picked.
 fn click_a_rim(mesh: core_geometry::Mesh, transform: core_geometry::Transform, tap: bool) -> usize {
     use super::states::{SETTLE_FRAMES, app};
 

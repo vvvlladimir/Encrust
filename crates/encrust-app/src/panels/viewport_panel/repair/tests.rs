@@ -60,6 +60,19 @@ fn in_repair(mesh: Mesh, camera: OrbitCamera, then: impl FnOnce(&mut Window)) {
     });
 }
 
+/// The open box and loose triangles off to its side enough for `HOVER_EDGES` open edges.
+fn open_box_and_crumbs() -> Mesh {
+    let mut mesh = open_box();
+    let crumb = [0.0, 1.0].map(|x| Vec3::new(150.0 + x, 150.0, 0.0));
+    for _ in 0..HOVER_EDGES / 3 + 1 {
+        let first = mesh.vertices.len() as u32;
+        mesh.vertices
+            .extend([crumb[0], crumb[1], Vec3::new(150.0, 151.0, 0.0)]);
+        mesh.faces.push([first, first + 1, first + 2]);
+    }
+    mesh
+}
+
 fn picked(window: &Window) -> usize {
     window
         .doc
@@ -82,6 +95,22 @@ fn a_click_on_the_rim_of_a_hole_picks_that_open_edge() {
             .expect("in front of the camera");
         pick_edge(&egui::Context::default(), window, VIEWPORT, cursor);
         assert_eq!(picked(window), 1);
+    });
+}
+
+#[test]
+fn a_click_picks_a_rim_on_a_model_of_too_many_open_edges_to_light_on_hover() {
+    let camera = OrbitCamera {
+        target: Vec3::new(60.0, 60.0, 10.0),
+        distance_mm: 80.0,
+        ..OrbitCamera::default()
+    };
+    in_repair(open_box_and_crumbs(), camera, |window| {
+        let cursor = projector(&camera, VIEWPORT)(Vec3::new(60.0, 50.0, 20.0))
+            .expect("in front of the camera");
+        assert!(hovered(window, VIEWPORT, Some(cursor)).edges.is_empty());
+        pick_edge(&egui::Context::default(), window, VIEWPORT, cursor);
+        assert_eq!(picked(window), 1, "a click looks over every open edge");
     });
 }
 

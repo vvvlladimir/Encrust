@@ -1,4 +1,16 @@
-use crate::{FastMap, Scalar, Vec2};
+use crate::{FastMap, Scalar, Vec2, Vec3};
+
+/// The cube `cell_mm` across that `at` falls in, of a grid with a corner at the origin.
+pub fn cell_of_point(at: Vec3, cell_mm: Scalar) -> [i32; 3] {
+    (at / cell_mm).floor().as_ivec3().to_array()
+}
+
+/// The 27 cells of the cube three cells across centred on `cell`, `cell` among them.
+pub fn cells_around([x, y, z]: [i32; 3]) -> impl Iterator<Item = [i32; 3]> {
+    (-1..=1).flat_map(move |dx| {
+        (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))
+    })
+}
 
 /// Items kept in square buckets of the plate `cell_mm` across, so a search near a point
 /// asks the buckets around it rather than every item (`.claude/rules/architecture.md` 7).

@@ -60,7 +60,7 @@ impl Default for RepairSettings {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Repaired {
     pub mesh: Mesh,
-    /// What the last repair on the mesh alone changed.
+    /// What the repairs on the mesh alone changed, together.
     pub mended: Mended,
     /// The lattice a wrap was sampled on, mm; `None` where it was cut exactly or not wrapped.
     pub voxel_mm: Option<Scalar>,
@@ -94,18 +94,19 @@ pub fn repair(
         RepairMethod::Wrap => wrap(mesh, settings, cancel),
         RepairMethod::Deep => {
             let wrapped = wrap(mesh, settings, cancel)?;
+            let again = mended_alone(wrapped.mesh, MendMethod::Repair);
             Ok(Repaired {
+                mended: wrapped.mended.then(again.mended),
                 voxel_mm: wrapped.voxel_mm,
                 wrapped: wrapped.wrapped,
-                ..mended_alone(wrapped.mesh, MendMethod::Repair)
+                ..again
             })
         }
     }
 }
 
-/// `mesh` repaired, then wrapped in one outer surface: its shells unioned exactly, or where
-/// the engine cannot read it or it still crosses itself, sampled into a winding field, which
-/// rounds sharp edges to `settings.wrap_mm`.
+/// `mesh` repaired, then wrapped in one outer surface: unioned exactly, or sampled into a
+/// winding field at `settings.wrap_mm`; see `docs/design/mesh-repair.md`.
 pub fn wrap(
     mesh: &Mesh,
     settings: RepairSettings,

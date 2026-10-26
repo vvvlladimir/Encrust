@@ -55,6 +55,46 @@ pub struct Mended {
     pub kept_as_found: bool,
 }
 
+impl Mended {
+    /// What this mend and `later`, run on the mesh it left, changed together.
+    #[must_use]
+    pub fn then(self, later: Mended) -> Mended {
+        let (first, later) = (self.done(), later.done());
+        Mended {
+            filled: Filled {
+                loops_filled: first.filled.loops_filled + later.filled.loops_filled,
+                faces_added: first.filled.faces_added + later.filled.faces_added,
+                loops_left: later.filled.loops_left,
+            },
+            stitched: Stitched {
+                edges_split: first.stitched.edges_split + later.stitched.edges_split,
+                vertices_inserted: first.stitched.vertices_inserted
+                    + later.stitched.vertices_inserted,
+            },
+            shells_dropped: first.shells_dropped + later.shells_dropped,
+            duplicates_removed: first.duplicates_removed + later.duplicates_removed,
+            orientation: later.orientation.or(first.orientation),
+            kept_as_found: first.kept_as_found && later.kept_as_found,
+        }
+    }
+
+    /// What stands of this mend: nothing but the holes it found where it was undone.
+    fn done(self) -> Mended {
+        if !self.kept_as_found {
+            return self;
+        }
+        let filled = Filled {
+            loops_left: self.filled.loops_filled + self.filled.loops_left,
+            ..Filled::default()
+        };
+        Mended {
+            filled,
+            kept_as_found: true,
+            ..Mended::default()
+        }
+    }
+}
+
 /// Runs `method` on the mesh; leaves it as it came if that would leave more wrong with it,
 /// or nothing of it at all. See `docs/design/mesh-repair.md`.
 pub fn mend(mesh: &mut Mesh, method: MendMethod, settings: MendSettings) -> Mended {

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Mesh, Vec3, list_shells};
+use core_geometry::{FastSet, Mesh, Vec3, list_shells};
 
 use super::pending::{Pending, done, settle, start};
 use crate::highlight::{FaceMark, Highlight, LIFT_MM, Spot, patch};
@@ -14,8 +14,8 @@ use crate::ui::theme;
 /// the model rather than a part of it.
 const SMALL_SHARE: f32 = 0.01;
 
-/// Faces past which a picked shell is flown to but not marked: its patch would be laid on
-/// the drawing thread, and a shell that size is the model itself.
+/// Faces past which a picked shell is flown to but not marked: the patch is laid on the
+/// drawing thread, and a shell that size is the model itself.
 const MARKED_FACES: usize = 100_000;
 
 /// One shell as the list shows it, in its model's space.
@@ -31,7 +31,7 @@ pub struct ShellRow {
 #[derive(Debug, Default)]
 pub struct Shells {
     listed: Vec<(Taken, Pending<Vec<ShellRow>>)>,
-    picked: Option<(Taken, Vec<usize>, Vec<Arc<Mesh>>)>,
+    picked: Option<(Taken, Vec<usize>, Option<Arc<Mesh>>)>,
     flight: Option<Spot>,
 }
 
@@ -82,7 +82,7 @@ impl Shells {
 
     /// Picks every shell of `object` not picked, and lets the picked ones go.
     pub fn invert(&mut self, object: &SceneObject) {
-        let picked = self.picked(object).to_vec();
+        let picked: FastSet<usize> = self.picked(object).iter().copied().collect();
         let rest = self.matching(object, |_| true);
         self.set(
             object,
@@ -110,20 +110,17 @@ impl Shells {
     /// The picked shells of the model they were picked on, marked in `fault`.
     pub fn highlight(&self, scene: &Scene) -> Highlight {
         let mut highlight = Highlight::default();
-        let Some((taken, _, patches)) = &self.picked else {
+        let Some((taken, _, Some(patch))) = &self.picked else {
             return highlight;
         };
         let Some(object) = scene.get(taken.id).filter(|object| taken.is_model(object)) else {
             return highlight;
         };
-        highlight.faces = patches
-            .iter()
-            .map(|mesh| FaceMark {
-                mesh: Arc::clone(mesh),
-                transform: object.transform,
-                colour: theme::scene().fault,
-            })
-            .collect();
+        highlight.faces.push(FaceMark {
+            mesh: Arc::clone(patch),
+            transform: object.transform,
+            colour: theme::scene().fault,
+        });
         highlight
     }
 
@@ -132,19 +129,16 @@ impl Shells {
         (0..rows.len()).filter(|&at| keep(&rows[at])).collect()
     }
 
-    /// Puts `picked` down as the picks of `object`, with the patches they are marked by.
+    /// Puts `picked` down as the picks of `object`, with the one patch they are marked by.
     fn set(&mut self, object: &SceneObject, picked: Vec<usize>) {
         let rows = self.rows(object).unwrap_or_default();
-        let patches = picked
+        let faces = picked
             .iter()
             .filter_map(|&at| rows.get(at))
             .filter(|row| row.faces.len() <= MARKED_FACES)
-            .filter_map(|row| {
-                let faces = row.faces.iter().map(|&face| face as usize);
-                patch(&object.mesh, faces, LIFT_MM)
-            })
-            .collect();
-        self.picked = Some((Taken::of(object), picked, patches));
+            .flat_map(|row| row.faces.iter().map(|&face| face as usize));
+        let marked = patch(&object.mesh, faces, LIFT_MM);
+        self.picked = Some((Taken::of(object), picked, marked));
     }
 }
 

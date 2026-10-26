@@ -7,32 +7,28 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
-use core_geometry::{
-    Bvh, MendSettings, Mended, Mesh, Scalar, Welded, diagnose, list_shells, orient_outward,
-    remove_duplicate_faces, self_intersections, weld,
-};
+use core_geometry::{Bvh, Mesh, Scalar, self_intersections, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use core_volume::{Cancel, RepairSettings, repair};
-use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
+use printer_profiles::{Compensation, MaterialProfile};
 
-use crate::args::{ImportArgs, JobArgs, RasterArgs, RepairMethod};
-use crate::edits;
+use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
 use crate::hollowing::{self, HollowArgs, HollowReport};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
-use crate::report::{FitCheck, ImportReport, Wrapped};
+use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
 use crate::sliced_file::{format_of, write_plate};
 use crate::stage::{self, Part, Staged};
-use crate::stats::MeshStats;
 
+mod checked;
 mod place;
 mod relief;
+use checked::checked;
 pub use place::{OrientSummary, orient_settings};
 use place::{centred, place};
 use relief::press_relief;
@@ -405,78 +401,6 @@ pub fn inspect(
         report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
     }
     Ok(report)
-}
-
-/// Drops the doubled faces, fixes the winding, makes the changes by hand, mends the model
-/// when asked and measures it, unless validation is off, and says what import found.
-fn checked(
-    mesh: &mut Mesh,
-    input: &Path,
-    welded: Welded,
-    args: &ImportArgs,
-    profile: Option<&PrinterProfile>,
-    list: bool,
-) -> Result<ImportReport> {
-    // Before the orientation fix: a face laid over another reads as a branch to it.
-    let doubled = if args.no_validate {
-        0
-    } else {
-        remove_duplicate_faces(mesh).len()
-    };
-    let orientation = (!args.no_validate).then(|| orient_outward(mesh));
-    let listed = list.then(|| list_shells(mesh));
-    let edited = edits::apply(mesh, args)?;
-    let repaired = args
-        .repair
-        .map(|method| repaired(mesh, method, args))
-        .transpose()?;
-    let (mended, wrapped) =
-        repaired.map_or((None, None), |(mended, wrapped)| (Some(mended), wrapped));
-    let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
-    let shells = diagnostics.as_ref().map(|found| found.shells);
-    let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
-    let fit = profile.map(|p| FitCheck::of(&stats, p));
-
-    Ok(ImportReport {
-        path: input.to_path_buf(),
-        stats,
-        welded,
-        doubled,
-        diagnostics,
-        orientation,
-        mended,
-        wrapped,
-        crossing_pairs: None,
-        edited,
-        shells: listed,
-        fit,
-    })
-}
-
-/// Runs the repair `--repair` named on `mesh` in place: what it changed, and how a wrap went.
-fn repaired(
-    mesh: &mut Mesh,
-    method: RepairMethod,
-    args: &ImportArgs,
-) -> Result<(Mended, Option<Wrapped>)> {
-    let settings = RepairSettings {
-        mend: MendSettings {
-            seam_tolerance_mm: args.seam_tolerance,
-            smallest_shell_mm2: args.smallest_shell,
-        },
-        wrap_mm: args.wrap_mm,
-    };
-    let done = repair(mesh, method.into(), settings, Cancel::never())
-        .context("could not repair the model")?;
-    *mesh = done.mesh;
-    let wrapped = matches!(method, RepairMethod::Wrap | RepairMethod::Deep).then_some(
-        match (done.wrapped, done.voxel_mm) {
-            (false, _) => Wrapped::LeftOut,
-            (true, None) => Wrapped::Exactly,
-            (true, Some(voxel_mm)) => Wrapped::OnLattice(voxel_mm),
-        },
-    );
-    Ok((done.mended, wrapped))
 }
 
 /// What an adaptive run is allowed to do: the layer height becomes its ceiling.

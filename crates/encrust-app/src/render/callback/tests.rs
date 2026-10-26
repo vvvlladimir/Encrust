@@ -2,7 +2,11 @@ use super::*;
 use core_geometry::{Bvh, Quat, diagnose};
 use core_supports::Trapped;
 
-use crate::scene::{ImportSummary, Imported};
+use core_volume::{Channel, Drilled};
+
+use super::draws::color_for;
+use crate::render::gpu::MAX_CUTS;
+use crate::scene::{ImportSummary, Imported, Mapped};
 
 /// A ball hollowed the way the window hollows one, with resin reported trapped in it.
 fn a_hollowed_ball_with_resin_in_it() -> Scene {

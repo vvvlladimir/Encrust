@@ -38,6 +38,18 @@ pub(super) fn done<'a, T>(
     })
 }
 
+/// What `object` as it stands was answered: `None` until its work has ended, `Some(None)`
+/// where it ended without an answer.
+pub(super) fn finished<'a, T>(
+    kept: &'a [(Taken, Pending<T>)],
+    object: &SceneObject,
+) -> Option<Option<&'a T>> {
+    match kept.iter().find(|(taken, _)| taken.is_model(object))? {
+        (_, Pending::Running(_)) => None,
+        (_, Pending::Done(answer)) => Some(answer.as_ref()),
+    }
+}
+
 pub(super) fn running<T>(kept: &[(Taken, Pending<T>)]) -> bool {
     kept.iter()
         .any(|(_, pending)| matches!(pending, Pending::Running(_)))
