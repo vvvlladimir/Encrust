@@ -21,7 +21,7 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 | 0x2C | small preview address, `u32` | |
 | 0x30 | print time, `u32` | seconds |
 | 0x34 | projector type, `u32` | 1 when either mirror flag is set, as in `.ctb` |
-| 0x38 | anti-alias level, `u32` | 1 |
+| 0x38 | anti-alias level, `u32` | as `.fdg`'s at 0x60 |
 | 0x3C | light PWM, bottom light PWM, `u16` each | |
 | 0x40 | two words | zero, as `.ctb`'s two at 0x14 |
 | 0x48 | total height, `f32` | mm |
@@ -37,7 +37,7 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 | 0x98 | the second lift and retract stage, six words | zero |
 | 0xB0 | `u32` | `0x14`, a constant of the vendor writer |
 | 0xB4 | modified timestamp, `u32` | minutes since the Unix epoch |
-| 0xB8 | anti-alias level, `u32` | 1 |
+| 0xB8 | anti-alias level, `u32` | the same again |
 | 0xBC | software version, `u32` | `0x01090000`, as `.ctb` v4 |
 | 0xC0 | the rest | as `.fdg` from the same offset to its end |
 

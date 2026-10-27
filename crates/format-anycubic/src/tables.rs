@@ -7,7 +7,7 @@ use crate::blocks::{
     self, COLOUR_TABLE_BYTES, EXTRA_BYTES, MACHINE_BYTES, MODEL_BYTES, SOFTWARE_BYTES,
     sub_layer_table_bytes,
 };
-use crate::rle::anti_alias_level;
+use crate::rle::GREY_STEPS;
 use crate::writer::AnycubicVersion;
 
 /// Bytes of a table's name, nul-padded.
@@ -168,7 +168,7 @@ pub(crate) fn write_header(fields: &mut Fields<'_>, job: &PrintJob) -> io::Resul
     fields.f32_le(material.retract_speed_mm_min / 60.0)?;
     fields.f32_le(job.volume_mm3 / 1000.0)?;
 
-    fields.u32_le(u32::from(anti_alias_level(raster)))?;
+    fields.u32_le(u32::from(raster.anti_alias_level(GREY_STEPS)))?;
     fields.u32_le(raster.width_px)?;
     fields.u32_le(raster.height_px)?;
     fields.f32_le(job.weight_g())?;
@@ -202,7 +202,7 @@ fn header_pixel_um(job: &PrintJob) -> f32 {
 /// resin type; and intelligent mode off, so the machine keeps the exposure it is given.
 fn write_header_tail(fields: &mut Fields<'_>, raster: &RasterSettings) -> io::Result<()> {
     fields.u32_le(0)?;
-    fields.u16_le(anti_alias_level(raster))?;
+    fields.u16_le(raster.anti_alias_level(GREY_STEPS))?;
     fields.u16_le(u16::from(raster.blur_px))?;
     fields.u32_le(RESIN_TYPE)?;
     fields.u32_le(0)

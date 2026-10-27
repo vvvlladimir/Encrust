@@ -68,6 +68,16 @@ pub struct RasterSettings {
 }
 
 impl RasterSettings {
+    /// The anti-alias level a sliced file states: how many greys an edge is drawn in, at
+    /// most `cap`, the container's own limit, and 1 for a panel drawn without grey.
+    pub fn anti_alias_level(&self, cap: u16) -> u16 {
+        match (self.shading, self.grey.levels) {
+            (Shading::Binary, _) => 1,
+            (Shading::Coverage, Some(levels)) => u16::from(levels.get()).min(cap),
+            (Shading::Coverage, None) => cap,
+        }
+    }
+
     /// Rejects a request that cannot produce a usable mask.
     pub fn validate(&self) -> Result<(), RasterError> {
         if self.width_px == 0 || self.height_px == 0 {
@@ -108,6 +118,26 @@ mod tests {
             grey: Grey::default(),
             blur_px: 0,
         }
+    }
+
+    #[test]
+    fn the_anti_alias_level_is_how_many_greys_an_edge_is_drawn_in() {
+        let with = |shading, levels| RasterSettings {
+            shading,
+            grey: Grey {
+                floor: 0,
+                levels: NonZeroU8::new(levels),
+            },
+            ..settings()
+        };
+        assert_eq!(with(Shading::Binary, 8).anti_alias_level(16), 1);
+        assert_eq!(with(Shading::Coverage, 4).anti_alias_level(16), 4);
+        assert_eq!(with(Shading::Coverage, 64).anti_alias_level(16), 16);
+        assert_eq!(
+            with(Shading::Coverage, 0).anti_alias_level(16),
+            16,
+            "every grey"
+        );
     }
 
     #[test]

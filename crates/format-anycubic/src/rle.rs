@@ -1,18 +1,8 @@
 use core_format::FormatError;
-use core_raster::{LayerRuns, RasterSettings, Run, Shading};
+use core_raster::{LayerRuns, Run};
 
 /// Greys the format carries: one nibble per pixel, so sixteen steps of seventeen.
 pub const GREY_STEPS: u16 = 16;
-
-/// The anti-alias level a file states for `raster`: how many greys its edges are drawn in,
-/// at most the sixteen the nibbles carry, and 1 for a panel drawn without grey.
-pub(crate) fn anti_alias_level(raster: &RasterSettings) -> u16 {
-    match (raster.shading, raster.grey.levels) {
-        (Shading::Binary, _) => 1,
-        (Shading::Coverage, Some(levels)) => u16::from(levels.get()).min(GREY_STEPS),
-        (Shading::Coverage, None) => GREY_STEPS,
-    }
-}
 
 /// Longest run the two-byte form can carry: twelve bits of length.
 const MAX_LONG_RUN: u32 = 0x0FFF;
@@ -156,26 +146,6 @@ pub fn decode(data: &[u8]) -> Result<Vec<Run>, FormatError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_anti_alias_level_is_how_many_greys_an_edge_is_drawn_in() {
-        let raster = |shading, levels| RasterSettings {
-            shading,
-            grey: core_raster::Grey {
-                floor: 0,
-                levels: std::num::NonZeroU8::new(levels),
-            },
-            ..crate::fixtures::sample_raster()
-        };
-        assert_eq!(anti_alias_level(&raster(Shading::Binary, 8)), 1);
-        assert_eq!(anti_alias_level(&raster(Shading::Coverage, 4)), 4);
-        assert_eq!(anti_alias_level(&raster(Shading::Coverage, 64)), 16);
-        assert_eq!(
-            anti_alias_level(&raster(Shading::Coverage, 0)),
-            16,
-            "every grey"
-        );
-    }
 
     fn layer(values: &[(u8, u32)]) -> LayerRuns {
         let total: u32 = values.iter().map(|(_, length)| length).sum();

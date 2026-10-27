@@ -19,7 +19,7 @@ mod rle;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use header::{HEADER_BYTES, Offsets, Totals, write_tail};
+pub(crate) use header::{HEADER_BYTES, Offsets, Totals, anti_alias_level, write_tail};
 pub use reader::{FdgReader, OpenFdg};
 pub(crate) use reader::{MotionAt, read_machine_name, read_motion, read_table};
 pub use rle::FdgLayer;

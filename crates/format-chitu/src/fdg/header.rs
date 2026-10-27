@@ -69,7 +69,7 @@ pub(crate) fn write_header(
 
     // Zero leaves the layer data in the clear, as for `.ctb`; see docs/decisions/0046.
     fields.u32_le(0)?;
-    fields.u32_le(1)?;
+    fields.u32_le(anti_alias_level(job))?;
     fields.u32_le(0x44)?;
     fields.f32_le(job.volume_mm3 / 1000.0)?;
     fields.f32_le(job.weight_g())?;
@@ -78,6 +78,12 @@ pub(crate) fn write_header(
     fields.u32_le(offsets.machine_name_bytes)?;
     write_motion(fields, job)?;
     write_tail(fields, job, totals)
+}
+
+/// The anti-alias level the header states, as the vendor writer does: the setting the edges
+/// were drawn with, at most 16, though the layer codec keeps only lit and unlit.
+pub(crate) fn anti_alias_level(job: &PrintJob) -> u32 {
+    u32::from(job.raster.anti_alias_level(16))
 }
 
 /// From the light-off delays to the software version, 0x7C to 0xC0.

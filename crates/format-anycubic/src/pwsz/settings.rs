@@ -5,7 +5,7 @@ use core_format::{FormatError, PrintJob, Rgb, Thumbnail, encode_colour};
 use serde_json::{Value, json};
 
 use super::PwszFlavour;
-use crate::rle::anti_alias_level;
+use crate::rle::GREY_STEPS;
 
 /// The two previews, in pixels, and the colour each is padded with.
 const PREVIEWS: [(u32, u32, Rgb); 2] = [(224, 168, [2, 72, 100]), (336, 252, [20, 27, 41])];
@@ -216,7 +216,7 @@ fn stages(height_mm: f32, up_mm_min: f32, down_mm_min: f32) -> (Value, Value) {
 fn slice_parameters(job: &PrintJob, flavour: PwszFlavour) -> Value {
     let material = &job.material;
     let mut parameters = json!({
-        "anti_count": anti_alias_level(&job.raster),
+        "anti_count": job.raster.anti_alias_level(GREY_STEPS),
         "blur_level": job.raster.blur_px,
         "bott_layers": material.bottom_layers,
         "bott_off_time": material.light_off_s(),

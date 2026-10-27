@@ -39,13 +39,13 @@ Offsets hexadecimal. Words are little-endian.
 | 0x20 | layer height, exposure, bottom exposure, `f32` each | mm, s, s |
 | 0x2C | large preview, small preview, layer table addresses, `u32` each | |
 | 0x38 | print time, `u32` | seconds |
-| 0x3C | anti-alias level, `u32` | 1 |
+| 0x3C | `u32` | 1, a constant of the vendor writer |
 | 0x40 | bottom light PWM, light PWM, `u16` each | the reverse of `.ctb`'s order |
 | 0x44 | two words | zero, as `.ctb`'s two at 0x14 |
 | 0x4C | total height, `f32` | mm |
 | 0x50 | bed X, Y, Z, `f32` each | `PrinterProfile::build_volume` |
 | 0x5C | encryption key, `u32` | 0: the layers in the clear, as for `.ctb` (ADR 0046) |
-| 0x60 | anti-alias level, `u32` | 1 |
+| 0x60 | anti-alias level, `u32` | the level the edges were drawn with, at most 16; the layers stay lit or unlit |
 | 0x64 | `u32` | `0x44`, a constant of the vendor writer |
 | 0x68 | volume ml, weight g, cost, `f32` each | cost zero |
 | 0x74 | machine name address, length, `u32` each | |

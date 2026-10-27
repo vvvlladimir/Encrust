@@ -2,7 +2,7 @@ use std::io;
 
 use core_format::{Fields, PrintJob};
 
-use crate::fdg::{Offsets, Totals, write_tail};
+use crate::fdg::{Offsets, Totals, anti_alias_level, write_tail};
 use crate::writer::CtbVersion;
 
 pub(crate) const MAGIC: u32 = 0x9FDA_83AE;
@@ -33,7 +33,7 @@ pub(crate) fn write_header(
     fields.u32_le(offsets.small_preview)?;
     fields.u32_le(job.print_time_s())?;
     fields.u32_le(u32::from(printer.mirror_x || printer.mirror_y))?;
-    fields.u32_le(1)?;
+    fields.u32_le(anti_alias_level(job))?;
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
     fields.zeros(8)?;
@@ -70,6 +70,6 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob, offsets: Offsets) -> io
     fields.zeros(24)?;
     fields.u32_le(CONSTANT_AT_B0)?;
     fields.u32_le(job.created_minutes())?;
-    fields.u32_le(1)?;
+    fields.u32_le(anti_alias_level(job))?;
     fields.u32_le(CtbVersion::V4.software_version())
 }

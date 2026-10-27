@@ -152,3 +152,9 @@ fn a_file_of_another_container_is_refused_by_its_magic() {
         }
     ));
 }
+
+#[test]
+fn the_header_states_the_anti_alias_level_twice() {
+    let bytes = written(1);
+    assert_eq!((word(&bytes, 0x38), word(&bytes, 0xB8)), (16, 16));
+}

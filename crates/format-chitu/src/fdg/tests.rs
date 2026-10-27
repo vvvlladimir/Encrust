@@ -183,6 +183,15 @@ fn the_block_at_0xd8_carries_the_rests_as_the_ctb_v4_parameters_do() {
 }
 
 #[test]
+fn the_header_states_the_anti_alias_level_the_edges_were_drawn_with() {
+    let bytes = written(1);
+    let word =
+        |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+    assert_eq!(word(0x60), 16, "every grey, capped at sixteen");
+    assert_eq!(word(0x3C), 1, "a constant of the vendor writer");
+}
+
+#[test]
 fn a_file_of_another_container_is_refused_by_its_magic() {
     let err = FdgReader
         .open(Cursor::new(0x12FD_0106u32.to_le_bytes().to_vec()))
