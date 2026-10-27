@@ -32,9 +32,9 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 | 0x68 | `u32` | zero |
 | 0x6C | bottom lift, bottom lift speed, lift, lift speed, retract speed, `f32` each | mm, mm/min; a lift is both stages summed |
 | 0x80 | volume ml, weight g, cost, `f32` each | cost zero without a resin price |
-| 0x8C | `u32` | zero, a word of the second stage |
+| 0x8C | `u32` | zero, as `.fdg` at 0xB4 |
 | 0x90 | machine name address, length, `u32` each | |
-| 0x98 | the second lift and retract stage, six words | zero |
+| 0x98 | the second stage, as `.fdg` at 0x9C | |
 | 0xB0 | `u32` | `0x14`, a constant of the vendor writer |
 | 0xB4 | modified timestamp, `u32` | minutes since the Unix epoch |
 | 0xB8 | anti-alias level, `u32` | the same again |
@@ -50,5 +50,5 @@ four bytes. We write the key `.ctb` does and read any.
 
 ## What we do not write
 
-Grey and the second lift stage, as for `.fdg`. The vendor writer fits each preview into
+Grey, as for `.fdg`. The vendor writer fits each preview into
 500 × 500 from whatever picture it is handed; ours are the `.fdg` sizes, which fit.

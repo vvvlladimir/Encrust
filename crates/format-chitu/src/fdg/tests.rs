@@ -6,7 +6,7 @@ use core_raster::LayerRuns;
 use super::header::HEADER_BYTES;
 use super::rle::{self, FdgLayer};
 use super::{FdgReader, FdgSink, FdgWriter};
-use crate::fixtures::sample_job;
+use crate::fixtures::{sample_job, two_stage_job};
 
 /// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
 fn block() -> LayerRuns {
@@ -272,5 +272,31 @@ fn the_header_states_the_bottom_light_off_and_no_height() {
         (f32_at(0x7C), f32_at(0x80)),
         (5.0, 0.5),
         "bottom, then normal light off"
+    );
+}
+
+#[test]
+fn a_two_stage_peel_states_both_climbs_summed_then_the_second_stage() {
+    let job = two_stage_job(1);
+    let mut file = Cursor::new(Vec::new());
+    {
+        let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
+        sink.push(FdgSink::encode(&block())).expect("a layer");
+        sink.finish(1500.0).expect("every promised layer arrived");
+    }
+    let bytes = file.into_inner();
+    let f32_at =
+        |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+    assert_eq!(
+        (f32_at(0x88), f32_at(0x90)),
+        (8.0, 6.0),
+        "bottom lift 5 + 3 mm, lift 2 + 4 mm"
+    );
+    let second: Vec<f32> = (0x9C..0xB4).step_by(4).map(f32_at).collect();
+    assert_eq!(second, [3.0, 180.0, 4.0, 900.0, 4.0, 360.0]);
+    assert_eq!(
+        (f32_at(0xDC), f32_at(0xFC)),
+        (120.0, 3.0),
+        "the second bottom retract's speed and distance, as in the .ctb v4 block"
     );
 }

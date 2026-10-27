@@ -2,7 +2,7 @@ use std::io;
 
 use core_format::{Fields, PrintJob};
 
-use crate::blocks::write_v4_motion;
+use crate::blocks::{write_second_stage, write_v4_motion};
 use crate::writer::encryption_key;
 
 /// Bytes of the header; the first preview follows it.
@@ -92,13 +92,15 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     fields.f32_le(material.bottom_light_off_s())?;
     fields.f32_le(material.light_off_s())?;
     fields.u32_le(0)?;
-    fields.f32_le(material.bottom_lift_distance_mm)?;
+    // A lift is both stages' whole climb, as in a `.ctb`.
+    fields.f32_le(material.bottom_lift_total_mm())?;
     fields.f32_le(material.bottom_lift_speed_mm_min)?;
-    fields.f32_le(material.lift_distance_mm)?;
+    fields.f32_le(material.lift_total_mm())?;
     fields.f32_le(material.lift_speed_mm_min)?;
     fields.f32_le(material.retract_speed_mm_min)?;
-    // The second lift and retract stage, and one more word of it, which we do not use.
-    fields.zeros(28)?;
+    write_second_stage(fields, job)?;
+    // A word the vendor writer copies from a setting we have not found.
+    fields.u32_le(0)?;
     fields.u32_le(job.created_minutes())?;
     // The vendor's slicer states no software version.
     fields.u32_le(0)
@@ -125,8 +127,7 @@ pub(crate) fn write_tail(
 /// The block from 0xD8 to the end of the header: the vendor writer copies `.ctb`'s v4
 /// parameters into its first 40 bytes.
 fn write_parameters(fields: &mut Fields<'_>, job: &PrintJob, totals: Totals) -> io::Result<()> {
-    write_v4_motion(fields, job, 0.0)?;
-    fields.zeros(4)?;
+    write_v4_motion(fields, job)?;
     fields.f32_le(totals.layer_time_s)?;
     fields.u32_le(totals.largest_layer_bytes)?;
     fields.u32_le(totals.last_bottom_index)?;

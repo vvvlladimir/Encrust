@@ -56,3 +56,22 @@ pub(crate) fn sample_job(layer_count: u32) -> PrintJob {
         created_unix_s: 0,
     }
 }
+
+/// A job whose resin peels in two stages, the second as the vendor's Mars 2 Pro file states it.
+pub(crate) fn two_stage_job(layer_count: u32) -> PrintJob {
+    let mut job = sample_job(layer_count);
+    let material = &mut job.material;
+    (material.bottom_lift_distance_mm, material.lift_distance_mm) = (5.0, 2.0);
+    let stage = &mut material.second_stage;
+    (
+        stage.bottom_lift_distance_mm,
+        stage.bottom_lift_speed_mm_min,
+    ) = (3.0, 180.0);
+    (stage.lift_distance_mm, stage.lift_speed_mm_min) = (4.0, 900.0);
+    (stage.retract_distance_mm, stage.retract_speed_mm_min) = (4.0, 360.0);
+    (
+        stage.bottom_retract_distance_mm,
+        stage.bottom_retract_speed_mm_min,
+    ) = (3.0, 120.0);
+    job
+}

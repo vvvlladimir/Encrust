@@ -6,7 +6,7 @@ use core_raster::LayerRuns;
 use super::reader::crypt;
 use super::{PhzReader, PhzWriter};
 use crate::fdg::{FdgSink, HEADER_BYTES};
-use crate::fixtures::sample_job;
+use crate::fixtures::{sample_job, two_stage_job};
 
 /// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
 fn block() -> LayerRuns {
@@ -148,4 +148,24 @@ fn a_file_of_another_container_is_refused_by_its_magic() {
 fn the_header_states_one_pass_then_the_anti_alias_level() {
     let bytes = written(1);
     assert_eq!((word(&bytes, 0x38), word(&bytes, 0xB8)), (1, 16));
+}
+
+#[test]
+fn a_two_stage_peel_states_both_climbs_summed_then_the_second_stage() {
+    let job = two_stage_job(1);
+    let mut file = Cursor::new(Vec::new());
+    {
+        let mut sink = PhzWriter.begin(&job, &mut file).expect("the job is sound");
+        sink.push(FdgSink::encode(&block())).expect("a layer");
+        sink.finish(1500.0).expect("every promised layer arrived");
+    }
+    let bytes = file.into_inner();
+    let f32_at = |at: usize| f32::from_bits(word(&bytes, at));
+    assert_eq!(
+        (f32_at(0x6C), f32_at(0x74)),
+        (8.0, 6.0),
+        "bottom lift 5 + 3 mm, lift 2 + 4 mm"
+    );
+    let second: Vec<f32> = (0x98..0xB0).step_by(4).map(f32_at).collect();
+    assert_eq!(second, [3.0, 180.0, 4.0, 900.0, 4.0, 360.0]);
 }

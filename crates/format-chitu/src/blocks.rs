@@ -222,15 +222,9 @@ fn write_slicer_info(
     offsets: Offsets,
 ) -> io::Result<()> {
     let material = &job.material;
-    let stage = &material.second_stage;
     let [_, after_lift_s, after_retract_s] = material.waits.rests_s();
 
-    fields.f32_le(stage.bottom_lift_distance_mm)?;
-    fields.f32_le(stage.bottom_lift_speed_mm_min)?;
-    fields.f32_le(stage.lift_distance_mm)?;
-    fields.f32_le(stage.lift_speed_mm_min)?;
-    fields.f32_le(stage.retract_distance_mm)?;
-    fields.f32_le(stage.retract_speed_mm_min)?;
+    write_second_stage(fields, job)?;
     fields.f32_le(after_lift_s)?;
     fields.u32_le(offsets.machine_name)?;
     fields.u32_le(job.printer.machine_name().len() as u32)?;
@@ -254,9 +248,7 @@ pub(crate) fn rewrite_v4_parameters(
     totals: Totals,
 ) -> io::Result<()> {
     fields.seek_to(u64::from(offsets.v4_parameters))?;
-    let stage = &job.material.second_stage;
-    write_v4_motion(fields, job, stage.bottom_retract_speed_mm_min)?;
-    fields.f32_le(stage.bottom_retract_distance_mm)?;
+    write_v4_motion(fields, job)?;
     fields.f32_le(totals.layer_time_s)?;
     fields.u32_le(totals.largest_layer_bytes)?;
     fields.u32_le(0)?;
@@ -269,17 +261,26 @@ pub(crate) fn rewrite_v4_parameters(
     fields.zeros(380)
 }
 
-/// The first 36 bytes of the v4 parameters: the bottom retract's two speeds, the rests
-/// around a lift, and the words between. `.fdg` and `.phz` copy them into their header at
-/// 0xD8, with no second stage.
-pub(crate) fn write_v4_motion(
-    fields: &mut Fields<'_>,
-    job: &PrintJob,
-    second_bottom_retract_speed_mm_min: f32,
-) -> io::Result<()> {
+/// The second lift and retract stage but for the bottom retract, which the v4 parameters
+/// hold; `.fdg` and `.phz` copy these six words into their header.
+pub(crate) fn write_second_stage(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    let stage = &job.material.second_stage;
+    fields.f32_le(stage.bottom_lift_distance_mm)?;
+    fields.f32_le(stage.bottom_lift_speed_mm_min)?;
+    fields.f32_le(stage.lift_distance_mm)?;
+    fields.f32_le(stage.lift_speed_mm_min)?;
+    fields.f32_le(stage.retract_distance_mm)?;
+    fields.f32_le(stage.retract_speed_mm_min)
+}
+
+/// The first 40 bytes of the v4 parameters: the bottom retract's two speeds, the rests
+/// around a lift, the second stage's bottom retract, and the words between. `.fdg` and
+/// `.phz` copy them into their header at 0xD8.
+pub(crate) fn write_v4_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let material = &job.material;
+    let stage = &material.second_stage;
     fields.f32_le(material.bottom_retract_speed_mm_min)?;
-    fields.f32_le(second_bottom_retract_speed_mm_min)?;
+    fields.f32_le(stage.bottom_retract_speed_mm_min)?;
     fields.u32_le(0)?;
 
     // Two fields the machine checks for the literal 4.0.
@@ -290,7 +291,8 @@ pub(crate) fn write_v4_motion(
     let [before_lift_s, after_lift_s, after_retract_s] = material.waits.rests_s();
     fields.f32_le(after_retract_s)?;
     fields.f32_le(after_lift_s)?;
-    fields.f32_le(before_lift_s)
+    fields.f32_le(before_lift_s)?;
+    fields.f32_le(stage.bottom_retract_distance_mm)
 }
 
 /// The resin block and its three strings: the resin's type, its name and the preset's name,
