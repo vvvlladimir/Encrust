@@ -194,11 +194,14 @@ fn the_layer_settings_state_every_layer() {
 }
 
 #[test]
-fn the_machine_settings_name_the_extension_the_file_goes_under() {
+fn the_machine_settings_keep_the_suffix_of_the_vendor_template() {
     let mut archive = written(PwszFlavour::Pm7m, &[layer(centre_block)]);
     let machine = json(&mut archive, "anycubic_photon_resins.pwsp");
     let kind = &machine["machine_type"];
-    assert_eq!(kind["key_suffix"], "pm7m");
+    assert_eq!(
+        kind["key_suffix"], "pwsz",
+        "the M7 Pro template serves the M7 Max"
+    );
     assert_eq!(kind["key_image_format"], "pwszImg");
     assert_eq!(
         (kind["res_x"].clone(), kind["res_y"].clone()),
@@ -212,6 +215,12 @@ fn the_machine_settings_name_the_extension_the_file_goes_under() {
     let mut archive = written(PwszFlavour::Pp1m, &[layer(centre_block)]);
     let machine = json(&mut archive, "anycubic_photon_resins.pwsp");
     assert_eq!(machine["machine_type"]["rotate_z"], 180.0);
+    assert_eq!(machine["machine_type"]["key_suffix"], "pp1m");
+    let resin = &machine["machine_extern"]["user_resins"][0]["slicepara"];
+    assert!(
+        resin.get("bott_time_dual").is_some(),
+        "its template's second bottom time"
+    );
 }
 
 #[test]

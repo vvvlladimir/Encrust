@@ -270,6 +270,7 @@ fn pwsz_extension(flavour: PwszFlavour) -> PwszExtension {
 fn anycubic_version(revision: PhotonRevision) -> AnycubicVersion {
     match revision {
         PhotonRevision::V1 => AnycubicVersion::V1,
+        PhotonRevision::V515 => AnycubicVersion::V515,
         PhotonRevision::V516 => AnycubicVersion::V516,
         PhotonRevision::V517 => AnycubicVersion::V517,
         PhotonRevision::V518 => AnycubicVersion::V518,
@@ -279,6 +280,7 @@ fn anycubic_version(revision: PhotonRevision) -> AnycubicVersion {
 fn photon_revision(version: AnycubicVersion) -> PhotonRevision {
     match version {
         AnycubicVersion::V1 => PhotonRevision::V1,
+        AnycubicVersion::V515 => PhotonRevision::V515,
         AnycubicVersion::V516 => PhotonRevision::V516,
         AnycubicVersion::V517 => PhotonRevision::V517,
         AnycubicVersion::V518 => PhotonRevision::V518,

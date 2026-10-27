@@ -14,17 +14,24 @@ use crate::{bit_planes, rle};
 const FILE_MARK: &[u8] = b"ANYCUBIC";
 
 /// Where the mark states each table is, by its own offset. The machine address is there
-/// from revision 516 on; see `docs/formats/anycubic.md`.
+/// when the mark claims eight tables or more; see `docs/formats/anycubic.md`.
 const HEADER_ADDRESS: u64 = 0x14;
 const LAYER_TABLE_ADDRESS: u64 = 0x24;
 const MACHINE_ADDRESS: u64 = 0x2C;
+
+/// Where the file mark states how many tables follow.
+const TABLE_COUNT_ADDRESS: u64 = 0x10;
+
+/// The fewest tables a file carrying the machine block states.
+const MACHINE_TABLE_COUNT: u32 = 8;
 
 /// Grey the four-bit runs decode to: sixteen steps of seventeen.
 const GREY_STEPS: u16 = 16;
 
 /// The revisions this reader knows, which are the ones the writer produces.
-const READ_VERSIONS: [AnycubicVersion; 4] = [
+const READ_VERSIONS: [AnycubicVersion; 5] = [
     AnycubicVersion::V1,
+    AnycubicVersion::V515,
     AnycubicVersion::V516,
     AnycubicVersion::V517,
     AnycubicVersion::V518,
@@ -116,17 +123,13 @@ fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, Form
     reads.seek_to(0x0C)?;
     let version = reads.u32_le()?;
     // Every revision puts the header's own address in the same slot and its first
-    // twenty fields in the same order, so one pass reads all three.
-    let Some(revision) = READ_VERSIONS
-        .iter()
-        .copied()
-        .find(|known| known.number() == version)
-    else {
+    // twenty fields in the same order, so one pass reads them all.
+    if !READ_VERSIONS.iter().any(|known| known.number() == version) {
         return Err(FormatError::UnsupportedVersion {
             format: codec.format(),
             version,
         });
-    };
+    }
 
     reads.seek_to(HEADER_ADDRESS)?;
     let header = u64::from(reads.u32_le()?);
@@ -168,7 +171,7 @@ fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, Form
     reads.seek_to(table + LAYER_TABLE_HEAD_BYTES - 4)?;
     let layer_count = reads.u32_le()?;
     let layers = read_table(&mut reads, table, layer_count)?;
-    let machine = read_machine_name(&mut reads, revision)?;
+    let machine = read_machine_name(&mut reads)?;
 
     let display_mm = (
         width_px as f32 * pitch_um / 1000.0,
@@ -201,13 +204,13 @@ fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, Form
 
 /// The name the machine block carries, which is what the firmware matches its own against.
 ///
-/// The header states no machine at all, and revisions below 516 carry no such block, so a
-/// file written for an older machine names none.
-fn read_machine_name<S: ReadSeek>(
-    reads: &mut Reads<S>,
-    revision: AnycubicVersion,
-) -> Result<Option<String>, FormatError> {
-    if !revision.has_machine_block() {
+/// The header states no machine at all, and Photon Workshop's files below 516 carry no
+/// such block, so such a file names none.
+fn read_machine_name<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, FormatError> {
+    // Photon Workshop's own files carry the machine block from eight tables on, and ours
+    // carry it at every revision; the table count says which, the revision does not.
+    reads.seek_to(TABLE_COUNT_ADDRESS)?;
+    if reads.u32_le()? < MACHINE_TABLE_COUNT {
         return Ok(None);
     }
     reads.seek_to(MACHINE_ADDRESS)?;
@@ -299,20 +302,20 @@ mod tests {
 
     #[test]
     fn a_revision_we_do_not_read_is_named_rather_than_guessed_at() {
-        let mut bytes = vec![0u8; AnycubicVersion::V1.file_mark_bytes() as usize];
+        let mut bytes = vec![0u8; crate::tables::FILE_MARK_BYTES as usize];
         bytes[..8].copy_from_slice(FILE_MARK);
-        bytes[0x0C..0x10].copy_from_slice(&515u32.to_le_bytes());
+        bytes[0x0C..0x10].copy_from_slice(&514u32.to_le_bytes());
 
         let mut source = Cursor::new(bytes);
         let err = AnycubicReader
             .open(&mut source)
             .err()
-            .expect("515 is a revision nothing here writes");
+            .expect("514 is a revision nothing here writes");
         assert!(matches!(
             err,
             FormatError::UnsupportedVersion {
                 format: "pwmx",
-                version: 515
+                version: 514
             }
         ));
     }

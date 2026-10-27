@@ -21,7 +21,7 @@ z = 200.0
 
 [output.anycubic]
 extension = "pmsq"
-revision = "v516"
+revision = "v515"
 
 [firmware]
 per_layer_settings = true

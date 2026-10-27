@@ -38,10 +38,10 @@ entries that sum them up after, and a reader finds an entry by name.
 |---|---|
 | `preview_images/preview_0.png` | 224 × 168, padded with `#024864` |
 | `preview_images/preview_1.png` | 336 × 252, padded with `#141B29` |
-| `software_info.conf` | `mark`, `opengl`, `os`, `version`: which program wrote it |
+| `software_info.conf` | `mark`, `os` and `version`: which program wrote it; `opengl` is `3.3-CoreProfile`, as the vendor states |
 | `layer_images/layer_N.pw0Img` | layer `N`, from 0, in the PW0 codec, nothing in front |
 | `layers_controller.conf` | `count`, then per layer `exposure_time` s, `layer_index`, `layer_minheight` mm (its floor), `layer_thickness` mm, `zup_height` mm, `zup_speed` mm/s |
-| `print_info.json` | `cost`, `currency`, `print_time` s, `volume` ml |
+| `print_info.json` | `cost`, `currency` (always `$`, as the vendor writes it), `print_time` s, `volume` ml |
 | `anycubic_photon_resins.pwsp` | the machine and its resin, below |
 | `scene.slice` | the model's extent and each layer's, below |
 | `calc_layer_volumes.data` | resin by slab, below |
@@ -53,11 +53,11 @@ Two objects: `machine_type` and `machine_extern`, both at version `"3"` and `"2"
 `machine_type` states the panel from the profile — `res_x`, `res_y`, `xy_pixel` and
 `xy_pixel_y` in micrometres, `print_xsize`, `print_ysize`, `print_zsize` in millimetres, one
 `child_screen` covering it — and `name`, the profile's machine name. `key_suffix` is the
-extension, `key_image_format` is `pwszImg`, `max_file_version` 518. The vendor writes the M7
-Pro's template for every machine but the P1 family, and that template keeps `pwsz` as the
-suffix; we write the extension the file goes under, as the open-source writer does. The P1
-Max's own template adds `rotate_z` 180 and `print_platform_zheights` `[0, 35]`, which we
-write for it alone.
+template's, `key_image_format` is `pwszImg`, `max_file_version` 518. The vendor writes the M7
+Pro's template for every machine but the P1 family, and so do we: its suffix stays `pwsz`
+under `.pm7`, `.pm7m` and `.pm4u` alike. The P1 Max's own template has `pp1m`, adds
+`rotate_z` 180 and `print_platform_zheights` `[0, 35]`, and gives the resin a second bottom
+exposure and the rests around a lift, all of which we write for it alone.
 
 `machine_extern` names the machine again as `alias`, carries the firmware's motion and
 exposure constants unchanged from the templates, and one user resin, which is also the
@@ -65,6 +65,8 @@ active one: named `User@<resin>@ACF@normal_print` as the vendor names a user's r
 `"10"` (standard resin), and the job's exposure, bottom layers, light-off, lift, retract and
 transition layers in `slicepara` and `slice_extpara`. Speeds are millimetres a second.
 `multi_state_used` is 0, because the slicer plans one lift stage, and both stages state it.
+`anti_count` and `blur_level` are the panel's anti-alias level and edge blur, as in the table
+container's header.
 `intelli_mode` is 1, the vendor's value for a user resin; what the firmware does with it is
 not known.
 

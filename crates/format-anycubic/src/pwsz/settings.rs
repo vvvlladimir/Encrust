@@ -5,6 +5,7 @@ use core_format::{FormatError, PrintJob, Rgb, Thumbnail, encode_colour};
 use serde_json::{Value, json};
 
 use super::PwszFlavour;
+use crate::rle::anti_alias_level;
 
 /// The two previews, in pixels, and the colour each is padded with.
 const PREVIEWS: [(u32, u32, Rgb); 2] = [(224, 168, [2, 72, 100]), (336, 252, [20, 27, 41])];
@@ -30,7 +31,7 @@ pub(crate) fn previews(job: &PrintJob) -> Result<Vec<Vec<u8>>, FormatError> {
 pub(crate) fn software_info() -> Result<Vec<u8>, FormatError> {
     text(&json!({
         "mark": "Encrust",
-        "opengl": "",
+        "opengl": "3.3-CoreProfile",
         "os": std::env::consts::OS,
         "version": env!("CARGO_PKG_VERSION"),
     }))
@@ -67,7 +68,8 @@ pub(crate) fn layers_controller(job: &PrintJob) -> Result<Vec<u8>, FormatError> 
 pub(crate) fn print_info(job: &PrintJob) -> Result<Vec<u8>, FormatError> {
     text(&json!({
         "cost": job.cost().unwrap_or(0.0),
-        "currency": job.material.details.currency,
+        // The vendor's slicer states dollars here whatever the resin is priced in.
+        "currency": "$",
         "print_time": job.print_time_s(),
         "volume": job.volume_mm3 / 1000.0,
     }))
@@ -76,7 +78,7 @@ pub(crate) fn print_info(job: &PrintJob) -> Result<Vec<u8>, FormatError> {
 /// The machine and the resin it prints with, in the shape the vendor's own settings take.
 pub(crate) fn machine(job: &PrintJob, flavour: PwszFlavour) -> Result<Vec<u8>, FormatError> {
     let printer = &job.printer;
-    let resin = user_resin(job);
+    let resin = user_resin(job, flavour);
     text(&json!({
         "machine_extern": {
             "active_resins": [resin["property"]["name"].clone()],
@@ -105,7 +107,7 @@ fn machine_type(job: &PrintJob, flavour: PwszFlavour) -> Value {
         "cloudprev_back_color": [0.007_812_5, 0.281_25, 0.390_625],
         "cloudprev_imag_size": [800, 600],
         "key_image_format": "pwszImg",
-        "key_suffix": flavour.extension(),
+        "key_suffix": template_suffix(flavour),
         "max_file_version": 518,
         "max_samples": 16,
         "name": printer.machine_name(),
@@ -136,8 +138,17 @@ fn machine_type(job: &PrintJob, flavour: PwszFlavour) -> Value {
     machine
 }
 
+/// The suffix the settings name: the vendor's slicer keeps its template's, which is the M7
+/// Pro's for every machine but the P1 Max.
+fn template_suffix(flavour: PwszFlavour) -> &'static str {
+    match flavour {
+        PwszFlavour::Pp1m => "pp1m",
+        _ => "pwsz",
+    }
+}
+
 /// The job's resin, named the way the vendor's settings name a user's own.
-fn user_resin(job: &PrintJob) -> Value {
+fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
     let material = &job.material;
     let resin_name = material.name.replace('@', " ");
     let lift_mm_s = material.lift_speed_mm_min / 60.0;
@@ -186,18 +197,18 @@ fn user_resin(job: &PrintJob) -> Value {
             "transition_type": 0,
             "version": "3",
         },
-        "slicepara": slice_parameters(job),
+        "slicepara": slice_parameters(job, flavour),
         "version": "2",
     })
 }
 
 /// The resin's single-stage settings, which the firmware prints by where a layer does
 /// not state its own.
-fn slice_parameters(job: &PrintJob) -> Value {
+fn slice_parameters(job: &PrintJob, flavour: PwszFlavour) -> Value {
     let material = &job.material;
-    json!({
-        "anti_count": 1,
-        "blur_level": 0,
+    let mut parameters = json!({
+        "anti_count": anti_alias_level(&job.raster),
+        "blur_level": job.raster.blur_px,
         "bott_layers": material.bottom_layers,
         "bott_off_time": material.light_off_s(),
         "bott_time": material.bottom_exposure_s,
@@ -210,7 +221,21 @@ fn slice_parameters(job: &PrintJob) -> Value {
         "zthick": job.nominal_height_mm(),
         "zup_height": material.lift_distance_mm,
         "zup_speed": material.lift_speed_mm_min / 60.0,
-    })
+    });
+    // The P1 Max's template carries a second bottom exposure and the rests around a lift.
+    if flavour == PwszFlavour::Pp1m {
+        let [before_s, after_s, _] = material.waits.rests_s();
+        for (key, value) in [
+            ("bott_time_dual", material.bottom_exposure_s),
+            ("wait_before_lift", before_s),
+            ("wait_after_lift", after_s),
+            ("bott_wait_before_lift", before_s),
+            ("bott_wait_after_lift", after_s),
+        ] {
+            parameters[key] = json!(value);
+        }
+    }
+    parameters
 }
 
 /// How the resin cures with depth, as the vendor's settings state it for every resin.

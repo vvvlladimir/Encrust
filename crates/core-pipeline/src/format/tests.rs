@@ -25,7 +25,7 @@ fn the_extension_decides_what_is_written() {
         of("cube.DLP"),
         Some(SlicedFormat::Anycubic(
             AnycubicFlavour::Dlp,
-            AnycubicVersion::V516
+            AnycubicVersion::V515
         ))
     );
     assert_eq!(of("cube.sl1"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1)));

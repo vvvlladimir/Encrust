@@ -21,7 +21,7 @@ z = 245.0
 
 [output.anycubic]
 extension = "pwmb"
-revision = "v516"
+revision = "v517"
 
 [firmware]
 per_layer_settings = true

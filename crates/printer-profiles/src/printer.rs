@@ -139,6 +139,7 @@ impl PwszExtension {
 pub enum PhotonRevision {
     #[default]
     V1,
+    V515,
     V516,
     V517,
     V518,

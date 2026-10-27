@@ -5,16 +5,16 @@ use core_raster::LayerRuns;
 
 use crate::blocks;
 use crate::rle::EncodedLayer;
-use crate::tables::{self, LAYER_DEF_BYTES, LayerDef, NAME_BYTES, Offsets};
+use crate::tables::{self, LAYER_DEF_BYTES, LayerDef, Offsets};
 
-/// Which revision of the container is written.
+/// Which revision a file states it is.
 ///
-/// Every revision holds the same tables in the same order and adds blocks behind them;
-/// which machine reads which is in `docs/formats/anycubic.md`.
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AnycubicVersion {
     #[default]
     V1,
+    V515,
     V516,
     V517,
     V518,
@@ -24,61 +24,10 @@ impl AnycubicVersion {
     pub fn number(self) -> u32 {
         match self {
             Self::V1 => 1,
+            Self::V515 => 515,
             Self::V516 => 516,
             Self::V517 => 517,
             Self::V518 => 518,
-        }
-    }
-
-    /// Whether this revision carries the grey table, which arrived at 515.
-    pub(crate) fn has_colour_table(self) -> bool {
-        self > Self::V1
-    }
-
-    /// Whether it carries the two-stage motion and machine blocks, which arrived at 516.
-    pub(crate) fn has_machine_block(self) -> bool {
-        self >= Self::V516
-    }
-
-    /// Whether it carries the slicer and model blocks, which arrived at 517.
-    pub(crate) fn has_model_block(self) -> bool {
-        self >= Self::V517
-    }
-
-    /// Whether it carries the second layer table, which arrived at 518.
-    pub(crate) fn has_sub_layer_table(self) -> bool {
-        self >= Self::V518
-    }
-
-    /// How many blocks the file mark claims. The number is not the count of addresses it
-    /// writes and the reference states these, so they are transcribed.
-    pub(crate) fn table_count(self) -> u32 {
-        match self {
-            Self::V1 => 4,
-            Self::V516 => 8,
-            Self::V517 => 9,
-            Self::V518 => 11,
-        }
-    }
-
-    /// Bytes of the file mark: the mark, the revision, the block count and its addresses.
-    pub(crate) fn file_mark_bytes(self) -> u32 {
-        let addresses = match self {
-            Self::V1 => 7,
-            Self::V516 => 8,
-            Self::V517 => 9,
-            Self::V518 => 11,
-        };
-        NAME_BYTES as u32 + 8 + 4 * addresses
-    }
-
-    /// Fields of the header table, which is what its length states.
-    pub(crate) fn header_field_bytes(self) -> u32 {
-        match self {
-            Self::V1 => 80,
-            Self::V516 => 84,
-            Self::V517 => 92,
-            Self::V518 => 96,
         }
     }
 
@@ -204,19 +153,11 @@ impl AnycubicFlavour {
             .find(|flavour| extension.eq_ignore_ascii_case(flavour.extension()))
     }
 
-    /// The newest revision this extension's machines read, which is what a file names
-    /// itself with when nothing else chose one.
     pub fn newest_version(self) -> AnycubicVersion {
         match self {
             Self::Pw0 | Self::Pwx => AnycubicVersion::V1,
-            Self::Pwmx
-            | Self::Pwmo
-            | Self::Pwms
-            | Self::Pmsq
-            | Self::Dlp
-            | Self::Pwma
-            | Self::Pm3
-            | Self::Pm3m => AnycubicVersion::V516,
+            Self::Pwmo | Self::Pwms | Self::Pmsq | Self::Dlp => AnycubicVersion::V515,
+            Self::Pwmx | Self::Pwma | Self::Pm3 | Self::Pm3m => AnycubicVersion::V516,
             Self::Pm5s | Self::M5sp | Self::Pm4n => AnycubicVersion::V518,
             _ => AnycubicVersion::V517,
         }
@@ -250,15 +191,15 @@ impl SlicedFileWriter for AnycubicWriter {
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
-        let offsets = Offsets::of(job.layer_count(), self.version);
+        let offsets = Offsets::of(job.layer_count());
         let mut fields = Fields::new(sink);
         tables::write_file_mark(&mut fields, offsets, self.version)?;
-        tables::write_front(&mut fields, job, self.version)?;
+        tables::write_front(&mut fields, job)?;
 
         // The rows are only known once their layers have been compressed, so the space is
         // reserved here and filled in by `finish`.
         fields.zeros((LAYER_DEF_BYTES * u64::from(job.layer_count())) as usize)?;
-        tables::write_back(&mut fields, job, self.flavour, self.version)?;
+        tables::write_back(&mut fields, job, self.version)?;
         debug_assert_eq!(fields.position()?, u64::from(offsets.layer_data));
         tracing::debug!(
             layers = job.layer_count(),
@@ -269,7 +210,6 @@ impl SlicedFileWriter for AnycubicWriter {
         Ok(AnycubicSink {
             fields,
             job: job.clone(),
-            version: self.version,
             offsets,
             defs: Vec::with_capacity(job.layer_count() as usize),
         })
@@ -280,7 +220,6 @@ impl SlicedFileWriter for AnycubicWriter {
 pub struct AnycubicSink<'w> {
     fields: Fields<'w>,
     job: PrintJob,
-    version: AnycubicVersion,
     offsets: Offsets,
     defs: Vec<LayerDef>,
 }
@@ -353,19 +292,17 @@ impl LayerSink for AnycubicSink<'_> {
         for def in &self.defs {
             def.write(&mut self.fields)?;
         }
-        if self.version.has_sub_layer_table() {
-            self.fields.seek_to(
-                u64::from(self.offsets.sub_layers) + u64::from(blocks::SUB_LAYER_HEAD_BYTES),
-            )?;
-            for def in &self.defs {
-                def.write_sub_layer(&mut self.fields)?;
-            }
+        self.fields.seek_to(
+            u64::from(self.offsets.sub_layers) + u64::from(blocks::SUB_LAYER_HEAD_BYTES),
+        )?;
+        for def in &self.defs {
+            def.write_sub_layer(&mut self.fields)?;
         }
 
         // The header states the resin the stack came to, which is only known now; see
         // docs/decisions/0067-the-resin-volume-is-patched-in-at-finish.md.
         self.fields.seek_to(u64::from(self.offsets.header))?;
-        tables::write_header(&mut self.fields, &self.job, self.version)?;
+        tables::write_header(&mut self.fields, &self.job)?;
 
         self.fields.flush()?;
         Ok(())
@@ -479,8 +416,8 @@ mod tests {
             sink.finish(0.0).expect("every promised layer arrived");
         }
         let bytes = buffer.into_inner();
-        let table = tables::Offsets::of(3, AnycubicVersion::default()).layer_table as usize
-            + tables::LAYER_TABLE_HEAD_BYTES as usize;
+        let table =
+            tables::Offsets::of(3).layer_table as usize + tables::LAYER_TABLE_HEAD_BYTES as usize;
         let f32_at = |at: usize| {
             f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
         };

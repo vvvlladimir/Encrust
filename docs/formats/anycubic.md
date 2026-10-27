@@ -1,22 +1,24 @@
 # The Anycubic Photon Workshop containers
 
-What Anycubic machines read, and what Photon Workshop exports. One container under many
-names: the extension is what a machine's firmware looks for, and the bytes behind it are the
-same table container at some revision. We write **version 1**, **516**, **517** and **518**.
+What Anycubic machines read. One container under many names: the extension is what a
+machine's firmware looks for, and the bytes behind it are the same table container stating
+some revision. **one set of tables at every revision**, with the revision it writes for
+the extension — **1**, **515**, **516**, **517** or **518** — and the machine block's
+property count as the only things the number changes.
 
 | Extension | Machine | Revision |
 |---|---|---|
 | `.pw0` | Photon Zero | 1 |
 | `.pwx` | Photon X | 1 |
 | `.pwmx` | Photon Mono X | 516 |
-| `.pwmo` | Photon Mono | 516 |
-| `.pwms` | Photon Mono SE | 516 |
-| `.pmsq` | Photon Mono SQ | 516 |
-| `.dlp` | Photon Ultra | 516 |
+| `.pwmo` | Photon Mono | 515 |
+| `.pwms` | Photon Mono SE | 515 |
+| `.pmsq` | Photon Mono SQ | 515 |
+| `.dlp` | Photon Ultra | 515 |
 | `.pwma` | Photon Mono 4K | 516 |
 | `.pm3` | Photon M3 | 516 |
 | `.pm3m` | Photon M3 Max | 516 |
-| `.pwmb` | Photon Mono X 6K | 516 |
+| `.pwmb` | Photon Mono X 6K | 517 |
 | `.pwmb` | Photon M3 Plus | 517 |
 | `.dl2p` | Photon D2 | 517 |
 | `.px6s` | Photon Mono X 6Ks | 517 |
@@ -31,8 +33,8 @@ same table container at some revision. We write **version 1**, **516**, **517** 
 The M7 line, the Mono 4 Ultra and the P1 read another container with these layers inside:
 `docs/formats/pwsz.md`.
 
-`.pwmb` is read at two revisions by two machines, which is why the revision is a field of
-the printer profile and not a property of the extension (ADR 0166).
+The revision is a field of the printer profile, not a property of the extension (ADR 0166);
+no two machines under one extension are written at different revisions.
 
 We do not parse whole files; we decode the run-length data of a layer, to check what we
 wrote.
@@ -45,13 +47,13 @@ There is no published specification.
 |---|---|
 | Open-source readers of the container | Table names and order, field types, which revision adds which table, the run-length codec |
 | A reference `.pwmx`, read byte by byte | Every offset and unit below, and the three things the source above leaves ambiguous |
-| The vendor's own slicer's writer, read statically | The revision each extension is written at, 518 for an extension it does not list, at 518 fifteen machine properties and the panel fields behind them, the second layer table's 24-byte head and 44-byte rows, and that it writes no second preview |
+| The vendor's own slicer's writer, read statically | What we write, field by field: the revision each extension is written at (518 for one it does not list), that every revision gets the same tables, and every value below marked as the slicer's |
 
 The reference file settles three things the code alone does not:
 
-1. **A table's stated length counts different things in different tables.** The preview
-   counts its own name and length word in; the header and the layer table do not. Getting
-   this wrong moves every table behind it by sixteen bytes.
+1. **A table's stated length counts different things in different tables.** The machine
+   block counts its own name and length word in; the header, the preview and the layer table
+   do not. Getting this wrong moves every table behind it by sixteen bytes.
 2. **Two units are not what the rest of the project uses.** A lift or retract speed is
    millimetres a **second**, not a minute. A layer's height in the layer table is that
    layer's own **thickness**, not its height above the plate.
@@ -61,28 +63,30 @@ The reference file settles three things the code alone does not:
 ## Shape of a file
 
 ```
-file mark             48 / 52 / 56 / 64 bytes: the container, its revision, and every address
-HEADER                16-byte table head, then 80 / 84 / 92 / 96 bytes of fields
+file mark             64 bytes: the container, its revision, and eleven addresses
+HEADER                16-byte table head, then 96 bytes of fields
 PREVIEW               16-byte table head, 12 bytes of shape, then raw 565 colour
-grey table            516, 517: 28 bytes, no table head
+grey table            8 bytes, no table head
 LAYERDEF              16-byte table head, the layer count, then 32 bytes per layer
-EXTRA                 516, 517: 16-byte table head, then 56 bytes of two-stage motion
-MACHINE               516, 517: 156 bytes, 518: 224, head counted in
-software              517, 518: 164 bytes, no table head
-MODEL                 517, 518: 48 bytes, head counted in
-SUBIMGS               518: 24-byte head, then 44 bytes per layer
+EXTRA                 16-byte table head, then 56 bytes of two-stage motion
+MACHINE               224 bytes, head counted in
+software              164 bytes, no table head
+Model                 44 bytes: a name and no length
+SUBIMGS               24-byte head, then 44 bytes per layer
 layer 1               four-bit run-length data
 ...
 layer N
 ```
 
-The order is the same at every revision; a later one inserts its blocks and nothing moves
-relative to the mark's own slots. The grey table goes in front of the layer table, and
-everything else between the layer table and the first layer's runs.
+Every revision writes all of these, in this order; the number on the file says which
+revision a machine is to take it as. Revision 1 and 515 files written by older Photon
+Workshop releases carry fewer tables, and the reader opens those as well: it finds the
+machine block by the mark's table count, not by its revision.
 
-Every table begins with its own name, nul-padded to twelve bytes, and a `u32` length. A
-reader that followed an address checks the name before trusting it. Everything is
-little-endian except one run length; see *Run-length data*.
+Every table but the grey table, the software block and the model block begins with its own
+name, nul-padded to twelve bytes, and a `u32` length. A reader that followed an address checks
+the name before trusting it. Everything is little-endian except one run length; see
+*Run-length data*.
 
 Layers are written back to back with no padding, no per-layer block in front of them and no
 checksum behind them: each layer's data ends exactly where the next begins.
@@ -92,37 +96,31 @@ checksum behind them: each layer's data ends exactly where the next begins.
 | Offset | Field | What we write |
 |---|---|---|
 | 0x00 | mark, 12 bytes | `ANYCUBIC`, nul-padded |
-| 0x0C | version, `u32` | 1, 516, 517 or 518 |
-| 0x10 | table count, `u32` | 4 at version 1, 8 at 516, 9 at 517, 11 at 518 |
+| 0x0C | version, `u32` | 1, 515, 516, 517 or 518 |
+| 0x10 | table count, `u32` | 11 |
 | 0x14 | header address, `u32` | the mark's own end |
-| 0x18 | software address, `u32` | 517 only, zero below it |
+| 0x18 | software address, `u32` | |
 | 0x1C | preview address, `u32` | |
-| 0x20 | grey table address, `u32` | 516 and 517, zero at version 1 |
+| 0x20 | grey table address, `u32` | |
 | 0x24 | layer table address, `u32` | |
-| 0x28 | extra address, `u32` | 516 and 517, zero at version 1 |
-| 0x2C | machine address, `u32` | **516 and 517 only** |
-| 0x2C / 0x30 | layer data address, `u32` | where the first layer's runs begin |
-| 0x30 / 0x34 | model address, `u32` | **517 and 518 only** |
-| 0x38 | second layer table address, `u32` | **518 only** |
-| 0x3C | second preview address, `u32` | **518 only**, zero: there is none |
-
-An address a revision has but a file does not use is written as zero rather than left out:
-the mark is a fixed width at a given revision. The machine address is the one that moves
-everything behind it, because 516 inserts a slot rather than appending one. The table count
-is not the number of addresses written, and the counts above are what the reference writer
-states.
+| 0x28 | extra address, `u32` | |
+| 0x2C | machine address, `u32` | |
+| 0x30 | layer data address, `u32` | where the first layer's runs begin |
+| 0x34 | model address, `u32` | |
+| 0x38 | second layer table address, `u32` | |
+| 0x3C | second preview address, `u32` | zero: there is none |
 
 Every address is known before anything is written, because the preview is a fixed size and
-the layer table is a fixed width once the layer count is known. Only the layer table's rows
-and the resin volume are filled in afterwards.
+both layer tables are a fixed width once the layer count is known. Only their rows and the
+resin volume are filled in afterwards.
 
-## Header, 80 bytes of fields
+## Header, 96 bytes of fields
 
 Offsets are from the end of the table's 16-byte head.
 
 | Offset | Field | What we write |
 |---|---|---|
-| 0x00 | pixel size, `f32` | micrometres, from `Display::pixel_pitch_mm` along X |
+| 0x00 | pixel size, `f32` | micrometres: the coarser axis, rounded to a whole micron |
 | 0x04 | layer height, `f32` | mm, the height actually sliced at |
 | 0x08 | exposure, `f32` | seconds |
 | 0x0C | wait before cure, `f32` | seconds |
@@ -132,46 +130,44 @@ Offsets are from the end of the table's 16-byte head.
 | 0x1C | lift speed, `f32` | **mm/s** |
 | 0x20 | retract speed, `f32` | **mm/s** |
 | 0x24 | resin volume, `f32` | ml |
-| 0x28 | anti-alias level, `u32` | 1, see *Grey* |
+| 0x28 | anti-alias level, `u32` | how many greys an edge is drawn in, see *Grey* |
 | 0x2C | resolution X, Y, `u32` each | from `RasterSettings` |
 | 0x34 | weight, `f32` | grams |
 | 0x38 | price, `f32` | zero for a resin with no price |
 | 0x3C | currency, one UTF-16 code unit then padding | the first character of the resin's |
-| 0x40 | per-layer settings, `u32` | 1 when exposure or thickness varies by layer |
+| 0x40 | per-layer settings, `u32` | 0, as the slicer leaves it; the rows carry each layer's own |
 | 0x44 | print time, `u32` | seconds |
 | 0x48 | transition layers, `u32` | |
 | 0x4C | transition layer type, `u32` | 0, the linear ramp |
+| 0x50 | advanced mode, `u32` | 0: the slicer plans one lift stage |
+| 0x54 | grey level, `u16` | the anti-alias level again |
+| 0x56 | blur level, `u16` | the edge blur, pixels |
+| 0x58 | resin type, `u32` | 10, which the slicer states for every resin |
+| 0x5C | intelligent mode, `u32` | 0: the machine keeps the exposure it is given |
 
-There is no build volume and no machine name here: the machine block revisions 516 and 517
-add carries the name, and below 516 the container records nothing about what it was sliced
-for. There is no mirroring field either, and the masks go in as they stand — a
-reference file converted from a `.sl1` matches the source layer for layer with no flip, so
-the panel's mounting stays a property of the profile (ADR 0134).
-
-The stated length is what says which of the later fields are there: 84 at revision 516 adds
-`advanced mode`, 92 at 517 adds `grey`, `blur level` and `resin type`, and 96 at 518 adds
-`intelligent mode`, which lets a machine set the exposure itself. We write zero in all five —
-the slicer plans one lift stage, so basic mode is what the motion block beside it describes,
-and nothing here can state a grey level, a blur or a resin type.
+There is no build volume and no machine name here: the machine block carries the name.
+There is no mirroring field either, and the masks go in as they stand — a reference file
+converted from a `.sl1` matches the source layer for layer with no flip, so the panel's
+mounting stays a property of the profile (ADR 0134).
 
 ## Preview
 
-One preview at version 1, 224 by 168 pixels.
+One preview, 224 by 168 pixels.
 
 | Offset | Field |
 |---|---|
 | 0x00 | resolution X, `u32` |
-| 0x04 | a mark of its own, 4 bytes: `x`, nul-padded |
+| 0x04 | a `u32` the slicer always states as 42 |
 | 0x08 | resolution Y, `u32` |
 | 0x0C | the pixels |
 
 The pixels are raw five-six-five colour, `rrrrrggg gggbbbbb` in a **little-endian** word,
 row by row from the top left, with no run-length coding: the size is always
 `width * height * 2`. The job's thumbnail is cut to the record's shape, padded with black
-where a square image does not reach it.
+where a square image does not reach it; a job with none gets a black one, where the slicer
+would state an empty preview.
 
-This table's stated length counts its own head, so it is `16 + 12 + width * height * 2` and
-the next table begins exactly that far on.
+The stated length is `12 + width * height * 2`: the shape and the pixels, not the head.
 
 ## Layer table
 
@@ -189,8 +185,7 @@ The 16-byte head, then a `u32` layer count, then one 32-byte row per layer in pr
 | 0x1C | padding, `u32` |
 
 A bottom layer carries the bottom lift distance and speed; every other layer the ordinary
-ones. This is what lets exposure and motion change over the height of a print, and the
-header's per-layer settings field is what allows a machine to obey it.
+ones. This is what lets exposure and motion change over the height of a print.
 
 *Lit pixels* is a count the machine displays. We count it after the grey is quantised, so it
 is what the file cures; the reference writer counts it before, and its own files disagree
@@ -223,47 +218,41 @@ The word of the long form is the one big-endian field in the container.
 
 ## Grey, and the anti-alias level
 
-The header's anti-alias level asks a machine to read that many one-bit passes of every
-layer and sum them, which is how the `.pws` container carries grey. This one does not need
-it: the runs carry four bits of their own. We write **1**, because a level above one asks a
-machine to look for passes it will not find. See `docs/decisions/0147`.
+The runs carry four bits of grey of their own, so the header's anti-alias level only says how
+many greys an edge was drawn in, as the slicer states it: the panel's grey levels, at most the
+sixteen a nibble holds, sixteen when every grey is kept, and 1 when the panel is drawn without
+grey. The `.pws` codec is the one that reads the level as a count of passes; see below.
 
-## The blocks revisions 516 to 518 add
+## The blocks behind the layer table
 
-The layer codec does not change, and neither does anything in front of the grey table.
+**Grey table**, 8 bytes with no name or length: two zero words, as the slicer writes it — no
+levels listed, since the nibble in the layer data is the grey either way.
 
-**Grey table**, 28 bytes with no name or length of its own: a `u32` saying whether the full
-greyscale is in use, a `u32` count of levels, that many bytes of eight-bit grey, and a `u32`
-nobody has identified. The count is sixteen, and at one anti-alias level the reference
-writer fills every entry with 255 — the nibble in the layer data is the grey either way.
+**`EXTRA`**, the two-stage motion block: for the bottom layers and then the rest, a stage
+count of 2 and, per stage, a height in mm and the speeds up and down in mm/s. The slicer
+plans one lift, so the second stage climbs nothing at no speed and retracts at the first's.
+The block **states a length of 24 and writes 56 bytes of fields**, as the slicer does.
 
-**`EXTRA`**, the two-stage motion block: a stage count and three floats for the bottom
-block, then the same for the rest. The second stage is zero and both counts are one, because
-the slicer plans one lift. The block **states a length of 24 and writes 56 bytes of
-fields**; the reference writer does the same, and a reader that believed the number would
-stop in the middle of it.
+**`MACHINE`**, 224 bytes with its own head counted in: the machine name in 96 bytes, the
+layer codec's name (`pw0Img`) in 16, the highest anti-alias level (16), a property count —
+1, 7 at 517 and 15 at 518 — the panel in millimetres, the travel, the file's own revision,
+the colour the machine paints behind a preview, the pixel along X and along Y in micrometres
+as `f32`, eight zero words, a panel count of 1, a zero word, the resolution as two `u16`, and
+four zero words.
 
-**`MACHINE`**, 156 bytes with its own head counted in: the machine name in 96 bytes, the
-layer codec's name (`pw0Img`) in 16, the highest anti-alias level, a property count — 1 at
-516 and 7 at 517 — the panel in millimetres, the travel, the newest revision the extension
-takes, and the colour the machine paints behind a preview.
+**Software**, 164 bytes with no name: the slicer's name in 32 bytes, a length of 128 as a
+`u32`, the version in 32, the host system in 64, and the OpenGL profile the slicer states,
+`3.3-CoreProfile`, in 32.
 
-**Software**, 164 bytes with no name: the slicer's name in 32 bytes, its own length as a
-`u32`, the version in 32, the host system in 64, and an OpenGL version in 32 that is left
-blank because nothing here renders through OpenGL.
+**`Model`**, 44 bytes, named in mixed case and with no length: the box the print stands in,
+measured from the panel's centre, then whether supports were generated and how dense. The
+stack's extent in X and Y does not reach the writer, so the box is the whole panel — an
+over-estimate the machine only draws with.
 
-**518** grows the machine block to 224 bytes and appends, after the background colour: the
-pixel along X and along Y in micrometres as `f32`, eight zero words, a panel count of 1, a
-zero word, the resolution as two `u16`, and four zero words. Its property count is 15.
-
-**`SUBIMGS`**, 518 only, behind the model block and counting its head in: a `u32` layer count
-and a `u32` index of 1, then per layer the address, the length and the lit pixel count of
-the same layer data the first table points at, and eight floats nobody has identified,
-written as zero. It is filled in at the end, like the first table.
-
-**`MODEL`**, 48 bytes: the box the print stands in, measured from the panel's centre, then
-whether supports were generated and how dense. The stack's extent in X and Y does not reach
-the writer, so the box is the whole panel — an over-estimate the machine only draws with.
+**`SUBIMGS`**, counting its head in: a `u32` layer count and a `u32` index of 1, then per
+layer the address, the length and the lit pixel count of the same layer data the first table
+points at, and eight floats nobody has identified, written as zero. It is filled in at the
+end, like the first table.
 
 ## The `.pws` codec
 
@@ -277,10 +266,9 @@ decode it, and a real file with four passes reads back as its model's volume.
 
 ## What we do not write
 
-- **Revision 515, the second preview, and the `.pws` codec.** No machine's published
-  profile asks for 515. 518 has a slot for a second preview the vendor's own writer leaves
-  empty, and so do we. A `.pws` is read, not written: see below.
+- **The second preview, and the `.pws` codec.** 518 has a slot for a second preview the
+  vendor's own writer leaves empty, and so do we. A `.pws` is read, not written: see below.
 - **A checksum.** The reference writer computes one over a layer's runs and does not write
   it; the field it would go in does not exist.
-- **The two-stage lift.** The motion block is there from 516 on and the header's advanced
-  mode is what switches it on; one stage is what the slicer plans, so it stays off.
+- **The two-stage lift.** The header's advanced mode is what switches the motion block's
+  second stage on; one stage is what the slicer plans, so it stays off.

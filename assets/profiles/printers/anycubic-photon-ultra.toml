@@ -21,7 +21,7 @@ z = 165.0
 
 [output.anycubic]
 extension = "dlp"
-revision = "v516"
+revision = "v515"
 
 [firmware]
 per_layer_settings = true

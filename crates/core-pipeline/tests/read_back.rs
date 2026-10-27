@@ -421,25 +421,21 @@ fn the_older_chitu_container_is_named_as_the_file_was_opened() {
 }
 
 #[test]
-fn an_anycubic_revision_with_a_machine_block_names_the_machine_back() {
-    let bytes = write_with(&format_anycubic::AnycubicWriter::new(
-        format_anycubic::AnycubicFlavour::Pwmx,
+fn an_anycubic_file_names_the_machine_back_at_every_revision() {
+    for version in [
+        format_anycubic::AnycubicVersion::V1,
         format_anycubic::AnycubicVersion::V516,
-    ));
-    let mut source = Cursor::new(bytes);
-    let opened = open(Path::new("plate.pwmx"), &mut source).expect("a .pwmx we wrote opens");
-    assert_eq!(
-        opened.facts().machine.as_deref(),
-        Some(printer().machine_name()),
-        "the machine block carries the name the firmware matches its own against"
-    );
-
-    let older = write_with(&format_anycubic::AnycubicWriter::default());
-    let mut source = Cursor::new(older);
-    let opened = open(Path::new("plate.pw0"), &mut source).expect("a version 1 file opens");
-    assert_eq!(
-        opened.facts().machine,
-        None,
-        "revision 1 carries no machine block to read a name out of"
-    );
+    ] {
+        let bytes = write_with(&format_anycubic::AnycubicWriter::new(
+            format_anycubic::AnycubicFlavour::Pwmx,
+            version,
+        ));
+        let mut source = Cursor::new(bytes);
+        let opened = open(Path::new("plate.pwmx"), &mut source).expect("a .pwmx we wrote opens");
+        assert_eq!(
+            opened.facts().machine.as_deref(),
+            Some(printer().machine_name()),
+            "{version:?} carries the machine block, as the vendor's slicer writes every one"
+        );
+    }
 }
