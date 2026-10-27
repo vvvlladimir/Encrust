@@ -31,3 +31,10 @@ bottom_lift_distance_mm = 10.0
 bottom_lift_speed_mm_min = 300.0
 bottom_retract_speed_mm_min = 300.0
 retract_speed_mm_min = 300.0
+
+# Read off the vendor's own slicer profile for this machine; see ADR 0371.
+[buffer]
+enabled = true
+height_mm = 5.0
+speed_mm_min = 120.0
+light_off_delay_s = 6.0

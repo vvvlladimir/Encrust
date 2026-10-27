@@ -1,5 +1,6 @@
 //! The resin form: the exposure and motion of one resin, on one machine.
 
+mod buffer;
 mod motion;
 
 use printer_profiles::{
@@ -36,12 +37,19 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         .as_ref()
         .map_or_else(String::new, |printer| printer.values.name.clone());
     let current = resin.draft.values.name.clone();
-    let (locked, limits) = window
+    let (locked, limits, machine_buffer) = window
         .machine
         .slicing
         .catalogue
         .printer(&resin.printer)
-        .map(|entry| (entry.profile.locked.clone(), entry.profile.limits.clone()))
+        .map(|entry| {
+            let profile = &entry.profile;
+            (
+                profile.locked.clone(),
+                profile.limits.clone(),
+                profile.buffer,
+            )
+        })
         .unwrap_or_default();
 
     let mut renamed = None;
@@ -71,6 +79,12 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
             form_card(ui, &tr!("print-motion"), |ui| {
                 describe(ui, &tr!("print-motion-help"));
                 motion::rows(ui, values, &locked, &limits);
+            });
+        }
+        if let Some(machine) = machine_buffer {
+            form_card(ui, &tr!("resin-buffer"), |ui| {
+                describe(ui, &tr!("resin-buffer-help"));
+                buffer::rows(ui, values, machine);
             });
         }
     }

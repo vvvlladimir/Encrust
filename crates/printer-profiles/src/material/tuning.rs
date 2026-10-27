@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Compensation, MaterialProfile, SecondStage, WaitMode, Waits};
+use crate::{Buffer, Compensation, MaterialProfile, SecondStage, WaitMode, Waits};
 
 /// The settings of a resin that depend on the machine it is printed on.
 /// Every field is optional: what a table leaves out keeps the resin's own value.
@@ -23,6 +23,7 @@ pub struct PrinterTuning {
     pub bottom_lift_speed_mm_min: Option<f32>,
     pub bottom_retract_speed_mm_min: Option<f32>,
     pub second_stage: Option<SecondStage>,
+    pub buffer: Option<Buffer>,
     pub bottom_light_off_delay_s: Option<f32>,
     pub waits: Option<Waits>,
     /// How the printer waits, over `waits`, for a machine that takes one mode only and
@@ -61,6 +62,7 @@ impl PrinterTuning {
                 tuned.bottom_retract_speed_mm_min,
             ),
             second_stage: changed(base.second_stage, tuned.second_stage),
+            buffer: changed(base.buffer, tuned.buffer).flatten(),
             bottom_light_off_delay_s: changed(
                 base.bottom_light_off_delay_s,
                 tuned.bottom_light_off_delay_s,
@@ -105,6 +107,7 @@ impl PrinterTuning {
                 stated.bottom_retract_speed_mm_min,
             ),
             second_stage: keep(self.second_stage, stated.second_stage),
+            buffer: keep(self.buffer, stated.buffer),
             bottom_light_off_delay_s: keep(
                 self.bottom_light_off_delay_s,
                 stated.bottom_light_off_delay_s,
@@ -149,6 +152,7 @@ impl PrinterTuning {
                 resin.bottom_retract_speed_mm_min,
             ),
             second_stage: read(self.second_stage, resin.second_stage),
+            buffer: self.buffer.and(resin.buffer),
             bottom_light_off_delay_s: self
                 .bottom_light_off_delay_s
                 .and(resin.bottom_light_off_delay_s),
@@ -191,6 +195,7 @@ impl PrinterTuning {
             other.bottom_retract_speed_mm_min,
         );
         put(&mut self.second_stage, other.second_stage);
+        put(&mut self.buffer, other.buffer);
         put(
             &mut self.bottom_light_off_delay_s,
             other.bottom_light_off_delay_s,
@@ -264,6 +269,9 @@ impl PrinterTuning {
             self.bottom_retract_speed_mm_min,
         );
         over(&mut profile.second_stage, self.second_stage);
+        if self.buffer.is_some() {
+            profile.buffer = self.buffer;
+        }
         if self.bottom_light_off_delay_s.is_some() {
             profile.bottom_light_off_delay_s = self.bottom_light_off_delay_s;
         }

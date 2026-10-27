@@ -88,7 +88,7 @@ Offsets are into the deciphered block.
 | 0xB4 | rest after retract, rest after lift, `f32` each, s |
 | 0xBC | transition layers, `u32` |
 | 0xC0 | bottom retract speed, its second stage, `f32` each |
-| 0xC8 | `0`, `4.0`, `0`, `4.0` |
+| 0xC8 | edge band width in mm and its exposure in s, then the bottom layers' pair, `f32` each: `0`, `4.0`, `0`, `4.0`, the band off |
 | 0xD8 | rest after retract, after lift, before lift, `f32` each, s: the ones we read |
 | 0xE4 | second-stage bottom retract, `f32` |
 | 0xE8 | two unknown words, then `5`, then the last layer's index, `u32` each |

@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use super::{ForeignResin, named};
 use crate::{
-    Compensation, MaterialProfile, PriceUnit, PrinterTuning, ProfileError, ResinDetails,
+    Buffer, Compensation, MaterialProfile, PriceUnit, PrinterTuning, ProfileError, ResinDetails,
     SecondStage, WaitMode, Waits, stated_distance_mm, stated_pwm, stated_speed_mm_min,
     stated_wait_s,
 };
@@ -96,6 +96,7 @@ fn tuning(slice: &Slice) -> PrinterTuning {
         bottom_lift_speed_mm_min: print("bottomlayerliftspeed").and_then(stated_speed_mm_min),
         bottom_retract_speed_mm_min: print("bottomlayerdropspeed").and_then(stated_speed_mm_min),
         second_stage: Some(stage),
+        buffer: buffer(slice),
         waits: Some(waits(slice)),
         compensation: Some(compensation(slice)),
         ..PrinterTuning::default()
@@ -126,6 +127,17 @@ fn second_stage(slice: &Slice) -> SecondStage {
         bottom_retract_distance_mm: distance("bottomlayerdropheight2"),
         bottom_retract_speed_mm_min: speed("bottomlayerdropspeed2"),
     }
+}
+
+/// The buffer, where the file has one; a machine without one ignores it.
+fn buffer(slice: &Slice) -> Option<Buffer> {
+    let number = |key| slice.number("print", key).unwrap_or(0.0);
+    Some(Buffer {
+        enabled: slice.flag("print", "bufferenable")?,
+        height_mm: number("bufferheight"),
+        speed_mm_min: number("bufferMotrospeed"),
+        light_off_delay_s: number("bufferlightoffdelay"),
+    })
 }
 
 fn pwm_of(value: u32) -> Option<u8> {

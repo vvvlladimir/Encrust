@@ -16,7 +16,7 @@ use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shadin
 use format_creality::{
     CxdlpReader, CxdlpSink, CxdlpV4Reader, CxdlpV4Sink, CxdlpV4Writer, CxdlpWriter,
 };
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{Buffer, MaterialProfile, PrinterProfile};
 
 const WIDTH_PX: u32 = 24;
 const HEIGHT_PX: u32 = 12;
@@ -329,6 +329,30 @@ fn every_version_four_layer_reads_back_the_pixels_it_went_in_as() {
             .collect();
         assert_eq!(read, expected, "layer {index}");
     }
+}
+
+#[test]
+fn a_version_four_file_states_the_resins_buffer_over_the_machines() {
+    let machine = Buffer {
+        enabled: true,
+        height_mm: 5.0,
+        speed_mm_min: 120.0,
+        light_off_delay_s: 6.0,
+    };
+    let resin = Buffer {
+        height_mm: 3.7,
+        speed_mm_min: 97.0,
+        light_off_delay_s: 4.3,
+        ..machine
+    };
+    let mut job = job(1);
+    job.printer.buffer = Some(machine);
+    job.material.buffer = Some(resin);
+    let mut source = Cursor::new(write_v4(&job, &[layer()], 10.0));
+    let opened = CxdlpV4Reader
+        .open(&mut source)
+        .expect("what we wrote is one of these");
+    assert_eq!(opened.facts().stated.buffer, Some(resin));
 }
 
 #[test]

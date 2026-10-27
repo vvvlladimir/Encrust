@@ -106,7 +106,8 @@ file for the HALOT X1 Max:
 
 The previews are the Chitu family's run-length RGB15 records at 120×120 and 300×300,
 smallest first. The print parameters and the slicer block are the `.ctb` blocks of the same
-names at 68 and 76 bytes. A row of the layer table is 40 bytes — Z, exposure, light-off,
+names at 68 and 76 bytes. The print parameters end at 0x34 with the HALOT buffer: height in mm,
+speed in mm/min, the wait after it in s, `f32` each, then `u32` 1 when it is on (ADR 0371). A row of the layer table is 40 bytes — Z, exposure, light-off,
 address, size, data type 0, centroid distance, the area the layer cures in whole mm², two
 reserved words — and the address points at a 44-byte motion block whose eleven floats carry this layer's own lift,
 retract and rests, with the run-length data behind it. **The size field counts that block

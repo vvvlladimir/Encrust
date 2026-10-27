@@ -193,3 +193,28 @@ fn a_profile_with_no_exposure_is_refused() {
         })
     ));
 }
+
+#[test]
+fn a_cfgx_gives_its_buffer_with_the_switch_as_it_stands() {
+    let path = fixture("saturn-4-ultra.cfgx");
+    let text = std::fs::read_to_string(&path).expect("the fixture is checked in");
+    let mut root: serde_json::Value = serde_json::from_str(&text).expect("the fixture is JSON");
+    let print = &mut root["material"][0]["slice"][0]["print"];
+    for (key, value) in [
+        ("bufferenable", serde_json::json!(true)),
+        ("bufferheight", serde_json::json!(3.7)),
+        ("bufferMotrospeed", serde_json::json!(97.0)),
+        ("bufferlightoffdelay", serde_json::json!(4.3)),
+    ] {
+        print[key]["currentvalue"] = value;
+    }
+    let foreign = ForeignResin::from_str(&root.to_string(), &path).expect("still a resin");
+    let buffer = foreign.resin.buffer.expect("the file has a buffer");
+    assert!(buffer.enabled);
+    assert!(
+        close(buffer.height_mm, 3.7)
+            && close(buffer.speed_mm_min, 97.0)
+            && close(buffer.light_off_delay_s, 4.3),
+        "3.7 mm at 97 mm/min, then 4.3 s, got {buffer:?}"
+    );
+}

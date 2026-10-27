@@ -156,7 +156,11 @@ fn write_print_parameters(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result
     fields.u32_le(material.bottom_layers)?;
     fields.f32_le(job.header_exposure_s())?;
     fields.f32_le(material.bottom_exposure_s)?;
-    fields.zeros(16)
+    let buffer = material.buffer_on(&job.printer).unwrap_or_default();
+    fields.f32_le(buffer.height_mm)?;
+    fields.f32_le(buffer.speed_mm_min)?;
+    fields.f32_le(buffer.light_off_delay_s)?;
+    fields.u32_le(u32::from(buffer.enabled))
 }
 
 /// The block the per-layer tables and the rests are announced in.

@@ -383,6 +383,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0363](0363-a-peel-has-two-stages.md) | A peel has two stages, and the bottom layers a light-off delay of their own | Accepted |
 | [0369](0369-a-printer-states-the-limits-of-a-resin.md) | A printer states the limits of a resin's settings | Accepted |
 | [0370](0370-a-printer-names-the-plate-edge-that-is-its-front.md) | A printer names the plate edge that is its front | Accepted |
+| [0371](0371-a-halot-buffer-is-a-resin-setting-from-the-machines-default.md) | A HALOT buffer is a resin setting that starts from the machine's default | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |

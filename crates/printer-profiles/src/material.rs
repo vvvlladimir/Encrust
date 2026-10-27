@@ -6,9 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::Compensation;
 use crate::{PrinterProfile, ProfileError};
 
+mod buffer;
 mod second_stage;
 mod tuning;
 
+pub use buffer::Buffer;
 pub use second_stage::SecondStage;
 pub use tuning::PrinterTuning;
 
@@ -36,6 +38,9 @@ pub struct MaterialProfile {
     pub bottom_retract_speed_mm_min: f32,
     #[serde(default)]
     pub second_stage: SecondStage,
+    /// The resin's own buffer, over the machine's; see `buffer_on`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buffer: Option<Buffer>,
     /// Light-off delay of the bottom layers, s; `None` is the normal layers' own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bottom_light_off_delay_s: Option<f32>,
@@ -448,6 +453,7 @@ impl Default for MaterialProfile {
             bottom_lift_speed_mm_min: default_bottom_lift_speed_mm_min(),
             bottom_retract_speed_mm_min: default_bottom_retract_speed_mm_min(),
             second_stage: SecondStage::default(),
+            buffer: None,
             bottom_light_off_delay_s: None,
             light_pwm: default_light_pwm(),
             bottom_light_pwm: default_light_pwm(),

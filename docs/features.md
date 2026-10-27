@@ -523,6 +523,9 @@ whole-surface fill is Cmd-Shift-click.
   the extra time per layer from a finished print (predicted vs. clock).
 - A compensation group can be switched off without losing its numbers.
 - Compensation belongs to a resin on a machine; there is no per-job switch.
+- **Buffer on HALOT machines:** the slow stretch near the vat and the wait after it, which
+  the firmware runs itself, is a resin setting starting from the maker's numbers, written
+  into the `.cxdlpv4`.
 
 ---
 
