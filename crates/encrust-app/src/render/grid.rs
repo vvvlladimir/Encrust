@@ -108,6 +108,7 @@ mod tests {
             x_mm,
             y_mm,
             z_mm: 100.0,
+            ..BuildPlate::default()
         }
     }
 

@@ -1,3 +1,5 @@
+use printer_profiles::FrontEdge;
+
 use super::*;
 
 #[test]
@@ -92,6 +94,22 @@ fn the_opening_view_looks_at_the_middle_of_the_plate() {
         "the default view is frontal"
     );
     assert!(camera.eye().z > camera.target.z, "and slightly from above");
+}
+
+#[test]
+fn the_opening_view_stands_at_the_edge_the_printer_calls_its_front() {
+    for (edge, outward) in [(FrontEdge::MinX, Vec3::NEG_X), (FrontEdge::MaxX, Vec3::X)] {
+        let plate = BuildPlate {
+            front_edge: edge,
+            ..BuildPlate::default()
+        };
+        let camera = OrbitCamera::framing_plate(&plate);
+        let seen = (camera.eye() - camera.target).truncate().normalize();
+        assert!(
+            seen.abs_diff_eq(outward.truncate(), 1e-5),
+            "{edge:?} opens looking from {outward}, not from {seen}"
+        );
+    }
 }
 
 fn bounding_corners(bounds: &Aabb) -> [Vec3; 8] {

@@ -257,7 +257,7 @@ measure it: `docs/design/compensation.md` (ADR 0144).
 ## Where the numbers come from
 
 Every shipped file is kept by hand. A machine the vendor's own slicer has a profile for
-carries that profile's panel, travel, mirroring and machine name; the rest are transcribed
+carries that profile's panel, travel, mirroring, front edge and machine name; the rest are transcribed
 from a published specification (ADR 0359). None is a measurement: an exposure test on the
 actual machine is what replaces them, and a corrected file in the user directory is how it
 is kept.

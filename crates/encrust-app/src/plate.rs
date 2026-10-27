@@ -1,6 +1,6 @@
 use crate::i18n::tr;
-use core_geometry::Vec3;
-use printer_profiles::PrinterProfile;
+use core_geometry::{Quat, Vec3};
+use printer_profiles::{FrontEdge, PrinterProfile};
 
 /// The build volume the viewport draws and models are placed on, in millimetres.
 ///
@@ -18,6 +18,7 @@ pub struct BuildPlate {
     pub x_mm: f32,
     pub y_mm: f32,
     pub z_mm: f32,
+    pub front_edge: FrontEdge,
 }
 
 impl Default for BuildPlate {
@@ -28,6 +29,7 @@ impl Default for BuildPlate {
             x_mm: 150.0,
             y_mm: 80.0,
             z_mm: 165.0,
+            front_edge: FrontEdge::MinY,
         }
     }
 }
@@ -39,6 +41,7 @@ impl BuildPlate {
             x_mm: profile.build_volume.x,
             y_mm: profile.build_volume.y,
             z_mm: profile.build_volume.z,
+            front_edge: profile.front_edge,
         }
     }
 
@@ -53,6 +56,11 @@ impl BuildPlate {
     /// Middle of the plate surface, the point the camera looks at when nothing is loaded.
     pub fn center(&self) -> Vec3 {
         Vec3::new(self.x_mm / 2.0, self.y_mm / 2.0, 0.0)
+    }
+
+    /// The turn about Z carrying the plate's `-Y` side onto the machine's front.
+    pub fn front_turn(&self) -> Quat {
+        Quat::from_rotation_z(self.front_edge.turn_rad())
     }
 
     /// Longest straight line through the build volume, used to size the default view.
@@ -103,6 +111,7 @@ z = 100.0
             x_mm: 10.0,
             y_mm: 6.0,
             z_mm: 100.0,
+            ..BuildPlate::default()
         };
         assert_eq!(plate.center(), Vec3::new(5.0, 3.0, 0.0));
     }
@@ -114,6 +123,7 @@ z = 100.0
             x_mm: 3.0,
             y_mm: 4.0,
             z_mm: 12.0,
+            ..BuildPlate::default()
         };
         // 3-4-12 is a Pythagorean quadruple: the space diagonal is exactly 13.
         assert!((plate.diagonal_mm() - 13.0).abs() < 1e-5);

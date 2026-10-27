@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{MaterialProfile, PrinterLimits, PrinterTuning, ProfileError};
+use crate::{FrontEdge, MaterialProfile, PrinterLimits, PrinterTuning, ProfileError};
 
 /// The sliced-file format a machine's firmware reads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -262,6 +262,9 @@ pub struct PrinterProfile {
     pub mirror_x: bool,
     #[serde(default)]
     pub mirror_y: bool,
+    /// Which plate edge is the machine's front, for the viewport only; see ADR 0370.
+    #[serde(default, skip_serializing_if = "FrontEdge::is_default")]
+    pub front_edge: FrontEdge,
     /// What this machine's firmware reads. A profile that says nothing gets `.goo`.
     #[serde(default)]
     pub output: OutputFormat,
@@ -360,6 +363,7 @@ impl Default for PrinterProfile {
             },
             mirror_x: true,
             mirror_y: false,
+            front_edge: FrontEdge::MinY,
             output: OutputFormat::Goo,
             connection: Connection::None,
             machines: Vec::new(),

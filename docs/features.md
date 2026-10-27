@@ -555,6 +555,8 @@ them from the meshes, and the time, marked ≈, from the plate's height.
 ## Viewing
 
 - Lit, shadowed 3D view with a view cube, orthographic or perspective, and a plate grid.
+- **Front where the printer has it:** on a machine whose front is a long side of a portrait
+  panel, the Front mark, the opening view and the view cube face that side.
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put

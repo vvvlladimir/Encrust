@@ -5,6 +5,7 @@ manufacturer = "Anycubic"
 machine_name = "AnyCubic Photon Zero"
 mirror_x = true
 mirror_y = false
+front_edge = "max_x"
 connection = "none"
 
 [display]
