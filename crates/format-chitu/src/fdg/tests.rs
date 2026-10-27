@@ -20,11 +20,12 @@ fn block() -> LayerRuns {
 }
 
 fn written(layers: u32) -> Vec<u8> {
+    let mut job = sample_job(layers);
+    job.material.light_pwm = 200;
+    job.material.bottom_light_pwm = 100;
     let mut file = Cursor::new(Vec::new());
     {
-        let mut sink = FdgWriter
-            .begin(&sample_job(layers), &mut file)
-            .expect("the job is sound");
+        let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
         for _ in 0..layers {
             sink.push(FdgSink::encode(&block())).expect("a layer");
         }
@@ -143,6 +144,18 @@ fn the_header_counts_the_heights_and_names_its_blocks() {
     assert_eq!(word(0x2C), HEADER_BYTES as u32, "the large preview follows the header");
     assert_eq!((word(0xCC), word(0xD0)), (0xD8, 0x50));
     assert_eq!(word(0x10C), 3, "three layers at three heights");
+}
+
+#[test]
+fn the_bottom_light_power_comes_before_the_light_power() {
+    let bytes = written(1);
+    assert_eq!(&bytes[0x40..0x44], &[100, 0, 200, 0]);
+
+    let open = FdgReader
+        .open(Cursor::new(bytes))
+        .expect("an .fdg we wrote");
+    assert_eq!(open.facts().stated.light_pwm, Some(200));
+    assert_eq!(open.facts().stated.bottom_light_pwm, Some(100));
 }
 
 #[test]

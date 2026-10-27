@@ -69,8 +69,8 @@ impl SlicedFileReader for FdgReader {
         let table = u64::from(reads.u32_le()?);
         let print_time_s = reads.u32_le()?;
         reads.skip(4)?;
-        let light_pwm = stated_pwm(reads.u16_le()?);
         let bottom_light_pwm = stated_pwm(reads.u16_le()?);
+        let light_pwm = stated_pwm(reads.u16_le()?);
 
         reads.seek_to(BED)?;
         let bed = (reads.f32_le()?, reads.f32_le()?);

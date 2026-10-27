@@ -40,7 +40,7 @@ Offsets hexadecimal. Words are little-endian.
 | 0x2C | large preview, small preview, layer table addresses, `u32` each | |
 | 0x38 | print time, `u32` | seconds |
 | 0x3C | anti-alias level, `u32` | 1 |
-| 0x40 | light PWM, bottom light PWM, `u16` each | |
+| 0x40 | bottom light PWM, light PWM, `u16` each | the reverse of `.ctb`'s order |
 | 0x44 | two words | zero, as `.ctb`'s two at 0x14 |
 | 0x4C | total height, `f32` | mm |
 | 0x50 | bed X, Y, Z, `f32` each | `PrinterProfile::build_volume` |

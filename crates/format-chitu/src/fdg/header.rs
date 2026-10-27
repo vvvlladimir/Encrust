@@ -58,8 +58,8 @@ pub(crate) fn write_header(
     fields.u32_le(offsets.layer_table)?;
     fields.u32_le(job.print_time_s())?;
     fields.u32_le(1)?;
-    fields.u16_le(u16::from(material.light_pwm))?;
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
+    fields.u16_le(u16::from(material.light_pwm))?;
     fields.zeros(8)?;
     fields.f32_le(job.height_mm())?;
     fields.f32_le(printer.build_volume.x)?;
