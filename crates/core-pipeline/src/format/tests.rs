@@ -5,6 +5,7 @@ fn the_extension_decides_what_is_written() {
     let of = |name: &str| SlicedFormat::of(Path::new(name), CtbVersion::V4);
     assert_eq!(of("cube.goo"), Some(SlicedFormat::Goo));
     assert_eq!(of("cube.GOO"), Some(SlicedFormat::Goo));
+    assert_eq!(of("cube.PRZ"), Some(SlicedFormat::Prz));
     assert_eq!(of("cube.ctb"), Some(SlicedFormat::Ctb(CtbVersion::V4)));
     assert_eq!(
         of("cube.cbddlp"),
@@ -30,6 +31,7 @@ fn the_extension_decides_what_is_written() {
     );
     assert_eq!(of("cube.sl1"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1)));
     assert_eq!(of("cube.ZIP"), Some(SlicedFormat::GcodeZip));
+    assert_eq!(of("cube.crmaslice"), Some(SlicedFormat::Crmaslice));
     assert_eq!(
         of("cube.cxdlp"),
         Some(SlicedFormat::Cxdlp(CxdlpVersion::V3))

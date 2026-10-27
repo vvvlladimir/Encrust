@@ -421,6 +421,22 @@ fn the_older_chitu_container_is_named_as_the_file_was_opened() {
 }
 
 #[test]
+fn a_renamed_container_opens_under_the_extension_its_machines_read() {
+    for (name, bytes) in [
+        ("plate.prz", write_with(&format_goo::GooWriter)),
+        (
+            "plate.crmaslice",
+            write_with(&format_gcode_zip::GcodeZipWriter),
+        ),
+    ] {
+        let mut source = Cursor::new(bytes);
+        let opened = open(Path::new(name), &mut source)
+            .unwrap_or_else(|error| panic!("{name} is the same bytes under another name: {error}"));
+        assert_eq!(opened.facts().layer_count(), LAYERS, "{name}");
+    }
+}
+
+#[test]
 fn an_anycubic_file_names_the_machine_back_at_every_revision() {
     for version in [
         format_anycubic::AnycubicVersion::V1,

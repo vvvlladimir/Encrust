@@ -11,6 +11,8 @@ pub enum OutputFormat {
     /// Elegoo's `.goo`.
     #[default]
     Goo,
+    /// The same container under the extension Phrozen's newer machines read, `.prz`.
+    Prz,
     /// Chitu's `.ctb`, revision 4.
     Ctb4,
     /// Chitu's `.ctb`, revision 5.
@@ -33,6 +35,8 @@ pub enum OutputFormat {
     Sl1s,
     /// The `.zip` of greyscale PNGs a Chitu board runs as gcode.
     Zip,
+    /// The same archive under the extension Carima's machines read, `.crmaslice`.
+    Crmaslice,
     /// Creality's `.cxdlp`, revision 3.
     Cxdlp3,
     /// The same container at revision 4, which the Halot Mage line reads.
@@ -150,6 +154,7 @@ impl OutputFormat {
     pub fn label(self) -> &'static str {
         match self {
             Self::Goo => ".goo",
+            Self::Prz => ".prz",
             Self::Ctb4 => ".ctb v4",
             Self::Ctb5 => ".ctb v5",
             Self::CtbEncrypted => ".ctb encrypted",
@@ -159,6 +164,7 @@ impl OutputFormat {
             Self::Sl1 => ".sl1",
             Self::Sl1s => ".sl1s",
             Self::Zip => ".zip",
+            Self::Crmaslice => ".crmaslice",
             Self::Cxdlp3 | Self::Cxdlp4 => ".cxdlp",
             Self::Svgx => ".svgx",
             Self::Cws => ".cws",

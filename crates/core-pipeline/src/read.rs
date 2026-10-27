@@ -223,11 +223,11 @@ pub fn reads_sliced_file(path: &Path) -> bool {
 fn claimed_by(path: &Path) -> Option<Family> {
     let extension = path.extension()?.to_string_lossy().to_lowercase();
     match extension.as_str() {
-        "goo" => Some(Family::Goo),
+        "goo" | "prz" => Some(Family::Goo),
         "ctb" | "cbddlp" => Some(Family::Chitu(CbddlpFlavour::Cbddlp)),
         "photon" => Some(Family::Chitu(CbddlpFlavour::Photon)),
         "sl1" | "sl1s" => Some(Family::Sl1),
-        "zip" => Some(Family::GcodeZip),
+        "zip" | "crmaslice" => Some(Family::GcodeZip),
         "cxdlp" => Some(Family::Cxdlp),
         "svgx" => Some(Family::Svgx),
         "cws" => Some(Family::Cws),
@@ -243,8 +243,21 @@ mod tests {
     #[test]
     fn every_extension_we_write_is_an_extension_we_can_open() {
         for name in [
-            "a.goo", "a.ctb", "a.cbddlp", "a.photon", "a.pwmx", "a.pwmo", "a.dlp", "a.sl1",
-            "a.sl1s", "a.zip", "a.cxdlp", "a.svgx", "a.cws",
+            "a.goo",
+            "a.ctb",
+            "a.cbddlp",
+            "a.photon",
+            "a.pwmx",
+            "a.pwmo",
+            "a.dlp",
+            "a.sl1",
+            "a.sl1s",
+            "a.zip",
+            "a.cxdlp",
+            "a.svgx",
+            "a.cws",
+            "a.prz",
+            "a.crmaslice",
         ] {
             assert!(
                 claimed_by(Path::new(name)).is_some(),

@@ -115,7 +115,7 @@ impl Destination<'_> {
         observer: &mut dyn Observer,
     ) -> Result<Option<F::Done>, PipelineError> {
         match self.format {
-            SlicedFormat::Goo => self.with(&GooWriter, sink, feed, observer),
+            SlicedFormat::Goo | SlicedFormat::Prz => self.with(&GooWriter, sink, feed, observer),
             SlicedFormat::Ctb(version) => self.with(&CtbWriter::new(version), sink, feed, observer),
             SlicedFormat::CtbEncrypted => self.with(&CtbEncryptedWriter, sink, feed, observer),
             SlicedFormat::Cbddlp(flavour) => {
@@ -133,7 +133,9 @@ impl Destination<'_> {
                 feed,
                 observer,
             ),
-            SlicedFormat::GcodeZip => self.with(&GcodeZipWriter, sink, feed, observer),
+            SlicedFormat::GcodeZip | SlicedFormat::Crmaslice => {
+                self.with(&GcodeZipWriter, sink, feed, observer)
+            }
             SlicedFormat::Cxdlp(CxdlpVersion::V3) => self.with(&CxdlpWriter, sink, feed, observer),
             SlicedFormat::Cxdlp(CxdlpVersion::V4) => {
                 self.with(&CxdlpV4Writer, sink, feed, observer)

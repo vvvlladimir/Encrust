@@ -11,6 +11,7 @@ use core_pipeline::{CbddlpFlavour, CtbVersion, CxdlpVersion, Sl1Flavour, SlicedF
 pub fn label_of(format: SlicedFormat) -> &'static str {
     match format {
         SlicedFormat::Goo => ".goo",
+        SlicedFormat::Prz => ".prz",
         SlicedFormat::Ctb(CtbVersion::V4) => ".ctb v4",
         SlicedFormat::Ctb(CtbVersion::V5) => ".ctb v5",
         SlicedFormat::CtbEncrypted => ".ctb encrypted",
@@ -20,6 +21,7 @@ pub fn label_of(format: SlicedFormat) -> &'static str {
         SlicedFormat::Sl1(Sl1Flavour::Sl1) => ".sl1",
         SlicedFormat::Sl1(Sl1Flavour::Sl1s) => ".sl1s",
         SlicedFormat::GcodeZip => ".zip",
+        SlicedFormat::Crmaslice => ".crmaslice",
         SlicedFormat::Cxdlp(CxdlpVersion::V3) => ".cxdlp v3",
         SlicedFormat::Cxdlp(CxdlpVersion::V4) => ".cxdlp v4",
         SlicedFormat::Svgx => ".svgx",

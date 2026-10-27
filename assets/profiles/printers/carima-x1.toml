@@ -1,0 +1,25 @@
+# Carima X1.
+
+name = "X1"
+manufacturer = "Carima"
+machine_name = "Carima X1"
+mirror_x = true
+mirror_y = false
+output = "crmaslice"
+connection = "none"
+
+[display]
+width_px = 4240
+height_px = 3840
+width_mm = 320.0
+height_mm = 289.8
+grey_floor = 0
+
+[build_volume]
+x = 320.0
+y = 289.8
+z = 500.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false

@@ -100,8 +100,8 @@ between layers, inside the cavity a `--hollow` run is building and between the m
 batch, and removes the file it was writing; a second one exits at once. `inspect`, `info`
 and `profiles` write at most one small file, so one Ctrl-C ends them.
 
-The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.photon`,
-`.sl1`, `.sl1s`, `.zip`, `.cxdlp`, `.svgx`, `.cws`, one of the Anycubic extensions in
+The output extension picks the format (ADR 0047): `.goo`, `.prz`, `.ctb`, `.cbddlp`, `.photon`,
+`.sl1`, `.sl1s`, `.zip`, `.crmaslice`, `.cxdlp`, `.svgx`, `.cws`, one of the Anycubic extensions in
 `docs/formats/anycubic.md` or `docs/formats/pwsz.md`, or a name with no extension for a directory of PNGs. A container
 name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
 and a run that cannot write the file it was asked for fails rather than reports success.

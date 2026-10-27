@@ -1,0 +1,25 @@
+# Carima IMD-124.
+
+name = "IMD-124"
+manufacturer = "Carima"
+machine_name = "Carima IMD-124"
+mirror_x = true
+mirror_y = false
+output = "crmaslice"
+connection = "none"
+
+[display]
+width_px = 1920
+height_px = 1080
+width_mm = 124.0
+height_mm = 70.0
+grey_floor = 0
+
+[build_volume]
+x = 124.0
+y = 70.0
+z = 140.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false

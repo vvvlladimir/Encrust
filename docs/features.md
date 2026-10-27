@@ -572,14 +572,14 @@ Every file Encrust writes is read back and checked. The output extension picks t
 
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
-| `.goo` | Elegoo, Phrozen | yes | |
+| `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; not yet printed from. |
 | `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | |
 | `.ctb` encrypted | the newer Chitu boards that take nothing else | yes | Written when the printer profile says `output = "ctb-encrypted"`; no shipped profile does yet. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. The `.pm5s`, `.m5sp` and `.pm4n` of the Photon Mono M5s, M5s Pro and Mono 4 have not yet been printed from. |
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
-| `.zip` (PNG layers + G-code) | Phrozen, Wanhao, Kelant | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. |
+| `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Carima | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
 | `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |

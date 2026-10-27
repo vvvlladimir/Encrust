@@ -18,6 +18,8 @@ pub use format_sl1::Sl1Flavour;
 pub enum SlicedFormat {
     #[default]
     Goo,
+    /// The `.goo` container under Phrozen's extension: the same bytes.
+    Prz,
     Ctb(CtbVersion),
     /// The encrypted `.ctb`, which an output name alone never picks: only a profile does.
     CtbEncrypted,
@@ -25,6 +27,8 @@ pub enum SlicedFormat {
     Anycubic(AnycubicFlavour, AnycubicVersion),
     Sl1(Sl1Flavour),
     GcodeZip,
+    /// The `.zip` archive under Carima's extension: the same bytes.
+    Crmaslice,
     Cxdlp(CxdlpVersion),
     Svgx,
     Cws,
@@ -58,6 +62,8 @@ impl SlicedFormat {
         let extension = path.extension()?;
         if extension.eq_ignore_ascii_case("goo") {
             Some(Self::Goo)
+        } else if extension.eq_ignore_ascii_case("prz") {
+            Some(Self::Prz)
         } else if extension.eq_ignore_ascii_case("ctb") {
             Some(Self::Ctb(version))
         } else if extension.eq_ignore_ascii_case("cbddlp") {
@@ -66,6 +72,8 @@ impl SlicedFormat {
             Some(Self::Cbddlp(CbddlpFlavour::Photon))
         } else if extension.eq_ignore_ascii_case("zip") {
             Some(Self::GcodeZip)
+        } else if extension.eq_ignore_ascii_case("crmaslice") {
+            Some(Self::Crmaslice)
         } else if extension.eq_ignore_ascii_case("cxdlp") {
             // The name carries no revision either, and version 3 is what all but the
             // newest of these machines read.
@@ -132,11 +140,13 @@ impl SlicedFormat {
     pub fn extension(self) -> &'static str {
         match self {
             Self::Goo => "goo",
+            Self::Prz => "prz",
             Self::Ctb(_) | Self::CtbEncrypted => "ctb",
             Self::Cbddlp(flavour) => flavour.extension(),
             Self::Anycubic(flavour, _) => flavour.extension(),
             Self::Sl1(flavour) => flavour.extension(),
             Self::GcodeZip => "zip",
+            Self::Crmaslice => "crmaslice",
             Self::Cxdlp(_) => "cxdlp",
             Self::Svgx => "svgx",
             Self::Cws => "cws",
@@ -149,6 +159,7 @@ impl From<OutputFormat> for SlicedFormat {
     fn from(format: OutputFormat) -> Self {
         match format {
             OutputFormat::Goo => Self::Goo,
+            OutputFormat::Prz => Self::Prz,
             OutputFormat::Ctb4 => Self::Ctb(CtbVersion::V4),
             OutputFormat::Ctb5 => Self::Ctb(CtbVersion::V5),
             OutputFormat::CtbEncrypted => Self::CtbEncrypted,
@@ -161,6 +172,7 @@ impl From<OutputFormat> for SlicedFormat {
             OutputFormat::Sl1 => Self::Sl1(Sl1Flavour::Sl1),
             OutputFormat::Sl1s => Self::Sl1(Sl1Flavour::Sl1s),
             OutputFormat::Zip => Self::GcodeZip,
+            OutputFormat::Crmaslice => Self::Crmaslice,
             OutputFormat::Cxdlp3 => Self::Cxdlp(CxdlpVersion::V3),
             OutputFormat::Cxdlp4 => Self::Cxdlp(CxdlpVersion::V4),
             OutputFormat::Svgx => Self::Svgx,
@@ -174,6 +186,7 @@ impl From<SlicedFormat> for OutputFormat {
     fn from(format: SlicedFormat) -> Self {
         match format {
             SlicedFormat::Goo => Self::Goo,
+            SlicedFormat::Prz => Self::Prz,
             SlicedFormat::Ctb(CtbVersion::V4) => Self::Ctb4,
             SlicedFormat::Ctb(CtbVersion::V5) => Self::Ctb5,
             SlicedFormat::CtbEncrypted => Self::CtbEncrypted,
@@ -186,6 +199,7 @@ impl From<SlicedFormat> for OutputFormat {
             SlicedFormat::Sl1(Sl1Flavour::Sl1) => Self::Sl1,
             SlicedFormat::Sl1(Sl1Flavour::Sl1s) => Self::Sl1s,
             SlicedFormat::GcodeZip => Self::Zip,
+            SlicedFormat::Crmaslice => Self::Crmaslice,
             SlicedFormat::Cxdlp(CxdlpVersion::V3) => Self::Cxdlp3,
             SlicedFormat::Cxdlp(CxdlpVersion::V4) => Self::Cxdlp4,
             SlicedFormat::Svgx => Self::Svgx,
