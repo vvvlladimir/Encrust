@@ -2,6 +2,7 @@
 //! and each layer's in two binary entries, and every layer in the PW0 codec of the table
 //! container. Layout is in `docs/formats/pwsz.md`.
 
+mod reader;
 mod scene;
 mod settings;
 #[cfg(test)]
@@ -15,6 +16,7 @@ use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
 use crate::rle::EncodedLayer;
+pub use reader::{OpenPwsz, PwszReader, claims};
 use scene::{Outline, SceneRow};
 
 /// Which extension the archive goes under: the one the machine's firmware looks for.
@@ -95,13 +97,23 @@ impl SlicedFileWriter for PwszWriter {
                 png,
             )?;
         }
-        entry(&mut zip, "software_info.conf", &settings::software_info()?)?;
+        // The vendor's order, as far as a stream allows: what the layers add up to waits for them.
+        let ahead = [
+            ("software_info.conf", settings::software_info()?),
+            ("layers_controller.conf", settings::layers_controller(job)?),
+            (
+                "anycubic_photon_resins.pwsp",
+                settings::machine(job, self.flavour)?,
+            ),
+        ];
+        for (name, bytes) in &ahead {
+            entry(&mut zip, name, bytes)?;
+        }
         tracing::debug!(layers = job.layer_count(), "pwsz previews written");
 
         Ok(PwszSink {
             zip,
             job: job.clone(),
-            flavour: self.flavour,
             rows: Vec::with_capacity(job.layer_count() as usize),
         })
     }
@@ -112,7 +124,6 @@ impl SlicedFileWriter for PwszWriter {
 pub struct PwszSink<'w> {
     zip: ZipWriter<&'w mut dyn WriteSeek>,
     job: PrintJob,
-    flavour: PwszFlavour,
     rows: Vec<SceneRow>,
 }
 
@@ -151,8 +162,7 @@ impl LayerSink for PwszSink<'_> {
             });
         }
 
-        let name = format!("layer_images/layer_{index}.pw0Img");
-        entry(&mut self.zip, &name, encoded.runs.data())?;
+        entry(&mut self.zip, &layer_name(index), encoded.runs.data())?;
         self.rows
             .push(SceneRow::of(&self.job, index, &encoded.outline));
         Ok(())
@@ -168,16 +178,11 @@ impl LayerSink for PwszSink<'_> {
             });
         }
 
-        // These entries state what the layers add up to, so they go in behind them; a
-        // reader looks an entry up by name, not by place.
+        // These entries state what the layers add up to, so they go in behind them, where
+        // the vendor puts them in front; a reader looks an entry up by name, not by place.
         let job = &self.job;
         let entries = [
-            ("layers_controller.conf", settings::layers_controller(job)?),
             ("print_info.json", settings::print_info(job)?),
-            (
-                "anycubic_photon_resins.pwsp",
-                settings::machine(job, self.flavour)?,
-            ),
             ("scene.slice", scene::scene_slice(job, &self.rows)?),
             (
                 "calc_layer_volumes.data",
@@ -194,6 +199,11 @@ impl LayerSink for PwszSink<'_> {
     }
 }
 
+/// The entry a layer is in, counted from 0.
+pub(crate) fn layer_name(index: u32) -> String {
+    format!("layer_images/layer_{index}.pw0Img")
+}
+
 /// A binary entry built in memory before it goes into the archive.
 pub(crate) fn built(
     write: impl FnOnce(&mut core_format::Fields<'_>) -> std::io::Result<()>,
@@ -208,9 +218,8 @@ fn entry(
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {
-    // The layers are already run-length coded and the previews deflated; the rest is small
-    // enough that storing it costs nothing worth a second codec.
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    // Deflated as the vendor writes it: a run-length layer still shrinks to a fiftieth.
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     zip.start_file(name, options).map_err(container)?;
     zip.write_all(bytes)?;
     Ok(())

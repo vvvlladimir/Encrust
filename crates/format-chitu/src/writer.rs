@@ -7,7 +7,7 @@ use core_format::{
 use core_raster::LayerRuns;
 
 use crate::blocks::{self, HEADER_BYTES, Head, Offsets, SLICER_INFO_BYTES, Totals};
-use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LayerDef, LAYER_TAIL_BYTES};
+use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LAYER_TAIL_BYTES, LayerDef};
 
 /// Every `.ctb` from version 4 onwards carries this magic, version 5 included.
 const MAGIC: u32 = 0x12FD_0106;
@@ -72,8 +72,8 @@ impl CtbVersion {
 }
 
 /// The key the layers are covered with: any but zero reads the same, and the vendor's
-/// slicer never writes zero; see `docs/decisions/0365`.
-fn encryption_key(job: &PrintJob) -> u32 {
+/// slicer never writes zero in a `.ctb`, `.fdg` or `.phz`; see `docs/decisions/0365`.
+pub(crate) fn encryption_key(job: &PrintJob) -> u32 {
     job.created_unix_s as u32 | 1
 }
 
@@ -232,12 +232,19 @@ impl LayerSink for CtbSink<'_> {
             blocks::rewrite_print_parameters(&mut patch, &self.job, self.offsets.print_parameters)?;
             blocks::rewrite_v4_parameters(&mut patch, &self.job, self.offsets, self.totals)?;
             patch.seek_to(0)?;
-            blocks::write_header(&mut patch, &self.job, self.version.head(&self.job), self.offsets)?;
+            blocks::write_header(
+                &mut patch,
+                &self.job,
+                self.version.head(&self.job),
+                self.offsets,
+            )?;
             debug_assert_eq!(patch.position()?, HEADER_BYTES);
         }
         let front = front.into_inner();
 
-        let mut table = Cursor::new(Vec::with_capacity(self.defs.len() * LAYER_DEF_BYTES as usize));
+        let mut table = Cursor::new(Vec::with_capacity(
+            self.defs.len() * LAYER_DEF_BYTES as usize,
+        ));
         {
             let mut rows = Fields::new(&mut table);
             for def in &self.defs {

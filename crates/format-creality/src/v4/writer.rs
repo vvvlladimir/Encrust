@@ -1,12 +1,13 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, Rle7Layer, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
 };
 use core_raster::LayerRuns;
 
-use core_format::Crc32;
 use crate::family::{block, block_at, model_code};
+use core_format::Crc32;
 
 use super::blocks::{self, LAYER_BLOCK_BYTES, LAYER_ROW_BYTES, LayerRow, Offsets};
+use super::rle::RowRunsLayer;
 
 /// Writes the Creality `.cxdlp` at version 4. Layout is in `docs/formats/creality.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -16,7 +17,7 @@ impl SlicedFileWriter for CxdlpV4Writer {
     type Sink<'w> = CxdlpV4Sink<'w>;
 
     fn extension(&self) -> &'static str {
-        "cxdlp"
+        "cxdlpv4"
     }
 
     fn begin<'w>(
@@ -82,7 +83,7 @@ pub struct CxdlpV4Sink<'w> {
 impl LayerSink for CxdlpV4Sink<'_> {
     /// The compressed layer and what it lights, which the table states and the codec does
     /// not keep.
-    type Encoded = (Rle7Layer, u64);
+    type Encoded = (RowRunsLayer, u64);
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
         let lit_px = layer
@@ -91,7 +92,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
             .filter(|run| run.value > 0)
             .map(|run| u64::from(run.length))
             .sum();
-        (Rle7Layer::encode(layer), lit_px)
+        (RowRunsLayer::encode(layer), lit_px)
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
@@ -124,7 +125,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
         self.rows.push(LayerRow {
             z_mm: self.job.layer_z_mm(index),
             exposure_s: self.job.exposure_of_layer_s(index),
-            light_off_delay_s: self.job.material.light_off_s(),
+            light_off_delay_s: self.job.material.light_off_of_layer_s(index),
             address: address as u32,
             size: LAYER_BLOCK_BYTES + encoded.data().len() as u32,
             area: area_field(&self.job, lit_px),
@@ -184,7 +185,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
 /// island a vendor's slicer measures; see `docs/formats/creality.md`.
 fn area_field(job: &PrintJob, lit_px: u64) -> u32 {
     let pitch = &job.raster.pitch;
-    let area = lit_px as f64 * f64::from(pitch.x * pitch.y) * 1000.0;
+    let area = (lit_px as f64 * f64::from(pitch.x * pitch.y)).round();
     area.clamp(0.0, f64::from(u32::MAX)) as u32
 }
 

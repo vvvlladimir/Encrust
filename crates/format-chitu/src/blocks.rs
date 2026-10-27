@@ -302,7 +302,11 @@ fn write_resin_parameters(fields: &mut Fields<'_>, job: &PrintJob, at: u32) -> i
     } else {
         material.details.kind.as_str()
     };
-    let strings = [kind.as_bytes(), material.name.as_bytes(), material.name.as_bytes()];
+    let strings = [
+        kind.as_bytes(),
+        material.name.as_bytes(),
+        material.name.as_bytes(),
+    ];
 
     fields.u32_le(0)?;
     fields.bytes(&[0, 0, 0, 0])?;

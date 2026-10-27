@@ -150,10 +150,51 @@ fn a_bottom_layer_lifts_by_its_own_numbers() {
         |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
 
     let row = |index: usize| table + index * LAYER_DEF_BYTES as usize;
-    assert_eq!((f32_at(row(0) + 8), f32_at(row(0) + 12)), (9.0, 0.5));
+    assert_eq!((f32_at(row(0) + 8), f32_at(row(0) + 12)), (9.0, 30.0));
     assert_eq!(
         (f32_at(row(1) + 8), f32_at(row(1) + 12)),
-        (5.0, 1.0),
-        "a speed is millimetres a second in this container"
+        (5.0, 60.0),
+        "a row's speed is millimetres a minute, as the vendor writes it"
+    );
+}
+
+#[test]
+fn a_second_stage_turns_advanced_mode_on_and_fills_the_extra_block() {
+    let mut job = sample_job(1);
+    job.material.bottom_lift_distance_mm = 5.0;
+    job.material.bottom_lift_speed_mm_min = 120.0;
+    job.material.bottom_retract_speed_mm_min = 240.0;
+    job.material.second_stage.bottom_lift_distance_mm = 3.0;
+    job.material.second_stage.bottom_lift_speed_mm_min = 180.0;
+    job.material.second_stage.bottom_retract_speed_mm_min = 180.0;
+
+    let mut buffer = Cursor::new(Vec::new());
+    {
+        let mut sink = AnycubicWriter::default()
+            .begin(&job, &mut buffer)
+            .expect("the job is sound");
+        sink.push(AnycubicSink::encode(&layer())).expect("a layer");
+        sink.finish(0.0).expect("every promised layer arrived");
+    }
+    let bytes = buffer.into_inner();
+    let at = |offset: usize| {
+        [
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]
+    };
+    let header = tables::Offsets::of(1).header as usize + 16;
+    assert_eq!(u32::from_le_bytes(at(header + 0x50)), 1, "advanced mode");
+
+    let extra = tables::Offsets::of(1).extra as usize + 16;
+    let bottom: Vec<f32> = (0..6)
+        .map(|i| f32::from_le_bytes(at(extra + 4 + 4 * i)))
+        .collect();
+    assert_eq!(
+        bottom,
+        [5.0, 2.0, 3.0, 3.0, 3.0, 4.0],
+        "first lift with the second retract, then the second lift with the first retract"
     );
 }

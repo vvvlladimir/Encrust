@@ -280,7 +280,7 @@ impl LayerSink for AnycubicSink<'_> {
             data_address: at,
             data_size: encoded.data().len() as u32,
             lift_distance_mm,
-            lift_speed_mm_s: lift_speed_mm_min / 60.0,
+            lift_speed_mm_min,
             exposure_s: self.job.exposure_of_layer_s(index),
             layer_height_mm: self.job.layer_height_mm(index),
             lit_pixels: encoded.lit_pixels(),

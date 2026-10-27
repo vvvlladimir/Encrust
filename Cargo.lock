@@ -2131,7 +2131,6 @@ dependencies = [
 name = "format-anycubic"
 version = "0.5.0"
 dependencies = [
- "core-analysis",
  "core-format",
  "core-raster",
  "criterion",

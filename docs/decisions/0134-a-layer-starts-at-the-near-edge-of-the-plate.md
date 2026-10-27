@@ -1,6 +1,6 @@
 # 0134. Write the plate as it stands, and leave mirroring to the header
 
-- **Status:** Accepted
+- **Status:** Accepted; the row order of an unmirrored machine's file is superseded by 0366
 - **Date:** 2026-09-29
 
 ## Context

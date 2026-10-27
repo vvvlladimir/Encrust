@@ -118,43 +118,31 @@ fn a_layer_entry_is_the_layer_in_the_pw0_codec() {
 }
 
 #[test]
-fn the_scene_states_a_layer_from_the_panel_centre() {
-    let mut archive = written(PwszFlavour::Pwsz, &[layer(centre_block)]);
+fn the_scene_states_a_layer_as_one_piece_with_no_extent() {
+    let two = |x: u32, y: u32| (x == 0 && y == 0) || ((4..7).contains(&x) && y == 3);
+    let mut archive = written(PwszFlavour::Pwsz, &[layer(two)]);
     let scene = entry(&mut archive, "scene.slice");
     assert_eq!(&scene[..13], b"ANYCUBIC-PWSZ");
     assert_eq!(&scene[388..392], b"<---");
     assert_eq!(u32_at(&scene, 392), 1);
 
-    // On a 0.8 x 0.4 mm panel of 0.1 mm pixels the block spans x 0.2..0.6 and y 0.1..0.3,
-    // so -0.2..0.2 and -0.1..0.1 from the centre, and covers 0.08 mm2.
+    // Four pixels of 0.01 mm2 in two pieces, stated as the vendor states them.
     let row = FIRST_SCENE_ROW;
-    let expected = [0.05, 0.08, -0.2, -0.1, 0.2, 0.1];
-    for (field, want) in expected.iter().enumerate() {
-        let got = f32_at(&scene, row + 4 * field);
-        assert!(
-            (got - want).abs() < 1e-5,
-            "field {field} is {got}, expected {want}"
-        );
-    }
+    assert!((f32_at(&scene, row) - 0.05).abs() < 1e-5, "the layer's top");
+    assert!(
+        (f32_at(&scene, row + 4) - 0.04).abs() < 1e-5,
+        "the cured area"
+    );
+    assert!(
+        (0..4).all(|i| f32_at(&scene, row + 8 + 4 * i) == 0.0),
+        "no extent"
+    );
     assert_eq!(u32_at(&scene, row + 24), 1, "one piece");
     assert!(
-        (f32_at(&scene, row + 28) - 0.08).abs() < 1e-5,
-        "the piece is all of it"
+        (f32_at(&scene, row + 28) - 0.04).abs() < 1e-5,
+        "as large as the layer"
     );
     assert_eq!(&scene[row + 64..row + 68], b"--->");
-}
-
-#[test]
-fn separate_pieces_are_counted_and_the_largest_kept() {
-    let two = |x: u32, y: u32| (x == 0 && y == 0) || ((4..7).contains(&x) && y == 3);
-    let mut archive = written(PwszFlavour::Pwsz, &[layer(two)]);
-    let scene = entry(&mut archive, "scene.slice");
-    assert_eq!(u32_at(&scene, FIRST_SCENE_ROW + 24), 2);
-    let largest = f32_at(&scene, FIRST_SCENE_ROW + 28);
-    assert!(
-        (largest - 0.03).abs() < 1e-5,
-        "three pixels of 0.01 mm2, got {largest}"
-    );
 }
 
 #[test]
@@ -337,4 +325,45 @@ fn the_lift_is_stated_as_two_stages_with_the_second_climbing_nothing() {
         assert_eq!(stages[stage]["up_speed"], single["zup_speed"]);
     }
     assert_eq!(single["gray_level"], single["blur_level"]);
+}
+
+#[test]
+fn an_archive_reads_back_what_it_was_told() {
+    let archive = written(
+        PwszFlavour::Pwsz,
+        &[layer(centre_block), layer(|_, _| false)],
+    );
+    let bytes = archive.into_inner().into_inner();
+    let mut open = core_format::SlicedFileReader::open(&PwszReader, Cursor::new(bytes))
+        .expect("the archive opens");
+    let job = sample_job(2);
+    let facts = core_format::OpenFile::facts(&open).clone();
+    assert_eq!((facts.width_px, facts.height_px), (8, 4));
+    assert_eq!(facts.layer_count(), 2);
+    assert_eq!(facts.bottom_layers, job.material.bottom_layers);
+    assert!((facts.exposure_s - job.material.exposure_s).abs() < 1e-5);
+    assert!(
+        (facts.layers[1].z_mm - job.layer_z_mm(1)).abs() < 1e-5,
+        "a layer's top"
+    );
+
+    let lit: u32 = core_format::OpenFile::layer(&mut open, 0)
+        .expect("the first layer")
+        .iter()
+        .filter(|run| run.value > 0)
+        .map(|run| run.length)
+        .sum();
+    assert_eq!(lit, 8);
+}
+
+#[test]
+fn an_archive_without_its_settings_is_refused_by_name() {
+    let mut buffer = Cursor::new(Vec::new());
+    zip::ZipWriter::new(&mut buffer)
+        .finish()
+        .expect("an empty archive");
+    let error = core_format::SlicedFileReader::open(&PwszReader, Cursor::new(buffer.into_inner()))
+        .err()
+        .expect("nothing to read");
+    assert!(matches!(error, FormatError::Missing { .. }));
 }

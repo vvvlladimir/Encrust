@@ -178,7 +178,10 @@ mod tests {
             asked_revision(machines, Some(CtbRevision::Four)),
             SlicedFormat::Ctb(CtbVersion::V4)
         ));
-        assert!(matches!(asked_revision(machines, None), SlicedFormat::CtbEncrypted));
+        assert!(matches!(
+            asked_revision(machines, None),
+            SlicedFormat::CtbEncrypted
+        ));
         assert!(matches!(
             asked_revision(SlicedFormat::Goo, Some(CtbRevision::Five)),
             SlicedFormat::Goo

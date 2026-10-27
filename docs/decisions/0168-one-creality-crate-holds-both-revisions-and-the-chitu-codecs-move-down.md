@@ -1,6 +1,6 @@
 # 0168. Write both `.cxdlp` revisions from one crate and move the Chitu codecs down
 
-- **Status:** Accepted
+- **Status:** Accepted; the version 4 codec, extension and model rule are superseded by 0368
 - **Date:** 2026-10-02
 
 ## Context

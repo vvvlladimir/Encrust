@@ -3,8 +3,8 @@ use core_format::{
 };
 use core_raster::LayerRuns;
 
-use core_format::Crc32;
 use crate::family::{block, model_code};
+use core_format::Crc32;
 
 use super::blocks::{self, PAGE_BREAK};
 use super::lines::EncodedLayer;

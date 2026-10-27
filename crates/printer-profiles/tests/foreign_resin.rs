@@ -85,8 +85,13 @@ fn a_peeling_machines_cfgx_gives_its_lifts_and_holds_the_light_off() {
     let stage = resin.second_stage;
     assert!(close(stage.lift_distance_mm, 2.0) && close(stage.lift_speed_mm_min, 180.0));
     assert!(close(stage.retract_distance_mm, 1.5) && close(stage.retract_speed_mm_min, 60.0));
-    assert!(close(stage.bottom_lift_distance_mm, 3.0) && close(stage.bottom_retract_distance_mm, 2.0));
-    assert!(close(resin.bottom_retract_distance_mm(), 7.7), "6.7 + 3 - 2");
+    assert!(
+        close(stage.bottom_lift_distance_mm, 3.0) && close(stage.bottom_retract_distance_mm, 2.0)
+    );
+    assert!(
+        close(resin.bottom_retract_distance_mm(), 7.7),
+        "6.7 + 3 - 2"
+    );
     assert_eq!(resin.bottom_light_off_delay_s, Some(1.5));
     assert!(close(resin.lift_speed_mm_min, 61.0) && close(resin.bottom_lift_speed_mm_min, 71.0));
     assert!(close(resin.retract_speed_mm_min, 173.0));

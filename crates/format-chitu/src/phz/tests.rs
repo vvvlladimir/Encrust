@@ -115,18 +115,9 @@ fn the_cipher_steps_by_the_key_and_the_layer_as_the_vendor_writer_does() {
 }
 
 #[test]
-fn a_file_with_its_layers_covered_by_a_key_reads_back() {
-    let mut bytes = written(2);
-    let key = 0x00C0_FFEE_u32;
-    bytes[0x58..0x5C].copy_from_slice(&key.to_le_bytes());
-    let open = PhzReader
-        .open(Cursor::new(bytes.clone()))
-        .expect("the header");
-    for index in 0..2 {
-        let entry = open.facts().layers[index as usize];
-        let at = entry.offset as usize;
-        crypt(key, index, &mut bytes[at..at + entry.size as usize]);
-    }
+fn a_written_file_covers_its_layers_with_a_key_and_reads_back() {
+    let bytes = written(2);
+    assert_ne!(word(&bytes, 0x58), 0, "the vendor never writes a zero key");
     let mut open = PhzReader.open(Cursor::new(bytes)).expect("the header");
     let lit: u32 = open
         .layer(1)
@@ -154,7 +145,7 @@ fn a_file_of_another_container_is_refused_by_its_magic() {
 }
 
 #[test]
-fn the_header_states_the_anti_alias_level_twice() {
+fn the_header_states_one_pass_then_the_anti_alias_level() {
     let bytes = written(1);
-    assert_eq!((word(&bytes, 0x38), word(&bytes, 0xB8)), (16, 16));
+    assert_eq!((word(&bytes, 0x38), word(&bytes, 0xB8)), (1, 16));
 }

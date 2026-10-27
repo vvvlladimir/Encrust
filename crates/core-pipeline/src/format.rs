@@ -82,6 +82,8 @@ impl SlicedFormat {
             Some(Self::GcodeZip)
         } else if extension.eq_ignore_ascii_case("crmaslice") {
             Some(Self::Crmaslice)
+        } else if extension.eq_ignore_ascii_case("cxdlpv4") {
+            Some(Self::Cxdlp(CxdlpVersion::V4))
         } else if extension.eq_ignore_ascii_case("cxdlp") {
             // The name carries no revision either, and version 3 is what all but the
             // newest of these machines read.
@@ -164,7 +166,9 @@ impl SlicedFormat {
             Self::Sl1(flavour) => flavour.extension(),
             Self::GcodeZip => "zip",
             Self::Crmaslice => "crmaslice",
-            Self::Cxdlp(_) => "cxdlp",
+            Self::Cxdlp(CxdlpVersion::V3) => "cxdlp",
+            // The vendor slicer names version 4 apart, and so do its machines.
+            Self::Cxdlp(CxdlpVersion::V4) => "cxdlpv4",
             Self::Svgx => "svgx",
             Self::Cws => "cws",
             Self::Fdg => "fdg",

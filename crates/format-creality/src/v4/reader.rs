@@ -1,6 +1,6 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, decode_rle7, layer_in_range, panel_in_range,
+    SlicedFileReader, layer_in_range, panel_in_range,
 };
 use core_raster::Run;
 
@@ -101,8 +101,8 @@ impl SlicedFileReader for CxdlpV4Reader {
                 bottom_layers,
                 print_time_s: Some(print_time_s),
                 volume_mm3: Some(volume_ml * 1000.0),
-                // The codec carries seven bits of grey, so a layer reads back in 128 steps.
-                grey_steps: 128,
+                // The codec carries six bits of grey, so a layer reads back in 64 steps.
+                grey_steps: 64,
                 stated: PrinterTuning::default(),
                 layers,
             },
@@ -174,7 +174,7 @@ impl<S: ReadSeek> OpenFile for OpenCxdlpV4<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let data = self.reads.bytes(entry.size as usize)?;
-        decode_rle7(&data)
+        super::rle::decode(&data)
     }
 }
 

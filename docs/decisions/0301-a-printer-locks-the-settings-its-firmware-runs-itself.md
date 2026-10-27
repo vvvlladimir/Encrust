@@ -1,6 +1,6 @@
 # 0301. A printer locks the settings its firmware runs itself
 
-- **Status:** Accepted
+- **Status:** Accepted; the lock laid over every resin is superseded by 0364
 - **Date:** 2026-10-17
 
 ## Context

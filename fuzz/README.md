@@ -30,6 +30,7 @@ Eighteen targets:
 | `sliced_photons` | `.photons`: the header, the walk over the layer records and the one-bit codec |
 | `sliced_pws` | `.pws`: the same container, its layers as one-bit passes summed into grey |
 | `sliced_sl1` | `.sl1` and `.sl1s` — a zip of PNGs, so the zip and PNG decoders with it |
+| `sliced_pwsz` | the PWSZ archive: its JSON settings and the PW0 codec of each layer |
 | `sliced_gcode_zip` | the `.zip` whose `run.gcode` is the program, parsed line by line |
 | `sliced_creality` | `.cxdlp` at versions 3 and 4: the vertical lines, the tables and RLE7 |
 | `sliced_cxline` | `.cxline`: the header, the walk over the layers, the rings and their fill |

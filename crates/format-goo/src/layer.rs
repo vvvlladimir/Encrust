@@ -34,36 +34,38 @@ fn write_definition(fields: &mut Fields<'_>, job: &PrintJob, index: u32) -> io::
     fields.f32_be(job.layer_z_mm(index))?;
     fields.f32_be(job.layer_z_mm(index))?;
     fields.f32_be(job.exposure_of_layer_s(index))?;
-    fields.f32_be(material.light_off_s())?;
+    fields.f32_be(material.light_off_of_layer_s(index))?;
     for rest_s in material.waits.rests_s() {
         fields.f32_be(rest_s)?;
     }
 
-    let (lift_distance, lift_speed) = if bottom {
-        (
+    let stage = &material.second_stage;
+    let motion = if bottom {
+        [
             material.bottom_lift_distance_mm,
             material.bottom_lift_speed_mm_min,
-        )
-    } else {
-        (material.lift_distance_mm, material.lift_speed_mm_min)
-    };
-    let (retract_distance, retract_speed) = if bottom {
-        (
+            stage.bottom_lift_distance_mm,
+            stage.bottom_lift_speed_mm_min,
             material.bottom_lift_distance_mm,
             material.bottom_retract_speed_mm_min,
-        )
+            stage.bottom_retract_distance_mm,
+            stage.bottom_retract_speed_mm_min,
+        ]
     } else {
-        (material.retract_distance_mm, material.retract_speed_mm_min)
+        [
+            material.lift_distance_mm,
+            material.lift_speed_mm_min,
+            stage.lift_distance_mm,
+            stage.lift_speed_mm_min,
+            material.retract_distance_mm,
+            material.retract_speed_mm_min,
+            stage.retract_distance_mm,
+            stage.retract_speed_mm_min,
+        ]
     };
-
-    fields.f32_be(lift_distance)?;
-    fields.f32_be(lift_speed)?;
-    fields.f32_be(0.0)?;
-    fields.f32_be(0.0)?;
-    fields.f32_be(retract_distance)?;
-    fields.f32_be(retract_speed)?;
-    fields.f32_be(0.0)?;
-    fields.f32_be(0.0)?;
+    for value in motion {
+        fields.f32_be(value)?;
+    }
 
     fields.u16_be(u16::from(if bottom {
         material.bottom_light_pwm
@@ -140,5 +142,24 @@ mod tests {
         assert_eq!(layer[size_at + 4], LAYER_MAGIC);
         assert_eq!(layer.len(), size_at + 4 + size + 2);
         assert_eq!(&layer[layer.len() - 2..], &DELIMITER);
+    }
+
+    #[test]
+    fn a_layer_states_both_stages_and_the_bottom_light_off() {
+        let mut job = sample_job(10);
+        job.material.waits.mode = printer_profiles::WaitMode::LightOff;
+        job.material.bottom_light_off_delay_s = Some(5.0);
+        job.material.second_stage.bottom_lift_distance_mm = 3.0;
+        job.material.second_stage.bottom_lift_speed_mm_min = 180.0;
+        let encoded = EncodedLayer::encode(&LayerRuns::builder(8, 4).finish());
+        let mut buffer = Cursor::new(Vec::new());
+        write(&mut Fields::new(&mut buffer), &job, 0, &encoded).expect("in-memory write");
+        let layer = buffer.into_inner();
+
+        assert!(
+            (float_at(&layer, 14) - 5.0).abs() < 1e-6,
+            "the bottom light-off"
+        );
+        assert_eq!((float_at(&layer, 38), float_at(&layer, 42)), (3.0, 180.0));
     }
 }

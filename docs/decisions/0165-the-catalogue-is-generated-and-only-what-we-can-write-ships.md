@@ -1,6 +1,6 @@
 # 0165. Generate the printer catalogue, and ship only machines we can write a file for
 
-- **Status:** Accepted; generating the catalogue is superseded by 0359
+- **Status:** Accepted; generating is superseded by 0359, the `.ctb` revision by 0365
 - **Date:** 2026-10-01
 
 ## Context

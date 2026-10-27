@@ -35,6 +35,7 @@ impl Crc32 {
     }
 
     /// This CRC followed by `next`, as if the bytes of both had been summed in order.
+    #[must_use]
     pub fn followed_by(self, next: Self) -> Self {
         Self {
             state: combine(self.state, next.state, next.length),

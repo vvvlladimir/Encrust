@@ -6,8 +6,9 @@ use serde_json::Value;
 
 use super::{ForeignResin, named};
 use crate::{
-    Compensation, MaterialProfile, PriceUnit, PrinterTuning, ProfileError, ResinDetails, SecondStage,
-    WaitMode, Waits, stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s,
+    Compensation, MaterialProfile, PriceUnit, PrinterTuning, ProfileError, ResinDetails,
+    SecondStage, WaitMode, Waits, stated_distance_mm, stated_pwm, stated_speed_mm_min,
+    stated_wait_s,
 };
 
 /// The currencies `resin.resinunit` indexes, in the order the format lists them.

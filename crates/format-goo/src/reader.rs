@@ -1,5 +1,5 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SecondStage, SlicedFile,
     SlicedFileReader, WaitMode, Waits, layer_in_range, panel_in_range, stated_distance_mm,
     stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
@@ -163,9 +163,32 @@ fn read_motion<S: ReadSeek>(reads: &mut Reads<S>) -> Result<PrinterTuning, Forma
         retract,
         retract_speed,
     ] = peel;
-    // Both second stages, which a resin has no place for.
-    reads.skip(32)?;
+    let mut second = [0.0; 8];
+    for value in &mut second {
+        *value = reads.f32_be()?;
+    }
+    let [
+        bottom_lift_distance_mm,
+        bottom_lift_speed_mm_min,
+        lift_distance_mm,
+        lift_speed_mm_min,
+        bottom_retract_distance_mm,
+        bottom_retract_speed_mm_min,
+        retract_distance_mm,
+        retract_speed_mm_min,
+    ] = second;
+    let stage = SecondStage {
+        lift_distance_mm,
+        lift_speed_mm_min,
+        retract_distance_mm,
+        retract_speed_mm_min,
+        bottom_lift_distance_mm,
+        bottom_lift_speed_mm_min,
+        bottom_retract_distance_mm,
+        bottom_retract_speed_mm_min,
+    };
     Ok(PrinterTuning {
+        second_stage: stage.is_used().then_some(stage),
         bottom_lift_distance_mm: stated_distance_mm(bottom_lift),
         bottom_lift_speed_mm_min: stated_speed_mm_min(bottom_lift_speed),
         lift_distance_mm: stated_distance_mm(lift),

@@ -1,0 +1,33 @@
+# Creality Halot X1.
+
+name = "Halot X1"
+manufacturer = "Creality"
+machine_name = "HALOT-X1"
+mirror_x = true
+mirror_y = false
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 15120
+height_px = 6230
+width_mm = 211.68
+height_mm = 118.37
+grey_floor = 0
+
+[build_volume]
+x = 211.68
+y = 118.37
+z = 200.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+wait_mode = "light-off"
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 300.0
+bottom_retract_speed_mm_min = 300.0
+retract_speed_mm_min = 300.0

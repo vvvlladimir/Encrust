@@ -60,13 +60,12 @@ pub(crate) fn write_previews(
 pub(crate) fn write_settings(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let (material, display) = (&job.material, &job.printer.display);
 
-    write_utf16(fields, &decimals(display.width_mm, 2))?;
-    write_utf16(fields, &decimals(display.height_mm, 2))?;
-    write_utf16(fields, &decimals(job.nominal_height_mm(), 3))?;
+    write_utf16(fields, &as_text(display.width_mm))?;
+    write_utf16(fields, &as_text(display.height_mm))?;
+    write_utf16(fields, &as_text(job.nominal_height_mm()))?;
 
     fields.u16_be(tenths(job.header_exposure_s()))?;
-    // One second is the floor the firmware needs: a zero here does not print.
-    fields.u16_be(seconds(material.light_off_s()).max(1))?;
+    fields.u16_be(whole_seconds(material.light_off_s()))?;
     fields.u16_be(seconds(material.bottom_exposure_s))?;
     fields.u16_be(material.bottom_layers as u16)?;
     fields.u16_be(whole_mm(material.bottom_lift_distance_mm))?;
@@ -80,28 +79,17 @@ pub(crate) fn write_settings(fields: &mut Fields<'_>, job: &PrintJob) -> io::Res
 
 /// Writes the block version 3 added: what sliced the file, the resin, and the corrections
 /// the firmware may apply. Every correction is written off, because ours are already in
-/// the masks (`docs/design/compensation.md`).
+/// the masks (`docs/design/compensation.md`); the bytes are the vendor's.
 pub(crate) fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     write_text(fields, SLICER)?;
     write_text(fields, &job.material.name)?;
 
-    // Distortion correction: off, with the thickness and focal length a vendor file
-    // carries anyway. These four are little-endian where the rest of the file is big.
-    fields.u8(0)?;
-    fields.u32_le(600)?;
-    fields.u32_le(300_000)?;
-
+    // Distortion, XY and Z compensation, each off with a zero value.
+    fields.zeros(15)?;
+    fields.u8(job.raster.anti_alias_level(8) as u8)?;
+    fields.zeros(2)?;
     fields.u8(1)?;
-    fields.u16_le(0)?;
-    fields.u8(0)?;
-    fields.u16_le(1000)?;
-
-    // The greys a layer may carry, which is all of them, and no blur of the firmware's.
-    fields.u8(1)?;
-    fields.u8(1)?;
-    fields.u8(u8::MAX)?;
-    fields.u8(0)?;
-    fields.u8(2)?;
+    fields.u8(job.raster.stated_blur_px())?;
     fields.bytes(&PAGE_BREAK)
 }
 
@@ -128,11 +116,14 @@ pub(crate) fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()
     Ok(())
 }
 
-/// A number as the text the settings block holds, to `places` decimals and no further.
-fn decimals(value: f32, places: usize) -> String {
-    let text = format!("{value:.places$}");
-    let text = text.trim_end_matches('0').trim_end_matches('.');
-    if text.is_empty() { "0" } else { text }.to_owned()
+/// A number as the vendor writer puts it, six decimals of the single-precision value.
+pub(crate) fn as_text(value: f32) -> String {
+    format!("{:.6}", f64::from(value))
+}
+
+/// A wait as the vendor writer states it, in whole seconds with the fraction dropped.
+pub(crate) fn whole_seconds(value: f32) -> u16 {
+    value.floor().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
 pub(crate) fn tenths(seconds: f32) -> u16 {
@@ -197,7 +188,7 @@ mod tests {
         let mut job = sample_job(4);
         job.material.exposure_s = 2.6;
         job.material.bottom_exposure_s = 32.0;
-        job.material.light_off_delay_s = 0.0;
+        job.material.light_off_delay_s = 0.9;
         let bytes = written(|fields| write_settings(fields, &job));
 
         // Behind the three text fields: exposure, the wait, then the bottom exposure.
@@ -205,8 +196,8 @@ mod tests {
         assert_eq!(u16::from_be_bytes([numbers[0], numbers[1]]), 26);
         assert_eq!(
             u16::from_be_bytes([numbers[2], numbers[3]]),
-            1,
-            "a resin with no light-off delay still gets the one second it needs"
+            0,
+            "the vendor drops the fraction of a wait"
         );
         assert_eq!(u16::from_be_bytes([numbers[4], numbers[5]]), 32);
     }
@@ -219,9 +210,21 @@ mod tests {
     }
 
     #[test]
-    fn a_number_is_written_as_text_without_trailing_zeros() {
-        assert_eq!(decimals(192.0, 2), "192");
-        assert_eq!(decimals(120.32, 2), "120.32");
-        assert_eq!(decimals(0.05, 3), "0.05");
+    fn a_number_is_written_as_text_to_six_decimals() {
+        assert_eq!(as_text(81.0), "81.000000");
+        assert_eq!(as_text(0.05), "0.050000");
+    }
+
+    #[test]
+    fn the_corrections_are_the_vendors_bytes_with_anti_aliasing_off() {
+        let mut job = sample_job(1);
+        job.raster.shading = core_raster::Shading::Binary;
+        let bytes = written(|fields| write_slicer_info(fields, &job));
+        assert_eq!(
+            &bytes[bytes.len() - 22..],
+            &[
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 1, 2, 0x0D, 0x0A
+            ]
+        );
     }
 }

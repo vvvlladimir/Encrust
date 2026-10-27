@@ -55,6 +55,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "sliced_pwsz"
+path = "fuzz_targets/sliced_pwsz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "sliced_cxline"
 path = "fuzz_targets/sliced_cxline.rs"
 test = false

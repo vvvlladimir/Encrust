@@ -42,7 +42,7 @@ pub use printer_profiles::exposure_for_mm;
 // What a reader finds of the resin in a file is the resin's own tuning table, so a format
 // crate states it in those types, through the bounds every importer of a resin shares.
 pub use printer_profiles::{
-    PrinterTuning, WaitMode, Waits, stated_distance_mm, stated_pwm, stated_rests,
+    PrinterTuning, SecondStage, WaitMode, Waits, stated_distance_mm, stated_pwm, stated_rests,
     stated_speed_mm_min, stated_wait_s,
 };
 

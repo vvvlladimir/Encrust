@@ -187,7 +187,10 @@ fn a_resins_table_for_the_machine_overrides_its_lock_and_another_machines_does_n
     let here = resin.starting_point("ceres").on(&profile);
     assert_eq!(here.transition_layers, 0, "the table for this machine wins");
     let fresh = resin.starting_point("new-machine").on(&profile);
-    assert_eq!(fresh.transition_layers, 8, "another machine's table is no statement here");
+    assert_eq!(
+        fresh.transition_layers, 8,
+        "another machine's table is no statement here"
+    );
     assert_eq!(MaterialProfile::default().on(&profile).transition_layers, 8);
 }
 

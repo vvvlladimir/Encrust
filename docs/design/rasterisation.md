@@ -13,9 +13,9 @@ x_px = x_mm / pitch.x
 y_px = y_mm / pitch.y
 ```
 
-Row `0` is the near edge of the plate, because that is the first row a sliced file carries
-(ADR 0134); Y is not inverted. A file asks for no mirroring at all — the profile's flags
-describe the panel's mounting and reach the header only — while the app asks for `mirror_y`
+Row `0` is the near edge of the plate (ADR 0134); Y is not inverted. A file for a machine
+without `mirror_x`, and every `.photons`, asks for `mirror_y` so its rows start at the far
+edge (ADR 0366); the profile's flags otherwise reach the header only — while the app asks for `mirror_y`
 to draw the plate's far edge at the top of the screen (ADR 0134). A mirror is applied here
 rather than in the geometry, so the mesh displayed and the mesh sliced stay one object, and
 it reverses every contour's orientation, so the rasteriser reverses a ring as it maps it

@@ -102,7 +102,9 @@ fn the_cipher_undoes_itself_and_zero_leaves_the_bytes_alone() {
 #[test]
 fn a_written_file_reads_back() {
     let bytes = written(3);
-    let mut open = FdgReader.open(Cursor::new(bytes)).expect("an .fdg we wrote");
+    let mut open = FdgReader
+        .open(Cursor::new(bytes))
+        .expect("an .fdg we wrote");
     let facts = open.facts();
     assert_eq!(facts.layer_count(), 3);
     assert_eq!((facts.width_px, facts.height_px), (8, 4));
@@ -119,19 +121,11 @@ fn a_written_file_reads_back() {
 }
 
 #[test]
-fn a_file_with_its_layers_covered_by_a_key_reads_back() {
-    let mut bytes = written(2);
-    let key = 0x00C0_FFEE_u32;
-    bytes[0x5C..0x60].copy_from_slice(&key.to_le_bytes());
-    let mut open = FdgReader
-        .open(Cursor::new(bytes.clone()))
-        .expect("the header");
-    for index in 0..2 {
-        let entry = open.facts().layers[index as usize];
-        let at = entry.offset as usize;
-        rle::crypt(key, index, &mut bytes[at..at + entry.size as usize]);
-    }
-    open = FdgReader.open(Cursor::new(bytes)).expect("the header");
+fn a_written_file_covers_its_layers_with_a_key_and_reads_back() {
+    let bytes = written(2);
+    let key = u32::from_le_bytes([bytes[0x5C], bytes[0x5D], bytes[0x5E], bytes[0x5F]]);
+    assert_ne!(key, 0, "the vendor never writes a zero key");
+    let mut open = FdgReader.open(Cursor::new(bytes)).expect("the header");
     let lit: u32 = open
         .layer(1)
         .expect("a covered layer")
@@ -145,9 +139,14 @@ fn a_file_with_its_layers_covered_by_a_key_reads_back() {
 #[test]
 fn the_header_counts_the_heights_and_names_its_blocks() {
     let bytes = written(3);
-    let word = |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+    let word =
+        |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
     assert_eq!(word(0), 0xBD3C_7AC8);
-    assert_eq!(word(0x2C), HEADER_BYTES as u32, "the large preview follows the header");
+    assert_eq!(
+        word(0x2C),
+        HEADER_BYTES as u32,
+        "the large preview follows the header"
+    );
     assert_eq!((word(0xCC), word(0xD0)), (0xD8, 0x50));
     assert_eq!(word(0x10C), 3, "three layers at three heights");
 }
@@ -212,7 +211,8 @@ fn a_layer_count_other_than_promised_is_refused() {
     let mut sink = FdgWriter
         .begin(&sample_job(1), &mut buffer)
         .expect("the job is sound");
-    sink.push(FdgSink::encode(&block())).expect("the first layer");
+    sink.push(FdgSink::encode(&block()))
+        .expect("the first layer");
     let err = sink.push(FdgSink::encode(&block())).unwrap_err();
     assert!(matches!(
         err,
@@ -244,5 +244,33 @@ fn a_layer_of_the_wrong_size_is_refused() {
     let err = sink
         .push(FdgLayer::encode(&LayerRuns::builder(4, 4).finish()))
         .unwrap_err();
-    assert!(matches!(err, FormatError::ResolutionMismatch { index: 0, .. }));
+    assert!(matches!(
+        err,
+        FormatError::ResolutionMismatch { index: 0, .. }
+    ));
+}
+
+#[test]
+fn the_header_states_the_bottom_light_off_and_no_height() {
+    let mut job = sample_job(3);
+    job.material.waits.mode = printer_profiles::WaitMode::LightOff;
+    job.material.light_off_delay_s = 0.5;
+    job.material.bottom_light_off_delay_s = Some(5.0);
+    let mut file = Cursor::new(Vec::new());
+    {
+        let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
+        for _ in 0..3 {
+            sink.push(FdgSink::encode(&block())).expect("a layer");
+        }
+        sink.finish(1500.0).expect("every promised layer arrived");
+    }
+    let bytes = file.into_inner();
+    let f32_at =
+        |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+    assert_eq!(f32_at(0x4C), 0.0, "the vendor leaves the height zero");
+    assert_eq!(
+        (f32_at(0x7C), f32_at(0x80)),
+        (5.0, 0.5),
+        "bottom, then normal light off"
+    );
 }

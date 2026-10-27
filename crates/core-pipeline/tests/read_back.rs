@@ -145,9 +145,9 @@ fn written_for(job: &PrintJob) -> Vec<(&'static str, Vec<u8>, u16)> {
         ),
         ("cxdlp", write_job(&format_creality::CxdlpWriter, job), 256),
         (
-            "cxdlp",
+            "cxdlpv4",
             write_job(&format_creality::CxdlpV4Writer, job),
-            128,
+            64,
         ),
         ("cws", write_job(&format_cws::CwsWriter, job), 256),
     ]

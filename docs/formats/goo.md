@@ -84,8 +84,8 @@ profile locks (ADR 0301): a file stating 6 mm made the plate rise again after th
 
 ### Mirroring
 
-Row zero of a layer is the near edge of the plate, as a vendor file carries it: a mask is the
-plate seen from above, not the panel (ADR 0134).
+Row zero of a layer is the near edge of the plate on an X-mirrored machine and its far edge
+on any other, which is how the vendor's files print the right way round (ADR 0134, 0366).
 
 The mirror flags say how the panel is mounted, and come from `PrinterProfile::mirror_x` and
 `mirror_y` rather than from the mask, which carries no mirroring. Readers take them to
@@ -101,7 +101,7 @@ Each layer is a 66-byte definition, then its data:
 | 2 | pause position Z, `f32`, the layer's own Z so a pause leaves the plate where it stands |
 | 6 | layer position Z, `f32`, the **top** of the layer |
 | 10 | layer exposure time, `f32` |
-| 14 | layer off time, `f32` |
+| 14 | layer off time, `f32`: the bottom light-off on a bottom layer |
 | 18 | before lift, after lift, after retract, `f32` each |
 | 30 | lift distance and speed, `f32` each |
 | 38 | second-stage lift distance and speed, `f32` each |

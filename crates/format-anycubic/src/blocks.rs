@@ -58,34 +58,62 @@ pub(crate) fn write_colour_table(fields: &mut Fields<'_>) -> io::Result<()> {
     fields.zeros(COLOUR_TABLE_BYTES as usize)
 }
 
-/// Writes the two-stage motion block. The slicer plans one stage, so the second climbs
-/// nothing at no speed and retracts at the first's; see docs/formats/anycubic.md.
+/// Writes the two-stage motion block, the bottom layers' then the rest's. Without a second
+/// stage the second climbs nothing and retracts at the first's speed; see docs/formats/anycubic.md.
 pub(crate) fn write_extra(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
-    let material = &job.material;
+    let (material, stage) = (&job.material, &job.material.second_stage);
+    let used = stage.is_used();
     write_table_head(fields, "EXTRA", EXTRA_STATED_BYTES)?;
     write_stages(
         fields,
-        material.bottom_lift_distance_mm,
-        material.bottom_lift_speed_mm_min / 60.0,
-        material.bottom_retract_speed_mm_min / 60.0,
+        [
+            material.bottom_lift_distance_mm,
+            material.bottom_lift_speed_mm_min,
+        ],
+        [
+            stage.bottom_lift_distance_mm,
+            stage.bottom_lift_speed_mm_min,
+        ],
+        [
+            stage.bottom_retract_speed_mm_min,
+            material.bottom_retract_speed_mm_min,
+        ],
+        used,
     )?;
     write_stages(
         fields,
-        material.lift_distance_mm,
-        material.lift_speed_mm_min / 60.0,
-        material.retract_speed_mm_min / 60.0,
+        [material.lift_distance_mm, material.lift_speed_mm_min],
+        [stage.lift_distance_mm, stage.lift_speed_mm_min],
+        [stage.retract_speed_mm_min, material.retract_speed_mm_min],
+        used,
     )
 }
 
-/// Two stages of one lift: a count, then height, speed up and speed down for each.
+/// Two stages of one lift: a count, then height, speed up and speed down for each, in mm and
+/// mm/s. The vendor pairs the first lift with the second retract, the order the bed moves in.
 fn write_stages(
     fields: &mut Fields<'_>,
-    height_mm: f32,
-    up_mm_s: f32,
-    down_mm_s: f32,
+    [first_mm, first_up_mm_min]: [f32; 2],
+    [second_mm, second_up_mm_min]: [f32; 2],
+    [second_down_mm_min, first_down_mm_min]: [f32; 2],
+    used: bool,
 ) -> io::Result<()> {
+    let per_s = |mm_min: f32| mm_min / 60.0;
+    let stages = if used {
+        [
+            first_mm,
+            per_s(first_up_mm_min),
+            per_s(second_down_mm_min),
+            second_mm,
+            per_s(second_up_mm_min),
+            per_s(first_down_mm_min),
+        ]
+    } else {
+        let down = per_s(first_down_mm_min);
+        [first_mm, per_s(first_up_mm_min), down, 0.0, 0.0, down]
+    };
     fields.u32_le(2)?;
-    for value in [height_mm, up_mm_s, down_mm_s, 0.0, 0.0, down_mm_s] {
+    for value in stages {
         fields.f32_le(value)?;
     }
     Ok(())

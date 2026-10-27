@@ -130,7 +130,9 @@ impl Catalogue {
             self.resins().any(|entry| entry.profile.name == name)
         });
         if let Some(printer) = printer {
-            let locked = self.printer(printer).map(|entry| entry.profile.locked.clone());
+            let locked = self
+                .printer(printer)
+                .map(|entry| entry.profile.locked.clone());
             set_up_on(&mut resin, printer, &locked.unwrap_or_default());
         }
         let id = own_id(&resin.name, |id| self.is_taken(Kind::Resin, id))?;

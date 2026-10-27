@@ -1,7 +1,6 @@
 use std::io;
 
 use core_format::{Fields, PrintJob, Rgb, rgb565};
-use core_raster::RasterSettings;
 
 use crate::blocks::{
     self, COLOUR_TABLE_BYTES, EXTRA_BYTES, MACHINE_BYTES, MODEL_BYTES, SOFTWARE_BYTES,
@@ -183,7 +182,7 @@ pub(crate) fn write_header(fields: &mut Fields<'_>, job: &PrintJob) -> io::Resul
     // Transition layer type: zero is the linear ramp, which is what the exposure plan
     // already carries layer by layer.
     fields.u32_le(0)?;
-    write_header_tail(fields, raster)
+    write_header_tail(fields, job)
 }
 
 /// The resin type the vendor's slicer states for every resin.
@@ -197,26 +196,29 @@ fn header_pixel_um(job: &PrintJob) -> f32 {
         .max((pitch_y_mm * 1000.0).round())
 }
 
-/// The fields behind the transition type: advanced mode off, as the slicer plans one lift
-/// stage; the grey level, which repeats the anti-alias level; the edge blur in pixels; the
+/// The fields behind the transition type: advanced mode, on when the resin peels in two
+/// stages; the grey level, which repeats the anti-alias level; the edge blur in pixels; the
 /// resin type; and intelligent mode off, so the machine keeps the exposure it is given.
-fn write_header_tail(fields: &mut Fields<'_>, raster: &RasterSettings) -> io::Result<()> {
-    fields.u32_le(0)?;
+fn write_header_tail(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    let raster = &job.raster;
+    fields.u32_le(u32::from(job.material.second_stage.is_used()))?;
     fields.u16_le(raster.anti_alias_level(GREY_STEPS))?;
-    fields.u16_le(u16::from(raster.blur_px))?;
+    fields.u16_le(u16::from(raster.stated_blur_px()))?;
     fields.u32_le(RESIN_TYPE)?;
     fields.u32_le(0)
 }
 
-/// Writes the currency of the price beside it.
-///
-/// The four-byte field holds one UTF-16 code unit and then padding, not a string: a `$` is
-/// `24 00 00 00`. A resin with no currency leaves it blank.
+/// Writes the currency of the price beside it: its first four bytes of UTF-8, as the vendor
+/// writes them, cut at a character and nul-padded. A `$` is `24 00 00 00`.
 fn write_currency(fields: &mut Fields<'_>, currency: &str) -> io::Result<()> {
-    let unit = currency.encode_utf16().next().unwrap_or(0);
-    fields.u16_le(unit)?;
-    fields.zeros(2)
+    let mut end = currency.len().min(CURRENCY_BYTES);
+    while !currency.is_char_boundary(end) {
+        end -= 1;
+    }
+    fields.text(&currency[..end], CURRENCY_BYTES)
 }
+
+const CURRENCY_BYTES: usize = 4;
 
 /// Writes the preview table: the job's thumbnail as raw five-six-five colour.
 fn write_preview(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
@@ -255,7 +257,8 @@ pub(crate) struct LayerDef {
     pub data_address: u32,
     pub data_size: u32,
     pub lift_distance_mm: f32,
-    pub lift_speed_mm_s: f32,
+    /// Millimetres a minute here, where the header states a second, as the vendor writes it.
+    pub lift_speed_mm_min: f32,
     pub exposure_s: f32,
     /// This layer's own thickness, not its height above the plate.
     pub layer_height_mm: f32,
@@ -267,7 +270,7 @@ impl LayerDef {
         fields.u32_le(self.data_address)?;
         fields.u32_le(self.data_size)?;
         fields.f32_le(self.lift_distance_mm)?;
-        fields.f32_le(self.lift_speed_mm_s)?;
+        fields.f32_le(self.lift_speed_mm_min)?;
         fields.f32_le(self.exposure_s)?;
         fields.f32_le(self.layer_height_mm)?;
         fields.u32_le(self.lit_pixels)?;
@@ -286,6 +289,22 @@ impl LayerDef {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_currency_is_its_first_four_bytes_of_utf8() {
+        let written = |currency: &str| {
+            let mut buffer = std::io::Cursor::new(Vec::new());
+            write_currency(&mut Fields::new(&mut buffer), currency).expect("in memory");
+            buffer.into_inner()
+        };
+        assert_eq!(written("$"), [0x24, 0, 0, 0]);
+        assert_eq!(written("\u{20AC}"), [0xE2, 0x82, 0xAC, 0]);
+        assert_eq!(
+            written("CHF\u{20AC}"),
+            [b'C', b'H', b'F', 0],
+            "a character is never split"
+        );
+    }
 
     #[test]
     fn every_block_sits_behind_the_one_before_it() {

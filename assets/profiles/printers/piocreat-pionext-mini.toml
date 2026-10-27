@@ -1,0 +1,33 @@
+# PIOCREAT PioNext Mini.
+
+name = "PioNext Mini"
+manufacturer = "PIOCREAT"
+machine_name = "PioNext Mini"
+mirror_x = true
+mirror_y = false
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 4448
+height_px = 3890
+width_mm = 80.0
+height_mm = 70.0
+grey_floor = 0
+
+[build_volume]
+x = 80.0
+y = 70.0
+z = 80.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+wait_mode = "light-off"
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 300.0
+bottom_retract_speed_mm_min = 300.0
+retract_speed_mm_min = 300.0

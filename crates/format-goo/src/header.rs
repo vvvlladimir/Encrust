@@ -130,9 +130,18 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     fields.f32_be(material.bottom_retract_speed_mm_min)?;
     fields.f32_be(material.retract_distance_mm)?;
     fields.f32_be(material.retract_speed_mm_min)?;
-    // Both second stages are unused: eight zeroed distances and speeds.
-    for _ in 0..8 {
-        fields.f32_be(0.0)?;
+    let stage = &material.second_stage;
+    for value in [
+        stage.bottom_lift_distance_mm,
+        stage.bottom_lift_speed_mm_min,
+        stage.lift_distance_mm,
+        stage.lift_speed_mm_min,
+        stage.bottom_retract_distance_mm,
+        stage.bottom_retract_speed_mm_min,
+        stage.retract_distance_mm,
+        stage.retract_speed_mm_min,
+    ] {
+        fields.f32_be(value)?;
     }
     fields.u16_be(u16::from(material.bottom_light_pwm))?;
     fields.u16_be(u16::from(material.light_pwm))?;

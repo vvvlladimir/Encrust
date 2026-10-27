@@ -1,6 +1,6 @@
 # 0361. Write the PWSZ archive in `format-anycubic`, its layers in PW0
 
-- **Status:** Accepted
+- **Status:** Accepted; the `core-analysis` dependency and the scene's extents are superseded by 0367
 - **Date:** 2026-10-27
 
 ## Context

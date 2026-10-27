@@ -13,6 +13,9 @@ const PREVIEWS: [(u32, u32, Rgb); 2] = [(224, 168, [2, 72, 100]), (336, 252, [20
 /// Which resin the settings name: the code the vendor gives its standard resin.
 const STANDARD_RESIN_CODE: &str = "10";
 
+/// The name the vendor gives the one resin a file prints with, whatever it is called.
+const USER_RESIN: &str = "user_resin";
+
 /// The previews, smallest first, cut from the job's thumbnail.
 pub(crate) fn previews(job: &PrintJob) -> Result<Vec<Vec<u8>>, FormatError> {
     PREVIEWS
@@ -147,32 +150,40 @@ fn template_suffix(flavour: PwszFlavour) -> &'static str {
     }
 }
 
-/// The job's resin, named the way the vendor's settings name a user's own.
+/// The job's resin, named the way the vendor's settings name the one a file prints with.
 fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
-    let material = &job.material;
-    let resin_name = material.name.replace('@', " ");
-    let (normal_0, normal_1) = stages(
-        material.lift_distance_mm,
-        material.lift_speed_mm_min,
-        material.retract_speed_mm_min,
+    let (material, stage) = (&job.material, &job.material.second_stage);
+    let used = stage.is_used();
+    let [normal_0, normal_1] = stages(
+        [material.lift_distance_mm, material.lift_speed_mm_min],
+        [stage.lift_distance_mm, stage.lift_speed_mm_min],
+        [stage.retract_speed_mm_min, material.retract_speed_mm_min],
+        used,
     );
-    let (bott_0, bott_1) = stages(
-        material.bottom_lift_distance_mm,
-        material.bottom_lift_speed_mm_min,
-        material.bottom_retract_speed_mm_min,
+    let [bott_0, bott_1] = stages(
+        [
+            material.bottom_lift_distance_mm,
+            material.bottom_lift_speed_mm_min,
+        ],
+        [
+            stage.bottom_lift_distance_mm,
+            stage.bottom_lift_speed_mm_min,
+        ],
+        [
+            stage.bottom_retract_speed_mm_min,
+            material.bottom_retract_speed_mm_min,
+        ],
+        used,
     );
+    let zdown_speed = normal_0["down_speed"].clone();
     json!({
         "depth_penetration_curve": penetration_constants(),
         "property": {
-            "brand_name": "User",
             "code": STANDARD_RESIN_CODE,
             "currency": material.details.currency,
             "density": material.density_g_cm3,
-            "film_name": "ACF",
-            "name": format!("User@{resin_name}@ACF@normal_print"),
+            "name": USER_RESIN,
             "price": material.details.price,
-            "resin_name": resin_name,
-            "setting_name": "normal_print",
             "subfunc_code": 0,
             "target_temperature": 25,
             "type": "nor_resin_type",
@@ -195,39 +206,54 @@ fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
             "transition_type": 0,
             "version": "3",
         },
-        "slicepara": slice_parameters(job, flavour),
+        "slicepara": slice_parameters(job, flavour, &zdown_speed),
         "version": "2",
     })
 }
 
-/// One lift as the two stages the vendor's slicer always states: the first climbs it, the
-/// second climbs nothing; each comes down at the retract speed, in mm/s.
-fn stages(height_mm: f32, up_mm_min: f32, down_mm_min: f32) -> (Value, Value) {
-    let (up, down) = (up_mm_min / 60.0, down_mm_min / 60.0);
-    (
-        json!({ "height": height_mm, "up_speed": up, "down_speed": down }),
-        // The speed up stays the first stage's: a firmware estimating time divides by it.
-        json!({ "height": 0.0, "up_speed": up, "down_speed": down }),
-    )
+/// One lift as the two stages the vendor's slicer always states, in mm and mm/s: the first
+/// lift with the second retract, then the second lift with the first, as `EXTRA` lays them.
+/// Without a second stage it climbs nothing at the first's speeds, which a firmware
+/// estimating time divides by.
+fn stages(
+    [first_mm, first_up_mm_min]: [f32; 2],
+    [second_mm, second_up_mm_min]: [f32; 2],
+    [second_down_mm_min, first_down_mm_min]: [f32; 2],
+    used: bool,
+) -> [Value; 2] {
+    let per_s = |mm_min: f32| mm_min / 60.0;
+    let stage = |height: f32, up: f32, down: f32| json!({ "height": height, "up_speed": per_s(up), "down_speed": per_s(down) });
+    if used {
+        [
+            stage(first_mm, first_up_mm_min, second_down_mm_min),
+            stage(second_mm, second_up_mm_min, first_down_mm_min),
+        ]
+    } else {
+        [
+            stage(first_mm, first_up_mm_min, first_down_mm_min),
+            stage(0.0, first_up_mm_min, first_down_mm_min),
+        ]
+    }
 }
 
 /// The resin's single-stage settings, which the firmware prints by where a layer does
 /// not state its own.
-fn slice_parameters(job: &PrintJob, flavour: PwszFlavour) -> Value {
+fn slice_parameters(job: &PrintJob, flavour: PwszFlavour, zdown_speed: &Value) -> Value {
     let material = &job.material;
     let mut parameters = json!({
         "anti_count": job.raster.anti_alias_level(GREY_STEPS),
-        "blur_level": job.raster.blur_px,
+        "blur_level": job.raster.stated_blur_px(),
         "bott_layers": material.bottom_layers,
-        "bott_off_time": material.light_off_s(),
+        "bott_off_time": material.bottom_light_off_s(),
         "bott_time": material.bottom_exposure_s,
         "exposure_time": material.exposure_s,
         // The vendor's slicer states the edge blur here as well.
-        "gray_level": job.raster.blur_px,
+        "gray_level": job.raster.stated_blur_px(),
         "off_time": material.light_off_s(),
         "use_indivi_layerpara": u32::from(job.varies_by_layer()),
         "use_random_erode": 0,
-        "zdown_speed": material.retract_speed_mm_min / 60.0,
+        // The speed of the first stage's way down, as the vendor states it.
+        "zdown_speed": zdown_speed.clone(),
         "zthick": job.nominal_height_mm(),
         "zup_height": material.lift_distance_mm,
         "zup_speed": material.lift_speed_mm_min / 60.0,

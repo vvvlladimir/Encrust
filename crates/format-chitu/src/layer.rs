@@ -91,7 +91,15 @@ pub(crate) fn write_extended(
 
     def.write(fields, LAYER_DEF_EX_BYTES)?;
     fields.u32_le(LAYER_DEF_EX_BYTES + def.data_size + LAYER_TAIL_BYTES)?;
-    for value in [lift, lift_speed, lift_2, lift_speed_2, retract_speed, retract_2, retract_speed_2] {
+    for value in [
+        lift,
+        lift_speed,
+        lift_2,
+        lift_speed_2,
+        retract_speed,
+        retract_2,
+        retract_speed_2,
+    ] {
         fields.f32_le(value)?;
     }
     for rest_s in material.waits.rests_s() {

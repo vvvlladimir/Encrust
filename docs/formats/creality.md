@@ -1,8 +1,8 @@
 # The Creality `.cxdlp`
 
-What the Halot line reads: one extension, two containers. Version 3 holds a layer as a list
-of vertical lines and is big-endian throughout; version 4 holds it as the seven-bit
-run-length runs of the Chitu family and is little-endian behind its magic. Twelve machines
+What the Halot line reads: two containers, `.cxdlp` and `.cxdlpv4`. Version 3 holds a layer as
+a list of vertical lines and is big-endian throughout; version 4 holds it as six-bit runs along
+each row and is little-endian behind its magic. Twelve machines
 in the shipped catalogue carry `output = "cxdlp3"` and two `output = "cxdlp4"`.
 
 Both are headed by `CXSW3DV2\0` and end with a checksum, which is the only thing they have
@@ -17,12 +17,13 @@ in common; the field behind the magic is what a reader picks on (ADR 0168).
 
 Three things worth stating before the tables:
 
-1. **The model code is matched by the firmware.** The header carries `CL-60`, `CL-89L`,
-   `CT-005` and the like, picked out of the machine's name; a profile whose name holds no
-   `CL` or `CT` code is refused rather than guessed at.
+1. **The model code is matched by the firmware.** The header carries `CL-60`, `R012` and the
+   like: the vendor slicer's own code for a machine name it knows (`HALOT-X1 Max` is `R012`),
+   else a `CL` or `CT` code picked out of the name; a profile with neither is refused rather
+   than guessed at.
 2. **An exposure is in tenths of a second in version 3** while the bottom exposure beside
-   it is in whole seconds, and the wait before cure has a floor of one second: a zero there
-   does not print.
+   it is in whole seconds, and the wait before cure is whole seconds with the fraction
+   dropped, as the vendor writes it.
 3. **The area fields** state what a layer cures in square millimetres times a thousand. A
    vendor slicer writes the largest island; we write everything the layer lights, because a
    writer of ours is handed runs and not contours. Nothing in the firmware is known to read
@@ -42,11 +43,11 @@ Everything is big-endian unless a field says otherwise.
 | — | u16, u16 | panel width and height, pixels |
 | — | 64 bytes | zero |
 | — | — | three previews: 116×116, 290×290, 290×290, raw big-endian RGB565, each closed by `0D 0A` |
-| — | u32 + UTF-16BE | panel width in millimetres, as text |
-| — | u32 + UTF-16BE | panel height in millimetres, as text |
-| — | u32 + UTF-16BE | layer height in millimetres, as text |
+| — | u32 + UTF-16BE | panel width in millimetres, as text to six decimals |
+| — | u32 + UTF-16BE | panel height in millimetres, the same |
+| — | u32 + UTF-16BE | layer height in millimetres, the same |
 | — | u16 | exposure, tenths of a second |
-| — | u16 | wait before cure, seconds, at least 1 |
+| — | u16 | wait before cure, whole seconds |
 | — | u16 | bottom exposure, seconds |
 | — | u16 | bottom layer count |
 | — | u16 ×5 | bottom lift mm, bottom lift mm/s, lift mm, lift mm/s, retract mm/s |
@@ -58,10 +59,10 @@ Everything is big-endian unless a field says otherwise.
 | — | u32 | checksum |
 
 The speeds are millimetres a second where our profiles hold millimetres a minute. The
-corrections in the version 3 block — distortion, XY and Z compensation, the grey range and
-the firmware's own blur — are all written off: ours are already in the masks, see
-`docs/design/compensation.md`. Those four fields are little-endian where the rest of the
-file is big, which is the container's own inconsistency and not a mistake of ours.
+corrections in the version 3 block — distortion, XY and Z compensation, each a flag and a
+little-endian value — are written off, ours being in the masks
+(`docs/design/compensation.md`). Five bytes follow: the anti-alias level (4 with it off),
+0, 0, 1 and the blur (2 with none), the vendor's bytes.
 
 ### A layer
 
@@ -85,7 +86,8 @@ own runs, which is why this is the one codec that expands a mask to pixels first
 ## Version 4
 
 The same magic and revision field, then the tables of the `.ctb` family, little-endian.
-`docs/formats/chitu.md` describes the two blocks and the layer codec; what differs:
+`docs/formats/chitu.md` describes the two blocks; what differs, checked against the vendor's
+file for the HALOT X1 Max:
 
 | Offset | Type | Field |
 |---|---|---|
@@ -95,20 +97,27 @@ The same magic and revision field, then the tables of the `.ctb` family, little-
 | — | f32 ×3 | build volume x, y, z, millimetres |
 | — | f32, f32 | print height, layer height |
 | — | u32 | bottom layer count |
-| — | u32 ×6 | small preview, layer table, layer count, large preview, print time, projector type |
+| — | u32 ×6 | small preview, layer table, layer count, large preview, print time, projector type (0, as the vendor writes it on a mirrored panel too) |
 | — | u32, u32 | print parameters offset and its size, 68 |
-| — | u32 | grey passes, always 1 |
+| — | u32 | anti-alias level, 4 with it off, as the vendor writes it |
 | — | u16, u16 | light PWM, bottom light PWM |
-| — | u32 | encryption key, always 0 |
+| — | u32 | encryption key, 0, as the vendor writes it here |
 | — | u32, u32 | slicer block offset and its size, 76 |
 
 The previews are the Chitu family's run-length RGB15 records at 120×120 and 300×300,
 smallest first. The print parameters and the slicer block are the `.ctb` blocks of the same
 names at 68 and 76 bytes. A row of the layer table is 40 bytes — Z, exposure, light-off,
-address, size, data type, centroid distance, largest area, two reserved words — and the
-address points at a 44-byte motion block whose eleven floats carry this layer's own lift,
+address, size, data type 0, centroid distance, the area the layer cures in whole mm², two
+reserved words — and the address points at a 44-byte motion block whose eleven floats carry this layer's own lift,
 retract and rests, with the run-length data behind it. **The size field counts that block
 and the data together**, which is the opposite of the `.ctb` convention.
+
+### A version 4 layer
+
+Runs along each row, restarting at every row. A run opens with `0x80 | g`, `g` its grey in six
+bits (`0x3F` fully lit, read back as `g << 2 | g >> 4`), then its length less one in seven-bit
+groups, most significant first; a run of one pixel has no group. A dark row of the X1 Max's
+15120 pixels is `80 76 0F`.
 
 A file ends with the same four-byte checksum.
 

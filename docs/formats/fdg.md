@@ -42,12 +42,12 @@ Offsets hexadecimal. Words are little-endian.
 | 0x3C | `u32` | 1, a constant of the vendor writer |
 | 0x40 | bottom light PWM, light PWM, `u16` each | the reverse of `.ctb`'s order |
 | 0x44 | two words | zero, as `.ctb`'s two at 0x14 |
-| 0x4C | total height, `f32` | mm |
+| 0x4C | total height, `f32` | 0, as the vendor writes it |
 | 0x50 | bed X, Y, Z, `f32` each | `PrinterProfile::build_volume` |
-| 0x5C | encryption key, `u32` | 0: the layers in the clear, as for `.ctb` (ADR 0046) |
+| 0x5C | encryption key, `u32` | never zero, as for `.ctb` (ADR 0365) |
 | 0x60 | anti-alias level, `u32` | the level the edges were drawn with, at most 16; the layers stay lit or unlit |
 | 0x64 | `u32` | `0x44`, a constant of the vendor writer |
-| 0x68 | volume ml, weight g, cost, `f32` each | cost zero |
+| 0x68 | volume ml, weight g, cost, `f32` each | cost zero without a resin price |
 | 0x74 | machine name address, length, `u32` each | |
 | 0x7C | bottom light-off delay, light-off delay, `f32` each | |
 | 0x84 | `u32` | zero |
@@ -86,7 +86,7 @@ With a key other than zero, each layer's bytes are covered word by word: with
 `step = (key + 0xE234893D) ^ 0x257E2431` and
 `word = step · ((layer index ^ 0x110BDACD) · 0x82391EFD)`, each little-endian four bytes are
 XORed with `word`, then `word += step`; all arithmetic wraps at 32 bits, and a short last
-chunk takes the low bytes. We write key zero and read either.
+chunk takes the low bytes. We write the key `.ctb` does and read any.
 
 ## What we do not write
 

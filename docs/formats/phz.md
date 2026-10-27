@@ -21,17 +21,17 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 | 0x2C | small preview address, `u32` | |
 | 0x30 | print time, `u32` | seconds |
 | 0x34 | projector type, `u32` | 1 when either mirror flag is set, as in `.ctb` |
-| 0x38 | anti-alias level, `u32` | as `.fdg`'s at 0x60 |
+| 0x38 | bilevel passes, `u32` | 1, as the vendor writes it; the level is at 0xB8 |
 | 0x3C | light PWM, bottom light PWM, `u16` each | |
 | 0x40 | two words | zero, as `.ctb`'s two at 0x14 |
-| 0x48 | total height, `f32` | mm |
+| 0x48 | total height, `f32` | 0, as the vendor writes it |
 | 0x4C | bed X, Y, Z, `f32` each | `PrinterProfile::build_volume` |
-| 0x58 | encryption key, `u32` | 0: the layers in the clear (ADR 0046) |
+| 0x58 | encryption key, `u32` | never zero, as for `.ctb` (ADR 0365) |
 | 0x5C | bottom light-off delay, light-off delay, `f32` each | |
 | 0x64 | bottom layers again, `u32` | |
 | 0x68 | `u32` | zero |
 | 0x6C | bottom lift, bottom lift speed, lift, lift speed, retract speed, `f32` each | mm, mm/min; a lift is both stages summed |
-| 0x80 | volume ml, weight g, cost, `f32` each | cost zero |
+| 0x80 | volume ml, weight g, cost, `f32` each | cost zero without a resin price |
 | 0x8C | `u32` | zero, a word of the second stage |
 | 0x90 | machine name address, length, `u32` each | |
 | 0x98 | the second lift and retract stage, six words | zero |
@@ -46,7 +46,7 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 As `.fdg`'s, word by word over each layer's bytes, with other seeds:
 `step = (key mod 0x4324) · 0x34A32231` and
 `word = step · ((layer index ^ 0x3FAD2212) · 0x1E1530CD)`, then `word += step` for each next
-four bytes. We write key zero and read either.
+four bytes. We write the key `.ctb` does and read any.
 
 ## What we do not write
 

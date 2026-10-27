@@ -573,14 +573,14 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
 | `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; not yet printed from. |
-| `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | |
-| `.ctb` encrypted | the newer Chitu boards that take nothing else | yes | Written when the printer profile says `output = "ctb-encrypted"`; no shipped profile does yet. Read whoever wrote it. |
+| `.ctb` v5 (v4 on request) | Elegoo, Creality, EPAX, Peopoly, QIDI, UniFormation | yes | Laid out field for field as the vendor slicer writes it. |
+| `.ctb` encrypted | Chitu boards with a panel past 4095 px a side | yes | Written for every such shipped printer, as the vendor slicer does. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. The `.pm5s`, `.m5sp` and `.pm4n` of the Photon Mono M5s, M5s Pro and Mono 4 have not yet been printed from. |
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Carima | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
-| `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
+| `.cxdlp`, `.cxdlpv4` | Creality | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the vendor slicer writes it for the HALOT X1 Max. |
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
@@ -610,9 +610,10 @@ rather than opened: as a resin while a printer's resins are in view, or when it 
 file or a resin profile, and as a printer otherwise. The first printer and resin you add
 are the ones the plate prints on, with no second click.
 
-**Printers:** about 160 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
+**Printers:** about 195 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
 FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab, HIFUN,
-ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima, Zortrax and PioNext.
+ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima, Zortrax, PIOCREAT and PioNext,
+the Creality HALOT X1, X1 Max, X1 Neo, SKY 2025 and MAGE S among them.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,
@@ -770,8 +771,8 @@ by a number of your own, or support the islands and drill the suction cups Check
 - Only the **ELEGOO Saturn 4 Ultra** is confirmed by a real print. Start every other printer
   with a small calibration piece and check the build area and mirroring.
 - **No bundled resins.** Calibrate your own exposure.
-- **Encrypted `.ctb`** is written only for a printer whose profile asks for it, and no
-  shipped profile does until a machine is confirmed by a print.
+- **Orientation:** a part prints the right way round on every machine; on an X-mirrored
+  one it lands in the corner opposite the one the vendor slicer puts it in.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.

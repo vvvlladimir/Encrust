@@ -12,6 +12,7 @@ use core_raster::LayerRuns;
 
 use crate::blocks::preview_pixels;
 use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LayerDef};
+use crate::writer::encryption_key;
 
 mod header;
 mod reader;
@@ -32,6 +33,9 @@ const SAME_HEIGHT_MM: f32 = 0.001;
 /// tells; it is written over the reserved bytes once every layer is in.
 pub(crate) type WriteHeader = fn(&mut Fields<'_>, &PrintJob, Offsets, Totals) -> io::Result<()>;
 
+/// Covers a layer's bytes with the container's keyed exclusive or, from its key and index.
+pub(crate) type Crypt = fn(u32, u32, &mut [u8]);
+
 /// Writes the `.fdg` container.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FdgWriter;
@@ -48,7 +52,7 @@ impl SlicedFileWriter for FdgWriter {
         job: &PrintJob,
         sink: &'w mut dyn WriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
-        FdgSink::open(job, sink, header::write_header)
+        FdgSink::open(job, sink, header::write_header, rle::crypt)
     }
 }
 
@@ -57,6 +61,7 @@ pub struct FdgSink<'w> {
     fields: Fields<'w>,
     job: PrintJob,
     write_header: WriteHeader,
+    crypt: Crypt,
     offsets: Offsets,
     totals: Totals,
     previous_z_mm: f32,
@@ -69,6 +74,7 @@ impl<'w> FdgSink<'w> {
         job: &PrintJob,
         sink: &'w mut dyn WriteSeek,
         write_header: WriteHeader,
+        crypt: Crypt,
     ) -> Result<Self, FormatError> {
         validate(job)?;
 
@@ -102,6 +108,7 @@ impl<'w> FdgSink<'w> {
             fields,
             job: job.clone(),
             write_header,
+            crypt,
             offsets,
             totals: Totals::default(),
             previous_z_mm: f32::MIN_POSITIVE,
@@ -141,12 +148,14 @@ impl LayerSink for FdgSink<'_> {
         let def = LayerDef {
             z_mm: self.job.layer_z_mm(index),
             exposure_s: self.job.exposure_of_layer_s(index),
-            light_off_delay_s: self.job.material.light_off_s(),
+            light_off_delay_s: self.job.material.light_off_of_layer_s(index),
             data_address: block as u32 + LAYER_DEF_EX_BYTES,
             data_size: encoded.data().len() as u32,
         };
+        let mut data = encoded.data().to_vec();
+        (self.crypt)(encryption_key(&self.job), index, &mut data);
         layer::write_extended(&mut self.fields, &self.job, index, &def)?;
-        self.fields.bytes(encoded.data())?;
+        self.fields.bytes(&data)?;
         self.tally(index, &def);
         self.defs.push(def);
         Ok(())

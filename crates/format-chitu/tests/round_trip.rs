@@ -458,8 +458,15 @@ fn the_file_ends_with_the_crc_of_everything_before_it() {
 
 #[test]
 fn the_layers_are_covered_by_a_key_that_is_never_zero() {
-    let file = write(CtbVersion::V5, &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()]);
-    assert_ne!(u32_at(&file, 0x64), 0, "the vendor's slicer never writes zero");
+    let file = write(
+        CtbVersion::V5,
+        &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()],
+    );
+    assert_ne!(
+        u32_at(&file, 0x64),
+        0,
+        "the vendor's slicer never writes zero"
+    );
 }
 
 #[test]
@@ -475,7 +482,11 @@ fn each_layer_ends_with_the_area_it_lights_and_a_word() {
         LAYER_DEF_EX_BYTES as usize + size + 8,
         "the block's total counts the tail"
     );
-    let area = f32::from_le_bytes(file[address + size..address + size + 4].try_into().expect("4"));
+    let area = f32::from_le_bytes(
+        file[address + size..address + size + 4]
+            .try_into()
+            .expect("4"),
+    );
     let expected = (WIDTH_PX * HEIGHT_PX) as f32 * pitch_area_mm2();
     assert!(
         (area - expected).abs() < 1e-3,
@@ -491,7 +502,11 @@ fn the_version_four_block_counts_the_layers_and_adds_up_their_time() {
     let slicer = u32_at(&file, SLICER_OFFSET) as usize;
     let v4 = u32_at(&file, slicer + 0x40) as usize;
     assert_eq!(u32_at(&file, v4 + 0x30), 0);
-    assert_eq!(u32_at(&file, v4 + 0x34), 3, "the layer count, not the last index");
+    assert_eq!(
+        u32_at(&file, v4 + 0x34),
+        3,
+        "the layer count, not the last index"
+    );
     let time = f32::from_le_bytes(file[v4 + 0x28..v4 + 0x2C].try_into().expect("4"));
     assert!(time > 0.0, "exposure and light-off of every layer");
 }

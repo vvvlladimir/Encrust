@@ -6,9 +6,9 @@ use core_format::{
 };
 use core_raster::{LayerRuns, Ring};
 
-use core_format::Crc32;
 use crate::family::{block, block_at};
 use crate::v3::blocks::{PAGE_BREAK, write_previews};
+use core_format::Crc32;
 
 mod blocks;
 mod reader;

@@ -1,6 +1,6 @@
 # 0046. Write `.ctb` layer data in the clear
 
-- **Status:** Accepted
+- **Status:** Superseded by 0365
 - **Date:** 2026-09-19
 
 ## Context

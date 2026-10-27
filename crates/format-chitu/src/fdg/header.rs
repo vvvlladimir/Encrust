@@ -3,6 +3,7 @@ use std::io;
 use core_format::{Fields, PrintJob};
 
 use crate::blocks::write_v4_motion;
+use crate::writer::encryption_key;
 
 /// Bytes of the header; the first preview follows it.
 pub(crate) const HEADER_BYTES: u64 = 0x134;
@@ -61,18 +62,18 @@ pub(crate) fn write_header(
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.zeros(8)?;
-    fields.f32_le(job.height_mm())?;
+    // The vendor's slicer leaves the print's height zero, as in a `.ctb`.
+    fields.f32_le(0.0)?;
     fields.f32_le(printer.build_volume.x)?;
     fields.f32_le(printer.build_volume.y)?;
     fields.f32_le(printer.build_volume.z)?;
 
-    // Zero leaves the layer data in the clear, as for `.ctb`; see docs/decisions/0046.
-    fields.u32_le(0)?;
+    fields.u32_le(encryption_key(job))?;
     fields.u32_le(anti_alias_level(job))?;
     fields.u32_le(0x44)?;
     fields.f32_le(job.volume_mm3 / 1000.0)?;
     fields.f32_le(job.weight_g())?;
-    fields.f32_le(0.0)?;
+    fields.f32_le(job.cost().unwrap_or(0.0))?;
     fields.u32_le(offsets.machine_name)?;
     fields.u32_le(offsets.machine_name_bytes)?;
     write_motion(fields, job)?;
@@ -88,7 +89,7 @@ pub(crate) fn anti_alias_level(job: &PrintJob) -> u32 {
 /// From the light-off delays to the software version, 0x7C to 0xC0.
 fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let material = &job.material;
-    fields.f32_le(material.light_off_s())?;
+    fields.f32_le(material.bottom_light_off_s())?;
     fields.f32_le(material.light_off_s())?;
     fields.u32_le(0)?;
     fields.f32_le(material.bottom_lift_distance_mm)?;

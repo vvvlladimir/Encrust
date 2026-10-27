@@ -101,19 +101,22 @@ batch, and removes the file it was writing; a second one exits at once. `inspect
 and `profiles` write at most one small file, so one Ctrl-C ends them.
 
 The output extension picks the format (ADR 0047): `.goo`, `.prz`, `.ctb`, `.cbddlp`, `.photon`,
-`.sl1`, `.sl1s`, `.zip`, `.crmaslice`, `.cxdlp`, `.svgx`, `.cws`, `.fdg`, `.phz`, `.photons`, `.cxline`, one of the Anycubic extensions in
+`.sl1`, `.sl1s`, `.zip`, `.crmaslice`, `.cxdlp`, `.cxdlpv4`, `.svgx`, `.cws`, `.fdg`, `.phz`, `.photons`, `.cxline`, one of the Anycubic extensions in
 `docs/formats/anycubic.md` or `docs/formats/pwsz.md`, or a name with no extension for a directory of PNGs. A container
 name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
 and a run that cannot write the file it was asked for fails rather than reports success.
-`--ctb-version` is read only by a `.ctb` name, and a `.ctb` is written encrypted when the
-printer profile says `output = "ctb-encrypted"` (ADR 0298). A `.cxdlp` name is written at version 3 unless
-the printer profile names version 4, as the Halot Mage line does (ADR 0168).
+A `.ctb` name is written at the revision the printer profile names: version 5, or the
+encrypted container for a panel past 4095 pixels a side, as the vendor slicer writes them
+(ADR 0298, 0365). `--ctb-version 4`, `5` or `encrypted` overrides it, and is read only by a
+`.ctb` name. A `.cxdlp` or `.cxdlpv4` name is written at the revision the printer
+profile names, as the Halot Mage and X1 lines name 4, else at the one the name says
+(ADR 0168, 0368).
 
 Each container pays for grey differently. A `.cbddlp` carries it in eight one-bit passes, so
 it is eight times the layer data of the others (ADR 0146). An Anycubic file carries four bits
 of it in one pass, which costs nothing but loses an edge dimmer than 16 (ADR 0147). An `.sl1`
 carries all eight bits and loses nothing, because its layers are PNGs, and so do a `.zip` and
-a `.cws`. A `.cxdlp` carries eight bits at version 3 and seven at version 4. An `.svgx` carries
+a `.cws`. A `.cxdlp` carries eight bits and a `.cxdlpv4` six. An `.svgx` carries
 none at all: its layers are polygons, and a pixel is lit or dark at half coverage (ADR 0169).
 Those two cost by the panel rather than by the model, so a run writing one for a panel larger
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above

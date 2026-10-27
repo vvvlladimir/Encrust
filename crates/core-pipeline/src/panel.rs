@@ -3,6 +3,8 @@ use std::num::NonZeroU8;
 use core_raster::{Grey, PixelPitch, RasterSettings, Shading};
 use printer_profiles::PrinterProfile;
 
+use crate::format::SlicedFormat;
+
 /// What a front end may set over the panel the printer profile describes.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PanelOverrides {
@@ -31,5 +33,23 @@ pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> R
             levels: overrides.grey_levels,
         },
         blur_px: overrides.blur_px,
+    }
+}
+
+/// The panel a file of `format` is laid out on: rows from the far edge of the plate, as the
+/// vendor slicer lays them, unless an X-mirrored machine prints the plate as it stands (ADR 0366).
+pub(crate) fn file_panel(
+    settings: &RasterSettings,
+    printer: &PrinterProfile,
+    format: SlicedFormat,
+) -> RasterSettings {
+    let far_edge_first = match format {
+        SlicedFormat::Cxline => false,
+        SlicedFormat::Photons => true,
+        _ => !printer.mirror_x,
+    };
+    RasterSettings {
+        mirror_y: far_edge_first,
+        ..*settings
     }
 }

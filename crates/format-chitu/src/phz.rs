@@ -28,6 +28,6 @@ impl SlicedFileWriter for PhzWriter {
         job: &PrintJob,
         sink: &'w mut dyn WriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
-        FdgSink::open(job, sink, header::write_header)
+        FdgSink::open(job, sink, header::write_header, reader::crypt)
     }
 }

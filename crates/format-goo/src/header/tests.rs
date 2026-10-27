@@ -145,7 +145,11 @@ fn binary_shading_states_the_vendors_dormant_level_and_blur() {
     let mut job = sample_job(10);
     job.raster.shading = Shading::Binary;
     let header = header_of(&job);
-    assert_eq!(u16_at(&header, AA_OFFSET), 4, "a vendor file with AA off says 4");
+    assert_eq!(
+        u16_at(&header, AA_OFFSET),
+        4,
+        "a vendor file with AA off says 4"
+    );
     assert_eq!(u16_at(&header, AA_OFFSET + 2), 0, "no grey ladder");
     assert_eq!(u16_at(&header, AA_OFFSET + 4), 2, "and a blur of 2");
 }

@@ -20,6 +20,7 @@ use rayon::prelude::*;
 use crate::error::PipelineError;
 use crate::fold::{Tolerance, fold_group};
 use crate::format::SlicedFormat;
+use crate::panel::file_panel;
 
 /// What a front end wants to hear about a run while it is happening.
 ///
@@ -250,6 +251,7 @@ fn stream_layers<S: LayerSink>(
     let windows = request.windows;
     let total = windows.layer_count();
     let tolerance = Tolerance::of(&request.job.material);
+    let settings = file_panel(request.settings, &request.job.printer, request.format);
     let mut written = Written {
         layers: 0,
         clipped_layers: 0,
@@ -269,7 +271,7 @@ fn stream_layers<S: LayerSink>(
                 }
                 let folded = fold_group(
                     layers,
-                    request.settings,
+                    &settings,
                     windows.plan(),
                     &tolerance,
                     &mut written.measured,

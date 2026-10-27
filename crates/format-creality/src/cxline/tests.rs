@@ -5,8 +5,8 @@ use core_raster::LayerRuns;
 
 use super::blocks::{FOOTER, MAGIC};
 use super::{CxlineReader, CxlineSink, CxlineWriter, cxline_model_code};
-use core_format::Crc32;
 use crate::fixtures::sample_job;
+use core_format::Crc32;
 
 /// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
 fn block() -> LayerRuns {

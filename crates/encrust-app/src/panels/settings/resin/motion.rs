@@ -67,11 +67,36 @@ pub(super) fn rows(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &Pri
 fn second_stage(ui: &mut egui::Ui, stage: &mut SecondStage) {
     subheading(ui, &tr!("resin-second-stage"));
     let rows = [
-        (tr!("print-lift"), None, &mut stage.lift_distance_mm, Travel::Stage),
-        (tr!("print-lift-speed"), None, &mut stage.lift_speed_mm_min, Travel::Speed),
-        (tr!("resin-retract"), None, &mut stage.retract_distance_mm, Travel::Stage),
-        (tr!("print-retract-speed"), None, &mut stage.retract_speed_mm_min, Travel::Speed),
-        (tr!("resin-bottom-lift"), None, &mut stage.bottom_lift_distance_mm, Travel::Stage),
+        (
+            tr!("print-lift"),
+            None,
+            &mut stage.lift_distance_mm,
+            Travel::Stage,
+        ),
+        (
+            tr!("print-lift-speed"),
+            None,
+            &mut stage.lift_speed_mm_min,
+            Travel::Speed,
+        ),
+        (
+            tr!("resin-retract"),
+            None,
+            &mut stage.retract_distance_mm,
+            Travel::Stage,
+        ),
+        (
+            tr!("print-retract-speed"),
+            None,
+            &mut stage.retract_speed_mm_min,
+            Travel::Speed,
+        ),
+        (
+            tr!("resin-bottom-lift"),
+            None,
+            &mut stage.bottom_lift_distance_mm,
+            Travel::Stage,
+        ),
         (
             tr!("resin-bottom-lift-speed"),
             None,
@@ -141,4 +166,3 @@ fn travel_rows<const N: usize>(
         };
     }
 }
-

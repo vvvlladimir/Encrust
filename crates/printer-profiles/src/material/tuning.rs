@@ -178,11 +178,23 @@ impl PrinterTuning {
         put(&mut self.lift_speed_mm_min, other.lift_speed_mm_min);
         put(&mut self.retract_distance_mm, other.retract_distance_mm);
         put(&mut self.retract_speed_mm_min, other.retract_speed_mm_min);
-        put(&mut self.bottom_lift_distance_mm, other.bottom_lift_distance_mm);
-        put(&mut self.bottom_lift_speed_mm_min, other.bottom_lift_speed_mm_min);
-        put(&mut self.bottom_retract_speed_mm_min, other.bottom_retract_speed_mm_min);
+        put(
+            &mut self.bottom_lift_distance_mm,
+            other.bottom_lift_distance_mm,
+        );
+        put(
+            &mut self.bottom_lift_speed_mm_min,
+            other.bottom_lift_speed_mm_min,
+        );
+        put(
+            &mut self.bottom_retract_speed_mm_min,
+            other.bottom_retract_speed_mm_min,
+        );
         put(&mut self.second_stage, other.second_stage);
-        put(&mut self.bottom_light_off_delay_s, other.bottom_light_off_delay_s);
+        put(
+            &mut self.bottom_light_off_delay_s,
+            other.bottom_light_off_delay_s,
+        );
         put(&mut self.waits, other.waits);
         put(&mut self.wait_mode, other.wait_mode);
         put(&mut self.compensation, other.compensation);

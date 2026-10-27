@@ -4,7 +4,7 @@ use std::path::Path;
 
 use core_format::{FormatError, OpenFile, ReadSeek, SlicedFile, SlicedFileReader};
 use core_raster::Run;
-use format_anycubic::{AnycubicReader, PhotonsReader, PwsReader};
+use format_anycubic::{AnycubicReader, PhotonsReader, PwsReader, PwszFlavour, PwszReader};
 use format_chitu::{CbddlpFlavour, ChituReader, FdgReader, PhzReader};
 use format_creality::{CxdlpReader, CxdlpV4Reader, CxlineReader};
 use format_ctb_encrypted::CtbEncryptedReader;
@@ -33,6 +33,7 @@ pub enum Opened<S> {
     Photons(format_anycubic::OpenPhotons<S>),
     Phz(format_chitu::OpenPhz<S>),
     Cxline(format_creality::OpenCxline<S>),
+    Pwsz(format_anycubic::OpenPwsz<S>),
 }
 
 impl<S: ReadSeek> OpenFile for Opened<S> {
@@ -52,6 +53,7 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::Photons(open) => open.facts(),
             Self::Phz(open) => open.facts(),
             Self::Cxline(open) => open.facts(),
+            Self::Pwsz(open) => open.facts(),
         }
     }
 
@@ -71,6 +73,7 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::Photons(open) => open.layer(index),
             Self::Phz(open) => open.layer(index),
             Self::Cxline(open) => open.layer(index),
+            Self::Pwsz(open) => open.layer(index),
         }
     }
 }
@@ -112,15 +115,18 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
         return Ok(Family::Anycubic);
     }
     if head.starts_with(b"PK") {
-        // Three containers are zips, so the entries inside decide which this is.
+        // Four containers are zips, so the entries inside decide which this is.
         source.seek(SeekFrom::Start(0))?;
-        let gcode_zip = format_gcode_zip::claims(source);
+        let pwsz = format_anycubic::pwsz_claims(source);
         source.seek(SeekFrom::Start(0))?;
-        let cws = !gcode_zip && format_cws::claims(source);
+        let gcode_zip = !pwsz && format_gcode_zip::claims(source);
         source.seek(SeekFrom::Start(0))?;
-        return Ok(match (gcode_zip, cws) {
-            (true, _) => Family::GcodeZip,
-            (_, true) => Family::Cws,
+        let cws = !pwsz && !gcode_zip && format_cws::claims(source);
+        source.seek(SeekFrom::Start(0))?;
+        return Ok(match (pwsz, gcode_zip, cws) {
+            (true, ..) => Family::Pwsz,
+            (_, true, _) => Family::GcodeZip,
+            (.., true) => Family::Cws,
             _ => Family::Sl1,
         });
     }
@@ -218,6 +224,7 @@ enum Family {
     Photons,
     Phz,
     Cxline,
+    Pwsz,
 }
 
 impl Family {
@@ -241,6 +248,7 @@ impl Family {
             Self::Photons => PhotonsReader.open(source).map(Opened::Photons),
             Self::Phz => PhzReader.open(source).map(Opened::Phz),
             Self::Cxline => CxlineReader.open(source).map(Opened::Cxline),
+            Self::Pwsz => PwszReader.open(source).map(Opened::Pwsz),
             Self::Cxdlp => match cxdlp_version(&mut source)? {
                 4 => CxdlpV4Reader.open(source).map(Opened::CxdlpV4),
                 _ => CxdlpReader.open(source).map(Opened::Cxdlp),
@@ -264,7 +272,7 @@ fn claimed_by(path: &Path) -> Option<Family> {
         "photon" => Some(Family::Chitu(CbddlpFlavour::Photon)),
         "sl1" | "sl1s" => Some(Family::Sl1),
         "zip" | "crmaslice" => Some(Family::GcodeZip),
-        "cxdlp" => Some(Family::Cxdlp),
+        "cxdlp" | "cxdlpv4" => Some(Family::Cxdlp),
         "svgx" => Some(Family::Svgx),
         "cws" => Some(Family::Cws),
         "fdg" => Some(Family::Fdg),
@@ -272,6 +280,7 @@ fn claimed_by(path: &Path) -> Option<Family> {
         "phz" => Some(Family::Phz),
         "cxline" => Some(Family::Cxline),
         "pws" => Some(Family::Pws),
+        other if PwszFlavour::of_extension(other).is_some() => Some(Family::Pwsz),
         other => format_anycubic::AnycubicFlavour::of_extension(other).map(|_| Family::Anycubic),
     }
 }
@@ -294,6 +303,7 @@ mod tests {
             "a.sl1s",
             "a.zip",
             "a.cxdlp",
+            "a.cxdlpv4",
             "a.svgx",
             "a.cws",
             "a.prz",
@@ -302,6 +312,11 @@ mod tests {
             "a.photons",
             "a.phz",
             "a.cxline",
+            "a.pwsz",
+            "a.pm7",
+            "a.pm7m",
+            "a.pm4u",
+            "a.pp1m",
         ] {
             assert!(
                 claimed_by(Path::new(name)).is_some(),

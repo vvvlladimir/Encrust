@@ -1,6 +1,5 @@
 use super::*;
 use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
-use core_pipeline::CtbVersion;
 use printer_profiles::PrinterTuning;
 use std::path::Path;
 use std::sync::Arc;
@@ -432,7 +431,7 @@ fn picking_a_printer_takes_the_format_its_firmware_reads_and_a_resin_measured_on
 
     slicing.set_printer(profile, Some(id));
 
-    assert_eq!(slicing.format, SlicedFormat::Ctb(CtbVersion::V4));
+    assert_eq!(slicing.format, SlicedFormat::CtbEncrypted);
     assert!(slicing.resin_id.is_some(), "a printer brings a resin");
     assert!(
         slicing.resin_is_tuned(),

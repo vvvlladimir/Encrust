@@ -15,7 +15,9 @@ mod tables;
 mod writer;
 
 pub use photons::{OpenPhotons, PhotonsLayer, PhotonsReader, PhotonsSink, PhotonsWriter};
-pub use pwsz::{PwszFlavour, PwszLayer, PwszSink, PwszWriter};
+pub use pwsz::{
+    OpenPwsz, PwszFlavour, PwszLayer, PwszReader, PwszSink, PwszWriter, claims as pwsz_claims,
+};
 pub use reader::{AnycubicReader, OpenAnycubic, PwsReader};
 pub use rle::{EncodedLayer, GREY_STEPS, decode};
 pub use writer::{AnycubicFlavour, AnycubicLayer, AnycubicSink, AnycubicVersion, AnycubicWriter};

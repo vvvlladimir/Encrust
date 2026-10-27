@@ -27,7 +27,8 @@ Big-endian throughout.
 | `u32` 7, then `CXSW3D\0` | the footer |
 | `u32` | checksum, as `.cxdlp`'s |
 
-The settings are whole numbers, rounded; the vendor writer truncates them.
+The settings are whole numbers; the light-off delay drops its fraction, as the vendor writer
+does, and the rest are rounded.
 
 ### The machine block
 
@@ -36,7 +37,7 @@ The settings are whole numbers, rounded; the vendor writer truncates them.
 | 0x00 | build height, `u32` | µm |
 | 0x04 | shrinkage compensation on, `u32` | 0: ours is in the masks |
 | 0x08 | support time offset, `f32` | 0 |
-| 0x0C | firmware blur, `u32` | 0 |
+| 0x0C | firmware blur, `u32` | 2 with no blur, as the vendor writes it |
 | 0x10 | exposure, `u16` | tenths of a second |
 | 0x12 | volume, `f32` | ml, written again once the stack is measured |
 | 0x16 | the rest | zero |

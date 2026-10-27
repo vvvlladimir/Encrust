@@ -76,7 +76,6 @@ pub struct MaterialProfile {
     pub printer_table: PrinterTuning,
 }
 
-
 /// What a resin is, what it looks like and what it costs: nothing a machine changes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -147,7 +146,6 @@ impl Waits {
         }
     }
 }
-
 
 fn default_retract_distance_mm() -> f32 {
     6.0
