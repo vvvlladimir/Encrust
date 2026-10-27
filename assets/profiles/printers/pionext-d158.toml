@@ -34,3 +34,12 @@ wait_mode = "light-off"
 bottom_light_off_delay_s = 0.0
 
 [locked.second_stage]
+
+[limits]
+layer_height_mm = { min = 0.01, max = 0.2 }
+exposure_s = { min = 0.5, max = 10 }
+bottom_exposure_s = { min = 1, max = 70 }
+bottom_layers = { max = 10 }
+light_off_delay_s = { max = 10 }
+lift_distance_mm = { min = 5, max = 15 }
+lift_speed_mm_min = { min = 60, max = 600 }

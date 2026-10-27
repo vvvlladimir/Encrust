@@ -53,6 +53,9 @@ pub enum ProfileError {
         value: f32,
     },
 
+    #[error("the limit on {field} runs out of order: min, warn_min, warn_max, max")]
+    DisorderedLimit { field: &'static str },
+
     #[error("the locked {field} must be greater than zero, got {value}")]
     NonPositiveLocked { field: &'static str, value: f32 },
 

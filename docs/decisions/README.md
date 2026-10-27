@@ -381,6 +381,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0301](0301-a-printer-locks-the-settings-its-firmware-runs-itself.md) | A printer locks the settings its firmware runs itself, and a shipped machine's locks are the build's | Accepted; the lock laid over every resin is superseded by 0364 |
 | [0364](0364-a-lock-is-the-machines-default.md) | A printer's lock is its default, which a resin's table for it overrides | Accepted |
 | [0363](0363-a-peel-has-two-stages.md) | A peel has two stages, and the bottom layers a light-off delay of their own | Accepted |
+| [0369](0369-a-printer-states-the-limits-of-a-resin.md) | A printer states the limits of a resin's settings | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |

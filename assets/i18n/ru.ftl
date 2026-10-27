@@ -1109,6 +1109,14 @@ resin-carried = Перенесено с { $exposure } с при { $from } мм �
 resin-light-power = Мощность света
 resin-bottom-power = Мощность на нижних слоях
 resin-transition-note = Линейный: каждый слой на { $step } с короче нижележащего.
+limit-takes-between = Эта машина принимает { $low }–{ $high } { $unit }.
+limit-takes-from = Эта машина принимает от { $low } { $unit }.
+limit-takes-up-to = Эта машина принимает не больше { $high } { $unit }.
+limit-advised-between = Производитель советует { $low }–{ $high } { $unit }.
+limit-advised-from = Производитель советует от { $low } { $unit }.
+limit-advised-up-to = Производитель советует не больше { $high } { $unit }.
+limit-why-thin-layer = Чем тоньше слой, тем больше слоёв и дольше печать.
+limit-why-few-bottom-layers = С меньшим числом нижних слоёв модель может оторваться от платформы.
 
 ## panels/settings/compensation.rs
 

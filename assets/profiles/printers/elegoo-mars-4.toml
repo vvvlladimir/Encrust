@@ -23,3 +23,7 @@ z = 175.0
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

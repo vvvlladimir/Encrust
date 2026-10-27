@@ -32,3 +32,7 @@ wait_mode = "light-off"
 bottom_light_off_delay_s = 0.5
 
 [locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

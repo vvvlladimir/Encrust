@@ -8,6 +8,7 @@ mod error;
 mod exchange;
 mod exposure;
 mod foreign;
+mod limits;
 mod material;
 mod own_ids;
 mod preset;
@@ -25,6 +26,7 @@ pub use error::ProfileError;
 pub use exchange::unique_id;
 pub use exposure::{ASSUMED_PENETRATION_DEPTH_MM, exposure_for_mm};
 pub use foreign::ForeignResin;
+pub use limits::{Limit, LimitBreach, PrinterLimits, SecondStageLimits, Stray};
 pub use material::{
     MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, SecondStage, WaitMode, Waits,
 };

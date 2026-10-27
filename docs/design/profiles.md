@@ -89,6 +89,16 @@ unknown keys are refused, so a misspelt key fails to load rather than doing noth
 | Waits | `waits`: light-off delay or rests before lift, after lift and after retract |
 | Geometry | `layer_height_mm`, because an exposure is only valid at the height it was measured at |
 
+A printer's `[limits]` uses the same keys, each `{ min, max, warn_min, warn_max }`: the
+span its field takes and the span its maker advises (ADR 0369).
+
+```toml
+[limits]
+layer_height_mm = { min = 0.01, max = 0.2 }
+lift_distance_mm = { min = 8, max = 20 }
+bottom_layers = { warn_min = 2, warn_max = 10 }
+```
+
 `name`, `density_g_cm3` and `[details]` — type, colour, price, currency and whether the
 price is per kilogram or per litre — are not tunable: none changes with the machine.
 `last_printer` names the machine the resin was last saved for.

@@ -1058,6 +1058,14 @@ resin-carried = Carried from { $exposure } s at { $from } mm to { $to } mm.
 resin-light-power = Light power
 resin-bottom-power = Bottom power
 resin-transition-note = Linear: each layer { $step } s shorter than the one under it.
+limit-takes-between = This machine takes { $low }–{ $high } { $unit }.
+limit-takes-from = This machine takes { $low } { $unit } or more.
+limit-takes-up-to = This machine takes { $high } { $unit } at most.
+limit-advised-between = Its maker advises { $low }–{ $high } { $unit }.
+limit-advised-from = Its maker advises { $low } { $unit } or more.
+limit-advised-up-to = Its maker advises { $high } { $unit } at most.
+limit-why-thin-layer = A thinner layer means more layers and a longer print.
+limit-why-few-bottom-layers = With fewer bottom layers the print may come off the plate.
 
 ## panels/settings/compensation.rs
 

@@ -30,3 +30,7 @@ variable_layer_height = false
 [locked]
 wait_mode = "light-off"
 bottom_light_off_delay_s = 5.0
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

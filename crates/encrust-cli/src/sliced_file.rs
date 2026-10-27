@@ -5,7 +5,7 @@ use core_engine::{Plate, Run};
 use core_format::PrintJob;
 use core_pipeline::CtbVersion;
 use core_pipeline::SlicedFormat;
-use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
+use printer_profiles::{LimitBreach, MaterialProfile, OutputFormat, PrinterProfile, Stray};
 
 use crate::exit::Cancelled;
 use crate::pipeline::{Watch, report_of};
@@ -67,6 +67,7 @@ pub fn write_plate(
     drop(plate.models);
     let mut slice = report_of(run.solid(), run.windows(), drainage);
     warn_if_exposure_was_measured_elsewhere(run.job(), &plate.material);
+    warn_of_limits(run.job());
 
     let mut watching = Watching {
         report: &mut slice,
@@ -140,6 +141,35 @@ fn warn_if_exposure_was_measured_elsewhere(job: &PrintJob, material: &MaterialPr
             normal_s,
         );
     }
+}
+
+/// A setting past what the machine takes, or past what its maker advises, is written as
+/// asked; the window would not have let the first be typed (ADR 0369).
+fn warn_of_limits(job: &PrintJob) {
+    let printed = MaterialProfile {
+        layer_height_mm: job.nominal_height_mm(),
+        ..job.material.clone()
+    };
+    for breach in job.printer.limits.breaches(&printed) {
+        tracing::warn!("{}", limit_warning(&job.printer.name, &breach));
+    }
+}
+
+fn limit_warning(printer: &str, breach: &LimitBreach) -> String {
+    let span = match breach.span {
+        (Some(low), Some(high)) => format!("{low} to {high}"),
+        (Some(low), None) => format!("at least {low}"),
+        (None, Some(high)) => format!("at most {high}"),
+        (None, None) => String::new(),
+    };
+    let whose = match breach.stray {
+        Stray::Refused => "takes",
+        Stray::Advised => "is advised",
+    };
+    format!(
+        "{} is {}, and {printer} {whose} {span}",
+        breach.field, breach.value
+    )
 }
 
 /// The clock the file is stamped with. One that reads before the epoch stamps the epoch:

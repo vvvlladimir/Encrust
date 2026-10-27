@@ -23,3 +23,6 @@ z = 235.0
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[limits]
+layer_height_mm = { max = 9 }

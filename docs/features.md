@@ -618,8 +618,10 @@ Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,
 build volume, mirror across X or Y, grey floor, output format and version, firmware
-abilities (per-layer settings, variable layer height), and the printers on your network it
-sends to.
+abilities (per-layer settings, variable layer height), the printers on your network it
+sends to, and the limits its maker puts on each resin setting: a field takes nothing past
+what the machine takes, and a value past what its maker advises is framed in red with the
+span, and why where the maker says. `encrust slice` warns of both and writes the file.
 
 **Resins:** **none are bundled**, on purpose. A correct exposure depends on your machine and
 your bottle, so you create the first resin yourself. A resin holds exposure, bottom layers,

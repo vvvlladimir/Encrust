@@ -29,3 +29,15 @@ wait_mode = "light-off"
 bottom_light_off_delay_s = 0.0
 
 [locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+exposure_s = { warn_min = 1, warn_max = 10 }
+bottom_exposure_s = { warn_min = 10, warn_max = 70 }
+bottom_layers = { max = 10, warn_min = 2 }
+lift_distance_mm = { warn_min = 5, warn_max = 10 }
+lift_speed_mm_min = { warn_min = 60, warn_max = 180 }
+retract_speed_mm_min = { warn_min = 60, warn_max = 180 }
+bottom_lift_distance_mm = { warn_min = 5, warn_max = 10 }
+bottom_lift_speed_mm_min = { warn_min = 60, warn_max = 180 }
+bottom_retract_speed_mm_min = { warn_min = 60, warn_max = 180 }

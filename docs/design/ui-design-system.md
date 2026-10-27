@@ -137,6 +137,7 @@ paints from tokens only.
 | `text_box` | The shape of every box text is typed in: `FIELD_H` tall, as a button is, the text centred in it |
 | `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure |
 | `carried_row` | A `number_row` the window changed for the user: its name in `warn` and a button that puts the old value back |
+| `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0369): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
 
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under

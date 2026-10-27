@@ -562,3 +562,28 @@ fn info_reports_one_layer_on_its_own_and_every_run_of_exposures() {
     assert_eq!(bands[0]["from_layer"], 7);
     assert_eq!(bands[0]["to_layer"], 10);
 }
+
+#[test]
+fn a_layer_past_what_the_machine_takes_is_written_but_reported() {
+    let path = write_box_stl("past-limit", 10.0, 12, 0);
+    let out = output_file("past-limit.goo");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--printer",
+        "creality-halot-mage-pro-cl-103",
+        "--material",
+        test_resin().to_str().unwrap(),
+        "--layer-height",
+        "0.3",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(out.exists(), "a limit warns, it does not stop the run");
+
+    let warning = stderr(&output);
+    assert!(
+        warning.contains("layer_height_mm is 0.3") && warning.contains("takes 0.01 to 0.2"),
+        "the warning names the setting and the span the machine takes: {warning}"
+    );
+}

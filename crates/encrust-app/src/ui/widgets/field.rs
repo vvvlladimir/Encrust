@@ -53,6 +53,7 @@ pub fn number_field<N: Numeric>(
         name,
         unit: "",
         width,
+        flagged: false,
     };
     boxed_field(ui, &field, value, speed, range, decimals)
 }
@@ -70,15 +71,22 @@ pub fn unit_field<N: Numeric>(
     decimals: Option<usize>,
     width: f32,
 ) -> bool {
-    let field = Field { name, unit, width };
+    let field = Field {
+        name,
+        unit,
+        width,
+        flagged: false,
+    };
     boxed_field(ui, &field, value, speed, range, decimals)
 }
 
-/// What a box is called, the unit drawn inside it, and its width in points.
-struct Field<'a> {
-    name: &'a str,
-    unit: &'a str,
-    width: f32,
+/// What a box is called, the unit drawn inside it, its width in points, and whether its
+/// value strays from what it should be, which borders it in `danger`.
+pub(super) struct Field<'a> {
+    pub(super) name: &'a str,
+    pub(super) unit: &'a str,
+    pub(super) width: f32,
+    pub(super) flagged: bool,
 }
 
 /// Names a control for a screen reader, which cannot see the label painted beside it.
@@ -92,7 +100,7 @@ const UNIT_PAD: f32 = 8.0;
 
 /// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
 /// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
-fn boxed_field<N: Numeric>(
+pub(super) fn boxed_field<N: Numeric>(
     ui: &mut Ui,
     field: &Field<'_>,
     value: &mut N,
@@ -136,6 +144,8 @@ fn boxed_field<N: Numeric>(
 
     let border = if response.has_focus() {
         colors.accent
+    } else if field.flagged {
+        colors.danger
     } else if ui.rect_contains_pointer(rect) && ui.is_enabled() {
         colors.line
     } else {
@@ -194,6 +204,7 @@ pub fn number_row(
         name: label,
         unit,
         width: theme::FIELD_W,
+        flagged: false,
     };
     row(ui, label, |ui| {
         boxed_field(ui, &field, value, speed, range, Some(decimals))
@@ -217,6 +228,7 @@ pub fn stepped_row(
         name: label,
         unit: "",
         width: theme::FIELD_W - 2.0 * theme::FIELD_H,
+        flagged: false,
     };
     let (least, most) = (*range.start(), *range.end());
     labelled(ui, label, theme::colors().text_mid, unit, |ui| {
@@ -273,6 +285,7 @@ pub fn carried_row(
             name: label,
             unit,
             width: theme::FIELD_W,
+            flagged: false,
         };
         if boxed_field(ui, &field, value, speed, range, Some(decimals)) {
             carried = Carried::Edited;
@@ -302,6 +315,7 @@ pub fn count_row(
         name: label,
         unit,
         width: theme::FIELD_W,
+        flagged: false,
     };
     row(ui, label, |ui| {
         boxed_field(ui, &field, value, speed, range, None)
@@ -315,13 +329,13 @@ pub fn picker_row(ui: &mut Ui, label: &str, glyph: &str, chosen: &str) -> egui::
     super::picker(ui, glyph, chosen)
 }
 
-fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
+pub(super) fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
     labelled(ui, label, theme::colors().text_mid, "", field)
 }
 
 /// A `field_label` and what `right` lays out from the row's right edge; `right` goes first so
 /// a long label is cut to the room it leaves rather than pushing it past the card.
-fn labelled<R>(
+pub(super) fn labelled<R>(
     ui: &mut Ui,
     label: &str,
     color: Color32,

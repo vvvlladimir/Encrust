@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{MaterialProfile, PrinterTuning, ProfileError};
+use crate::{MaterialProfile, PrinterLimits, PrinterTuning, ProfileError};
 
 /// The sliced-file format a machine's firmware reads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -279,6 +279,9 @@ pub struct PrinterProfile {
     /// file states these. See `docs/decisions/0301`.
     #[serde(default, skip_serializing_if = "PrinterTuning::is_empty")]
     pub locked: PrinterTuning,
+    /// The span each resin setting may take on this machine. See `docs/decisions/0369`.
+    #[serde(default, skip_serializing_if = "PrinterLimits::is_empty")]
+    pub limits: PrinterLimits,
 }
 
 /// One printer on the network a profile sends to: what the user calls it and where it is.
@@ -362,6 +365,7 @@ impl Default for PrinterProfile {
             machines: Vec::new(),
             firmware: Firmware::default(),
             locked: PrinterTuning::default(),
+            limits: PrinterLimits::default(),
         }
     }
 }
@@ -428,6 +432,7 @@ impl PrinterProfile {
         {
             return Err(ProfileError::NoAddress { index });
         }
+        self.limits.validate()?;
         MaterialProfile::default()
             .with_tuning(&self.locked)
             .validate_values()

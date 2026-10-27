@@ -7,8 +7,9 @@ use crate::i18n::tr;
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, kept, nested,
-    number_row, secondary_button, section, subheading_with_switch, switch, theme, tone,
+    Carried, Held, Segment, Segmented, carried_row, describe, hint, icon, icon_button, kept,
+    limited_row, nested, number_row, secondary_button, section, subheading_with_switch, switch,
+    theme, tone,
 };
 
 /// Eight greys is what other slicers call anti-aliasing level 8, and the most a panel
@@ -44,14 +45,25 @@ pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
         } else {
             tr!("resin-layer-height")
         };
-        if number_row(
+        let limit = slicing
+            .printer
+            .as_ref()
+            .map(|printer| printer.limits.layer_height_mm)
+            .unwrap_or_default();
+        let why = tr!("limit-why-thin-layer");
+        let held = Held {
+            limit: &limit,
+            why: Some(&why),
+        };
+        if limited_row(
             ui,
             &label,
             &mut layer_height_mm,
             &tr!("unit-mm"),
             LAYER_HEIGHT_STEP,
             MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
-            3,
+            Some(3),
+            held,
         ) {
             slicing.set_layer_height(layer_height_mm);
         }
