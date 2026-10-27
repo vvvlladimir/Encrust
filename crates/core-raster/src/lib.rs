@@ -11,6 +11,7 @@ mod rasterizer;
 mod runs;
 mod scanline;
 mod settings;
+mod trace;
 
 pub use error::RasterError;
 pub use mask::LayerMask;
@@ -19,3 +20,4 @@ pub use rastered::Rastered;
 pub use rasterizer::{Rasterizer, ScanlineRasterizer};
 pub use runs::{LayerRuns, Run, RunsBuilder};
 pub use settings::{Grey, PixelPitch, RasterSettings, Shading};
+pub use trace::{Ring, double_area_px, length_px, rings_of};

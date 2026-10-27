@@ -6,9 +6,9 @@ use core_analysis::Measured;
 use core_format::{LayerSink, PrintJob, SlicedFileWriter, WRITE_BUFFER_BYTES, WriteSeek};
 use core_raster::RasterSettings;
 use core_slicer::{Sliced, Source, Windows};
-use format_anycubic::{AnycubicWriter, PwszWriter};
-use format_chitu::{CbddlpWriter, CtbWriter, FdgWriter};
-use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter};
+use format_anycubic::{AnycubicWriter, PhotonsWriter, PwszWriter};
+use format_chitu::{CbddlpWriter, CtbWriter, FdgWriter, PhzWriter};
+use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter, CxlineWriter};
 use format_ctb_encrypted::CtbEncryptedWriter;
 use format_cws::CwsWriter;
 use format_gcode_zip::GcodeZipWriter;
@@ -143,6 +143,9 @@ impl Destination<'_> {
             SlicedFormat::Svgx => self.with(&SvgxWriter, sink, feed, observer),
             SlicedFormat::Cws => self.with(&CwsWriter, sink, feed, observer),
             SlicedFormat::Fdg => self.with(&FdgWriter, sink, feed, observer),
+            SlicedFormat::Photons => self.with(&PhotonsWriter, sink, feed, observer),
+            SlicedFormat::Phz => self.with(&PhzWriter, sink, feed, observer),
+            SlicedFormat::Cxline => self.with(&CxlineWriter, sink, feed, observer),
             SlicedFormat::Pwsz(flavour) => {
                 self.with(&PwszWriter::new(flavour), sink, feed, observer)
             }

@@ -14,13 +14,24 @@ const RESOLUTION: u64 = 0x18;
 const LAYER_TABLE: u64 = 0x34;
 const BED: u64 = 0x50;
 const MACHINE_NAME: u64 = 0x74;
-const MOTION: u64 = 0x80;
+const MOTION: MotionAt = MotionAt {
+    light_off: 0x80,
+    lift: 0x88,
+};
 const TRANSITION: u64 = 0xC8;
 const BOTTOM_RETRACT_SPEED: u64 = 0xD8;
 
 /// Where the three rests sit in the record in front of a layer's data, counted back from
 /// the data; the header holds only two of them.
 const RESTS_BEFORE_DATA: u64 = (LAYER_DEF_EX_BYTES - 0x44) as u64;
+
+/// Where a header of this layout puts its light-off delay and its five lift and retract
+/// numbers; the transition and the bottom retract speed sit at one offset in both.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MotionAt {
+    pub light_off: u64,
+    pub lift: u64,
+}
 
 /// Reads the `.fdg` container.
 #[derive(Debug, Default, Clone, Copy)]
@@ -68,12 +79,12 @@ impl SlicedFileReader for FdgReader {
         reads.skip(8)?;
         let volume_ml = reads.f32_le()?;
 
-        let machine = read_machine_name(&mut reads)?;
+        let machine = read_machine_name(&mut reads, MACHINE_NAME)?;
         let layers = read_table(&mut reads, table, layer_count)?;
         let stated = PrinterTuning {
             light_pwm,
             bottom_light_pwm,
-            ..read_motion(&mut reads, layers.first())?
+            ..read_motion(&mut reads, layers.first(), MOTION)?
         };
 
         Ok(OpenFdg {
@@ -103,8 +114,12 @@ impl SlicedFileReader for FdgReader {
     }
 }
 
-fn read_machine_name<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, FormatError> {
-    reads.seek_to(MACHINE_NAME)?;
+/// The machine name whose address and length stand at `field`.
+pub(crate) fn read_machine_name<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    field: u64,
+) -> Result<Option<String>, FormatError> {
+    reads.seek_to(field)?;
     let at = u64::from(reads.u32_le()?);
     let length = reads.u32_le()? as usize;
     if at == 0 || length == 0 {
@@ -114,18 +129,25 @@ fn read_machine_name<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>
     Ok(Some(reads.text(length)?))
 }
 
-fn read_motion<S: ReadSeek>(
+pub(crate) fn read_motion<S: ReadSeek>(
     reads: &mut Reads<S>,
     first: Option<&LayerEntry>,
+    at: MotionAt,
 ) -> Result<PrinterTuning, FormatError> {
-    reads.seek_to(MOTION)?;
+    reads.seek_to(at.light_off)?;
     let light_off = reads.f32_le()?;
-    reads.skip(4)?;
+    reads.seek_to(at.lift)?;
     let mut motion = [0.0; 5];
     for value in &mut motion {
         *value = reads.f32_le()?;
     }
-    let [bottom_lift, bottom_lift_speed, lift, lift_speed, retract_speed] = motion;
+    let [
+        bottom_lift,
+        bottom_lift_speed,
+        lift,
+        lift_speed,
+        retract_speed,
+    ] = motion;
 
     reads.seek_to(TRANSITION)?;
     let transition_layers = Some(reads.u16_le()?);
@@ -156,7 +178,7 @@ fn read_motion<S: ReadSeek>(
     })
 }
 
-fn read_table<S: ReadSeek>(
+pub(crate) fn read_table<S: ReadSeek>(
     reads: &mut Reads<S>,
     table: u64,
     layer_count: u32,

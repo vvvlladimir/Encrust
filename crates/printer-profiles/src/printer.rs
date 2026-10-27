@@ -45,8 +45,14 @@ pub enum OutputFormat {
     Svgx,
     /// The `.cws` archive of greyscale PNGs and the gcode that runs them.
     Cws,
-    /// The `.fdg` Voxelab's and FlashForge's Chitu boards read: one bit a pixel.
+    /// The `.fdg` Voxelab's Chitu boards read: one bit a pixel.
     Fdg,
+    /// The `.photons` the Photon S reads: a header of doubles and one bit a pixel.
+    Photons,
+    /// The `.phz` the Sonic Mini reads: the `.fdg` layout under a header of its own.
+    Phz,
+    /// The `.cxline` the D158 and D160 read: the `.cxdlp` header over layers of polygons.
+    Cxline,
     /// Anycubic's PWSZ archive, under the extension of the machine that reads it.
     Pwsz { extension: PwszExtension },
 }
@@ -171,6 +177,9 @@ impl OutputFormat {
             Self::Svgx => ".svgx",
             Self::Cws => ".cws",
             Self::Fdg => ".fdg",
+            Self::Photons => ".photons",
+            Self::Phz => ".phz",
+            Self::Cxline => ".cxline",
             Self::Pwsz { extension } => extension.label(),
         }
     }

@@ -61,6 +61,10 @@ impl<'w> Fields<'w> {
         self.bytes(&value.to_be_bytes())
     }
 
+    pub fn f64_be(&mut self, value: f64) -> io::Result<()> {
+        self.bytes(&value.to_be_bytes())
+    }
+
     pub fn u16_le(&mut self, value: u16) -> io::Result<()> {
         self.bytes(&value.to_le_bytes())
     }

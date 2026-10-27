@@ -3,11 +3,10 @@ use std::fmt::Write as _;
 use core_format::{
     Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
 };
-use core_raster::LayerRuns;
+use core_raster::{LayerRuns, Ring};
 
 use crate::document::{self, TAIL};
 use crate::header::{self, HEADER_BYTES};
-use crate::trace::{self, Ring};
 
 /// Writes the `.svgx`. Layout is in `docs/formats/svgx.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -80,7 +79,7 @@ impl LayerSink for SvgxSink<'_> {
     type Encoded = (u32, u32, Vec<Ring>);
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        (layer.width(), layer.height(), trace::rings_of(layer))
+        (layer.width(), layer.height(), core_raster::rings_of(layer))
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
@@ -143,11 +142,11 @@ fn group_body(job: &PrintJob, rings: &[Ring]) -> String {
 
     let area_mm2: f64 = rings
         .iter()
-        .map(|ring| trace::double_area_px(ring) as f64 * f64::from(pitch_x * pitch_y) / 2.0)
+        .map(|ring| core_raster::double_area_px(ring) as f64 * f64::from(pitch_x * pitch_y) / 2.0)
         .sum();
     let perimeter_mm: f64 = rings
         .iter()
-        .map(|ring| trace::length_px(ring) as f64 * f64::from(pitch_x.max(pitch_y)))
+        .map(|ring| core_raster::length_px(ring) as f64 * f64::from(pitch_x.max(pitch_y)))
         .sum();
 
     let mut body = format!("area=\"{area_mm2:.3}\" perimeter=\"{perimeter_mm:.3}\">\n");

@@ -2162,6 +2162,8 @@ version = "0.5.0"
 dependencies = [
  "core-format",
  "core-raster",
+ "core-slicer",
+ "glam 0.33.12",
  "printer-profiles",
  "tracing",
  "workspace-hack",

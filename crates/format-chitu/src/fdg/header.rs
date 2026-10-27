@@ -76,10 +76,10 @@ pub(crate) fn write_header(
     fields.u32_le(offsets.machine_name)?;
     fields.u32_le(offsets.machine_name_bytes)?;
     write_motion(fields, job)?;
-    write_parameters(fields, job, totals)
+    write_tail(fields, job, totals)
 }
 
-/// From the light-off delays to the transition, 0x7C to 0xD8.
+/// From the light-off delays to the software version, 0x7C to 0xC0.
 fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let material = &job.material;
     fields.f32_le(material.light_off_s())?;
@@ -93,7 +93,16 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     // The second lift and retract stage, and one more word of it, which we do not use.
     fields.zeros(28)?;
     fields.u32_le(job.created_minutes())?;
-    fields.u32_le(CtbVersion::V4.software_version())?;
+    fields.u32_le(CtbVersion::V4.software_version())
+}
+
+/// From the rests to the end, 0xC0 to 0x134, which `.phz` holds at the same offsets.
+pub(crate) fn write_tail(
+    fields: &mut Fields<'_>,
+    job: &PrintJob,
+    totals: Totals,
+) -> io::Result<()> {
+    let material = &job.material;
     let [_, after_lift_s, after_retract_s] = material.waits.rests_s();
     fields.f32_le(after_retract_s)?;
     fields.f32_le(after_lift_s)?;
@@ -101,7 +110,8 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     fields.u16_le(0)?;
     fields.u32_le(PARAMETERS_AT)?;
     fields.u32_le(PARAMETERS_BYTES)?;
-    fields.u32_le(0)
+    fields.u32_le(0)?;
+    write_parameters(fields, job, totals)
 }
 
 /// The block from 0xD8 to the end of the header.

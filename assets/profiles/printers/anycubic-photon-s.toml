@@ -1,0 +1,31 @@
+# Anycubic Photon S.
+
+name = "Photon S"
+manufacturer = "Anycubic"
+machine_name = "AnyCubic Photon S"
+mirror_x = true
+mirror_y = false
+output = "photons"
+connection = "none"
+
+[display]
+width_px = 1440
+height_px = 2560
+width_mm = 68.04
+height_mm = 120.96
+grey_floor = 0
+
+[build_volume]
+x = 68.04
+y = 120.96
+z = 165.0
+
+[firmware]
+per_layer_settings = false
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+light_pwm = 255
+bottom_light_pwm = 255
+wait_mode = "light-off"

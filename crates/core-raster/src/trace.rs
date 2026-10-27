@@ -4,7 +4,7 @@
 //! the outline of a layer is the set of those steps stitched into closed rings. See
 //! `docs/formats/svgx.md`.
 
-use core_raster::LayerRuns;
+use crate::LayerRuns;
 
 /// Grey from which a pixel counts as material. The container carries no grey at all, so a
 /// mask shaded by coverage is cut at half a pixel's worth of it.
@@ -12,7 +12,7 @@ const THRESHOLD: u8 = 128;
 
 /// One closed ring of the outline, in pixel-grid corners. A ring that encloses material
 /// runs one way round and a hole in it the other, which is what tells them apart.
-pub(crate) type Ring = Vec<(u32, u32)>;
+pub type Ring = Vec<(u32, u32)>;
 
 /// A corner of the pixel grid.
 type Corner = (u32, u32);
@@ -28,7 +28,7 @@ type Edge = (Corner, Corner);
 ///
 /// The work is proportional to the runs of the layer rather than to the panel, which is
 /// what keeps a stack of empty 4K layers from costing a second each.
-pub(crate) fn rings_of(layer: &LayerRuns) -> Vec<Ring> {
+pub fn rings_of(layer: &LayerRuns) -> Vec<Ring> {
     stitch(boundary_edges(&lit_spans(layer)))
 }
 
@@ -177,7 +177,7 @@ fn collinear(a: Corner, b: Corner, c: Corner) -> bool {
 }
 
 /// Twice the signed area of a ring, in pixels. Positive encloses material.
-pub(crate) fn double_area_px(ring: &Ring) -> i64 {
+pub fn double_area_px(ring: &Ring) -> i64 {
     let mut total = 0i64;
     for index in 0..ring.len() {
         let (x0, y0) = ring[index];
@@ -188,7 +188,7 @@ pub(crate) fn double_area_px(ring: &Ring) -> i64 {
 }
 
 /// The length of a ring in pixels, which is the sum of its axis-aligned steps.
-pub(crate) fn length_px(ring: &Ring) -> u64 {
+pub fn length_px(ring: &Ring) -> u64 {
     let mut total = 0u64;
     for index in 0..ring.len() {
         let (x0, y0) = ring[index];
@@ -200,7 +200,7 @@ pub(crate) fn length_px(ring: &Ring) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use core_raster::LayerMask;
+    use crate::LayerMask;
 
     use super::*;
 

@@ -112,14 +112,14 @@ pub(crate) fn write_footer(fields: &mut Fields<'_>) -> io::Result<()> {
 }
 
 /// Writes a length-prefixed, nul-terminated string: the length counts the nul.
-fn write_text(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
+pub(crate) fn write_text(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
     fields.u32_be(value.len() as u32 + 1)?;
     fields.bytes(value.as_bytes())?;
     fields.u8(0)
 }
 
 /// Writes a length-prefixed UTF-16 string, big-endian, with the length in bytes.
-fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
+pub(crate) fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
     let units: Vec<u16> = value.encode_utf16().collect();
     fields.u32_be((units.len() * 2) as u32)?;
     for unit in units {
@@ -135,20 +135,20 @@ fn decimals(value: f32, places: usize) -> String {
     if text.is_empty() { "0" } else { text }.to_owned()
 }
 
-fn tenths(seconds: f32) -> u16 {
+pub(crate) fn tenths(seconds: f32) -> u16 {
     (seconds * 10.0).round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
-fn seconds(value: f32) -> u16 {
+pub(crate) fn seconds(value: f32) -> u16 {
     value.round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
-fn whole_mm(value: f32) -> u16 {
+pub(crate) fn whole_mm(value: f32) -> u16 {
     value.round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
 /// A speed the container states in millimetres a second, where our profiles use a minute.
-fn mm_per_second(mm_min: f32) -> u16 {
+pub(crate) fn mm_per_second(mm_min: f32) -> u16 {
     (mm_min / 60.0).round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 

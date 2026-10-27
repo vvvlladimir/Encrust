@@ -27,6 +27,9 @@ pub fn label_of(format: SlicedFormat) -> &'static str {
         SlicedFormat::Svgx => ".svgx",
         SlicedFormat::Cws => ".cws",
         SlicedFormat::Fdg => ".fdg",
+        SlicedFormat::Photons => ".photons",
+        SlicedFormat::Phz => ".phz",
+        SlicedFormat::Cxline => ".cxline",
         SlicedFormat::Pwsz(flavour) => flavour.label(),
     }
 }
@@ -82,6 +85,9 @@ mod tests {
                 ".svgx",
                 ".cws",
                 ".fdg",
+                ".photons",
+                ".phz",
+                ".cxline",
                 ".pwsz"
             ]
         );

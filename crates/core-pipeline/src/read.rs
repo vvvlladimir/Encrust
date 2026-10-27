@@ -4,9 +4,9 @@ use std::path::Path;
 
 use core_format::{FormatError, OpenFile, ReadSeek, SlicedFile, SlicedFileReader};
 use core_raster::Run;
-use format_anycubic::{AnycubicReader, PwsReader};
-use format_chitu::{CbddlpFlavour, ChituReader, FdgReader};
-use format_creality::{CxdlpReader, CxdlpV4Reader};
+use format_anycubic::{AnycubicReader, PhotonsReader, PwsReader};
+use format_chitu::{CbddlpFlavour, ChituReader, FdgReader, PhzReader};
+use format_creality::{CxdlpReader, CxdlpV4Reader, CxlineReader};
 use format_ctb_encrypted::CtbEncryptedReader;
 use format_cws::CwsReader;
 use format_gcode_zip::GcodeZipReader;
@@ -30,6 +30,9 @@ pub enum Opened<S> {
     Svgx(format_svgx::OpenSvgx<S>),
     Cws(format_cws::OpenCws<S>),
     Fdg(format_chitu::OpenFdg<S>),
+    Photons(format_anycubic::OpenPhotons<S>),
+    Phz(format_chitu::OpenPhz<S>),
+    Cxline(format_creality::OpenCxline<S>),
 }
 
 impl<S: ReadSeek> OpenFile for Opened<S> {
@@ -46,6 +49,9 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::Svgx(open) => open.facts(),
             Self::Cws(open) => open.facts(),
             Self::Fdg(open) => open.facts(),
+            Self::Photons(open) => open.facts(),
+            Self::Phz(open) => open.facts(),
+            Self::Cxline(open) => open.facts(),
         }
     }
 
@@ -62,6 +68,9 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::Svgx(open) => open.layer(index),
             Self::Cws(open) => open.layer(index),
             Self::Fdg(open) => open.layer(index),
+            Self::Photons(open) => open.layer(index),
+            Self::Phz(open) => open.layer(index),
+            Self::Cxline(open) => open.layer(index),
         }
     }
 }
@@ -115,8 +124,14 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
             _ => Family::Sl1,
         });
     }
+    if head.starts_with(&PHOTONS_TAG) {
+        return Ok(Family::Photons);
+    }
     if head.starts_with(b"DLP-II") {
         return Ok(Family::Svgx);
+    }
+    if head.len() >= 10 && &head[4..10] == b"CXLINE" {
+        return Ok(Family::Cxline);
     }
     if head.len() >= 10 && &head[4..10] == b"CXSW3D" {
         return Ok(Family::Cxdlp);
@@ -131,6 +146,9 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
         let magic = u32::from_le_bytes([head[0], head[1], head[2], head[3]]);
         if magic == FDG_MAGIC {
             return Ok(Family::Fdg);
+        }
+        if magic == PHZ_MAGIC {
+            return Ok(Family::Phz);
         }
         if CHITU_MAGICS.contains(&magic) {
             // A renamed file carries no flavour, and `.cbddlp` is the name of these bytes.
@@ -173,10 +191,13 @@ fn fill<S: ReadSeek>(source: &mut S, buffer: &mut [u8]) -> Result<usize, FormatE
     Ok(filled)
 }
 
-/// The tag behind a `.goo`'s version string, and the magics of the Chitu family and `.fdg`.
+/// The tag behind a `.goo`'s version string, the magics of the Chitu family, `.fdg` and
+/// `.phz`, and the words a `.photons` opens with.
 const GOO_MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
 const CHITU_MAGICS: [u32; 3] = [0x12FD_0019, 0x12FD_0086, 0x12FD_0106];
 const FDG_MAGIC: u32 = 0xBD3C_7AC8;
+const PHZ_MAGIC: u32 = 0x9FDA_83AE;
+const PHOTONS_TAG: [u8; 6] = [0, 0, 0, 2, 0, 0x31];
 
 /// Which container a reader handles, so one can be picked by name or by content.
 #[derive(Debug, Clone, Copy)]
@@ -194,6 +215,9 @@ enum Family {
     Svgx,
     Cws,
     Fdg,
+    Photons,
+    Phz,
+    Cxline,
 }
 
 impl Family {
@@ -214,6 +238,9 @@ impl Family {
             Self::Svgx => SvgxReader.open(source).map(Opened::Svgx),
             Self::Cws => CwsReader.open(source).map(Opened::Cws),
             Self::Fdg => FdgReader.open(source).map(Opened::Fdg),
+            Self::Photons => PhotonsReader.open(source).map(Opened::Photons),
+            Self::Phz => PhzReader.open(source).map(Opened::Phz),
+            Self::Cxline => CxlineReader.open(source).map(Opened::Cxline),
             Self::Cxdlp => match cxdlp_version(&mut source)? {
                 4 => CxdlpV4Reader.open(source).map(Opened::CxdlpV4),
                 _ => CxdlpReader.open(source).map(Opened::Cxdlp),
@@ -241,6 +268,9 @@ fn claimed_by(path: &Path) -> Option<Family> {
         "svgx" => Some(Family::Svgx),
         "cws" => Some(Family::Cws),
         "fdg" => Some(Family::Fdg),
+        "photons" => Some(Family::Photons),
+        "phz" => Some(Family::Phz),
+        "cxline" => Some(Family::Cxline),
         "pws" => Some(Family::Pws),
         other => format_anycubic::AnycubicFlavour::of_extension(other).map(|_| Family::Anycubic),
     }
@@ -269,6 +299,9 @@ mod tests {
             "a.prz",
             "a.crmaslice",
             "a.fdg",
+            "a.photons",
+            "a.phz",
+            "a.cxline",
         ] {
             assert!(
                 claimed_by(Path::new(name)).is_some(),

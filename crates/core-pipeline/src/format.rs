@@ -33,13 +33,16 @@ pub enum SlicedFormat {
     Svgx,
     Cws,
     Fdg,
+    Photons,
+    Phz,
+    Cxline,
     Pwsz(PwszFlavour),
 }
 
 impl SlicedFormat {
-    /// The sixteen a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
+    /// The nineteen a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
     /// the Anycubic families are on the picker; the others are renames (ADR 0047).
-    pub const CHOICES: [Self; 16] = [
+    pub const CHOICES: [Self; 19] = [
         Self::Goo,
         Self::Ctb(CtbVersion::V4),
         Self::Ctb(CtbVersion::V5),
@@ -55,6 +58,9 @@ impl SlicedFormat {
         Self::Svgx,
         Self::Cws,
         Self::Fdg,
+        Self::Photons,
+        Self::Phz,
+        Self::Cxline,
         Self::Pwsz(PwszFlavour::Pwsz),
     ];
 
@@ -86,6 +92,12 @@ impl SlicedFormat {
             Some(Self::Cws)
         } else if extension.eq_ignore_ascii_case("fdg") {
             Some(Self::Fdg)
+        } else if extension.eq_ignore_ascii_case("photons") {
+            Some(Self::Photons)
+        } else if extension.eq_ignore_ascii_case("phz") {
+            Some(Self::Phz)
+        } else if extension.eq_ignore_ascii_case("cxline") {
+            Some(Self::Cxline)
         } else {
             let extension = extension.to_string_lossy();
             Sl1Flavour::of_extension(&extension)
@@ -155,6 +167,9 @@ impl SlicedFormat {
             Self::Svgx => "svgx",
             Self::Cws => "cws",
             Self::Fdg => "fdg",
+            Self::Photons => "photons",
+            Self::Phz => "phz",
+            Self::Cxline => "cxline",
             Self::Pwsz(flavour) => flavour.extension(),
         }
     }
@@ -183,6 +198,9 @@ impl From<OutputFormat> for SlicedFormat {
             OutputFormat::Svgx => Self::Svgx,
             OutputFormat::Cws => Self::Cws,
             OutputFormat::Fdg => Self::Fdg,
+            OutputFormat::Photons => Self::Photons,
+            OutputFormat::Phz => Self::Phz,
+            OutputFormat::Cxline => Self::Cxline,
             OutputFormat::Pwsz { extension } => Self::Pwsz(pwsz_flavour(extension)),
         }
     }
@@ -211,6 +229,9 @@ impl From<SlicedFormat> for OutputFormat {
             SlicedFormat::Svgx => Self::Svgx,
             SlicedFormat::Cws => Self::Cws,
             SlicedFormat::Fdg => Self::Fdg,
+            SlicedFormat::Photons => Self::Photons,
+            SlicedFormat::Phz => Self::Phz,
+            SlicedFormat::Cxline => Self::Cxline,
             SlicedFormat::Pwsz(flavour) => Self::Pwsz {
                 extension: pwsz_extension(flavour),
             },

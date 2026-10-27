@@ -454,6 +454,109 @@ fn the_one_bit_container_keeps_the_lit_area_and_the_resin() {
     assert_eq!(lit, 46 * 22, "the border falls below the cut");
 }
 
+/// The Photon S's container: one bit a pixel, and of the resin only its peel and wait.
+#[test]
+fn the_photon_s_container_keeps_the_lit_area_and_the_peel() {
+    let job = PrintJob {
+        material: told(),
+        ..job()
+    };
+    let bytes = write_job(&format_anycubic::PhotonsWriter, &job);
+    let mut unnamed = Cursor::new(bytes.clone());
+    assert!(
+        open(Path::new("plate.bin"), &mut unnamed).is_ok(),
+        "it names itself in its bytes"
+    );
+
+    let mut source = Cursor::new(bytes);
+    let mut opened =
+        open(Path::new("plate.photons"), &mut source).expect("a .photons we wrote opens");
+    let facts = opened.facts();
+    assert_eq!(facts.layer_count(), LAYERS);
+    assert_eq!((facts.width_px, facts.height_px), (WIDTH_PX, HEIGHT_PX));
+    assert_eq!(facts.grey_steps, 2);
+    assert_eq!(facts.stated, stated_by("cws"), "the same peel as the .cws");
+
+    let runs = opened.layer(0).expect("the first layer");
+    let lit: u32 = runs
+        .iter()
+        .filter(|run| run.value > 0)
+        .map(|run| run.length)
+        .sum();
+    assert_eq!(lit, 46 * 22, "the border falls below the cut");
+}
+
+/// The Sonic Mini's container: the `.fdg` layout under another header, the resin as `.ctb`
+/// states it.
+#[test]
+fn the_sonic_mini_container_keeps_the_lit_area_and_the_resin() {
+    let job = PrintJob {
+        material: told(),
+        ..job()
+    };
+    let bytes = write_job(&format_chitu::PhzWriter, &job);
+    let mut unnamed = Cursor::new(bytes.clone());
+    assert!(
+        open(Path::new("plate.bin"), &mut unnamed).is_ok(),
+        "it names itself in its bytes"
+    );
+
+    let mut source = Cursor::new(bytes);
+    let mut opened = open(Path::new("plate.phz"), &mut source).expect("a .phz we wrote opens");
+    let facts = opened.facts();
+    assert_eq!(facts.layer_count(), LAYERS);
+    assert_eq!((facts.width_px, facts.height_px), (WIDTH_PX, HEIGHT_PX));
+    assert_eq!(facts.grey_steps, 2);
+    assert_eq!(facts.stated, stated_by("ctb"));
+
+    let runs = opened.layer(0).expect("the first layer");
+    let lit: u32 = runs
+        .iter()
+        .filter(|run| run.value > 0)
+        .map(|run| run.length)
+        .sum();
+    assert_eq!(lit, 46 * 22, "the border falls below the cut");
+}
+
+/// The D158's container: polygons traced out of the mask, so the border of grey 120 is below
+/// the cut and the block inside it comes back whole; the light is stated as it was told.
+#[test]
+fn the_polygon_container_of_the_creality_family_keeps_the_lit_area() {
+    let job = PrintJob {
+        material: told(),
+        ..job()
+    };
+    let bytes = write_job(&format_creality::CxlineWriter, &job);
+    let mut unnamed = Cursor::new(bytes.clone());
+    assert!(
+        open(Path::new("plate.bin"), &mut unnamed).is_ok(),
+        "it names itself in its bytes"
+    );
+
+    let mut source = Cursor::new(bytes);
+    let mut opened =
+        open(Path::new("plate.cxline"), &mut source).expect("a .cxline we wrote opens");
+    let facts = opened.facts();
+    assert_eq!(facts.layer_count(), LAYERS);
+    assert_eq!((facts.width_px, facts.height_px), (WIDTH_PX, HEIGHT_PX));
+    assert_eq!(facts.grey_steps, 2);
+    let told = stated_by("goo");
+    assert_eq!(
+        (facts.stated.light_pwm, facts.stated.bottom_light_pwm),
+        (told.light_pwm, told.bottom_light_pwm)
+    );
+
+    let runs = opened.layer(0).expect("the first layer");
+    let covered: u64 = runs.iter().map(|run| u64::from(run.length)).sum();
+    assert_eq!(covered, u64::from(WIDTH_PX) * u64::from(HEIGHT_PX));
+    let lit: u32 = runs
+        .iter()
+        .filter(|run| run.value > 0)
+        .map(|run| run.length)
+        .sum();
+    assert_eq!(lit, 46 * 22, "the border falls below the cut");
+}
+
 #[test]
 fn a_renamed_container_opens_under_the_extension_its_machines_read() {
     for (name, bytes) in [

@@ -144,6 +144,10 @@ impl<S: ReadSeek> Reads<S> {
         Ok(f32::from_be_bytes(self.array()?))
     }
 
+    pub fn f64_be(&mut self) -> Result<f64, FormatError> {
+        Ok(f64::from_be_bytes(self.array()?))
+    }
+
     pub fn u16_le(&mut self) -> Result<u16, FormatError> {
         Ok(u16::from_le_bytes(self.array()?))
     }

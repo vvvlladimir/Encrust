@@ -1,5 +1,8 @@
 //! The `.fdg` container: the Chitu layer records and previews under a header of its own and
-//! a one-bit layer codec. Layout is in `docs/formats/fdg.md`.
+//! a one-bit layer codec. Layout is in `docs/formats/fdg.md`; `.phz` is this layout under
+//! another header.
+
+use std::io;
 
 use core_format::{
     Fields, FormatError, LayerSink, PREVIEW_SIZES_PX, PrintJob, SlicedFileWriter, WriteSeek,
@@ -16,12 +19,18 @@ mod rle;
 #[cfg(test)]
 mod tests;
 
-use header::{HEADER_BYTES, Offsets, Totals};
+pub(crate) use header::{HEADER_BYTES, Offsets, Totals, write_tail};
 pub use reader::{FdgReader, OpenFdg};
+pub(crate) use reader::{MotionAt, read_machine_name, read_motion, read_table};
 pub use rle::FdgLayer;
+pub(crate) use rle::{cover, decode};
 
 /// Two heights closer than this are one height, as the header counts them.
 const SAME_HEIGHT_MM: f32 = 0.001;
+
+/// Writes the header of a container of this layout, with what only the end of the stack
+/// tells; it is written over the reserved bytes once every layer is in.
+pub(crate) type WriteHeader = fn(&mut Fields<'_>, &PrintJob, Offsets, Totals) -> io::Result<()>;
 
 /// Writes the `.fdg` container.
 #[derive(Debug, Default, Clone, Copy)]
@@ -39,6 +48,28 @@ impl SlicedFileWriter for FdgWriter {
         job: &PrintJob,
         sink: &'w mut dyn WriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
+        FdgSink::open(job, sink, header::write_header)
+    }
+}
+
+/// An `.fdg` or `.phz` file with everything in front of its layers written.
+pub struct FdgSink<'w> {
+    fields: Fields<'w>,
+    job: PrintJob,
+    write_header: WriteHeader,
+    offsets: Offsets,
+    totals: Totals,
+    previous_z_mm: f32,
+    defs: Vec<LayerDef>,
+}
+
+impl<'w> FdgSink<'w> {
+    /// Writes the previews, the machine name and room for the header and the table.
+    pub(crate) fn open(
+        job: &PrintJob,
+        sink: &'w mut dyn WriteSeek,
+        write_header: WriteHeader,
+    ) -> Result<Self, FormatError> {
         validate(job)?;
 
         let mut fields = Fields::new(sink);
@@ -67,25 +98,16 @@ impl SlicedFileWriter for FdgWriter {
         offsets.layer_table = fields.position()? as u32;
         fields.zeros((LAYER_DEF_BYTES * u64::from(job.layer_count())) as usize)?;
 
-        Ok(FdgSink {
+        Ok(Self {
             fields,
             job: job.clone(),
+            write_header,
             offsets,
             totals: Totals::default(),
             previous_z_mm: f32::MIN_POSITIVE,
             defs: Vec::with_capacity(job.layer_count() as usize),
         })
     }
-}
-
-/// An `.fdg` file with everything in front of its layers written.
-pub struct FdgSink<'w> {
-    fields: Fields<'w>,
-    job: PrintJob,
-    offsets: Offsets,
-    totals: Totals,
-    previous_z_mm: f32,
-    defs: Vec<LayerDef>,
 }
 
 impl LayerSink for FdgSink<'_> {
@@ -145,7 +167,7 @@ impl LayerSink for FdgSink<'_> {
             def.write(&mut self.fields, LAYER_DEF_EX_BYTES)?;
         }
         self.fields.seek_to(0)?;
-        header::write_header(&mut self.fields, &self.job, self.offsets, self.totals)?;
+        (self.write_header)(&mut self.fields, &self.job, self.offsets, self.totals)?;
         debug_assert_eq!(self.fields.position()?, HEADER_BYTES);
         self.fields.flush()?;
         Ok(())

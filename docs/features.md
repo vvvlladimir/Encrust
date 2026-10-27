@@ -581,9 +581,12 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Carima | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
 | `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
+| `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
 | `.fdg` | Voxelab | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
+| `.phz` | Phrozen Sonic Mini | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
+| `.photons` | Anycubic Photon S | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. One exposure for the whole print. Not yet printed from. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
 
 Encrust also opens the `.pws` of the original Photon and Photon S, which it does not write.
@@ -609,7 +612,7 @@ are the ones the plate prints on, with no second click.
 
 **Printers:** about 160 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
 FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab, HIFUN,
-ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima and Zortrax.
+ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima, Zortrax and PioNext.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,

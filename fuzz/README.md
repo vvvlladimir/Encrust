@@ -16,20 +16,23 @@ cargo +nightly fuzz run sliced_chitu -- -max_total_time=60
 cargo +nightly fuzz run mesh         -- -max_total_time=300 -max_len=65536
 ```
 
-Fifteen targets:
+Eighteen targets:
 
 | target | what it covers |
 | --- | --- |
 | `mesh` | STL, OBJ and 3MF through `loader_for_extension`, and `Texture::decode` behind them |
 | `sliced_chitu` | `.ctb` v4 and v5, `.cbddlp`, `.photon`, and RLE7 and RLE1 |
 | `sliced_fdg` | `.fdg`: the header, the layer table, the cipher and the one-bit codec |
+| `sliced_phz` | `.phz`: the header, the layer table, the cipher and the one-bit codec |
 | `sliced_ctb_encrypted` | the encrypted `.ctb`: header, deciphered settings, signature, layers; seeded with a real file |
 | `sliced_goo` | the `.goo` header, layer table and run-length encoding |
 | `sliced_anycubic` | `.pwmx` and the six extensions beside it, and PW0 |
+| `sliced_photons` | `.photons`: the header, the walk over the layer records and the one-bit codec |
 | `sliced_pws` | `.pws`: the same container, its layers as one-bit passes summed into grey |
 | `sliced_sl1` | `.sl1` and `.sl1s` — a zip of PNGs, so the zip and PNG decoders with it |
 | `sliced_gcode_zip` | the `.zip` whose `run.gcode` is the program, parsed line by line |
 | `sliced_creality` | `.cxdlp` at versions 3 and 4: the vertical lines, the tables and RLE7 |
+| `sliced_cxline` | `.cxline`: the header, the walk over the layers, the rings and their fill |
 | `sliced_svgx` | `.svgx`: the header, the document index and the path data of one group |
 | `sliced_cws` | `.cws`: a zip, `slice.conf`, the gcode program and the PNGs behind it |
 | `sniff` | a file whose name says nothing: the sniffer picks the family, possibly the wrong one |
