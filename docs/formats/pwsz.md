@@ -21,9 +21,9 @@ No file a machine accepted has been read, and none of these machines is in the r
 
 | Source | What it settles |
 |---|---|
-| The vendor's own slicer's writer, read statically | Which entries it writes and in what order, the keys it sets in each, that a layer is `layer_N.pw0Img` in the PW0 codec, the size of the scene head (388 bytes) and of a volumes row (48), and that the machine settings are a template with the panel's fields written over |
+| The vendor's own slicer's writer, read statically | Which entries it writes and in what order, the keys it sets in each and from which setting, that a layer is `layer_N.pw0Img` in the PW0 codec, the scene head (388 bytes), every field of `calc_layer_volumes.data`, and that the machine settings are a template with the panel's fields written over |
 | The same program's machine templates | Every constant below: the previews' sizes and colours, the firmware's motion and exposure constants, the resin's depth curve |
-| An open-source reader and writer of the archive | The field order of `scene.slice` and `calc_layer_volumes.data`, and that a raw volume times 0.0011 is millilitres |
+| An open-source reader and writer of the archive | The field order of a `scene.slice` row, which the vendor's slicer fills only in part |
 
 Both writers write the layers in PW0, though the settings call the codec `pwszImg`: that
 name is a vector codec of contour segments, which neither writes.
@@ -44,7 +44,7 @@ entries that sum them up after, and a reader finds an entry by name.
 | `print_info.json` | `cost`, `currency` (always `$`, as the vendor writes it), `print_time` s, `volume` ml |
 | `anycubic_photon_resins.pwsp` | the machine and its resin, below |
 | `scene.slice` | the model's extent and each layer's, below |
-| `calc_layer_volumes.data` | resin by slab, below |
+| `calc_layer_volumes.data` | the area each layer cures, below |
 
 ## `anycubic_photon_resins.pwsp`
 
@@ -64,7 +64,10 @@ exposure constants unchanged from the templates, and one user resin, which is al
 active one: named `User@<resin>@ACF@normal_print` as the vendor names a user's resin, code
 `"10"` (standard resin), and the job's exposure, bottom layers, light-off, lift, retract and
 transition layers in `slicepara` and `slice_extpara`. Speeds are millimetres a second.
-`multi_state_used` is 0, because the slicer plans one lift stage, and both stages state it.
+`multi_state_used` is 1, as the vendor's slicer always states it: stage 0 is the lift we plan,
+stage 1 climbs nothing, and both come down at the retract speed, as the `EXTRA` block of
+`anycubic.md` does. Stage 1 keeps stage 0's speed up, since a firmware estimating time
+divides by it. `gray_level` states the edge blur again, as the vendor's slicer does.
 `anti_count` and `blur_level` are the panel's anti-alias level and edge blur, as in the table
 container's header.
 `intelli_mode` is 1, the vendor's value for a user resin; what the firmware does with it is
@@ -93,13 +96,15 @@ A row: the layer's top in mm, its cured area in mm², its lit box from the panel
 (left, top, right, bottom, mm), the number of separate pieces it cures as a `u32`, the area
 of the largest in mm², and 32 zero bytes. A dark layer's box is zero.
 
+The vendor's slicer leaves the model's extent and every box zero and counts each layer as one
+piece as large as the layer; we state what the layers light, which a reader of either form
+takes the same way.
+
 ## `calc_layer_volumes.data`
 
-A 16-byte head — `0x20251024`, the slab thickness 0.2 as `f32`, a `u32` 1, the slab count —
-then 48 bytes a slab: the layer below the slab (0 for the first), its floor and thickness in
-mm, 32 zero bytes, and its raw volume, `f32`. A slab is consecutive layers summed until they
-are 0.2 mm thick; the last may be thinner. The firmware reads a raw volume times 0.0011 as
-millilitres, so we write cubic millimetres divided by 1.1.
+A 16-byte head — `0x20251024`, 0.2 as `f32`, a `u32` 1, the layer count — then 48 bytes a
+layer: its number counted from 1, its top in mm, the sliced layer height in mm, 32 zero
+bytes, and the area it cures in mm², `f32`, the quantity `.cxline` states per layer.
 
 ## What we do not write
 

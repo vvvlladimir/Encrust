@@ -3,9 +3,9 @@ use core_format::{
 };
 use core_raster::LayerRuns;
 
-use crate::blocks;
 use crate::rle::EncodedLayer;
 use crate::tables::{self, LAYER_DEF_BYTES, LayerDef, Offsets};
+use crate::{blocks, extent};
 
 /// Which revision a file states it is.
 ///
@@ -212,6 +212,7 @@ impl SlicedFileWriter for AnycubicWriter {
             job: job.clone(),
             offsets,
             defs: Vec::with_capacity(job.layer_count() as usize),
+            lit_box_px: None,
         })
     }
 }
@@ -222,17 +223,28 @@ pub struct AnycubicSink<'w> {
     job: PrintJob,
     offsets: Offsets,
     defs: Vec<LayerDef>,
+    /// What every layer so far lights, for the model block.
+    lit_box_px: Option<[u32; 4]>,
+}
+
+/// One layer in the PW0 codec, and where it is lit.
+pub struct AnycubicLayer {
+    runs: EncodedLayer,
+    box_px: Option<[u32; 4]>,
 }
 
 impl LayerSink for AnycubicSink<'_> {
-    type Encoded = EncodedLayer;
+    type Encoded = AnycubicLayer;
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        EncodedLayer::encode(layer)
+        AnycubicLayer {
+            runs: EncodedLayer::encode(layer),
+            box_px: extent::lit_box(layer),
+        }
     }
 
-    fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
-        let index = self.defs.len() as u32;
+    fn push(&mut self, layer: Self::Encoded) -> Result<(), FormatError> {
+        let (encoded, index) = (&layer.runs, self.defs.len() as u32);
         if index == self.job.layer_count() {
             return Err(FormatError::LayerCountMismatch {
                 expected: self.job.layer_count(),
@@ -273,6 +285,9 @@ impl LayerSink for AnycubicSink<'_> {
             layer_height_mm: self.job.layer_height_mm(index),
             lit_pixels: encoded.lit_pixels(),
         });
+        if let Some(box_px) = layer.box_px {
+            self.lit_box_px = Some(extent::union(self.lit_box_px, box_px));
+        }
         Ok(())
     }
 
@@ -299,6 +314,12 @@ impl LayerSink for AnycubicSink<'_> {
             def.write_sub_layer(&mut self.fields)?;
         }
 
+        self.fields.seek_to(u64::from(self.offsets.model))?;
+        let model_mm = self
+            .lit_box_px
+            .map(|box_px| extent::box_mm(&self.job, box_px));
+        blocks::write_model(&mut self.fields, &self.job, model_mm)?;
+
         // The header states the resin the stack came to, which is only known now; see
         // docs/decisions/0067-the-resin-volume-is-patched-in-at-finish.md.
         self.fields.seek_to(u64::from(self.offsets.header))?;
@@ -310,124 +331,4 @@ impl LayerSink for AnycubicSink<'_> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::io::Cursor;
-
-    use super::*;
-    use crate::fixtures::sample_job;
-
-    fn layer() -> LayerRuns {
-        LayerRuns::builder(8, 4).finish()
-    }
-
-    #[test]
-    fn every_extension_round_trips_through_its_own_name() {
-        for flavour in AnycubicFlavour::ALL {
-            assert_eq!(
-                AnycubicFlavour::of_extension(flavour.extension()),
-                Some(flavour)
-            );
-        }
-        assert_eq!(
-            AnycubicFlavour::of_extension("PWMX"),
-            Some(AnycubicFlavour::Pwmx)
-        );
-        assert_eq!(AnycubicFlavour::of_extension("goo"), None);
-        assert_eq!(AnycubicWriter::default().extension(), "pwmx");
-    }
-
-    #[test]
-    fn a_job_without_layers_is_rejected_before_anything_is_written() {
-        let mut buffer = Cursor::new(Vec::new());
-        let err = AnycubicWriter::default()
-            .begin(&sample_job(0), &mut buffer)
-            .err()
-            .expect("an empty job cannot be written");
-        assert!(matches!(err, FormatError::EmptyJob));
-        assert!(buffer.into_inner().is_empty());
-    }
-
-    #[test]
-    fn a_layer_of_the_wrong_size_is_rejected() {
-        let mut buffer = Cursor::new(Vec::new());
-        let mut sink = AnycubicWriter::default()
-            .begin(&sample_job(1), &mut buffer)
-            .expect("the job is sound");
-        let err = sink
-            .push(EncodedLayer::encode(&LayerRuns::builder(4, 4).finish()))
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            FormatError::ResolutionMismatch { index: 0, .. }
-        ));
-    }
-
-    #[test]
-    fn more_layers_than_promised_are_refused() {
-        let mut buffer = Cursor::new(Vec::new());
-        let mut sink = AnycubicWriter::default()
-            .begin(&sample_job(1), &mut buffer)
-            .expect("the job is sound");
-        sink.push(AnycubicSink::encode(&layer()))
-            .expect("the first layer");
-        let err = sink.push(AnycubicSink::encode(&layer())).unwrap_err();
-        assert!(matches!(
-            err,
-            FormatError::LayerCountMismatch {
-                expected: 1,
-                written: 2
-            }
-        ));
-    }
-
-    #[test]
-    fn fewer_layers_than_promised_are_refused_at_the_end() {
-        let mut buffer = Cursor::new(Vec::new());
-        let sink = AnycubicWriter::default()
-            .begin(&sample_job(2), &mut buffer)
-            .expect("the job is sound");
-        let err = sink.finish(0.0).unwrap_err();
-        assert!(matches!(
-            err,
-            FormatError::LayerCountMismatch {
-                expected: 2,
-                written: 0
-            }
-        ));
-    }
-
-    #[test]
-    fn a_bottom_layer_lifts_by_its_own_numbers() {
-        let mut job = sample_job(3);
-        job.material.bottom_layers = 1;
-        job.material.bottom_lift_distance_mm = 9.0;
-        job.material.bottom_lift_speed_mm_min = 30.0;
-        job.material.lift_distance_mm = 5.0;
-        job.material.lift_speed_mm_min = 60.0;
-
-        let mut buffer = Cursor::new(Vec::new());
-        {
-            let mut sink = AnycubicWriter::default()
-                .begin(&job, &mut buffer)
-                .expect("the job is sound");
-            for _ in 0..3 {
-                sink.push(AnycubicSink::encode(&layer())).expect("a layer");
-            }
-            sink.finish(0.0).expect("every promised layer arrived");
-        }
-        let bytes = buffer.into_inner();
-        let table =
-            tables::Offsets::of(3).layer_table as usize + tables::LAYER_TABLE_HEAD_BYTES as usize;
-        let f32_at = |at: usize| {
-            f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
-        };
-
-        let row = |index: usize| table + index * LAYER_DEF_BYTES as usize;
-        assert_eq!((f32_at(row(0) + 8), f32_at(row(0) + 12)), (9.0, 0.5));
-        assert_eq!(
-            (f32_at(row(1) + 8), f32_at(row(1) + 12)),
-            (5.0, 1.0),
-            "a speed is millimetres a second in this container"
-        );
-    }
-}
+mod tests;

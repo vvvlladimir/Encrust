@@ -146,7 +146,7 @@ pub(crate) fn write_back(
     blocks::write_extra(fields, job)?;
     blocks::write_machine(fields, job, version)?;
     blocks::write_software(fields)?;
-    blocks::write_model(fields, job)?;
+    blocks::write_model(fields, job, None)?;
     blocks::write_sub_layer_head(fields, job.layer_count())
 }
 

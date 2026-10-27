@@ -452,7 +452,7 @@ fn the_second_layer_table_repeats_the_first() {
     );
 
     let sub_layers = u32_at(&file, SUB_LAYERS_ADDRESS) as usize;
-    assert_eq!(u32_at(&file, sub_layers + 12), 24 + 44 * 3);
+    assert_eq!(u32_at(&file, sub_layers + 12), 44, "one row's length");
     assert_eq!(u32_at(&file, sub_layers + 16), 3);
     let table = u32_at(&file, LAYER_TABLE_ADDRESS) as usize + 20;
     for index in 0..3 {

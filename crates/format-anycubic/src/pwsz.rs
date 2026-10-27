@@ -179,7 +179,10 @@ impl LayerSink for PwszSink<'_> {
                 settings::machine(job, self.flavour)?,
             ),
             ("scene.slice", scene::scene_slice(job, &self.rows)?),
-            ("calc_layer_volumes.data", scene::layer_volumes(&self.rows)?),
+            (
+                "calc_layer_volumes.data",
+                scene::layer_volumes(job, &self.rows)?,
+            ),
         ];
         for (name, bytes) in &entries {
             entry(&mut self.zip, name, bytes)?;

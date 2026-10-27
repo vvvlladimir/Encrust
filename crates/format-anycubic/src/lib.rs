@@ -4,6 +4,7 @@
 
 mod bit_planes;
 mod blocks;
+mod extent;
 #[cfg(test)]
 mod fixtures;
 mod photons;
@@ -17,4 +18,4 @@ pub use photons::{OpenPhotons, PhotonsLayer, PhotonsReader, PhotonsSink, Photons
 pub use pwsz::{PwszFlavour, PwszLayer, PwszSink, PwszWriter};
 pub use reader::{AnycubicReader, OpenAnycubic, PwsReader};
 pub use rle::{EncodedLayer, GREY_STEPS, decode};
-pub use writer::{AnycubicFlavour, AnycubicSink, AnycubicVersion, AnycubicWriter};
+pub use writer::{AnycubicFlavour, AnycubicLayer, AnycubicSink, AnycubicVersion, AnycubicWriter};

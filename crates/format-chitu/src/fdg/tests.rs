@@ -23,6 +23,12 @@ fn written(layers: u32) -> Vec<u8> {
     let mut job = sample_job(layers);
     job.material.light_pwm = 200;
     job.material.bottom_light_pwm = 100;
+    job.material.waits = printer_profiles::Waits {
+        mode: printer_profiles::WaitMode::Rest,
+        before_lift_s: 1.5,
+        after_lift_s: 0.5,
+        after_retract_s: 2.0,
+    };
     let mut file = Cursor::new(Vec::new());
     {
         let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
@@ -156,6 +162,24 @@ fn the_bottom_light_power_comes_before_the_light_power() {
         .expect("an .fdg we wrote");
     assert_eq!(open.facts().stated.light_pwm, Some(200));
     assert_eq!(open.facts().stated.bottom_light_pwm, Some(100));
+}
+
+#[test]
+fn the_block_at_0xd8_carries_the_rests_as_the_ctb_v4_parameters_do() {
+    let bytes = written(1);
+    let f32_at =
+        |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+    assert_eq!(
+        (f32_at(0xC0), f32_at(0xC4)),
+        (2.0, 0.5),
+        "after retract, after lift"
+    );
+    assert_eq!((f32_at(0xE4), f32_at(0xEC)), (4.0, 4.0));
+    assert_eq!(
+        (f32_at(0xF0), f32_at(0xF4), f32_at(0xF8)),
+        (2.0, 0.5, 1.5),
+        "after retract, after lift, before lift"
+    );
 }
 
 #[test]

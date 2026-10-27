@@ -187,6 +187,10 @@ The 16-byte head, then a `u32` layer count, then one 32-byte row per layer in pr
 A bottom layer carries the bottom lift distance and speed; every other layer the ordinary
 ones. This is what lets exposure and motion change over the height of a print.
 
+Where the slicer and the reference file differ, we keep the reference: the slicer states the
+table's length as 4, its count alone, and writes a row's lift speed in mm/min, which the
+header's per-layer flag of 0 keeps a machine from acting on.
+
 *Lit pixels* is a count the machine displays. We count it after the grey is quantised, so it
 is what the file cures; the reference writer counts it before, and its own files disagree
 with themselves by about half a per cent.
@@ -246,11 +250,11 @@ four zero words.
 
 **`Model`**, 44 bytes, named in mixed case and with no length: the box the print stands in,
 measured from the panel's centre, then whether supports were generated and how dense. The
-stack's extent in X and Y does not reach the writer, so the box is the whole panel — an
-over-estimate the machine only draws with.
+slicer states its mesh's box; ours is what the layers light, from the plate to the top of
+the stack, written once the last layer is in.
 
-**`SUBIMGS`**, counting its head in: a `u32` layer count and a `u32` index of 1, then per
-layer the address, the length and the lit pixel count of the same layer data the first table
+**`SUBIMGS`**, stating one row's length, 44, whatever the layer count, as the slicer does: a
+`u32` layer count and a `u32` index of 1, then per layer the address, the length and the lit pixel count of the same layer data the first table
 points at, and eight floats nobody has identified, written as zero. It is filled in at the
 end, like the first table.
 

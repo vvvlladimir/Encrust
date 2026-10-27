@@ -158,22 +158,29 @@ fn separate_pieces_are_counted_and_the_largest_kept() {
 }
 
 #[test]
-fn the_volumes_group_layers_into_slabs_of_two_tenths() {
-    // Six layers of 0.05 mm are one slab of four and one of the two left over.
-    let layers: Vec<_> = (0..6).map(|_| layer(centre_block)).collect();
+fn the_volumes_state_each_layer_its_top_and_cured_area() {
+    let layers: Vec<_> = (0..3).map(|_| layer(centre_block)).collect();
     let mut archive = written(PwszFlavour::Pwsz, &layers);
     let volumes = entry(&mut archive, "calc_layer_volumes.data");
     assert_eq!(u32_at(&volumes, 0), 0x2025_1024);
-    assert_eq!(u32_at(&volumes, 12), 2, "two slabs");
-    assert_eq!(volumes.len(), 16 + 2 * 48);
+    assert_eq!(u32_at(&volumes, 12), 3, "a row per layer");
+    assert_eq!(volumes.len(), 16 + 3 * 48);
 
-    let second = 16 + 48;
-    assert_eq!(u32_at(&volumes, second), 3, "the layer under the slab");
-    assert!((f32_at(&volumes, second + 4) - 0.2).abs() < 1e-5);
-    assert!((f32_at(&volumes, second + 8) - 0.1).abs() < 1e-5);
-    // 0.08 mm2 over 0.1 mm is 0.008 mm3, stated as 0.008 / 1.1.
-    let raw = f32_at(&volumes, second + 44);
-    assert!((raw - 0.008 / 1.1).abs() < 1e-6, "raw volume {raw}");
+    let third = 16 + 2 * 48;
+    assert_eq!(u32_at(&volumes, third), 3, "rows count from one");
+    assert!(
+        (f32_at(&volumes, third + 4) - 0.15).abs() < 1e-5,
+        "the layer's top"
+    );
+    assert!(
+        (f32_at(&volumes, third + 8) - 0.05).abs() < 1e-5,
+        "the layer height"
+    );
+    let area = f32_at(&volumes, third + 44);
+    assert!(
+        (area - 0.08).abs() < 1e-6,
+        "eight pixels of 0.01 mm2, got {area}"
+    );
 }
 
 #[test]
@@ -310,4 +317,24 @@ fn every_shipped_machine_that_reads_this_archive_can_be_written() {
         sink.finish(0.0).expect("the one layer is in");
     }
     assert_eq!(found, 5, "the M7, M7 Pro, M7 Max, Mono 4 Ultra and P1 Max");
+}
+
+#[test]
+fn the_lift_is_stated_as_two_stages_with_the_second_climbing_nothing() {
+    let mut archive = written(PwszFlavour::Pwsz, &[layer(centre_block)]);
+    let machine = json(&mut archive, "anycubic_photon_resins.pwsp");
+    let resin = &machine["machine_extern"]["user_resins"][0];
+    let (extra, single) = (&resin["slice_extpara"], &resin["slicepara"]);
+    assert_eq!(
+        extra["multi_state_used"], 1,
+        "as the vendor's slicer states it"
+    );
+    let stages = &extra["multi_state_paras"];
+    assert_eq!(stages["normal_0"]["height"], single["zup_height"]);
+    assert_eq!(stages["normal_1"]["height"], 0.0);
+    for stage in ["normal_0", "normal_1"] {
+        assert_eq!(stages[stage]["down_speed"], single["zdown_speed"]);
+        assert_eq!(stages[stage]["up_speed"], single["zup_speed"]);
+    }
+    assert_eq!(single["gray_level"], single["blur_level"]);
 }

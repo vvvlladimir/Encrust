@@ -59,8 +59,8 @@ Offsets hexadecimal. Words are little-endian.
 | 0xC8 | transition layers, transition type, `u16` each | the count, then 0 |
 | 0xCC | address and length of the block at 0xD8, `u32` each | `0xD8`, `0x50` |
 | 0xD4 | `u32` | zero |
-| 0xD8 | bottom retract speed, `f32` | mm/min |
-| 0xDC | nine words | zero |
+| 0xD8 | the first 36 bytes of `.ctb`'s v4 parameters (`chitu.md`) | bottom retract speed, the two 4.0 words, rest after retract, after lift, before lift |
+| 0xFC | `u32` | zero |
 | 0x100 | exposure, light-off delay and rests over every layer, `f32` | seconds |
 | 0x104 | largest layer's byte count, `u32` | |
 | 0x108 | index of the last layer below the bottom height, `u32` | |

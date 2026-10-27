@@ -207,21 +207,10 @@ fn write_v4_parameters(
         CtbVersion::V5 => at + PRINT_PARAMETERS_V4_BYTES,
     };
 
-    fields.f32_le(job.material.bottom_retract_speed_mm_min)?;
-    fields.f32_le(0.0)?;
-    fields.u32_le(0)?;
-
-    // Two fields the machine checks for the literal 4.0, and one for the literal 5.
-    fields.f32_le(4.0)?;
-    fields.u32_le(0)?;
-    fields.f32_le(4.0)?;
-
-    let [before_lift_s, after_lift_s, after_retract_s] = job.material.waits.rests_s();
-    fields.f32_le(after_retract_s)?;
-    fields.f32_le(after_lift_s)?;
-    fields.f32_le(before_lift_s)?;
+    write_v4_motion(fields, job)?;
     fields.zeros(8)?;
     fields.u32_le(0)?;
+    // A field the machine checks for the literal 5.
     fields.u32_le(5)?;
     fields.u32_le(job.layer_count().saturating_sub(1))?;
     fields.zeros(16)?;
@@ -234,6 +223,24 @@ fn write_v4_parameters(
         write_resin_parameters(fields, job, resin_parameters_address)?;
     }
     Ok(())
+}
+
+/// The first 36 bytes of the v4 parameters: the bottom retract speed, the rests around a
+/// lift, and the words between. `.fdg` and `.phz` copy them into their header at 0xD8.
+pub(crate) fn write_v4_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    fields.f32_le(job.material.bottom_retract_speed_mm_min)?;
+    fields.f32_le(0.0)?;
+    fields.u32_le(0)?;
+
+    // Two fields the machine checks for the literal 4.0.
+    fields.f32_le(4.0)?;
+    fields.u32_le(0)?;
+    fields.f32_le(4.0)?;
+
+    let [before_lift_s, after_lift_s, after_retract_s] = job.material.waits.rests_s();
+    fields.f32_le(after_retract_s)?;
+    fields.f32_le(after_lift_s)?;
+    fields.f32_le(before_lift_s)
 }
 
 fn write_resin_parameters(fields: &mut Fields<'_>, job: &PrintJob, at: u32) -> io::Result<()> {

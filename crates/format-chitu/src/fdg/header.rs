@@ -2,6 +2,7 @@ use std::io;
 
 use core_format::{Fields, PrintJob};
 
+use crate::blocks::write_v4_motion;
 use crate::writer::CtbVersion;
 
 /// Bytes of the header; the first preview follows it.
@@ -114,10 +115,11 @@ pub(crate) fn write_tail(
     write_parameters(fields, job, totals)
 }
 
-/// The block from 0xD8 to the end of the header.
+/// The block from 0xD8 to the end of the header: the vendor writer copies `.ctb`'s v4
+/// parameters into its first 40 bytes.
 fn write_parameters(fields: &mut Fields<'_>, job: &PrintJob, totals: Totals) -> io::Result<()> {
-    fields.f32_le(job.material.bottom_retract_speed_mm_min)?;
-    fields.zeros(36)?;
+    write_v4_motion(fields, job)?;
+    fields.zeros(4)?;
     fields.f32_le(totals.layer_time_s)?;
     fields.u32_le(totals.largest_layer_bytes)?;
     fields.u32_le(totals.last_bottom_index)?;

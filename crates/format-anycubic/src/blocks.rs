@@ -47,7 +47,7 @@ pub(crate) const SUB_LAYER_HEAD_BYTES: u32 = NAME_BYTES as u32 + 4 + 4 + 4;
 /// eight floats nobody has identified.
 pub(crate) const SUB_LAYER_ROW_BYTES: u32 = 3 * 4 + 8 * 4;
 
-/// Bytes of the second layer table, which counts its own head in.
+/// Bytes the second layer table takes in the file, head and rows.
 pub(crate) fn sub_layer_table_bytes(layer_count: u32) -> u32 {
     SUB_LAYER_HEAD_BYTES + SUB_LAYER_ROW_BYTES * layer_count
 }
@@ -143,7 +143,8 @@ fn panel_px(side_px: u32) -> io::Result<u16> {
 /// Writes the second layer table's head and leaves its rows blank; they are filled in once
 /// the layers are written, like the first table's.
 pub(crate) fn write_sub_layer_head(fields: &mut Fields<'_>, layer_count: u32) -> io::Result<()> {
-    write_table_head(fields, "SUBIMGS", sub_layer_table_bytes(layer_count))?;
+    // The vendor's slicer states one row's length here, whatever the layer count.
+    write_table_head(fields, "SUBIMGS", SUB_LAYER_ROW_BYTES)?;
     fields.u32_le(layer_count)?;
     fields.u32_le(1)?;
     fields.zeros((SUB_LAYER_ROW_BYTES * layer_count) as usize)
@@ -160,24 +161,23 @@ pub(crate) fn write_software(fields: &mut Fields<'_>) -> io::Result<()> {
     fields.text("3.3-CoreProfile", 32)
 }
 
-/// Writes the model block: the box the print stands in, measured from the panel's centre.
-///
-/// The stack's own extent in X and Y is not carried this far down the pipeline, so the box
-/// is the whole panel, which is an over-estimate the machine only draws with.
-pub(crate) fn write_model(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
-    let display = &job.printer.display;
+/// Writes the model block: the box the print stands in, measured from the panel's centre,
+/// from the plate to the top of the stack. The vendor's slicer states the mesh's own box;
+/// ours is what the layers light, `None` until they are written.
+pub(crate) fn write_model(
+    fields: &mut Fields<'_>,
+    job: &PrintJob,
+    box_mm: Option<[f32; 4]>,
+) -> io::Result<()> {
     // The vendor's slicer names this block in mixed case and gives it no length.
     fields.text("Model", NAME_BYTES)?;
+    let [left, top, right, bottom] = box_mm.unwrap_or_default();
+    for value in [left, top, 0.0, right, bottom, job.height_mm()] {
+        fields.f32_le(value)?;
+    }
 
-    fields.f32_le(display.width_mm / -2.0)?;
-    fields.f32_le(display.height_mm / -2.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(display.width_mm / 2.0)?;
-    fields.f32_le(display.height_mm / 2.0)?;
-    fields.f32_le(job.height_mm())?;
-
-    // Whether supports were generated, and how dense. Supports reach this writer as part
-    // of the mesh, so nothing here can tell.
+    // TODO(step-B7): whether supports were generated, and how dense; needs `PrintJob` to
+    // carry the support settings, as supports reach the writers only inside the mesh.
     fields.u32_le(0)?;
     fields.f32_le(0.0)
 }
@@ -223,7 +223,7 @@ mod tests {
         );
         assert_eq!(written(write_software).len(), SOFTWARE_BYTES as usize);
         assert_eq!(
-            written(|fields| write_model(fields, &sample_job(1))).len(),
+            written(|fields| write_model(fields, &sample_job(1), None)).len(),
             MODEL_BYTES as usize
         );
     }
