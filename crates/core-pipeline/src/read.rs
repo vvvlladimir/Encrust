@@ -5,7 +5,7 @@ use std::path::Path;
 use core_format::{FormatError, OpenFile, ReadSeek, SlicedFile, SlicedFileReader};
 use core_raster::Run;
 use format_anycubic::{AnycubicReader, PwsReader};
-use format_chitu::{CbddlpFlavour, ChituReader};
+use format_chitu::{CbddlpFlavour, ChituReader, FdgReader};
 use format_creality::{CxdlpReader, CxdlpV4Reader};
 use format_ctb_encrypted::CtbEncryptedReader;
 use format_cws::CwsReader;
@@ -29,6 +29,7 @@ pub enum Opened<S> {
     CxdlpV4(format_creality::OpenCxdlpV4<S>),
     Svgx(format_svgx::OpenSvgx<S>),
     Cws(format_cws::OpenCws<S>),
+    Fdg(format_chitu::OpenFdg<S>),
 }
 
 impl<S: ReadSeek> OpenFile for Opened<S> {
@@ -44,6 +45,7 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::CxdlpV4(open) => open.facts(),
             Self::Svgx(open) => open.facts(),
             Self::Cws(open) => open.facts(),
+            Self::Fdg(open) => open.facts(),
         }
     }
 
@@ -59,6 +61,7 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::CxdlpV4(open) => open.layer(index),
             Self::Svgx(open) => open.layer(index),
             Self::Cws(open) => open.layer(index),
+            Self::Fdg(open) => open.layer(index),
         }
     }
 }
@@ -126,6 +129,9 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
     }
     if head.len() >= 4 {
         let magic = u32::from_le_bytes([head[0], head[1], head[2], head[3]]);
+        if magic == FDG_MAGIC {
+            return Ok(Family::Fdg);
+        }
         if CHITU_MAGICS.contains(&magic) {
             // A renamed file carries no flavour, and `.cbddlp` is the name of these bytes.
             return Ok(Family::Chitu(CbddlpFlavour::Cbddlp));
@@ -167,9 +173,10 @@ fn fill<S: ReadSeek>(source: &mut S, buffer: &mut [u8]) -> Result<usize, FormatE
     Ok(filled)
 }
 
-/// The tag behind a `.goo`'s version string, and the magics of the Chitu family.
+/// The tag behind a `.goo`'s version string, and the magics of the Chitu family and `.fdg`.
 const GOO_MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
 const CHITU_MAGICS: [u32; 3] = [0x12FD_0019, 0x12FD_0086, 0x12FD_0106];
+const FDG_MAGIC: u32 = 0xBD3C_7AC8;
 
 /// Which container a reader handles, so one can be picked by name or by content.
 #[derive(Debug, Clone, Copy)]
@@ -186,6 +193,7 @@ enum Family {
     Cxdlp,
     Svgx,
     Cws,
+    Fdg,
 }
 
 impl Family {
@@ -205,6 +213,7 @@ impl Family {
             // field behind it picks the reader.
             Self::Svgx => SvgxReader.open(source).map(Opened::Svgx),
             Self::Cws => CwsReader.open(source).map(Opened::Cws),
+            Self::Fdg => FdgReader.open(source).map(Opened::Fdg),
             Self::Cxdlp => match cxdlp_version(&mut source)? {
                 4 => CxdlpV4Reader.open(source).map(Opened::CxdlpV4),
                 _ => CxdlpReader.open(source).map(Opened::Cxdlp),
@@ -231,6 +240,7 @@ fn claimed_by(path: &Path) -> Option<Family> {
         "cxdlp" => Some(Family::Cxdlp),
         "svgx" => Some(Family::Svgx),
         "cws" => Some(Family::Cws),
+        "fdg" => Some(Family::Fdg),
         "pws" => Some(Family::Pws),
         other => format_anycubic::AnycubicFlavour::of_extension(other).map(|_| Family::Anycubic),
     }
@@ -258,6 +268,7 @@ mod tests {
             "a.cws",
             "a.prz",
             "a.crmaslice",
+            "a.fdg",
         ] {
             assert!(
                 claimed_by(Path::new(name)).is_some(),

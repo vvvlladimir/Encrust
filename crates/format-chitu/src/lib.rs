@@ -1,8 +1,9 @@
-//! The Chitu container family: `.ctb` versions 4 and 5, and the older `.cbddlp` and
-//! `.photon`. Layout is in `docs/formats/chitu.md`.
+//! The Chitu container family: `.ctb` versions 4 and 5, the older `.cbddlp` and
+//! `.photon`, and `.fdg`. Layout is in `docs/formats/chitu.md`.
 
 mod blocks;
 mod cbddlp;
+mod fdg;
 #[cfg(test)]
 mod fixtures;
 mod layer;
@@ -13,6 +14,7 @@ mod writer;
 #[cfg(test)]
 pub(crate) use blocks::HEADER_BYTES;
 pub use cbddlp::{CbddlpFlavour, CbddlpSink, CbddlpWriter};
+pub use fdg::{FdgLayer, FdgReader, FdgSink, FdgWriter, OpenFdg};
 pub use reader::{ChituReader, OpenChitu};
 pub use rle1::{EncodedPasses, GREY_PASSES, decode_passes};
 pub use writer::{CtbSink, CtbVersion, CtbWriter};

@@ -26,6 +26,7 @@ pub fn label_of(format: SlicedFormat) -> &'static str {
         SlicedFormat::Cxdlp(CxdlpVersion::V4) => ".cxdlp v4",
         SlicedFormat::Svgx => ".svgx",
         SlicedFormat::Cws => ".cws",
+        SlicedFormat::Fdg => ".fdg",
         SlicedFormat::Pwsz(flavour) => flavour.label(),
     }
 }
@@ -80,6 +81,7 @@ mod tests {
                 ".cxdlp v4",
                 ".svgx",
                 ".cws",
+                ".fdg",
                 ".pwsz"
             ]
         );

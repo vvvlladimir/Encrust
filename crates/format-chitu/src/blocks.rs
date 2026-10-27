@@ -86,7 +86,7 @@ fn write_shared_body(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<Offs
 }
 
 /// The job's thumbnail cut to one record's shape, or black when there is none.
-fn preview_pixels(job: &PrintJob, (width, height): (u32, u32)) -> Vec<Rgb> {
+pub(crate) fn preview_pixels(job: &PrintJob, (width, height): (u32, u32)) -> Vec<Rgb> {
     match job.thumbnail.as_ref() {
         Some(thumbnail) => thumbnail
             .fitted_to(width, height, PREVIEW_BACKGROUND)

@@ -16,12 +16,13 @@ cargo +nightly fuzz run sliced_chitu -- -max_total_time=60
 cargo +nightly fuzz run mesh         -- -max_total_time=300 -max_len=65536
 ```
 
-Fourteen targets:
+Fifteen targets:
 
 | target | what it covers |
 | --- | --- |
 | `mesh` | STL, OBJ and 3MF through `loader_for_extension`, and `Texture::decode` behind them |
 | `sliced_chitu` | `.ctb` v4 and v5, `.cbddlp`, `.photon`, and RLE7 and RLE1 |
+| `sliced_fdg` | `.fdg`: the header, the layer table, the cipher and the one-bit codec |
 | `sliced_ctb_encrypted` | the encrypted `.ctb`: header, deciphered settings, signature, layers; seeded with a real file |
 | `sliced_goo` | the `.goo` header, layer table and run-length encoding |
 | `sliced_anycubic` | `.pwmx` and the six extensions beside it, and PW0 |

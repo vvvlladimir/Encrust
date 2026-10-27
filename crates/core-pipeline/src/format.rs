@@ -32,13 +32,14 @@ pub enum SlicedFormat {
     Cxdlp(CxdlpVersion),
     Svgx,
     Cws,
+    Fdg,
     Pwsz(PwszFlavour),
 }
 
 impl SlicedFormat {
-    /// The fifteen a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
+    /// The sixteen a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
     /// the Anycubic families are on the picker; the others are renames (ADR 0047).
-    pub const CHOICES: [Self; 15] = [
+    pub const CHOICES: [Self; 16] = [
         Self::Goo,
         Self::Ctb(CtbVersion::V4),
         Self::Ctb(CtbVersion::V5),
@@ -53,6 +54,7 @@ impl SlicedFormat {
         Self::Cxdlp(CxdlpVersion::V4),
         Self::Svgx,
         Self::Cws,
+        Self::Fdg,
         Self::Pwsz(PwszFlavour::Pwsz),
     ];
 
@@ -82,6 +84,8 @@ impl SlicedFormat {
             Some(Self::Svgx)
         } else if extension.eq_ignore_ascii_case("cws") {
             Some(Self::Cws)
+        } else if extension.eq_ignore_ascii_case("fdg") {
+            Some(Self::Fdg)
         } else {
             let extension = extension.to_string_lossy();
             Sl1Flavour::of_extension(&extension)
@@ -150,6 +154,7 @@ impl SlicedFormat {
             Self::Cxdlp(_) => "cxdlp",
             Self::Svgx => "svgx",
             Self::Cws => "cws",
+            Self::Fdg => "fdg",
             Self::Pwsz(flavour) => flavour.extension(),
         }
     }
@@ -177,6 +182,7 @@ impl From<OutputFormat> for SlicedFormat {
             OutputFormat::Cxdlp4 => Self::Cxdlp(CxdlpVersion::V4),
             OutputFormat::Svgx => Self::Svgx,
             OutputFormat::Cws => Self::Cws,
+            OutputFormat::Fdg => Self::Fdg,
             OutputFormat::Pwsz { extension } => Self::Pwsz(pwsz_flavour(extension)),
         }
     }
@@ -204,6 +210,7 @@ impl From<SlicedFormat> for OutputFormat {
             SlicedFormat::Cxdlp(CxdlpVersion::V4) => Self::Cxdlp4,
             SlicedFormat::Svgx => Self::Svgx,
             SlicedFormat::Cws => Self::Cws,
+            SlicedFormat::Fdg => Self::Fdg,
             SlicedFormat::Pwsz(flavour) => Self::Pwsz {
                 extension: pwsz_extension(flavour),
             },

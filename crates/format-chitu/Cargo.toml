@@ -1,6 +1,6 @@
 [package]
 name = "format-chitu"
-description = "Writer for the Chitu .ctb sliced-file format, versions 4 and 5."
+description = "Writer and reader for the Chitu .ctb, .cbddlp and .fdg sliced-file formats."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,8 +1,7 @@
 # The Elegoo `.goo` format
 
 The container Elegoo's resin printers read. We write it; we do not parse whole files, only
-the run-length data of a layer. Phrozen's newer machines read the same bytes as `.prz`
-(ADR 0362).
+the run-length data of a layer. Phrozen's newer machines read the same bytes as `.prz`.
 
 ## Where the knowledge comes from
 

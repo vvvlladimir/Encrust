@@ -583,6 +583,7 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
+| `.fdg` | Voxelab | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
 
 Encrust also opens the `.pws` of the original Photon and Photon S, which it does not write.

@@ -34,6 +34,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "sliced_fdg"
+path = "fuzz_targets/sliced_fdg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "sliced_goo"
 path = "fuzz_targets/sliced_goo.rs"
 test = false

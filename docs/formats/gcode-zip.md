@@ -3,7 +3,7 @@
 What a Phrozen Shuffle, a Phrozen Sonic, a Phrozen Transform, a Wanhao CGR, a Wanhao D8 and
 a Kelant S400 read: a plain zip holding one gcode program, two previews and one eight-bit
 greyscale PNG per layer. Eleven machines in the shipped catalogue carry `output = "zip"`;
-twelve Carima machines read the same archive as `.crmaslice` (ADR 0362).
+twelve Carima machines read the same archive as `.crmaslice`.
 
 Like `.sl1` it is an archive rather than a binary container, and unlike `.sl1` it has no
 settings file at all: the program **is** the file, and the board executes it line by line.
