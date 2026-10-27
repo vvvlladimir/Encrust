@@ -32,3 +32,6 @@ transition_layers = 0
 light_pwm = 255
 bottom_light_pwm = 255
 wait_mode = "light-off"
+bottom_light_off_delay_s = 0.5
+
+[locked.second_stage]

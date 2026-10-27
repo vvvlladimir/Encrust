@@ -1,10 +1,13 @@
+use std::io::Cursor;
+
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, Rle7Layer, SlicedFileWriter, WriteSeek, validate,
+    Crc32, Fields, FormatError, LayerSink, PrintJob, Rle7Layer, SlicedFileWriter, WriteSeek,
+    chitu_layer_crypt, validate,
 };
 use core_raster::LayerRuns;
 
-use crate::blocks::{self, HEADER_BYTES, Head, Offsets, SLICER_INFO_BYTES};
-use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LayerDef};
+use crate::blocks::{self, HEADER_BYTES, Head, Offsets, SLICER_INFO_BYTES, Totals};
+use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LayerDef, LAYER_TAIL_BYTES};
 
 /// Every `.ctb` from version 4 onwards carries this magic, version 5 included.
 const MAGIC: u32 = 0x12FD_0106;
@@ -15,8 +18,8 @@ const MAGIC: u32 = 0x12FD_0106;
 /// layer; version 5 adds the resin block. See `docs/formats/chitu.md`.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CtbVersion {
-    #[default]
     V4,
+    #[default]
     V5,
 }
 
@@ -35,26 +38,43 @@ impl CtbVersion {
             Self::V5 => 0x50,
         }
     }
-    /// capability stamp, so a version has to name one that shipped with it.
-    pub(crate) fn software_version(self) -> u32 {
-        match self {
-            Self::V4 => 0x0109_0000,
-            Self::V5 => 0x0200_0000,
-        }
+
+    /// The slicer info's flag word: whether the layers carry grey in its low byte, and in
+    /// its high byte whether the machine is to obey the per-layer blocks, which the vendor
+    /// leaves clear while every layer is the header's.
+    pub(crate) fn flags(self, job: &PrintJob) -> u32 {
+        let grey = match job.raster.shading {
+            core_raster::Shading::Binary => 0x07,
+            core_raster::Shading::Coverage => 0x0F,
+        };
+        let per_layer = if job.varies_by_layer() {
+            self.per_layer_settings()
+        } else {
+            0
+        };
+        grey | u32::from(per_layer) << 24
     }
 
-    fn head(self) -> Head {
+    fn head(self, job: &PrintJob) -> Head {
         Head {
             magic: MAGIC,
             version: self.number(),
 
-            // The masks already carry eight bits of grey each, so nothing is gained by
+            // The masks already carry seven bits of grey each, so nothing is gained by
             // stacking several passes of a one-bit image, which is what a level above one
             // means here.
             grey_passes: 1,
             slicer_info_bytes: SLICER_INFO_BYTES,
+            encryption_key: encryption_key(job),
+            states_height: false,
         }
     }
+}
+
+/// The key the layers are covered with: any but zero reads the same, and the vendor's
+/// slicer never writes zero; see `docs/decisions/0365`.
+fn encryption_key(job: &PrintJob) -> u32 {
+    job.created_unix_s as u32 | 1
 }
 
 /// Writes the Chitu `.ctb` container. Layout is in `docs/formats/chitu.md`.
@@ -83,9 +103,13 @@ impl SlicedFileWriter for CtbWriter {
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
-        let mut fields = Fields::new(sink);
-        let offsets = blocks::write_body(&mut fields, job, self.version)?;
+        // Everything in front of the layer table is kept, to be patched and summed at the end.
+        let mut front = Cursor::new(Vec::new());
+        let offsets = blocks::write_body(&mut Fields::new(&mut front), job, self.version)?;
+        let front = front.into_inner();
 
+        let mut fields = Fields::new(sink);
+        fields.bytes(&front)?;
         // The table is fixed-width and its rows are only known once their layers have
         // been compressed, so the space is reserved here and filled in by `finish`.
         fields.zeros((LAYER_DEF_BYTES * u64::from(job.layer_count())) as usize)?;
@@ -100,9 +124,18 @@ impl SlicedFileWriter for CtbWriter {
             job: job.clone(),
             version: self.version,
             offsets,
+            front,
             defs: Vec::with_capacity(job.layer_count() as usize),
+            totals: Totals::default(),
+            layers_crc: Crc32::default(),
         })
     }
+}
+
+/// One layer's runs, and how many pixels they light.
+pub struct CtbLayer {
+    runs: Rle7Layer,
+    lit_px: u64,
 }
 
 /// A `.ctb` file with everything in front of its layers written.
@@ -111,14 +144,26 @@ pub struct CtbSink<'w> {
     job: PrintJob,
     version: CtbVersion,
     offsets: Offsets,
+    front: Vec<u8>,
     defs: Vec<LayerDef>,
+    totals: Totals,
+    layers_crc: Crc32,
 }
 
 impl LayerSink for CtbSink<'_> {
-    type Encoded = Rle7Layer;
+    type Encoded = CtbLayer;
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        Rle7Layer::encode(layer)
+        let lit_px = layer
+            .runs()
+            .iter()
+            .filter(|run| run.value > 0)
+            .map(|run| u64::from(run.length))
+            .sum();
+        CtbLayer {
+            runs: Rle7Layer::encode(layer),
+            lit_px,
+        }
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
@@ -129,13 +174,12 @@ impl LayerSink for CtbSink<'_> {
                 written: index + 1,
             });
         }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
+        let runs = &encoded.runs;
+        if runs.width() != self.job.raster.width_px || runs.height() != self.job.raster.height_px {
             return Err(FormatError::ResolutionMismatch {
                 index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
+                width: runs.width(),
+                height: runs.height(),
                 expected_width: self.job.raster.width_px,
                 expected_height: self.job.raster.height_px,
             });
@@ -145,13 +189,29 @@ impl LayerSink for CtbSink<'_> {
         let def = LayerDef {
             z_mm: self.job.layer_z_mm(index),
             exposure_s: self.job.exposure_of_layer_s(index),
-            light_off_delay_s: self.job.material.light_off_s(),
+            light_off_delay_s: self.job.material.light_off_of_layer_s(index),
             data_address: block as u32 + LAYER_DEF_EX_BYTES,
-            data_size: encoded.data().len() as u32,
+            data_size: runs.data().len() as u32,
         };
 
-        layer::write_extended(&mut self.fields, &self.job, index, &def)?;
-        self.fields.bytes(encoded.data())?;
+        let mut data = runs.data().to_vec();
+        chitu_layer_crypt(encryption_key(&self.job), index, &mut data);
+        let mut bytes = Cursor::new(Vec::with_capacity(data.len() + 96));
+        {
+            let mut layer_fields = Fields::new(&mut bytes);
+            layer::write_extended(&mut layer_fields, &self.job, index, &def)?;
+            layer_fields.bytes(&data)?;
+            layer::write_tail(&mut layer_fields, &self.job, encoded.lit_px)?;
+        }
+        let bytes = bytes.into_inner();
+        self.layers_crc.update(&bytes);
+        self.fields.bytes(&bytes)?;
+
+        let material = &self.job.material;
+        let rests: f32 = material.waits.rests_s().iter().sum();
+        self.totals.layer_time_s += def.exposure_s + def.light_off_delay_s + rests;
+        self.totals.largest_layer_bytes = self.totals.largest_layer_bytes.max(def.data_size);
+        self.totals.layers += 1;
         self.defs.push(def);
         Ok(())
     }
@@ -166,28 +226,55 @@ impl LayerSink for CtbSink<'_> {
             });
         }
 
-        self.fields.seek_to(u64::from(self.offsets.layer_table))?;
-        for def in &self.defs {
-            def.write(&mut self.fields, LAYER_DEF_EX_BYTES)?;
+        let mut front = Cursor::new(std::mem::take(&mut self.front));
+        {
+            let mut patch = Fields::new(&mut front);
+            blocks::rewrite_print_parameters(&mut patch, &self.job, self.offsets.print_parameters)?;
+            blocks::rewrite_v4_parameters(&mut patch, &self.job, self.offsets, self.totals)?;
+            patch.seek_to(0)?;
+            blocks::write_header(&mut patch, &self.job, self.version.head(&self.job), self.offsets)?;
+            debug_assert_eq!(patch.position()?, HEADER_BYTES);
         }
+        let front = front.into_inner();
 
-        blocks::rewrite_print_parameters(
-            &mut self.fields,
-            &self.job,
-            self.offsets.print_parameters,
-        )?;
+        let mut table = Cursor::new(Vec::with_capacity(self.defs.len() * LAYER_DEF_BYTES as usize));
+        {
+            let mut rows = Fields::new(&mut table);
+            for def in &self.defs {
+                def.write(&mut rows, LAYER_DEF_EX_BYTES)?;
+            }
+        }
+        let table = table.into_inner();
+
+        let crc = [&front[..], &table[..]]
+            .iter()
+            .fold(Crc32::default(), |sum, block| {
+                let mut next = Crc32::default();
+                next.update(block);
+                sum.followed_by(next)
+            })
+            .followed_by(self.layers_crc);
 
         self.fields.seek_to(0)?;
-        blocks::write_header(
-            &mut self.fields,
-            &self.job,
-            self.version.head(),
-            self.offsets,
+        self.fields.bytes(&front)?;
+        self.fields.bytes(&table)?;
+        self.fields.seek_to(
+            u64::from(self.offsets.layer_table) + table.len() as u64 + self.layers_crc_len(),
         )?;
-        debug_assert_eq!(self.fields.position()?, HEADER_BYTES);
-
+        // The file ends with the CRC of everything before it, as the vendor's slicer ends it.
+        self.fields.u32_le(crc.zlib())?;
         self.fields.flush()?;
         Ok(())
+    }
+}
+
+impl CtbSink<'_> {
+    /// Bytes of every layer written, extended blocks and tails included.
+    fn layers_crc_len(&self) -> u64 {
+        self.defs
+            .iter()
+            .map(|def| u64::from(LAYER_DEF_EX_BYTES + def.data_size + LAYER_TAIL_BYTES))
+            .sum()
     }
 }
 
@@ -232,7 +319,7 @@ mod tests {
             .begin(&sample_job(1), &mut buffer)
             .expect("the job is sound");
         let err = sink
-            .push(Rle7Layer::encode(&LayerRuns::builder(4, 4).finish()))
+            .push(CtbSink::encode(&LayerRuns::builder(4, 4).finish()))
             .unwrap_err();
         assert!(matches!(
             err,

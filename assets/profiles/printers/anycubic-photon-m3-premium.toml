@@ -29,3 +29,4 @@ variable_layer_height = false
 
 [locked]
 wait_mode = "light-off"
+bottom_light_off_delay_s = 0.5

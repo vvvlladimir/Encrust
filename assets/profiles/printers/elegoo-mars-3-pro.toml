@@ -5,7 +5,7 @@ manufacturer = "Elegoo"
 machine_name = "ELEGOO Mars 3 Pro"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb-encrypted"
 
 [display]
 width_px = 4098

@@ -26,3 +26,5 @@ variable_layer_height = false
 
 [locked]
 transition_layers = 8
+
+[locked.second_stage]

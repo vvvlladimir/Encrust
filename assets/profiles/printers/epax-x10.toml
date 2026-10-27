@@ -1,27 +1,23 @@
 # EPAX X10.
-#
-# The source profile asks for a `.ctb` below version 4 and we write
-# version 4, so this machine needs firmware from 2021 or later. An older
-# board refuses the file rather than misprinting it.
 
 name = "X10"
 manufacturer = "EPAX"
 machine_name = "EPAX X10 2K Color"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb5"
 connection = "none"
 
 [display]
 width_px = 1600
 height_px = 2560
 width_mm = 135.36
-height_mm = 216.57
+height_mm = 216.576
 grey_floor = 0
 
 [build_volume]
 x = 135.36
-y = 216.57
+y = 216.576
 z = 250.0
 
 [firmware]

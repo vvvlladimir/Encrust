@@ -175,19 +175,29 @@ impl PrintJob {
             }
         };
 
+        let stage = &material.second_stage;
         let bottom_motion = travel(
             material.bottom_lift_distance_mm,
             material.bottom_lift_speed_mm_min,
         ) + travel(
-            material.bottom_lift_distance_mm,
+            stage.bottom_lift_distance_mm,
+            stage.bottom_lift_speed_mm_min,
+        ) + travel(
+            material.bottom_retract_distance_mm(),
             material.bottom_retract_speed_mm_min,
+        ) + travel(
+            stage.bottom_retract_distance_mm,
+            stage.bottom_retract_speed_mm_min,
         );
         let normal_motion = travel(material.lift_distance_mm, material.lift_speed_mm_min)
-            + travel(material.retract_distance_mm, material.retract_speed_mm_min);
+            + travel(stage.lift_distance_mm, stage.lift_speed_mm_min)
+            + travel(material.retract_distance_mm, material.retract_speed_mm_min)
+            + travel(stage.retract_distance_mm, stage.retract_speed_mm_min);
 
         // What the machine spends per layer beyond any of this, measured on a real print.
         let unaccounted = layer_count as f32 * material.compensation.layer_time_s;
-        let delays = layer_count as f32 * material.wait_per_layer_s();
+        let delays = layer_count as f32 * material.wait_per_layer_s()
+            + bottom as f32 * (material.bottom_light_off_s() - material.light_off_s());
         let total = exposure
             + delays
             + unaccounted

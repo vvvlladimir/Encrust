@@ -58,9 +58,10 @@ fn every_shipped_printer_names_the_format_its_firmware_reads() {
     let expected = [
         ("elegoo-mars-4-ultra", OutputFormat::Goo),
         ("elegoo-saturn-4-ultra", OutputFormat::Goo),
-        ("elegoo-mars-3-pro", OutputFormat::Ctb4),
-        ("phrozen-sonic-mini-8k", OutputFormat::Ctb4),
-        ("uniformation-gktwo", OutputFormat::Ctb4),
+        ("elegoo-mars-3-pro", OutputFormat::CtbEncrypted),
+        ("phrozen-sonic-mini-8k", OutputFormat::CtbEncrypted),
+        ("uniformation-gktwo", OutputFormat::CtbEncrypted),
+        ("creality-ld-002h", OutputFormat::Ctb5),
     ];
     for (id, format) in expected {
         let entry = catalogue.printer(id).expect("a shipped machine");

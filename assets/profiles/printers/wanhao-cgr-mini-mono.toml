@@ -5,7 +5,7 @@ manufacturer = "Wanhao"
 machine_name = "WanHao CGR MINI MONO"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb5"
 connection = "none"
 
 [display]
@@ -28,3 +28,5 @@ variable_layer_height = false
 transition_layers = 0
 light_pwm = 255
 bottom_light_pwm = 255
+
+[locked.second_stage]

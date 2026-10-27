@@ -4,6 +4,7 @@
 //! A concrete format lives in its own crate beside this one; see `format-goo`.
 
 mod chitu;
+mod crc;
 mod de;
 mod error;
 mod exposure;
@@ -19,6 +20,7 @@ mod timestamp;
 mod writer;
 
 pub use chitu::{CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, chitu_layer_crypt};
+pub use crc::Crc32;
 pub use de::{MAX_ENTRY_BYTES, ReadSeek, Reads, read_entry};
 pub use error::FormatError;
 pub use exposure::{ExposurePlan, ExposureRange};

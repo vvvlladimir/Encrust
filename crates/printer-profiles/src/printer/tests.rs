@@ -1,4 +1,5 @@
 use super::*;
+use crate::PrinterTuning;
 
 const SAMPLE: &str = r#"
 name = "Test"
@@ -168,6 +169,26 @@ fn a_locked_setting_overrides_the_resin_and_one_left_open_keeps_it() {
         !written.contains("locked"),
         "nothing locked is left out: {written}"
     );
+}
+
+#[test]
+fn a_resins_table_for_the_machine_overrides_its_lock_and_another_machines_does_not() {
+    let locked = format!("{SAMPLE}\n[locked]\ntransition_layers = 8\n");
+    let profile = PrinterProfile::from_toml_str(&locked, path()).expect("valid profile");
+    let mut resin = MaterialProfile::default();
+    let zero = PrinterTuning {
+        transition_layers: Some(0),
+        ..PrinterTuning::default()
+    };
+    resin.printers.insert("ceres".to_owned(), zero.clone());
+    resin.printers.insert("other".to_owned(), zero);
+    resin.last_printer = Some("other".to_owned());
+
+    let here = resin.starting_point("ceres").on(&profile);
+    assert_eq!(here.transition_layers, 0, "the table for this machine wins");
+    let fresh = resin.starting_point("new-machine").on(&profile);
+    assert_eq!(fresh.transition_layers, 8, "another machine's table is no statement here");
+    assert_eq!(MaterialProfile::default().on(&profile).transition_layers, 8);
 }
 
 #[test]

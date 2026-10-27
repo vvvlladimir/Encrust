@@ -9,7 +9,7 @@ use crate::args::ProfileArgs;
 use crate::commands::GlobalArgs;
 use crate::exit::{Cancelled, Exit, Stop};
 use crate::progress::bar;
-use crate::sliced_file::{CtbRevision, format_of, now_unix_s};
+use crate::sliced_file::{CtbRevision, asked_revision, format_of, now_unix_s};
 use crate::{json, profiles};
 
 #[derive(clap::Args, Debug)]
@@ -26,9 +26,9 @@ pub struct ConvertCommand {
     #[command(flatten)]
     pub profile: ProfileArgs,
 
-    /// Which `.ctb` revision to write, when the output is one.
-    #[arg(long, value_name = "N", default_value = "4")]
-    pub ctb_version: CtbRevision,
+    /// Which `.ctb` revision to write, when the output is one; the machine's own by default.
+    #[arg(long, value_name = "N")]
+    pub ctb_version: Option<CtbRevision>,
 }
 
 #[derive(Serialize)]
@@ -45,7 +45,7 @@ impl ConvertCommand {
         let Some(printer) = chosen.printer else {
             bail!("convert needs --printer or --profile: the machine the new file is for");
         };
-        let Some(format) = format_of(&self.output, self.ctb_version) else {
+        let Some(format) = format_of(&self.output) else {
             bail!("{} names no sliced-file format", self.output.display());
         };
         let mut source = open_file(&self.input)?;
@@ -62,7 +62,7 @@ impl ConvertCommand {
         let converted = convert(
             &mut source,
             &Converting {
-                format: format.at_revision_of(printer.output),
+                format: asked_revision(format.at_revision_of(printer.output), self.ctb_version),
                 name: &name,
                 printer: &printer,
                 material: &chosen.material,

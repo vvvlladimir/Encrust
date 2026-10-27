@@ -10,13 +10,13 @@ connection = "none"
 [display]
 width_px = 480
 height_px = 854
-width_mm = 55.4
-height_mm = 98.63
+width_mm = 55.44
+height_mm = 98.64
 grey_floor = 0
 
 [build_volume]
-x = 55.4
-y = 98.63
+x = 55.44
+y = 98.64
 z = 150.0
 
 [output.anycubic]
@@ -32,3 +32,6 @@ transition_layers = 0
 light_pwm = 255
 bottom_light_pwm = 255
 wait_mode = "light-off"
+bottom_light_off_delay_s = 1.0
+
+[locked.second_stage]

@@ -13,29 +13,41 @@ use crate::progress::{Watching, bar};
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
 
-/// Which `.ctb` revision `--ctb-version` asked for.
-/// Version 4 is the default as every machine reading 5 reads it; see `docs/formats/chitu.md`.
-#[derive(Debug, Default, Clone, Copy, clap::ValueEnum)]
+/// Which `.ctb` revision `--ctb-version` asked for, over the one the machine's profile
+/// names; see `docs/formats/chitu.md`.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum CtbRevision {
-    #[default]
     #[value(name = "4")]
     Four,
     #[value(name = "5")]
     Five,
+    #[value(name = "encrypted")]
+    Encrypted,
 }
 
-impl From<CtbRevision> for CtbVersion {
-    fn from(revision: CtbRevision) -> Self {
-        match revision {
-            CtbRevision::Four => Self::V4,
-            CtbRevision::Five => Self::V5,
+impl CtbRevision {
+    fn format(self) -> SlicedFormat {
+        match self {
+            Self::Four => SlicedFormat::Ctb(CtbVersion::V4),
+            Self::Five => SlicedFormat::Ctb(CtbVersion::V5),
+            Self::Encrypted => SlicedFormat::CtbEncrypted,
         }
     }
 }
 
-/// The format `path` names, or `None` when it names a directory for a PNG stack.
-pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
-    SlicedFormat::of(path, revision.into())
+/// The format `path` names, or `None` when it names a directory for a PNG stack. A `.ctb`
+/// is version 5 until the machine's profile or `--ctb-version` says otherwise.
+pub fn format_of(path: &Path) -> Option<SlicedFormat> {
+    SlicedFormat::of(path, CtbVersion::V5)
+}
+
+/// `format` at the `.ctb` revision `--ctb-version` asked for, where it asked and the
+/// format is a `.ctb`.
+pub fn asked_revision(format: SlicedFormat, revision: Option<CtbRevision>) -> SlicedFormat {
+    match (format, revision) {
+        (SlicedFormat::Ctb(_) | SlicedFormat::CtbEncrypted, Some(revision)) => revision.format(),
+        _ => format,
+    }
 }
 
 /// Slices and rasterises `plate` straight into a sliced file at `path`, one window in memory
@@ -147,20 +159,30 @@ mod tests {
 
     #[test]
     fn the_extension_decides_what_is_written() {
-        let of = |name: &str| format_of(Path::new(name), CtbRevision::default());
+        let of = |name: &str| format_of(Path::new(name));
         assert!(matches!(of("cube.goo"), Some(SlicedFormat::Goo)));
         assert!(matches!(
             of("cube.ctb"),
-            Some(SlicedFormat::Ctb(CtbVersion::V4))
-        ));
-        assert!(matches!(
-            format_of(Path::new("cube.ctb"), CtbRevision::Five),
             Some(SlicedFormat::Ctb(CtbVersion::V5))
         ));
         assert!(
             of("out").is_none(),
             "a name without an extension is a PNG directory"
         );
+    }
+
+    #[test]
+    fn an_asked_revision_holds_over_the_machines_own_and_touches_no_other_format() {
+        let machines = SlicedFormat::CtbEncrypted;
+        assert!(matches!(
+            asked_revision(machines, Some(CtbRevision::Four)),
+            SlicedFormat::Ctb(CtbVersion::V4)
+        ));
+        assert!(matches!(asked_revision(machines, None), SlicedFormat::CtbEncrypted));
+        assert!(matches!(
+            asked_revision(SlicedFormat::Goo, Some(CtbRevision::Five)),
+            SlicedFormat::Goo
+        ));
     }
 
     fn panel(width_px: u32, height_px: u32) -> PrinterProfile {

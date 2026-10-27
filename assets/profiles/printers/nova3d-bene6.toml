@@ -11,13 +11,13 @@ connection = "none"
 [display]
 width_px = 4085
 height_px = 2542
-width_mm = 143.0
-height_mm = 88.97
+width_mm = 142.977
+height_mm = 88.971
 grey_floor = 0
 
 [build_volume]
-x = 143.0
-y = 88.97
+x = 142.977
+y = 88.971
 z = 180.0
 
 [firmware]

@@ -12,14 +12,18 @@ connection = "none"
 width_px = 1620
 height_px = 2560
 width_mm = 82.62
-height_mm = 130.6
+height_mm = 130.56
 grey_floor = 0
 
 [build_volume]
 x = 82.62
-y = 130.6
+y = 130.56
 z = 155.0
 
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[locked]
+
+[locked.second_stage]

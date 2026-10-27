@@ -141,12 +141,13 @@ fn u16_at(header: &[u8], offset: usize) -> u16 {
 }
 
 #[test]
-fn binary_shading_is_reported_as_a_single_anti_aliasing_level() {
+fn binary_shading_states_the_vendors_dormant_level_and_blur() {
     let mut job = sample_job(10);
     job.raster.shading = Shading::Binary;
     let header = header_of(&job);
-    assert_eq!(u16_at(&header, AA_OFFSET), 1);
-    assert_eq!(u16_at(&header, AA_OFFSET + 2), 1, "and a single grey level");
+    assert_eq!(u16_at(&header, AA_OFFSET), 4, "a vendor file with AA off says 4");
+    assert_eq!(u16_at(&header, AA_OFFSET + 2), 0, "no grey ladder");
+    assert_eq!(u16_at(&header, AA_OFFSET + 4), 2, "and a blur of 2");
 }
 
 #[test]
@@ -167,17 +168,6 @@ fn unrounded_grey_is_reported_as_no_level_count_at_all() {
 #[test]
 fn the_blur_level_is_the_radius_the_edges_were_faded_over() {
     let mut job = sample_job(10);
-    assert_eq!(
-        u16_at(&header_of(&job), AA_OFFSET + 4),
-        0,
-        "sharp by default"
-    );
-    job.raster.blur_px = 2;
-    assert_eq!(u16_at(&header_of(&job), AA_OFFSET + 4), 2);
-    job.raster.shading = Shading::Binary;
-    assert_eq!(
-        u16_at(&header_of(&job), AA_OFFSET + 4),
-        0,
-        "a binary mask is never blurred"
-    );
+    job.raster.blur_px = 3;
+    assert_eq!(u16_at(&header_of(&job), AA_OFFSET + 4), 3);
 }

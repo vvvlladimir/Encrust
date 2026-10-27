@@ -10,13 +10,13 @@ connection = "none"
 [display]
 width_px = 5760
 height_px = 3600
-width_mm = 198.15
-height_mm = 123.84
+width_mm = 197.0
+height_mm = 122.8
 grey_floor = 0
 
 [build_volume]
-x = 198.15
-y = 123.84
+x = 197.0
+y = 122.8
 z = 245.0
 
 [output.anycubic]
@@ -29,3 +29,4 @@ variable_layer_height = false
 
 [locked]
 wait_mode = "light-off"
+bottom_light_off_delay_s = 2.0

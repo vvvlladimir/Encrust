@@ -27,3 +27,5 @@ variable_layer_height = false
 [locked]
 bottom_light_pwm = 255
 light_pwm = 255
+
+[locked.second_stage]

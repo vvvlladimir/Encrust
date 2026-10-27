@@ -114,7 +114,7 @@
        "currentvalue": 0.0
       },
       "bottomlightofftime": {
-       "currentvalue": 0.0
+       "currentvalue": 1.5
       },
       "bottomlayerliftheight": {
        "currentvalue": 6.699999809265137
@@ -123,10 +123,10 @@
        "currentvalue": 5.300000190734863
       },
       "bottomlayerliftheight2": {
-       "currentvalue": 0.0
+       "currentvalue": 3.0
       },
       "normallayerliftheight2": {
-       "currentvalue": 0.0
+       "currentvalue": 2.0
       },
       "bottomlayerliftspeed": {
        "currentvalue": 71.0
@@ -135,10 +135,10 @@
        "currentvalue": 61.0
       },
       "bottomlayerliftspeed2": {
-       "currentvalue": 0.0
+       "currentvalue": 120.0
       },
       "normallayerliftspeed2": {
-       "currentvalue": 0.0
+       "currentvalue": 180.0
       },
       "bottomlayerdropspeed": {
        "currentvalue": 157.0
@@ -147,16 +147,16 @@
        "currentvalue": 173.0
       },
       "bottomlayerdropspeed2": {
-       "currentvalue": 0.0
+       "currentvalue": 50.0
       },
       "normallayerdropspeed2": {
-       "currentvalue": 0.0
+       "currentvalue": 60.0
       },
       "normallayerdropheight2": {
-       "currentvalue": 0.0
+       "currentvalue": 1.5
       },
       "bottomlayerdropheight2": {
-       "currentvalue": 0.0
+       "currentvalue": 2.0
       },
       "edgeexposuremm": {
        "currentvalue": 0.0

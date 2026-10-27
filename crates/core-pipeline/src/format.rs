@@ -122,6 +122,7 @@ impl SlicedFormat {
             }
             (Self::Cxdlp(_), Self::Cxdlp(revision)) => Self::Cxdlp(revision),
             (Self::Ctb(_), Self::CtbEncrypted) => Self::CtbEncrypted,
+            (Self::Ctb(_), Self::Ctb(revision)) => Self::Ctb(revision),
             _ => self,
         }
     }

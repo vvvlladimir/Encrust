@@ -5,15 +5,15 @@ manufacturer = "UniFormation"
 machine_name = "UniFormation GKtwo"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb-encrypted"
 
 [display]
 width_px = 7680
 height_px = 4320
-width_mm = 228.0
-height_mm = 128.0
+width_mm = 228.1
+height_mm = 128.3
 
 [build_volume]
-x = 228.0
-y = 128.0
+x = 228.1
+y = 128.3
 z = 245.0

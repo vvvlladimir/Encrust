@@ -1,27 +1,23 @@
 # Peopoly Phenom XXL.
-#
-# The source profile asks for a `.ctb` below version 4 and we write
-# version 4, so this machine needs firmware from 2021 or later. An older
-# board refuses the file rather than misprinting it.
 
 name = "Phenom XXL"
 manufacturer = "Peopoly"
 machine_name = "Peopoly Phenom XXL"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb5"
 connection = "none"
 
 [display]
 width_px = 3840
 height_px = 2160
-width_mm = 526.08
-height_mm = 295.92
+width_mm = 527.04
+height_mm = 296.46
 grey_floor = 0
 
 [build_volume]
-x = 526.08
-y = 295.92
+x = 527.04
+y = 296.46
 z = 550.0
 
 [firmware]

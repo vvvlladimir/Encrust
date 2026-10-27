@@ -3,7 +3,7 @@ use core_format::{
 };
 use core_raster::LayerRuns;
 
-use crate::crc::Crc32;
+use core_format::Crc32;
 use crate::family::{block, block_at, model_code};
 
 use super::blocks::{self, LAYER_BLOCK_BYTES, LAYER_ROW_BYTES, LayerRow, Offsets};

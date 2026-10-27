@@ -1,22 +1,21 @@
-//! The checksum a `.cxdlp` ends with: a reflected CRC-32 over every byte before it, with
-//! no final inversion. See `docs/formats/creality.md`.
+//! The reflected CRC-32 two families end their files with: `.cxdlp` with neither inversion
+//! (`docs/formats/creality.md`), `.ctb` in zlib's form (`docs/formats/chitu.md`).
 //!
-//! The file is written once and never read back, so the two halves either side of the
-//! layer-area table — which is only known after the layers that follow it — are summed
-//! separately and joined by `combine`.
+//! A file is written once and never read back, so the parts either side of a block only
+//! known later are summed separately and joined by `combine`.
 
 /// The polynomial, reflected, as the table is built from.
 const POLYNOMIAL: u32 = 0xEDB8_8320;
 
 /// A CRC taken over bytes as they are written.
 #[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct Crc32 {
+pub struct Crc32 {
     state: u32,
     length: u64,
 }
 
 impl Crc32 {
-    pub(crate) fn update(&mut self, bytes: &[u8]) {
+    pub fn update(&mut self, bytes: &[u8]) {
         for byte in bytes {
             let index = ((self.state as u8) ^ byte) as usize;
             self.state = table()[index] ^ (self.state >> 8);
@@ -24,12 +23,19 @@ impl Crc32 {
         self.length += bytes.len() as u64;
     }
 
-    pub(crate) fn value(self) -> u32 {
+    /// The register as summed, with neither inversion.
+    pub fn value(self) -> u32 {
         self.state
     }
 
+    /// The same bytes' CRC as zlib states it: the register started at all ones and the
+    /// result inverted, which over linear arithmetic is this sum plus that of as many zeros.
+    pub fn zlib(self) -> u32 {
+        self.state ^ combine(u32::MAX, 0, self.length) ^ u32::MAX
+    }
+
     /// This CRC followed by `next`, as if the bytes of both had been summed in order.
-    pub(crate) fn followed_by(self, next: Self) -> Self {
+    pub fn followed_by(self, next: Self) -> Self {
         Self {
             state: combine(self.state, next.state, next.length),
             length: self.length + next.length,
@@ -148,6 +154,14 @@ mod tests {
 
         assert_eq!(over(b"123456789").value(), 0x2DFD_2D88);
         assert_eq!(over(&[]).value(), 0);
+    }
+
+    #[test]
+    fn the_zlib_form_is_the_standard_crc() {
+        assert_eq!(over(b"123456789").zlib(), 0xCBF4_3926);
+        assert_eq!(over(&[]).zlib(), 0);
+        let joined = over(b"1234").followed_by(over(b"56789"));
+        assert_eq!(joined.zlib(), 0xCBF4_3926, "and joins like the plain sum");
     }
 
     #[test]

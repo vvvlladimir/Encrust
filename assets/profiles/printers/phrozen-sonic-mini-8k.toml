@@ -5,7 +5,7 @@ manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic Mini 8K"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb-encrypted"
 
 [display]
 width_px = 7500

@@ -3,7 +3,7 @@ use core_format::{
 };
 use core_raster::LayerRuns;
 
-use crate::crc::Crc32;
+use core_format::Crc32;
 use crate::family::{block, model_code};
 
 use super::blocks::{self, PAGE_BREAK};

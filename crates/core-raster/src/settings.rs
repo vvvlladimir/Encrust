@@ -67,14 +67,30 @@ pub struct RasterSettings {
     pub blur_px: u8,
 }
 
+/// The anti-alias level a file states while the masks carry no grey: the vendor slicer's
+/// default choice, inert while its flag is off; see `docs/decisions/0365`.
+pub const DORMANT_ANTI_ALIAS_LEVEL: u16 = 4;
+
+/// The edge blur a file states while there is none, by the same rule.
+pub const DORMANT_BLUR_PX: u8 = 2;
+
 impl RasterSettings {
     /// The anti-alias level a sliced file states: how many greys an edge is drawn in, at
-    /// most `cap`, the container's own limit, and 1 for a panel drawn without grey.
+    /// most `cap`, the container's own limit, and the dormant default for a binary panel.
     pub fn anti_alias_level(&self, cap: u16) -> u16 {
         match (self.shading, self.grey.levels) {
-            (Shading::Binary, _) => 1,
+            (Shading::Binary, _) => DORMANT_ANTI_ALIAS_LEVEL.min(cap),
             (Shading::Coverage, Some(levels)) => u16::from(levels.get()).min(cap),
             (Shading::Coverage, None) => cap,
+        }
+    }
+
+    /// The edge blur a sliced file states, the dormant default where there is none.
+    pub fn stated_blur_px(&self) -> u8 {
+        if self.blur_px == 0 {
+            DORMANT_BLUR_PX
+        } else {
+            self.blur_px
         }
     }
 
@@ -130,7 +146,11 @@ mod tests {
             },
             ..settings()
         };
-        assert_eq!(with(Shading::Binary, 8).anti_alias_level(16), 1);
+        assert_eq!(
+            with(Shading::Binary, 8).anti_alias_level(16),
+            4,
+            "the vendor's dormant default"
+        );
         assert_eq!(with(Shading::Coverage, 4).anti_alias_level(16), 4);
         assert_eq!(with(Shading::Coverage, 64).anti_alias_level(16), 16);
         assert_eq!(

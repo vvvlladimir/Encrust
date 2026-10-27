@@ -47,9 +47,10 @@ fn write_identity(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     fields.text(job.printer.machine_name(), 32)?;
     fields.text(&job.material.name, 32)?;
 
+    // A binary file states the vendor's dormant level and blur, as a vendor file does.
     fields.u16_be(match job.raster.shading {
         Shading::Coverage => 8,
-        Shading::Binary => 1,
+        Shading::Binary => job.raster.anti_alias_level(8),
     })?;
     // Zero is what a file rounded to no ladder at all carries, as a vendor file does.
     fields.u16_be(match job.raster.shading {
@@ -58,12 +59,9 @@ fn write_identity(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
             .grey
             .levels
             .map_or(0, |levels| levels.get().into()),
-        Shading::Binary => 1,
-    })?;
-    fields.u16_be(match job.raster.shading {
-        Shading::Coverage => job.raster.blur_px.into(),
         Shading::Binary => 0,
-    })
+    })?;
+    fields.u16_be(job.raster.stated_blur_px().into())
 }
 
 /// Writes both preview images, black when the job carries no thumbnail.

@@ -1,7 +1,6 @@
 //! The Creality `.cxdlp` container, at the two revisions its machines read, and the `.cxline`
 //! beside it. Layouts are in `docs/formats/creality.md` and `cxline.md`.
 
-mod crc;
 mod cxline;
 mod family;
 #[cfg(test)]

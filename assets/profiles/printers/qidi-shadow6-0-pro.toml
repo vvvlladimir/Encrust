@@ -1,15 +1,11 @@
 # QIDI Shadow6.0 Pro.
-#
-# The source profile asks for a `.ctb` below version 4 and we write
-# version 4, so this machine needs firmware from 2021 or later. An older
-# board refuses the file rather than misprinting it.
 
 name = "Shadow6.0 Pro"
 manufacturer = "QIDI"
 machine_name = "QIDI Shadow6.0 Pro"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb5"
 connection = "none"
 
 [display]

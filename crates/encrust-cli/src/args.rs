@@ -371,9 +371,9 @@ pub struct RasterArgs {
     #[arg(long, value_name = "N")]
     pub raster_window: Option<usize>,
 
-    /// Which `.ctb` revision to write, when the output is one.
-    #[arg(long, value_name = "N", default_value = "4")]
-    pub ctb_version: CtbRevision,
+    /// Which `.ctb` revision to write, when the output is one; the machine's own by default.
+    #[arg(long, value_name = "N")]
+    pub ctb_version: Option<CtbRevision>,
 }
 
 /// Everything one model's run is told, shared by `slice` and `batch`.

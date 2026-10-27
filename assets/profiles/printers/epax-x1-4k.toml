@@ -5,8 +5,7 @@ manufacturer = "EPAX"
 machine_name = "EPAX X1-4K"
 mirror_x = true
 mirror_y = false
-# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
-output = "ctb4"
+output = "ctb5"
 connection = "none"
 
 [display]

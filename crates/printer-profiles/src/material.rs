@@ -6,6 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::Compensation;
 use crate::{PrinterProfile, ProfileError};
 
+mod second_stage;
+mod tuning;
+
+pub use second_stage::SecondStage;
+pub use tuning::PrinterTuning;
+
 /// Exposure and motion settings for one resin.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MaterialProfile {
@@ -28,6 +34,11 @@ pub struct MaterialProfile {
     pub bottom_lift_speed_mm_min: f32,
     #[serde(default = "default_bottom_retract_speed_mm_min")]
     pub bottom_retract_speed_mm_min: f32,
+    #[serde(default)]
+    pub second_stage: SecondStage,
+    /// Light-off delay of the bottom layers, s; `None` is the normal layers' own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bottom_light_off_delay_s: Option<f32>,
     /// UV power for normal layers, 0 to 255.
     #[serde(default = "default_light_pwm")]
     pub light_pwm: u8,
@@ -59,34 +70,12 @@ pub struct MaterialProfile {
     /// shared across the catalogue and retuned per machine; see docs/design/profiles.md.
     #[serde(default)]
     pub printers: BTreeMap<String, PrinterTuning>,
+    /// The table `for_printer` laid over this resin, which the machine's locks stay under;
+    /// empty on a resin as it is kept.
+    #[serde(default, skip_serializing_if = "PrinterTuning::is_empty")]
+    pub printer_table: PrinterTuning,
 }
 
-/// The settings of a resin that depend on the machine it is printed on.
-/// Every field is optional: what a table leaves out keeps the resin's own value.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PrinterTuning {
-    pub layer_height_mm: Option<f32>,
-    pub exposure_s: Option<f32>,
-    pub bottom_exposure_s: Option<f32>,
-    pub bottom_layers: Option<u32>,
-    pub transition_layers: Option<u16>,
-    pub light_off_delay_s: Option<f32>,
-    pub light_pwm: Option<u8>,
-    pub bottom_light_pwm: Option<u8>,
-    pub lift_distance_mm: Option<f32>,
-    pub lift_speed_mm_min: Option<f32>,
-    pub retract_distance_mm: Option<f32>,
-    pub retract_speed_mm_min: Option<f32>,
-    pub bottom_lift_distance_mm: Option<f32>,
-    pub bottom_lift_speed_mm_min: Option<f32>,
-    pub bottom_retract_speed_mm_min: Option<f32>,
-    pub waits: Option<Waits>,
-    /// How the printer waits, over `waits`, for a machine that takes one mode only and
-    /// leaves the rests to the resin.
-    pub wait_mode: Option<WaitMode>,
-    pub compensation: Option<Compensation>,
-}
 
 /// What a resin is, what it looks like and what it costs: nothing a machine changes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -159,117 +148,6 @@ impl Waits {
     }
 }
 
-impl PrinterTuning {
-    /// What has to be said about `tuned` that `base` does not already say: the inverse of a tuning,
-    /// turning numbers edited for one machine back into that machine's table.
-    pub fn of_changes(base: &MaterialProfile, tuned: &MaterialProfile) -> Self {
-        Self {
-            layer_height_mm: changed(base.layer_height_mm, tuned.layer_height_mm),
-            exposure_s: changed(base.exposure_s, tuned.exposure_s),
-            bottom_exposure_s: changed(base.bottom_exposure_s, tuned.bottom_exposure_s),
-            bottom_layers: changed(base.bottom_layers, tuned.bottom_layers),
-            transition_layers: changed(base.transition_layers, tuned.transition_layers),
-            light_off_delay_s: changed(base.light_off_delay_s, tuned.light_off_delay_s),
-            light_pwm: changed(base.light_pwm, tuned.light_pwm),
-            bottom_light_pwm: changed(base.bottom_light_pwm, tuned.bottom_light_pwm),
-            lift_distance_mm: changed(base.lift_distance_mm, tuned.lift_distance_mm),
-            lift_speed_mm_min: changed(base.lift_speed_mm_min, tuned.lift_speed_mm_min),
-            retract_distance_mm: changed(base.retract_distance_mm, tuned.retract_distance_mm),
-            retract_speed_mm_min: changed(base.retract_speed_mm_min, tuned.retract_speed_mm_min),
-            bottom_lift_distance_mm: changed(
-                base.bottom_lift_distance_mm,
-                tuned.bottom_lift_distance_mm,
-            ),
-            bottom_lift_speed_mm_min: changed(
-                base.bottom_lift_speed_mm_min,
-                tuned.bottom_lift_speed_mm_min,
-            ),
-            bottom_retract_speed_mm_min: changed(
-                base.bottom_retract_speed_mm_min,
-                tuned.bottom_retract_speed_mm_min,
-            ),
-            waits: changed(base.waits, tuned.waits),
-            wait_mode: None,
-            compensation: changed(base.compensation, tuned.compensation),
-        }
-    }
-
-    /// Whether this table says nothing at all, which is a machine on the resin's own
-    /// numbers and a table not worth writing.
-    pub fn is_empty(&self) -> bool {
-        *self == Self::default()
-    }
-
-    /// The one way of waiting this machine takes, where it takes only one.
-    pub fn held_wait_mode(&self) -> Option<WaitMode> {
-        self.wait_mode
-            .or_else(|| self.waits.map(|waits| waits.mode))
-    }
-
-    /// Whether this machine leaves the resin nothing to say about how it waits.
-    pub fn locks_waiting(&self) -> bool {
-        match self.held_wait_mode() {
-            None => false,
-            Some(WaitMode::LightOff) => self.light_off_delay_s.is_some(),
-            Some(WaitMode::Rest) => self.waits.is_some(),
-        }
-    }
-
-    /// Whether this machine runs every part of the peel itself, leaving the resin no motion.
-    pub fn locks_motion(&self) -> bool {
-        [
-            self.lift_distance_mm,
-            self.lift_speed_mm_min,
-            self.retract_distance_mm,
-            self.retract_speed_mm_min,
-            self.bottom_lift_distance_mm,
-            self.bottom_lift_speed_mm_min,
-            self.bottom_retract_speed_mm_min,
-        ]
-        .iter()
-        .all(Option::is_some)
-    }
-
-    fn apply_to(&self, profile: &mut MaterialProfile) {
-        over(&mut profile.layer_height_mm, self.layer_height_mm);
-        over(&mut profile.exposure_s, self.exposure_s);
-        over(&mut profile.bottom_exposure_s, self.bottom_exposure_s);
-        over(&mut profile.bottom_layers, self.bottom_layers);
-        over(&mut profile.transition_layers, self.transition_layers);
-        over(&mut profile.light_off_delay_s, self.light_off_delay_s);
-        over(&mut profile.light_pwm, self.light_pwm);
-        over(&mut profile.bottom_light_pwm, self.bottom_light_pwm);
-        over(&mut profile.lift_distance_mm, self.lift_distance_mm);
-        over(&mut profile.lift_speed_mm_min, self.lift_speed_mm_min);
-        over(&mut profile.retract_distance_mm, self.retract_distance_mm);
-        over(&mut profile.retract_speed_mm_min, self.retract_speed_mm_min);
-        over(
-            &mut profile.bottom_lift_distance_mm,
-            self.bottom_lift_distance_mm,
-        );
-        over(
-            &mut profile.bottom_lift_speed_mm_min,
-            self.bottom_lift_speed_mm_min,
-        );
-        over(
-            &mut profile.bottom_retract_speed_mm_min,
-            self.bottom_retract_speed_mm_min,
-        );
-        over(&mut profile.waits, self.waits);
-        over(&mut profile.waits.mode, self.wait_mode);
-        over(&mut profile.compensation, self.compensation);
-    }
-}
-
-fn changed<T: Copy + PartialEq>(base: T, tuned: T) -> Option<T> {
-    (base != tuned).then_some(tuned)
-}
-
-fn over<T: Copy>(target: &mut T, value: Option<T>) {
-    if let Some(value) = value {
-        *target = value;
-    }
-}
 
 fn default_retract_distance_mm() -> f32 {
     6.0
@@ -366,14 +244,17 @@ impl MaterialProfile {
         tuned.printers = BTreeMap::new();
         if let Some(tuning) = self.printers.get(printer_id) {
             tuning.apply_to(&mut tuned);
+            tuned.printer_table = tuning.clone();
         }
         tuned
     }
 
-    /// This resin as `printer` prints it: every setting the machine locks put over its own.
+    /// This resin as `printer` prints it: every setting the machine locks put over its own,
+    /// but where the resin's table for the machine states one; see `docs/decisions/0364`.
     #[must_use]
     pub fn on(&self, printer: &PrinterProfile) -> Self {
-        self.clone().with_tuning(&printer.locked)
+        let locks = printer.locked.unstated_by(&self.printer_table);
+        self.clone().with_tuning(&locks)
     }
 
     /// This resin as measured at `layer_height_mm`: normal exposure follows the working curve, the
@@ -405,7 +286,12 @@ impl MaterialProfile {
             Some(last) if !self.is_tuned_for(printer_id) && self.is_tuned_for(last) => last,
             _ => printer_id,
         };
-        self.for_printer(from)
+        let mut start = self.for_printer(from);
+        if from != printer_id {
+            // Another machine's table says nothing about what this one locks.
+            start.printer_table = PrinterTuning::default();
+        }
+        start
     }
 
     /// Seconds the printer stands still over one layer besides its exposure.
@@ -423,6 +309,46 @@ impl MaterialProfile {
             WaitMode::LightOff => self.light_off_delay_s,
             WaitMode::Rest => 0.0,
         }
+    }
+
+    /// The bottom layers' light-off delay the printer is told, zero while resting.
+    pub fn bottom_light_off_s(&self) -> f32 {
+        match self.waits.mode {
+            WaitMode::LightOff => self
+                .bottom_light_off_delay_s
+                .unwrap_or(self.light_off_delay_s),
+            WaitMode::Rest => 0.0,
+        }
+    }
+
+    /// The light-off delay of layer `index`.
+    pub fn light_off_of_layer_s(&self, index: u32) -> f32 {
+        if self.is_bottom_layer(index) {
+            self.bottom_light_off_s()
+        } else {
+            self.light_off_s()
+        }
+    }
+
+    /// The whole climb of a normal layer's lift, both stages, mm.
+    pub fn lift_total_mm(&self) -> f32 {
+        self.lift_distance_mm + self.second_stage.lift_distance_mm
+    }
+
+    /// The whole climb of a bottom layer's lift, both stages, mm.
+    pub fn bottom_lift_total_mm(&self) -> f32 {
+        self.bottom_lift_distance_mm + self.second_stage.bottom_lift_distance_mm
+    }
+
+    /// The whole way back down after a normal lift, both stages, mm.
+    pub fn retract_total_mm(&self) -> f32 {
+        self.retract_distance_mm + self.second_stage.retract_distance_mm
+    }
+
+    /// How far a bottom layer's first retract stage runs, mm: all the way the lift went
+    /// but the slow last stretch of the second.
+    pub fn bottom_retract_distance_mm(&self) -> f32 {
+        (self.bottom_lift_total_mm() - self.second_stage.bottom_retract_distance_mm).max(0.0)
     }
 
     /// What `weight_g` grams, `volume_mm3` cubic millimetres, of this resin cost, or
@@ -492,7 +418,12 @@ impl MaterialProfile {
             ("waits.after_lift_s", waits.after_lift_s),
             ("waits.after_retract_s", waits.after_retract_s),
             ("details.price", self.details.price),
+            (
+                "bottom_light_off_delay_s",
+                self.bottom_light_off_delay_s.unwrap_or(0.0),
+            ),
         ];
+        let others = others.into_iter().chain(self.second_stage.fields());
         for (field, value) in others {
             if value < 0.0 {
                 return Err(ProfileError::Negative { field, value });
@@ -518,6 +449,8 @@ impl Default for MaterialProfile {
             bottom_lift_distance_mm: default_bottom_lift_distance_mm(),
             bottom_lift_speed_mm_min: default_bottom_lift_speed_mm_min(),
             bottom_retract_speed_mm_min: default_bottom_retract_speed_mm_min(),
+            second_stage: SecondStage::default(),
+            bottom_light_off_delay_s: None,
             light_pwm: default_light_pwm(),
             bottom_light_pwm: default_light_pwm(),
             transition_layers: 0,
@@ -528,6 +461,7 @@ impl Default for MaterialProfile {
             waits: Waits::default(),
             compensation: Compensation::default(),
             printers: BTreeMap::new(),
+            printer_table: PrinterTuning::default(),
         }
     }
 }

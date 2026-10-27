@@ -3,7 +3,6 @@ use std::io;
 use core_format::{Fields, PrintJob};
 
 use crate::fdg::{Offsets, Totals, anti_alias_level, write_tail};
-use crate::writer::CtbVersion;
 
 pub(crate) const MAGIC: u32 = 0x9FDA_83AE;
 const VERSION: u32 = 4;
@@ -71,5 +70,6 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob, offsets: Offsets) -> io
     fields.u32_le(CONSTANT_AT_B0)?;
     fields.u32_le(job.created_minutes())?;
     fields.u32_le(anti_alias_level(job))?;
-    fields.u32_le(CtbVersion::V4.software_version())
+    // The vendor's slicer states no software version.
+    fields.u32_le(0)
 }

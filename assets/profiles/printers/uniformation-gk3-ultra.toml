@@ -5,8 +5,7 @@ manufacturer = "UniFormation"
 machine_name = "UniFormation GK3 Ultra"
 mirror_x = true
 mirror_y = false
-# The vendor's profile names `.ctb` without its revision; version 4 is the oldest we write.
-output = "ctb4"
+output = "ctb-encrypted"
 connection = "none"
 
 [display]

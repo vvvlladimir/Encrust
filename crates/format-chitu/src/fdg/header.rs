@@ -3,7 +3,6 @@ use std::io;
 use core_format::{Fields, PrintJob};
 
 use crate::blocks::write_v4_motion;
-use crate::writer::CtbVersion;
 
 /// Bytes of the header; the first preview follows it.
 pub(crate) const HEADER_BYTES: u64 = 0x134;
@@ -100,7 +99,8 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     // The second lift and retract stage, and one more word of it, which we do not use.
     fields.zeros(28)?;
     fields.u32_le(job.created_minutes())?;
-    fields.u32_le(CtbVersion::V4.software_version())
+    // The vendor's slicer states no software version.
+    fields.u32_le(0)
 }
 
 /// From the rests to the end, 0xC0 to 0x134, which `.phz` holds at the same offsets.
@@ -124,7 +124,7 @@ pub(crate) fn write_tail(
 /// The block from 0xD8 to the end of the header: the vendor writer copies `.ctb`'s v4
 /// parameters into its first 40 bytes.
 fn write_parameters(fields: &mut Fields<'_>, job: &PrintJob, totals: Totals) -> io::Result<()> {
-    write_v4_motion(fields, job)?;
+    write_v4_motion(fields, job, 0.0)?;
     fields.zeros(4)?;
     fields.f32_le(totals.layer_time_s)?;
     fields.u32_le(totals.largest_layer_bytes)?;

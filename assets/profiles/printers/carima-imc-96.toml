@@ -23,3 +23,7 @@ z = 140.0
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[locked]
+
+[locked.second_stage]

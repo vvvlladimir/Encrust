@@ -22,7 +22,7 @@ use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
 use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
-use crate::sliced_file::{format_of, write_plate};
+use crate::sliced_file::{asked_revision, format_of, write_plate};
 use crate::stage::{self, Part, Staged};
 
 mod checked;
@@ -234,7 +234,7 @@ pub fn slice_staged(
     job: &JobArgs,
     watch: &Watch,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
-    let format = format_of(output, job.raster.ctb_version);
+    let format = format_of(output);
     let window = raster_window(&job.raster);
     if format.is_some() && staged.printer.is_none() {
         anyhow::bail!(
@@ -242,7 +242,12 @@ pub fn slice_staged(
             output.display()
         );
     }
-    let plate = format.and_then(|format| staged.take_plate(Some(format), window));
+    let plate = format
+        .and_then(|format| staged.take_plate(Some(format), window))
+        .map(|mut plate| {
+            plate.format = asked_revision(plate.format, job.raster.ctb_version);
+            plate
+        });
     let (mut slice, raster) = match plate {
         Some(plate) => write_plate(plate, output, staged.drainage, watch)
             .map(|(slice, raster)| (slice, Some(raster)))?,

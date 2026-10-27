@@ -5,7 +5,7 @@ manufacturer = "Elegoo"
 machine_name = "ELEGOO Mars 2 Pro"
 mirror_x = true
 mirror_y = false
-output = "ctb4"
+output = "ctb5"
 connection = "none"
 
 [display]

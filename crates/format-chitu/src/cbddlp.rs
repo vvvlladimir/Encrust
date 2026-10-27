@@ -181,6 +181,8 @@ fn head() -> Head {
         // The container has no slicer info block, and says so with a zero size beside a
         // zero address.
         slicer_info_bytes: 0,
+        encryption_key: 0,
+        states_height: true,
     }
 }
 

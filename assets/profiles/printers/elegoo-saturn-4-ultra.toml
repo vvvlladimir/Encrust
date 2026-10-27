@@ -36,3 +36,5 @@ retract_speed_mm_min = 0.05
 bottom_lift_distance_mm = 0.05
 bottom_lift_speed_mm_min = 0.05
 bottom_retract_speed_mm_min = 0.05
+
+[locked.second_stage]

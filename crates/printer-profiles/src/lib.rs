@@ -25,7 +25,9 @@ pub use error::ProfileError;
 pub use exchange::unique_id;
 pub use exposure::{ASSUMED_PENETRATION_DEPTH_MM, exposure_for_mm};
 pub use foreign::ForeignResin;
-pub use material::{MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, WaitMode, Waits};
+pub use material::{
+    MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, SecondStage, WaitMode, Waits,
+};
 pub use own_ids::{Renamed, own_id};
 pub use preset::Preset;
 pub use printer::{

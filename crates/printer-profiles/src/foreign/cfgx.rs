@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use super::{ForeignResin, named};
 use crate::{
-    Compensation, MaterialProfile, PriceUnit, PrinterTuning, ProfileError, ResinDetails, WaitMode,
-    Waits, stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s,
+    Compensation, MaterialProfile, PriceUnit, PrinterTuning, ProfileError, ResinDetails, SecondStage,
+    WaitMode, Waits, stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
 
 /// The currencies `resin.resinunit` indexes, in the order the format lists them.
@@ -73,6 +73,7 @@ fn tuning(slice: &Slice) -> PrinterTuning {
     let print = |key| slice.number("print", key);
     let pwm = |key| slice.count("advanced", key).and_then(pwm_of);
     let lift_distance_mm = print("normallayerliftheight").and_then(stated_distance_mm);
+    let stage = second_stage(slice);
     PrinterTuning {
         layer_height_mm: print("layerheight").filter(|height| *height > 0.0),
         bottom_exposure_s: print("bottomlayerexposuretime"),
@@ -81,19 +82,48 @@ fn tuning(slice: &Slice) -> PrinterTuning {
             .count("print", "transitionlayercount")
             .and_then(|count| u16::try_from(count).ok()),
         light_off_delay_s: print("lightofftime").and_then(stated_wait_s),
+        bottom_light_off_delay_s: print("bottomlightofftime").and_then(stated_wait_s),
         light_pwm: pwm("normallightintensitypwm"),
         bottom_light_pwm: pwm("bottomlightintensitypwm"),
         lift_distance_mm,
         lift_speed_mm_min: print("normallayerliftspeed").and_then(stated_speed_mm_min),
-        // The format has one distance for a peel; the plate comes back down as far.
-        retract_distance_mm: lift_distance_mm,
+        // The plate comes back down as far as both stages lifted it, the last stretch slower.
+        retract_distance_mm: lift_distance_mm
+            .map(|lift| (lift + stage.lift_distance_mm - stage.retract_distance_mm).max(0.0)),
         retract_speed_mm_min: print("normallayerdropspeed").and_then(stated_speed_mm_min),
         bottom_lift_distance_mm: print("bottomlayerliftheight").and_then(stated_distance_mm),
         bottom_lift_speed_mm_min: print("bottomlayerliftspeed").and_then(stated_speed_mm_min),
         bottom_retract_speed_mm_min: print("bottomlayerdropspeed").and_then(stated_speed_mm_min),
+        second_stage: Some(stage),
         waits: Some(waits(slice)),
         compensation: Some(compensation(slice)),
         ..PrinterTuning::default()
+    }
+}
+
+/// The second stage of each peel, a stage the file leaves out moving nowhere.
+fn second_stage(slice: &Slice) -> SecondStage {
+    let distance = |key| {
+        slice
+            .number("print", key)
+            .and_then(stated_distance_mm)
+            .unwrap_or(0.0)
+    };
+    let speed = |key| {
+        slice
+            .number("print", key)
+            .and_then(stated_speed_mm_min)
+            .unwrap_or(0.0)
+    };
+    SecondStage {
+        lift_distance_mm: distance("normallayerliftheight2"),
+        lift_speed_mm_min: speed("normallayerliftspeed2"),
+        retract_distance_mm: distance("normallayerdropheight2"),
+        retract_speed_mm_min: speed("normallayerdropspeed2"),
+        bottom_lift_distance_mm: distance("bottomlayerliftheight2"),
+        bottom_lift_speed_mm_min: speed("bottomlayerliftspeed2"),
+        bottom_retract_distance_mm: distance("bottomlayerdropheight2"),
+        bottom_retract_speed_mm_min: speed("bottomlayerdropspeed2"),
     }
 }
 
