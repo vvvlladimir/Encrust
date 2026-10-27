@@ -3,21 +3,21 @@
 name = "Bene6"
 manufacturer = "Nova3D"
 machine_name = "NOVA3D Bene6"
-mirror_x = false
-mirror_y = true
+mirror_x = true
+mirror_y = false
 output = "cws"
 connection = "none"
 
 [display]
-width_px = 4098
-height_px = 2560
-width_mm = 143.43
-height_mm = 89.6
+width_px = 4085
+height_px = 2542
+width_mm = 143.0
+height_mm = 88.97
 grey_floor = 0
 
 [build_volume]
-x = 143.43
-y = 89.6
+x = 143.0
+y = 88.97
 z = 180.0
 
 [firmware]
