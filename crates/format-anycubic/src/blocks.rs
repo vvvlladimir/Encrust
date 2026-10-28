@@ -4,8 +4,9 @@
 
 use std::io;
 
-use core_format::{Fields, PrintJob};
+use core_format::{Fields, FormatError, PrintJob};
 
+use crate::peel::{paired_mm_s, single_mm_s};
 use crate::rle::GREY_STEPS;
 use crate::tables::{NAME_BYTES, write_table_head};
 use crate::writer::AnycubicVersion;
@@ -61,60 +62,19 @@ pub(crate) fn write_colour_table(fields: &mut Fields<'_>) -> io::Result<()> {
 /// Writes the two-stage motion block, the bottom layers' then the rest's. Without a second
 /// stage the second climbs nothing and retracts at the first's speed; see docs/formats/anycubic.md.
 pub(crate) fn write_extra(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
-    let (material, stage) = (&job.material, &job.material.second_stage);
-    let used = stage.is_used();
     write_table_head(fields, "EXTRA", EXTRA_STATED_BYTES)?;
-    write_stages(
-        fields,
-        [
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-        ],
-        [
-            stage.bottom_lift_distance_mm,
-            stage.bottom_lift_speed_mm_min,
-        ],
-        [
-            stage.bottom_retract_speed_mm_min,
-            material.bottom_retract_speed_mm_min,
-        ],
-        used,
-    )?;
-    write_stages(
-        fields,
-        [material.lift_distance_mm, material.lift_speed_mm_min],
-        [stage.lift_distance_mm, stage.lift_speed_mm_min],
-        [stage.retract_speed_mm_min, material.retract_speed_mm_min],
-        used,
-    )
-}
-
-/// Two stages of one lift: a count, then height, speed up and speed down for each, in mm and
-/// mm/s. The vendor pairs the first lift with the second retract, the order the bed moves in.
-fn write_stages(
-    fields: &mut Fields<'_>,
-    [first_mm, first_up_mm_min]: [f32; 2],
-    [second_mm, second_up_mm_min]: [f32; 2],
-    [second_down_mm_min, first_down_mm_min]: [f32; 2],
-    used: bool,
-) -> io::Result<()> {
-    let per_s = |mm_min: f32| mm_min / 60.0;
-    let stages = if used {
-        [
-            first_mm,
-            per_s(first_up_mm_min),
-            per_s(second_down_mm_min),
-            second_mm,
-            per_s(second_up_mm_min),
-            per_s(first_down_mm_min),
-        ]
-    } else {
-        let down = per_s(first_down_mm_min);
-        [first_mm, per_s(first_up_mm_min), down, 0.0, 0.0, down]
-    };
-    fields.u32_le(2)?;
-    for value in stages {
-        fields.f32_le(value)?;
+    for bottom in [true, false] {
+        let peel = job.material.peel(bottom);
+        let stages = if job.material.second_stage.is_used() {
+            paired_mm_s(&peel).concat()
+        } else {
+            let [height, up, down] = single_mm_s(&peel);
+            vec![height, up, down, 0.0, 0.0, down]
+        };
+        fields.u32_le(2)?;
+        for value in stages {
+            fields.f32_le(value)?;
+        }
     }
     Ok(())
 }
@@ -153,19 +113,22 @@ fn write_machine_panel(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()
     fields.zeros(8 * 4)?;
     fields.u32_le(1)?;
     fields.zeros(4)?;
-    fields.u16_le(panel_px(job.raster.width_px)?)?;
-    fields.u16_le(panel_px(job.raster.height_px)?)?;
+    // `begin` refused a panel past `panel_in_sixteen_bits`.
+    fields.u16_le(job.raster.width_px as u16)?;
+    fields.u16_le(job.raster.height_px as u16)?;
     fields.zeros(4 * 4)
 }
 
-/// One side of the panel in the sixteen bits the machine block gives it.
-fn panel_px(side_px: u32) -> io::Result<u16> {
-    u16::try_from(side_px).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("a {side_px} px panel side does not fit the machine block's 16-bit field"),
-        )
-    })
+/// Refuses a panel whose sides do not fit the sixteen bits `what` states them in.
+pub(crate) fn panel_in_sixteen_bits(job: &PrintJob, what: &'static str) -> Result<(), FormatError> {
+    let (width, height) = (job.raster.width_px, job.raster.height_px);
+    if width > u32::from(u16::MAX) || height > u32::from(u16::MAX) {
+        return Err(FormatError::Encoding {
+            what,
+            reason: format!("a panel of {width} x {height} px is past the 65535 it holds"),
+        });
+    }
+    Ok(())
 }
 
 /// Writes the second layer table's head and leaves its rows blank; they are filled in once

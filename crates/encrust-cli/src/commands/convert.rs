@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use core_format::OpenFile;
 use core_pipeline::{Converting, Observer, convert, open_file};
 use indicatif::ProgressBar;
 use serde::Serialize;
@@ -9,7 +10,7 @@ use crate::args::ProfileArgs;
 use crate::commands::GlobalArgs;
 use crate::exit::{Cancelled, Exit, Stop};
 use crate::progress::bar;
-use crate::sliced_file::{CtbRevision, asked_revision, format_of, now_unix_s};
+use crate::sliced_file::{CtbRevision, asked_revision, format_of, now_unix_s, warn_of_limits};
 use crate::{json, profiles};
 
 #[derive(clap::Args, Debug)]
@@ -59,19 +60,18 @@ impl ConvertCommand {
             bar: global.shows_progress().then(|| bar("layers")),
             stop,
         };
-        let converted = convert(
-            &mut source,
-            &Converting {
-                format: asked_revision(format.at_revision_of(printer.output), self.ctb_version),
-                name: &name,
-                printer: &printer,
-                material: &chosen.material,
-                created_unix_s: now_unix_s(),
-            },
-            &self.output,
-            &mut watching,
-        )
-        .with_context(|| format!("cannot convert {}", self.input.display()))?;
+        let converting = Converting {
+            format: asked_revision(format.at_revision_of(printer.output), self.ctb_version),
+            name: &name,
+            printer: &printer,
+            material: &chosen.material,
+            created_unix_s: now_unix_s(),
+        };
+        if let Ok(job) = converting.job_of(source.facts()) {
+            warn_of_limits(&job);
+        }
+        let converted = convert(&mut source, &converting, &self.output, &mut watching)
+            .with_context(|| format!("cannot convert {}", self.input.display()))?;
         drop(watching);
         let converted = converted.ok_or(Cancelled)?;
 

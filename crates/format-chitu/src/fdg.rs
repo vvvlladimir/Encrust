@@ -5,12 +5,11 @@
 use std::io;
 
 use core_format::{
-    Fields, FormatError, LayerSink, PREVIEW_SIZES_PX, PrintJob, SlicedFileWriter, WriteSeek,
-    validate, write_preview,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate, write_chitu_previews,
 };
 use core_raster::LayerRuns;
 
-use crate::blocks::preview_pixels;
 use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LayerDef};
 use crate::writer::encryption_key;
 
@@ -22,9 +21,8 @@ mod tests;
 
 pub(crate) use header::{HEADER_BYTES, Offsets, Totals, anti_alias_level, write_tail};
 pub use reader::{FdgReader, OpenFdg};
-pub(crate) use reader::{MotionAt, read_machine_name, read_motion, read_table};
+pub(crate) use reader::{Head, MotionAt, open_layout};
 pub use rle::FdgLayer;
-pub(crate) use rle::{cover, decode};
 
 /// Two heights closer than this are one height, as the header counts them.
 const SAME_HEIGHT_MM: f32 = 0.001;
@@ -81,19 +79,7 @@ impl<'w> FdgSink<'w> {
         let mut fields = Fields::new(sink);
         fields.seek_to(HEADER_BYTES)?;
         let mut offsets = Offsets::default();
-        let [(large_w, large_h), (small_w, small_h)] = PREVIEW_SIZES_PX;
-        offsets.large_preview = write_preview(
-            &mut fields,
-            large_w,
-            large_h,
-            &preview_pixels(job, (large_w, large_h)),
-        )?;
-        offsets.small_preview = write_preview(
-            &mut fields,
-            small_w,
-            small_h,
-            &preview_pixels(job, (small_w, small_h)),
-        )?;
+        (offsets.large_preview, offsets.small_preview) = write_chitu_previews(&mut fields, job)?;
 
         let name = job.printer.machine_name().as_bytes();
         offsets.machine_name = fields.position()? as u32;
@@ -126,23 +112,7 @@ impl LayerSink for FdgSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.defs.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
 
         let block = self.fields.position()?;
         let def = LayerDef {
@@ -164,12 +134,7 @@ impl LayerSink for FdgSink<'_> {
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.defs.len() as u32;
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
 
         self.fields.seek_to(u64::from(self.offsets.layer_table))?;
         for def in &self.defs {
@@ -186,10 +151,8 @@ impl LayerSink for FdgSink<'_> {
 impl FdgSink<'_> {
     /// Adds a written layer to what the header sums over the stack.
     fn tally(&mut self, index: u32, def: &LayerDef) {
-        let rests_s: f32 = self.job.material.waits.rests_s().iter().sum();
         let totals = &mut self.totals;
-        totals.layer_time_s += def.exposure_s + def.light_off_delay_s + rests_s;
-        totals.largest_layer_bytes = totals.largest_layer_bytes.max(def.data_size);
+        totals.stack.add(&self.job, index, def.data_size);
 
         let bottom_mm = self.job.nominal_height_mm() * self.job.material.bottom_layers as f32;
         if def.z_mm < bottom_mm {

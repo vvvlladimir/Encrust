@@ -1,8 +1,8 @@
 use std::io;
 
 use core_format::{
-    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_RESIN_TYPE, Fields, PREVIEW_SIZES_PX, PrintJob,
-    Rgb, write_preview,
+    CHITU_ANTI_ALIAS_CAP, CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, ChituTotals, Fields, PrintJob,
+    chitu_second_stage_words, write_chitu_previews, write_chitu_resin,
 };
 
 use crate::writer::CtbVersion;
@@ -11,10 +11,6 @@ pub(crate) const HEADER_BYTES: u64 = 112;
 const PRINT_PARAMETERS_BYTES: u32 = 60;
 pub(crate) const SLICER_INFO_BYTES: u32 = 76;
 const PRINT_PARAMETERS_V4_BYTES: u32 = 464;
-const RESIN_PARAMETERS_BYTES: u32 = 40;
-
-/// Colour a preview record is padded with where the square thumbnail does not reach.
-const PREVIEW_BACKGROUND: Rgb = [0, 0, 0];
 
 /// What the header says about the container it heads, which is all that separates a
 /// `.ctb` from a `.cbddlp`. See `docs/formats/chitu.md`.
@@ -46,16 +42,6 @@ pub(crate) struct Offsets {
     pub layer_table: u32,
 }
 
-/// What a `.ctb` states about the whole stack once every layer is in.
-#[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct Totals {
-    /// Seconds every layer spends lit, dark and resting, added up.
-    pub layer_time_s: f32,
-    /// Bytes of the largest layer's run-length data.
-    pub largest_layer_bytes: u32,
-    pub layers: u32,
-}
-
 /// Writes everything between the header and the layer table, in the order the vendor's
 /// slicer lays it down: the fixed blocks, the previews, then the strings they address.
 ///
@@ -75,7 +61,7 @@ pub(crate) fn write_body(
     offsets.v4_parameters = fields.position()? as u32;
     fields.zeros(PRINT_PARAMETERS_V4_BYTES as usize)?;
 
-    (offsets.large_preview, offsets.small_preview) = write_previews(fields, job)?;
+    (offsets.large_preview, offsets.small_preview) = write_chitu_previews(fields, job)?;
 
     offsets.machine_name = fields.position()? as u32;
     fields.bytes(job.printer.machine_name().as_bytes())?;
@@ -83,13 +69,13 @@ pub(crate) fn write_body(
     fields.text(CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES as usize)?;
     if version == CtbVersion::V5 {
         offsets.resin_parameters = fields.position()? as u32;
-        write_resin_parameters(fields, job, offsets.resin_parameters)?;
+        write_chitu_resin(fields, job, offsets.resin_parameters)?;
     }
     offsets.layer_table = fields.position()? as u32;
 
     fields.seek_to(u64::from(offsets.slicer_info))?;
     write_slicer_info(fields, job, version, offsets)?;
-    rewrite_v4_parameters(fields, job, offsets, Totals::default())?;
+    rewrite_v4_parameters(fields, job, offsets, ChituTotals::default())?;
     fields.seek_to(u64::from(offsets.layer_table))?;
     Ok(offsets)
 }
@@ -99,40 +85,11 @@ pub(crate) fn write_body(
 pub(crate) fn write_cbddlp_body(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<Offsets> {
     let mut offsets = Offsets::default();
     fields.seek_to(HEADER_BYTES)?;
-    (offsets.large_preview, offsets.small_preview) = write_previews(fields, job)?;
+    (offsets.large_preview, offsets.small_preview) = write_chitu_previews(fields, job)?;
     offsets.print_parameters = fields.position()? as u32;
     write_print_parameters(fields, job)?;
     offsets.layer_table = fields.position()? as u32;
     Ok(offsets)
-}
-
-/// Both preview records, large then small, and where each starts.
-fn write_previews(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<(u32, u32)> {
-    let [(large_w, large_h), (small_w, small_h)] = PREVIEW_SIZES_PX;
-    let large = write_preview(
-        fields,
-        large_w,
-        large_h,
-        &preview_pixels(job, (large_w, large_h)),
-    )?;
-    let small = write_preview(
-        fields,
-        small_w,
-        small_h,
-        &preview_pixels(job, (small_w, small_h)),
-    )?;
-    Ok((large, small))
-}
-
-/// The job's thumbnail cut to one record's shape, or black when there is none.
-pub(crate) fn preview_pixels(job: &PrintJob, (width, height): (u32, u32)) -> Vec<Rgb> {
-    match job.thumbnail.as_ref() {
-        Some(thumbnail) => thumbnail
-            .fitted_to(width, height, PREVIEW_BACKGROUND)
-            .pixels()
-            .to_vec(),
-        None => vec![PREVIEW_BACKGROUND; (width * height) as usize],
-    }
 }
 
 pub(crate) fn write_header(
@@ -206,8 +163,8 @@ fn write_print_parameters(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result
     fields.f32_le(material.bottom_light_off_s())?;
     fields.f32_le(material.light_off_s())?;
     fields.u32_le(material.bottom_layers)?;
-    // A word the vendor's slicer sets to one in every file.
     fields.u32_le(0)?;
+    // A word the vendor's slicer sets to one in every file.
     fields.u32_le(1)?;
     fields.zeros(8)
 }
@@ -227,7 +184,7 @@ fn write_slicer_info(
     fields.u32_le(job.printer.machine_name().len() as u32)?;
     fields.u32_le(version.flags(job))?;
     fields.u32_le(job.created_minutes())?;
-    fields.u32_le(u32::from(job.raster.anti_alias_level(8)))?;
+    fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     // The vendor's slicer states no software version here.
     fields.u32_le(0)?;
     fields.f32_le(after_retract_s)?;
@@ -242,7 +199,7 @@ pub(crate) fn rewrite_v4_parameters(
     fields: &mut Fields<'_>,
     job: &PrintJob,
     offsets: Offsets,
-    totals: Totals,
+    totals: ChituTotals,
 ) -> io::Result<()> {
     fields.seek_to(u64::from(offsets.v4_parameters))?;
     write_v4_motion(fields, job)?;
@@ -261,13 +218,10 @@ pub(crate) fn rewrite_v4_parameters(
 /// The second lift and retract stage but for the bottom retract, which the v4 parameters
 /// hold; `.fdg` and `.phz` copy these six words into their header.
 pub(crate) fn write_second_stage(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
-    let stage = &job.material.second_stage;
-    fields.f32_le(stage.bottom_lift_distance_mm)?;
-    fields.f32_le(stage.bottom_lift_speed_mm_min)?;
-    fields.f32_le(stage.lift_distance_mm)?;
-    fields.f32_le(stage.lift_speed_mm_min)?;
-    fields.f32_le(stage.retract_distance_mm)?;
-    fields.f32_le(stage.retract_speed_mm_min)
+    for word in chitu_second_stage_words(&job.material.second_stage) {
+        fields.f32_le(word)?;
+    }
+    Ok(())
 }
 
 /// The first 40 bytes of the v4 parameters: the bottom retract's two speeds, the rests
@@ -290,35 +244,4 @@ pub(crate) fn write_v4_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Re
     fields.f32_le(after_lift_s)?;
     fields.f32_le(before_lift_s)?;
     fields.f32_le(stage.bottom_retract_distance_mm)
-}
-
-/// The resin block and its three strings: the resin's type, its name and the preset's name,
-/// each addressed and measured from the block.
-fn write_resin_parameters(fields: &mut Fields<'_>, job: &PrintJob, at: u32) -> io::Result<()> {
-    let material = &job.material;
-    let kind = if material.details.kind.is_empty() {
-        CHITU_RESIN_TYPE
-    } else {
-        material.details.kind.as_str()
-    };
-    let strings = [
-        kind.as_bytes(),
-        material.name.as_bytes(),
-        material.name.as_bytes(),
-    ];
-
-    fields.u32_le(0)?;
-    fields.bytes(&[0, 0, 0, 0])?;
-    let mut address = at + RESIN_PARAMETERS_BYTES;
-    for text in strings {
-        fields.u32_le(address)?;
-        fields.u32_le(text.len() as u32)?;
-        address += text.len() as u32;
-    }
-    fields.f32_le(material.density_g_cm3)?;
-    fields.u32_le(0)?;
-    for text in strings {
-        fields.bytes(text)?;
-    }
-    Ok(())
 }

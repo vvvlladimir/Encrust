@@ -5,32 +5,11 @@ use core_raster::LayerRuns;
 
 use super::blocks::{FOOTER, MAGIC};
 use super::{CxlineReader, CxlineSink, CxlineWriter, cxline_model_code};
-use crate::fixtures::sample_job;
+use crate::fixtures::{lit_block, sample_job, written_by};
 use core_format::Crc32;
 
-/// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
-fn block() -> LayerRuns {
-    let mut builder = LayerRuns::builder(8, 4);
-    builder.push(10, 0);
-    builder.push(4, 255);
-    builder.push(4, 0);
-    builder.push(4, 255);
-    builder.push(10, 0);
-    builder.finish()
-}
-
 fn written(layers: u32) -> Vec<u8> {
-    let mut file = Cursor::new(Vec::new());
-    {
-        let mut sink = CxlineWriter
-            .begin(&sample_job(layers), &mut file)
-            .expect("the job is sound");
-        for _ in 0..layers {
-            sink.push(CxlineSink::encode(&block())).expect("a layer");
-        }
-        sink.finish(1500.0).expect("every promised layer arrived");
-    }
-    file.into_inner()
+    written_by(&CxlineWriter, &sample_job(layers))
 }
 
 #[test]
@@ -177,7 +156,8 @@ fn a_file_without_the_panel_in_millimetres_is_refused() {
     let mut file = Cursor::new(Vec::new());
     {
         let mut sink = CxlineWriter.begin(&job, &mut file).expect("sound");
-        sink.push(CxlineSink::encode(&block())).expect("a layer");
+        sink.push(CxlineSink::encode(&lit_block()))
+            .expect("a layer");
         sink.finish(0.0).expect("written");
     }
     let err = CxlineReader
@@ -218,8 +198,9 @@ fn a_layer_of_the_wrong_size_or_count_is_refused() {
         err,
         FormatError::ResolutionMismatch { index: 0, .. }
     ));
-    sink.push(CxlineSink::encode(&block())).expect("the first");
-    let err = sink.push(CxlineSink::encode(&block())).unwrap_err();
+    sink.push(CxlineSink::encode(&lit_block()))
+        .expect("the first");
+    let err = sink.push(CxlineSink::encode(&lit_block())).unwrap_err();
     assert!(matches!(
         err,
         FormatError::LayerCountMismatch {

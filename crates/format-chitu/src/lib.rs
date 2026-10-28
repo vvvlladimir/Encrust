@@ -16,7 +16,7 @@ mod writer;
 pub(crate) use blocks::HEADER_BYTES;
 pub use cbddlp::{CbddlpFlavour, CbddlpSink, CbddlpWriter};
 pub use fdg::{FdgLayer, FdgReader, FdgSink, FdgWriter, OpenFdg};
-pub use phz::{OpenPhz, PhzReader, PhzWriter};
+pub use phz::{PhzReader, PhzWriter};
 pub use reader::{ChituReader, OpenChitu};
 pub use rle1::{EncodedPasses, GREY_PASSES, decode_passes};
 pub use writer::{CtbSink, CtbVersion, CtbWriter};

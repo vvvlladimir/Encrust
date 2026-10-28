@@ -1,5 +1,6 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
@@ -7,9 +8,8 @@ use crate::rle::EncodedLayer;
 use crate::tables::{self, LAYER_DEF_BYTES, LayerDef, Offsets};
 use crate::{blocks, extent};
 
-/// Which revision a file states it is.
-///
-
+/// Which revision a file states it is; which machine reads which is in
+/// `docs/formats/anycubic.md`.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AnycubicVersion {
     #[default]
@@ -21,6 +21,7 @@ pub enum AnycubicVersion {
 }
 
 impl AnycubicVersion {
+    /// The revision number the file's header states.
     pub fn number(self) -> u32 {
         match self {
             Self::V1 => 1,
@@ -142,17 +143,18 @@ impl AnycubicFlavour {
         }
     }
 
+    /// The extension without its dot.
     pub fn extension(self) -> &'static str {
         &self.label()[1..]
     }
 
     /// The flavour `extension` names, without the dot and in any case.
     pub fn of_extension(extension: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|flavour| extension.eq_ignore_ascii_case(flavour.extension()))
+        core_format::flavour_of(&Self::ALL, extension, Self::extension)
     }
 
+    /// The newest revision this extension's machines read, which is what a file names
+    /// itself with when nothing else chose one.
     pub fn newest_version(self) -> AnycubicVersion {
         match self {
             Self::Pw0 | Self::Pwx => AnycubicVersion::V1,
@@ -172,6 +174,7 @@ pub struct AnycubicWriter {
 }
 
 impl AnycubicWriter {
+    /// A writer of `flavour` stating `version`.
     pub fn new(flavour: AnycubicFlavour, version: AnycubicVersion) -> Self {
         Self { flavour, version }
     }
@@ -190,6 +193,7 @@ impl SlicedFileWriter for AnycubicWriter {
         sink: &'w mut dyn WriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
+        blocks::panel_in_sixteen_bits(job, "the machine block")?;
 
         let offsets = Offsets::of(job.layer_count());
         let mut fields = Fields::new(sink);
@@ -245,34 +249,11 @@ impl LayerSink for AnycubicSink<'_> {
 
     fn push(&mut self, layer: Self::Encoded) -> Result<(), FormatError> {
         let (encoded, index) = (&layer.runs, self.defs.len() as u32);
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
 
         let material = &self.job.material;
-        let bottom = material.is_bottom_layer(index);
-        let (lift_distance_mm, lift_speed_mm_min) = if bottom {
-            (
-                material.bottom_lift_distance_mm,
-                material.bottom_lift_speed_mm_min,
-            )
-        } else {
-            (material.lift_distance_mm, material.lift_speed_mm_min)
-        };
+        let peel = material.peel_of_layer(index);
+        let (lift_distance_mm, lift_speed_mm_min) = (peel.lift_mm, peel.lift_speed_mm_min);
 
         let at = self.fields.position()? as u32;
         self.fields.bytes(encoded.data())?;
@@ -294,12 +275,7 @@ impl LayerSink for AnycubicSink<'_> {
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.defs.len() as u32;
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
 
         // The rows sit behind the table's own name, length and count.
         self.fields

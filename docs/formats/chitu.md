@@ -176,8 +176,10 @@ the records are there either way: the header's addresses are not optional.
 | 0x28 | bottom layers, `u32` |
 | 0x2C | four words: 0, 1, 0, 0, as the vendor writes them |
 
-The lifts are both stages' whole climb at the first stage's speed. Cost is the resin's price
-times the volume, zero without a price.
+The lifts are both stages' whole climb at the first stage's speed; a reader takes the slicer
+info's second stage back off them, and the retract travels the same climb back. This holds in
+the encrypted `.ctb`, `.fdg` and `.phz` too. Cost is the resin's price times the volume, zero
+without a price.
 
 ## Slicer info, 76 bytes
 

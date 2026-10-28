@@ -37,7 +37,7 @@ The `.cxdlpv4` writer writes it, its reader reads it back, and a `.cfgx` resin i
 - A HALOT file states the buffer its maker would, and a user can change it or turn it off.
 - Nothing else carries the field. A machine whose format gains one adds its writer only.
 - What the firmware does with each number is the maker's. We checked the bytes against the
-  vendor's files, not against a print; `PLAN-encrust-profiles.md` §5 lists the check.
+  vendor's files, not against a print.
 
 ## Alternatives considered
 

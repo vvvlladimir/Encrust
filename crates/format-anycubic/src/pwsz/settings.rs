@@ -1,10 +1,11 @@
 //! The archive's JSON entries and its two previews. Which keys, and the constants among
 //! them, are in `docs/formats/pwsz.md`.
 
-use core_format::{FormatError, PrintJob, Rgb, Thumbnail, encode_colour};
+use core_format::{FormatError, LayerPeel, PrintJob, Rgb, Thumbnail, encode_colour};
 use serde_json::{Value, json};
 
 use super::PwszFlavour;
+use crate::peel::{paired_mm_s, single_mm_s};
 use crate::rle::GREY_STEPS;
 
 /// The two previews, in pixels, and the colour each is padded with.
@@ -21,10 +22,8 @@ pub(crate) fn previews(job: &PrintJob) -> Result<Vec<Vec<u8>>, FormatError> {
     PREVIEWS
         .iter()
         .map(|&(width, height, background)| {
-            let image = match job.thumbnail.as_ref() {
-                Some(thumbnail) => thumbnail.fitted_to(width, height, background),
-                None => Thumbnail::filled(width, height, background),
-            };
+            let image =
+                Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, background);
             encode_colour(&image)
         })
         .collect()
@@ -45,14 +44,8 @@ pub(crate) fn layers_controller(job: &PrintJob) -> Result<Vec<u8>, FormatError> 
     let material = &job.material;
     let paras: Vec<Value> = (0..job.layer_count())
         .map(|index| {
-            let (lift_mm, lift_mm_min) = if material.is_bottom_layer(index) {
-                (
-                    material.bottom_lift_distance_mm,
-                    material.bottom_lift_speed_mm_min,
-                )
-            } else {
-                (material.lift_distance_mm, material.lift_speed_mm_min)
-            };
+            let peel = material.peel_of_layer(index);
+            let (lift_mm, lift_mm_min) = (peel.lift_mm, peel.lift_speed_mm_min);
             let thickness_mm = job.layer_height_mm(index);
             json!({
                 "exposure_time": job.exposure_of_layer_s(index),
@@ -152,29 +145,10 @@ fn template_suffix(flavour: PwszFlavour) -> &'static str {
 
 /// The job's resin, named the way the vendor's settings name the one a file prints with.
 fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
-    let (material, stage) = (&job.material, &job.material.second_stage);
-    let used = stage.is_used();
-    let [normal_0, normal_1] = stages(
-        [material.lift_distance_mm, material.lift_speed_mm_min],
-        [stage.lift_distance_mm, stage.lift_speed_mm_min],
-        [stage.retract_speed_mm_min, material.retract_speed_mm_min],
-        used,
-    );
-    let [bott_0, bott_1] = stages(
-        [
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-        ],
-        [
-            stage.bottom_lift_distance_mm,
-            stage.bottom_lift_speed_mm_min,
-        ],
-        [
-            stage.bottom_retract_speed_mm_min,
-            material.bottom_retract_speed_mm_min,
-        ],
-        used,
-    );
+    let material = &job.material;
+    let used = material.second_stage.is_used();
+    let [normal_0, normal_1] = stages(&material.peel(false), used);
+    let [bott_0, bott_1] = stages(&material.peel(true), used);
     let zdown_speed = normal_0["down_speed"].clone();
     json!({
         "depth_penetration_curve": penetration_constants(),
@@ -211,28 +185,16 @@ fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
     })
 }
 
-/// One lift as the two stages the vendor's slicer always states, in mm and mm/s: the first
-/// lift with the second retract, then the second lift with the first, as `EXTRA` lays them.
-/// Without a second stage it climbs nothing at the first's speeds, which a firmware
-/// estimating time divides by.
-fn stages(
-    [first_mm, first_up_mm_min]: [f32; 2],
-    [second_mm, second_up_mm_min]: [f32; 2],
-    [second_down_mm_min, first_down_mm_min]: [f32; 2],
-    used: bool,
-) -> [Value; 2] {
-    let per_s = |mm_min: f32| mm_min / 60.0;
-    let stage = |height: f32, up: f32, down: f32| json!({ "height": height, "up_speed": per_s(up), "down_speed": per_s(down) });
+/// One lift as the two stages the vendor's slicer always states, in mm and mm/s. Without a
+/// second stage it climbs nothing at the first's speeds, which a firmware estimating time
+/// divides by.
+fn stages(peel: &LayerPeel, used: bool) -> [Value; 2] {
+    let stage = |[height, up, down]: [f32; 3]| json!({ "height": height, "up_speed": up, "down_speed": down });
     if used {
-        [
-            stage(first_mm, first_up_mm_min, second_down_mm_min),
-            stage(second_mm, second_up_mm_min, first_down_mm_min),
-        ]
+        paired_mm_s(peel).map(stage)
     } else {
-        [
-            stage(first_mm, first_up_mm_min, first_down_mm_min),
-            stage(0.0, first_up_mm_min, first_down_mm_min),
-        ]
+        let [height, up, down] = single_mm_s(peel);
+        [stage([height, up, down]), stage([0.0, up, down])]
     }
 }
 

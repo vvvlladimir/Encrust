@@ -6,18 +6,7 @@ use core_raster::LayerRuns;
 use super::header::HEADER_BYTES;
 use super::rle::{self, FdgLayer};
 use super::{FdgReader, FdgSink, FdgWriter};
-use crate::fixtures::{sample_job, two_stage_job};
-
-/// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
-fn block() -> LayerRuns {
-    let mut builder = LayerRuns::builder(8, 4);
-    builder.push(10, 0);
-    builder.push(4, 255);
-    builder.push(4, 0);
-    builder.push(4, 255);
-    builder.push(10, 0);
-    builder.finish()
-}
+use crate::fixtures::{lit_block, sample_job, two_stage_job, written_by};
 
 fn written(layers: u32) -> Vec<u8> {
     let mut job = sample_job(layers);
@@ -29,20 +18,12 @@ fn written(layers: u32) -> Vec<u8> {
         after_lift_s: 0.5,
         after_retract_s: 2.0,
     };
-    let mut file = Cursor::new(Vec::new());
-    {
-        let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
-        for _ in 0..layers {
-            sink.push(FdgSink::encode(&block())).expect("a layer");
-        }
-        sink.finish(1500.0).expect("every promised layer arrived");
-    }
-    file.into_inner()
+    written_by(&FdgWriter, &job)
 }
 
 #[test]
 fn a_row_and_its_middle_each_open_with_a_colour_byte() {
-    let data = FdgLayer::encode(&block()).data().to_vec();
+    let data = FdgLayer::encode(&lit_block()).data().to_vec();
     assert_eq!(
         data,
         [
@@ -77,6 +58,18 @@ fn the_codec_keeps_what_is_lit_and_drops_what_is_below_half() {
     let runs = rle::decode(FdgLayer::encode(&layer).data(), 16).expect("our own bytes");
     let lit: Vec<(u32, u8)> = runs.iter().map(|run| (run.length, run.value)).collect();
     assert_eq!(lit, [(3, 0), (5, 255), (4, 0), (4, 255)]);
+}
+
+#[test]
+fn a_lit_first_pixel_reads_back_lit() {
+    let mut builder = LayerRuns::builder(8, 1);
+    builder.push(2, 255);
+    builder.push(6, 0);
+    let layer = builder.finish();
+
+    let runs = rle::decode(FdgLayer::encode(&layer).data(), 8).expect("our own bytes");
+    let lit: Vec<(u32, u8)> = runs.iter().map(|run| (run.length, run.value)).collect();
+    assert_eq!(lit, [(2, 255), (6, 0)]);
 }
 
 #[test]
@@ -211,9 +204,9 @@ fn a_layer_count_other_than_promised_is_refused() {
     let mut sink = FdgWriter
         .begin(&sample_job(1), &mut buffer)
         .expect("the job is sound");
-    sink.push(FdgSink::encode(&block()))
+    sink.push(FdgSink::encode(&lit_block()))
         .expect("the first layer");
-    let err = sink.push(FdgSink::encode(&block())).unwrap_err();
+    let err = sink.push(FdgSink::encode(&lit_block())).unwrap_err();
     assert!(matches!(
         err,
         FormatError::LayerCountMismatch {
@@ -260,7 +253,7 @@ fn the_header_states_the_bottom_light_off_and_no_height() {
     {
         let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
         for _ in 0..3 {
-            sink.push(FdgSink::encode(&block())).expect("a layer");
+            sink.push(FdgSink::encode(&lit_block())).expect("a layer");
         }
         sink.finish(1500.0).expect("every promised layer arrived");
     }
@@ -281,7 +274,7 @@ fn a_two_stage_peel_states_both_climbs_summed_then_the_second_stage() {
     let mut file = Cursor::new(Vec::new());
     {
         let mut sink = FdgWriter.begin(&job, &mut file).expect("the job is sound");
-        sink.push(FdgSink::encode(&block())).expect("a layer");
+        sink.push(FdgSink::encode(&lit_block())).expect("a layer");
         sink.finish(1500.0).expect("every promised layer arrived");
     }
     let bytes = file.into_inner();
@@ -298,5 +291,29 @@ fn a_two_stage_peel_states_both_climbs_summed_then_the_second_stage() {
         (f32_at(0xDC), f32_at(0xFC)),
         (120.0, 3.0),
         "the second bottom retract's speed and distance, as in the .ctb v4 block"
+    );
+}
+
+#[test]
+fn a_two_stage_peel_reads_back_as_its_two_stages() {
+    let job = two_stage_job(1);
+    let open = FdgReader
+        .open(Cursor::new(written_by(&FdgWriter, &job)))
+        .expect("a .fdg we wrote");
+    let stated = &open.facts().stated;
+    assert_eq!(stated.second_stage, Some(job.material.second_stage));
+    assert_eq!(
+        (stated.bottom_lift_distance_mm, stated.lift_distance_mm),
+        (Some(5.0), Some(2.0)),
+        "the first stage, split off the summed climbs"
+    );
+    assert_eq!(
+        stated.retract_distance_mm,
+        Some(2.0),
+        "6 mm back, 4 of them slow"
+    );
+    assert_eq!(
+        stated.bottom_light_off_delay_s,
+        Some(job.material.bottom_light_off_s())
     );
 }

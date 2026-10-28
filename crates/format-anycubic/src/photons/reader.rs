@@ -46,8 +46,9 @@ impl SlicedFileReader for PhotonsReader {
         let header = read_header(&mut reads)?;
 
         let (preview_width, preview_height) = header.preview_px;
-        let preview_bytes = u64::from(preview_width) * u64::from(preview_height) * 2;
-        reads.seek_to(HEADER_BYTES + preview_bytes)?;
+        let preview_bytes =
+            (u64::from(preview_width) * u64::from(preview_height)).saturating_mul(2);
+        reads.seek_to(HEADER_BYTES.saturating_add(preview_bytes))?;
         let layer_count = reads.u32_be()?;
         let (layers, (width_px, height_px)) = read_layers(&mut reads, layer_count, &header)?;
         let pixel_count = panel_in_range(width_px, height_px)?;

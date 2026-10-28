@@ -1,38 +1,13 @@
 //! Every expected number is what the vendor's slicer wrote for the GK3 Ultra with the same
 //! resin, `local-docs` sample `GK3-Ultra.ctb`, deciphered.
 
-use std::io::Cursor;
-
-use core_format::{Crc32, LayerSink, SlicedFileWriter};
-use core_raster::{LayerMask, LayerRuns};
+use core_format::Crc32;
 
 use super::*;
-use crate::fixtures::{HEIGHT_PX, WIDTH_PX, test_resin_job};
+use crate::fixtures::{test_resin_job, written};
 
 /// Bytes behind each layer's data: its lit area and a zero word.
 const LAYER_TAIL_BYTES: usize = 8;
-
-fn lit_layer() -> LayerRuns {
-    let mut mask = LayerMask::new(WIDTH_PX, HEIGHT_PX);
-    mask.pixels_mut()[20..36].fill(255);
-    LayerRuns::from_mask(&mask)
-}
-
-fn written(job: &PrintJob) -> Vec<u8> {
-    let mut file = Cursor::new(Vec::new());
-    {
-        let mut sink = CtbEncryptedWriter
-            .begin(job, &mut file)
-            .expect("the job matches the panel");
-        for _ in 0..job.layer_count() {
-            sink.push(CtbEncryptedSink::encode(&lit_layer()))
-                .expect("a layer is written");
-        }
-        sink.finish(job.volume_mm3)
-            .expect("every promised layer arrived");
-    }
-    file.into_inner()
-}
 
 fn word(bytes: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])

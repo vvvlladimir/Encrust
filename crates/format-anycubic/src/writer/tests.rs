@@ -24,6 +24,24 @@ fn every_extension_round_trips_through_its_own_name() {
 }
 
 #[test]
+fn a_panel_past_the_machine_blocks_sixteen_bits_is_refused() {
+    let mut job = sample_job(1);
+    job.raster.width_px = 70_000;
+    job.printer.display.width_px = 70_000;
+    let err = AnycubicWriter::new(AnycubicFlavour::Pwmx, AnycubicVersion::V516)
+        .begin(&job, &mut Cursor::new(Vec::new()))
+        .err()
+        .expect("the machine block cannot state the panel");
+    assert!(matches!(
+        err,
+        FormatError::Encoding {
+            what: "the machine block",
+            ..
+        }
+    ));
+}
+
+#[test]
 fn a_job_without_layers_is_rejected_before_anything_is_written() {
     let mut buffer = Cursor::new(Vec::new());
     let err = AnycubicWriter::default()

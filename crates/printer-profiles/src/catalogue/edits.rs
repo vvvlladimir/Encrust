@@ -83,14 +83,26 @@ fn read(
     let Some(shipped) = shipped else {
         return PrinterProfile::from_toml_str(text, path);
     };
+    let carried = machines_carried_over(&shipped, text, path);
     // A store that refuses either write keeps the copy, to be put back the same way next run.
     if store
         .keep_aside(Kind::Printer, id, OLD_COPY_ASIDE, text)
         .is_ok()
     {
-        let _ = store.write(Kind::Printer, id, &written(Table::new(), path)?);
+        let _ = store.write(Kind::Printer, id, &written_over(&carried, &shipped, path)?);
     }
-    Ok(shipped)
+    Ok(carried)
+}
+
+/// `shipped` with the printers on the network an old whole copy sends to, as nothing ships them.
+fn machines_carried_over(shipped: &PrinterProfile, old: &str, path: &Path) -> PrinterProfile {
+    let machines = PrinterProfile::from_toml_str(old, path)
+        .map(|old| old.machines)
+        .unwrap_or_default();
+    PrinterProfile {
+        machines,
+        ..shipped.clone()
+    }
 }
 
 /// The fields of `profile` that differ from `shipped`, with those it leaves unset listed.

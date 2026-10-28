@@ -1,37 +1,17 @@
 use std::io::Cursor;
 
 use core_format::{FormatError, LayerSink, OpenFile, SlicedFileReader, SlicedFileWriter};
-use core_raster::LayerRuns;
 
 use super::reader::crypt;
 use super::{PhzReader, PhzWriter};
 use crate::fdg::{FdgSink, HEADER_BYTES};
-use crate::fixtures::{sample_job, two_stage_job};
-
-/// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
-fn block() -> LayerRuns {
-    let mut builder = LayerRuns::builder(8, 4);
-    builder.push(10, 0);
-    builder.push(4, 255);
-    builder.push(4, 0);
-    builder.push(4, 255);
-    builder.push(10, 0);
-    builder.finish()
-}
+use crate::fixtures::{lit_block, sample_job, two_stage_job, written_by};
 
 fn written(layers: u32) -> Vec<u8> {
     let mut job = sample_job(layers);
     job.material.light_pwm = 200;
     job.material.bottom_light_pwm = 100;
-    let mut file = Cursor::new(Vec::new());
-    {
-        let mut sink = PhzWriter.begin(&job, &mut file).expect("the job is sound");
-        for _ in 0..layers {
-            sink.push(FdgSink::encode(&block())).expect("a layer");
-        }
-        sink.finish(1500.0).expect("every promised layer arrived");
-    }
-    file.into_inner()
+    written_by(&PhzWriter, &job)
 }
 
 fn word(bytes: &[u8], at: usize) -> u32 {
@@ -156,7 +136,7 @@ fn a_two_stage_peel_states_both_climbs_summed_then_the_second_stage() {
     let mut file = Cursor::new(Vec::new());
     {
         let mut sink = PhzWriter.begin(&job, &mut file).expect("the job is sound");
-        sink.push(FdgSink::encode(&block())).expect("a layer");
+        sink.push(FdgSink::encode(&lit_block())).expect("a layer");
         sink.finish(1500.0).expect("every promised layer arrived");
     }
     let bytes = file.into_inner();
@@ -168,4 +148,19 @@ fn a_two_stage_peel_states_both_climbs_summed_then_the_second_stage() {
     );
     let second: Vec<f32> = (0x98..0xB0).step_by(4).map(f32_at).collect();
     assert_eq!(second, [3.0, 180.0, 4.0, 900.0, 4.0, 360.0]);
+}
+
+#[test]
+fn a_two_stage_peel_reads_back_as_its_two_stages() {
+    let job = two_stage_job(1);
+    let open = PhzReader
+        .open(Cursor::new(written_by(&PhzWriter, &job)))
+        .expect("a .phz we wrote");
+    let stated = &open.facts().stated;
+    assert_eq!(stated.second_stage, Some(job.material.second_stage));
+    assert_eq!(
+        (stated.bottom_lift_distance_mm, stated.lift_distance_mm),
+        (Some(5.0), Some(2.0)),
+        "the first stage, split off the summed climbs"
+    );
 }

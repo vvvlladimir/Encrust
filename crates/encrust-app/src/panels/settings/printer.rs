@@ -10,7 +10,9 @@ use crate::i18n::tr;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
-use crate::ui::{count_row, hint, icon, number_row, picker, secondary_button, switch, text_row};
+use crate::ui::{
+    count_row, describe, hint, icon, number_row, picker, secondary_button, switch, text_row,
+};
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
 /// millimetres.
@@ -237,26 +239,38 @@ fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     hint(ui, &tr!("printer-mirror-note"));
 
     ui.add_space(6.0);
-    inset(ui, &mut profile.plate_inset);
+    let plate_mm = (profile.build_volume.x, profile.build_volume.y);
+    inset(ui, &mut profile.plate_inset, plate_mm);
 }
 
 /// The band along the plate's edges a model is marked in, each edge on its own; off is none.
-fn inset(ui: &mut egui::Ui, inset: &mut Option<PlateInset>) {
+/// A band takes at most half the plate across it, so two never meet past the middle.
+fn inset(ui: &mut egui::Ui, inset: &mut Option<PlateInset>, (width_mm, depth_mm): (f32, f32)) {
     let mut on = inset.is_some();
     if switch(ui, &mut on, &tr!("printer-inset")).changed() {
         *inset = on.then(PlateInset::default);
     }
     if let Some(inset) = inset {
-        for (label, edge) in [
-            (tr!("printer-inset-min-x"), &mut inset.min_x_mm),
-            (tr!("printer-inset-max-x"), &mut inset.max_x_mm),
-            (tr!("printer-inset-min-y"), &mut inset.min_y_mm),
-            (tr!("printer-inset-max-y"), &mut inset.max_y_mm),
+        let (across_x, across_y) = (width_mm / 2.0, depth_mm / 2.0);
+        for (label, edge, most_mm) in [
+            (tr!("printer-inset-min-x"), &mut inset.min_x_mm, across_x),
+            (tr!("printer-inset-max-x"), &mut inset.max_x_mm, across_x),
+            (tr!("printer-inset-min-y"), &mut inset.min_y_mm, across_y),
+            (tr!("printer-inset-max-y"), &mut inset.max_y_mm, across_y),
         ] {
-            number_row(ui, &label, edge, &tr!("unit-mm"), FINE_STEP, 0.0..=50.0, 2);
+            let most_mm = most_mm.clamp(0.0, 50.0);
+            number_row(
+                ui,
+                &label,
+                edge,
+                &tr!("unit-mm"),
+                FINE_STEP,
+                0.0..=most_mm,
+                2,
+            );
         }
     }
-    hint(ui, &tr!("printer-inset-note"));
+    describe(ui, &tr!("printer-inset-note"));
 }
 
 /// What this machine obeys beyond the header, which no file format states.

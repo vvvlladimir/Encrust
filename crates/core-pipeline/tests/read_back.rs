@@ -250,8 +250,16 @@ fn stated_by(extension: &str) -> PrinterTuning {
         ..bottom.clone()
     };
     match extension {
-        "goo" | "ctb" => rests,
-        "cbddlp" => bottom,
+        "goo" => rests,
+        // The bottom layers' own light-off delay, none as the printer rests.
+        "ctb" => PrinterTuning {
+            bottom_light_off_delay_s: Some(0.0),
+            ..rests
+        },
+        "cbddlp" => PrinterTuning {
+            bottom_light_off_delay_s: Some(0.0),
+            ..bottom
+        },
         "zip" => PrinterTuning {
             transition_layers: Some(2),
             bottom_retract_speed_mm_min: Some(150.0),

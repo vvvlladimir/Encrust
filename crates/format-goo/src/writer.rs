@@ -1,5 +1,6 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
@@ -56,23 +57,7 @@ impl LayerSink for GooSink<'_> {
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
-        if self.written == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: self.written as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, self.written, (encoded.width(), encoded.height()))?;
 
         layer::write(&mut self.fields, &self.job, self.written, &encoded)?;
         self.written += 1;
@@ -80,12 +65,7 @@ impl LayerSink for GooSink<'_> {
     }
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
         self.fields.bytes(&ENDING_STRING)?;
 
         // The header is a fixed layout of a fixed length, so the volume the stack came to

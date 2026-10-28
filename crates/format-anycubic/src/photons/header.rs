@@ -1,6 +1,8 @@
 use std::io;
 
-use core_format::{Fields, PrintJob, Rgb, Thumbnail};
+use core_format::{Fields, PrintJob, Rgb, Thumbnail, rgb15};
+
+pub(crate) use crate::tables::PREVIEW_PX;
 
 /// The two words a file opens with, which name the container.
 pub(crate) const TAG: u32 = 2;
@@ -8,9 +10,6 @@ pub(crate) const SUBTAG: u16 = 0x31;
 
 /// Bytes from the start of the file to the preview: the tag, then the header proper.
 pub(crate) const HEADER_BYTES: u64 = 6 + 0x5C;
-
-/// The one preview the container holds.
-pub(crate) const PREVIEW_PX: (u32, u32) = (224, 168);
 
 /// Two words of the header the vendor writer always sets, between the preview's sides.
 const PREVIEW_WORDS: [u32; 2] = [42, 10];
@@ -46,14 +45,10 @@ pub(crate) fn write_preview(
     thumbnail: Option<&Thumbnail>,
 ) -> io::Result<()> {
     let (width, height) = PREVIEW_PX;
-    let image = match thumbnail {
-        Some(thumbnail) => thumbnail.fitted_to(width, height, BACKGROUND),
-        None => Thumbnail::filled(width, height, BACKGROUND),
-    };
+    let image = Thumbnail::fitted_or_filled(thumbnail, width, height, BACKGROUND);
     let mut data = Vec::with_capacity(image.pixels().len() * 2);
-    for &[r, g, b] in image.pixels() {
-        let word = (u16::from(r >> 3) << 11) | (u16::from(g >> 3) << 6) | u16::from(b >> 3);
-        data.extend_from_slice(&word.to_le_bytes());
+    for &pixel in image.pixels() {
+        data.extend_from_slice(&rgb15(pixel).to_le_bytes());
     }
     fields.bytes(&data)
 }

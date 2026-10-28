@@ -4,7 +4,9 @@
 
 use std::io;
 
-use core_format::{Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, encode_rgb15};
+use core_format::{
+    CHITU_ANTI_ALIAS_CAP, Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, Thumbnail, encode_rgb15,
+};
 
 use crate::family::MAGIC;
 
@@ -81,7 +83,7 @@ pub(crate) fn write_header(
     fields.u32_le(PRINT_PARAMETERS_BYTES)?;
 
     // The anti-alias level, 4 with it off, as the vendor writes it.
-    fields.u32_le(u32::from(job.raster.anti_alias_level(8)))?;
+    fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
 
@@ -121,14 +123,9 @@ fn write_preview(
     job: &PrintJob,
     (width, height): (u32, u32),
 ) -> io::Result<u32> {
-    let pixels = match job.thumbnail.as_ref() {
-        Some(thumbnail) => thumbnail
-            .fitted_to(width, height, PREVIEW_BACKGROUND)
-            .pixels()
-            .to_vec(),
-        None => vec![PREVIEW_BACKGROUND; (width * height) as usize],
-    };
-    let data = encode_rgb15(&pixels);
+    let image =
+        Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND);
+    let data = encode_rgb15(image.pixels());
     let record = fields.position()?;
 
     fields.u32_le(width)?;
@@ -180,7 +177,7 @@ fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> 
     fields.u32_le(u32::from(per_layer))?;
     // The vendor states no time and no software version here.
     fields.u32_le(0)?;
-    fields.u32_le(u32::from(job.raster.anti_alias_level(8)))?;
+    fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     fields.u32_le(0)?;
     fields.f32_le(after_retract_s)?;
     fields.f32_le(before_lift_s)?;
@@ -227,29 +224,18 @@ pub(crate) fn write_layer_block(
     job: &PrintJob,
     index: u32,
 ) -> io::Result<()> {
-    let (material, stage) = (&job.material, &job.material.second_stage);
+    let material = &job.material;
     let bottom = material.is_bottom_layer(index);
-    let motion = if bottom {
-        [
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-            stage.bottom_lift_distance_mm,
-            stage.bottom_lift_speed_mm_min,
-            material.bottom_retract_speed_mm_min,
-            stage.bottom_retract_distance_mm,
-            stage.bottom_retract_speed_mm_min,
-        ]
-    } else {
-        [
-            material.lift_distance_mm,
-            material.lift_speed_mm_min,
-            stage.lift_distance_mm,
-            stage.lift_speed_mm_min,
-            material.retract_speed_mm_min,
-            stage.retract_distance_mm,
-            stage.retract_speed_mm_min,
-        ]
-    };
+    let peel = material.peel(bottom);
+    let motion = [
+        peel.lift_mm,
+        peel.lift_speed_mm_min,
+        peel.second_lift_mm,
+        peel.second_lift_speed_mm_min,
+        peel.retract_speed_mm_min,
+        peel.second_retract_mm,
+        peel.second_retract_speed_mm_min,
+    ];
     let light_pwm = if bottom {
         material.bottom_light_pwm
     } else {

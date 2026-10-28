@@ -42,19 +42,14 @@ impl ProfileStore for PageProfiles {
     }
 
     fn write(&self, kind: Kind, id: &str, toml: &str) -> Result<(), ProfileError> {
-        let path = self.path_of(kind, id);
-        let storage = storage().ok_or_else(|| refused(&path, "no page storage here"))?;
-        storage
-            .set_item(&key(&path), toml)
-            .map_err(|_| refused(&path, "the page's storage is full or switched off"))
+        set(&self.path_of(kind, id), toml)
     }
 
     fn keep_aside(&self, kind: Kind, id: &str, tag: &str, toml: &str) -> Result<(), ProfileError> {
-        let path = self.path_of(kind, id).with_extension(format!("toml.{tag}"));
-        let storage = storage().ok_or_else(|| refused(&path, "no page storage here"))?;
-        storage
-            .set_item(&key(&path), toml)
-            .map_err(|_| refused(&path, "the page's storage is full or switched off"))
+        set(
+            &self.path_of(kind, id).with_extension(format!("toml.{tag}")),
+            toml,
+        )
     }
 
     fn remove(&self, kind: Kind, id: &str) -> Result<(), ProfileError> {
@@ -64,6 +59,13 @@ impl ProfileStore for PageProfiles {
         }
         Ok(())
     }
+}
+
+fn set(path: &std::path::Path, toml: &str) -> Result<(), ProfileError> {
+    let storage = storage().ok_or_else(|| refused(path, "no page storage here"))?;
+    storage
+        .set_item(&key(path), toml)
+        .map_err(|_| refused(path, "the page's storage is full or switched off"))
 }
 
 fn key(path: &std::path::Path) -> String {

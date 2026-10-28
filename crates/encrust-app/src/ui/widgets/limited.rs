@@ -19,7 +19,6 @@ pub struct Held<'a> {
 /// A `number_row` held to a machine's limit (ADR 0369): its box takes only what the machine
 /// takes, and a value past that or past what the maker advises is boxed in `danger`, with
 /// the span it strays from under it.
-#[allow(clippy::too_many_arguments)]
 pub fn limited_row<N: Numeric>(
     ui: &mut Ui,
     label: &str,

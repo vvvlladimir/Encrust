@@ -1,6 +1,6 @@
 # 0166. A machine states which Photon Workshop revision it reads
 
-- **Status:** Accepted
+- **Status:** Accepted; 515 left unwritten is superseded by 0374
 - **Date:** 2026-10-01
 
 ## Context

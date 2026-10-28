@@ -135,7 +135,11 @@ pub fn decode(data: &[u8], pixel_count: u32) -> Result<Vec<Run>, FormatError> {
     let mut grey = 0u8;
     let mut covered = 0u32;
     for (offset, &byte) in data.iter().enumerate() {
-        let length = if byte & COLOUR_FLAG != 0 {
+        let length = if offset == 0 && byte == 0 {
+            // The opening byte of a lit first pixel carries no flag.
+            grey = 255;
+            1
+        } else if byte & COLOUR_FLAG != 0 {
             let level = u32::from((byte & !COLOUR_FLAG).min(LIT_GREY));
             grey = (level * 255 / u32::from(LIT_GREY)) as u8;
             1
@@ -174,16 +178,5 @@ pub fn crypt(key: u32, index: u32, data: &mut [u8]) {
     }
     let step = key.wrapping_add(0xE234_893D) ^ 0x257E_2431;
     let word = step.wrapping_mul((index ^ 0x110B_DACD).wrapping_mul(0x8239_1EFD));
-    cover(data, word, step);
-}
-
-/// Exclusive-ors each little-endian four bytes with `word`, then steps it on; a short last
-/// chunk takes the low bytes. The keyed ciphers of this layout differ only in the two seeds.
-pub(crate) fn cover(data: &mut [u8], mut word: u32, step: u32) {
-    for chunk in data.chunks_mut(4) {
-        for (byte, mask) in chunk.iter_mut().zip(word.to_le_bytes()) {
-            *byte ^= mask;
-        }
-        word = word.wrapping_add(step);
-    }
+    core_format::chitu_keystream_xor(data, word, step);
 }

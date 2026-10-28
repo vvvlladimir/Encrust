@@ -19,7 +19,9 @@ it was.
 `core_pipeline::write_to` lays a file's rows from the far edge of the plate when the profile
 has no `mirror_x`, and always for `.photons`; an X-mirrored machine and `.cxline` keep the plate
 as it stands. The rule is `panel::file_panel`, applied only where a file is written: the preview,
-the measuring and the PNG stack still see the plate as ADR 0134 lays it.
+the measuring and the PNG stack still see the plate as ADR 0134 lays it. `convert` takes the
+file it reads as cut for the machine it converts for, and reverses each layer's rows where
+the two containers lay that machine's plate from opposite edges.
 
 ## Consequences
 

@@ -6,36 +6,15 @@ use core_raster::LayerRuns;
 use super::codec::{self, PhotonsLayer};
 use super::header::{HEADER_BYTES, PREVIEW_PX};
 use super::{PhotonsReader, PhotonsSink, PhotonsWriter};
-use crate::fixtures::sample_job;
-
-/// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
-fn block() -> LayerRuns {
-    let mut builder = LayerRuns::builder(8, 4);
-    builder.push(10, 0);
-    builder.push(4, 255);
-    builder.push(4, 0);
-    builder.push(4, 255);
-    builder.push(10, 0);
-    builder.finish()
-}
+use crate::fixtures::{lit_block, sample_job, written_by};
 
 fn written(layers: u32) -> Vec<u8> {
-    let mut file = Cursor::new(Vec::new());
-    {
-        let mut sink = PhotonsWriter
-            .begin(&sample_job(layers), &mut file)
-            .expect("the job is sound");
-        for _ in 0..layers {
-            sink.push(PhotonsSink::encode(&block())).expect("a layer");
-        }
-        sink.finish(1500.0).expect("every promised layer arrived");
-    }
-    file.into_inner()
+    written_by(&PhotonsWriter, &sample_job(layers))
 }
 
 #[test]
 fn a_stretch_is_its_colour_and_length_less_one_with_the_bits_reversed() {
-    let data = PhotonsLayer::encode(&block()).data().to_vec();
+    let data = PhotonsLayer::encode(&lit_block()).data().to_vec();
     // 10 dark, 4 lit across rows 1 and 2's join, 4 dark, 4 lit, 10 dark.
     assert_eq!(data, [0x90, 0xC1, 0xC0, 0xC1, 0x90]);
 }
@@ -99,6 +78,28 @@ fn a_layer_that_ends_lit_does_not_count_its_last_stretch() {
     }
     let record = file.into_inner();
     assert_eq!(record[..4], 1u32.to_be_bytes(), "the vendor writer's count");
+}
+
+#[test]
+fn a_layer_past_what_its_length_word_counts_is_refused() {
+    assert_eq!(codec::length_bits(2).expect("two bytes fit"), 48);
+    assert!(matches!(
+        codec::length_bits(1 << 29),
+        Err(FormatError::Encoding { .. })
+    ));
+}
+
+#[test]
+fn a_preview_too_large_to_address_is_refused() {
+    let mut bytes = written(1);
+    // The preview's width at 82, then four bytes, then its height.
+    bytes[82..86].fill(0xFF);
+    bytes[90..94].fill(0xFF);
+    let err = PhotonsReader
+        .open(Cursor::new(bytes))
+        .err()
+        .expect("no file holds that preview");
+    assert!(matches!(err, FormatError::AddressPastEnd { .. }), "{err:?}");
 }
 
 #[test]
@@ -204,8 +205,9 @@ fn more_or_fewer_layers_than_promised_are_refused() {
     let mut sink = PhotonsWriter
         .begin(&sample_job(1), &mut file)
         .expect("sound");
-    sink.push(PhotonsSink::encode(&block())).expect("the first");
-    let err = sink.push(PhotonsSink::encode(&block())).unwrap_err();
+    sink.push(PhotonsSink::encode(&lit_block()))
+        .expect("the first");
+    let err = sink.push(PhotonsSink::encode(&lit_block())).unwrap_err();
     assert!(matches!(
         err,
         FormatError::LayerCountMismatch {
@@ -226,4 +228,17 @@ fn more_or_fewer_layers_than_promised_are_refused() {
             written: 0
         }
     ));
+}
+
+#[test]
+fn a_panel_past_what_a_reader_holds_is_refused() {
+    let mut bytes = written(1);
+    // The first record's sides, behind the layer count and the record's first twelve bytes.
+    let record = (HEADER_BYTES + u64::from(PREVIEW_PX.0 * PREVIEW_PX.1 * 2)) as usize + 4;
+    bytes[record + 12..record + 20].fill(0xFF);
+    let err = PhotonsReader
+        .open(Cursor::new(bytes))
+        .err()
+        .expect("no panel is that large");
+    assert!(matches!(err, FormatError::PanelTooLarge { .. }), "{err:?}");
 }

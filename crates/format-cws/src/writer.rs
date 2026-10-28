@@ -1,6 +1,9 @@
 use std::io::Write;
 
-use core_format::{FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate};
+use core_format::{
+    FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
+};
 use core_raster::LayerRuns;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
@@ -69,22 +72,7 @@ impl LayerSink for CwsSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width != self.job.raster.width_px || encoded.height != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width,
-                height: encoded.height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width, encoded.height))?;
 
         let png = encoded.png?;
         let name = image_name(index, self.job.layer_count());
@@ -96,12 +84,7 @@ impl LayerSink for CwsSink<'_> {
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
 
         // The program goes in last because it is the layer blocks, which are only known
         // once their layers have been written. A reader looks entries up by name.

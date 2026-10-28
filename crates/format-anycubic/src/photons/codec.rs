@@ -1,5 +1,3 @@
-use std::io;
-
 use core_format::{Fields, FormatError};
 use core_raster::{LayerRuns, Run};
 
@@ -69,16 +67,29 @@ impl PhotonsLayer {
     }
 
     /// Writes the record and the data behind it.
-    pub(crate) fn write(&self, fields: &mut Fields<'_>) -> io::Result<()> {
+    pub(crate) fn write(&self, fields: &mut Fields<'_>) -> Result<(), FormatError> {
+        let length_bits = length_bits(self.data.len())?;
         fields.u32_be(self.lit_px)?;
         fields.zeros(8)?;
         fields.u32_be(self.width)?;
         fields.u32_be(self.height)?;
-        fields.u32_be((self.data.len() as u32).wrapping_mul(8) + LENGTH_BIAS_BITS)?;
+        fields.u32_be(length_bits)?;
         fields.bytes(&scrambled(self.width as u16))?;
         fields.bytes(&scrambled(self.height as u16))?;
-        fields.bytes(&self.data)
+        fields.bytes(&self.data)?;
+        Ok(())
     }
+}
+
+/// The length word of a record over `bytes` of data, which counts bits in 32.
+pub(crate) fn length_bits(bytes: usize) -> Result<u32, FormatError> {
+    u32::try_from(bytes)
+        .ok()
+        .and_then(|bytes| bytes.checked_mul(8)?.checked_add(LENGTH_BIAS_BITS))
+        .ok_or_else(|| FormatError::Encoding {
+            what: "a layer record",
+            reason: format!("{bytes} bytes of layer are past what its length word counts"),
+        })
 }
 
 /// Bytes of data behind a record whose length word is `bits`.

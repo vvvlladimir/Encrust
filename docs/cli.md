@@ -350,7 +350,12 @@ with a printer, what the print takes: time, resin by volume and weight, price wh
 resin has one, and the layers likely to fail. `--strict` fails it on the same defects. The
 `fits` line answers for the model where it stands, not only for its size: one small enough
 to print but hanging off the plate is named as off it, because the panel clips whatever
-hangs over and the resin figure then counts material no machine would cure.
+hangs over and the resin figure then counts material no machine would cure. A model in the
+band a maker keeps clear along the plate's edges still fits, and the line names how far it
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0372).
+
+`slice` and `convert` warn of each resin setting past what the printer takes or its maker
+advises, and write the file as asked (ADR 0369).
 
 `info --layer N` reports one layer of a sliced file, counted from one as a printer's screen
 counts: where it tops out, how thick it is, how long it burns and how much of the panel it
@@ -363,7 +368,9 @@ number.
 
 `convert` writes a sliced file again in the container its output names, for the printer
 given. The masks are copied, never resampled, so the printer's panel must be the size the
-file was drawn for, in pixels and, where the file records it, in millimetres; the layer heights and every exposure are the file's own, and the resin
+file was drawn for, in pixels and, where the file records it, in millimetres. The file is
+taken as cut for that printer, and each layer is turned end for end where the new container
+lays its plate from the other edge (ADR 0366). The layer heights and every exposure are the file's own, and the resin
 gives the lifts, waits and price. A ramp above the bottom block is read back as the resin
 transition it is and stated again as one, so a machine that reads the header alone still
 takes the file; any other run of exposures becomes a band of height, which such a machine

@@ -29,9 +29,9 @@ pub enum Opened<S> {
     CxdlpV4(format_creality::OpenCxdlpV4<S>),
     Svgx(format_svgx::OpenSvgx<S>),
     Cws(format_cws::OpenCws<S>),
+    /// An `.fdg` or a `.phz`, one layout under two headers.
     Fdg(format_chitu::OpenFdg<S>),
     Photons(format_anycubic::OpenPhotons<S>),
-    Phz(format_chitu::OpenPhz<S>),
     Cxline(format_creality::OpenCxline<S>),
     Pwsz(format_anycubic::OpenPwsz<S>),
 }
@@ -51,7 +51,6 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::Cws(open) => open.facts(),
             Self::Fdg(open) => open.facts(),
             Self::Photons(open) => open.facts(),
-            Self::Phz(open) => open.facts(),
             Self::Cxline(open) => open.facts(),
             Self::Pwsz(open) => open.facts(),
         }
@@ -71,7 +70,6 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
             Self::Cws(open) => open.layer(index),
             Self::Fdg(open) => open.layer(index),
             Self::Photons(open) => open.layer(index),
-            Self::Phz(open) => open.layer(index),
             Self::Cxline(open) => open.layer(index),
             Self::Pwsz(open) => open.layer(index),
         }
@@ -246,7 +244,7 @@ impl Family {
             Self::Cws => CwsReader.open(source).map(Opened::Cws),
             Self::Fdg => FdgReader.open(source).map(Opened::Fdg),
             Self::Photons => PhotonsReader.open(source).map(Opened::Photons),
-            Self::Phz => PhzReader.open(source).map(Opened::Phz),
+            Self::Phz => PhzReader.open(source).map(Opened::Fdg),
             Self::Cxline => CxlineReader.open(source).map(Opened::Cxline),
             Self::Pwsz => PwszReader.open(source).map(Opened::Pwsz),
             Self::Cxdlp => match cxdlp_version(&mut source)? {

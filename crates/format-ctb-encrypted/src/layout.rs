@@ -12,9 +12,6 @@ pub(crate) const POINTER_BYTES: u64 = 16;
 /// The definition in front of each layer's data.
 pub(crate) const LAYER_DEF_BYTES: u64 = 88;
 
-/// The resin block of version 5, without the strings behind it.
-pub(crate) const RESIN_BYTES: u64 = 40;
-
 /// The file address a page and an offset within it name; a page is four gigabytes.
 pub(crate) fn page_address(page: u32, offset: u32) -> u64 {
     u64::from(page) << 32 | u64::from(offset)

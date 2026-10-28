@@ -2,7 +2,8 @@
 //! with each layer held as polygons rather than lines. Layout is in `docs/formats/cxline.md`.
 
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::{LayerRuns, Ring};
 
@@ -66,8 +67,7 @@ impl SlicedFileWriter for CxlineWriter {
         fields.zeros(4 * layers as usize)?;
         fields.bytes(&PAGE_BREAK)?;
         fields.bytes(&corrections)?;
-        let mut after = Crc32::default();
-        after.update(&corrections);
+        let after = Crc32::of(&corrections);
 
         Ok(CxlineSink {
             fields,
@@ -106,21 +106,7 @@ impl LayerSink for CxlineSink<'_> {
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let (width, height, rings) = encoded;
         let index = self.areas.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if width != self.job.raster.width_px || height != self.job.raster.height_px {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width,
-                height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (width, height))?;
 
         let pitch = (self.job.raster.pitch.x, self.job.raster.pitch.y);
         let area = rings::area_field(&rings, pitch);
@@ -132,12 +118,7 @@ impl LayerSink for CxlineSink<'_> {
     }
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
-        if self.areas.len() as u32 != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.areas.len() as u32,
-            });
-        }
+        check_layers_finished(&self.job, self.areas.len() as u32)?;
         let footer = block(blocks::write_footer)?;
         self.after.update(&footer);
         self.fields.bytes(&footer)?;
@@ -157,10 +138,10 @@ impl LayerSink for CxlineSink<'_> {
         self.fields.bytes(&table)?;
         self.fields.seek_to(end)?;
 
-        let (mut before, mut middle) = (Crc32::default(), Crc32::default());
-        before.update(&self.head);
-        middle.update(&table);
-        let checksum = before.followed_by(middle).followed_by(self.after).value();
+        let checksum = Crc32::of(&self.head)
+            .followed_by(Crc32::of(&table))
+            .followed_by(self.after)
+            .value();
         self.fields.u32_be(checksum)?;
         self.fields.flush()?;
         Ok(())

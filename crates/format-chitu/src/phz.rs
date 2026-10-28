@@ -10,7 +10,7 @@ mod reader;
 #[cfg(test)]
 mod tests;
 
-pub use reader::{OpenPhz, PhzReader};
+pub use reader::PhzReader;
 
 /// Writes the `.phz` container.
 #[derive(Debug, Default, Clone, Copy)]

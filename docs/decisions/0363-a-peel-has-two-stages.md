@@ -31,7 +31,8 @@ stretch at the second speed.
 - Both are keys of a printer's tuning table and of `[locked]`; a `.cfgx` import reads them.
   The print time counts the second stages and the bottom delay.
 - A writer states them where its format has a place, as the vendor does; a format with one
-  stage gets the first.
+  stage gets the first. A reader of a Chitu container (`.ctb`, its encrypted form, `.fdg`,
+  `.phz`) splits the second stage back off the summed climbs (`core_format::ChituPeel`).
 
 ## Consequences
 

@@ -26,8 +26,9 @@ Our reader opens the vendor's X1 Max file and every pixel of it, and the HALOT X
 X1 Neo, SKY 2025 and MAGE S can be profiled once their machine name is the vendor's. A file
 of ours from before this, in the old codec, no longer reads. Grey is six bits, not seven.
 
-A machine the vendor's table does not name and whose name has no `CL` code, such as the
-HALOT PLAY and R6, still cannot be written. Reopen when a file for one of them is read.
+The HALOT PLAY, R6 and PIOCREAT C02, which the vendor's table does not name and whose names
+hold no `CL` code, ship with their own machine name as their code, unverified. Reopen when a
+file for one of them is read, or one of them refuses ours.
 
 ## Alternatives considered
 

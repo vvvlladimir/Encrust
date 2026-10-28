@@ -2,7 +2,6 @@
 //! layer, and `calc_layer_volumes.data`, the area each layer cures.
 
 use core_format::{Fields, FormatError, PrintJob};
-use core_raster::LayerRuns;
 
 use super::built;
 
@@ -19,19 +18,6 @@ const VOLUMES_MARK: u32 = 0x2025_1024;
 /// writes it as a constant.
 const VOLUMES_STEP_MM: f32 = 0.2;
 
-/// What one layer cures, in pixels: what its row is made from once the pitch is known.
-pub(crate) struct Outline {
-    area_px: f32,
-}
-
-impl Outline {
-    pub(crate) fn of(layer: &LayerRuns) -> Self {
-        Self {
-            area_px: layer.coverage(),
-        }
-    }
-}
-
 /// One layer as the scene entry records it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct SceneRow {
@@ -41,10 +27,11 @@ pub(crate) struct SceneRow {
 }
 
 impl SceneRow {
-    pub(crate) fn of(job: &PrintJob, index: u32, outline: &Outline) -> Self {
+    /// Layer `index` of `job`, curing `cured_px` pixels.
+    pub(crate) fn of(job: &PrintJob, index: u32, cured_px: f32) -> Self {
         Self {
             top_mm: job.layer_z_mm(index),
-            area_mm2: outline.area_px * job.raster.pitch.x * job.raster.pitch.y,
+            area_mm2: cured_px * job.raster.pitch.x * job.raster.pitch.y,
         }
     }
 }

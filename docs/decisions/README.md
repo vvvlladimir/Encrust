@@ -98,9 +98,11 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0358](0358-a-shell-inside-another-follows-its-holder.md) | A closed shell inside another follows its holder's turning | Accepted |
 | [0359](0359-the-printer-catalogue-is-kept-by-hand.md) | Keep the printer catalogue by hand, checked against the vendor's own profiles | Accepted |
 | [0360](0360-write-photon-workshop-revision-518.md) | Write revision 518 of the Photon Workshop container, without its second preview | Accepted |
+| [0374](0374-write-photon-workshop-revision-515.md) | Write revision 515 of the Photon Workshop container | Accepted |
 | [0361](0361-write-the-pwsz-archive-in-format-anycubic.md) | Write the PWSZ archive in `format-anycubic`, its layers in PW0 | Accepted; the `core-analysis` dependency and the scene's extents are superseded by 0367 |
 | [0367](0367-read-the-pwsz-and-write-it-as-the-vendor-does.md) | Read the PWSZ archive, and write it as the vendor slicer does | Accepted |
 | [0362](0362-write-cxline-phz-and-photons-in-the-family-crates.md) | Write `.cxline`, `.phz` and `.photons` in the crates of their families, and trace masks in `core-raster` | Accepted |
+| [0375](0375-write-prz-as-goo-and-crmaslice-as-zip.md) | Write `.prz` as `.goo` and `.crmaslice` as the gcode archive | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
@@ -389,7 +391,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted; an installed printer as a whole copy is superseded by 0373 |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |
-| [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
+| [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted; 515 left unwritten is superseded by 0374 |
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
 | [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |

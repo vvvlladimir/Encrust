@@ -28,7 +28,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         let machine = read_text(&mut reads)?;
         let width_px = u32::from(reads.u16_le()?);
         let height_px = u32::from(reads.u16_le()?);
-        panel_in_range(width_px, height_px)?;
+        let pixel_count = panel_in_range(width_px, height_px)?;
         let display_mm = (reads.f32_le()?, reads.f32_le()?);
         reads.skip(4)?;
         reads.skip(4)?;
@@ -65,6 +65,7 @@ impl SlicedFileReader for CxdlpV4Reader {
 
         Ok(OpenCxdlpV4 {
             reads,
+            pixel_count,
             facts: SlicedFile {
                 format: "cxdlp",
                 version: Some(version),
@@ -92,7 +93,6 @@ impl SlicedFileReader for CxdlpV4Reader {
     }
 }
 
-/// The layer table, where a row addresses the motion block the data follows.
 /// The magic and the revision behind it, refusing a file that is not this one.
 fn read_magic<S: ReadSeek>(reads: &mut Reads<S>) -> Result<u32, FormatError> {
     let magic_bytes = reads.u32_be()?;
@@ -151,6 +151,7 @@ fn read_print_parameters<S: ReadSeek>(
     })
 }
 
+/// The layer table, where a row addresses the motion block the data follows.
 fn read_table<S: ReadSeek>(
     reads: &mut Reads<S>,
     table: u64,
@@ -201,6 +202,7 @@ fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, Format
 /// A version 4 `.cxdlp` with its tables read and its layers still in it.
 pub struct OpenCxdlpV4<S> {
     reads: Reads<S>,
+    pixel_count: u32,
     facts: SlicedFile,
 }
 
@@ -214,7 +216,7 @@ impl<S: ReadSeek> OpenFile for OpenCxdlpV4<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let data = self.reads.bytes(entry.size as usize)?;
-        super::rle::decode(&data)
+        super::rle::decode(&data, self.pixel_count)
     }
 }
 

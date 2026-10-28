@@ -34,11 +34,16 @@ impl SlicedFileReader for PwszReader {
         let resin = active_resin(&settings["machine_extern"]);
         let slice = &resin["slicepara"];
 
-        let (width_px, height_px) = (whole(&machine["res_x"]), whole(&machine["res_y"]));
+        let side = |key: &str| {
+            whole(&machine[key]).ok_or_else(|| FormatError::Missing {
+                what: format!("{SETTINGS} machine_type.{key}"),
+            })
+        };
+        let (width_px, height_px) = (side("res_x")?, side("res_y")?);
         panel_in_range(width_px, height_px)?;
         let layers = layer_entries(&json(&mut zip, LAYERS)?);
-        let print_info = json(&mut zip, PRINT_INFO).unwrap_or_default();
-        let software = json(&mut zip, SOFTWARE).unwrap_or_default();
+        let print_info = optional_json(&mut zip, PRINT_INFO)?;
+        let software = optional_json(&mut zip, SOFTWARE)?;
 
         Ok(OpenPwsz {
             zip,
@@ -56,7 +61,7 @@ impl SlicedFileReader for PwszReader {
                 layer_height_mm: number(&slice["zthick"]).unwrap_or_default(),
                 exposure_s: number(&slice["exposure_time"]).unwrap_or_default(),
                 bottom_exposure_s: number(&slice["bott_time"]).unwrap_or_default(),
-                bottom_layers: whole(&slice["bott_layers"]),
+                bottom_layers: whole(&slice["bott_layers"]).unwrap_or_default(),
                 print_time_s: print_info["print_time"].as_f64().map(|s| s as u32),
                 volume_mm3: number(&print_info["volume"]).map(|ml| ml * 1000.0),
                 grey_steps: GREY_STEPS,
@@ -122,12 +127,23 @@ fn json<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Value, Forma
     })
 }
 
+/// An entry the vendor writes but a file can do without: absent is `Null`, broken an error.
+fn optional_json<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Value, FormatError> {
+    match json(zip, name) {
+        Err(FormatError::Missing { .. }) => Ok(Value::Null),
+        read => read,
+    }
+}
+
 fn number(value: &Value) -> Option<f32> {
     value.as_f64().map(|number| number as f32)
 }
 
-fn whole(value: &Value) -> u32 {
-    value.as_u64().unwrap_or_default() as u32
+/// A count, held at `u32::MAX` past it so a bound downstream refuses it rather than a wrap.
+fn whole(value: &Value) -> Option<u32> {
+    value
+        .as_u64()
+        .map(|whole| u32::try_from(whole).unwrap_or(u32::MAX))
 }
 
 fn text(value: &Value) -> Option<String> {

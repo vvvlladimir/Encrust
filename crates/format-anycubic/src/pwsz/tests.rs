@@ -367,3 +367,55 @@ fn an_archive_without_its_settings_is_refused_by_name() {
         .expect("nothing to read");
     assert!(matches!(error, FormatError::Missing { .. }));
 }
+
+/// The archive `written` makes of one blank layer, with `name` holding `bytes` instead.
+fn with_entry(name: &str, bytes: &[u8]) -> Cursor<Vec<u8>> {
+    let mut source = written(PwszFlavour::Pwsz, &[layer(|_, _| false)]);
+    let mut buffer = Cursor::new(Vec::new());
+    {
+        let mut zip = zip::ZipWriter::new(&mut buffer);
+        let options = zip::write::SimpleFileOptions::default();
+        for index in 0..source.len() {
+            let mut file = source.by_index(index).expect("listed");
+            let entry_name = file.name().expect("named").into_owned();
+            zip.start_file(entry_name.as_str(), options)
+                .expect("writable");
+            if entry_name == name {
+                std::io::Write::write_all(&mut zip, bytes).expect("writable");
+            } else {
+                std::io::copy(&mut file, &mut zip).expect("copied");
+            }
+        }
+        zip.finish().expect("closed");
+    }
+    Cursor::new(buffer.into_inner())
+}
+
+#[test]
+fn a_broken_print_info_is_refused_rather_than_read_as_none() {
+    let error =
+        core_format::SlicedFileReader::open(&PwszReader, with_entry("print_info.json", b"{"))
+            .err()
+            .expect("the entry is not JSON");
+    assert!(matches!(error, FormatError::Encoding { .. }), "{error:?}");
+}
+
+#[test]
+fn a_panel_past_what_a_reader_holds_is_refused() {
+    let mut settings = json(
+        &mut written(PwszFlavour::Pwsz, &[layer(|_, _| false)]),
+        "anycubic_photon_resins.pwsp",
+    );
+    settings["machine_type"]["res_x"] = Value::from(u64::from(u32::MAX) + 1);
+    let bytes = serde_json::to_vec(&settings).expect("serialisable");
+    let error = core_format::SlicedFileReader::open(
+        &PwszReader,
+        with_entry("anycubic_photon_resins.pwsp", &bytes),
+    )
+    .err()
+    .expect("no panel is that wide");
+    assert!(
+        matches!(error, FormatError::PanelTooLarge { .. }),
+        "{error:?}"
+    );
+}

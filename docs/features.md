@@ -503,10 +503,12 @@ whole-surface fill is Cmd-Shift-click.
 - How much grey reaches the printer depends on its format (see [File formats](#file-formats)).
 
 ### Motion and waits
-- Lift distance and speed, retract speed, separate values for the bottom layers.
+- Lift distance and speed, retract speed, separate values for the bottom layers, and a
+  second, slower stage of each where the printer takes one. Opening a `.ctb`, `.fdg` or `.phz`
+  reads both stages back, and the bottom layers' own light-off delay.
 - A setting the printer's own slicer does not let you change is not offered either, and the
   file states what that slicer writes. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
-  Ultra 16K, Saturn 5 Ultra and Mars 5 Ultra — there are no lift or retract settings, and the
+  Ultra 16K and Mars 5 Ultra — there are no lift or retract settings, and the
   print time counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only.
   Older Chitu machines have no light power or transition layers, Anycubic and Halot machines
   wait with the light off, and a Halot Mage's bottom lift is fixed.
@@ -559,7 +561,7 @@ them from the meshes, and the time, marked ≈, from the plate's height.
 
 - Lit, shadowed 3D view with a view cube, orthographic or perspective, and a plate grid.
 - **Plate inset:** on a machine whose maker keeps models off a band along the plate's edges
-  (Mars, Mars 2, Mars 2 Pro), the band is dashed and darker on the plate, a model standing in
+  (Mars Pro, Mars 2, Mars 2 Pro), the band is dashed and darker on the plate, a model standing in
   it is marked, and `inspect` says so; it still slices whole. Any printer can turn it on, edge
   by edge, in its form.
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
@@ -602,8 +604,10 @@ Encrust also opens the `.pws` of the original Photon and Photon S, which it does
 
 **Convert** a sliced file to another format for another printer.
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
-same size in pixels. A stack with varying layer heights cannot be converted yet, and the
-converted file's preview pictures are blank.
+same size in pixels. The file is taken as cut for that printer: where the new format lays
+the plate from the other edge, each layer is turned to match, so the part prints where it
+stood. A stack with varying layer heights cannot be converted yet, and the converted file's
+preview pictures are blank.
 
 The window offers only the machines whose format Encrust can actually write.
 
@@ -622,8 +626,8 @@ are the ones the plate prints on, with no second click.
 **Printers:** about 200 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
 FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab, HIFUN,
 ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima, Zortrax, PIOCREAT and PioNext,
-the Creality HALOT X1, X1 Max, X1 Neo, SKY 2025, MAGE S, PLAY and R6, the PIOCREAT C02
-and the ELEGOO Saturn 5 Ultra among them.
+the Creality HALOT X1, X1 Max, X1 Neo, SKY 2025, MAGE S, PLAY and R6 and the PIOCREAT C02
+among them.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,

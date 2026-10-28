@@ -7,10 +7,12 @@ use crate::Compensation;
 use crate::{PrinterProfile, ProfileError};
 
 mod buffer;
+mod peel;
 mod second_stage;
 mod tuning;
 
 pub use buffer::Buffer;
+pub use peel::LayerPeel;
 pub use second_stage::SecondStage;
 pub use tuning::PrinterTuning;
 
@@ -321,6 +323,39 @@ impl MaterialProfile {
                 .bottom_light_off_delay_s
                 .unwrap_or(self.light_off_delay_s),
             WaitMode::Rest => 0.0,
+        }
+    }
+
+    /// Layer `index`'s peel: the bottom block's or every other layer's.
+    pub fn peel_of_layer(&self, index: u32) -> LayerPeel {
+        self.peel(self.is_bottom_layer(index))
+    }
+
+    /// The bottom block's peel, or every other layer's.
+    pub fn peel(&self, bottom: bool) -> LayerPeel {
+        let stage = &self.second_stage;
+        if bottom {
+            LayerPeel {
+                lift_mm: self.bottom_lift_distance_mm,
+                lift_speed_mm_min: self.bottom_lift_speed_mm_min,
+                second_lift_mm: stage.bottom_lift_distance_mm,
+                second_lift_speed_mm_min: stage.bottom_lift_speed_mm_min,
+                retract_mm: self.bottom_lift_distance_mm,
+                retract_speed_mm_min: self.bottom_retract_speed_mm_min,
+                second_retract_mm: stage.bottom_retract_distance_mm,
+                second_retract_speed_mm_min: stage.bottom_retract_speed_mm_min,
+            }
+        } else {
+            LayerPeel {
+                lift_mm: self.lift_distance_mm,
+                lift_speed_mm_min: self.lift_speed_mm_min,
+                second_lift_mm: stage.lift_distance_mm,
+                second_lift_speed_mm_min: stage.lift_speed_mm_min,
+                retract_mm: self.retract_distance_mm,
+                retract_speed_mm_min: self.retract_speed_mm_min,
+                second_retract_mm: stage.retract_distance_mm,
+                second_retract_speed_mm_min: stage.retract_speed_mm_min,
+            }
         }
     }
 

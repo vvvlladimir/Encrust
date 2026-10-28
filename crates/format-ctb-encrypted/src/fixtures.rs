@@ -1,10 +1,13 @@
 //! The job the writer tests build files from: the resin the vendor's GK3 Ultra sample was
 //! cut with, on a panel small enough to check by hand.
 
+use std::io::Cursor;
 use std::path::Path;
 
-use core_format::{ExposurePlan, LayerPlan, PrintJob};
-use core_raster::{Grey, PixelPitch, RasterSettings, Shading};
+use core_format::{ExposurePlan, LayerPlan, LayerSink, PrintJob, SlicedFileWriter};
+use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
+
+use crate::{CtbEncryptedSink, CtbEncryptedWriter};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 pub(crate) const WIDTH_PX: u32 = 16;
@@ -94,4 +97,28 @@ pub(crate) fn test_resin_job(layer_count: u32) -> PrintJob {
         thumbnail: None,
         created_unix_s: 0,
     }
+}
+
+/// A layer lighting sixteen pixels of the panel's second and third rows.
+pub(crate) fn lit_layer() -> LayerRuns {
+    let mut mask = LayerMask::new(WIDTH_PX, HEIGHT_PX);
+    mask.pixels_mut()[20..36].fill(255);
+    LayerRuns::from_mask(&mask)
+}
+
+/// `job` written as an encrypted `.ctb`, each of its layers `lit_layer`.
+pub(crate) fn written(job: &PrintJob) -> Vec<u8> {
+    let mut file = Cursor::new(Vec::new());
+    {
+        let mut sink = CtbEncryptedWriter
+            .begin(job, &mut file)
+            .expect("the job matches the panel");
+        for _ in 0..job.layer_count() {
+            sink.push(CtbEncryptedSink::encode(&lit_layer()))
+                .expect("a layer is written");
+        }
+        sink.finish(job.volume_mm3)
+            .expect("every promised layer arrived");
+    }
+    file.into_inner()
 }

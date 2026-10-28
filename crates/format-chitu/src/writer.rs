@@ -1,12 +1,12 @@
 use std::io::Cursor;
 
 use core_format::{
-    Crc32, Fields, FormatError, LayerSink, PrintJob, Rle7Layer, SlicedFileWriter, WriteSeek,
-    chitu_layer_crypt, chitu_lit_px, validate, write_chitu_layer_tail,
+    ChituLayer, ChituTotals, Crc32, Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter,
+    WriteSeek, check_layer_pushed, check_layers_finished, chitu_grey_flags, validate,
 };
 use core_raster::LayerRuns;
 
-use crate::blocks::{self, HEADER_BYTES, Head, Offsets, SLICER_INFO_BYTES, Totals};
+use crate::blocks::{self, HEADER_BYTES, Head, Offsets, SLICER_INFO_BYTES};
 use crate::layer::{self, LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES, LAYER_TAIL_BYTES, LayerDef};
 
 /// Every `.ctb` from version 4 onwards carries this magic, version 5 included.
@@ -43,10 +43,7 @@ impl CtbVersion {
     /// its high byte whether the machine is to obey the per-layer blocks, which the vendor
     /// leaves clear while every layer is the header's.
     pub(crate) fn flags(self, job: &PrintJob) -> u32 {
-        let grey = match job.raster.shading {
-            core_raster::Shading::Binary => 0x07,
-            core_raster::Shading::Coverage => 0x0F,
-        };
+        let grey = chitu_grey_flags(job.raster.shading);
         let per_layer = if job.varies_by_layer() {
             self.per_layer_settings()
         } else {
@@ -126,16 +123,10 @@ impl SlicedFileWriter for CtbWriter {
             offsets,
             front,
             defs: Vec::with_capacity(job.layer_count() as usize),
-            totals: Totals::default(),
+            totals: ChituTotals::default(),
             layers_crc: Crc32::default(),
         })
     }
-}
-
-/// One layer's runs, and how many pixels they light.
-pub struct CtbLayer {
-    runs: Rle7Layer,
-    lit_px: u64,
 }
 
 /// A `.ctb` file with everything in front of its layers written.
@@ -146,38 +137,21 @@ pub struct CtbSink<'w> {
     offsets: Offsets,
     front: Vec<u8>,
     defs: Vec<LayerDef>,
-    totals: Totals,
+    totals: ChituTotals,
     layers_crc: Crc32,
 }
 
 impl LayerSink for CtbSink<'_> {
-    type Encoded = CtbLayer;
+    type Encoded = ChituLayer;
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        CtbLayer {
-            runs: Rle7Layer::encode(layer),
-            lit_px: chitu_lit_px(layer),
-        }
+        ChituLayer::encode(layer)
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.defs.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        let runs = &encoded.runs;
-        if runs.width() != self.job.raster.width_px || runs.height() != self.job.raster.height_px {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: runs.width(),
-                height: runs.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        let runs = encoded.runs();
+        check_layer_pushed(&self.job, index, (runs.width(), runs.height()))?;
 
         let block = self.fields.position()?;
         let def = LayerDef {
@@ -188,24 +162,13 @@ impl LayerSink for CtbSink<'_> {
             data_size: runs.data().len() as u32,
         };
 
-        let mut data = runs.data().to_vec();
-        chitu_layer_crypt(encryption_key(&self.job), index, &mut data);
-        let mut bytes = Cursor::new(Vec::with_capacity(data.len() + 96));
-        {
-            let mut layer_fields = Fields::new(&mut bytes);
-            layer::write_extended(&mut layer_fields, &self.job, index, &def)?;
-            layer_fields.bytes(&data)?;
-            write_chitu_layer_tail(&mut layer_fields, &self.job, encoded.lit_px)?;
-        }
-        let bytes = bytes.into_inner();
+        let job = &self.job;
+        let bytes = encoded.block(job, encryption_key(job), index, |fields| {
+            layer::write_extended(fields, job, index, &def)
+        })?;
         self.layers_crc.update(&bytes);
         self.fields.bytes(&bytes)?;
-
-        let material = &self.job.material;
-        let rests: f32 = material.waits.rests_s().iter().sum();
-        self.totals.layer_time_s += def.exposure_s + def.light_off_delay_s + rests;
-        self.totals.largest_layer_bytes = self.totals.largest_layer_bytes.max(def.data_size);
-        self.totals.layers += 1;
+        self.totals.add(job, index, def.data_size);
         self.defs.push(def);
         Ok(())
     }
@@ -213,12 +176,7 @@ impl LayerSink for CtbSink<'_> {
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.defs.len() as u32;
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
 
         let mut front = Cursor::new(std::mem::take(&mut self.front));
         {
@@ -247,13 +205,8 @@ impl LayerSink for CtbSink<'_> {
         }
         let table = table.into_inner();
 
-        let crc = [&front[..], &table[..]]
-            .iter()
-            .fold(Crc32::default(), |sum, block| {
-                let mut next = Crc32::default();
-                next.update(block);
-                sum.followed_by(next)
-            })
+        let crc = Crc32::of(&front)
+            .followed_by(Crc32::of(&table))
             .followed_by(self.layers_crc);
 
         self.fields.seek_to(0)?;

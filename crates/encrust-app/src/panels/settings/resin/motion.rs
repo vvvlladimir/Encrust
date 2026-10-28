@@ -7,7 +7,7 @@ use crate::i18n::tr;
 use crate::ui::{Held, limited_row, subheading};
 
 /// A setting no machine states a limit for.
-pub(super) const UNLIMITED: Limit = Limit {
+const UNLIMITED: Limit = Limit {
     min: None,
     max: None,
     warn_min: None,

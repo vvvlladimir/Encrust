@@ -10,14 +10,17 @@ mod tests;
 
 use std::io::{Cursor, Write};
 
-use core_format::{FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate};
+use core_format::{
+    FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
+};
 use core_raster::LayerRuns;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
 use crate::rle::EncodedLayer;
 pub use reader::{OpenPwsz, PwszReader, claims};
-use scene::{Outline, SceneRow};
+use scene::SceneRow;
 
 /// Which extension the archive goes under: the one the machine's firmware looks for.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -57,9 +60,7 @@ impl PwszFlavour {
 
     /// The flavour `extension` names, whatever its case, or `None` for any other.
     pub fn of_extension(extension: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|flavour| flavour.extension().eq_ignore_ascii_case(extension))
+        core_format::flavour_of(&Self::ALL, extension, Self::extension)
     }
 }
 
@@ -70,6 +71,7 @@ pub struct PwszWriter {
 }
 
 impl PwszWriter {
+    /// A writer under `flavour`'s extension.
     pub fn new(flavour: PwszFlavour) -> Self {
         Self { flavour }
     }
@@ -127,10 +129,11 @@ pub struct PwszSink<'w> {
     rows: Vec<SceneRow>,
 }
 
-/// One layer in the PW0 codec, and the extent the scene entry records for it.
+/// One layer in the PW0 codec, and the area it cures, which the scene entry records.
 pub struct PwszLayer {
     runs: EncodedLayer,
-    outline: Outline,
+    /// Fully lit pixels it adds up to, a half-lit one counting a half.
+    cured_px: f32,
 }
 
 impl LayerSink for PwszSink<'_> {
@@ -139,44 +142,25 @@ impl LayerSink for PwszSink<'_> {
     fn encode(layer: &LayerRuns) -> Self::Encoded {
         PwszLayer {
             runs: EncodedLayer::encode(layer),
-            outline: Outline::of(layer),
+            cured_px: layer.coverage(),
         }
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.rows.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
         let (width, height) = (encoded.runs.width(), encoded.runs.height());
-        if width != self.job.raster.width_px || height != self.job.raster.height_px {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width,
-                height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (width, height))?;
 
         entry(&mut self.zip, &layer_name(index), encoded.runs.data())?;
         self.rows
-            .push(SceneRow::of(&self.job, index, &encoded.outline));
+            .push(SceneRow::of(&self.job, index, encoded.cured_px));
         Ok(())
     }
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.rows.len() as u32;
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
 
         // These entries state what the layers add up to, so they go in behind them, where
         // the vendor puts them in front; a reader looks an entry up by name, not by place.

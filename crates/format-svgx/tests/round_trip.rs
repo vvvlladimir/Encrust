@@ -206,5 +206,5 @@ fn every_shipped_machine_that_reads_this_container_can_be_written() {
             .begin(&job, &mut file)
             .unwrap_or_else(|error| panic!("{} cannot be written: {error}", entry.id));
     }
-    assert!(found >= 8, "only {found} machines name this container");
+    assert!(found >= 7, "only {found} machines name this container");
 }

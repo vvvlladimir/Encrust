@@ -79,6 +79,20 @@ fn the_range_takes_the_bounds_it_states_and_the_fallback_for_the_rest() {
 }
 
 #[test]
+fn a_bound_past_the_fallbacks_other_end_carries_that_end_with_it() {
+    let above = Limit {
+        min: Some(20.0),
+        ..Limit::default()
+    };
+    assert_eq!(above.range(1.0..=10.0), 20.0..=20.0);
+    let below = Limit {
+        max: Some(0.5),
+        ..Limit::default()
+    };
+    assert_eq!(below.range(1.0..=10.0), 0.5..=0.5);
+}
+
+#[test]
 fn a_limit_out_of_order_is_refused_by_its_field() {
     let source = r#"
 name = "Test"

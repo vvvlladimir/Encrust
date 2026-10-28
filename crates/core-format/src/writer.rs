@@ -85,6 +85,55 @@ pub fn validate(job: &PrintJob) -> Result<(), FormatError> {
     Ok(())
 }
 
+/// The one of `flavours` whose `extension`, without the dot, is `extension` in any case:
+/// how a container written under several extensions picks its flavour from a file name.
+pub fn flavour_of<F: Copy>(
+    flavours: &[F],
+    extension: &str,
+    extension_of: impl Fn(F) -> &'static str,
+) -> Option<F> {
+    flavours
+        .iter()
+        .copied()
+        .find(|&flavour| extension.eq_ignore_ascii_case(extension_of(flavour)))
+}
+
+/// Refuses layer `index` of a `width_px` by `height_px` mask when `job` has no such layer,
+/// or its masks are another size; every sink checks a layer so before writing it.
+pub fn check_layer_pushed(
+    job: &PrintJob,
+    index: u32,
+    (width_px, height_px): (u32, u32),
+) -> Result<(), FormatError> {
+    if index >= job.layer_count() {
+        return Err(FormatError::LayerCountMismatch {
+            expected: job.layer_count(),
+            written: index + 1,
+        });
+    }
+    if (width_px, height_px) != (job.raster.width_px, job.raster.height_px) {
+        return Err(FormatError::ResolutionMismatch {
+            index: index as usize,
+            width: width_px,
+            height: height_px,
+            expected_width: job.raster.width_px,
+            expected_height: job.raster.height_px,
+        });
+    }
+    Ok(())
+}
+
+/// Refuses to finish `job` with `written` layers in where it promised another count.
+pub fn check_layers_finished(job: &PrintJob, written: u32) -> Result<(), FormatError> {
+    if written != job.layer_count() {
+        return Err(FormatError::LayerCountMismatch {
+            expected: job.layer_count(),
+            written,
+        });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,5 +199,48 @@ mod tests {
             validate(&job).unwrap_err(),
             FormatError::PanelMismatch { .. }
         ));
+    }
+
+    #[test]
+    fn a_flavour_is_found_by_its_extension_in_any_case() {
+        let names = |flavour: u8| ["ctb", "cbddlp"][usize::from(flavour)];
+        assert_eq!(flavour_of(&[0, 1], "CBDDLP", names), Some(1));
+        assert_eq!(flavour_of(&[0, 1], "goo", names), None);
+    }
+
+    #[test]
+    fn a_layer_past_the_promised_count_is_refused() {
+        assert!(matches!(
+            check_layer_pushed(&sample_job(2), 2, (8, 4)),
+            Err(FormatError::LayerCountMismatch {
+                expected: 2,
+                written: 3
+            })
+        ));
+    }
+
+    #[test]
+    fn a_layer_of_another_size_is_refused() {
+        assert!(matches!(
+            check_layer_pushed(&sample_job(2), 1, (4, 4)),
+            Err(FormatError::ResolutionMismatch {
+                index: 1,
+                width: 4,
+                ..
+            })
+        ));
+        assert!(check_layer_pushed(&sample_job(2), 1, (8, 4)).is_ok());
+    }
+
+    #[test]
+    fn finishing_short_of_the_promised_count_is_refused() {
+        assert!(matches!(
+            check_layers_finished(&sample_job(2), 1),
+            Err(FormatError::LayerCountMismatch {
+                expected: 2,
+                written: 1
+            })
+        ));
+        assert!(check_layers_finished(&sample_job(2), 2).is_ok());
     }
 }

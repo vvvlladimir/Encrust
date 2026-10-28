@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 use crate::error::PipelineError;
 use crate::format::SlicedFormat;
-use crate::panel::{PanelOverrides, raster_settings};
+use crate::panel::{PanelOverrides, raster_settings, rows_from_far_edge};
 use crate::write::{Destination, Feed, Observer};
 
 /// A sliced file read back and written again in another container (ADR 0180).
@@ -29,6 +29,14 @@ pub struct Converting<'a> {
     pub material: &'a MaterialProfile,
     /// When the new file is made, seconds since the Unix epoch.
     pub created_unix_s: u64,
+}
+
+impl Converting<'_> {
+    /// The job the new file of `source` is written from, which a front end checks against
+    /// the machine's limits before it starts.
+    pub fn job_of(&self, source: &SlicedFile) -> Result<PrintJob, PipelineError> {
+        job_of(source, self)
+    }
 }
 
 /// What a conversion wrote.
@@ -54,12 +62,16 @@ pub fn convert_to(
         job: &job,
     };
     let pixel_mm2 = job.raster.pitch.x * job.raster.pitch.y;
+    // The file was cut for this panel, so its rows lie as this machine takes that container.
+    let rows_reversed = rows_from_far_edge(source.facts().format, converting.printer)
+        != rows_from_far_edge(converting.format.extension(), converting.printer);
     destination.write(
         sink,
         &mut Layers {
             source,
             plan: &job.plan,
             pixel_mm2,
+            rows_reversed,
         },
         observer,
     )
@@ -232,6 +244,8 @@ struct Layers<'a, O> {
     source: &'a mut O,
     plan: &'a LayerPlan,
     pixel_mm2: f32,
+    /// Whether the new container lays the plate from the other edge than the file did.
+    rows_reversed: bool,
 }
 
 impl<O: OpenFile> Feed for Layers<'_, O> {
@@ -271,6 +285,11 @@ impl<O: OpenFile> Feed for Layers<'_, O> {
                 .map(|(index, runs)| {
                     let thickness = self.plan.thickness_of(*index).unwrap_or(0.0);
                     let layer = layer_of(width_px, height_px, runs);
+                    let layer = if self.rows_reversed {
+                        layer.rows_reversed()
+                    } else {
+                        layer
+                    };
                     (
                         S::encode(&layer),
                         cured_mm3(runs, self.pixel_mm2 * thickness),

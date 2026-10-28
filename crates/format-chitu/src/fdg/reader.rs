@@ -1,10 +1,11 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range, stated_distance_mm, stated_pwm, stated_rests,
+    ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, layer_in_range, panel_in_range, stated_pwm, stated_rests,
     stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
+use super::Crypt;
 use super::header::MAGIC;
 use super::rle;
 use crate::layer::{LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES};
@@ -15,22 +16,27 @@ const LAYER_TABLE: u64 = 0x34;
 const BED: u64 = 0x50;
 const MACHINE_NAME: u64 = 0x74;
 const MOTION: MotionAt = MotionAt {
-    light_off: 0x80,
+    light_off: 0x7C,
     lift: 0x88,
+    second_stage: 0x9C,
 };
 const TRANSITION: u64 = 0xC8;
-const BOTTOM_RETRACT_SPEED: u64 = 0xD8;
+/// The copy of `.ctb`'s v4 motion: the bottom retract's two speeds lead it, the second
+/// stage's bottom retract distance is its tenth word.
+const V4_MOTION: u64 = 0xD8;
 
 /// Where the three rests sit in the record in front of a layer's data, counted back from
 /// the data; the header holds only two of them.
 const RESTS_BEFORE_DATA: u64 = (LAYER_DEF_EX_BYTES - 0x44) as u64;
 
-/// Where a header of this layout puts its light-off delay and its five lift and retract
-/// numbers; the transition and the bottom retract speed sit at one offset in both.
+/// Where a header of this layout puts its two light-off delays, its five lift and retract
+/// numbers and the second stage's six; the transition and the v4 block sit at one offset in
+/// both.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MotionAt {
     pub light_off: u64,
     pub lift: u64,
+    pub second_stage: u64,
 }
 
 /// Reads the `.fdg` container.
@@ -79,43 +85,98 @@ impl SlicedFileReader for FdgReader {
         reads.skip(8)?;
         let volume_ml = reads.f32_le()?;
 
-        let machine = read_machine_name(&mut reads, MACHINE_NAME)?;
-        let layers = read_table(&mut reads, table, layer_count)?;
-        let stated = PrinterTuning {
+        let head = Head {
+            format: "fdg",
+            version,
+            width_px,
+            height_px,
+            pixel_count,
+            layer_height_mm,
+            exposure_s,
+            bottom_exposure_s,
+            bottom_layers,
+            print_time_s,
+            bed,
+            key,
+            volume_ml,
             light_pwm,
             bottom_light_pwm,
-            ..read_motion(&mut reads, layers.first(), MOTION)?
+            table,
+            layer_count,
         };
-
-        Ok(OpenFdg {
-            reads,
-            facts: SlicedFile {
-                format: "fdg",
-                version: Some(version),
-                machine,
-                slicer: None,
-                resin: None,
-                width_px,
-                height_px,
-                display_mm: (bed.0 > 0.0 && bed.1 > 0.0).then_some(bed),
-                layer_height_mm,
-                exposure_s,
-                bottom_exposure_s,
-                bottom_layers,
-                print_time_s: Some(print_time_s),
-                volume_mm3: Some(volume_ml * 1000.0),
-                grey_steps: 2,
-                stated,
-                layers,
-            },
-            key,
-            pixel_count,
-        })
+        open_layout(reads, head, MACHINE_NAME, MOTION, rle::crypt)
     }
 }
 
+/// What a header of this layout states, read off by its container's own reader.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Head {
+    pub format: &'static str,
+    pub version: u32,
+    pub width_px: u32,
+    pub height_px: u32,
+    pub pixel_count: u32,
+    pub layer_height_mm: f32,
+    pub exposure_s: f32,
+    pub bottom_exposure_s: f32,
+    pub bottom_layers: u32,
+    pub print_time_s: u32,
+    /// The bed's width and depth, mm.
+    pub bed: (f32, f32),
+    pub key: u32,
+    pub volume_ml: f32,
+    pub light_pwm: Option<u8>,
+    pub bottom_light_pwm: Option<u8>,
+    pub table: u64,
+    pub layer_count: u32,
+}
+
+/// Reads what the rest of a file of this layout holds behind `head`: the machine name at
+/// `machine_name`, the table and the peel at `motion`, its layers ciphered by `crypt`.
+pub(crate) fn open_layout<S: ReadSeek>(
+    mut reads: Reads<S>,
+    head: Head,
+    machine_name: u64,
+    motion: MotionAt,
+    crypt: Crypt,
+) -> Result<OpenFdg<S>, FormatError> {
+    let machine = read_machine_name(&mut reads, machine_name)?;
+    let layers = read_table(&mut reads, head.table, head.layer_count)?;
+    let stated = PrinterTuning {
+        light_pwm: head.light_pwm,
+        bottom_light_pwm: head.bottom_light_pwm,
+        ..read_motion(&mut reads, layers.first(), motion)?
+    };
+    let bed = head.bed;
+    Ok(OpenFdg {
+        reads,
+        facts: SlicedFile {
+            format: head.format,
+            version: Some(head.version),
+            machine,
+            slicer: None,
+            resin: None,
+            width_px: head.width_px,
+            height_px: head.height_px,
+            display_mm: (bed.0 > 0.0 && bed.1 > 0.0).then_some(bed),
+            layer_height_mm: head.layer_height_mm,
+            exposure_s: head.exposure_s,
+            bottom_exposure_s: head.bottom_exposure_s,
+            bottom_layers: head.bottom_layers,
+            print_time_s: Some(head.print_time_s),
+            volume_mm3: Some(head.volume_ml * 1000.0),
+            grey_steps: 2,
+            stated,
+            layers,
+        },
+        key: head.key,
+        pixel_count: head.pixel_count,
+        crypt,
+    })
+}
+
 /// The machine name whose address and length stand at `field`.
-pub(crate) fn read_machine_name<S: ReadSeek>(
+fn read_machine_name<S: ReadSeek>(
     reads: &mut Reads<S>,
     field: u64,
 ) -> Result<Option<String>, FormatError> {
@@ -129,12 +190,13 @@ pub(crate) fn read_machine_name<S: ReadSeek>(
     Ok(Some(reads.text(length)?))
 }
 
-pub(crate) fn read_motion<S: ReadSeek>(
+fn read_motion<S: ReadSeek>(
     reads: &mut Reads<S>,
     first: Option<&LayerEntry>,
     at: MotionAt,
 ) -> Result<PrinterTuning, FormatError> {
     reads.seek_to(at.light_off)?;
+    let bottom_light_off = reads.f32_le()?;
     let light_off = reads.f32_le()?;
     reads.seek_to(at.lift)?;
     let mut motion = [0.0; 5];
@@ -149,10 +211,19 @@ pub(crate) fn read_motion<S: ReadSeek>(
         retract_speed,
     ] = motion;
 
+    let mut second_stage = [0.0; 6];
+    reads.seek_to(at.second_stage)?;
+    for value in &mut second_stage {
+        *value = reads.f32_le()?;
+    }
+
     reads.seek_to(TRANSITION)?;
     let transition_layers = Some(reads.u16_le()?);
-    reads.seek_to(BOTTOM_RETRACT_SPEED)?;
+    reads.seek_to(V4_MOTION)?;
     let bottom_retract_speed = reads.f32_le()?;
+    let stage_bottom_retract_speed = reads.f32_le()?;
+    reads.seek_to(V4_MOTION + 0x24)?;
+    let stage_bottom_retract = reads.f32_le()?;
     let waits = match first {
         Some(entry) if entry.offset >= RESTS_BEFORE_DATA => {
             reads.seek_to(entry.offset - RESTS_BEFORE_DATA)?;
@@ -163,22 +234,26 @@ pub(crate) fn read_motion<S: ReadSeek>(
         _ => None,
     };
 
+    let peel = ChituPeel {
+        bottom_lift_total_mm: bottom_lift,
+        lift_total_mm: lift,
+        second_stage,
+        bottom_retract: [stage_bottom_retract, stage_bottom_retract_speed],
+    };
     Ok(PrinterTuning {
-        bottom_lift_distance_mm: stated_distance_mm(bottom_lift),
         bottom_lift_speed_mm_min: stated_speed_mm_min(bottom_lift_speed),
-        lift_distance_mm: stated_distance_mm(lift),
-        retract_distance_mm: stated_distance_mm(lift),
         lift_speed_mm_min: stated_speed_mm_min(lift_speed),
         retract_speed_mm_min: stated_speed_mm_min(retract_speed),
         bottom_retract_speed_mm_min: stated_speed_mm_min(bottom_retract_speed),
         light_off_delay_s: stated_wait_s(light_off),
+        bottom_light_off_delay_s: stated_wait_s(bottom_light_off),
         transition_layers,
         waits,
-        ..PrinterTuning::default()
+        ..peel.stated()
     })
 }
 
-pub(crate) fn read_table<S: ReadSeek>(
+fn read_table<S: ReadSeek>(
     reads: &mut Reads<S>,
     table: u64,
     layer_count: u32,
@@ -202,13 +277,14 @@ pub(crate) fn read_table<S: ReadSeek>(
     Ok(entries)
 }
 
-/// An `.fdg` file with its table read and its masks still in it.
+/// An `.fdg` or `.phz` file with its table read and its masks still in it.
 pub struct OpenFdg<S> {
     reads: Reads<S>,
     facts: SlicedFile,
     /// Key the layer bytes are covered with, or zero when they are in the clear.
     key: u32,
     pixel_count: u32,
+    crypt: Crypt,
 }
 
 impl<S: ReadSeek> OpenFile for OpenFdg<S> {
@@ -221,7 +297,7 @@ impl<S: ReadSeek> OpenFile for OpenFdg<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let mut data = self.reads.bytes(entry.size as usize)?;
-        rle::crypt(self.key, index, &mut data);
+        (self.crypt)(self.key, index, &mut data);
         rle::decode(&data, self.pixel_count)
     }
 }

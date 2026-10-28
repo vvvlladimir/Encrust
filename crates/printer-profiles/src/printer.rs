@@ -446,6 +446,9 @@ impl PrinterProfile {
         {
             return Err(ProfileError::NoAddress { index });
         }
+        if let Some(inset) = &self.plate_inset {
+            inset.validate(self.build_volume.x, self.build_volume.y)?;
+        }
         self.limits.validate()?;
         MaterialProfile::default()
             .with_tuning(&self.locked)

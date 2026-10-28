@@ -9,9 +9,11 @@
 use core_format::{
     ExposurePlan, ExposureRange, LayerPlan, LayerSink, PrintJob, SlicedFileWriter, Thumbnail,
 };
+use core_format::{OpenFile, SlicedFileReader};
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
 use format_chitu::{
-    CbddlpSink, CbddlpWriter, CtbSink, CtbVersion, CtbWriter, GREY_PASSES, decode_passes,
+    CbddlpSink, CbddlpWriter, ChituReader, CtbSink, CtbVersion, CtbWriter, GREY_PASSES,
+    decode_passes,
 };
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -509,4 +511,38 @@ fn the_version_four_block_counts_the_layers_and_adds_up_their_time() {
     );
     let time = f32::from_le_bytes(file[v4 + 0x28..v4 + 0x2C].try_into().expect("4"));
     assert!(time > 0.0, "exposure and light-off of every layer");
+}
+
+#[test]
+fn a_two_stage_peel_reads_back_as_its_two_stages() {
+    let mut job = job(1);
+    let material = &mut job.material;
+    (material.bottom_lift_distance_mm, material.lift_distance_mm) = (5.0, 2.0);
+    let stage = &mut material.second_stage;
+    (
+        stage.bottom_lift_distance_mm,
+        stage.bottom_lift_speed_mm_min,
+    ) = (3.0, 180.0);
+    (stage.lift_distance_mm, stage.lift_speed_mm_min) = (4.0, 900.0);
+    (stage.retract_distance_mm, stage.retract_speed_mm_min) = (4.0, 360.0);
+    (
+        stage.bottom_retract_distance_mm,
+        stage.bottom_retract_speed_mm_min,
+    ) = (3.0, 120.0);
+    let file = write_job(CtbVersion::V5, &job, &[layer_from(&[0; 128])]);
+
+    let open = ChituReader::default()
+        .open(std::io::Cursor::new(file))
+        .expect("a .ctb we wrote");
+    let stated = &open.facts().stated;
+    assert_eq!(stated.second_stage, Some(job.material.second_stage));
+    assert_eq!(
+        (stated.bottom_lift_distance_mm, stated.lift_distance_mm),
+        (Some(5.0), Some(2.0)),
+        "the first stage, split off the summed climbs"
+    );
+    assert_eq!(
+        stated.bottom_light_off_delay_s,
+        Some(job.material.bottom_light_off_s())
+    );
 }

@@ -141,14 +141,8 @@ const SLICER: &str = concat!("Encrust-", env!("CARGO_PKG_VERSION"));
 pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
     let material = &job.material;
     let bottom = material.is_bottom_layer(index);
-    let (lift_mm, lift_speed) = if bottom {
-        (
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-        )
-    } else {
-        (material.lift_distance_mm, material.lift_speed_mm_min)
-    };
+    let peel = material.peel_of_layer(index);
+    let (lift_mm, lift_speed) = (peel.lift_mm, peel.lift_speed_mm_min);
     let retract_speed = if bottom {
         material.bottom_retract_speed_mm_min
     } else {

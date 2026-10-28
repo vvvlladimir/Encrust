@@ -16,7 +16,7 @@ cargo +nightly fuzz run sliced_chitu -- -max_total_time=60
 cargo +nightly fuzz run mesh         -- -max_total_time=300 -max_len=65536
 ```
 
-Eighteen targets:
+Nineteen targets:
 
 | target | what it covers |
 | --- | --- |

@@ -15,6 +15,14 @@ pub struct Crc32 {
 }
 
 impl Crc32 {
+    /// The CRC of `bytes` alone.
+    pub fn of(bytes: &[u8]) -> Self {
+        let mut crc = Self::default();
+        crc.update(bytes);
+        crc
+    }
+
+    /// Takes `bytes` into the sum, as they are written.
     pub fn update(&mut self, bytes: &[u8]) {
         for byte in bytes {
             let index = ((self.state as u8) ^ byte) as usize;

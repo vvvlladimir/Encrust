@@ -101,6 +101,41 @@ fn a_whole_copy_an_older_release_left_is_put_back_to_the_shipped_printer() {
 }
 
 #[test]
+fn a_whole_copy_an_older_release_left_keeps_its_printers_on_the_network() {
+    in_its_own_dir("edits-old-machines", |dir, catalogue| {
+        let shipped = catalogue.shipped_printer(LD_002H).expect("shipped");
+        let machines = vec![crate::NetworkMachine {
+            name: "Shelf".to_owned(),
+            address: "192.168.1.40".to_owned(),
+            board: None,
+        }];
+        let old = PrinterProfile {
+            front_edge: FrontEdge::MinX,
+            machines: machines.clone(),
+            ..shipped.clone()
+        };
+        let path = file(dir, LD_002H);
+        std::fs::create_dir_all(path.parent().expect("in a folder")).expect("writable");
+        std::fs::write(&path, old.to_toml_string(&path).expect("valid")).expect("writable");
+
+        let entry = Catalogue::with_root(dir).expect("reads");
+        let entry = entry.printer(LD_002H).expect("still installed");
+        assert_eq!(entry.profile.machines, machines);
+        assert_eq!(entry.profile.front_edge, shipped.front_edge);
+        let reloaded = Catalogue::with_root(dir).expect("reads back");
+        assert_eq!(
+            reloaded
+                .printer(LD_002H)
+                .expect("installed")
+                .profile
+                .machines,
+            machines,
+            "kept as an edit"
+        );
+    });
+}
+
+#[test]
 fn a_printer_of_their_own_is_read_as_it_stands() {
     in_its_own_dir("edits-own", |dir, _| {
         let path = file(dir, "my-printer");

@@ -187,6 +187,12 @@ pub fn double_area_px(ring: &Ring) -> i64 {
     total
 }
 
+/// The area `rings` enclose together, holes taken out, on pixels of `pitch_mm` (x, y), mm².
+pub fn area_mm2(rings: &[Ring], pitch_mm: (f32, f32)) -> f64 {
+    let double_px: i64 = rings.iter().map(double_area_px).sum();
+    double_px as f64 / 2.0 * f64::from(pitch_mm.0) * f64::from(pitch_mm.1)
+}
+
 /// The length of a ring in pixels, which is the sum of its axis-aligned steps.
 pub fn length_px(ring: &Ring) -> u64 {
     let mut total = 0u64;

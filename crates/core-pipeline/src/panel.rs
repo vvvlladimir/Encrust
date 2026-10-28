@@ -43,13 +43,18 @@ pub(crate) fn file_panel(
     printer: &PrinterProfile,
     format: SlicedFormat,
 ) -> RasterSettings {
-    let far_edge_first = match format {
-        SlicedFormat::Cxline => false,
-        SlicedFormat::Photons => true,
-        _ => !printer.mirror_x,
-    };
     RasterSettings {
-        mirror_y: far_edge_first,
+        mirror_y: rows_from_far_edge(format.extension(), printer),
         ..*settings
+    }
+}
+
+/// Whether a file of the container `extension` names, cut for `printer`, lays its rows from
+/// the far edge of the plate (ADR 0366); a file read back is named by its reader the same way.
+pub(crate) fn rows_from_far_edge(extension: &str, printer: &PrinterProfile) -> bool {
+    match extension {
+        "cxline" => false,
+        "photons" => true,
+        _ => !printer.mirror_x,
     }
 }

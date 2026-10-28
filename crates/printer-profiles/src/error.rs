@@ -43,6 +43,9 @@ pub enum ProfileError {
     #[error("{field} cannot be negative, got {value}")]
     Negative { field: &'static str, value: f32 },
 
+    #[error("the plate inset leaves nothing of the plate to stand a model on")]
+    InsetLeavesNoPlate,
+
     #[error("printer {index} on the network has no address")]
     NoAddress { index: usize },
 

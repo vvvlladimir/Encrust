@@ -36,9 +36,15 @@ impl Limit {
         *self == Self::default()
     }
 
-    /// The span a field offers: `fallback` with the bounds this limit states put in.
+    /// The span a field offers: `fallback` with the bounds this limit states put in. A stated
+    /// bound past the fallback's other end takes that end along, so the span never inverts.
     pub fn range(&self, fallback: RangeInclusive<f32>) -> RangeInclusive<f32> {
-        self.min.unwrap_or(*fallback.start())..=self.max.unwrap_or(*fallback.end())
+        let start = self.min.unwrap_or(*fallback.start());
+        let end = self.max.unwrap_or(*fallback.end());
+        match self.max {
+            Some(_) => start.min(end)..=end,
+            None => start..=end.max(start),
+        }
     }
 
     /// How `value` strays, if it does.

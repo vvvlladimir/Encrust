@@ -1,7 +1,7 @@
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use core_thumbnail::Thumbnail;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{LimitBreach, MaterialProfile, PrinterProfile};
 
 use crate::timestamp::format_utc;
 use crate::{ExposurePlan, exposure_for_mm};
@@ -129,6 +129,16 @@ impl PrintJob {
             && (self.material.transition_layers > 0
                 || !self.exposure.is_empty()
                 || !self.is_uniform())
+    }
+
+    /// Each resin setting the job prints at past what its machine takes or its maker advises,
+    /// the layer height the stack's own (ADR 0369).
+    pub fn limit_breaches(&self) -> Vec<LimitBreach> {
+        let printed = MaterialProfile {
+            layer_height_mm: self.nominal_height_mm(),
+            ..self.material.clone()
+        };
+        self.printer.limits.breaches(&printed)
     }
 
     /// When the file was made as `YYYY-MM-DD hh:mm:ss` in UTC.

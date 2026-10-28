@@ -30,8 +30,11 @@ contours.
   does, to fill a read layer's rings.
 - The tracer moves from `format-svgx` into `core-raster` as `rings_of` and `Ring`, which
   `.svgx` and `.cxline` both call: it reads `LayerRuns` and nothing else.
+- `.fdg`, the Chitu layer records and previews under a header of its own and a one-bit
+  codec, is an `fdg` module of `format-chitu` rather than a crate on its own (ADR 0148): it
+  shares that crate's records and cipher.
 - `.phz` is a `phz` module of `format-chitu`, writing through the `.fdg` sink, which takes the
-  function that writes its header.
+  function that writes its header, and read through the `.fdg` reader with its own cipher.
 - `.photons` is a `photons` module of `format-anycubic`, the Photon S's maker.
 
 Each writes key zero where it has a cipher (ADR 0046), and each has a reader, so every file

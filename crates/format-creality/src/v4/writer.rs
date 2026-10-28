@@ -1,5 +1,6 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
@@ -86,35 +87,13 @@ impl LayerSink for CxdlpV4Sink<'_> {
     type Encoded = (RowRunsLayer, u64);
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        let lit_px = layer
-            .runs()
-            .iter()
-            .filter(|run| run.value > 0)
-            .map(|run| u64::from(run.length))
-            .sum();
-        (RowRunsLayer::encode(layer), lit_px)
+        (RowRunsLayer::encode(layer), layer.lit_px())
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let (encoded, lit_px) = encoded;
         let index = self.rows.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
 
         let address = self.fields.position()?;
         let mut body = block(|fields| blocks::write_layer_block(fields, &self.job, index))?;
@@ -136,12 +115,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.rows.len() as u32;
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
         let end = self.fields.position()?;
 
         // The resin the print takes is only known now, so the blocks that state it are
@@ -170,7 +144,9 @@ impl LayerSink for CxdlpV4Sink<'_> {
         self.fields.seek_to(0)?;
         self.fields.bytes(&header)?;
 
-        let checksum = sum(&[&header, &body, &table])
+        let checksum = Crc32::of(&header)
+            .followed_by(Crc32::of(&body))
+            .followed_by(Crc32::of(&table))
             .followed_by(self.layers)
             .value();
         self.fields.seek_to(end)?;
@@ -187,15 +163,6 @@ fn area_field(job: &PrintJob, lit_px: u64) -> u32 {
     let pitch = &job.raster.pitch;
     let area = (lit_px as f64 * f64::from(pitch.x * pitch.y)).round();
     area.clamp(0.0, f64::from(u32::MAX)) as u32
-}
-
-/// The sum over several blocks written one after another.
-fn sum(blocks: &[&[u8]]) -> Crc32 {
-    blocks.iter().fold(Crc32::default(), |total, block| {
-        let mut next = Crc32::default();
-        next.update(block);
-        total.followed_by(next)
-    })
 }
 
 #[cfg(test)]

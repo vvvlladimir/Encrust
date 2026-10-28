@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use core_format::ExposureRange;
-use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec3, Welded};
+use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec2, Vec3, Welded};
 use printer_profiles::PrinterProfile;
 
 use crate::edits::{Edited, describe as describe_edits};
@@ -16,8 +16,9 @@ pub struct FitCheck {
     /// How far the model reaches outside the envelope where it stands, per axis, mm.
     /// Whatever hangs off the plate is clipped off the masks.
     pub outside: Vec3,
-    /// How far it reaches into the plate's inset, per axis, mm: a warning, as it slices whole.
-    pub inset: Vec3,
+    /// How far it reaches into the plate's inset along X and Y, mm: a warning, as it slices
+    /// whole. The inset is a band of the plate, so it has no Z.
+    pub inset: Vec2,
 }
 
 /// How far past the envelope counts as past it, millimetres. Under a micron is float dust
@@ -32,15 +33,18 @@ impl FitCheck {
             .plate_inset
             .unwrap_or_default()
             .area_mm(volume.x, volume.y);
-        let (low, high) = (
-            Vec3::new(low[0], low[1], 0.0),
-            Vec3::new(high[0], high[1], volume.z),
-        );
+        let (low, high) = (Vec2::from(low), Vec2::from(high));
+        let inset = past(
+            (low - stats.min.truncate())
+                .max(stats.max.truncate() - high)
+                .extend(0.0),
+        )
+        .truncate();
         Self {
             printer: profile.name.clone(),
             overflow: past(stats.size() - plate),
             outside: past((-stats.min).max(stats.max - plate)),
-            inset: past((low - stats.min).max(stats.max - high)),
+            inset,
         }
     }
 

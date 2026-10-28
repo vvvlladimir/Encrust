@@ -2,7 +2,7 @@
 //! from the panel's corner. See `docs/formats/cxline.md`.
 
 use core_format::FormatError;
-use core_raster::{Ring, double_area_px};
+use core_raster::{Ring, area_mm2};
 use core_slicer::Contour;
 use glam::Vec2;
 
@@ -13,9 +13,9 @@ pub(crate) const POINT_BYTES: u64 = 8;
 
 /// The area field of a layer: what it lights in square millimetres, times a thousand.
 pub(crate) fn area_field(rings: &[Ring], pitch_mm: (f32, f32)) -> u32 {
-    let double_px: i64 = rings.iter().map(double_area_px).sum();
-    let area_mm2 = double_px as f64 / 2.0 * f64::from(pitch_mm.0) * f64::from(pitch_mm.1);
-    (area_mm2 * 1000.0).round().clamp(0.0, f64::from(u32::MAX)) as u32
+    (area_mm2(rings, pitch_mm) * 1000.0)
+        .round()
+        .clamp(0.0, f64::from(u32::MAX)) as u32
 }
 
 /// A layer's bytes, page break included. Each ring is closed by its first point again.

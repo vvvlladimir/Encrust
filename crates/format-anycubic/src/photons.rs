@@ -2,9 +2,12 @@
 //! one-bit run-length layer codec. Layout is in `docs/formats/photons.md`.
 
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
+
+use crate::blocks::panel_in_sixteen_bits;
 
 mod codec;
 mod header;
@@ -33,13 +36,7 @@ impl SlicedFileWriter for PhotonsWriter {
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
         // A layer record states the panel in sixteen bits as well as in thirty-two.
-        let (width, height) = (job.raster.width_px, job.raster.height_px);
-        if width > u32::from(u16::MAX) || height > u32::from(u16::MAX) {
-            return Err(FormatError::Encoding {
-                what: "a layer record",
-                reason: format!("a panel of {width} x {height} px is past the 65535 it holds"),
-            });
-        }
+        panel_in_sixteen_bits(job, "a layer record")?;
 
         let mut fields = Fields::new(sink);
         header::write_header(&mut fields, job)?;
@@ -70,35 +67,14 @@ impl LayerSink for PhotonsSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
         encoded.write(&mut self.fields)?;
         self.written += 1;
         Ok(())
     }
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
         self.job.volume_mm3 = volume_mm3;
         self.fields.seek_to(0)?;
         header::write_header(&mut self.fields, &self.job)?;

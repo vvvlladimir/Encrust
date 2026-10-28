@@ -21,6 +21,7 @@ pub struct RowRunsLayer {
 }
 
 impl RowRunsLayer {
+    /// Compresses a layer, each row its own runs; see `docs/formats/creality.md`.
     pub fn encode(layer: &LayerRuns) -> Self {
         let width = layer.width();
         let mut data = Vec::new();
@@ -88,10 +89,12 @@ fn push_run(data: &mut Vec<u8>, grey: u8, length: u32) {
 
 /// Expands a layer back into runs of eight-bit grey, a six-bit grey `g` reading as
 /// `g << 2 | g >> 4`, so `0x3F` is 255.
-pub fn decode(data: &[u8]) -> Result<Vec<Run>, FormatError> {
+pub fn decode(data: &[u8], pixel_count: u32) -> Result<Vec<Run>, FormatError> {
     let mut runs: Vec<Run> = Vec::new();
+    let mut covered = 0u32;
     let mut cursor = 0;
     while cursor < data.len() {
+        let start = cursor;
         let head = data[cursor];
         if head & RUN == 0 {
             return Err(FormatError::MalformedRun { offset: cursor });
@@ -107,7 +110,13 @@ pub fn decode(data: &[u8]) -> Result<Vec<Run>, FormatError> {
         }
         let grey = head & MAX_GREY;
         let value = grey << 2 | grey >> 4;
-        let length = stored + 1;
+        let length = stored
+            .checked_add(1)
+            .ok_or(FormatError::MalformedRun { offset: start })?;
+        covered = covered
+            .checked_add(length)
+            .filter(|&covered| covered <= pixel_count)
+            .ok_or(FormatError::MalformedRun { offset: start })?;
         match runs.last_mut() {
             Some(last) if last.value == value => last.length += length,
             _ => runs.push(Run { length, value }),
@@ -149,7 +158,7 @@ mod tests {
     #[test]
     fn a_layer_reads_back_in_six_bit_grey() {
         let source = layer(5, 2, &[(3, 0), (4, 255), (2, 128), (1, 0)]);
-        let runs = decode(RowRunsLayer::encode(&source).data()).expect("well formed");
+        let runs = decode(RowRunsLayer::encode(&source).data(), 10).expect("well formed");
         let expected = [(3, 0), (4, 255), (2, 130), (1, 0)];
         let got: Vec<(u32, u8)> = runs.iter().map(|run| (run.length, run.value)).collect();
         assert_eq!(got, expected);
@@ -158,8 +167,24 @@ mod tests {
     #[test]
     fn a_length_byte_with_no_run_before_it_is_refused() {
         assert!(matches!(
-            decode(&[0x05]),
+            decode(&[0x05], 10),
             Err(FormatError::MalformedRun { offset: 0 })
+        ));
+    }
+
+    #[test]
+    fn a_length_that_fills_every_bit_is_refused() {
+        assert!(matches!(
+            decode(&[0x80, 0x0F, 0x7F, 0x7F, 0x7F, 0x7F], u32::MAX),
+            Err(FormatError::MalformedRun { offset: 0 })
+        ));
+    }
+
+    #[test]
+    fn runs_past_the_panel_are_refused() {
+        assert!(matches!(
+            decode(&[0x80, 0x03, 0xBF, 0x03], 6),
+            Err(FormatError::MalformedRun { offset: 2 })
         ));
     }
 }

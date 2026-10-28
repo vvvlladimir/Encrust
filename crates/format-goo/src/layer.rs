@@ -39,30 +39,17 @@ fn write_definition(fields: &mut Fields<'_>, job: &PrintJob, index: u32) -> io::
         fields.f32_be(rest_s)?;
     }
 
-    let stage = &material.second_stage;
-    let motion = if bottom {
-        [
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-            stage.bottom_lift_distance_mm,
-            stage.bottom_lift_speed_mm_min,
-            material.bottom_lift_distance_mm,
-            material.bottom_retract_speed_mm_min,
-            stage.bottom_retract_distance_mm,
-            stage.bottom_retract_speed_mm_min,
-        ]
-    } else {
-        [
-            material.lift_distance_mm,
-            material.lift_speed_mm_min,
-            stage.lift_distance_mm,
-            stage.lift_speed_mm_min,
-            material.retract_distance_mm,
-            material.retract_speed_mm_min,
-            stage.retract_distance_mm,
-            stage.retract_speed_mm_min,
-        ]
-    };
+    let peel = material.peel(bottom);
+    let motion = [
+        peel.lift_mm,
+        peel.lift_speed_mm_min,
+        peel.second_lift_mm,
+        peel.second_lift_speed_mm_min,
+        peel.retract_mm,
+        peel.retract_speed_mm_min,
+        peel.second_retract_mm,
+        peel.second_retract_speed_mm_min,
+    ];
     for value in motion {
         fields.f32_be(value)?;
     }

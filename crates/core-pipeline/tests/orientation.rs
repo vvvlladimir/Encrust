@@ -10,7 +10,9 @@ use std::path::Path;
 use core_analysis::Measured;
 use core_format::{ExposurePlan, OpenFile, PrintJob};
 use core_geometry::{Mesh, Vec3};
-use core_pipeline::{PanelOverrides, SlicedFormat, Writing, open, raster_settings, write_to};
+use core_pipeline::{
+    Converting, PanelOverrides, SlicedFormat, Writing, convert_to, open, raster_settings, write_to,
+};
 use core_slicer::{ONE_SAMPLE, SliceSettings, Windows};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -48,6 +50,11 @@ fn near_edge_slab() -> Mesh {
 
 /// The first and last row of the file's first layer that hold a lit pixel.
 fn lit_rows(printer: PrinterProfile, format: SlicedFormat, name: &str) -> (u32, u32) {
+    lit_rows_of(written(printer, format), name)
+}
+
+/// The slab written as `format` for `printer`.
+fn written(printer: PrinterProfile, format: SlicedFormat) -> Vec<u8> {
     let mesh = near_edge_slab();
     let settings = raster_settings(&printer, PanelOverrides::default());
     let windows = Windows::new(
@@ -86,9 +93,13 @@ fn lit_rows(printer: PrinterProfile, format: SlicedFormat, name: &str) -> (u32, 
     )
     .expect("the slab writes")
     .expect("nothing cancelled the run");
+    file.into_inner()
+}
 
-    file.set_position(0);
-    let mut opened = open(Path::new(name), file).expect("the file reads back");
+/// The first and last row of the first layer of `bytes`, a file called `name`, that hold
+/// a lit pixel.
+fn lit_rows_of(bytes: Vec<u8>, name: &str) -> (u32, u32) {
+    let mut opened = open(Path::new(name), Cursor::new(bytes)).expect("the file reads back");
     let mut lit = Vec::new();
     let mut at = 0;
     for run in opened.layer(0).expect("the first layer") {
@@ -136,4 +147,32 @@ fn photons_starts_at_the_far_edge_whatever_the_mirror() {
 fn cxline_keeps_the_plate_as_it_stands() {
     let rows = lit_rows(printer(false), SlicedFormat::Cxline, "normal.cxline");
     assert_eq!(rows, (2, 7), "the vendor's .cxline matched without a flip");
+}
+
+#[test]
+fn a_conversion_lays_the_rows_as_the_new_container_does() {
+    let printer = printer(true);
+    let goo = written(printer.clone(), SlicedFormat::Goo);
+    let mut source = open(Path::new("mirrored.goo"), Cursor::new(goo)).expect("reads back");
+    let resin = MaterialProfile::default();
+    let mut converted = Cursor::new(Vec::new());
+    convert_to(
+        &mut source,
+        &Converting {
+            format: SlicedFormat::Photons,
+            name: "orientation",
+            printer: &printer,
+            material: &resin,
+            created_unix_s: 0,
+        },
+        &mut converted,
+        &mut (),
+    )
+    .expect("the file converts")
+    .expect("nothing cancelled the run");
+    assert_eq!(
+        lit_rows_of(converted.into_inner(), "mirrored.photons"),
+        (HEIGHT_PX - 8, HEIGHT_PX - 3),
+        "the slab moves to the far edge, as a .photons cut for this machine has it"
+    );
 }

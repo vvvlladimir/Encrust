@@ -3,7 +3,7 @@
 
 use std::io;
 
-use core_format::{Fields, PrintJob, Rgb, Thumbnail, rgb565};
+use core_format::{CHITU_ANTI_ALIAS_CAP, Fields, PrintJob, Rgb, Thumbnail, rgb565};
 
 use crate::family::MAGIC;
 
@@ -40,10 +40,7 @@ pub(crate) fn write_previews(
     thumbnail: Option<&Thumbnail>,
 ) -> io::Result<()> {
     for (width, height) in PREVIEW_SIZES_PX {
-        let image = match thumbnail {
-            Some(thumbnail) => thumbnail.fitted_to(width, height, PREVIEW_BACKGROUND),
-            None => Thumbnail::filled(width, height, PREVIEW_BACKGROUND),
-        };
+        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, PREVIEW_BACKGROUND);
         for &pixel in image.pixels() {
             fields.u16_be(rgb565(pixel))?;
         }
@@ -86,7 +83,7 @@ pub(crate) fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::
 
     // Distortion, XY and Z compensation, each off with a zero value.
     fields.zeros(15)?;
-    fields.u8(job.raster.anti_alias_level(8) as u8)?;
+    fields.u8(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP) as u8)?;
     fields.zeros(2)?;
     fields.u8(1)?;
     fields.u8(job.raster.stated_blur_px())?;

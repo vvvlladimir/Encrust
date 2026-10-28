@@ -1,6 +1,6 @@
 use std::io;
 
-use core_format::{Fields, PrintJob};
+use core_format::{ChituTotals, Fields, PrintJob};
 
 use crate::blocks::{write_second_stage, write_v4_motion};
 use crate::writer::encryption_key;
@@ -28,9 +28,7 @@ pub(crate) struct Offsets {
 /// What the header sums over the stack, only known once every layer is written.
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct Totals {
-    /// Exposure, light-off delay and rests of every layer, seconds.
-    pub layer_time_s: f32,
-    pub largest_layer_bytes: u32,
+    pub stack: ChituTotals,
     pub last_bottom_index: u32,
     pub distinct_heights: u32,
 }
@@ -128,8 +126,8 @@ pub(crate) fn write_tail(
 /// parameters into its first 40 bytes.
 fn write_parameters(fields: &mut Fields<'_>, job: &PrintJob, totals: Totals) -> io::Result<()> {
     write_v4_motion(fields, job)?;
-    fields.f32_le(totals.layer_time_s)?;
-    fields.u32_le(totals.largest_layer_bytes)?;
+    fields.f32_le(totals.stack.layer_time_s)?;
+    fields.u32_le(totals.stack.largest_layer_bytes)?;
     fields.u32_le(totals.last_bottom_index)?;
     fields.u32_le(totals.distinct_heights)?;
     fields.zeros(36)

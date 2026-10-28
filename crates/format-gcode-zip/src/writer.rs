@@ -1,7 +1,8 @@
 use std::io::Write;
 
 use core_format::{
-    FormatError, LayerSink, PrintJob, SlicedFileWriter, Thumbnail, WriteSeek, validate,
+    FormatError, LayerSink, PrintJob, SlicedFileWriter, Thumbnail, WriteSeek, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 use zip::ZipWriter;
@@ -76,22 +77,7 @@ impl LayerSink for GcodeZipSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width != self.job.raster.width_px || encoded.height != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width,
-                height: encoded.height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width, encoded.height))?;
 
         let png = encoded.png?;
         entry(&mut self.zip, &gcode::image_name(index), &png)?;
@@ -102,12 +88,7 @@ impl LayerSink for GcodeZipSink<'_> {
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
 
         // The program goes in last: its header states the resin the stack came to, which
         // is only known once the last layer is cut, and a zip entry cannot be rewritten.
@@ -138,10 +119,7 @@ fn write_thumbnails(
     thumbnail: Option<&Thumbnail>,
 ) -> Result<(), FormatError> {
     for (name, width, height) in THUMBNAILS {
-        let image = match thumbnail {
-            Some(thumbnail) => thumbnail.fitted_to(width, height, THUMBNAIL_BACKGROUND),
-            None => Thumbnail::filled(width, height, THUMBNAIL_BACKGROUND),
-        };
+        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, THUMBNAIL_BACKGROUND);
         entry(zip, name, &core_format::encode_colour(&image)?)?;
     }
     Ok(())

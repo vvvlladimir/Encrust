@@ -1,11 +1,7 @@
-use core_format::{
-    FormatError, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range, stated_pwm,
-};
-use core_raster::Run;
+use core_format::{FormatError, ReadSeek, Reads, SlicedFileReader, panel_in_range, stated_pwm};
 
 use super::header::MAGIC;
-use crate::fdg::{self, MotionAt};
+use crate::fdg::{self, Head, MotionAt, OpenFdg};
 
 /// Fields of the header, by their offset; the whole list is in `docs/formats/phz.md`.
 const LAYER_TABLE: u64 = 0x24;
@@ -15,8 +11,9 @@ const BED: u64 = 0x4C;
 const MACHINE_NAME: u64 = 0x90;
 const VOLUME: u64 = 0x80;
 const MOTION: MotionAt = MotionAt {
-    light_off: 0x60,
+    light_off: 0x5C,
     lift: 0x6C,
+    second_stage: 0x98,
 };
 
 /// Reads the `.phz` container.
@@ -24,7 +21,7 @@ const MOTION: MotionAt = MotionAt {
 pub struct PhzReader;
 
 impl SlicedFileReader for PhzReader {
-    type Open<S: ReadSeek> = OpenPhz<S>;
+    type Open<S: ReadSeek> = OpenFdg<S>;
 
     fn extension(&self) -> &'static str {
         "phz"
@@ -64,38 +61,26 @@ impl SlicedFileReader for PhzReader {
         reads.seek_to(VOLUME)?;
         let volume_ml = reads.f32_le()?;
 
-        let machine = fdg::read_machine_name(&mut reads, MACHINE_NAME)?;
-        let layers = fdg::read_table(&mut reads, table, layer_count)?;
-        let stated = PrinterTuning {
+        let head = Head {
+            format: "phz",
+            version,
+            width_px,
+            height_px,
+            pixel_count,
+            layer_height_mm,
+            exposure_s,
+            bottom_exposure_s,
+            bottom_layers,
+            print_time_s,
+            bed,
+            key,
+            volume_ml,
             light_pwm,
             bottom_light_pwm,
-            ..fdg::read_motion(&mut reads, layers.first(), MOTION)?
+            table,
+            layer_count,
         };
-
-        Ok(OpenPhz {
-            reads,
-            facts: SlicedFile {
-                format: "phz",
-                version: Some(version),
-                machine,
-                slicer: None,
-                resin: None,
-                width_px,
-                height_px,
-                display_mm: (bed.0 > 0.0 && bed.1 > 0.0).then_some(bed),
-                layer_height_mm,
-                exposure_s,
-                bottom_exposure_s,
-                bottom_layers,
-                print_time_s: Some(print_time_s),
-                volume_mm3: Some(volume_ml * 1000.0),
-                grey_steps: 2,
-                stated,
-                layers,
-            },
-            key,
-            pixel_count,
-        })
+        fdg::open_layout(reads, head, MACHINE_NAME, MOTION, crypt)
     }
 }
 
@@ -107,29 +92,5 @@ pub(crate) fn crypt(key: u32, index: u32, data: &mut [u8]) {
     }
     let step = (key % 0x4324).wrapping_mul(0x34A3_2231);
     let word = step.wrapping_mul((index ^ 0x3FAD_2212).wrapping_mul(0x1E15_30CD));
-    fdg::cover(data, word, step);
-}
-
-/// A `.phz` file with its table read and its masks still in it.
-pub struct OpenPhz<S> {
-    reads: Reads<S>,
-    facts: SlicedFile,
-    /// Key the layer bytes are covered with, or zero when they are in the clear.
-    key: u32,
-    pixel_count: u32,
-}
-
-impl<S: ReadSeek> OpenFile for OpenPhz<S> {
-    fn facts(&self) -> &SlicedFile {
-        &self.facts
-    }
-
-    fn layer(&mut self, index: u32) -> Result<Vec<Run>, FormatError> {
-        layer_in_range(index, self.facts.layer_count())?;
-        let entry = self.facts.layers[index as usize];
-        self.reads.seek_to(entry.offset)?;
-        let mut data = self.reads.bytes(entry.size as usize)?;
-        crypt(self.key, index, &mut data);
-        fdg::decode(&data, self.pixel_count)
-    }
+    core_format::chitu_keystream_xor(data, word, step);
 }

@@ -122,24 +122,25 @@ fn write_exposure(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
 
 fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let material = &job.material;
-    fields.f32_be(material.bottom_lift_distance_mm)?;
-    fields.f32_be(material.bottom_lift_speed_mm_min)?;
-    fields.f32_be(material.lift_distance_mm)?;
-    fields.f32_be(material.lift_speed_mm_min)?;
-    fields.f32_be(material.bottom_lift_distance_mm)?;
-    fields.f32_be(material.bottom_retract_speed_mm_min)?;
-    fields.f32_be(material.retract_distance_mm)?;
-    fields.f32_be(material.retract_speed_mm_min)?;
-    let stage = &material.second_stage;
+    // Each stage's lifts, bottom then normal, then its retracts the same way.
+    let (bottom, normal) = (material.peel(true), material.peel(false));
     for value in [
-        stage.bottom_lift_distance_mm,
-        stage.bottom_lift_speed_mm_min,
-        stage.lift_distance_mm,
-        stage.lift_speed_mm_min,
-        stage.bottom_retract_distance_mm,
-        stage.bottom_retract_speed_mm_min,
-        stage.retract_distance_mm,
-        stage.retract_speed_mm_min,
+        bottom.lift_mm,
+        bottom.lift_speed_mm_min,
+        normal.lift_mm,
+        normal.lift_speed_mm_min,
+        bottom.retract_mm,
+        bottom.retract_speed_mm_min,
+        normal.retract_mm,
+        normal.retract_speed_mm_min,
+        bottom.second_lift_mm,
+        bottom.second_lift_speed_mm_min,
+        normal.second_lift_mm,
+        normal.second_lift_speed_mm_min,
+        bottom.second_retract_mm,
+        bottom.second_retract_speed_mm_min,
+        normal.second_retract_mm,
+        normal.second_retract_speed_mm_min,
     ] {
         fields.f32_be(value)?;
     }
