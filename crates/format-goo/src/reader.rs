@@ -115,7 +115,8 @@ struct ExposureBlock {
 fn read_exposure<S: ReadSeek>(reads: &mut Reads<S>) -> Result<ExposureBlock, FormatError> {
     let layer_height_mm = reads.f32_be()?;
     let exposure_s = reads.f32_be()?;
-    let resting = reads.u8()? != 0;
+    // The delay mode byte is 1 in every vendor file; which wait is unused is told by its zeros.
+    reads.skip(1)?;
     let light_off_delay_s = stated_wait_s(reads.f32_be()?);
     // Six rests, the bottom layers' three first; a resin holds one set, the common one.
     reads.skip(12)?;
@@ -126,7 +127,7 @@ fn read_exposure<S: ReadSeek>(reads: &mut Reads<S>) -> Result<ExposureBlock, For
             Some(after_lift_s),
             Some(after_retract_s),
         ] => Some(Waits {
-            mode: if resting {
+            mode: if before_lift_s + after_lift_s + after_retract_s > 0.0 {
                 WaitMode::Rest
             } else {
                 WaitMode::LightOff
@@ -284,6 +285,43 @@ mod tests {
                 found: 0x1111_1111
             }
         ));
+    }
+
+    /// An exposure block from the layer height on: delay mode 1, then the seven waits.
+    fn exposure_block(light_off_s: f32, rests_s: [f32; 3]) -> Cursor<Vec<u8>> {
+        let mut bytes = [0.05_f32, 2.5].map(f32::to_be_bytes).concat();
+        bytes.push(1);
+        for value in [light_off_s].into_iter().chain(rests_s).chain(rests_s) {
+            bytes.extend(value.to_be_bytes());
+        }
+        bytes.extend(30.0_f32.to_be_bytes());
+        bytes.extend(2_u32.to_be_bytes());
+        Cursor::new(bytes)
+    }
+
+    #[test]
+    fn a_vendor_file_holding_the_light_off_reads_as_light_off() {
+        let block =
+            read_exposure(&mut Reads::new(exposure_block(0.5, [0.0; 3]))).expect("a whole block");
+        let waits = block.waits.expect("three rests stated");
+        assert_eq!(waits.mode, WaitMode::LightOff, "no rest is stated");
+        assert_eq!(block.light_off_delay_s, Some(0.5));
+    }
+
+    #[test]
+    fn a_vendor_file_resting_reads_as_resting() {
+        let block = read_exposure(&mut Reads::new(exposure_block(0.0, [2.0, 3.0, 4.0])))
+            .expect("a whole block");
+        let waits = block.waits.expect("three rests stated");
+        assert_eq!(waits.mode, WaitMode::Rest);
+        assert_eq!(
+            [
+                waits.before_lift_s,
+                waits.after_lift_s,
+                waits.after_retract_s
+            ],
+            [2.0, 3.0, 4.0]
+        );
     }
 
     #[test]

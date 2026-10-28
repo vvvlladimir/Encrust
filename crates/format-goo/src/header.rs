@@ -107,9 +107,9 @@ fn write_geometry(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
 fn write_exposure(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let material = &job.material;
     fields.f32_be(job.header_exposure_s())?;
-    // False selects "turn off time", the light-off delay; true the static waits below,
-    // bottom layers first and then the rest, which take the same rests.
-    fields.bool(material.waits.resting())?;
+    // The delay mode is 1 whatever the resin waits by, as the vendor writes it: the field
+    // left unused, light-off delay or rests, is zero instead (`docs/formats/goo.md`).
+    fields.bool(true)?;
     fields.f32_be(material.light_off_s())?;
     for _ in 0..2 {
         for rest_s in material.waits.rests_s() {

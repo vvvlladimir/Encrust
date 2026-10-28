@@ -61,7 +61,7 @@ profile.
 | 195318 | X and Y mirror, `bool` each | see *Mirroring* below |
 | 195320 | X, Y, Z size, `f32` each | illuminated area and the machine's Z travel, mm |
 | 195332 | layer thickness, `f32` | the height actually sliced at, not the profile's |
-| 195340 | exposure delay mode, `bool` | `true` while the resin waits by resting, else *turn off time* |
+| 195340 | exposure delay mode, `bool` | always `true`, as both of the vendor's writers do; see below |
 | 195341 | turn off time, then six static waits, `f32` each | the light-off delay or zero; before lift, after lift, after retract, for the bottom layers and then the rest |
 | 195445 | advance mode, `bool` | see below |
 | 195458 | total price, `f32`, then its unit as 8 bytes | what the job costs in the resin's own currency, `€/L` or `$/kg`; zero for a resin with no price |
@@ -81,6 +81,11 @@ profile says it reads the per-layer tables (ADR 0141). A vendor file leaves it c
 Elegoo Saturn 4 Ultra and lets the machine ramp the bottom block off the header. It also
 states 0.05 in every lift and retract field, distance and speed, which the machine's
 profile locks (ADR 0301): a file stating 6 mm made the plate rise again after the tilt.
+
+*Exposure delay mode* is the constant 1 in the vendor's own `.goo` writers, V3 and V5 alike,
+whether its resin waits by a light-off delay or by rests: the wait not taken is written as
+zeros instead. We write the same, and a reader tells the mode from the values — any rest
+above zero is resting, else the light-off delay — never from the byte.
 
 ### Mirroring
 

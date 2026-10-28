@@ -34,7 +34,7 @@ fn a_resting_resin_selects_the_static_waits_and_fills_them() {
     let header = header_of(&job);
     assert_eq!(
         header[DELAY_MODE_OFFSET], 1,
-        "static waits, not turn-off time"
+        "the mode the vendor always writes"
     );
     assert!(
         f32_at(&header, DELAY_MODE_OFFSET + 1).abs() < f32::EPSILON,
@@ -54,7 +54,14 @@ fn a_resting_resin_selects_the_static_waits_and_fills_them() {
 fn a_resin_holding_the_light_off_writes_no_waits() {
     let job = sample_job(10);
     let header = header_of(&job);
-    assert_eq!(header[DELAY_MODE_OFFSET], 0);
+    assert_eq!(
+        header[DELAY_MODE_OFFSET], 1,
+        "the mode the vendor always writes"
+    );
+    assert!(
+        (0..6).all(|index| f32_at(&header, DELAY_MODE_OFFSET + 5 + 4 * index) == 0.0),
+        "no rest"
+    );
     assert!((f32_at(&header, DELAY_MODE_OFFSET + 1) - job.material.light_off_delay_s).abs() < 1e-6);
 }
 
