@@ -18,6 +18,8 @@ pub use format_sl1::Sl1Flavour;
 pub enum SlicedFormat {
     #[default]
     Goo,
+    /// The `.goo` container at revision 5.1, which an output name alone never picks.
+    Goo5,
     /// The `.goo` container under Phrozen's extension: the same bytes.
     Prz,
     Ctb(CtbVersion),
@@ -40,10 +42,11 @@ pub enum SlicedFormat {
 }
 
 impl SlicedFormat {
-    /// The nineteen a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
+    /// The twenty a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
     /// the Anycubic families are on the picker; the others are renames (ADR 0047).
-    pub const CHOICES: [Self; 19] = [
+    pub const CHOICES: [Self; 20] = [
         Self::Goo,
+        Self::Goo5,
         Self::Ctb(CtbVersion::V4),
         Self::Ctb(CtbVersion::V5),
         Self::CtbEncrypted,
@@ -123,6 +126,7 @@ impl SlicedFormat {
                 Self::Anycubic(flavour, revision)
             }
             (Self::Cxdlp(_), Self::Cxdlp(revision)) => Self::Cxdlp(revision),
+            (Self::Goo, Self::Goo5) => Self::Goo5,
             (Self::Ctb(_), Self::CtbEncrypted) => Self::CtbEncrypted,
             (Self::Ctb(_), Self::Ctb(revision)) => Self::Ctb(revision),
             _ => self,
@@ -158,7 +162,7 @@ impl SlicedFormat {
     /// Extension of the file this writes, without the dot.
     pub fn extension(self) -> &'static str {
         match self {
-            Self::Goo => "goo",
+            Self::Goo | Self::Goo5 => "goo",
             Self::Prz => "prz",
             Self::Ctb(_) | Self::CtbEncrypted => "ctb",
             Self::Cbddlp(flavour) => flavour.extension(),
@@ -184,6 +188,7 @@ impl From<OutputFormat> for SlicedFormat {
     fn from(format: OutputFormat) -> Self {
         match format {
             OutputFormat::Goo => Self::Goo,
+            OutputFormat::Goo5 => Self::Goo5,
             OutputFormat::Prz => Self::Prz,
             OutputFormat::Ctb4 => Self::Ctb(CtbVersion::V4),
             OutputFormat::Ctb5 => Self::Ctb(CtbVersion::V5),
@@ -215,6 +220,7 @@ impl From<SlicedFormat> for OutputFormat {
     fn from(format: SlicedFormat) -> Self {
         match format {
             SlicedFormat::Goo => Self::Goo,
+            SlicedFormat::Goo5 => Self::Goo5,
             SlicedFormat::Prz => Self::Prz,
             SlicedFormat::Ctb(CtbVersion::V4) => Self::Ctb4,
             SlicedFormat::Ctb(CtbVersion::V5) => Self::Ctb5,

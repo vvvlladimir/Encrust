@@ -37,7 +37,7 @@ pub use reader::{
 };
 pub use rgb15::{PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, encode_rgb15, rgb15, write_preview};
 pub use rle7::{Rle7Layer, decode_rle7};
-pub use ser::{Fields, WriteSeek};
+pub use ser::{BufferedSink, Fields, ReadWriteSeek};
 pub use writer::{
     LayerSink, SlicedFileWriter, WRITE_BUFFER_BYTES, check_layer_pushed, check_layers_finished,
     flavour_of, validate,

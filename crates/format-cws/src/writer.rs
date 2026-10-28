@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use core_format::{
-    FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
@@ -32,7 +32,7 @@ impl SlicedFileWriter for CwsWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -52,7 +52,7 @@ impl SlicedFileWriter for CwsWriter {
 /// The archive with its settings in, its images still to come and the program growing a
 /// block at a time beside them.
 pub struct CwsSink<'w> {
-    zip: ZipWriter<&'w mut dyn WriteSeek>,
+    zip: ZipWriter<&'w mut dyn ReadWriteSeek>,
     job: PrintJob,
     /// One block per layer that has landed, in print order.
     blocks: String,
@@ -117,7 +117,7 @@ pub(crate) fn image_name(index: u32, layer_count: u32) -> String {
 }
 
 fn entry(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {

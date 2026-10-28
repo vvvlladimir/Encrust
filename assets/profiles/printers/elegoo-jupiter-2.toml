@@ -5,7 +5,7 @@ manufacturer = "Elegoo"
 machine_name = "ELEGOO Jupiter 2"
 mirror_x = true
 mirror_y = false
-output = "goo"
+output = "goo5"
 connection = "none"
 
 [display]

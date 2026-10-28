@@ -59,6 +59,7 @@ fn every_shipped_printer_names_the_format_its_firmware_reads() {
     let expected = [
         ("elegoo-mars-4-ultra", OutputFormat::Goo),
         ("elegoo-saturn-4-ultra", OutputFormat::Goo),
+        ("elegoo-jupiter-2", OutputFormat::Goo5),
         ("elegoo-mars-3-pro", OutputFormat::CtbEncrypted),
         ("phrozen-sonic-mini-8k", OutputFormat::CtbEncrypted),
         ("uniformation-gktwo", OutputFormat::CtbEncrypted),

@@ -110,13 +110,14 @@ encrypted container for a panel past 4095 pixels a side, as the vendor slicer wr
 (ADR 0298, 0365). `--ctb-version 4`, `5` or `encrypted` overrides it, and is read only by a
 `.ctb` name. A `.cxdlp` or `.cxdlpv4` name is written at the revision the printer
 profile names, as the Halot Mage and X1 lines name 4, else at the one the name says
-(ADR 0168, 0368).
+(ADR 0168, 0368). A `.goo` name is written at revision 5.1 where the printer profile names
+it, as the Jupiter 2's does, else at 3.0 (ADR 0377).
 
 Each container pays for grey differently. A `.cbddlp` carries it in eight one-bit passes, so
 it is eight times the layer data of the others (ADR 0146). An Anycubic file carries four bits
 of it in one pass, which costs nothing but loses an edge dimmer than 16 (ADR 0147). An `.sl1`
 carries all eight bits and loses nothing, because its layers are PNGs, and so do a `.zip` and
-a `.cws`. A `.cxdlp` carries eight bits and a `.cxdlpv4` six. An `.svgx` carries
+a `.cws`. A `.cxdlp` carries eight bits, a `.cxdlpv4` six and a `.goo` 5.1 three. An `.svgx` carries
 none at all: its layers are polygons, and a pixel is lit or dark at half coverage (ADR 0169).
 Those two cost by the panel rather than by the model, so a run writing one for a panel larger
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above

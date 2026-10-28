@@ -107,6 +107,7 @@ fn written_with(material: &MaterialProfile) -> Vec<(&'static str, Vec<u8>)> {
 fn written_for(job: &PrintJob) -> Vec<(&'static str, Vec<u8>, u16)> {
     vec![
         ("goo", write_job(&format_goo::GooWriter, job), 256),
+        ("goo", write_job(&format_goo::Goo5Writer, job), 8),
         (
             "ctb",
             write_job(

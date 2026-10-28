@@ -1,5 +1,5 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
@@ -7,6 +7,7 @@ use core_raster::LayerRuns;
 use crate::header::{self, ENDING_STRING};
 use crate::layer;
 use crate::rle::EncodedLayer;
+use crate::version::GooVersion;
 
 /// Writes the Elegoo `.goo` container. Layout is in `docs/formats/goo.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -22,12 +23,12 @@ impl SlicedFileWriter for GooWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
         let mut fields = Fields::new(sink);
-        header::write(&mut fields, job)?;
+        header::write(&mut fields, job, GooVersion::V3)?;
         tracing::debug!(
             layers = job.layer_count(),
             bytes = fields.written(),
@@ -72,7 +73,7 @@ impl LayerSink for GooSink<'_> {
         // is written by laying it down again over the one written at the start.
         self.job.volume_mm3 = volume_mm3;
         self.fields.seek_to(0)?;
-        header::write(&mut self.fields, &self.job)?;
+        header::write(&mut self.fields, &self.job, GooVersion::V3)?;
 
         self.fields.flush()?;
         Ok(())

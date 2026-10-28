@@ -1,6 +1,6 @@
 use core_raster::LayerRuns;
 
-use crate::{FormatError, PrintJob, WriteSeek};
+use crate::{FormatError, PrintJob, ReadWriteSeek};
 
 /// Bytes to hold before they go to the file. A layer is tens of kilobytes; the default 8 KB
 /// `BufWriter` makes tens of thousands of writes, 1 MB a few per layer.
@@ -21,7 +21,7 @@ pub trait SlicedFileWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError>;
 }
 

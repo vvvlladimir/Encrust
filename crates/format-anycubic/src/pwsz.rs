@@ -11,7 +11,7 @@ mod tests;
 use std::io::{Cursor, Write};
 
 use core_format::{
-    FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
@@ -87,7 +87,7 @@ impl SlicedFileWriter for PwszWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -124,7 +124,7 @@ impl SlicedFileWriter for PwszWriter {
 /// The archive with its previews in and its layers going in one entry at a time; what the
 /// layers add up to is written once they are all in.
 pub struct PwszSink<'w> {
-    zip: ZipWriter<&'w mut dyn WriteSeek>,
+    zip: ZipWriter<&'w mut dyn ReadWriteSeek>,
     job: PrintJob,
     rows: Vec<SceneRow>,
 }
@@ -198,7 +198,7 @@ pub(crate) fn built(
 }
 
 fn entry(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {

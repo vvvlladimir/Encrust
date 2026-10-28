@@ -11,6 +11,7 @@ use core_pipeline::{CbddlpFlavour, CtbVersion, CxdlpVersion, Sl1Flavour, SlicedF
 pub fn label_of(format: SlicedFormat) -> &'static str {
     match format {
         SlicedFormat::Goo => ".goo",
+        SlicedFormat::Goo5 => ".goo v5.1",
         SlicedFormat::Prz => ".prz",
         SlicedFormat::Ctb(CtbVersion::V4) => ".ctb v4",
         SlicedFormat::Ctb(CtbVersion::V5) => ".ctb v5",
@@ -71,6 +72,7 @@ mod tests {
             labels,
             vec![
                 ".goo",
+                ".goo v5.1",
                 ".ctb v4",
                 ".ctb v5",
                 ".ctb encrypted",

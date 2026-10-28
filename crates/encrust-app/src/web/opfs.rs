@@ -3,7 +3,7 @@
 //! through a synchronous handle, which only a worker is given, and the page's thread hands
 //! it to the user as a download.
 
-use std::io::{self, Seek, SeekFrom, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 
 use crate::i18n::tr;
 use wasm_bindgen::JsCast;
@@ -13,7 +13,7 @@ use web_sys::{
     FileSystemReadWriteOptions, FileSystemSyncAccessHandle, StorageManager,
 };
 
-/// A file in private storage, open for writing at any offset.
+/// A file in private storage, open for writing and reading back at any offset.
 pub struct StoredFile {
     handle: FileSystemSyncAccessHandle,
     at: u64,
@@ -46,6 +46,19 @@ impl Write for StoredFile {
 
     fn flush(&mut self) -> io::Result<()> {
         self.handle.flush().map_err(failed)
+    }
+}
+
+impl Read for StoredFile {
+    fn read(&mut self, into: &mut [u8]) -> io::Result<usize> {
+        let options = FileSystemReadWriteOptions::new();
+        options.set_at(self.at as f64);
+        let read = self
+            .handle
+            .read_with_u8_array_and_options(into, &options)
+            .map_err(failed)? as usize;
+        self.at += read as u64;
+        Ok(read)
     }
 }
 

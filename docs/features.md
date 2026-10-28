@@ -583,7 +583,7 @@ Every file Encrust writes is read back and checked. The output extension picks t
 
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
-| `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; not yet printed from. |
+| `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; the Jupiter 2 gets revision 5.1, as the vendor slicer writes for it, with eight levels of grey; not yet printed from. |
 | `.ctb` v5 (v4 on request) | Elegoo, Creality, EPAX, Peopoly, QIDI, UniFormation | yes | Laid out field for field as the vendor slicer writes it. |
 | `.ctb` encrypted | Chitu boards with a panel past 4095 px a side | yes | Written for every such shipped printer, as the vendor slicer does. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |

@@ -1,8 +1,8 @@
 use std::io::Cursor;
 
 use core_format::{
-    ChituLayer, ChituTotals, Crc32, Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter,
-    WriteSeek, check_layer_pushed, check_layers_finished, chitu_grey_flags, validate,
+    ChituLayer, ChituTotals, Crc32, Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek,
+    SlicedFileWriter, check_layer_pushed, check_layers_finished, chitu_grey_flags, validate,
 };
 use core_raster::LayerRuns;
 
@@ -96,7 +96,7 @@ impl SlicedFileWriter for CtbWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 

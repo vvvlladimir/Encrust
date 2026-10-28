@@ -5,7 +5,7 @@
 use std::io;
 
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, validate, write_chitu_previews,
 };
 use core_raster::LayerRuns;
@@ -48,7 +48,7 @@ impl SlicedFileWriter for FdgWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         FdgSink::open(job, sink, header::write_header, rle::crypt)
     }
@@ -70,7 +70,7 @@ impl<'w> FdgSink<'w> {
     /// Writes the previews, the machine name and room for the header and the table.
     pub(crate) fn open(
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
         write_header: WriteHeader,
         crypt: Crypt,
     ) -> Result<Self, FormatError> {

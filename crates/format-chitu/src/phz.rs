@@ -1,7 +1,7 @@
 //! The `.phz` of the Sonic Mini: the `.fdg` layout, previews, records and one-bit codec
 //! under a header of its own. Layout is in `docs/formats/phz.md`.
 
-use core_format::{FormatError, PrintJob, SlicedFileWriter, WriteSeek};
+use core_format::{FormatError, PrintJob, ReadWriteSeek, SlicedFileWriter};
 
 use crate::fdg::FdgSink;
 
@@ -26,7 +26,7 @@ impl SlicedFileWriter for PhzWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         FdgSink::open(job, sink, header::write_header, reader::crypt)
     }

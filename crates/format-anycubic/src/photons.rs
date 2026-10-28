@@ -2,7 +2,7 @@
 //! one-bit run-length layer codec. Layout is in `docs/formats/photons.md`.
 
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
@@ -32,7 +32,7 @@ impl SlicedFileWriter for PhotonsWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
         // A layer record states the panel in sixteen bits as well as in thirty-two.

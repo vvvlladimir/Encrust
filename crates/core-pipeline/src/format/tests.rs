@@ -82,6 +82,11 @@ fn a_name_without_a_revision_takes_the_one_the_profile_states() {
         "a name of another container keeps what it named"
     );
     assert_eq!(
+        SlicedFormat::Goo.at_revision_of(OutputFormat::Goo5),
+        SlicedFormat::Goo5,
+        "a .goo name keeps the revision the machine reads"
+    );
+    assert_eq!(
         SlicedFormat::Anycubic(AnycubicFlavour::Pm5, AnycubicVersion::V517).at_revision_of(stated),
         SlicedFormat::Anycubic(AnycubicFlavour::Pm5, AnycubicVersion::V517),
         "another extension is another container"

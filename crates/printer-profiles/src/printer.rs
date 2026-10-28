@@ -13,6 +13,8 @@ pub enum OutputFormat {
     /// Elegoo's `.goo`.
     #[default]
     Goo,
+    /// The same extension at revision 5.1, which the Jupiter 2 reads.
+    Goo5,
     /// The same container under the extension Phrozen's newer machines read, `.prz`.
     Prz,
     /// Chitu's `.ctb`, revision 4.
@@ -164,6 +166,7 @@ impl OutputFormat {
     pub fn label(self) -> &'static str {
         match self {
             Self::Goo => ".goo",
+            Self::Goo5 => ".goo v5.1",
             Self::Prz => ".prz",
             Self::Ctb4 => ".ctb v4",
             Self::Ctb5 => ".ctb v5",

@@ -6,7 +6,7 @@ use crate::fixtures::sample_job;
 fn header_of(job: &PrintJob) -> Vec<u8> {
     let mut buffer = Cursor::new(Vec::new());
     let mut fields = Fields::new(&mut buffer);
-    write(&mut fields, job).expect("in-memory write");
+    write(&mut fields, job, GooVersion::V3).expect("in-memory write");
     buffer.into_inner()
 }
 

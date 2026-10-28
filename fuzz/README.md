@@ -72,7 +72,8 @@ done
 `.cxdlp` needs a machine that writes one — `--printer creality-halot-lite-cl-89l`. Then move each
 into the matching `corpus/<target>/`, and give `sniff` one of every container. A `.goo` stays over
 two hundred kilobytes whatever the panel, because its header alone is 195 of them, so a run that is
-to reach its layer walk needs `-max_len` raised past that.
+to reach its layer walk needs `-max_len` raised past that. Revision 5.1 has no small machine: seed it with
+`crates/format-goo/tests/fixtures/jupiter-2-two-layers.goo`.
 
 ## When something crashes
 

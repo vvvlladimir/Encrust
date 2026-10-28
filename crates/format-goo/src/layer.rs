@@ -5,8 +5,13 @@ use crate::rle::EncodedLayer;
 use core_format::Fields;
 use core_format::PrintJob;
 
+use crate::version::GooVersion;
+
 /// Marks the start of a layer's run-length data; the checksum does not cover it.
-const LAYER_MAGIC: u8 = 0x55;
+pub(crate) const LAYER_MAGIC: u8 = 0x55;
+
+/// Bytes of a layer's definition with the delimiter that closes it.
+pub(crate) const DEFINITION_BYTES: u32 = 66;
 
 pub(crate) fn write(
     fields: &mut Fields<'_>,
@@ -14,8 +19,7 @@ pub(crate) fn write(
     index: u32,
     encoded: &EncodedLayer,
 ) -> io::Result<()> {
-    write_definition(fields, job, index)?;
-    fields.bytes(&DELIMITER)?;
+    write_definition(fields, job, index, GooVersion::V3)?;
 
     fields.u32_be(encoded.data_size())?;
     fields.u8(LAYER_MAGIC)?;
@@ -24,19 +28,25 @@ pub(crate) fn write(
     fields.bytes(&DELIMITER)
 }
 
-fn write_definition(fields: &mut Fields<'_>, job: &PrintJob, index: u32) -> io::Result<()> {
-    let material = &job.material;
+/// A layer's definition and the delimiter behind it, in `version`'s byte order.
+pub(crate) fn write_definition(
+    fields: &mut Fields<'_>,
+    job: &PrintJob,
+    index: u32,
+    version: GooVersion,
+) -> io::Result<()> {
+    let (order, material) = (version.order(), &job.material);
     let bottom = material.is_bottom_layer(index);
 
     // Pause position, then the layer position. A layer that pauses stops where it is, as a
     // vendor file carries it; the machine's Z travel here moves the plate off the print.
-    fields.u16_be(0)?;
-    fields.f32_be(job.layer_z_mm(index))?;
-    fields.f32_be(job.layer_z_mm(index))?;
-    fields.f32_be(job.exposure_of_layer_s(index))?;
-    fields.f32_be(material.light_off_of_layer_s(index))?;
+    order.put_u16(fields, 0)?;
+    order.put_f32(fields, job.layer_z_mm(index))?;
+    order.put_f32(fields, job.layer_z_mm(index))?;
+    order.put_f32(fields, job.exposure_of_layer_s(index))?;
+    order.put_f32(fields, material.light_off_of_layer_s(index))?;
     for rest_s in material.waits.rests_s() {
-        fields.f32_be(rest_s)?;
+        order.put_f32(fields, rest_s)?;
     }
 
     let peel = material.peel(bottom);
@@ -45,20 +55,22 @@ fn write_definition(fields: &mut Fields<'_>, job: &PrintJob, index: u32) -> io::
         peel.lift_speed_mm_min,
         peel.second_lift_mm,
         peel.second_lift_speed_mm_min,
-        peel.retract_mm,
+        version.retract_mm(peel.retract_mm, job.layer_height_mm(index)),
         peel.retract_speed_mm_min,
         peel.second_retract_mm,
         peel.second_retract_speed_mm_min,
     ];
     for value in motion {
-        fields.f32_be(value)?;
+        order.put_f32(fields, value)?;
     }
 
-    fields.u16_be(u16::from(if bottom {
+    let pwm = if bottom {
         material.bottom_light_pwm
     } else {
         material.light_pwm
-    }))
+    };
+    order.put_u16(fields, u16::from(pwm))?;
+    fields.bytes(&DELIMITER)
 }
 
 #[cfg(test)]
@@ -69,10 +81,6 @@ mod tests {
 
     use super::*;
     use crate::fixtures::sample_job;
-
-    /// Bytes before the data size field: the pause flag, fifteen floats, the light PWM
-    /// and the delimiter that closes the definition.
-    const DEFINITION_BYTES: usize = 2 + 15 * 4 + 2 + 2;
 
     fn layer_of(index: u32) -> Vec<u8> {
         let job = sample_job(10);
@@ -118,7 +126,7 @@ mod tests {
     #[test]
     fn the_data_block_is_wrapped_in_the_magic_byte_and_the_checksum() {
         let layer = layer_of(0);
-        let size_at = DEFINITION_BYTES;
+        let size_at = DEFINITION_BYTES as usize;
         let size = u32::from_be_bytes([
             layer[size_at],
             layer[size_at + 1],

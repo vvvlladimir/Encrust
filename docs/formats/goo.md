@@ -42,7 +42,7 @@ profile.
 
 | Offset | Field | What we write |
 |---|---|---|
-| 0 | version, 4 bytes | `V3.0`, the only version the firmware accepts |
+| 0 | version, 4 bytes | `V3.0`; `V5.1` for a machine whose profile names it, see *Revision 5.1* |
 | 4 | magic tag, 8 bytes | `07 00 00 00 44 4C 50 00` |
 | 12 | software info, 32 bytes | `Encrust` |
 | 44 | software version, 24 bytes | the crate version |
@@ -160,3 +160,51 @@ runs that short; a longer run of the same grey is cheaper as an `01` chunk.
 
 The first chunk of a layer is never a step chunk: the value it would step from is the
 value the previous layer left behind.
+
+## Revision 5.1
+
+What the vendor's slicer writes for the Elegoo Jupiter 2, and so what we write when a
+profile's `output` is `goo5` (ADR 0377). Read from its files and its writer.
+
+**Every multi-byte field is little-endian**, the previews included. The header up to the
+transition layers is the version 3.0 header at the same offsets, but for:
+
+- the version, `V5.1`;
+- the first-stage retract, header and layers alike: the resin's retract less the layer's
+  thickness, the travel down that leaves the plate a layer higher. A vendor file with a
+  2 mm lift at 0.05 mm states 1.95; its window has no retract distance of its own.
+
+Behind the header, at 195477, come fifteen bytes and three tables, every offset absolute:
+
+| Offset | Field |
+|---|---|
+| 195477 | `u8` 2 |
+| 195478 | `u32` each: where the definition, mask and block tables start |
+| 195490 | `u16` `0x0300` |
+| A1 | `0xA1`, then per layer `u32` offset and `u32` 66 of its definition |
+| A2 | `0xA2`, then per layer offset and size of its left mask, then of its right |
+| A3 | `0xA3`, `u32` 1, then offset and size, 142, of the name block |
+
+The definitions follow A3, 66 bytes each, laid out as in version 3.0 with their delimiter
+and nothing behind it. Then the masks, a layer's left half and then its right. Then the
+name block: `0x66`, the resin preset's name in 139 bytes, `0D 0A`. The file closes with the
+MD5 of every byte before it, 32 lower-case hex characters, in place of the ending string.
+
+### A layer's masks
+
+The panel is split down the middle and each half is its own mask, `width / 2` wide: the
+Jupiter 2's 15120 columns are two of 7560. A mask is `0x55`, the runs, the checksum of
+version 3.0 over the runs, `0D 0A`; its size counts all four.
+
+A pixel is stored as one of eight levels, its grey shifted right by five; a reader spreads
+the level back over the byte, `level * 255 / 7`. Runs cross row ends. Each starts with one byte:
+
+| Byte | Meaning |
+|---|---|
+| `00lllxxx` | `lll` pixels, 1 to 6, of the current level `xxx`; `111` means 7 or more |
+| `1sssssss` | the level changes by `sssssss - 0x20`, -7 to +7, and stays for 1 pixel or more |
+| `01bbcccc` | a length field, only ever behind one of the two above |
+
+A length field stores a number `m` in `cccc` and `bb` more bytes, least significant first:
+`m & 0xF`, then `m >> 4`, `m >> 12`, `m >> 20`. Behind `00111xxx` the run is `m + 8`
+pixels, behind a level change `m + 2`; without one, 7 and 1. The level starts at 0.

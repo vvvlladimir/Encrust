@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use core_format::{
     CHITU_ANTI_ALIAS_CAP, CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, ChituLayer, ChituTotals, Crc32,
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, check_layer_pushed,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, chitu_grey_flags, chitu_layer_motion, chitu_second_stage_words,
     validate, write_chitu_previews, write_chitu_resin,
 };
@@ -42,7 +42,7 @@ impl SlicedFileWriter for CtbEncryptedWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
         // Everything in front of the first layer is kept, to be patched and summed at the end.

@@ -1,8 +1,8 @@
 use std::io::Write;
 
 use core_format::{
-    FormatError, LayerSink, PrintJob, SlicedFileWriter, Thumbnail, WriteSeek, check_layer_pushed,
-    check_layers_finished, validate,
+    FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, Thumbnail,
+    check_layer_pushed, check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 use zip::ZipWriter;
@@ -37,7 +37,7 @@ impl SlicedFileWriter for GcodeZipWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -57,7 +57,7 @@ impl SlicedFileWriter for GcodeZipWriter {
 /// The archive with its previews in, its layers still to come and the program growing a
 /// block at a time beside them.
 pub struct GcodeZipSink<'w> {
-    zip: ZipWriter<&'w mut dyn WriteSeek>,
+    zip: ZipWriter<&'w mut dyn ReadWriteSeek>,
     job: PrintJob,
     /// One block per layer that has landed, in print order.
     blocks: String,
@@ -115,7 +115,7 @@ pub struct EncodedLayer {
 }
 
 fn write_thumbnails(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     thumbnail: Option<&Thumbnail>,
 ) -> Result<(), FormatError> {
     for (name, width, height) in THUMBNAILS {
@@ -126,7 +126,7 @@ fn write_thumbnails(
 }
 
 fn entry(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {

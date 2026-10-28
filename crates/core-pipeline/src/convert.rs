@@ -1,10 +1,7 @@
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 use core_format::{
-    ExposurePlan, ExposureRange, LayerSink, OpenFile, PrintJob, SlicedFile, WRITE_BUFFER_BYTES,
-    WriteSeek,
+    ExposurePlan, ExposureRange, LayerSink, OpenFile, PrintJob, ReadWriteSeek, SlicedFile,
 };
 use core_raster::{LayerRuns, Run, Shading};
 use core_slicer::LayerPlan;
@@ -14,6 +11,7 @@ use rayon::prelude::*;
 use crate::error::PipelineError;
 use crate::format::SlicedFormat;
 use crate::panel::{PanelOverrides, raster_settings, rows_from_far_edge};
+use crate::write::create_sink;
 use crate::write::{Destination, Feed, Observer};
 
 /// A sliced file read back and written again in another container (ADR 0180).
@@ -52,7 +50,7 @@ pub struct Converted {
 pub fn convert_to(
     source: &mut impl OpenFile,
     converting: &Converting<'_>,
-    sink: &mut dyn WriteSeek,
+    sink: &mut dyn ReadWriteSeek,
     observer: &mut dyn Observer,
 ) -> Result<Option<Converted>, PipelineError> {
     let job = job_of(source.facts(), converting)?;
@@ -85,11 +83,7 @@ pub fn convert(
     path: &Path,
     observer: &mut dyn Observer,
 ) -> Result<Option<Converted>, PipelineError> {
-    let file = File::create(path).map_err(|source| PipelineError::Create {
-        path: path.to_owned(),
-        source,
-    })?;
-    let mut buffered = BufWriter::with_capacity(WRITE_BUFFER_BYTES, file);
+    let mut buffered = create_sink(path)?;
     let converted = convert_to(source, converting, &mut buffered, observer);
     if !matches!(converted, Ok(Some(_))) {
         drop(buffered);

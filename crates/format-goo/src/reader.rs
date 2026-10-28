@@ -7,6 +7,10 @@ use core_raster::Run;
 
 use crate::header::HEADER_SIZE;
 use crate::rle;
+use crate::rle5::{decode_half, join_halves};
+use crate::version::{ByteOrder, GooVersion};
+
+mod v5;
 
 /// The tag behind the version string, which is what says this is a `.goo` at all.
 const MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
@@ -39,6 +43,12 @@ impl SlicedFileReader for GooReader {
         let mut reads = Reads::new(source);
 
         let version = reads.text(4)?;
+        let revision = if version == GooVersion::V5.tag() {
+            GooVersion::V5
+        } else {
+            GooVersion::V3
+        };
+        let order = revision.order();
         if reads.array::<8>()? != MAGIC_TAG {
             // The tag is eight bytes where every other container has a word, so the first
             // four of it are what a mismatch can report.
@@ -57,28 +67,36 @@ impl SlicedFileReader for GooReader {
         let resin = reads.text(32)?;
 
         reads.seek_to(GEOMETRY)?;
-        let layer_count = reads.u32_be()?;
-        let width_px = u32::from(reads.u16_be()?);
-        let height_px = u32::from(reads.u16_be()?);
+        let layer_count = order.u32(&mut reads)?;
+        let width_px = u32::from(order.u16(&mut reads)?);
+        let height_px = u32::from(order.u16(&mut reads)?);
         panel_in_range(width_px, height_px)?;
         reads.skip(2)?;
-        let display_mm = (reads.f32_be()?, reads.f32_be()?);
+        let display_mm = (order.f32(&mut reads)?, order.f32(&mut reads)?);
 
         reads.seek_to(LAYER_HEIGHT)?;
-        let exposure = read_exposure(&mut reads)?;
-        let mut stated = read_motion(&mut reads)?;
+        let exposure = read_exposure(&mut reads, order)?;
+        let mut stated = read_motion(&mut reads, order)?;
+        stated.retract_distance_mm = stated
+            .retract_distance_mm
+            .map(|mm| revision.resin_retract_mm(mm, exposure.layer_height_mm));
         stated.waits = exposure.waits;
         stated.light_off_delay_s = exposure.light_off_delay_s;
 
         reads.seek_to(TOTALS)?;
-        let print_time_s = reads.u32_be()?;
-        let volume_mm3 = reads.f32_be()?;
+        let print_time_s = order.u32(&mut reads)?;
+        let volume_mm3 = order.f32(&mut reads)?;
         reads.seek_to(TRANSITION)?;
-        stated.transition_layers = Some(reads.u16_be()?);
+        stated.transition_layers = Some(order.u16(&mut reads)?);
 
-        let layers = walk_layers(&mut reads, layer_count)?;
+        let (layers, right_halves) = match revision {
+            GooVersion::V3 => (walk_layers(&mut reads, layer_count)?, Vec::new()),
+            GooVersion::V5 => v5::walk_tables(&mut reads, layer_count)?,
+        };
         Ok(OpenGoo {
             reads,
+            right_halves,
+            half_px: width_px / 2,
             facts: SlicedFile {
                 format: "goo",
                 version: version.strip_prefix('V').and_then(parse_version),
@@ -94,7 +112,10 @@ impl SlicedFileReader for GooReader {
                 bottom_layers: exposure.bottom_layers,
                 print_time_s: Some(print_time_s),
                 volume_mm3: Some(volume_mm3),
-                grey_steps: 256,
+                grey_steps: match revision {
+                    GooVersion::V3 => 256,
+                    GooVersion::V5 => 8,
+                },
                 stated,
                 layers,
             },
@@ -112,15 +133,18 @@ struct ExposureBlock {
     light_off_delay_s: Option<f32>,
 }
 
-fn read_exposure<S: ReadSeek>(reads: &mut Reads<S>) -> Result<ExposureBlock, FormatError> {
-    let layer_height_mm = reads.f32_be()?;
-    let exposure_s = reads.f32_be()?;
+fn read_exposure<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    order: ByteOrder,
+) -> Result<ExposureBlock, FormatError> {
+    let layer_height_mm = order.f32(reads)?;
+    let exposure_s = order.f32(reads)?;
     // The delay mode byte is 1 in every vendor file; which wait is unused is told by its zeros.
     reads.skip(1)?;
-    let light_off_delay_s = stated_wait_s(reads.f32_be()?);
+    let light_off_delay_s = stated_wait_s(order.f32(reads)?);
     // Six rests, the bottom layers' three first; a resin holds one set, the common one.
     reads.skip(12)?;
-    let rests = [reads.f32_be()?, reads.f32_be()?, reads.f32_be()?].map(stated_wait_s);
+    let rests = [order.f32(reads)?, order.f32(reads)?, order.f32(reads)?].map(stated_wait_s);
     let waits = match rests {
         [
             Some(before_lift_s),
@@ -141,18 +165,21 @@ fn read_exposure<S: ReadSeek>(reads: &mut Reads<S>) -> Result<ExposureBlock, For
     Ok(ExposureBlock {
         layer_height_mm,
         exposure_s,
-        bottom_exposure_s: reads.f32_be()?,
-        bottom_layers: reads.u32_be()?,
+        bottom_exposure_s: order.f32(reads)?,
+        bottom_layers: order.u32(reads)?,
         waits,
         light_off_delay_s,
     })
 }
 
 /// The header's motion block, which follows the exposure: each peel, then the light.
-fn read_motion<S: ReadSeek>(reads: &mut Reads<S>) -> Result<PrinterTuning, FormatError> {
+fn read_motion<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    order: ByteOrder,
+) -> Result<PrinterTuning, FormatError> {
     let mut peel = [0.0; 8];
     for value in &mut peel {
-        *value = reads.f32_be()?;
+        *value = order.f32(reads)?;
     }
     let [
         bottom_lift,
@@ -166,7 +193,7 @@ fn read_motion<S: ReadSeek>(reads: &mut Reads<S>) -> Result<PrinterTuning, Forma
     ] = peel;
     let mut second = [0.0; 8];
     for value in &mut second {
-        *value = reads.f32_be()?;
+        *value = order.f32(reads)?;
     }
     let [
         bottom_lift_distance_mm,
@@ -197,8 +224,8 @@ fn read_motion<S: ReadSeek>(reads: &mut Reads<S>) -> Result<PrinterTuning, Forma
         bottom_retract_speed_mm_min: stated_speed_mm_min(bottom_retract_speed),
         retract_distance_mm: stated_distance_mm(retract),
         retract_speed_mm_min: stated_speed_mm_min(retract_speed),
-        bottom_light_pwm: stated_pwm(reads.u16_be()?),
-        light_pwm: stated_pwm(reads.u16_be()?),
+        bottom_light_pwm: stated_pwm(order.u16(reads)?),
+        light_pwm: stated_pwm(order.u16(reads)?),
         ..PrinterTuning::default()
     })
 }
@@ -249,6 +276,9 @@ fn walk_layers<S: ReadSeek>(
 pub struct OpenGoo<S> {
     reads: Reads<S>,
     facts: SlicedFile,
+    /// Version 5.1 only: where each layer's right half lies, the left being in `facts`.
+    right_halves: Vec<LayerEntry>,
+    half_px: u32,
 }
 
 impl<S: ReadSeek> OpenFile for OpenGoo<S> {
@@ -261,7 +291,17 @@ impl<S: ReadSeek> OpenFile for OpenGoo<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let data = self.reads.bytes(entry.size as usize)?;
-        rle::decode(&data)
+        let Some(right) = self.right_halves.get(index as usize).copied() else {
+            return rle::decode(&data);
+        };
+        self.reads.seek_to(right.offset)?;
+        let right = decode_half(&self.reads.bytes(right.size as usize)?)?;
+        join_halves(
+            &decode_half(&data)?,
+            &right,
+            self.half_px,
+            self.facts.height_px,
+        )
     }
 }
 
@@ -301,8 +341,11 @@ mod tests {
 
     #[test]
     fn a_vendor_file_holding_the_light_off_reads_as_light_off() {
-        let block =
-            read_exposure(&mut Reads::new(exposure_block(0.5, [0.0; 3]))).expect("a whole block");
+        let block = read_exposure(
+            &mut Reads::new(exposure_block(0.5, [0.0; 3])),
+            ByteOrder::Big,
+        )
+        .expect("a whole block");
         let waits = block.waits.expect("three rests stated");
         assert_eq!(waits.mode, WaitMode::LightOff, "no rest is stated");
         assert_eq!(block.light_off_delay_s, Some(0.5));
@@ -310,8 +353,11 @@ mod tests {
 
     #[test]
     fn a_vendor_file_resting_reads_as_resting() {
-        let block = read_exposure(&mut Reads::new(exposure_block(0.0, [2.0, 3.0, 4.0])))
-            .expect("a whole block");
+        let block = read_exposure(
+            &mut Reads::new(exposure_block(0.0, [2.0, 3.0, 4.0])),
+            ByteOrder::Big,
+        )
+        .expect("a whole block");
         let waits = block.waits.expect("three rests stated");
         assert_eq!(waits.mode, WaitMode::Rest);
         assert_eq!(

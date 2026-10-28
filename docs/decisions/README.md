@@ -103,6 +103,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0367](0367-read-the-pwsz-and-write-it-as-the-vendor-does.md) | Read the PWSZ archive, and write it as the vendor slicer does | Accepted |
 | [0362](0362-write-cxline-phz-and-photons-in-the-family-crates.md) | Write `.cxline`, `.phz` and `.photons` in the crates of their families, and trace masks in `core-raster` | Accepted |
 | [0375](0375-write-prz-as-goo-and-crmaslice-as-zip.md) | Write `.prz` as `.goo` and `.crmaslice` as the gcode archive | Accepted |
+| [0377](0377-write-goo-revision-5-1-for-the-machines-that-read-it.md) | Write `.goo` revision 5.1 for the machines that read it | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
@@ -166,6 +167,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0013](0013-exposure-settings-in-the-material-profile.md) | Exposure and motion settings live in MaterialProfile | Accepted |
 | [0045](0045-sliced-files-are-written-to-a-seekable-sink.md) | Every sliced file is written to a seekable sink | Accepted |
 | [0175](0175-a-sliced-file-leaves-through-a-sink.md) | A sliced file leaves through a sink, not a path | Accepted |
+| [0376](0376-a-sliced-file-sink-reads-back.md) | A sliced-file sink can be read back | Accepted |
 | [0067](0067-the-resin-volume-is-patched-in-at-finish.md) | The resin volume is patched into the header at `finish` | Accepted |
 | [0090](0090-exposure-is-banded-by-height.md) | Exposure varies by bands of height, and the bottom block is out of reach | Accepted |
 | [0128](0128-the-exposure-follows-the-layer-in-sight.md) | The exposure follows the layer in sight | Accepted |

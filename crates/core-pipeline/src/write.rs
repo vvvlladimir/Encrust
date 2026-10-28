@@ -1,9 +1,10 @@
-use std::fs::File;
-use std::io::BufWriter;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
 
 use core_analysis::Measured;
-use core_format::{LayerSink, PrintJob, SlicedFileWriter, WRITE_BUFFER_BYTES, WriteSeek};
+use core_format::{
+    BufferedSink, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, WRITE_BUFFER_BYTES,
+};
 use core_raster::RasterSettings;
 use core_slicer::{Sliced, Source, Windows};
 use format_anycubic::{AnycubicWriter, PhotonsWriter, PwszWriter};
@@ -12,7 +13,7 @@ use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter, CxlineWriter};
 use format_ctb_encrypted::CtbEncryptedWriter;
 use format_cws::CwsWriter;
 use format_gcode_zip::GcodeZipWriter;
-use format_goo::GooWriter;
+use format_goo::{Goo5Writer, GooWriter};
 use format_sl1::Sl1Writer;
 use format_svgx::SvgxWriter;
 use rayon::prelude::*;
@@ -74,7 +75,7 @@ pub struct Written {
 /// observer cancelled and `sink` holds a half file; [`write()`] discards it on disk.
 pub fn write_to(
     request: &Writing<'_>,
-    sink: &mut dyn WriteSeek,
+    sink: &mut dyn ReadWriteSeek,
     observer: &mut dyn Observer,
 ) -> Result<Option<Written>, PipelineError> {
     let destination = Destination {
@@ -111,12 +112,13 @@ impl Destination<'_> {
     /// Writes the container `format` names, fed by `feed`.
     pub(crate) fn write<F: Feed>(
         &self,
-        sink: &mut dyn WriteSeek,
+        sink: &mut dyn ReadWriteSeek,
         feed: &mut F,
         observer: &mut dyn Observer,
     ) -> Result<Option<F::Done>, PipelineError> {
         match self.format {
             SlicedFormat::Goo | SlicedFormat::Prz => self.with(&GooWriter, sink, feed, observer),
+            SlicedFormat::Goo5 => self.with(&Goo5Writer, sink, feed, observer),
             SlicedFormat::Ctb(version) => self.with(&CtbWriter::new(version), sink, feed, observer),
             SlicedFormat::CtbEncrypted => self.with(&CtbEncryptedWriter, sink, feed, observer),
             SlicedFormat::Cbddlp(flavour) => {
@@ -157,7 +159,7 @@ impl Destination<'_> {
     fn with<'w, W, F>(
         &self,
         writer: &W,
-        file: &'w mut dyn WriteSeek,
+        file: &'w mut dyn ReadWriteSeek,
         feed: &mut F,
         observer: &mut dyn Observer,
     ) -> Result<Option<F::Done>, PipelineError>
@@ -200,11 +202,7 @@ pub fn write(
     path: &Path,
     observer: &mut dyn Observer,
 ) -> Result<Option<Written>, PipelineError> {
-    let file = File::create(path).map_err(|source| PipelineError::Create {
-        path: path.to_owned(),
-        source,
-    })?;
-    let mut buffered = BufWriter::with_capacity(WRITE_BUFFER_BYTES, file);
+    let mut buffered = create_sink(path)?;
 
     let written = write_to(request, &mut buffered, observer);
     if !matches!(written, Ok(Some(_))) {
@@ -212,6 +210,22 @@ pub fn write(
         let _ = std::fs::remove_file(path);
     }
     written
+}
+
+/// A new, empty file at `path` to write a sliced file into, readable too: a format may hash
+/// what it wrote (ADR 0376).
+pub(crate) fn create_sink(path: &Path) -> Result<BufferedSink<File>, PipelineError> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|source| PipelineError::Create {
+            path: path.to_owned(),
+            source,
+        })?;
+    Ok(BufferedSink::with_capacity(WRITE_BUFFER_BYTES, file))
 }
 
 /// Measures what the stack cures without writing it anywhere, so a preview can say what

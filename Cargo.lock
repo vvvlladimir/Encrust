@@ -2212,6 +2212,7 @@ dependencies = [
  "core-format",
  "core-raster",
  "criterion",
+ "md-5",
  "printer-profiles",
  "proptest",
  "thiserror 2.0.21",
