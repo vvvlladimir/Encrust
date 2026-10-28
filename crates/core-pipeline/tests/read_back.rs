@@ -251,7 +251,13 @@ fn stated_by(extension: &str) -> PrinterTuning {
     };
     match extension {
         "goo" | "ctb" => rests,
-        "cbddlp" | "zip" => bottom,
+        "cbddlp" => bottom,
+        "zip" => PrinterTuning {
+            transition_layers: Some(2),
+            bottom_retract_speed_mm_min: Some(150.0),
+            bottom_light_off_delay_s: Some(0.0),
+            ..bottom
+        },
         "pwmx" => PrinterTuning {
             transition_layers: Some(2),
             ..peel

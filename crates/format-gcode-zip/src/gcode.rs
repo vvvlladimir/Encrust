@@ -22,7 +22,7 @@ pub(crate) fn preamble(job: &PrintJob) -> String {
          M106 S0;Turn LED OFF\n\
          ;<Slice> Blank\n\
          G28 Z0;Home Z\n\
-         ;END_GCODE_BEGIN\n",
+         ;START_GCODE_END\n",
     );
     text
 }
@@ -52,6 +52,10 @@ fn header(job: &PrintJob) -> String {
         "projectType",
         if mirrored { "LCD_mirror" } else { "Normal" },
     );
+    head.int(
+        "transitionLayerCount",
+        u32::from(material.transition_layers),
+    );
     head.number("normalExposureTime", job.header_exposure_s());
 
     // Two keys for the bottom exposure and two for the bottom count: a reader takes
@@ -65,6 +69,11 @@ fn header(job: &PrintJob) -> String {
     head.number("zSlowUpDistance", 0.0);
     head.int("bottomLayCount", material.bottom_layers);
     head.int("bottomLayerCount", material.bottom_layers);
+    // The shrinkage already scaled into the masks, which the board does not apply again.
+    let [shrink_x, shrink_y, shrink_z] = material.compensation.scale();
+    head.number("shrinkageX", shrink_x * 100.0);
+    head.number("shrinkageY", shrink_y * 100.0);
+    head.number("shrinkageZ", shrink_z * 100.0);
 
     // How the panel is mounted, not what the masks were drawn as, as in every other
     // container we write (ADR 0134).
@@ -73,8 +82,9 @@ fn header(job: &PrintJob) -> String {
     head.int("totalLayer", job.layer_count());
     head.number("bottomLayerLiftHeight", material.bottom_lift_distance_mm);
     head.number("bottomLayerLiftSpeed", material.bottom_lift_speed_mm_min);
-    head.number("bottomLightOffTime", material.light_off_s());
+    head.number("bottomLightOffTime", material.bottom_light_off_s());
     head.number("lightOffTime", material.light_off_s());
+    head.number("bottomLayerDropSpeed", material.bottom_retract_speed_mm_min);
     head.int("bottomPWMLight", u32::from(material.bottom_light_pwm));
     head.int("PWMLight", u32::from(material.light_pwm));
     head.int(
@@ -150,7 +160,11 @@ pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
         line(move_to(z_mm, lift_speed, "Move Z"));
     }
 
-    wait(&mut line, material.light_off_s(), "Wait before cure");
+    wait(
+        &mut line,
+        material.light_off_of_layer_s(index),
+        "Wait before cure",
+    );
     line(format!("M106 S{pwm};Turn LED ON\n"));
     line(format!(
         "G4 P{};Cure time/delay\n",
@@ -160,22 +174,20 @@ pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
     block
 }
 
-/// The closing moves: the last layer peeled off the film, then the plate out of the vat.
+/// The closing moves: the light out, then the plate slowly up to the top of its travel.
 pub(crate) fn epilogue(job: &PrintJob) -> String {
-    let material = &job.material;
-    let top_mm = job.height_mm();
-    let machine_z = job.printer.build_volume.z;
-    let lifted = (top_mm + material.lift_distance_mm).min(machine_z.max(top_mm));
-
-    let mut text = ";START_GCODE_END\nM106 S0;Turn LED OFF\n".to_owned();
-    if lifted > top_mm {
-        text.push_str(&move_to(lifted, material.lift_speed_mm_min, "Z Lift (1)"));
-    }
-    if machine_z > lifted {
-        text.push_str(&move_to(machine_z, material.lift_speed_mm_min, "Move Z"));
-    }
-    text.push_str("M18;Disable motors\n;END_GCODE_END\n;<Completed>\n");
-    text
+    let top_mm = job.printer.build_volume.z.max(job.height_mm());
+    // One slow climb at 25 mm/min, read off the vendor's own slicer profile for every
+    // machine of this container.
+    format!(
+        ";END_GCODE_BEGIN\n\
+         M106 S0;Turn LED OFF\n\
+         G1 Z{} F25;Move Z\n\
+         M18;Disable motors\n\
+         ;END_GCODE_END\n\
+         ;<Completed>\n",
+        mm(top_mm)
+    )
 }
 
 /// What the layer at `index` is called inside the archive. The numbering starts at one.

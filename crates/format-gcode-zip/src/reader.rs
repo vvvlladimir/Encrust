@@ -107,7 +107,10 @@ fn stated(number: impl Fn(&str) -> Option<f32>) -> PrinterTuning {
         retract_speed_mm_min: number("normalDropSpeed").and_then(stated_speed_mm_min),
         bottom_lift_distance_mm: number("bottomLayerLiftHeight").and_then(stated_distance_mm),
         bottom_lift_speed_mm_min: number("bottomLayerLiftSpeed").and_then(stated_speed_mm_min),
+        bottom_retract_speed_mm_min: number("bottomLayerDropSpeed").and_then(stated_speed_mm_min),
         light_off_delay_s: number("lightOffTime").and_then(stated_wait_s),
+        bottom_light_off_delay_s: number("bottomLightOffTime").and_then(stated_wait_s),
+        transition_layers: number("transitionLayerCount").map(|count| count as u16),
         light_pwm: pwm("PWMLight"),
         bottom_light_pwm: pwm("bottomPWMLight"),
         ..PrinterTuning::default()
@@ -144,7 +147,11 @@ fn parse(program: &str) -> (BTreeMap<String, String>, Option<String>, Vec<Block>
                 z_mm: 0.0,
                 exposure_s: 0.0,
             });
-        } else if let Some(z) = line.strip_prefix(";PositionZ:") {
+        } else if let Some(z) = line
+            .strip_prefix(";PositionZ:")
+            .or_else(|| line.strip_prefix(";currPos:"))
+        {
+            // Two spellings of the layer's Z: ours with its unit, the vendor's bare.
             if let (Some(block), Ok(z_mm)) = (
                 blocks.last_mut(),
                 z.trim_end_matches("mm").trim().parse::<f32>(),
@@ -156,7 +163,8 @@ fn parse(program: &str) -> (BTreeMap<String, String>, Option<String>, Vec<Block>
         } else if let Some(pwm) = command(line, "M106 S") {
             // The light is lit by one `M106` and put out by the next; the dwell between
             // the two is the exposure, wherever in the block it sits.
-            lit = pwm.parse::<u16>().is_ok_and(|pwm| pwm > 0);
+            // A vendor program states the power as a decimal, `S255.000000`.
+            lit = pwm.parse::<f32>().is_ok_and(|pwm| pwm > 0.0);
         } else if let Some(ms) = lit
             .then(|| command(line, "G4 P").and_then(|ms| ms.parse::<f32>().ok()))
             .flatten()
@@ -311,6 +319,21 @@ mod tests {
         assert!((blocks[0].z_mm - 0.05).abs() < 1e-6);
         assert!((blocks[0].exposure_s - 30.0).abs() < 1e-6);
         assert!((blocks[1].exposure_s - 2.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_vendor_block_states_its_z_bare_and_its_power_as_a_decimal() {
+        let program = ";LAYER_START:0\n;currPos:0.05\nM6054 \"1.png\";show Image\n\
+             G0 Z5.050000 F120.000000;\nG0 Z0.050000 F240.000000;\nG4 P5000;\n\
+             M106 S255.000000;light on\nG4 P30000;\nM106 S0; light off\n";
+        let (settings, _, blocks) = parse(program);
+
+        assert!((blocks[0].z_mm - 0.05).abs() < 1e-6, "z 0.05 mm");
+        assert!((blocks[0].exposure_s - 30.0).abs() < 1e-6, "exposure 30 s");
+        assert!(
+            !settings.contains_key("currPos"),
+            "a layer's Z is not a setting"
+        );
     }
 
     #[test]

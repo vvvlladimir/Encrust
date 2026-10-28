@@ -588,7 +588,7 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. The `.pm5s`, `.m5sp` and `.pm4n` of the Photon Mono M5s, M5s Pro and Mono 4 have not yet been printed from. |
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
-| `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Carima | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
+| `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
 | `.cxdlp`, `.cxdlpv4` | Creality | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the vendor slicer writes it for the HALOT X1 Max. |
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
