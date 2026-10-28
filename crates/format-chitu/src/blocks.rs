@@ -1,8 +1,8 @@
 use std::io;
 
 use core_format::{
-    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, Fields, PREVIEW_SIZES_PX, PrintJob, Rgb,
-    write_preview,
+    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_RESIN_TYPE, Fields, PREVIEW_SIZES_PX, PrintJob,
+    Rgb, write_preview,
 };
 
 use crate::writer::CtbVersion;
@@ -12,9 +12,6 @@ const PRINT_PARAMETERS_BYTES: u32 = 60;
 pub(crate) const SLICER_INFO_BYTES: u32 = 76;
 const PRINT_PARAMETERS_V4_BYTES: u32 = 464;
 const RESIN_PARAMETERS_BYTES: u32 = 40;
-
-/// The resin type a resin with none is stated as, the vendor's default.
-const DEFAULT_RESIN_TYPE: &str = "normal";
 
 /// Colour a preview record is padded with where the square thumbnail does not reach.
 const PREVIEW_BACKGROUND: Rgb = [0, 0, 0];
@@ -300,7 +297,7 @@ pub(crate) fn write_v4_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Re
 fn write_resin_parameters(fields: &mut Fields<'_>, job: &PrintJob, at: u32) -> io::Result<()> {
     let material = &job.material;
     let kind = if material.details.kind.is_empty() {
-        DEFAULT_RESIN_TYPE
+        CHITU_RESIN_TYPE
     } else {
         material.details.kind.as_str()
     };

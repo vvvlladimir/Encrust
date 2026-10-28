@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use core_format::{
     Crc32, Fields, FormatError, LayerSink, PrintJob, Rle7Layer, SlicedFileWriter, WriteSeek,
-    chitu_layer_crypt, validate,
+    chitu_layer_crypt, chitu_lit_px, validate, write_chitu_layer_tail,
 };
 use core_raster::LayerRuns;
 
@@ -154,15 +154,9 @@ impl LayerSink for CtbSink<'_> {
     type Encoded = CtbLayer;
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        let lit_px = layer
-            .runs()
-            .iter()
-            .filter(|run| run.value > 0)
-            .map(|run| u64::from(run.length))
-            .sum();
         CtbLayer {
             runs: Rle7Layer::encode(layer),
-            lit_px,
+            lit_px: chitu_lit_px(layer),
         }
     }
 
@@ -201,7 +195,7 @@ impl LayerSink for CtbSink<'_> {
             let mut layer_fields = Fields::new(&mut bytes);
             layer::write_extended(&mut layer_fields, &self.job, index, &def)?;
             layer_fields.bytes(&data)?;
-            layer::write_tail(&mut layer_fields, &self.job, encoded.lit_px)?;
+            write_chitu_layer_tail(&mut layer_fields, &self.job, encoded.lit_px)?;
         }
         let bytes = bytes.into_inner();
         self.layers_crc.update(&bytes);

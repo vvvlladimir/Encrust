@@ -13,6 +13,12 @@ with a side past 4095 pixels gets the encrypted container (`0x12FD0107`), every 
 version 5. It never writes version 4. ADR 0046 kept the layer key zero and ADR 0165 sent every
 `.ctb` machine to version 4; both rest on the claim that firmware does not care.
 
+The encrypted writer had copied its unknown words from one file of another slicer. Against
+files the vendor slicer cut for the GK3 Ultra, Sonic Mega 8K S, Whale3 Super 14K and Mars 4
+Ultra it wrote one peel stage where the vendor writes two, the normal light-off delay for the
+bottom layers, the per-layer flag on every file, and constants where the vendor writes the
+stack's totals, each layer's area and a CRC.
+
 ## Decision
 
 `format-chitu` writes the `.ctb` as the vendor's slicer lays it down
@@ -22,17 +28,27 @@ total height of zero; the summed layer time, largest layer and layer count in th
 block; a layer key that is never zero; each layer's lit area behind its data; a CRC32 of
 everything as the last four bytes.
 
+`format-ctb-encrypted` writes the same numbers into its settings block and definitions
+(`docs/formats/ctb-encrypted.md`): both stages and their whole climb, the bottom light-off,
+the slicer flags, anti-alias level, cost and version 4 totals, a lit-area tail behind every
+layer and a CRC32 after the signature. The per-layer flag stays clear for a transition ramp,
+as in the vendor's file with one. What both containers compute alike — a layer's peel, its
+area, the default resin type — lives once in `core-format`.
+
 A profile's `output` is `ctb5`, or `ctb-encrypted` when a side of its panel is past 4095
 pixels. Version 4 stays writable for a machine that asks for it on the command line, where
 `--ctb-version` now defaults to the profile's revision.
 
 ## Consequences
 
-Our file and the vendor's for LD-002H agree in every field but the previews, the time
-estimate and the edge rule of a pixel. A layer costs one more pass over its bytes for the key.
+Our file and the vendor's for LD-002H, and the encrypted ones for the four machines above,
+agree in every field but the addresses, previews, layer key, time estimate and the edge rule
+of a pixel. A layer costs one more pass over its bytes for the key.
 The tests decode through the key, as the reader already did for vendor files.
 
-Reopen if a machine is found that prints version 4 and refuses version 5.
+Reopen if a machine is found that prints version 4 and refuses version 5. The plain `.ctb`
+still sets its per-layer flag for a transition ramp; no vendor file of that container with
+one has been seen.
 
 ## Alternatives considered
 

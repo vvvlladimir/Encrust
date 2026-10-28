@@ -1,6 +1,6 @@
 use std::io;
 
-use core_format::{Fields, PrintJob};
+use core_format::{Fields, PrintJob, chitu_layer_motion};
 
 /// Bytes of one record in the layer table.
 pub(crate) const LAYER_DEF_BYTES: u64 = 36;
@@ -52,37 +52,7 @@ pub(crate) fn write_extended(
     def: &LayerDef,
 ) -> io::Result<()> {
     let material = &job.material;
-    let stage = &material.second_stage;
     let bottom = material.is_bottom_layer(index);
-    // The first lift field is both stages' whole climb, as the vendor's slicer states it.
-    let (lift, lift_speed, lift_2, lift_speed_2) = if bottom {
-        (
-            material.bottom_lift_total_mm(),
-            material.bottom_lift_speed_mm_min,
-            stage.bottom_lift_distance_mm,
-            stage.bottom_lift_speed_mm_min,
-        )
-    } else {
-        (
-            material.lift_total_mm(),
-            material.lift_speed_mm_min,
-            stage.lift_distance_mm,
-            stage.lift_speed_mm_min,
-        )
-    };
-    let (retract_speed, retract_2, retract_speed_2) = if bottom {
-        (
-            material.bottom_retract_speed_mm_min,
-            stage.bottom_retract_distance_mm,
-            stage.bottom_retract_speed_mm_min,
-        )
-    } else {
-        (
-            material.retract_speed_mm_min,
-            stage.retract_distance_mm,
-            stage.retract_speed_mm_min,
-        )
-    };
     let light_pwm = if bottom {
         material.bottom_light_pwm
     } else {
@@ -91,28 +61,13 @@ pub(crate) fn write_extended(
 
     def.write(fields, LAYER_DEF_EX_BYTES)?;
     fields.u32_le(LAYER_DEF_EX_BYTES + def.data_size + LAYER_TAIL_BYTES)?;
-    for value in [
-        lift,
-        lift_speed,
-        lift_2,
-        lift_speed_2,
-        retract_speed,
-        retract_2,
-        retract_speed_2,
-    ] {
+    for value in chitu_layer_motion(job, index) {
         fields.f32_le(value)?;
     }
     for rest_s in material.waits.rests_s() {
         fields.f32_le(rest_s)?;
     }
     fields.f32_le(f32::from(light_pwm))
-}
-
-/// What follows a layer's data: the area it lights, mm², and a word of zeros.
-pub(crate) fn write_tail(fields: &mut Fields<'_>, job: &PrintJob, lit_px: u64) -> io::Result<()> {
-    let (pitch_x_mm, pitch_y_mm) = job.printer.display.pixel_pitch_mm();
-    fields.f32_le((lit_px as f64 * f64::from(pitch_x_mm) * f64::from(pitch_y_mm)) as f32)?;
-    fields.u32_le(0)
 }
 
 #[cfg(test)]

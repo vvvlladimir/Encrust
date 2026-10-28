@@ -1,9 +1,12 @@
+use std::io::Cursor;
+
 use core_format::{
-    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, Fields, FormatError, LayerSink, PREVIEW_SIZES_PX,
-    PrintJob, Rgb, Rle7Layer, SlicedFileWriter, WriteSeek, chitu_layer_crypt, validate,
+    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_RESIN_TYPE, Crc32, Fields, FormatError,
+    LayerSink, PREVIEW_SIZES_PX, PrintJob, Rgb, Rle7Layer, SlicedFileWriter, WriteSeek,
+    chitu_layer_crypt, chitu_layer_motion, chitu_lit_px, validate, write_chitu_layer_tail,
     write_preview,
 };
-use core_raster::LayerRuns;
+use core_raster::{LayerRuns, Shading};
 
 use crate::cipher;
 use crate::layout::{HEADER_BYTES, LAYER_DEF_BYTES, MAGIC, POINTER_BYTES, RESIN_BYTES, paged};
@@ -18,13 +21,12 @@ const LAYER_KEY: u32 = 0xEFBE_ADDE;
 /// What the settings' checksum states, which the signature is derived from.
 const CHECKSUM: u64 = 0;
 
-/// Words of unknown meaning in front of and behind the signature, as files machines take
-/// carry them; see `docs/formats/ctb-encrypted.md`.
-const BEFORE_SIGNATURE: [u32; 2] = [0x4220_C0FA, 0];
-const AFTER_SIGNATURE: u32 = 0x6D42_A8B3;
+/// Bytes of the signature, two cipher blocks.
+const SIGNATURE_BYTES: u32 = 32;
 
-/// The per-layer settings byte that lets the machine obey each layer's definition.
-const PER_LAYER_SETTINGS: u8 = 0x40;
+/// The per-layer settings byte of a version 5 `.ctb`, set only where a layer differs from
+/// what the settings state.
+const PER_LAYER_SETTINGS: u8 = 0x50;
 
 /// Colour a preview record is padded with where the square thumbnail does not reach.
 const PREVIEW_BACKGROUND: Rgb = [0, 0, 0];
@@ -46,18 +48,28 @@ impl SlicedFileWriter for CtbEncryptedWriter {
         sink: &'w mut dyn WriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
+        // Everything in front of the first layer is kept, to be patched and summed at the end.
+        let mut front = Cursor::new(Vec::new());
+        let (blocks, pointers) = {
+            let mut fields = Fields::new(&mut front);
+            fields.zeros(HEADER_BYTES as usize + SETTINGS_BYTES)?;
+            let blocks = write_blocks(&mut fields, job)?;
+            let pointers = fields.position()?;
+            fields.zeros((POINTER_BYTES * u64::from(job.layer_count())) as usize)?;
+            (blocks, pointers)
+        };
+        let front = front.into_inner();
         let mut fields = Fields::new(sink);
-        // The header and the settings are written last, over this space.
-        fields.zeros(HEADER_BYTES as usize + SETTINGS_BYTES)?;
-        let blocks = write_blocks(&mut fields, job)?;
-        let pointers = fields.position()?;
-        fields.zeros((POINTER_BYTES * u64::from(job.layer_count())) as usize)?;
+        fields.bytes(&front)?;
         Ok(CtbEncryptedSink {
             fields,
             job: job.clone(),
             blocks,
             pointers,
+            front,
             definitions: Vec::with_capacity(job.layer_count() as usize),
+            totals: Totals::default(),
+            layers_crc: Crc32::default(),
         })
     }
 }
@@ -70,6 +82,14 @@ struct Blocks {
     machine_name: (u32, u32),
     disclaimer: u32,
     resin: u32,
+}
+
+/// What the stack adds up to, which the settings state once the last layer is in.
+#[derive(Debug, Clone, Copy, Default)]
+struct Totals {
+    /// Seconds every layer spends lit, dark and resting, added up.
+    layer_time_s: f32,
+    largest_layer_bytes: u32,
 }
 
 fn write_blocks(fields: &mut Fields<'_>, job: &PrintJob) -> Result<Blocks, FormatError> {
@@ -104,30 +124,40 @@ fn preview(job: &PrintJob, (width, height): (u32, u32)) -> Vec<Rgb> {
     }
 }
 
-/// The resin block: its colour, then the address and length of its type, its name and the
-/// machine's, then its density, with the three strings behind it.
+/// The resin block as the plain `.ctb` lays it: a zero colour, then the address and length
+/// of the resin's type, its name and the preset's name, then its density, the strings behind.
 fn write_resin(fields: &mut Fields<'_>, job: &PrintJob, at: u32) -> Result<(), FormatError> {
     let resin = &job.material;
-    let kind = resin.details.kind.as_bytes();
-    let name = resin.name.as_bytes();
-    let machine = job.printer.machine_name().as_bytes();
-    let kind_at = at + RESIN_BYTES as u32;
-    let name_at = kind_at + kind.len() as u32;
-    let machine_at = name_at + name.len() as u32;
+    let kind = if resin.details.kind.is_empty() {
+        CHITU_RESIN_TYPE
+    } else {
+        resin.details.kind.as_str()
+    };
+    let strings = [
+        kind.as_bytes(),
+        resin.name.as_bytes(),
+        resin.name.as_bytes(),
+    ];
 
-    let [red, green, blue] = resin.details.color;
-    fields.u32_le(0)?;
-    fields.bytes(&[blue, green, red, 0])?;
-    for (address, text) in [(kind_at, kind), (name_at, name), (machine_at, machine)] {
+    fields.zeros(8)?;
+    let mut address = at + RESIN_BYTES as u32;
+    for text in strings {
         fields.u32_le(address)?;
         fields.u32_le(text.len() as u32)?;
+        address += text.len() as u32;
     }
     fields.f32_le(resin.density_g_cm3)?;
     fields.u32_le(0)?;
-    fields.bytes(kind)?;
-    fields.bytes(name)?;
-    fields.bytes(machine)?;
+    for text in strings {
+        fields.bytes(text)?;
+    }
     Ok(())
+}
+
+/// One layer's runs, and how many pixels they light.
+pub struct EncryptedLayer {
+    runs: Rle7Layer,
+    lit_px: u64,
 }
 
 /// An encrypted `.ctb` with everything in front of its layers written.
@@ -136,15 +166,22 @@ pub struct CtbEncryptedSink<'w> {
     job: PrintJob,
     blocks: Blocks,
     pointers: u64,
+    /// The header, settings, blocks and pointer table, rewritten once the stack is in.
+    front: Vec<u8>,
     /// Where each layer's definition went.
     definitions: Vec<u64>,
+    totals: Totals,
+    layers_crc: Crc32,
 }
 
 impl LayerSink for CtbEncryptedSink<'_> {
-    type Encoded = Rle7Layer;
+    type Encoded = EncryptedLayer;
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        Rle7Layer::encode(layer)
+        EncryptedLayer {
+            runs: Rle7Layer::encode(layer),
+            lit_px: chitu_lit_px(layer),
+        }
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
@@ -155,22 +192,35 @@ impl LayerSink for CtbEncryptedSink<'_> {
                 written: index + 1,
             });
         }
-        if (encoded.width(), encoded.height())
-            != (self.job.raster.width_px, self.job.raster.height_px)
-        {
+        let runs = &encoded.runs;
+        if (runs.width(), runs.height()) != (self.job.raster.width_px, self.job.raster.height_px) {
             return Err(FormatError::ResolutionMismatch {
                 index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
+                width: runs.width(),
+                height: runs.height(),
                 expected_width: self.job.raster.width_px,
                 expected_height: self.job.raster.height_px,
             });
         }
         let at = self.fields.position()?;
-        let mut data = encoded.data().to_vec();
+        let mut data = runs.data().to_vec();
         chitu_layer_crypt(LAYER_KEY, index, &mut data);
-        write_definition(&mut self.fields, &self.job, index, at, data.len())?;
-        self.fields.bytes(&data)?;
+        let mut bytes = Cursor::new(Vec::with_capacity(data.len() + 96));
+        {
+            let mut layer = Fields::new(&mut bytes);
+            write_definition(&mut layer, &self.job, index, at, data.len())?;
+            layer.bytes(&data)?;
+            write_chitu_layer_tail(&mut layer, &self.job, encoded.lit_px)?;
+        }
+        let bytes = bytes.into_inner();
+        self.layers_crc.update(&bytes);
+        self.fields.bytes(&bytes)?;
+
+        let material = &self.job.material;
+        let rests: f32 = material.waits.rests_s().iter().sum();
+        self.totals.layer_time_s +=
+            self.job.exposure_of_layer_s(index) + material.light_off_of_layer_s(index) + rests;
+        self.totals.largest_layer_bytes = self.totals.largest_layer_bytes.max(data.len() as u32);
         self.definitions.push(at);
         Ok(())
     }
@@ -184,28 +234,49 @@ impl LayerSink for CtbEncryptedSink<'_> {
                 written,
             });
         }
-        for word in BEFORE_SIGNATURE {
-            self.fields.u32_le(word)?;
-        }
-        let signature_at = self.fields.position()? as u32;
-        self.fields.bytes(&cipher::signature(CHECKSUM))?;
-        self.fields.u32_le(AFTER_SIGNATURE)?;
+        let end_of_layers = self.fields.position()?;
+        let signature_at = end_of_layers as u32;
+        let signature = cipher::signature(CHECKSUM);
+        self.patch_front(signature_at)?;
 
-        self.fields.seek_to(self.pointers)?;
-        for &definition in &self.definitions {
-            let (page, offset) = paged(definition);
-            self.fields.u32_le(offset)?;
-            self.fields.u32_le(page)?;
-            self.fields.u32_le(LAYER_DEF_BYTES as u32)?;
-            self.fields.u32_le(0)?;
-        }
-        let mut settings = settings(&self.job, self.blocks, self.pointers as u32);
-        cipher::encrypt(&mut settings.0, "settings")?;
-        self.fields.seek_to(HEADER_BYTES)?;
-        self.fields.bytes(&settings.0)?;
+        // The file ends with the CRC of everything before it, as the vendor's slicer ends it.
+        let mut crc = Crc32::default();
+        crc.update(&self.front);
+        let mut tail = Crc32::default();
+        tail.update(&signature);
+        let crc = crc.followed_by(self.layers_crc).followed_by(tail);
+
         self.fields.seek_to(0)?;
-        write_header(&mut self.fields, signature_at)?;
+        self.fields.bytes(&self.front)?;
+        self.fields.seek_to(end_of_layers)?;
+        self.fields.bytes(&signature)?;
+        self.fields.u32_le(crc.zlib())?;
         self.fields.flush()?;
+        Ok(())
+    }
+}
+
+impl CtbEncryptedSink<'_> {
+    /// Lays the pointer table, the enciphered settings and the header over the front.
+    fn patch_front(&mut self, signature_at: u32) -> Result<(), FormatError> {
+        let mut settings = settings(&self.job, self.blocks, self.pointers as u32, self.totals);
+        cipher::encrypt(&mut settings.0, "settings")?;
+        let mut front = Cursor::new(std::mem::take(&mut self.front));
+        {
+            let mut fields = Fields::new(&mut front);
+            fields.seek_to(self.pointers)?;
+            for &definition in &self.definitions {
+                let (page, offset) = paged(definition);
+                for word in [offset, page, LAYER_DEF_BYTES as u32, 0] {
+                    fields.u32_le(word)?;
+                }
+            }
+            fields.seek_to(HEADER_BYTES)?;
+            fields.bytes(&settings.0)?;
+            fields.seek_to(0)?;
+            write_header(&mut fields, signature_at)?;
+        }
+        self.front = front.into_inner();
         Ok(())
     }
 }
@@ -217,7 +288,7 @@ fn write_header(fields: &mut Fields<'_>, signature_at: u32) -> Result<(), Format
         HEADER_BYTES as u32,
         0,
         VERSION,
-        32,
+        SIGNATURE_BYTES,
     ] {
         fields.u32_le(word)?;
     }
@@ -240,43 +311,32 @@ fn write_definition(
     data_bytes: usize,
 ) -> Result<(), FormatError> {
     let resin = &job.material;
-    let bottom = resin.is_bottom_layer(index);
-    let (lift_mm, lift_speed, retract_speed, pwm) = if bottom {
-        let speeds = (
-            resin.bottom_lift_speed_mm_min,
-            resin.bottom_retract_speed_mm_min,
-        );
-        (
-            resin.bottom_lift_distance_mm,
-            speeds.0,
-            speeds.1,
-            resin.bottom_light_pwm,
-        )
+    let pwm = if resin.is_bottom_layer(index) {
+        resin.bottom_light_pwm
     } else {
-        let speeds = (resin.lift_speed_mm_min, resin.retract_speed_mm_min);
-        (resin.lift_distance_mm, speeds.0, speeds.1, resin.light_pwm)
+        resin.light_pwm
     };
     let (page, offset) = paged(at + LAYER_DEF_BYTES);
     fields.u32_le(LAYER_DEF_BYTES as u32)?;
     fields.f32_le(job.layer_z_mm(index))?;
     fields.f32_le(job.exposure_of_layer_s(index))?;
-    fields.f32_le(resin.light_off_s())?;
+    fields.f32_le(resin.light_off_of_layer_s(index))?;
     for word in [offset, page, data_bytes as u32, 0, 0, 0] {
         fields.u32_le(word)?;
     }
-    let [before_lift_s, after_lift_s, after_retract_s] = resin.waits.rests_s();
-    for value in [lift_mm, lift_speed, 0.0, 0.0, retract_speed, 0.0, 0.0] {
+    for value in chitu_layer_motion(job, index) {
         fields.f32_le(value)?;
     }
-    for value in [before_lift_s, after_lift_s, after_retract_s, f32::from(pwm)] {
-        fields.f32_le(value)?;
+    for rest_s in resin.waits.rests_s() {
+        fields.f32_le(rest_s)?;
     }
+    fields.f32_le(f32::from(pwm))?;
     fields.u32_le(0)?;
     Ok(())
 }
 
 /// The settings block in the clear: the job's numbers and where `blocks` put everything.
-fn settings(job: &PrintJob, blocks: Blocks, pointers: u32) -> Settings {
+fn settings(job: &PrintJob, blocks: Blocks, pointers: u32, totals: Totals) -> Settings {
     let mut settings = Settings([0; SETTINGS_BYTES]);
     let set = &mut settings;
     set.put_u32(at::CHECKSUM, CHECKSUM as u32);
@@ -284,8 +344,6 @@ fn settings(job: &PrintJob, blocks: Blocks, pointers: u32) -> Settings {
     set.put_f32(at::DISPLAY_MM, job.printer.display.width_mm);
     set.put_f32(at::DISPLAY_MM + 4, job.printer.display.height_mm);
     set.put_f32(at::MACHINE_Z_MM, job.printer.build_volume.z);
-    let last = job.layer_count().saturating_sub(1);
-    set.put_f32(at::TOTAL_HEIGHT_MM, job.layer_z_mm(last));
     set.put_f32(at::LAYER_HEIGHT_MM, job.nominal_height_mm());
     set.put_f32(at::EXPOSURE_S, job.header_exposure_s());
     set.put_f32(at::BOTTOM_EXPOSURE_S, job.material.bottom_exposure_s);
@@ -300,14 +358,18 @@ fn settings(job: &PrintJob, blocks: Blocks, pointers: u32) -> Settings {
     set.put_u32(at::PROJECTOR, u32::from(mirrored));
     set.put_f32(at::VOLUME_ML, job.volume_mm3 / 1000.0);
     set.put_f32(at::WEIGHT_G, job.weight_g());
+    set.put_f32(at::COST, job.cost().unwrap_or(0.0));
     set.put_u32(at::ONE, 1);
     set.put_u32(at::LAYER_KEY, LAYER_KEY);
     set.put_u32(at::MACHINE_NAME, blocks.machine_name.0);
     set.put_u32(at::MACHINE_NAME + 4, blocks.machine_name.1);
     set.put_u32(at::DISCLAIMER, blocks.disclaimer);
     set.put_u32(at::DISCLAIMER + 4, CHITU_DISCLAIMER_BYTES);
+    set.put_u32(at::ONE_AGAIN, 1);
     set.put_u32(at::RESIN, blocks.resin);
-    set.put_u32(at::LAST_LAYER, last);
+    set.put_f32(at::LAYER_TIME_S, totals.layer_time_s);
+    set.put_u32(at::LARGEST_LAYER_BYTES, totals.largest_layer_bytes);
+    set.put_u32(at::LAYER_COUNT_AGAIN, job.layer_count());
     put_motion(set, job);
     put_slicer_info(set, job);
     settings
@@ -316,14 +378,33 @@ fn settings(job: &PrintJob, blocks: Blocks, pointers: u32) -> Settings {
 /// The peel, the light and the rests, which the settings state for the stack as a whole.
 fn put_motion(set: &mut Settings, job: &PrintJob) {
     let resin = &job.material;
+    let stage = &resin.second_stage;
     set.put_f32(at::LIGHT_OFF_S, resin.light_off_s());
-    set.put_f32(at::BOTTOM_LIGHT_OFF_S, resin.light_off_s());
-    set.put_f32(at::BOTTOM_LIFT_MM, resin.bottom_lift_distance_mm);
+    set.put_f32(at::BOTTOM_LIGHT_OFF_S, resin.bottom_light_off_s());
+    set.put_f32(at::BOTTOM_LIFT_MM, resin.bottom_lift_total_mm());
     set.put_f32(at::BOTTOM_LIFT_SPEED, resin.bottom_lift_speed_mm_min);
-    set.put_f32(at::LIFT_MM, resin.lift_distance_mm);
+    set.put_f32(at::LIFT_MM, resin.lift_total_mm());
     set.put_f32(at::LIFT_SPEED, resin.lift_speed_mm_min);
     set.put_f32(at::RETRACT_SPEED, resin.retract_speed_mm_min);
     set.put_f32(at::BOTTOM_RETRACT_SPEED, resin.bottom_retract_speed_mm_min);
+    set.put_f32(
+        at::BOTTOM_RETRACT_SPEED_2,
+        stage.bottom_retract_speed_mm_min,
+    );
+    set.put_f32(at::BOTTOM_RETRACT_MM_2, stage.bottom_retract_distance_mm);
+    for (index, value) in [
+        stage.bottom_lift_distance_mm,
+        stage.bottom_lift_speed_mm_min,
+        stage.lift_distance_mm,
+        stage.lift_speed_mm_min,
+        stage.retract_distance_mm,
+        stage.retract_speed_mm_min,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        set.put_f32(at::SECOND_STAGE + 4 * index, value);
+    }
     set.put_u16(at::LIGHT_PWM, u16::from(resin.light_pwm));
     set.put_u16(at::BOTTOM_LIGHT_PWM, u16::from(resin.bottom_light_pwm));
     let [before_lift_s, after_lift_s, after_retract_s] = resin.waits.rests_s();
@@ -341,10 +422,12 @@ fn put_motion(set: &mut Settings, job: &PrintJob) {
 
 /// What the plain `.ctb` keeps in its slicer info and version 4 blocks.
 fn put_slicer_info(set: &mut Settings, job: &PrintJob) {
-    set.put_u8(at::ANTI_ALIAS_FLAG, 0x0F);
-    set.put_u8(at::PER_LAYER_SETTINGS, PER_LAYER_SETTINGS);
+    set.put_u32(at::FLAGS, flags(job));
     set.put_u32(at::MODIFIED_MINUTES, job.created_minutes());
-    set.put_u32(at::ANTI_ALIAS_LEVEL, 1);
+    set.put_u32(
+        at::ANTI_ALIAS_LEVEL,
+        u32::from(job.raster.anti_alias_level(8)),
+    );
     set.put_u32(
         at::TRANSITION_LAYERS,
         u32::from(job.material.transition_layers),
@@ -352,5 +435,19 @@ fn put_slicer_info(set: &mut Settings, job: &PrintJob) {
     for offset in at::FOUR {
         set.put_f32(offset, 4.0);
     }
-    set.put_u32(at::FIVE, 5);
 }
+
+/// Grey in the low byte; in the high byte whether the machine is to obey each definition,
+/// which the vendor leaves clear for a stack the settings describe, transition ramp included.
+fn flags(job: &PrintJob) -> u32 {
+    let grey = match job.raster.shading {
+        Shading::Binary => 0x07,
+        Shading::Coverage => 0x0F,
+    };
+    let per_layer =
+        job.printer.firmware.per_layer_settings && (!job.exposure.is_empty() || !job.is_uniform());
+    grey | u32::from(if per_layer { PER_LAYER_SETTINGS } else { 0 }) << 24
+}
+
+#[cfg(test)]
+mod tests;

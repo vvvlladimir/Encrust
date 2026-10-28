@@ -19,7 +19,10 @@ mod ser;
 mod timestamp;
 mod writer;
 
-pub use chitu::{CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, chitu_layer_crypt};
+pub use chitu::{
+    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_RESIN_TYPE, chitu_layer_crypt,
+    chitu_layer_motion, chitu_lit_px, write_chitu_layer_tail,
+};
 pub use crc::Crc32;
 pub use de::{MAX_ENTRY_BYTES, ReadSeek, Reads, read_entry};
 pub use error::FormatError;
