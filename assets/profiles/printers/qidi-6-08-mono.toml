@@ -5,7 +5,7 @@ manufacturer = "QIDI"
 machine_name = "6.08 mono"
 mirror_x = true
 mirror_y = false
-front_edge = "min_x"
+front_edge = "max_x"
 output = "ctb5"
 connection = "none"
 

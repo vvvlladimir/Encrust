@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use printer_profiles::{
-    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, WaitMode, Waits,
+    Catalogue, Connection, FrontEdge, MaterialProfile, OutputFormat, PrinterProfile, WaitMode,
+    Waits,
 };
 
 fn asset(name: &str) -> PathBuf {
@@ -66,6 +67,25 @@ fn every_shipped_printer_names_the_format_its_firmware_reads() {
     for (id, format) in expected {
         let entry = catalogue.printer(id).expect("a shipped machine");
         assert_eq!(entry.profile.output, format, "{id} writes the wrong format");
+    }
+}
+
+#[test]
+fn a_turned_panel_faces_the_edge_the_vendor_file_puts_in_front() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+
+    // The vendor's `Left`, `Right` and `Front`, read through the half turn between its
+    // X-mirrored layer and ours (ADR 0370); `.photons` and unmirrored panels have none.
+    let expected = [
+        ("creality-ld-002h", FrontEdge::MaxX),
+        ("elegoo-mars-2-pro", FrontEdge::MinX),
+        ("anycubic-photon-s", FrontEdge::MinX),
+        ("phrozen-sonic-mini", FrontEdge::MinX),
+        ("elegoo-saturn-4-ultra", FrontEdge::MinY),
+    ];
+    for (id, edge) in expected {
+        let entry = catalogue.printer(id).expect("a shipped machine");
+        assert_eq!(entry.profile.front_edge, edge, "{id} faces the wrong edge");
     }
 }
 
