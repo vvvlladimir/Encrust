@@ -24,7 +24,7 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let Some(draft) = window.machine.settings.printer.as_mut() else {
         return;
     };
-    let shipped = draft.shipped().cloned();
+    let shipped = draft.shipped();
     let (id, profile) = (draft.id.clone(), &mut draft.values);
     let mut restore = false;
     form_card(ui, &tr!("settings-tab-machine"), |ui| {

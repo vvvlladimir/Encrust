@@ -391,6 +391,17 @@ impl PrinterProfile {
         self.machine_name.as_deref().unwrap_or(&self.name)
     }
 
+    /// This machine sent over `other`'s network: its connection and the printers listed,
+    /// which are the user's and no part of a model's numbers.
+    #[must_use]
+    pub fn with_network_of(self, other: &PrinterProfile) -> Self {
+        Self {
+            connection: other.connection,
+            machines: other.machines.clone(),
+            ..self
+        }
+    }
+
     pub fn from_toml_str(source: &str, path: &Path) -> Result<Self, ProfileError> {
         let profile: Self = toml::from_str(source).map_err(|source| ProfileError::Parse {
             path: path.to_owned(),
