@@ -1,5 +1,7 @@
 use super::*;
 
+mod printer_edits;
+
 #[test]
 fn the_window_opens_on_the_prepare_mode_with_nothing_selected() {
     let app = SlicerApp::default();

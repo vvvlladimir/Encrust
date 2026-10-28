@@ -1,4 +1,4 @@
-use core_geometry::Vec3;
+use core_geometry::{Vec2, Vec3};
 use egui::Color32;
 
 use crate::plate::BuildPlate;
@@ -18,7 +18,7 @@ pub const AXIS_LENGTH_MM: f32 = 30.0;
 const DASH_MM: f32 = 3.0;
 const DASH_GAP_MM: f32 = 2.0;
 
-/// Line list for the plate's outline, the build volume and the axis arrows. The grid is
+/// Line list for the plate's outline and inset, the build volume and the axis arrows. The grid is
 /// not here: it is drawn into the plate's surface, see `docs/design/viewport.md`.
 pub fn plate_lines(plate: &BuildPlate) -> Vec<LineVertex> {
     let scene = theme::scene();
@@ -39,13 +39,13 @@ pub fn plate_lines(plate: &BuildPlate) -> Vec<LineVertex> {
         push(&mut lines, [ax, ay, 0.0], [bx, by, 0.0], scene.plate_border);
     }
 
+    push_inset(&mut lines, plate);
     push_volume(&mut lines, plate);
     lines
 }
 
 /// The plate's outline at `height_mm`, dashed, which is where the section cuts.
 pub fn section_frame(plate: &BuildPlate, height_mm: f32) -> Vec<LineVertex> {
-    let colour = theme::scene().section_frame;
     let corners = [
         Vec3::new(0.0, 0.0, height_mm),
         Vec3::new(plate.x_mm, 0.0, height_mm),
@@ -53,6 +53,26 @@ pub fn section_frame(plate: &BuildPlate, height_mm: f32) -> Vec<LineVertex> {
         Vec3::new(0.0, plate.y_mm, height_mm),
     ];
     let mut lines = Vec::new();
+    push_dashed_loop(&mut lines, corners, theme::scene().section_frame);
+    lines
+}
+
+/// The plate's inset, dashed on the plate, where the maker gives one.
+fn push_inset(lines: &mut Vec<LineVertex>, plate: &BuildPlate) {
+    let (low, high) = plate.usable_area();
+    if (low, high) == (Vec2::ZERO, Vec2::new(plate.x_mm, plate.y_mm)) {
+        return;
+    }
+    let corners = [
+        Vec3::new(low.x, low.y, 0.0),
+        Vec3::new(high.x, low.y, 0.0),
+        Vec3::new(high.x, high.y, 0.0),
+        Vec3::new(low.x, high.y, 0.0),
+    ];
+    push_dashed_loop(lines, corners, theme::scene().plate_border);
+}
+
+fn push_dashed_loop(lines: &mut Vec<LineVertex>, corners: [Vec3; 4], colour: Color32) {
     for i in 0..corners.len() {
         let (from, to) = (corners[i], corners[(i + 1) % corners.len()]);
         let length = from.distance(to);
@@ -64,7 +84,6 @@ pub fn section_frame(plate: &BuildPlate, height_mm: f32) -> Vec<LineVertex> {
             at += DASH_MM + DASH_GAP_MM;
         }
     }
-    lines
 }
 
 fn push_volume(lines: &mut Vec<LineVertex>, plate: &BuildPlate) {
@@ -130,6 +149,33 @@ mod tests {
             assert!((0.0..=plate.x_mm).contains(&x));
             assert!((0.0..=plate.y_mm).contains(&y));
             assert!((0.0..=plate.z_mm).contains(&z));
+        }
+    }
+
+    #[test]
+    fn an_inset_is_dashed_on_the_plate_along_its_inner_edge() {
+        let mut lines = Vec::new();
+        push_inset(&mut lines, &plate(50.0, 30.0));
+        assert!(lines.is_empty(), "a plate without an inset has no dashes");
+
+        let mut inset = plate(50.0, 30.0);
+        inset.inset = printer_profiles::PlateInset {
+            min_x_mm: 2.0,
+            max_x_mm: 1.0,
+            min_y_mm: 3.0,
+            max_y_mm: 0.5,
+        };
+        push_inset(&mut lines, &inset);
+        assert!(!lines.is_empty());
+        for vertex in &lines {
+            let [x, y, z] = vertex.position;
+            let on_edge = [x - 2.0, x - 49.0, y - 3.0, y - 29.5]
+                .iter()
+                .any(|gap| gap.abs() < 1e-4);
+            assert!(
+                z == 0.0 && on_edge,
+                "({x}, {y}, {z}) is off the rectangle x 2..49, y 3..29.5 mm on the plate"
+            );
         }
     }
 

@@ -107,8 +107,9 @@ pub struct FrameInput<'a> {
     /// effect because the bottom block keeps the resin's ramp; see ADR 0090.
     pub bands: &'a [ExposureBand],
     pub band_floor_mm: f32,
-    /// The build volume in plate millimetres, or `None` to mark nothing standing past it.
-    pub volume_mm: Option<Vec3>,
+    /// The low and high corners a model stands in unmarked, plate millimetres, or `None` to
+    /// mark nothing: the build volume less the plate's inset.
+    pub volume_mm: Option<[Vec3; 2]>,
     /// Where the Cut tool's plane meets the model it is set on, traced over its surface.
     pub cut_line: Option<CutLine>,
     /// Whether the models are drawn seen through, which is what shows a cavity that holds

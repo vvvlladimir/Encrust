@@ -74,7 +74,7 @@ pub struct ViewportCallback {
     reliefs: Vec<ReliefDraw>,
     bands: Vec<ExposureBand>,
     band_floor_mm: f32,
-    volume_mm: Vec3,
+    volume_mm: [Vec3; 2],
     cut_line: Option<CutLine>,
     /// Whether the models are drawn seen through, so a cavity that holds resin can be
     /// looked into; see `docs/design/viewport.md`.
@@ -203,7 +203,10 @@ impl ViewportCallback {
             reliefs,
             bands: bands_of(banding.ranges),
             band_floor_mm: banding.floor_mm,
-            volume_mm: Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm),
+            volume_mm: {
+                let (low, high) = plate.usable_area();
+                [low.extend(0.0), high.extend(plate.z_mm)]
+            },
             cut_line,
             xray: view.xray,
             grid: view.grid,

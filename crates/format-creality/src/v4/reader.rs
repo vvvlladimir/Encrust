@@ -23,28 +23,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         let mut reads = Reads::new(source);
         let end = reads.length()?;
 
-        let magic_bytes = reads.u32_be()?;
-        if magic_bytes as usize != MAGIC.len() {
-            return Err(FormatError::NotThisFormat {
-                format: "cxdlp",
-                found: magic_bytes,
-            });
-        }
-        let magic = reads.bytes(MAGIC.len())?;
-        if !magic.starts_with(b"CXSW3D") {
-            return Err(FormatError::NotThisFormat {
-                format: "cxdlp",
-                found: u32::from_be_bytes([magic[0], magic[1], magic[2], magic[3]]),
-            });
-        }
-
-        let version = u32::from(reads.u16_be()?);
-        if version != u32::from(VERSION) {
-            return Err(FormatError::UnsupportedVersion {
-                format: "cxdlp",
-                version,
-            });
-        }
+        let version = read_magic(&mut reads)?;
 
         let machine = read_text(&mut reads)?;
         let width_px = u32::from(reads.u16_le()?);
@@ -75,18 +54,12 @@ impl SlicedFileReader for CxdlpV4Reader {
         }
 
         reads.seek_to(print_parameters)?;
-        reads.skip(4 * 5)?;
-        let volume_ml = reads.f32_le()?;
-        reads.skip(4 * 2)?;
-        reads.skip(4 * 3)?;
-        let exposure_s = reads.f32_le()?;
-        let bottom_exposure_s = reads.f32_le()?;
-        let buffer = Buffer {
-            height_mm: reads.f32_le()?,
-            speed_mm_min: reads.f32_le()?,
-            light_off_delay_s: reads.f32_le()?,
-            enabled: reads.u32_le()? != 0,
-        };
+        let PrintParameters {
+            volume_ml,
+            exposure_s,
+            bottom_exposure_s,
+            buffer,
+        } = read_print_parameters(&mut reads)?;
 
         let layers = read_table(&mut reads, table, layer_count, end)?;
 
@@ -120,6 +93,64 @@ impl SlicedFileReader for CxdlpV4Reader {
 }
 
 /// The layer table, where a row addresses the motion block the data follows.
+/// The magic and the revision behind it, refusing a file that is not this one.
+fn read_magic<S: ReadSeek>(reads: &mut Reads<S>) -> Result<u32, FormatError> {
+    let magic_bytes = reads.u32_be()?;
+    if magic_bytes as usize != MAGIC.len() {
+        return Err(FormatError::NotThisFormat {
+            format: "cxdlp",
+            found: magic_bytes,
+        });
+    }
+    let magic = reads.bytes(MAGIC.len())?;
+    if !magic.starts_with(b"CXSW3D") {
+        return Err(FormatError::NotThisFormat {
+            format: "cxdlp",
+            found: u32::from_be_bytes([magic[0], magic[1], magic[2], magic[3]]),
+        });
+    }
+
+    let version = u32::from(reads.u16_be()?);
+    if version != u32::from(VERSION) {
+        return Err(FormatError::UnsupportedVersion {
+            format: "cxdlp",
+            version,
+        });
+    }
+    Ok(version)
+}
+
+/// What the reader takes from the print parameters block.
+struct PrintParameters {
+    volume_ml: f32,
+    exposure_s: f32,
+    bottom_exposure_s: f32,
+    buffer: Buffer,
+}
+
+/// Reads the print parameters block, the cursor at its start; see docs/formats/creality.md.
+fn read_print_parameters<S: ReadSeek>(
+    reads: &mut Reads<S>,
+) -> Result<PrintParameters, FormatError> {
+    reads.skip(4 * 5)?;
+    let volume_ml = reads.f32_le()?;
+    reads.skip(4 * 5)?;
+    let exposure_s = reads.f32_le()?;
+    let bottom_exposure_s = reads.f32_le()?;
+    let buffer = Buffer {
+        height_mm: reads.f32_le()?,
+        speed_mm_min: reads.f32_le()?,
+        light_off_delay_s: reads.f32_le()?,
+        enabled: reads.u32_le()? != 0,
+    };
+    Ok(PrintParameters {
+        volume_ml,
+        exposure_s,
+        bottom_exposure_s,
+        buffer,
+    })
+}
+
 fn read_table<S: ReadSeek>(
     reads: &mut Reads<S>,
     table: u64,

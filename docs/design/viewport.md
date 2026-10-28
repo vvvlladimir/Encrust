@@ -252,7 +252,7 @@ The shares are shader constants; the colours and directions are tokens.
 
 A surface leaning past the overhang angle is filled with the overhang colour at 0.85, so
 where the need for a support ends is one line (ADR 0245). Whatever stands past the build
-volume is hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run
+volume, or in the plate's inset where the printer has one (ADR 0372, the plate darker there), is hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run
 diagonally on any face, smoothed over a pixel with `fwidth` and evened out to half where
 they are closer together than pixels. Between the stripes the mark keeps a light wash, so
 a part narrower than the pitch still shows.

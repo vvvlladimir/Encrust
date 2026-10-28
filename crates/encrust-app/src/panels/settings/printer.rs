@@ -4,7 +4,7 @@
 mod connection;
 
 use core_pipeline::SlicedFormat;
-use printer_profiles::PrinterProfile;
+use printer_profiles::{PlateInset, PrinterProfile};
 
 use crate::i18n::tr;
 use crate::job::label_of;
@@ -130,19 +130,8 @@ fn autosave(window: &mut Window) {
     draft.mark_saved();
     let (id, profile) = (draft.id.clone(), draft.values.clone());
     crate::profiles::learn_printer_names(window.machine);
-    if window.machine.slicing.printer_id.as_deref() != Some(id.as_str()) {
-        return;
-    }
-    let moves_the_plate = window.machine.slicing.printer.as_ref().is_none_or(|old| {
-        old.build_volume != profile.build_volume
-            || old.display != profile.display
-            || old.output != profile.output
-    });
-    if moves_the_plate {
-        crate::profiles::apply_printer(window, profile, Some(id));
-    } else {
-        window.machine.network.bind_to(Some(id), Some(&profile));
-        window.machine.slicing.printer = Some(profile);
+    if window.machine.slicing.printer_id.as_deref() == Some(id.as_str()) {
+        crate::profiles::printer_edited(window, profile, id);
     }
 }
 
@@ -246,6 +235,28 @@ fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     switch(ui, &mut profile.mirror_x, &tr!("printer-mirror-x"));
     switch(ui, &mut profile.mirror_y, &tr!("printer-mirror-y"));
     hint(ui, &tr!("printer-mirror-note"));
+
+    ui.add_space(6.0);
+    inset(ui, &mut profile.plate_inset);
+}
+
+/// The band along the plate's edges a model is marked in, each edge on its own; off is none.
+fn inset(ui: &mut egui::Ui, inset: &mut Option<PlateInset>) {
+    let mut on = inset.is_some();
+    if switch(ui, &mut on, &tr!("printer-inset")).changed() {
+        *inset = on.then(PlateInset::default);
+    }
+    if let Some(inset) = inset {
+        for (label, edge) in [
+            (tr!("printer-inset-min-x"), &mut inset.min_x_mm),
+            (tr!("printer-inset-max-x"), &mut inset.max_x_mm),
+            (tr!("printer-inset-min-y"), &mut inset.min_y_mm),
+            (tr!("printer-inset-max-y"), &mut inset.max_y_mm),
+        ] {
+            number_row(ui, &label, edge, &tr!("unit-mm"), FINE_STEP, 0.0..=50.0, 2);
+        }
+    }
+    hint(ui, &tr!("printer-inset-note"));
 }
 
 /// What this machine obeys beyond the header, which no file format states.

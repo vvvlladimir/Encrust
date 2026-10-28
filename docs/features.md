@@ -558,6 +558,10 @@ them from the meshes, and the time, marked ≈, from the plate's height.
 ## Viewing
 
 - Lit, shadowed 3D view with a view cube, orthographic or perspective, and a plate grid.
+- **Plate inset:** on a machine whose maker keeps models off a band along the plate's edges
+  (Mars, Mars 2, Mars 2 Pro), the band is dashed and darker on the plate, a model standing in
+  it is marked, and `inspect` says so; it still slices whole. Any printer can turn it on, edge
+  by edge, in its form.
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
 - **See through models** (x-ray) to find cavities and trapped resin.

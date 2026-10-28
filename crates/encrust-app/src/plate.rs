@@ -1,6 +1,6 @@
 use crate::i18n::tr;
-use core_geometry::{Quat, Vec3};
-use printer_profiles::{FrontEdge, PrinterProfile};
+use core_geometry::{Quat, Vec2, Vec3};
+use printer_profiles::{FrontEdge, PlateInset, PrinterProfile};
 
 /// The build volume the viewport draws and models are placed on, in millimetres.
 ///
@@ -19,6 +19,8 @@ pub struct BuildPlate {
     pub y_mm: f32,
     pub z_mm: f32,
     pub front_edge: FrontEdge,
+    /// The band along the edges a model is marked in, though it still slices whole.
+    pub inset: PlateInset,
 }
 
 impl Default for BuildPlate {
@@ -30,6 +32,7 @@ impl Default for BuildPlate {
             y_mm: 80.0,
             z_mm: 165.0,
             front_edge: FrontEdge::MinY,
+            inset: PlateInset::default(),
         }
     }
 }
@@ -42,6 +45,7 @@ impl BuildPlate {
             y_mm: profile.build_volume.y,
             z_mm: profile.build_volume.z,
             front_edge: profile.front_edge,
+            inset: profile.plate_inset.unwrap_or_default(),
         }
     }
 
@@ -61,6 +65,12 @@ impl BuildPlate {
     /// The turn about Z carrying the plate's `-Y` side onto the machine's front.
     pub fn front_turn(&self) -> Quat {
         Quat::from_rotation_z(self.front_edge.turn_rad())
+    }
+
+    /// The low and high corners of the plate inside its inset, where a model stands unmarked.
+    pub fn usable_area(&self) -> (Vec2, Vec2) {
+        let [low, high] = self.inset.area_mm(self.x_mm, self.y_mm);
+        (Vec2::from_array(low), Vec2::from_array(high))
     }
 
     /// Longest straight line through the build volume, used to size the default view.

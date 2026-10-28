@@ -12,6 +12,7 @@ mod front_edge;
 mod limits;
 mod material;
 mod own_ids;
+mod plate_inset;
 mod preset;
 mod printer;
 mod stated;
@@ -33,6 +34,7 @@ pub use material::{
     Buffer, MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, SecondStage, WaitMode, Waits,
 };
 pub use own_ids::{Renamed, own_id};
+pub use plate_inset::PlateInset;
 pub use preset::Preset;
 pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, NetworkMachine, OutputFormat,
