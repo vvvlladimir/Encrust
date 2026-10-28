@@ -213,18 +213,10 @@ fn a_user_profile_overrides_the_bundled_id() {
     std::fs::write(
         &path,
         r#"
+edits_over_shipped = true
 name = "Mine"
-manufacturer = "Elegoo"
-
-[display]
-width_px = 100
-height_px = 50
-width_mm = 10.0
-height_mm = 5.0
 
 [build_volume]
-x = 10.0
-y = 5.0
 z = 100.0
 "#,
     )
@@ -237,6 +229,11 @@ z = 100.0
         .printer("elegoo-mars-4-ultra")
         .expect("still there");
     assert_eq!(entry.profile.name, "Mine");
+    assert!((entry.profile.build_volume.z - 100.0).abs() < f32::EPSILON);
+    assert_eq!(
+        entry.profile.manufacturer, "Elegoo",
+        "the rest is the shipped one"
+    );
     assert_eq!(entry.source, Source::User(path.clone()));
 
     std::fs::remove_dir_all(&dir).expect("the temporary directory goes away");
@@ -294,7 +291,7 @@ const MARS: &str = "elegoo-mars-3-pro";
 
 /// A catalogue writing into a directory of this test's own, so nothing reads or
 /// writes the profile directory the user actually keeps.
-fn in_its_own_dir(name: &str, body: impl FnOnce(&Path, Catalogue)) {
+pub(super) fn in_its_own_dir(name: &str, body: impl FnOnce(&Path, Catalogue)) {
     let dir = std::env::temp_dir().join(format!("encrust-catalogue-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     let catalogue = Catalogue::with_root(&dir).expect("the shipped catalogue is valid");
@@ -511,9 +508,11 @@ fn a_copy_saved_before_a_lock_still_takes_the_shipped_one() {
             .locked
             .clone();
         assert_eq!(written, shipped.locked, "a save keeps the machine's locks");
-        let file = dir.join("printers/elegoo-saturn-4-ultra.toml");
-        let on_disk = std::fs::read_to_string(&file).expect("the save wrote it");
-        let on_disk = PrinterProfile::from_toml_str(&on_disk, &file).expect("and it reads");
+        let on_disk = Catalogue::with_root(dir).expect("the save wrote it");
+        let on_disk = &on_disk
+            .printer("elegoo-saturn-4-ultra")
+            .expect("saved")
+            .profile;
         assert_eq!(on_disk.locked, shipped.locked, "and so does the file");
 
         std::fs::write(
@@ -588,6 +587,13 @@ impl ProfileStore for Kept {
         Ok(())
     }
 
+    fn keep_aside(&self, kind: Kind, id: &str, tag: &str, toml: &str) -> Result<(), ProfileError> {
+        let mut kept = self.0.lock().expect("no test panics holding it");
+        let name = format!("{}/{id}.{tag}", kind.dir());
+        kept.insert(("aside", name), toml.to_owned());
+        Ok(())
+    }
+
     fn remove(&self, kind: Kind, id: &str) -> Result<(), ProfileError> {
         let mut kept = self.0.lock().expect("no test panics holding it");
         kept.remove(&(kind.dir(), id.to_owned()));
@@ -625,7 +631,7 @@ fn a_store_with_no_directory_keeps_what_is_saved_into_it() {
     assert!(reloaded.resin("my-resin").is_err(), "only the user had it");
 }
 
-const SAMPLE_PRINTER: &str = r#"
+pub(super) const SAMPLE_PRINTER: &str = r#"
 name = "Mine"
 manufacturer = "Me"
 

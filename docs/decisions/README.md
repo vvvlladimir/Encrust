@@ -385,8 +385,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0370](0370-a-printer-names-the-plate-edge-that-is-its-front.md) | A printer names the plate edge that is its front | Accepted |
 | [0371](0371-a-halot-buffer-is-a-resin-setting-from-the-machines-default.md) | A HALOT buffer is a resin setting that starts from the machine's default | Accepted |
 | [0372](0372-a-plate-inset-warns-and-never-clips.md) | A plate inset warns and never clips | Accepted |
+| [0373](0373-an-installed-printer-is-kept-as-its-edits.md) | An installed printer is kept as its edits over the shipped one | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
-| [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
+| [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted; an installed printer as a whole copy is superseded by 0373 |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |

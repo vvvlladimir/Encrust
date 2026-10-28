@@ -49,6 +49,14 @@ impl ProfileStore for PageProfiles {
             .map_err(|_| refused(&path, "the page's storage is full or switched off"))
     }
 
+    fn keep_aside(&self, kind: Kind, id: &str, tag: &str, toml: &str) -> Result<(), ProfileError> {
+        let path = self.path_of(kind, id).with_extension(format!("toml.{tag}"));
+        let storage = storage().ok_or_else(|| refused(&path, "no page storage here"))?;
+        storage
+            .set_item(&key(&path), toml)
+            .map_err(|_| refused(&path, "the page's storage is full or switched off"))
+    }
+
     fn remove(&self, kind: Kind, id: &str) -> Result<(), ProfileError> {
         let path = self.path_of(kind, id);
         if let Some(storage) = storage() {

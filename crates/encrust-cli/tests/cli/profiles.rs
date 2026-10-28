@@ -162,7 +162,12 @@ fn a_user_profile_overrides_the_catalogue_by_id() {
     let printers = dir.join("printers");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&printers).expect("temp dir");
-    fs::copy(test_panel(), printers.join("elegoo-mars-4-ultra.toml")).expect("copy the panel");
+    // The user's file of a shipped machine holds their edits over it (ADR 0373).
+    fs::write(
+        printers.join("elegoo-mars-4-ultra.toml"),
+        "edits_over_shipped = true\nname = \"Test panel\"\n",
+    )
+    .expect("temp dir");
 
     let path = write_box_stl("user-override", 10.0, 12, 0);
     let output = encrust_with_profiles(

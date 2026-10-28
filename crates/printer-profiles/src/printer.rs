@@ -426,7 +426,7 @@ impl PrinterProfile {
         Self::from_toml_str(&source, path)
     }
 
-    fn validate(&self) -> Result<(), ProfileError> {
+    pub(crate) fn validate(&self) -> Result<(), ProfileError> {
         let checks = [
             ("display.width_mm", self.display.width_mm),
             ("display.height_mm", self.display.height_mm),

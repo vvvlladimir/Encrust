@@ -62,6 +62,9 @@ pub enum ProfileError {
     #[error("there is no {kind} called {id} in the catalogue")]
     Unknown { kind: &'static str, id: String },
 
+    #[error("{path} holds edits over the shipped printer {id}, which this build does not ship")]
+    EditsOverNothing { id: String, path: PathBuf },
+
     #[error("this platform has nowhere to keep your profiles; set {variable}")]
     NoUserDir { variable: &'static str },
 
