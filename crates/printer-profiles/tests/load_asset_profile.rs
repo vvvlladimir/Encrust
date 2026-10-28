@@ -197,3 +197,25 @@ fn only_the_machines_the_vendor_keeps_without_grey_are_binary_only() {
         );
     }
 }
+
+#[test]
+fn a_machine_takes_the_grey_range_its_vendor_spreads_edges_over() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+
+    // The vendor's defaults, where its edge smoothing defaults to the mode that applies them.
+    let expected = [
+        ("elegoo-mars-2-pro", (127, 255)),
+        ("elegoo-saturn-8k", (95, 255)),
+        ("elegoo-jupiter-se", (63, 255)),
+        ("flashforge-foto-8-9", (0, 204)),
+        ("elegoo-saturn-4-ultra", (0, 255)),
+    ];
+    for (id, range) in expected {
+        let display = catalogue
+            .printer(id)
+            .expect("a shipped machine")
+            .profile
+            .display;
+        assert_eq!((display.grey_min, display.grey_max), range, "{id}");
+    }
+}

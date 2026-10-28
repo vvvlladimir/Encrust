@@ -13,7 +13,6 @@ width_px = 8520
 height_px = 4320
 width_mm = 153.36
 height_mm = 77.76
-grey_floor = 0
 binary_only = true
 
 [build_volume]

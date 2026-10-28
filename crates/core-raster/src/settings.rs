@@ -21,18 +21,47 @@ pub enum Shading {
     Binary,
 }
 
-/// How much of the grey range the panel and the resin between them can actually hold. A pixel dim
-/// enough leaves resin uncured rather than partly cured; see `docs/design/rasterisation.md`.
+/// The greys an edge pixel is written in, as the vendor's slicer calls its Gray Range: an
+/// edge grey is first raised to `min`, then the whole span squeezed into `min..=max`.
+/// Black and full white are left alone; see `docs/decisions/0379`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GreyRange {
+    pub min: u8,
+    pub max: u8,
+}
+
+impl GreyRange {
+    /// Every grey as it is.
+    pub const FULL: Self = Self { min: 0, max: 255 };
+
+    /// The grey `value` is written as.
+    pub fn spread(self, value: u8) -> u8 {
+        if value == 0 || value == u8::MAX {
+            return value;
+        }
+        let lifted = f32::from(value.max(self.min));
+        let span = f32::from(self.max) - f32::from(self.min);
+        (f32::from(self.min) + lifted * span / 255.0).round() as u8
+    }
+}
+
+impl Default for GreyRange {
+    fn default() -> Self {
+        Self::FULL
+    }
+}
+
+/// How the greys of an edge are written: the span they are spread over and the rungs they
+/// are rounded to; see `docs/design/rasterisation.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Grey {
-    /// Dimmest grey the panel cures. Anything below it is written black instead.
-    pub floor: u8,
+    pub range: GreyRange,
     /// How many greys to round to, white included, or `None` to keep all 255.
     pub levels: Option<NonZeroU8>,
 }
 
 impl Grey {
-    /// The 8-bit grey a coverage of `0.0..=1.0` is written as, before the floor. Eight levels are
+    /// The 8-bit grey a coverage of `0.0..=1.0` is written as, before the range. Eight levels are
     /// `31, 63, ..., 255`; a count that does not divide 256 lands a little low.
     fn ladder(self, coverage: f32) -> u8 {
         let Some(levels) = self.levels else {
@@ -44,10 +73,9 @@ impl Grey {
         (rung * step - 1).min(255) as u8
     }
 
-    /// The grey to write for a coverage, black where the panel would not cure it.
+    /// The grey to write for a coverage.
     pub fn shade(self, coverage: f32) -> u8 {
-        let value = self.ladder(coverage);
-        if value < self.floor { 0 } else { value }
+        self.range.spread(self.ladder(coverage))
     }
 }
 
@@ -115,6 +143,10 @@ impl RasterSettings {
                 self.pitch.x.min(self.pitch.y),
             ));
         }
+        let GreyRange { min, max } = self.grey.range;
+        if min > max {
+            return Err(RasterError::InvertedGreyRange { min, max });
+        }
         Ok(())
     }
 }
@@ -141,8 +173,8 @@ mod tests {
         let with = |shading, levels| RasterSettings {
             shading,
             grey: Grey {
-                floor: 0,
                 levels: NonZeroU8::new(levels),
+                ..Grey::default()
             },
             ..settings()
         };
@@ -171,8 +203,8 @@ mod tests {
     #[test]
     fn eight_levels_are_the_ladder_other_slicers_write() {
         let grey = Grey {
-            floor: 0,
             levels: NonZeroU8::new(8),
+            ..Grey::default()
         };
         // 31, 63, ..., 255: one rung per eighth of a pixel covered.
         let rungs: Vec<u8> = (1..=8).map(|n| grey.shade(n as f32 / 8.0)).collect();
@@ -180,18 +212,36 @@ mod tests {
     }
 
     #[test]
-    fn a_grey_under_the_floor_is_written_black() {
-        let grey = Grey {
-            floor: 128,
-            levels: None,
+    fn an_edge_grey_is_spread_over_the_range_as_the_vendor_writes_it() {
+        // Read off the vendor's files for one model at 0..255, 127..255 and 0..200.
+        let lifted = GreyRange { min: 127, max: 255 };
+        assert_eq!(lifted.spread(3), 191, "raised to 127, then spread");
+        assert_eq!(lifted.spread(127), 191);
+        assert_eq!(lifted.spread(144), 199);
+        assert_eq!(lifted.spread(240), 247);
+        let capped = GreyRange { min: 0, max: 200 };
+        assert_eq!(capped.spread(64), 50);
+        assert_eq!(capped.spread(248), 195);
+        for range in [lifted, capped] {
+            assert_eq!(range.spread(0), 0, "black stays black");
+            assert_eq!(range.spread(255), 255, "full white stays white");
+        }
+        assert!((0..=255).all(|value| GreyRange::FULL.spread(value) == value));
+    }
+
+    #[test]
+    fn a_range_whose_bottom_is_over_its_top_is_rejected() {
+        let inverted = RasterSettings {
+            grey: Grey {
+                range: GreyRange { min: 200, max: 100 },
+                levels: None,
+            },
+            ..settings()
         };
-        assert_eq!(
-            grey.shade(0.1),
-            0,
-            "26 would not cure, so it is not written"
-        );
-        assert_eq!(grey.shade(0.5), 128, "the floor itself is kept");
-        assert_eq!(grey.shade(1.0), 255, "white is never floored");
+        assert!(matches!(
+            inverted.validate(),
+            Err(RasterError::InvertedGreyRange { min: 200, max: 100 })
+        ));
     }
 
     #[test]

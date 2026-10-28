@@ -49,6 +49,9 @@ pub enum ProfileError {
     #[error("printer {index} on the network has no address")]
     NoAddress { index: usize },
 
+    #[error("display.grey_min is {min}, above display.grey_max of {max}")]
+    InvertedGreyRange { min: u8, max: u8 },
+
     #[error("tuning for printer {printer}: {field} must be greater than zero, got {value}")]
     NonPositiveTuning {
         printer: String,

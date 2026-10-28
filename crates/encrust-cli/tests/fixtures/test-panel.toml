@@ -14,8 +14,8 @@ width_px = 200
 height_px = 200
 width_mm = 20.0
 height_mm = 20.0
-# A floor the tests can see honoured; a profile that says nothing keeps every grey.
-grey_floor = 128
+# A range the tests can see honoured; a profile that says nothing keeps every grey.
+grey_min = 127
 
 [build_volume]
 x = 40.0

@@ -499,7 +499,9 @@ whole-surface fill is Cmd-Shift-click.
 ### Edge smoothing (anti-aliasing)
 - Ready-made looks: **Sharp**, **Balanced**, **Soft**, **Crisp text**, **Organic curves**,
   or raw masks.
-- Or set it by hand: grey levels, edge blur, grey floor, rounded edge grey.
+- Or set it by hand: grey levels, edge blur, rounded edge grey.
+- Edge greys are spread over the printer's grey range, as its maker's slicer does: on the
+  ELEGOO Mars 2 and 3 series, for one, every edge grey is at least three quarters lit.
 - How much grey reaches the printer depends on its format (see [File formats](#file-formats)).
 - Not offered for the Creality HALOT-X1, X1 Max, X1 Neo and SKY 2025, or the PIOCREAT
   PioNext Mini and Ultra: their maker's slicer keeps it off, so their masks carry no grey.
@@ -633,7 +635,7 @@ among them.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,
-build volume, mirror across X or Y, grey floor, output format and version, firmware
+build volume, mirror across X or Y, the range of edge greys, output format and version, firmware
 abilities (per-layer settings, variable layer height), the printers on your network it
 sends to, and the limits its maker puts on each resin setting: a field takes nothing past
 what the machine takes, and a value past what its maker advises is framed in red with the

@@ -23,7 +23,7 @@ impl Rasterizer for ScanlineRasterizer {
     fn rasterize(&self, layer: &Layer, settings: &RasterSettings) -> Result<Rastered, RasterError> {
         settings.validate()?;
 
-        // A blur fades the exact coverage, so the floor and the ladder wait until after it;
+        // A blur fades the exact coverage, so the range and the ladder wait until after it;
         // see `docs/decisions/0117`.
         let blur_px = match settings.shading {
             Shading::Coverage => settings.blur_px,

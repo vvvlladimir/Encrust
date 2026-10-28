@@ -12,7 +12,6 @@ width_px = 4320
 height_px = 2560
 width_mm = 172.8
 height_mm = 102.4
-grey_floor = 0
 
 [build_volume]
 x = 172.8

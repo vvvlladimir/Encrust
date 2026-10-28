@@ -4,7 +4,7 @@
 mod connection;
 
 use core_pipeline::SlicedFormat;
-use printer_profiles::{PlateInset, PrinterProfile};
+use printer_profiles::{Display, PlateInset, PrinterProfile};
 
 use crate::i18n::tr;
 use crate::job::label_of;
@@ -137,23 +137,27 @@ fn autosave(window: &mut Window) {
     }
 }
 
-/// The dimmest grey this panel cures. Below it a mask pixel is written black instead of
-/// being left as resin that never sets; see `docs/decisions/0113`.
-fn grey_floor_row(ui: &mut egui::Ui, floor: &mut u8) {
-    let mut value = u32::from(*floor);
-    if count_row(ui, &tr!("printer-grey-floor"), &mut value, "", 1.0, 0..=254) {
-        *floor = value as u8;
+/// The greys an edge is spread over, as the vendor's slicer sets them for this machine; see
+/// `docs/decisions/0379`.
+fn grey_range_rows(ui: &mut egui::Ui, display: &mut Display) {
+    let mut min = u32::from(display.grey_min);
+    let mut max = u32::from(display.grey_max);
+    if count_row(ui, &tr!("printer-grey-min"), &mut min, "", 1.0, 0..=max) {
+        display.grey_min = min as u8;
+    }
+    if count_row(ui, &tr!("printer-grey-max"), &mut max, "", 1.0, min..=255) {
+        display.grey_max = max as u8;
     }
     hint(
         ui,
-        &match floor {
-            0 => tr!("printer-grey-floor-off"),
-            _ => tr!("printer-grey-floor-on"),
+        &match (display.grey_min, display.grey_max) {
+            (0, 255) => tr!("printer-grey-range-full"),
+            _ => tr!("printer-grey-range-spread"),
         },
     );
 }
 
-/// The panel, the pitch it works out to, and the dimmest grey it cures.
+/// The panel, the pitch it works out to, and the greys an edge is spread over.
 fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     count_row(
         ui,
@@ -200,7 +204,7 @@ fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         ),
     );
 
-    grey_floor_row(ui, &mut profile.display.grey_floor);
+    grey_range_rows(ui, &mut profile.display);
 }
 
 /// The envelope the plate can print in, and which way round the panel is mounted.

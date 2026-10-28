@@ -39,9 +39,21 @@ fn a_profile_that_names_no_machine_writes_its_own_name() {
 }
 
 #[test]
-fn a_profile_that_states_no_floor_keeps_every_grey() {
+fn a_profile_that_states_no_grey_range_keeps_every_grey() {
     let profile = PrinterProfile::from_toml_str(SAMPLE, path()).expect("a valid profile");
-    assert_eq!(profile.display.grey_floor, 0);
+    assert_eq!(
+        (profile.display.grey_min, profile.display.grey_max),
+        (0, 255)
+    );
+}
+
+#[test]
+fn a_grey_range_whose_bottom_is_over_its_top_is_rejected() {
+    let inverted = SAMPLE.replace("[display]", "[display]\ngrey_min = 200\ngrey_max = 100");
+    assert!(matches!(
+        PrinterProfile::from_toml_str(&inverted, path()),
+        Err(ProfileError::InvertedGreyRange { min: 200, max: 100 })
+    ));
 }
 
 #[test]

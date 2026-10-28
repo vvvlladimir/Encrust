@@ -11,6 +11,7 @@ use core_geometry::{
     Vec3,
 };
 use core_plate::{OrientGoal, OrientPreset};
+use core_raster::GreyRange;
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
 use printer_profiles::SupportProfile;
@@ -18,6 +19,7 @@ use printer_profiles::SupportProfile;
 use crate::hollowing::HollowArgs;
 use crate::modelling::ModelArgs;
 use crate::profiles::Selection;
+use crate::raster_report::parse_grey_range;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
 use crate::sliced_file::CtbRevision;
 
@@ -342,11 +344,12 @@ pub struct RasterArgs {
     #[arg(long, value_name = "N")]
     pub grey_levels: Option<NonZeroU8>,
 
-    /// Dimmest grey to write, overriding what the printer profile claims its panel cures.
-    #[arg(long, value_name = "VALUE")]
-    pub grey_floor: Option<u8>,
+    /// The greys an edge is spread over, overriding the printer profile's: one dimmer than
+    /// MIN is raised to it first. 0..255 keeps every grey as it is.
+    #[arg(long, value_name = "MIN..MAX", value_parser = parse_grey_range)]
+    pub grey_range: Option<GreyRange>,
 
-    /// Fade every edge over a box this many pixels either side, before the floor cuts it.
+    /// Fade every edge over a box this many pixels either side, before the range spreads it.
     #[arg(long, value_name = "PX", default_value = "0",
           value_parser = clap::value_parser!(u8).range(0..=8))]
     pub blur: u8,

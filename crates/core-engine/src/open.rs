@@ -92,7 +92,7 @@ pub fn open_plate(
                 Shading::Binary
             },
             grey_levels: slicing.grey_levels,
-            grey_floor: None,
+            grey_range: None,
             blur_px: slicing.blur_px,
         },
         cutting: Cutting {

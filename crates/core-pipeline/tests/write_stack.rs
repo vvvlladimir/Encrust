@@ -15,7 +15,7 @@ use core_pipeline::{
     Observer, PanelOverrides, SlicedFormat, Tolerance, Writing, raster_settings,
     write as write_stack,
 };
-use core_raster::{RasterSettings, Shading};
+use core_raster::{GreyRange, RasterSettings, Shading};
 use core_slicer::{ONE_SAMPLE, SliceSettings, Windows};
 use format_chitu::CtbVersion;
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -58,7 +58,7 @@ fn panel() -> RasterSettings {
         PanelOverrides {
             shading: Shading::Coverage,
             grey_levels: None,
-            grey_floor: None,
+            grey_range: None,
             blur_px: 0,
         },
     )
@@ -132,6 +132,22 @@ fn run(
         observer,
     )
     .expect("the box writes")
+}
+
+#[test]
+fn the_grey_range_is_the_profiles_unless_one_is_asked_for() {
+    let mut printer = printer();
+    (printer.display.grey_min, printer.display.grey_max) = (127, 255);
+    let range = |asked| {
+        let overrides = PanelOverrides {
+            grey_range: asked,
+            ..PanelOverrides::default()
+        };
+        raster_settings(&printer, overrides).grey.range
+    };
+    assert_eq!(range(None), GreyRange { min: 127, max: 255 });
+    let asked = GreyRange { min: 0, max: 200 };
+    assert_eq!(range(Some(asked)), asked);
 }
 
 #[test]
@@ -429,7 +445,7 @@ fn rounding_the_greys_still_writes_the_stack() {
         PanelOverrides {
             shading: Shading::Coverage,
             grey_levels: NonZeroU8::new(8),
-            grey_floor: Some(16),
+            grey_range: Some(GreyRange { min: 16, max: 240 }),
             blur_px: 1,
         },
     );

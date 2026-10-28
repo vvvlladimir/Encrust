@@ -17,9 +17,9 @@ with grey exists to compare against.
 `PrinterProfile.display.binary_only`, false unless stated, says a machine takes masks
 without grey only; the six profiles state it. `core_pipeline::raster_settings`, the one
 call the window, the command line and a converted file all draw their panel from, makes
-the shading binary for such a machine whatever was asked, so grey levels, blur and floor
+the shading binary for such a machine whatever was asked, so grey levels, blur and range
 fall away with it. The window does not show *Edge smoothing* for it; the command line
-warns when `--grey-levels`, `--grey-floor` or `--blur` is given for it.
+warns when `--grey-levels`, `--grey-range` or `--blur` is given for it.
 
 ## Consequences
 

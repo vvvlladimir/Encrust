@@ -32,9 +32,9 @@ is of the model as import leaves it; turns and bridges go first, drops last, bef
 `--repair`. `--samples-per-layer N` cuts N planes inside each layer,
 so a feature thinner than a layer is kept. A mask is
 shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
-at all, `--grey-levels N` rounds its edges to N greys, `--grey-floor V` sets the dimmest
-grey written or `--blur PX` fades every edge. A printer whose profile states
-`binary_only` takes no grey: the three are ignored for it, with a warning (ADR 0378).
+at all, `--grey-levels N` rounds its edges to N greys, `--grey-range MIN..MAX` spreads
+edge greys over that range in place of the profile's (ADR 0379) or `--blur PX` fades every
+edge. A printer whose profile states `binary_only` takes no grey: the three are ignored for it, with a warning (ADR 0378).
 
 ```sh
 encrust profiles list

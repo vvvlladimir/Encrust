@@ -156,9 +156,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0039](0039-near-empty-and-near-full-pixels-snap.md) | Coverage within 2% of empty or full snaps to the panel's own black and white | Accepted |
 | [0113](0113-write-only-the-grey-the-panel-cures.md) | A mask carries only the grey the panel will cure | Accepted |
 | [0117](0117-blur-the-coverage-before-the-floor.md) | Blur is a box filter on the runs' coverage, before the floor | Accepted |
-| [0139](0139-the-edge-grey-follows-a-file-that-prints.md) | Let the edge carry every grey | Accepted |
+| [0139](0139-the-edge-grey-follows-a-file-that-prints.md) | Let the edge carry every grey | Accepted; the floor is superseded by 0379 |
 | [0145](0145-tolerance-moves-the-contours-not-the-mask.md) | Tolerance moves the contours, not the mask | Accepted |
 | [0378](0378-a-machine-may-take-masks-without-grey-only.md) | A machine may take masks without grey only | Accepted |
+| [0379](0379-an-edge-grey-is-spread-over-the-vendors-grey-range.md) | Spread an edge grey over the vendor's grey range | Accepted |
 
 ### Exposure and the written stack
 

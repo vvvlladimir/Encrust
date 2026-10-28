@@ -1,6 +1,6 @@
 # 0139. Let the edge carry every grey
 
-- **Status:** Accepted
+- **Status:** Accepted; the floor is superseded by 0379
 - **Date:** 2026-09-29
 
 ## Context

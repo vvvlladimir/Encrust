@@ -217,7 +217,7 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
         ("--hanging-passes", job.raster.hanging_passes != 0),
         ("--no-anti-alias", job.raster.no_anti_alias),
         ("--grey-levels", job.raster.grey_levels.is_some()),
-        ("--grey-floor", job.raster.grey_floor.is_some()),
+        ("--grey-range", job.raster.grey_range.is_some()),
         ("--blur", job.raster.blur != 0),
     ];
     if let Some((flag, _)) = given.iter().find(|(_, given)| *given) {

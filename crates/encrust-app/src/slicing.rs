@@ -481,7 +481,7 @@ impl Slicing {
         PanelOverrides {
             shading: self.shading(),
             grey_levels: self.grey_levels,
-            grey_floor: None,
+            grey_range: None,
             blur_px: self.blur_px,
         }
     }

@@ -227,14 +227,36 @@ pub struct Display {
     /// Illuminated area, millimetres.
     pub width_mm: f32,
     pub height_mm: f32,
-    /// Dimmest grey this panel cures; a mask pixel below it is written black instead.
-    /// Zero, the default, keeps every grey. See `docs/decisions/0139`.
-    #[serde(default)]
-    pub grey_floor: u8,
+    /// The greys an edge pixel is spread over, as the vendor's slicer sets them for this
+    /// machine; 0 to 255, the default, keeps every grey. See `docs/decisions/0379`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub grey_min: u8,
+    #[serde(default = "full_grey", skip_serializing_if = "is_full_grey")]
+    pub grey_max: u8,
     /// Whether this machine takes masks without grey only, as its vendor's slicer keeps
     /// anti-aliasing off and hidden for it. See `docs/decisions/0378`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub binary_only: bool,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
+fn full_grey() -> u8 {
+    u8::MAX
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn is_full_grey(value: &u8) -> bool {
+    *value == u8::MAX
 }
 
 impl Display {
@@ -369,7 +391,8 @@ impl Default for PrinterProfile {
                 height_px: 2560,
                 width_mm: 143.36,
                 height_mm: 89.6,
-                grey_floor: 0,
+                grey_min: 0,
+                grey_max: u8::MAX,
                 binary_only: false,
             },
             build_volume: BuildVolume {
@@ -457,6 +480,10 @@ impl PrinterProfile {
             if value <= 0.0 {
                 return Err(ProfileError::NonPositive { field, value });
             }
+        }
+        let (min, max) = (self.display.grey_min, self.display.grey_max);
+        if min > max {
+            return Err(ProfileError::InvertedGreyRange { min, max });
         }
         if let Some(index) = self
             .machines

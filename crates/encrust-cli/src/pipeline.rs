@@ -435,12 +435,12 @@ pub fn overrides_of(
     printer: Option<&PrinterProfile>,
     talk: bool,
 ) -> PanelOverrides {
-    let asks_grey = args.grey_levels.is_some() || args.grey_floor.is_some() || args.blur != 0;
+    let asks_grey = args.grey_levels.is_some() || args.grey_range.is_some() || args.blur != 0;
     if let Some(printer) =
         printer.filter(|printer| talk && asks_grey && printer.display.binary_only)
     {
         tracing::warn!(
-            "{} takes masks without grey, so --grey-levels, --grey-floor and --blur change nothing",
+            "{} takes masks without grey, so --grey-levels, --grey-range and --blur change nothing",
             printer.name
         );
     }
@@ -451,7 +451,7 @@ pub fn overrides_of(
             Shading::Coverage
         },
         grey_levels: args.grey_levels,
-        grey_floor: args.grey_floor,
+        grey_range: args.grey_range,
         blur_px: args.blur,
     }
 }

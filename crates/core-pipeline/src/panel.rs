@@ -1,6 +1,6 @@
 use std::num::NonZeroU8;
 
-use core_raster::{Grey, PixelPitch, RasterSettings, Shading};
+use core_raster::{Grey, GreyRange, PixelPitch, RasterSettings, Shading};
 use printer_profiles::PrinterProfile;
 
 use crate::format::SlicedFormat;
@@ -11,8 +11,8 @@ pub struct PanelOverrides {
     pub shading: Shading,
     /// How many greys an anti-aliased edge is rounded to, or `None` for all 255.
     pub grey_levels: Option<NonZeroU8>,
-    /// Dimmest grey to write, or `None` to keep what the profile claims the panel cures.
-    pub grey_floor: Option<u8>,
+    /// The greys an edge is spread over, or `None` for the printer profile's.
+    pub grey_range: Option<GreyRange>,
     /// Radius an edge is faded over, pixels; `0` leaves it sharp.
     pub blur_px: u8,
 }
@@ -34,7 +34,10 @@ pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> R
             overrides.shading
         },
         grey: Grey {
-            floor: overrides.grey_floor.unwrap_or(printer.display.grey_floor),
+            range: overrides.grey_range.unwrap_or(GreyRange {
+                min: printer.display.grey_min,
+                max: printer.display.grey_max,
+            }),
             levels: overrides.grey_levels,
         },
         blur_px: overrides.blur_px,
