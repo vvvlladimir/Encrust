@@ -13,7 +13,7 @@ use core_format::{
 };
 use core_pipeline::open;
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
-use printer_profiles::{MaterialProfile, PrinterProfile, PrinterTuning, WaitMode, Waits};
+use printer_profiles::{Buffer, MaterialProfile, PrinterProfile, PrinterTuning, WaitMode, Waits};
 
 const WIDTH_PX: u32 = 64;
 const HEIGHT_PX: u32 = 40;
@@ -257,6 +257,11 @@ fn stated_by(extension: &str) -> PrinterTuning {
             ..peel
         },
         "cws" => peel,
+        // The test printer has no buffer, so the block states it off (ADR 0371).
+        "cxdlpv4" => PrinterTuning {
+            buffer: Some(Buffer::default()),
+            ..PrinterTuning::default()
+        },
         // Two bottom layers and a ramp of two fade over five; read back, the firmware's one
         // first layer leaves a ramp of three ending on the same layer.
         "sl1" => PrinterTuning {
