@@ -20,7 +20,8 @@ Three things worth stating before the tables:
 1. **The model code is matched by the firmware.** The header carries `CL-60`, `R012` and the
    like: the vendor slicer's own code for a machine name it knows (`HALOT-X1 Max` is `R012`),
    else a `CL` or `CT` code picked out of the name; a profile with neither is refused rather
-   than guessed at.
+   than guessed at. A shipped machine the vendor has no code for (`HALOT-PLAY`, `HALOT-R6`,
+   `PIOCREAT C02`) carries its name, as the vendor writer does with any name it does not know.
 2. **An exposure is in tenths of a second in version 3** while the bottom exposure beside
    it is in whole seconds, and the wait before cure is whole seconds with the fraction
    dropped, as the vendor writes it.

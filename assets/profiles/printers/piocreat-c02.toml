@@ -1,0 +1,42 @@
+# PIOCREAT C02.
+
+name = "C02"
+manufacturer = "PIOCREAT"
+machine_name = "PIOCREAT C02"
+mirror_x = true
+mirror_y = false
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 13320
+height_px = 5120
+width_mm = 223.78
+height_mm = 126.98
+grey_floor = 0
+
+[build_volume]
+x = 223.78
+y = 126.98
+z = 230.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+wait_mode = "light-off"
+bottom_lift_distance_mm = 6.0
+bottom_lift_speed_mm_min = 60.0
+bottom_retract_speed_mm_min = 60.0
+retract_speed_mm_min = 60.0
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+exposure_s = { warn_min = 0.5, warn_max = 10 }
+bottom_exposure_s = { warn_min = 1, warn_max = 70 }
+bottom_layers = { warn_min = 2, warn_max = 10 }
+light_off_delay_s = { warn_max = 20 }
+lift_distance_mm = { warn_min = 5, warn_max = 20 }
+lift_speed_mm_min = { warn_min = 60 }

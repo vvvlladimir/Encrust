@@ -1,8 +1,8 @@
 # The `.fdg`
 
-What the Voxelab Ceres 8.9, Polaris 5.5 and Proxima 6 read, Chitu boards all: the `.ctb`
-v4 preview records and per-layer records under a header of its own, and a layer codec of
-one bit a pixel. Written by `format-chitu`'s `fdg` module.
+What the Voxelab Ceres 8.9, Polaris 5.5 and Proxima 6 and the FlashForge Foto 6.0 and 8.9
+read, Chitu boards all: the `.ctb` v4 preview records and per-layer records under a header
+of its own, and a layer codec of one bit a pixel. Written by `format-chitu`'s `fdg` module.
 
 Read off the vendor's own slicer, statically: its writer for this container, its encoder
 and its cipher. No file has been printed from yet.

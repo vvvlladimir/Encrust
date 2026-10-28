@@ -506,10 +506,10 @@ whole-surface fill is Cmd-Shift-click.
 - Lift distance and speed, retract speed, separate values for the bottom layers.
 - A setting the printer's own slicer does not let you change is not offered either, and the
   file states what that slicer writes. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
-  Ultra 16K and Mars 5 Ultra — there are no lift or retract settings, and the print time
-  counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only. Older Chitu
-  machines have no light power or transition layers, Anycubic and Halot machines wait with the
-  light off, and a Halot Mage's bottom lift is fixed.
+  Ultra 16K, Saturn 5 Ultra and Mars 5 Ultra — there are no lift or retract settings, and the
+  print time counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only.
+  Older Chitu machines have no light power or transition layers, Anycubic and Halot machines
+  wait with the light off, and a Halot Mage's bottom lift is fixed.
 - Wait before lift, after lift and after retract, light-off delay.
 - Light power, and bottom light power where the printer supports it.
 
@@ -593,7 +593,7 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
-| `.fdg` | Voxelab | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
+| `.fdg` | Voxelab, FlashForge Foto | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
 | `.phz` | Phrozen Sonic Mini | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
 | `.photons` | Anycubic Photon S | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. One exposure for the whole print. Not yet printed from. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
@@ -619,10 +619,11 @@ rather than opened: as a resin while a printer's resins are in view, or when it 
 file or a resin profile, and as a printer otherwise. The first printer and resin you add
 are the ones the plate prints on, with no second click.
 
-**Printers:** about 195 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
+**Printers:** about 200 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
 FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab, HIFUN,
 ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima, Zortrax, PIOCREAT and PioNext,
-the Creality HALOT X1, X1 Max, X1 Neo, SKY 2025 and MAGE S among them.
+the Creality HALOT X1, X1 Max, X1 Neo, SKY 2025, MAGE S, PLAY and R6, the PIOCREAT C02
+and the ELEGOO Saturn 5 Ultra among them.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,

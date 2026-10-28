@@ -1,0 +1,43 @@
+# Creality Halot R6.
+
+name = "Halot R6"
+manufacturer = "Creality"
+machine_name = "HALOT-R6"
+mirror_x = true
+mirror_y = false
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 1620
+height_px = 2560
+width_mm = 82.62
+height_mm = 130.56
+grey_floor = 0
+
+[build_volume]
+x = 82.62
+y = 130.56
+z = 160.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+wait_mode = "light-off"
+bottom_lift_distance_mm = 6.0
+bottom_lift_speed_mm_min = 60.0
+bottom_retract_speed_mm_min = 60.0
+retract_speed_mm_min = 60.0
+bottom_light_off_delay_s = 0.0
+
+[limits]
+layer_height_mm = { min = 0.01, max = 0.2 }
+exposure_s = { min = 1, max = 10 }
+bottom_exposure_s = { min = 10, max = 70 }
+bottom_layers = { max = 10 }
+light_off_delay_s = { max = 10 }
+lift_distance_mm = { min = 3, max = 5 }
+lift_speed_mm_min = { min = 60, max = 300 }

@@ -21,8 +21,8 @@ pub enum CxdlpVersion {
 }
 
 /// The code the vendor slicer gives a machine it knows by name, newer HALOTs having an `R`
-/// code with no `CL` in their name.
-const KNOWN_CODES: [(&str, &str); 16] = [
+/// code with no `CL` in their name; one it has no code for it names as it stands.
+const KNOWN_CODES: [(&str, &str); 19] = [
     ("HALOT-LITE", "CL-89L"),
     ("HALOT-ONE", "CL-60"),
     ("HALOT-ONE PRO", "CL-70"),
@@ -39,6 +39,9 @@ const KNOWN_CODES: [(&str, &str); 16] = [
     ("PioNext Mini", "R018"),
     ("PioNext Ultra", "R026"),
     ("HALOT-SKY 2025", "R027"),
+    ("HALOT-PLAY", "HALOT-PLAY"),
+    ("HALOT-R6", "HALOT-R6"),
+    ("PIOCREAT C02", "PIOCREAT C02"),
 ];
 
 /// The model code the header must carry: the vendor slicer's own for a machine it names,
@@ -105,7 +108,7 @@ mod tests {
     fn a_machine_the_vendor_names_takes_its_code() {
         assert_eq!(model_code("HALOT-X1 Max").as_deref(), Some("R012"));
         assert_eq!(model_code("HALOT-ONE").as_deref(), Some("CL-60"));
-        assert_eq!(model_code("HALOT-PLAY"), None);
+        assert_eq!(model_code("HALOT-PLAY").as_deref(), Some("HALOT-PLAY"));
     }
 
     #[test]

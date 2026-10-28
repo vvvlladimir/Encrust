@@ -19,7 +19,7 @@ grey_floor = 0
 [build_volume]
 x = 68.04
 y = 120.96
-z = 155.0
+z = 150.0
 
 [firmware]
 per_layer_settings = true

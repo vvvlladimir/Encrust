@@ -108,6 +108,7 @@ fn every_tilting_vat_states_no_lift_of_its_own() {
     for id in [
         "elegoo-saturn-4-ultra",
         "elegoo-saturn-4-ultra-16k",
+        "elegoo-saturn-5-ultra",
         "elegoo-mars-5-ultra",
     ] {
         let entry = catalogue.printer(id).expect("a shipped machine");

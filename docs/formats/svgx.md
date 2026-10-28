@@ -2,7 +2,7 @@
 
 What the FlashForge Foto, Focus, Explorer and Hunter and the Voxelab Proxima read: a
 twenty-eight byte header, two bitmap previews, and an SVG document holding the whole stack.
-Nine machines in the shipped catalogue carry `output = "svgx"`.
+Seven machines in the shipped catalogue carry `output = "svgx"`.
 
 It is the one container we write whose layers are **vectors**. A layer is a group of filled
 polygons in millimetres, not a grid of pixels, so it carries no grey at all: a path is
