@@ -158,6 +158,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0117](0117-blur-the-coverage-before-the-floor.md) | Blur is a box filter on the runs' coverage, before the floor | Accepted |
 | [0139](0139-the-edge-grey-follows-a-file-that-prints.md) | Let the edge carry every grey | Accepted |
 | [0145](0145-tolerance-moves-the-contours-not-the-mask.md) | Tolerance moves the contours, not the mask | Accepted |
+| [0378](0378-a-machine-may-take-masks-without-grey-only.md) | A machine may take masks without grey only | Accepted |
 
 ### Exposure and the written stack
 

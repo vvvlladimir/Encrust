@@ -12,7 +12,7 @@ use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use printer_profiles::{Compensation, MaterialProfile};
+use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
@@ -428,8 +428,22 @@ fn adaptive_settings(job: &JobArgs, layer_height: Scalar, talk: bool) -> Adaptiv
     settings
 }
 
-/// What the command line sets over the panel the printer profile describes.
-pub fn overrides_of(args: &RasterArgs) -> PanelOverrides {
+/// What the command line sets over the panel the printer profile describes, warning when it
+/// asks for grey a binary-only `printer` does not take.
+pub fn overrides_of(
+    args: &RasterArgs,
+    printer: Option<&PrinterProfile>,
+    talk: bool,
+) -> PanelOverrides {
+    let asks_grey = args.grey_levels.is_some() || args.grey_floor.is_some() || args.blur != 0;
+    if let Some(printer) =
+        printer.filter(|printer| talk && asks_grey && printer.display.binary_only)
+    {
+        tracing::warn!(
+            "{} takes masks without grey, so --grey-levels, --grey-floor and --blur change nothing",
+            printer.name
+        );
+    }
     PanelOverrides {
         shading: if args.no_anti_alias {
             Shading::Binary

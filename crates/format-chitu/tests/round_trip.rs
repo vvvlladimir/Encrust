@@ -514,6 +514,16 @@ fn the_version_four_block_counts_the_layers_and_adds_up_their_time() {
 }
 
 #[test]
+fn a_grey_stack_states_the_flag_the_vendor_writes_without_grey() {
+    let pixels: Vec<u8> = (0..WIDTH_PX * HEIGHT_PX).map(|index| index as u8).collect();
+    for version in [CtbVersion::V4, CtbVersion::V5] {
+        let file = write(version, &[layer_from(&pixels)]);
+        let slicer = u32_at(&file, SLICER_OFFSET) as usize;
+        assert_eq!(file[slicer + 0x24], 0x07, "{version:?}");
+    }
+}
+
+#[test]
 fn a_two_stage_peel_reads_back_as_its_two_stages() {
     let mut job = job(1);
     let material = &mut job.material;

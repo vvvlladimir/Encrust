@@ -1,8 +1,8 @@
 use std::io::Cursor;
 
 use core_format::{
-    ChituLayer, ChituTotals, Crc32, Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek,
-    SlicedFileWriter, check_layer_pushed, check_layers_finished, chitu_grey_flags, validate,
+    CHITU_SLICER_FLAGS, ChituLayer, ChituTotals, Crc32, Fields, FormatError, LayerSink, PrintJob,
+    ReadWriteSeek, SlicedFileWriter, check_layer_pushed, check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
@@ -39,17 +39,15 @@ impl CtbVersion {
         }
     }
 
-    /// The slicer info's flag word: whether the layers carry grey in its low byte, and in
-    /// its high byte whether the machine is to obey the per-layer blocks, which the vendor
-    /// leaves clear while every layer is the header's.
+    /// The slicer info's flag word: in its high byte whether the machine is to obey the
+    /// per-layer blocks, which the vendor leaves clear while every layer is the header's.
     pub(crate) fn flags(self, job: &PrintJob) -> u32 {
-        let grey = chitu_grey_flags(job.raster.shading);
         let per_layer = if job.varies_by_layer() {
             self.per_layer_settings()
         } else {
             0
         };
-        grey | u32::from(per_layer) << 24
+        CHITU_SLICER_FLAGS | u32::from(per_layer) << 24
     }
 
     fn head(self, job: &PrintJob) -> Head {

@@ -12,11 +12,14 @@ use crate::ui::{
 /// How this plate is cut and exposed: a form opened from the top bar. Its edits change the
 /// plate's copy, never the resin profile; a new printer or resin resets them.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
-    let (locked, limits) = machine
+    let (locked, limits, binary_only) = machine
         .slicing
         .printer
         .as_ref()
-        .map(|printer| (printer.locked.clone(), printer.limits.clone()))
+        .map(|printer| {
+            let binary_only = printer.display.binary_only;
+            (printer.locked.clone(), printer.limits.clone(), binary_only)
+        })
         .unwrap_or_default();
     let mut to_the_printer = layers::layers(ui, machine);
     section(
@@ -33,7 +36,9 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
         },
     );
     to_the_printer |= layers::bands(ui, machine);
-    layers::edges(ui, machine);
+    if !binary_only {
+        layers::edges(ui, machine);
+    }
     if !locked.locks_waiting() {
         section(ui, &tr!("print-waiting"), None, |ui| {
             describe(ui, &tr!("print-waiting-help"));
@@ -293,4 +298,52 @@ fn motion(
 /// A limit the maker gives no reason for.
 fn held(limit: &Limit) -> Held<'_> {
     Held { limit, why: None }
+}
+
+#[cfg(test)]
+mod tests {
+    use egui_kittest::kittest::Queryable as _;
+
+    use super::*;
+    use crate::ui::theme;
+
+    /// The form for the shipped printer `id`, after the theme has been put on.
+    fn form_for(id: &str) -> egui_kittest::Harness<'static, Machine> {
+        let mut machine = Machine::default();
+        let printer = machine
+            .slicing
+            .catalogue
+            .printer(id)
+            .expect("a shipped machine")
+            .profile
+            .clone();
+        machine.slicing.set_printer(printer, None);
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(360.0, 2000.0))
+            .build_ui_state(
+                move |ui, machine: &mut Machine| {
+                    if dressed {
+                        super::ui(ui, machine);
+                    } else {
+                        theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                machine,
+            );
+        harness.run_steps(3);
+        harness
+    }
+
+    #[test]
+    fn a_binary_only_machine_offers_no_edge_smoothing() {
+        let shown = |id| {
+            form_for(id)
+                .query_by_label_contains("Edge smoothing")
+                .is_some()
+        };
+        assert!(shown("elegoo-saturn-4-ultra"));
+        assert!(!shown("creality-halot-x1"), "its vendor keeps grey off");
+    }
 }

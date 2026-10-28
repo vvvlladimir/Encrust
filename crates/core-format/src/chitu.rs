@@ -3,7 +3,7 @@
 
 use std::io;
 
-use core_raster::{LayerRuns, Shading};
+use core_raster::LayerRuns;
 use core_thumbnail::{Rgb, Thumbnail};
 
 use crate::{
@@ -97,13 +97,9 @@ impl ChituTotals {
     }
 }
 
-/// The low byte of the slicer info's flag word: whether the layers carry grey.
-pub fn chitu_grey_flags(shading: Shading) -> u32 {
-    match shading {
-        Shading::Binary => 0x07,
-        Shading::Coverage => 0x0F,
-    }
-}
+/// The low byte of the slicer info's flag word, the same with grey or without as the
+/// vendor's slicer writes it.
+pub const CHITU_SLICER_FLAGS: u32 = 0x07;
 
 /// Both preview records, large then small, cut from the job's thumbnail or black, and
 /// where each starts.

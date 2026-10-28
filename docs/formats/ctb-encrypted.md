@@ -83,7 +83,7 @@ Offsets are into the deciphered block.
 | 0x84 | second stage: bottom lift, its speed, lift, its speed, retract, its speed, `f32` each |
 | 0x9C | rest before lift, `f32`, s |
 | 0xA0 | machine name address, length, `u32` each |
-| 0xA8 | the plain `.ctb`'s slicer flags, `u32`: 7 binary or `0x0F` grey; `0x50` in the top byte only where a layer differs from these settings, a transition ramp not counted |
+| 0xA8 | the plain `.ctb`'s slicer flags, `u32`: 7 in the low byte, with grey or without; `0x50` in the top byte only where a layer differs from these settings, a transition ramp not counted |
 | 0xAC | modified time in minutes since the epoch, anti-alias level (4 with it off), `u32` each |
 | 0xB4 | rest after retract, rest after lift, `f32` each, s |
 | 0xBC | transition layers, `u32` |

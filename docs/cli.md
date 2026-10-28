@@ -33,7 +33,8 @@ is of the model as import leaves it; turns and bridges go first, drops last, bef
 so a feature thinner than a layer is kept. A mask is
 shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
 at all, `--grey-levels N` rounds its edges to N greys, `--grey-floor V` sets the dimmest
-grey written or `--blur PX` fades every edge.
+grey written or `--blur PX` fades every edge. A printer whose profile states
+`binary_only` takes no grey: the three are ignored for it, with a warning (ADR 0378).
 
 ```sh
 encrust profiles list

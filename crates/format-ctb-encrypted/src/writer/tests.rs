@@ -2,6 +2,7 @@
 //! resin, `local-docs` sample `GK3-Ultra.ctb`, deciphered.
 
 use core_format::Crc32;
+use core_raster::Shading;
 
 use super::*;
 use crate::fixtures::{test_resin_job, written};
@@ -116,6 +117,13 @@ fn a_stack_the_settings_describe_leaves_the_per_layer_flag_clear() {
         "binary grey, no per-layer settings"
     );
     assert_eq!(settings.u32(at::ANTI_ALIAS_LEVEL), 4, "the dormant level");
+}
+
+#[test]
+fn a_grey_stack_states_the_flag_the_vendor_writes_without_grey() {
+    let mut job = test_resin_job(2);
+    job.raster.shading = Shading::Coverage;
+    assert_eq!(deciphered(&written(&job)).u32(at::FLAGS), 7);
 }
 
 #[test]

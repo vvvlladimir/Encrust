@@ -175,3 +175,25 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
         "the rests stay the resin's"
     );
 }
+
+#[test]
+fn only_the_machines_the_vendor_keeps_without_grey_are_binary_only() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+
+    let expected = [
+        "creality-halot-x1",
+        "creality-halot-x1-max",
+        "creality-halot-x1-neo",
+        "creality-halot-sky-2025",
+        "piocreat-pionext-mini",
+        "piocreat-pionext-ultra",
+    ];
+    for entry in catalogue.printers() {
+        assert_eq!(
+            entry.profile.display.binary_only,
+            expected.contains(&entry.id.as_str()),
+            "{}",
+            entry.id
+        );
+    }
+}

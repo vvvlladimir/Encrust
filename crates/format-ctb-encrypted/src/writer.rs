@@ -1,9 +1,9 @@
 use std::io::Cursor;
 
 use core_format::{
-    CHITU_ANTI_ALIAS_CAP, CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, ChituLayer, ChituTotals, Crc32,
-    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
-    check_layers_finished, chitu_grey_flags, chitu_layer_motion, chitu_second_stage_words,
+    CHITU_ANTI_ALIAS_CAP, CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_SLICER_FLAGS, ChituLayer,
+    ChituTotals, Crc32, Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter,
+    check_layer_pushed, check_layers_finished, chitu_layer_motion, chitu_second_stage_words,
     validate, write_chitu_previews, write_chitu_resin,
 };
 use core_raster::LayerRuns;
@@ -332,13 +332,12 @@ fn put_slicer_info(set: &mut Settings, job: &PrintJob) {
     }
 }
 
-/// Grey in the low byte; in the high byte whether the machine is to obey each definition,
-/// which the vendor leaves clear for a stack the settings describe, transition ramp included.
+/// In the high byte whether the machine is to obey each definition, which the vendor
+/// leaves clear for a stack the settings describe, transition ramp included.
 fn flags(job: &PrintJob) -> u32 {
-    let grey = chitu_grey_flags(job.raster.shading);
     let per_layer =
         job.printer.firmware.per_layer_settings && (!job.exposure.is_empty() || !job.is_uniform());
-    grey | u32::from(if per_layer { PER_LAYER_SETTINGS } else { 0 }) << 24
+    CHITU_SLICER_FLAGS | u32::from(if per_layer { PER_LAYER_SETTINGS } else { 0 }) << 24
 }
 
 #[cfg(test)]

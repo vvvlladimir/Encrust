@@ -231,6 +231,10 @@ pub struct Display {
     /// Zero, the default, keeps every grey. See `docs/decisions/0139`.
     #[serde(default)]
     pub grey_floor: u8,
+    /// Whether this machine takes masks without grey only, as its vendor's slicer keeps
+    /// anti-aliasing off and hidden for it. See `docs/decisions/0378`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub binary_only: bool,
 }
 
 impl Display {
@@ -366,6 +370,7 @@ impl Default for PrinterProfile {
                 width_mm: 143.36,
                 height_mm: 89.6,
                 grey_floor: 0,
+                binary_only: false,
             },
             build_volume: BuildVolume {
                 x: 143.36,

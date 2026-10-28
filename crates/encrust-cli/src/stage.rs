@@ -330,7 +330,7 @@ pub fn plate_of(
         printer: chosen.printer.clone(),
         material: chosen.material.clone(),
         cutting: cutting_of(job, layer_height, &chosen.material.compensation, watch.talk),
-        panel: overrides_of(&job.raster),
+        panel: overrides_of(&job.raster, chosen.printer.as_ref(), watch.talk),
         exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
         remove_islands: job.raster.remove_islands,
         hanging_passes: job.raster.hanging_passes,

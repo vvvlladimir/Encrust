@@ -21,7 +21,7 @@ mod writer;
 
 pub use chitu::{
     CHITU_ANTI_ALIAS_CAP, CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_RESIN_BYTES,
-    CHITU_RESIN_TYPE, ChituLayer, ChituPeel, ChituTotals, chitu_grey_flags, chitu_keystream_xor,
+    CHITU_RESIN_TYPE, CHITU_SLICER_FLAGS, ChituLayer, ChituPeel, ChituTotals, chitu_keystream_xor,
     chitu_layer_crypt, chitu_layer_motion, chitu_second_stage_words, write_chitu_previews,
     write_chitu_resin,
 };

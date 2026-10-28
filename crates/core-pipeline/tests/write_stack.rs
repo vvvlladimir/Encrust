@@ -135,6 +135,20 @@ fn run(
 }
 
 #[test]
+fn a_binary_only_panel_gets_no_grey_whatever_was_asked() {
+    let mut printer = printer();
+    printer.display.binary_only = true;
+    let settings = raster_settings(
+        &printer,
+        PanelOverrides {
+            shading: Shading::Coverage,
+            ..PanelOverrides::default()
+        },
+    );
+    assert_eq!(settings.shading, Shading::Binary);
+}
+
+#[test]
 fn a_box_reaches_the_file_as_the_layers_it_cures() {
     let path = temp("box", "goo");
     let written = run(

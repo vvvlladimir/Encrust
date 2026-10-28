@@ -37,7 +37,7 @@ pub(crate) const LAYER_KEY: usize = 0x80;
 pub(crate) const SECOND_STAGE: usize = 0x84;
 pub(crate) const FIRST_REST_BEFORE_LIFT_S: usize = 0x9C;
 pub(crate) const MACHINE_NAME: usize = 0xA0;
-/// The plain `.ctb`'s slicer flags: grey in the low byte, per-layer settings in the high.
+/// The plain `.ctb`'s slicer flags: 7 in the low byte, per-layer settings in the high.
 pub(crate) const FLAGS: usize = 0xA8;
 pub(crate) const MODIFIED_MINUTES: usize = 0xAC;
 pub(crate) const ANTI_ALIAS_LEVEL: usize = 0xB0;

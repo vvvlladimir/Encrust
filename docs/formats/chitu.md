@@ -131,9 +131,9 @@ pass, and stacking passes would cost several times the bytes for a worse result.
 container has no grey of its own and the passes are the only way to carry any, so it is
 written at level 8; see `docs/decisions/0146`.
 
-`slicer info` carries an anti-alias *flag* as well, `0x0F` when grey is in use and `0x07`
-when not, and a level of its own: the index of 2, 4 or 8 the vendor offers, 4 with
-anti-aliasing off, as it writes it. The older
+`slicer info` carries a level of its own: the index of 2, 4 or 8 the vendor offers, 4 with
+anti-aliasing off, as it writes it. Its flag byte beside it is `0x07` with grey or
+without: the vendor's slicer sets it so unconditionally. The older
 container has no slicer info block, so the header's level is all it states.
 
 ### Mirroring
@@ -189,7 +189,7 @@ without a price.
 | 0x18 | rest after lift, `f32` | |
 | 0x1C | machine name address, `u32` | the end of this block |
 | 0x20 | machine name length, `u32` | |
-| 0x24 | anti-alias flag, `u8` | `0x0F` with grey, `0x07` without |
+| 0x24 | flags, `u8` | `0x07`, with grey or without, as the vendor writes it |
 | 0x25 | padding, `u16` | |
 | 0x27 | per-layer settings, `u8` | `0x40` for version 4, `0x50` for version 5, 0 while every layer is the header's |
 | 0x28 | modified timestamp, `u32` | **minutes** since the Unix epoch |

@@ -17,8 +17,9 @@ pub struct PanelOverrides {
     pub blur_px: u8,
 }
 
-/// The panel the masks are drawn for, straight off the printer profile. Masks go in as the plate
-/// stands, near edge up; only the header carries the mirroring (ADR 0134).
+/// The panel the masks are drawn for, straight off the printer profile, without grey on a
+/// binary-only machine whatever was asked (ADR 0378). Masks go in as the plate stands, near
+/// edge up; only the header carries the mirroring (ADR 0134).
 pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> RasterSettings {
     let (x, y) = printer.display.pixel_pitch_mm();
     RasterSettings {
@@ -27,7 +28,11 @@ pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> R
         pitch: PixelPitch { x, y },
         mirror_x: false,
         mirror_y: false,
-        shading: overrides.shading,
+        shading: if printer.display.binary_only {
+            Shading::Binary
+        } else {
+            overrides.shading
+        },
         grey: Grey {
             floor: overrides.grey_floor.unwrap_or(printer.display.grey_floor),
             levels: overrides.grey_levels,

@@ -501,6 +501,8 @@ whole-surface fill is Cmd-Shift-click.
   or raw masks.
 - Or set it by hand: grey levels, edge blur, grey floor, rounded edge grey.
 - How much grey reaches the printer depends on its format (see [File formats](#file-formats)).
+- Not offered for the Creality HALOT-X1, X1 Max, X1 Neo and SKY 2025, or the PIOCREAT
+  PioNext Mini and Ultra: their maker's slicer keeps it off, so their masks carry no grey.
 
 ### Motion and waits
 - Lift distance and speed, retract speed, separate values for the bottom layers, and a
