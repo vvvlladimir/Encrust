@@ -330,6 +330,17 @@ pub fn hint(ui: &mut Ui, text: &str) {
     );
 }
 
+/// A figure worked out from the fields over it, set flush with their right edge.
+pub fn field_note(ui: &mut Ui, text: &str) {
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.label(
+            RichText::new(text)
+                .font(theme::small())
+                .color(theme::colors().text_low),
+        );
+    });
+}
+
 /// Lines of numbers under a picker: the build volume, the exposure the resin asks for.
 pub fn meta(ui: &mut Ui, lines: &[String]) {
     for line in lines {
@@ -495,11 +506,18 @@ pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
     .inner
 }
 
-/// The frame of a window over the plate: the panel's fill, a hairline edge, the shadow.
-pub fn dialog_frame() -> Frame {
+/// A window over the plate: on the panel's fill, ringed in `line`, `margin` inside it, over
+/// the stage dimmed by the scrim.
+pub fn dialog(id: egui::Id, margin: i8) -> egui::Modal {
+    egui::Modal::new(id)
+        .frame(dialog_frame().inner_margin(egui::Margin::same(margin)))
+        .backdrop_color(theme::scrim(theme::SCRIM_SHARE))
+}
+
+fn dialog_frame() -> Frame {
     Frame::new()
         .fill(theme::colors().panel)
-        .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
+        .stroke(egui::Stroke::new(1.0, theme::colors().line))
         .corner_radius(theme::R_PANEL)
         .shadow(theme::WINDOW_SHADOW)
 }

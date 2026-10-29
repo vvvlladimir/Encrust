@@ -56,6 +56,11 @@ impl Recent {
         self.0.retain(|file| file.path != path);
     }
 
+    /// Forgets every file, as the start page's Clear the list asks.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     pub fn files(&self) -> &[RecentFile] {
         &self.0
     }

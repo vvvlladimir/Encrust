@@ -9,7 +9,7 @@ use crate::scene::Scene;
 use crate::state::{Machine, Tools};
 use crate::status::Status;
 use crate::tool_settings::ToolSettings;
-use crate::ui::{dialog_frame, dialog_head, hairline, hint, icon, inline_button, switch, theme};
+use crate::ui::{dialog, dialog_head, hairline, hint, icon, inline_button, switch, theme};
 
 /// The sheet's width where there is room for it, and the narrowest it is still drawn at.
 const SHEET_W: f32 = 520.0;
@@ -64,36 +64,34 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     let sheet_w = (screen.width() - SCREEN_MARGIN).clamp(SHEET_MIN_W, SHEET_W);
     let body_h = (screen.height() - SCREEN_MARGIN - CHROME_H).clamp(BODY_MIN_H, BODY_MAX_H);
     let report_h = (body_h * REPORT_SHARE).max(REPORT_MIN_H);
-    let sheet = egui::Modal::new(egui::Id::new("report"))
-        .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
-        .show(ctx, |ui| {
-            ui.set_width(sheet_w);
-            header(ui, report);
-            ui.add_space(10.0);
+    let sheet = dialog(egui::Id::new("report"), 18).show(ctx, |ui| {
+        ui.set_width(sheet_w);
+        header(ui, report);
+        ui.add_space(10.0);
 
-            let text = egui::ScrollArea::vertical()
-                .max_height(body_h)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    // The privacy notice as well, so it says what does not happen first (ADR 0212).
-                    hint(ui, &tr!("report-nothing-sent"));
-                    ui.add_space(12.0);
-                    asked(ui, &tr!("report-what-happened"), &mut report.what);
-                    asked(ui, &tr!("report-steps"), &mut report.steps);
-                    carried(ui, report);
-                    ui.add_space(8.0);
-                    hint(ui, &tr!("report-no-model"));
-                    ui.add_space(12.0);
+        let text = egui::ScrollArea::vertical()
+            .max_height(body_h)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                // The privacy notice as well, so it says what does not happen first (ADR 0212).
+                hint(ui, &tr!("report-nothing-sent"));
+                ui.add_space(12.0);
+                asked(ui, &tr!("report-what-happened"), &mut report.what);
+                asked(ui, &tr!("report-steps"), &mut report.steps);
+                carried(ui, report);
+                ui.add_space(8.0);
+                hint(ui, &tr!("report-no-model"));
+                ui.add_space(12.0);
 
-                    // Drawn after the fields so that a key pressed this frame is already in it.
-                    let text = report.markdown(&facts);
-                    shown(ui, &text, report_h);
-                    text
-                })
-                .inner;
-            ui.add_space(12.0);
-            handed_over(ui, report, &facts, &text, status);
-        });
+                // Drawn after the fields so that a key pressed this frame is already in it.
+                let text = report.markdown(&facts);
+                shown(ui, &text, report_h);
+                text
+            })
+            .inner;
+        ui.add_space(12.0);
+        handed_over(ui, report, &facts, &text, status);
+    });
 
     if sheet.should_close() {
         report.open = false;

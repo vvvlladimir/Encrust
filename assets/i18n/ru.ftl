@@ -394,6 +394,8 @@ bin-click-again = Нажмите ещё раз, чтобы удалить
 ## panels/settings.rs
 
 settings-title = Настройки
+settings-group-profiles = Профили инструментов
+settings-group-window = Окно
 settings-shortcuts = Горячие клавиши
 settings-import = Импорт
 settings-cannot-export = не удалось экспортировать профиль
@@ -1249,8 +1251,8 @@ printer-cannot-put-back = не удалось вернуть поставляе�
 printer-cannot-save = не удалось сохранить принтер
 printer-grey-min = Самый тусклый серый края
 printer-grey-max = Самый яркий серый края
-printer-grey-range-full = серый края записывается как есть
-printer-grey-range-spread = серый края поднимается до самого тусклого и растягивается до самого яркого; чёрный и сплошной белый не меняются
+printer-grey-range-full = Серый края записывается как есть.
+printer-grey-range-spread = Серый края поднимается до самого тусклого и растягивается до самого яркого; чёрный и сплошной белый не меняются.
 printer-pitch = { $x } × { $y } мкм на пиксель
 printer-mirror = Зеркало
 printer-mirror-normal = Обычное
@@ -1263,8 +1265,8 @@ printer-inset-max-x = Отступ у +X
 printer-inset-min-y = Отступ у −Y
 printer-inset-max-y = Отступ у +Y
 printer-inset-note = Модель в полосе отступа помечается, но нарезается целиком.
-printer-per-layer-on = экспозиция и движение читаются из каждого слоя; в .goo это называют расширенным режимом
-printer-per-layer-off = каждый слой печатается по значениям из заголовка, а нижние слои принтер плавно проходит сам
+printer-per-layer-on = Экспозиция и движение читаются из каждого слоя; в .goo это называют расширенным режимом.
+printer-per-layer-off = Каждый слой печатается по значениям из заголовка, а нижние слои принтер плавно проходит сам.
 printer-variable-height-note = Если выключено, платформа двигается на высоту из заголовка, поэтому адаптивный набор слоёв отклоняется.
 printer-output-note = Формат, в который нарезается для этого принтера, и для диалога, и для самого принтера.
 
@@ -1645,7 +1647,7 @@ updates-more-notes = И ещё больше на странице выпуска
 ## panels/start.rs
 
 start-title = Новая платформа
-start-subtitle = Откройте модель или продолжите с того места, где остановились.
+start-setup = { $machine } · { $resin } · { $layer } мкм
 start-zone = Откройте модель или проект
 start-drop-here = Перетащите модель сюда
 start-drop-formats = STL, OBJ, 3MF или проект .encrust
@@ -1653,12 +1655,7 @@ start-open-model = Открыть модель
 start-open-project = Открыть проект
 start-recent = Недавние
 start-test-prints = Пробные печати
-start-files =
-    { $count ->
-        [one] { $count } файл
-        [few] { $count } файла
-       *[many] { $count } файлов
-    }
+start-clear-recent = Очистить список
 start-models =
     { $count ->
         [one] { $count } модель
@@ -1739,20 +1736,15 @@ section-layers-range = Слои с { $first } по { $layer }
 ## panels/settings/confirm.rs
 
 confirm-cannot-undo = Это нельзя отменить.
-confirm-remove-machine = Удалить «{ $name }» и всё, что вы на нём изменили?
-confirm-remove = Удалить
+confirm-click-again = Нажмите ещё раз, чтобы продолжить
+confirm-asked-delete = Удалить?
+confirm-asked-take-off = Убрать?
+confirm-asked-stop = Остановить?
 confirm-machine-stays = Принтер остаётся в библиотеке, поэтому его можно добавить снова со значениями, поставляемыми в этой сборке.
-confirm-take-resin-off = Убрать эту смолу
-confirm-delete-named = Удалить «{ $name }»?
 confirm-untouched-resin = В неё ничего не вводилось, поэтому она не сохраняется в общем списке.
-confirm-take-off-named = Убрать «{ $name }» с этого принтера?
-confirm-take-off = Убрать
 confirm-stays-in-pool = Она остаётся в общем списке, и этот или любой другой принтер может взять её обратно.
 confirm-stays-measured = Она остаётся в общем списке, откалибрована на: { $printers }.
-confirm-delete-resin = Удалить эту смолу
-confirm-delete-resin-named = Удалить «{ $name }» и подобранные для неё экспозиции?
 confirm-comes-off = Она также убирается с: { $printers }.
-confirm-delete-profile = Удалить этот профиль
 confirm-reset-unreadable = Сбросить нечитаемые профили
 confirm-delete-unreadable = Удалить нечитаемые профили
 confirm-reset-named = Удалить ваши копии профилей { $names } и использовать те, что поставляются с этой версией?
@@ -1877,9 +1869,7 @@ preview-cannot-rasterise = не удалось растеризовать сло
 
 ## panels/printer_card/controls.rs
 
-controls-stop-question = Остановить печать? Её нельзя будет возобновить.
-controls-stop = Остановить печать
-controls-keep-printing = Продолжить печать
+controls-stop-cost = Остановленную печать нельзя возобновить.
 controls-film = Освобождение плёнки: подъём { $lifts } из { $max }
 controls-copy = Копировать
 controls-camera-off = Выключить камеру
@@ -2191,6 +2181,14 @@ exchange-choose-printer-resin = сначала выберите принтер, 
 
 ## panels/find.rs
 
+find-group-tools = Инструменты
+find-group-actions = Действия
+find-group-models = Модели
+find-keys-move = ↑ ↓
+find-move = выбрать
+find-keys-open = Enter
+find-open = открыть
+find-close = закрыть
 find-nothing = Под таким названием ничего нет
 
 ## panels/inspector/scope.rs
@@ -2236,6 +2234,7 @@ sheet-firmware = прошивка { $version }
 ## panels/settings/machines/library.rs
 
 library-all-brands = Все производители
+library-import = Импортировать профиль
 library-custom = Свой принтер
 library-search = Искать среди всех принтеров
 library-machines =

@@ -289,6 +289,10 @@ pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> 
         if focused && drives_the_focus(*key, *modifiers) {
             return true;
         }
+        // An armed `confirm_button` takes Esc before the window it stands in.
+        if *key == egui::Key::Escape && !modifiers.any() && crate::ui::any_armed(ctx) {
+            return true;
+        }
         match action_of(*key, *modifiers) {
             Some(action) => {
                 fired.push(action);
@@ -447,14 +451,15 @@ pub fn tooltip(action: Action) -> String {
 /// then the window itself.
 fn leave_machines(machine: &mut crate::state::Machine) {
     let settings = &mut machine.settings;
-    if settings.confirm.take().is_some() || settings.calculators.open.take().is_some() {
+    if std::mem::take(&mut settings.reset_unreadable) || settings.calculators.open.take().is_some()
+    {
         return;
     }
     settings.close_machines();
 }
 
 fn leave_settings(machine: &mut crate::state::Machine) {
-    if machine.settings.confirm.take().is_none() {
+    if !std::mem::take(&mut machine.settings.reset_unreadable) {
         machine.settings.close();
     }
 }

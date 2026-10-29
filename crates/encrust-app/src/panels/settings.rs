@@ -18,10 +18,10 @@ use printer_profiles::Kind;
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::settings::{Deleting, Node, Section, Tab};
+use crate::settings::{Node, Section, Tab};
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{focus_ring, hairline, icon, inline_button, theme};
+use crate::ui::{chooser_group, focus_ring, hairline, icon, inline_button, theme};
 use frame::{child, scrolled, with_header};
 
 /// The window, while it is open, and the question over it, which may be asked without it.
@@ -45,31 +45,37 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
     ask(ctx, window);
 }
 
-/// The pages down the left, the profiles over the window's own settings, and the window
-/// and the sheet the rest of the setup lives in.
+/// The pages down the left under their group names, the profiles over the window's own,
+/// and at the list's foot the window the rest of the setup lives in.
 fn pages(ui: &mut Ui, window: &mut Window) {
     ui.spacing_mut().item_spacing.y = 2.0;
     let settings = &mut window.machine.settings;
-    for group in [&Section::PROFILES[..], &Section::OWN[..]] {
+    let groups = [
+        (tr!("settings-group-profiles"), &Section::PROFILES[..]),
+        (tr!("settings-group-window"), &Section::OWN[..]),
+    ];
+    for (index, (name, group)) in groups.into_iter().enumerate() {
+        if index > 0 {
+            ui.add_space(GROUP_GAP);
+        }
+        chooser_group(ui, &name);
         for section in group {
             let active = settings.section == *section;
             if nav_row(ui, section_icon(*section), &section.label(), active).clicked() {
                 settings.turn_to(*section);
             }
         }
-        ui.add_space(10.0);
-        hairline(ui);
-        ui.add_space(10.0);
-    }
-    if nav_row(ui, icon::PRINTER, &tr!("machines-title"), false).clicked() {
-        window.machine.settings.close();
-        crate::panels::open_machines(window.machine);
     }
     // The keys are a sheet rather than a page: there is nothing to edit, and one listing
     // is enough. See `crate::shortcuts`.
     if nav_row(ui, icon::KEYBOARD, &tr!("settings-shortcuts"), false).clicked() {
         window.machine.settings.close();
         window.view.options.sheet = true;
+    }
+    ui.add_space((ui.available_height() - NAV_ROW_H).max(0.0));
+    if nav_row(ui, icon::PRINTER, &tr!("machines-title"), false).clicked() {
+        window.machine.settings.close();
+        crate::panels::open_machines(window.machine);
     }
 }
 
@@ -117,7 +123,7 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     ui.horizontal_centered(|ui| {
         ui.label(
             RichText::new(section.label())
-                .font(theme::page_title(18.0))
+                .font(theme::page_title(theme::PAGE_TITLE_PT))
                 .color(theme::colors().text_high),
         );
         let Some(kind) = section.kind() else {
@@ -138,10 +144,14 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     pressed
 }
 
+const NAV_ROW_H: f32 = theme::BUTTON_H + 4.0;
+/// Room over a group name of the list but the first.
+const GROUP_GAP: f32 = 10.0;
+
 /// One entry of the list of pages: a glyph and a name, washed while it is the page open.
 pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::Response {
     let colors = theme::colors();
-    let size = vec2(ui.available_width(), theme::BUTTON_H + 4.0);
+    let size = vec2(ui.available_width(), NAV_ROW_H);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, label)
@@ -254,31 +264,24 @@ pub(super) fn export_profile(machine: &mut Machine, kind: Kind, id: &str) {
     }
 }
 
-/// The question over the window, while a deletion is waiting to be answered for.
+/// The question over the window, while the profiles that would not read wait to be given up.
 fn ask(ctx: &egui::Context, window: &mut Window) {
-    let settings = &mut window.machine.settings;
-    let Some(deleting) = settings.confirm.clone() else {
+    if !window.machine.settings.reset_unreadable {
+        return;
+    }
+    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue) else {
         return;
     };
-    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
-        return;
-    };
-    settings.confirm = None;
-    match (answer, deleting) {
-        (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) => {
-            forget_profile(window.machine, kind, &id);
-        }
-        (confirm::Answer::Confirmed, Deleting::Unreadable) => {
-            let machine = &mut *window.machine;
-            let outcome = machine.slicing.catalogue.discard_unreadable();
-            report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
-        }
-        _ => {}
+    window.machine.settings.reset_unreadable = false;
+    if matches!(answer, confirm::Answer::Confirmed) {
+        let machine = &mut *window.machine;
+        let outcome = machine.slicing.catalogue.discard_unreadable();
+        report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
     }
 }
 
 /// Throws away a support profile or a tool's preset, and leaves nothing of it open.
-fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
+pub(super) fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
     let catalogue = &mut machine.slicing.catalogue;
     let outcome = catalogue.forget_user_copy(kind, id);
     report(&mut machine.status, &tr!("settings-cannot-delete"), outcome);
@@ -407,7 +410,7 @@ pub(super) fn name_row(ui: &mut egui::Ui, salt: &str, name: &str) -> Option<Stri
     });
     let mut response = None;
     ui.horizontal(|ui| {
-        crate::ui::field_label(ui, &tr!("settings-name"), theme::colors().text_mid, "");
+        crate::ui::row_name(ui, &tr!("settings-name"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let field = crate::ui::text_box(egui::TextEdit::singleline(&mut text))
                 .font(theme::label())

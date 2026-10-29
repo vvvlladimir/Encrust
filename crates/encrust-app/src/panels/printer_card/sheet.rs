@@ -7,7 +7,7 @@ use super::{colour_of, controls, face, history, job_lines, picture_of, trouble_l
 use crate::i18n::tr;
 use crate::network::{Errand, Network, Reading, Target};
 use crate::panels::Window;
-use crate::ui::{dialog_frame, dialog_head, hairline, icon, subheading, theme, tone};
+use crate::ui::{dialog, dialog_head, hairline, icon, subheading, theme, tone};
 
 /// How wide the sheet is, and the picture of the plate at its left.
 const SHEET_W: f32 = 620.0;
@@ -31,17 +31,15 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     };
     let mut close = false;
     let mut errand = None;
-    let modal = egui::Modal::new(egui::Id::new("printer-sheet"))
-        .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
-        .show(ctx, |ui| {
-            ui.set_width(SHEET_W);
-            close = dialog_head(ui, icon::PRINTER, &network.label(&target));
-            tone(ui, &about(&target), theme::colors().text_low);
-            ui.add_space(8.0);
-            hairline(ui);
-            ui.add_space(12.0);
-            errand = body(ui, network, &target);
-        });
+    let modal = dialog(egui::Id::new("printer-sheet"), 18).show(ctx, |ui| {
+        ui.set_width(SHEET_W);
+        close = dialog_head(ui, icon::PRINTER, &network.label(&target));
+        tone(ui, &about(&target), theme::colors().text_low);
+        ui.add_space(8.0);
+        hairline(ui);
+        ui.add_space(12.0);
+        errand = body(ui, network, &target);
+    });
     if close || modal.should_close() {
         network.open = None;
     }

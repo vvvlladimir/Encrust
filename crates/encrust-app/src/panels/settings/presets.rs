@@ -11,10 +11,9 @@ use printer_profiles::{Entry, Kind, Preset};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, with_footer};
-use crate::panels::settings::{export_profile, form_card, name_row, report};
-use crate::settings::Deleting;
+use crate::panels::settings::{export_profile, forget_profile, form_card, name_row, report};
 use crate::state::Machine;
-use crate::ui::{describe, icon, quiet_button};
+use crate::ui::{Confirm, confirm_button, describe, icon, quiet_button};
 
 const HOLLOW: Table = Table {
     heads: || {
@@ -49,7 +48,7 @@ enum Action {
     Pick(String),
     Rename(String, String),
     Export(String),
-    Ask(String),
+    Delete(String),
 }
 
 /// The page of the tool the Settings window has open, laid out in `content`.
@@ -169,8 +168,15 @@ fn actions(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
     if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(owned).map(Action::Export);
     }
-    if quiet_button(ui, icon::REMOVE, &tr!("profiles-delete"), true, some).clicked() {
-        *action = picked.map(owned).map(Action::Ask);
+    let delete = Confirm {
+        glyph: icon::REMOVE,
+        text: &tr!("profiles-delete"),
+        asked: &tr!("confirm-asked-delete"),
+        tooltip: &tr!("confirm-cannot-undo"),
+        enabled: some,
+    };
+    if confirm_button(ui, &delete) {
+        *action = picked.map(owned).map(Action::Delete);
     }
 }
 
@@ -179,7 +185,7 @@ fn apply(machine: &mut Machine, kind: Kind, action: Action) {
         Action::Pick(id) => machine.settings.preset = Some(id),
         Action::Rename(id, name) => rename(machine, kind, &id, name),
         Action::Export(id) => export_profile(machine, kind, &id),
-        Action::Ask(id) => machine.settings.confirm = Some(Deleting::Profile(kind, id)),
+        Action::Delete(id) => forget_profile(machine, kind, &id),
     }
 }
 

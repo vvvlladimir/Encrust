@@ -19,9 +19,19 @@ pub fn chooser_frame() -> Frame {
 
 /// The name of a group of a chooser's rows, in capitals.
 pub fn chooser_group(ui: &mut Ui, name: &str) {
+    capitals(ui, name, ROW_PAD);
+}
+
+/// The name of a group of rows standing flush with them, in capitals: a window's list, the
+/// sheet of keys.
+pub fn group_name(ui: &mut Ui, name: &str) {
+    capitals(ui, name, 0.0);
+}
+
+fn capitals(ui: &mut Ui, name: &str, pad: f32) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), GROUP_H), Sense::hover());
     ui.painter().text(
-        rect.left_center() + vec2(ROW_PAD, 0.0),
+        rect.left_center() + vec2(pad, 0.0),
         Align2::LEFT_CENTER,
         name.to_uppercase(),
         theme::rail_name(),

@@ -250,6 +250,14 @@ fn the_sheet_of_keys() {
     picture("sheet", app);
 }
 
+/// Find over a picked model, nothing typed: every tool, action and model by group.
+#[test]
+fn the_find_palette() {
+    let mut app = app(true);
+    app.view.options.find = true;
+    picture("find", app);
+}
+
 #[test]
 fn the_machine_and_resin_window() {
     let mut results = SnapshotResults::new();

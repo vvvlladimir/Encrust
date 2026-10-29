@@ -9,11 +9,14 @@ use printer_profiles::{AutoProfile, Catalogue, ContactShape, Kind, SupportProfil
 
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::panels::settings::confirm::cost;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
-use crate::panels::settings::{export_profile, report};
+use crate::panels::settings::{export_profile, forget_profile, report};
 use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
-use crate::ui::{describe, icon, quiet_button, secondary_button, subheading};
+use crate::ui::{
+    Confirm, confirm_button, describe, icon, quiet_button, secondary_button, subheading,
+};
 
 /// Below this a form has no room for two columns of cards.
 pub(super) const TWO_COLUMNS_W: f32 = 720.0;
@@ -39,7 +42,7 @@ enum Action {
     Edit(Kind, String),
     Duplicate(String),
     Export(String),
-    Ask(String),
+    Delete(String),
 }
 
 /// The profile picked on the page: an automatic one, or a support profile.
@@ -244,13 +247,20 @@ fn actions(
     let deletable = support
         .as_deref()
         .is_some_and(|id| can_delete(catalogue, Kind::Support, id));
-    let delete = quiet_button(ui, icon::REMOVE, &tr!("profiles-delete"), true, deletable);
-    let delete = match deletable {
-        true => delete,
-        false => delete.on_disabled_hover_text(tr!("profiles-shipped")),
+    let tooltip = match (&support, deletable) {
+        (Some(id), true) => cost(catalogue, &Deleting::Profile(Kind::Support, id.clone())),
+        (Some(_), false) => tr!("profiles-shipped"),
+        (None, _) => String::new(),
     };
-    if delete.clicked() {
-        *action = support.map(Action::Ask);
+    let delete = Confirm {
+        glyph: icon::REMOVE,
+        text: &tr!("profiles-delete"),
+        asked: &tr!("confirm-asked-delete"),
+        tooltip: &tooltip,
+        enabled: deletable,
+    };
+    if confirm_button(ui, &delete) {
+        *action = support.map(Action::Delete);
     }
 }
 
@@ -265,7 +275,7 @@ fn apply(machine: &mut Machine, action: Action) {
         }
         Action::Duplicate(id) => add(machine, Some(&id)),
         Action::Export(id) => export_profile(machine, Kind::Support, &id),
-        Action::Ask(id) => settings.confirm = Some(Deleting::Profile(Kind::Support, id)),
+        Action::Delete(id) => forget_profile(machine, Kind::Support, &id),
     }
 }
 

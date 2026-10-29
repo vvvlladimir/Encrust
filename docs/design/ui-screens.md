@@ -209,7 +209,9 @@ and the one that applies right.
 - A set of profiles is a `table`: words left, figures right, group rows in `text_low`, the
   picked row washed. The bar: Edit, Duplicate, Export, Delete (`confirm_button`).
 - A profile's form is blocks: a 180 title column beside at most 460 of fields, a hairline
-  under each; Reset to defaults in the header. General holds Language, Opening, Motion
+  under each; Reset to defaults in the header. A text row's name stands in a 150 column so
+  every box starts on one line; every box ends on the block's right edge, and a figure
+  worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. General holds Language, Opening, Motion
   (*Reduce motion*), Sliced files, the Prusa login and the bug report.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and
   a tick on the one in use, Add a machine with import and a delete `bin_button` at the
@@ -219,7 +221,8 @@ and the one that applies right.
   Network (protocol, printers as rows with their live state, add by address, the ones found
   nearby as dashed rows with Add).
 - With no machine yet the page is the library: a search over every machine, Import a
-  profile and Custom printer, and makers as 4-column tiles of glyph, name and count.
+  profile and Custom printer at its right, and makers as 4-column tiles of glyph, name and
+  count; a maker opened shows its models under a way back to every brand.
 
 **Printer sheet**, 700 by 640: under its title the model, address and firmware; the plate's
 picture beside the state (its word in the state's colour, the file, the percent at 22, a 6
@@ -227,19 +230,21 @@ point bar, layer and time left), Pause and Stop (`confirm_button`), light source
 readings; the camera's address with copy and its switch; Recent prints as three tiles with
 their outcome.
 
-**Find**, 500 wide, 70 from the stage's top over a 40 % scrim: a 48 tall field, results
-grouped as Tools, Actions, Models with their keys, the keys to move and open at its foot.
+**Find**, 500 wide, 70 from the stage's top over a 40 % scrim: a 48 tall field over a
+hairline, results grouped under capital names as Tools, Actions, Models with their keys,
+the lit row on `picked_wash`, and a `hint_bar` of the keys to move, open and close at its foot.
 
-**Keyboard shortcuts**, 800 wide: a search in the title row and the keys in two columns of
-groups — Tools, The window, The plate, The layers, The view — each a row of name and keys.
+**Keyboard shortcuts**, 800 wide: the keys in two columns of groups under 10.5 capital
+names — Tools, The plate, then The window, The layers, Files — each a row of name and keys.
 
 ## Start page
 
-Under the top bar, padded 48 × 140: *Start a plate* at 26 and the machine, resin and layer
-height under it; the drop zone, a 1.5 point dashed `line` box rounded 12 with a 52 square of
+Under the top bar, padded 48 × 140 (the sides give way down to one tile's width): *Start a
+plate* at 26 and the machine, resin and layer height under it; the drop zone, a 1.5 point dashed `line` box rounded 12 with a 52 square of
 the drop glyph on `accent_wash`, its words, and Open a model (primary) and Open a project at
-its right; then a shelf heading with Recent / Test prints as a `Segmented` and Clear the list
-at its right; then tiles of at least 180, a 120 picture over the name, when and kind.
+its right; then a shelf heading with Recent / Test prints as a `Segmented` 220 wide and, on Recent with
+anything in it, Clear the list at its right; then tiles of at least 180 on `panel` ringed in
+`hairline` (`line` under the pointer), a 120 picture over the name, when and kind.
 
 ## A small window
 

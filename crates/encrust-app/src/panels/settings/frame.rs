@@ -3,15 +3,15 @@
 
 use egui::{Align, Color32, Layout, Rect, Sense, Ui, UiBuilder, pos2, vec2};
 
-use crate::ui::{dialog_frame, dialog_head, focus_ring, theme};
+use crate::ui::{dialog, dialog_head, focus_ring, theme};
 
 /// The most of the screen a window takes, where the screen has it.
 const MOST: egui::Vec2 = vec2(1080.0, 720.0);
 /// The page's name over the right side, and the action bar under it.
 const HEADER_H: f32 = 64.0;
 /// The action bar, and the foot of the list beside it at the same height so the two
-/// hairlines over them meet: one button and the room either side of it.
-const FOOTER_H: f32 = theme::BUTTON_H + 24.0;
+/// hairlines over them meet.
+const FOOTER_H: f32 = theme::DIALOG_BAR_H;
 pub(super) const LIST_FOOT_H: f32 = FOOTER_H;
 /// Room either side of what the right side shows.
 pub(super) const SIDE_PAD: f32 = 20.0;
@@ -28,28 +28,32 @@ pub(super) fn show(
     let screen = ctx.content_rect().size() - egui::Vec2::splat(2.0 * theme::DIALOG_MARGIN);
     let size = screen.min(MOST).max(egui::Vec2::ZERO);
     let mut close = false;
-    let modal = egui::Modal::new(egui::Id::new(id))
-        .frame(dialog_frame())
-        .show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
-            let list_w = theme::DIALOG_LIST_W.min(rect.width() * theme::DIALOG_LIST_SHARE);
-            let list = Rect::from_min_max(
-                pos2(rect.left(), head.bottom()),
-                pos2(rect.left() + list_w, rect.bottom()),
-            );
-            let side = Rect::from_min_max(pos2(list.right() + 1.0, head.bottom()), rect.max);
-            let mut title_row = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(head.shrink2(vec2(16.0, 0.0)))
-                    .layout(Layout::left_to_right(Align::Center)),
-            );
-            close = dialog_head(&mut title_row, glyph, title);
-            let painter = ui.painter();
-            painter.hline(rect.x_range(), head.bottom(), stroke());
-            painter.vline(list.right(), list.y_range(), stroke());
-            add(ui, list, side);
-        });
+    let modal = dialog(egui::Id::new(id), 0).show(ctx, |ui| {
+        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+        let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
+        let list_w = theme::DIALOG_LIST_W.min(rect.width() * theme::DIALOG_LIST_SHARE);
+        let list = Rect::from_min_max(
+            pos2(rect.left(), head.bottom()),
+            pos2(rect.left() + list_w, rect.bottom()),
+        );
+        let side = Rect::from_min_max(pos2(list.right() + 1.0, head.bottom()), rect.max);
+        let list_corner = egui::CornerRadius {
+            sw: theme::R_PANEL.sw,
+            ..egui::CornerRadius::ZERO
+        };
+        ui.painter()
+            .rect_filled(list, list_corner, theme::colors().base);
+        let mut title_row = ui.new_child(
+            UiBuilder::new()
+                .max_rect(head.shrink2(vec2(16.0, 0.0)))
+                .layout(Layout::left_to_right(Align::Center)),
+        );
+        close = dialog_head(&mut title_row, glyph, title);
+        let painter = ui.painter();
+        painter.hline(rect.x_range(), head.bottom(), stroke());
+        painter.vline(list.right(), list.y_range(), stroke());
+        add(ui, list, side);
+    });
     close || modal.should_close()
 }
 
@@ -81,8 +85,14 @@ pub(super) fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
 /// `content` split into what scrolls and the action bar along its foot.
 pub(super) fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
     let split = content.bottom() - FOOTER_H;
-    ui.painter().hline(content.x_range(), split, stroke());
     let bar = Rect::from_min_max(pos2(content.left(), split + 1.0), content.max);
+    let bar_corner = egui::CornerRadius {
+        se: theme::R_PANEL.se,
+        ..egui::CornerRadius::ZERO
+    };
+    ui.painter()
+        .rect_filled(bar, bar_corner, theme::colors().base);
+    ui.painter().hline(content.x_range(), split, stroke());
     let mut bar = ui.new_child(
         UiBuilder::new()
             .max_rect(bar.shrink2(vec2(SIDE_PAD, 0.0)))
@@ -184,7 +194,7 @@ impl Table {
             egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
         });
         let fill = match (picked, response.hovered()) {
-            (true, _) => colors.accent_wash,
+            (true, _) => colors.picked_wash,
             (false, true) => colors.hover,
             (false, false) => Color32::TRANSPARENT,
         };

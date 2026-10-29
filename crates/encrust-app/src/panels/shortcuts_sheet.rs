@@ -4,15 +4,16 @@ use egui::{Align, Align2, Layout, RichText, Sense, StrokeKind, vec2};
 
 use crate::i18n::tr;
 use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_keys};
-use crate::ui::{dialog_frame, dialog_head, hairline, icon, theme};
+use crate::ui::{dialog, dialog_head, group_name, hairline, icon, theme};
 
 /// The groups down each column, split so the two columns come out about even.
 const LEFT: [Group; 2] = [Group::Tools, Group::Plate];
 const RIGHT: [Group; 3] = [Group::Window, Group::Layers, Group::Files];
 
-const COLUMN_W: f32 = 300.0;
-const COLUMN_GAP: f32 = 32.0;
-const ROW_H: f32 = 28.0;
+/// Two columns and the gap between them fill the sheet's 800 inside its margin.
+const COLUMN_W: f32 = 364.0;
+const COLUMN_GAP: f32 = 28.0;
+const ROW_H: f32 = 30.0;
 /// Points between the keys of one chord, and either side of the "or" between two chords.
 const KEY_GAP: f32 = 3.0;
 const OR_GAP: f32 = 6.0;
@@ -25,32 +26,30 @@ const CAP_MIN_W: f32 = 22.0;
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, open: &mut bool) {
-    let sheet = egui::Modal::new(egui::Id::new("shortcuts"))
-        .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
-        .show(ctx, |ui| {
-            ui.set_width(COLUMN_W * 2.0 + COLUMN_GAP);
-            header(ui, open);
-            ui.add_space(10.0);
-            let room = (ui.ctx().content_rect().height() - CHROME_H).max(ROW_H * 4.0);
-            egui::ScrollArea::vertical()
-                .max_height(room)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    ui.horizontal_top(|ui| {
-                        column(ui, &LEFT);
-                        ui.add_space(COLUMN_GAP);
-                        column(ui, &RIGHT);
-                    });
+    let sheet = dialog(egui::Id::new("shortcuts"), 18).show(ctx, |ui| {
+        ui.set_width(COLUMN_W * 2.0 + COLUMN_GAP);
+        header(ui, open);
+        ui.add_space(10.0);
+        let room = (ui.ctx().content_rect().height() - CHROME_H).max(ROW_H * 4.0);
+        egui::ScrollArea::vertical()
+            .max_height(room)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    column(ui, &LEFT);
+                    ui.add_space(COLUMN_GAP);
+                    column(ui, &RIGHT);
                 });
-            ui.add_space(14.0);
-            hairline(ui);
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new(tr!("shortcuts-note"))
-                    .font(theme::small())
-                    .color(theme::colors().text_low),
-            );
-        });
+            });
+        ui.add_space(14.0);
+        hairline(ui);
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new(tr!("shortcuts-note"))
+                .font(theme::small())
+                .color(theme::colors().text_low),
+        );
+    });
     if sheet.should_close() {
         *open = false;
     }
@@ -70,14 +69,9 @@ fn column(ui: &mut egui::Ui, groups: &[Group]) {
         ui.spacing_mut().item_spacing.y = 0.0;
         for (index, group) in groups.iter().enumerate() {
             if index > 0 {
-                ui.add_space(14.0);
+                ui.add_space(12.0);
             }
-            ui.label(
-                RichText::new(group.label())
-                    .font(theme::small())
-                    .color(theme::colors().text_low),
-            );
-            ui.add_space(4.0);
+            group_name(ui, &group.label());
             for binding in BINDINGS.iter().filter(|binding| binding.group == *group) {
                 let chords: Vec<Vec<&str>> = binding.keys.iter().map(chord_keys).collect();
                 row(ui, &binding.action.label(), &chords);
@@ -100,7 +94,7 @@ fn row(ui: &mut egui::Ui, label: &str, chords: &[Vec<&str>]) {
         Align2::LEFT_CENTER,
         label,
         theme::label(),
-        colors.text_high,
+        colors.text_mid,
     );
 
     let mut right = rect.right();

@@ -11,8 +11,8 @@ use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
 use crate::ui::{
-    count_row, describe, hint, icon, number_row, picker, picker_row, secondary_button, switch,
-    text_row,
+    count_row, describe, field_note, hint, icon, number_row, picker, picker_row, secondary_button,
+    switch, text_row,
 };
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
@@ -148,7 +148,7 @@ fn grey_range_rows(ui: &mut egui::Ui, display: &mut Display) {
     if count_row(ui, &tr!("printer-grey-max"), &mut max, "", 1.0, min..=255) {
         display.grey_max = max as u8;
     }
-    hint(
+    describe(
         ui,
         &match (display.grey_min, display.grey_max) {
             (0, 255) => tr!("printer-grey-range-full"),
@@ -195,12 +195,12 @@ fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     );
 
     let (pitch_x, pitch_y) = profile.display.pixel_pitch_mm();
-    hint(
+    field_note(
         ui,
         &tr!(
             "printer-pitch",
-            x = format!("{:.1}", pitch_x * 1000.0),
-            y = format!("{:.1}", pitch_y * 1000.0)
+            x = format!("{:.2}", pitch_x * 1000.0),
+            y = format!("{:.2}", pitch_y * 1000.0)
         ),
     );
 
@@ -282,7 +282,7 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         &mut profile.firmware.per_layer_settings,
         &tr!("printer-per-layer"),
     );
-    hint(
+    describe(
         ui,
         &match profile.firmware.per_layer_settings {
             true => tr!("printer-per-layer-on"),
@@ -296,7 +296,7 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         &mut profile.firmware.variable_layer_height,
         &tr!("printer-variable-height"),
     );
-    hint(ui, &tr!("printer-variable-height-note"));
+    describe(ui, &tr!("printer-variable-height-note"));
 }
 
 /// How the panel takes the plate, as the maker's settings state it.
@@ -318,7 +318,7 @@ fn mirror(ui: &mut egui::Ui, mirror: &mut Mirror) {
             }
         }
     });
-    hint(ui, &tr!("printer-mirror-note"));
+    describe(ui, &tr!("printer-mirror-note"));
 }
 
 fn mirror_label(mirror: Mirror) -> String {
@@ -346,5 +346,5 @@ fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
             }
         }
     });
-    hint(ui, &tr!("printer-output-note"));
+    describe(ui, &tr!("printer-output-note"));
 }
