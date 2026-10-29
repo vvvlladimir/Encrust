@@ -59,7 +59,7 @@ pub fn list_row(
     let (rect, row) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
     let (fill, text) = match (selected, row.hovered()) {
-        (true, _) => (colors.picked_wash, colors.accent_soft),
+        (true, _) => (colors.picked_wash, colors.text_high),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (colors.raised, colors.text_high),
     };
@@ -168,17 +168,12 @@ pub fn issue_row(
 
     let dot = rect.left_center() + vec2(14.0, 0.0);
     painter.circle_filled(dot, 3.5, tint);
-    let place_color = if selected {
-        colors.accent_soft
-    } else {
-        colors.text_high
-    };
     painter.text(
         dot + vec2(11.0, 0.0),
         Align2::LEFT_CENTER,
         place,
         theme::label(),
-        place_color,
+        colors.text_high,
     );
     painter.text(
         rect.right_center() - vec2(12.0, 0.0),

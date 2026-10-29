@@ -211,7 +211,7 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
         let width = ui.available_width() - theme::PRIMARY_H - theme::BUTTON_GAP;
         let grow = ui
             .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
-                primary_button(ui, icon::SUPPORTS, &label, blocker.is_none()).on_hover_text(what)
+                primary_button(ui, &label, blocker.is_none()).on_hover_text(what)
             })
             .inner;
         if grow.clicked() {

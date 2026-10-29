@@ -273,7 +273,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let ids: Vec<ObjectId> = window.doc.scene.targets().map(|object| object.id).collect();
     let blocked = ids.is_empty().then(|| tr!("repair-nothing-on-plate"));
-    let button = primary_button(ui, icon::REPAIR, &tr!("repair-repair"), blocked.is_none());
+    let button = primary_button(ui, &tr!("repair-repair"), blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
         let state = window.tools.repair.state;
         for id in ids {

@@ -141,7 +141,7 @@ fn empty_state(ui: &egui::Ui, at: egui::Pos2, viewport: Rect, window: &mut Windo
                                 .color(theme::colors().text_mid),
                         );
                         ui.add_space(14.0);
-                        if primary_button(ui, icon::OPEN, &tr!("stage-open"), true).clicked()
+                        if primary_button(ui, &tr!("stage-open"), true).clicked()
                             && let Some(file) = files::pick(Wanted::ModelOrProject)
                         {
                             crate::app::open_by_what_it_is(window, file);

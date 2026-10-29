@@ -472,7 +472,7 @@ fn press(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     let blocked = window.tools.relief.blocker(&window.doc.scene);
-    let button = primary_button(ui, icon::RELIEF, &tr!("relief-press"), blocked.is_none());
+    let button = primary_button(ui, &tr!("relief-press"), blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
         let started = window.tools.relief.start(&window.doc.scene);
         window

@@ -95,7 +95,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.placing == Placing::Channel && points > 0 {
         let label = tr!("drain-dig", count = points);
         let what = tr!("drain-dig-tooltip");
-        if primary_button(ui, icon::DRAIN, &label, true)
+        if primary_button(ui, &label, true)
             .on_hover_text(what)
             .clicked()
         {
@@ -116,7 +116,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         tr!("drain-check")
     };
     let what = tr!("drain-check-tooltip");
-    if primary_button(ui, icon::DRAIN, &label, !window.doc.scene.is_empty())
+    if primary_button(ui, &label, !window.doc.scene.is_empty())
         .on_hover_text(what)
         .clicked()
     {

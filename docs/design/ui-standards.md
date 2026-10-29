@@ -120,8 +120,9 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 - **The redesign (ADR 0382)** is written in `ui-screens.md`, not built: the rail still stands over the inspector,
   the plate card states seven dotted rows with Slice to a file under the primary, Supports,
   Cut and Relief print viewport instructions, a deleted profile or machine does not ask,
-  and only a switch's knob animates. `hint_bar`, `figure_grid`, `details_fold`,
-  `confirm_button`, `ok_wash` and `motion`'s `OPEN`, `CLOSE` and `ARMED` are still to be built.
+  and only a switch's knob and a pressed control move. `hint_bar`,
+  `figure_grid`, `details_fold`, `confirm_button`, `companion_square`, `notice_card` and
+  `job_notice` are built but drawn nowhere yet; `ok_wash` is still to be built.
 
 - Units: `deg`, `x`, `um` beside `°`, `×`, `µm`; Precision has no unit.
 - Decimals chosen per call (`number_row`'s `decimals`): spacing 1.8 and 1.80 mm, height 20.0

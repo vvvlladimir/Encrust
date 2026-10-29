@@ -185,7 +185,7 @@ fn machine_row(
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
     });
     let fill = match (picked, response.hovered()) {
-        (true, _) => colors.accent_wash,
+        (true, _) => colors.picked_wash,
         (false, true) => colors.hover,
         (false, false) => Color32::TRANSPARENT,
     };

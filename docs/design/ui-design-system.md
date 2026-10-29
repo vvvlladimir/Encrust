@@ -133,7 +133,8 @@ paints from tokens only.
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
 | `issue_row` | One finding: a dot in its colour, where it is, what it is; the row goes there |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
-| `notice` | A verdict: a glyph in its colour, the verdict in plain ink, what to do under it, one action and a close; no stripe |
+| `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
+| `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
@@ -149,11 +150,12 @@ paints from tokens only.
 | `dialog_frame`, `dialog_head` | A window over the plate: its frame, and its glyph, name and close button |
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
-| `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on. Beside a bigger control, raised and as tall as it |
-| `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it |
+| `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
+| `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |
+| `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it. The bin's framed look is a `companion_square` |
 | `rail_button` | A tool in the tool row, a glyph over its name, washed in the accent when it is the tool in use, with a dot while the tool needs attention and its key's digit while the pointer is on the row |
 | `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
-| `Segmented` | Mutually exclusive choices in one bordered box, split by hairlines, the chosen one washed |
+| `Segmented` | Mutually exclusive choices sunk in one bordered track, the chosen one a pill raised in the accent's wash and ringed in `line` |
 | `switch` | A labelled toggle with an animated knob |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |

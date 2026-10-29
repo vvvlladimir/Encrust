@@ -735,7 +735,8 @@ address in a video player).
 - **Tool rail:** shows each tool's name under its icon whenever the window has room, and
   icons alone when it does not. Drag the column's edge to set your own width; double-click
   it to go back to fitting the names. The plate column's edge resets the same way.
-- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
+- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, each shown on its tool while
+  the pointer is on the rail, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.
@@ -751,6 +752,8 @@ address in a video player).
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **Reduce motion** in Settings → General stops every animation in the window.
+- A bin asks before it removes: the first press arms it for 3 s, the second removes; Esc or a
+  click elsewhere puts it back.
 - **Language:** the window follows the system's or the browser's first language, or the one
   you pick in Settings → General. A system language with no translation shows the window in
   English, and Settings says so. English and Russian are complete; a message a translation
