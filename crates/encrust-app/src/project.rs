@@ -81,11 +81,17 @@ pub fn new_project(window: &mut Window) {
     clear(window);
 }
 
+/// Adds an empty plate, which starts from the printer's and resin's print settings.
+pub fn new_plate(window: &mut Window) {
+    window.doc.scene.add_plate();
+    window.machine.slicing.take_profile_settings();
+}
+
 /// Takes everything off the plate and forgets which file it came from. The chosen
-/// profiles and the tools' own numbers stay: they are how this user works, not what is
-/// on the plate.
+/// profiles and the tools' own numbers stay; the print settings go back to the profiles'.
 pub fn clear(window: &mut Window) {
     window.doc.scene = Scene::default();
+    window.machine.slicing.take_profile_settings();
     window.doc.history = History::default();
     window.doc.project.path = None;
     window.doc.project.saved = Some(digest(&captured(window).manifest));

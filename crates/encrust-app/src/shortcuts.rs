@@ -537,9 +537,7 @@ pub fn act(window: &mut Window, action: Action) {
         Action::Find => window.view.options.find = true,
         Action::Step(layers) => section::step(window, layers),
         Action::Play => section::play(window),
-        Action::NewPlate => {
-            window.doc.scene.add_plate();
-        }
+        Action::NewPlate => crate::project::new_plate(window),
         Action::NewProject => crate::project::new_project(window),
         Action::OpenProject => crate::project::open_dialog(window),
         Action::SaveProject => {

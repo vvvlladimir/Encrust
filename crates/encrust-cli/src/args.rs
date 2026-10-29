@@ -336,11 +336,15 @@ pub struct SliceArgs {
 #[derive(Debug, clap::Args)]
 #[command(next_help_heading = "Masks")]
 pub struct RasterArgs {
-    /// Expose each pixel fully or not at all, for panels that do not honour grey.
+    /// Shade each edge pixel by how much of it the model covers, whatever the resin says.
+    #[arg(long, conflicts_with = "no_anti_alias")]
+    pub anti_alias: bool,
+
+    /// Expose each pixel fully or not at all, whatever the resin says.
     #[arg(long)]
     pub no_anti_alias: bool,
 
-    /// Round anti-aliased edges to this many greys, white included. Off keeps all 255.
+    /// Round anti-aliased edges to this many greys, white included. Unset, the resin's.
     #[arg(long, value_name = "N")]
     pub grey_levels: Option<NonZeroU8>,
 
@@ -350,9 +354,9 @@ pub struct RasterArgs {
     pub grey_range: Option<GreyRange>,
 
     /// Fade every edge over a box this many pixels either side, before the range spreads it.
-    #[arg(long, value_name = "PX", default_value = "0",
-          value_parser = clap::value_parser!(u8).range(0..=8))]
-    pub blur: u8,
+    /// Unset, the resin's.
+    #[arg(long, value_name = "PX", value_parser = clap::value_parser!(u8).range(0..=8))]
+    pub blur: Option<u8>,
 
     /// Take every island out of the written file: a piece cured over nothing, and nothing
     /// that stood on it.

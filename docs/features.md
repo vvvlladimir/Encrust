@@ -478,6 +478,10 @@ whole-surface fill is Cmd-Shift-click.
 
 ## Print settings
 
+Every value here starts from the printer's and resin's settings and changes the plate in
+hand only. Opening a project, starting a new one, adding a plate or restarting takes the
+profiles' values again; a button at its foot takes them back at once. To change what every plate starts from, edit the printer or resin in Settings.
+
 ### Layers
 - **Layer height.** When you change it, every exposure is moved along the resin's curve
   automatically. The old value is shown and can be restored with one press.
@@ -497,9 +501,10 @@ whole-surface fill is Cmd-Shift-click.
   whole stack, so bands and adaptive layers are refused for it.
 
 ### Edge smoothing (anti-aliasing)
-- Ready-made looks: **Sharp**, **Balanced**, **Soft**, **Crisp text**, **Organic curves**,
-  or raw masks.
-- Or set it by hand: grey levels, edge blur, rounded edge grey.
+- Ready-made looks: **Off** (raw masks), **Sharp**, **Balanced** or **Soft**; the section's
+  heading names the greys and blur in use.
+- Or set it by hand: edge blur, and a limit on the edge greys with their count.
+- Each resin carries its own, set in its settings; choosing the resin brings it to the plate.
 - Edge greys are spread over the printer's grey range: on the
   ELEGOO Mars 2 and 3 series, for one, every edge grey is at least three quarters lit.
 - How much grey reaches the printer depends on its format (see [File formats](#file-formats)).
@@ -714,7 +719,8 @@ address in a video player).
 ## Projects
 
 - Save the whole job as an `.encrust` project: every plate, model, support tree, cavity and
-  setting exactly as it stands.
+  tool setting exactly as it stands. The print settings are not kept: a project opens with
+  its printer's and resin's.
 - It reopens instantly, without rebuilding anything, and the command line can slice it
   directly.
 

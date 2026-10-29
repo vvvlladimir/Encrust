@@ -14,6 +14,7 @@ use core_engine::project::{
 };
 use core_engine::{EngineError, Machine, Opening, open_plate};
 use core_geometry::{Bvh, Mesh, Orientation, Region, Transform, Vec3, diagnose};
+use core_raster::Shading;
 use core_supports::{ModelSupports, ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{DrainHole, HoleSize, HollowMode, InfillSettings};
 use printer_profiles::{
@@ -90,13 +91,6 @@ fn project() -> Project {
             printer: Some(SATURN.to_owned()),
             resin: Some(GREY.to_owned()),
             slicing: SlicingState {
-                layer_height_mm: 0.05,
-                adaptive: None,
-                exposure: Vec::new(),
-                samples: core_slicer::ONE_SAMPLE,
-                anti_alias: true,
-                grey_levels: None,
-                blur_px: 0,
                 remove_islands: false,
                 hanging_passes: 0,
                 format: OutputFormat::Goo,
@@ -310,6 +304,23 @@ fn only_what_is_visible_on_the_opened_plate_is_taken() {
 
     let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
     assert_eq!(plate.models.len(), 1);
+}
+
+#[test]
+fn a_plate_prints_as_its_resin_says() {
+    let mut resin = MaterialProfile {
+        exposure_s: 3.75,
+        layer_height_mm: 0.03,
+        ..MaterialProfile::default()
+    };
+    resin.edges.anti_alias = false;
+    let machine = Machine { resin, ..machine() };
+
+    let plate = open_plate(&project(), &machine, &opening()).expect("the project is complete");
+    assert_eq!(plate.material.exposure_s, 3.75, "the resin's exposure");
+    assert_eq!(plate.cutting.layer_height_mm, 0.03, "and its layer height");
+    assert_eq!(plate.panel.shading, Shading::Binary, "and its edges");
+    assert!(plate.cutting.adaptive.is_none());
 }
 
 /// The shipped printers and one resin of the user's, which nothing ships, in a directory

@@ -7,15 +7,12 @@ mod restore;
 pub use restore::{hollow_of, supports_of};
 
 use std::io::{Read, Seek, Write};
-use std::num::NonZeroU8;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
-use core_format::ExposureRange;
 use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Region, Scalar, Transform, Vec3};
 use core_joint::Joints;
-use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{
     Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
@@ -27,9 +24,12 @@ use serde::{Deserialize, Serialize};
 /// What a project file is called, and what an open or save dialog filters on.
 pub const EXTENSION: &str = "encrust";
 
-/// The manifest this build writes. Versions 4 and 5 are read as well; any other is refused,
+/// The manifest this build writes. Versions 4 to 6 are read as well; any other is refused,
 /// lacking built geometry and diagnostics (ADR 0191, 0205, 0261, 0302).
-pub const VERSION: u32 = 6;
+pub const VERSION: u32 = 7;
+
+/// The last version that kept the print settings, which this build ignores (ADR 0380).
+const PRINT_SETTINGS_KEPT: u32 = 6;
 
 /// The last version whose lattice took one size for its cells and walls, which this build
 /// reads as the cell's.
@@ -187,18 +187,10 @@ pub struct Manifest {
     pub objects: Vec<ObjectState>,
 }
 
-/// How the plate is cut and drawn: layer height, exposures, anti-aliasing, the container.
+/// What the plate's slices do beyond the print settings, which are taken from the printer
+/// and resin each time a project opens (ADR 0380).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlicingState {
-    pub layer_height_mm: Scalar,
-    pub adaptive: Option<AdaptiveSettings>,
-    pub exposure: Vec<ExposureRange>,
-    /// Planes cut per layer.
-    pub samples: NonZeroU8,
-    pub anti_alias: bool,
-    /// How many greys a mask may hold, or `None` for all 255.
-    pub grey_levels: Option<NonZeroU8>,
-    pub blur_px: u8,
     pub remove_islands: bool,
     /// Layers more of what stood on an island taken out that go too; absent, and so
     /// none, before ADR 0228.
@@ -571,7 +563,7 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         let version: Version = serde_json::from_str(&text)?;
         match version.version {
             VERSION => serde_json::from_str(&text)?,
-            ONE_LATTICE_SIZE => Manifest {
+            ONE_LATTICE_SIZE | PRINT_SETTINGS_KEPT => Manifest {
                 version: VERSION,
                 ..serde_json::from_str(&text)?
             },

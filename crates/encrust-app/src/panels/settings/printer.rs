@@ -304,7 +304,7 @@ fn mirror(ui: &mut egui::Ui, mirror: &mut Mirror) {
     let response = picker_row(
         ui,
         &tr!("printer-mirror"),
-        icon::SLICE,
+        icon::FLIP,
         &mirror_label(*mirror),
     );
     egui::Popup::menu(&response).show(|ui| {

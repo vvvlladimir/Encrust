@@ -31,10 +31,12 @@ from 0; `--drop-shells 2` drops shells numbered from 1 as `inspect --shells` lis
 is of the model as import leaves it; turns and bridges go first, drops last, before
 `--repair`. `--samples-per-layer N` cuts N planes inside each layer,
 so a feature thinner than a layer is kept. A mask is
-shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
-at all, `--grey-levels N` rounds its edges to N greys, `--grey-range MIN..MAX` spreads
-edge greys over that range in place of the profile's (ADR 0378) or `--blur PX` fades every
-edge. A printer whose profile states `binary_only` takes no grey: the three are ignored for it, with a warning (ADR 0377).
+shaded as the resin's `[edges]` say (ADR 0380), anti-aliased when it says nothing, unless
+`--anti-alias` or `--no-anti-alias` shades edges by coverage or lights each pixel fully or
+not at all, `--grey-levels N` rounds its edges to N greys or `--blur PX` fades every edge;
+`--grey-range MIN..MAX` spreads edge greys over that range in place of the printer
+profile's (ADR 0378). A printer whose profile states `binary_only` takes no grey: these
+are ignored for it, with a warning (ADR 0377).
 
 ```sh
 encrust profiles list
@@ -323,10 +325,13 @@ path = "b.stl"
 hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; open_floor = true opens a shell
 ```
 
-A project saved by the window slices as it was saved: the file holds its shells and its
-support trees, and nothing is built again (ADR 0191). It carries its own models, so a flag that shapes one — `--hollow`, `--supports`,
-`--rotate`, `--blur` and the rest — is refused; `--printer`, `--resin` and `--layer-height`
-replace the project's own, and `--slice-window` applies as to a model. The project names
+A project saved by the window slices its models as they were saved: the file holds its
+shells and its support trees, and nothing is built again (ADR 0191). It carries its own
+models, so a flag that shapes one — `--hollow`, `--supports`, `--rotate`, `--infill` and the
+rest — is refused; `--printer` and `--resin` replace the project's own. It keeps no print
+settings (ADR 0380): they are the printer's and resin's, under `--layer-height`,
+`--adaptive`, `--samples-per-layer`, `--exposure-at`, the mask flags and `--slice-window` as
+for a model. The project names
 its printer and resin by id only (ADR 0261): one that is not among your profiles has to be
 named by a flag, `--profile` and `--material` included.
 

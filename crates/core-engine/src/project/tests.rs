@@ -14,13 +14,6 @@ fn project(objects: usize) -> Project {
             printer: Some("elegoo-saturn-4-ultra".to_owned()),
             resin: None,
             slicing: SlicingState {
-                layer_height_mm: 0.05,
-                adaptive: Some(AdaptiveSettings::default()),
-                exposure: vec![ExposureRange::new(0.0, 4.0, 9.5)],
-                samples: core_slicer::ONE_SAMPLE,
-                anti_alias: true,
-                grey_levels: None,
-                blur_px: 0,
                 remove_islands: false,
                 hanging_passes: 0,
                 format: OutputFormat::Ctb5,
@@ -533,26 +526,7 @@ fn a_version_4_file_keeps_the_ids_of_the_profiles_it_carried() {
     older["version"] = WHOLE_PROFILES.into();
     older["printer"] = serde_json::json!({ "id": "my-saturn", "profile": { "name": "Mine" } });
     older["resin"] = serde_json::json!({ "id": null, "profile": { "name": "From a file" } });
-    let mut bytes = Cursor::new(Vec::new());
-    {
-        let mut zip = zip::ZipWriter::new(&mut bytes);
-        let options = zip::write::SimpleFileOptions::default();
-        zip.start_file(MANIFEST, options)
-            .expect("a zip in memory takes an entry");
-        zip.write_all(&serde_json::to_vec(&older).expect("the manifest serialises"))
-            .expect("a zip in memory takes bytes");
-        for (name, mesh) in [
-            (source_name(0), &saved.models[0].source),
-            (shell_name(0), &saved.models[0].source),
-        ] {
-            zip.start_file(name, options)
-                .expect("a zip in memory takes an entry");
-            zip.write_all(&blob::write(mesh))
-                .expect("a zip in memory takes bytes");
-        }
-        zip.finish().expect("a zip in memory finishes");
-    }
-    bytes.set_position(0);
+    let bytes = archive(&older, &saved);
 
     let back = read_from(bytes).expect("a version 4 file reads");
     assert_eq!(back.manifest.version, VERSION);
@@ -614,4 +588,44 @@ fn a_project_missing_a_mesh_is_refused() {
 
     let error = read_from(bytes).expect_err("the first model has no shell in the file");
     assert!(matches!(error, ProjectError::BadMesh { .. }));
+}
+
+/// An archive of `manifest` as written by hand, holding `saved`'s first model as its source
+/// and shell.
+fn archive(manifest: &serde_json::Value, saved: &Project) -> Cursor<Vec<u8>> {
+    let mut bytes = Cursor::new(Vec::new());
+    {
+        let mut zip = zip::ZipWriter::new(&mut bytes);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file(MANIFEST, options)
+            .expect("a zip in memory takes an entry");
+        zip.write_all(&serde_json::to_vec(manifest).expect("the manifest serialises"))
+            .expect("a zip in memory takes bytes");
+        for (name, mesh) in [
+            (source_name(0), &saved.models[0].source),
+            (shell_name(0), &saved.models[0].source),
+        ] {
+            zip.start_file(name, options)
+                .expect("a zip in memory takes an entry");
+            zip.write_all(&blob::write(mesh))
+                .expect("a zip in memory takes bytes");
+        }
+        zip.finish().expect("a zip in memory finishes");
+    }
+    bytes.set_position(0);
+    bytes
+}
+
+#[test]
+fn a_version_6_file_reads_and_leaves_its_print_settings_to_the_profiles() {
+    let saved = project(1);
+    let mut older = serde_json::to_value(&saved.manifest).expect("serialises");
+    older["version"] = PRINT_SETTINGS_KEPT.into();
+    older["slicing"]["layer_height_mm"] = 0.03.into();
+    older["slicing"]["anti_alias"] = false.into();
+    older["slicing"]["exposure"] = serde_json::json!([]);
+
+    let back = read_from(archive(&older, &saved)).expect("a version 6 file reads");
+    assert_eq!(back.manifest.version, VERSION);
+    assert_eq!(back.manifest.slicing, saved.manifest.slicing);
 }

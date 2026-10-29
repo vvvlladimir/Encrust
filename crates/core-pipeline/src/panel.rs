@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 
 use core_raster::{Grey, GreyRange, PixelPitch, RasterSettings, Shading};
-use printer_profiles::{Mirror, PrinterProfile};
+use printer_profiles::{EdgeSmoothing, Mirror, PrinterProfile};
 
 use crate::format::SlicedFormat;
 
@@ -15,6 +15,21 @@ pub struct PanelOverrides {
     pub grey_range: Option<GreyRange>,
     /// Radius an edge is faded over, pixels; `0` leaves it sharp.
     pub blur_px: u8,
+}
+
+impl From<EdgeSmoothing> for PanelOverrides {
+    fn from(edges: EdgeSmoothing) -> Self {
+        Self {
+            shading: if edges.anti_alias {
+                Shading::Coverage
+            } else {
+                Shading::Binary
+            },
+            grey_levels: edges.grey_levels,
+            grey_range: None,
+            blur_px: edges.blur_px,
+        }
+    }
 }
 
 /// The panel the masks are drawn for, straight off the printer profile, without grey on a

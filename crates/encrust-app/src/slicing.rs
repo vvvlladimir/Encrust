@@ -5,9 +5,9 @@ use anyhow::{Context, Result, bail};
 use core_engine::{Cutting, Plate};
 use core_format::{ExposurePlan, ExposureRange};
 use core_geometry::Scalar;
-use core_raster::{RasterSettings, Shading};
+use core_raster::RasterSettings;
 use core_slicer::{AdaptiveSettings, ONE_SAMPLE, WINDOW_LAYERS};
-use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Renamed};
+use printer_profiles::{Catalogue, EdgeSmoothing, MaterialProfile, PrinterProfile, Renamed};
 
 use crate::i18n::tr;
 use crate::job::{Outcome, SliceJob, SliceRequest, SlicedFormat, models_of, worker_threads};
@@ -15,6 +15,10 @@ use crate::preview::Fold;
 use crate::scene::Scene;
 use crate::status::Status;
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
+
+mod print_settings;
+
+pub use print_settings::PrintSettings;
 
 /// Bounds on the layer height field: ten microns is the finest an MSLA panel is worth
 /// slicing in, and above a millimetre no resin cures through.
@@ -54,11 +58,8 @@ pub struct Slicing {
     pub exposure: Vec<ExposureRange>,
     /// How many planes are sampled inside each layer's band.
     pub samples: NonZeroU8,
-    pub anti_alias: bool,
-    /// How many greys an anti-aliased edge is rounded to, or `None` for all 255.
-    pub grey_levels: Option<NonZeroU8>,
-    /// Radius an anti-aliased edge is faded over, pixels; `0` leaves it sharp.
-    pub blur_px: u8,
+    /// How a mask's edge is shaded, taken from the resin when one is chosen.
+    pub edges: EdgeSmoothing,
     /// Whether every island is taken out of the written file.
     pub remove_islands: bool,
     /// How many layers more of what stood on an island taken out go too, one a pass,
@@ -106,9 +107,7 @@ impl Default for Slicing {
             adaptive: None,
             exposure: Vec::new(),
             samples: ONE_SAMPLE,
-            anti_alias: true,
-            grey_levels: None,
-            blur_px: 0,
+            edges: EdgeSmoothing::default(),
             remove_islands: false,
             hanging_passes: 0,
             format: SlicedFormat::default(),
@@ -277,11 +276,17 @@ impl Slicing {
     /// The resin this printer needs, out of the resin as it was loaded.
     fn retune(&mut self) {
         self.chosen += 1;
-        self.material = match self.printer_id.as_deref() {
+        self.material = self.starting_material();
+        self.edges = self.base_material.edges;
+        self.rescaled = None;
+    }
+
+    /// The resin as the printer in hand starts from it.
+    fn starting_material(&self) -> MaterialProfile {
+        match self.printer_id.as_deref() {
             Some(id) => self.base_material.starting_point(id),
             None => self.base_material.clone(),
-        };
-        self.rescaled = None;
+        }
     }
 
     /// The layer height the stack is cut at, millimetres: the thickest layer, when the
@@ -316,22 +321,6 @@ impl Slicing {
         }
         self.material = self.material.rescaled_to(layer_height_mm);
         self.rescaled = Some(before);
-    }
-
-    /// The bands as they would stand at the height the resin was measured at, which is
-    /// what a project file keeps: it records the resin as loaded, not this session's copy.
-    pub fn bands_as_measured(&self) -> Vec<ExposureRange> {
-        let measured_mm = match self.printer_id.as_deref() {
-            Some(id) => self.base_material.starting_point(id).layer_height_mm,
-            None => self.base_material.layer_height_mm,
-        };
-        self.exposure
-            .iter()
-            .map(|band| ExposureRange {
-                exposure_s: self.material.exposure_at(band.exposure_s, measured_mm),
-                ..*band
-            })
-            .collect()
     }
 
     /// What the last change of layer height carried along, while nobody has touched it.
@@ -478,20 +467,7 @@ impl Slicing {
 
     /// What the window sets over the panel the printer profile describes.
     fn overrides(&self) -> PanelOverrides {
-        PanelOverrides {
-            shading: self.shading(),
-            grey_levels: self.grey_levels,
-            grey_range: None,
-            blur_px: self.blur_px,
-        }
-    }
-
-    fn shading(&self) -> Shading {
-        if self.anti_alias {
-            Shading::Coverage
-        } else {
-            Shading::Binary
-        }
+        PanelOverrides::from(self.edges)
     }
 
     /// Drains the running job into the stage notice. Returns whether one is still running,

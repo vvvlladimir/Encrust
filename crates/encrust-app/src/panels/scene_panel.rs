@@ -29,7 +29,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
         .inner_margin(PLATES_MARGIN)
         .show(ui, |ui| {
             let room = ui.available_width();
-            plate_strip::ui(ui, &mut window.doc.scene, room);
+            if plate_strip::ui(ui, &mut window.doc.scene, room) {
+                window.machine.slicing.take_profile_settings();
+            }
         });
     hairline(ui);
     header(ui, window);

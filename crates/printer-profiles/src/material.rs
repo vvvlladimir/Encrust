@@ -7,11 +7,13 @@ use crate::Compensation;
 use crate::{PrinterProfile, ProfileError};
 
 mod buffer;
+mod edges;
 mod peel;
 mod second_stage;
 mod tuning;
 
 pub use buffer::Buffer;
+pub use edges::EdgeSmoothing;
 pub use peel::LayerPeel;
 pub use second_stage::SecondStage;
 pub use tuning::PrinterTuning;
@@ -69,6 +71,8 @@ pub struct MaterialProfile {
     pub details: ResinDetails,
     #[serde(default)]
     pub waits: Waits,
+    #[serde(default)]
+    pub edges: EdgeSmoothing,
     /// What the print comes out as against what was sliced, and the corrections for it.
     #[serde(default)]
     pub compensation: Compensation,
@@ -498,6 +502,7 @@ impl Default for MaterialProfile {
             last_printer: None,
             details: ResinDetails::default(),
             waits: Waits::default(),
+            edges: EdgeSmoothing::default(),
             compensation: Compensation::default(),
             printers: BTreeMap::new(),
             printer_table: PrinterTuning::default(),

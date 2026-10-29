@@ -10,9 +10,8 @@ use core_engine::{Cutting, SupportPlan, bake, cut};
 use core_geometry::{Bvh, Mesh, Scalar, self_intersections, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
-use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
+use printer_profiles::{Compensation, EdgeSmoothing, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
@@ -430,26 +429,30 @@ fn adaptive_settings(job: &JobArgs, layer_height: Scalar, talk: bool) -> Adaptiv
 
 /// Warns when the command line asks for grey a binary-only `printer` does not take.
 pub fn warn_if_grey_ignored(args: &RasterArgs, printer: Option<&PrinterProfile>) {
-    let asks_grey = args.grey_levels.is_some() || args.grey_range.is_some() || args.blur != 0;
+    let asks_grey = args.anti_alias
+        || args.grey_levels.is_some()
+        || args.grey_range.is_some()
+        || args.blur.is_some_and(|blur| blur != 0);
     if let Some(printer) = printer.filter(|printer| asks_grey && printer.display.binary_only) {
         tracing::warn!(
-            "{} takes masks without grey, so --grey-levels, --grey-range and --blur change nothing",
+            "{} takes masks without grey, so --anti-alias, --grey-levels, --grey-range and \
+             --blur change nothing",
             printer.name
         );
     }
 }
 
-/// What the command line sets over the panel the printer profile describes.
-pub fn overrides_of(args: &RasterArgs) -> PanelOverrides {
+/// What the command line sets over the resin's edge smoothing and the panel the printer
+/// profile describes.
+pub fn overrides_of(args: &RasterArgs, resin: EdgeSmoothing) -> PanelOverrides {
+    let edges = EdgeSmoothing {
+        anti_alias: (resin.anti_alias || args.anti_alias) && !args.no_anti_alias,
+        grey_levels: args.grey_levels.or(resin.grey_levels),
+        blur_px: args.blur.unwrap_or(resin.blur_px),
+    };
     PanelOverrides {
-        shading: if args.no_anti_alias {
-            Shading::Binary
-        } else {
-            Shading::Coverage
-        },
-        grey_levels: args.grey_levels,
         grey_range: args.grey_range,
-        blur_px: args.blur,
+        ..PanelOverrides::from(edges)
     }
 }
 

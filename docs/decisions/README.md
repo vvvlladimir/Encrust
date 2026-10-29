@@ -159,6 +159,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0145](0145-tolerance-moves-the-contours-not-the-mask.md) | Tolerance moves the contours, not the mask | Accepted |
 | [0377](0377-a-machine-may-take-masks-without-grey-only.md) | A machine may take masks without grey only | Accepted |
 | [0378](0378-an-edge-grey-is-spread-over-the-machines-grey-range.md) | Spread an edge grey over the machine's grey range | Accepted |
+| [0380](0380-print-settings-start-from-the-profiles-and-last-while-the-plate-is-in-hand.md) | Print settings start from the profiles and last while the plate is in hand | Accepted |
 
 ### Exposure and the written stack
 
@@ -336,7 +337,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted; the raft written into the first profile only superseded by 0266; the Raft tab editing the picked model's raft superseded by 0291 |
 | [0266](0266-a-support-on-a-raft-flares-onto-it-without-a-pad.md) | Stand a support on a raft by its flare, without a pad | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
-| [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted; refusing every other version is superseded by 0261 |
+| [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted; refusing every other version is superseded by 0261, keeping the print settings by 0380 |
 | [0261](0261-a-project-names-its-printer-and-resin-by-id.md) | Name a project's printer and resin by id, give the user's own ids a random tail, and picture the plate in the file | Accepted |
 
 ### Sliced-file formats
@@ -469,7 +470,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |
 | [0234](0234-recent-files-are-pictured-and-share-a-shelf-with-test-prints.md) | Show the recent files as pictures, and switch between them and the test prints | Accepted |
-| [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted; a tool value as always an entry of its own is superseded by 0257 |
+| [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted; a tool value as always an entry of its own is superseded by 0257, remembering the print settings by 0380 |
 | [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |

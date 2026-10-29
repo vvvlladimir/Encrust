@@ -291,6 +291,22 @@ fn an_edit_for_one_printer_leaves_every_other_alone() {
 }
 
 #[test]
+fn a_resins_edge_smoothing_is_saved_for_every_printer() {
+    let catalogue = with_grey("edges");
+    let mut settings = Settings::default();
+    settings.open_machines(&catalogue, Some(MARS), Some("standard-grey"));
+    let resin = settings.resin.as_mut().expect("open");
+
+    resin.draft.values.edges.anti_alias = false;
+    let saved = resin.to_saved();
+    assert!(!saved.edges.anti_alias, "the resin's own default");
+    assert!(
+        !saved.for_printer(SATURN).edges.anti_alias,
+        "and on another printer"
+    );
+}
+
+#[test]
 fn a_resin_taken_off_a_printer_stays_in_the_pool_and_comes_back() {
     let mut catalogue = with_grey("pool");
     remove_resin(&mut catalogue, MARS, "standard-grey").expect("writable");

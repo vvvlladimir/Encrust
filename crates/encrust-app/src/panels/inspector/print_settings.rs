@@ -5,12 +5,12 @@ use crate::i18n::tr;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Held, Segment, Segmented, carried_row, describe, hint, limit_verdict, limited_row,
-    number_row, readings, section, subheading,
+    Carried, Held, Segment, Segmented, carried_row, describe, hint, icon, limit_verdict,
+    limited_row, number_row, readings, secondary_button, section, subheading,
 };
 
 /// How this plate is cut and exposed: a form opened from the top bar. Its edits change the
-/// plate's copy, never the resin profile; a new printer or resin resets them.
+/// plate's copy, never the profiles, and last only while the plate is in hand (ADR 0380).
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     let (locked, limits, binary_only) = machine
         .slicing
@@ -21,21 +21,16 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
             (printer.locked.clone(), printer.limits.clone(), binary_only)
         })
         .unwrap_or_default();
-    let mut to_the_printer = layers::layers(ui, machine);
-    section(
-        ui,
-        &tr!("print-exposure"),
-        Some(&tr!("print-this-session")),
-        |ui| {
-            describe(ui, &tr!("print-exposure-help"));
-            describe(ui, &tr!("print-from-resin"));
-            exposure(ui, &mut machine.slicing, &locked, &limits);
-            if locked.transition_layers.is_none() {
-                transition(ui, &mut machine.slicing.material, &limits.transition_layers);
-            }
-        },
-    );
-    to_the_printer |= layers::bands(ui, machine);
+    let mut way = layers::PrinterWay::default();
+    layers::layers(ui, machine, &mut way);
+    section(ui, &tr!("print-exposure"), None, |ui| {
+        describe(ui, &tr!("print-exposure-help"));
+        exposure(ui, &mut machine.slicing, &locked, &limits);
+        if locked.transition_layers.is_none() {
+            transition(ui, &mut machine.slicing.material, &limits.transition_layers);
+        }
+    });
+    layers::bands(ui, machine, &mut way);
     if !binary_only {
         layers::edges(ui, machine);
     }
@@ -58,7 +53,7 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
             motion(ui, &mut machine.slicing.material, &locked, &limits)
         });
     }
-    if to_the_printer {
+    if way.taken {
         let printer = machine.slicing.printer_id.clone();
         let resin = machine.slicing.resin_id.clone();
         machine.settings.open_machines(
@@ -66,6 +61,19 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
             printer.as_deref(),
             resin.as_deref(),
         );
+    }
+}
+
+/// The way back to the printer's and resin's settings, once the panel holds others.
+pub fn action(ui: &mut egui::Ui, machine: &mut Machine) {
+    let clicked = ui
+        .add_enabled_ui(machine.slicing.print_settings_edited(), |ui| {
+            secondary_button(ui, icon::RESET, &tr!("print-use-profiles")).clicked()
+        })
+        .inner;
+    if clicked {
+        let profiles = machine.slicing.profile_settings();
+        machine.slicing.put_print_settings(profiles);
     }
 }
 
@@ -110,8 +118,8 @@ fn exposure(
             &tr!(
                 "print-carried",
                 exposure = format!("{:.2}", rescaled.exposure_s),
-                from = format!("{:.3}", rescaled.from_mm),
-                to = format!("{:.3}", slicing.layer_height_mm())
+                from = format!("{:.0}", rescaled.from_mm * 1000.0),
+                to = format!("{:.0}", slicing.layer_height_mm() * 1000.0)
             ),
         );
     }
@@ -184,7 +192,7 @@ fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile, limit: &Limit) 
             (tr!("print-transition-type"), tr!("print-linear")),
             (
                 tr!("print-step"),
-                tr!("value-s", value = format!("{step_s:.3}")),
+                tr!("value-s", value = format!("{step_s:.2}")),
             ),
         ],
     );
@@ -198,9 +206,9 @@ fn waiting(
     locked: &PrinterTuning,
     limits: &PrinterLimits,
 ) {
-    if let Some(mode) = locked.held_wait_mode() {
-        material.waits.mode = mode;
-    } else {
+    // A held mode is shown, not written: the run puts the machine's locks over the resin.
+    let held = locked.held_wait_mode();
+    if held.is_none() {
         let mut mode = material.waits.mode;
         let modes = [
             Segment::new(WaitMode::LightOff, tr!("print-light-off")),
@@ -213,7 +221,7 @@ fn waiting(
             material.waits.mode = mode;
         }
     }
-    match material.waits.mode {
+    match held.unwrap_or(material.waits.mode) {
         WaitMode::LightOff if locked.light_off_delay_s.is_none() => {
             limited_row(
                 ui,
@@ -317,7 +325,7 @@ mod tests {
     use super::*;
     use crate::ui::theme;
 
-    /// The form for the shipped printer `id`, after the theme has been put on.
+    /// The form and its foot for the shipped printer `id`, after the theme has been put on.
     fn form_for(id: &str) -> egui_kittest::Harness<'static, Machine> {
         let mut machine = Machine::default();
         let printer = machine
@@ -335,6 +343,7 @@ mod tests {
                 move |ui, machine: &mut Machine| {
                     if dressed {
                         super::ui(ui, machine);
+                        action(ui, machine);
                     } else {
                         theme::apply(ui.ctx());
                         dressed = true;
@@ -355,5 +364,31 @@ mod tests {
         };
         assert!(shown("elegoo-saturn-4-ultra"));
         assert!(!shown("creality-halot-x1"), "a binary-only machine");
+    }
+
+    #[test]
+    fn the_way_to_the_printer_is_offered_once() {
+        let form = form_for("elegoo-saturn-4-ultra");
+        assert!(form.query_by_label_contains("so no layer can").is_some());
+        assert!(
+            form.query_by_label_contains("exposure cannot vary")
+                .is_some()
+        );
+        let ways = form.query_all_by_label("Open printer settings").count();
+        assert_eq!(ways, 1, "two refusals, one way to the printer's settings");
+    }
+
+    #[test]
+    fn an_edited_plate_goes_back_to_the_profiles() {
+        let mut form = form_for("elegoo-saturn-4-ultra");
+        assert!(!form.state().slicing.print_settings_edited());
+
+        form.state_mut().slicing.edges.blur_px = 2;
+        form.run_steps(2);
+
+        form.get_by_label_contains("Use the profiles' settings")
+            .click();
+        form.run_steps(2);
+        assert!(!form.state().slicing.print_settings_edited());
     }
 }

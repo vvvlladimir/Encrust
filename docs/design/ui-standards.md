@@ -104,13 +104,12 @@ Widget from the catalogue (or a new one with its row) → text in `en.ftl`, help
 
 ## Known gaps
 
-- Units: `deg`, `x`, `um` beside `°`, `×`, `µm`; layer height in mm in print settings, µm on
-  the chip; Precision has no unit.
+- Units: `deg`, `x`, `um` beside `°`, `×`, `µm`; Precision has no unit.
 - Decimals chosen per call (`number_row`'s `decimals`): spacing 1.8 and 1.80 mm, height 20.0
   and 20.00, a step of 27.800 s.
 - Presets: Hollow uses a name box and a Save button, not Supports' picker with icons.
-- Supports and Cut print viewport instructions; Print settings offers "Open printer settings"
-  twice; Machine and resin prints lowercase explanations under fields, its boxes misaligned.
+- Supports and Cut print viewport instructions; Machine and resin prints lowercase
+  explanations under fields, its boxes misaligned.
 - Stock egui controls in `title_bar/menus.rs`, `settings/printer/connection.rs`,
   `scene_panel.rs`, `settings/machines/resins.rs`, `plate_strip.rs`, `project.rs`,
   `profiles.rs`; ~120 bare `ui.label` calls outside `ui::widgets`, most in `stage_notice.rs`,

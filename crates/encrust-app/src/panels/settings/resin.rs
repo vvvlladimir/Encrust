@@ -9,6 +9,7 @@ use printer_profiles::{
 
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::panels::edge_fields;
 use crate::panels::settings::{compensation, form_card, name_row, report, settled};
 use crate::settings::{Node, ResinDraft, rename_resin};
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
@@ -76,6 +77,8 @@ struct MachineHold {
     locked: PrinterTuning,
     limits: PrinterLimits,
     buffer: Option<Buffer>,
+    /// The machine's masks carry no grey, so there is no edge to smooth.
+    binary_only: bool,
 }
 
 fn machine_hold(window: &Window, printer: &str) -> MachineHold {
@@ -88,6 +91,7 @@ fn machine_hold(window: &Window, printer: &str) -> MachineHold {
             locked: entry.profile.locked.clone(),
             limits: entry.profile.limits.clone(),
             buffer: entry.profile.buffer,
+            binary_only: entry.profile.display.binary_only,
         })
         .unwrap_or_default()
 }
@@ -98,6 +102,7 @@ fn cards(ui: &mut egui::Ui, resin: &mut ResinDraft, printer: &str, hold: &Machin
         locked,
         limits,
         buffer,
+        binary_only,
     } = hold;
     form_card(ui, &tr!("resin-exposure-on", printer = printer), |ui| {
         describe(ui, &tr!("print-exposure-help"));
@@ -120,6 +125,12 @@ fn cards(ui: &mut egui::Ui, resin: &mut ResinDraft, printer: &str, hold: &Machin
         form_card(ui, &tr!("resin-buffer"), |ui| {
             describe(ui, &tr!("resin-buffer-help"));
             buffer::rows(ui, values, machine);
+        });
+    }
+    if !binary_only {
+        form_card(ui, &tr!("layers-edge-smoothing"), |ui| {
+            describe(ui, &tr!("layers-edge-note"));
+            edge_fields::rows(ui, &mut values.edges);
         });
     }
 }

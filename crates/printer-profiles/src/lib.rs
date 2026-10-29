@@ -32,8 +32,8 @@ pub use foreign::ForeignResin;
 pub use front_edge::FrontEdge;
 pub use limits::{Limit, LimitBreach, PrinterLimits, SecondStageLimits, Stray};
 pub use material::{
-    Buffer, LayerPeel, MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, SecondStage,
-    WaitMode, Waits,
+    Buffer, EdgeSmoothing, LayerPeel, MaterialProfile, PriceUnit, PrinterTuning, ResinDetails,
+    SecondStage, WaitMode, Waits,
 };
 pub use mirror::Mirror;
 pub use own_ids::{Renamed, own_id};

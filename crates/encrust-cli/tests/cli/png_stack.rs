@@ -122,6 +122,39 @@ fn binary_shading_writes_no_intermediate_grey() {
 }
 
 #[test]
+fn the_resins_edge_smoothing_is_taken_unless_a_flag_says_otherwise() {
+    let path = write_box_stl("raster-resin-edges", 10.0, 12, 0);
+    let resin = std::env::temp_dir().join("encrust-cli-tests/binary-resin.toml");
+    let base = std::fs::read_to_string(test_resin()).expect("the fixture is readable");
+    std::fs::write(&resin, format!("{base}\n[edges]\nanti_alias = false\n"))
+        .expect("the temp dir is writable");
+    let shading = |name: &str, flag: Option<&str>| -> String {
+        let out = output_dir(name);
+        let (panel, resin) = (test_panel(), resin.clone());
+        let mut args = vec![
+            path.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--material",
+            resin.to_str().unwrap(),
+            "--layer-height",
+            "5",
+            "-o",
+            out.to_str().unwrap(),
+        ];
+        args.extend(flag);
+        let text = stdout(&slice(&args));
+        field(&text, "shading").to_owned()
+    };
+
+    assert_eq!(shading("resin-edges", None), "binary, no intermediate grey");
+    assert!(
+        shading("resin-edges-flag", Some("--anti-alias")).starts_with("coverage"),
+        "--anti-alias outranks the resin"
+    );
+}
+
+#[test]
 fn a_blur_widens_the_grey_at_every_edge() {
     let path = write_box_stl("raster-blur", 10.0, 12, 0);
     let grey_pixels = |name: &str, blur: &str| {

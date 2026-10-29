@@ -190,6 +190,7 @@ impl ResinDraft {
         saved.name = edited.name.clone();
         saved.density_g_cm3 = edited.density_g_cm3;
         saved.details = edited.details.clone();
+        saved.edges = edited.edges;
         let tuning = PrinterTuning::of_changes(&saved, edited);
         saved.printers.insert(self.printer.clone(), tuning);
         saved.last_printer = Some(self.printer.clone());
