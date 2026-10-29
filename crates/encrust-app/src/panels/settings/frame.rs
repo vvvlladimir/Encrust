@@ -3,7 +3,8 @@
 
 use egui::{Align, Color32, Layout, Rect, Sense, Ui, UiBuilder, pos2, vec2};
 
-use crate::ui::{dialog, dialog_head, focus_ring, theme};
+use crate::ui::theme::motion;
+use crate::ui::{dialog, dialog_head, focus_ring, hover_mix, theme};
 
 /// The most of the screen a window takes, where the screen has it.
 const MOST: egui::Vec2 = vec2(1080.0, 720.0);
@@ -28,7 +29,7 @@ pub(super) fn show(
     let screen = ctx.content_rect().size() - egui::Vec2::splat(2.0 * theme::DIALOG_MARGIN);
     let size = screen.min(MOST).max(egui::Vec2::ZERO);
     let mut close = false;
-    let modal = dialog(egui::Id::new(id), 0).show(ctx, |ui| {
+    let modal = dialog(ctx, egui::Id::new(id), 0).show(ctx, |ui| {
         let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
         let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
         let list_w = theme::DIALOG_LIST_W.min(rect.width() * theme::DIALOG_LIST_SHARE);
@@ -129,14 +130,21 @@ pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     response
         .widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, open, label));
-    let text = match (open, response.hovered()) {
-        (true, _) | (false, true) => colors.text_high,
-        (false, false) => colors.text_low,
+    let text = match open {
+        true => colors.text_high,
+        false => hover_mix(ui, &response, colors.text_low, colors.text_high),
     };
     let at = pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
     ui.painter().galley(at, galley, text);
-    if open {
-        let line = Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom());
+    // The underline grows out from the middle of the tab coming open.
+    let how_open = motion::toggle(ui.ctx(), response.id.with("open"), open, motion::FAST);
+    if how_open > 0.0 {
+        let half = rect.width() * how_open / 2.0;
+        let x = rect.center().x;
+        let line = Rect::from_min_max(
+            pos2(x - half, rect.bottom() - 2.0),
+            pos2(x + half, rect.bottom()),
+        );
         ui.painter().rect_filled(line, 0.0, colors.accent);
     }
     focus_ring(ui, &response, theme::R_CONTROL);
@@ -193,10 +201,9 @@ impl Table {
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
         });
-        let fill = match (picked, response.hovered()) {
-            (true, _) => colors.picked_wash,
-            (false, true) => colors.hover,
-            (false, false) => Color32::TRANSPARENT,
+        let fill = match picked {
+            true => colors.picked_wash,
+            false => hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
         };
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, theme::R_CONTROL, fill);

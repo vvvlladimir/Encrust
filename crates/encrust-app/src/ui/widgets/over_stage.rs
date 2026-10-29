@@ -131,23 +131,22 @@ pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: b
     cancel
 }
 
-/// A running job's glyph, turning once every `SPIN_S` unless motion is reduced.
-fn spinner(ui: &mut Ui) {
+/// A running job's glyph, turning unless motion is reduced.
+pub fn spinner(ui: &mut Ui) {
     let ink = theme::colors().accent_soft;
     let (rect, _) = ui.allocate_exact_size(vec2(SPINNER_PT, SPINNER_PT), Sense::hover());
     let galley = ui
         .painter()
         .layout_no_wrap(icon::JOB.to_owned(), theme::icon(SPINNER_PT), ink);
-    let turn = motion::looping(ui.ctx(), SPIN_S).unwrap_or(0.0) * std::f32::consts::TAU;
+    let turn = motion::spin(ui.ctx()).unwrap_or(0.0) * std::f32::consts::TAU;
     let corner = rect.center() - galley.size() / 2.0;
     let shape = egui::epaint::TextShape::new(corner, galley, ink)
         .with_angle_and_anchor(turn, egui::Align2::CENTER_CENTER);
     ui.painter().add(shape);
 }
 
-/// A spinner's glyph, points, and how long it takes to turn once, s.
+/// A spinner's glyph, points.
 const SPINNER_PT: f32 = 16.0;
-const SPIN_S: f64 = 0.8;
 
 fn notice_frame(ui: &mut Ui, min_w: f32, add: impl FnOnce(&mut Ui)) {
     card().inner_margin(NOTICE_MARGIN).show(ui, |ui| {

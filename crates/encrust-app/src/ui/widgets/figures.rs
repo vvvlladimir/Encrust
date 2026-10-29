@@ -106,7 +106,7 @@ pub fn details_fold<R>(
     let id = ui.id().with(("details", label));
     let open = kept::get::<bool>(ui.ctx(), id.with("open")).unwrap_or(false);
     let how_open = motion::fold(ui.ctx(), id, open);
-    let inner = (how_open > 0.0).then(|| unfold(ui, id, how_open, add));
+    let inner = (how_open > 0.0).then(|| unfold(ui, id, how_open, Grows::Up, add));
     let row = details_row(ui, label, summary, open, how_open);
     if row.clicked() {
         kept::set(ui.ctx(), id.with("open"), &!open);
@@ -114,17 +114,40 @@ pub fn details_fold<R>(
     inner
 }
 
-/// Draws `add` at its full height but shows `how_open` of it, the bottom first, sliding
-/// and fading in with it.
-fn unfold<R>(ui: &mut Ui, id: egui::Id, how_open: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+/// The edge a fold opens from: a block's body grows down from its heading, a card's details
+/// up from the row under them.
+pub(super) enum Grows {
+    Down,
+    Up,
+}
+
+/// Draws `add` at its full height but shows `how_open` of it, from the edge `grows` names,
+/// sliding and fading in with it. Fully open, it is drawn as it stands, and measured.
+pub(super) fn unfold<R>(
+    ui: &mut Ui,
+    id: egui::Id,
+    how_open: f32,
+    grows: Grows,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let height_id = id.with("height");
+    if how_open >= 1.0 {
+        let drawn = ui.scope(add);
+        let measured = drawn.response.rect.height();
+        ui.data_mut(|data| data.insert_temp(height_id, measured));
+        return drawn.inner;
+    }
     let full_h = ui
-        .data(|data| data.get_temp::<f32>(id.with("height")))
+        .data(|data| data.get_temp::<f32>(height_id))
         .unwrap_or(0.0);
     let shown = Rect::from_min_size(
         ui.cursor().min,
         vec2(ui.available_width(), full_h * how_open),
     );
-    let slide = (1.0 - how_open) * (full_h + UNFOLD_SLIDE);
+    let slide = match grows {
+        Grows::Up => (1.0 - how_open) * (full_h + UNFOLD_SLIDE),
+        Grows::Down => (1.0 - how_open) * UNFOLD_SLIDE,
+    };
     let room = Rect::from_min_size(
         shown.min - vec2(0.0, slide),
         vec2(shown.width(), f32::INFINITY),
@@ -135,7 +158,7 @@ fn unfold<R>(ui: &mut Ui, id: egui::Id, how_open: f32, add: impl FnOnce(&mut Ui)
     let inner = add(&mut child);
     let measured = child.min_rect().height();
     if (measured - full_h).abs() > 0.5 {
-        ui.data_mut(|data| data.insert_temp(id.with("height"), measured));
+        ui.data_mut(|data| data.insert_temp(height_id, measured));
         ui.ctx().request_repaint();
     }
     ui.advance_cursor_after_rect(shown);
@@ -158,10 +181,11 @@ fn details_row(
         ui.allocate_exact_size(vec2(ui.available_width(), DETAILS_ROW_H), Sense::click());
     response.widget_info(|| WidgetInfo::selected(WidgetType::CollapsingHeader, true, open, label));
     let colors = theme::colors();
-    let (fill, ink) = if response.hovered() {
-        (colors.raised, colors.text_mid)
+    let fill = super::hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.raised);
+    let ink = if response.hovered() {
+        colors.text_mid
     } else {
-        (egui::Color32::TRANSPARENT, colors.text_low)
+        colors.text_low
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);

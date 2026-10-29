@@ -86,8 +86,7 @@ fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Where the search over every tool, field and setting will open. Drawn already, so the
-/// bar keeps its shape. TODO(step-5): the palette behind it, with its own ADR.
+/// The way into Find, its keys beside it while there is room (ADR 0230).
 fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
     let colors = theme::colors();
     let tint = colors.text_low;
@@ -106,11 +105,7 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("find-button"))
     });
     let painter = ui.painter();
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        egui::Color32::TRANSPARENT
-    };
+    let fill = crate::ui::hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover);
     painter.rect(
         rect,
         theme::R_CONTROL,

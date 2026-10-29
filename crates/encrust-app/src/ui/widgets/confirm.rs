@@ -113,7 +113,7 @@ pub fn confirm_button(ui: &mut Ui, confirm: &Confirm<'_>) -> bool {
         let skin = Skin {
             fill: colors.danger_wash,
             foreground: colors.danger,
-            border: Some(colors.danger.gamma_multiply(ARMED_RING)),
+            border: Some(armed_ring(ui.ctx())),
             hovered: colors.danger_wash,
             pressed: colors.danger_wash,
         };
@@ -153,8 +153,16 @@ pub fn confirm_button(ui: &mut Ui, confirm: &Confirm<'_>) -> bool {
     fired
 }
 
-/// How much of the danger an armed control's ring keeps.
-pub(super) const ARMED_RING: f32 = 0.55;
+/// How much of the danger an armed control's ring keeps at the top of its pulse, and at
+/// the bottom.
+const ARMED_RING: f32 = 0.55;
+const ARMED_RING_LOW: f32 = 0.2;
+
+/// The ring of an armed control, pulsing while it waits.
+pub(super) fn armed_ring(ctx: &egui::Context) -> egui::Color32 {
+    let strength = ARMED_RING_LOW + (ARMED_RING - ARMED_RING_LOW) * motion::pulse(ctx);
+    theme::colors().danger.gamma_multiply(strength)
+}
 
 #[cfg(test)]
 mod tests {

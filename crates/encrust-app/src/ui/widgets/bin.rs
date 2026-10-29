@@ -1,7 +1,7 @@
 use egui::{Align2, Color32, Rect, Response, Sense, StrokeKind, Ui, vec2};
 
-use super::button::{DISABLED_GLYPH, pressed_rect};
-use super::confirm::{ARMED_RING, Arming, arm};
+use super::button::{DISABLED_GLYPH, hover_mix, pressed_rect};
+use super::confirm::{Arming, arm, armed_ring};
 use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
@@ -52,14 +52,15 @@ fn paint(ui: &Ui, response: &Response, look: BinLook, armed: bool, enabled: bool
     let rect = pressed_rect(ui, response);
     let hovered = enabled && response.hovered();
     let (fill, ring) = match (armed, look, hovered) {
-        (true, ..) => (
-            colors.danger_wash,
-            Some(colors.danger.gamma_multiply(ARMED_RING)),
+        (true, ..) => (colors.danger_wash, Some(armed_ring(ui.ctx()))),
+        (false, BinLook::Framed, _) => (
+            eased(ui, response, enabled, colors.raised, colors.hover),
+            Some(colors.hairline),
         ),
-        (false, BinLook::Framed, true) => (colors.hover, Some(colors.hairline)),
-        (false, BinLook::Framed, false) => (colors.raised, Some(colors.hairline)),
-        (false, BinLook::Quiet, true) => (colors.raised, None),
-        (false, BinLook::Quiet, false) => (Color32::TRANSPARENT, None),
+        (false, BinLook::Quiet, _) => (
+            eased(ui, response, enabled, Color32::TRANSPARENT, colors.raised),
+            None,
+        ),
     };
     paint_box(ui, rect, fill, ring);
     let ink = match (enabled, armed, look, hovered) {
@@ -81,6 +82,14 @@ fn paint(ui: &Ui, response: &Response, look: BinLook, armed: bool, enabled: bool
         theme::icon(size_pt),
         ink,
     );
+}
+
+/// `rest`, easing to `hovered` under the pointer while the bin can be used.
+fn eased(ui: &Ui, response: &Response, enabled: bool, rest: Color32, hovered: Color32) -> Color32 {
+    match enabled {
+        true => hover_mix(ui, response, rest, hovered),
+        false => rest,
+    }
 }
 
 fn paint_box(ui: &Ui, rect: Rect, fill: Color32, ring: Option<Color32>) {

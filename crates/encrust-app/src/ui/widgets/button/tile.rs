@@ -1,6 +1,6 @@
 use egui::{Align2, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType, vec2};
 
-use super::focus_ring;
+use super::{focus_ring, hover_mix};
 use crate::ui::theme;
 
 /// A picture to pick from a grid, `side` points square, ringed in the accent while it is
@@ -41,11 +41,7 @@ pub fn preset_picker(ui: &mut Ui, glyph: &str, label: &str, edited: bool) -> Res
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label));
 
-    let border = if response.hovered() {
-        colors.line
-    } else {
-        colors.hairline
-    };
+    let border = hover_mix(ui, &response, colors.hairline, colors.line);
     let painter = ui.painter();
     painter.rect(
         rect,
@@ -110,11 +106,7 @@ pub fn summary_button(
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), SUMMARY_H), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        colors.raised
-    };
+    let fill = hover_mix(ui, &response, colors.raised, colors.hover);
     let painter = ui.painter();
     painter.rect(
         rect,
@@ -167,11 +159,8 @@ pub fn zone_button(ui: &mut Ui, rect: Rect, glyph: &str, title: &str, detail: &s
     let colors = theme::colors();
     let response = ui.allocate_rect(rect, Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
-    let (fill, line) = if response.hovered() {
-        (colors.hover, colors.accent_soft)
-    } else {
-        (colors.raised, colors.line)
-    };
+    let fill = hover_mix(ui, &response, colors.raised, colors.hover);
+    let line = hover_mix(ui, &response, colors.line, colors.accent_soft);
     let painter = ui.painter_at(rect);
     painter.rect(
         rect,

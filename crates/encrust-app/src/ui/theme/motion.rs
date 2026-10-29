@@ -28,6 +28,16 @@ pub const CLOSE: Motion = Motion {
 /// How long an armed `confirm_button` waits for its second press, s. A wait rather than a
 /// motion, so *Reduce motion* leaves it.
 pub const ARMED_S: f64 = 3.0;
+/// The loops, s a round: a job's glyph turning, the sheen crossing a bar, a busy printer's
+/// dot breathing, an armed control's ring pulsing.
+const SPIN_S: f64 = 0.8;
+const SHEEN_S: f64 = 1.4;
+const BREATHE_S: f64 = 1.6;
+const PULSE_S: f64 = 1.0;
+/// The camera swinging to a face of the view cube, s.
+const TURN_S: f64 = 0.35;
+/// How far a window over the plate rises as it comes in, points.
+pub const LIFT_PT: f32 = 6.0;
 
 impl Motion {
     /// How long this takes, s, or nought while *Reduce motion* is on.
@@ -65,9 +75,40 @@ pub fn appear(ctx: &Context, id: Id) -> f32 {
     fold(ctx, id, true)
 }
 
+/// How far round a job's turning glyph is, 0 to 1; `None` under *Reduce motion*.
+pub fn spin(ctx: &Context) -> Option<f32> {
+    looping(ctx, SPIN_S)
+}
+
+/// Where the sheen crossing a bar stands, 0 to 1; `None` under *Reduce motion*.
+pub fn sheen(ctx: &Context) -> Option<f32> {
+    looping(ctx, SHEEN_S)
+}
+
+/// How bright a busy printer's dot is, 0 to 1 and back; full under *Reduce motion*.
+pub fn breathe(ctx: &Context) -> f32 {
+    looping(ctx, BREATHE_S).map_or(1.0, wave)
+}
+
+/// How strong an armed control's ring is, 0 to 1 and back; full under *Reduce motion*.
+pub fn pulse(ctx: &Context) -> f32 {
+    looping(ctx, PULSE_S).map_or(1.0, wave)
+}
+
+/// How long the camera takes to swing to a face of the view cube, s; nought under
+/// *Reduce motion*.
+pub fn turn_s(ctx: &Context) -> f64 {
+    if reduced(ctx) { 0.0 } else { TURN_S }
+}
+
+/// A loop's place, 0 to 1, as a rise and fall from 1 down to 0 and back.
+fn wave(phase: f32) -> f32 {
+    0.5 + 0.5 * (phase * std::f32::consts::TAU).cos()
+}
+
 /// Where a loop of `period_s` stands, 0 to 1, asking for the next frame; `None` under
 /// *Reduce motion*, which keeps everything still.
-pub fn looping(ctx: &Context, period_s: f64) -> Option<f32> {
+fn looping(ctx: &Context, period_s: f64) -> Option<f32> {
     if reduced(ctx) {
         return None;
     }
@@ -86,7 +127,9 @@ pub fn reduce(ctx: &Context, on: bool) {
     }
 }
 
-fn reduced(ctx: &Context) -> bool {
+/// Whether *Reduce motion* is on, for a motion whose length is worked out elsewhere, such as
+/// the camera's flight to a point.
+pub fn reduced(ctx: &Context) -> bool {
     ctx.data(|data| data.get_temp(reduced_id()))
         .unwrap_or(false)
 }
@@ -164,9 +207,19 @@ mod tests {
     #[test]
     fn under_reduce_motion_nothing_loops() {
         let ctx = Context::default();
-        assert!(looping(&ctx, 1.4).is_some());
+        assert!(spin(&ctx).is_some() && sheen(&ctx).is_some());
+        assert!(turn_s(&ctx) > 0.0);
         reduce(&ctx, true);
-        assert!(looping(&ctx, 1.4).is_none());
+        assert!(spin(&ctx).is_none() && sheen(&ctx).is_none());
+        assert_eq!((breathe(&ctx), pulse(&ctx)), (1.0, 1.0), "held at full");
+        assert_eq!(turn_s(&ctx), 0.0);
+    }
+
+    #[test]
+    fn a_wave_falls_from_full_to_nothing_and_rises_again() {
+        assert!((wave(0.0) - 1.0).abs() < 1e-6);
+        assert!(wave(0.5).abs() < 1e-6);
+        assert!((wave(1.0) - 1.0).abs() < 1e-6);
     }
 
     #[test]

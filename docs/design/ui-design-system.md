@@ -103,15 +103,21 @@ two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
 | Token | Value | For |
 |---|---|---|
 | `FAST` | 120 ms, ease out | hover, press, a switch's knob, a tab's underline |
-| `OPEN` | 220–260 ms, ease out `(.2,.8,.2,1)` | a fold, a window, a notice coming in, a menu |
+| `OPEN` | 220–260 ms, ease out `(.2,.8,.2,1)` | a fold, a window, a notice coming in |
 | `CLOSE` | 160–180 ms, ease in | the same going away: faster than it came |
 | `ARMED` | 3 s | how long a `confirm_button` waits for its second press |
 
 A size grows from nought or shrinks to it (a fold's height), what it holds fades and
-slides 6 points with it; a pressed control shrinks to 96 %. A job's bar runs a sheen, a
-running job's glyph turns, a busy printer's dot breathes: the only motions that loop.
-*Reduce motion* in Settings → General sets every duration to nought; `ARMED` is a wait, not a
-motion, and stays.
+slides 6 points with it; a pressed control shrinks to 96 %, a hovered one eases to its
+hover fill (`hover_mix`), a tab's underline grows from its middle. A window fades its scrim
+in and rises `LIFT_PT` as it comes; a menu fades in by egui's own `animation_time`, set to
+`FAST`; a notice whose job ended fades out as it last stood. A job's bar runs a sheen, a
+running job's glyph turns, a busy printer's dot breathes, an armed control's ring pulses:
+the only motions that loop, each a function of `motion` (`spin`, `sheen`, `breathe`,
+`pulse`), so nothing outside it names a period. The camera's swing to a view is
+`motion::turn_s`. *Reduce motion* in Settings → General sets every duration to nought and
+holds every loop still; `ARMED` is a wait, not a motion, and stays. Nothing asks for a frame
+once nothing moves.
 
 ## Widgets
 
@@ -128,7 +134,9 @@ paints from tokens only.
 | `list`, `list_row` | Rows a panel adds to — support groups, bands, holes — on one hairline |
 | `card` | The frame of anything floating over the viewport |
 | `card_foot` | The foot of a side card, on `base` and rounded to fit inside the card |
-| `progress_bar` | A running job: filled to its fraction, or running on its own when the job cannot count its work |
+| `progress_bar`, `progress_bar_of` | A running job: filled to its fraction, or running on its own when the job cannot count its work; the second as tall as asked, the printer sheet's 6 |
+| `spinner` | A running job's glyph, turning: every wait in the window, never egui's own |
+| `hover_mix` | A fill easing to its hover by `FAST`, for every control painted by hand |
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
 | `issue_row` | One finding: a dot in its colour, where it is, what it is; the row goes there |
@@ -147,7 +155,7 @@ paints from tokens only.
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
-| `dialog`, `dialog_head` | A window over the plate on the stage dimmed by the scrim: its frame ringed in `line`, and its glyph, name and close button |
+| `dialog`, `palette_dialog`, `dialog_head` | A window over the plate on the stage dimmed by the scrim, rising as it comes in: its frame ringed in `line`, Find's hanging from the top over a lighter scrim, and its glyph, name and close button |
 | `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
 | `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |
 | `field_note` | A figure worked out from the fields over it, flush with their right edge |
@@ -218,7 +226,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Points, planes | `LINE_SEGMENT`, `PARALLELOGRAM` |
 | Pick, place, paint, shape | `CURSOR`, `PLUS`, `PAINT_BRUSH`, `WRENCH` |
 | Texture, text, combine | `CHECKERBOARD`, `TEXT_T`, `UNITE` |
-| Blocker, split | `SHIELD`, `SPLIT_HORIZONTAL` |
+| Split | `SPLIT_HORIZONTAL` |
 | Preset, save | `BOOKMARK_SIMPLE`, `FLOPPY_DISK` |
 | Warning, error, job, armed | `WARNING`, `WARNING_OCTAGON`, `CIRCLE_NOTCH`, `QUESTION` |
 | Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION` |

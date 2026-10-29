@@ -21,7 +21,7 @@ use crate::panels::Window;
 use crate::settings::{Node, Section, Tab};
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{chooser_group, focus_ring, hairline, icon, inline_button, theme};
+use crate::ui::{chooser_group, focus_ring, hairline, hover_mix, icon, inline_button, theme};
 use frame::{child, scrolled, with_header};
 
 /// The window, while it is open, and the question over it, which may be asked without it.
@@ -156,10 +156,12 @@ pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool)
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, label)
     });
-    let (fill, text) = match (active, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
+    let (fill, text) = match active {
+        true => (colors.accent_wash, colors.accent_soft),
+        false => (
+            hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover),
+            hover_mix(ui, &response, colors.text_mid, colors.text_high),
+        ),
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);

@@ -59,11 +59,11 @@ pub struct Palette {
     pub warn: Color32,
     /// Non-orientable mesh, write failure.
     pub danger: Color32,
-    // TODO(step-6): `ok_wash`, 14 % of `ok`, arrives with the inspector's good verdict.
-    /// The washes behind a verdict a print fails on, or only might, and an armed control:
-    /// 14 % of each, 12 % of the danger so its own text still reads at AA.
+    /// The washes behind a verdict a print fails on, only might, or passes, and an armed
+    /// control: 14 % of each, 12 % of the danger so its own text still reads at AA.
     pub danger_wash: Color32,
     pub warn_wash: Color32,
+    pub ok_wash: Color32,
     /// Transform field letters, in the CAD convention X red, Y green, Z blue.
     pub axis: [Color32; 3],
     /// A picked model: the part of a support the pointer has hold of, the row of a
@@ -96,6 +96,7 @@ const ENCRUST: Palette = Palette {
     danger: Color32::from_rgb(0xef, 0x5b, 0x4b),
     danger_wash: Color32::from_rgba_unmultiplied_const(0xef, 0x5b, 0x4b, 31),
     warn_wash: Color32::from_rgba_unmultiplied_const(0xe8, 0xb0, 0x43, 36),
+    ok_wash: Color32::from_rgba_unmultiplied_const(0x4f, 0xcf, 0x8a, 36),
     axis: [
         Color32::from_rgb(0xe0, 0x57, 0x4f),
         Color32::from_rgb(0x5f, 0xbf, 0x62),
@@ -375,8 +376,9 @@ pub const PRIMARY_H: f32 = 40.0;
 pub const FOCUS_W: f32 = 1.0;
 pub const FOCUS_HALO_W: f32 = 3.0;
 pub const BUTTON_H: f32 = 32.0;
-/// Height of a running job's progress bar.
+/// Height of a running job's progress bar, and of a print's in the printer sheet.
 pub const BAR_H: f32 = 4.0;
+pub const SHEET_BAR_H: f32 = 6.0;
 /// A form block: its title's column, the most its fields take, and the room between them.
 pub const BLOCK_TITLE_W: f32 = 180.0;
 pub const BLOCK_FIELDS_W: f32 = 460.0;
@@ -684,6 +686,7 @@ mod tests {
         let colors = colors();
         for (name, ink, wash) in [
             ("warn", colors.warn, colors.warn_wash),
+            ("ok", colors.ok, colors.ok_wash),
             ("danger", colors.danger, colors.danger_wash),
             ("accent", colors.accent_soft, colors.accent_wash),
             ("picked", colors.text_high, colors.picked_wash),

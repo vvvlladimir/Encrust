@@ -1,6 +1,6 @@
 use egui::{Align2, Color32, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType, vec2};
 
-use super::{DISABLED_GLYPH, focus_ring, pressed_rect};
+use super::{DISABLED_GLYPH, focus_ring, hover_mix, pressed_rect};
 use crate::ui::theme;
 
 /// A borderless square with one glyph in it: the top bar and the overlay cards.
@@ -43,9 +43,9 @@ pub fn companion_square(
     let (_, response) = ui.allocate_exact_size(vec2(side, side), sense);
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, tooltip));
     let colors = theme::colors();
-    let fill = match (enabled, response.hovered()) {
-        (true, true) => colors.hover,
-        _ => colors.raised,
+    let fill = match enabled {
+        true => hover_mix(ui, &response, colors.raised, colors.hover),
+        false => colors.raised,
     };
     let ink = if enabled {
         colors.text_high
@@ -95,8 +95,14 @@ pub fn rail_button(ui: &mut Ui, button: &RailButton<'_>) -> Response {
     let colors = theme::colors();
     let (fill, foreground) = match (active, response.hovered()) {
         (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.raised, colors.text_high),
-        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
+        (false, hovered) => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.raised),
+            if hovered {
+                colors.text_high
+            } else {
+                colors.text_mid
+            },
+        ),
     };
     let shrunk = pressed_rect(ui, &response);
     let painter = ui.painter();
@@ -188,8 +194,17 @@ fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
 
     let (fill, foreground) = match (config.active, enabled && response.hovered()) {
         (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
+        (false, hovered) => (
+            match enabled {
+                true => hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+                false => Color32::TRANSPARENT,
+            },
+            if hovered {
+                colors.text_high
+            } else {
+                colors.text_mid
+            },
+        ),
     };
     let foreground = if enabled {
         foreground

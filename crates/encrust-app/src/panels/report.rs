@@ -64,7 +64,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     let sheet_w = (screen.width() - SCREEN_MARGIN).clamp(SHEET_MIN_W, SHEET_W);
     let body_h = (screen.height() - SCREEN_MARGIN - CHROME_H).clamp(BODY_MIN_H, BODY_MAX_H);
     let report_h = (body_h * REPORT_SHARE).max(REPORT_MIN_H);
-    let sheet = dialog(egui::Id::new("report"), 18).show(ctx, |ui| {
+    let sheet = dialog(ctx, egui::Id::new("report"), 18).show(ctx, |ui| {
         ui.set_width(sheet_w);
         header(ui, report);
         ui.add_space(10.0);

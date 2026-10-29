@@ -1025,3 +1025,17 @@ fn a_click_on_the_rim_of_a_hole_in_a_turned_model_of_a_million_faces_picks_its_e
     };
     assert_eq!(click_a_rim(mesh, transform, false), 1);
 }
+
+/// Once nothing moves the window stops asking for frames, so an idle window costs nothing:
+/// every loop and every fold settles, on the start page and over a plate alike.
+#[test]
+fn a_window_at_rest_asks_for_no_more_frames() {
+    for started in [false, true] {
+        let mut app = super::states::app(true);
+        app.view.options.started = started;
+        let builder = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 800.0));
+        let mut harness = super::states::drawn(builder, app);
+        let settled = harness.try_run();
+        assert!(settled.is_ok(), "started {started}: {settled:?}");
+    }
+}

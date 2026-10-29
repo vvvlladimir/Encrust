@@ -17,14 +17,14 @@ pub use widgets::{
     axis_label, bare_switch, bin_button, blocked_hover, body_and_foot, busy, card, card_foot,
     carried_row, compact_button, companion_button, companion_square, confirm_bin, count_row,
     describe, described, describing, dialog, dialog_head, duration, empty_state, field_label,
-    field_note, filter_chip, focus_ring, hairline, heading, help_mark, hint, hint_bar, icon_button,
-    icon_toggle, inline_button, inset, issue_row, job_notice, limit_verdict, limited_row, list,
-    list_row, meta, mode_group, nested, notice, notice_card, number_field, number_row, picker,
-    picker_row, preset_picker, primary_button, progress_bar, quiet_button, rail_button, readings,
-    row_name, secondary_button, section, section_with_action, section_with_actions,
-    section_with_switch, stats, stepped_row, subheading, subheading_with_switch, summary_button,
-    swatch, switch, text_box, text_row, toggle_button, tone, two_lines, unit_field,
-    vertical_hairline, zone_button,
+    field_note, filter_chip, focus_ring, hairline, heading, help_mark, hint, hint_bar, hover_mix,
+    icon_button, icon_toggle, inline_button, inset, issue_row, job_notice, limit_verdict,
+    limited_row, list, list_row, meta, mode_group, nested, notice, notice_card, number_field,
+    number_row, palette_dialog, picker, picker_row, preset_picker, primary_button, progress_bar,
+    progress_bar_of, quiet_button, rail_button, readings, row_name, secondary_button, section,
+    section_with_action, section_with_actions, section_with_switch, spinner, stats, stepped_row,
+    subheading, subheading_with_switch, summary_button, swatch, switch, text_box, text_row,
+    toggle_button, tone, two_lines, unit_field, vertical_hairline, zone_button,
 };
 pub use widgets::{Confirm, any_armed, confirm_button};
 pub use widgets::{Figure, details_fold, figure_grid, small_icon_button, split_readings, tag};
