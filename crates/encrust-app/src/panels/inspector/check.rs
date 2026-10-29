@@ -15,7 +15,7 @@ use crate::workspace::{Mode, Tool};
 
 mod issues;
 
-use issues::{Filter, explain, filter, issue_name, listing, rows};
+use issues::{Filter, explain, filter, issue_name, listing, neighbour, rows};
 
 /// What the stack will fail on: the verdict, a way to take the islands out, every issue a
 /// click away from its layer, and what pulls hardest on the film.
@@ -31,39 +31,86 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         return;
     };
 
-    section(ui, &tr!("check-verdict"), None, |ui| {
+    let found = tr!(
+        "check-found",
+        issues = risks.len(),
+        layers = layer_count(&risks)
+    );
+    section(ui, &tr!("check-issues"), Some(&found), |ui| {
         if verdict(ui, worst.as_ref())
             && let Some(worst) = worst
         {
             go_to(window, &[worst]);
         }
-        islands_action(ui, window.machine, &risks, removed);
-        let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
-        if islands && secondary_button(ui, icon::SUPPORTS, &tr!("check-support-islands")).clicked()
-        {
-            support_islands(window, &risks);
+        if risks.is_empty() {
+            return;
         }
-        let cups = risks.iter().any(|risk| Filter::Cups.admits(&risk.kind));
-        if cups && secondary_button(ui, icon::DRAIN, &tr!("check-drill-cups")).clicked() {
-            crate::shortcuts::pick(window, Tool::Drain);
+        describe(ui, &tr!("check-issues-help"));
+        let filter = filter(ui, &risks);
+        let shown = window.machine.preview.layer();
+        if let Some(picked) = listing(ui, shown, &risks, filter) {
+            go_to(window, &picked);
+        }
+        if let Some(picked) = stepping(ui, &risks, filter, shown) {
+            go_to(window, &picked);
         }
     });
-    if !risks.is_empty() {
-        let layers = rows(&risks)
-            .iter()
-            .map(|row| row.layer)
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
-        let found = tr!("check-found", issues = risks.len(), layers = layers);
-        section(ui, &tr!("check-issues"), Some(&found), |ui| {
-            describe(ui, &tr!("check-issues-help"));
-            let filter = filter(ui, &risks);
-            if let Some(picked) = listing(ui, window.machine.preview.layer(), &risks, filter) {
-                go_to(window, &picked);
+    let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
+    if islands || removed > 0 {
+        section(ui, &tr!("check-filter-islands"), None, |ui| {
+            islands_action(ui, window.machine, &risks, removed);
+            if islands
+                && secondary_button(ui, icon::SUPPORTS, &tr!("check-support-islands")).clicked()
+            {
+                support_islands(window, &risks);
+            }
+        });
+    }
+    if risks.iter().any(|risk| Filter::Cups.admits(&risk.kind)) {
+        section(ui, &tr!("check-filter-cups"), None, |ui| {
+            if secondary_button(ui, icon::DRAIN, &tr!("check-drill-cups")).clicked() {
+                crate::shortcuts::pick(window, Tool::Drain);
             }
         });
     }
     pull(ui, window);
+    section(ui, &tr!("check-estimate"), None, |ui| {
+        readings(ui, &crate::panels::plate_estimate(ui.ctx(), window));
+    });
+}
+
+/// How many layers the issues stand on.
+fn layer_count(risks: &[Risk]) -> usize {
+    rows(risks)
+        .iter()
+        .map(|row| row.layer)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+}
+
+/// Previous and Next, to the issue rows either side of the layer in view.
+fn stepping(ui: &mut egui::Ui, risks: &[Risk], filter: Filter, shown: usize) -> Option<Vec<Risk>> {
+    let mut picked = None;
+    ui.columns(2, |columns| {
+        let before = neighbour(risks, filter, shown, false);
+        let after = neighbour(risks, filter, shown, true);
+        let back = columns[0]
+            .add_enabled_ui(before.is_some(), |ui| {
+                secondary_button(ui, icon::LAYER_DOWN, &tr!("check-previous"))
+            })
+            .inner;
+        let on = columns[1]
+            .add_enabled_ui(after.is_some(), |ui| {
+                secondary_button(ui, icon::LAYER_UP, &tr!("check-next"))
+            })
+            .inner;
+        picked = match (back.clicked(), on.clicked()) {
+            (true, _) => before,
+            (_, true) => after,
+            _ => None,
+        };
+    });
+    picked
 }
 
 /// Stands a support under every island the check found, in a group of their own built

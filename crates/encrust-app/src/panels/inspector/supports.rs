@@ -13,8 +13,8 @@ use crate::state::Doc;
 use crate::status::Status;
 use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
-    BinLook, bin_button, compact_button, companion_button, describe, hint, icon, icon_toggle,
-    number_row, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
+    BinLook, bin_button, compact_button, companion_button, describe, icon, icon_toggle, number_row,
+    primary_button, progress_bar, secondary_button, section, stats, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -284,7 +284,6 @@ fn standing(doc: &Doc) -> (usize, usize) {
 /// three things that can be done to it without the mouse.
 fn editing(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.supports.picked.is_empty() {
-        hint(ui, &tr!("supports-pick-hint"));
         return;
     }
     describe(ui, &tr!("supports-picked-help"));

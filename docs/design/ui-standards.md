@@ -117,17 +117,15 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 
 ## Known gaps
 
-- **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row and the glyphs are;
-  the plate card states seven dotted rows with Slice to a file under the primary, Supports,
-  Cut and Relief print viewport instructions, a deleted profile or machine does not ask,
-  and only a switch's knob and a pressed control move. `hint_bar`,
-  `figure_grid`, `details_fold`, `confirm_button`, `companion_square`, `notice_card` and
-  `job_notice` are built but drawn nowhere yet; `ok_wash` is still to be built.
+- **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row, the glyphs, the hint bar,
+  the notices and the empty plate are; the plate card states seven dotted rows with Slice
+  to a file under the primary, a deleted profile or machine does not ask, and a notice
+  that goes away fades only when it is a message, a job's or a broken model's card going at
+  once. `figure_grid`, `details_fold`, `confirm_button` and
+  `companion_square` are built but drawn nowhere yet; `ok_wash` is still to be built.
 
-- Units: `deg`, `x`, `um` beside `°`, `×`, `µm`; Precision has no unit.
-- Decimals chosen per call (`number_row`'s `decimals`): spacing 1.8 and 1.80 mm, height 20.0
-  and 20.00, a step of 27.800 s.
-- Presets: Hollow uses a name box and a Save button, not Supports' picker with icons.
+- Decimals: a unit of the table brings its own (`field.rs`, `standard_decimals`); `%`
+  and units the table lacks (g/ml, the compensation's) still take the caller's.
 - Machine and resin prints lowercase explanations under fields, its boxes misaligned.
 - Stock egui controls in `title_bar/menus.rs`, `settings/printer/connection.rs`,
   `scene_panel.rs`, `settings/machines/resins.rs`, `plate_strip.rs`, `project.rs`,

@@ -49,6 +49,17 @@ pub fn ui(ui: &mut egui::Ui, window: &Window) {
     readings(ui, &rows);
 }
 
+/// What printing the plate takes — time, resin, weight and price — as the plate card
+/// reads them.
+pub fn estimate(ctx: &egui::Context, window: &Window) -> Vec<(String, String)> {
+    let tally = tally(ctx, &window.doc.scene);
+    let mut rows = tally_readings(&tally, &window.machine.slicing.material);
+    if let Some(time) = plate_time(window) {
+        rows.insert(0, (tr!("summary-time"), time));
+    }
+    rows
+}
+
 /// What the machine takes over the plate: as planned once a stack cut from the plate as it
 /// stands is held, estimated from the plate's height until then.
 fn plate_time(window: &Window) -> Option<String> {

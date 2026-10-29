@@ -1,6 +1,7 @@
 mod destination;
 mod edge_fields;
 mod find;
+mod hint_bar;
 mod inspector;
 mod mask_pane;
 mod plate_strip;
@@ -24,6 +25,7 @@ mod view_column;
 mod view_cube;
 mod viewport_panel;
 
+pub use plate_summary::estimate as plate_estimate;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use settings::{import_dropped, import_profile};

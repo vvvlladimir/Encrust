@@ -6,7 +6,6 @@
 common-already-done = Уже сделано
 common-cancel = Отмена
 common-export = Экспорт
-common-settings = Настройки
 error-cannot-hand-over = не удалось передать { $name }
 error-cannot-open = не удалось открыть { $path }
 error-cannot-read = не удалось прочитать { $path }
@@ -19,8 +18,7 @@ status-exported = Экспортировано: { $path }
 status-opened = Открыто: { $path }
 status-saved = Сохранено: { $name }
 table-profile = Профиль
-unit-deg = град.
-unit-degrees = °
+unit-deg = °
 unit-g-ml = г/мл
 unit-h = ч
 unit-m = мин
@@ -31,6 +29,7 @@ unit-mm-min = мм/мин
 unit-um = мкм
 unit-px = пикс.
 unit-s = с
+unit-times = ×
 value-g = { $value } г
 value-ml = { $value } мл
 value-mm = { $value } мм
@@ -63,6 +62,7 @@ general-open-folder = Открыть папку
 ## panels/inspector/cut.rs
 
 cut-plane = Плоскость
+cut-fact = { $axis } на { $height } мм
 cut-select-model = Выберите модель для разреза.
 cut-height = Высота
 cut-offset = Смещение
@@ -336,7 +336,6 @@ supports-removed-inside =
     }
 supports-where = Где
 supports-picked = Выбрано
-supports-pick-hint = Щёлкните по наконечнику, распорке, соединению, стволу или опоре, чтобы выбрать. Перетаскивание переносит, Shift добавляет, Alt убирает.
 supports-picked-help = «Вырастить заново» возвращает выбранные поддержки автоматике, и следующее выращивание строит их заново. «В группу» строит их по профилю текущей группы.
 supports-stat-parts = Части
 supports-stat-supports = Поддержки
@@ -363,6 +362,9 @@ support-steady-spacing = Шаг
 support-steady-area = Наименьший склон
 supports-remove-all-tooltip = Убрать все поддержки
 supports-preset = Пресет поддержек
+supports-on-plate = На платформе
+supports-profiles = Профили
+supports-edit-profiles = Изменить профили…
 supports-mode-pick = Выбрать поддержки
 supports-mode-place = Ставить поддержки
 supports-mode-area = Закрасить или запретить область
@@ -428,10 +430,12 @@ check-filter-levers = Рычаги
 check-filter-peel = Отрыв
 check-filter-cups = Присоски
 check-filter-thin = Тонкие
-check-verdict = Заключение
 check-support-islands = Поддержать все острова
 check-drill-cups = Просверлить присоски
 check-issues = Проблемы
+check-estimate = Оценка
+check-previous = Назад
+check-next = Дальше
 check-found =
     { $issues ->
         [one] { $issues } проблема
@@ -607,9 +611,8 @@ list-show = Показать в окне просмотра
 
 ## panels/inspector/measure.rs
 
-measure-settings = Настройки
-measure-measure = Замер
-measure-esc-clears = Esc сбрасывает.
+measure-reading = Показания
+measure-caught = Привязка
 measure-clear = Сбросить
 measure-points = Точки
 measure-planes = Плоскости
@@ -620,8 +623,6 @@ measure-snap-free = Свободно
 measure-snap-corner-note = Щелчок захватывает ближайший угол, где поверхность меняет направление.
 measure-snap-edge-note = Щелчок захватывает ближайшее ребро, где поверхность меняет направление.
 measure-snap-free-note = Точно там, где пришёлся щелчок.
-measure-free-while-alt = Свободно, пока зажат Alt.
-measure-hold-alt = Удерживайте Alt для свободного замера.
 measure-show-axes = Показывать dX, dY, dZ в окне просмотра
 measure-second-point = Щёлкните по второй точке.
 measure-two-points = Щёлкните по двум точкам на модели.
@@ -704,7 +705,7 @@ print-use-profiles = Взять настройки профилей
 print-exposure-help = Сколько экран засвечивает каждый слой. Мало — тонкие части не печатаются или слои расслаиваются; много — детали разбухают, а отверстия зарастают. Нижние слои засвечиваются дольше, чтобы печать держалась на платформе, а слои перехода плавно снижают время между ними.
 print-waiting-help = Паузы, чтобы смола успокоилась. «Свет выключен» — одна пауза перед засветкой каждого слоя; время отдыха — паузы после засветки, наверху подъёма и после возврата платформы. Длинные паузы помогают густой смоле и большим слоям, но удлиняют печать.
 print-motion-help = После каждого слоя платформа поднимается, отрывая его от плёнки, и возвращается. Медленный подъём отрывает мягче — это нужно большим и хрупким слоям, а высоты подъёма должно хватать, чтобы плёнка отпустила слой.
-print-waiting = Паузы
+print-motion-waits = Движение и паузы
 print-motion = Движение
 print-carried = Перенесено с { $exposure } с при { $from } мкм на слой { $to } мкм.
 print-transition = Переход
@@ -742,7 +743,6 @@ relief-hold-top = Грани вверх
 relief-hold-note = Грани, отклонённые от направления на платформу или прямо вверх не больше чем на столько градусов, сохраняют форму, и рельеф обрывается на их краю. Ноль не оставляет ни одной.
 relief-paint = Где
 relief-paint-brush = Рисовать, где выдавить
-relief-paint-hint = Ведите по модели, чтобы закрасить; Alt — стереть.
 relief-paint-note = Как только на модели закрашена хоть одна грань, текстура выдавливается только в закрашенные грани, остальная модель сохраняет свою сетку, и вид показывает текстуру только там.
 relief-paint-clear = Очистить закрашенные области
 relief-nothing-painted = Ничего не закрашено: закрасьте, где нужна текстура, или отключите кисть, чтобы выдавить на всю модель.
@@ -791,7 +791,6 @@ text-missing-glyph = в этом шрифте нет буквы { $character }
 text-blank = писать нечего
 text-bad-size = буквам нужны высота и глубина
 text-off-the-model = здесь надпись не встаёт на модель
-relief-mode = Режим
 relief-mode-texture = Текстура
 relief-mode-text = Текст
 relief-mode-combine = Объединение
@@ -1042,6 +1041,8 @@ presets-cannot-rename = не удалось переименовать проф�
 ## panels/inspector/presets.rs
 
 presets-unsaved = Не сохранено
+presets-edited = · изменено
+presets-new-name = Мои настройки
 presets-none-saved = Пока ничего не сохранено
 presets-delete-named = Удалить «{ $name }»
 presets-deleted =
@@ -1049,7 +1050,6 @@ presets-deleted =
         [hollow] Профиль полости удалён
        *[drain] Профиль дренажа удалён
     }
-presets-name-hint = Назовите эти настройки
 
 ## panels/settings/machines/resins.rs
 
@@ -1465,19 +1465,17 @@ position-lift = Поднять
 position-click-face = Щёлкните по грани
 position-lay-on-face = Положить на грань
 position-auto-orient = Автоориентация
-orient-preset-supports = Меньше поддержек
-orient-preset-peel = Меньше усилие отрыва
-orient-preset-shortest = Самая быстрая печать
+orient-preset-supports = Опоры
+orient-preset-peel = Отрыв
+orient-preset-shortest = Время
 orient-preset-auto = Авто
 orient-preset-supports-hint = Меньше всего смолы в поддержках, в каком бы положении ни стояла модель.
 orient-preset-peel-hint = Самая слабая тяга на плёнку, без присосок; при усилии меньше 10 Н — меньше всего поддержек.
 orient-preset-shortest-hint = Наименьшее число слоёв, при котором модель ещё печатается.
 orient-preset-auto-hint = Баланс поддержек, тяги и времени печати: ни в чём не приходится сильно уступать.
-position-mirror = Зеркало
-position-across = По { $axis }
-position-keep-original = Сохранить оригинал
-position-keep-original-note = Вместо этого зеркальная копия рядом.
-position-place-help = «На платформе» ставит модель на платформу, «По центру» переносит её в середину, а «Вписать» увеличивает до размеров области печати. «Автоориентация» поворачивает модель так, как ей лучше печататься; «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете.
+position-mirror-across = Отразить по { $axis }
+position-mirror-copy = Отражать копию
+position-place-help = «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете; «По центру» ставит модель над серединой платформы; «Отразить» переворачивает выбранные модели или их копии, поставленные рядом.
 
 ## panels/inspector/paint.rs
 
@@ -1841,7 +1839,6 @@ job-cannot-measure = не удалось измерить набор слоёв
 
 ## panels/inspector.rs
 
-inspector-parallel = параллельно
 inspector-about-select = Выберите модель, затем перемещайте, поворачивайте, масштабируйте, кладите и зеркальте её.
 inspector-about-measure = Щёлкните по двум точкам или двум плоским граням модели.
 inspector-about-hollow = Вырежьте полость, чтобы сэкономить смолу и облегчить отрыв.
@@ -2240,9 +2237,8 @@ library-machines =
 
 ## panels/stage.rs
 
-stage-empty = На платформе нет модели
-stage-empty-hint = Откройте модель или проект либо перетащите их в окно.
-stage-open = Открыть...
+stage-empty = На платформе ничего нет
+stage-open = Открыть модель
 
 ## plate.rs
 
@@ -2266,3 +2262,29 @@ web-no-storage = в этом браузере нет закрытого файл
 picker-no-machine = Принтеров пока нет. Добавьте принтер в окне «Принтер и смола».
 picker-no-resin = Для этого принтера пока нет смол. Добавьте их в окне «Принтер и смола».
 picker-edit-resin = Изменить эту смолу...
+
+hint-click = Щелчок
+hint-drag = Перетаскивание
+hint-shift = Shift
+hint-esc = Esc
+hint-modifier-click = { $key } + щелчок
+hint-shift-click = Shift + щелчок
+hint-clear = сбросить
+hint-remove = убрать
+hint-add = добавить
+hint-paint = закрасить
+hint-erase = стереть
+hint-measure-two-points = по двум точкам
+hint-measure-second-point = по второй точке
+hint-measure-two-faces = по двум плоским граням
+hint-measure-second-face = по второй плоской грани
+hint-measure-freely = мерить свободно
+hint-drain-hole = по модели, чтобы прорезать отверстие
+hint-drain-channel = по модели, чтобы добавить точку канала
+hint-relief-write = по модели, чтобы написать там
+hint-pick-without-writing = выбрать, не создавая надпись
+hint-supports-pick = по части опоры, чтобы выбрать её
+hint-supports-carry = перенести выбранное
+hint-supports-place = по модели, чтобы поставить опору
+hint-supports-line = поставить их линией
+hint-cut-part = по части, чтобы отметить её

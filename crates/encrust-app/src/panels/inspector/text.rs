@@ -212,7 +212,7 @@ fn shape(ui: &mut egui::Ui, state: &mut TextState) {
         ui,
         &tr!("text-angle"),
         &mut state.angle_deg,
-        &tr!("unit-degrees"),
+        &tr!("unit-deg"),
         1.0,
         0.0..=360.0,
         0,

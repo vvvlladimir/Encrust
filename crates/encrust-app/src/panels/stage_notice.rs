@@ -1,17 +1,20 @@
-use egui::{Align, Align2, Id, Layout, Rect, RichText, pos2};
+use egui::{Align2, Id, Rect, RichText, pos2, vec2};
 
 use crate::i18n::tr;
 use crate::panels::{Window, unreadable_profiles};
 use crate::scene::ObjectId;
 use crate::status::{Change, Status};
-use crate::ui::{card, icon, icon_button, inline_button, progress_bar, theme};
+use crate::ui::{
+    NoticeReply, card, icon, icon_button, job_notice, notice_card, theme, theme::motion,
+};
 
-/// Points between the cards, and how wide a job's card is drawn whatever its label
-/// measures.
+/// Points between the cards, and how far above the stage's foot the lowest stands.
 const GAP: f32 = 6.0;
-const JOB_W: f32 = 360.0;
-/// The widest a message may grow before it is cut.
-const MESSAGE_W: f32 = 520.0;
+const FOOT_RISE: f32 = 8.0;
+/// The widest a message may grow before it wraps.
+const MESSAGE_W: f32 = 440.0;
+/// Points a notice slides up as it comes in.
+const COME_IN: f32 = 6.0;
 /// How long a message that is not a failure stays up after it changed, or after the
 /// pointer left it, seconds.
 const INFO_LINGER_S: f64 = 4.0;
@@ -28,7 +31,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     let mut stack = Stack {
         ctx: ui.ctx().clone(),
         room: stage,
-        bottom: stage.bottom(),
+        bottom: stage.bottom() - FOOT_RISE,
     };
     let width = (stage.width() - theme::CARD_MARGIN.sum().x).clamp(0.0, MESSAGE_W);
     message(&mut stack, &mut window.machine.status, running, width);
@@ -47,16 +50,38 @@ struct Stack {
 }
 
 impl Stack {
-    /// The card `name` on top of those already stacked, as `add` draws it.
-    fn card<R>(&mut self, name: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-        let shown = egui::Area::new(Id::new("stage-notice").with(name))
+    /// The card `name` on top of those already stacked, as `add` draws it, fading and
+    /// sliding up as it comes in.
+    fn card<R>(
+        &mut self,
+        name: &str,
+        add: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> egui::InnerResponse<R> {
+        self.fading_card(name, 1.0, add)
+    }
+
+    /// The same, `left` of it still there as it goes away, 1 until it starts to.
+    fn fading_card<R>(
+        &mut self,
+        name: &str,
+        left: f32,
+        add: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> egui::InnerResponse<R> {
+        let id = Id::new("stage-notice").with(name);
+        let came_in = motion::appear(&self.ctx, id) * left;
+        let shown = egui::Area::new(id)
             .order(egui::Order::Middle)
-            .fixed_pos(pos2(self.room.center().x, self.bottom))
+            .fixed_pos(
+                pos2(self.room.center().x, self.bottom) + vec2(0.0, (1.0 - came_in) * COME_IN),
+            )
             .pivot(Align2::CENTER_BOTTOM)
             .constrain_to(self.room)
-            .show(&self.ctx, add);
+            .show(&self.ctx, |ui| {
+                ui.set_opacity(came_in);
+                add(ui)
+            });
         self.bottom = shown.response.rect.top() - GAP;
-        shown.inner
+        shown
     }
 }
 
@@ -95,37 +120,9 @@ fn job_card(
     fraction: Option<f32>,
     cancelling: bool,
 ) -> bool {
-    let colors = theme::colors();
-    let mut cancel = false;
-    stack.card(name, |ui| {
-        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-            ui.set_width(JOB_W);
-            ui.horizontal(|ui| {
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.add_enabled_ui(!cancelling, |ui| {
-                        cancel = icon_button(ui, icon::CANCEL, &tr!("common-cancel")).clicked();
-                    });
-                    if let Some(fraction) = fraction {
-                        ui.label(
-                            RichText::new(format!("{:.0} %", fraction * 100.0))
-                                .font(theme::figures(11.5))
-                                .color(colors.text_mid),
-                        );
-                    }
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        let text = RichText::new(label)
-                            .font(theme::label())
-                            .color(colors.text_high);
-                        ui.add(egui::Label::new(text).truncate());
-                    });
-                });
-            });
-            // Slicing reports no layer counts until the stack is cut, so the bar runs rather
-            // than lies.
-            progress_bar(ui, fraction);
-        })
-    });
-    cancel
+    stack
+        .card(name, |ui| job_notice(ui, label, fraction, cancelling))
+        .inner
 }
 
 /// The user's profile files that would not read, and the way to reset them.
@@ -154,28 +151,31 @@ fn broken(stack: &mut Stack, window: &mut Window) {
         [(_, name, _)] => tr!("notice-broken-one", name = name.clone()),
         several => tr!("notice-broken-several", count = several.len()),
     };
-    let (mut repair, mut keep) = (false, false);
-    stack.card("broken", |ui| {
-        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                let text = RichText::new(label)
-                    .font(theme::label())
-                    .color(theme::colors().warn);
-                let lines: Vec<&str> = offered
-                    .iter()
-                    .flat_map(|(_, _, defects)| defects.iter().map(String::as_str))
-                    .collect();
-                ui.label(text).on_hover_text(lines.join("\n"));
-                let wording = if offered.len() == 1 {
-                    tr!("notice-repair")
-                } else {
-                    tr!("notice-repair-all")
-                };
-                repair = inline_button(ui, icon::REPAIR, &wording, true, true).clicked();
-                keep = icon_button(ui, icon::CANCEL, &tr!("notice-keep-as-is")).clicked();
-            });
-        })
+    let lines: Vec<&str> = offered
+        .iter()
+        .flat_map(|(_, _, defects)| defects.iter().map(String::as_str))
+        .collect();
+    let wording = if offered.len() == 1 {
+        tr!("notice-repair")
+    } else {
+        tr!("notice-repair-all")
+    };
+    let colors = theme::colors();
+    let shown = stack.card("broken", |ui| {
+        notice_card(
+            ui,
+            icon::WARNING,
+            colors.warn,
+            &label,
+            Some(&wording),
+            Some(&tr!("notice-keep-as-is")),
+        )
     });
+    shown.response.on_hover_text(lines.join("\n"));
+    let NoticeReply {
+        acted: repair,
+        closed: keep,
+    } = shown.inner;
     for (id, _, _) in &offered {
         if repair {
             let (repairs, state) = (&mut window.doc.repairs, window.tools.repair.state.plain());
@@ -196,27 +196,20 @@ fn unready(stack: &mut Stack, window: &mut Window) {
         (false, true) => tr!("notice-no-printer"),
         (true, false) => tr!("notice-no-resin"),
     };
-    let mut open = false;
-    stack.card("unready", |ui| {
-        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                let colors = theme::colors();
-                ui.label(
-                    RichText::new(icon::INFO)
-                        .font(theme::icon(13.0))
-                        .color(colors.warn),
-                );
-                ui.label(
-                    RichText::new(label)
-                        .font(theme::label())
-                        .color(colors.text_high),
-                );
-                open =
-                    inline_button(ui, icon::PRINTER, &tr!("notice-set-up"), true, true).clicked();
-            });
+    let colors = theme::colors();
+    let open = stack
+        .card("unready", |ui| {
+            notice_card(
+                ui,
+                icon::INFO,
+                colors.warn,
+                &label,
+                Some(&tr!("notice-set-up")),
+                None,
+            )
         })
-    });
+        .inner
+        .acted;
     if open {
         crate::panels::open_machines(window.machine);
     }
@@ -231,19 +224,24 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
     if matches!(status, Status::Idle) || !error && (running || since_s > INFO_LINGER_S) {
         return;
     }
-    if !error {
-        stack
-            .ctx
-            .request_repaint_after(std::time::Duration::from_secs_f64(INFO_LINGER_S - since_s));
+    // The last `CLOSE` of its moment, a message fades out rather than vanishing.
+    let left_s = INFO_LINGER_S - since_s;
+    let close_s = f64::from(motion::CLOSE.seconds(&stack.ctx));
+    let left = match error || left_s >= close_s {
+        true => 1.0,
+        false => (left_s / close_s) as f32,
+    };
+    if left < 1.0 {
+        stack.ctx.request_repaint();
+    } else if !error {
+        let until_fade = std::time::Duration::from_secs_f64(left_s - close_s);
+        stack.ctx.request_repaint_after(until_fade);
     }
 
     let colors = theme::colors();
-    let mut frame = card().inner_margin(theme::CARD_MARGIN);
-    if error {
-        frame = frame.stroke(egui::Stroke::new(1.0, colors.danger.gamma_multiply(0.5)));
-    }
+    let frame = card().inner_margin(theme::CARD_MARGIN);
     let mut dismissed = false;
-    let shown = stack.card("message", |ui| {
+    let shown = stack.fading_card("message", left, |ui| {
         frame.show(ui, |ui| {
             ui.set_max_width(max_w);
             // Rows as tall as their text: a notice is a line or two, not a form.
@@ -252,7 +250,7 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if error {
-                    let glyph = RichText::new(icon::WARNING).font(theme::icon(13.0));
+                    let glyph = RichText::new(icon::ERROR).font(theme::icon(16.0));
                     ui.label(glyph.color(colors.danger));
                 }
                 // A message longer than the room wraps rather than running past the card.

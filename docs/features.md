@@ -754,6 +754,18 @@ address in a video player).
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **Reduce motion** in Settings → General stops every animation in the window.
+- **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
+  Drain, Relief's text and brush, Supports' pick and place, Cut's part mark — a pill under
+  the tool row names the keys and what each does.
+- With nothing on the plate the inspector says so and offers Open a model; the stage stays
+  clear.
+- **Check:** Previous and Next step through the layers with issues; the islands and the
+  suction cups each have their own section with what fixes them, and Estimate gives the
+  plate's time, resin, weight and price.
+- The support group picker lists what stands on the plate, then the profiles holding
+  nothing, then *Edit the profiles*.
+- Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
+  Save over the one in use or as a new one, and a bin that asks before it deletes.
 - A bin asks before it removes: the first press arms it for 3 s, the second removes; Esc or a
   click elsewhere puts it back.
 - **Language:** the window follows the system's or the browser's first language, or the one

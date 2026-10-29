@@ -211,6 +211,31 @@ pub(super) fn listing(
     picked
 }
 
+/// The issues of the row `filter` admits on the next layer past `shown`, or the one
+/// before it when not `forward`.
+pub(super) fn neighbour(
+    risks: &[Risk],
+    filter: Filter,
+    shown: usize,
+    forward: bool,
+) -> Option<Vec<Risk>> {
+    let rows: Vec<Row> = rows(risks)
+        .into_iter()
+        .filter(|row| filter == Filter::All || row.filter == filter)
+        .collect();
+    let row = match forward {
+        true => rows.iter().find(|row| row.layer > shown),
+        false => rows.iter().rev().find(|row| row.layer < shown),
+    }?;
+    Some(
+        risks
+            .iter()
+            .filter(|risk| row.holds(risk))
+            .copied()
+            .collect(),
+    )
+}
+
 /// What one row holds, short enough for the right of it.
 fn detail(row: &Row) -> String {
     if row.hanging {

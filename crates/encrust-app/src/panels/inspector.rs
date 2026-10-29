@@ -23,9 +23,13 @@ pub(super) use position::auto_orient;
 
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 
+use crate::files::{self, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::ui::{body_and_foot, card_foot, hairline, help_mark, theme};
+use crate::ui::{
+    body_and_foot, card_foot, empty_state, hairline, help_mark, icon, mode_group, primary_button,
+    theme,
+};
 use crate::workspace::Tool;
 
 /// The card beside the rail: the open tool, no taller than `max_h` points; its sections
@@ -33,6 +37,10 @@ use crate::workspace::Tool;
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     let tool = window.tool.card();
     header(ui, window, tool);
+    if window.doc.scene.is_empty() && tool != Tool::PrintSettings {
+        empty_plate(ui, window);
+        return;
+    }
     if tool == Tool::Supports {
         supports::top(ui, window);
     }
@@ -51,6 +59,21 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
             }
         },
     );
+}
+
+/// Every tool with no model to work on: what is missing, and the way to put one there.
+fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
+    hairline(ui);
+    egui::Frame::new()
+        .inner_margin(theme::PANEL_MARGIN)
+        .show(ui, |ui| {
+            empty_state(ui, icon::EMPTY_PLATE, &tr!("stage-empty"));
+            if primary_button(ui, &tr!("stage-open"), true).clicked()
+                && let Some(file) = files::pick(Wanted::ModelOrProject)
+            {
+                crate::app::open_by_what_it_is(window, file);
+            }
+        });
 }
 
 fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
@@ -110,23 +133,14 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
         Tool::Check => check::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
-        Tool::Measure => match window.tools.measure.target {
-            crate::measure::Target::Points => window
-                .tools
-                .measure
-                .snapped()
-                .and_then(|snapped| plain(snapped.label())),
-            crate::measure::Target::Planes => window
-                .tools
-                .measure
-                .plane_gap()
-                .filter(crate::measure::PlaneGap::is_parallel)
-                .and_then(|_| plain(tr!("inspector-parallel"))),
-        },
-        // The Supports and Repair cards have their modes where the fact would stand.
-        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape | Tool::Repair => {
-            None
-        }
+        Tool::Cut => Some((cut::fact(window), colors.text_mid)),
+        // These cards have their modes where the fact would stand.
+        Tool::Measure
+        | Tool::Relief
+        | Tool::Supports
+        | Tool::Paint
+        | Tool::Shape
+        | Tool::Repair => None,
     }
 }
 
@@ -160,19 +174,28 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     child.label(
         RichText::new(tool.glyph())
             .font(theme::icon(16.0))
-            .color(colors.text_low),
+            .color(colors.accent_soft),
     );
     child.label(
         RichText::new(tool.label())
             .font(theme::tool_title())
             .color(colors.text_high),
     );
-    help_mark(&mut child, &[help(tool)]);
+    let mut texts = vec![help(tool)];
+    if tool == Tool::Relief {
+        texts.push(relief::mode_note(window));
+    }
+    help_mark(&mut child, &texts);
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if tool == Tool::Supports {
-            supports::modes(ui, window);
-        } else if tool == Tool::Repair {
-            repair::modes(ui, window);
+        let modes: Option<fn(&mut egui::Ui, &mut Window)> = match tool {
+            Tool::Supports | Tool::Paint | Tool::Shape => Some(supports::modes),
+            Tool::Repair => Some(repair::modes),
+            Tool::Measure => Some(measure::modes),
+            Tool::Relief => Some(relief::modes),
+            _ => None,
+        };
+        if let Some(modes) = modes {
+            mode_group(ui, |ui| modes(ui, window));
         } else if let Some((text, color)) = fact(window, tool) {
             ui.add(
                 egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))

@@ -8,9 +8,8 @@ use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
-    Segment, Segmented, blocked_hover, busy, describe, hint, icon, meta, number_row,
-    primary_button, secondary_button, section, stats, subheading, swatch, switch, theme,
-    toggle_button, tone,
+    blocked_hover, busy, describe, icon, icon_toggle, meta, number_row, primary_button,
+    secondary_button, section, stats, subheading, swatch, switch, theme, toggle_button, tone,
 };
 
 use super::paint::{COARSE_STEP, MAX_BRUSH_MM, MIN_BRUSH_MM};
@@ -21,10 +20,9 @@ const MIN_TILE_MM: f32 = 1.0;
 const MAX_TILE_MM: f32 = 200.0;
 const TILE_STEP: f64 = 0.1;
 
-/// Per point of drag: a relief is measured in tenths of a millimetre, precision in
-/// hundredths of its own range.
+/// Per point of drag: a relief is measured in tenths of a millimetre, precision in whole
+/// percent.
 const DEPTH_STEP: f64 = 0.05;
-const FINE_STEP: f64 = 0.01;
 
 /// Past two millimetres a relief is a shape of its own rather than a texture, and it
 /// would cost a band that wide on every voxel of the field.
@@ -37,7 +35,6 @@ const SMOOTHING_STEP: f64 = 0.1;
 /// The tool's three jobs behind one switch at its head — a texture pressed in, text
 /// written on, models combined — each with its own sections and its own action.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, &tr!("relief-mode"), None, |ui| modes(ui, window));
     match window.tools.relief.mode {
         ReliefMode::Texture => texture(ui, window),
         ReliefMode::Text => super::text::sections(ui, window),
@@ -54,24 +51,35 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-fn modes(ui: &mut egui::Ui, window: &mut Window) {
-    let segments = [
-        Segment::new(ReliefMode::Texture, tr!("relief-mode-texture")),
-        Segment::new(ReliefMode::Text, tr!("relief-mode-text")),
-        Segment::new(ReliefMode::Combine, tr!("relief-mode-combine")),
-    ];
+/// Texture, Text or Combine, as icons in the card's heading, laid right to left.
+pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
     let mode = &mut window.tools.relief.mode;
-    Segmented::new(&segments)
-        .width(ui.available_width())
-        .show(ui, mode);
-    describe(
-        ui,
-        &match mode {
-            ReliefMode::Texture => tr!("relief-mode-texture-note"),
-            ReliefMode::Text => tr!("relief-mode-text-note"),
-            ReliefMode::Combine => tr!("relief-mode-combine-note"),
-        },
-    );
+    for (value, glyph, name) in [
+        (
+            ReliefMode::Combine,
+            icon::COMBINE,
+            tr!("relief-mode-combine"),
+        ),
+        (ReliefMode::Text, icon::TEXT, tr!("relief-mode-text")),
+        (
+            ReliefMode::Texture,
+            icon::TEXTURE,
+            tr!("relief-mode-texture"),
+        ),
+    ] {
+        if icon_toggle(ui, glyph, &name, *mode == value).clicked() {
+            *mode = value;
+        }
+    }
+}
+
+/// What the mode in hand does, read from the question mark beside the card's name.
+pub fn mode_note(window: &Window) -> String {
+    match window.tools.relief.mode {
+        ReliefMode::Texture => tr!("relief-mode-texture-note"),
+        ReliefMode::Text => tr!("relief-mode-text-note"),
+        ReliefMode::Combine => tr!("relief-mode-combine-note"),
+    }
 }
 
 /// What is pressed into the models on the plate — a chosen picture as tiles, or the
@@ -101,7 +109,6 @@ fn painting(ui: &mut egui::Ui, window: &mut Window) {
         window.tools.relief.brushing = !brushing;
     }
     if window.tools.relief.brushing {
-        hint(ui, &tr!("relief-paint-hint"));
         number_row(
             ui,
             &tr!("paint-brush"),
@@ -147,7 +154,7 @@ fn holding(ui: &mut egui::Ui, window: &mut Window) {
         (tr!("relief-hold-bottom"), &mut state.bottom_deg),
         (tr!("relief-hold-top"), &mut state.top_deg),
     ] {
-        number_row(ui, &label, angle, &tr!("unit-degrees"), 1.0, 0.0..=90.0, 0);
+        number_row(ui, &label, angle, &tr!("unit-deg"), 1.0, 0.0..=90.0, 0);
     }
     describe(ui, &tr!("relief-hold-note"));
 }
@@ -368,7 +375,7 @@ fn tiling(ui: &mut egui::Ui, tiling: &mut Tiling) {
         ui,
         &tr!("relief-angle"),
         &mut tiling.angle_deg,
-        &tr!("unit-degrees"),
+        &tr!("unit-deg"),
         1.0,
         0.0..=360.0,
         0,
@@ -391,15 +398,19 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
         &mut window.tools.relief.state.symmetric,
         &tr!("relief-symmetric"),
     );
-    number_row(
+    let precision = &mut window.tools.relief.state.precision;
+    let mut percent = *precision * 100.0;
+    if number_row(
         ui,
         &tr!("relief-precision"),
-        &mut window.tools.relief.state.precision,
-        "",
-        FINE_STEP,
-        0.0..=1.0,
-        2,
-    );
+        &mut percent,
+        "%",
+        1.0,
+        0.0..=100.0,
+        1,
+    ) {
+        *precision = percent / 100.0;
+    }
 
     let lattice_mm = window.tools.relief.settings().voxel_mm(
         window

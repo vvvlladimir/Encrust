@@ -9,16 +9,15 @@ use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
-    Segment, Segmented, blocked_hover, busy, describe, hint, icon, nested, notice, number_row,
-    primary_button, progress_bar, secondary_button, section, section_with_switch, stats,
-    subheading, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, hint, icon, inset, nested, notice,
+    number_row, primary_button, progress_bar, secondary_button, section, section_with_switch,
+    stats, subheading, theme, tone,
 };
 use crate::workspace::Tool;
 
-/// Per point of drag. A wall is measured in whole millimetres, precision and density in
-/// hundredths of their own range.
+/// Per point of drag. A wall is measured in whole millimetres, precision in whole percent,
+/// density in hundredths of its own range.
 const COARSE_STEP: f64 = 0.05;
-const FINE_STEP: f64 = 0.01;
 
 /// Past fifteen millimetres there is nothing left to hollow on anything that fits the
 /// machine. The floor is `core_volume::MIN_WALL_MM`, which is what the lattice can resolve.
@@ -44,7 +43,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         own: |object| &mut object.own.hollow,
         read: |object| &object.own.hollow,
     };
-    let own = section(ui, &tr!("common-settings"), None, |ui| {
+    let own = inset(ui, |ui| {
         let own = scope::owner(ui, window, &scoped);
         scope::editing(window, own, &scoped, |window| {
             presets::bar(
@@ -56,8 +55,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             );
         });
         own
-    })
-    .flatten();
+    });
     scope::editing(window, own, &scoped, |window| settings(ui, window));
     section(ui, &tr!("common-already-done"), None, |ui| {
         done(ui, window);
@@ -178,15 +176,19 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
         MIN_WALL_MM..=MAX_WALL_MM,
         2,
     );
-    number_row(
+    let precision = &mut window.tools.hollow.state.precision;
+    let mut percent = *precision * 100.0;
+    if number_row(
         ui,
         &tr!("hollow-precision"),
-        &mut window.tools.hollow.state.precision,
-        "",
-        FINE_STEP,
-        0.0..=1.0,
-        2,
-    );
+        &mut percent,
+        "%",
+        1.0,
+        0.0..=100.0,
+        1,
+    ) {
+        *precision = percent / 100.0;
+    }
     ui.add_space(2.0);
     let lattice_mm = core_volume::lattice_mm(
         window.tools.hollow.state.thickness_mm,

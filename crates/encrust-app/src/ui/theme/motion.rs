@@ -51,6 +51,31 @@ pub fn fold(ctx: &Context, id: Id, open: bool) -> f32 {
     toggle(ctx, id, open, if open { OPEN } else { CLOSE })
 }
 
+/// How far `id` has come in, 0 to 1, by `OPEN`: from nought on the first frame it is
+/// drawn after a frame it was not, so a card that comes back comes in again.
+pub fn appear(ctx: &Context, id: Id) -> f32 {
+    let pass = ctx.cumulative_pass_nr();
+    let was = ctx.data(|data| data.get_temp::<u64>(id.with("before")));
+    ctx.data_mut(|data| data.insert_temp(id.with("before"), pass));
+    if was.is_none_or(|before| before + 1 < pass) {
+        toggle(ctx, id, false, OPEN);
+        ctx.request_repaint();
+        return 0.0;
+    }
+    fold(ctx, id, true)
+}
+
+/// Where a loop of `period_s` stands, 0 to 1, asking for the next frame; `None` under
+/// *Reduce motion*, which keeps everything still.
+pub fn looping(ctx: &Context, period_s: f64) -> Option<f32> {
+    if reduced(ctx) {
+        return None;
+    }
+    ctx.request_repaint();
+    let now = ctx.input(|input| input.time);
+    Some((now.rem_euclid(period_s) / period_s) as f32)
+}
+
 /// Stops every motion while `on`, egui's own included. Called each frame with the
 /// preference.
 pub fn reduce(ctx: &Context, on: bool) {
@@ -116,6 +141,32 @@ mod tests {
         let id = Id::new("fold");
         assert!(fold(&ctx, id, false) == 0.0);
         assert!(fold(&ctx, id, true) == 1.0);
+    }
+
+    #[test]
+    fn a_card_comes_in_from_nought_and_again_after_it_was_gone() {
+        let ctx = Context::default();
+        let id = Id::new("notice");
+        let mut shown = Vec::new();
+        for drawn in [true, true, false, true] {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                if drawn {
+                    shown.push(appear(ui.ctx(), id));
+                }
+            });
+            // No renderer takes the font atlas here.
+            output.textures_delta.clear();
+        }
+        assert_eq!(shown[0], 0.0, "the first frame starts it from nought");
+        assert_eq!(shown[2], 0.0, "a frame without it, and it comes in again");
+    }
+
+    #[test]
+    fn under_reduce_motion_nothing_loops() {
+        let ctx = Context::default();
+        assert!(looping(&ctx, 1.4).is_some());
+        reduce(&ctx, true);
+        assert!(looping(&ctx, 1.4).is_none());
     }
 
     #[test]

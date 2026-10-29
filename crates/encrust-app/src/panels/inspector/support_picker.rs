@@ -46,7 +46,7 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     let hand = in_hand(window, active);
     let presets = presets(&window.machine.slicing.catalogue);
     ui.spacing_mut().item_spacing.x = 4.0;
-    let beside = 2.0 * (theme::ICON_SIZE + 4.0);
+    let beside = 2.0 * (theme::BUTTON_H + 4.0);
     let width = (ui.available_width() - beside).max(80.0);
     let (_, response) = ui.allocate_exact_size(vec2(width, theme::FIELD_H), Sense::click());
     response.widget_info(|| {
@@ -75,7 +75,7 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
         });
     save_button(ui, window, &hand);
     let (act, tip) = removal(rows.len(), active);
-    if bin_button(ui, theme::ICON_SIZE, BinLook::Quiet, &tip, active.holds > 0) {
+    if bin_button(ui, theme::BUTTON_H, BinLook::Framed, &tip, active.holds > 0) {
         acts.push(act);
     }
     take(window, pick);
@@ -166,6 +166,14 @@ fn take(window: &mut Window, pick: Option<Pick>) {
         Some(Pick::Shape(id)) => catalogue.support(&id).map(|entry| {
             tool.chosen = Some(entry.profile.clone());
         }),
+        Some(Pick::EditProfiles) => {
+            window.machine.settings.open = true;
+            window
+                .machine
+                .settings
+                .turn_to(crate::settings::Section::Supports);
+            Ok(())
+        }
         None => Ok(()),
     };
     if let Err(error) = found {

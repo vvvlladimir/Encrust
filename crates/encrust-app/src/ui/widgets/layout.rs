@@ -1,9 +1,10 @@
 use egui::layers::ShapeIdx;
-use egui::{Frame, RichText, Sense, Ui, vec2};
+use egui::{Frame, Rect, RichText, Sense, Ui, vec2};
 
 use super::section::trailing_hairline;
 use crate::i18n::tr;
 use crate::ui::theme;
+use crate::ui::theme::motion;
 
 /// Where `describe` sends its text while a section's body is being drawn.
 const DESCRIBING: &str = "encrust-describing";
@@ -135,6 +136,57 @@ pub fn nested<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     );
     shown.inner
 }
+
+/// The band under a card's heading that holds its preset, padded 10 × 12, a hairline under it.
+pub fn inset<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let inner = Frame::new()
+        .inner_margin(egui::Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = theme::NOTE_GAP;
+            add(ui)
+        })
+        .inner;
+    hairline(ui);
+    inner
+}
+
+/// A tool's modes in its heading: icon toggles sunk together in one bordered group.
+pub fn mode_group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let colors = theme::colors();
+    Frame::new()
+        .fill(colors.sunken)
+        .stroke(egui::Stroke::new(1.0, colors.hairline))
+        .corner_radius(theme::R_CONTROL)
+        .inner_margin(2)
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
+            add(ui)
+        })
+        .inner
+}
+
+/// What a card says when it has nothing to work on: a large glyph over one line, centred.
+pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str) {
+    let colors = theme::colors();
+    ui.vertical_centered(|ui| {
+        ui.add_space(EMPTY_PAD);
+        ui.label(
+            RichText::new(glyph)
+                .font(theme::icon(30.0))
+                .color(colors.text_low),
+        );
+        ui.add_space(theme::ITEM_GAP);
+        ui.label(
+            RichText::new(text)
+                .font(theme::body())
+                .color(colors.text_high),
+        );
+        ui.add_space(EMPTY_PAD);
+    });
+}
+
+/// Room above and below an empty state, points.
+const EMPTY_PAD: f32 = 16.0;
 
 /// A verdict that has to be seen before anything else in its block: a glyph in `tint`,
 /// the verdict in plain ink, and a line saying what to do about it.
@@ -356,15 +408,41 @@ pub fn readings(ui: &mut Ui, entries: &[(String, String)]) {
 /// The bar of a running job: filled to `fraction` where it is known, and running on its
 /// own where it is not, which is a job that cannot honestly count its work.
 pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
-    let bar = match fraction {
-        Some(fraction) => egui::ProgressBar::new(fraction),
-        None => egui::ProgressBar::new(0.0).animate(true),
+    let colors = theme::colors();
+    let size = egui::vec2(ui.available_width(), theme::BAR_H);
+    let (track, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::new(egui::WidgetType::ProgressIndicator);
+        info.value = fraction.map(f64::from);
+        info
+    });
+    let painter = ui.painter_at(track);
+    let round = egui::CornerRadius::same((theme::BAR_H / 2.0) as u8);
+    painter.rect_filled(track, round, colors.active);
+    let phase = motion::looping(ui.ctx(), SHEEN_S);
+    let fill = match fraction {
+        Some(fraction) => track.with_max_x(track.left() + track.width() * fraction.clamp(0.0, 1.0)),
+        // A job that cannot count runs a stretch of the bar along it; still, a stretch.
+        None => {
+            let width = track.width() * RUNNING_SHARE;
+            let left = track.left() + phase.unwrap_or(0.0) * (track.width() + width) - width;
+            Rect::from_x_y_ranges(left..=left + width, track.y_range())
+        }
     };
-    ui.add(
-        bar.desired_height(theme::BAR_H)
-            .corner_radius(theme::R_CONTROL),
-    );
+    painter.rect_filled(fill, round, colors.accent);
+    if let (Some(phase), Some(_)) = (phase, fraction) {
+        let width = fill.width() * RUNNING_SHARE;
+        let left = fill.left() + phase * (fill.width() + width) - width;
+        let sheen = Rect::from_x_y_ranges(left..=left + width, fill.y_range()).intersect(fill);
+        painter.rect_filled(sheen, round, colors.text_high.gamma_multiply(SHEEN_ALPHA));
+    }
 }
+
+/// How long the sheen takes to cross a bar, s, how much of the bar it and a running stretch
+/// cover, and how much of the light ink the sheen keeps.
+const SHEEN_S: f64 = 1.4;
+const RUNNING_SHARE: f32 = 0.3;
+const SHEEN_ALPHA: f32 = 0.25;
 
 /// What a tool is busy with and the bar of its run, and where the run can be stopped a way
 /// to stop it. `step` is the step in words and the share done, for a run that counts; the

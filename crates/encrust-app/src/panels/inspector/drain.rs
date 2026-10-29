@@ -10,8 +10,8 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, busy, count_row, describe, hint, icon, inline_button, notice, number_row,
-    primary_button, secondary_button, section, theme, tone,
+    Segment, Segmented, busy, count_row, describe, hint, icon, inline_button, inset, notice,
+    number_row, primary_button, secondary_button, section, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -46,7 +46,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         own: |object| &mut object.own.drain,
         read: |object| &object.own.drain,
     };
-    let own = section(ui, &tr!("common-settings"), None, |ui| {
+    let own = inset(ui, |ui| {
         let own = scope::owner(ui, window, &scoped);
         scope::editing(window, own, &scoped, |window| {
             presets::bar(
@@ -58,8 +58,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             );
         });
         own
-    })
-    .flatten();
+    });
     section(ui, &tr!("drain-trapped-resin"), None, |ui| {
         drainage(ui, window)
     });
@@ -232,7 +231,7 @@ fn outline(ui: &mut egui::Ui, tools: &mut Tools) {
         ui,
         &tr!("drain-turn"),
         &mut state.turn_deg,
-        &tr!("unit-degrees"),
+        &tr!("unit-deg"),
         0.5,
         0.0..=MAX_TURN_DEG,
         0,

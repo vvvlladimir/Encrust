@@ -1,16 +1,19 @@
 use crate::i18n::tr;
 use crate::measure::{Measure, Snap, Target};
+use crate::panels::Window;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, secondary_button, section, stats, subheading, switch,
+    Segment, Segmented, describe, icon, icon_toggle, secondary_button, section, stats, switch,
 };
 
 /// What a click is caught by, and what the two picked points or planes are apart.
 pub fn ui(ui: &mut egui::Ui, tools: &mut Tools) {
-    section(ui, &tr!("measure-settings"), None, |ui| {
-        settings(ui, &mut tools.measure);
-    });
-    section(ui, &tr!("measure-measure"), None, |ui| {
+    if tools.measure.target == Target::Points {
+        section(ui, &tr!("measure-snap-to"), None, |ui| {
+            settings(ui, &mut tools.measure);
+        });
+    }
+    section(ui, &tr!("measure-reading"), None, |ui| {
         let measure = &mut tools.measure;
         let read = match measure.target {
             Target::Points => points(ui, measure),
@@ -19,29 +22,28 @@ pub fn ui(ui: &mut egui::Ui, tools: &mut Tools) {
         if !read {
             return;
         }
-        hint(ui, &tr!("measure-esc-clears"));
-        ui.add_space(6.0);
         if secondary_button(ui, icon::CANCEL, &tr!("measure-clear")).clicked() {
             measure.clear();
         }
     });
 }
 
-/// Points or planes, what a point snaps to, and whether the span's axes are drawn.
+/// Points or planes, as icons in the card's heading, laid right to left.
+pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
+    let target = &mut window.tools.measure.target;
+    for (value, glyph, name) in [
+        (Target::Planes, icon::PLANES, tr!("measure-planes")),
+        (Target::Points, icon::POINTS, tr!("measure-points")),
+    ] {
+        if icon_toggle(ui, glyph, &name, *target == value).clicked() {
+            *target = value;
+        }
+    }
+}
+
+/// What a point snaps to, and whether the span's axes are drawn.
 fn settings(ui: &mut egui::Ui, measure: &mut Measure) {
     let width = ui.available_width();
-    let targets = [
-        Segment::new(Target::Points, tr!("measure-points")),
-        Segment::new(Target::Planes, tr!("measure-planes")),
-    ];
-    Segmented::new(&targets)
-        .width(width)
-        .show(ui, &mut measure.target);
-    if measure.target == Target::Planes {
-        return;
-    }
-
-    subheading(ui, &tr!("measure-snap-to"));
     let snaps = [
         Segment::new(Snap::Corner, tr!("measure-snap-corner")),
         Segment::new(Snap::Edge, tr!("measure-snap-edge")),
@@ -61,12 +63,6 @@ fn settings(ui: &mut egui::Ui, measure: &mut Measure) {
             Snap::Free => tr!("measure-snap-free-note"),
         },
     );
-    if alt {
-        hint(ui, &tr!("measure-free-while-alt"));
-    } else if measure.snap != Snap::Free {
-        hint(ui, &tr!("measure-hold-alt"));
-    }
-    ui.add_space(4.0);
     switch(ui, &mut measure.show_axes, &tr!("measure-show-axes"));
 }
 
@@ -80,15 +76,16 @@ fn points(ui: &mut egui::Ui, measure: &Measure) -> bool {
         describe(ui, &next);
         return false;
     };
-    stats(
-        ui,
-        &[
-            (tr!("measure-distance"), mm(distance_mm)),
-            ("dX".to_owned(), mm(delta.x)),
-            ("dY".to_owned(), mm(delta.y)),
-            ("dZ".to_owned(), mm(delta.z)),
-        ],
-    );
+    let mut entries = vec![
+        (tr!("measure-distance"), mm(distance_mm)),
+        ("dX".to_owned(), mm(delta.x)),
+        ("dY".to_owned(), mm(delta.y)),
+        ("dZ".to_owned(), mm(delta.z)),
+    ];
+    if let Some(snapped) = measure.snapped() {
+        entries.push((tr!("measure-caught"), snapped.label()));
+    }
+    stats(ui, &entries);
     true
 }
 

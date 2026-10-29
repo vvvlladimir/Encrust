@@ -34,23 +34,24 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     if !binary_only {
         layers::edges(ui, machine);
     }
-    if !locked.locks_waiting() {
-        section(ui, &tr!("print-waiting"), None, |ui| {
-            describe(ui, &tr!("print-waiting-help"));
-            waiting(ui, &mut machine.slicing.material, &locked, &limits)
-        });
-    }
-    if [
+    let waits = !locked.locks_waiting();
+    let moves = [
         locked.lift_distance_mm,
         locked.lift_speed_mm_min,
         locked.retract_speed_mm_min,
     ]
     .iter()
-    .any(Option::is_none)
-    {
-        section(ui, &tr!("print-motion"), None, |ui| {
-            describe(ui, &tr!("print-motion-help"));
-            motion(ui, &mut machine.slicing.material, &locked, &limits)
+    .any(Option::is_none);
+    if waits || moves {
+        section(ui, &tr!("print-motion-waits"), None, |ui| {
+            if moves {
+                describe(ui, &tr!("print-motion-help"));
+                motion(ui, &mut machine.slicing.material, &locked, &limits);
+            }
+            if waits {
+                describe(ui, &tr!("print-waiting-help"));
+                waiting(ui, &mut machine.slicing.material, &locked, &limits);
+            }
         });
     }
     if way.taken {

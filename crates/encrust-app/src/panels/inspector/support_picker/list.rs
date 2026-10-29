@@ -4,8 +4,9 @@ use crate::i18n::tr;
 use crate::ui::{BinLook, confirm_bin, icon, theme};
 use egui::{Sense, vec2};
 
-/// The open picker: the automatic preset with the shapes it built under it, then the
-/// presets by hand, each line the group built to it where one stands.
+/// The open picker: what stands on the plate — the automatic preset with the shapes it
+/// built set in under it, then each group by hand — the profiles holding nothing, and the
+/// way to edit them. On Shape, every shape a click away.
 pub(super) struct List<'a> {
     pub(super) rows: &'a [Row],
     pub(super) presets: &'a Presets,
@@ -15,10 +16,16 @@ pub(super) struct List<'a> {
 
 impl List<'_> {
     pub(super) fn show(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+        Line::caption(&tr!("supports-on-plate")).show(ui, 0, acts);
         let auto = self.auto(ui, acts);
+        let by_hand = self.by_hand(ui, acts, true);
+        Line::caption(&tr!("supports-profiles")).show(ui, 0, acts);
+        let idle = self.by_hand(ui, acts, false);
         ui.separator();
-        let by_hand = self.by_hand(ui, acts);
-        auto.or(by_hand)
+        let edit = Line::preset(&tr!("supports-edit-profiles"), None)
+            .show(ui, 0, acts)
+            .then_some(Pick::EditProfiles);
+        auto.or(by_hand).or(idle).or(edit)
     }
 
     pub(super) fn standing(&self, name: &str) -> Option<&Row> {
@@ -45,7 +52,11 @@ impl List<'_> {
         built.sort_by(|a, b| a.weight.total_cmp(&b.weight));
         let total: usize = built.iter().map(|row| row.holds).sum();
         let mut pick = None;
+        let in_auto = self.hand.in_auto;
         for offered in &self.presets.autos {
+            if !self.shaping && total == 0 && !(in_auto && self.hand.name == offered.name) {
+                continue;
+            }
             let line = Line::heading(&offered.name, total, self.shaping)
                 .selected(!self.shaping && self.hand.in_auto && self.hand.name == offered.name);
             if line.show(ui, self.rows.len(), acts) {
@@ -71,14 +82,24 @@ impl List<'_> {
         pick
     }
 
-    /// The presets by hand, then any group whose preset is in neither list.
-    pub(super) fn by_hand(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+    /// The presets by hand with a group standing, then any group whose preset is in
+    /// neither list; or, not `standing`, the profiles holding nothing.
+    pub(super) fn by_hand(
+        &self,
+        ui: &mut egui::Ui,
+        acts: &mut Vec<Act>,
+        standing: bool,
+    ) -> Option<Pick> {
         let mut pick = None;
         for offered in &self.presets.by_hand {
             let group = self.standing(&offered.name);
+            if group.is_some() != standing {
+                continue;
+            }
             let on = !self.hand.in_auto && self.hand.name == offered.name;
             if Line::preset(&offered.name, group)
                 .selected(on)
+                .idle(!standing)
                 .show(ui, self.rows.len(), acts)
             {
                 match group {
@@ -86,6 +107,9 @@ impl List<'_> {
                     None => pick = Some(Pick::Preset(offered.id.clone())),
                 }
             }
+        }
+        if !standing {
+            return pick;
         }
         let presets = &self.presets;
         let listed = |name: &str| {
@@ -116,6 +140,8 @@ pub(super) struct Line<'a> {
     pub(super) indent: f32,
     /// A heading only names what is under it, and takes no click.
     pub(super) heading: bool,
+    /// A profile holding nothing, quieter than a group that stands.
+    pub(super) idle: bool,
 }
 
 impl<'a> Line<'a> {
@@ -127,7 +153,20 @@ impl<'a> Line<'a> {
             selected: false,
             indent: 0.0,
             heading: false,
+            idle: false,
         }
+    }
+
+    /// The name of a part of the list, in capitals' stead the quiet tone, taking no click.
+    pub(super) fn caption(name: &'a str) -> Self {
+        Self {
+            heading: true,
+            ..Self::preset(name, None)
+        }
+    }
+
+    pub(super) fn idle(self, idle: bool) -> Self {
+        Self { idle, ..self }
     }
 
     pub(super) fn heading(name: &'a str, total: usize, heading: bool) -> Self {
@@ -182,11 +221,21 @@ impl<'a> Line<'a> {
         if let Some(row) = self.group {
             swatch(painter, egui::pos2(left + 4.0, rect.center().y), row);
         }
-        let ink = match (self.heading, hidden, self.selected) {
-            (true, ..) => colors.text_mid,
+        let ink = match (self.heading, hidden, self.idle) {
+            (true, ..) => colors.text_low,
             (false, true, _) => colors.text_low,
-            (false, false, _) => colors.text_high,
+            (false, false, true) => colors.text_mid,
+            (false, false, false) => colors.text_high,
         };
+        if self.selected && !hovered {
+            painter.text(
+                egui::pos2(rect.right() - ICONS_W / 2.0, rect.center().y),
+                egui::Align2::CENTER_CENTER,
+                icon::IN_HAND,
+                theme::icon(13.0),
+                colors.accent_soft,
+            );
+        }
         let icons_left = rect.right() - ICONS_W;
         let mut right = icons_left - 40.0;
         if let Some(count) = self.group.map(|row| row.holds).or(self.count) {

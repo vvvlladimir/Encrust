@@ -5,15 +5,16 @@ use crate::panels::{Window, frame_view, set_orthographic};
 use crate::shortcuts::{self, Action};
 use crate::ui::{card, icon, icon_button, icon_toggle};
 
-/// The margin inside the card.
+/// The margin inside the card, and how much higher than the side cards its foot stands.
 const CARD_PAD: i8 = 3;
+const FOOT_RISE: f32 = 8.0;
 
 /// The bottom right of the viewport, beside this plate's card: how the viewport is looked
 /// at. Answers where the card stands.
 pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) -> Rect {
     egui::Area::new(Id::new("view-tools"))
         .order(egui::Order::Middle)
-        .fixed_pos(viewport.right_bottom())
+        .fixed_pos(viewport.right_bottom() - vec2(0.0, FOOT_RISE))
         .pivot(Align2::RIGHT_BOTTOM)
         .constrain_to(viewport)
         .show(ui.ctx(), |ui| {

@@ -91,13 +91,13 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume, Imported size); Place (Lay on face, Centre, Mirror, Mirror a copy, Lift off the plate); Auto-orient (Auto / Supports / Peel / Time, Auto-orient) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair |
-| Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size, Place a blocker); Already done | Hollow |
+| Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size; a click on the model places one); Already done | Hollow |
 | Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon); Plugs | Check drainage |
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues | — | Found (`issue_row`s with layer, previous / next); one section per kind with its actions; Estimate | Check again |
-| Print settings | `layer height · exposure` | — | Layers; Exposure; Edge smoothing, Motion and waits, Shrinkage compensation folded with their state at the right | Use the profiles' settings |
+| Check | the number of issues | — | Issues (the verdict, `issue_row`s with layer, previous / next); Islands and Cups with their actions; Peel; Estimate | — (the check runs by itself) |
+| Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
 

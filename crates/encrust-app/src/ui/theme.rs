@@ -368,7 +368,7 @@ pub const FOCUS_W: f32 = 1.0;
 pub const FOCUS_HALO_W: f32 = 3.0;
 pub const BUTTON_H: f32 = 32.0;
 /// Height of a running job's progress bar.
-pub const BAR_H: f32 = 6.0;
+pub const BAR_H: f32 = 4.0;
 /// A form block: its title's column, the most its fields take, and the room between them.
 pub const BLOCK_TITLE_W: f32 = 180.0;
 pub const BLOCK_FIELDS_W: f32 = 460.0;
