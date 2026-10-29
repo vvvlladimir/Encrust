@@ -616,8 +616,8 @@ dependencies = [
 
 [[package]]
 name = "boolmesh"
-version = "0.2.1"
-source = "git+https://github.com/vvvlladimir/boolmesh?rev=48b09fd2ecbd86f18d6ebe4a6866d2c90d454146#48b09fd2ecbd86f18d6ebe4a6866d2c90d454146"
+version = "0.2.2"
+source = "git+https://github.com/vvvlladimir/boolmesh?rev=27c23f2e3c37a37d5a8fcd5a01412edf1b73274a#27c23f2e3c37a37d5a8fcd5a01412edf1b73274a"
 dependencies = [
  "glam 0.32.1",
  "rayon",

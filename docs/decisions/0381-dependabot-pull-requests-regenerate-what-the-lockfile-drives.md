@@ -19,9 +19,11 @@ check the regenerated tree.
 - On a dependabot cargo pull request, `ci.yml` first runs `cargo hakari generate` and
   `cargo xtask licenses` on the branch. When either file changes, a second job commits them to
   the branch, and the Linux job of that run is skipped.
-- The push uses a token from a GitHub App installed on this repository alone with
-  `contents: write`, whose client id and private key are Dependabot secrets
-  `SYNC_APP_CLIENT_ID` and `SYNC_APP_PRIVATE_KEY`. Its push starts the run that checks the tree.
+- The push uses a token from a GitHub App with `contents: write`, whose client id and private
+  key are the secrets `SYNC_APP_CLIENT_ID` and `SYNC_APP_PRIVATE_KEY`, stored for Dependabot as
+  well as for Actions. Its push starts the run that checks the tree.
+- The same App replaces the personal token `notify-site.yml` used to reach the site repository:
+  the App is installed there too, and each job narrows its token to the repository it needs.
 - The job that runs cargo holds no secret and hands the two files over as an artifact; the job
   that holds the token checks out afresh and runs nothing from the bumped crates.
 - `audit.yml`'s licence check skips dependabot's own commit: the run after the App's push, or the
@@ -32,9 +34,10 @@ check the regenerated tree.
 
 A dependabot pull request is green when the bump is, and costs one short sync run plus one full
 run. A commit by the App stops dependabot rebasing the branch on its own; `@dependabot recreate`
-starts over and syncs again. The App's key is one more secret to rotate. Reopen this when
-Cargo's `feature-unification` replaces the workspace-hack (ADR-0272) and the licences are the
-only file left.
+starts over and syncs again. The App's key replaces a personal token that expires, but reaches
+both repositories, so the App holds `contents: write` and nothing more. Reopen this when Cargo's
+`feature-unification` replaces the workspace-hack (ADR-0272) and the licences are the only file
+left.
 
 ## Alternatives considered
 
