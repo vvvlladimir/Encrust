@@ -64,7 +64,9 @@ fn the_layer_strip_takes_a_press_while_a_model_is_picked() {
             app,
         );
     harness.run_steps(3);
-    harness.get_by_label("Model and layer side by side").click();
+    harness
+        .get_by_label("Model and layer side by side  M")
+        .click();
     harness.run_steps(3);
 
     assert_eq!(harness.state().mode, Mode::Preview);

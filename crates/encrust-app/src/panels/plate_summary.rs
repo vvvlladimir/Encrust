@@ -6,13 +6,18 @@ use core_geometry::{Mesh, Scalar, signed_volume};
 use core_slicer::LayerPlan;
 use printer_profiles::MaterialProfile;
 
+use egui::{Align, Layout, vec2};
+
 use crate::i18n::tr;
-use crate::panels::Window;
+use crate::panels::{Window, destination, slice};
 use crate::preview::stack_fingerprint;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
-use crate::ui::{duration, heading, readings};
+use crate::ui::{
+    Figure, card_foot, details_fold, duration, figure_grid, heading, icon, notice, readings,
+    split_readings, theme,
+};
 use crate::workspace::Mode;
 
 /// What stands on the plate, as the summary states it.
@@ -25,32 +30,167 @@ pub struct Tally {
     pub supports_mm3: f32,
 }
 
-/// The figures over the Slice button: the plate's while it is laid out, and the layer's
-/// while a stack is being read.
-pub fn ui(ui: &mut egui::Ui, window: &Window) {
-    if *window.mode == Mode::Preview && window.machine.preview.layer_count() > 0 {
-        let layer = window.machine.preview.layer();
-        heading(
-            ui,
-            &tr!("summary-layer", layer = layer + 1),
-            Some(&block(window.machine, layer)),
-        );
-        let mut rows = layer_readings(window);
-        rows.extend(print_readings(window));
-        readings(ui, &rows);
-        return;
-    }
-    heading(ui, &tr!("summary-this-plate"), None);
-    let tally = tally(ui.ctx(), &window.doc.scene);
-    let mut rows = plate_readings(&window.doc.scene, &window.machine.slicing, &tally);
-    if let Some(time) = plate_time(window) {
-        rows.push((tr!("summary-time"), time));
-    }
-    readings(ui, &rows);
+/// The plate's card on the stage's foot, under the models: what the plate comes to — or in
+/// Preview the layer shown — then the printer its file goes to and the press that makes the
+/// file. The card grows upward as Details opens (ADR 0348, 0382).
+pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    egui::Frame::new().inner_margin(BODY_MARGIN).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        if *window.mode == Mode::Preview && window.machine.preview.layer_count() > 0 {
+            layer(ui, window);
+        } else {
+            plate(ui, window);
+        }
+    });
+    card_foot().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        destination::ui(ui, window);
+        slice::ui(ui, window);
+    });
 }
 
-/// What printing the plate takes — time, resin, weight and price — as the plate card
-/// reads them.
+/// Room around the card's heading and figures, over its foot.
+const BODY_MARGIN: egui::Margin = egui::Margin {
+    left: 12,
+    right: 12,
+    top: 0,
+    bottom: 8,
+};
+
+/// The card's heading, `aside` at its right.
+fn title_row(ui: &mut egui::Ui, title: &str, aside: Option<&str>) {
+    let size = vec2(ui.available_width(), theme::SECTION_H);
+    let layout = Layout::left_to_right(Align::Center);
+    ui.allocate_ui_with_layout(size, layout, |ui| heading(ui, title, aside));
+}
+
+/// The plate's time, resin, weight and price, the rest of them under Details, and a word
+/// on any model left broken.
+fn plate(ui: &mut egui::Ui, window: &Window) {
+    let scene = &window.doc.scene;
+    let material = &window.machine.slicing.material;
+    let name = scene.plates().get(scene.active_plate() as usize);
+    title_row(ui, name.map_or("", String::as_str), Some(&material.name));
+    let tally = tally(ui.ctx(), scene);
+    let split = (tally.triangles > 0).then(|| Split::of(&tally, material));
+    let time = split.as_ref().and_then(|_| plate_time(window));
+    let cells = plate_figures(time, split.as_ref(), &material.details.currency);
+    figure_grid(ui, &figures(&cells));
+    if let Some(split) = &split {
+        ui.add_space(FIGURES_GAP);
+        details_fold(ui, &tr!("summary-details"), None, |ui| {
+            details(ui, &tally, split, &material.details.currency);
+        });
+    }
+    broken_verdict(ui, scene);
+}
+
+/// Room between the figures and the Details row, points.
+const FIGURES_GAP: f32 = 4.0;
+
+/// The four cells of the plate's grid, `—` in each it cannot state yet.
+fn plate_figures(
+    time: Option<String>,
+    split: Option<&Split>,
+    currency: &str,
+) -> [(String, String, String); 4] {
+    let none = || NO_FIGURE.to_owned();
+    let (resin, weight) = split.map_or_else(
+        || (none(), none()),
+        |split| (two_places(total(split.ml)), two_places(total(split.g))),
+    );
+    let price = split.and_then(|split| split.price.map(total));
+    let unit = |unit: String, known: bool| if known { unit } else { String::new() };
+    [
+        (
+            tr!("summary-time"),
+            time.unwrap_or_else(none),
+            String::new(),
+        ),
+        (
+            tr!("summary-resin"),
+            resin,
+            unit(tr!("unit-ml"), split.is_some()),
+        ),
+        (
+            tr!("summary-weight"),
+            weight,
+            unit(tr!("unit-g"), split.is_some()),
+        ),
+        (
+            tr!("summary-price"),
+            price.map_or_else(none, two_places),
+            unit(currency.to_owned(), price.is_some()),
+        ),
+    ]
+}
+
+/// What a cell states before there is anything to state.
+const NO_FIGURE: &str = "—";
+
+fn two_places(value: f32) -> String {
+    format!("{value:.2}")
+}
+
+/// The grid's cells, borrowed from what `plate_figures` or `layer_figures` built.
+fn figures(cells: &[(String, String, String); 4]) -> [Figure<'_>; 4] {
+    cells
+        .each_ref()
+        .map(|(name, value, unit)| Figure { name, value, unit })
+}
+
+/// What Details opens: the models' and the supports' share of the resin, the weight and
+/// the price, then the mesh's size.
+fn details(ui: &mut egui::Ui, tally: &Tally, split: &Split, currency: &str) {
+    let with = |value: f32, unit: &str| format!("{value:.2} {unit}");
+    let mut rows = vec![
+        (
+            tr!("summary-resin"),
+            with(split.ml[0], &tr!("unit-ml")),
+            with(split.ml[1], &tr!("unit-ml")),
+        ),
+        (
+            tr!("summary-weight"),
+            with(split.g[0], &tr!("unit-g")),
+            with(split.g[1], &tr!("unit-g")),
+        ),
+    ];
+    if let Some([model, supports]) = split.price {
+        rows.push((
+            tr!("summary-price"),
+            with(model, currency),
+            with(supports, currency),
+        ));
+    }
+    split_readings(ui, [&tr!("summary-model"), &tr!("summary-supports")], &rows);
+    readings(
+        ui,
+        &[
+            (tr!("summary-vertices"), tally.vertices.to_string()),
+            (tr!("summary-triangles"), tally.triangles.to_string()),
+        ],
+    );
+}
+
+/// A model left broken is a verdict here rather than a blocker: what is sliced from it may
+/// be nothing like the model, and this is the last place to turn back.
+fn broken_verdict(ui: &mut egui::Ui, scene: &Scene) {
+    let broken = crate::repair::broken_on_the_plate(scene);
+    if broken == 0 {
+        return;
+    }
+    ui.add_space(theme::ITEM_GAP);
+    notice(
+        ui,
+        icon::WARNING,
+        theme::colors().warn,
+        &tr!("summary-broken", count = broken),
+        &tr!("summary-broken-why", count = broken),
+    );
+}
+
+/// What printing the plate takes — time, resin, weight and price — as the Check tool's
+/// estimate reads them.
 pub fn estimate(ctx: &egui::Context, window: &Window) -> Vec<(String, String)> {
     let tally = tally(ctx, &window.doc.scene);
     let mut rows = tally_readings(&tally, &window.machine.slicing.material);
@@ -97,64 +237,51 @@ fn estimated_time_s(scene: &Scene, slicing: &Slicing) -> Option<(u32, Option<u32
     Some((time_s(most, thinnest_mm(slicing))?, shortest))
 }
 
-fn plate_readings(scene: &Scene, slicing: &Slicing, tally: &Tally) -> Vec<(String, String)> {
-    let (height_mm, layers) = stack(scene, slicing);
-    // An adaptive stack only knows its count once the model has been planned, so the
-    // summary states the two ends of the range the settings allow.
-    let count = match layers {
-        (most, Some(fewest)) => tr!("summary-layer-range", fewest = fewest, most = most),
-        (layers, None) => layers.to_string(),
-    };
-    let mut rows = vec![
-        (
-            tr!("summary-height"),
-            tr!("value-mm", value = format!("{height_mm:.1}")),
-        ),
-        (tr!("summary-layers"), count),
-    ];
-    if tally.triangles > 0 {
-        rows.extend(tally_readings(tally, &slicing.material));
-    }
-    rows
-}
-
 fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(String, String)> {
+    let split = Split::of(tally, material);
+    let both = |[model, supports]: [f32; 2]| format!("{model:.2}/{supports:.2}");
     let mut readings = vec![
         (tr!("summary-vertices"), tally.vertices.to_string()),
         (tr!("summary-triangles"), tally.triangles.to_string()),
         (
             tr!("summary-model-supports"),
-            tr!(
-                "value-ml",
-                value = format!(
-                    "{:.2}/{:.2}",
-                    tally.model_mm3 / 1000.0,
-                    tally.supports_mm3 / 1000.0
-                )
-            ),
+            tr!("value-ml", value = both(split.ml)),
         ),
+        (tr!("summary-weight"), tr!("value-g", value = both(split.g))),
     ];
-    let weight_g = |volume_mm3: f32| volume_mm3 / 1000.0 * material.density_g_cm3;
-    readings.push((
-        tr!("summary-weight"),
-        tr!(
-            "value-g",
-            value = format!(
-                "{:.2}/{:.2}",
-                weight_g(tally.model_mm3),
-                weight_g(tally.supports_mm3)
-            )
-        ),
-    ));
-    let price = |volume_mm3: f32| material.cost(weight_g(volume_mm3), volume_mm3);
-    if let (Some(model), Some(supports)) = (price(tally.model_mm3), price(tally.supports_mm3)) {
+    if let Some(price) = split.price {
         let currency = &material.details.currency;
-        readings.push((
-            tr!("summary-price"),
-            format!("{model:.2}/{supports:.2} {currency}"),
-        ));
+        readings.push((tr!("summary-price"), format!("{} {currency}", both(price))));
     }
     readings
+}
+
+/// What the plate's resin comes to, the models' first and the supports' second.
+struct Split {
+    ml: [f32; 2],
+    g: [f32; 2],
+    /// `None` while the resin has no price.
+    price: Option<[f32; 2]>,
+}
+
+impl Split {
+    fn of(tally: &Tally, material: &MaterialProfile) -> Self {
+        let volumes_mm3 = [tally.model_mm3, tally.supports_mm3];
+        let g = volumes_mm3.map(|volume_mm3| volume_mm3 / 1000.0 * material.density_g_cm3);
+        let [model, supports] = [0, 1].map(|at| material.cost(g[at], volumes_mm3[at]));
+        Self {
+            ml: volumes_mm3.map(|volume_mm3| volume_mm3 / 1000.0),
+            g,
+            price: model
+                .zip(supports)
+                .map(|(model, supports)| [model, supports]),
+        }
+    }
+}
+
+/// The models' and the supports' together.
+fn total([model, supports]: [f32; 2]) -> f32 {
+    model + supports
 }
 
 /// The height of everything visible on the plate and how many layers it comes to: one
@@ -225,76 +352,43 @@ fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
     object.printed()
 }
 
-fn layer_readings(window: &Window) -> Vec<(String, String)> {
-    let preview = &window.machine.preview;
-    let exposure_s = layer_exposure_s(window.machine, preview.layer());
-
-    vec![
-        (
-            tr!("summary-z-height"),
-            tr!(
-                "value-mm",
-                value = format!("{:.3}", preview.layer_z().unwrap_or_default())
-            ),
-        ),
-        (
-            tr!("summary-exposure"),
-            tr!("value-s", value = format!("{exposure_s:.2}")),
-        ),
-        (
-            tr!("summary-cured-area"),
-            tr!(
-                "value-mm2",
-                value = format!("{:.0}", preview.layer_area_mm2().unwrap_or_default())
-            ),
-        ),
-    ]
+/// The layer shown in Preview: its exposure, the block of the ramp it is in, the area it
+/// cures and the resin that comes to.
+fn layer(ui: &mut egui::Ui, window: &Window) {
+    title_row(ui, &tr!("summary-layer"), None);
+    let cells = layer_figures(window.machine);
+    figure_grid(ui, &figures(&cells));
 }
 
-/// What the stack comes to in resin, money and time, measured from the masks.
-fn print_readings(window: &Window) -> Vec<(String, String)> {
-    let material = &window.machine.slicing.material;
-    let mut rows = Vec::new();
-    match window.measured() {
-        Some(measured) => {
-            let volume_mm3 = measured.volume_mm3();
-            let weight_g = volume_mm3 / 1000.0 * material.density_g_cm3;
-            let price = material.cost(weight_g, volume_mm3).map_or_else(
-                || tr!("summary-not-priced"),
-                |cost| format!("{cost:.3} {}", material.details.currency),
-            );
-            rows.extend([
-                (
-                    tr!("summary-volume"),
-                    tr!("value-ml", value = format!("{:.3}", volume_mm3 / 1000.0)),
-                ),
-                (
-                    tr!("summary-weight"),
-                    tr!("value-g", value = format!("{weight_g:.3}")),
-                ),
-                (tr!("summary-price"), price),
-            ]);
-        }
-        None => {
-            let waiting = if window.machine.preview.is_measuring() {
-                tr!("summary-measuring")
-            } else {
-                "-".to_owned()
-            };
-            rows.extend(
-                [
-                    tr!("summary-volume"),
-                    tr!("summary-weight"),
-                    tr!("summary-price"),
-                ]
-                .map(|key| (key, waiting.clone())),
-            );
-        }
-    }
-    if let Some(seconds) = print_time_s(window.machine) {
-        rows.push((tr!("summary-time"), duration(seconds)));
-    }
-    rows
+fn layer_figures(machine: &Machine) -> [(String, String, String); 4] {
+    let preview = &machine.preview;
+    let layer = preview.layer();
+    let area_mm2 = preview.layer_area_mm2();
+    let thickness_mm = preview
+        .layer_z()
+        .map(|top| top - preview.bottom_of(layer).unwrap_or(0.0));
+    let volume_mm3 = area_mm2.zip(thickness_mm).map(|(area, thick)| area * thick);
+    let one_place = |value: Option<Scalar>| {
+        value.map_or_else(|| NO_FIGURE.to_owned(), |value| format!("{value:.1}"))
+    };
+    [
+        (
+            tr!("summary-exposure"),
+            two_places(layer_exposure_s(machine, layer)),
+            tr!("unit-s"),
+        ),
+        (tr!("summary-block"), block(machine, layer), String::new()),
+        (
+            tr!("summary-cured-area"),
+            one_place(area_mm2),
+            tr!("unit-mm2"),
+        ),
+        (
+            tr!("summary-volume"),
+            one_place(volume_mm3),
+            tr!("unit-mm3"),
+        ),
+    ]
 }
 
 /// The stack as the writer would see it, which is what every per-layer reading here is

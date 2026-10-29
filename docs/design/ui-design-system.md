@@ -151,6 +151,9 @@ paints from tokens only.
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
+| `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
+| `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
+| `split_readings` | Figures split two ways, the models' and the supports': the two heads over their columns, a row a name and its two figures |
 | `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |
 | `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it. The bin's framed look is a `companion_square` |
 | `rail_button` | A tool in the tool row, a glyph over its name, washed in the accent when it is the tool in use, with a dot while the tool needs attention and its key's digit while the pointer is on the row |

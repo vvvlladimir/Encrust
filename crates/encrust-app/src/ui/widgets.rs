@@ -20,22 +20,22 @@ pub use bin::{BinLook, bin_button, confirm_bin};
 pub use button::{
     RailButton, blocked_hover, compact_button, companion_button, companion_square, filter_chip,
     focus_ring, icon_button, icon_toggle, inline_button, picker, preset_picker, primary_button,
-    quiet_button, rail_button, secondary_button, summary_button, swatch, toggle_button,
-    zone_button,
+    quiet_button, rail_button, secondary_button, small_icon_button, summary_button, swatch,
+    toggle_button, zone_button,
 };
 pub use confirm::confirm_button;
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
     number_row, picker_row, stepped_row, text_box, text_row, unit_field,
 };
-pub use figures::{Figure, details_fold, figure_grid};
+pub use figures::{Figure, details_fold, figure_grid, split_readings};
 pub use layout::{
     body_and_foot, busy, card, card_foot, describe, described, describing, dialog_frame,
     dialog_head, empty_state, hairline, heading, help_mark, hint, inset, meta, mode_group, nested,
     notice, progress_bar, readings, stats, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
-pub use list::{issue_row, list, list_row, two_lines};
+pub use list::{issue_row, list, list_row, tag, two_lines};
 pub use over_stage::{NoticeReply, hint_bar, job_notice, notice_card};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};

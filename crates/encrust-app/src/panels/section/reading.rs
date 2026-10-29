@@ -1,5 +1,5 @@
 use super::playback::{fraction, height_range};
-use super::{LAYER_FIELD_MIN_W, READOUT_H, floor_height, layer_at};
+use super::{LAYER_BOX_H, LAYER_FIELD_MIN_W, READOUT_H, floor_height, layer_at};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{focus_ring, theme};
@@ -89,8 +89,9 @@ impl Reading {
         }
     }
 
-    /// The layer the cut stands at, over how many there are and its height, centred.
-    /// A click on the layer opens it for typing; answers with the layer typed, on Enter.
+    /// The layer the cut stands at in a sunken box, how many there are and its height
+    /// under it, centred. A click on the layer opens it for typing; answers with the layer
+    /// typed, on Enter.
     pub(super) fn show(&self, ui: &mut egui::Ui) -> Option<usize> {
         let colors = theme::colors();
         let width = ui.available_width();
@@ -106,74 +107,77 @@ impl Reading {
             response.on_hover_text(tr!("section-no-layers-yet"));
             return None;
         }
-        let painter = ui.painter();
-        let row_h = painter
-            .layout_no_wrap("0".to_owned(), theme::figures(12.5), colors.text_low)
+        let figure_w = ui
+            .painter()
+            .layout_no_wrap(self.layer.to_string(), figure_font(), colors.accent_soft)
             .size()
-            .y;
+            .x;
+        let box_w = (figure_w + 2.0 * LAYER_BOX_PAD).clamp(LAYER_BOX_MIN_W, width);
+        let layer_box = Rect::from_center_size(
+            pos2(rect.center().x, rect.top() + LAYER_BOX_H / 2.0),
+            vec2(box_w, LAYER_BOX_H),
+        );
+        let painter = ui.painter();
         painter.text(
-            rect.center_top() + vec2(0.0, row_h),
+            layer_box.center_bottom() + vec2(0.0, 4.0),
             Align2::CENTER_TOP,
-            format!("/ {}", self.layers),
-            theme::figures(11.0),
+            tr!("section-of", count = self.layers),
+            theme::figures(10.5),
             colors.text_low,
         );
         painter.text(
             rect.center_bottom(),
             Align2::CENTER_BOTTOM,
             mm(self.height_mm),
-            theme::figures(10.0),
-            colors.text_low,
+            theme::figures(10.5),
+            colors.text_mid,
         );
         response.on_hover_text(tr!(
             "section-height-of",
             height = format!("{:.2}", self.height_mm),
             top = format!("{:.2}", self.top_mm)
         ));
-        let layer_rect = Rect::from_min_size(rect.min, vec2(width, row_h));
-        self.layer_field(ui, layer_rect)
+        self.layer_field(ui, layer_box)
     }
 
-    /// The layer's own figure, or the box it is typed into once clicked.
+    /// The layer's own figure in its box, or the box it is typed into once clicked.
     pub(super) fn layer_field(&self, ui: &mut egui::Ui, rect: Rect) -> Option<usize> {
         let colors = theme::colors();
         let id = egui::Id::new("layer-readout");
         let typing: Option<String> = ui.data(|data| data.get_temp(id));
         let Some(mut text) = typing else {
-            let figure = ui.painter().layout_no_wrap(
-                self.layer.to_string(),
-                theme::figures(12.5),
-                colors.accent_soft,
-            );
-            let at = pos2(rect.center().x - figure.size().x / 2.0, rect.top());
-            let spot = Rect::from_min_size(at, figure.size());
             let response = ui
-                .interact(spot, id.with("figure"), Sense::click())
+                .interact(rect, id.with("figure"), Sense::click())
                 .on_hover_cursor(egui::CursorIcon::Text)
                 .on_hover_text(tr!("section-type-layer"));
             response.widget_info(|| {
                 let name = tr!("section-layer-field", layer = self.layer);
                 egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name)
             });
+            paint_box(ui, rect, response.hovered());
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                self.layer.to_string(),
+                figure_font(),
+                colors.accent_soft,
+            );
             focus_ring(ui, &response, theme::R_CONTROL);
-            ui.painter().galley(at, figure, colors.accent_soft);
             if response.clicked() {
                 ui.data_mut(|data| data.insert_temp(id, self.layer.to_string()));
                 ui.memory_mut(|memory| memory.request_focus(id.with("field")));
             }
             return None;
         };
-        // The box is the figure itself: no frame, no margin, as wide as what is typed and
-        // centred where it stood, so opening it moves nothing on the strip.
-        let typed_w = ui
+        paint_box(ui, rect, true);
+        // The text is the figure itself, no frame and no margin, as wide as what is typed
+        // and centred where it stood, so opening it moves nothing on the strip.
+        let typed = ui
             .painter()
-            .layout_no_wrap(text.clone(), theme::figures(12.5), colors.accent_soft)
-            .size()
-            .x;
-        let field = Rect::from_center_size(
-            rect.center(),
-            vec2(typed_w.max(LAYER_FIELD_MIN_W), rect.height()),
-        );
+            .layout_no_wrap(text.clone(), figure_font(), colors.accent_soft)
+            .size();
+        let field =
+            Rect::from_center_size(rect.center(), vec2(typed.x.max(LAYER_FIELD_MIN_W), typed.y));
         // A child, not `put`: allocating the box would pull the strip's cursor back up
         // to it, and the track under the readout with it.
         let layout = Layout::centered_and_justified(egui::Direction::LeftToRight);
@@ -182,7 +186,7 @@ impl Reading {
             .add(
                 egui::TextEdit::singleline(&mut text)
                     .id(id.with("field"))
-                    .font(theme::figures(12.5))
+                    .font(figure_font())
                     .text_color(colors.accent_soft)
                     .horizontal_align(Align::Center)
                     .frame(egui::Frame::NONE)
@@ -198,6 +202,27 @@ impl Reading {
         entered.then(|| text.trim().parse().ok()).flatten()
     }
 }
+
+/// The sunken box the layer stands in, ringed in `line` under the pointer or while typed in.
+fn paint_box(ui: &egui::Ui, rect: Rect, lit: bool) {
+    let colors = theme::colors();
+    let ring = if lit { colors.line } else { colors.hairline };
+    ui.painter().rect(
+        rect,
+        theme::R_CONTROL,
+        colors.sunken,
+        egui::Stroke::new(1.0, ring),
+        egui::StrokeKind::Inside,
+    );
+}
+
+fn figure_font() -> egui::FontId {
+    theme::figures(14.0)
+}
+
+/// Room either side of the layer in its box, and the least the box is wide, points.
+const LAYER_BOX_PAD: f32 = 6.0;
+const LAYER_BOX_MIN_W: f32 = 32.0;
 
 /// A height in the strip's narrow column: two decimals, one from a hundred millimetres up.
 pub(super) fn mm(height_mm: Scalar) -> String {

@@ -1,12 +1,12 @@
-use egui::{Align2, Sense, Stroke, vec2};
+use egui::{Align2, Sense, vec2};
 
 use crate::i18n::tr;
 use crate::scene::{ObjectId, Scene};
 use crate::shortcuts::{self, Action};
-use crate::ui::{focus_ring, icon, icon_button, theme};
+use crate::ui::{focus_ring, icon, small_icon_button, theme};
 
-/// How big a plate's square is.
-const PLATE_SIZE: f32 = 32.0;
+/// How big a plate's square is: as the card's other squares.
+const SIDE: f32 = theme::SMALL_ICON_SIZE;
 
 /// The row at the head of the plate panel: one numbered square per plate and the way to add
 /// another, scrolling past `max_w` points. A one-plate project still shows it.
@@ -37,7 +37,8 @@ pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) -> bool {
                         asked = Some((plate, tab));
                     }
                 }
-                if icon_button(ui, icon::ADD, &shortcuts::tooltip(Action::NewPlate)).clicked() {
+                if small_icon_button(ui, icon::ADD, &shortcuts::tooltip(Action::NewPlate)).clicked()
+                {
                     asked = Some((active, Asked::Add));
                 }
             });
@@ -95,25 +96,17 @@ enum Asked {
 /// stands on it on hover, and the rest on a right click.
 fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<Asked> {
     let colors = theme::colors();
-    let (rect, response) = ui.allocate_exact_size(vec2(PLATE_SIZE, PLATE_SIZE), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(SIDE, SIDE), Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, true, place.active, name)
     });
     let (fill, ink) = match (place.active, response.hovered()) {
-        (true, _) => (colors.raised, colors.accent_soft),
+        (true, _) => (colors.accent_wash, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    if place.active {
-        painter.rect_stroke(
-            rect,
-            theme::R_CONTROL,
-            Stroke::new(1.0, colors.line),
-            egui::StrokeKind::Inside,
-        );
-    }
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,

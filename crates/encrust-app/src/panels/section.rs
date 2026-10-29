@@ -1,12 +1,12 @@
 use core_geometry::Scalar;
-use egui::{Align, Align2, Color32, Layout, Rect, Sense, Stroke, vec2};
+use egui::{Align, Layout, vec2};
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::pick::Shown;
 use crate::preview::Preview;
 use crate::shortcuts::{self, Action};
-use crate::ui::{focus_ring, icon, icon_button, theme};
+use crate::ui::{icon, icon_button, icon_toggle, mode_group, theme};
 use crate::workspace::{Mode, Section};
 
 mod playback;
@@ -21,25 +21,30 @@ use track::track;
 /// of a print, slow enough to see a layer.
 const PLAY_LAYERS_PER_S: f32 = 30.0;
 
-/// One of the three views, stacked; the readout under them; the least room the typed
+/// The readout under the views; the box the layer stands in, and the least room the typed
 /// layer is given, so an emptied box still takes a click; and the room between groups.
-const VIEW_H: f32 = 30.0;
-const READOUT_H: f32 = 52.0;
+const READOUT_H: f32 = 56.0;
+const LAYER_BOX_H: f32 = 20.0;
 const LAYER_FIELD_MIN_W: f32 = 8.0;
 const GAP: f32 = 10.0;
 
-/// The track: how wide it is, how thick its rule, the band of exposures down its left,
-/// and the handle on it.
-const TRACK_W: f32 = 40.0;
-const RULE_W: f32 = 5.0;
-const BAND_W: f32 = 3.0;
-const HANDLE: egui::Vec2 = vec2(20.0, 10.0);
-/// How many ticks the scale beside the rule carries, and how wide the widest row of the
-/// cured-area profile stands either side of the rule.
+/// The track: how thick its rule and the thumbs on it.
+const RULE_W: f32 = 3.0;
+const HANDLE: egui::Vec2 = vec2(26.0, 12.0);
+/// How many ticks the scale at the right carries, how long each is and how far in from
+/// the edge.
 const TICKS: usize = 18;
-const PROFILE_W: f32 = 9.0;
-/// A risk's tick across the rule.
-const RISK: egui::Vec2 = vec2(16.0, 2.0);
+const TICK_W: f32 = 8.0;
+const TICK_INSET: f32 = 4.0;
+/// The cured-area profile: a dashed line every so many points up the track, the widest
+/// standing so far either side of the rule.
+const PROFILE_PITCH: f32 = 4.0;
+const PROFILE_HALF_W: f32 = 22.0;
+/// A risk's bar across the rule, the first of a run's, and how close two risks stand to be
+/// one run, points.
+const RISK: egui::Vec2 = vec2(22.0, 3.0);
+const RISK_FIRST: egui::Vec2 = vec2(32.0, 5.0);
+const RISK_RUN_GAP: f32 = 12.0;
 
 /// Where the viewport cuts the plate's contents, plate millimetres, or `None` for the whole
 /// model. Preview always cuts at its layer; Prepare only once the strip leaves the top.
@@ -75,6 +80,7 @@ pub fn shown(window: &Window) -> Shown {
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     ui.with_layout(Layout::top_down(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.y = 2.0;
+        ui.add_space(theme::TOOLBAR_PAD);
         views(ui, window);
         ui.add_space(GAP);
         let readout = Reading::of(window);
@@ -85,6 +91,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         let movable = readout.at.is_some();
         ui.add_enabled_ui(movable, |ui| step_button(ui, window, 1));
         let below = 2.0 * theme::ICON_SIZE + GAP + 3.0 * ui.spacing().item_spacing.y;
+        let below = below + theme::TOOLBAR_PAD;
         let track_h = (ui.available_height() - below).max(0.0);
         track(ui, window, track_h, &readout);
         ui.add_enabled_ui(movable, |ui| {
@@ -98,58 +105,25 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 /// The three ways of looking at the plate: the model, the model and its layer side by
 /// side, and the layer alone. The two that read the layers are the Preview mode.
 fn views(ui: &mut egui::Ui, window: &mut Window) {
-    let colors = theme::colors();
     let showing = showing(window);
     let keys = shortcuts::text(Action::View(1));
     let views = [
-        (icon::MODEL, tr!("view-model"), keys.as_str()),
-        (icon::SIDE_BY_SIDE, tr!("view-side-by-side"), keys.as_str()),
-        (icon::MASK, tr!("view-mask"), keys.as_str()),
+        (icon::MODEL, tr!("view-model")),
+        (icon::SIDE_BY_SIDE, tr!("view-side-by-side")),
+        (icon::MASK, tr!("view-mask")),
     ];
-    let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, VIEW_H * 3.0), Sense::hover());
     let mut picked = None;
-    for (index, (glyph, name, keys)) in views.iter().enumerate() {
-        let cell = Rect::from_min_size(
-            rect.min + vec2(0.0, VIEW_H * index as f32),
-            vec2(width, VIEW_H),
-        );
-        let response = ui.interact(cell, ui.id().with(("view", index)), Sense::click());
-        let on = index == showing;
-        let (fill, tint) = match (on, response.hovered()) {
-            (true, _) => (colors.accent_wash, colors.accent_soft),
-            (false, true) => (colors.hover, colors.text_high),
-            (false, false) => (Color32::TRANSPARENT, colors.text_low),
-        };
-        ui.painter().rect_filled(cell, theme::R_CONTROL, fill);
-        ui.painter().text(
-            cell.center(),
-            Align2::CENTER_CENTER,
-            *glyph,
-            theme::icon(14.0),
-            tint,
-        );
-        if index > 0 {
-            ui.painter().hline(
-                cell.x_range(),
-                cell.top(),
-                Stroke::new(1.0, colors.hairline),
-            );
-        }
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, name.as_str())
+    mode_group(ui, |ui| {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
+            for (index, (glyph, name)) in views.iter().enumerate() {
+                let tooltip = format!("{name}  {keys}");
+                if icon_toggle(ui, glyph, &tooltip, index == showing).clicked() {
+                    picked = Some(index);
+                }
+            }
         });
-        focus_ring(ui, &response, theme::R_CONTROL);
-        if response.on_hover_text(format!("{name}  {keys}")).clicked() {
-            picked = Some(index);
-        }
-    }
-    ui.painter().rect_stroke(
-        rect,
-        theme::R_CONTROL,
-        Stroke::new(1.0, colors.hairline),
-        egui::StrokeKind::Inside,
-    );
+    });
     if let Some(index) = picked {
         show_view(window, index);
     }

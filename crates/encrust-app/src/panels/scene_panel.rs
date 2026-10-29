@@ -3,18 +3,17 @@ use egui::{Align2, Rect, Sense, vec2};
 use core_geometry::{Vec2, Vec3};
 
 use crate::i18n::tr;
-use crate::panels::plate_summary;
-use crate::panels::{Window, destination, plate_strip, slice};
+use crate::panels::{Window, plate_strip};
 use crate::project;
 use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::{
-    body_and_foot, count_row, focus_ring, hairline, hint, icon, icon_button, number_row,
-    secondary_button, theme,
+    body_and_foot, count_row, focus_ring, hairline, heading, hint, icon, number_row,
+    secondary_button, small_icon_button, tag, theme, tone,
 };
 
-/// The heading over the list, as tall as an inspector's.
-const HEADER_H: f32 = 40.0;
+/// The heading over the list, as tall as a section's.
+const HEADER_H: f32 = theme::SECTION_H;
 
 /// More copies than this in one go is a slip of the mouse, not an intention.
 const ARRAY_MAX: u32 = 20;
@@ -39,52 +38,39 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     body_and_foot(ui, max_h, window, rows, actions);
 }
 
-/// What the plate comes to, the printer it goes to and the button that makes the file: a
-/// card of its own on the stage's foot, under the models.
-pub fn this_plate(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            plate_summary::ui(ui, window);
-            ui.add_space(theme::ITEM_GAP);
-            destination::ui(ui, window);
-            slice::ui(ui, window);
-        });
-}
-
-/// Points around the row of plates at the card's head.
+/// Points around the row of plates at the card's head, which stands 42 tall.
 const PLATES_MARGIN: egui::Margin = egui::Margin::symmetric(12, 8);
 
-/// What the plate holds and how much of it the tools are aimed at, with the way to add
-/// another model.
+/// The card's heading: *Models*, the open project, how many models the tools are aimed
+/// at, and the way to add another model.
 fn header(ui: &mut egui::Ui, window: &mut Window) {
-    let colors = theme::colors();
-    let (tint, tally) = tally(&window.doc.scene);
+    let picked = window.doc.scene.selection().len();
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
-    let inner = rect.shrink2(vec2(theme::PANEL_PAD, 0.0));
+    let inner = rect
+        .shrink2(vec2(theme::PANEL_PAD, 0.0))
+        .with_max_x(rect.right() - 6.0);
     ui.scope_builder(
         egui::UiBuilder::new()
             .max_rect(inner)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
         |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            ui.label(
-                egui::RichText::new(tr!("models-title"))
-                    .font(theme::section())
-                    .color(colors.text_mid),
-            );
-            ui.label(
-                egui::RichText::new(tally)
-                    .font(theme::figures(11.0))
-                    .color(tint),
-            );
+            heading(ui, &tr!("models-title"), None);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let tooltip = shortcuts::tooltip(Action::OpenModel);
-                if icon_button(ui, icon::ADD, &tooltip).clicked() {
+                if small_icon_button(ui, icon::ADD, &tooltip).clicked() {
                     crate::import::open_dialog(window);
                 }
-                project_name(ui, &window.doc.project);
+                if picked > 0 {
+                    tone(
+                        ui,
+                        &tr!("models-picked", count = picked),
+                        theme::colors().accent_soft,
+                    );
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    project_name(ui, &window.doc.project);
+                });
             });
         },
     );
@@ -95,20 +81,10 @@ fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
     let Some(name) = opened.name() else {
         return;
     };
-    let text = egui::RichText::new(name)
+    let text = egui::RichText::new(tr!("models-project", name = name.to_owned()))
         .font(theme::label())
         .color(theme::colors().text_low);
     ui.add(egui::Label::new(text).truncate());
-}
-
-/// How many models are picked, in the selection's colour, or with none picked how many
-/// stand on the plate.
-fn tally(scene: &Scene) -> (egui::Color32, String) {
-    let colors = theme::colors();
-    match scene.selection().len() {
-        0 => (colors.text_low, scene.here().count().to_string()),
-        picked => (colors.picked, tr!("models-selected", count = picked)),
-    }
 }
 
 /// What can be done to what stands on the plate. These belong to the contents rather
@@ -116,16 +92,16 @@ fn tally(scene: &Scene) -> (egui::Color32, String) {
 fn actions(ui: &mut egui::Ui, window: &mut Window) {
     hairline(ui);
     egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
+        .inner_margin(theme::TOOLBAR_PAD)
         .show(ui, |ui| {
             let picked: Vec<ObjectId> = window.doc.scene.selection().to_vec();
             let aimed = !picked.is_empty();
-            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.spacing_mut().item_spacing.x = 0.0;
             ui.columns(4, |columns| {
                 cell(&mut columns[0], aimed, |ui| duplicate(ui, window, &picked));
                 cell(&mut columns[1], aimed, |ui| array(ui, window, &picked));
                 cell(&mut columns[2], true, |ui| {
-                    if icon_button(ui, icon::ARRANGE, &tr!("models-arrange")).clicked() {
+                    if small_icon_button(ui, icon::ARRANGE, &tr!("models-arrange")).clicked() {
                         window.machine.status = crate::arrange::arrange_plate(
                             &mut window.doc.scene,
                             &window.doc.plate,
@@ -135,7 +111,7 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
                 });
                 cell(&mut columns[3], aimed, |ui| {
                     let tooltip = shortcuts::tooltip(Action::Remove);
-                    if icon_button(ui, icon::REMOVE, &tooltip).clicked() {
+                    if small_icon_button(ui, icon::REMOVE, &tooltip).clicked() {
                         window.doc.scene.remove_selected();
                     }
                 });
@@ -158,7 +134,7 @@ fn duplicate(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     } else {
         shortcuts::tooltip(Action::Duplicate)
     };
-    if icon_button(ui, icon::DUPLICATE, &tooltip).clicked() {
+    if small_icon_button(ui, icon::DUPLICATE, &tooltip).clicked() {
         duplicate_selection(window);
     }
 }
@@ -179,7 +155,7 @@ pub fn duplicate_selection(window: &mut Window) {
 /// The grid and the gap it leaves, behind the button that lays it out.
 /// The popup stays open on a click inside, which a field needs to open for typing.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
-    let response = icon_button(ui, icon::ARRAY, &tr!("models-array"));
+    let response = small_icon_button(ui, icon::ARRAY, &tr!("models-array"));
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
@@ -291,8 +267,10 @@ fn row(
     plates: &[String],
     active: u32,
 ) -> Option<Clicked> {
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(ui.available_width(), theme::MODEL_ROW_H),
+        Sense::click(),
+    );
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::SelectableLabel,
@@ -306,7 +284,7 @@ fn row(
     let asked = row_menu(&response, object, plates, active);
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
-    let end = rect.right() - 10.0;
+    let end = rect.right() - 8.0;
     let (name_right, repair) = match trouble(&object.summary) {
         Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
         None => (end, false),
@@ -446,27 +424,18 @@ fn import_mark(
     mark: Mark,
     lines: &[String],
 ) -> (f32, bool) {
-    let spot = match mark {
-        Mark::Repaired => {
-            Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0))
-        }
-        Mark::Broken => {
-            let width =
-                ui.painter()
-                    .layout_no_wrap(broken(), theme::small(), theme::colors().danger);
-            let width = width.size().x + 8.0;
-            Rect::from_center_size(
-                egui::pos2(right - width / 2.0, rect.center().y),
-                vec2(width, 18.0),
-            )
-        }
+    let colors = theme::colors();
+    let id = ui.id().with((object.id, "import"));
+    let response = match mark {
+        Mark::Repaired => quiet_mark(ui, rect, id, right),
+        Mark::Broken => tag(
+            ui,
+            egui::pos2(right, rect.center().y),
+            id,
+            &tr!("models-broken"),
+            (colors.danger, colors.danger_wash),
+        ),
     };
-    let response = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("models-import-found"))
-    });
-    paint_mark(ui.painter(), spot, mark, response.hovered());
-    focus_ring(ui, &response, theme::R_CONTROL);
     let mut repair = false;
     egui::Popup::menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
@@ -478,22 +447,31 @@ fn import_mark(
             repair = ui.button(tr!("notice-repair")).clicked();
         }
     });
-    (spot.left(), repair)
+    (response.rect.left(), repair)
 }
 
-/// What the end of the row of a model that will not slice as it stands reads.
-fn broken() -> String {
-    tr!("models-broken")
-}
-
-fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
+/// The quiet sign of a model repair only had to tidy, `right` its right end.
+fn quiet_mark(ui: &mut egui::Ui, rect: Rect, id: egui::Id, right: f32) -> egui::Response {
     let colors = theme::colors();
-    let (text, font, color) = match mark {
-        Mark::Repaired => (icon::WARNING.to_owned(), theme::icon(14.0), colors.text_low),
-        Mark::Broken => (broken(), theme::small(), colors.danger),
+    let spot = Rect::from_center_size(egui::pos2(right - 9.0, rect.center().y), vec2(18.0, 18.0));
+    let response = ui.interact(spot, id, Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("models-import-found"))
+    });
+    let ink = if response.hovered() {
+        colors.text_high
+    } else {
+        colors.text_low
     };
-    let color = if hovered { colors.text_high } else { color };
-    painter.text(spot.center(), Align2::CENTER_CENTER, text, font, color);
+    ui.painter().text(
+        spot.center(),
+        Align2::CENTER_CENTER,
+        icon::WARNING,
+        theme::icon(14.0),
+        ink,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response
 }
 
 /// What is wrong with a model, what is odd about it and what repair did, and how loudly.

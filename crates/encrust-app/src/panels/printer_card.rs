@@ -54,8 +54,9 @@ pub enum Chosen {
     Open(String),
 }
 
-/// Where the printer in hand sends its files, as one row: its name and state, the others the
-/// profile lists, a new scan and its sheet. Failures wait behind the status word.
+/// Where the printer in hand sends its files, as one row: its name and state, and its
+/// sheet beside it; a press opens the printers the profile lists and a new scan.
+/// Failures wait behind the status word.
 pub fn destination(
     ui: &mut egui::Ui,
     network: &Network,
@@ -63,28 +64,19 @@ pub fn destination(
 ) -> Option<Chosen> {
     let chosen_machine = network.chosen_machine()?;
     let target = network.resolve(chosen_machine);
-    let several = network.listed().len() > 1;
     let mut notes: Vec<Note> = warning.into_iter().map(Note::plain).collect();
     notes.extend(machine_notes(network, chosen_machine));
     let mut chosen = None;
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(target) = &target
                 && icon_button(ui, icon::OPEN_SHEET, &tr!("card-open-printer")).clicked()
             {
                 chosen = Some(Chosen::Open(target.key()));
             }
-            let scan = ui.add_enabled_ui(!network.is_scanning(), |ui| {
-                icon_button(ui, icon::RESCAN, &tr!("connection-scan-again"))
-            });
-            if scan.inner.clicked() {
-                chosen = Some(Chosen::Scan);
-            }
             let face = machine_face(network, chosen_machine);
-            let row = destination_row(ui, chosen_machine.label(), &face, several, &notes);
-            if !several {
-                return;
-            }
+            let row = destination_row(ui, chosen_machine.label(), &face, &notes);
             egui::Popup::menu(&row).show(|ui| {
                 for machine in network.listed() {
                     let face = machine_face(network, machine);
@@ -93,6 +85,15 @@ pub fn destination(
                     if ui.selectable_label(on, line).clicked() {
                         chosen = Some(Chosen::Pick(machine.address.clone()));
                     }
+                }
+                ui.separator();
+                let scan = egui::Button::new(format!(
+                    "{}  {}",
+                    icon::RESCAN,
+                    tr!("connection-scan-again")
+                ));
+                if ui.add_enabled(!network.is_scanning(), scan).clicked() {
+                    chosen = Some(Chosen::Scan);
                 }
             });
         });
@@ -155,34 +156,25 @@ fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -
     }
 }
 
-/// The row itself: the printer glyph, its name, what it is doing in its colour, and a
-/// caret when there are others to choose from. Hovering the status word shows `notes`.
-fn destination_row(
-    ui: &mut egui::Ui,
-    name: &str,
-    face: &Face,
-    several: bool,
-    notes: &[Note],
-) -> egui::Response {
+/// The row itself, on `raised`: the printer glyph, its name, what it is doing in its colour
+/// and the caret of the list it opens. Hovering the status word shows `notes`.
+fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, notes: &[Note]) -> egui::Response {
     let colors = theme::colors();
-    let sense = if several {
-        Sense::click()
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(ui.available_width(), theme::PRINTER_ROW_H),
+        Sense::click(),
+    );
+    let fill = if response.hovered() {
+        colors.hover
     } else {
-        Sense::hover()
-    };
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), sense);
-    let border = if several && response.hovered() {
-        colors.line
-    } else {
-        colors.hairline
+        colors.raised
     };
     let painter = ui.painter();
     painter.rect(
         rect,
         theme::R_CONTROL,
-        colors.sunken,
-        egui::Stroke::new(1.0, border),
+        fill,
+        egui::Stroke::new(1.0, colors.hairline),
         StrokeKind::Inside,
     );
     painter.text(
@@ -192,39 +184,31 @@ fn destination_row(
         theme::icon(14.0),
         colors.text_low,
     );
-    let mut right = rect.right() - 10.0;
-    if several {
-        painter.text(
-            pos2(rect.right() - 16.0, rect.center().y),
-            Align2::CENTER_CENTER,
-            icon::CARET_DOWN,
-            theme::icon(14.0),
-            colors.text_low,
-        );
-        right = rect.right() - 30.0;
-    }
-    let status = paint_status(painter, face, rect, right);
+    painter.text(
+        pos2(rect.right() - 16.0, rect.center().y),
+        Align2::CENTER_CENTER,
+        icon::CARET_DOWN,
+        theme::icon(14.0),
+        colors.text_low,
+    );
+    let status = paint_status(painter, face, rect, rect.right() - 30.0);
+    let ink = colors.text_high;
     let room = (status.left() - 8.0 - rect.left() - 30.0).max(0.0);
-    let mut job =
-        egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), colors.text_high);
+    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), ink);
     job.wrap = egui::text::TextWrapping::truncate_at_width(room);
     let galley = painter.layout_job(job);
     painter.galley(
         pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
         galley,
-        colors.text_high,
+        ink,
     );
-    if several {
-        focus_ring(ui, &response, theme::R_CONTROL);
-    }
+    focus_ring(ui, &response, theme::R_CONTROL);
     let response = if !notes.is_empty() && ui.rect_contains_pointer(status) {
         response.on_hover_ui(|ui| note_lines(ui, notes))
-    } else if several {
-        response.on_hover_text(tr!("card-destination-several"))
     } else {
-        response.on_hover_text(tr!("card-destination"))
+        response.on_hover_text(tr!("card-destination-several"))
     };
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, several, name));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, name));
     response
 }
 

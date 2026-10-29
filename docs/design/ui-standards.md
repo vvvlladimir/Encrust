@@ -118,11 +118,11 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 ## Known gaps
 
 - **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row, the glyphs, the hint bar,
-  the notices and the empty plate are; the plate card states seven dotted rows with Slice
-  to a file under the primary, a deleted profile or machine does not ask, and a notice
-  that goes away fades only when it is a message, a job's or a broken model's card going at
-  once. `figure_grid`, `details_fold`, `confirm_button` and
-  `companion_square` are built but drawn nowhere yet; `ok_wash` is still to be built.
+  the notices, the empty plate, the plate and models cards and the layer strip are; a
+  deleted profile or machine does not ask, and a notice that goes away fades only when it
+  is a message, a job's or a broken model's card going at once. `confirm_button` is built
+  but drawn nowhere yet; `ok_wash` is still to be built. The printer list the plate card
+  opens and a model's import popup are stock egui menus.
 
 - Decimals: a unit of the table brings its own (`field.rs`, `standard_decimals`); `%`
   and units the table lacks (g/ml, the compensation's) still take the caller's.

@@ -186,6 +186,38 @@ pub fn issue_row(
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// A state named at the end of a row, `right_center` its right end: the word in `ink` on
+/// `wash`, a pill. A click on it says more, so it is a button of its own.
+pub fn tag(
+    ui: &mut Ui,
+    right_center: egui::Pos2,
+    id: Id,
+    text: &str,
+    (ink, wash): (Color32, Color32),
+) -> Response {
+    let word = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), ink);
+    let size = word.size() + 2.0 * TAG_PAD;
+    let rect = egui::Rect::from_min_size(right_center - vec2(size.x, size.y / 2.0), size);
+    let response = ui.interact(rect, id, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, text));
+    let fill = if response.hovered() {
+        ink.gamma_multiply(TAG_HOVER_WASH)
+    } else {
+        wash
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, egui::CornerRadius::same(u8::MAX), fill);
+    painter.galley(rect.min + TAG_PAD, word, ink);
+    focus_ring(ui, &response, egui::CornerRadius::same(u8::MAX));
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Room around a tag's word, and how much of its ink washes it under the pointer.
+const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
+const TAG_HOVER_WASH: f32 = 0.24;
+
 /// A name over the line that says more about it, drawn from `left_center`: a machine over
 /// its maker and the file it is sliced into.
 pub fn two_lines(painter: &egui::Painter, left_center: egui::Pos2, title: &str, detail: &str) {

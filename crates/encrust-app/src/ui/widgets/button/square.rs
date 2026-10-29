@@ -8,6 +8,11 @@ pub fn icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
     square(ui, glyph, tooltip, Square::icon())
 }
 
+/// The same square at 26 points, for the rows of a card: its plates, its actions.
+pub fn small_icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
+    square(ui, glyph, tooltip, Square::small())
+}
+
 /// An icon square that stays lit while `on`: a lock, a link, a mode held down.
 pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Response {
     square(
@@ -161,6 +166,14 @@ impl Square {
         Self {
             size: theme::ICON_SIZE,
             glyph_size: 16.0,
+            active: false,
+        }
+    }
+
+    fn small() -> Self {
+        Self {
+            size: theme::SMALL_ICON_SIZE,
+            glyph_size: 15.0,
             active: false,
         }
     }

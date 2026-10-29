@@ -561,8 +561,11 @@ smoothing, not the original model.
 - **Drill the suction cups.**
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
-Resin is counted from what is actually cured. Before slicing, the plate's summary states
-them from the meshes, and the time, marked ≈, from the plate's height.
+Resin is counted from what is actually cured. Before slicing, the plate's card states
+them from the meshes, and the time, marked ≈, from the plate's height: time, resin, weight
+and price in view, the models' and the supports' share, vertices and triangles under
+*Details*, which stays open or shut between runs. In Preview the card states the layer
+shown: its exposure, its block of the ramp, the area it cures and the resin that comes to.
 
 ---
 
@@ -709,8 +712,10 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   controls. Stop needs a second press, because a stopped print cannot be resumed.
 - Slice to a file from the plate's card, or, while the printer answers and is free, slice
   and send in one press from the button over it: a bar shows the slicing and the upload,
-  then the same button starts the print. The card names the printer and what it is doing,
-  with a button to scan again. **File > Slice to .goo** (Cmd Enter, named for the
+  then the same button starts the print, Slice to a file the square beside it; Cancel
+  stops the slice or the upload. The card names the printer and what it is doing; a press
+  on it lists the others and scans again. A printer busy printing gets no file: the card
+  says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
 - A Prusa login is kept in the window's settings, never in the profile.
 

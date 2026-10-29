@@ -9,6 +9,8 @@ pub mod kept;
 pub mod theme;
 mod widgets;
 
+#[expect(unused_imports, reason = "TODO(step-10): the windows it is built for")]
+pub use widgets::confirm_button;
 pub use widgets::{
     BinLook, Carried, Held, NoticeReply, RailButton, Segment, Segmented, address_field, ago,
     axis_label, bare_switch, bin_button, blocked_hover, body_and_foot, busy, card, card_foot,
@@ -22,8 +24,4 @@ pub use widgets::{
     stats, stepped_row, subheading, subheading_with_switch, summary_button, swatch, switch,
     text_box, text_row, toggle_button, tone, two_lines, unit_field, vertical_hairline, zone_button,
 };
-#[expect(
-    unused_imports,
-    reason = "TODO(step-7, step-10): the panels these are built for"
-)]
-pub use widgets::{Figure, confirm_button, details_fold, figure_grid};
+pub use widgets::{Figure, details_fold, figure_grid, small_icon_button, split_readings, tag};
