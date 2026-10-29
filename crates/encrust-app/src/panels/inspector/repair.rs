@@ -6,8 +6,8 @@ use crate::panels::Window;
 use crate::repair::{Finding, Found, RepairMode, RepairState};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    blocked_hover, busy, describe, icon, icon_toggle, issue_row, list, list_row, number_row,
-    picker, primary_button, readings, section, section_with_action, theme, tone,
+    blocked_hover, busy, describe, icon, icon_toggle, issue_list, issue_row, list, list_row,
+    number_row, picker, primary_button, readings, section, section_with_action, theme, tone,
 };
 
 /// Every repair the Method picker offers, in the order it lists them.
@@ -65,7 +65,7 @@ fn found(ui: &mut egui::Ui, window: &mut Window) {
     if window.doc.repairs.found.shown().is_some() {
         window.doc.repairs.found.place(&window.doc.scene, &ids);
     }
-    let action = (icon::FIND, tr!("repair-count-crossings"));
+    let action = (icon::RESCAN, tr!("repair-count-crossings"));
     let (pressed, _) = section_with_action(ui, &tr!("repair-found"), (action.0, &action.1), |ui| {
         describe(ui, &tr!("repair-found-note"));
         if ids.is_empty() {
@@ -115,7 +115,7 @@ fn marking(ui: &mut egui::Ui, found: &mut Found, scene: &Scene, rows: &[(String,
         tone(ui, &tr!("repair-nothing-found"), theme::colors().ok);
         return;
     }
-    list(ui, |ui| {
+    issue_list(ui, |ui| {
         for (name, count, finding) in rows {
             let shown = found.shown() == Some(*finding);
             let tint = theme::scene().fault;

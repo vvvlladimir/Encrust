@@ -20,6 +20,10 @@ const PAD: f32 = 10.0;
 const ENDS_GAP: f32 = 12.0;
 /// A bar narrower than this shows the right end's controls as their glyphs alone.
 const COMPACT_BAR_W: f32 = 720.0;
+/// Find's box: as wide as `ui-screens.md` sets it, a 30 square when compact.
+const FIND_W: f32 = 200.0;
+const FIND_H: f32 = 30.0;
+const FIND_COMPACT_W: f32 = 30.0;
 
 /// The bar is the window's own title bar rather than a band under one; see
 /// `docs/decisions/0104` and `0217`.
@@ -47,8 +51,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 window_buttons(ui);
-                find_button(ui, window, compact);
                 window_controls(ui, window);
+                find_button(ui, window, compact);
                 update_badge(ui, window.machine, compact);
                 alpha_badge(ui, window.machine, compact);
             },
@@ -86,60 +90,49 @@ fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The way into Find, its keys beside it while there is room (ADR 0230).
+/// The way into Find, a sunken box like the field it opens, its keys at its right while
+/// there is room (ADR 0230).
 fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
     let colors = theme::colors();
     let tint = colors.text_low;
-    let label = ui
-        .painter()
-        .layout_no_wrap(tr!("find-button"), theme::label(), tint);
-    let keys = ui
-        .painter()
-        .layout_no_wrap(shortcuts::text(Action::Find), theme::small(), tint);
-    let width = match compact {
-        true => PAD + 12.0 + PAD,
-        false => PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD,
-    };
-    let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::click());
+    let width = if compact { FIND_COMPACT_W } else { FIND_W };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, FIND_H), Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("find-button"))
     });
     let painter = ui.painter();
-    let fill = crate::ui::hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover);
+    let stroke = crate::ui::hover_mix(ui, &response, colors.hairline, colors.line);
     painter.rect(
         rect,
-        theme::R_CONTROL,
-        fill,
-        Stroke::new(1.0, colors.hairline),
+        theme::R_SURFACE,
+        colors.sunken,
+        Stroke::new(1.0, stroke),
         egui::StrokeKind::Inside,
     );
+    let glyph_x = if compact {
+        rect.center().x
+    } else {
+        rect.left() + 15.0
+    };
     painter.text(
-        pos2(rect.left() + PAD + 6.0, rect.center().y),
+        pos2(glyph_x, rect.center().y),
         Align2::CENTER_CENTER,
         icon::FIND,
         theme::icon(13.0),
         tint,
     );
-    let label_w = label.size().x;
     if !compact {
-        painter.galley(
-            pos2(
-                rect.left() + PAD + 18.0,
-                rect.center().y - label.size().y / 2.0,
-            ),
-            label,
+        painter.text(
+            pos2(rect.left() + 28.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            tr!("find-button"),
+            theme::label(),
             tint,
         );
-        painter.galley(
-            pos2(
-                rect.left() + PAD + 18.0 + label_w + 16.0,
-                rect.center().y - keys.size().y / 2.0,
-            ),
-            keys,
-            tint,
-        );
+        let keys = shortcuts::text(Action::Find);
+        crate::ui::keycap(painter, &keys, rect.right() - 8.0, rect.center().y);
     }
-    focus_ring(ui, &response, theme::R_CONTROL);
+    focus_ring(ui, &response, theme::R_SURFACE);
     if response.on_hover_text(tr!("find-tooltip")).clicked() {
         window.view.options.find = true;
     }

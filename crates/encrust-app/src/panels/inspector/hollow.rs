@@ -360,6 +360,7 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
         .filter(|object| object.hollow.is_hollow())
         .count();
     if hollowed == 0 {
+        hint(ui, &tr!("hollow-nothing-done"));
         return;
     }
 

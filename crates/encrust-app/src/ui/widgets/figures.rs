@@ -74,8 +74,8 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     let name = painter.layout_job(name);
     let value_top = inner.top() + name.size().y + 1.0;
     painter.galley(inner.left_top(), name, colors.text_low);
-    let value = painter.layout_no_wrap(figure.value.to_owned(), theme::figure(), colors.text_high);
-    let unit_left = inner.left() + value.size().x + 2.0;
+    let value = painter.layout_job(figure_job(figure.value));
+    let unit_left = inner.left() + value.size().x + UNIT_GAP;
     let baseline = value_top + value.size().y;
     painter.galley(pos2(inner.left(), value_top), value, colors.text_high);
     if !figure.unit.is_empty() {
@@ -88,6 +88,32 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
         );
     }
 }
+
+/// `figure` with each run of letters in it — `m`, `s` of `17m26s` — set as a unit beside
+/// the numbers.
+fn figure_job(figure: &str) -> egui::text::LayoutJob {
+    let colors = theme::colors();
+    let mut job = egui::text::LayoutJob::default();
+    let mut rest = figure;
+    while let Some(first) = rest.chars().next() {
+        let letters = first.is_alphabetic();
+        let end = rest
+            .find(|c: char| c.is_alphabetic() != letters)
+            .unwrap_or(rest.len());
+        let (font, color) = if letters {
+            (theme::small(), colors.text_low)
+        } else {
+            (theme::figure(), colors.text_high)
+        };
+        let leading = if job.is_empty() { 0.0 } else { UNIT_GAP };
+        job.append(&rest[..end], leading, egui::TextFormat::simple(font, color));
+        rest = &rest[end..];
+    }
+    job
+}
+
+/// Room between a figure and the unit beside it, points.
+const UNIT_GAP: f32 = 2.0;
 
 /// A row of the grid, the rule between cells, and the room inside a cell, points.
 const FIGURE_H: f32 = 46.0;

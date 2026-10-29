@@ -1,10 +1,10 @@
 //! The sheet that lists every key, drawn from `crate::shortcuts` alone.
 
-use egui::{Align, Align2, Layout, RichText, Sense, StrokeKind, vec2};
+use egui::{Align, Align2, Layout, RichText, Sense, vec2};
 
 use crate::i18n::tr;
 use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_keys};
-use crate::ui::{dialog, dialog_head, group_name, hairline, icon, theme};
+use crate::ui::{dialog, dialog_head, group_name, hairline, icon, keycap, theme};
 
 /// The groups down each column, split so the two columns come out about even.
 const LEFT: [Group; 2] = [Group::Tools, Group::Plate];
@@ -19,10 +19,6 @@ const KEY_GAP: f32 = 3.0;
 const OR_GAP: f32 = 6.0;
 /// What the sheet leaves of the window's height for its head, its foot and its margin.
 const CHROME_H: f32 = 200.0;
-
-/// Padding inside a keycap, and the smallest one a single character gets.
-const CAP_PAD: egui::Vec2 = vec2(7.0, 3.0);
-const CAP_MIN_W: f32 = 22.0;
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, open: &mut bool) {
@@ -103,7 +99,7 @@ fn row(ui: &mut egui::Ui, label: &str, chords: &[Vec<&str>]) {
             right = or(ui, right - OR_GAP, rect.center().y) - OR_GAP;
         }
         for key in chord.iter().rev() {
-            right = keycap(ui, key, right, rect.center().y) - KEY_GAP;
+            right = keycap(ui.painter(), key, right, rect.center().y) - KEY_GAP;
         }
         right += KEY_GAP;
     }
@@ -125,37 +121,4 @@ fn or(ui: &egui::Ui, right: f32, center_y: f32) -> f32 {
     let at = egui::pos2(left, center_y - galley.size().y / 2.0);
     ui.painter().galley(at, galley, theme::colors().text_low);
     left
-}
-
-/// One keycap, drawn from its right edge leftwards. Returns the edge it ended on, so the
-/// next cap of the same row knows where to go.
-fn keycap(ui: &egui::Ui, text: &str, right: f32, center_y: f32) -> f32 {
-    let colors = theme::colors();
-    let font = theme::figures(12.0);
-    let galley = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), font, colors.text_mid);
-    let width = (galley.size().x + CAP_PAD.x * 2.0).max(CAP_MIN_W);
-    let height = galley.size().y + CAP_PAD.y * 2.0;
-    let cap = egui::Rect::from_min_size(
-        egui::pos2(right - width, center_y - height / 2.0),
-        vec2(width, height),
-    );
-
-    ui.painter().rect(
-        cap,
-        theme::R_CONTROL,
-        colors.raised,
-        egui::Stroke::new(1.0, colors.line),
-        StrokeKind::Inside,
-    );
-    ui.painter().galley(
-        egui::pos2(
-            cap.center().x - galley.size().x / 2.0,
-            cap.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        colors.text_mid,
-    );
-    cap.left()
 }

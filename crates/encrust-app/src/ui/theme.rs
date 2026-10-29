@@ -327,6 +327,8 @@ pub const FIELD_H: f32 = BUTTON_H;
 pub const FIELD_W: f32 = 128.0;
 pub const PANEL_PAD: f32 = 12.0;
 pub const ITEM_GAP: f32 = 8.0;
+/// Between the rows of a section's body.
+pub const ROW_GAP: f32 = 6.0;
 /// Between buttons sharing one row, and between a tool heading's mode icons.
 pub const BUTTON_GAP: f32 = 6.0;
 pub const ICON_GAP: f32 = 2.0;
@@ -430,7 +432,7 @@ pub fn small() -> FontId {
 
 /// Both halves of a reading: the name and the figure after its leader.
 pub fn reading() -> FontId {
-    FontId::proportional(12.0)
+    FontId::proportional(12.5)
 }
 
 /// The label of a segment in a row of choices.
@@ -440,12 +442,12 @@ pub fn segment() -> FontId {
 
 /// A unit inside a number's box.
 pub fn unit() -> FontId {
-    FontId::proportional(10.5)
+    FontId::proportional(11.5)
 }
 
 /// A section heading in the inspector or on a floating card.
 pub fn section() -> FontId {
-    FontId::new(12.0, FontFamily::Name(SEMIBOLD.into()))
+    FontId::new(12.5, FontFamily::Name(SEMIBOLD.into()))
 }
 
 /// The title of a form block, in the column beside its fields.
@@ -494,7 +496,7 @@ pub fn primary() -> FontId {
 
 /// The open tool's name, at the head of the inspector.
 pub fn tool_title() -> FontId {
-    FontId::new(14.0, FontFamily::Name(SEMIBOLD.into()))
+    FontId::new(14.5, FontFamily::Name(SEMIBOLD.into()))
 }
 
 /// X, Y or Z beside the arrows in the corner of the plate.
@@ -505,6 +507,11 @@ pub fn axis_letter() -> FontId {
 /// A tool's name under its glyph on the rail.
 pub fn rail_name() -> FontId {
     FontId::proportional(10.5)
+}
+
+/// A key's face on a keycap.
+pub fn keycap() -> FontId {
+    FontId::new(10.5, FontFamily::Name(MEDIUM.into()))
 }
 
 /// The digit that picks a tool, in the corner of its rail button.

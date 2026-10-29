@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use crate::i18n::tr;
 use crate::settings::unique_id;
 use crate::status::Status;
-use crate::ui::{BinLook, bin_button, companion_square, icon, preset_picker, theme};
+use crate::ui::{BinLook, bin_button, icon, preset_picker, quiet_square, theme};
 
 /// The named settings of one tool, as the Supports card has them: a picker showing the
 /// preset the panel matches, or the one it came from and `· edited`; Save, over that one or
@@ -111,9 +111,9 @@ fn row<T>(
                 tr!("presets-delete-named", name = name.clone())
             });
             let held = named.matching.is_some();
-            pressed.forget = bin_button(ui, theme::BUTTON_H, BinLook::Framed, &tip, held);
+            pressed.forget = bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, held);
             let save_tip = tr!("shape-save-tooltip");
-            let save = companion_square(ui, icon::SAVE, &save_tip, theme::BUTTON_H, !held);
+            let save = quiet_square(ui, icon::SAVE, &save_tip, theme::BUTTON_H, !held);
             egui::Popup::menu(&save).show(|ui| {
                 let over = egui::Button::new(tr!("shape-save"));
                 pressed.over = ui.add_enabled(named.edited, over).clicked();

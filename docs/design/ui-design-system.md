@@ -144,7 +144,7 @@ paints from tokens only.
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
 | `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule |
-| `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped |
+| `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret. The support picker's chooser is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
 | `picker_row` | A `picker` under a `field_label` of its own, for a choice too long for a field box |
@@ -229,7 +229,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Split | `SPLIT_HORIZONTAL` |
 | Preset, save | `BOOKMARK_SIMPLE`, `FLOPPY_DISK` |
 | Warning, error, job, armed | `WARNING`, `WARNING_OCTAGON`, `CIRCLE_NOTCH`, `QUESTION` |
-| Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION` |
+| Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION_MARK` |
 
 A glyph in a button other than the primary is 16, in the tool row 19, in a 26 square 15, in an empty state 30.
 

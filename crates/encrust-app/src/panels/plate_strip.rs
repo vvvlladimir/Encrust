@@ -7,6 +7,8 @@ use crate::ui::{focus_ring, icon, small_icon_button, theme};
 
 /// How big a plate's square is: as the card's other squares.
 const SIDE: f32 = theme::SMALL_ICON_SIZE;
+/// How strongly the accent rings the plate in front.
+const ACTIVE_RING: f32 = 0.4;
 
 /// The row at the head of the plate panel: one numbered square per plate and the way to add
 /// another, scrolling past `max_w` points. A one-plate project still shows it.
@@ -96,22 +98,33 @@ enum Asked {
 /// stands on it on hover, and the rest on a right click.
 fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<Asked> {
     let colors = theme::colors();
-    let (rect, response) = ui.allocate_exact_size(vec2(SIDE, SIDE), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(SIDE + 2.0, SIDE), Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, true, place.active, name)
     });
-    let (fill, ink) = match (place.active, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
+    let (fill, ring, ink) = match (place.active, response.hovered()) {
+        (true, _) => (
+            colors.accent_wash,
+            colors.accent.gamma_multiply(ACTIVE_RING),
+            colors.accent_soft,
+        ),
+        (false, true) => (colors.hover, colors.hairline, colors.text_high),
+        (false, false) => (egui::Color32::TRANSPARENT, colors.hairline, colors.text_mid),
     };
     let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
+    let stroke = egui::Stroke::new(1.0, ring);
+    painter.rect(
+        rect,
+        theme::R_CONTROL,
+        fill,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
         (place.plate + 1).to_string(),
-        theme::figures(12.5),
+        theme::figures(12.0),
         ink,
     );
     focus_ring(ui, &response, theme::R_CONTROL);

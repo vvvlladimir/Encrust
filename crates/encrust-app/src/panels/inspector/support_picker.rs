@@ -75,7 +75,7 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
         });
     save_button(ui, window, &hand);
     let (act, tip) = removal(rows.len(), active);
-    if bin_button(ui, theme::BUTTON_H, BinLook::Framed, &tip, active.holds > 0) {
+    if bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, active.holds > 0) {
         acts.push(act);
     }
     take(window, pick);

@@ -171,7 +171,7 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
     fn paint(ui: &Ui, slot: Rect, segment: &Segment<'_, T>, active: bool, hovered: bool) {
         let colors = theme::colors();
         let (fill, ring, foreground) = match (active, hovered) {
-            (true, _) => (colors.accent_wash, colors.line, colors.accent_soft),
+            (true, _) => (colors.raised, colors.line, colors.accent_soft),
             (false, true) => (colors.hover, egui::Color32::TRANSPARENT, colors.text_high),
             (false, false) => (
                 egui::Color32::TRANSPARENT,

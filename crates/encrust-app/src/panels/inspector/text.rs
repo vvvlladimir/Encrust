@@ -16,6 +16,8 @@ const LIST_H: f32 = 280.0;
 /// The room the family field keeps on its right for the caret, and the caret's size, points.
 const CARET_W: f32 = 28.0;
 const CARET_GLYPH: f32 = 14.0;
+/// The room the family's glyph takes at the field's left.
+const FONT_W: f32 = 30.0;
 
 /// Per point of drag.
 const SIZE_STEP: f64 = 0.1;
@@ -54,7 +56,9 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let tool = &window.tools.text;
     match tool.shapes() {
-        Ok(_) => tone(ui, &tr!("text-click-note"), theme::colors().text_mid),
+        Ok(_) => {
+            ui.vertical_centered(|ui| hint(ui, &tr!("text-click-note")));
+        }
         Err(error) => hint(ui, &reason(&error)),
     }
 }
@@ -107,12 +111,19 @@ fn family_field(ui: &mut egui::Ui, shown: &mut String, current: String) -> egui:
         .hint_text(current)
         .font(theme::label())
         .margin(egui::Margin {
-            left: 10,
+            left: FONT_W as i8,
             right: CARET_W as i8,
             ..egui::Margin::ZERO
         })
         .desired_width(ui.available_width());
     let response = ui.add(field);
+    ui.painter().text(
+        response.rect.left_center() + egui::vec2(FONT_W / 2.0, 0.0),
+        egui::Align2::CENTER_CENTER,
+        crate::ui::icon::FONT,
+        theme::icon(CARET_GLYPH),
+        theme::colors().text_low,
+    );
     let caret = response.rect.right_center() - egui::vec2(CARET_W / 2.0, 0.0);
     ui.painter().text(
         caret,
