@@ -4,6 +4,7 @@ use crate::i18n::tr;
 
 mod bin;
 mod button;
+mod chooser;
 mod confirm;
 mod field;
 mod figures;
@@ -22,6 +23,9 @@ pub use button::{
     focus_ring, icon_button, icon_toggle, inline_button, picker, preset_picker, primary_button,
     quiet_button, rail_button, secondary_button, small_icon_button, summary_button, swatch,
     toggle_button, zone_button,
+};
+pub use chooser::{
+    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row,
 };
 pub use confirm::confirm_button;
 pub use field::{

@@ -363,6 +363,9 @@ pub const RAIL_ICON_H: f32 = 36.0;
 pub const TOOLBAR_PAD: f32 = 4.0;
 /// The chips and buttons standing in the top bar and the layer strip.
 pub const CHIP_H: f32 = 32.0;
+/// A list the chip opens, and how far under the chip it hangs.
+pub const CHOOSER_W: f32 = 300.0;
+pub const CHOOSER_GAP: f32 = 6.0;
 pub const ICON_SIZE: f32 = 28.0;
 /// The squares of a card's own rows: its plates and the actions under its models.
 pub const SMALL_ICON_SIZE: f32 = 26.0;
