@@ -429,6 +429,64 @@ fn an_automatic_profile_is_saved_over_the_shipped_one_and_can_be_thrown_away() {
 }
 
 #[test]
+fn a_support_put_back_as_it_ships_follows_the_shipped_one_again() {
+    in_its_own_dir("support-back", |dir, mut catalogue| {
+        let shipped = SupportProfile::shipped("medium").expect("the medium preset ships");
+        let edited = SupportProfile {
+            density: 3.0,
+            ..shipped.clone()
+        };
+        let file = dir.join("supports/medium.toml");
+        catalogue.save_support("medium", &edited).expect("writable");
+        assert!(file.exists(), "an edit is kept whole");
+
+        catalogue
+            .save_support("medium", &shipped)
+            .expect("removable");
+        assert!(!file.exists(), "a reset keeps no copy");
+        assert_eq!(
+            catalogue.support("medium").expect("shipped").source,
+            Source::Bundled
+        );
+
+        catalogue.save_support("medium", &edited).expect("writable");
+        assert_eq!(
+            Catalogue::with_root(dir)
+                .expect("reads")
+                .support("medium")
+                .expect("there")
+                .profile,
+            edited,
+            "undoing the reset keeps the copy again"
+        );
+    });
+}
+
+#[test]
+fn an_automatic_profile_put_back_as_it_ships_keeps_no_copy() {
+    in_its_own_dir("auto-back", |dir, mut catalogue| {
+        let entry = catalogue
+            .autos()
+            .next()
+            .expect("an automatic profile ships");
+        let (id, shipped) = (entry.id.clone(), entry.profile.clone());
+        let edited = AutoProfile {
+            max_overhang_deg: shipped.max_overhang_deg + 10.0,
+            ..shipped.clone()
+        };
+        catalogue.save_auto(&id, &edited).expect("writable");
+        catalogue.save_auto(&id, &shipped).expect("removable");
+
+        assert!(!dir.join(format!("auto/{id}.toml")).exists());
+        let back = catalogue
+            .autos()
+            .find(|entry| entry.id == id)
+            .expect("shipped");
+        assert_eq!(back.source, Source::Bundled);
+    });
+}
+
+#[test]
 fn no_automatic_profile_can_be_added() {
     in_its_own_dir("new-auto", |dir, mut catalogue| {
         let shipped = catalogue.autos().next().expect("ships").profile.clone();

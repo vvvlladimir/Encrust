@@ -27,6 +27,10 @@ back to the shipped printer, rewritten as no edits, the old file kept beside it 
 `<id>.toml.bak`. A file of an id this build does not ship is the user's own printer and is
 read as it stands.
 
+A shipped support or automatic profile is copied only when the user saves an edit over it,
+so its copy stays whole and frozen. Saving one that matches what ships under its id drops
+the copy instead, so a reset puts it back to following each release.
+
 ## Consequences
 
 - An update reaches every field the user left alone, new fields included, with no step of
@@ -53,7 +57,15 @@ What differs from them would be the owner's edits, kept through the move. It cos
 profiles in the build, and a copy older than v0.5.0 would keep what v0.4.0 to v0.5.0 changed
 as edits nobody made; few machines are installed to keep that for.
 
+### Edits over a shipped support profile, as for a printer
+
+An edited support would take each release's other numbers too, but a support's numbers are
+tuned together, and a mix of the user's one and a release's neighbour can hold worse than
+either. The form already marks where a copy leaves the shipped numbers.
+
 ### The option that won, and what it costs
 
 The user's file of a shipped printer is no longer a profile on its own, and the merge is
 done on every read; a typo in an edit fails loudly only once laid over the shipped profile.
+An edited support takes no correction until the user resets it, and a renamed one never
+matches the shipped profile, so it stays a copy.

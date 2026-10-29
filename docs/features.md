@@ -679,6 +679,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   other field, new ones included. One added in 0.5.0 or before is put back to the
   bundled profile once, its old file kept beside it as `.toml.bak`. A custom printer is
   never touched.
+- An edited bundled support or automatic profile is kept whole and keeps its numbers
+  through updates; **Reset to defaults** puts it back to the bundled one, which then
+  changes with each update.
 - A profile file of yours that no longer reads, after an update for instance, is left out
   and the bundled one of the same name is used. The start page and the stage say so and
   offer to reset those files to the bundled profiles. A broken profile of your own, which

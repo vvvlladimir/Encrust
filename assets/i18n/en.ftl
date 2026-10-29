@@ -935,8 +935,8 @@ support-table-spacing = Spacing
 support-cannot-add = cannot add a support profile
 support-pick-profile = Pick a support profile.
 support-reset = Reset to defaults
-support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
-support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
+support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name; under its shipped name it then changes with each update. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
+support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with; from then on it changes with each update. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
 support-reset-stock-help = Reset to defaults puts back the numbers a new profile starts with and keeps its name. Undo takes a reset back.
 support-cannot-save = cannot save the support profile
 

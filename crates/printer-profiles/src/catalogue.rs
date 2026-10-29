@@ -383,12 +383,16 @@ impl Catalogue {
         Ok(path)
     }
 
-    /// Writes a support profile into the user's directory.
+    /// Writes a support profile into the user's directory. One that matches what ships under
+    /// its id is not kept, so the shipped one follows each release again (ADR 0372).
     pub fn save_support(
         &mut self,
         id: &str,
         profile: &SupportProfile,
     ) -> Result<PathBuf, ProfileError> {
+        if shipped_support(id).is_ok_and(|shipped| shipped == *profile) {
+            return self.back_to_shipped(Kind::Support, id);
+        }
         let path = self.keep(Kind::Support, id, |path| profile.to_toml_string(path))?;
         self.supports.insert(
             id.to_owned(),
@@ -401,14 +405,17 @@ impl Catalogue {
         Ok(path)
     }
 
-    /// Writes the user's copy of the shipped automatic profile `id`. There is no other
-    /// kind of automatic profile, so an id that does not ship is refused.
+    /// Writes the user's copy of the shipped automatic profile `id`, or drops it where it
+    /// matches the shipped one. An id that does not ship is refused: there is no other kind.
     pub fn save_auto(&mut self, id: &str, profile: &AutoProfile) -> Result<PathBuf, ProfileError> {
         if !self.autos.contains_key(id) {
             return Err(ProfileError::Unknown {
                 kind: Kind::Auto.label(),
                 id: id.to_owned(),
             });
+        }
+        if shipped_auto(id).is_ok_and(|shipped| shipped == *profile) {
+            return self.back_to_shipped(Kind::Auto, id);
         }
         let path = self.keep(Kind::Auto, id, |path| profile.to_toml_string(path))?;
         self.autos.insert(
@@ -419,6 +426,13 @@ impl Catalogue {
                 source: Source::User(path.clone()),
             },
         );
+        Ok(path)
+    }
+
+    /// Throws away the user's copy of a shipped profile and says where it was kept.
+    fn back_to_shipped(&mut self, kind: Kind, id: &str) -> Result<PathBuf, ProfileError> {
+        let path = self.store_for(id)?.path_of(kind, id);
+        self.forget_user_copy(kind, id)?;
         Ok(path)
     }
 
