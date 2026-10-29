@@ -18,7 +18,8 @@ check the regenerated tree.
 
 - On a dependabot cargo pull request, `ci.yml` first runs `cargo hakari generate` and
   `cargo xtask licenses` on the branch. When either file changes, a second job commits them to
-  the branch, and the Linux job of that run is skipped.
+  the branch, with the lockfile edges the new workspace-hack adds, and the Linux job of that run
+  is skipped.
 - The push uses a token from a GitHub App with `contents: write`, whose client id and private
   key are the secrets `SYNC_APP_CLIENT_ID` and `SYNC_APP_PRIVATE_KEY`, stored for Dependabot as
   well as for Actions. Its push starts the run that checks the tree.

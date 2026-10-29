@@ -9502,7 +9502,7 @@ THE SOFTWARE.
 
 Used by:
 
-- [boolmesh 0.2.1](https://github.com/komietty/boolmesh)
+- [boolmesh 0.2.2](https://github.com/komietty/boolmesh)
 
 ```text
 Mozilla Public License Version 2.0

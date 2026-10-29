@@ -114,16 +114,19 @@ jobs:
 
       - run: |
           cargo hakari generate
+          # The hack's new edges are recorded in Cargo.lock; resolving again moves no version.
+          cargo metadata --format-version 1 > /dev/null
           cargo run -q -p xtask --locked -- licenses
 
       - id: diff
-        run: git diff --quiet -- workspace-hack/Cargo.toml THIRD-PARTY-LICENSES.md || echo changed=true >> "$GITHUB_OUTPUT"
+        run: git diff --quiet -- Cargo.lock workspace-hack/Cargo.toml THIRD-PARTY-LICENSES.md || echo changed=true >> "$GITHUB_OUTPUT"
 
       - if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: dependabot-sync
           path: |
+            Cargo.lock
             workspace-hack/Cargo.toml
             THIRD-PARTY-LICENSES.md
 
