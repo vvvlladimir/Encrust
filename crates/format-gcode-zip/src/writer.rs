@@ -130,9 +130,9 @@ fn entry(
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {
-    // A PNG is already deflated, and so is stored rather than deflated a second time; the
-    // program is small enough that it makes no difference either way.
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    // Deflated as known files are: a mask's PNG is mostly repeats a second pass folds away,
+    // some fifteen times smaller for a fifth of a millisecond (docs/formats/gcode-zip.md).
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())

@@ -41,8 +41,9 @@ run.gcode              the program the board runs
 We write the entries in that order, so the program trails the stack it describes: its header
 states the resin the stack came to, which is only known once the last layer is cut, and a zip
 entry cannot be rewritten once it is closed. A reader looks entries up by name, so the order
-does not reach it. Entries are stored rather than deflated, because a PNG is already
-compressed.
+does not reach it. Every entry is deflated, as in known files: a mask's PNG is mostly long
+runs its own deflate leaves as repeated codes, and a second pass folds them away. A 2160 by
+3840 layer of 52.6 KB goes in as 3.5 KB, for 0.2 ms more a layer.
 
 ## The header
 
