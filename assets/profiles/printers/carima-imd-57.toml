@@ -1,0 +1,31 @@
+# Carima IMD-57.
+
+name = "IMD-57"
+manufacturer = "Carima"
+machine_name = "Carima IMD-57"
+mirror = "lcd-mirror"
+output = "crmaslice"
+connection = "none"
+
+[display]
+width_px = 1920
+height_px = 1080
+width_mm = 57.0
+height_mm = 32.0
+
+[build_volume]
+x = 57.0
+y = 32.0
+z = 100.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

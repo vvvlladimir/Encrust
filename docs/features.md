@@ -478,6 +478,10 @@ whole-surface fill is Cmd-Shift-click.
 
 ## Print settings
 
+Every value here starts from the printer's and resin's settings and changes the plate in
+hand only. Opening a project, starting a new one, adding a plate or restarting takes the
+profiles' values again; a button at its foot takes them back at once. To change what every plate starts from, edit the printer or resin in Settings.
+
 ### Layers
 - **Layer height.** When you change it, every exposure is moved along the resin's curve
   automatically. The old value is shown and can be restored with one press.
@@ -497,19 +501,26 @@ whole-surface fill is Cmd-Shift-click.
   whole stack, so bands and adaptive layers are refused for it.
 
 ### Edge smoothing (anti-aliasing)
-- Ready-made looks: **Sharp**, **Balanced**, **Soft**, **Crisp text**, **Organic curves**,
-  or raw masks.
-- Or set it by hand: grey levels, edge blur, grey floor, rounded edge grey.
+- Ready-made looks: **Off** (raw masks), **Sharp**, **Balanced** or **Soft**; the section's
+  heading names the greys and blur in use.
+- Or set it by hand: edge blur, and a limit on the edge greys with their count.
+- Each resin carries its own, set in its settings; choosing the resin brings it to the plate.
+- Edge greys are spread over the printer's grey range: on the
+  ELEGOO Mars 2 and 3 series, for one, every edge grey is at least three quarters lit.
 - How much grey reaches the printer depends on its format (see [File formats](#file-formats)).
+- Not offered for the Creality HALOT-X1, X1 Max, X1 Neo and SKY 2025, or the PIOCREAT
+  PioNext Mini and Ultra: their masks carry no grey.
 
 ### Motion and waits
-- Lift distance and speed, retract speed, separate values for the bottom layers.
-- A setting the printer's own slicer does not let you change is not offered either, and the
-  file states what that slicer writes. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
-  Ultra 16K and Mars 5 Ultra — there are no lift or retract settings, and the print time
-  counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only. Older Chitu
-  machines have no light power or transition layers, Anycubic and Halot machines wait with the
-  light off, and a Halot Mage's bottom lift is fixed.
+- Lift distance and speed, retract speed, separate values for the bottom layers, and a
+  second, slower stage of each where the printer takes one. Opening a `.ctb`, `.fdg` or `.phz`
+  reads both stages back, and the bottom layers' own light-off delay.
+- A setting the printer's firmware runs itself is not offered either, and the file states
+  the machine's default. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
+  Ultra 16K and Mars 5 Ultra — there are no lift or retract settings, and the
+  print time counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only.
+  Older Chitu machines have no light power or transition layers, Anycubic and Halot machines
+  wait with the light off, and a Halot Mage's bottom lift is fixed.
 - Wait before lift, after lift and after retract, light-off delay.
 - Light power, and bottom light power where the printer supports it.
 
@@ -523,6 +534,9 @@ whole-surface fill is Cmd-Shift-click.
   the extra time per layer from a finished print (predicted vs. clock).
 - A compensation group can be switched off without losing its numbers.
 - Compensation belongs to a resin on a machine; there is no per-job switch.
+- **Buffer on HALOT machines:** the slow stretch near the vat and the wait after it, which
+  the firmware runs itself, is a resin setting starting from the maker's numbers, written
+  into the `.cxdlpv4`.
 
 ---
 
@@ -555,6 +569,12 @@ them from the meshes, and the time, marked ≈, from the plate's height.
 ## Viewing
 
 - Lit, shadowed 3D view with a view cube, orthographic or perspective, and a plate grid.
+- **Plate inset:** on a machine whose maker keeps models off a band along the plate's edges
+  (Mars Pro, Mars 2, Mars 2 Pro), the band is dashed and darker on the plate, a model standing in
+  it is marked, and `inspect` says so; it still slices whole. Any printer can turn it on, edge
+  by edge, in its form.
+- **Front where the printer has it:** on a machine whose front is a long side of a portrait
+  panel, the Front mark, the opening view and the view cube face that side.
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
@@ -572,24 +592,31 @@ Every file Encrust writes is read back and checked. The output extension picks t
 
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
-| `.goo` | Elegoo, Phrozen | yes | |
-| `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | |
-| `.ctb` encrypted | the newer Chitu boards that take nothing else | yes | Written when the printer profile says `output = "ctb-encrypted"`; no shipped profile does yet. Read whoever wrote it. |
+| `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; the Jupiter 2 gets revision 5.1, the revision it reads, with eight levels of grey; not yet printed from. |
+| `.ctb` v5 (v4 on request) | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, Wanhao, EMAKE3D, LYNcase | yes | Laid out field for field as the printers read it. |
+| `.ctb` encrypted | Chitu boards with a panel past 4095 px a side | yes | Written for every such shipped printer. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
-| `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. |
+| `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. The `.pm5s`, `.m5sp` and `.pm4n` of the Photon Mono M5s, M5s Pro and Mono 4 have not yet been printed from. |
+| `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
-| `.zip` (PNG layers + G-code) | Phrozen, Wanhao, Kelant | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. |
-| `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
+| `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Zortrax, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
+| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the HALOT X1 Max reads it. |
+| `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
-| `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
+| `.cws` | Nova3D, Carima | full 8 bits | Only the plain variant is written. |
+| `.fdg` | Voxelab, FlashForge Foto | none (1 bit) | Edges below half grey are dropped. Not yet printed from. |
+| `.phz` | Phrozen Sonic Mini | none (1 bit) | Edges below half grey are dropped. Not yet printed from. |
+| `.photons` | Anycubic Photon S | none (1 bit) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
 
 Encrust also opens the `.pws` of the original Photon and Photon S, which it does not write.
 
 **Convert** a sliced file to another format for another printer.
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
-same size in pixels. A stack with varying layer heights cannot be converted yet, and the
-converted file's preview pictures are blank.
+same size in pixels. The file is taken as cut for that printer: where the new format lays
+the plate from the other edge, each layer is turned to match, so the part prints where it
+stood. A stack with varying layer heights cannot be converted yet, and the converted file's
+preview pictures are blank.
 
 The window offers only the machines whose format Encrust can actually write.
 
@@ -605,14 +632,19 @@ rather than opened: as a resin while a printer's resins are in view, or when it 
 file or a resin profile, and as a printer otherwise. The first printer and resin you add
 are the ones the plate prints on, with no second click.
 
-**Printers:** bundled profiles from Anycubic, Elegoo, Creality, Phrozen,
-EPAX, FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab.
+**Printers:** about 200 bundled profiles from Anycubic, Elegoo, Creality, Phrozen, EPAX,
+FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab, HIFUN,
+ApexMaker, EMAKE3D, Newbie Box, JAMG HE, LYNcase, Carima, Zortrax, PIOCREAT and PioNext,
+the Creality HALOT X1, X1 Max, X1 Neo, SKY 2025, MAGE S, PLAY and R6 and the PIOCREAT C02
+among them.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,
-build volume, mirror across X or Y, grey floor, output format and version, firmware
-abilities (per-layer settings, variable layer height), and the printers on your network it
-sends to.
+build volume, the panel's mirror (normal, LCD mirror or DLP normal), the range of edge greys, output format and version, firmware
+abilities (per-layer settings, variable layer height), the printers on your network it
+sends to, and the limits its maker puts on each resin setting: a field takes nothing past
+what the machine takes, and a value past what its maker advises is framed in red with the
+span, and why where the maker says. `encrust slice` warns of both and writes the file.
 
 **Resins:** **none are bundled**, on purpose. A correct exposure depends on your machine and
 your bottle, so you create the first resin yourself. A resin holds exposure, bottom layers,
@@ -643,6 +675,10 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   being ignored.
 - Your own profiles live in a folder of their own, layered over the bundled ones. Open it
   from Settings.
+- A bundled printer you added keeps only the fields you changed; an update brings every
+  other field, new ones included. One added in 0.5.0 or before is put back to the
+  bundled profile once, its old file kept beside it as `.toml.bak`. A custom printer is
+  never touched.
 - A profile file of yours that no longer reads, after an update for instance, is left out
   and the bundled one of the same name is used. The start page and the stage say so and
   offer to reset those files to the bundled profiles. A broken profile of your own, which
@@ -683,7 +719,8 @@ address in a video player).
 ## Projects
 
 - Save the whole job as an `.encrust` project: every plate, model, support tree, cavity and
-  setting exactly as it stands.
+  tool setting exactly as it stands. The print settings are not kept: a project opens with
+  its printer's and resin's.
 - It reopens instantly, without rebuilding anything, and the command line can slice it
   directly.
 
@@ -764,8 +801,8 @@ by a number of your own, or support the islands and drill the suction cups Check
 - Only the **ELEGOO Saturn 4 Ultra** is confirmed by a real print. Start every other printer
   with a small calibration piece and check the build area and mirroring.
 - **No bundled resins.** Calibrate your own exposure.
-- **Encrypted `.ctb`** is written only for a printer whose profile asks for it, and no
-  shipped profile does until a machine is confirmed by a print.
+- **Orientation:** every file lays the plate out as the twenty known files checked do;
+  `.sl1`, the DLP machines and nine FlashForge and Nova3D profiles have no known file.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.

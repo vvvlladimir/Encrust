@@ -1,6 +1,6 @@
 [package]
 name = "format-goo"
-description = "Writer for the Elegoo .goo sliced-file format."
+description = "Writer and reader for the Elegoo .goo sliced-file format."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,7 @@ doctest = false
 [dependencies]
 core-format.workspace = true
 core-raster.workspace = true
+md-5.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

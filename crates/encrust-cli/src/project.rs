@@ -1,27 +1,24 @@
 //! A `.encrust` project saved by the window, sliced a plate at a time. Flags that shape a model
-//! are refused; printer and resin are named by id only (ADR 0261) and flags may change them.
+//! are refused; printer and resin are named by id only (ADR 0261) and flags may change them,
+//! and the print settings are theirs under what the flags set (ADR 0380).
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use core_engine::project::{Manifest, Project, load};
 use core_engine::{Machine, Opening, open_plate};
+use core_format::ExposurePlan;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::JobArgs;
-use crate::pipeline::raster_window;
+use crate::pipeline::{cutting_of, overrides_of, raster_window, warn_if_grey_ignored};
 use crate::profiles::catalogue;
 use crate::sliced_file::now_unix_s;
 use crate::stage::{Part, Staged};
 
-/// Opens a project to stage its plates from, at the layer height `job` may override.
-pub fn open(path: &Path, job: &JobArgs) -> Result<Project> {
-    let mut project =
-        load(path).with_context(|| format!("cannot open the project {}", path.display()))?;
-    if let Some(height_mm) = job.slicing.layer_height {
-        project.manifest.slicing.layer_height_mm = height_mm;
-    }
-    Ok(project)
+/// Opens a project to stage its plates from.
+pub fn open(path: &Path) -> Result<Project> {
+    load(path).with_context(|| format!("cannot open the project {}", path.display()))
 }
 
 /// The plates holding a model to print, by index and name, as the window slices them all.
@@ -91,6 +88,12 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
         },
     )
     .with_context(|| format!("cannot build the plate {} holds", path.display()))?;
+    warn_if_grey_ignored(&job.raster, Some(&built.printer));
+    // The project keeps no print settings: the resin's, under what the flags change (ADR 0380).
+    let material = match job.slicing.layer_height {
+        Some(height_mm) => built.material.rescaled_to(height_mm),
+        None => built.material,
+    };
 
     let on_plate: Vec<_> = manifest
         .objects
@@ -114,15 +117,11 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
             })
             .collect(),
         models: built.models,
+        cutting: cutting_of(job, material.layer_height_mm, &material.compensation, false),
+        panel: overrides_of(&job.raster, material.edges),
+        exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
         printer: Some(built.printer),
-        material: built.material,
-        // How many layers are cut at once trades memory for time and shapes nothing.
-        cutting: core_engine::Cutting {
-            slice_window: job.slicing.slice_window,
-            ..built.cutting
-        },
-        panel: built.panel,
-        exposure: built.exposure,
+        material,
         remove_islands: built.remove_islands,
         hanging_passes: built.hanging_passes,
         drainage,
@@ -207,18 +206,8 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
             job.supports.supports.is_some() || job.supports.support_profile.is_some(),
         ),
         ("--support-cavity", job.supports.support_cavity),
-        ("--adaptive", job.slicing.adaptive),
-        (
-            "--samples-per-layer",
-            job.slicing.samples_per_layer.get() != 1,
-        ),
-        ("--exposure-at", !job.slicing.exposure_at.is_empty()),
         ("--remove-islands", job.raster.remove_islands),
         ("--hanging-passes", job.raster.hanging_passes != 0),
-        ("--no-anti-alias", job.raster.no_anti_alias),
-        ("--grey-levels", job.raster.grey_levels.is_some()),
-        ("--grey-floor", job.raster.grey_floor.is_some()),
-        ("--blur", job.raster.blur != 0),
     ];
     if let Some((flag, _)) = given.iter().find(|(_, given)| *given) {
         bail!("{flag} does not apply to a project, which carries its own; change it in the window");
@@ -256,7 +245,7 @@ mod tests {
             "--material".into(),
             fixtures.join("test-resin.toml"),
         ]);
-        let project = open(&path, &flags.job).expect("the project was just saved");
+        let project = open(&path).expect("the project was just saved");
         let staged = stage(&path, &project, None, &flags.job).expect("it stages");
         assert!(staged.remove_islands);
         assert_eq!(staged.hanging_passes, 2, "as the window would slice it");

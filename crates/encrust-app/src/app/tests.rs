@@ -1,5 +1,7 @@
 use super::*;
 
+mod printer_edits;
+
 #[test]
 fn the_window_opens_on_the_prepare_mode_with_nothing_selected() {
     let app = SlicerApp::default();
@@ -350,13 +352,21 @@ fn a_plate_with_nothing_to_print_on_is_set_up_from_its_notice() {
     );
     harness.get_by_label("No printer or resin yet");
 
-    for step in [
-        "Set up",
-        "Add a machine",
-        "Elegoo",
-        "Saturn 4 Ultra",
-        "Add a resin",
-    ] {
+    for step in ["Set up", "Add a machine", "Elegoo"] {
+        harness.get_by_role_and_label(Role::Button, step).click();
+        harness.run_steps(3);
+    }
+    // The brand holds more machines than the window shows, so the library is searched.
+    harness
+        .state_mut()
+        .machine
+        .settings
+        .library
+        .as_mut()
+        .expect("the library is open")
+        .search = "Saturn 4 Ultra".to_owned();
+    harness.run_steps(3);
+    for step in ["Elegoo Saturn 4 Ultra", "Add a resin"] {
         harness.get_by_role_and_label(Role::Button, step).click();
         harness.run_steps(3);
     }

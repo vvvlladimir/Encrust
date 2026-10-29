@@ -9,7 +9,6 @@ pub(crate) const CHECKSUM: usize = 0x00;
 pub(crate) const LAYER_POINTERS: usize = 0x08;
 pub(crate) const DISPLAY_MM: usize = 0x0C;
 pub(crate) const MACHINE_Z_MM: usize = 0x14;
-pub(crate) const TOTAL_HEIGHT_MM: usize = 0x20;
 pub(crate) const LAYER_HEIGHT_MM: usize = 0x24;
 pub(crate) const EXPOSURE_S: usize = 0x28;
 pub(crate) const BOTTOM_EXPOSURE_S: usize = 0x2C;
@@ -28,28 +27,36 @@ pub(crate) const LIFT_SPEED: usize = 0x60;
 pub(crate) const RETRACT_SPEED: usize = 0x64;
 pub(crate) const VOLUME_ML: usize = 0x68;
 pub(crate) const WEIGHT_G: usize = 0x6C;
+pub(crate) const COST: usize = 0x70;
 pub(crate) const BOTTOM_LIGHT_OFF_S: usize = 0x74;
 pub(crate) const ONE: usize = 0x78;
 pub(crate) const LIGHT_PWM: usize = 0x7C;
 pub(crate) const BOTTOM_LIGHT_PWM: usize = 0x7E;
 pub(crate) const LAYER_KEY: usize = 0x80;
+/// Second-stage bottom lift, its speed, lift, its speed, retract, its speed.
+pub(crate) const SECOND_STAGE: usize = 0x84;
 pub(crate) const FIRST_REST_BEFORE_LIFT_S: usize = 0x9C;
 pub(crate) const MACHINE_NAME: usize = 0xA0;
-pub(crate) const ANTI_ALIAS_FLAG: usize = 0xA8;
-pub(crate) const PER_LAYER_SETTINGS: usize = 0xAB;
+/// The plain `.ctb`'s slicer flags: 7 in the low byte, per-layer settings in the high.
+pub(crate) const FLAGS: usize = 0xA8;
 pub(crate) const MODIFIED_MINUTES: usize = 0xAC;
 pub(crate) const ANTI_ALIAS_LEVEL: usize = 0xB0;
 pub(crate) const FIRST_REST_AFTER_RETRACT_S: usize = 0xB4;
 pub(crate) const FIRST_REST_AFTER_LIFT_S: usize = 0xB8;
 pub(crate) const TRANSITION_LAYERS: usize = 0xBC;
 pub(crate) const BOTTOM_RETRACT_SPEED: usize = 0xC0;
+pub(crate) const BOTTOM_RETRACT_SPEED_2: usize = 0xC4;
 pub(crate) const FOUR: [usize; 2] = [0xCC, 0xD4];
 pub(crate) const REST_AFTER_RETRACT_S: usize = 0xD8;
 pub(crate) const REST_AFTER_LIFT_S: usize = 0xDC;
 pub(crate) const REST_BEFORE_LIFT_S: usize = 0xE0;
-pub(crate) const FIVE: usize = 0xF0;
-pub(crate) const LAST_LAYER: usize = 0xF4;
+pub(crate) const BOTTOM_RETRACT_MM_2: usize = 0xE4;
+pub(crate) const LAYER_TIME_S: usize = 0xE8;
+pub(crate) const LARGEST_LAYER_BYTES: usize = 0xEC;
+pub(crate) const LAYER_COUNT_AGAIN: usize = 0xF4;
 pub(crate) const DISCLAIMER: usize = 0x108;
+/// A word set to one behind the disclaimer's length in every file.
+pub(crate) const ONE_AGAIN: usize = 0x110;
 pub(crate) const RESIN: usize = 0x114;
 
 /// The deciphered block, read field by field.
@@ -70,10 +77,6 @@ impl Settings {
 
     pub(crate) fn f32(&self, at: usize) -> f32 {
         f32::from_le_bytes(self.word(at))
-    }
-
-    pub(crate) fn put_u8(&mut self, at: usize, value: u8) {
-        self.0[at] = value;
     }
 
     pub(crate) fn put_u16(&mut self, at: usize, value: u16) {

@@ -16,7 +16,7 @@ use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shadin
 use format_creality::{
     CxdlpReader, CxdlpSink, CxdlpV4Reader, CxdlpV4Sink, CxdlpV4Writer, CxdlpWriter,
 };
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{Buffer, MaterialProfile, PrinterProfile};
 
 const WIDTH_PX: u32 = 24;
 const HEIGHT_PX: u32 = 12;
@@ -128,23 +128,7 @@ fn the_checksum_covers_every_byte_including_the_area_table_filled_in_last() {
             .expect("four bytes of checksum"),
     );
 
-    // The same reflected CRC-32 the firmware takes: no inverted register, no final xor.
-    let mut table = [0u32; 256];
-    for (index, cell) in table.iter_mut().enumerate() {
-        let mut value = index as u32;
-        for _ in 0..8 {
-            value = if value & 1 == 0 {
-                value >> 1
-            } else {
-                (value >> 1) ^ 0xEDB8_8320
-            };
-        }
-        *cell = value;
-    }
-    let mut expected = 0u32;
-    for byte in &file[..file.len() - 4] {
-        expected = table[((expected as u8) ^ byte) as usize] ^ (expected >> 8);
-    }
+    let expected = checksum(&file[..file.len() - 4]);
 
     assert_eq!(
         stated, expected,
@@ -329,6 +313,30 @@ fn every_version_four_layer_reads_back_the_pixels_it_went_in_as() {
             .collect();
         assert_eq!(read, expected, "layer {index}");
     }
+}
+
+#[test]
+fn a_version_four_file_states_the_resins_buffer_over_the_machines() {
+    let machine = Buffer {
+        enabled: true,
+        height_mm: 5.0,
+        speed_mm_min: 120.0,
+        light_off_delay_s: 6.0,
+    };
+    let resin = Buffer {
+        height_mm: 3.7,
+        speed_mm_min: 97.0,
+        light_off_delay_s: 4.3,
+        ..machine
+    };
+    let mut job = job(1);
+    job.printer.buffer = Some(machine);
+    job.material.buffer = Some(resin);
+    let mut source = Cursor::new(write_v4(&job, &[layer()], 10.0));
+    let opened = CxdlpV4Reader
+        .open(&mut source)
+        .expect("what we wrote is one of these");
+    assert_eq!(opened.facts().stated.buffer, Some(resin));
 }
 
 #[test]

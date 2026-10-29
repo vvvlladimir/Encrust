@@ -4,8 +4,10 @@ use core_format::{Fields, PrintJob, Rgb, rgb565};
 
 use crate::blocks::{
     self, COLOUR_TABLE_BYTES, EXTRA_BYTES, MACHINE_BYTES, MODEL_BYTES, SOFTWARE_BYTES,
+    sub_layer_table_bytes,
 };
-use crate::writer::{AnycubicFlavour, AnycubicVersion};
+use crate::rle::GREY_STEPS;
+use crate::writer::AnycubicVersion;
 
 /// Bytes of a table's name, nul-padded.
 pub(crate) const NAME_BYTES: usize = 12;
@@ -16,7 +18,16 @@ pub(crate) const TABLE_BASE_BYTES: u32 = NAME_BYTES as u32 + 4;
 /// The mark at the front of every file.
 const FILE_MARK: &str = "ANYCUBIC";
 
-/// The only preview the container holds below version 518.
+/// Bytes of the file mark: the mark, the revision, the table count and eleven addresses.
+pub(crate) const FILE_MARK_BYTES: u32 = NAME_BYTES as u32 + 8 + 4 * 11;
+
+/// How many tables the file mark claims, whatever the revision it states.
+const TABLE_COUNT: u32 = 11;
+
+/// Fields of the header table, which is what its length states.
+const HEADER_FIELD_BYTES: u32 = 96;
+
+/// The one preview the container holds.
 pub(crate) const PREVIEW_PX: (u32, u32) = (224, 168);
 
 /// Colour a preview is padded with where the square thumbnail does not reach.
@@ -29,8 +40,7 @@ pub(crate) const LAYER_DEF_BYTES: u64 = 32;
 pub(crate) const LAYER_TABLE_HEAD_BYTES: u64 = TABLE_BASE_BYTES as u64 + 4;
 
 /// Where each block ended up. The file mark states all of them up front, so they are
-/// computed before anything is written; a block a revision does not carry is zero, which
-/// is how the mark says it is absent.
+/// computed before anything is written.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Offsets {
     pub header: u32,
@@ -41,41 +51,23 @@ pub(crate) struct Offsets {
     pub machine: u32,
     pub software: u32,
     pub model: u32,
+    pub sub_layers: u32,
     pub layer_data: u32,
 }
 
 impl Offsets {
-    /// Every block's place, derived from the layer count and the revision alone: the
-    /// preview is a fixed size and every other block is a fixed width.
-    pub(crate) fn of(layer_count: u32, version: AnycubicVersion) -> Self {
-        let header = version.file_mark_bytes();
-        let preview = header + TABLE_BASE_BYTES + version.header_field_bytes();
-        let after_preview = preview + preview_table_bytes();
-
-        let (colour, layer_table) = if version.has_colour_table() {
-            (after_preview, after_preview + COLOUR_TABLE_BYTES)
-        } else {
-            (0, after_preview)
-        };
-        let after_layers =
-            layer_table + TABLE_BASE_BYTES + 4 + LAYER_DEF_BYTES as u32 * layer_count;
-
-        let mut at = after_layers;
-        let (extra, machine) = if version.has_machine_block() {
-            let blocks = (at, at + EXTRA_BYTES);
-            at += EXTRA_BYTES + MACHINE_BYTES;
-            blocks
-        } else {
-            (0, 0)
-        };
-        let (software, model) = if version.has_model_block() {
-            let blocks = (at, at + SOFTWARE_BYTES);
-            at += SOFTWARE_BYTES + MODEL_BYTES;
-            blocks
-        } else {
-            (0, 0)
-        };
-
+    /// Every block's place, derived from the layer count alone: the preview is a fixed size
+    /// and every other block is a fixed width.
+    pub(crate) fn of(layer_count: u32) -> Self {
+        let header = FILE_MARK_BYTES;
+        let preview = header + TABLE_BASE_BYTES + HEADER_FIELD_BYTES;
+        let colour = preview + preview_table_bytes();
+        let layer_table = colour + COLOUR_TABLE_BYTES;
+        let extra = layer_table + TABLE_BASE_BYTES + 4 + LAYER_DEF_BYTES as u32 * layer_count;
+        let machine = extra + EXTRA_BYTES;
+        let software = machine + MACHINE_BYTES;
+        let model = software + SOFTWARE_BYTES;
+        let sub_layers = model + MODEL_BYTES;
         Self {
             header,
             preview,
@@ -85,14 +77,20 @@ impl Offsets {
             machine,
             software,
             model,
-            layer_data: at,
+            sub_layers,
+            layer_data: sub_layers + sub_layer_table_bytes(layer_count),
         }
     }
 }
 
-/// The whole preview table, which states its own length including the base.
+/// What the preview table states its length as: its shape and its pixels, not its base.
+fn preview_stated_bytes() -> u32 {
+    12 + PREVIEW_PX.0 * PREVIEW_PX.1 * 2
+}
+
+/// The whole preview table.
 fn preview_table_bytes() -> u32 {
-    TABLE_BASE_BYTES + 12 + PREVIEW_PX.0 * PREVIEW_PX.1 * 2
+    TABLE_BASE_BYTES + preview_stated_bytes()
 }
 
 /// Writes a table's name and the length it states. Some tables count their own base into
@@ -103,7 +101,7 @@ pub(crate) fn write_table_head(fields: &mut Fields<'_>, name: &str, length: u32)
 }
 
 /// Writes the mark at the front of the file: what the container is, its revision, and
-/// where each of its blocks begins. A revision states only the addresses it has.
+/// where each of its blocks begins.
 pub(crate) fn write_file_mark(
     fields: &mut Fields<'_>,
     offsets: Offsets,
@@ -111,34 +109,30 @@ pub(crate) fn write_file_mark(
 ) -> io::Result<()> {
     fields.text(FILE_MARK, NAME_BYTES)?;
     fields.u32_le(version.number())?;
-    fields.u32_le(version.table_count())?;
-    fields.u32_le(offsets.header)?;
-    fields.u32_le(offsets.software)?;
-    fields.u32_le(offsets.preview)?;
-    fields.u32_le(offsets.colour)?;
-    fields.u32_le(offsets.layer_table)?;
-    fields.u32_le(offsets.extra)?;
-    if version.has_machine_block() {
-        fields.u32_le(offsets.machine)?;
+    fields.u32_le(TABLE_COUNT)?;
+    for address in [
+        offsets.header,
+        offsets.software,
+        offsets.preview,
+        offsets.colour,
+        offsets.layer_table,
+        offsets.extra,
+        offsets.machine,
+        offsets.layer_data,
+        offsets.model,
+        offsets.sub_layers,
+    ] {
+        fields.u32_le(address)?;
     }
-    fields.u32_le(offsets.layer_data)?;
-    if version.has_model_block() {
-        fields.u32_le(offsets.model)?;
-    }
-    Ok(())
+    // The second preview's address: left out, as in every file of this revision.
+    fields.u32_le(0)
 }
 
 /// Writes every block in front of the layer table.
-pub(crate) fn write_front(
-    fields: &mut Fields<'_>,
-    job: &PrintJob,
-    version: AnycubicVersion,
-) -> io::Result<()> {
-    write_header(fields, job, version)?;
+pub(crate) fn write_front(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    write_header(fields, job)?;
     write_preview(fields, job)?;
-    if version.has_colour_table() {
-        blocks::write_colour_table(fields)?;
-    }
+    blocks::write_colour_table(fields)?;
     write_layer_table_head(fields, job.layer_count())
 }
 
@@ -146,32 +140,21 @@ pub(crate) fn write_front(
 pub(crate) fn write_back(
     fields: &mut Fields<'_>,
     job: &PrintJob,
-    flavour: AnycubicFlavour,
     version: AnycubicVersion,
 ) -> io::Result<()> {
-    if version.has_machine_block() {
-        blocks::write_extra(fields, job)?;
-        blocks::write_machine(fields, job, flavour, version)?;
-    }
-    if version.has_model_block() {
-        blocks::write_software(fields)?;
-        blocks::write_model(fields, job)?;
-    }
-    Ok(())
+    blocks::write_extra(fields, job)?;
+    blocks::write_machine(fields, job, version)?;
+    blocks::write_software(fields)?;
+    blocks::write_model(fields, job, None)?;
+    blocks::write_sub_layer_head(fields, job.layer_count())
 }
 
 /// Writes the header table. Layout is in `docs/formats/anycubic.md`.
-pub(crate) fn write_header(
-    fields: &mut Fields<'_>,
-    job: &PrintJob,
-    version: AnycubicVersion,
-) -> io::Result<()> {
-    let (printer, material, raster) = (&job.printer, &job.material, &job.raster);
-    let (pitch_x_mm, _) = printer.display.pixel_pitch_mm();
+pub(crate) fn write_header(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    let (material, raster) = (&job.material, &job.raster);
+    write_table_head(fields, "HEADER", HEADER_FIELD_BYTES)?;
 
-    write_table_head(fields, "HEADER", version.header_field_bytes())?;
-
-    fields.f32_le(pitch_x_mm * 1000.0)?;
+    fields.f32_le(header_pixel_um(job))?;
     fields.f32_le(job.nominal_height_mm())?;
     fields.f32_le(job.header_exposure_s())?;
     fields.f32_le(material.light_off_s())?;
@@ -184,60 +167,66 @@ pub(crate) fn write_header(
     fields.f32_le(material.retract_speed_mm_min / 60.0)?;
     fields.f32_le(job.volume_mm3 / 1000.0)?;
 
-    // One pass: the runs carry four bits of grey of their own, and a level above one asks
-    // a machine to read that many one-bit passes it will not find. See ADR 0147.
-    fields.u32_le(1)?;
+    fields.u32_le(u32::from(raster.anti_alias_level(GREY_STEPS)))?;
     fields.u32_le(raster.width_px)?;
     fields.u32_le(raster.height_px)?;
     fields.f32_le(job.weight_g())?;
     fields.f32_le(job.cost().unwrap_or(0.0))?;
     write_currency(fields, &material.details.currency)?;
-    fields.u32_le(u32::from(job.varies_by_layer()))?;
+
+    // The per-layer flag, left clear even when the rows differ; the rows carry it.
+    fields.u32_le(0)?;
     fields.u32_le(job.print_time_s())?;
     fields.u32_le(u32::from(material.transition_layers))?;
 
     // Transition layer type: zero is the linear ramp, which is what the exposure plan
     // already carries layer by layer.
     fields.u32_le(0)?;
-    write_header_tail(fields, version)
+    write_header_tail(fields, job)
 }
 
-/// The fields revisions 516 and 517 append to the header.
-fn write_header_tail(fields: &mut Fields<'_>, version: AnycubicVersion) -> io::Result<()> {
-    if !version.has_machine_block() {
-        return Ok(());
-    }
+/// The resin type the format states for every resin.
+const RESIN_TYPE: u32 = 10;
 
-    // Advanced mode is what lets a machine obey the two-stage lift; the slicer plans one
-    // stage, so the basic mode is what the motion block beside it describes.
-    fields.u32_le(0)?;
-    if !version.has_model_block() {
-        return Ok(());
-    }
+/// The pixel the header states: the coarser of the two axes, rounded to a whole micron.
+fn header_pixel_um(job: &PrintJob) -> f32 {
+    let (pitch_x_mm, pitch_y_mm) = job.printer.display.pixel_pitch_mm();
+    (pitch_x_mm * 1000.0)
+        .round()
+        .max((pitch_y_mm * 1000.0).round())
+}
 
-    // A grey level, a blur level and a resin type the vendor slicer offers and this one
-    // does not: nothing here can state them, so they are left at zero.
-    fields.u16_le(0)?;
-    fields.u16_le(0)?;
+/// The fields behind the transition type: advanced mode, on when the resin peels in two
+/// stages; the grey level, which repeats the anti-alias level; the edge blur in pixels; the
+/// resin type; and intelligent mode off, so the machine keeps the exposure it is given.
+fn write_header_tail(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    let raster = &job.raster;
+    fields.u32_le(u32::from(job.material.second_stage.is_used()))?;
+    fields.u16_le(raster.anti_alias_level(GREY_STEPS))?;
+    fields.u16_le(u16::from(raster.stated_blur_px()))?;
+    fields.u32_le(RESIN_TYPE)?;
     fields.u32_le(0)
 }
 
-/// Writes the currency of the price beside it.
-///
-/// The four-byte field holds one UTF-16 code unit and then padding, not a string: a `$` is
-/// `24 00 00 00`. A resin with no currency leaves it blank.
+/// Writes the currency of the price beside it: its first four bytes of UTF-8,
+/// cut at a character and nul-padded. A `$` is `24 00 00 00`.
 fn write_currency(fields: &mut Fields<'_>, currency: &str) -> io::Result<()> {
-    let unit = currency.encode_utf16().next().unwrap_or(0);
-    fields.u16_le(unit)?;
-    fields.zeros(2)
+    let mut end = currency.len().min(CURRENCY_BYTES);
+    while !currency.is_char_boundary(end) {
+        end -= 1;
+    }
+    fields.text(&currency[..end], CURRENCY_BYTES)
 }
+
+const CURRENCY_BYTES: usize = 4;
 
 /// Writes the preview table: the job's thumbnail as raw five-six-five colour.
 fn write_preview(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let (width, height) = PREVIEW_PX;
-    write_table_head(fields, "PREVIEW", preview_table_bytes())?;
+    write_table_head(fields, "PREVIEW", preview_stated_bytes())?;
     fields.u32_le(width)?;
-    fields.text("x", 4)?;
+    // A word between the two sides that every file states as 42.
+    fields.u32_le(42)?;
     fields.u32_le(height)?;
 
     match job.thumbnail.as_ref() {
@@ -268,7 +257,8 @@ pub(crate) struct LayerDef {
     pub data_address: u32,
     pub data_size: u32,
     pub lift_distance_mm: f32,
-    pub lift_speed_mm_s: f32,
+    /// Millimetres a minute here, where the header states a second.
+    pub lift_speed_mm_min: f32,
     pub exposure_s: f32,
     /// This layer's own thickness, not its height above the plate.
     pub layer_height_mm: f32,
@@ -280,11 +270,19 @@ impl LayerDef {
         fields.u32_le(self.data_address)?;
         fields.u32_le(self.data_size)?;
         fields.f32_le(self.lift_distance_mm)?;
-        fields.f32_le(self.lift_speed_mm_s)?;
+        fields.f32_le(self.lift_speed_mm_min)?;
         fields.f32_le(self.exposure_s)?;
         fields.f32_le(self.layer_height_mm)?;
         fields.u32_le(self.lit_pixels)?;
         fields.u32_le(0)
+    }
+
+    /// This layer's row of the second layer table, which revision 518 adds.
+    pub(crate) fn write_sub_layer(&self, fields: &mut Fields<'_>) -> io::Result<()> {
+        fields.u32_le(self.data_address)?;
+        fields.u32_le(self.data_size)?;
+        fields.u32_le(self.lit_pixels)?;
+        fields.zeros(8 * 4)
     }
 }
 
@@ -293,39 +291,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_tables_of_a_ten_layer_file_sit_where_the_reference_file_puts_them() {
-        // A reference `.pwmx` of ten layers, read byte by byte; see
-        // docs/formats/anycubic.md.
-        let offsets = Offsets::of(10, AnycubicVersion::V1);
-        assert_eq!(offsets.header, 0x30);
-        assert_eq!(offsets.preview, 0x90);
-        assert_eq!(offsets.layer_table, 0x126AC);
-        assert_eq!(offsets.layer_data, 0x12800);
+    fn a_currency_is_its_first_four_bytes_of_utf8() {
+        let written = |currency: &str| {
+            let mut buffer = std::io::Cursor::new(Vec::new());
+            write_currency(&mut Fields::new(&mut buffer), currency).expect("in memory");
+            buffer.into_inner()
+        };
+        assert_eq!(written("$"), [0x24, 0, 0, 0]);
+        assert_eq!(written("\u{20AC}"), [0xE2, 0x82, 0xAC, 0]);
         assert_eq!(
-            (
-                offsets.colour,
-                offsets.extra,
-                offsets.machine,
-                offsets.model
-            ),
-            (0, 0, 0, 0),
-            "version 1 carries none of the later blocks and says so with a zero"
+            written("CHF\u{20AC}"),
+            [b'C', b'H', b'F', 0],
+            "a character is never split"
         );
     }
 
     #[test]
-    fn a_later_revision_moves_the_layer_data_behind_the_blocks_it_added() {
-        let one = Offsets::of(10, AnycubicVersion::V1);
-        let five = Offsets::of(10, AnycubicVersion::V516);
-        assert_eq!(five.header, one.header + 4, "one more address in the mark");
-        assert_eq!(five.colour, five.layer_table - COLOUR_TABLE_BYTES);
-        assert_eq!(five.extra, five.layer_table + 0x14 + 32 * 10);
-        assert_eq!(five.machine, five.extra + EXTRA_BYTES);
-        assert_eq!(five.layer_data, five.machine + MACHINE_BYTES);
-
-        let seven = Offsets::of(10, AnycubicVersion::V517);
-        assert_eq!(seven.software, seven.machine + MACHINE_BYTES);
-        assert_eq!(seven.model, seven.software + SOFTWARE_BYTES);
-        assert_eq!(seven.layer_data, seven.model + MODEL_BYTES);
+    fn every_block_sits_behind_the_one_before_it() {
+        let offsets = Offsets::of(10);
+        assert_eq!(offsets.header, 64, "a mark of eleven addresses");
+        assert_eq!(offsets.preview, 64 + 16 + 96);
+        assert_eq!(offsets.colour, offsets.preview + 16 + 12 + 224 * 168 * 2);
+        assert_eq!(offsets.layer_table, offsets.colour + 8);
+        assert_eq!(offsets.extra, offsets.layer_table + 20 + 32 * 10);
+        assert_eq!(offsets.machine, offsets.extra + 72);
+        assert_eq!(offsets.software, offsets.machine + 224);
+        assert_eq!(offsets.model, offsets.software + 164);
+        assert_eq!(offsets.sub_layers, offsets.model + 44);
+        assert_eq!(offsets.layer_data, offsets.sub_layers + 24 + 44 * 10);
     }
 }

@@ -31,9 +31,12 @@ from 0; `--drop-shells 2` drops shells numbered from 1 as `inspect --shells` lis
 is of the model as import leaves it; turns and bridges go first, drops last, before
 `--repair`. `--samples-per-layer N` cuts N planes inside each layer,
 so a feature thinner than a layer is kept. A mask is
-shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
-at all, `--grey-levels N` rounds its edges to N greys, `--grey-floor V` sets the dimmest
-grey written or `--blur PX` fades every edge.
+shaded as the resin's `[edges]` say (ADR 0380), anti-aliased when it says nothing, unless
+`--anti-alias` or `--no-anti-alias` shades edges by coverage or lights each pixel fully or
+not at all, `--grey-levels N` rounds its edges to N greys or `--blur PX` fades every edge;
+`--grey-range MIN..MAX` spreads edge greys over that range in place of the printer
+profile's (ADR 0378). A printer whose profile states `binary_only` takes no grey: these
+are ignored for it, with a warning (ADR 0377).
 
 ```sh
 encrust profiles list
@@ -100,20 +103,24 @@ between layers, inside the cavity a `--hollow` run is building and between the m
 batch, and removes the file it was writing; a second one exits at once. `inspect`, `info`
 and `profiles` write at most one small file, so one Ctrl-C ends them.
 
-The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.photon`,
-`.sl1`, `.sl1s`, `.zip`, `.cxdlp`, `.svgx`, `.cws`, one of the seven Anycubic extensions in
-`docs/formats/anycubic.md`, or a name with no extension for a directory of PNGs. A container
+The output extension picks the format (ADR 0047): `.goo`, `.prz`, `.ctb`, `.cbddlp`, `.photon`,
+`.sl1`, `.sl1s`, `.zip`, `.crmaslice`, `.cxdlp`, `.cxdlpv4`, `.svgx`, `.cws`, `.fdg`, `.phz`, `.photons`, `.cxline`, one of the Anycubic extensions in
+`docs/formats/anycubic.md` or `docs/formats/pwsz.md`, or a name with no extension for a directory of PNGs. A container
 name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
 and a run that cannot write the file it was asked for fails rather than reports success.
-`--ctb-version` is read only by a `.ctb` name, and a `.ctb` is written encrypted when the
-printer profile says `output = "ctb-encrypted"` (ADR 0298). A `.cxdlp` name is written at version 3 unless
-the printer profile names version 4, as the Halot Mage line does (ADR 0168).
+A `.ctb` name is written at the revision the printer profile names: version 5, or the
+encrypted container for a panel past 4095 pixels a side, as the printers read them
+(ADR 0298, 0365). `--ctb-version 4`, `5` or `encrypted` overrides it, and is read only by a
+`.ctb` name. A `.cxdlp` or `.cxdlpv4` name is written at the revision the printer
+profile names, as the Halot Mage and X1 lines name 4, else at the one the name says
+(ADR 0168, 0367). A `.goo` name is written at revision 5.1 where the printer profile names
+it, as the Jupiter 2's does, else at 3.0 (ADR 0376).
 
 Each container pays for grey differently. A `.cbddlp` carries it in eight one-bit passes, so
 it is eight times the layer data of the others (ADR 0146). An Anycubic file carries four bits
 of it in one pass, which costs nothing but loses an edge dimmer than 16 (ADR 0147). An `.sl1`
 carries all eight bits and loses nothing, because its layers are PNGs, and so do a `.zip` and
-a `.cws`. A `.cxdlp` carries eight bits at version 3 and seven at version 4. An `.svgx` carries
+a `.cws`. A `.cxdlp` carries eight bits, a `.cxdlpv4` six and a `.goo` 5.1 three. An `.svgx` carries
 none at all: its layers are polygons, and a pixel is lit or dark at half coverage (ADR 0169).
 Those two cost by the panel rather than by the model, so a run writing one for a panel larger
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above
@@ -318,10 +325,13 @@ path = "b.stl"
 hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; open_floor = true opens a shell
 ```
 
-A project saved by the window slices as it was saved: the file holds its shells and its
-support trees, and nothing is built again (ADR 0191). It carries its own models, so a flag that shapes one — `--hollow`, `--supports`,
-`--rotate`, `--blur` and the rest — is refused; `--printer`, `--resin` and `--layer-height`
-replace the project's own, and `--slice-window` applies as to a model. The project names
+A project saved by the window slices its models as they were saved: the file holds its
+shells and its support trees, and nothing is built again (ADR 0191). It carries its own
+models, so a flag that shapes one — `--hollow`, `--supports`, `--rotate`, `--infill` and the
+rest — is refused; `--printer` and `--resin` replace the project's own. It keeps no print
+settings (ADR 0380): they are the printer's and resin's, under `--layer-height`,
+`--adaptive`, `--samples-per-layer`, `--exposure-at`, the mask flags and `--slice-window` as
+for a model. The project names
 its printer and resin by id only (ADR 0261): one that is not among your profiles has to be
 named by a flag, `--profile` and `--material` included.
 
@@ -347,7 +357,12 @@ with a printer, what the print takes: time, resin by volume and weight, price wh
 resin has one, and the layers likely to fail. `--strict` fails it on the same defects. The
 `fits` line answers for the model where it stands, not only for its size: one small enough
 to print but hanging off the plate is named as off it, because the panel clips whatever
-hangs over and the resin figure then counts material no machine would cure.
+hangs over and the resin figure then counts material no machine would cure. A model in the
+band a maker keeps clear along the plate's edges still fits, and the line names how far it
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371).
+
+`slice` and `convert` warn of each resin setting past what the printer takes or its maker
+advises, and write the file as asked (ADR 0368).
 
 `info --layer N` reports one layer of a sliced file, counted from one as a printer's screen
 counts: where it tops out, how thick it is, how long it burns and how much of the panel it
@@ -360,7 +375,9 @@ number.
 
 `convert` writes a sliced file again in the container its output names, for the printer
 given. The masks are copied, never resampled, so the printer's panel must be the size the
-file was drawn for, in pixels and, where the file records it, in millimetres; the layer heights and every exposure are the file's own, and the resin
+file was drawn for, in pixels and, where the file records it, in millimetres. The file is
+taken as cut for that printer, and each layer is mirrored along X, Y or both where the new
+container lays the plate out otherwise (ADR 0366). The layer heights and every exposure are the file's own, and the resin
 gives the lifts, waits and price. A ramp above the bottom block is read back as the resin
 transition it is and stated again as one, so a machine that reads the header alone still
 takes the file; any other run of exposures becomes a band of height, which such a machine
@@ -400,7 +417,7 @@ gives; where several share the panel and the file names none, `--printer ID` say
 (ADR 0293):
 
 ```sh
-encrust profiles import vendor.goo
+encrust profiles import printed.goo
 ```
 
 A `.cfgx` or `.ini` another program exported its resin as is read the same way, with its

@@ -184,6 +184,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
 
     let printer_named = manifest.printer.is_some();
     let not_here = take_machine(manifest.printer, manifest.resin, slicing);
+    slicing.take_profile_settings();
     let kept = ToolSettings::of(tools, slicing).slicing;
     ToolSettings {
         slicing: if printer_named && not_here.printer.is_none() {
@@ -202,6 +203,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
         repair: tools.repair.state,
+        print: None,
     }
     .apply(tools, slicing);
 

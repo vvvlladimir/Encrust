@@ -1,12 +1,14 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, Rle7Layer, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
-use crate::crc::Crc32;
 use crate::family::{block, block_at, model_code};
+use core_format::Crc32;
 
 use super::blocks::{self, LAYER_BLOCK_BYTES, LAYER_ROW_BYTES, LayerRow, Offsets};
+use super::rle::RowRunsLayer;
 
 /// Writes the Creality `.cxdlp` at version 4. Layout is in `docs/formats/creality.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -16,13 +18,13 @@ impl SlicedFileWriter for CxdlpV4Writer {
     type Sink<'w> = CxdlpV4Sink<'w>;
 
     fn extension(&self) -> &'static str {
-        "cxdlp"
+        "cxdlpv4"
     }
 
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -39,7 +41,7 @@ impl SlicedFileWriter for CxdlpV4Writer {
         })?;
 
         // The blocks in front of the layer table are built in memory because the header
-        // addresses them and the checksum covers them, and the sink cannot be read back.
+        // addresses them and the checksum takes them while streaming, with no second pass.
         let header_bytes = blocks::header_bytes(&model);
         let (body, offsets) = block_at(header_bytes, |fields| blocks::write_body(fields, job))?;
 
@@ -82,38 +84,16 @@ pub struct CxdlpV4Sink<'w> {
 impl LayerSink for CxdlpV4Sink<'_> {
     /// The compressed layer and what it lights, which the table states and the codec does
     /// not keep.
-    type Encoded = (Rle7Layer, u64);
+    type Encoded = (RowRunsLayer, u64);
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        let lit_px = layer
-            .runs()
-            .iter()
-            .filter(|run| run.value > 0)
-            .map(|run| u64::from(run.length))
-            .sum();
-        (Rle7Layer::encode(layer), lit_px)
+        (RowRunsLayer::encode(layer), layer.lit_px())
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let (encoded, lit_px) = encoded;
         let index = self.rows.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
 
         let address = self.fields.position()?;
         let mut body = block(|fields| blocks::write_layer_block(fields, &self.job, index))?;
@@ -124,7 +104,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
         self.rows.push(LayerRow {
             z_mm: self.job.layer_z_mm(index),
             exposure_s: self.job.exposure_of_layer_s(index),
-            light_off_delay_s: self.job.material.light_off_s(),
+            light_off_delay_s: self.job.material.light_off_of_layer_s(index),
             address: address as u32,
             size: LAYER_BLOCK_BYTES + encoded.data().len() as u32,
             area: area_field(&self.job, lit_px),
@@ -135,12 +115,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.rows.len() as u32;
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
         let end = self.fields.position()?;
 
         // The resin the print takes is only known now, so the blocks that state it are
@@ -169,7 +144,9 @@ impl LayerSink for CxdlpV4Sink<'_> {
         self.fields.seek_to(0)?;
         self.fields.bytes(&header)?;
 
-        let checksum = sum(&[&header, &body, &table])
+        let checksum = Crc32::of(&header)
+            .followed_by(Crc32::of(&body))
+            .followed_by(Crc32::of(&table))
             .followed_by(self.layers)
             .value();
         self.fields.seek_to(end)?;
@@ -181,20 +158,11 @@ impl LayerSink for CxdlpV4Sink<'_> {
 
 /// What the layer cures in square millimetres times a thousand, which is the unit the
 /// row's area field is in. It carries everything the layer lights rather than the largest
-/// island a vendor's slicer measures; see `docs/formats/creality.md`.
+/// island alone; see `docs/formats/creality.md`.
 fn area_field(job: &PrintJob, lit_px: u64) -> u32 {
     let pitch = &job.raster.pitch;
-    let area = lit_px as f64 * f64::from(pitch.x * pitch.y) * 1000.0;
+    let area = (lit_px as f64 * f64::from(pitch.x * pitch.y)).round();
     area.clamp(0.0, f64::from(u32::MAX)) as u32
-}
-
-/// The sum over several blocks written one after another.
-fn sum(blocks: &[&[u8]]) -> Crc32 {
-    blocks.iter().fold(Crc32::default(), |total, block| {
-        let mut next = Crc32::default();
-        next.update(block);
-        total.followed_by(next)
-    })
 }
 
 #[cfg(test)]

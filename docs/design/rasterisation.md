@@ -13,10 +13,10 @@ x_px = x_mm / pitch.x
 y_px = y_mm / pitch.y
 ```
 
-Row `0` is the near edge of the plate, because that is the first row a sliced file carries
-(ADR 0134); Y is not inverted. A file asks for no mirroring at all — the profile's flags
-describe the panel's mounting and reach the header only — while the app asks for `mirror_y`
-to draw the plate's far edge at the top of the screen (ADR 0134). A mirror is applied here
+Y is not inverted. A written file asks for `mirror_y`, its rows from the far edge, and for
+`mirror_x` on an `lcd-mirror` panel, by `core_pipeline::file_layout`; `.photons` asks for no
+`mirror_x`, and `.cxline` and four Elegoo machines named there for neither (ADR 0366). The
+window asks for `mirror_y` to draw the plate's far edge at the top of the screen. A mirror is applied here
 rather than in the geometry, so the mesh displayed and the mesh sliced stay one object, and
 it reverses every contour's orientation, so the rasteriser reverses a ring as it maps it
 whenever exactly one of the two is set.
@@ -81,18 +81,18 @@ resin there is left liquid behind a wall that looks printed. `Grey` is the two l
 follow, applied after the coverage above (ADR 0113):
 
 ```
-value = ladder(coverage)          rounded to `levels` rungs, or all 255
-      = 0                         if value < floor
+value = ladder(coverage)                          rounded to `levels` rungs, or all 255
+      = min + max(value, min) · (max − min) / 255 unless value is 0 or 255
 ```
 
 The ladder at `n` levels is `256/n − 1, 2·256/n − 1, …, 255`, which is what other slicers
 write at anti-aliasing level `n`: eight levels are `31, 63, …, 255`. A count that does not
 divide 256 lands a rung or two low, which costs nothing a printer can see.
 
-`floor` comes from `Display::grey_floor` in the printer profile and defaults to 0, keeping
-every grey: a file that prints well on the one machine measured carries the whole ramp down
-to 1 (ADR 0139). A panel that leaves a dim pixel uncured asks for a floor of its own, and
-pays a fraction of a pixel at every edge for it.
+`min` and `max` are the machine's grey range, `Display::grey_min` and `grey_max` in the printer
+profile: an edge grey is raised to `min`, then the span squeezed into `min..max`, while black
+and full white stay as they are (ADR 0378). They default to 0 and 255, which keeps every grey:
+a file that prints well on the one machine measured carries the whole ramp down to 1 (ADR 0139).
 
 This is what serious font rasterisers do (`libart`, FreeType's smooth renderer,
 `stb_truetype` v2, `font-rs`), except that they accumulate into a dense buffer the size of
@@ -114,7 +114,7 @@ and a pixel is lit when its centre falls inside a span.
 `blur_px = r` fades every edge further than coverage does: the united coverage passes
 through a box `2r + 1` pixels wide, across then down, and only then through `Grey` (ADR 0117).
 On a straight edge at radius 1 the pixels either side read a third and two thirds. It is off
-by default: exact coverage with no floor already puts as much grey on an edge as a file that
+by default: exact coverage over the full range already puts as much grey on an edge as a file that
 prints well does, and a radius of 1 puts three times as much (ADR 0139).
 
 Neither pass touches a pixel that is not near an edge. Across a row the window holds one

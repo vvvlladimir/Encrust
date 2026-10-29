@@ -10,6 +10,7 @@ use crate::{
     ProfileStore, SupportProfile,
 };
 
+mod edits;
 mod unreadable;
 
 pub use unreadable::Unreadable;
@@ -134,13 +135,7 @@ impl Catalogue {
 
     /// Lays what `store` keeps over what is already loaded, by id, and writes edits there.
     pub fn overlay_store(&mut self, store: Arc<dyn ProfileStore>) -> Result<(), ProfileError> {
-        let printers = overlay(
-            &mut self.printers,
-            &*store,
-            Kind::Printer,
-            PrinterProfile::from_toml_str,
-            Adds::Yes,
-        )?;
+        let printers = edits::overlay_printers(&mut self.printers, &*store)?;
         self.unreadable.extend(printers);
         let copies = self.printers.values_mut();
         for entry in copies.filter(|entry| matches!(entry.source, Source::User(_))) {
@@ -345,7 +340,7 @@ impl Catalogue {
     }
 
     /// Writes a printer into the user's directory and takes it into the catalogue, where
-    /// it replaces the shipped machine of the same id.
+    /// it replaces the shipped machine of the same id; of that one, only what differs is kept.
     pub fn save_printer(
         &mut self,
         id: &str,
@@ -355,7 +350,10 @@ impl Catalogue {
             locked: shipped_locks(id, profile),
             ..profile.clone()
         };
-        let path = self.keep(Kind::Printer, id, |path| profile.to_toml_string(path))?;
+        let path = self.keep(Kind::Printer, id, |path| match shipped_printer(id) {
+            Some(shipped) => edits::written_over(&profile, &shipped, path),
+            None => profile.to_toml_string(path),
+        })?;
         self.printers.insert(
             id.to_owned(),
             Entry {

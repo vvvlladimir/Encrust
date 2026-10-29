@@ -5,7 +5,7 @@
 
 ## Context
 
-The vendor slicers pair their grey levels with an image blur of level 2 or 4, which fades an edge over
+Known files pair their grey levels with an image blur of level 2 or 4, which fades an edge over
 more than the one pixel exact coverage greys. Published tests on a Mars 3 found grey level 3
 with blur 2 the best surface, and that a wider blur turns the white just inside a wall grey
 as well — dimmer than a panel cures. The kernel itself is documented nowhere.

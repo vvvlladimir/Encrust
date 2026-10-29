@@ -1,7 +1,7 @@
 use core_slicer::{Contour, Winding};
 
 use super::*;
-use crate::{LayerMask, PixelPitch};
+use crate::{GreyRange, LayerMask, PixelPitch};
 
 fn fully_lit(mask: &LayerMask) -> usize {
     mask.pixels()
@@ -200,16 +200,16 @@ fn a_blurred_edge_fades_either_side_of_where_it_was() {
 }
 
 #[test]
-fn the_floor_cuts_a_blurred_edge_after_the_fade() {
+fn the_range_lifts_a_blurred_edge_after_the_fade() {
     let grey = Grey {
-        floor: 128,
+        range: GreyRange { min: 127, max: 255 },
         levels: None,
     };
     let row = blurred(grey, Shading::Coverage).pixels()[3 * 10..4 * 10].to_vec();
     assert_eq!(
         row,
-        vec![0, 0, 170, 255, 255, 170, 0, 0, 0, 0],
-        "the outer third would not cure; the inner two thirds would"
+        vec![0, 191, 212, 255, 255, 212, 191, 0, 0, 0],
+        "the faded 85 is raised to 127 then spread to 191, the faded 170 to 212"
     );
 }
 

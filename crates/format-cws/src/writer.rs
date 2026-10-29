@@ -1,6 +1,9 @@
 use std::io::Write;
 
-use core_format::{FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate};
+use core_format::{
+    FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
+    check_layers_finished, validate,
+};
 use core_raster::LayerRuns;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
@@ -12,7 +15,7 @@ use crate::gcode;
 /// a stem ending in a digit would run into that number.
 pub(crate) const STEM: &str = "encrust";
 
-/// Fewest digits an image's number is written in, as a vendor file writes it.
+/// Fewest digits an image's number is written in.
 pub(crate) const DIGITS: usize = 4;
 
 /// Writes the `.cws` archive. Layout is in `docs/formats/cws.md`.
@@ -29,7 +32,7 @@ impl SlicedFileWriter for CwsWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -49,7 +52,7 @@ impl SlicedFileWriter for CwsWriter {
 /// The archive with its settings in, its images still to come and the program growing a
 /// block at a time beside them.
 pub struct CwsSink<'w> {
-    zip: ZipWriter<&'w mut dyn WriteSeek>,
+    zip: ZipWriter<&'w mut dyn ReadWriteSeek>,
     job: PrintJob,
     /// One block per layer that has landed, in print order.
     blocks: String,
@@ -69,22 +72,7 @@ impl LayerSink for CwsSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width != self.job.raster.width_px || encoded.height != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width,
-                height: encoded.height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width, encoded.height))?;
 
         let png = encoded.png?;
         let name = image_name(index, self.job.layer_count());
@@ -96,12 +84,7 @@ impl LayerSink for CwsSink<'_> {
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
 
         // The program goes in last because it is the layer blocks, which are only known
         // once their layers have been written. A reader looks entries up by name.
@@ -110,7 +93,7 @@ impl LayerSink for CwsSink<'_> {
         program.push_str(&gcode::epilogue(&self.job));
         entry(&mut self.zip, &format!("{STEM}.gcode"), program.as_bytes())?;
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -134,26 +117,16 @@ pub(crate) fn image_name(index: u32, layer_count: u32) -> String {
 }
 
 fn entry(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {
     // A PNG is already deflated, and so is stored rather than deflated a second time; the
     // settings and the program are small enough that it makes no difference either way.
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file(name, options).map_err(container)?;
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 #[cfg(test)]

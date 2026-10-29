@@ -1,22 +1,64 @@
-use std::io::{self, Seek, SeekFrom, Write};
+use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 
-/// A sink a sliced file can be written to; `Seek` is required of every format. A header that points
-/// at a table it precedes is written by going back over it (ADR 0045).
-pub trait WriteSeek: Write + Seek {}
+/// A sink a sliced file can be written to. `Seek` lets a header point at a table it precedes
+/// (ADR 0045); `Read` lets a trailer hash what was written before it (ADR 0375).
+pub trait ReadWriteSeek: Read + Write + Seek {}
 
-impl<T: Write + Seek + ?Sized> WriteSeek for T {}
+impl<T: Read + Write + Seek + ?Sized> ReadWriteSeek for T {}
+
+/// A file written through a buffer that can still be read back: what `BufWriter` cannot.
+pub struct BufferedSink<F: Read + Write + Seek> {
+    buffer: BufWriter<F>,
+}
+
+impl<F: Read + Write + Seek> BufferedSink<F> {
+    /// `file` behind a buffer of `capacity` bytes.
+    pub fn with_capacity(capacity: usize, file: F) -> Self {
+        Self {
+            buffer: BufWriter::with_capacity(capacity, file),
+        }
+    }
+
+    /// The file, once what the buffer holds has reached it.
+    pub fn into_inner(self) -> Result<F, io::IntoInnerError<BufWriter<F>>> {
+        self.buffer.into_inner()
+    }
+}
+
+impl<F: Read + Write + Seek> Read for BufferedSink<F> {
+    fn read(&mut self, into: &mut [u8]) -> io::Result<usize> {
+        self.buffer.flush()?;
+        self.buffer.get_mut().read(into)
+    }
+}
+
+impl<F: Read + Write + Seek> Write for BufferedSink<F> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.buffer.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.buffer.flush()
+    }
+}
+
+impl<F: Read + Write + Seek> Seek for BufferedSink<F> {
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        self.buffer.seek(to)
+    }
+}
 
 /// Field writer for a sliced-file container.
 ///
 /// Both endiannesses are spelt out at the call site because the two formats disagree:
 /// `.goo` is big-endian throughout and `.ctb` is little-endian.
 pub struct Fields<'w> {
-    sink: &'w mut dyn WriteSeek,
+    sink: &'w mut dyn ReadWriteSeek,
     written: usize,
 }
 
 impl<'w> Fields<'w> {
-    pub fn new(sink: &'w mut dyn WriteSeek) -> Self {
+    pub fn new(sink: &'w mut dyn ReadWriteSeek) -> Self {
         Self { sink, written: 0 }
     }
 
@@ -61,6 +103,10 @@ impl<'w> Fields<'w> {
         self.bytes(&value.to_be_bytes())
     }
 
+    pub fn f64_be(&mut self, value: f64) -> io::Result<()> {
+        self.bytes(&value.to_be_bytes())
+    }
+
     pub fn u16_le(&mut self, value: u16) -> io::Result<()> {
         self.bytes(&value.to_le_bytes())
     }
@@ -101,7 +147,26 @@ impl<'w> Fields<'w> {
     pub fn flush(&mut self) -> io::Result<()> {
         self.sink.flush()
     }
+
+    /// Hands every byte from the start of the sink to its current end to `each`, a chunk at
+    /// a time, and leaves the position at the end, where a trailer over them goes.
+    pub fn read_back(&mut self, mut each: impl FnMut(&[u8])) -> io::Result<()> {
+        let end = self.sink.seek(SeekFrom::End(0))?;
+        self.sink.seek(SeekFrom::Start(0))?;
+        let mut chunk = vec![0; READ_BACK_CHUNK_BYTES];
+        let mut left = end;
+        while left > 0 {
+            let take = left.min(chunk.len() as u64) as usize;
+            self.sink.read_exact(&mut chunk[..take])?;
+            each(&chunk[..take]);
+            left -= take as u64;
+        }
+        Ok(())
+    }
 }
+
+/// How much of a sink `Fields::read_back` holds at once.
+const READ_BACK_CHUNK_BYTES: usize = 1 << 20;
 
 #[cfg(test)]
 mod tests {
@@ -157,6 +222,37 @@ mod tests {
         let written = sink.into_inner();
         assert_eq!(written.len(), 600);
         assert!(written.iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn reading_back_sees_every_byte_in_order_and_ends_at_the_end() {
+        let mut sink = buffer();
+        let mut fields = Fields::new(&mut sink);
+        fields.bytes(&[1, 2, 3, 4]).expect("in-memory write");
+        fields.seek_to(1).expect("in-memory seek");
+        fields.u8(9).expect("in-memory write");
+
+        let mut seen = Vec::new();
+        fields
+            .read_back(|chunk| seen.extend_from_slice(chunk))
+            .expect("in-memory read");
+        fields.u8(5).expect("in-memory write");
+
+        assert_eq!(seen, [1, 9, 3, 4]);
+        assert_eq!(sink.into_inner(), [1, 9, 3, 4, 5]);
+    }
+
+    #[test]
+    fn a_buffered_sink_reads_back_what_it_still_holds() {
+        let mut sink = BufferedSink::with_capacity(64, buffer());
+        let mut fields = Fields::new(&mut sink);
+        fields.bytes(&[7, 8]).expect("in-memory write");
+
+        let mut seen = Vec::new();
+        fields
+            .read_back(|chunk| seen.extend_from_slice(chunk))
+            .expect("in-memory read");
+        assert_eq!(seen, [7, 8]);
     }
 
     #[test]

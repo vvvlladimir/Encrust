@@ -22,8 +22,8 @@ fn a_cube_becomes_one_greyscale_png_per_layer() {
     assert_eq!(field(&text, "panel"), "200 x 200 px at 0.1000 x 0.1000 mm");
     assert_eq!(
         field(&text, "shading"),
-        "coverage, exact pixel area, all 255 greys down to 128",
-        "the floor comes from the profile without being asked for"
+        "coverage, exact pixel area, all 255 greys spread over 127..255",
+        "the range comes from the profile without being asked for"
     );
     assert_eq!(
         field(&text, "masks"),
@@ -65,7 +65,7 @@ fn the_stack_sits_where_the_model_sits_on_the_plate() {
 }
 
 #[test]
-fn rounding_and_the_floor_are_asked_for_on_the_command_line() {
+fn rounding_and_the_range_are_asked_for_on_the_command_line() {
     let path = write_box_stl("raster-rungs", 10.0, 12, 0);
     let out = output_dir("rungs");
     let text = stdout(&slice(&[
@@ -76,8 +76,8 @@ fn rounding_and_the_floor_are_asked_for_on_the_command_line() {
         "5",
         "--grey-levels",
         "4",
-        "--grey-floor",
-        "0",
+        "--grey-range",
+        "0..255",
         "--rotate",
         "0,0,20",
         "-o",
@@ -122,6 +122,39 @@ fn binary_shading_writes_no_intermediate_grey() {
 }
 
 #[test]
+fn the_resins_edge_smoothing_is_taken_unless_a_flag_says_otherwise() {
+    let path = write_box_stl("raster-resin-edges", 10.0, 12, 0);
+    let resin = std::env::temp_dir().join("encrust-cli-tests/binary-resin.toml");
+    let base = std::fs::read_to_string(test_resin()).expect("the fixture is readable");
+    std::fs::write(&resin, format!("{base}\n[edges]\nanti_alias = false\n"))
+        .expect("the temp dir is writable");
+    let shading = |name: &str, flag: Option<&str>| -> String {
+        let out = output_dir(name);
+        let (panel, resin) = (test_panel(), resin.clone());
+        let mut args = vec![
+            path.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--material",
+            resin.to_str().unwrap(),
+            "--layer-height",
+            "5",
+            "-o",
+            out.to_str().unwrap(),
+        ];
+        args.extend(flag);
+        let text = stdout(&slice(&args));
+        field(&text, "shading").to_owned()
+    };
+
+    assert_eq!(shading("resin-edges", None), "binary, no intermediate grey");
+    assert!(
+        shading("resin-edges-flag", Some("--anti-alias")).starts_with("coverage"),
+        "--anti-alias outranks the resin"
+    );
+}
+
+#[test]
 fn a_blur_widens_the_grey_at_every_edge() {
     let path = write_box_stl("raster-blur", 10.0, 12, 0);
     let grey_pixels = |name: &str, blur: &str| {
@@ -132,8 +165,8 @@ fn a_blur_widens_the_grey_at_every_edge() {
             test_panel().to_str().unwrap(),
             "--layer-height",
             "5",
-            "--grey-floor",
-            "0",
+            "--grey-range",
+            "0..255",
             "--blur",
             blur,
             "-o",

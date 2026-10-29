@@ -1,0 +1,27 @@
+# EPAX DX10 Pro 5K.
+
+name = "DX10 Pro 5K"
+manufacturer = "EPAX"
+machine_name = "EPAX DX10 PRO 5K"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 4920
+height_px = 2880
+width_mm = 221.4
+height_mm = 129.6
+
+[build_volume]
+x = 221.4
+y = 129.6
+z = 120.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

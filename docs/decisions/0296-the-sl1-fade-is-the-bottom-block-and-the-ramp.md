@@ -10,7 +10,7 @@ reader read the count back as bottom layers. The firmware does neither. It expos
 for `expTimeFirst`, steps down linearly until layer `numFade - 1`, which takes `expTime`,
 and divides by `numFade - 1` on the way. A resin of six bottom layers and no ramp was
 written as `numFade = 0`, and a file with `numFade = 10` was read as ten bottom layers
-where the machine prints one and a ramp of eight. The vendor's slicer keeps the count
+where the machine prints one and a ramp of eight. Known files keep the count
 between 3 and 20.
 
 ## Decision

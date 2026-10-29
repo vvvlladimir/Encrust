@@ -6,9 +6,9 @@
 ## Context
 
 Step 18 asks for network sending where the protocol is documented. Two are: SDCP 3.0,
-published by the mainboard vendor and spoken by Elegoo machines from the
+published by the mainboard maker and spoken by Elegoo machines from the
 Saturn 4 Ultra onwards, and the older ChiTu Wi-Fi protocol of the Saturn 3 Ultra and Mars
-4 Ultra, which has been reverse engineered but not published.
+4 Ultra, which is described by third parties but not published.
 
 They are not variants of one thing. In SDCP the printer is the server: the client opens a
 WebSocket to it and posts the file to its HTTP endpoint. In the older protocol the roles

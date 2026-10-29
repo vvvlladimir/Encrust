@@ -1,6 +1,6 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range, stated_distance_mm, stated_pwm, stated_rests,
+    ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, layer_in_range, panel_in_range, stated_pwm, stated_rests,
     stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
@@ -164,14 +164,14 @@ impl SlicedFileReader for ChituReader {
 }
 
 /// The resin volume, which the print parameters block states in millilitres, and the peel
-/// and light-off delay it states beside it.
+/// and light-off delays it states beside it.
 fn read_print_parameters<S: ReadSeek>(
     reads: &mut Reads<S>,
-) -> Result<(f32, PrinterTuning), FormatError> {
+) -> Result<(f32, PrintParameters), FormatError> {
     reads.seek_to(PRINT_PARAMETERS)?;
     let at = u64::from(reads.u32_le()?);
     if at == 0 {
-        return Ok((0.0, PrinterTuning::default()));
+        return Ok((0.0, PrintParameters::default()));
     }
     reads.seek_to(at)?;
     let mut block = [0.0; 10];
@@ -187,54 +187,76 @@ fn read_print_parameters<S: ReadSeek>(
         volume_ml,
         _,
         _,
-        _,
+        bottom_light_off,
         light_off,
     ] = block;
-    let peel = PrinterTuning {
-        bottom_lift_distance_mm: stated_distance_mm(bottom_lift),
+    let peel = ChituPeel {
+        bottom_lift_total_mm: bottom_lift,
+        lift_total_mm: lift,
+        ..ChituPeel::default()
+    };
+    let tuning = PrinterTuning {
         bottom_lift_speed_mm_min: stated_speed_mm_min(bottom_lift_speed),
-        lift_distance_mm: stated_distance_mm(lift),
-        retract_distance_mm: stated_distance_mm(lift),
         lift_speed_mm_min: stated_speed_mm_min(lift_speed),
         retract_speed_mm_min: stated_speed_mm_min(retract_speed),
         light_off_delay_s: stated_wait_s(light_off),
-        ..PrinterTuning::default()
+        bottom_light_off_delay_s: stated_wait_s(bottom_light_off),
+        ..peel.stated()
     };
-    Ok((volume_ml * 1000.0, peel))
+    Ok((volume_ml * 1000.0, PrintParameters { tuning, peel }))
 }
 
-/// What the `.ctb` slicer info block and the parameters it points at add to `peel`: the
-/// transition, the rests and the bottom retract speed. A file without the block adds none.
+/// What the print parameters block states: the tuning it holds alone, and the summed climbs
+/// a second stage from the slicer info is split off.
+#[derive(Default)]
+struct PrintParameters {
+    tuning: PrinterTuning,
+    peel: ChituPeel,
+}
+
+/// What the `.ctb` slicer info block and the parameters it points at add to the print
+/// parameters: the second stage, the transition, the rests and the bottom retract speed. A
+/// file without the block adds none.
 fn read_slicer_info<S: ReadSeek>(
     reads: &mut Reads<S>,
-    peel: PrinterTuning,
+    parameters: PrintParameters,
 ) -> Result<PrinterTuning, FormatError> {
+    let PrintParameters { tuning, mut peel } = parameters;
     reads.seek_to(SLICER_INFO)?;
     let at = u64::from(reads.u32_le()?);
     let size = reads.u32_le()?;
     if at == 0 || size == 0 {
-        return Ok(peel);
+        return Ok(tuning);
+    }
+    reads.seek_to(at)?;
+    for value in &mut peel.second_stage {
+        *value = reads.f32_le()?;
     }
     reads.seek_to(at + 0x3C)?;
     let transition_layers = u16::try_from(reads.u32_le()?).ok();
     let parameters_at = u64::from(reads.u32_le()?);
-    if parameters_at == 0 {
-        return Ok(PrinterTuning {
-            transition_layers,
-            ..peel
-        });
-    }
-    reads.seek_to(parameters_at)?;
-    let bottom_retract_speed_mm_min = stated_speed_mm_min(reads.f32_le()?);
-    reads.seek_to(parameters_at + 0x18)?;
-    let after_retract_s = reads.f32_le()?;
-    let after_lift_s = reads.f32_le()?;
-    let before_lift_s = reads.f32_le()?;
-    Ok(PrinterTuning {
+    let mut tuning = PrinterTuning {
         transition_layers,
-        bottom_retract_speed_mm_min,
-        waits: stated_rests(before_lift_s, after_lift_s, after_retract_s),
-        ..peel
+        ..tuning
+    };
+    if parameters_at != 0 {
+        reads.seek_to(parameters_at)?;
+        tuning.bottom_retract_speed_mm_min = stated_speed_mm_min(reads.f32_le()?);
+        let stage_bottom_retract_speed = reads.f32_le()?;
+        reads.seek_to(parameters_at + 0x18)?;
+        let after_retract_s = reads.f32_le()?;
+        let after_lift_s = reads.f32_le()?;
+        let before_lift_s = reads.f32_le()?;
+        tuning.waits = stated_rests(before_lift_s, after_lift_s, after_retract_s);
+        peel.bottom_retract = [reads.f32_le()?, stage_bottom_retract_speed];
+    }
+    let split = peel.stated();
+    Ok(PrinterTuning {
+        bottom_lift_distance_mm: split.bottom_lift_distance_mm,
+        lift_distance_mm: split.lift_distance_mm,
+        retract_distance_mm: split.retract_distance_mm,
+        second_stage: split.second_stage,
+        ..tuning
     })
 }
 

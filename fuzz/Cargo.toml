@@ -34,6 +34,41 @@ doc = false
 bench = false
 
 [[bin]]
+name = "sliced_fdg"
+path = "fuzz_targets/sliced_fdg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_photons"
+path = "fuzz_targets/sliced_photons.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_phz"
+path = "fuzz_targets/sliced_phz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_pwsz"
+path = "fuzz_targets/sliced_pwsz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_cxline"
+path = "fuzz_targets/sliced_cxline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "sliced_goo"
 path = "fuzz_targets/sliced_goo.rs"
 test = false

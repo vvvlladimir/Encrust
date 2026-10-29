@@ -1,6 +1,6 @@
 name: Fuzz
 
-# The readers take bytes nobody in this project wrote: meshes, sliced files from other slicers,
+# The readers take bytes nobody in this project wrote: meshes, sliced files from elsewhere,
 # textures from a pack. Property tests cover the shapes we thought of; this covers the ones we did
 # not. On a schedule rather than on a pull request — two minutes of fuzzing is a smoke test, and
 # failing a pull request over which inputs one random session reached would teach everybody to

@@ -27,7 +27,7 @@ pub(crate) fn preamble(job: &PrintJob) -> String {
     text
 }
 
-/// The settings header, `;(Key = value)` a line, in the order a vendor file carries them.
+/// The settings header, `;(Key = value)` a line, in the order a printed file carries them.
 ///
 /// The firmware ignores all of it and a slicer reads it back: the keys are spelt as the
 /// container spells them, spaces and all.
@@ -91,8 +91,8 @@ fn slicing_settings(job: &PrintJob) -> Vec<String> {
             "Z Lift Retract Rate",
             format!("{:.3}", material.retract_speed_mm_min),
         ),
-        setting("Flip X", bool_text(job.printer.mirror_x)),
-        setting("Flip Y", bool_text(job.printer.mirror_y)),
+        setting("Flip X", bool_text(job.printer.mirror.mirrors_x())),
+        setting("Flip Y", bool_text(false)),
         setting("Number of Slices", job.layer_count().to_string()),
     ]
 }
@@ -141,14 +141,8 @@ const SLICER: &str = concat!("Encrust-", env!("CARGO_PKG_VERSION"));
 pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
     let material = &job.material;
     let bottom = material.is_bottom_layer(index);
-    let (lift_mm, lift_speed) = if bottom {
-        (
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-        )
-    } else {
-        (material.lift_distance_mm, material.lift_speed_mm_min)
-    };
+    let peel = material.peel_of_layer(index);
+    let (lift_mm, lift_speed) = (peel.lift_mm, peel.lift_speed_mm_min);
     let retract_speed = if bottom {
         material.bottom_retract_speed_mm_min
     } else {

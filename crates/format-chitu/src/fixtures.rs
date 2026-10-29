@@ -1,9 +1,10 @@
 //! Sample profiles the writer tests build jobs from.
 
+use std::io::Cursor;
 use std::path::Path;
 
-use core_format::{ExposurePlan, LayerPlan, PrintJob};
-use core_raster::{Grey, PixelPitch, RasterSettings, Shading};
+use core_format::{ExposurePlan, LayerPlan, LayerSink, PrintJob, SlicedFileWriter};
+use core_raster::{Grey, LayerRuns, PixelPitch, RasterSettings, Shading};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 pub(crate) fn sample_printer() -> PrinterProfile {
@@ -55,4 +56,48 @@ pub(crate) fn sample_job(layer_count: u32) -> PrintJob {
         thumbnail: None,
         created_unix_s: 0,
     }
+}
+
+/// A job whose resin peels in two stages, the second as a Mars 2 Pro file states it.
+pub(crate) fn two_stage_job(layer_count: u32) -> PrintJob {
+    let mut job = sample_job(layer_count);
+    let material = &mut job.material;
+    (material.bottom_lift_distance_mm, material.lift_distance_mm) = (5.0, 2.0);
+    let stage = &mut material.second_stage;
+    (
+        stage.bottom_lift_distance_mm,
+        stage.bottom_lift_speed_mm_min,
+    ) = (3.0, 180.0);
+    (stage.lift_distance_mm, stage.lift_speed_mm_min) = (4.0, 900.0);
+    (stage.retract_distance_mm, stage.retract_speed_mm_min) = (4.0, 360.0);
+    (
+        stage.bottom_retract_distance_mm,
+        stage.bottom_retract_speed_mm_min,
+    ) = (3.0, 120.0);
+    job
+}
+
+/// An 8 x 4 layer with a lit block from column 2 to 5 in rows 1 and 2.
+pub(crate) fn lit_block() -> LayerRuns {
+    let mut builder = LayerRuns::builder(8, 4);
+    builder.push(10, 0);
+    builder.push(4, 255);
+    builder.push(4, 0);
+    builder.push(4, 255);
+    builder.push(10, 0);
+    builder.finish()
+}
+
+/// `job` written by `writer`, each of its layers `lit_block`, to a resin volume of 1500 mm³.
+pub(crate) fn written_by<W: SlicedFileWriter>(writer: &W, job: &PrintJob) -> Vec<u8> {
+    let mut file = Cursor::new(Vec::new());
+    {
+        let mut sink = writer.begin(job, &mut file).expect("the job is sound");
+        for _ in 0..job.layer_count() {
+            sink.push(<W::Sink<'_> as LayerSink>::encode(&lit_block()))
+                .expect("a layer");
+        }
+        sink.finish(1500.0).expect("every promised layer arrived");
+    }
+    file.into_inner()
 }

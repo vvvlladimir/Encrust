@@ -30,8 +30,8 @@ const CMD_VIDEO: u32 = 386;
 pub(crate) const CMD_UPLOAD: u32 = 256;
 const CMD_REPORT_PERIOD: u32 = 512;
 
-/// How often a version 1 board is asked to report while it pulls a file, in ms. The vendor
-/// client sends this, and a board that is not asked reports far less often.
+/// How often a version 1 board is asked to report while it pulls a file, in ms. A board
+/// expects this, and one that is not asked reports far less often.
 const REPORT_PERIOD_MS: u32 = 5000;
 
 /// A printer answers a command in well under a second when it is not busy.
@@ -302,7 +302,7 @@ impl Control {
         None
     }
 
-    /// The three commands a vendor client sends a version 1 board before it asks for anything.
+    /// The three commands a version 1 board expects before it is asked for anything.
     ///
     /// The first two carry no data and are not documented anywhere; the third sets how
     /// often the board reports, which is what the transfer's progress is read from.

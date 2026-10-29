@@ -10,9 +10,9 @@ machine-name and machine-type fields, and `.ctb` twice, in the slicer-info and p
 parameters blocks. Elegoo's firmware and the SDCP handshake read that string.
 
 We wrote `PrinterProfile::name`, which is the short label the picker shows: `Saturn 4
-Ultra`. A vendor file for the same machine carries `ELEGOO Saturn 4 Ultra`. The
+Ultra`. A known file for the same machine carries `ELEGOO Saturn 4 Ultra`. The
 manufacturer is on the profile but not in the string, and gluing the two together would
-produce `Elegoo Saturn 4 Ultra`, which matches neither the case nor, on other vendors, the
+produce `Elegoo Saturn 4 Ultra`, which matches neither the case nor, on other makers, the
 form the firmware expects.
 
 ## Decision
@@ -28,7 +28,7 @@ are left alone rather than guessed at.
 ## Consequences
 
 The picker, the fit report and the window keep showing the short name while the file carries
-the long one, which is what both need. Four shipped profiles still write a name no vendor
+the long one, which is what both need. Four shipped profiles still write a name no known
 file was checked against; each is one line of TOML away from correct once someone slices on
 that machine and reads the string back.
 
@@ -38,7 +38,7 @@ value.
 
 ## Alternatives considered
 
-### Put the vendor string in `name`
+### Put the firmware's string in `name`
 
 One line, no new field. It lost because `name` is what the picker, the fit line and the
 window title show, and `ELEGOO Saturn 4 Ultra` in a list of five machines is noise where

@@ -1,13 +1,9 @@
 # Elegoo Mars 4 Ultra.
-#
-# UNVERIFIED: these numbers come from published specifications, not from measurement.
-# Check them against the actual machine before trusting a print, especially the
-# illuminated area and the mirroring flags.
 
 name = "Mars 4 Ultra"
 manufacturer = "Elegoo"
-mirror_x = true
-mirror_y = false
+machine_name = "ELEGOO Mars 4 Ultra"
+mirror = "lcd-mirror"
 output = "goo"
 # Elegoo Link: this generation answers an SDCP broadcast.
 connection = "sdcp"
@@ -22,3 +18,7 @@ height_mm = 77.76
 x = 153.36
 y = 77.76
 z = 165.0
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

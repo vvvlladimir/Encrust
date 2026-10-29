@@ -1,13 +1,13 @@
 use std::fmt::Write as _;
 
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
+    check_layers_finished, validate,
 };
-use core_raster::LayerRuns;
+use core_raster::{LayerRuns, Ring};
 
 use crate::document::{self, TAIL};
 use crate::header::{self, HEADER_BYTES};
-use crate::trace::{self, Ring};
 
 /// Writes the `.svgx`. Layout is in `docs/formats/svgx.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -23,7 +23,7 @@ impl SlicedFileWriter for SvgxWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -80,27 +80,13 @@ impl LayerSink for SvgxSink<'_> {
     type Encoded = (u32, u32, Vec<Ring>);
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        (layer.width(), layer.height(), trace::rings_of(layer))
+        (layer.width(), layer.height(), core_raster::rings_of(layer))
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let (width, height, rings) = encoded;
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if width != self.job.raster.width_px || height != self.job.raster.height_px {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width,
-                height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (width, height))?;
 
         let body = group_body(&self.job, &rings);
         self.fields
@@ -110,12 +96,7 @@ impl LayerSink for SvgxSink<'_> {
     }
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
         self.fields.bytes(TAIL.as_bytes())?;
 
         self.fields.seek_to(self.volume_at)?;
@@ -141,13 +122,10 @@ fn group_body(job: &PrintJob, rings: &[Ring]) -> String {
         job.printer.display.height_mm / 2.0,
     );
 
-    let area_mm2: f64 = rings
-        .iter()
-        .map(|ring| trace::double_area_px(ring) as f64 * f64::from(pitch_x * pitch_y) / 2.0)
-        .sum();
+    let area_mm2 = core_raster::area_mm2(rings, (pitch_x, pitch_y));
     let perimeter_mm: f64 = rings
         .iter()
-        .map(|ring| trace::length_px(ring) as f64 * f64::from(pitch_x.max(pitch_y)))
+        .map(|ring| core_raster::length_px(ring) as f64 * f64::from(pitch_x.max(pitch_y)))
         .sum();
 
     let mut body = format!("area=\"{area_mm2:.3}\" perimeter=\"{perimeter_mm:.3}\">\n");

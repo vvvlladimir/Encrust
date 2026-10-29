@@ -1,0 +1,27 @@
+# Phrozen Sonic Mighty 12K.
+
+name = "Sonic Mighty 12K"
+manufacturer = "Phrozen"
+machine_name = "Phrozen Sonic Mighty 12K"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 11520
+height_px = 5120
+width_mm = 218.88
+height_mm = 123.12
+
+[build_volume]
+x = 218.88
+y = 123.12
+z = 235.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

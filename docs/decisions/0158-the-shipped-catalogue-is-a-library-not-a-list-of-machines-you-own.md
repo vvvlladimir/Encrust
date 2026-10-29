@@ -1,6 +1,6 @@
 # 0158. The shipped catalogue is a library, not the machines you own
 
-- **Status:** Accepted
+- **Status:** Accepted; an installed printer as a whole copy is superseded by 0372
 - **Date:** 2026-10-01
 
 ## Context

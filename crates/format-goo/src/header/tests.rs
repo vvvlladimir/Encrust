@@ -6,7 +6,7 @@ use crate::fixtures::sample_job;
 fn header_of(job: &PrintJob) -> Vec<u8> {
     let mut buffer = Cursor::new(Vec::new());
     let mut fields = Fields::new(&mut buffer);
-    write(&mut fields, job).expect("in-memory write");
+    write(&mut fields, job, GooVersion::V3).expect("in-memory write");
     buffer.into_inner()
 }
 
@@ -32,10 +32,7 @@ fn a_resting_resin_selects_the_static_waits_and_fills_them() {
         after_retract_s: 2.0,
     };
     let header = header_of(&job);
-    assert_eq!(
-        header[DELAY_MODE_OFFSET], 1,
-        "static waits, not turn-off time"
-    );
+    assert_eq!(header[DELAY_MODE_OFFSET], 1, "the mode every file states");
     assert!(
         f32_at(&header, DELAY_MODE_OFFSET + 1).abs() < f32::EPSILON,
         "no light-off delay"
@@ -54,7 +51,11 @@ fn a_resting_resin_selects_the_static_waits_and_fills_them() {
 fn a_resin_holding_the_light_off_writes_no_waits() {
     let job = sample_job(10);
     let header = header_of(&job);
-    assert_eq!(header[DELAY_MODE_OFFSET], 0);
+    assert_eq!(header[DELAY_MODE_OFFSET], 1, "the mode every file states");
+    assert!(
+        (0..6).all(|index| f32_at(&header, DELAY_MODE_OFFSET + 5 + 4 * index) == 0.0),
+        "no rest"
+    );
     assert!((f32_at(&header, DELAY_MODE_OFFSET + 1) - job.material.light_off_delay_s).abs() < 1e-6);
 }
 
@@ -141,12 +142,17 @@ fn u16_at(header: &[u8], offset: usize) -> u16 {
 }
 
 #[test]
-fn binary_shading_is_reported_as_a_single_anti_aliasing_level() {
+fn binary_shading_states_the_dormant_level_and_blur() {
     let mut job = sample_job(10);
     job.raster.shading = Shading::Binary;
     let header = header_of(&job);
-    assert_eq!(u16_at(&header, AA_OFFSET), 1);
-    assert_eq!(u16_at(&header, AA_OFFSET + 2), 1, "and a single grey level");
+    assert_eq!(
+        u16_at(&header, AA_OFFSET),
+        4,
+        "a printed file with AA off says 4"
+    );
+    assert_eq!(u16_at(&header, AA_OFFSET + 2), 0, "no grey ladder");
+    assert_eq!(u16_at(&header, AA_OFFSET + 4), 2, "and a blur of 2");
 }
 
 #[test]
@@ -167,17 +173,6 @@ fn unrounded_grey_is_reported_as_no_level_count_at_all() {
 #[test]
 fn the_blur_level_is_the_radius_the_edges_were_faded_over() {
     let mut job = sample_job(10);
-    assert_eq!(
-        u16_at(&header_of(&job), AA_OFFSET + 4),
-        0,
-        "sharp by default"
-    );
-    job.raster.blur_px = 2;
-    assert_eq!(u16_at(&header_of(&job), AA_OFFSET + 4), 2);
-    job.raster.shading = Shading::Binary;
-    assert_eq!(
-        u16_at(&header_of(&job), AA_OFFSET + 4),
-        0,
-        "a binary mask is never blurred"
-    );
+    job.raster.blur_px = 3;
+    assert_eq!(u16_at(&header_of(&job), AA_OFFSET + 4), 3);
 }

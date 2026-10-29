@@ -28,8 +28,8 @@ pub fn encode_rgb15(pixels: &[[u8; 3]]) -> Vec<u8> {
     let mut data = Vec::new();
     let mut open: Option<(u16, u32)> = None;
 
-    for &[r, g, b] in pixels {
-        let colour = u16::from(b >> 3) | (u16::from(g >> 2) << 5) | (u16::from(r >> 3) << 11);
+    for &pixel in pixels {
+        let colour = rgb15_word(pixel);
         match open {
             Some((current, run)) if current == colour && run < MAX_RUN => {
                 open = Some((current, run + 1));
@@ -45,6 +45,16 @@ pub fn encode_rgb15(pixels: &[[u8; 3]]) -> Vec<u8> {
         push_run(&mut data, colour, run);
     }
     data
+}
+
+/// One pixel's colour word, red highest, green six bits wide but for its lowest bit, which
+/// a run-length record keeps for its repeat flag and a raw one leaves clear.
+pub fn rgb15(pixel: [u8; 3]) -> u16 {
+    rgb15_word(pixel) & !REPEAT_FLAG
+}
+
+fn rgb15_word([r, g, b]: [u8; 3]) -> u16 {
+    u16::from(b >> 3) | (u16::from(g >> 2) << 5) | (u16::from(r >> 3) << 11)
 }
 
 fn push_run(data: &mut Vec<u8>, colour: u16, run: u32) {
@@ -83,6 +93,16 @@ pub fn write_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_raw_word_leaves_the_repeat_bit_clear() {
+        assert_eq!(rgb15([255, 255, 255]), 0xFFDF);
+        assert_eq!(
+            rgb15([0, 0x0C, 0]),
+            0x0040,
+            "green's sixth bit lands above the flag"
+        );
+    }
 
     #[test]
     fn a_lone_pixel_is_one_word_with_the_repeat_bit_clear() {

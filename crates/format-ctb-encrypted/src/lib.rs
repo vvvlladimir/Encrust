@@ -3,6 +3,8 @@
 //! `docs/formats/ctb-encrypted.md` and `docs/decisions/0298`.
 
 mod cipher;
+#[cfg(test)]
+mod fixtures;
 mod layout;
 mod reader;
 mod settings;

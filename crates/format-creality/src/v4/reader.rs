@@ -1,6 +1,6 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, decode_rle7, layer_in_range, panel_in_range,
+    Buffer, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, layer_in_range, panel_in_range,
 };
 use core_raster::Run;
 
@@ -23,33 +23,12 @@ impl SlicedFileReader for CxdlpV4Reader {
         let mut reads = Reads::new(source);
         let end = reads.length()?;
 
-        let magic_bytes = reads.u32_be()?;
-        if magic_bytes as usize != MAGIC.len() {
-            return Err(FormatError::NotThisFormat {
-                format: "cxdlp",
-                found: magic_bytes,
-            });
-        }
-        let magic = reads.bytes(MAGIC.len())?;
-        if !magic.starts_with(b"CXSW3D") {
-            return Err(FormatError::NotThisFormat {
-                format: "cxdlp",
-                found: u32::from_be_bytes([magic[0], magic[1], magic[2], magic[3]]),
-            });
-        }
-
-        let version = u32::from(reads.u16_be()?);
-        if version != u32::from(VERSION) {
-            return Err(FormatError::UnsupportedVersion {
-                format: "cxdlp",
-                version,
-            });
-        }
+        let version = read_magic(&mut reads)?;
 
         let machine = read_text(&mut reads)?;
         let width_px = u32::from(reads.u16_le()?);
         let height_px = u32::from(reads.u16_le()?);
-        panel_in_range(width_px, height_px)?;
+        let pixel_count = panel_in_range(width_px, height_px)?;
         let display_mm = (reads.f32_le()?, reads.f32_le()?);
         reads.skip(4)?;
         reads.skip(4)?;
@@ -63,7 +42,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         reads.skip(4)?;
         let print_parameters = u64::from(reads.u32_le()?);
 
-        // A layer covered by the vendor's cipher would decode to noise, so a file that
+        // A layer covered by the format's cipher would decode to noise, so a file that
         // names a key is refused rather than read wrongly; see docs/formats/creality.md.
         reads.skip(4 + 4 + 2 + 2)?;
         let key = reads.u32_le()?;
@@ -75,17 +54,18 @@ impl SlicedFileReader for CxdlpV4Reader {
         }
 
         reads.seek_to(print_parameters)?;
-        reads.skip(4 * 5)?;
-        let volume_ml = reads.f32_le()?;
-        reads.skip(4 * 2)?;
-        reads.skip(4 * 3)?;
-        let exposure_s = reads.f32_le()?;
-        let bottom_exposure_s = reads.f32_le()?;
+        let PrintParameters {
+            volume_ml,
+            exposure_s,
+            bottom_exposure_s,
+            buffer,
+        } = read_print_parameters(&mut reads)?;
 
         let layers = read_table(&mut reads, table, layer_count, end)?;
 
         Ok(OpenCxdlpV4 {
             reads,
+            pixel_count,
             facts: SlicedFile {
                 format: "cxdlp",
                 version: Some(version),
@@ -101,13 +81,74 @@ impl SlicedFileReader for CxdlpV4Reader {
                 bottom_layers,
                 print_time_s: Some(print_time_s),
                 volume_mm3: Some(volume_ml * 1000.0),
-                // The codec carries seven bits of grey, so a layer reads back in 128 steps.
-                grey_steps: 128,
-                stated: PrinterTuning::default(),
+                // The codec carries six bits of grey, so a layer reads back in 64 steps.
+                grey_steps: 64,
+                stated: PrinterTuning {
+                    buffer: Some(buffer),
+                    ..PrinterTuning::default()
+                },
                 layers,
             },
         })
     }
+}
+
+/// The magic and the revision behind it, refusing a file that is not this one.
+fn read_magic<S: ReadSeek>(reads: &mut Reads<S>) -> Result<u32, FormatError> {
+    let magic_bytes = reads.u32_be()?;
+    if magic_bytes as usize != MAGIC.len() {
+        return Err(FormatError::NotThisFormat {
+            format: "cxdlp",
+            found: magic_bytes,
+        });
+    }
+    let magic = reads.bytes(MAGIC.len())?;
+    if !magic.starts_with(b"CXSW3D") {
+        return Err(FormatError::NotThisFormat {
+            format: "cxdlp",
+            found: u32::from_be_bytes([magic[0], magic[1], magic[2], magic[3]]),
+        });
+    }
+
+    let version = u32::from(reads.u16_be()?);
+    if version != u32::from(VERSION) {
+        return Err(FormatError::UnsupportedVersion {
+            format: "cxdlp",
+            version,
+        });
+    }
+    Ok(version)
+}
+
+/// What the reader takes from the print parameters block.
+struct PrintParameters {
+    volume_ml: f32,
+    exposure_s: f32,
+    bottom_exposure_s: f32,
+    buffer: Buffer,
+}
+
+/// Reads the print parameters block, the cursor at its start; see docs/formats/creality.md.
+fn read_print_parameters<S: ReadSeek>(
+    reads: &mut Reads<S>,
+) -> Result<PrintParameters, FormatError> {
+    reads.skip(4 * 5)?;
+    let volume_ml = reads.f32_le()?;
+    reads.skip(4 * 5)?;
+    let exposure_s = reads.f32_le()?;
+    let bottom_exposure_s = reads.f32_le()?;
+    let buffer = Buffer {
+        height_mm: reads.f32_le()?,
+        speed_mm_min: reads.f32_le()?,
+        light_off_delay_s: reads.f32_le()?,
+        enabled: reads.u32_le()? != 0,
+    };
+    Ok(PrintParameters {
+        volume_ml,
+        exposure_s,
+        bottom_exposure_s,
+        buffer,
+    })
 }
 
 /// The layer table, where a row addresses the motion block the data follows.
@@ -161,6 +202,7 @@ fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, Format
 /// A version 4 `.cxdlp` with its tables read and its layers still in it.
 pub struct OpenCxdlpV4<S> {
     reads: Reads<S>,
+    pixel_count: u32,
     facts: SlicedFile,
 }
 
@@ -174,7 +216,7 @@ impl<S: ReadSeek> OpenFile for OpenCxdlpV4<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let data = self.reads.bytes(entry.size as usize)?;
-        decode_rle7(&data)
+        super::rle::decode(&data, self.pixel_count)
     }
 }
 

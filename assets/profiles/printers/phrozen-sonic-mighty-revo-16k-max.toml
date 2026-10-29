@@ -1,0 +1,27 @@
+# Phrozen Sonic Mighty Revo 16K Max.
+
+name = "Sonic Mighty Revo 16K Max"
+manufacturer = "Phrozen"
+machine_name = "Sonic Mighty Revo 16K Max"
+mirror = "lcd-mirror"
+output = "prz"
+connection = "none"
+
+[display]
+width_px = 15104
+height_px = 6230
+width_mm = 302.4
+height_mm = 161.98
+
+[build_volume]
+x = 302.4
+y = 161.98
+z = 300.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

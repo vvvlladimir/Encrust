@@ -1,0 +1,31 @@
+# Carima LM1.
+
+name = "LM1"
+manufacturer = "Carima"
+machine_name = "Carima LM1"
+mirror = "lcd-mirror"
+output = "cws"
+connection = "none"
+
+[display]
+width_px = 2560
+height_px = 1620
+width_mm = 130.0
+height_mm = 80.0
+
+[build_volume]
+x = 130.0
+y = 80.0
+z = 150.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

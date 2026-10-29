@@ -1,10 +1,8 @@
 # Written by `cargo xtask hygiene --bless`. Each line may only shrink or go: a split
 # that brings one under its limit is blessed, and nothing new is ever added here.
-fn crates/encrust-app/src/shortcuts.rs act 84
+fn crates/encrust-app/src/shortcuts.rs act 82
 fn crates/encrust-app/src/undo.rs fingerprint 92
 fn crates/encrust-cli/src/bin/hollow_lab.rs matrix 86
-fn crates/encrust-cli/src/stage.rs plate_of 88
-fn crates/format-anycubic/src/reader.rs open_as 84
 fn crates/format-chitu/src/reader.rs open 92
 fn crates/format-creality/src/v3/reader.rs open 97
 fn crates/format-cws/src/reader.rs open 90

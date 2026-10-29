@@ -1,7 +1,7 @@
 //! The firmware's `numFade` against our bottom block and ramp: it exposes layer 0 at the
 //! first time and ramps to the normal one at layer `numFade - 1`; see docs/formats/sl1.md.
 
-/// The fade count the vendor's own slicer accepts at most and at least.
+/// The fade count the format accepts at most and at least.
 const FADE_RANGE: std::ops::RangeInclusive<u32> = 3..=20;
 
 /// The `numFade` whose ramp reaches the normal exposure on the layer ours does.

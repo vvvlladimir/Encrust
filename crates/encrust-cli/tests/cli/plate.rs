@@ -251,16 +251,32 @@ fn a_flag_that_shapes_a_model_is_refused_for_a_project() {
 }
 
 #[test]
-fn blur_samples_and_infill_are_refused_for_a_project_too() {
-    for flags in [
-        ["--blur", "2"],
-        ["--samples-per-layer", "3"],
-        ["--infill", "hive"],
-    ] {
-        let output = estimate(&[&[project_fixture().to_str().unwrap()][..], &flags].concat());
-        assert_eq!(output.status.code(), Some(1), "{flags:?}");
-        assert!(stderr(&output).contains(flags[0]), "{}", stderr(&output));
-    }
+fn infill_is_refused_for_a_project_too() {
+    let output = estimate(&[project_fixture().to_str().unwrap(), "--infill", "hive"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("--infill"), "{}", stderr(&output));
+}
+
+#[test]
+fn a_project_takes_the_print_settings_the_flags_set() {
+    let out = output_file("project-flags.goo");
+    let output = slice_project(
+        &project_fixture(),
+        &[
+            "--no-anti-alias",
+            "--samples-per-layer",
+            "3",
+            "-o",
+            out.to_str().unwrap(),
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert_eq!(
+        field(&text, "shading"),
+        "binary, no intermediate grey",
+        "{text}"
+    );
 }
 
 #[test]

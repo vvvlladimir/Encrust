@@ -1,7 +1,7 @@
 use super::*;
 use crate::fixtures::sample_job;
 use core_format::{ExposurePlan, ExposureRange};
-use printer_profiles::{WaitMode, Waits};
+use printer_profiles::{Mirror, WaitMode, Waits};
 
 fn value_of<'a>(gcode: &'a str, key: &str) -> Option<&'a str> {
     gcode
@@ -30,7 +30,7 @@ fn the_header_states_the_stack_the_blocks_go_on_to_run() {
 #[test]
 fn a_mirrored_panel_says_so_in_both_places_a_reader_looks() {
     let mut job = sample_job(1);
-    job.printer.mirror_x = true;
+    job.printer.mirror = Mirror::LcdMirror;
     let text = preamble(&job);
 
     assert_eq!(value_of(&text, "mirror"), Some("1"));
@@ -132,6 +132,43 @@ fn the_bottom_block_peels_and_cures_on_its_own_numbers() {
 }
 
 #[test]
+fn the_bottom_block_waits_its_own_light_off_delay() {
+    let mut job = sample_job(4);
+    job.material.bottom_layers = 2;
+    job.material.light_off_delay_s = 0.5;
+    job.material.bottom_light_off_delay_s = Some(5.0);
+    let text = preamble(&job);
+
+    assert_eq!(value_of(&text, "bottomLightOffTime"), Some("5"));
+    assert_eq!(value_of(&text, "lightOffTime"), Some("0.5"));
+    assert!(layer_block(&job, 1).contains("G4 P5000;Wait before cure"));
+    assert!(layer_block(&job, 2).contains("G4 P500;Wait before cure"));
+}
+
+#[test]
+fn the_header_states_transition_drop_speed_and_shrinkage() {
+    let mut job = sample_job(4);
+    job.material.transition_layers = 3;
+    job.material.bottom_retract_speed_mm_min = 240.0;
+    job.material.compensation.shrinkage_on = true;
+    job.material.compensation.shrink_x_pct = 101.5;
+    let text = preamble(&job);
+
+    assert_eq!(value_of(&text, "transitionLayerCount"), Some("3"));
+    assert_eq!(value_of(&text, "bottomLayerDropSpeed"), Some("240"));
+    assert_eq!(value_of(&text, "shrinkageX"), Some("101.5"));
+    assert_eq!(value_of(&text, "shrinkageZ"), Some("100"));
+}
+
+#[test]
+fn the_opening_block_closes_with_the_marker_of_the_start_program() {
+    let text = preamble(&sample_job(1));
+
+    assert!(text.ends_with("G28 Z0;Home Z\n;START_GCODE_END\n"));
+    assert!(!text.contains("END_GCODE_BEGIN"));
+}
+
+#[test]
 fn a_band_of_height_reaches_the_layer_it_covers() {
     let mut job = sample_job(6);
     job.material.bottom_layers = 0;
@@ -171,8 +208,15 @@ fn the_program_ends_with_the_plate_out_of_the_vat() {
 
     assert!(text.contains("M106 S0;Turn LED OFF"));
     assert!(
-        text.contains(&format!("G0 Z{} F", mm(job.printer.build_volume.z))),
-        "the plate comes up to the top of the travel so the part can be taken off"
+        text.starts_with(";END_GCODE_BEGIN\n"),
+        "the closing block opens with the marker of the end program"
+    );
+    assert!(
+        text.contains(&format!(
+            "G1 Z{} F25;Move Z",
+            mm(job.printer.build_volume.z)
+        )),
+        "the plate climbs slowly to the top of the travel so the part can be taken off"
     );
     assert!(text.ends_with("M18;Disable motors\n;END_GCODE_END\n;<Completed>\n"));
 }

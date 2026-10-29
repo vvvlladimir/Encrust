@@ -40,7 +40,7 @@ The model can be moved, scaled, supported again and cut for any printer. What th
 printed with comes back with it: its supports and raft are part of the mesh, its edges are
 the voxel's rather than the original model's, and its layers' steps stay. A 20 mm cube of
 571 layers on a 16K panel opens in about a second, a `.sl1` of the same in over a minute,
-nearly all of it decoding the PNG layers. Looking at a vendor file's exact masks is no
+nearly all of it decoding the PNG layers. Looking at a known file's exact masks is no
 longer done in the window; `encrust info` still decodes and checks every layer. Reopen if a
 user needs the file's own masks on screen.
 

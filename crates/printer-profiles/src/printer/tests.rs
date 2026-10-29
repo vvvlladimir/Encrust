@@ -1,4 +1,5 @@
 use super::*;
+use crate::PrinterTuning;
 
 const SAMPLE: &str = r#"
 name = "Test"
@@ -38,9 +39,21 @@ fn a_profile_that_names_no_machine_writes_its_own_name() {
 }
 
 #[test]
-fn a_profile_that_states_no_floor_keeps_every_grey() {
+fn a_profile_that_states_no_grey_range_keeps_every_grey() {
     let profile = PrinterProfile::from_toml_str(SAMPLE, path()).expect("a valid profile");
-    assert_eq!(profile.display.grey_floor, 0);
+    assert_eq!(
+        (profile.display.grey_min, profile.display.grey_max),
+        (0, 255)
+    );
+}
+
+#[test]
+fn a_grey_range_whose_bottom_is_over_its_top_is_rejected() {
+    let inverted = SAMPLE.replace("[display]", "[display]\ngrey_min = 200\ngrey_max = 100");
+    assert!(matches!(
+        PrinterProfile::from_toml_str(&inverted, path()),
+        Err(ProfileError::InvertedGreyRange { min: 200, max: 100 })
+    ));
 }
 
 #[test]
@@ -171,6 +184,29 @@ fn a_locked_setting_overrides_the_resin_and_one_left_open_keeps_it() {
 }
 
 #[test]
+fn a_resins_table_for_the_machine_overrides_its_lock_and_another_machines_does_not() {
+    let locked = format!("{SAMPLE}\n[locked]\ntransition_layers = 8\n");
+    let profile = PrinterProfile::from_toml_str(&locked, path()).expect("valid profile");
+    let mut resin = MaterialProfile::default();
+    let zero = PrinterTuning {
+        transition_layers: Some(0),
+        ..PrinterTuning::default()
+    };
+    resin.printers.insert("ceres".to_owned(), zero.clone());
+    resin.printers.insert("other".to_owned(), zero);
+    resin.last_printer = Some("other".to_owned());
+
+    let here = resin.starting_point("ceres").on(&profile);
+    assert_eq!(here.transition_layers, 0, "the table for this machine wins");
+    let fresh = resin.starting_point("new-machine").on(&profile);
+    assert_eq!(
+        fresh.transition_layers, 8,
+        "another machine's table is no statement here"
+    );
+    assert_eq!(MaterialProfile::default().on(&profile).transition_layers, 8);
+}
+
+#[test]
 fn a_locked_speed_of_zero_is_refused() {
     let locked = format!("{SAMPLE}\n[locked]\nlift_speed_mm_min = 0.0\n");
     assert!(matches!(
@@ -186,7 +222,7 @@ fn a_locked_speed_of_zero_is_refused() {
 fn pitch_is_area_over_pixel_count() {
     let profile = PrinterProfile::from_toml_str(SAMPLE, path()).expect("valid profile");
     assert_eq!(profile.display.pixel_pitch_mm(), (0.1, 0.1));
-    assert!(!profile.mirror_x);
+    assert_eq!(profile.mirror, Mirror::Normal);
 }
 
 #[test]

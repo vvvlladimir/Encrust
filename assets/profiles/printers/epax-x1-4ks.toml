@@ -1,0 +1,27 @@
+# EPAX X1-4KS.
+
+name = "X1-4KS"
+manufacturer = "EPAX"
+machine_name = "EPAX X1-4KS"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 4098
+height_px = 2560
+width_mm = 143.43
+height_mm = 89.6
+
+[build_volume]
+x = 143.43
+y = 89.6
+z = 155.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

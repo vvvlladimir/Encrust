@@ -94,7 +94,7 @@ sliced file shares" already lives.
 
 Cheaper than opening the central directory — the entry name sits at a known offset in the
 first local header. It loses because the first entry is whatever the writer happened to put
-there: our own two archives differ, and so do the two vendors'.
+there: our own two archives differ, and so do the two known ones.
 
 ### Write the Klipper variant too, since the archive is the same
 

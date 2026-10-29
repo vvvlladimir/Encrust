@@ -16,6 +16,9 @@ pub trait ProfileStore: std::fmt::Debug + Send + Sync {
 
     fn write(&self, kind: Kind, id: &str, toml: &str) -> Result<(), ProfileError>;
 
+    /// Keeps `toml` beside the profile under `tag`, where the catalogue never reads it.
+    fn keep_aside(&self, kind: Kind, id: &str, tag: &str, toml: &str) -> Result<(), ProfileError>;
+
     /// Throws the profile away. One that was never kept is not an error.
     fn remove(&self, kind: Kind, id: &str) -> Result<(), ProfileError>;
 }
@@ -77,6 +80,11 @@ impl ProfileStore for DirStore {
                 source,
             })?;
         }
+        std::fs::write(&path, toml).map_err(|source| ProfileError::Io { path, source })
+    }
+
+    fn keep_aside(&self, kind: Kind, id: &str, tag: &str, toml: &str) -> Result<(), ProfileError> {
+        let path = self.path_of(kind, id).with_extension(format!("toml.{tag}"));
         std::fs::write(&path, toml).map_err(|source| ProfileError::Io { path, source })
     }
 

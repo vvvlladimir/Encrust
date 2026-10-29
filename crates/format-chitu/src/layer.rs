@@ -1,6 +1,6 @@
 use std::io;
 
-use core_format::{Fields, PrintJob};
+use core_format::{Fields, PrintJob, chitu_layer_motion};
 
 /// Bytes of one record in the layer table.
 pub(crate) const LAYER_DEF_BYTES: u64 = 36;
@@ -9,6 +9,9 @@ pub(crate) const LAYER_DEF_BYTES: u64 = 36;
 /// again, then the motion this layer is printed with. Also what its table size field
 /// states, because the field counts the record and that block together.
 pub(crate) const LAYER_DEF_EX_BYTES: u32 = 84;
+
+/// Bytes behind a `.ctb` layer's data: its lit area, then a word.
+pub(crate) const LAYER_TAIL_BYTES: u32 = 8;
 
 /// One row of the layer table, filled in as its layer is written.
 #[derive(Debug, Clone, Copy)]
@@ -50,19 +53,6 @@ pub(crate) fn write_extended(
 ) -> io::Result<()> {
     let material = &job.material;
     let bottom = material.is_bottom_layer(index);
-    let (lift_distance, lift_speed) = if bottom {
-        (
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-        )
-    } else {
-        (material.lift_distance_mm, material.lift_speed_mm_min)
-    };
-    let retract_speed = if bottom {
-        material.bottom_retract_speed_mm_min
-    } else {
-        material.retract_speed_mm_min
-    };
     let light_pwm = if bottom {
         material.bottom_light_pwm
     } else {
@@ -70,14 +60,10 @@ pub(crate) fn write_extended(
     };
 
     def.write(fields, LAYER_DEF_EX_BYTES)?;
-    fields.u32_le(LAYER_DEF_EX_BYTES + def.data_size)?;
-    fields.f32_le(lift_distance)?;
-    fields.f32_le(lift_speed)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(retract_speed)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
+    fields.u32_le(LAYER_DEF_EX_BYTES + def.data_size + LAYER_TAIL_BYTES)?;
+    for value in chitu_layer_motion(job, index) {
+        fields.f32_le(value)?;
+    }
     for rest_s in material.waits.rests_s() {
         fields.f32_le(rest_s)?;
     }

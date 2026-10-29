@@ -118,6 +118,23 @@ pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<St
     stand_on(window, plate);
 }
 
+/// Follows a saved edit of `profile`, the printer in use: an edit that moves the plate stands
+/// everything on it again; any other redraws the plate, the models staying where they stand.
+pub fn printer_edited(window: &mut Window, profile: PrinterProfile, id: String) {
+    let moves_the_plate = window.machine.slicing.printer.as_ref().is_none_or(|old| {
+        old.build_volume != profile.build_volume
+            || old.display != profile.display
+            || old.output != profile.output
+    });
+    if moves_the_plate {
+        apply_printer(window, profile, Some(id));
+        return;
+    }
+    window.doc.plate = BuildPlate::from_profile(&profile);
+    window.machine.network.bind_to(Some(id), Some(&profile));
+    window.machine.slicing.printer = Some(profile);
+}
+
 /// Takes the machine out from under the plate: the default envelope, nothing bound and
 /// nothing to slice for. It is what removing the last machine leaves (BUG-14).
 pub fn clear_printer(window: &mut Window) {

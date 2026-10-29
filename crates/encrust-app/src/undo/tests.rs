@@ -529,3 +529,38 @@ fn a_layer_height_typed_into_the_panel_is_taken_back() {
         "the height goes back to what the resin was read at"
     );
 }
+
+#[test]
+fn an_exposure_typed_into_the_print_settings_is_taken_back_and_put_again() {
+    let mut bench = Bench::default();
+    bench.observe(true);
+    let resin = bench.slicing.material.clone();
+
+    bench.slicing.material.exposure_s = 3.5;
+    bench.slicing.material.waits.after_lift_s = 1.25;
+    bench.observe(true);
+
+    assert!(bench.undo());
+    assert_eq!(bench.slicing.material.exposure_s, resin.exposure_s);
+    assert_eq!(
+        bench.slicing.material.waits.after_lift_s,
+        resin.waits.after_lift_s
+    );
+    assert!(bench.redo());
+    assert_eq!(bench.slicing.material.exposure_s, 3.5);
+    assert_eq!(bench.slicing.material.waits.after_lift_s, 1.25);
+}
+
+#[test]
+fn a_chosen_resin_brings_its_edge_smoothing_without_an_edit() {
+    let mut bench = Bench::default();
+    bench.observe(true);
+
+    let mut resin = MaterialProfile::default();
+    resin.edges.anti_alias = false;
+    bench.slicing.set_material(resin);
+    bench.observe(true);
+
+    assert!(!bench.slicing.edges.anti_alias, "the resin's own default");
+    assert!(!bench.history.can_undo());
+}

@@ -560,11 +560,10 @@ z = 10.0
     let runs = LayerRuns::from_mask(&mask);
 
     let path = std::env::temp_dir().join(format!("encrust-preview-{name}.goo"));
-    let file = std::fs::File::create(&path).expect("a temporary file");
-    let mut buffered = std::io::BufWriter::new(file);
+    let mut buffer = std::io::Cursor::new(Vec::new());
     {
         let mut sink = format_goo::GooWriter
-            .begin(&job, &mut buffered)
+            .begin(&job, &mut buffer)
             .expect("the job matches the panel");
         for _ in 0..count {
             sink.push(format_goo::GooSink::encode(&runs))
@@ -572,5 +571,6 @@ z = 10.0
         }
         sink.finish(1234.0).expect("every promised layer arrived");
     }
+    std::fs::write(&path, buffer.into_inner()).expect("a temporary file");
     path
 }

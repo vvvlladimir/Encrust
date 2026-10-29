@@ -2,7 +2,7 @@
 
 What the FlashForge Foto, Focus, Explorer and Hunter and the Voxelab Proxima read: a
 twenty-eight byte header, two bitmap previews, and an SVG document holding the whole stack.
-Nine machines in the shipped catalogue carry `output = "svgx"`.
+Seven machines in the shipped catalogue carry `output = "svgx"`.
 
 It is the one container we write whose layers are **vectors**. A layer is a group of filled
 polygons in millimetres, not a grid of pixels, so it carries no grey at all: a path is
@@ -66,8 +66,8 @@ multiple of four pixels, so no row needs the padding a bitmap would otherwise ta
 
 `attachlayer` and `attachtime` are the bottom block's count and exposure, `basetime` the
 normal exposure, `buildinlayer` the transition count. A group's `area` and `perimeter` are
-what the layer cures in square millimetres and the length of its outline in millimetres; a
-vendor slicer writes other units there, and nothing in the firmware is known to read either
+what the layer cures in square millimetres and the length of its outline in millimetres; known
+files carry other units there, and nothing in the firmware is known to read either
 beyond showing them.
 
 **`volume` is a fixed-width zero-padded field** of thirteen characters. The resin a stack

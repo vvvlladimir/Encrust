@@ -1,6 +1,6 @@
 use super::*;
 use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
-use core_pipeline::CtbVersion;
+use core_raster::Shading;
 use printer_profiles::PrinterTuning;
 use std::path::Path;
 use std::sync::Arc;
@@ -171,18 +171,6 @@ fn carrying_the_resin_along_writes_the_same_exposures() {
 }
 
 #[test]
-fn a_project_keeps_the_bands_at_the_height_the_resin_was_measured_at() {
-    let mut slicing = measured_resin();
-    slicing.set_layer_height(0.1);
-    let kept = slicing.bands_as_measured();
-    assert!(
-        (kept[0].exposure_s - 4.0).abs() < 1e-5,
-        "got {}",
-        kept[0].exposure_s
-    );
-}
-
-#[test]
 fn the_layer_height_follows_the_material() {
     let mut slicing = Slicing::default();
     slicing.set_material(MaterialProfile {
@@ -282,9 +270,9 @@ fn adaptive_layers_are_blocked_on_a_printer_that_steps_by_the_header() {
 #[test]
 fn anti_aliasing_decides_the_shading() {
     let mut slicing = Slicing::default();
-    assert_eq!(slicing.shading(), Shading::Coverage);
-    slicing.anti_alias = false;
-    assert_eq!(slicing.shading(), Shading::Binary);
+    assert_eq!(slicing.overrides().shading, Shading::Coverage);
+    slicing.edges.anti_alias = false;
+    assert_eq!(slicing.overrides().shading, Shading::Binary);
 }
 
 #[test]
@@ -432,7 +420,7 @@ fn picking_a_printer_takes_the_format_its_firmware_reads_and_a_resin_measured_on
 
     slicing.set_printer(profile, Some(id));
 
-    assert_eq!(slicing.format, SlicedFormat::Ctb(CtbVersion::V4));
+    assert_eq!(slicing.format, SlicedFormat::CtbEncrypted);
     assert!(slicing.resin_id.is_some(), "a printer brings a resin");
     assert!(
         slicing.resin_is_tuned(),
@@ -582,4 +570,19 @@ fn a_printer_opened_from_a_file_leaves_the_resin_untuned() {
         !slicing.resin_is_tuned(),
         "no id, so nothing to tune against"
     );
+}
+
+#[test]
+fn taking_the_profiles_settings_drops_every_print_setting_edit() {
+    let mut fresh = measured_resin();
+    fresh.exposure.clear();
+    let mut slicing = measured_resin();
+    slicing.set_layer_height(0.1);
+    slicing.material.exposure_s = 9.0;
+    slicing.edges.blur_px = 2;
+    slicing.adaptive = Some(AdaptiveSettings::default());
+    slicing.samples = NonZeroU8::new(3).expect("three is not zero");
+
+    slicing.take_profile_settings();
+    assert_eq!(slicing.print_settings(), fresh.print_settings());
 }

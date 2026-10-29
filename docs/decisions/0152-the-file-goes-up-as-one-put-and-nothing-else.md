@@ -68,7 +68,7 @@ every other call in the crate, which would then not use `ureq` either.
 
 Every machine in the field can be sent to, which is the whole point of the feature. It lost
 on what the POST arm costs today: either a multipart body in memory or a new dependency,
-for firmware that the vendor has itself moved off. The refusal names the version, so a user
+for firmware that the maker has itself moved off. The refusal names the version, so a user
 who hits it knows exactly what to do.
 
 ### The option that won, and what it costs

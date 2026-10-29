@@ -39,17 +39,26 @@ fn an_exposure_band_tints_only_the_height_it_covers() {
 }
 
 /// A model standing past the build volume is marked there and nowhere else: the ball
-/// reaches x = 115 mm, so a volume 100 mm wide cuts through it and one 200 mm wide does not.
+/// spans x = 35..115 mm, so a volume 100 mm wide cuts through it and one 200 mm wide does
+/// not, and neither does an inset of 30 mm on the low side while one of 50 mm does.
 #[test]
 fn a_model_past_the_build_volume_is_marked_there() {
     let Some(plain) = paint_ball(&[], 0.0, None) else {
         return;
     };
-    let roomy = paint_ball(&[], 0.0, Some(Vec3::splat(200.0))).expect("the second frame");
-    let tight = paint_ball(&[], 0.0, Some(Vec3::new(100.0, 200.0, 200.0))).expect("the third");
+    let paint = |low: Vec3, high: Vec3| paint_ball(&[], 0.0, Some([low, high])).expect("a frame");
+    let roomy = paint(Vec3::ZERO, Vec3::splat(200.0));
+    let tight = paint(Vec3::ZERO, Vec3::new(100.0, 200.0, 200.0));
+    let narrow_band = paint(Vec3::new(30.0, 0.0, 0.0), Vec3::splat(200.0));
+    let wide_band = paint(Vec3::new(50.0, 0.0, 0.0), Vec3::splat(200.0));
 
     assert_eq!(plain, roomy, "a model inside the volume is drawn as it was");
     assert_ne!(plain, tight, "the part past x = 100 mm has to show");
+    assert_eq!(
+        plain, narrow_band,
+        "a model clear of the inset is drawn as it was"
+    );
+    assert_ne!(plain, wide_band, "the part short of x = 50 mm has to show");
 }
 
 /// The Cut tool's plane is traced where it crosses the model it is set on, and nowhere on
@@ -285,4 +294,51 @@ pub(super) fn paint_over_a_lit_plate(height_mm: f32, floor: Option<Floor>) -> Op
             ..Marks::default()
         },
     )
+}
+
+/// The plate is darker in its inset, and only there: a band 20 mm deep on its low X side.
+#[test]
+fn the_plate_is_darker_in_its_inset() {
+    let floor = Floor {
+        near_corner_mm: Vec2::ZERO,
+        size_mm: Vec2::new(150.0, 80.0),
+    };
+    let camera = OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 0.0),
+        distance_mm: 200.0,
+        ..OrbitCamera::default()
+    };
+    let plate = |low: Vec3| {
+        let marks = Marks {
+            floor: Some(floor),
+            volume_mm: Some([low, Vec3::new(150.0, 80.0, 100.0)]),
+            ..Marks::default()
+        };
+        paint(camera, None, &[], &[], marks)
+    };
+    let Some(whole) = plate(Vec3::ZERO) else {
+        return;
+    };
+    let inset = plate(Vec3::new(20.0, 0.0, 0.0)).expect("the second frame draws too");
+    let brightness = |pixel: &[u8; 4]| {
+        pixel[..3]
+            .iter()
+            .map(|&value| u32::from(value))
+            .sum::<u32>()
+    };
+    let (mut darker, mut brighter) = (0, 0);
+    for (before, after) in whole
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(inset.as_chunks::<4>().0)
+    {
+        match brightness(after).cmp(&brightness(before)) {
+            std::cmp::Ordering::Less => darker += 1,
+            std::cmp::Ordering::Greater => brighter += 1,
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+    assert!(darker > 0, "the band has to show darker");
+    assert_eq!(brighter, 0, "nothing outside the band changes");
 }

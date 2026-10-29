@@ -10,7 +10,8 @@ const PLATE_SIZE: f32 = 32.0;
 
 /// The row at the head of the plate panel: one numbered square per plate and the way to add
 /// another, scrolling past `max_w` points. A one-plate project still shows it.
-pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) {
+/// Answers whether a plate was added.
+pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) -> bool {
     let names: Vec<String> = scene.plates().to_vec();
     let active = scene.active_plate();
     let picked = !scene.selection().is_empty();
@@ -42,9 +43,11 @@ pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) {
             });
         });
 
+    let added = matches!(asked, Some((_, Asked::Add)));
     if let Some((plate, asked)) = asked {
         apply(scene, plate, asked);
     }
+    added
 }
 
 fn apply(scene: &mut Scene, plate: u32, asked: Asked) {

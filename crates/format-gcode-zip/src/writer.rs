@@ -1,7 +1,8 @@
 use std::io::Write;
 
 use core_format::{
-    FormatError, LayerSink, PrintJob, SlicedFileWriter, Thumbnail, WriteSeek, validate,
+    FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, Thumbnail,
+    check_layer_pushed, check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 use zip::ZipWriter;
@@ -12,7 +13,7 @@ use crate::gcode;
 /// The entry the board runs, which is the whole of the file but its images.
 pub(crate) const PROGRAM: &str = "run.gcode";
 
-/// The previews the archive holds, in the order and at the sizes a vendor file carries.
+/// The previews the archive holds, in the order and at the sizes a printed file carries.
 pub(crate) const THUMBNAILS: [(&str, u32, u32); 2] = [
     ("preview.png", 954, 850),
     ("preview_cropping.png", 168, 150),
@@ -36,7 +37,7 @@ impl SlicedFileWriter for GcodeZipWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -56,7 +57,7 @@ impl SlicedFileWriter for GcodeZipWriter {
 /// The archive with its previews in, its layers still to come and the program growing a
 /// block at a time beside them.
 pub struct GcodeZipSink<'w> {
-    zip: ZipWriter<&'w mut dyn WriteSeek>,
+    zip: ZipWriter<&'w mut dyn ReadWriteSeek>,
     job: PrintJob,
     /// One block per layer that has landed, in print order.
     blocks: String,
@@ -76,22 +77,7 @@ impl LayerSink for GcodeZipSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width != self.job.raster.width_px || encoded.height != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width,
-                height: encoded.height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width, encoded.height))?;
 
         let png = encoded.png?;
         entry(&mut self.zip, &gcode::image_name(index), &png)?;
@@ -102,12 +88,7 @@ impl LayerSink for GcodeZipSink<'_> {
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
 
         // The program goes in last: its header states the resin the stack came to, which
         // is only known once the last layer is cut, and a zip entry cannot be rewritten.
@@ -117,7 +98,7 @@ impl LayerSink for GcodeZipSink<'_> {
         program.push_str(&gcode::epilogue(&self.job));
         entry(&mut self.zip, PROGRAM, program.as_bytes())?;
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -134,40 +115,27 @@ pub struct EncodedLayer {
 }
 
 fn write_thumbnails(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     thumbnail: Option<&Thumbnail>,
 ) -> Result<(), FormatError> {
     for (name, width, height) in THUMBNAILS {
-        let image = match thumbnail {
-            Some(thumbnail) => thumbnail.fitted_to(width, height, THUMBNAIL_BACKGROUND),
-            None => Thumbnail::filled(width, height, THUMBNAIL_BACKGROUND),
-        };
+        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, THUMBNAIL_BACKGROUND);
         entry(zip, name, &core_format::encode_colour(&image)?)?;
     }
     Ok(())
 }
 
 fn entry(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {
-    // A PNG is already deflated, and so is stored rather than deflated a second time; the
-    // program is small enough that it makes no difference either way.
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file(name, options).map_err(container)?;
+    // Deflated as known files are: a mask's PNG is mostly repeats a second pass folds away,
+    // some fifteen times smaller for a fifth of a millisecond (docs/formats/gcode-zip.md).
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 #[cfg(test)]

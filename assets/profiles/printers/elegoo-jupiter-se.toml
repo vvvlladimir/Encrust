@@ -1,0 +1,28 @@
+# Elegoo Jupiter SE.
+
+name = "Jupiter SE"
+manufacturer = "Elegoo"
+machine_name = "ELEGOO Jupiter Se"
+mirror = "lcd-mirror"
+output = "goo"
+connection = "none"
+
+[display]
+width_px = 5448
+height_px = 3064
+width_mm = 277.848
+height_mm = 156.264
+grey_min = 63
+
+[build_volume]
+x = 277.848
+y = 156.264
+z = 300.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

@@ -1,0 +1,27 @@
+# EPAX E10 14KW.
+
+name = "E10 14KW"
+manufacturer = "EPAX"
+machine_name = "EPAX E10 14KW"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 13320
+height_px = 5120
+width_mm = 223.78
+height_mm = 126.98
+
+[build_volume]
+x = 223.78
+y = 126.98
+z = 240.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

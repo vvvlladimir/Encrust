@@ -4,7 +4,9 @@
 
 use std::io;
 
-use core_format::{Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, encode_rgb15};
+use core_format::{
+    CHITU_ANTI_ALIAS_CAP, Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, Thumbnail, encode_rgb15,
+};
 
 use crate::family::MAGIC;
 
@@ -74,16 +76,18 @@ pub(crate) fn write_header(
     fields.u32_le(job.layer_count())?;
     fields.u32_le(offsets.large_preview)?;
     fields.u32_le(job.print_time_s())?;
-    fields.u32_le(u32::from(printer.mirror_x || printer.mirror_y))?;
+    // The projector type, zero on a mirrored panel too; the masks
+    // already print the right way round (ADR 0366).
+    fields.u32_le(0)?;
     fields.u32_le(offsets.print_parameters)?;
     fields.u32_le(PRINT_PARAMETERS_BYTES)?;
 
-    // The masks carry eight bits of grey each, so nothing is stacked in passes.
-    fields.u32_le(1)?;
+    // The anti-alias level, 4 with it off.
+    fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
 
-    // Zero leaves the layer data in the clear; see docs/decisions/0046.
+    // Zero leaves the layer data in the clear.
     fields.u32_le(0)?;
     fields.u32_le(offsets.slicer_info)?;
     fields.u32_le(SLICER_INFO_BYTES)
@@ -119,14 +123,9 @@ fn write_preview(
     job: &PrintJob,
     (width, height): (u32, u32),
 ) -> io::Result<u32> {
-    let pixels = match job.thumbnail.as_ref() {
-        Some(thumbnail) => thumbnail
-            .fitted_to(width, height, PREVIEW_BACKGROUND)
-            .pixels()
-            .to_vec(),
-        None => vec![PREVIEW_BACKGROUND; (width * height) as usize],
-    };
-    let data = encode_rgb15(&pixels);
+    let image =
+        Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND);
+    let data = encode_rgb15(image.pixels());
     let record = fields.position()?;
 
     fields.u32_le(width)?;
@@ -149,12 +148,16 @@ fn write_print_parameters(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result
     fields.f32_le(job.volume_mm3 / 1000.0)?;
     fields.f32_le(job.weight_g())?;
     fields.f32_le(job.cost().unwrap_or_default())?;
-    fields.f32_le(material.light_off_s())?;
+    fields.f32_le(material.bottom_light_off_s())?;
     fields.f32_le(material.light_off_s())?;
     fields.u32_le(material.bottom_layers)?;
     fields.f32_le(job.header_exposure_s())?;
     fields.f32_le(material.bottom_exposure_s)?;
-    fields.zeros(16)
+    let buffer = material.buffer_on(&job.printer).unwrap_or_default();
+    fields.f32_le(buffer.height_mm)?;
+    fields.f32_le(buffer.speed_mm_min)?;
+    fields.f32_le(buffer.light_off_delay_s)?;
+    fields.u32_le(u32::from(buffer.enabled))
 }
 
 /// The block the per-layer tables and the rests are announced in.
@@ -162,22 +165,25 @@ fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> 
     let material = &job.material;
     let [before_lift_s, after_lift_s, after_retract_s] = material.waits.rests_s();
 
-    // The second lift and retract are off: a stack of ours moves in one stroke.
-    fields.zeros(4 * 6)?;
+    // Of the second stage the header states the ordinary lift alone; the layers carry it all.
+    let stage = &material.second_stage;
+    fields.zeros(4 * 2)?;
+    fields.f32_le(stage.lift_distance_mm)?;
+    fields.f32_le(stage.lift_speed_mm_min)?;
+    fields.zeros(4 * 2)?;
     fields.f32_le(after_lift_s)?;
-    fields.u32_le(u32::from(job.printer.firmware.per_layer_settings))?;
-    fields.u32_le(job.created_minutes())?;
-    fields.u32_le(1)?;
-
-    // No slicer names itself here: the field is a capability stamp of the vendor's own.
+    // Per-layer settings, set only while a layer differs from the header, as in a `.ctb`.
+    let per_layer = job.printer.firmware.per_layer_settings && job.varies_by_layer();
+    fields.u32_le(u32::from(per_layer))?;
+    // No time and no software version are stated here.
+    fields.u32_le(0)?;
+    fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     fields.u32_le(0)?;
     fields.f32_le(after_retract_s)?;
     fields.f32_le(before_lift_s)?;
-    fields.f32_le(job.header_exposure_s())?;
-    fields.f32_le(material.bottom_exposure_s)?;
-
-    // A second copy of the rest after lift, which a real file carries as well.
     fields.f32_le(after_lift_s)?;
+    fields.f32_le(material.bottom_exposure_s)?;
+    fields.f32_le(job.header_exposure_s())?;
     fields.u32_le(u32::from(material.transition_layers))?;
     fields.zeros(8)
 }
@@ -192,7 +198,7 @@ pub(crate) struct LayerRow {
     pub address: u32,
     /// That block and the run-length data behind it, together.
     pub size: u32,
-    /// What the layer cures, square millimetres times a thousand.
+    /// What the layer cures, whole square millimetres.
     pub area: u32,
 }
 
@@ -220,19 +226,16 @@ pub(crate) fn write_layer_block(
 ) -> io::Result<()> {
     let material = &job.material;
     let bottom = material.is_bottom_layer(index);
-    let (lift_distance, lift_speed) = if bottom {
-        (
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-        )
-    } else {
-        (material.lift_distance_mm, material.lift_speed_mm_min)
-    };
-    let retract_speed = if bottom {
-        material.bottom_retract_speed_mm_min
-    } else {
-        material.retract_speed_mm_min
-    };
+    let peel = material.peel(bottom);
+    let motion = [
+        peel.lift_mm,
+        peel.lift_speed_mm_min,
+        peel.second_lift_mm,
+        peel.second_lift_speed_mm_min,
+        peel.retract_speed_mm_min,
+        peel.second_retract_mm,
+        peel.second_retract_speed_mm_min,
+    ];
     let light_pwm = if bottom {
         material.bottom_light_pwm
     } else {
@@ -240,13 +243,9 @@ pub(crate) fn write_layer_block(
     };
     let [before_lift_s, after_lift_s, after_retract_s] = material.waits.rests_s();
 
-    fields.f32_le(lift_distance)?;
-    fields.f32_le(lift_speed)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(retract_speed)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
+    for value in motion {
+        fields.f32_le(value)?;
+    }
     fields.f32_le(before_lift_s)?;
     fields.f32_le(after_lift_s)?;
     fields.f32_le(after_retract_s)?;
@@ -330,5 +329,25 @@ mod tests {
             "a normal layer lifts {}",
             lift(5)
         );
+    }
+
+    #[test]
+    fn a_bottom_layer_moves_in_both_stages() {
+        let mut job = sample_job(3);
+        job.material.bottom_layers = 1;
+        job.material.bottom_lift_distance_mm = 5.0;
+        job.material.bottom_lift_speed_mm_min = 120.0;
+        job.material.bottom_retract_speed_mm_min = 240.0;
+        job.material.second_stage.bottom_lift_distance_mm = 3.0;
+        job.material.second_stage.bottom_lift_speed_mm_min = 180.0;
+        job.material.second_stage.bottom_retract_distance_mm = 3.0;
+        job.material.second_stage.bottom_retract_speed_mm_min = 180.0;
+        let bytes = written(|fields| write_layer_block(fields, &job, 0));
+        let floats: Vec<f32> = bytes
+            .chunks(4)
+            .take(7)
+            .map(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+            .collect();
+        assert_eq!(floats, [5.0, 120.0, 3.0, 180.0, 240.0, 3.0, 180.0]);
     }
 }

@@ -1,9 +1,10 @@
-//! Version 4 of the container: the tables and the seven-bit run-length layers of the
-//! Chitu family under Creality's own magic, little-endian throughout. See
+//! Version 4 of the container: the tables of the Chitu family under Creality's own magic,
+//! little-endian throughout, and layers of six-bit runs that restart on every row. See
 //! `docs/formats/creality.md`.
 
 mod blocks;
 mod reader;
+mod rle;
 mod writer;
 
 pub use reader::{CxdlpV4Reader, OpenCxdlpV4};

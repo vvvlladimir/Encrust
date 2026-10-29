@@ -1,4 +1,5 @@
 mod destination;
+mod edge_fields;
 mod find;
 mod inspector;
 mod mask_pane;

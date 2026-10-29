@@ -1,0 +1,43 @@
+# PioNext D160.
+
+name = "D160"
+manufacturer = "PioNext"
+machine_name = "D160"
+mirror = "normal"
+output = "cxline"
+connection = "none"
+
+[display]
+width_px = 2560
+height_px = 1440
+width_mm = 158.72
+height_mm = 89.28
+
+[build_volume]
+x = 158.72
+y = 89.28
+z = 100.0
+
+[firmware]
+per_layer_settings = false
+variable_layer_height = false
+
+[locked]
+transition_layers = 5
+bottom_lift_distance_mm = 7.0
+bottom_lift_speed_mm_min = 420.0
+retract_speed_mm_min = 60.0
+bottom_retract_speed_mm_min = 60.0
+wait_mode = "light-off"
+bottom_light_off_delay_s = 0.0
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { min = 0.01, max = 0.2 }
+exposure_s = { min = 0.5, max = 10 }
+bottom_exposure_s = { min = 1, max = 70 }
+bottom_layers = { max = 10 }
+light_off_delay_s = { min = 1, max = 10 }
+lift_distance_mm = { min = 5, max = 15 }
+lift_speed_mm_min = { min = 60, max = 600 }

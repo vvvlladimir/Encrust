@@ -73,7 +73,13 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
 fn has_action(tool: Tool) -> bool {
     matches!(
         tool,
-        Tool::Repair | Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports
+        Tool::Repair
+            | Tool::Hollow
+            | Tool::Drain
+            | Tool::Cut
+            | Tool::Relief
+            | Tool::Supports
+            | Tool::PrintSettings
     )
 }
 
@@ -85,6 +91,7 @@ fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         Tool::Cut => cut::action(ui, window),
         Tool::Relief => relief::action(ui, window),
         Tool::Supports => supports::action(ui, window),
+        Tool::PrintSettings => print_settings::action(ui, window.machine),
         _ => {}
     }
 }

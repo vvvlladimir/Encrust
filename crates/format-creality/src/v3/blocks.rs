@@ -3,7 +3,7 @@
 
 use std::io;
 
-use core_format::{Fields, PrintJob, Rgb, Thumbnail, rgb565};
+use core_format::{CHITU_ANTI_ALIAS_CAP, Fields, PrintJob, Rgb, Thumbnail, rgb565};
 
 use crate::family::MAGIC;
 
@@ -40,10 +40,7 @@ pub(crate) fn write_previews(
     thumbnail: Option<&Thumbnail>,
 ) -> io::Result<()> {
     for (width, height) in PREVIEW_SIZES_PX {
-        let image = match thumbnail {
-            Some(thumbnail) => thumbnail.fitted_to(width, height, PREVIEW_BACKGROUND),
-            None => Thumbnail::filled(width, height, PREVIEW_BACKGROUND),
-        };
+        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, PREVIEW_BACKGROUND);
         for &pixel in image.pixels() {
             fields.u16_be(rgb565(pixel))?;
         }
@@ -60,13 +57,12 @@ pub(crate) fn write_previews(
 pub(crate) fn write_settings(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let (material, display) = (&job.material, &job.printer.display);
 
-    write_utf16(fields, &decimals(display.width_mm, 2))?;
-    write_utf16(fields, &decimals(display.height_mm, 2))?;
-    write_utf16(fields, &decimals(job.nominal_height_mm(), 3))?;
+    write_utf16(fields, &as_text(display.width_mm))?;
+    write_utf16(fields, &as_text(display.height_mm))?;
+    write_utf16(fields, &as_text(job.nominal_height_mm()))?;
 
     fields.u16_be(tenths(job.header_exposure_s()))?;
-    // One second is the floor the firmware needs: a zero here does not print.
-    fields.u16_be(seconds(material.light_off_s()).max(1))?;
+    fields.u16_be(whole_seconds(material.light_off_s()))?;
     fields.u16_be(seconds(material.bottom_exposure_s))?;
     fields.u16_be(material.bottom_layers as u16)?;
     fields.u16_be(whole_mm(material.bottom_lift_distance_mm))?;
@@ -85,23 +81,12 @@ pub(crate) fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::
     write_text(fields, SLICER)?;
     write_text(fields, &job.material.name)?;
 
-    // Distortion correction: off, with the thickness and focal length a vendor file
-    // carries anyway. These four are little-endian where the rest of the file is big.
-    fields.u8(0)?;
-    fields.u32_le(600)?;
-    fields.u32_le(300_000)?;
-
+    // Distortion, XY and Z compensation, each off with a zero value.
+    fields.zeros(15)?;
+    fields.u8(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP) as u8)?;
+    fields.zeros(2)?;
     fields.u8(1)?;
-    fields.u16_le(0)?;
-    fields.u8(0)?;
-    fields.u16_le(1000)?;
-
-    // The greys a layer may carry, which is all of them, and no blur of the firmware's.
-    fields.u8(1)?;
-    fields.u8(1)?;
-    fields.u8(u8::MAX)?;
-    fields.u8(0)?;
-    fields.u8(2)?;
+    fields.u8(job.raster.stated_blur_px())?;
     fields.bytes(&PAGE_BREAK)
 }
 
@@ -112,14 +97,14 @@ pub(crate) fn write_footer(fields: &mut Fields<'_>) -> io::Result<()> {
 }
 
 /// Writes a length-prefixed, nul-terminated string: the length counts the nul.
-fn write_text(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
+pub(crate) fn write_text(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
     fields.u32_be(value.len() as u32 + 1)?;
     fields.bytes(value.as_bytes())?;
     fields.u8(0)
 }
 
 /// Writes a length-prefixed UTF-16 string, big-endian, with the length in bytes.
-fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
+pub(crate) fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
     let units: Vec<u16> = value.encode_utf16().collect();
     fields.u32_be((units.len() * 2) as u32)?;
     for unit in units {
@@ -128,27 +113,30 @@ fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// A number as the text the settings block holds, to `places` decimals and no further.
-fn decimals(value: f32, places: usize) -> String {
-    let text = format!("{value:.places$}");
-    let text = text.trim_end_matches('0').trim_end_matches('.');
-    if text.is_empty() { "0" } else { text }.to_owned()
+/// A number as the format states it, six decimals of the single-precision value.
+pub(crate) fn as_text(value: f32) -> String {
+    format!("{:.6}", f64::from(value))
 }
 
-fn tenths(seconds: f32) -> u16 {
+/// A wait as the format states it, in whole seconds with the fraction dropped.
+pub(crate) fn whole_seconds(value: f32) -> u16 {
+    value.floor().clamp(0.0, f32::from(u16::MAX)) as u16
+}
+
+pub(crate) fn tenths(seconds: f32) -> u16 {
     (seconds * 10.0).round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
-fn seconds(value: f32) -> u16 {
+pub(crate) fn seconds(value: f32) -> u16 {
     value.round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
-fn whole_mm(value: f32) -> u16 {
+pub(crate) fn whole_mm(value: f32) -> u16 {
     value.round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
 /// A speed the container states in millimetres a second, where our profiles use a minute.
-fn mm_per_second(mm_min: f32) -> u16 {
+pub(crate) fn mm_per_second(mm_min: f32) -> u16 {
     (mm_min / 60.0).round().clamp(0.0, f32::from(u16::MAX)) as u16
 }
 
@@ -197,7 +185,7 @@ mod tests {
         let mut job = sample_job(4);
         job.material.exposure_s = 2.6;
         job.material.bottom_exposure_s = 32.0;
-        job.material.light_off_delay_s = 0.0;
+        job.material.light_off_delay_s = 0.9;
         let bytes = written(|fields| write_settings(fields, &job));
 
         // Behind the three text fields: exposure, the wait, then the bottom exposure.
@@ -205,8 +193,8 @@ mod tests {
         assert_eq!(u16::from_be_bytes([numbers[0], numbers[1]]), 26);
         assert_eq!(
             u16::from_be_bytes([numbers[2], numbers[3]]),
-            1,
-            "a resin with no light-off delay still gets the one second it needs"
+            0,
+            "a wait is stated without its fraction"
         );
         assert_eq!(u16::from_be_bytes([numbers[4], numbers[5]]), 32);
     }
@@ -219,9 +207,21 @@ mod tests {
     }
 
     #[test]
-    fn a_number_is_written_as_text_without_trailing_zeros() {
-        assert_eq!(decimals(192.0, 2), "192");
-        assert_eq!(decimals(120.32, 2), "120.32");
-        assert_eq!(decimals(0.05, 3), "0.05");
+    fn a_number_is_written_as_text_to_six_decimals() {
+        assert_eq!(as_text(81.0), "81.000000");
+        assert_eq!(as_text(0.05), "0.050000");
+    }
+
+    #[test]
+    fn the_corrections_are_written_off_with_anti_aliasing_off() {
+        let mut job = sample_job(1);
+        job.raster.shading = core_raster::Shading::Binary;
+        let bytes = written(|fields| write_slicer_info(fields, &job));
+        assert_eq!(
+            &bytes[bytes.len() - 22..],
+            &[
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 1, 2, 0x0D, 0x0A
+            ]
+        );
     }
 }

@@ -1,0 +1,33 @@
+# Voxelab Proxima 6.
+
+name = "Proxima 6"
+manufacturer = "Voxelab"
+machine_name = "Voxelab Proxima 6"
+mirror = "lcd-mirror"
+front_edge = "min_x"
+output = "fdg"
+connection = "none"
+
+[display]
+width_px = 1620
+height_px = 2560
+width_mm = 82.62
+height_mm = 130.56
+
+[build_volume]
+x = 82.62
+y = 130.56
+z = 155.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

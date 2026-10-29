@@ -1,0 +1,31 @@
+# PioNext DJ89 PLUS.
+
+name = "DJ89 PLUS"
+manufacturer = "PioNext"
+machine_name = "DJ89 PLUS"
+mirror = "lcd-mirror"
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 7680
+height_px = 4320
+width_mm = 228.096
+height_mm = 128.304
+
+[build_volume]
+x = 228.096
+y = 128.304
+z = 100.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 5
+wait_mode = "light-off"
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 300.0
+bottom_retract_speed_mm_min = 60.0
+retract_speed_mm_min = 60.0

@@ -1,0 +1,27 @@
+# EPAX X133 6K.
+
+name = "X133 6K"
+manufacturer = "EPAX"
+machine_name = "EPAX X133 6K"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 5760
+height_px = 3240
+width_mm = 288.0
+height_mm = 162.0
+
+[build_volume]
+x = 288.0
+y = 162.0
+z = 400.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

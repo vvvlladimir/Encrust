@@ -10,7 +10,7 @@ area, bottom area and contour length, with weights trained by an evolutionary al
 None of those three is what an MSLA print fails on. Every layer here is pulled off the
 film, and that force follows the cross-section being pulled: a 40 by 40 plate lying flat
 tears off its supports where the same plate standing on its edge prints without trouble.
-Printer vendors say the same thing in their own words — the Z cross-section is
+Printer makers say the same thing in their own words — the Z cross-section is
 the thing to keep small.
 
 The cross-section is also the one term that cannot be read off the faces. Overhang area,

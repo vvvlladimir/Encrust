@@ -1,0 +1,27 @@
+# UniFormation GK3 Ultra.
+
+name = "GK3 Ultra"
+manufacturer = "UniFormation"
+machine_name = "UniFormation GK3 Ultra"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 15120
+height_px = 6230
+width_mm = 302.4
+height_mm = 161.98
+
+[build_volume]
+x = 302.4
+y = 161.98
+z = 300.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 3, warn_max = 20 }

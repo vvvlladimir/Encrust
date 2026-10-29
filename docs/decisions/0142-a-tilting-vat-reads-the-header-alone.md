@@ -13,7 +13,7 @@ A print from such a file stopped rising at around 0.6 mm — the first normal la
 past the bottom and transition block — while the panel kept exposing. The same job with
 `per_layer_settings = false` printed to the end. The two files differ in one meaningful
 byte, offset 195445, and in nothing else: same layer count, same Z per layer, same
-exposure ramp in the records, same lift and retract. A vendor file for the machine
+exposure ramp in the records, same lift and retract. A known file for the machine
 carries the same records and clears the same byte.
 
 The Saturn 4 Ultra separates a layer by tilting the vat, not by pulling the plate off the
@@ -32,7 +32,7 @@ and a tilting vat is a property of one machine rather than of a manufacturer or 
 
 ## Consequences
 
-Files for this machine are byte-compatible with the vendor's on the flag. The bottom block is
+Files for this machine are byte-compatible with the known one on the flag. The bottom block is
 ramped by the firmware from the header's bottom exposure, common exposure and transition
 count, which is what the working print did.
 

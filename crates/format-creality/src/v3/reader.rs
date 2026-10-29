@@ -133,7 +133,7 @@ impl SlicedFileReader for CxdlpReader {
 }
 
 /// A length-prefixed, nul-terminated string, or `None` where it is empty.
-fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, FormatError> {
+pub(crate) fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, FormatError> {
     let length = reads.u32_be()?;
     if length == 0 {
         return Ok(None);
@@ -144,7 +144,9 @@ fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, Format
 }
 
 /// One of the three settings the container states as UTF-16 text rather than a number.
-fn read_utf16_number<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<f32>, FormatError> {
+pub(crate) fn read_utf16_number<S: ReadSeek>(
+    reads: &mut Reads<S>,
+) -> Result<Option<f32>, FormatError> {
     let length = reads.u32_be()?;
     let bytes = reads.bytes(length as usize)?;
     let units: Vec<u16> = bytes

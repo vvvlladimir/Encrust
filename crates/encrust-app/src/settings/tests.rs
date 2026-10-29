@@ -7,7 +7,8 @@ use super::library::{
 use super::*;
 use crate::undo::Frame;
 use printer_profiles::{
-    Catalogue, Kind, MaterialProfile, PrinterProfile, PrinterTuning, SupportProfile,
+    Catalogue, Connection, Kind, MaterialProfile, NetworkMachine, PrinterProfile, PrinterTuning,
+    SupportProfile,
 };
 
 const RESTING: Frame = Frame {
@@ -290,6 +291,22 @@ fn an_edit_for_one_printer_leaves_every_other_alone() {
 }
 
 #[test]
+fn a_resins_edge_smoothing_is_saved_for_every_printer() {
+    let catalogue = with_grey("edges");
+    let mut settings = Settings::default();
+    settings.open_machines(&catalogue, Some(MARS), Some("standard-grey"));
+    let resin = settings.resin.as_mut().expect("open");
+
+    resin.draft.values.edges.anti_alias = false;
+    let saved = resin.to_saved();
+    assert!(!saved.edges.anti_alias, "the resin's own default");
+    assert!(
+        !saved.for_printer(SATURN).edges.anti_alias,
+        "and on another printer"
+    );
+}
+
+#[test]
 fn a_resin_taken_off_a_printer_stays_in_the_pool_and_comes_back() {
     let mut catalogue = with_grey("pool");
     remove_resin(&mut catalogue, MARS, "standard-grey").expect("writable");
@@ -357,7 +374,7 @@ fn a_copy_that_differs_from_the_shipped_machine_carries_it() {
     let mut settings = Settings::default();
     settings.pick(&catalogue, Node::Printer(SATURN.to_owned()));
     let draft = settings.printer.as_ref().expect("a printer is open");
-    assert_eq!(draft.shipped(), Some(&shipped));
+    assert_eq!(draft.shipped(), Some(shipped.clone()));
 
     catalogue.save_printer(SATURN, &shipped).expect("writable");
     settings.pick(&catalogue, Node::Printer(SATURN.to_owned()));
@@ -366,6 +383,43 @@ fn a_copy_that_differs_from_the_shipped_machine_carries_it() {
         draft.shipped(),
         None,
         "a copy that matches what is shipped has nothing to say"
+    );
+}
+
+/// The printers a machine is sent to are the user's: listing one is no edit of the model,
+/// and taking the shipped numbers back keeps them.
+#[test]
+fn the_shipped_machine_comes_back_over_the_users_network() {
+    let mut catalogue = writable("own-network");
+    let shipped = catalogue
+        .shipped_printer(SATURN)
+        .expect("a shipped machine");
+    let listed = PrinterProfile {
+        connection: Connection::Sdcp,
+        machines: vec![NetworkMachine {
+            name: "Bench".to_owned(),
+            address: "192.168.1.40".to_owned(),
+            board: None,
+        }],
+        ..shipped.clone()
+    };
+    catalogue.save_printer(SATURN, &listed).expect("writable");
+    let mut settings = Settings::default();
+    settings.pick(&catalogue, Node::Printer(SATURN.to_owned()));
+    let draft = settings.printer.as_ref().expect("a printer is open");
+    assert_eq!(draft.shipped(), None, "a network alone is no own copy");
+
+    let edited = PrinterProfile {
+        name: "Saturn, as I measured it".to_owned(),
+        ..listed.clone()
+    };
+    catalogue.save_printer(SATURN, &edited).expect("writable");
+    settings.pick(&catalogue, Node::Printer(SATURN.to_owned()));
+    let draft = settings.printer.as_ref().expect("a printer is open");
+    assert_eq!(
+        draft.shipped(),
+        Some(listed),
+        "the shipped numbers, the printers kept"
     );
 }
 

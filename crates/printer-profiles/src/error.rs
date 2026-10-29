@@ -43,8 +43,14 @@ pub enum ProfileError {
     #[error("{field} cannot be negative, got {value}")]
     Negative { field: &'static str, value: f32 },
 
+    #[error("the plate inset leaves nothing of the plate to stand a model on")]
+    InsetLeavesNoPlate,
+
     #[error("printer {index} on the network has no address")]
     NoAddress { index: usize },
+
+    #[error("display.grey_min is {min}, above display.grey_max of {max}")]
+    InvertedGreyRange { min: u8, max: u8 },
 
     #[error("tuning for printer {printer}: {field} must be greater than zero, got {value}")]
     NonPositiveTuning {
@@ -53,11 +59,17 @@ pub enum ProfileError {
         value: f32,
     },
 
+    #[error("the limit on {field} runs out of order: min, warn_min, warn_max, max")]
+    DisorderedLimit { field: &'static str },
+
     #[error("the locked {field} must be greater than zero, got {value}")]
     NonPositiveLocked { field: &'static str, value: f32 },
 
     #[error("there is no {kind} called {id} in the catalogue")]
     Unknown { kind: &'static str, id: String },
+
+    #[error("{path} holds edits over the shipped printer {id}, which this build does not ship")]
+    EditsOverNothing { id: String, path: PathBuf },
 
     #[error("this platform has nowhere to keep your profiles; set {variable}")]
     NoUserDir { variable: &'static str },

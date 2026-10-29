@@ -10,7 +10,7 @@ on the command line, a file dialog in the window. That works for someone who clo
 repository and nobody else. A user who downloads a binary has no `assets/` directory, so
 the first thing the slicer asks them for is a file they do not have.
 
-The catalogue also has to be editable. Every number in it is transcribed from a vendor
+The catalogue also has to be editable. Every number in it is transcribed from a maker's
 specification rather than measured, and the person holding the machine knows better than
 we do. Their correction must survive an upgrade of the binary, and it must be reachable
 without them learning where the executable lives.

@@ -12,7 +12,8 @@ use core_format::{
 };
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
 use format_anycubic::{
-    AnycubicFlavour, AnycubicSink, AnycubicVersion, AnycubicWriter, PwsReader, decode,
+    AnycubicFlavour, AnycubicReader, AnycubicSink, AnycubicVersion, AnycubicWriter, PwsReader,
+    decode,
 };
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -25,7 +26,12 @@ const LAYER_DEF_BYTES: usize = 32;
 const HEADER_ADDRESS: usize = 0x14;
 const PREVIEW_ADDRESS: usize = 0x1C;
 const LAYER_TABLE_ADDRESS: usize = 0x24;
-const LAYER_DATA_ADDRESS: usize = 0x2C;
+const COLOUR_ADDRESS: usize = 0x20;
+const EXTRA_ADDRESS: usize = 0x28;
+const MACHINE_ADDRESS: usize = 0x2C;
+const LAYER_DATA_ADDRESS: usize = 0x30;
+const MODEL_ADDRESS: usize = 0x34;
+const SUB_LAYERS_ADDRESS: usize = 0x38;
 
 fn printer() -> PrinterProfile {
     PrinterProfile::from_toml_str(
@@ -139,27 +145,43 @@ fn the_file_mark_addresses_a_table_that_names_itself() {
     let file = write(&job(1), &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()]);
 
     assert_eq!(table_name(&file, 0), "ANYCUBIC");
-    assert_eq!(u32_at(&file, 0x0C), 1, "version 1 is what we write");
-    assert_eq!(u32_at(&file, 0x10), 4, "four tables carry a version 1 file");
-
-    let header = u32_at(&file, HEADER_ADDRESS) as usize;
-    let preview = u32_at(&file, PREVIEW_ADDRESS) as usize;
-    let table = u32_at(&file, LAYER_TABLE_ADDRESS) as usize;
-    let data = u32_at(&file, LAYER_DATA_ADDRESS) as usize;
-
-    assert_eq!(table_name(&file, header), "HEADER");
-    assert_eq!(table_name(&file, preview), "PREVIEW");
-    assert_eq!(table_name(&file, table), "LAYERDEF");
-    assert!(
-        header < preview && preview < table && table < data,
-        "the tables are written in the order the mark lists them"
+    assert_eq!(u32_at(&file, 0x0C), 1, "the default writer is version 1");
+    assert_eq!(
+        u32_at(&file, 0x10),
+        11,
+        "eleven tables, whatever the revision"
     );
-    assert!(data <= file.len(), "the layer data is inside the file");
 
-    // The blocks a later revision adds are addressed with a zero, not left out.
-    for at in [0x18, 0x20, 0x28] {
-        assert_eq!(u32_at(&file, at), 0);
+    let named = [
+        (HEADER_ADDRESS, "HEADER"),
+        (PREVIEW_ADDRESS, "PREVIEW"),
+        (LAYER_TABLE_ADDRESS, "LAYERDEF"),
+        (EXTRA_ADDRESS, "EXTRA"),
+        (MACHINE_ADDRESS, "MACHINE"),
+        (MODEL_ADDRESS, "Model"),
+        (SUB_LAYERS_ADDRESS, "SUBIMGS"),
+    ];
+    for (slot, name) in named {
+        assert_eq!(table_name(&file, u32_at(&file, slot) as usize), name);
     }
+    let order = [
+        HEADER_ADDRESS,
+        PREVIEW_ADDRESS,
+        COLOUR_ADDRESS,
+        LAYER_TABLE_ADDRESS,
+        EXTRA_ADDRESS,
+        MACHINE_ADDRESS,
+        0x18,
+        MODEL_ADDRESS,
+        SUB_LAYERS_ADDRESS,
+        LAYER_DATA_ADDRESS,
+    ]
+    .map(|slot| u32_at(&file, slot));
+    assert!(
+        order.windows(2).all(|pair| pair[0] < pair[1]),
+        "the blocks are written in this order: {order:?}"
+    );
+    assert_eq!(u32_at(&file, 0x3C), 0, "no second preview");
 }
 
 #[test]
@@ -173,11 +195,11 @@ fn a_table_states_its_own_length() {
     let preview = u32_at(&file, PREVIEW_ADDRESS) as usize;
     let table = u32_at(&file, LAYER_TABLE_ADDRESS) as usize;
 
-    assert_eq!(u32_at(&file, header + 12), 80, "the header's fields alone");
+    assert_eq!(u32_at(&file, header + 12), 96, "the header's fields alone");
     assert_eq!(
-        u32_at(&file, preview + 12) as usize,
-        preview_end(&file) - preview,
-        "the preview counts its own name and length in, where no other table does"
+        u32_at(&file, preview + 12) as usize + 16,
+        u32_at(&file, COLOUR_ADDRESS) as usize - preview,
+        "the preview counts its shape and pixels, not its name and length"
     );
     assert_eq!(
         u32_at(&file, table + 12) as usize,
@@ -185,11 +207,14 @@ fn a_table_states_its_own_length() {
         "the layer table counts the layer count and its rows"
     );
     assert_eq!(u32_at(&file, table + 16), 4, "four layers");
-}
-
-/// Where the preview table ends, which is where the layer table begins.
-fn preview_end(file: &[u8]) -> usize {
-    u32_at(file, LAYER_TABLE_ADDRESS) as usize
+    let machine = u32_at(&file, MACHINE_ADDRESS) as usize;
+    assert_eq!(u32_at(&file, machine + 12), 224);
+    assert_eq!(
+        u32_at(&file, 0x18) as usize + 32,
+        machine + 224 + 32,
+        "the slicer block follows the machine block"
+    );
+    assert_eq!(u32_at(&file, machine + 224 + 32), 128, "and states 128");
 }
 
 #[test]
@@ -292,9 +317,9 @@ fn the_preview_carries_the_job_thumbnail_as_five_six_five_colour() {
     let preview = u32_at(&file, PREVIEW_ADDRESS) as usize;
     assert_eq!(u32_at(&file, preview + 16), 224);
     assert_eq!(
-        String::from_utf8_lossy(&file[preview + 20..preview + 24]).trim_end_matches('\0'),
-        "x",
-        "a mark of its own sits between the two resolutions"
+        u32_at(&file, preview + 20),
+        42,
+        "a word every file states sits between the two sides"
     );
     assert_eq!(u32_at(&file, preview + 24), 168);
 
@@ -336,100 +361,151 @@ fn a_band_of_height_writes_its_own_exposure_into_the_layer_table() {
     let header = u32_at(&file, HEADER_ADDRESS) as usize + 16;
     assert_eq!(
         u32_at(&file, header + 64),
-        1,
-        "the header tells the machine the rows may differ from it"
-    );
-}
-
-/// Where the file mark states the blocks only a later revision carries.
-const SOFTWARE_ADDRESS: usize = 0x18;
-const COLOUR_ADDRESS: usize = 0x20;
-const EXTRA_ADDRESS: usize = 0x28;
-const MACHINE_ADDRESS: usize = 0x2C;
-
-#[test]
-fn revision_516_adds_the_grey_table_and_the_machine_block() {
-    let layers = [LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()];
-    let file = write_version(
-        AnycubicWriter::new(AnycubicFlavour::Pwmx, AnycubicVersion::V516),
-        &job(1),
-        &layers,
-        0.0,
-    );
-
-    assert_eq!(u32_at(&file, 0x0C), 516);
-    assert_eq!(u32_at(&file, 0x10), 8, "eight blocks carry a 516 file");
-
-    let header = u32_at(&file, HEADER_ADDRESS) as usize;
-    assert_eq!(u32_at(&file, header + 12), 84, "516 adds one header field");
-
-    let colour = u32_at(&file, COLOUR_ADDRESS) as usize;
-    let table = u32_at(&file, LAYER_TABLE_ADDRESS) as usize;
-    assert!(
-        colour > 0 && colour < table,
-        "the grey table sits between the preview and the layer table"
-    );
-    assert_eq!(u32_at(&file, colour + 4), 16, "sixteen grey levels");
-
-    let extra = u32_at(&file, EXTRA_ADDRESS) as usize;
-    let machine = u32_at(&file, MACHINE_ADDRESS) as usize;
-    assert_eq!(table_name(&file, extra), "EXTRA");
-    assert_eq!(table_name(&file, machine), "MACHINE");
-    assert_eq!(
-        u32_at(&file, machine + 12),
-        156,
-        "the machine block counts its own name and length in"
-    );
-    assert_eq!(
-        u32_at(&file, SOFTWARE_ADDRESS),
         0,
-        "the slicer block arrives at 517, not here"
+        "the per-layer flag stays clear; the rows carry it"
     );
-
-    // The layer data address moved one slot along, because the mark gained the machine.
-    let data = u32_at(&file, 0x30) as usize;
-    assert!(data > machine && data <= file.len());
 }
 
 #[test]
-fn revision_517_adds_the_slicer_and_model_blocks() {
+fn every_revision_is_the_same_tables_under_its_own_number() {
     let layers = [LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()];
-    let file = write_version(
-        AnycubicWriter::new(AnycubicFlavour::Pm5, AnycubicVersion::V517),
-        &job(1),
-        &layers,
-        0.0,
-    );
-
-    assert_eq!(u32_at(&file, 0x0C), 517);
-    assert_eq!(u32_at(&file, 0x10), 9, "nine blocks carry a 517 file");
-
-    let header = u32_at(&file, HEADER_ADDRESS) as usize;
-    assert_eq!(u32_at(&file, header + 12), 92, "517 adds three more fields");
-
-    let software = u32_at(&file, SOFTWARE_ADDRESS) as usize;
-    let model = u32_at(&file, 0x34) as usize;
-    assert!(software > 0, "the slicer block is addressed");
-    assert_eq!(
-        u32_at(&file, software + 32),
-        164,
-        "the slicer block states its length in the middle of itself"
-    );
-    assert_eq!(table_name(&file, model), "MODEL");
-
-    let data = u32_at(&file, 0x30) as usize;
-    assert!(data > model, "the layers come last");
-    assert!(data <= file.len());
+    let files: Vec<_> = [
+        (AnycubicVersion::V1, 1),
+        (AnycubicVersion::V515, 1),
+        (AnycubicVersion::V516, 1),
+        (AnycubicVersion::V517, 7),
+        (AnycubicVersion::V518, 15),
+    ]
+    .into_iter()
+    .map(|(version, properties)| {
+        let writer = AnycubicWriter::new(AnycubicFlavour::Pwmx, version);
+        let file = write_version(writer, &job(1), &layers, 0.0);
+        let machine = u32_at(&file, MACHINE_ADDRESS) as usize;
+        assert_eq!(u32_at(&file, 0x0C), version.number());
+        assert_eq!(u32_at(&file, machine + 132), properties, "{version:?}");
+        assert_eq!(
+            u32_at(&file, machine + 148),
+            version.number(),
+            "{version:?}"
+        );
+        file
+    })
+    .collect();
+    let without_numbers = |file: &Vec<u8>| {
+        let machine = u32_at(file, MACHINE_ADDRESS) as usize;
+        let mut bytes = file.clone();
+        for at in [0x0C, machine + 132, machine + 148] {
+            bytes[at..at + 4].fill(0);
+        }
+        bytes
+    };
+    for file in &files[1..] {
+        assert_eq!(without_numbers(file), without_numbers(&files[0]));
+    }
 }
 
 #[test]
-fn an_extension_names_the_newest_revision_its_machines_read() {
+fn the_header_states_the_panels_grey_and_ends_as_the_format_ends_it() {
+    let mut blurred = job(1);
+    blurred.raster.grey.levels = std::num::NonZeroU8::new(4);
+    blurred.raster.blur_px = 2;
+    let file = write(
+        &blurred,
+        &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()],
+    );
+    let fields = u32_at(&file, HEADER_ADDRESS) as usize + 16;
+    assert_eq!(
+        u32_at(&file, fields + 40),
+        4,
+        "four greys is anti-alias level four"
+    );
+    assert_eq!(u32_at(&file, fields + 80), 0, "advanced mode off");
+    assert_eq!(
+        u32_at(&file, fields + 84),
+        4 | 2 << 16,
+        "the grey level repeats it, and the blur is two pixels"
+    );
+    assert_eq!(u32_at(&file, fields + 88), 10, "the standard resin type");
+    assert_eq!(u32_at(&file, fields + 92), 0, "intelligent mode off");
+    let grey = u32_at(&file, COLOUR_ADDRESS) as usize;
+    assert_eq!(&file[grey..grey + 8], &[0; 8], "a grey table of no levels");
+}
+
+#[test]
+fn the_second_layer_table_repeats_the_first() {
+    let layers: Vec<_> = (0..3)
+        .map(|index| layer_from(&vec![index * 40 + 40; (WIDTH_PX * HEIGHT_PX) as usize]))
+        .collect();
+    let file = write(&job(3), &layers);
+
+    let machine = u32_at(&file, MACHINE_ADDRESS) as usize;
+    let pixel_um = (f32_at(&file, machine + 0x9C), f32_at(&file, machine + 0xA0));
+    assert!(
+        (pixel_um.0 - 100.0).abs() < 1e-3 && (pixel_um.1 - 100.0).abs() < 1e-3,
+        "a 0.1 mm pixel is 100 um along each axis, got {pixel_um:?}"
+    );
+    assert_eq!(u32_at(&file, machine + 0xC4), 1, "one panel");
+    assert_eq!(
+        u32_at(&file, machine + 0xCC),
+        WIDTH_PX | HEIGHT_PX << 16,
+        "the panel's resolution as two u16"
+    );
+
+    let sub_layers = u32_at(&file, SUB_LAYERS_ADDRESS) as usize;
+    assert_eq!(u32_at(&file, sub_layers + 12), 44, "one row's length");
+    assert_eq!(u32_at(&file, sub_layers + 16), 3);
+    let table = u32_at(&file, LAYER_TABLE_ADDRESS) as usize + 20;
+    for index in 0..3 {
+        let row = table + index * LAYER_DEF_BYTES;
+        let sub_row = sub_layers + 24 + index * 44;
+        assert_eq!(
+            (
+                u32_at(&file, sub_row),
+                u32_at(&file, sub_row + 4),
+                u32_at(&file, sub_row + 8)
+            ),
+            (
+                u32_at(&file, row),
+                u32_at(&file, row + 4),
+                u32_at(&file, row + 24)
+            ),
+            "layer {index} is the same data in both tables"
+        );
+    }
+    assert_eq!(
+        u32_at(&file, LAYER_DATA_ADDRESS) as usize,
+        sub_layers + 24 + 44 * 3,
+        "the layers follow the second table"
+    );
+    let open = AnycubicReader
+        .open(std::io::Cursor::new(file))
+        .expect("the file reads back");
+    assert_eq!(open.facts().machine.as_deref(), Some("Test panel"));
+}
+
+#[test]
+fn an_extension_is_written_at_the_revision_its_machines_read() {
     assert_eq!(AnycubicFlavour::Pwx.newest_version(), AnycubicVersion::V1);
+    assert_eq!(AnycubicFlavour::Dlp.newest_version(), AnycubicVersion::V515);
     assert_eq!(
         AnycubicFlavour::Pwmx.newest_version(),
         AnycubicVersion::V516
     );
-    assert_eq!(AnycubicFlavour::Pm5.newest_version(), AnycubicVersion::V517);
+    assert_eq!(
+        AnycubicFlavour::Pwmb.newest_version(),
+        AnycubicVersion::V517
+    );
+    for flavour in [
+        AnycubicFlavour::Pm5s,
+        AnycubicFlavour::M5sp,
+        AnycubicFlavour::Pm4n,
+    ] {
+        assert_eq!(
+            flavour.newest_version(),
+            AnycubicVersion::V518,
+            "{flavour:?}"
+        );
+    }
 }
 
 /// A one-layer V1 file made a `.pws`: `levels` passes in the header and `passes` as the

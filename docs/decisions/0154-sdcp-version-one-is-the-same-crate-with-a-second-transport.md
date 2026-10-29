@@ -42,7 +42,7 @@ correctly. `Control` holds either a `WebSocket` or a broker behind one `Link`, `
 either posts packets or serves the file and sends command `256`, and everything between the
 two — envelope, topics, acknowledgements, status — is written once.
 
-This is the same argument ADR 0146 made for `format-chitu`: one vendor family, one crate,
+This is the same argument ADR 0146 made for `format-chitu`: one maker's family, one crate,
 with the version deciding the codec rather than the crate.
 
 ADR 0136 stands. One protocol is still one crate with no shared crate and no sideways edge;

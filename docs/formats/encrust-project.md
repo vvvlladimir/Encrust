@@ -27,8 +27,9 @@ one reads, and a plate with nothing on it has none.
 
 ## `project.json`
 
-`version` is read on its own before anything else. This build writes version 6. Version 5
-is read too: its lattice had one `size_mm` for cells and walls, read as the `cell_mm`, and the
+`version` is read on its own before anything else. This build writes version 7. Version 6
+is read too, its layer height, adaptive layers, bands, planes a layer and edge smoothing
+ignored: a project keeps no print settings (ADR 0380). Version 5 is read as well: its lattice had one `size_mm` for cells and walls, read as the `cell_mm`, and the
 fields it lacks take their defaults. Version 4 is read as well: it carried its printer and
 resin whole, and only their ids are kept. Any other is refused whole: version 3 and below
 hold no built geometry or diagnostics.
@@ -36,7 +37,7 @@ hold no built geometry or diagnostics.
 | Key | Type |
 |---|---|
 | `printer`, `resin` | the catalogue id, or `null`; never the profile itself (ADR 0261) |
-| `slicing` | layer height, `AdaptiveSettings`, `ExposureRange` bands, anti-aliasing, `OutputFormat`; taken up only with the printer |
+| `slicing` | island removal and its hanging passes, `OutputFormat`; taken up only with the printer. The print settings are the printer's and resin's (ADR 0380) |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
 | `hollow` | what the Hollow tool is set to, not what it built |
 | `hollow.infill` | the lattice's `pattern`, `cell_mm` and `density`, from which its walls and crossing holes follow; an older file's `wall_mm` reads as the density it made (ADR 0320); `null` for an empty cavity |

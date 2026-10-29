@@ -98,9 +98,11 @@ struct Globals {
     overhang_color: [f32; 4],
     /// `xyz` washes whatever shows of a model's inside; `w` is unused padding.
     inside_color: [f32; 4],
-    /// `xyz` is the build volume, plate millimetres; `w` is 1.0 while what stands past it
-    /// is marked.
+    /// `xyz` is the high corner of where a model stands unmarked, plate millimetres; `w` is
+    /// 1.0 while what stands past it is marked.
     volume: [f32; 4],
+    /// `xyz` is the low corner of the same box; `w` is unused padding.
+    volume_low: [f32; 4],
     /// `xyz` marks whatever stands past the build volume; `w` is unused padding.
     outside_color: [f32; 4],
     /// The Cut tool's plane as `xyz` its normal and `w` its offset along it, millimetres.
@@ -276,7 +278,10 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
         inside_color: theme::gamma(theme::scene().section_wash),
         volume: frame
             .volume_mm
-            .map_or([0.0; 4], |volume| volume.extend(1.0).to_array()),
+            .map_or([0.0; 4], |[_, high]| high.extend(1.0).to_array()),
+        volume_low: frame
+            .volume_mm
+            .map_or([0.0; 4], |[low, _]| low.extend(0.0).to_array()),
         outside_color: theme::gamma(theme::scene().outside),
         cut_plane: frame.cut_line.map_or([0.0; 4], |line| {
             line.normal.extend(line.offset_mm).to_array()

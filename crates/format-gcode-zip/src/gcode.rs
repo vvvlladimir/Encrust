@@ -22,35 +22,23 @@ pub(crate) fn preamble(job: &PrintJob) -> String {
          M106 S0;Turn LED OFF\n\
          ;<Slice> Blank\n\
          G28 Z0;Home Z\n\
-         ;END_GCODE_BEGIN\n",
+         ;START_GCODE_END\n",
     );
     text
 }
 
-/// The settings header, `;key:value` a line, in the order a vendor file carries them.
+/// The settings header, `;key:value` a line, in the order a printed file carries them.
 fn header(job: &PrintJob) -> String {
-    let (printer, material, display) = (&job.printer, &job.material, &job.printer.display);
-    let mirrored = printer.mirror_x || printer.mirror_y;
-    let mut head = Header::default();
-
-    // The archive names its layers by number, so nothing in it refers to the file's own
-    // name and a vendor file leaves this empty too.
-    head.text("fileName", "");
-    head.text("machineType", printer.machine_name());
-    head.number("estimatedPrintTime", job.print_time_s() as f32);
-    head.number("volume", job.volume_mm3 / 1000.0);
-    head.text("resin", &material.name);
-    head.number("weight", job.weight_g());
-    head.number("price", job.cost().unwrap_or_default());
-    head.number("layerHeight", job.nominal_height_mm());
-    head.int("resolutionX", job.raster.width_px);
-    head.int("resolutionY", job.raster.height_px);
-    head.number("machineX", display.width_mm);
-    head.number("machineY", display.height_mm);
-    head.number("machineZ", printer.build_volume.z);
+    let (printer, material) = (&job.printer, &job.material);
+    let mirrored = printer.mirror.mirrors_x();
+    let mut head = job_keys(job);
     head.text(
         "projectType",
         if mirrored { "LCD_mirror" } else { "Normal" },
+    );
+    head.int(
+        "transitionLayerCount",
+        u32::from(material.transition_layers),
     );
     head.number("normalExposureTime", job.header_exposure_s());
 
@@ -65,6 +53,11 @@ fn header(job: &PrintJob) -> String {
     head.number("zSlowUpDistance", 0.0);
     head.int("bottomLayCount", material.bottom_layers);
     head.int("bottomLayerCount", material.bottom_layers);
+    // The shrinkage already scaled into the masks, which the board does not apply again.
+    let [shrink_x, shrink_y, shrink_z] = material.compensation.scale();
+    head.number("shrinkageX", shrink_x * 100.0);
+    head.number("shrinkageY", shrink_y * 100.0);
+    head.number("shrinkageZ", shrink_z * 100.0);
 
     // How the panel is mounted, not what the masks were drawn as, as in every other
     // container we write (ADR 0134).
@@ -73,8 +66,9 @@ fn header(job: &PrintJob) -> String {
     head.int("totalLayer", job.layer_count());
     head.number("bottomLayerLiftHeight", material.bottom_lift_distance_mm);
     head.number("bottomLayerLiftSpeed", material.bottom_lift_speed_mm_min);
-    head.number("bottomLightOffTime", material.light_off_s());
+    head.number("bottomLightOffTime", material.bottom_light_off_s());
     head.number("lightOffTime", material.light_off_s());
+    head.number("bottomLayerDropSpeed", material.bottom_retract_speed_mm_min);
     head.int("bottomPWMLight", u32::from(material.bottom_light_pwm));
     head.int("PWMLight", u32::from(material.light_pwm));
     head.int(
@@ -87,6 +81,28 @@ fn header(job: &PrintJob) -> String {
     head.finish()
 }
 
+/// The keys naming the job and the machine, which open the header.
+fn job_keys(job: &PrintJob) -> Header {
+    let (printer, material, display) = (&job.printer, &job.material, &job.printer.display);
+    let mut head = Header::default();
+    // The archive names its layers by number, so nothing in it refers to the file's own
+    // name and a printed file leaves this empty too.
+    head.text("fileName", "");
+    head.text("machineType", printer.machine_name());
+    head.number("estimatedPrintTime", job.print_time_s() as f32);
+    head.number("volume", job.volume_mm3 / 1000.0);
+    head.text("resin", &material.name);
+    head.number("weight", job.weight_g());
+    head.number("price", job.cost().unwrap_or_default());
+    head.number("layerHeight", job.nominal_height_mm());
+    head.int("resolutionX", job.raster.width_px);
+    head.int("resolutionY", job.raster.height_px);
+    head.number("machineX", display.width_mm);
+    head.number("machineY", display.height_mm);
+    head.number("machineZ", printer.build_volume.z);
+    head
+}
+
 /// One layer's block: the image to show, the peel around it and the exposure itself.
 ///
 /// Everything here is this layer's own, which is why the container carries a banded
@@ -96,23 +112,7 @@ pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
     let bottom = material.is_bottom_layer(index);
     let z_mm = job.layer_z_mm(index);
     let [before_lift_s, after_lift_s, after_retract_s] = material.waits.rests_s();
-    // A bottom layer comes back down from exactly where it went, as in every other
-    // container: the profile states no bottom retract distance of its own.
-    let (lift_mm, lift_speed, retract_mm, retract_speed) = if bottom {
-        (
-            material.bottom_lift_distance_mm,
-            material.bottom_lift_speed_mm_min,
-            material.bottom_lift_distance_mm,
-            material.bottom_retract_speed_mm_min,
-        )
-    } else {
-        (
-            material.lift_distance_mm,
-            material.lift_speed_mm_min,
-            material.retract_distance_mm,
-            material.retract_speed_mm_min,
-        )
-    };
+    let (lift_mm, lift_speed, retract_mm, retract_speed) = travel(job, bottom);
     let pwm = if bottom {
         material.bottom_light_pwm
     } else {
@@ -150,7 +150,11 @@ pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
         line(move_to(z_mm, lift_speed, "Move Z"));
     }
 
-    wait(&mut line, material.light_off_s(), "Wait before cure");
+    wait(
+        &mut line,
+        material.light_off_of_layer_s(index),
+        "Wait before cure",
+    );
     line(format!("M106 S{pwm};Turn LED ON\n"));
     line(format!(
         "G4 P{};Cure time/delay\n",
@@ -160,22 +164,19 @@ pub(crate) fn layer_block(job: &PrintJob, index: u32) -> String {
     block
 }
 
-/// The closing moves: the last layer peeled off the film, then the plate out of the vat.
+/// The closing moves: the light out, then the plate slowly up to the top of its travel.
 pub(crate) fn epilogue(job: &PrintJob) -> String {
-    let material = &job.material;
-    let top_mm = job.height_mm();
-    let machine_z = job.printer.build_volume.z;
-    let lifted = (top_mm + material.lift_distance_mm).min(machine_z.max(top_mm));
-
-    let mut text = ";START_GCODE_END\nM106 S0;Turn LED OFF\n".to_owned();
-    if lifted > top_mm {
-        text.push_str(&move_to(lifted, material.lift_speed_mm_min, "Z Lift (1)"));
-    }
-    if machine_z > lifted {
-        text.push_str(&move_to(machine_z, material.lift_speed_mm_min, "Move Z"));
-    }
-    text.push_str("M18;Disable motors\n;END_GCODE_END\n;<Completed>\n");
-    text
+    let top_mm = job.printer.build_volume.z.max(job.height_mm());
+    // One slow climb at 25 mm/min, the same for every machine of this container.
+    format!(
+        ";END_GCODE_BEGIN\n\
+         M106 S0;Turn LED OFF\n\
+         G1 Z{} F25;Move Z\n\
+         M18;Disable motors\n\
+         ;END_GCODE_END\n\
+         ;<Completed>\n",
+        mm(top_mm)
+    )
 }
 
 /// What the layer at `index` is called inside the archive. The numbering starts at one.
@@ -184,6 +185,27 @@ pub(crate) fn image_name(index: u32) -> String {
 }
 
 /// One absolute move of the plate, millimetres at millimetres a minute.
+/// A layer's lift and retract, distances in mm and speeds in mm/min. A bottom layer comes
+/// back down from exactly where it went: the profile states no bottom retract distance.
+fn travel(job: &PrintJob, bottom: bool) -> (f32, f32, f32, f32) {
+    let material = &job.material;
+    if bottom {
+        (
+            material.bottom_lift_distance_mm,
+            material.bottom_lift_speed_mm_min,
+            material.bottom_lift_distance_mm,
+            material.bottom_retract_speed_mm_min,
+        )
+    } else {
+        (
+            material.lift_distance_mm,
+            material.lift_speed_mm_min,
+            material.retract_distance_mm,
+            material.retract_speed_mm_min,
+        )
+    }
+}
+
 fn move_to(z_mm: f32, speed_mm_min: f32, comment: &str) -> String {
     format!("G0 Z{} F{};{comment}\n", mm(z_mm), mm(speed_mm_min))
 }

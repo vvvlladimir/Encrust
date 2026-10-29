@@ -184,6 +184,18 @@ fn every_layer_reads_back_with_its_own_z_and_exposure() {
 }
 
 #[test]
+fn a_layer_image_is_deflated_in_the_archive_as_known_files_have_it() {
+    let file = write(&job(1), &blank(1), 0.0);
+    let mut zip = zip::ZipArchive::new(Cursor::new(file)).expect("what we wrote is a zip");
+    let layer = zip.by_name("1.png").expect("the first layer");
+    assert_eq!(
+        layer.compression(),
+        zip::CompressionMethod::Deflated,
+        "a mask's PNG shrinks some fifteen times when deflated again"
+    );
+}
+
+#[test]
 fn a_layer_decodes_to_the_pixels_it_went_in_as() {
     let pixels: Vec<u8> = (0..WIDTH_PX * HEIGHT_PX).map(|i| (i * 2) as u8).collect();
     let runs = layer_from(&pixels);

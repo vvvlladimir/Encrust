@@ -1,0 +1,31 @@
+# PioNext C01.
+
+name = "C01"
+manufacturer = "PioNext"
+machine_name = "C01"
+mirror = "lcd-mirror"
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 13320
+height_px = 5120
+width_mm = 223.78
+height_mm = 126.98
+
+[build_volume]
+x = 223.78
+y = 126.98
+z = 200.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 5
+wait_mode = "light-off"
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 600.0
+bottom_retract_speed_mm_min = 60.0
+retract_speed_mm_min = 60.0

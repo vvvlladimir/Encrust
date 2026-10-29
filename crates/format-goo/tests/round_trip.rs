@@ -28,7 +28,7 @@ fn printer() -> PrinterProfile {
         r#"
 name = "Test panel"
 manufacturer = "Test"
-mirror_x = true
+mirror = "lcd-mirror"
 
 [display]
 width_px = 16

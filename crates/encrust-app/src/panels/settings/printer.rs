@@ -4,13 +4,16 @@
 mod connection;
 
 use core_pipeline::SlicedFormat;
-use printer_profiles::PrinterProfile;
+use printer_profiles::{Display, Mirror, PlateInset, PrinterProfile};
 
 use crate::i18n::tr;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
-use crate::ui::{count_row, hint, icon, number_row, picker, secondary_button, switch, text_row};
+use crate::ui::{
+    count_row, describe, hint, icon, number_row, picker, picker_row, secondary_button, switch,
+    text_row,
+};
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
 /// millimetres.
@@ -22,7 +25,7 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let Some(draft) = window.machine.settings.printer.as_mut() else {
         return;
     };
-    let shipped = draft.shipped().cloned();
+    let shipped = draft.shipped();
     let (id, profile) = (draft.id.clone(), &mut draft.values);
     let mut restore = false;
     form_card(ui, &tr!("settings-tab-machine"), |ui| {
@@ -130,39 +133,31 @@ fn autosave(window: &mut Window) {
     draft.mark_saved();
     let (id, profile) = (draft.id.clone(), draft.values.clone());
     crate::profiles::learn_printer_names(window.machine);
-    if window.machine.slicing.printer_id.as_deref() != Some(id.as_str()) {
-        return;
-    }
-    let moves_the_plate = window.machine.slicing.printer.as_ref().is_none_or(|old| {
-        old.build_volume != profile.build_volume
-            || old.display != profile.display
-            || old.output != profile.output
-    });
-    if moves_the_plate {
-        crate::profiles::apply_printer(window, profile, Some(id));
-    } else {
-        window.machine.network.bind_to(Some(id), Some(&profile));
-        window.machine.slicing.printer = Some(profile);
+    if window.machine.slicing.printer_id.as_deref() == Some(id.as_str()) {
+        crate::profiles::printer_edited(window, profile, id);
     }
 }
 
-/// The dimmest grey this panel cures. Below it a mask pixel is written black instead of
-/// being left as resin that never sets; see `docs/decisions/0113`.
-fn grey_floor_row(ui: &mut egui::Ui, floor: &mut u8) {
-    let mut value = u32::from(*floor);
-    if count_row(ui, &tr!("printer-grey-floor"), &mut value, "", 1.0, 0..=254) {
-        *floor = value as u8;
+/// The greys an edge is spread over on this machine; see `docs/decisions/0378`.
+fn grey_range_rows(ui: &mut egui::Ui, display: &mut Display) {
+    let mut min = u32::from(display.grey_min);
+    let mut max = u32::from(display.grey_max);
+    if count_row(ui, &tr!("printer-grey-min"), &mut min, "", 1.0, 0..=max) {
+        display.grey_min = min as u8;
+    }
+    if count_row(ui, &tr!("printer-grey-max"), &mut max, "", 1.0, min..=255) {
+        display.grey_max = max as u8;
     }
     hint(
         ui,
-        &match floor {
-            0 => tr!("printer-grey-floor-off"),
-            _ => tr!("printer-grey-floor-on"),
+        &match (display.grey_min, display.grey_max) {
+            (0, 255) => tr!("printer-grey-range-full"),
+            _ => tr!("printer-grey-range-spread"),
         },
     );
 }
 
-/// The panel, the pitch it works out to, and the dimmest grey it cures.
+/// The panel, the pitch it works out to, and the greys an edge is spread over.
 fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     count_row(
         ui,
@@ -209,7 +204,7 @@ fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         ),
     );
 
-    grey_floor_row(ui, &mut profile.display.grey_floor);
+    grey_range_rows(ui, &mut profile.display);
 }
 
 /// The envelope the plate can print in, and which way round the panel is mounted.
@@ -243,9 +238,41 @@ fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     );
 
     ui.add_space(6.0);
-    switch(ui, &mut profile.mirror_x, &tr!("printer-mirror-x"));
-    switch(ui, &mut profile.mirror_y, &tr!("printer-mirror-y"));
-    hint(ui, &tr!("printer-mirror-note"));
+    mirror(ui, &mut profile.mirror);
+
+    ui.add_space(6.0);
+    let plate_mm = (profile.build_volume.x, profile.build_volume.y);
+    inset(ui, &mut profile.plate_inset, plate_mm);
+}
+
+/// The band along the plate's edges a model is marked in, each edge on its own; off is none.
+/// A band takes at most half the plate across it, so two never meet past the middle.
+fn inset(ui: &mut egui::Ui, inset: &mut Option<PlateInset>, (width_mm, depth_mm): (f32, f32)) {
+    let mut on = inset.is_some();
+    if switch(ui, &mut on, &tr!("printer-inset")).changed() {
+        *inset = on.then(PlateInset::default);
+    }
+    if let Some(inset) = inset {
+        let (across_x, across_y) = (width_mm / 2.0, depth_mm / 2.0);
+        for (label, edge, most_mm) in [
+            (tr!("printer-inset-min-x"), &mut inset.min_x_mm, across_x),
+            (tr!("printer-inset-max-x"), &mut inset.max_x_mm, across_x),
+            (tr!("printer-inset-min-y"), &mut inset.min_y_mm, across_y),
+            (tr!("printer-inset-max-y"), &mut inset.max_y_mm, across_y),
+        ] {
+            let most_mm = most_mm.clamp(0.0, 50.0);
+            number_row(
+                ui,
+                &label,
+                edge,
+                &tr!("unit-mm"),
+                FINE_STEP,
+                0.0..=most_mm,
+                2,
+            );
+        }
+    }
+    describe(ui, &tr!("printer-inset-note"));
 }
 
 /// What this machine obeys beyond the header, which no file format states.
@@ -270,6 +297,36 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         &tr!("printer-variable-height"),
     );
     hint(ui, &tr!("printer-variable-height-note"));
+}
+
+/// How the panel takes the plate, as the maker's settings state it.
+fn mirror(ui: &mut egui::Ui, mirror: &mut Mirror) {
+    let response = picker_row(
+        ui,
+        &tr!("printer-mirror"),
+        icon::FLIP,
+        &mirror_label(*mirror),
+    );
+    egui::Popup::menu(&response).show(|ui| {
+        for choice in Mirror::ALL {
+            if ui
+                .selectable_label(choice == *mirror, mirror_label(choice))
+                .clicked()
+            {
+                *mirror = choice;
+                ui.close();
+            }
+        }
+    });
+    hint(ui, &tr!("printer-mirror-note"));
+}
+
+fn mirror_label(mirror: Mirror) -> String {
+    match mirror {
+        Mirror::Normal => tr!("printer-mirror-normal"),
+        Mirror::LcdMirror => tr!("printer-mirror-lcd"),
+        Mirror::DlpNormal => tr!("printer-mirror-dlp"),
+    }
 }
 
 /// The container this machine's firmware reads. Only containers the window can write for

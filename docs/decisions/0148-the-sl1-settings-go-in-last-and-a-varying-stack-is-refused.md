@@ -70,7 +70,7 @@ and adopting it would mean writing values into a free-text field and hoping.
 
 ### Buffer the whole archive and rewrite `config.ini` at the end
 
-Keeps the entry order the vendor's own slicer uses. It loses on ADR 0010 and rule 7: peak memory must not
+Keeps the entry order of known files. It loses on ADR 0010 and rule 7: peak memory must not
 grow with the layer count, and a stack is hundreds of megabytes.
 
 ### Write `config.ini` first with a padded `usedMaterial`, then patch the bytes in place
@@ -93,6 +93,6 @@ give a core crate a PNG dependency for the benefit of one format.
 
 ### The option that won, and what it costs
 
-The entry order is ours rather than the vendor's. Every reader we know of looks entries up
+The entry order is ours rather than the known files'. Every reader we know of looks entries up
 by name — the zip central directory is an index, not a stream — but a reader that insisted on
 `config.ini` first would reject our files, and the readers we test against would not say so.

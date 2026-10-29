@@ -1,0 +1,35 @@
+# Anycubic Photon Mono M5s Pro.
+
+name = "Photon Mono M5s Pro"
+manufacturer = "Anycubic"
+machine_name = "AnyCubic Photon Mono M5s Pro"
+mirror = "lcd-mirror"
+connection = "none"
+
+[display]
+width_px = 13312
+height_px = 5120
+width_mm = 223.642
+height_mm = 126.48
+grey_min = 63
+
+[build_volume]
+x = 223.642
+y = 126.48
+z = 200.0
+
+[output.anycubic]
+extension = "m5sp"
+revision = "v518"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"
+bottom_light_off_delay_s = 5.0
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

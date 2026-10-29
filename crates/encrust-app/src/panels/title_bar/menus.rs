@@ -77,7 +77,7 @@ pub(super) fn item_enabled(
 pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
     if item(ui, &tr!("menu-new-plate"), Action::NewPlate).clicked() {
         ui.close();
-        window.doc.scene.add_plate();
+        project::new_plate(window);
     }
     if item(ui, &tr!("menu-new-project"), Action::NewProject).clicked() {
         ui.close();

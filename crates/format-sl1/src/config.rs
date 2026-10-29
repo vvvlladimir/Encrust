@@ -62,8 +62,8 @@ pub(crate) fn prusaslicer_ini(job: &PrintJob, flavour: Sl1Flavour) -> String {
             "landscape"
         },
     );
-    ini.int("display_mirror_x", u32::from(printer.mirror_x));
-    ini.int("display_mirror_y", u32::from(printer.mirror_y));
+    ini.int("display_mirror_x", u32::from(printer.mirror.mirrors_x()));
+    ini.int("display_mirror_y", 0);
     ini.number("max_print_height", printer.build_volume.z);
     ini.text("bed_shape", &bed_shape(job));
 

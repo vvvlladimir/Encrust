@@ -74,7 +74,7 @@ fn lay_out(painter: &egui::Painter) -> Word {
     Word { corners, atlas }
 }
 
-/// The word lying in front of `plate`, and the atlas its triangles sample.
+/// The word lying before the edge `plate` calls its front, and the atlas its triangles sample.
 ///
 /// Geometry rather than an overlay: it lies on the plate's plane, so it keeps the plate's
 /// perspective and stays put when the camera moves.
@@ -84,7 +84,10 @@ pub fn front(plate: &BuildPlate) -> (Vec<LabelVertex>, Option<Arc<ColorImage>>) 
     };
     let colour = theme::scene().label;
     let scale = BAND_MM * FILL;
-    let middle = Vec3::new(plate.x_mm / 2.0, -BAND_MM / 2.0, RELIEF_MM);
+    let turn = plate.front_turn();
+    let (rightward, away) = (turn * Vec3::X, turn * Vec3::Y);
+    let depth_mm = away.x.abs() * plate.x_mm + away.y.abs() * plate.y_mm;
+    let middle = plate.center() - away * (depth_mm + BAND_MM) / 2.0 + Vec3::Z * RELIEF_MM;
 
     let vertices = word
         .corners
@@ -92,7 +95,7 @@ pub fn front(plate: &BuildPlate) -> (Vec<LabelVertex>, Option<Arc<ColorImage>>) 
         .map(|([x, y], uv)| {
             // The font lays out downwards and the plate measures away from the viewer, so
             // the word's own `y` runs against the plate's.
-            let at = middle + Vec3::new(x * scale, -y * scale, 0.0);
+            let at = middle + rightward * x * scale - away * y * scale;
             LabelVertex::new(at, *uv, colour)
         })
         .collect();

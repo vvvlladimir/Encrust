@@ -1,0 +1,26 @@
+# JAMG HE Sonic Mighty Revo 16k.
+
+name = "Sonic Mighty Revo 16k"
+manufacturer = "JAMG HE"
+machine_name = "JAMG HE Sonic Mighty Revo 16k"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 15120
+height_px = 6230
+width_mm = 211.68
+height_mm = 118.37
+
+[build_volume]
+x = 211.68
+y = 118.37
+z = 235.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { max = 9 }

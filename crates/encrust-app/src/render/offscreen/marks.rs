@@ -13,7 +13,7 @@ use std::sync::Arc;
 pub(super) fn paint_ball(
     bands: &[ExposureBand],
     band_floor_mm: f32,
-    volume_mm: Option<Vec3>,
+    volume_mm: Option<[Vec3; 2]>,
 ) -> Option<Vec<u8>> {
     paint_marked_ball(Marks {
         bands,
@@ -151,7 +151,7 @@ pub(super) struct Marks<'a> {
     pub(super) pockets: &'a [TrapBox],
     pub(super) bands: &'a [ExposureBand],
     pub(super) band_floor_mm: f32,
-    pub(super) volume_mm: Option<Vec3>,
+    pub(super) volume_mm: Option<[Vec3; 2]>,
     pub(super) cut_line: Option<CutLine>,
     /// Whether the models are drawn seen through; see `docs/design/viewport.md`.
     pub(super) xray: bool,

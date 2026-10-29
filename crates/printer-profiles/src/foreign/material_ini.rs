@@ -1,5 +1,5 @@
 //! An SLA material profile as `key = value` lines: a saved configuration, or one material's
-//! preset. Motion and power are not in it; they belong to the vendor's own machines.
+//! preset. Motion and power are not in it; they belong to the machine.
 
 use std::collections::HashMap;
 use std::path::Path;

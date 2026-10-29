@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use core_format::ExposureRange;
-use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec3, Welded};
+use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec2, Vec3, Welded};
 use printer_profiles::PrinterProfile;
 
 use crate::edits::{Edited, describe as describe_edits};
@@ -16,6 +16,9 @@ pub struct FitCheck {
     /// How far the model reaches outside the envelope where it stands, per axis, mm.
     /// Whatever hangs off the plate is clipped off the masks.
     pub outside: Vec3,
+    /// How far it reaches into the plate's inset along X and Y, mm: a warning, as it slices
+    /// whole. The inset is a band of the plate, so it has no Z.
+    pub inset: Vec2,
 }
 
 /// How far past the envelope counts as past it, millimetres. Under a micron is float dust
@@ -26,10 +29,22 @@ impl FitCheck {
     pub fn of(stats: &MeshStats, profile: &PrinterProfile) -> Self {
         let volume = &profile.build_volume;
         let plate = Vec3::new(volume.x, volume.y, volume.z);
+        let [low, high] = profile
+            .plate_inset
+            .unwrap_or_default()
+            .area_mm(volume.x, volume.y);
+        let (low, high) = (Vec2::from(low), Vec2::from(high));
+        let inset = past(
+            (low - stats.min.truncate())
+                .max(stats.max.truncate() - high)
+                .extend(0.0),
+        )
+        .truncate();
         Self {
             printer: profile.name.clone(),
             overflow: past(stats.size() - plate),
             outside: past((-stats.min).max(stats.max - plate)),
+            inset,
         }
     }
 
@@ -308,7 +323,19 @@ fn describe_repair(mended: &Mended) -> String {
 /// as where it stands, because the two ask for different things of the user.
 fn describe_fit(fit: &FitCheck) -> String {
     if fit.fits() {
-        return format!("{}: yes", fit.printer);
+        let inset: Vec<String> = [("X", fit.inset.x), ("Y", fit.inset.y)]
+            .iter()
+            .filter(|(_, mm)| *mm > 0.0)
+            .map(|(axis, mm)| format!("{axis} by {mm:.3} mm"))
+            .collect();
+        return match inset.is_empty() {
+            true => format!("{}: yes", fit.printer),
+            false => format!(
+                "{}: yes, in the plate's inset in {}",
+                fit.printer,
+                inset.join(", ")
+            ),
+        };
     }
     let mut over = Vec::new();
     let mut outside = Vec::new();
@@ -479,6 +506,24 @@ z = {z}
         assert_eq!(
             describe_fit(&fit),
             "Test: no, off the plate in X by 3.000 mm"
+        );
+    }
+
+    #[test]
+    fn a_model_in_the_plates_inset_fits_and_is_named_there() {
+        let mut printer = profile(20.0, 20.0, 20.0);
+        printer.plate_inset = Some(printer_profiles::PlateInset {
+            min_x_mm: 1.5,
+            ..printer_profiles::PlateInset::default()
+        });
+        let fit = FitCheck::of(
+            &standing(Vec3::new(0.5, 5.0, 0.0), Vec3::new(10.5, 15.0, 10.0)),
+            &printer,
+        );
+        assert!(fit.fits(), "the inset warns, it never clips");
+        assert_eq!(
+            describe_fit(&fit),
+            "Test: yes, in the plate's inset in X by 1.000 mm"
         );
     }
 

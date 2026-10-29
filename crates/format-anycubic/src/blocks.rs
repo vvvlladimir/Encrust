@@ -1,18 +1,19 @@
 //! The blocks the Photon Workshop container gained after version 1: the grey table, the
-//! two-stage motion block, the machine, the slicer and the model's bounding box. Layout is
-//! in `docs/formats/anycubic.md`.
+//! two-stage motion block, the machine, the slicer, the model's bounding box and the second
+//! layer table. Layout is in `docs/formats/anycubic.md`.
 
 use std::io;
 
-use core_format::{Fields, PrintJob};
+use core_format::{Fields, FormatError, PrintJob};
 
+use crate::peel::{paired_mm_s, single_mm_s};
 use crate::rle::GREY_STEPS;
 use crate::tables::{NAME_BYTES, write_table_head};
-use crate::writer::{AnycubicFlavour, AnycubicVersion};
+use crate::writer::AnycubicVersion;
 
-/// The grey table: how many levels the layer data's nibbles stand for, and the eight-bit
-/// grey each one lights. Unnamed, so it carries no table head.
-pub(crate) const COLOUR_TABLE_BYTES: u32 = 4 + 4 + GREY_STEPS as u32 + 4;
+/// The grey table: whether the full greyscale is in use and how many levels the nibbles
+/// stand for. Unnamed, so it carries no table head.
+pub(crate) const COLOUR_TABLE_BYTES: u32 = 4 + 4;
 
 /// Fields of the two-stage motion block, which states a length of its own that does not
 /// match them.
@@ -25,53 +26,57 @@ const EXTRA_STATED_BYTES: u32 = 24;
 pub(crate) const EXTRA_BYTES: u32 = NAME_BYTES as u32 + 4 + EXTRA_FIELD_BYTES;
 
 /// Bytes of the machine block, which counts its own head in.
-pub(crate) const MACHINE_BYTES: u32 = 156;
+pub(crate) const MACHINE_BYTES: u32 = 224;
 
 /// Bytes of the machine's name and of the name of its layer-data codec.
 pub(crate) const MACHINE_NAME_BYTES: usize = 96;
 const CODEC_NAME_BYTES: usize = 16;
 
-/// Bytes of the slicer block. Unnamed, and it states its own length in the middle.
+/// Bytes of the slicer block. Unnamed, and it states a length of its own in the middle.
 pub(crate) const SOFTWARE_BYTES: u32 = 32 + 4 + 32 + 64 + 32;
 
-/// Bytes of the model block, which counts its own head in.
-pub(crate) const MODEL_BYTES: u32 = NAME_BYTES as u32 + 4 + 8 * 4;
+/// What the slicer block states its length as: files of this format state 128.
+const SOFTWARE_STATED_BYTES: u32 = 128;
 
-/// Writes the grey table.
-///
-/// With one anti-aliasing level every entry is full brightness, which is what the
-/// reference writer emits; the nibble in the layer data is the grey either way. See
-/// ADR 0147.
-pub(crate) fn write_colour_table(fields: &mut Fields<'_>) -> io::Result<()> {
-    fields.u32_le(0)?;
-    fields.u32_le(u32::from(GREY_STEPS))?;
-    for step in 0..GREY_STEPS {
-        let level = u32::from(step) + 1;
-        fields.u8((level * 255).min(u32::from(u8::MAX)) as u8)?;
-    }
-    fields.u32_le(0)
+/// Bytes of the model block: a name and no length, then the box and two words.
+pub(crate) const MODEL_BYTES: u32 = NAME_BYTES as u32 + 8 * 4;
+
+/// Bytes the second layer table spends in front of its rows: name, length, count, index.
+pub(crate) const SUB_LAYER_HEAD_BYTES: u32 = NAME_BYTES as u32 + 4 + 4 + 4;
+
+/// Bytes of one row of the second layer table: where a layer is, how long, how lit, and
+/// eight floats nobody has identified.
+pub(crate) const SUB_LAYER_ROW_BYTES: u32 = 3 * 4 + 8 * 4;
+
+/// Bytes the second layer table takes in the file, head and rows.
+pub(crate) fn sub_layer_table_bytes(layer_count: u32) -> u32 {
+    SUB_LAYER_HEAD_BYTES + SUB_LAYER_ROW_BYTES * layer_count
 }
 
-/// Writes the two-stage motion block: one stage, because this is what the slicer plans.
+/// Writes the grey table: two zero words, as files of this format carry it. The nibble in
+/// the layer data is the grey either way; see ADR 0147.
+pub(crate) fn write_colour_table(fields: &mut Fields<'_>) -> io::Result<()> {
+    fields.zeros(COLOUR_TABLE_BYTES as usize)
+}
+
+/// Writes the two-stage motion block, the bottom layers' then the rest's. Without a second
+/// stage the second climbs nothing and retracts at the first's speed; see docs/formats/anycubic.md.
 pub(crate) fn write_extra(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
-    let material = &job.material;
     write_table_head(fields, "EXTRA", EXTRA_STATED_BYTES)?;
-
-    fields.u32_le(1)?;
-    fields.f32_le(material.bottom_lift_distance_mm)?;
-    fields.f32_le(material.bottom_lift_speed_mm_min / 60.0)?;
-    fields.f32_le(material.bottom_retract_speed_mm_min / 60.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
-
-    fields.u32_le(1)?;
-    fields.f32_le(material.lift_distance_mm)?;
-    fields.f32_le(material.lift_speed_mm_min / 60.0)?;
-    fields.f32_le(material.retract_speed_mm_min / 60.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(0.0)
+    for bottom in [true, false] {
+        let peel = job.material.peel(bottom);
+        let stages = if job.material.second_stage.is_used() {
+            paired_mm_s(&peel).concat()
+        } else {
+            let [height, up, down] = single_mm_s(&peel);
+            vec![height, up, down, 0.0, 0.0, down]
+        };
+        fields.u32_le(2)?;
+        for value in stages {
+            fields.f32_le(value)?;
+        }
+    }
+    Ok(())
 }
 
 /// Writes the machine block: what the firmware matches its own name against, and the
@@ -79,7 +84,6 @@ pub(crate) fn write_extra(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result
 pub(crate) fn write_machine(
     fields: &mut Fields<'_>,
     job: &PrintJob,
-    flavour: AnycubicFlavour,
     version: AnycubicVersion,
 ) -> io::Result<()> {
     let printer = &job.printer;
@@ -92,41 +96,78 @@ pub(crate) fn write_machine(
     fields.f32_le(printer.display.width_mm)?;
     fields.f32_le(printer.display.height_mm)?;
     fields.f32_le(printer.build_volume.z)?;
-    fields.u32_le(flavour.newest_version().number())?;
+    fields.u32_le(version.number())?;
 
     // The colour the machine paints behind a preview; the reference writer states this one
     // whatever the file holds.
-    fields.u32_le(6_506_241)
+    fields.u32_le(6_506_241)?;
+    write_machine_panel(fields, job)
+}
+
+/// The machine block's panel fields: the pixel along each axis, how many panels there
+/// are, and the panel's resolution.
+fn write_machine_panel(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
+    let (pitch_x_mm, pitch_y_mm) = job.printer.display.pixel_pitch_mm();
+    fields.f32_le(pitch_x_mm * 1000.0)?;
+    fields.f32_le(pitch_y_mm * 1000.0)?;
+    fields.zeros(8 * 4)?;
+    fields.u32_le(1)?;
+    fields.zeros(4)?;
+    // `begin` refused a panel past `panel_in_sixteen_bits`.
+    fields.u16_le(job.raster.width_px as u16)?;
+    fields.u16_le(job.raster.height_px as u16)?;
+    fields.zeros(4 * 4)
+}
+
+/// Refuses a panel whose sides do not fit the sixteen bits `what` states them in.
+pub(crate) fn panel_in_sixteen_bits(job: &PrintJob, what: &'static str) -> Result<(), FormatError> {
+    let (width, height) = (job.raster.width_px, job.raster.height_px);
+    if width > u32::from(u16::MAX) || height > u32::from(u16::MAX) {
+        return Err(FormatError::Encoding {
+            what,
+            reason: format!("a panel of {width} x {height} px is past the 65535 it holds"),
+        });
+    }
+    Ok(())
+}
+
+/// Writes the second layer table's head and leaves its rows blank; they are filled in once
+/// the layers are written, like the first table's.
+pub(crate) fn write_sub_layer_head(fields: &mut Fields<'_>, layer_count: u32) -> io::Result<()> {
+    // Files of this format state one row's length here, whatever the layer count.
+    write_table_head(fields, "SUBIMGS", SUB_LAYER_ROW_BYTES)?;
+    fields.u32_le(layer_count)?;
+    fields.u32_le(1)?;
+    fields.zeros((SUB_LAYER_ROW_BYTES * layer_count) as usize)
 }
 
 /// Writes the slicer block: which program wrote the file.
 pub(crate) fn write_software(fields: &mut Fields<'_>) -> io::Result<()> {
     fields.text("Encrust", 32)?;
-    fields.u32_le(SOFTWARE_BYTES)?;
+    fields.u32_le(SOFTWARE_STATED_BYTES)?;
     fields.text(env!("CARGO_PKG_VERSION"), 32)?;
     fields.text(std::env::consts::OS, 64)?;
 
-    // The field holds the slicer's OpenGL version. Nothing here renders through OpenGL.
-    fields.text("", 32)
+    // The OpenGL profile files of this format state; nothing here renders through it.
+    fields.text("3.3-CoreProfile", 32)
 }
 
-/// Writes the model block: the box the print stands in, measured from the panel's centre.
-///
-/// The stack's own extent in X and Y is not carried this far down the pipeline, so the box
-/// is the whole panel, which is an over-estimate the machine only draws with.
-pub(crate) fn write_model(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
-    let display = &job.printer.display;
-    write_table_head(fields, "MODEL", MODEL_BYTES)?;
+/// Writes the model block: the box the print stands in, measured from the panel's centre,
+/// from the plate to the top of the stack: what the layers light, `None` until they are written.
+pub(crate) fn write_model(
+    fields: &mut Fields<'_>,
+    job: &PrintJob,
+    box_mm: Option<[f32; 4]>,
+) -> io::Result<()> {
+    // The format names this block in mixed case and gives it no length.
+    fields.text("Model", NAME_BYTES)?;
+    let [left, top, right, bottom] = box_mm.unwrap_or_default();
+    for value in [left, top, 0.0, right, bottom, job.height_mm()] {
+        fields.f32_le(value)?;
+    }
 
-    fields.f32_le(display.width_mm / -2.0)?;
-    fields.f32_le(display.height_mm / -2.0)?;
-    fields.f32_le(0.0)?;
-    fields.f32_le(display.width_mm / 2.0)?;
-    fields.f32_le(display.height_mm / 2.0)?;
-    fields.f32_le(job.height_mm())?;
-
-    // Whether supports were generated, and how dense. Supports reach this writer as part
-    // of the mesh, so nothing here can tell.
+    // TODO(step-B7): whether supports were generated, and how dense; needs `PrintJob` to
+    // carry the support settings, as supports reach the writers only inside the mesh.
     fields.u32_le(0)?;
     fields.f32_le(0.0)
 }
@@ -155,19 +196,24 @@ mod tests {
             written(|fields| write_extra(fields, &sample_job(1))).len(),
             EXTRA_BYTES as usize
         );
+        for version in [
+            AnycubicVersion::V1,
+            AnycubicVersion::V516,
+            AnycubicVersion::V518,
+        ] {
+            assert_eq!(
+                written(|fields| write_machine(fields, &sample_job(1), version)).len(),
+                MACHINE_BYTES as usize,
+                "{version:?}"
+            );
+        }
         assert_eq!(
-            written(|fields| write_machine(
-                fields,
-                &sample_job(1),
-                AnycubicFlavour::Pwmx,
-                AnycubicVersion::V516
-            ))
-            .len(),
-            MACHINE_BYTES as usize
+            written(|fields| write_sub_layer_head(fields, 3)).len(),
+            sub_layer_table_bytes(3) as usize
         );
         assert_eq!(written(write_software).len(), SOFTWARE_BYTES as usize);
         assert_eq!(
-            written(|fields| write_model(fields, &sample_job(1))).len(),
+            written(|fields| write_model(fields, &sample_job(1), None)).len(),
             MODEL_BYTES as usize
         );
     }
@@ -189,8 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn the_grey_table_lights_every_level_at_one_pass() {
-        let bytes = written(write_colour_table);
-        assert_eq!(&bytes[8..8 + GREY_STEPS as usize], &[255; 16]);
+    fn the_grey_table_states_no_levels() {
+        assert_eq!(written(write_colour_table), vec![0; 8]);
     }
 }

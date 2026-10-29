@@ -1,9 +1,9 @@
 //! Version 3 of the container: a layer is a list of vertical lines, each six bytes, and
 //! everything in it but the magic is big-endian. See `docs/formats/creality.md`.
 
-mod blocks;
+pub(crate) mod blocks;
 mod lines;
-mod reader;
+pub(crate) mod reader;
 mod writer;
 
 pub use lines::{EncodedLayer, decode};

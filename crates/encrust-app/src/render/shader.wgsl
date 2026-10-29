@@ -74,9 +74,11 @@ struct Globals {
     // w is unused padding. Both come from ui::theme, see docs/design/ui-design-system.md.
     overhang_color: vec4<f32>,
     inside_color: vec4<f32>,
-    // xyz is the build volume in plate millimetres from the origin corner, w 1.0 while a
-    // model past it is to be marked; outside_color.rgb is what marks it.
+    // xyz is the high corner of where a model stands unmarked, in plate millimetres, w 1.0
+    // while a model past it is to be marked; outside_color.rgb is what marks it.
     volume: vec4<f32>,
+    // xyz is that box's low corner: the origin less the plate's inset; w is unused padding.
+    volume_low: vec4<f32>,
     outside_color: vec4<f32>,
     // The Cut tool's plane: xyz its normal, w its offset along it in millimetres. It is
     // traced only inside cut_low..cut_high, and only while cut_low.w is 1.0.
@@ -152,7 +154,7 @@ fn outside_volume(world: vec3<f32>) -> bool {
     if (globals.volume.w < 0.5) {
         return false;
     }
-    let low = world < vec3<f32>(-VOLUME_SLACK);
+    let low = world < globals.volume_low.xyz - vec3<f32>(VOLUME_SLACK);
     let high = world > globals.volume.xyz + vec3<f32>(VOLUME_SLACK);
     return any(low) || any(high);
 }
@@ -825,7 +827,21 @@ fn plate_fragment(in: FloorFragment) -> @location(0) vec4<f32> {
         colour = mix(colour, globals.grid_minor, minor);
         colour = mix(colour, globals.grid_major, major);
     }
+    if (in_inset(in.plate)) {
+        colour = vec4<f32>(colour.rgb * (1.0 - INSET_SHADE), colour.a);
+    }
     return colour;
+}
+
+// How much darker the plate is in its inset (ADR 0371): about a third of the way from the
+// plate's grey to the backdrop's, which is 0.6 of it.
+const INSET_SHADE = 0.12;
+
+fn in_inset(at_mm: vec2<f32>) -> bool {
+    if (globals.volume.w < 0.5) {
+        return false;
+    }
+    return any(at_mm < globals.volume_low.xy) || any(at_mm > globals.volume.xy);
 }
 
 // Black at the shadow's own darkness, premultiplied. Nothing from under the plate: the

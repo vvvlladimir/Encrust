@@ -1,0 +1,27 @@
+# LYNcase LY-01.
+
+name = "LY-01"
+manufacturer = "LYNcase"
+machine_name = "LYN cast LY-01"
+mirror = "dlp-normal"
+output = "ctb5"
+connection = "none"
+
+[display]
+width_px = 2560
+height_px = 1440
+width_mm = 134.4
+height_mm = 75.6
+
+[build_volume]
+x = 134.4
+y = 75.6
+z = 165.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

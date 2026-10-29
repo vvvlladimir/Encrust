@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use core_pipeline::Written;
-use core_raster::{RasterSettings, Shading};
+use core_raster::{GreyRange, RasterSettings, Shading};
 
 /// What rasterising the layer stack produced, and what did not fit on the panel.
 pub struct RasterReport {
@@ -168,15 +168,33 @@ fn describe_shading(settings: &RasterSettings) -> String {
         Some(levels) => format!("{levels} greys"),
         None => "all 255 greys".to_owned(),
     };
-    let floor = match settings.grey.floor {
-        0 => String::new(),
-        floor => format!(" down to {floor}"),
+    let range = match settings.grey.range {
+        GreyRange::FULL => String::new(),
+        GreyRange { min, max } => format!(" spread over {min}..{max}"),
     };
     let blur = match settings.blur_px {
         0 => String::new(),
         radius => format!(", blurred {radius} px"),
     };
-    format!("coverage, exact pixel area, {levels}{floor}{blur}")
+    format!("coverage, exact pixel area, {levels}{range}{blur}")
+}
+
+/// `--grey-range`, as `MIN..MAX`.
+pub fn parse_grey_range(text: &str) -> Result<GreyRange, String> {
+    let (min, max) = text
+        .split_once("..")
+        .ok_or_else(|| "expected MIN..MAX".to_owned())?;
+    let grey = |value: &str| {
+        value
+            .trim()
+            .parse::<u8>()
+            .map_err(|_| format!("{value:?} is not a grey from 0 to 255"))
+    };
+    let (min, max) = (grey(min)?, grey(max)?);
+    if min > max {
+        return Err(format!("{min} is above {max}"));
+    }
+    Ok(GreyRange { min, max })
 }
 
 #[cfg(test)]

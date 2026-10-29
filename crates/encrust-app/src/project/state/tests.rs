@@ -110,18 +110,13 @@ fn bench() -> Bench {
         }],
     );
 
-    let mut slicing = Slicing::default();
-    let printer = slicing
-        .catalogue
-        .printer(SATURN)
-        .expect("ships")
-        .profile
-        .clone();
-    slicing.set_printer(printer, Some(SATURN.to_owned()));
+    let mut slicing = on_saturn();
     slicing.set_layer_height(0.035);
-    slicing.anti_alias = false;
-    slicing.grey_levels = std::num::NonZeroU8::new(4);
-    slicing.blur_px = 2;
+    slicing.edges.anti_alias = false;
+    slicing.edges.grey_levels = std::num::NonZeroU8::new(4);
+    slicing.edges.blur_px = 2;
+    slicing.material.exposure_s = 3.25;
+    slicing.material.waits.after_lift_s = 0.75;
     slicing.remove_islands = true;
     slicing.hanging_passes = 2;
     slicing.samples = std::num::NonZeroU8::new(3).expect("three is not zero");
@@ -156,6 +151,19 @@ fn bench() -> Bench {
 }
 
 const SATURN: &str = "elegoo-saturn-4-ultra";
+
+/// A window with the shipped Saturn in hand, as it starts from the profiles.
+fn on_saturn() -> Slicing {
+    let mut slicing = Slicing::default();
+    let printer = slicing
+        .catalogue
+        .printer(SATURN)
+        .expect("ships")
+        .profile
+        .clone();
+    slicing.set_printer(printer, Some(SATURN.to_owned()));
+    slicing
+}
 
 /// Writes a plate and reads it back into an empty window.
 fn round_trip(saved: &Bench) -> Bench {
@@ -210,7 +218,7 @@ fn a_printer_not_here_leaves_the_windows_printer_and_slicing() {
         window.layer_height_mm(),
         "the slicing goes only with its printer"
     );
-    assert_eq!(back.slicing.blur_px, window.blur_px);
+    assert_eq!(back.slicing.edges.blur_px, window.edges.blur_px);
     assert_eq!(
         back.scene.objects().len(),
         1,
@@ -257,22 +265,23 @@ fn a_saved_plate_opens_as_the_plate_that_was_saved() {
 }
 
 #[test]
+fn an_opened_project_prints_as_its_printer_and_resin_say() {
+    let mut window = bench();
+    apply(capture(bench().plate()), window.plate_mut());
+    assert_eq!(
+        window.slicing.print_settings(),
+        on_saturn().print_settings(),
+        "nothing the Print settings panel was set to, the window's or the file's"
+    );
+}
+
+#[test]
 fn every_tool_opens_set_the_way_it_was_saved() {
     let saved = bench();
     let back = round_trip(&saved);
 
-    assert_eq!(
-        back.slicing.layer_height_mm(),
-        saved.slicing.layer_height_mm()
-    );
-    assert_eq!(back.slicing.anti_alias, saved.slicing.anti_alias);
-    assert_eq!(back.slicing.grey_levels, saved.slicing.grey_levels);
-    assert_eq!(back.slicing.blur_px, saved.slicing.blur_px);
     assert_eq!(back.slicing.remove_islands, saved.slicing.remove_islands);
     assert_eq!(back.slicing.hanging_passes, saved.slicing.hanging_passes);
-    assert_eq!(back.slicing.samples, saved.slicing.samples);
-    assert_eq!(back.slicing.exposure, saved.slicing.exposure);
-    assert_eq!(back.slicing.adaptive, saved.slicing.adaptive);
     assert_eq!(
         back.tools.supports.groups.len(),
         saved.tools.supports.groups.len()

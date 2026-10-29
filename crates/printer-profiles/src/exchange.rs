@@ -130,7 +130,10 @@ impl Catalogue {
             self.resins().any(|entry| entry.profile.name == name)
         });
         if let Some(printer) = printer {
-            set_up_on(&mut resin, printer);
+            let locked = self
+                .printer(printer)
+                .map(|entry| entry.profile.locked.clone());
+            set_up_on(&mut resin, printer, &locked.unwrap_or_default());
         }
         let id = own_id(&resin.name, |id| self.is_taken(Kind::Resin, id))?;
         self.save_resin(&id, &resin)?;
@@ -216,11 +219,12 @@ fn fresh_name(name: &str, taken: impl Fn(&str) -> bool) -> String {
 }
 
 /// Sets `resin` up on `printer`, starting from the printer it was last tuned on, unless
-/// the file already carries numbers for it.
-fn set_up_on(resin: &mut MaterialProfile, printer: &str) {
+/// the file already carries numbers for it. What the machine locks, the file's own numbers
+/// state, as the program that wrote it would print them.
+fn set_up_on(resin: &mut MaterialProfile, printer: &str, locked: &PrinterTuning) {
     if !resin.is_tuned_for(printer) {
         let start = resin.starting_point(printer);
-        let tuning = PrinterTuning::of_changes(resin, &start);
+        let tuning = PrinterTuning::of_changes(resin, &start).and(&locked.read_from(&start));
         resin.printers.insert(printer.to_owned(), tuning);
     }
     resin.last_printer = Some(printer.to_owned());

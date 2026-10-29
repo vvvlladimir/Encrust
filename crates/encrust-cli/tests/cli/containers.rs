@@ -88,8 +88,10 @@ fn ctb_layers(file: &[u8]) -> Vec<(f32, f32, Vec<u8>)> {
     const LAYER_DEF_BYTES: usize = 36;
     const LAYER_DEF_EX_BYTES: u32 = 84;
 
+    const LAYER_TAIL_BYTES: usize = 8;
     let table = le_u32(file, 0x40) as usize;
     let layer_count = le_u32(file, 0x44) as usize;
+    let key = le_u32(file, 0x64);
     let mut layers = Vec::with_capacity(layer_count);
 
     for index in 0..layer_count {
@@ -111,11 +113,13 @@ fn ctb_layers(file: &[u8]) -> Vec<(f32, f32, Vec<u8>)> {
         );
         assert_eq!(
             le_u32(file, extended + LAYER_DEF_BYTES) as usize,
-            LAYER_DEF_EX_BYTES as usize + size,
+            LAYER_DEF_EX_BYTES as usize + size + LAYER_TAIL_BYTES,
             "layer {index} must state the size of its own block"
         );
 
-        let pixels = core_format::decode_rle7(&file[address..address + size])
+        let mut data = file[address..address + size].to_vec();
+        core_format::chitu_layer_crypt(key, index as u32, &mut data);
+        let pixels = core_format::decode_rle7(&data)
             .expect("the file we just wrote decodes")
             .iter()
             .flat_map(|run| std::iter::repeat_n(run.value, run.length as usize))
@@ -250,10 +254,10 @@ fn a_cube_becomes_a_printable_ctb_file() {
     );
 
     let file = fs::read(&out).expect("the ctb file was written");
-    assert_eq!(le_u32(&file, 0), 0x12FD_0106, "the version 4 magic");
-    assert_eq!(le_u32(&file, 4), 4, "the default revision");
+    assert_eq!(le_u32(&file, 0), 0x12FD_0106, "the .ctb magic");
+    assert_eq!(le_u32(&file, 4), 5, "the default revision");
     assert_eq!(le_u32(&file, 0x44), 10);
-    assert_eq!(le_u32(&file, 0x64), 0, "the layer data is left unencrypted");
+    assert_ne!(le_u32(&file, 0x64), 0, "the layers are covered");
 
     let layers = ctb_layers(&file);
     assert_eq!(layers.len(), 10);
@@ -320,7 +324,7 @@ fn a_goo_name_on_a_chitu_machine_is_written_but_reported() {
 
     let warning = stderr(&output);
     assert!(
-        warning.contains(".ctb v4") && warning.contains(".goo"),
+        warning.contains(".ctb encrypted") && warning.contains(".goo"),
         "the warning is a log line, so it goes to stderr: {warning}"
     );
 }
@@ -553,4 +557,29 @@ fn info_reports_one_layer_on_its_own_and_every_run_of_exposures() {
     assert_eq!(bands.len(), 1, "{document}");
     assert_eq!(bands[0]["from_layer"], 7);
     assert_eq!(bands[0]["to_layer"], 10);
+}
+
+#[test]
+fn a_layer_past_what_the_machine_takes_is_written_but_reported() {
+    let path = write_box_stl("past-limit", 10.0, 12, 0);
+    let out = output_file("past-limit.goo");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--printer",
+        "creality-halot-mage-pro-cl-103",
+        "--material",
+        test_resin().to_str().unwrap(),
+        "--layer-height",
+        "0.3",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(out.exists(), "a limit warns, it does not stop the run");
+
+    let warning = stderr(&output);
+    assert!(
+        warning.contains("layer_height_mm is 0.3") && warning.contains("takes 0.01 to 0.2"),
+        "the warning names the setting and the span the machine takes: {warning}"
+    );
 }

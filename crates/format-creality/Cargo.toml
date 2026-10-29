@@ -1,6 +1,6 @@
 [package]
 name = "format-creality"
-description = "Writer and reader for the Creality .cxdlp sliced-file format."
+description = "Writer and reader for the Creality .cxdlp and the PioNext .cxline sliced-file formats."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,8 @@ doctest = false
 [dependencies]
 core-format.workspace = true
 core-raster.workspace = true
+core-slicer.workspace = true
+glam.workspace = true
 tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 

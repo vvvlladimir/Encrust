@@ -1,0 +1,27 @@
+# EMAKE3D Megalabs 1.
+
+name = "Megalabs 1"
+manufacturer = "EMAKE3D"
+machine_name = "Megalabs 1"
+mirror = "lcd-mirror"
+output = "ctb5"
+connection = "none"
+
+[display]
+width_px = 3840
+height_px = 2160
+width_mm = 533.0
+height_mm = 299.8125
+
+[build_volume]
+x = 533.0
+y = 299.8125
+z = 550.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

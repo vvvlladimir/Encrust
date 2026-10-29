@@ -169,9 +169,11 @@ impl OrbitCamera {
 
     /// The view an empty window opens with: the whole build volume, seen from the front.
     pub fn framing_plate(plate: &BuildPlate) -> Self {
+        let default = Self::default();
         let mut camera = Self {
             target: plate.center(),
-            ..Self::default()
+            yaw_rad: default.yaw_rad + plate.front_edge.turn_rad(),
+            ..default
         };
         camera.distance_mm = plate.diagonal_mm() / (camera.fov_y_rad / 2.0).sin() / 2.0;
         camera

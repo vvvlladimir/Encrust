@@ -1,0 +1,42 @@
+# Anycubic Photon Mono M7 Max.
+
+name = "Photon Mono M7 Max"
+manufacturer = "Anycubic"
+machine_name = "Anycubic Photon Mono M7 Max"
+mirror = "lcd-mirror"
+connection = "none"
+
+[display]
+width_px = 6480
+height_px = 3600
+width_mm = 297.5
+height_mm = 164.0
+
+[build_volume]
+x = 297.5
+y = 164.0
+z = 300.0
+
+[output.pwsz]
+extension = "pm7m"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"
+bottom_light_off_delay_s = 5.0
+
+[limits]
+layer_height_mm = { min = 0.01, max = 0.3 }
+exposure_s = { min = 0.1, max = 200 }
+bottom_exposure_s = { min = 0.1, max = 200 }
+transition_layers = { max = 99 }
+light_off_delay_s = { max = 200 }
+lift_distance_mm = { max = 99 }
+bottom_lift_distance_mm = { max = 99 }
+
+[limits.second_stage]
+lift_distance_mm = { max = 99 }
+bottom_lift_distance_mm = { max = 99 }

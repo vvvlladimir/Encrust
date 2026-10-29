@@ -79,9 +79,20 @@ fn a_peeling_machines_cfgx_gives_its_lifts_and_holds_the_light_off() {
     let resin = &foreign.resin;
     assert!(close(resin.lift_distance_mm, 5.3) && close(resin.bottom_lift_distance_mm, 6.7));
     assert!(
-        close(resin.retract_distance_mm, 5.3),
-        "back down as far as up"
+        close(resin.retract_distance_mm, 5.8),
+        "back down as far as both stages went up, less the slow last stretch"
     );
+    let stage = resin.second_stage;
+    assert!(close(stage.lift_distance_mm, 2.0) && close(stage.lift_speed_mm_min, 180.0));
+    assert!(close(stage.retract_distance_mm, 1.5) && close(stage.retract_speed_mm_min, 60.0));
+    assert!(
+        close(stage.bottom_lift_distance_mm, 3.0) && close(stage.bottom_retract_distance_mm, 2.0)
+    );
+    assert!(
+        close(resin.bottom_retract_distance_mm(), 7.7),
+        "6.7 + 3 - 2"
+    );
+    assert_eq!(resin.bottom_light_off_delay_s, Some(1.5));
     assert!(close(resin.lift_speed_mm_min, 61.0) && close(resin.bottom_lift_speed_mm_min, 71.0));
     assert!(close(resin.retract_speed_mm_min, 173.0));
     assert!(close(resin.bottom_retract_speed_mm_min, 157.0));
@@ -181,4 +192,29 @@ fn a_profile_with_no_exposure_is_refused() {
             ..
         })
     ));
+}
+
+#[test]
+fn a_cfgx_gives_its_buffer_with_the_switch_as_it_stands() {
+    let path = fixture("saturn-4-ultra.cfgx");
+    let text = std::fs::read_to_string(&path).expect("the fixture is checked in");
+    let mut root: serde_json::Value = serde_json::from_str(&text).expect("the fixture is JSON");
+    let print = &mut root["material"][0]["slice"][0]["print"];
+    for (key, value) in [
+        ("bufferenable", serde_json::json!(true)),
+        ("bufferheight", serde_json::json!(3.7)),
+        ("bufferMotrospeed", serde_json::json!(97.0)),
+        ("bufferlightoffdelay", serde_json::json!(4.3)),
+    ] {
+        print[key]["currentvalue"] = value;
+    }
+    let foreign = ForeignResin::from_str(&root.to_string(), &path).expect("still a resin");
+    let buffer = foreign.resin.buffer.expect("the file has a buffer");
+    assert!(buffer.enabled);
+    assert!(
+        close(buffer.height_mm, 3.7)
+            && close(buffer.speed_mm_min, 97.0)
+            && close(buffer.light_off_delay_s, 4.3),
+        "3.7 mm at 97 mm/min, then 4.3 s, got {buffer:?}"
+    );
 }

@@ -1,0 +1,43 @@
+# Anycubic Photon S.
+
+name = "Photon S"
+manufacturer = "Anycubic"
+machine_name = "AnyCubic Photon S"
+mirror = "lcd-mirror"
+front_edge = "min_x"
+output = "photons"
+connection = "none"
+
+[display]
+width_px = 1440
+height_px = 2560
+width_mm = 68.04
+height_mm = 120.96
+
+[build_volume]
+x = 68.04
+y = 120.96
+z = 165.0
+
+[firmware]
+per_layer_settings = false
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+light_pwm = 255
+bottom_light_pwm = 255
+wait_mode = "light-off"
+bottom_light_off_delay_s = 0.0
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }
+lift_distance_mm = { warn_max = 50 }
+lift_speed_mm_min = { warn_min = 6, warn_max = 1200 }
+retract_speed_mm_min = { warn_min = 6, warn_max = 1200 }
+bottom_lift_distance_mm = { warn_max = 50 }
+bottom_lift_speed_mm_min = { warn_min = 6, warn_max = 1200 }
+bottom_retract_speed_mm_min = { warn_min = 6, warn_max = 1200 }

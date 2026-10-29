@@ -1,6 +1,6 @@
 # 0165. Generate the printer catalogue, and ship only machines we can write a file for
 
-- **Status:** Accepted
+- **Status:** Accepted; generating is superseded by 0359, the `.ctb` revision by 0365
 - **Date:** 2026-10-01
 
 ## Context
@@ -60,7 +60,7 @@ and a machine that refuses one is the signal to write version 3 after all.
 
 ## Alternatives considered
 
-### Vendor the source `.ini` files and read them at build time
+### Bundle the source `.ini` files and read them at build time
 
 The catalogue would never drift from the source. But the build would depend on files we
 did not write, a rebuild could change what ships, and a generated catalogue nobody reviews

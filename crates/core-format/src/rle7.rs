@@ -1,5 +1,5 @@
-//! The seven-bit greyscale run-length codec the `.ctb` family and `.cxdlp` version 4 both
-//! carry their layers in. See `docs/formats/chitu.md`.
+//! The seven-bit greyscale run-length codec both `.ctb` crates carry their layers in.
+//! See `docs/formats/chitu.md`.
 
 use core_raster::{LayerRuns, Run};
 

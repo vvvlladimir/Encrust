@@ -1,0 +1,31 @@
+# Carima IMD-110.
+
+name = "IMD-110"
+manufacturer = "Carima"
+machine_name = "Carima IMD-110"
+mirror = "lcd-mirror"
+output = "crmaslice"
+connection = "none"
+
+[display]
+width_px = 1920
+height_px = 1080
+width_mm = 110.0
+height_mm = 61.0
+
+[build_volume]
+x = 110.0
+y = 61.0
+z = 140.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

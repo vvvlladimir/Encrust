@@ -1,12 +1,12 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, chitu_layer_crypt, decode_rle7, layer_in_range, panel_in_range,
-    stated_distance_mm, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,
+    ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, chitu_layer_crypt, decode_rle7, layer_in_range, panel_in_range, stated_pwm,
+    stated_rests, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
 use crate::cipher;
-use crate::layout::{MAGIC, POINTER_BYTES, RESIN_BYTES, page_address};
+use crate::layout::{MAGIC, POINTER_BYTES, page_address};
 use crate::settings::{self as at, SETTINGS_BYTES, Settings};
 
 /// The offset and length of the part of a layer's data enciphered with AES.
@@ -134,7 +134,7 @@ fn read_resin_name<S: ReadSeek>(
     reads.seek_to(u64::from(address) + 16)?;
     let name_at = reads.u32_le()?;
     let name_bytes = reads.u32_le()?;
-    if u64::from(name_at) < u64::from(address) + RESIN_BYTES {
+    if u64::from(name_at) < u64::from(address) + u64::from(core_format::CHITU_RESIN_BYTES) {
         return Ok(None);
     }
     read_text(reads, name_at, name_bytes)
@@ -191,17 +191,27 @@ fn facts(
 /// What the settings say of the resin beyond its exposure, kept where a printer could
 /// take it (ADR 0293).
 fn stated(settings: &Settings) -> PrinterTuning {
-    let lift_mm = stated_distance_mm(settings.f32(at::LIFT_MM));
+    let mut second_stage = [0.0; 6];
+    for (index, word) in second_stage.iter_mut().enumerate() {
+        *word = settings.f32(at::SECOND_STAGE + 4 * index);
+    }
+    let peel = ChituPeel {
+        bottom_lift_total_mm: settings.f32(at::BOTTOM_LIFT_MM),
+        lift_total_mm: settings.f32(at::LIFT_MM),
+        second_stage,
+        bottom_retract: [
+            settings.f32(at::BOTTOM_RETRACT_MM_2),
+            settings.f32(at::BOTTOM_RETRACT_SPEED_2),
+        ],
+    };
     PrinterTuning {
         transition_layers: u16::try_from(settings.u32(at::TRANSITION_LAYERS)).ok(),
         light_off_delay_s: stated_wait_s(settings.f32(at::LIGHT_OFF_S)),
         light_pwm: stated_pwm(settings.u16(at::LIGHT_PWM)),
         bottom_light_pwm: stated_pwm(settings.u16(at::BOTTOM_LIGHT_PWM)),
-        lift_distance_mm: lift_mm,
-        retract_distance_mm: lift_mm,
         lift_speed_mm_min: stated_speed_mm_min(settings.f32(at::LIFT_SPEED)),
         retract_speed_mm_min: stated_speed_mm_min(settings.f32(at::RETRACT_SPEED)),
-        bottom_lift_distance_mm: stated_distance_mm(settings.f32(at::BOTTOM_LIFT_MM)),
+        bottom_light_off_delay_s: stated_wait_s(settings.f32(at::BOTTOM_LIGHT_OFF_S)),
         bottom_lift_speed_mm_min: stated_speed_mm_min(settings.f32(at::BOTTOM_LIFT_SPEED)),
         bottom_retract_speed_mm_min: stated_speed_mm_min(settings.f32(at::BOTTOM_RETRACT_SPEED)),
         waits: stated_rests(
@@ -209,7 +219,7 @@ fn stated(settings: &Settings) -> PrinterTuning {
             settings.f32(at::REST_AFTER_LIFT_S),
             settings.f32(at::REST_AFTER_RETRACT_S),
         ),
-        ..PrinterTuning::default()
+        ..peel.stated()
     }
 }
 
@@ -267,6 +277,25 @@ mod tests {
                 found: 0x12FD_0106
             })
         ));
+    }
+
+    #[test]
+    fn a_two_stage_peel_reads_back_as_its_two_stages() {
+        let job = crate::fixtures::test_resin_job(2);
+        let open = CtbEncryptedReader
+            .open(Cursor::new(crate::fixtures::written(&job)))
+            .expect("a file we wrote");
+        let stated = &open.facts().stated;
+        assert_eq!(stated.second_stage, Some(job.material.second_stage));
+        assert_eq!(
+            (stated.bottom_lift_distance_mm, stated.lift_distance_mm),
+            (Some(5.0), Some(2.0)),
+            "the first stage, split off the summed climbs"
+        );
+        assert_eq!(
+            stated.bottom_light_off_delay_s,
+            Some(job.material.bottom_light_off_s())
+        );
     }
 
     #[test]

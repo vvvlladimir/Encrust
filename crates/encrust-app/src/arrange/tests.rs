@@ -14,6 +14,7 @@ fn plate() -> BuildPlate {
         x_mm: 150.0,
         y_mm: 80.0,
         z_mm: 165.0,
+        ..BuildPlate::default()
     }
 }
 

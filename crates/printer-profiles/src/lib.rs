@@ -8,8 +8,12 @@ mod error;
 mod exchange;
 mod exposure;
 mod foreign;
+mod front_edge;
+mod limits;
 mod material;
+mod mirror;
 mod own_ids;
+mod plate_inset;
 mod preset;
 mod printer;
 mod stated;
@@ -25,12 +29,19 @@ pub use error::ProfileError;
 pub use exchange::unique_id;
 pub use exposure::{ASSUMED_PENETRATION_DEPTH_MM, exposure_for_mm};
 pub use foreign::ForeignResin;
-pub use material::{MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, WaitMode, Waits};
+pub use front_edge::FrontEdge;
+pub use limits::{Limit, LimitBreach, PrinterLimits, SecondStageLimits, Stray};
+pub use material::{
+    Buffer, EdgeSmoothing, LayerPeel, MaterialProfile, PriceUnit, PrinterTuning, ResinDetails,
+    SecondStage, WaitMode, Waits,
+};
+pub use mirror::Mirror;
 pub use own_ids::{Renamed, own_id};
+pub use plate_inset::PlateInset;
 pub use preset::Preset;
 pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, NetworkMachine, OutputFormat,
-    PhotonRevision, PrinterProfile,
+    PhotonRevision, PrinterProfile, PwszExtension,
 };
 pub use stated::{
     stated_distance_mm, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,

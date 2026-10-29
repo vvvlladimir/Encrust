@@ -88,7 +88,7 @@ impl SliceCommand {
             _ => bail!("--all-plates slices the plates of one project (.encrust)"),
         };
         stage::refuse_for_a_project(self.plate.arrange, &self.job)?;
-        let project = project::open(path, &self.job)?;
+        let project = project::open(path)?;
         let plates = project::printable_plates(&project.manifest);
         if plates.is_empty() {
             bail!("{} holds nothing to print", path.display());

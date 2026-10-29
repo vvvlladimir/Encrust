@@ -11,6 +11,8 @@ use core_pipeline::{CbddlpFlavour, CtbVersion, CxdlpVersion, Sl1Flavour, SlicedF
 pub fn label_of(format: SlicedFormat) -> &'static str {
     match format {
         SlicedFormat::Goo => ".goo",
+        SlicedFormat::Goo5 => ".goo v5.1",
+        SlicedFormat::Prz => ".prz",
         SlicedFormat::Ctb(CtbVersion::V4) => ".ctb v4",
         SlicedFormat::Ctb(CtbVersion::V5) => ".ctb v5",
         SlicedFormat::CtbEncrypted => ".ctb encrypted",
@@ -20,10 +22,16 @@ pub fn label_of(format: SlicedFormat) -> &'static str {
         SlicedFormat::Sl1(Sl1Flavour::Sl1) => ".sl1",
         SlicedFormat::Sl1(Sl1Flavour::Sl1s) => ".sl1s",
         SlicedFormat::GcodeZip => ".zip",
+        SlicedFormat::Crmaslice => ".crmaslice",
         SlicedFormat::Cxdlp(CxdlpVersion::V3) => ".cxdlp v3",
         SlicedFormat::Cxdlp(CxdlpVersion::V4) => ".cxdlp v4",
         SlicedFormat::Svgx => ".svgx",
         SlicedFormat::Cws => ".cws",
+        SlicedFormat::Fdg => ".fdg",
+        SlicedFormat::Photons => ".photons",
+        SlicedFormat::Phz => ".phz",
+        SlicedFormat::Cxline => ".cxline",
+        SlicedFormat::Pwsz(flavour) => flavour.label(),
     }
 }
 
@@ -64,6 +72,7 @@ mod tests {
             labels,
             vec![
                 ".goo",
+                ".goo v5.1",
                 ".ctb v4",
                 ".ctb v5",
                 ".ctb encrypted",
@@ -76,7 +85,12 @@ mod tests {
                 ".cxdlp v3",
                 ".cxdlp v4",
                 ".svgx",
-                ".cws"
+                ".cws",
+                ".fdg",
+                ".photons",
+                ".phz",
+                ".cxline",
+                ".pwsz"
             ]
         );
     }

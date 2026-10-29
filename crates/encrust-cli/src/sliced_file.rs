@@ -5,7 +5,7 @@ use core_engine::{Plate, Run};
 use core_format::PrintJob;
 use core_pipeline::CtbVersion;
 use core_pipeline::SlicedFormat;
-use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
+use printer_profiles::{LimitBreach, MaterialProfile, OutputFormat, PrinterProfile, Stray};
 
 use crate::exit::Cancelled;
 use crate::pipeline::{Watch, report_of};
@@ -13,29 +13,41 @@ use crate::progress::{Watching, bar};
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
 
-/// Which `.ctb` revision `--ctb-version` asked for.
-/// Version 4 is the default as every machine reading 5 reads it; see `docs/formats/chitu.md`.
-#[derive(Debug, Default, Clone, Copy, clap::ValueEnum)]
+/// Which `.ctb` revision `--ctb-version` asked for, over the one the machine's profile
+/// names; see `docs/formats/chitu.md`.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum CtbRevision {
-    #[default]
     #[value(name = "4")]
     Four,
     #[value(name = "5")]
     Five,
+    #[value(name = "encrypted")]
+    Encrypted,
 }
 
-impl From<CtbRevision> for CtbVersion {
-    fn from(revision: CtbRevision) -> Self {
-        match revision {
-            CtbRevision::Four => Self::V4,
-            CtbRevision::Five => Self::V5,
+impl CtbRevision {
+    fn format(self) -> SlicedFormat {
+        match self {
+            Self::Four => SlicedFormat::Ctb(CtbVersion::V4),
+            Self::Five => SlicedFormat::Ctb(CtbVersion::V5),
+            Self::Encrypted => SlicedFormat::CtbEncrypted,
         }
     }
 }
 
-/// The format `path` names, or `None` when it names a directory for a PNG stack.
-pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
-    SlicedFormat::of(path, revision.into())
+/// The format `path` names, or `None` when it names a directory for a PNG stack. A `.ctb`
+/// is version 5 until the machine's profile or `--ctb-version` says otherwise.
+pub fn format_of(path: &Path) -> Option<SlicedFormat> {
+    SlicedFormat::of(path, CtbVersion::V5)
+}
+
+/// `format` at the `.ctb` revision `--ctb-version` asked for, where it asked and the
+/// format is a `.ctb`.
+pub fn asked_revision(format: SlicedFormat, revision: Option<CtbRevision>) -> SlicedFormat {
+    match (format, revision) {
+        (SlicedFormat::Ctb(_) | SlicedFormat::CtbEncrypted, Some(revision)) => revision.format(),
+        _ => format,
+    }
 }
 
 /// Slices and rasterises `plate` straight into a sliced file at `path`, one window in memory
@@ -55,6 +67,7 @@ pub fn write_plate(
     drop(plate.models);
     let mut slice = report_of(run.solid(), run.windows(), drainage);
     warn_if_exposure_was_measured_elsewhere(run.job(), &plate.material);
+    warn_of_limits(run.job());
 
     let mut watching = Watching {
         report: &mut slice,
@@ -130,6 +143,31 @@ fn warn_if_exposure_was_measured_elsewhere(job: &PrintJob, material: &MaterialPr
     }
 }
 
+/// A setting past what the machine takes, or past what its maker advises, is written as
+/// asked; the window would not have let the first be typed (ADR 0368).
+pub(crate) fn warn_of_limits(job: &PrintJob) {
+    for breach in job.limit_breaches() {
+        tracing::warn!("{}", limit_warning(&job.printer.name, &breach));
+    }
+}
+
+fn limit_warning(printer: &str, breach: &LimitBreach) -> String {
+    let span = match breach.span {
+        (Some(low), Some(high)) => format!("{low} to {high}"),
+        (Some(low), None) => format!("at least {low}"),
+        (None, Some(high)) => format!("at most {high}"),
+        (None, None) => String::new(),
+    };
+    let whose = match breach.stray {
+        Stray::Refused => "takes",
+        Stray::Advised => "is advised",
+    };
+    format!(
+        "{} is {}, and {printer} {whose} {span}",
+        breach.field, breach.value
+    )
+}
+
 /// The clock the file is stamped with. One that reads before the epoch stamps the epoch:
 /// the field is informational and no printer refuses a file over it.
 pub fn now_unix_s() -> u64 {
@@ -147,20 +185,33 @@ mod tests {
 
     #[test]
     fn the_extension_decides_what_is_written() {
-        let of = |name: &str| format_of(Path::new(name), CtbRevision::default());
+        let of = |name: &str| format_of(Path::new(name));
         assert!(matches!(of("cube.goo"), Some(SlicedFormat::Goo)));
         assert!(matches!(
             of("cube.ctb"),
-            Some(SlicedFormat::Ctb(CtbVersion::V4))
-        ));
-        assert!(matches!(
-            format_of(Path::new("cube.ctb"), CtbRevision::Five),
             Some(SlicedFormat::Ctb(CtbVersion::V5))
         ));
         assert!(
             of("out").is_none(),
             "a name without an extension is a PNG directory"
         );
+    }
+
+    #[test]
+    fn an_asked_revision_holds_over_the_machines_own_and_touches_no_other_format() {
+        let machines = SlicedFormat::CtbEncrypted;
+        assert!(matches!(
+            asked_revision(machines, Some(CtbRevision::Four)),
+            SlicedFormat::Ctb(CtbVersion::V4)
+        ));
+        assert!(matches!(
+            asked_revision(machines, None),
+            SlicedFormat::CtbEncrypted
+        ));
+        assert!(matches!(
+            asked_revision(SlicedFormat::Goo, Some(CtbRevision::Five)),
+            SlicedFormat::Goo
+        ));
     }
 
     fn panel(width_px: u32, height_px: u32) -> PrinterProfile {

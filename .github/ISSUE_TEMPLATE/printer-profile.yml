@@ -32,7 +32,7 @@ body:
     id: machine
     attributes:
       label: Machine details
-      description: Screen resolution in pixels, build volume in mm, and the file extension its own slicer writes.
+      description: Screen resolution in pixels, build volume in mm, and the file extension the printer reads.
       placeholder: |
         Resolution: 11520 x 5120
         Build volume: 218.88 x 122.88 x 260 mm
@@ -42,7 +42,7 @@ body:
   - type: textarea
     id: file
     attributes:
-      label: A file its own slicer produced
+      label: A sliced file the printer reads
       description: >
         Drag in a small sliced file — a 10 mm cube from whichever slicer you use today. The
         header fields, the layer encoding and the machine's own defaults are all in there, and that

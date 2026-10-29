@@ -6,7 +6,7 @@
 use std::num::NonZeroU8;
 
 use core_raster::{
-    Grey, LayerMask, PixelPitch, RasterSettings, Rasterizer, ScanlineRasterizer, Shading,
+    Grey, GreyRange, LayerMask, PixelPitch, RasterSettings, Rasterizer, ScanlineRasterizer, Shading,
 };
 use core_slicer::{Contour, Layer, Winding};
 use glam::Vec2;
@@ -201,27 +201,26 @@ fn the_mask_starts_at_the_near_corner_of_the_plate() {
 }
 
 #[test]
-fn no_pixel_is_written_a_grey_the_panel_would_not_cure() {
+fn no_edge_pixel_is_written_dimmer_than_the_range() {
     // A circle off the pixel grid: its edge covers pixels by every fraction there is.
     let (layer, _) = polygon(Vec2::new(10.03, 10.07), 5.0, 256);
-    let floored = mask_with(
+    let lifted = mask_with(
         &layer,
         Grey {
-            floor: 128,
+            range: GreyRange { min: 127, max: 255 },
             levels: None,
         },
     );
+    let plain = mask(&layer, Shading::Coverage);
 
     assert!(
-        floored.pixels().iter().all(|&p| p == 0 || p >= 128),
-        "an edge pixel is either dark or bright enough to hold"
+        lifted.pixels().iter().all(|&p| p == 0 || p >= 191),
+        "an edge pixel is dark, or raised to 127 and spread to at least 191"
     );
-    assert!(
-        mask(&layer, Shading::Coverage)
-            .pixels()
-            .iter()
-            .any(|&p| (1..128).contains(&p)),
-        "without a floor the same circle does write greys that would not cure"
+    assert_eq!(
+        lifted.pixels().iter().filter(|&&p| p > 0).count(),
+        plain.pixels().iter().filter(|&&p| p > 0).count(),
+        "the range lights no pixel the full range leaves dark, and darkens none"
     );
 }
 
@@ -231,8 +230,8 @@ fn rounding_to_eight_greys_leaves_only_the_rungs() {
     let rounded = mask_with(
         &layer,
         Grey {
-            floor: 0,
             levels: NonZeroU8::new(8),
+            ..Grey::default()
         },
     );
 

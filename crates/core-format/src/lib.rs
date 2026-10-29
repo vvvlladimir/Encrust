@@ -4,6 +4,7 @@
 //! A concrete format lives in its own crate beside this one; see `format-goo`.
 
 mod chitu;
+mod crc;
 mod de;
 mod error;
 mod exposure;
@@ -18,7 +19,13 @@ mod ser;
 mod timestamp;
 mod writer;
 
-pub use chitu::{CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, chitu_layer_crypt};
+pub use chitu::{
+    CHITU_ANTI_ALIAS_CAP, CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, CHITU_RESIN_BYTES,
+    CHITU_RESIN_TYPE, CHITU_SLICER_FLAGS, ChituLayer, ChituPeel, ChituTotals, chitu_keystream_xor,
+    chitu_layer_crypt, chitu_layer_motion, chitu_second_stage_words, write_chitu_previews,
+    write_chitu_resin,
+};
+pub use crc::Crc32;
 pub use de::{MAX_ENTRY_BYTES, ReadSeek, Reads, read_entry};
 pub use error::FormatError;
 pub use exposure::{ExposurePlan, ExposureRange};
@@ -28,10 +35,13 @@ pub use reader::{
     LayerEntry, MAX_PANEL_PX, OpenFile, SlicedFile, SlicedFileReader, layer_in_range,
     panel_in_range,
 };
-pub use rgb15::{PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, encode_rgb15, write_preview};
+pub use rgb15::{PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, encode_rgb15, rgb15, write_preview};
 pub use rle7::{Rle7Layer, decode_rle7};
-pub use ser::{Fields, WriteSeek};
-pub use writer::{LayerSink, SlicedFileWriter, WRITE_BUFFER_BYTES, validate};
+pub use ser::{BufferedSink, Fields, ReadWriteSeek};
+pub use writer::{
+    LayerSink, SlicedFileWriter, WRITE_BUFFER_BYTES, check_layer_pushed, check_layers_finished,
+    flavour_of, validate,
+};
 
 // How an exposure follows the layer height is a property of the resin, so it lives with
 // the resin profile; every writer scales through it.
@@ -40,8 +50,8 @@ pub use printer_profiles::exposure_for_mm;
 // What a reader finds of the resin in a file is the resin's own tuning table, so a format
 // crate states it in those types, through the bounds every importer of a resin shares.
 pub use printer_profiles::{
-    PrinterTuning, WaitMode, Waits, stated_distance_mm, stated_pwm, stated_rests,
-    stated_speed_mm_min, stated_wait_s,
+    Buffer, LayerPeel, PrinterTuning, SecondStage, WaitMode, Waits, stated_distance_mm, stated_pwm,
+    stated_rests, stated_speed_mm_min, stated_wait_s,
 };
 
 // Runs are the format-neutral currency of a rasterised layer; they live in `core-raster`

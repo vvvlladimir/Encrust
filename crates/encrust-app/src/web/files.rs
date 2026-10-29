@@ -73,7 +73,7 @@ pub async fn slice_offered(
     let (outcome, offered) = match opfs::StoredFile::create(STORED).await {
         Ok(file) => {
             // Every write is a call into the browser, so they go out a megabyte at a time.
-            let mut sink = std::io::BufWriter::with_capacity(1 << 20, file);
+            let mut sink = core_format::BufferedSink::with_capacity(1 << 20, file);
             let outcome = run_into(request, &mut sink, cancel, report);
             // Flushed here rather than on drop, which would lose a failure; the handle
             // closes with it, so the page can read the file.

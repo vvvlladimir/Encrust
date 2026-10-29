@@ -1,11 +1,13 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
 use crate::header::{self, ENDING_STRING};
 use crate::layer;
 use crate::rle::EncodedLayer;
+use crate::version::GooVersion;
 
 /// Writes the Elegoo `.goo` container. Layout is in `docs/formats/goo.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -21,12 +23,12 @@ impl SlicedFileWriter for GooWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
         let mut fields = Fields::new(sink);
-        header::write(&mut fields, job)?;
+        header::write(&mut fields, job, GooVersion::V3)?;
         tracing::debug!(
             layers = job.layer_count(),
             bytes = fields.written(),
@@ -56,23 +58,7 @@ impl LayerSink for GooSink<'_> {
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
-        if self.written == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: self.written as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, self.written, (encoded.width(), encoded.height()))?;
 
         layer::write(&mut self.fields, &self.job, self.written, &encoded)?;
         self.written += 1;
@@ -80,19 +66,14 @@ impl LayerSink for GooSink<'_> {
     }
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
         self.fields.bytes(&ENDING_STRING)?;
 
         // The header is a fixed layout of a fixed length, so the volume the stack came to
         // is written by laying it down again over the one written at the start.
         self.job.volume_mm3 = volume_mm3;
         self.fields.seek_to(0)?;
-        header::write(&mut self.fields, &self.job)?;
+        header::write(&mut self.fields, &self.job, GooVersion::V3)?;
 
         self.fields.flush()?;
         Ok(())

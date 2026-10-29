@@ -6,8 +6,8 @@ Each records the binary layout, field by field, with the offsets and types; wher
 knowledge came from (an official specification, an open-source reader, observation of
 real files); and every place our reading differs from the specification, with the reason.
 
-Every format here is written and read back: `core-format` holds both halves, and step 18d1
-added a reader beside each writer (ADR 0149).
+Every format here but `pwsz.md` is written and read back: `core-format` holds both halves,
+and step 18d1 added a reader beside each writer (ADR 0149).
 
 Sources we use:
 
@@ -26,9 +26,10 @@ same way — an external specification, with every place a real machine differs 
 Chitu family: `.ctb` versions 4 and 5 from step 8a, `.cbddlp` and `.photon` from step 18a.
 `anycubic.md` covers the Photon Workshop family from step 18b, `sl1.md` the Prusa archive
 from step 18c, and `gcode-zip.md` the `.zip` of greyscale PNGs from step 21d.
-`creality.md` covers the `.cxdlp` at both its revisions from step 21e, `svgx.md` the
-`.svgx` of polygons from step 21f, and `cws.md` the `.cws` archive from step 21g.
-`ctb-encrypted.md` covers the encrypted `.ctb`, read and written for the machines that take
+`creality.md` covers the `.cxdlp` at both its revisions from step 21e and `cxline.md` the PioNext `.cxline` beside it, `svgx.md` the
+`.svgx` of polygons from step 21f, and `cws.md` the `.cws` archive from step 21g. `pwsz.md`
+covers the newer Anycubic archive (ADR 0361).
+`fdg.md` covers the `.fdg` of Voxelab's Chitu boards and `phz.md` the Sonic Mini's `.phz` beside it, `photons.md` the Photon S's `.photons`. `ctb-encrypted.md` covers the encrypted `.ctb`, read and written for the machines that take
 nothing else (ADR 0298). `resin-profiles.md` is not a sliced file but the resin profile another program exports,
 read and never written (ADR 0295).
 `encrust-project.md` covers our own `.encrust` project, which is not an external format and

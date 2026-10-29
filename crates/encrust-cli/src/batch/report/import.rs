@@ -70,6 +70,8 @@ pub struct Fit {
     pub overflow_mm: [Scalar; 3],
     /// How far the model reaches past the envelope where it stands, per axis.
     pub outside_mm: [Scalar; 3],
+    /// How far it reaches into the plate's inset along X and Y; it still slices whole.
+    pub inset_mm: [Scalar; 2],
 }
 
 pub(super) fn model_of(import: &ImportReport) -> Model {
@@ -138,5 +140,6 @@ pub(super) fn fit_of(import: &ImportReport) -> Option<Fit> {
         fits: fit.fits(),
         overflow_mm: [fit.overflow.x, fit.overflow.y, fit.overflow.z],
         outside_mm: [fit.outside.x, fit.outside.y, fit.outside.z],
+        inset_mm: [fit.inset.x, fit.inset.y],
     })
 }

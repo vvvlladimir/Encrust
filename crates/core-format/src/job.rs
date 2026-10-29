@@ -1,7 +1,7 @@
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use core_thumbnail::Thumbnail;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{LimitBreach, MaterialProfile, PrinterProfile};
 
 use crate::timestamp::format_utc;
 use crate::{ExposurePlan, exposure_for_mm};
@@ -131,6 +131,16 @@ impl PrintJob {
                 || !self.is_uniform())
     }
 
+    /// Each resin setting the job prints at past what its machine takes or its maker advises,
+    /// the layer height the stack's own (ADR 0368).
+    pub fn limit_breaches(&self) -> Vec<LimitBreach> {
+        let printed = MaterialProfile {
+            layer_height_mm: self.nominal_height_mm(),
+            ..self.material.clone()
+        };
+        self.printer.limits.breaches(&printed)
+    }
+
     /// When the file was made as `YYYY-MM-DD hh:mm:ss` in UTC.
     pub fn created_utc(&self) -> String {
         format_utc(self.created_unix_s)
@@ -175,19 +185,29 @@ impl PrintJob {
             }
         };
 
+        let stage = &material.second_stage;
         let bottom_motion = travel(
             material.bottom_lift_distance_mm,
             material.bottom_lift_speed_mm_min,
         ) + travel(
-            material.bottom_lift_distance_mm,
+            stage.bottom_lift_distance_mm,
+            stage.bottom_lift_speed_mm_min,
+        ) + travel(
+            material.bottom_retract_distance_mm(),
             material.bottom_retract_speed_mm_min,
+        ) + travel(
+            stage.bottom_retract_distance_mm,
+            stage.bottom_retract_speed_mm_min,
         );
         let normal_motion = travel(material.lift_distance_mm, material.lift_speed_mm_min)
-            + travel(material.retract_distance_mm, material.retract_speed_mm_min);
+            + travel(stage.lift_distance_mm, stage.lift_speed_mm_min)
+            + travel(material.retract_distance_mm, material.retract_speed_mm_min)
+            + travel(stage.retract_distance_mm, stage.retract_speed_mm_min);
 
         // What the machine spends per layer beyond any of this, measured on a real print.
         let unaccounted = layer_count as f32 * material.compensation.layer_time_s;
-        let delays = layer_count as f32 * material.wait_per_layer_s();
+        let delays = layer_count as f32 * material.wait_per_layer_s()
+            + bottom as f32 * (material.bottom_light_off_s() - material.light_off_s());
         let total = exposure
             + delays
             + unaccounted

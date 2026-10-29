@@ -10,7 +10,7 @@ ADR 0090 said `.goo` sets advance mode "whenever a job's exposure varies at all"
 stack. A ramp alone is enough, and almost every job has one, so almost every file we write
 claims advance mode.
 
-A vendor file for an Elegoo Saturn 4 Ultra claims the opposite. It carries the same
+A known file for an Elegoo Saturn 4 Ultra claims the opposite. It carries the same
 ramp in its per-layer records, the same `transition layers` count in its header — and
 advance mode `false`. The machine ramps the bottom block from the header's bottom exposure,
 common exposure and transition count, and never reads the records.
@@ -37,7 +37,7 @@ reveals.
 
 The default is unchanged: `per_layer_settings` still defaults to `true`, so every shipped
 profile writes what it wrote before. What changes is that a user with a machine that
-misbehaves on the per-layer path can turn it off and get the vendor's bytes, without editing
+misbehaves on the per-layer path can turn it off and get the known file's bytes, without editing
 TOML.
 
 The per-layer records are still written in full either way — the format fixes their size, so
@@ -48,11 +48,11 @@ none of the three ways above, which would mean the flag carries something else a
 
 ## Alternatives considered
 
-### Drop the transition-ramp clause outright, matching the vendor file
+### Drop the transition-ramp clause outright, matching the known file
 
 Would make an ordinary job byte-compatible with the reference file on this flag. It lost
 because the ramp in the per-layer records is real and some machine may well be reading it;
-turning it off for every machine on the evidence of one vendor's file for one machine is a
+turning it off for every machine on the evidence of one known file for one machine is a
 wider claim than the evidence supports.
 
 ### A per-job switch in the Slicing panel

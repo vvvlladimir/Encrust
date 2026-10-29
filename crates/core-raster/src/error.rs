@@ -9,4 +9,7 @@ pub enum RasterError {
 
     #[error("pixel pitch must be greater than zero, got {0} mm")]
     NonPositivePixelPitch(f32),
+
+    #[error("the grey range starts at {min}, above its top of {max}")]
+    InvertedGreyRange { min: u8, max: u8 },
 }

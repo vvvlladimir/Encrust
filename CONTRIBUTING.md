@@ -16,7 +16,7 @@ ever printed anything. Everything else about this project can be fixed by writin
 Open a **printer profile** issue with:
 
 - the printer's make and model, and its screen resolution and build volume if you know them;
-- a small file its own slicer produced — `.ctb`, `.goo`, `.pwmx`, `.sl1`, whatever it takes. A
+- a small sliced file the printer reads — `.ctb`, `.goo`, `.pwmx`, `.sl1`, whatever it takes. A
   10 × 10 × 10 mm cube is plenty, and the file tells us the header fields, the layer encoding and
   the defaults that machine expects;
 - the resin and the exposure settings you actually print with.
@@ -97,8 +97,8 @@ a file. That is interoperability, and it is what the project is for.
 
 Two things follow, and they are not negotiable here:
 
-- **Only publicly documented or independently reverse-engineered detail.** Do not paste code,
-  headers or constants out of a vendor SDK whose licence forbids it, and do not submit anything you
+- **Only publicly documented or independently established detail.** Do not paste code,
+  headers or constants out of a manufacturer's SDK whose licence forbids it, and do not submit anything you
   obtained under an NDA.
 - **Do not bulk-import another slicer's profile catalogue.** A profile built from a specification,
   from a file your own printer accepted, or from your own measurements is fine. A wholesale copy of

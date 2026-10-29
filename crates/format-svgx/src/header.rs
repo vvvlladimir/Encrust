@@ -37,10 +37,8 @@ pub(crate) fn write_header(
 pub(crate) fn write_previews(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<[u32; 2]> {
     let mut addresses = [0; 2];
     for (address, (width, height)) in addresses.iter_mut().zip(PREVIEW_SIZES_PX) {
-        let image = match job.thumbnail.as_ref() {
-            Some(thumbnail) => thumbnail.fitted_to(width, height, PREVIEW_BACKGROUND),
-            None => Thumbnail::filled(width, height, PREVIEW_BACKGROUND),
-        };
+        let image =
+            Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND);
         *address = write_bitmap(fields, width, height, image.pixels())?;
     }
     Ok(addresses)

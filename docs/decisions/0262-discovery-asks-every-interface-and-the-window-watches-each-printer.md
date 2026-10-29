@@ -49,7 +49,7 @@ Discovery works on macOS, and a failed scan explains itself. The reachability do
 state rather than the last scan's word, so it no longer goes stale.
 
 Each listed version 3 board holds one of its few control connections while the window
-is open; the vendor's boards are reported to take about four. A send opens one more
+is open; the maker's boards are reported to take about four. A send opens one more
 beside it. Each version 1 board is probed every period. If boards start refusing a
 second connection, the watch has to pause while a file goes up.
 

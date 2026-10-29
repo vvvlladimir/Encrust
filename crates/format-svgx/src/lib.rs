@@ -8,7 +8,6 @@ mod fixtures;
 mod header;
 mod index;
 mod reader;
-mod trace;
 mod writer;
 
 pub use reader::{OpenSvgx, SvgxReader};

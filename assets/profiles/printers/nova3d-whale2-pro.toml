@@ -1,0 +1,27 @@
+# Nova3D Whale2 Pro.
+
+name = "Whale2 Pro"
+manufacturer = "Nova3D"
+machine_name = "NOVA3D Whale2 Pro"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 7680
+height_px = 4320
+width_mm = 228.096
+height_mm = 128.304
+
+[build_volume]
+x = 228.096
+y = 128.304
+z = 260.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

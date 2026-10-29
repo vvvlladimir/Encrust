@@ -1,10 +1,11 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
-use crate::crc::Crc32;
 use crate::family::{block, model_code};
+use core_format::Crc32;
 
 use super::blocks::{self, PAGE_BREAK};
 use super::lines::EncodedLayer;
@@ -23,7 +24,7 @@ impl SlicedFileWriter for CxdlpWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -41,9 +42,8 @@ impl SlicedFileWriter for CxdlpWriter {
             what: "a CL or CT model code in the machine name, as in Halot One CL-60".to_owned(),
         })?;
 
-        // The blocks in front of the layers are built once in memory — a few hundred
-        // kilobytes, bounded by the preview sizes — because every byte of them has to go
-        // through the checksum as well as to the sink, and the sink cannot be read back.
+        // The blocks in front of the layers, a few hundred kilobytes bounded by the previews,
+        // are built in memory so the checksum takes them while streaming, with no second pass.
         let head = block(|fields| {
             blocks::write_header(fields, job, &model)?;
             blocks::write_previews(fields, job.thumbnail.as_ref())?;
@@ -58,10 +58,8 @@ impl SlicedFileWriter for CxdlpWriter {
         fields.bytes(&PAGE_BREAK)?;
         fields.bytes(&info)?;
 
-        let mut before = Crc32::default();
-        before.update(&head);
-        let mut after = Crc32::default();
-        after.update(&info);
+        let before = Crc32::of(&head);
+        let after = Crc32::of(&info);
 
         tracing::debug!(layers, model = %model, "cxdlp header written");
         Ok(CxdlpSink {
@@ -98,24 +96,8 @@ impl LayerSink for CxdlpSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.areas.len() as u32;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
         let encoded = encoded?;
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
 
         let pitch = &self.job.raster.pitch;
         let area = encoded.area_field(pitch.x * pitch.y);
@@ -134,12 +116,7 @@ impl LayerSink for CxdlpSink<'_> {
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
-        if self.areas.len() as u32 != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.areas.len() as u32,
-            });
-        }
+        check_layers_finished(&self.job, self.areas.len() as u32)?;
 
         let footer = block(blocks::write_footer)?;
         self.after.update(&footer);
@@ -158,8 +135,7 @@ impl LayerSink for CxdlpSink<'_> {
         self.fields.bytes(&table)?;
         self.fields.seek_to(end)?;
 
-        let mut middle = Crc32::default();
-        middle.update(&table);
+        let middle = Crc32::of(&table);
         let checksum = self
             .before
             .followed_by(middle)

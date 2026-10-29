@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use core_analysis::Measured;
-use core_format::{PrintJob, WriteSeek};
+use core_format::{PrintJob, ReadWriteSeek};
 use core_pipeline::{Observer, SlicedFormat, Tolerance, Writing, Written, raster_settings};
 use core_raster::RasterSettings;
 use core_slicer::{LayerPlan, Solid, Windows};
@@ -111,7 +111,7 @@ impl Run {
     pub fn write(
         &self,
         name: &str,
-        sink: &mut dyn WriteSeek,
+        sink: &mut dyn ReadWriteSeek,
         observer: &mut dyn Observer,
     ) -> Result<Option<Written>, EngineError> {
         Ok(core_pipeline::write_to(

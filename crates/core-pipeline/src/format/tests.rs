@@ -5,6 +5,7 @@ fn the_extension_decides_what_is_written() {
     let of = |name: &str| SlicedFormat::of(Path::new(name), CtbVersion::V4);
     assert_eq!(of("cube.goo"), Some(SlicedFormat::Goo));
     assert_eq!(of("cube.GOO"), Some(SlicedFormat::Goo));
+    assert_eq!(of("cube.PRZ"), Some(SlicedFormat::Prz));
     assert_eq!(of("cube.ctb"), Some(SlicedFormat::Ctb(CtbVersion::V4)));
     assert_eq!(
         of("cube.cbddlp"),
@@ -25,17 +26,19 @@ fn the_extension_decides_what_is_written() {
         of("cube.DLP"),
         Some(SlicedFormat::Anycubic(
             AnycubicFlavour::Dlp,
-            AnycubicVersion::V516
+            AnycubicVersion::V515
         ))
     );
     assert_eq!(of("cube.sl1"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1)));
     assert_eq!(of("cube.ZIP"), Some(SlicedFormat::GcodeZip));
+    assert_eq!(of("cube.crmaslice"), Some(SlicedFormat::Crmaslice));
     assert_eq!(
         of("cube.cxdlp"),
         Some(SlicedFormat::Cxdlp(CxdlpVersion::V3))
     );
     assert_eq!(of("cube.svgx"), Some(SlicedFormat::Svgx));
     assert_eq!(of("cube.cws"), Some(SlicedFormat::Cws));
+    assert_eq!(of("cube.PM7"), Some(SlicedFormat::Pwsz(PwszFlavour::Pm7)));
     assert_eq!(of("cube.sl1s"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1s)));
     assert_eq!(
         SlicedFormat::of(Path::new("cube.ctb"), CtbVersion::V5),
@@ -77,6 +80,11 @@ fn a_name_without_a_revision_takes_the_one_the_profile_states() {
         SlicedFormat::Goo.at_revision_of(stated),
         SlicedFormat::Goo,
         "a name of another container keeps what it named"
+    );
+    assert_eq!(
+        SlicedFormat::Goo.at_revision_of(OutputFormat::Goo5),
+        SlicedFormat::Goo5,
+        "a .goo name keeps the revision the machine reads"
     );
     assert_eq!(
         SlicedFormat::Anycubic(AnycubicFlavour::Pm5, AnycubicVersion::V517).at_revision_of(stated),

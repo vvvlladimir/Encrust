@@ -11,7 +11,6 @@ cargo test --workspace
 cargo bench --workspace
 cargo run --release -p encrust-cli --bin encrust -- slice model.stl \
   --printer elegoo-mars-4-ultra --resin my-grey --center -o model.goo
-cargo xtask gen-profiles --source <dir of .ini profiles> --dry-run
 cargo xtask web   # the window for a browser, on nightly: docs/design/web-build.md
 cargo xtask man   # the command line's man pages, into target/man
 cargo xtask arch  # the drawn dependency graph against the manifests

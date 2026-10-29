@@ -155,3 +155,24 @@ fn a_blur_is_named_with_its_radius() {
         "coverage, exact pixel area, all 255 greys, blurred 2 px"
     );
 }
+
+#[test]
+fn a_grey_range_reads_as_its_two_ends() {
+    assert_eq!(
+        parse_grey_range("127..255"),
+        Ok(GreyRange { min: 127, max: 255 })
+    );
+    assert!(parse_grey_range("200..100").is_err(), "inverted");
+    assert!(parse_grey_range("0..256").is_err(), "past white");
+    assert!(parse_grey_range("127").is_err(), "one end");
+}
+
+#[test]
+fn a_narrowed_range_is_named_with_its_ends() {
+    let mut settings = report().settings;
+    settings.grey.range = GreyRange { min: 127, max: 255 };
+    assert_eq!(
+        describe_shading(&settings),
+        "coverage, exact pixel area, all 255 greys spread over 127..255"
+    );
+}

@@ -1,10 +1,7 @@
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 use core_format::{
-    ExposurePlan, ExposureRange, LayerSink, OpenFile, PrintJob, SlicedFile, WRITE_BUFFER_BYTES,
-    WriteSeek,
+    ExposurePlan, ExposureRange, LayerSink, OpenFile, PrintJob, ReadWriteSeek, SlicedFile,
 };
 use core_raster::{LayerRuns, Run, Shading};
 use core_slicer::LayerPlan;
@@ -13,7 +10,8 @@ use rayon::prelude::*;
 
 use crate::error::PipelineError;
 use crate::format::SlicedFormat;
-use crate::panel::{PanelOverrides, raster_settings};
+use crate::panel::{PanelOverrides, file_layout, raster_settings};
+use crate::write::create_sink;
 use crate::write::{Destination, Feed, Observer};
 
 /// A sliced file read back and written again in another container (ADR 0180).
@@ -31,6 +29,14 @@ pub struct Converting<'a> {
     pub created_unix_s: u64,
 }
 
+impl Converting<'_> {
+    /// The job the new file of `source` is written from, which a front end checks against
+    /// the machine's limits before it starts.
+    pub fn job_of(&self, source: &SlicedFile) -> Result<PrintJob, PipelineError> {
+        job_of(source, self)
+    }
+}
+
 /// What a conversion wrote.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Converted {
@@ -44,7 +50,7 @@ pub struct Converted {
 pub fn convert_to(
     source: &mut impl OpenFile,
     converting: &Converting<'_>,
-    sink: &mut dyn WriteSeek,
+    sink: &mut dyn ReadWriteSeek,
     observer: &mut dyn Observer,
 ) -> Result<Option<Converted>, PipelineError> {
     let job = job_of(source.facts(), converting)?;
@@ -54,12 +60,18 @@ pub fn convert_to(
         job: &job,
     };
     let pixel_mm2 = job.raster.pitch.x * job.raster.pitch.y;
+    // The file was cut for this panel, so it lies as this machine takes that container.
+    let (mirror, name) = (converting.printer.mirror, converting.printer.machine_name());
+    let from = file_layout(source.facts().format, mirror, name);
+    let to = file_layout(converting.format.extension(), mirror, name);
     destination.write(
         sink,
         &mut Layers {
             source,
             plan: &job.plan,
             pixel_mm2,
+            columns_reversed: from.mirror_x != to.mirror_x,
+            rows_reversed: from.mirror_y != to.mirror_y,
         },
         observer,
     )
@@ -73,11 +85,7 @@ pub fn convert(
     path: &Path,
     observer: &mut dyn Observer,
 ) -> Result<Option<Converted>, PipelineError> {
-    let file = File::create(path).map_err(|source| PipelineError::Create {
-        path: path.to_owned(),
-        source,
-    })?;
-    let mut buffered = BufWriter::with_capacity(WRITE_BUFFER_BYTES, file);
+    let mut buffered = create_sink(path)?;
     let converted = convert_to(source, converting, &mut buffered, observer);
     if !matches!(converted, Ok(Some(_))) {
         drop(buffered);
@@ -232,6 +240,10 @@ struct Layers<'a, O> {
     source: &'a mut O,
     plan: &'a LayerPlan,
     pixel_mm2: f32,
+    /// Whether the new container mirrors the plate along X, or lays it from the other edge,
+    /// where the file did not.
+    columns_reversed: bool,
+    rows_reversed: bool,
 }
 
 impl<O: OpenFile> Feed for Layers<'_, O> {
@@ -271,6 +283,7 @@ impl<O: OpenFile> Feed for Layers<'_, O> {
                 .map(|(index, runs)| {
                     let thickness = self.plan.thickness_of(*index).unwrap_or(0.0);
                     let layer = layer_of(width_px, height_px, runs);
+                    let layer = layer.mirrored(self.columns_reversed, self.rows_reversed);
                     (
                         S::encode(&layer),
                         cured_mm3(runs, self.pixel_mm2 * thickness),

@@ -1,134 +1,16 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use toml::Table;
 
-use crate::{MaterialProfile, PrinterTuning, ProfileError};
+mod output;
 
-/// The sliced-file format a machine's firmware reads.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum OutputFormat {
-    /// Elegoo's `.goo`.
-    #[default]
-    Goo,
-    /// Chitu's `.ctb`, revision 4.
-    Ctb4,
-    /// Chitu's `.ctb`, revision 5.
-    Ctb5,
-    /// Chitu's encrypted `.ctb`, which the newer Chitu boards take and nothing else.
-    CtbEncrypted,
-    /// Chitu's older `.cbddlp`.
-    Cbddlp,
-    /// The same container under the extension Anycubic's early machines read, `.photon`.
-    Photon,
-    /// Anycubic's Photon Workshop container, under the extension of the machine that
-    /// reads it and at the revision that machine's firmware takes.
-    Anycubic {
-        extension: AnycubicExtension,
-        revision: PhotonRevision,
-    },
-    /// Prusa's `.sl1`.
-    Sl1,
-    /// The same container under the extension the SL1S Speed reads.
-    Sl1s,
-    /// The `.zip` of greyscale PNGs a Chitu board runs as gcode.
-    Zip,
-    /// Creality's `.cxdlp`, revision 3.
-    Cxdlp3,
-    /// The same container at revision 4, which the Halot Mage line reads.
-    Cxdlp4,
-    /// The `.svgx`, whose layers are polygons rather than pixels.
-    Svgx,
-    /// The `.cws` archive of greyscale PNGs and the gcode that runs them.
-    Cws,
-}
+pub use output::{AnycubicExtension, OutputFormat, PhotonRevision, PwszExtension};
 
-/// Which extension an Anycubic machine's firmware looks for; all are one container,
-/// see `docs/formats/anycubic.md`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum AnycubicExtension {
-    #[default]
-    Pwmx,
-    Pwmo,
-    Pwms,
-    Pmsq,
-    Pw0,
-    Pwx,
-    Dlp,
-    Dl2p,
-    Pwma,
-    Pwmb,
-    Px6s,
-    Pmx2,
-    Pm3n,
-    Pm3,
-    Pm3m,
-    Pm3r,
-    Pm5,
-}
-
-impl AnycubicExtension {
-    /// What the extension is called where a user would see it named.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Pwmx => ".pwmx",
-            Self::Pwmo => ".pwmo",
-            Self::Pwms => ".pwms",
-            Self::Pmsq => ".pmsq",
-            Self::Pw0 => ".pw0",
-            Self::Pwx => ".pwx",
-            Self::Dlp => ".dlp",
-            Self::Dl2p => ".dl2p",
-            Self::Pwma => ".pwma",
-            Self::Pwmb => ".pwmb",
-            Self::Px6s => ".px6s",
-            Self::Pmx2 => ".pmx2",
-            Self::Pm3n => ".pm3n",
-            Self::Pm3 => ".pm3",
-            Self::Pm3m => ".pm3m",
-            Self::Pm3r => ".pm3r",
-            Self::Pm5 => ".pm5",
-        }
-    }
-
-    /// The extension itself, without the dot.
-    pub fn as_str(self) -> &'static str {
-        &self.label()[1..]
-    }
-}
-
-/// Which revision of the Photon Workshop container a machine's firmware reads, stated per machine
-/// as one extension can be read at two revisions (ADR 0166).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum PhotonRevision {
-    #[default]
-    V1,
-    V516,
-    V517,
-}
-
-impl OutputFormat {
-    /// What the format is called where a user would see it named.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Goo => ".goo",
-            Self::Ctb4 => ".ctb v4",
-            Self::Ctb5 => ".ctb v5",
-            Self::CtbEncrypted => ".ctb encrypted",
-            Self::Cbddlp => ".cbddlp",
-            Self::Photon => ".photon",
-            Self::Anycubic { extension, .. } => extension.label(),
-            Self::Sl1 => ".sl1",
-            Self::Sl1s => ".sl1s",
-            Self::Zip => ".zip",
-            Self::Cxdlp3 | Self::Cxdlp4 => ".cxdlp",
-            Self::Svgx => ".svgx",
-            Self::Cws => ".cws",
-        }
-    }
-}
+use crate::{
+    Buffer, FrontEdge, MaterialProfile, Mirror, PlateInset, PrinterLimits, PrinterTuning,
+    ProfileError, mirror,
+};
 
 /// How a machine takes a sliced file over the network, where it takes one at all.
 /// What it speaks, not how it is reached; address and credentials: `docs/decisions/0153`.
@@ -166,10 +48,35 @@ pub struct Display {
     /// Illuminated area, millimetres.
     pub width_mm: f32,
     pub height_mm: f32,
-    /// Dimmest grey this panel cures; a mask pixel below it is written black instead.
-    /// Zero, the default, keeps every grey. See `docs/decisions/0139`.
-    #[serde(default)]
-    pub grey_floor: u8,
+    /// The greys an edge pixel is spread over on this machine; 0 to 255, the default, keeps every grey. See `docs/decisions/0378`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub grey_min: u8,
+    #[serde(default = "full_grey", skip_serializing_if = "is_full_grey")]
+    pub grey_max: u8,
+    /// Whether this machine takes masks without grey only, anti-aliasing off and hidden.
+    /// See `docs/decisions/0377`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub binary_only: bool,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
+fn full_grey() -> u8 {
+    u8::MAX
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn is_full_grey(value: &u8) -> bool {
+    *value == u8::MAX
 }
 
 impl Display {
@@ -201,11 +108,15 @@ pub struct PrinterProfile {
     pub machine_name: Option<String>,
     pub display: Display,
     pub build_volume: BuildVolume,
-    /// Whether the panel is mirrored relative to model space.
+    /// How the panel takes the plate; a profile that says nothing is `Normal`.
     #[serde(default)]
-    pub mirror_x: bool,
-    #[serde(default)]
-    pub mirror_y: bool,
+    pub mirror: Mirror,
+    /// Which plate edge is the machine's front, for the viewport only; see ADR 0369.
+    #[serde(default, skip_serializing_if = "FrontEdge::is_default")]
+    pub front_edge: FrontEdge,
+    /// The band along the plate's edges models are kept out of, where the maker gives one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plate_inset: Option<PlateInset>,
     /// What this machine's firmware reads. A profile that says nothing gets `.goo`.
     #[serde(default)]
     pub output: OutputFormat,
@@ -223,6 +134,12 @@ pub struct PrinterProfile {
     /// file states these. See `docs/decisions/0301`.
     #[serde(default, skip_serializing_if = "PrinterTuning::is_empty")]
     pub locked: PrinterTuning,
+    /// The buffer this firmware runs and a resin may change; `None` for one without.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buffer: Option<Buffer>,
+    /// The span each resin setting may take on this machine. See `docs/decisions/0368`.
+    #[serde(default, skip_serializing_if = "PrinterLimits::is_empty")]
+    pub limits: PrinterLimits,
 }
 
 /// One printer on the network a profile sends to: what the user calls it and where it is.
@@ -292,20 +209,25 @@ impl Default for PrinterProfile {
                 height_px: 2560,
                 width_mm: 143.36,
                 height_mm: 89.6,
-                grey_floor: 0,
+                grey_min: 0,
+                grey_max: u8::MAX,
+                binary_only: false,
             },
             build_volume: BuildVolume {
                 x: 143.36,
                 y: 89.6,
                 z: 165.0,
             },
-            mirror_x: true,
-            mirror_y: false,
+            mirror: Mirror::LcdMirror,
+            front_edge: FrontEdge::MinY,
             output: OutputFormat::Goo,
             connection: Connection::None,
             machines: Vec::new(),
             firmware: Firmware::default(),
             locked: PrinterTuning::default(),
+            buffer: None,
+            plate_inset: None,
+            limits: PrinterLimits::default(),
         }
     }
 }
@@ -317,11 +239,25 @@ impl PrinterProfile {
         self.machine_name.as_deref().unwrap_or(&self.name)
     }
 
+    /// This machine sent over `other`'s network: its connection and the printers listed,
+    /// which are the user's and no part of a model's numbers.
+    #[must_use]
+    pub fn with_network_of(self, other: &PrinterProfile) -> Self {
+        Self {
+            connection: other.connection,
+            machines: other.machines.clone(),
+            ..self
+        }
+    }
+
     pub fn from_toml_str(source: &str, path: &Path) -> Result<Self, ProfileError> {
-        let profile: Self = toml::from_str(source).map_err(|source| ProfileError::Parse {
+        let parse_error = |source| ProfileError::Parse {
             path: path.to_owned(),
             source,
-        })?;
+        };
+        let mut table: Table = toml::from_str(source).map_err(parse_error)?;
+        mirror::read_old_flags(&mut table);
+        let profile: Self = table.try_into().map_err(parse_error)?;
         profile.validate()?;
         Ok(profile)
     }
@@ -352,7 +288,7 @@ impl PrinterProfile {
         Self::from_toml_str(&source, path)
     }
 
-    fn validate(&self) -> Result<(), ProfileError> {
+    pub(crate) fn validate(&self) -> Result<(), ProfileError> {
         let checks = [
             ("display.width_mm", self.display.width_mm),
             ("display.height_mm", self.display.height_mm),
@@ -365,6 +301,10 @@ impl PrinterProfile {
                 return Err(ProfileError::NonPositive { field, value });
             }
         }
+        let (min, max) = (self.display.grey_min, self.display.grey_max);
+        if min > max {
+            return Err(ProfileError::InvertedGreyRange { min, max });
+        }
         if let Some(index) = self
             .machines
             .iter()
@@ -372,6 +312,10 @@ impl PrinterProfile {
         {
             return Err(ProfileError::NoAddress { index });
         }
+        if let Some(inset) = &self.plate_inset {
+            inset.validate(self.build_volume.x, self.build_volume.y)?;
+        }
+        self.limits.validate()?;
         MaterialProfile::default()
             .with_tuning(&self.locked)
             .validate_values()

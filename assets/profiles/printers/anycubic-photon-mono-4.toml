@@ -1,0 +1,43 @@
+# Anycubic Photon Mono 4.
+
+name = "Photon Mono 4"
+manufacturer = "Anycubic"
+machine_name = "Anycubic Photon Mono 4"
+mirror = "lcd-mirror"
+connection = "none"
+
+[display]
+width_px = 9024
+height_px = 5120
+width_mm = 153.408
+height_mm = 87.04
+
+[build_volume]
+x = 153.408
+y = 87.04
+z = 165.0
+
+[output.anycubic]
+extension = "pm4n"
+revision = "v518"
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"
+bottom_light_off_delay_s = 5.0
+
+[limits]
+layer_height_mm = { min = 0.01, max = 0.3 }
+exposure_s = { min = 0.1, max = 200 }
+bottom_exposure_s = { min = 0.1, max = 200 }
+transition_layers = { max = 99 }
+light_off_delay_s = { max = 200 }
+lift_distance_mm = { max = 99 }
+bottom_lift_distance_mm = { max = 99 }
+
+[limits.second_stage]
+lift_distance_mm = { max = 99 }
+bottom_lift_distance_mm = { max = 99 }

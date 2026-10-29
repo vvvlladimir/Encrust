@@ -1,6 +1,6 @@
 # 0301. A printer locks the settings its firmware runs itself
 
-- **Status:** Accepted
+- **Status:** Accepted; the lock laid over every resin is superseded by 0364
 - **Date:** 2026-10-17
 
 ## Context
@@ -9,7 +9,7 @@ ADR 0142 cleared advance mode for the Elegoo Saturn 4 Ultra, so the machine read
 header alone. The header still carried the resin's peel, 6 mm at 65 mm/min, and on such a
 file a user saw the plate rise again after the vat tilted.
 
-The vendor slicer's machine definitions hide fields per machine and write a fixed default for
+The makers' machine settings hide fields per machine and fix a default for
 each: every peel field at 0.05 on the tilting vats (the Saturn 4 Ultra, its 16K, the Mars 5
 Ultra), two of which are offered resting alone; the light power at 255 and the transition at
 0 on older Chitu boards; light-off waiting on Anycubic and Halot machines; the bottom peel on
@@ -28,23 +28,23 @@ a Halot Mage. Files it wrote from fresh presets for the Mars 5 Ultra and the Sat
   keeps its own.
 - The print time counts no travel under 1 mm/min, the placeholder floor of ADR 0293: that
   motion is the machine's own, and its time is the resin's measured layer time.
-- What the vendor slicer hides, at its default, is locked for every machine of ours it matches
+- What the maker hides, at its default, is locked for every machine of ours it matches
   by panel, in the profile file alone: `gen-profiles` keeps a generated file's `[locked]` when
   it rewrites the rest from the source. The Mars 5 Ultra and the Saturn 4 Ultra 16K ship,
-  read off the vendor's files for them.
+  read off known files for them.
 
 ## Consequences
 
-What the vendor will not let a user change, neither do we, and a lock added to the catalogue
+What the maker will not let a user change, neither do we, and a lock added to the catalogue
 reaches every user at the next start, copy or not. A resin keeps its own numbers for the
 machines that do not lock them. Locking the transition at 0 removes a ramp we used to write
-on machines that claimed the per-layer tables; the vendor writes none there.
+on machines that claimed the per-layer tables; known files carry none there.
 
-A tilting vat's estimate leaves the tilt out until the resin's layer time is measured. The
-vendor writes the bottom layers' light-off apart from the rest; one delay cannot say that.
+A tilting vat's estimate leaves the tilt out until the resin's layer time is measured. Known
+files state the bottom layers' light-off apart from the rest; one delay cannot say that.
 
 Whether a tilting vat's firmware obeys a peel the file states is not measured: a preset
-carried over from another machine made the vendor write 5 mm at 60 mm/min for one. Reopen
+carried over from another machine gave a known file 5 mm at 60 mm/min for one. Reopen
 this if a Saturn 4 Ultra prints that file without rising twice.
 
 ## Alternatives considered

@@ -1,5 +1,6 @@
 use core_format::{
-    Fields, FormatError, LayerSink, PrintJob, SlicedFileWriter, WriteSeek, validate,
+    Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
+    check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 
@@ -55,7 +56,7 @@ impl SlicedFileWriter for CbddlpWriter {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -105,23 +106,7 @@ impl LayerSink for CbddlpSink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.layers_pushed();
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width() != self.job.raster.width_px
-            || encoded.height() != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width(),
-                height: encoded.height(),
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
 
         // The passes of one layer sit together, so the stack streams even though the
         // table that addresses them is ordered the other way round.
@@ -142,12 +127,7 @@ impl LayerSink for CbddlpSink<'_> {
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
         let written = self.layers_pushed();
-        if written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written,
-            });
-        }
+        check_layers_finished(&self.job, written)?;
 
         self.fields.seek_to(u64::from(self.offsets.layer_table))?;
         for pass in 0..GREY_PASSES as usize {
@@ -181,6 +161,8 @@ fn head() -> Head {
         // The container has no slicer info block, and says so with a zero size beside a
         // zero address.
         slicer_info_bytes: 0,
+        encryption_key: 0,
+        states_height: true,
     }
 }
 

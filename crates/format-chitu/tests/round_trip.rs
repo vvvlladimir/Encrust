@@ -9,9 +9,11 @@
 use core_format::{
     ExposurePlan, ExposureRange, LayerPlan, LayerSink, PrintJob, SlicedFileWriter, Thumbnail,
 };
+use core_format::{OpenFile, SlicedFileReader};
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
 use format_chitu::{
-    CbddlpSink, CbddlpWriter, CtbSink, CtbVersion, CtbWriter, GREY_PASSES, decode_passes,
+    CbddlpSink, CbddlpWriter, ChituReader, CtbSink, CtbVersion, CtbWriter, GREY_PASSES,
+    decode_passes,
 };
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -27,7 +29,7 @@ fn printer() -> PrinterProfile {
         r#"
 name = "Test panel"
 manufacturer = "Test"
-mirror_x = true
+mirror = "lcd-mirror"
 
 [display]
 width_px = 16
@@ -68,6 +70,11 @@ fn job(layer_count: u32) -> PrintJob {
         thumbnail: None,
         created_unix_s: 0,
     }
+}
+
+/// One pixel of the test panel, mm², as its profile states it: 1.6 mm over 16 px a side.
+fn pitch_area_mm2() -> f32 {
+    0.1 * 0.1
 }
 
 fn layer_from(pixels: &[u8]) -> LayerRuns {
@@ -158,10 +165,13 @@ fn every_offset_in_the_header_lands_inside_the_file_in_order() {
     let slicer = u32_at(&file, SLICER_OFFSET) as usize;
     let table = u32_at(&file, LAYER_TABLE) as usize;
 
-    assert_eq!(large, HEADER_BYTES, "the large preview follows the header");
+    assert_eq!(
+        parameters, HEADER_BYTES,
+        "the print parameters follow the header"
+    );
     assert!(
-        large < small && small < parameters && parameters < slicer && slicer < table,
-        "the blocks are written in the order the header lists them"
+        parameters < slicer && slicer < large && large < small && small < table,
+        "then the slicer info and version 4 block, the previews, and the table"
     );
     assert!(table < file.len(), "the layer table is inside the file");
     assert_eq!(u32_at(&file, PRINT_PARAMETERS_SIZE), 60);
@@ -216,8 +226,9 @@ fn a_layer_decodes_to_the_pixels_it_went_in_as() {
     let address = u32_at(&file, table + 12) as usize;
     let size = u32_at(&file, table + 16) as usize;
 
-    let runs = core_format::decode_rle7(&file[address..address + size])
-        .expect("our own encoder is well formed");
+    let mut data = file[address..address + size].to_vec();
+    core_format::chitu_layer_crypt(u32_at(&file, 0x64), 0, &mut data);
+    let runs = core_format::decode_rle7(&data).expect("our own encoder is well formed");
     let decoded: Vec<u8> = runs
         .iter()
         .flat_map(|run| std::iter::repeat_n(run.value, run.length as usize))
@@ -433,4 +444,111 @@ fn a_layer_of_the_older_container_decodes_to_the_greys_its_passes_carry() {
             "pixel {at} went in as {out} and came back as {back}"
         );
     }
+}
+
+#[test]
+fn the_file_ends_with_the_crc_of_everything_before_it() {
+    let layers: Vec<_> = (0..3)
+        .map(|index| layer_from(&vec![index * 40; (WIDTH_PX * HEIGHT_PX) as usize]))
+        .collect();
+    let file = write(CtbVersion::V5, &layers);
+    let (body, tail) = file.split_at(file.len() - 4);
+    let mut crc = core_format::Crc32::default();
+    crc.update(body);
+    assert_eq!(u32_at(tail, 0), crc.zlib());
+}
+
+#[test]
+fn the_layers_are_covered_by_a_key_that_is_never_zero() {
+    let file = write(
+        CtbVersion::V5,
+        &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()],
+    );
+    assert_ne!(u32_at(&file, 0x64), 0, "a written key is never zero");
+}
+
+#[test]
+fn each_layer_ends_with_the_area_it_lights_and_a_word() {
+    let pixels = vec![255; (WIDTH_PX * HEIGHT_PX) as usize];
+    let file = write(CtbVersion::V5, &[layer_from(&pixels)]);
+    let table = u32_at(&file, LAYER_TABLE) as usize;
+    let address = u32_at(&file, table + 12) as usize;
+    let size = u32_at(&file, table + 16) as usize;
+    let extended = address - LAYER_DEF_EX_BYTES as usize;
+    assert_eq!(
+        u32_at(&file, extended + 0x24) as usize,
+        LAYER_DEF_EX_BYTES as usize + size + 8,
+        "the block's total counts the tail"
+    );
+    let area = f32::from_le_bytes(
+        file[address + size..address + size + 4]
+            .try_into()
+            .expect("4"),
+    );
+    let expected = (WIDTH_PX * HEIGHT_PX) as f32 * pitch_area_mm2();
+    assert!(
+        (area - expected).abs() < 1e-3,
+        "a fully lit panel lights {expected} mm², got {area}"
+    );
+    assert_eq!(u32_at(&file, address + size + 4), 0);
+}
+
+#[test]
+fn the_version_four_block_counts_the_layers_and_adds_up_their_time() {
+    let layers = vec![LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish(); 3];
+    let file = write(CtbVersion::V5, &layers);
+    let slicer = u32_at(&file, SLICER_OFFSET) as usize;
+    let v4 = u32_at(&file, slicer + 0x40) as usize;
+    assert_eq!(u32_at(&file, v4 + 0x30), 0);
+    assert_eq!(
+        u32_at(&file, v4 + 0x34),
+        3,
+        "the layer count, not the last index"
+    );
+    let time = f32::from_le_bytes(file[v4 + 0x28..v4 + 0x2C].try_into().expect("4"));
+    assert!(time > 0.0, "exposure and light-off of every layer");
+}
+
+#[test]
+fn a_grey_stack_states_the_flag_a_binary_stack_states() {
+    let pixels: Vec<u8> = (0..WIDTH_PX * HEIGHT_PX).map(|index| index as u8).collect();
+    for version in [CtbVersion::V4, CtbVersion::V5] {
+        let file = write(version, &[layer_from(&pixels)]);
+        let slicer = u32_at(&file, SLICER_OFFSET) as usize;
+        assert_eq!(file[slicer + 0x24], 0x07, "{version:?}");
+    }
+}
+
+#[test]
+fn a_two_stage_peel_reads_back_as_its_two_stages() {
+    let mut job = job(1);
+    let material = &mut job.material;
+    (material.bottom_lift_distance_mm, material.lift_distance_mm) = (5.0, 2.0);
+    let stage = &mut material.second_stage;
+    (
+        stage.bottom_lift_distance_mm,
+        stage.bottom_lift_speed_mm_min,
+    ) = (3.0, 180.0);
+    (stage.lift_distance_mm, stage.lift_speed_mm_min) = (4.0, 900.0);
+    (stage.retract_distance_mm, stage.retract_speed_mm_min) = (4.0, 360.0);
+    (
+        stage.bottom_retract_distance_mm,
+        stage.bottom_retract_speed_mm_min,
+    ) = (3.0, 120.0);
+    let file = write_job(CtbVersion::V5, &job, &[layer_from(&[0; 128])]);
+
+    let open = ChituReader::default()
+        .open(std::io::Cursor::new(file))
+        .expect("a .ctb we wrote");
+    let stated = &open.facts().stated;
+    assert_eq!(stated.second_stage, Some(job.material.second_stage));
+    assert_eq!(
+        (stated.bottom_lift_distance_mm, stated.lift_distance_mm),
+        (Some(5.0), Some(2.0)),
+        "the first stage, split off the summed climbs"
+    );
+    assert_eq!(
+        stated.bottom_light_off_delay_s,
+        Some(job.material.bottom_light_off_s())
+    );
 }

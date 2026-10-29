@@ -1,7 +1,7 @@
 //! The cube in the viewport's top right: which way the camera faces, and a click on a face,
 //! edge or corner looks from there. Drawn with egui shapes; see ADR 0219.
 
-use core_geometry::{Mat4, Vec3};
+use core_geometry::{Mat4, Quat, Vec3};
 use egui::{Align2, Id, Pos2, Rect, Sense, Shape, Stroke, Vec2, vec2};
 
 use crate::camera::{CameraTurn, OrbitCamera};
@@ -29,12 +29,24 @@ const NAME_HEIGHT: f32 = 0.5;
 const NAME_WIDTH: f32 = 1.6;
 
 /// One face of the cube: its outward normal, which way its name reads, and which way is up
-/// for the name. All three are plate axes.
+/// for the name. All three are plate axes, for a printer whose front is the plate's `-Y`.
 struct Face {
     normal: Vec3,
     across: Vec3,
     up: Vec3,
     name: fn() -> String,
+}
+
+impl Face {
+    /// The face carried round with the plate's front, so Front names the printer's.
+    fn turned(&self, turn: Quat) -> Self {
+        Self {
+            normal: (turn * self.normal).round(),
+            across: (turn * self.across).round(),
+            up: (turn * self.up).round(),
+            name: self.name,
+        }
+    }
 }
 
 const FACES: [Face; 6] = [
@@ -102,7 +114,8 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
         .show(ui.ctx(), |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                if let Some(towards) = cube(ui, &window.view.camera) {
+                let front = window.doc.plate.front_turn();
+                if let Some(towards) = cube(ui, &window.view.camera, front) {
                     let to = window.view.camera.seen_from(towards);
                     turn(ui, window, to);
                 }
@@ -130,14 +143,18 @@ fn turn(ui: &egui::Ui, window: &mut Window, to: OrbitCamera) {
 }
 
 /// Draws the cube as `camera` sees it and returns the view a click on it asked for.
-fn cube(ui: &mut egui::Ui, camera: &OrbitCamera) -> Option<Vec3> {
+fn cube(ui: &mut egui::Ui, camera: &OrbitCamera, turn: Quat) -> Option<Vec3> {
     // Not focusable: a face is aimed at with the pointer; the keyboard has Frame view.
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(SIZE), Sense::CLICK);
     let view = camera.view();
-    let faces: Vec<(&Face, Vec<Cell>)> = FACES
+    let faces: Vec<(Face, Vec<Cell>)> = FACES
         .iter()
+        .map(|face| face.turned(turn))
         .filter(|face| view.transform_vector3(face.normal).z > SEEN_FACING)
-        .map(|face| (face, cells(face, &view, rect)))
+        .map(|face| {
+            let cells = cells(&face, &view, rect);
+            (face, cells)
+        })
         .collect();
     let hovered = response.hover_pos().and_then(|at| {
         faces
@@ -304,6 +321,15 @@ mod tests {
             contains(&middle.corners, square().center()),
             "seen straight on, the front face's middle is the middle of the square"
         );
+    }
+
+    #[test]
+    fn a_front_on_the_left_edge_turns_front_and_right_with_it() {
+        let turn = Quat::from_rotation_z(printer_profiles::FrontEdge::MinX.turn_rad());
+        let normal_of = |index: usize| FACES[index].turned(turn).normal;
+        assert_eq!(normal_of(2), Vec3::NEG_X, "front faces the plate's -X");
+        assert_eq!(normal_of(4), Vec3::NEG_Y, "right is on the viewer's right");
+        assert_eq!(normal_of(0), Vec3::Z, "top stays on top");
     }
 
     #[test]

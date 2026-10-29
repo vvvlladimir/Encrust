@@ -1,0 +1,32 @@
+# Elegoo Mars 3.
+
+name = "Mars 3"
+manufacturer = "Elegoo"
+machine_name = "ELEGOO Mars 3"
+mirror = "lcd-mirror"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 4098
+height_px = 2560
+width_mm = 143.43
+height_mm = 89.6
+grey_min = 127
+
+[build_volume]
+x = 143.43
+y = 89.6
+z = 175.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+bottom_light_pwm = 255
+light_pwm = 255
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

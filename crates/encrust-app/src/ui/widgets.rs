@@ -6,6 +6,7 @@ mod bin;
 mod button;
 mod field;
 mod layout;
+mod limited;
 mod list;
 mod section;
 mod toggle;
@@ -25,6 +26,7 @@ pub use layout::{
     dialog_head, hairline, heading, help_mark, hint, meta, nested, notice, progress_bar, readings,
     stats, subheading, subheading_with_switch, vertical_hairline,
 };
+pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{issue_row, list, list_row, two_lines};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};

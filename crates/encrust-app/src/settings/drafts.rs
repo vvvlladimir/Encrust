@@ -1,6 +1,6 @@
 use crate::slicing::Rescaled;
 use crate::undo::Frame;
-use printer_profiles::{MaterialProfile, PrinterTuning};
+use printer_profiles::{MaterialProfile, PrinterProfile, PrinterTuning};
 use std::collections::VecDeque;
 
 /// How many settled edits a form takes back.
@@ -94,16 +94,19 @@ impl<T: Clone + PartialEq> Draft<T> {
         self.saved = self.values.clone();
     }
 
-    /// The profile the build ships under this id, while the user's copy differs from it.
-    pub fn shipped(&self) -> Option<&T> {
-        self.shipped
-            .as_ref()
-            .filter(|shipped| **shipped != self.saved)
-    }
-
     /// The profile the build ships under this id, whether the user's copy differs or not.
     pub fn as_shipped(&self) -> Option<&T> {
         self.shipped.as_ref()
+    }
+}
+
+impl Draft<PrinterProfile> {
+    /// The machine the build ships under this id over the user's own network, while the
+    /// user's copy differs from it in anything but the network.
+    pub fn shipped(&self) -> Option<PrinterProfile> {
+        let shipped = self.shipped.as_ref()?;
+        (shipped.clone().with_network_of(&self.saved) != self.saved)
+            .then(|| shipped.clone().with_network_of(&self.values))
     }
 }
 
@@ -187,6 +190,7 @@ impl ResinDraft {
         saved.name = edited.name.clone();
         saved.density_g_cm3 = edited.density_g_cm3;
         saved.details = edited.details.clone();
+        saved.edges = edited.edges;
         let tuning = PrinterTuning::of_changes(&saved, edited);
         saved.printers.insert(self.printer.clone(), tuning);
         saved.last_printer = Some(self.printer.clone());

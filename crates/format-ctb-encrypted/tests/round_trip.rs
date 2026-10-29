@@ -1,4 +1,4 @@
-//! Reads a file the vendor's own slicer wrote, and writes a file and reads it back the way
+//! Reads a known file, and writes a file and reads it back the way
 //! a machine would: settings deciphered, signature held, every layer decoding to the
 //! pixels it went in as.
 #![expect(
@@ -20,18 +20,18 @@ use printer_profiles::{MaterialProfile, PrinterProfile};
 const WIDTH_PX: u32 = 16;
 const HEIGHT_PX: u32 = 8;
 
-/// The first three layers of a cube the vendor's slicer cut for a Saturn 4 Ultra, with
+/// The first three layers of a cube sliced for a Saturn 4 Ultra, with
 /// the test resin's unique numbers: 2.37 s, 31.3 s, seven bottom layers, 0.035 mm.
-fn vendor_file() -> Vec<u8> {
+fn known_file() -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/saturn-4-ultra-v5.ctb");
     std::fs::read(path).expect("the fixture is checked in")
 }
 
 #[test]
-fn a_vendor_file_gives_its_settings_resin_and_layers() {
+fn a_known_file_gives_its_settings_resin_and_layers() {
     let mut open = CtbEncryptedReader
-        .open(Cursor::new(vendor_file()))
-        .expect("the vendor's file opens");
+        .open(Cursor::new(known_file()))
+        .expect("the known file opens");
     let facts = open.facts().clone();
     assert_eq!(facts.version, Some(5));
     assert_eq!((facts.width_px, facts.height_px), (11_520, 5_120));
@@ -65,7 +65,7 @@ fn a_vendor_file_gives_its_settings_resin_and_layers() {
 
 #[test]
 fn a_file_whose_settings_were_altered_is_refused() {
-    let mut bytes = vendor_file();
+    let mut bytes = known_file();
     // The settings start behind the 48-byte header; one flipped byte changes the checksum.
     bytes[48] ^= 1;
     let refused = CtbEncryptedReader.open(Cursor::new(bytes)).err();
@@ -80,7 +80,7 @@ fn printer() -> PrinterProfile {
         r#"
 name = "Test panel"
 manufacturer = "Test"
-mirror_x = true
+mirror = "lcd-mirror"
 
 [display]
 width_px = 16

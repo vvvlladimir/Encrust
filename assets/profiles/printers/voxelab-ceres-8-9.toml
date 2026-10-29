@@ -1,0 +1,32 @@
+# Voxelab Ceres 8.9.
+
+name = "Ceres 8.9"
+manufacturer = "Voxelab"
+machine_name = "Voxelab Ceres 8.9"
+mirror = "lcd-mirror"
+output = "fdg"
+connection = "none"
+
+[display]
+width_px = 3840
+height_px = 2400
+width_mm = 192.0
+height_mm = 120.0
+
+[build_volume]
+x = 192.0
+y = 120.0
+z = 200.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 8
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

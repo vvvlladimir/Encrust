@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use printer_profiles::{
-    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, WaitMode, Waits,
+    Catalogue, Connection, FrontEdge, MaterialProfile, Mirror, OutputFormat, PrinterProfile,
+    WaitMode, Waits,
 };
 
 fn asset(name: &str) -> PathBuf {
@@ -16,7 +17,7 @@ fn shipped_profile_parses_and_its_pitch_is_plausible() {
         .expect("shipped profile is valid");
 
     assert_eq!(profile.manufacturer, "Elegoo");
-    assert!(profile.mirror_x);
+    assert_eq!(profile.mirror, Mirror::LcdMirror);
 
     // A 9" 9K panel sits around 18 um; anything outside 10..40 um means a wrong spec.
     let (pitch_x, pitch_y) = profile.display.pixel_pitch_mm();
@@ -58,13 +59,34 @@ fn every_shipped_printer_names_the_format_its_firmware_reads() {
     let expected = [
         ("elegoo-mars-4-ultra", OutputFormat::Goo),
         ("elegoo-saturn-4-ultra", OutputFormat::Goo),
-        ("elegoo-mars-3-pro", OutputFormat::Ctb4),
-        ("phrozen-sonic-mini-8k", OutputFormat::Ctb4),
-        ("uniformation-gktwo", OutputFormat::Ctb4),
+        ("elegoo-jupiter-2", OutputFormat::Goo5),
+        ("elegoo-mars-3-pro", OutputFormat::CtbEncrypted),
+        ("phrozen-sonic-mini-8k", OutputFormat::CtbEncrypted),
+        ("uniformation-gktwo", OutputFormat::CtbEncrypted),
+        ("creality-ld-002h", OutputFormat::Ctb5),
     ];
     for (id, format) in expected {
         let entry = catalogue.printer(id).expect("a shipped machine");
         assert_eq!(entry.profile.output, format, "{id} writes the wrong format");
+    }
+}
+
+#[test]
+fn a_turned_panel_faces_the_edge_a_printed_file_puts_in_front() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+
+    // The maker's `Left` is the plate's `-X` edge and `Right` its `+X` on every panel, since a
+    // file of ours lays the plate out as a known one does (ADR 0366, 0369).
+    let expected = [
+        ("creality-ld-002h", FrontEdge::MinX),
+        ("elegoo-mars-2-pro", FrontEdge::MaxX),
+        ("anycubic-photon-s", FrontEdge::MinX),
+        ("phrozen-sonic-mini", FrontEdge::MinX),
+        ("elegoo-saturn-4-ultra", FrontEdge::MinY),
+    ];
+    for (id, edge) in expected {
+        let entry = catalogue.printer(id).expect("a shipped machine");
+        assert_eq!(entry.profile.front_edge, edge, "{id} faces the wrong edge");
     }
 }
 
@@ -112,7 +134,7 @@ fn every_tilting_vat_states_no_lift_of_its_own() {
         let entry = catalogue.printer(id).expect("a shipped machine");
         let printed = MaterialProfile::default().on(&entry.profile);
 
-        // The vendor's own files for these carry 0.05 in every peel field, see ADR 0301.
+        // Printed files for these carry 0.05 in every peel field, see ADR 0301.
         for value in [
             printed.lift_distance_mm,
             printed.lift_speed_mm_min,
@@ -146,7 +168,7 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
     assert_eq!(
         printed.waits.mode,
         WaitMode::Rest,
-        "the vendor slicer offers no other"
+        "the machine takes no other"
     );
     assert_eq!(
         printed.waits.after_retract_s, 1.3,
@@ -155,26 +177,45 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
 }
 
 #[test]
-fn every_shipped_printer_says_its_numbers_are_unverified() {
-    let dir = asset("printers");
-    let files = std::fs::read_dir(&dir).expect("the shipped catalogue is a directory");
-    let mut machines = 0;
+fn only_the_machines_without_grey_are_binary_only() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
 
-    for file in files {
-        let path = file.expect("a readable directory entry").path();
-        if path.extension().is_none_or(|extension| extension != "toml") {
-            continue;
-        }
-        let source = std::fs::read_to_string(&path).expect("a readable profile");
-        assert!(
-            source.contains("UNVERIFIED"),
-            "{} ships numbers without saying nobody measured them",
-            path.display()
+    let expected = [
+        "creality-halot-x1",
+        "creality-halot-x1-max",
+        "creality-halot-x1-neo",
+        "creality-halot-sky-2025",
+        "piocreat-pionext-mini",
+        "piocreat-pionext-ultra",
+    ];
+    for entry in catalogue.printers() {
+        assert_eq!(
+            entry.profile.display.binary_only,
+            expected.contains(&entry.id.as_str()),
+            "{}",
+            entry.id
         );
-        machines += 1;
     }
+}
 
-    // The catalogue is generated from a source of about 150 machines, of which the
-    // containers we write cover roughly a third; see docs/design/profiles.md.
-    assert!(machines >= 40, "only {machines} machines are shipped");
+#[test]
+fn a_machine_takes_the_grey_range_its_edges_are_spread_over() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+
+    // The machines' defaults, where edge smoothing defaults to the mode that applies them.
+    let expected = [
+        ("elegoo-mars-2-pro", (127, 255)),
+        ("elegoo-saturn-8k", (95, 255)),
+        ("elegoo-jupiter-se", (63, 255)),
+        ("flashforge-foto-8-9", (0, 204)),
+        ("elegoo-saturn-4-ultra", (0, 255)),
+    ];
+    for (id, range) in expected {
+        let display = catalogue
+            .printer(id)
+            .expect("a shipped machine")
+            .profile
+            .display;
+        assert_eq!((display.grey_min, display.grey_max), range, "{id}");
+    }
 }

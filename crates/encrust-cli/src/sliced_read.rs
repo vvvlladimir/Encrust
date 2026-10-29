@@ -87,11 +87,7 @@ pub fn layer(path: &Path, number: u32) -> Result<Layer> {
             z_mm: entry.z_mm,
             thickness_mm: thickness_of(&facts, index),
             exposure_s: entry.exposure_s,
-            lit_px: runs
-                .iter()
-                .filter(|run| run.value > 0)
-                .map(|run| u64::from(run.length))
-                .sum(),
+            lit_px: core_raster::lit_px(&runs),
             panel_px: u64::from(facts.width_px) * u64::from(facts.height_px),
         },
         mask: mask.finish(),
@@ -441,11 +437,7 @@ fn decode_stack(opened: &mut impl OpenFile) -> Result<Stack> {
             anyhow::bail!("layer {index} covers {covered} pixels, not the panel's {expected}");
         }
 
-        let lit: u64 = runs
-            .iter()
-            .filter(|run| run.value > 0)
-            .map(|run| u64::from(run.length))
-            .sum();
+        let lit = core_raster::lit_px(&runs);
         lit_total += lit;
 
         let z_mm = facts.layers[index as usize].z_mm;

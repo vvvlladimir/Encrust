@@ -1,17 +1,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use core_format::{ExposurePlan, ExposureRange};
+use core_format::ExposurePlan;
 use core_geometry::{Bvh, Mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
-use core_raster::Shading;
-use core_slicer::WINDOW_LAYERS;
+use core_slicer::{ONE_SAMPLE, WINDOW_LAYERS};
 use core_volume::{Drilled, ModelHollow};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Raft, SupportProfile};
 
-use crate::project::{
-    Manifest, ModelMeshes, ObjectState, Project, SlicingState, hollow_of, supports_of,
-};
+use crate::project::{Manifest, ModelMeshes, ObjectState, Project, hollow_of, supports_of};
 use crate::{Cutting, EngineError, Model, Plate};
 
 /// What opening a project into a plate needs that the file does not say.
@@ -59,18 +56,17 @@ impl Machine {
 }
 
 /// One plate of `project` as a run takes it on `machine`: the geometry the file holds,
-/// meshed and cut but never decided again (ADR 0191).
+/// meshed and cut but never decided again (ADR 0191), printed as the profiles say (ADR 0380).
 pub fn open_plate(
     project: &Project,
     machine: &Machine,
     opening: &Opening,
 ) -> Result<Plate, EngineError> {
     let manifest = &project.manifest;
-    let (material, bands) = tuned(
-        &machine.resin,
-        machine.printer_id.as_deref(),
-        &manifest.slicing,
-    );
+    let material = match machine.printer_id.as_deref() {
+        Some(id) => machine.resin.starting_point(id),
+        None => machine.resin.clone(),
+    };
 
     let table = support_table(manifest);
     let models = manifest
@@ -85,54 +81,22 @@ pub fn open_plate(
     Ok(Plate {
         models,
         printer: machine.printer.clone(),
-        panel: PanelOverrides {
-            shading: if slicing.anti_alias {
-                Shading::Coverage
-            } else {
-                Shading::Binary
-            },
-            grey_levels: slicing.grey_levels,
-            grey_floor: None,
-            blur_px: slicing.blur_px,
-        },
+        panel: PanelOverrides::from(material.edges),
         cutting: Cutting {
             layer_height_mm: material.layer_height_mm,
-            adaptive: slicing.adaptive,
-            samples: slicing.samples,
+            adaptive: None,
+            samples: ONE_SAMPLE,
             compensation: material.compensation,
             slice_window: WINDOW_LAYERS,
         },
         material,
-        exposure: ExposurePlan::new(bands),
+        exposure: ExposurePlan::default(),
         remove_islands: slicing.remove_islands,
         hanging_passes: slicing.hanging_passes,
         format: SlicedFormat::from(slicing.format).at_revision_of(machine.printer.output),
         raster_window: opening.raster_window,
         created_unix_s: opening.created_unix_s,
     })
-}
-
-/// The resin as this printer starts from it, carried to the project's layer height, and
-/// the bands the file keeps at the resin's own height carried along with it.
-fn tuned(
-    resin: &MaterialProfile,
-    printer_id: Option<&str>,
-    slicing: &SlicingState,
-) -> (MaterialProfile, Vec<ExposureRange>) {
-    let measured = match printer_id {
-        Some(id) => resin.starting_point(id),
-        None => resin.clone(),
-    };
-    let height_mm = slicing.layer_height_mm;
-    let bands = slicing
-        .exposure
-        .iter()
-        .map(|band| ExposureRange {
-            exposure_s: measured.exposure_at(band.exposure_s, height_mm),
-            ..*band
-        })
-        .collect();
-    (measured.rescaled_to(height_mm), bands)
 }
 
 /// The profile of every support group, the first of which everything falls back to.

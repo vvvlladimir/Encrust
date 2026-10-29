@@ -40,6 +40,20 @@ impl Thumbnail {
         &self.pixels
     }
 
+    /// `thumbnail` fitted to a record of `width_px` by `height_px`, or the record all
+    /// `background` when there is none.
+    pub fn fitted_or_filled(
+        thumbnail: Option<&Self>,
+        width_px: u32,
+        height_px: u32,
+        background: Rgb,
+    ) -> Self {
+        match thumbnail {
+            Some(thumbnail) => thumbnail.fitted_to(width_px, height_px, background),
+            None => Self::filled(width_px, height_px, background),
+        }
+    }
+
     /// This image scaled to fill a record of `width_px` by `height_px`. The aspect ratio is kept
     /// and the remainder padded with `background`.
     #[must_use]

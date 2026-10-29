@@ -1,6 +1,6 @@
 [package]
 name = "format-anycubic"
-description = "Writer for the Anycubic Photon Workshop sliced-file formats, version 1."
+description = "Writer for the Anycubic Photon Workshop sliced-file formats and the PWSZ archive."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,14 +14,17 @@ doctest = false
 [dependencies]
 core-format.workspace = true
 core-raster.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+zip.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 core-format.workspace = true
 printer-profiles.workspace = true
 criterion.workspace = true
+zip.workspace = true
 
 [lints]
 workspace = true

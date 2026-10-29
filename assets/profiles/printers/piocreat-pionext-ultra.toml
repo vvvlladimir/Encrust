@@ -1,0 +1,39 @@
+# PIOCREAT PioNext Ultra.
+
+name = "PioNext Ultra"
+manufacturer = "PIOCREAT"
+machine_name = "PioNext Ultra"
+mirror = "lcd-mirror"
+output = "cxdlp4"
+connection = "none"
+
+[display]
+width_px = 15120
+height_px = 6230
+width_mm = 211.0
+height_mm = 118.0
+binary_only = true
+
+[build_volume]
+x = 211.0
+y = 118.0
+z = 100.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[locked]
+transition_layers = 0
+wait_mode = "light-off"
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 300.0
+bottom_retract_speed_mm_min = 300.0
+retract_speed_mm_min = 300.0
+
+# The machine's stock settings; see ADR 0370.
+[buffer]
+enabled = false
+height_mm = 0.0
+speed_mm_min = 60.0
+light_off_delay_s = 0.0

@@ -23,7 +23,7 @@ impl SlicedFileReader for Sl1Reader {
     }
 
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
-        let mut zip = ZipArchive::new(source).map_err(archive)?;
+        let mut zip = ZipArchive::new(source)?;
 
         let settings = read_settings(&mut zip)?;
         let mut layers = layer_names(&zip);
@@ -147,16 +147,6 @@ fn entry_bytes<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Vec<u
         what: name.to_owned(),
     })?;
     read_entry(&mut entry, name)
-}
-
-fn archive(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 /// An `.sl1` with its settings read and its layers still in it.

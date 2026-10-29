@@ -1,0 +1,27 @@
+# Phrozen Sonic Mega 8K S.
+
+name = "Sonic Mega 8K S"
+manufacturer = "Phrozen"
+machine_name = "Phrozen Sonic Mega 8K S"
+mirror = "normal"
+output = "ctb-encrypted"
+connection = "none"
+
+[display]
+width_px = 7680
+height_px = 4320
+width_mm = 330.24
+height_mm = 185.76
+
+[build_volume]
+x = 330.24
+y = 185.76
+z = 300.0
+
+[firmware]
+per_layer_settings = true
+variable_layer_height = false
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 2, warn_max = 10 }

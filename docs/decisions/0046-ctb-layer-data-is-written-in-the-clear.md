@@ -1,6 +1,6 @@
 # 0046. Write `.ctb` layer data in the clear
 
-- **Status:** Accepted
+- **Status:** Superseded by 0365
 - **Date:** 2026-09-19
 
 ## Context
@@ -8,7 +8,7 @@
 The `.ctb` header carries a 32-bit `encryption_key` at offset 0x64. When it is non-zero,
 every layer's run-length data is scrambled before it is written: the key and the layer index
 are folded by two multiply-adds into a 32-bit keystream word, whose bytes are XORed over the
-layer and which advances by a constant every four bytes. Some vendor exports carry a
+layer and which advances by a constant every four bytes. Some known files carry a
 non-zero key; readers take both forms, and a key of zero means the bytes are
 the runs themselves.
 
@@ -45,16 +45,16 @@ Nothing is protected, which is the point of the field and not something this pro
 A user who expects a slicer to hide their model from whoever holds the file will not get
 that here.
 
-Reopen this if a machine is found that refuses a zero key. The signal is a file that prints
-from a vendor slicer and not from us with the same profile; the fix is a key on the writer and the
+Reopen this if a machine is found that refuses a zero key. The signal is a known file that prints
+where ours does not with the same profile; the fix is a key on the writer and the
 generator over each layer's bytes, which is about twenty lines, plus a test that decodes a
 layer through it.
 
 ## Alternatives considered
 
-### Write a random key, as the vendor slicer does
+### Write a random key, as some known files carry
 
-It is what the reference slicer does, and doing what the reference does is usually the
+It is what some known files carry, and doing what a known file does is usually the
 cheaper bet with an undocumented format. It loses because it buys nothing: the cipher is not
 authentication and not compression, the firmware does not ask for it, and it would make
 every file we write unverifiable by the tests that prove the format is right.
@@ -67,8 +67,8 @@ untested branch in the one place a mistake silently ruins a print.
 
 ### The option that won, and what it costs
 
-Writing in the clear means our files differ from a vendor's in a field a reader can see, so
-anyone comparing a vendor file against ours byte for byte finds the layer data unscrambled
+Writing in the clear means our files differ from a known file in a field a reader can see, so
+anyone comparing one against ours byte for byte finds the layer data unscrambled
 and the key zero. If some machine or some future firmware treats a zero key as a marker of a
 file it should not print, we find out from a failed print rather than from a decode error,
 which is the worst way to find out.

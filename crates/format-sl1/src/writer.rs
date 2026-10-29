@@ -1,7 +1,8 @@
 use std::io::Write;
 
 use core_format::{
-    FormatError, LayerSink, PrintJob, SlicedFileWriter, Thumbnail, WriteSeek, validate,
+    FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, Thumbnail,
+    check_layer_pushed, check_layers_finished, validate,
 };
 use core_raster::LayerRuns;
 use zip::ZipWriter;
@@ -47,9 +48,7 @@ impl Sl1Flavour {
 
     /// The flavour `extension` names, without the dot and in any case.
     pub fn of_extension(extension: &str) -> Option<Self> {
-        [Self::Sl1, Self::Sl1s]
-            .into_iter()
-            .find(|flavour| extension.eq_ignore_ascii_case(flavour.extension()))
+        core_format::flavour_of(&[Self::Sl1, Self::Sl1s], extension, Self::extension)
     }
 
     pub(crate) fn printer_model(self) -> &'static str {
@@ -61,8 +60,8 @@ impl Sl1Flavour {
 
     /// What the archive format key states: `SL1` whichever extension it is.
     ///
-    /// A genuine `.sl1s` from Prusa's own slicer carries `SL1` too: the key names the
-    /// container rather than the machine, and `printer_model` names the machine.
+    /// A printed `.sl1s` carries `SL1` too: the key names the container rather than the
+    /// machine, and `printer_model` names the machine.
     pub(crate) const ARCHIVE_FORMAT: &'static str = "SL1";
 }
 
@@ -102,7 +101,7 @@ impl SlicedFileWriter for Sl1Writer {
     fn begin<'w>(
         &self,
         job: &PrintJob,
-        sink: &'w mut dyn WriteSeek,
+        sink: &'w mut dyn ReadWriteSeek,
     ) -> Result<Self::Sink<'w>, FormatError> {
         validate(job)?;
 
@@ -141,7 +140,7 @@ impl SlicedFileWriter for Sl1Writer {
 
 /// An `.sl1` archive with its previews in and its layers still to come.
 pub struct Sl1Sink<'w> {
-    zip: ZipWriter<&'w mut dyn WriteSeek>,
+    zip: ZipWriter<&'w mut dyn ReadWriteSeek>,
     job: PrintJob,
     flavour: Sl1Flavour,
     job_dir: String,
@@ -161,22 +160,7 @@ impl LayerSink for Sl1Sink<'_> {
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
         let index = self.written;
-        if index == self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: index + 1,
-            });
-        }
-        if encoded.width != self.job.raster.width_px || encoded.height != self.job.raster.height_px
-        {
-            return Err(FormatError::ResolutionMismatch {
-                index: index as usize,
-                width: encoded.width,
-                height: encoded.height,
-                expected_width: self.job.raster.width_px,
-                expected_height: self.job.raster.height_px,
-            });
-        }
+        check_layer_pushed(&self.job, index, (encoded.width, encoded.height))?;
 
         let png = encoded.png?;
         let name = format!("{}{index:0width$}.png", self.job_dir, width = INDEX_DIGITS);
@@ -187,12 +171,7 @@ impl LayerSink for Sl1Sink<'_> {
 
     fn finish(mut self, volume_mm3: f32) -> Result<(), FormatError> {
         self.job.volume_mm3 = volume_mm3;
-        if self.written != self.job.layer_count() {
-            return Err(FormatError::LayerCountMismatch {
-                expected: self.job.layer_count(),
-                written: self.written,
-            });
-        }
+        check_layers_finished(&self.job, self.written)?;
 
         // The two settings files go in last because one of their values is the resin the
         // stack came to, and an archive entry cannot be rewritten once it is closed. A
@@ -202,7 +181,7 @@ impl LayerSink for Sl1Sink<'_> {
         let settings = config::prusaslicer_ini(&self.job, self.flavour);
         entry(&mut self.zip, "prusaslicer.ini", settings.as_bytes())?;
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -219,14 +198,11 @@ pub struct EncodedLayer {
 }
 
 fn write_thumbnails(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     thumbnail: Option<&Thumbnail>,
 ) -> Result<(), FormatError> {
     for (width, height) in THUMBNAILS_PX {
-        let image = match thumbnail {
-            Some(thumbnail) => thumbnail.fitted_to(width, height, THUMBNAIL_BACKGROUND),
-            None => Thumbnail::filled(width, height, THUMBNAIL_BACKGROUND),
-        };
+        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, THUMBNAIL_BACKGROUND);
         let png = core_format::encode_colour(&image)?;
         entry(
             zip,
@@ -238,26 +214,16 @@ fn write_thumbnails(
 }
 
 fn entry(
-    zip: &mut ZipWriter<&mut dyn WriteSeek>,
+    zip: &mut ZipWriter<&mut dyn ReadWriteSeek>,
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {
     // A PNG is already deflated, and so is stored rather than deflated a second time; the
     // two settings files are small enough that it makes no difference either way.
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file(name, options).map_err(container)?;
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 //!
 //! The same record is what the window remembers between runs (`prefs`), what a project
 //! writes (`project::state`) and what one entry of the undo stack puts back (`undo`); see
-//! `docs/decisions/0192`.
+//! `docs/decisions/0192`. The print settings are the undo stack's alone (ADR 0380).
 
 use core_engine::project::{
     Array, CutState, DrainState, Group, HollowState, SlicingState, SupportState,
@@ -13,7 +13,7 @@ use core_volume::Boolean;
 
 use crate::relief::ReliefState;
 use crate::repair::RepairState;
-use crate::slicing::Slicing;
+use crate::slicing::{PrintSettings, Slicing};
 use crate::state::Tools;
 use crate::supports::{SupportGroup, SupportTool};
 use crate::text::TextState;
@@ -38,6 +38,10 @@ pub struct ToolSettings {
     pub combine: Boolean,
     #[serde(default)]
     pub repair: RepairState,
+    /// What the Print settings panel holds; never written, so neither a project nor the next
+    /// run takes it.
+    #[serde(skip)]
+    pub print: Option<PrintSettings>,
 }
 
 impl ToolSettings {
@@ -54,12 +58,16 @@ impl ToolSettings {
             text: tools.text.state.clone(),
             combine: tools.boolean.op,
             repair: tools.repair.state,
+            print: Some(slicing.print_settings()),
         }
     }
 
     /// Stands every tool under these values.
     pub fn apply(self, tools: &mut Tools, slicing: &mut Slicing) {
         restore_slicing(self.slicing, slicing);
+        if let Some(print) = self.print {
+            slicing.put_print_settings(print);
+        }
         restore_supports(self.supports, &mut tools.supports);
 
         tools.hollow.state = self.hollow;
@@ -75,13 +83,6 @@ impl ToolSettings {
 
 fn slicing_state(slicing: &Slicing) -> SlicingState {
     SlicingState {
-        layer_height_mm: slicing.layer_height_mm(),
-        adaptive: slicing.adaptive,
-        exposure: slicing.bands_as_measured(),
-        samples: slicing.samples,
-        anti_alias: slicing.anti_alias,
-        grey_levels: slicing.grey_levels,
-        blur_px: slicing.blur_px,
         remove_islands: slicing.remove_islands,
         hanging_passes: slicing.hanging_passes,
         format: slicing.format.into(),
@@ -110,16 +111,7 @@ fn support_state(supports: &SupportTool) -> SupportState {
     }
 }
 
-/// The bands are kept at the height the resin was measured at, so they go in before the
-/// layer height carries them to the one that was asked for.
 fn restore_slicing(state: SlicingState, slicing: &mut Slicing) {
-    slicing.exposure = state.exposure;
-    slicing.set_layer_height(state.layer_height_mm);
-    slicing.adaptive = state.adaptive;
-    slicing.samples = state.samples;
-    slicing.anti_alias = state.anti_alias;
-    slicing.grey_levels = state.grey_levels;
-    slicing.blur_px = state.blur_px;
     slicing.remove_islands = state.remove_islands;
     slicing.hanging_passes = state.hanging_passes;
     slicing.set_format(state.format.into());
@@ -259,7 +251,14 @@ mod tests {
         let settings = ToolSettings::of(&edited(), &Slicing::default());
         let text = serde_json::to_string(&settings).expect("the settings serialise");
         let read: ToolSettings = serde_json::from_str(&text).expect("and read back");
-        assert_eq!(read, settings);
+        assert!(read.print.is_none(), "the print settings are never written");
+        assert_eq!(
+            read,
+            ToolSettings {
+                print: None,
+                ..settings
+            }
+        );
     }
 
     #[test]

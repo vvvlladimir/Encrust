@@ -10,9 +10,8 @@ use core_engine::{Cutting, SupportPlan, bake, cut};
 use core_geometry::{Bvh, Mesh, Scalar, self_intersections, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
-use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use printer_profiles::{Compensation, MaterialProfile};
+use printer_profiles::{Compensation, EdgeSmoothing, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
@@ -22,7 +21,7 @@ use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
 use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
-use crate::sliced_file::{format_of, write_plate};
+use crate::sliced_file::{asked_revision, format_of, write_plate};
 use crate::stage::{self, Part, Staged};
 
 mod checked;
@@ -234,7 +233,7 @@ pub fn slice_staged(
     job: &JobArgs,
     watch: &Watch,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
-    let format = format_of(output, job.raster.ctb_version);
+    let format = format_of(output);
     let window = raster_window(&job.raster);
     if format.is_some() && staged.printer.is_none() {
         anyhow::bail!(
@@ -242,7 +241,12 @@ pub fn slice_staged(
             output.display()
         );
     }
-    let plate = format.and_then(|format| staged.take_plate(Some(format), window));
+    let plate = format
+        .and_then(|format| staged.take_plate(Some(format), window))
+        .map(|mut plate| {
+            plate.format = asked_revision(plate.format, job.raster.ctb_version);
+            plate
+        });
     let (mut slice, raster) = match plate {
         Some(plate) => write_plate(plate, output, staged.drainage, watch)
             .map(|(slice, raster)| (slice, Some(raster)))?,
@@ -423,17 +427,32 @@ fn adaptive_settings(job: &JobArgs, layer_height: Scalar, talk: bool) -> Adaptiv
     settings
 }
 
-/// What the command line sets over the panel the printer profile describes.
-pub fn overrides_of(args: &RasterArgs) -> PanelOverrides {
+/// Warns when the command line asks for grey a binary-only `printer` does not take.
+pub fn warn_if_grey_ignored(args: &RasterArgs, printer: Option<&PrinterProfile>) {
+    let asks_grey = args.anti_alias
+        || args.grey_levels.is_some()
+        || args.grey_range.is_some()
+        || args.blur.is_some_and(|blur| blur != 0);
+    if let Some(printer) = printer.filter(|printer| asks_grey && printer.display.binary_only) {
+        tracing::warn!(
+            "{} takes masks without grey, so --anti-alias, --grey-levels, --grey-range and \
+             --blur change nothing",
+            printer.name
+        );
+    }
+}
+
+/// What the command line sets over the resin's edge smoothing and the panel the printer
+/// profile describes.
+pub fn overrides_of(args: &RasterArgs, resin: EdgeSmoothing) -> PanelOverrides {
+    let edges = EdgeSmoothing {
+        anti_alias: (resin.anti_alias || args.anti_alias) && !args.no_anti_alias,
+        grey_levels: args.grey_levels.or(resin.grey_levels),
+        blur_px: args.blur.unwrap_or(resin.blur_px),
+    };
     PanelOverrides {
-        shading: if args.no_anti_alias {
-            Shading::Binary
-        } else {
-            Shading::Coverage
-        },
-        grey_levels: args.grey_levels,
-        grey_floor: args.grey_floor,
-        blur_px: args.blur,
+        grey_range: args.grey_range,
+        ..PanelOverrides::from(edges)
     }
 }
 

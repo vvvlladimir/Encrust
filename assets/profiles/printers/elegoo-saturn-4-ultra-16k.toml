@@ -1,15 +1,10 @@
 # Elegoo Saturn 4 Ultra 16K.
-#
-# UNVERIFIED: the panel and the machine name are read off a file the vendor's own slicer
-# wrote for this machine, not measured. Check them against the actual machine before
-# trusting a print, especially the illuminated area and the mirroring flags.
 
 name = "Saturn 4 Ultra 16K"
 manufacturer = "Elegoo"
-# Verified against a file the vendor's own slicer wrote for this machine.
+# Verified against a file this machine prints.
 machine_name = "ELEGOO Saturn 4 Ultra 16K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "goo"
 # Elegoo Link: this generation answers an SDCP broadcast.
 connection = "sdcp"
@@ -26,10 +21,10 @@ y = 118.37
 z = 220.0
 
 [firmware]
-# A tilting vat, which the vendor's files leave reading the header alone, see ADR 0142.
+# A tilting vat, which reads the header alone, see ADR 0142.
 per_layer_settings = false
 
-# The vat tilts to separate a layer, so the peel is the vendor slicer's hidden defaults;
+# The vat tilts to separate a layer, so the peel is the firmware's defaults;
 # see ADR 0301.
 [locked]
 lift_distance_mm = 0.05
@@ -39,3 +34,9 @@ retract_speed_mm_min = 0.05
 bottom_lift_distance_mm = 0.05
 bottom_lift_speed_mm_min = 0.05
 bottom_retract_speed_mm_min = 0.05
+
+[locked.second_stage]
+
+[limits]
+layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
+bottom_layers = { warn_min = 3, warn_max = 10 }

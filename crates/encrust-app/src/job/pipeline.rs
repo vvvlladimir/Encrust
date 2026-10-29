@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{EngineError, Plate, Run};
 #[cfg(target_arch = "wasm32")]
-use core_format::WriteSeek;
+use core_format::ReadWriteSeek;
 use core_geometry::{Mesh, Scalar};
 use core_pipeline::{Observer, Tolerance, Written};
 use core_raster::RasterSettings;
@@ -62,7 +62,7 @@ pub fn run(
 #[cfg(target_arch = "wasm32")]
 pub fn run_into(
     request: &SliceRequest,
-    sink: &mut dyn WriteSeek,
+    sink: &mut dyn ReadWriteSeek,
     cancel: &AtomicBool,
     report: &mut (dyn FnMut(Progress) + Send),
 ) -> Outcome {

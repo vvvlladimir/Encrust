@@ -6,8 +6,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use core_format::OpenFile;
 use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+use core_pipeline::file_layout;
 use core_volume::{Cancel, Panel, StackField, extract};
-use printer_profiles::{Catalogue, PrinterProfile};
+use printer_profiles::{Catalogue, Mirror, PrinterProfile};
 
 use crate::files::Handed;
 use crate::i18n::tr;
@@ -31,7 +32,7 @@ const TALLEST_MM: f32 = 1000.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Placement {
     pub panel: Panel,
-    /// The panel mirrors along X or Y, so the file's masks are the model mirrored.
+    /// The file lays the plate out mirrored along X or Y (ADR 0366), which is undone.
     pub mirror_x: bool,
     pub mirror_y: bool,
 }
@@ -52,20 +53,24 @@ pub fn placement(
         .transpose()?
         .map(|entry| &entry.profile)
         .or(in_hand.filter(|printer| oriented(printer, panel_px).is_some()));
-    place(panel_px, facts.display_mm, printer)
+    place(panel_px, facts.display_mm, printer, facts.format)
 }
 
 fn place(
     panel_px: (u32, u32),
     display_mm: Option<(f32, f32)>,
     printer: Option<&PrinterProfile>,
+    format: &str,
 ) -> Result<Placement> {
     let stated = display_mm.filter(|&(width, height)| {
         width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0
     });
-    let (size_mm, (mirror_x, mirror_y)) = printer
+    let layout = printer.map_or(file_layout(format, Mirror::Normal, ""), |printer| {
+        file_layout(format, printer.mirror, printer.machine_name())
+    });
+    let (size_mm, turned) = printer
         .and_then(|printer| oriented(printer, panel_px))
-        .or(stated.map(|size_mm| (size_mm, (false, false))))
+        .or(stated.map(|size_mm| (size_mm, false)))
         .context(tr!("sliced-no-panel"))?;
     Ok(Placement {
         panel: Panel {
@@ -73,20 +78,27 @@ fn place(
             height_px: panel_px.1,
             pitch_mm: (size_mm.0 / panel_px.0 as f32, size_mm.1 / panel_px.1 as f32),
         },
-        mirror_x,
-        mirror_y,
+        mirror_x: if turned {
+            layout.mirror_y
+        } else {
+            layout.mirror_x
+        },
+        mirror_y: if turned {
+            layout.mirror_x
+        } else {
+            layout.mirror_y
+        },
     })
 }
 
-/// The printer's panel size and mirroring along the file's axes, turned where the file
-/// states the panel portrait; `None` where it is another panel.
-fn oriented(printer: &PrinterProfile, panel_px: (u32, u32)) -> Option<((f32, f32), (bool, bool))> {
+/// The printer's panel size along the file's axes, and whether the file states it portrait
+/// where the printer has it landscape or the other way; `None` where it is another panel.
+fn oriented(printer: &PrinterProfile, panel_px: (u32, u32)) -> Option<((f32, f32), bool)> {
     let display = &printer.display;
-    let (mirror_x, mirror_y) = (printer.mirror_x, printer.mirror_y);
     if (display.width_px, display.height_px) == panel_px {
-        Some(((display.width_mm, display.height_mm), (mirror_x, mirror_y)))
+        Some(((display.width_mm, display.height_mm), false))
     } else if (display.height_px, display.width_px) == panel_px {
-        Some(((display.height_mm, display.width_mm), (mirror_y, mirror_x)))
+        Some(((display.height_mm, display.width_mm), true))
     } else {
         None
     }
@@ -208,20 +220,44 @@ mod tests {
         printer.display.height_px = panel_px.1;
         printer.display.width_mm = size_mm.0;
         printer.display.height_mm = size_mm.1;
-        printer.mirror_x = mirror_x;
-        printer.mirror_y = false;
+        printer.mirror = if mirror_x {
+            Mirror::LcdMirror
+        } else {
+            Mirror::Normal
+        };
         printer
     }
 
     #[test]
     fn a_file_stating_its_panel_portrait_takes_the_printer_turned() {
         let landscape = printer((200, 100), (40.0, 30.0), true);
-        let placed = place((100, 200), None, Some(&landscape)).expect("the printer places it");
+        let placed =
+            place((100, 200), None, Some(&landscape), "goo").expect("the printer places it");
         assert_eq!(
             (placed.panel.pitch_mm, placed.mirror_x, placed.mirror_y),
-            ((0.3, 0.2), false, true),
-            "30 mm over 100 px across and 40 mm over 200 px down; the X mirror lies along Y"
+            ((0.3, 0.2), true, true),
+            "30 mm over 100 px across and 40 mm over 200 px down; a half turn either way"
         );
+    }
+
+    #[test]
+    fn a_file_is_turned_back_as_its_container_laid_it_out() {
+        let mirrored = printer((200, 100), (40.0, 20.0), true);
+        let normal = printer((200, 100), (40.0, 20.0), false);
+        for (printer, format, undone) in [
+            (&mirrored, "goo", (true, true)),
+            (&normal, "goo", (false, true)),
+            (&mirrored, "photons", (false, true)),
+            (&normal, "cxline", (false, false)),
+        ] {
+            let placed = place((200, 100), None, Some(printer), format).expect("it places");
+            assert_eq!(
+                (placed.mirror_x, placed.mirror_y),
+                undone,
+                "{format} on {:?}",
+                printer.mirror
+            );
+        }
     }
 
     #[test]
@@ -233,11 +269,12 @@ mod tests {
             (f32::INFINITY, 10.0),
         ] {
             assert!(
-                place((10, 10), Some(stated), None).is_err(),
+                place((10, 10), Some(stated), None, "goo").is_err(),
                 "{stated:?} gives no pixel pitch to build on"
             );
         }
-        let placed = place((10, 20), Some((5.0, 4.0)), None).expect("a stated size places it");
+        let placed =
+            place((10, 20), Some((5.0, 4.0)), None, "goo").expect("a stated size places it");
         assert_eq!(
             placed.panel.pitch_mm,
             (0.5, 0.2),

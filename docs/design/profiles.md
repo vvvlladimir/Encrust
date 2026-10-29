@@ -21,9 +21,8 @@ catalogue ships none and the first resin is the user's own (ADR 0196).
 Every file under `printers/` and `supports/` is embedded into `printer-profiles` by its
 build script, which emits an `include_str!` table sorted by id; a kind with no directory
 ships an empty table. Adding a machine is adding
-a file; nothing else has to be edited. Most of `printers/` is written by the generator at
-the end of this page; a file without its marker line was written by hand and the generator
-leaves it alone.
+a file; nothing else has to be edited. Where the numbers in it come from is at the end of
+this page.
 
 The user's own directory has the same shape:
 
@@ -89,6 +88,16 @@ unknown keys are refused, so a misspelt key fails to load rather than doing noth
 | Motion | `lift_distance_mm`, `lift_speed_mm_min`, `retract_distance_mm`, `retract_speed_mm_min`, `bottom_lift_distance_mm`, `bottom_lift_speed_mm_min`, `bottom_retract_speed_mm_min` |
 | Waits | `waits`: light-off delay or rests before lift, after lift and after retract |
 | Geometry | `layer_height_mm`, because an exposure is only valid at the height it was measured at |
+
+A printer's `[limits]` uses the same keys, each `{ min, max, warn_min, warn_max }`: the
+span its field takes and the span its maker advises (ADR 0368).
+
+```toml
+[limits]
+layer_height_mm = { min = 0.01, max = 0.2 }
+lift_distance_mm = { min = 8, max = 20 }
+bottom_layers = { warn_min = 2, warn_max = 10 }
+```
 
 `name`, `density_g_cm3` and `[details]` — type, colour, price, currency and whether the
 price is per kilogram or per litre — are not tunable: none changes with the machine.
@@ -193,8 +202,8 @@ board = "d85f46e4d7d90100"
 ## What the file calls the machine
 
 A sliced file names the machine it is for, and the firmware matches that string. It is
-`name` unless the profile states `machine_name`, which is what the vendor's own slicer
-writes: `Saturn 4 Ultra` in the picker, `ELEGOO Saturn 4 Ultra` in the file (ADR 0140).
+`name` unless the profile states `machine_name`, which is the string the firmware
+matches: `Saturn 4 Ultra` in the picker, `ELEGOO Saturn 4 Ultra` in the file (ADR 0140).
 
 ## What the firmware obeys
 
@@ -212,6 +221,17 @@ refused without it (ADR 0091). The Saturn 4 Ultra is the one shipped profile tha
 `per_layer_settings`: it separates a layer by tilting its vat, and obeying the per-layer
 lift stalls the plate (ADR 0142).
 
+## What the panel and plate state
+
+| Key | Meaning |
+|---|---|
+| `front_edge` | `min_x` or `max_x`: the plate edge facing the user, for the view only (ADR 0369) |
+| `[plate_inset]` | `min_x_mm` … `max_y_mm`: a margin the machine cannot cure; a part in it warns, never clips (ADR 0371) |
+| `display.binary_only` | The masks carry no grey, whatever the format could hold (ADR 0377) |
+| `display.grey_min`, `display.grey_max` | The greys an edge pixel is spread over, 0–255 (ADR 0378) |
+| `[buffer]` | The HALOT buffer's default, which a resin overrides (ADR 0370) |
+| `[limits.second_stage]`, `[locked.second_stage]` | Limits and locks of the peel's second stage (ADR 0363, 0368) |
+
 ## What the machine locks
 
 A printer file's `[locked]` table takes any key of a resin's per-printer table, and
@@ -220,7 +240,7 @@ machine: it goes over the resin's own and its per-printer table, the window leav
 out, and every file and estimate for the machine states it (ADR 0301). A shipped machine takes
 its table from the build, whatever the user's copy of it says.
 
-What is locked is what the vendor slicer hides for that machine, at the default it writes:
+What is locked is what the maker hides for that machine, at the maker's default:
 every lift and retract at 0.05 on the tilting vats, resting alone on two of them; the light
 power at 255 and the transition at 0 on older Chitu boards; light-off waiting on Anycubic and
 Halot machines; the bottom peel on a Halot Mage.
@@ -247,65 +267,14 @@ measure it: `docs/design/compensation.md` (ADR 0144).
 
 ## Where the numbers come from
 
-Every shipped file is transcribed from a vendor specification or a public machine list and
-carries an `UNVERIFIED` header. They are a starting point. An exposure test on the
+Every shipped file is kept by hand. A machine with the maker's settings
+carries their panel, travel, mirroring, front edge and machine name; the rest are transcribed
+from a published specification (ADR 0359). None is a measurement: an exposure test on the
 actual machine is what replaces them, and a corrected file in the user directory is how it
 is kept.
 
-## Growing the catalogue
-
-```sh
-cargo xtask gen-profiles --source <dir of .ini profiles> \
-  [--cross-check <machine list>] [--out assets/profiles/printers] [--dry-run]
-```
-
-The source is a public set of printer profiles, one `.ini` per machine — about 150 machines
-across 21 manufacturers. The machine list published beside them is generated from the same
-files, so `--cross-check` holds a transcription against it rather than taking anything from
-it. It is run by hand against a local checkout, never from a `build.rs`: the build has no
-network, and a catalogue that changes under a rebuild is not reviewable (ADR 0165).
-
-An `.ini` carries everything a printer file of ours needs but the container:
-
-| `.ini` | our file |
-|---|---|
-| `display_pixels_x`, `display_pixels_y` | `[display] width_px`, `height_px` |
-| `display_width`, `display_height` | `[display] width_mm`, `height_mm`, and `[build_volume] x`, `y` |
-| `max_print_height` | `[build_volume] z` |
-| `display_mirror_x`, `display_mirror_y` | `mirror_x`, `mirror_y` |
-| `printer_notes: FILEFORMAT_<ext>`, `FILEVERSION_<n>` | `output` |
-
-The brand is the first word of the file name that names one of the twenty the generator
-knows, and the model is the rest; the id is the two in kebab case, which is the file stem.
-`connection` is not in the source and is a table in the generator, holding only the
-generations `docs/formats/sdcp.md` and `docs/formats/prusalink.md` name. `[locked]` is not in
-the source either: it is written into the catalogue file itself, and a run keeps a generated
-file's table when it rewrites the rest. `machine_name` is
-only known from a file the vendor's own slicer wrote, so it is left out until one is read.
-There are no exposures in the source — the `CUSTOM_VALUES` block carries lift, speed and
-PWM, not a measured cure — and none is invented here.
-
-Five rules the generator keeps:
-
-1. **Facts, not files.** A resolution, a panel size and a travel are measurements, and
-   they are transcribed into our own schema. The `.ini` files are not vendored, and the
-   judgements made about them are recorded in the generator. Our own licence binds code,
-   not measurements.
-2. **Ship nothing we cannot write.** A machine whose container has no writer is reported
-   with the step that brings its codec, and no file is written for it. The one exception
-   is a `.ctb` below version 4: version 4 is the oldest we write, so the profile points at
-   it, says so in its header and clears `firmware.per_layer_settings`.
-3. **Own only what you generated.** A catalogue file carrying the generator's marker line
-   is rewritten; one without it was written by hand and is kept, so a profile corrected
-   against a real machine survives every later run. A generated file the source no longer
-   names is reported, not deleted.
-4. **Every file stays `UNVERIFIED`** until somebody prints the exposure test. The user
-   directory is where a corrected machine lives.
-5. **Tests over verification.** Nobody owns 150 machines. Every shipped profile has to
-   load and resolve, its pixel pitch has to be plausible, the extension its container
-   writes has to route back to the same writer, and its panel has to match the published
-   machine list — which is what catches a transcription slip. Where the list is the stale
-   one, that is a line in the generator naming what settles it.
-
-A run prints what it wrote, what is waiting on a later step, what it kept, where it took
-the source over the list, and what it refused; it fails on a refusal.
+Adding a machine is writing one file: facts, not a copied file, in our own schema, and
+only for a container we write. A `.ctb` older than version 4 points at version 4, the
+oldest we write, says so in its header and clears `firmware.per_layer_settings`. Every
+shipped profile has to load and resolve, its pixel pitch has to be plausible, and it has to
+name the format its firmware reads.
