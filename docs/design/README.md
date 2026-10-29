@@ -18,8 +18,9 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [preview.md](preview.md) | The preview stack, shrinking a layer to a texture, what the panel reports |
 | [thumbnail.md](thumbnail.md) | The view, the depth buffer and the resampling behind a sliced file's previews |
 | [profiles.md](profiles.md) | The profile catalogue, the user directory, and one resin retuned per printer |
-| [ui-design-system.md](ui-design-system.md) | The Encrust tokens, the widget set and the window's layout |
+| [ui-design-system.md](ui-design-system.md) | The Encrust tokens, motion, the widget set, its states and glyphs |
 | [ui-standards.md](ui-standards.md) | How every panel is built: text, units, undo, what is remembered |
+| [ui-screens.md](ui-screens.md) | Where every part of every screen stands, and how big it is |
 | [distance-queries.md](distance-queries.md) | The nearest point on a mesh, and the winding number that signs it |
 | [volume.md](volume.md) | The distance field, its sparse storage, the CSG operators and extraction |
 | [hollowing.md](hollowing.md) | The three hollow modes, the blockers, and the lattices that fill a cavity |
