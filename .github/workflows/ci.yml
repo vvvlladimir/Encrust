@@ -86,10 +86,88 @@ jobs:
             grep -vE '^(docs/|\.claude/|\.github/ISSUE_TEMPLATE/)|\.md$|^\.github/FUNDING\.yml$' || true)
           if [ -z "$built" ]; then echo skip=true >> "$GITHUB_OUTPUT"; fi
 
+  # Dependabot edits only Cargo.lock; the two files generated from it are regenerated here, and
+  # pushed by `sync-push` so CI runs once, on the commit that has them. See ADR-0381.
+  sync-generate:
+    name: dependabot sync
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/cargo/')
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux
+          save-if: false
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hakari,cargo-about@0.9.3
+
+      - run: |
+          cargo hakari generate
+          cargo run -q -p xtask --locked -- licenses
+
+      - id: diff
+        run: git diff --quiet -- workspace-hack/Cargo.toml THIRD-PARTY-LICENSES.md || echo changed=true >> "$GITHUB_OUTPUT"
+
+      - if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependabot-sync
+          path: |
+            workspace-hack/Cargo.toml
+            THIRD-PARTY-LICENSES.md
+
+  # The App's token exists only in this job, which runs nothing from the bumped crates.
+  sync-push:
+    name: dependabot push
+    needs: sync-generate
+    if: needs.sync-generate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ steps.token.outputs.token }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: dependabot-sync
+
+      # A push by the App's token, unlike GITHUB_TOKEN's, starts the next run.
+      - env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          BOT: ${{ steps.token.outputs.app-slug }}[bot]
+        run: |
+          id=$(gh api "/users/$BOT" --jq .id)
+          git config user.name "$BOT"
+          git config user.email "$id+$BOT@users.noreply.github.com"
+          git commit -am "build(deps): regenerate workspace-hack and third-party licences"
+          git push
+
   linux:
     name: rust (ubuntu)
-    needs: gate
-    if: needs.gate.outputs.skip != 'true' && github.event.pull_request.draft != true
+    needs: [gate, sync-generate]
+    # Skipped when dependabot sync changed something: its push starts the run that matters.
+    if: >-
+      !cancelled() && needs.gate.result == 'success' && needs.gate.outputs.skip != 'true'
+      && needs.sync-generate.outputs.changed != 'true' && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

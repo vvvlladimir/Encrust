@@ -52,7 +52,9 @@ jobs:
 
   # THIRD-PARTY-LICENSES.md ships in every archive and installer, so a dependency added without
   # regenerating it would hand a user terms that no longer match the binary. See ADR 0214.
+  # Not on dependabot's own commit: ci.yml regenerates the file and its push runs this (ADR-0381).
   notices:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -18,6 +18,10 @@ updates:
         update-types: [minor, patch]
       cargo-major:
         update-types: [major]
+      # A security update ignores the groups above unless one applies to it.
+      cargo-security:
+        applies-to: security-updates
+        patterns: ["*"]
     ignore:
       - dependency-name: "egui*"
         update-types: ["version-update:semver-major"]
