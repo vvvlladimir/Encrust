@@ -74,9 +74,9 @@ pub struct Preferences {
     #[serde(default)]
     mask_split: Option<f32>,
     /// How wide the inspector and the plate panel were dragged, points, or `None` for the
-    /// defaults; `left_w` is new so a width saved before ADR 0348 is not taken for a drag.
+    /// defaults; `inspector_w` is new so a column dragged before ADR 0382 is forgotten.
     #[serde(default)]
-    left_w: Option<f32>,
+    inspector_w: Option<f32>,
     #[serde(default)]
     plate_w: Option<f32>,
     #[serde(default)]
@@ -178,7 +178,7 @@ impl Preferences {
             relief: tools.relief.choice(),
             recent: Recent::default(),
             mask_split: None,
-            left_w: None,
+            inspector_w: None,
             plate_w: None,
             general: General::default(),
             modes: Modes::of(tools, Axes::default()),
@@ -221,7 +221,7 @@ impl Preferences {
     pub fn with_layout(self, options: &ViewOptions) -> Self {
         Self {
             mask_split: Some(options.mask_split),
-            left_w: options.inspector_w,
+            inspector_w: options.inspector_w,
             plate_w: Some(options.plate_w),
             ..self
         }
@@ -275,7 +275,7 @@ impl Preferences {
         }
         let range = theme::INSPECTOR_W_RANGE;
         options.inspector_w = self
-            .left_w
+            .inspector_w
             .filter(|stored| stored.is_finite())
             .map(|stored| stored.clamp(*range.start(), *range.end()));
         // Before the printer, so that applying it points the window at the machine this

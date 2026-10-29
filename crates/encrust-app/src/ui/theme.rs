@@ -336,6 +336,8 @@ pub const INSPECTOR_HEAD_H: f32 = 48.0;
 /// How far either column may be dragged.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
+/// The inspector's width until it is dragged.
+pub const INSPECTOR_W: f32 = 316.0;
 /// Where Preview divides the model from the mask, as a fraction of the stage's width, and
 /// how far the divide may be dragged.
 pub const MASK_SPLIT: f32 = 0.5;
@@ -353,8 +355,7 @@ pub const WINDOW_MIN_H: f32 = 560.0;
 pub const LAYER_STRIP_W: f32 = 56.0;
 /// A rail button holds a glyph over its name, or stands a square of the glyph alone.
 pub const RAIL_BUTTON_H: f32 = 50.0;
-// TODO(step-4): 36 once the row stands over the stage rather than in the inspector's width.
-pub const RAIL_ICON_H: f32 = 34.0;
+pub const RAIL_ICON_H: f32 = 36.0;
 /// Between a card of buttons, the rail or the layer strip, and its buttons.
 pub const TOOLBAR_PAD: f32 = 4.0;
 /// The chips and buttons standing in the top bar and the layer strip.
@@ -478,9 +479,8 @@ pub fn axis_letter() -> FontId {
 }
 
 /// A tool's name under its glyph on the rail.
-// TODO(step-4): 10.5 once the row stands over the stage rather than in the inspector's width.
 pub fn rail_name() -> FontId {
-    FontId::proportional(10.0)
+    FontId::proportional(10.5)
 }
 
 /// The digit that picks a tool, in the corner of its rail button.

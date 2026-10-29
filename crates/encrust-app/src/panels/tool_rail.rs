@@ -5,52 +5,10 @@ use crate::shortcuts::{self, Action};
 use crate::ui::{RailButton, rail_button, theme, vertical_hairline};
 use crate::workspace::Tool;
 
-/// Points a tool's name keeps clear of either side of its button.
-const NAME_PAD: f32 = 3.0;
+/// The least a named button is wide: narrower, the names go (`ui-screens.md`, Tool row).
+const NAMED_MIN_W: f32 = 56.0;
 
-/// The widths the rail stands at in full, points: with the tools' names under their
-/// glyphs, and with the glyphs alone in squares. See `docs/design/ui-design-system.md`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RailWidths {
-    pub named: f32,
-    pub glyphs: f32,
-}
-
-impl RailWidths {
-    /// The widths for these names, `names` points wide in the rail's order.
-    fn of(names: &[f32]) -> Self {
-        let named: f32 = names.iter().copied().map(named_button_w).sum();
-        Self {
-            named: chrome() + named,
-            glyphs: chrome() + names.len() as f32 * theme::RAIL_ICON_H,
-        }
-    }
-}
-
-/// The rail's widths in the language the window is written in.
-pub fn widths(ctx: &egui::Context) -> RailWidths {
-    RailWidths::of(&name_widths(ctx))
-}
-
-fn name_widths(ctx: &egui::Context) -> Vec<f32> {
-    ctx.fonts_mut(|fonts| {
-        Tool::on_rail()
-            .map(|tool| {
-                fonts
-                    .layout_no_wrap(tool.label(), theme::rail_name(), Color32::WHITE)
-                    .size()
-                    .x
-            })
-            .collect()
-    })
-}
-
-/// A named button is as wide as its name, and never narrower than a glyph's square.
-fn named_button_w(name_w: f32) -> f32 {
-    (name_w + 2.0 * NAME_PAD).max(theme::RAIL_ICON_H)
-}
-
-/// What the rail takes besides its buttons: its padding, the gaps and the rules.
+/// What the row takes besides its buttons: its padding, the gaps and the rules.
 fn chrome() -> f32 {
     let tools: usize = Tool::RAIL.iter().map(|group| group.len()).sum();
     let rules = Tool::RAIL.len() - 1;
@@ -59,8 +17,9 @@ fn chrome() -> f32 {
         + rules as f32 * (2.0 * theme::BUTTON_GAP + 1.0)
 }
 
-/// How the rail fits `width`: each button's width, their height, and whether the names
-/// show. Named buttons share what is over their need; glyphs stand in squares.
+/// How the row fits `width`: each button's width, their height, and whether the names
+/// show. Named, the buttons share the width equally, a name wider than its share cut short;
+/// under `NAMED_MIN_W` each, the glyphs stand alone in squares.
 #[derive(Debug, Clone, PartialEq)]
 struct Fit {
     buttons_w: Vec<f32>,
@@ -69,21 +28,18 @@ struct Fit {
 }
 
 impl Fit {
-    fn into(width: f32, names: &[f32]) -> Self {
-        let widths = RailWidths::of(names);
-        let count = names.len() as f32;
-        // Half a point of slack, so a column sized to the names keeps them under rounding.
-        if width + 0.5 >= widths.named {
-            let over = (width - widths.named).max(0.0) / count;
+    fn into(width: f32, count: usize) -> Self {
+        let share = ((width - chrome()) / count as f32).max(0.0);
+        if share >= NAMED_MIN_W {
             return Self {
-                buttons_w: names.iter().map(|&w| named_button_w(w) + over).collect(),
+                buttons_w: vec![share; count],
                 button_h: theme::RAIL_BUTTON_H,
                 labelled: true,
             };
         }
-        let side = ((width - chrome()) / count).clamp(0.0, theme::RAIL_ICON_H);
+        let side = share.min(theme::RAIL_ICON_H);
         Self {
-            buttons_w: vec![side; names.len()],
+            buttons_w: vec![side; count],
             button_h: side,
             labelled: false,
         }
@@ -96,10 +52,10 @@ impl Fit {
     }
 }
 
-/// The card over the inspector, `width` points wide: every tool in one row, in the order a
-/// plate is worked, a rule between each group (ADR 0348).
+/// The tool row over the stage, `width` points wide: every tool in the order a plate is
+/// worked, a rule between each group (ADR 0382).
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, width: f32) {
-    let fit = Fit::into(width, &name_widths(ui.ctx()));
+    let fit = Fit::into(width, Tool::on_rail().count());
     ui.set_width(width);
     // The row's rect is last frame's: the digits show while the pointer is anywhere on it.
     let row_id = ui.id().with("tool-row");
@@ -178,94 +134,62 @@ fn badge(window: &Window, tool: Tool) -> Option<Color32> {
 mod tests {
     use super::*;
 
-    /// Nine names as wide as the English ones, in points.
-    const NAMES: [f32; 9] = [28.0, 40.0, 33.0, 33.0, 26.0, 17.0, 28.0, 43.0, 30.0];
+    /// The row's width at which each of nine buttons gets `share`.
+    fn row_w(share: f32) -> f32 {
+        chrome() + 9.0 * share
+    }
 
     #[test]
-    fn a_rail_as_wide_as_its_names_shows_them_and_shares_what_is_over() {
-        let named = RailWidths::of(&NAMES).named;
-        let fit = Fit::into(named + 16.0, &NAMES);
+    fn a_row_with_room_shares_it_equally_among_named_buttons() {
+        let fit = Fit::into(row_w(70.0), 9);
         assert!(fit.labelled);
-        let used = chrome() + fit.buttons_w.iter().sum::<f32>();
         assert!(
-            (used - (named + 16.0)).abs() < 1e-3,
-            "expected the buttons to fill {} points, they take {used}",
-            named + 16.0
+            fit.buttons_w.iter().all(|&w| (w - 70.0).abs() < 1e-3),
+            "{:?}",
+            fit.buttons_w
         );
         assert_eq!(fit.button_h, theme::RAIL_BUTTON_H);
     }
 
     #[test]
-    fn a_rail_short_of_its_names_stands_its_glyphs_in_squares() {
-        let widths = RailWidths::of(&NAMES);
-        let fit = Fit::into(widths.named - 1.0, &NAMES);
+    fn under_fifty_six_points_a_tool_the_names_go() {
+        let fit = Fit::into(row_w(NAMED_MIN_W - 1.0), 9);
         assert!(!fit.labelled);
         assert!(
             fit.buttons_w
                 .iter()
-                .all(|&w| (w - fit.button_h).abs() < 1e-4),
-            "every button a square, got {:?} by {}",
-            fit.buttons_w,
-            fit.button_h
+                .all(|&w| (w - theme::RAIL_ICON_H).abs() < 1e-4),
+            "every button a {} square, got {:?}",
+            theme::RAIL_ICON_H,
+            fit.buttons_w
         );
-        let squeezed = Fit::into(widths.glyphs - 18.0, &NAMES);
-        let side = theme::RAIL_ICON_H - 2.0;
-        assert!(
-            (squeezed.button_h - side).abs() < 1e-4,
-            "18 points short of nine glyphs takes 2 off each: {side} expected, {} got",
-            squeezed.button_h
-        );
-    }
-
-    /// The rail's names, as the window's own fonts set them in `language`.
-    fn widths_in(language: crate::i18n::Language) -> RailWidths {
-        let keys = [
-            "tool-select",
-            "tool-measure",
-            "tool-repair",
-            "tool-hollow",
-            "tool-drain",
-            "tool-cut",
-            "tool-relief",
-            "tool-supports",
-            "tool-check",
-        ];
-        let ctx = egui::Context::default();
-        ctx.set_fonts(crate::ui::fonts::definitions());
-        let mut names = Vec::new();
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-            names = keys
-                .iter()
-                .map(|key| {
-                    let name = crate::i18n::message(language, key, None);
-                    ui.painter()
-                        .layout_no_wrap(name, theme::rail_name(), Color32::WHITE)
-                        .size()
-                        .x
-                })
-                .collect();
-        });
-        output.textures_delta.clear();
-        RailWidths::of(&names)
     }
 
     #[test]
-    fn every_language_names_its_tools_within_the_widest_column() {
-        for language in crate::i18n::Language::ALL {
-            let named = widths_in(language).named;
-            let widest = *theme::INSPECTOR_W_RANGE.end();
-            assert!(
-                named <= widest,
-                "{language:?} needs {named} points for the rail's names, the column takes {widest}"
-            );
-        }
+    fn a_row_short_of_nine_squares_shrinks_them_and_never_below_nought() {
+        let squeezed = Fit::into(row_w(theme::RAIL_ICON_H - 2.0), 9);
+        assert!((squeezed.button_h - (theme::RAIL_ICON_H - 2.0)).abs() < 1e-4);
+        assert_eq!(Fit::into(0.0, 9).button_h, 0.0);
     }
 
     #[test]
     fn glyphs_with_room_to_spare_stand_centred() {
-        let widths = RailWidths::of(&NAMES);
-        let fit = Fit::into(widths.glyphs + 20.0, &NAMES);
-        assert_eq!(fit.button_h, theme::RAIL_ICON_H);
-        assert!((fit.margin(widths.glyphs + 20.0) - 10.0).abs() < 1e-4);
+        let width = row_w(theme::RAIL_ICON_H) + 20.0;
+        let fit = Fit::into(width, 9);
+        assert!(!fit.labelled);
+        assert!((fit.margin(width) - 10.0).abs() < 1e-4);
+    }
+
+    /// What the row is given in a window of `width`: the stage between the inspector and
+    /// the models card at their defaults, less the layer strip, the gaps and the outlines.
+    fn row_in_window(width: f32) -> f32 {
+        let cards = theme::INSPECTOR_W + theme::SCENE_W + theme::LAYER_STRIP_W;
+        width - cards - 5.0 * theme::FLOAT_GAP - 6.0
+    }
+
+    #[test]
+    fn the_names_show_in_a_window_of_1280_and_go_in_the_least_one() {
+        assert!(Fit::into(row_in_window(1280.0), 9).labelled);
+        assert!(!Fit::into(row_in_window(theme::WINDOW_MIN_W), 9).labelled);
     }
 }

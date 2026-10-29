@@ -113,13 +113,16 @@ pub fn rail_button(ui: &mut Ui, button: &RailButton<'_>) -> Response {
         foreground,
     );
     if button.labelled {
-        painter.text(
-            shrunk.center() + vec2(0.0, RAIL_NAME_DROP),
-            Align2::CENTER_CENTER,
-            name,
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            name.to_owned(),
             theme::rail_name(),
             foreground,
         );
+        job.wrap =
+            egui::text::TextWrapping::truncate_at_width(shrunk.width() - 2.0 * RAIL_NAME_PAD);
+        let galley = painter.layout_job(job);
+        let at = shrunk.center() + vec2(0.0, RAIL_NAME_DROP) - galley.size() / 2.0;
+        painter.galley(at, galley, foreground);
     }
     if let Some(key) = button.key.filter(|_| button.labelled) {
         let ink = if active {
@@ -144,6 +147,7 @@ pub fn rail_button(ui: &mut Ui, button: &RailButton<'_>) -> Response {
 const RAIL_GLYPH_PT: f32 = 19.0;
 const RAIL_NAME_RISE: f32 = 7.0;
 const RAIL_NAME_DROP: f32 = 13.0;
+const RAIL_NAME_PAD: f32 = 2.0;
 /// Where a rail button's digit and dot sit from its top corners, and the dot's radius.
 const RAIL_KEY_OFFSET: egui::Vec2 = vec2(4.0, 3.0);
 const RAIL_BADGE_OFFSET: egui::Vec2 = vec2(-13.5, 9.5);
