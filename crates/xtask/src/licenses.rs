@@ -12,7 +12,7 @@ pub const FILE: &str = "THIRD-PARTY-LICENSES.md";
 
 /// What writes it, and what `about.toml` and `about.hbs` beside this file configure. The
 /// `cli` feature is not default, and without it the install leaves no binary behind.
-const INSTALL: &str = "cargo install cargo-about --locked --features cli";
+const INSTALL: &str = "cargo install cargo-about --locked --features cli --version 0.9.3";
 
 #[derive(clap::Args)]
 pub struct Args {
