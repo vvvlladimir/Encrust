@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.0](https://github.com/vvvlladimir/Encrust/compare/v0.5.0...v0.6.0) (2026-10-29)
+
+
+### ✨ New
+
+* **app:** rail over the inspector, one press on the plate card ([4ef1fac](https://github.com/vvvlladimir/Encrust/commit/4ef1fac954efad8a91071d8f03e83bd944c015ea))
+* **cli:** pick a project's plates, control a printer, refuse silent ([74bc532](https://github.com/vvvlladimir/Encrust/commit/74bc5323123edbedceb1fd15a2ff26d1c179adb7))
+* **core-volume:** support drilling holes into model supports ([880687f](https://github.com/vvvlladimir/Encrust/commit/880687fc0a730fd517f46b69893f1eefcc04d9be))
+* **printers:** Add new printer formats, profiles and enhance format support ([#145](https://github.com/vvvlladimir/Encrust/issues/145)) ([e3cbd66](https://github.com/vvvlladimir/Encrust/commit/e3cbd6618defb01dc401b9af53789153d698f6d3))
+* **repair:** enhance repair functionality ([#144](https://github.com/vvvlladimir/Encrust/issues/144)) ([589d77f](https://github.com/vvvlladimir/Encrust/commit/589d77f3e510d40c45cdd5f8821345bf7307246e))
+* **settings:** add support and auto profile editing forms ([88eef7a](https://github.com/vvvlladimir/Encrust/commit/88eef7aefee2c194345ea1e749e4646e430589d3))
+* **supports:** Enhance CLI and supports with new features and refactorings ([#143](https://github.com/vvvlladimir/Encrust/issues/143)) ([9b08070](https://github.com/vvvlladimir/Encrust/commit/9b0807052c8bd3b19de9533227da996ce9eaeb21))
+* **volume:** support walled holes drilled before hollowing ([9055452](https://github.com/vvvlladimir/Encrust/commit/9055452c5849ebfca980585296261a480cae3beb))
+
+
+### 🐛 Fixed
+
+* **drain:** Implement exact intersection of model solids with hole bodies ([#142](https://github.com/vvvlladimir/Encrust/issues/142)) ([95742dd](https://github.com/vvvlladimir/Encrust/commit/95742ddebedcc44139cb2f49c239c6ee998c9570))
+* **profiles:** reset of a shipped support profile drops the user's copy ([5484681](https://github.com/vvvlladimir/Encrust/commit/54846817695f1d349ba0b3ae256a4639b4ba2aa7))
+* **volume:** state an infill by its cell and its density ([c69e791](https://github.com/vvvlladimir/Encrust/commit/c69e79183a36c772be91c12ec76e661371892889))
+* **web:** keep the window's chords from the browser ([aea7f02](https://github.com/vvvlladimir/Encrust/commit/aea7f02a9f7c87a43336945e64029c92d64a119e))
+
 ## [0.5.0](https://github.com/vvvlladimir/Encrust/compare/v0.4.0...v0.5.0) (2026-10-20)
 
 
