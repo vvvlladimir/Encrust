@@ -3,9 +3,8 @@
 name = "Mars Pro"
 manufacturer = "Elegoo"
 machine_name = "ELEGOO Mars Pro"
-mirror_x = true
-mirror_y = false
-front_edge = "min_x"
+mirror = "lcd-mirror"
+front_edge = "max_x"
 output = "ctb5"
 connection = "none"
 

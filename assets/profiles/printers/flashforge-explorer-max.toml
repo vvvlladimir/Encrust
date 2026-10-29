@@ -3,8 +3,7 @@
 name = "Explorer MAX"
 manufacturer = "FlashForge"
 machine_name = "Flashforge Explorer Max"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "svgx"
 connection = "none"
 

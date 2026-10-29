@@ -2,8 +2,7 @@
 
 name = "CT-005 Pro"
 manufacturer = "Creality"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxdlp3"
 connection = "none"
 

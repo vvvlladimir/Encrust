@@ -82,8 +82,8 @@ Two pairs of keys carry one value each — `bottomLay…` and `bottomLayer…`, 
 and `bottomLayerCount`. Two generations of this header spell them differently and a reader
 takes whichever it knows, so both are written.
 
-`mirror` and `projectType` say how the panel is mounted, not what the masks were drawn as,
-as in every other container we write (ADR 0134).
+`mirror` and `projectType` state the panel's mirror, which the masks carry as well, laid out
+as in every other container we write (ADR 0366).
 
 ## The program
 

@@ -3,8 +3,7 @@
 name = "X10 8K"
 manufacturer = "EPAX"
 machine_name = "EPAX X10 8K/8kW"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

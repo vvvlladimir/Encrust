@@ -143,6 +143,27 @@ impl LayerRuns {
         }
         builder.finish()
     }
+
+    /// The same layer with each row reversed where `columns`, the rows in the opposite order
+    /// where `rows`: the plate mirrored along X, along Y, or both, which is a half turn.
+    #[must_use]
+    pub fn mirrored(&self, columns: bool, rows: bool) -> Self {
+        match (columns, rows) {
+            (false, false) => self.clone(),
+            (false, true) => self.rows_reversed(),
+            (true, true) => self.half_turned(),
+            (true, false) => self.rows_reversed().half_turned(),
+        }
+    }
+
+    /// Every pixel in the opposite reading order: the layer turned half round.
+    fn half_turned(&self) -> Self {
+        let mut builder = Self::builder(self.width, self.height);
+        for run in self.runs.iter().rev() {
+            builder.push(run.length, run.value);
+        }
+        builder.finish()
+    }
 }
 
 /// Collects the runs of one layer in reading order. Neighbouring runs of the same value merge as

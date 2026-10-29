@@ -3,9 +3,8 @@
 name = "LD-002H"
 manufacturer = "Creality"
 machine_name = "CREALITY LD-002H"
-mirror_x = true
-mirror_y = false
-front_edge = "max_x"
+mirror = "lcd-mirror"
+front_edge = "min_x"
 output = "ctb5"
 connection = "none"
 

@@ -371,8 +371,8 @@ number.
 `convert` writes a sliced file again in the container its output names, for the printer
 given. The masks are copied, never resampled, so the printer's panel must be the size the
 file was drawn for, in pixels and, where the file records it, in millimetres. The file is
-taken as cut for that printer, and each layer is turned end for end where the new container
-lays its plate from the other edge (ADR 0366). The layer heights and every exposure are the file's own, and the resin
+taken as cut for that printer, and each layer is mirrored along X, Y or both where the new
+container lays the plate out otherwise (ADR 0366). The layer heights and every exposure are the file's own, and the resin
 gives the lifts, waits and price. A ramp above the bottom block is read back as the resin
 transition it is and stated again as one, so a machine that reads the header alone still
 takes the file; any other run of exposures becomes a band of height, which such a machine

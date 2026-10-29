@@ -2,8 +2,7 @@
 
 name = "Elfin2"
 manufacturer = "Nova3D"
-mirror_x = false
-mirror_y = true
+mirror = "normal"
 output = "cws"
 connection = "none"
 

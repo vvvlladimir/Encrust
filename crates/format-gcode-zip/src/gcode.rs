@@ -30,7 +30,7 @@ pub(crate) fn preamble(job: &PrintJob) -> String {
 /// The settings header, `;key:value` a line, in the order a printed file carries them.
 fn header(job: &PrintJob) -> String {
     let (printer, material) = (&job.printer, &job.material);
-    let mirrored = printer.mirror_x || printer.mirror_y;
+    let mirrored = printer.mirror.mirrors_x();
     let mut head = job_keys(job);
     head.text(
         "projectType",

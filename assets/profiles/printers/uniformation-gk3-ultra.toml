@@ -3,8 +3,7 @@
 name = "GK3 Ultra"
 manufacturer = "UniFormation"
 machine_name = "UniFormation GK3 Ultra"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

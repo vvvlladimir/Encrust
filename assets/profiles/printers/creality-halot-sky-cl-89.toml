@@ -2,8 +2,7 @@
 
 name = "Halot Sky CL-89"
 manufacturer = "Creality"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxdlp3"
 connection = "none"
 

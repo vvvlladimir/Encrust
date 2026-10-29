@@ -137,9 +137,8 @@ container has no slicer info block, so the header's level is all it states.
 
 ### Mirroring
 
-`projector type` says how the panel is mounted: it is set when `PrinterProfile::mirror_x`
-or `mirror_y` is, exactly as for `.goo`. The masks carry the plate as it stands on an
-X-mirrored machine and start at its far edge on any other (ADR 0134, 0366).
+`projector type` is set on an `lcd-mirror` panel, exactly as for `.goo`. The masks start at
+the far edge of the plate and are mirrored along X on such a panel (ADR 0366).
 
 ## Preview records
 

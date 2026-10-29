@@ -3,8 +3,7 @@
 name = "Sonic Mighty Revo 16K Max"
 manufacturer = "Phrozen"
 machine_name = "Sonic Mighty Revo 16K Max"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "prz"
 connection = "none"
 

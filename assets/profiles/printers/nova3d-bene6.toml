@@ -3,8 +3,7 @@
 name = "Bene6"
 manufacturer = "Nova3D"
 machine_name = "NOVA3D Bene6"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cws"
 connection = "none"
 

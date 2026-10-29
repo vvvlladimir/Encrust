@@ -45,7 +45,7 @@ pub(crate) fn write_header(
     fields.u32_le(VERSION)?;
     fields.u32_le(job.layer_count())?;
     fields.u32_le(material.bottom_layers)?;
-    fields.u32_le(u32::from(printer.mirror_x || printer.mirror_y))?;
+    fields.u32_le(u32::from(printer.mirror.mirrors_x()))?;
     fields.u32_le(material.bottom_layers)?;
     fields.u32_le(raster.width_px)?;
     fields.u32_le(raster.height_px)?;

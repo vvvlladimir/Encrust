@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 
 use core_raster::{Grey, GreyRange, PixelPitch, RasterSettings, Shading};
-use printer_profiles::PrinterProfile;
+use printer_profiles::{Mirror, PrinterProfile};
 
 use crate::format::SlicedFormat;
 
@@ -18,8 +18,8 @@ pub struct PanelOverrides {
 }
 
 /// The panel the masks are drawn for, straight off the printer profile, without grey on a
-/// binary-only machine whatever was asked (ADR 0377). Masks go in as the plate stands, near
-/// edge up; only the header carries the mirroring (ADR 0134).
+/// binary-only machine whatever was asked (ADR 0377). It sees the plate as it stands, near
+/// edge up (ADR 0134); a written file lays it out by `file_layout`.
 pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> RasterSettings {
     let (x, y) = printer.display.pixel_pitch_mm();
     RasterSettings {
@@ -44,25 +44,59 @@ pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> R
     }
 }
 
-/// The panel a file of `format` is laid out on: rows from the far edge of the plate, as the
-/// printers expect them, unless an X-mirrored machine prints the plate as it stands (ADR 0366).
+/// How a file lays the plate out: mirrored along X, and its rows from the far edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileLayout {
+    pub mirror_x: bool,
+    pub mirror_y: bool,
+}
+
+/// Machines whose maker's writer reverses the rows of an LCD mirror's mask instead of each
+/// row, compared without case: their files hold the plate as it stands (ADR 0366).
+const ROWS_INSTEAD_OF_X: [&str; 4] = [
+    "elegoo saturn 3 ultra",
+    "elegoo jupiter se",
+    "elegoo saturn 4 ultra",
+    "elegoo mars 5 ultra",
+];
+
+/// How a file of the container `extension` names lays the plate out for the machine called
+/// `machine_name` whose panel takes it as `mirror` (ADR 0366); a file read back is named by its
+/// reader the same way.
+pub fn file_layout(extension: &str, mirror: Mirror, machine_name: &str) -> FileLayout {
+    let by_rows = ROWS_INSTEAD_OF_X
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(machine_name.trim()));
+    match extension {
+        "cxline" => FileLayout {
+            mirror_x: false,
+            mirror_y: false,
+        },
+        "photons" => FileLayout {
+            mirror_x: false,
+            mirror_y: true,
+        },
+        _ if mirror.mirrors_x() && by_rows => FileLayout {
+            mirror_x: false,
+            mirror_y: false,
+        },
+        _ => FileLayout {
+            mirror_x: mirror.mirrors_x(),
+            mirror_y: true,
+        },
+    }
+}
+
+/// The panel a file of `format` for `printer` is drawn on.
 pub(crate) fn file_panel(
     settings: &RasterSettings,
     printer: &PrinterProfile,
     format: SlicedFormat,
 ) -> RasterSettings {
+    let layout = file_layout(format.extension(), printer.mirror, printer.machine_name());
     RasterSettings {
-        mirror_y: rows_from_far_edge(format.extension(), printer),
+        mirror_x: layout.mirror_x,
+        mirror_y: layout.mirror_y,
         ..*settings
-    }
-}
-
-/// Whether a file of the container `extension` names, cut for `printer`, lays its rows from
-/// the far edge of the plate (ADR 0366); a file read back is named by its reader the same way.
-pub(crate) fn rows_from_far_edge(extension: &str, printer: &PrinterProfile) -> bool {
-    match extension {
-        "cxline" => false,
-        "photons" => true,
-        _ => !printer.mirror_x,
     }
 }

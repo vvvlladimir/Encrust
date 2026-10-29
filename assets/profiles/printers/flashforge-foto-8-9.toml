@@ -3,8 +3,7 @@
 name = "Foto 8.9"
 manufacturer = "FlashForge"
 machine_name = "Flashforge Foto 8.9"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "fdg"
 connection = "none"
 

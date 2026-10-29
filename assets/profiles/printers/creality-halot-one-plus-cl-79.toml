@@ -2,8 +2,7 @@
 
 name = "Halot One Plus CL-79"
 manufacturer = "Creality"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxdlp3"
 connection = "none"
 

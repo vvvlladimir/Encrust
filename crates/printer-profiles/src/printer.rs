@@ -1,13 +1,15 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use toml::Table;
 
 mod output;
 
 pub use output::{AnycubicExtension, OutputFormat, PhotonRevision, PwszExtension};
 
 use crate::{
-    Buffer, FrontEdge, MaterialProfile, PlateInset, PrinterLimits, PrinterTuning, ProfileError,
+    Buffer, FrontEdge, MaterialProfile, Mirror, PlateInset, PrinterLimits, PrinterTuning,
+    ProfileError, mirror,
 };
 
 /// How a machine takes a sliced file over the network, where it takes one at all.
@@ -106,11 +108,9 @@ pub struct PrinterProfile {
     pub machine_name: Option<String>,
     pub display: Display,
     pub build_volume: BuildVolume,
-    /// Whether the panel is mirrored relative to model space.
+    /// How the panel takes the plate; a profile that says nothing is `Normal`.
     #[serde(default)]
-    pub mirror_x: bool,
-    #[serde(default)]
-    pub mirror_y: bool,
+    pub mirror: Mirror,
     /// Which plate edge is the machine's front, for the viewport only; see ADR 0369.
     #[serde(default, skip_serializing_if = "FrontEdge::is_default")]
     pub front_edge: FrontEdge,
@@ -218,8 +218,7 @@ impl Default for PrinterProfile {
                 y: 89.6,
                 z: 165.0,
             },
-            mirror_x: true,
-            mirror_y: false,
+            mirror: Mirror::LcdMirror,
             front_edge: FrontEdge::MinY,
             output: OutputFormat::Goo,
             connection: Connection::None,
@@ -252,10 +251,13 @@ impl PrinterProfile {
     }
 
     pub fn from_toml_str(source: &str, path: &Path) -> Result<Self, ProfileError> {
-        let profile: Self = toml::from_str(source).map_err(|source| ProfileError::Parse {
+        let parse_error = |source| ProfileError::Parse {
             path: path.to_owned(),
             source,
-        })?;
+        };
+        let mut table: Table = toml::from_str(source).map_err(parse_error)?;
+        mirror::read_old_flags(&mut table);
+        let profile: Self = table.try_into().map_err(parse_error)?;
         profile.validate()?;
         Ok(profile)
     }

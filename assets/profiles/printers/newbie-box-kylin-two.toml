@@ -3,8 +3,7 @@
 name = "Kylin Two"
 manufacturer = "Newbie Box"
 machine_name = "Kylin Two"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

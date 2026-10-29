@@ -3,8 +3,7 @@
 name = "Halot Play"
 manufacturer = "Creality"
 machine_name = "HALOT-PLAY"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxdlp4"
 connection = "none"
 

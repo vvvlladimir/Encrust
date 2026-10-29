@@ -3,8 +3,7 @@
 name = "Sonic Mega 8K V2"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic Mega 8K V2"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "ctb-encrypted"
 connection = "none"
 

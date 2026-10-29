@@ -4,14 +4,15 @@
 mod connection;
 
 use core_pipeline::SlicedFormat;
-use printer_profiles::{Display, PlateInset, PrinterProfile};
+use printer_profiles::{Display, Mirror, PlateInset, PrinterProfile};
 
 use crate::i18n::tr;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
 use crate::ui::{
-    count_row, describe, hint, icon, number_row, picker, secondary_button, switch, text_row,
+    count_row, describe, hint, icon, number_row, picker, picker_row, secondary_button, switch,
+    text_row,
 };
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
@@ -237,9 +238,7 @@ fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     );
 
     ui.add_space(6.0);
-    switch(ui, &mut profile.mirror_x, &tr!("printer-mirror-x"));
-    switch(ui, &mut profile.mirror_y, &tr!("printer-mirror-y"));
-    hint(ui, &tr!("printer-mirror-note"));
+    mirror(ui, &mut profile.mirror);
 
     ui.add_space(6.0);
     let plate_mm = (profile.build_volume.x, profile.build_volume.y);
@@ -298,6 +297,36 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         &tr!("printer-variable-height"),
     );
     hint(ui, &tr!("printer-variable-height-note"));
+}
+
+/// How the panel takes the plate, as the maker's settings state it.
+fn mirror(ui: &mut egui::Ui, mirror: &mut Mirror) {
+    let response = picker_row(
+        ui,
+        &tr!("printer-mirror"),
+        icon::SLICE,
+        &mirror_label(*mirror),
+    );
+    egui::Popup::menu(&response).show(|ui| {
+        for choice in Mirror::ALL {
+            if ui
+                .selectable_label(choice == *mirror, mirror_label(choice))
+                .clicked()
+            {
+                *mirror = choice;
+                ui.close();
+            }
+        }
+    });
+    hint(ui, &tr!("printer-mirror-note"));
+}
+
+fn mirror_label(mirror: Mirror) -> String {
+    match mirror {
+        Mirror::Normal => tr!("printer-mirror-normal"),
+        Mirror::LcdMirror => tr!("printer-mirror-lcd"),
+        Mirror::DlpNormal => tr!("printer-mirror-dlp"),
+    }
 }
 
 /// The container this machine's firmware reads. Only containers the window can write for

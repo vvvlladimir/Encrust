@@ -3,8 +3,7 @@
 name = "Photon Mono X 6K"
 manufacturer = "Anycubic"
 machine_name = "AnyCubic Photon Mono X 6K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 connection = "none"
 
 [display]

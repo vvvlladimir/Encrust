@@ -3,8 +3,7 @@
 name = "Whale2 Pro"
 manufacturer = "Nova3D"
 machine_name = "NOVA3D Whale2 Pro"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

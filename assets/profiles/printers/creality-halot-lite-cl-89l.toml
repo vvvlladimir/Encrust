@@ -2,8 +2,7 @@
 
 name = "Halot Lite CL-89L"
 manufacturer = "Creality"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxdlp3"
 connection = "none"
 

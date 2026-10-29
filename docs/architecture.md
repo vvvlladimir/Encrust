@@ -284,8 +284,8 @@ destinations, not by a crate under them (ADR 0182).
 - Z is up, the plate is `z = 0`. Layer `n` covers
   `[z_min + n·h, z_min + (n+1)·h)` and is sampled in the middle, so `z_max` is never cut.
 - `Scalar` is `f32` (ADR 0003).
-- Panel mirroring lives in `PrinterProfile`, reaches the file header alone, and is never
-  applied to a mask or to the geometry (ADR 0134).
+- Panel mirroring lives in `PrinterProfile::mirror`; `core_pipeline::file_layout` draws it
+  into a written file's masks, never into the geometry (ADR 0366).
 - Every height a file states is rounded to the micron the machines step in (ADR 0133).
 
 ## Inside encrust-app

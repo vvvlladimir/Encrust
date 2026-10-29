@@ -91,8 +91,8 @@ fn slicing_settings(job: &PrintJob) -> Vec<String> {
             "Z Lift Retract Rate",
             format!("{:.3}", material.retract_speed_mm_min),
         ),
-        setting("Flip X", bool_text(job.printer.mirror_x)),
-        setting("Flip Y", bool_text(job.printer.mirror_y)),
+        setting("Flip X", bool_text(job.printer.mirror.mirrors_x())),
+        setting("Flip Y", bool_text(false)),
         setting("Number of Slices", job.layer_count().to_string()),
     ]
 }

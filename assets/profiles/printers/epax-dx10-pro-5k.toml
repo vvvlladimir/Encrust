@@ -3,8 +3,7 @@
 name = "DX10 Pro 5K"
 manufacturer = "EPAX"
 machine_name = "EPAX DX10 PRO 5K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

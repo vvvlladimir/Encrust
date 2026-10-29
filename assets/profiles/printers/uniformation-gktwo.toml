@@ -3,8 +3,7 @@
 name = "GKtwo"
 manufacturer = "UniFormation"
 machine_name = "UniFormation GKtwo"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 
 [display]

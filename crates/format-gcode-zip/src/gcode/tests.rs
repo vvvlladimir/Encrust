@@ -1,7 +1,7 @@
 use super::*;
 use crate::fixtures::sample_job;
 use core_format::{ExposurePlan, ExposureRange};
-use printer_profiles::{WaitMode, Waits};
+use printer_profiles::{Mirror, WaitMode, Waits};
 
 fn value_of<'a>(gcode: &'a str, key: &str) -> Option<&'a str> {
     gcode
@@ -30,7 +30,7 @@ fn the_header_states_the_stack_the_blocks_go_on_to_run() {
 #[test]
 fn a_mirrored_panel_says_so_in_both_places_a_reader_looks() {
     let mut job = sample_job(1);
-    job.printer.mirror_x = true;
+    job.printer.mirror = Mirror::LcdMirror;
     let text = preamble(&job);
 
     assert_eq!(value_of(&text, "mirror"), Some("1"));

@@ -3,8 +3,7 @@
 name = "Sonic Mini"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic Mini"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 front_edge = "min_x"
 output = "phz"
 connection = "none"

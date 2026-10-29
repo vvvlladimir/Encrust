@@ -3,8 +3,7 @@
 name = "D160"
 manufacturer = "PioNext"
 machine_name = "D160"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxline"
 connection = "none"
 

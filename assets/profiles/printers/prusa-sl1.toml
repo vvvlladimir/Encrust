@@ -2,8 +2,7 @@
 
 name = "SL1"
 manufacturer = "Prusa"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "sl1"
 connection = "prusa-link"
 

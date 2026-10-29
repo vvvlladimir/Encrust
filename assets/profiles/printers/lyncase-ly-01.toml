@@ -3,8 +3,7 @@
 name = "LY-01"
 manufacturer = "LYNcase"
 machine_name = "LYN cast LY-01"
-mirror_x = false
-mirror_y = false
+mirror = "dlp-normal"
 output = "ctb5"
 connection = "none"
 

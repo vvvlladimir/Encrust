@@ -123,7 +123,7 @@ pub(crate) fn write_header(
     fields.u32_le(job.layer_count())?;
     fields.u32_le(offsets.small_preview)?;
     fields.u32_le(job.print_time_s())?;
-    fields.u32_le(u32::from(job.printer.mirror_x || job.printer.mirror_y))?;
+    fields.u32_le(u32::from(job.printer.mirror.mirrors_x()))?;
     fields.u32_le(offsets.print_parameters)?;
     fields.u32_le(PRINT_PARAMETERS_BYTES)?;
 

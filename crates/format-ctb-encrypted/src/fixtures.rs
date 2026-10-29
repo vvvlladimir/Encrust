@@ -57,7 +57,7 @@ price_per = "kilogram"
 const PRINTER: &str = r#"
 name = "Test panel"
 manufacturer = "Test"
-mirror_x = true
+mirror = "lcd-mirror"
 
 [display]
 width_px = 16

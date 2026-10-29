@@ -3,8 +3,7 @@
 name = "Sonic Mini 4K"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic Mini 4K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

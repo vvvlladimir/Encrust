@@ -16,6 +16,6 @@ pub use format::{
     AnycubicFlavour, AnycubicVersion, CbddlpFlavour, CtbVersion, CxdlpVersion, PwszFlavour,
     Sl1Flavour, SlicedFormat,
 };
-pub use panel::{PanelOverrides, raster_settings};
+pub use panel::{FileLayout, PanelOverrides, file_layout, raster_settings};
 pub use read::{Opened, open, open_file, reads_sliced_file};
 pub use write::{Observer, Writing, Written, measure, write, write_to};

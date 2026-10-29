@@ -3,8 +3,7 @@
 name = "PioNext Ultra"
 manufacturer = "PIOCREAT"
 machine_name = "PioNext Ultra"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

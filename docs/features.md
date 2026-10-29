@@ -635,7 +635,7 @@ among them.
 Search the library by name or brand, or add a **custom printer**.
 
 **What a printer profile holds:** name and maker, screen size in pixels, lit area in mm,
-build volume, mirror across X or Y, the range of edge greys, output format and version, firmware
+build volume, the panel's mirror (normal, LCD mirror or DLP normal), the range of edge greys, output format and version, firmware
 abilities (per-layer settings, variable layer height), the printers on your network it
 sends to, and the limits its maker puts on each resin setting: a field takes nothing past
 what the machine takes, and a value past what its maker advises is framed in red with the
@@ -795,8 +795,8 @@ by a number of your own, or support the islands and drill the suction cups Check
 - Only the **ELEGOO Saturn 4 Ultra** is confirmed by a real print. Start every other printer
   with a small calibration piece and check the build area and mirroring.
 - **No bundled resins.** Calibrate your own exposure.
-- **Orientation:** a part prints the right way round on every machine; on an X-mirrored
-  one it lands in the corner opposite the one known files put it in.
+- **Orientation:** every file lays the plate out as the twenty known files checked do;
+  `.sl1`, the DLP machines and nine FlashForge and Nova3D profiles have no known file.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.

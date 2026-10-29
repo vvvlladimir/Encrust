@@ -89,12 +89,12 @@ above zero is resting, else the light-off delay — never from the byte.
 
 ### Mirroring
 
-Row zero of a layer is the near edge of the plate on an X-mirrored machine and its far edge
-on any other, which is how known files print the right way round (ADR 0134, 0366).
+Row zero of a layer is the far edge of the plate, and an `lcd-mirror` panel's layer is
+mirrored along X: a half turn, as known files have it. The Saturn 3 Ultra, Jupiter SE,
+Saturn 4 Ultra and Mars 5 Ultra keep the plate as it stands instead (ADR 0366).
 
-The mirror flags say how the panel is mounted, and come from `PrinterProfile::mirror_x` and
-`mirror_y` rather than from the mask, which carries no mirroring. Readers take them to
-show the layer the way the plate stood.
+The X flag is set on an `lcd-mirror` panel and the Y flag never; the mask carries the
+mirroring as well.
 
 ## Layer
 

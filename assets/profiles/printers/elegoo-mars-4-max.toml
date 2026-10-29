@@ -3,8 +3,7 @@
 name = "Mars 4 Max"
 manufacturer = "Elegoo"
 machine_name = "ELEGOO Mars 4 Max"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "goo"
 connection = "none"
 

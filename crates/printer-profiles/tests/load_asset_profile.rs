@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use printer_profiles::{
-    Catalogue, Connection, FrontEdge, MaterialProfile, OutputFormat, PrinterProfile, WaitMode,
-    Waits,
+    Catalogue, Connection, FrontEdge, MaterialProfile, Mirror, OutputFormat, PrinterProfile,
+    WaitMode, Waits,
 };
 
 fn asset(name: &str) -> PathBuf {
@@ -17,7 +17,7 @@ fn shipped_profile_parses_and_its_pitch_is_plausible() {
         .expect("shipped profile is valid");
 
     assert_eq!(profile.manufacturer, "Elegoo");
-    assert!(profile.mirror_x);
+    assert_eq!(profile.mirror, Mirror::LcdMirror);
 
     // A 9" 9K panel sits around 18 um; anything outside 10..40 um means a wrong spec.
     let (pitch_x, pitch_y) = profile.display.pixel_pitch_mm();
@@ -75,11 +75,11 @@ fn every_shipped_printer_names_the_format_its_firmware_reads() {
 fn a_turned_panel_faces_the_edge_a_printed_file_puts_in_front() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
 
-    // A printed file's `Left`, `Right` and `Front`, read through the half turn between its
-    // X-mirrored layer and ours (ADR 0369); `.photons` and unmirrored panels have none.
+    // The maker's `Left` is the plate's `-X` edge and `Right` its `+X` on every panel, since a
+    // file of ours lays the plate out as a known one does (ADR 0366, 0369).
     let expected = [
-        ("creality-ld-002h", FrontEdge::MaxX),
-        ("elegoo-mars-2-pro", FrontEdge::MinX),
+        ("creality-ld-002h", FrontEdge::MinX),
+        ("elegoo-mars-2-pro", FrontEdge::MaxX),
         ("anycubic-photon-s", FrontEdge::MinX),
         ("phrozen-sonic-mini", FrontEdge::MinX),
         ("elegoo-saturn-4-ultra", FrontEdge::MinY),

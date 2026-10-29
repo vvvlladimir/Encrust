@@ -13,9 +13,9 @@ x_px = x_mm / pitch.x
 y_px = y_mm / pitch.y
 ```
 
-Y is not inverted. Rows start at the near edge of the plate on an X-mirrored machine and in
-every `.cxline` (ADR 0134), and at the far edge otherwise and in every `.photons`: such a file
-asks for `mirror_y` (ADR 0366). The profile's flags otherwise reach the header only. The
+Y is not inverted. A written file asks for `mirror_y`, its rows from the far edge, and for
+`mirror_x` on an `lcd-mirror` panel, by `core_pipeline::file_layout`; `.photons` asks for no
+`mirror_x`, and `.cxline` and four Elegoo machines named there for neither (ADR 0366). The
 window asks for `mirror_y` to draw the plate's far edge at the top of the screen. A mirror is applied here
 rather than in the geometry, so the mesh displayed and the mesh sliced stay one object, and
 it reverses every contour's orientation, so the rasteriser reverses a ring as it maps it

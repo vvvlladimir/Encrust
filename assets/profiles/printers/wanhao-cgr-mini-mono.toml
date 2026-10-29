@@ -3,9 +3,8 @@
 name = "CGR Mini Mono"
 manufacturer = "Wanhao"
 machine_name = "WanHao CGR MINI MONO"
-mirror_x = true
-mirror_y = false
-front_edge = "max_x"
+mirror = "lcd-mirror"
+front_edge = "min_x"
 output = "ctb5"
 connection = "none"
 

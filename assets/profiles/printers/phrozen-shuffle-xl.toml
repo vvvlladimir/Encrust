@@ -3,8 +3,7 @@
 name = "Shuffle XL"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Shuffle XL"
-mirror_x = false
-mirror_y = false
+mirror = "dlp-normal"
 output = "zip"
 connection = "none"
 

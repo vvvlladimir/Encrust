@@ -3,8 +3,7 @@
 name = "D8"
 manufacturer = "Wanhao"
 machine_name = "WanHao D8"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "zip"
 connection = "none"
 

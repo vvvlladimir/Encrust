@@ -6,8 +6,7 @@
 
 name = "Test panel"
 manufacturer = "Encrust tests"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 
 [display]
 width_px = 200

@@ -3,8 +3,7 @@
 name = "Halot Sky 2025"
 manufacturer = "Creality"
 machine_name = "HALOT-SKY 2025"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

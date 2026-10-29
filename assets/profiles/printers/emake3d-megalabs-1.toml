@@ -3,8 +3,7 @@
 name = "Megalabs 1"
 manufacturer = "EMAKE3D"
 machine_name = "Megalabs 1"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

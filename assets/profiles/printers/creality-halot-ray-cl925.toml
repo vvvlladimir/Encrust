@@ -2,8 +2,7 @@
 
 name = "Halot Ray CL925"
 manufacturer = "Creality"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "cxdlp3"
 connection = "none"
 

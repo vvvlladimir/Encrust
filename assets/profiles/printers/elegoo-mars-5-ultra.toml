@@ -4,8 +4,7 @@ name = "Mars 5 Ultra"
 manufacturer = "Elegoo"
 # Verified against a file this machine prints.
 machine_name = "ELEGOO Mars 5 Ultra"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "goo"
 # Elegoo Link: this generation answers an SDCP broadcast.
 connection = "sdcp"

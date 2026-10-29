@@ -3,8 +3,7 @@
 name = "X1-4KS"
 manufacturer = "EPAX"
 machine_name = "EPAX X1-4KS"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

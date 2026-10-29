@@ -3,8 +3,7 @@
 name = "Mars 4 Ultra"
 manufacturer = "Elegoo"
 machine_name = "ELEGOO Mars 4 Ultra"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "goo"
 # Elegoo Link: this generation answers an SDCP broadcast.
 connection = "sdcp"

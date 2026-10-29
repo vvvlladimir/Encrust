@@ -3,8 +3,7 @@
 name = "Saturn 8K"
 manufacturer = "Elegoo"
 machine_name = "ELEGOO Saturn 8K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

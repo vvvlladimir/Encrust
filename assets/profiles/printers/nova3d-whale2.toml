@@ -3,8 +3,7 @@
 name = "Whale2"
 manufacturer = "Nova3D"
 machine_name = "NOVA3D Whale2"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cws"
 connection = "none"
 

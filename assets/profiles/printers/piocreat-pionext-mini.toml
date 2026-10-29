@@ -3,8 +3,7 @@
 name = "PioNext Mini"
 manufacturer = "PIOCREAT"
 machine_name = "PioNext Mini"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

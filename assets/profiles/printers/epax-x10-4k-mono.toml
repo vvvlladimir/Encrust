@@ -3,8 +3,7 @@
 name = "X10 4K Mono"
 manufacturer = "EPAX"
 machine_name = "EPAX X10 4K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

@@ -3,8 +3,7 @@
 name = "Sonic Mini 8K S"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic Mini 8K S"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "prz"
 connection = "none"
 

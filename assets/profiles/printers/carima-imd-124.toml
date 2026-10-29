@@ -3,8 +3,7 @@
 name = "IMD-124"
 manufacturer = "Carima"
 machine_name = "Carima IMD-124"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "crmaslice"
 connection = "none"
 

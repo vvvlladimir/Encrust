@@ -88,8 +88,8 @@ The machine: `printer_technology` (`SLA`), `printer_model`, `printer_variant`,
 The print: `layer_height`, `initial_layer_height`, `exposure_time`,
 `initial_exposure_time`, `faded_layers`, `material_name`, `material_density`.
 
-`display_mirror_x` and `display_mirror_y` come from the printer profile and the masks go in
-as they stand, as everywhere else (ADR 0134).
+`display_mirror_x` is set on an `lcd-mirror` panel and `display_mirror_y` never; the masks
+are laid out as everywhere else (ADR 0366), which no known `.sl1` has confirmed.
 
 ## The fade
 

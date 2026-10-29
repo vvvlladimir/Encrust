@@ -259,7 +259,7 @@ fn settings(job: &PrintJob, blocks: Blocks, pointers: u32, totals: ChituTotals) 
     set.put_u32(at::LARGE_PREVIEW, blocks.large_preview);
     set.put_u32(at::SMALL_PREVIEW, blocks.small_preview);
     set.put_u32(at::PRINT_TIME_S, job.print_time_s());
-    let mirrored = job.printer.mirror_x || job.printer.mirror_y;
+    let mirrored = job.printer.mirror.mirrors_x();
     set.put_u32(at::PROJECTOR, u32::from(mirrored));
     set.put_f32(at::VOLUME_ML, job.volume_mm3 / 1000.0);
     set.put_f32(at::WEIGHT_G, job.weight_g());

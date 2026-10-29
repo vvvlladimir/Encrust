@@ -24,6 +24,27 @@ fn reversing_the_rows_puts_the_last_row_first() {
 }
 
 #[test]
+fn mirroring_reverses_each_row_the_row_order_or_both() {
+    let mut builder = LayerRuns::builder(3, 2);
+    for (length, value) in [(1, 9), (2, 0), (2, 7), (1, 0)] {
+        builder.push(length, value);
+    }
+    let layer = builder.finish();
+    for (columns, rows, pixels) in [
+        (true, false, [0, 0, 9, 0, 7, 7]),
+        (false, true, [7, 7, 0, 9, 0, 0]),
+        (true, true, [0, 7, 7, 0, 0, 9]),
+        (false, false, [9, 0, 0, 7, 7, 0]),
+    ] {
+        assert_eq!(
+            layer.mirrored(columns, rows).to_mask().pixels(),
+            &pixels,
+            "columns reversed: {columns}, rows reversed: {rows}"
+        );
+    }
+}
+
+#[test]
 fn a_pixel_lit_at_any_grey_counts_as_lit() {
     assert_eq!(runs_of(8, &[(2, 0), (3, 1), (1, 0), (2, 255)]).lit_px(), 5);
 }

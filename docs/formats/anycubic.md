@@ -146,9 +146,8 @@ Offsets are from the end of the table's 16-byte head.
 | 0x5C | intelligent mode, `u32` | 0: the machine keeps the exposure it is given |
 
 There is no build volume and no machine name here: the machine block carries the name.
-There is no mirroring field either, and the masks go in as they stand — a reference file
-converted from a `.sl1` matches the source layer for layer with no flip, so the panel's
-mounting stays a property of the profile (ADR 0134).
+There is no mirroring field either: the masks carry it, laid out by `file_layout`, rows
+from the far edge and mirrored along X on an `lcd-mirror` panel (ADR 0366).
 
 ## Preview
 

@@ -3,8 +3,7 @@
 name = "Sonic Mighty Revo"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic Mighty Revo"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

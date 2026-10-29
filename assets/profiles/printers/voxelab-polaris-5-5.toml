@@ -3,9 +3,8 @@
 name = "Polaris 5.5"
 manufacturer = "Voxelab"
 machine_name = "Voxelab Polaris 5.5"
-mirror_x = true
-mirror_y = false
-front_edge = "max_x"
+mirror = "lcd-mirror"
+front_edge = "min_x"
 output = "fdg"
 connection = "none"
 

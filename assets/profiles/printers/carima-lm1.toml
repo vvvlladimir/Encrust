@@ -3,8 +3,7 @@
 name = "LM1"
 manufacturer = "Carima"
 machine_name = "Carima LM1"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cws"
 connection = "none"
 

@@ -3,8 +3,7 @@
 name = "CGR Mono"
 manufacturer = "Wanhao"
 machine_name = "WanHao CGR MONO"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

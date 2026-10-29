@@ -10,7 +10,7 @@ use rayon::prelude::*;
 
 use crate::error::PipelineError;
 use crate::format::SlicedFormat;
-use crate::panel::{PanelOverrides, raster_settings, rows_from_far_edge};
+use crate::panel::{PanelOverrides, file_layout, raster_settings};
 use crate::write::create_sink;
 use crate::write::{Destination, Feed, Observer};
 
@@ -60,16 +60,18 @@ pub fn convert_to(
         job: &job,
     };
     let pixel_mm2 = job.raster.pitch.x * job.raster.pitch.y;
-    // The file was cut for this panel, so its rows lie as this machine takes that container.
-    let rows_reversed = rows_from_far_edge(source.facts().format, converting.printer)
-        != rows_from_far_edge(converting.format.extension(), converting.printer);
+    // The file was cut for this panel, so it lies as this machine takes that container.
+    let (mirror, name) = (converting.printer.mirror, converting.printer.machine_name());
+    let from = file_layout(source.facts().format, mirror, name);
+    let to = file_layout(converting.format.extension(), mirror, name);
     destination.write(
         sink,
         &mut Layers {
             source,
             plan: &job.plan,
             pixel_mm2,
-            rows_reversed,
+            columns_reversed: from.mirror_x != to.mirror_x,
+            rows_reversed: from.mirror_y != to.mirror_y,
         },
         observer,
     )
@@ -238,7 +240,9 @@ struct Layers<'a, O> {
     source: &'a mut O,
     plan: &'a LayerPlan,
     pixel_mm2: f32,
-    /// Whether the new container lays the plate from the other edge than the file did.
+    /// Whether the new container mirrors the plate along X, or lays it from the other edge,
+    /// where the file did not.
+    columns_reversed: bool,
     rows_reversed: bool,
 }
 
@@ -279,11 +283,7 @@ impl<O: OpenFile> Feed for Layers<'_, O> {
                 .map(|(index, runs)| {
                     let thickness = self.plan.thickness_of(*index).unwrap_or(0.0);
                     let layer = layer_of(width_px, height_px, runs);
-                    let layer = if self.rows_reversed {
-                        layer.rows_reversed()
-                    } else {
-                        layer
-                    };
+                    let layer = layer.mirrored(self.columns_reversed, self.rows_reversed);
                     (
                         S::encode(&layer),
                         cured_mm3(runs, self.pixel_mm2 * thickness),

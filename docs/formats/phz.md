@@ -20,7 +20,7 @@ yet.
 | 0x28 | layer count, `u32` | |
 | 0x2C | small preview address, `u32` | |
 | 0x30 | print time, `u32` | seconds |
-| 0x34 | projector type, `u32` | 1 when either mirror flag is set, as in `.ctb` |
+| 0x34 | projector type, `u32` | 1 on an `lcd-mirror` panel, as in `.ctb` |
 | 0x38 | bilevel passes, `u32` | 1; the level is at 0xB8 |
 | 0x3C | light PWM, bottom light PWM, `u16` each | |
 | 0x40 | two words | zero, as `.ctb`'s two at 0x14 |

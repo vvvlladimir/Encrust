@@ -2,8 +2,7 @@
 
 name = "S400"
 manufacturer = "Kelant"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "zip"
 connection = "none"
 

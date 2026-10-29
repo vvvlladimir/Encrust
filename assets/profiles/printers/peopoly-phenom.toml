@@ -3,8 +3,7 @@
 name = "Phenom"
 manufacturer = "Peopoly"
 machine_name = "Peopoly Phenom"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

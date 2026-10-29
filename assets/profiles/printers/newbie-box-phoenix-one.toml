@@ -3,8 +3,7 @@
 name = "Phoenix One"
 manufacturer = "Newbie Box"
 machine_name = "Phoenix One"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

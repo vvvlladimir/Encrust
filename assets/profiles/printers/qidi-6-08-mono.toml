@@ -3,9 +3,8 @@
 name = "6.08 mono"
 manufacturer = "QIDI"
 machine_name = "6.08 mono"
-mirror_x = true
-mirror_y = false
-front_edge = "max_x"
+mirror = "lcd-mirror"
+front_edge = "min_x"
 output = "ctb5"
 connection = "none"
 

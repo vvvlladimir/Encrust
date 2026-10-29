@@ -3,8 +3,7 @@
 name = "HF-L3-14K PRO"
 manufacturer = "HIFUN"
 machine_name = "HF-L3-14K PRO"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

@@ -25,10 +25,9 @@ panel.
 `max_x`, transcribed from the maker's word (`Front`, `Left`, `Right`). It is for
 the viewport only: the plate keeps panel axes, so raster, files and placement do not change.
 
-The maker's `Left` is the plate's `-X` edge, `Right` its `+X`. On an X-mirrored panel other
-than `.photons` a known layer is ours turned half round (ADR 0366), so there `Left` is our `max_x`
-and `Right` our `min_x`; elsewhere `min_x` and `max_x`. One LD-002H part placed alike in both
-slicers' windows showed it: the two files held it in opposite corners.
+The maker's `Left` is the plate's `-X` edge, `Right` its `+X`, on every panel: a file of ours
+lays the plate out as a known one does (ADR 0366), so a part placed alike in both windows
+lands in the same corner of both files.
 
 The viewport turns three things about Z by `FrontEdge::turn_rad`: the word Front, the
 opening and Home camera, and the view cube's faces with their names.
@@ -58,6 +57,4 @@ choose between `-X` and `+X`.
 
 ### The option that won, and what it costs
 
-One more profile field to transcribe and keep right per machine, read through the file
-layout as well as the maker's word. On those X-mirrored machines the grid's X runs towards
-the front where the maker's runs away from it.
+One more profile field to transcribe and keep right per machine.

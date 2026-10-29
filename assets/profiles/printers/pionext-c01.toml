@@ -3,8 +3,7 @@
 name = "C01"
 manufacturer = "PioNext"
 machine_name = "C01"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

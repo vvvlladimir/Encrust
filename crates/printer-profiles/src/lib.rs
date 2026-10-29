@@ -11,6 +11,7 @@ mod foreign;
 mod front_edge;
 mod limits;
 mod material;
+mod mirror;
 mod own_ids;
 mod plate_inset;
 mod preset;
@@ -34,6 +35,7 @@ pub use material::{
     Buffer, LayerPeel, MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, SecondStage,
     WaitMode, Waits,
 };
+pub use mirror::Mirror;
 pub use own_ids::{Renamed, own_id};
 pub use plate_inset::PlateInset;
 pub use preset::Preset;

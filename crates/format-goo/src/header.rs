@@ -108,9 +108,9 @@ fn write_geometry(fields: &mut Fields<'_>, job: &PrintJob, order: ByteOrder) -> 
     order.put_u32(fields, job.layer_count())?;
     order.put_u16(fields, raster.width_px as u16)?;
     order.put_u16(fields, raster.height_px as u16)?;
-    // How the panel is mounted, not what the masks were drawn as; see docs/formats/goo.md.
-    fields.bool(job.printer.mirror_x)?;
-    fields.bool(job.printer.mirror_y)?;
+    // The panel's mirror, which the masks carry as well; see docs/formats/goo.md.
+    fields.bool(job.printer.mirror.mirrors_x())?;
+    fields.bool(false)?;
     order.put_f32(fields, raster.width_px as f32 * raster.pitch.x)?;
     order.put_f32(fields, raster.height_px as f32 * raster.pitch.y)?;
     order.put_f32(fields, job.printer.build_volume.z)?;

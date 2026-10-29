@@ -3,9 +3,8 @@
 name = "Photon Mono"
 manufacturer = "Anycubic"
 machine_name = "AnyCubic Photon Mono"
-mirror_x = true
-mirror_y = false
-front_edge = "max_x"
+mirror = "lcd-mirror"
+front_edge = "min_x"
 connection = "none"
 
 [display]

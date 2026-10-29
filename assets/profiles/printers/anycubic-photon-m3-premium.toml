@@ -3,8 +3,7 @@
 name = "Photon M3 Premium"
 manufacturer = "Anycubic"
 machine_name = "AnyCubic Photon M3 Premium"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 connection = "none"
 
 [display]

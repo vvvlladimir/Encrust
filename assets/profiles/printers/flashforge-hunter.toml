@@ -2,8 +2,7 @@
 
 name = "Hunter"
 manufacturer = "FlashForge"
-mirror_x = false
-mirror_y = true
+mirror = "normal"
 output = "svgx"
 connection = "none"
 

@@ -2,8 +2,7 @@
 
 name = "Shuffle 16"
 manufacturer = "Phrozen"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

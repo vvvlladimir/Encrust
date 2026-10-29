@@ -3,8 +3,7 @@
 name = "Ceres 8.9"
 manufacturer = "Voxelab"
 machine_name = "Voxelab Ceres 8.9"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "fdg"
 connection = "none"
 

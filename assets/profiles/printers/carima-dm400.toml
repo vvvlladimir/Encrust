@@ -3,8 +3,7 @@
 name = "DM400"
 manufacturer = "Carima"
 machine_name = "Carima DM400"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "crmaslice"
 connection = "none"
 

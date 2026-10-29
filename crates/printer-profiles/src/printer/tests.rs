@@ -222,7 +222,7 @@ fn a_locked_speed_of_zero_is_refused() {
 fn pitch_is_area_over_pixel_count() {
     let profile = PrinterProfile::from_toml_str(SAMPLE, path()).expect("valid profile");
     assert_eq!(profile.display.pixel_pitch_mm(), (0.1, 0.1));
-    assert!(!profile.mirror_x);
+    assert_eq!(profile.mirror, Mirror::Normal);
 }
 
 #[test]

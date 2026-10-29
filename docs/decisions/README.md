@@ -134,8 +134,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0071](0071-material-is-what-a-positive-winding-encloses.md) | Material is what a positive winding number encloses | Accepted; a cut's weight is amended by 0188 |
 | [0091](0091-a-stack-is-planned-not-counted.md) | A stack is a plan of boundaries, not a count times a height | Accepted |
 | [0114](0114-unite-a-layers-planes-by-brightness.md) | A layer is sampled at several planes, united by brightness on the runs | Accepted |
-| [0134](0134-a-layer-starts-at-the-near-edge-of-the-plate.md) | Write the plate as it stands, and leave mirroring to the header | Accepted; the row order of an unmirrored machine's file is superseded by 0366 |
-| [0366](0366-an-unmirrored-machine-gets-rows-from-the-far-edge.md) | An unmirrored machine gets its rows from the far edge of the plate | Accepted |
+| [0134](0134-a-layer-starts-at-the-near-edge-of-the-plate.md) | Write the plate as it stands, and leave mirroring to the header | Accepted; a written file's layout and the mirror flags are superseded by 0366 |
+| [0366](0366-a-file-lays-the-plate-out-as-known-files-do.md) | Lay a file's plate out as known files do, and name the panel by the maker's mirror | Accepted |
 | [0187](0187-nothing-under-the-plate-is-cut.md) | Nothing under the plate is cut | Accepted; the top is clamped the same way by 0199 |
 | [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted; the floor is answered the same way by 0203 |
 | [0203](0203-a-bake-says-how-low-the-material-stands.md) | A bake says how low the material stands, and the plate is warned about that | Accepted |

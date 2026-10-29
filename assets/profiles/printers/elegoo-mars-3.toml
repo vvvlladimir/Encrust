@@ -3,8 +3,7 @@
 name = "Mars 3"
 manufacturer = "Elegoo"
 machine_name = "ELEGOO Mars 3"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb-encrypted"
 connection = "none"
 

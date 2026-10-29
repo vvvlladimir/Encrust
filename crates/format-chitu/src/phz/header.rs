@@ -33,7 +33,7 @@ pub(crate) fn write_header(
     fields.u32_le(job.layer_count())?;
     fields.u32_le(offsets.small_preview)?;
     fields.u32_le(job.print_time_s())?;
-    fields.u32_le(u32::from(printer.mirror_x || printer.mirror_y))?;
+    fields.u32_le(u32::from(printer.mirror.mirrors_x()))?;
     // Bilevel passes per layer, one as in a `.ctb` header; the level proper is at 0xB8.
     fields.u32_le(1)?;
     fields.u16_le(u16::from(material.light_pwm))?;

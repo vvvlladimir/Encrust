@@ -3,8 +3,7 @@
 name = "Photon S"
 manufacturer = "Anycubic"
 machine_name = "AnyCubic Photon S"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 front_edge = "min_x"
 output = "photons"
 connection = "none"

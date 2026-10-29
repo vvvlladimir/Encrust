@@ -3,8 +3,7 @@
 name = "DJ89 PLUS"
 manufacturer = "PioNext"
 machine_name = "DJ89 PLUS"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

@@ -32,7 +32,7 @@ Offsets hexadecimal. Words are little-endian.
 | 0x04 | version, `u32` | 4 |
 | 0x08 | layer count, `u32` | |
 | 0x0C | bottom layers, `u32` | |
-| 0x10 | projector type, `u32` | 1 when either mirror flag is set, as in `.ctb` |
+| 0x10 | projector type, `u32` | 1 on an `lcd-mirror` panel, as in `.ctb` |
 | 0x14 | bottom layers again, `u32` | |
 | 0x18 | resolution X, Y, `u32` each | |
 | 0x20 | layer height, exposure, bottom exposure, `f32` each | mm, s, s |

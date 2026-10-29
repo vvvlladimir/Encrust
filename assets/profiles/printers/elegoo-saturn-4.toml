@@ -3,8 +3,7 @@
 name = "Saturn 4"
 manufacturer = "Elegoo"
 machine_name = "ELEGOO Saturn 4"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "goo"
 connection = "none"
 

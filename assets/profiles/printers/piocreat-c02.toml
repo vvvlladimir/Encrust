@@ -3,8 +3,7 @@
 name = "C02"
 manufacturer = "PIOCREAT"
 machine_name = "PIOCREAT C02"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

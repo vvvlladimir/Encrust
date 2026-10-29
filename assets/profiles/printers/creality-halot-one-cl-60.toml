@@ -2,8 +2,7 @@
 
 name = "Halot One CL-60"
 manufacturer = "Creality"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 front_edge = "min_x"
 output = "cxdlp3"
 connection = "none"

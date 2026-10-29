@@ -3,8 +3,7 @@
 name = "X156 4K Color"
 manufacturer = "EPAX"
 machine_name = "EPAX X156 4K Color"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "ctb5"
 connection = "none"
 

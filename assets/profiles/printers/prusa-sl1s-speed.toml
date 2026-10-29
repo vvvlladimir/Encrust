@@ -2,8 +2,7 @@
 
 name = "SL1S Speed"
 manufacturer = "Prusa"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "sl1s"
 connection = "prusa-link"
 

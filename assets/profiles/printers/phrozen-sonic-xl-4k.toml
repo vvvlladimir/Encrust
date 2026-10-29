@@ -3,8 +3,7 @@
 name = "Sonic XL 4K"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Sonic XL 4K"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "zip"
 connection = "none"
 

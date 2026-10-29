@@ -3,8 +3,7 @@
 name = "Halot X1 Neo"
 manufacturer = "Creality"
 machine_name = "HALOT-X1 Neo"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "cxdlp4"
 connection = "none"
 

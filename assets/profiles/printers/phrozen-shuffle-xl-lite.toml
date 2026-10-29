@@ -3,8 +3,7 @@
 name = "Shuffle XL Lite"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Shuffle XL Lite"
-mirror_x = true
-mirror_y = false
+mirror = "lcd-mirror"
 output = "zip"
 connection = "none"
 

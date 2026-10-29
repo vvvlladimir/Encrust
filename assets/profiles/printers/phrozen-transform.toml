@@ -3,8 +3,7 @@
 name = "Transform"
 manufacturer = "Phrozen"
 machine_name = "Phrozen Transform"
-mirror_x = false
-mirror_y = false
+mirror = "normal"
 output = "zip"
 connection = "none"
 
