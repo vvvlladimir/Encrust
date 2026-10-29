@@ -143,6 +143,8 @@ pub struct General {
     pub sliced_dir: Option<std::path::PathBuf>,
     /// The language the window is written in, or `None` for the system's.
     pub language: Option<Language>,
+    /// Whether nothing in the window animates.
+    pub reduce_motion: bool,
 }
 
 impl Default for General {
@@ -152,6 +154,7 @@ impl Default for General {
             invert_zoom: false,
             sliced_dir: None,
             language: None,
+            reduce_motion: false,
         }
     }
 }

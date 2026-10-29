@@ -40,8 +40,8 @@ text or a glyph — the tool in use, the active segment, a picked row — and `a
 behind an active segment; `picked_wash` (10%) is the selection. `on_accent` is the only thing
 drawn on an accent fill.
 `ok`, `warn` and `danger` are functional — a machine that answered, a repair notice, a
-mesh that cannot be oriented — each with a 14% wash behind a verdict or an armed control
-(`ok_wash`, `warn_wash`, `danger_wash`). Every card over the stage stands on one shadow,
+mesh that cannot be oriented — each with a wash behind a verdict or an armed control
+(`ok_wash`, `warn_wash` 14%; `danger_wash` 12%, so `danger` on it still reads at AA). Every card over the stage stands on one shadow,
 `CARD_SHADOW`; nothing else casts one but a window over the plate. The
 axis colours are the CAD convention (X red, Y green, Z blue) and are used for the
 transform letters and the gizmo, never for decoration.
@@ -110,7 +110,8 @@ two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
 A size grows from nought or shrinks to it (a fold's height), what it holds fades and
 slides 6 points with it; a pressed control shrinks to 96 %. A job's bar runs a sheen, a
 running job's glyph turns, a busy printer's dot breathes: the only motions that loop.
-*Reduce motion* in Settings → General sets every duration to nought.
+*Reduce motion* in Settings → General sets every duration to nought; `ARMED` is a wait, not a
+motion, and stays.
 
 ## Widgets
 
