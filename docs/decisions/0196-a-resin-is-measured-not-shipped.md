@@ -6,7 +6,7 @@
 ## Context
 
 The catalogue shipped four resins. None was measured on anything: the files carry an
-`UNVERIFIED` header and a table per machine transcribed from vendor material, and ADR 0050
+`UNVERIFIED` header and a table per machine transcribed from makers' material, and ADR 0050
 already says an exposure is only true on the machine it was measured on. A manual run
 found what that costs:
 

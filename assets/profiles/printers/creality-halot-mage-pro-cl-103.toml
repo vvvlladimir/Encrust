@@ -40,7 +40,7 @@ light_off_delay_s = { max = 10 }
 lift_distance_mm = { min = 8, max = 20 }
 lift_speed_mm_min = { min = 60 }
 
-# Read off the vendor's own slicer profile for this machine; see ADR 0371.
+# The machine's stock settings; see ADR 0370.
 [buffer]
 enabled = true
 height_mm = 10.0

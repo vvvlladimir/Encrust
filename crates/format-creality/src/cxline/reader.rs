@@ -53,20 +53,9 @@ impl SlicedFileReader for CxlineReader {
         reads.skip(u64::from(header.layer_count) * 4 + PAGE_BREAK.len() as u64)?;
         reads.skip(8 + PAGE_BREAK.len() as u64)?;
 
-        let layers = walk_layers(&mut reads, header.layer_count, end)?
-            .into_iter()
-            .zip(0u32..)
-            .map(|((offset, size), index)| LayerEntry {
-                z_mm: layer_height_mm * (index + 1) as f32,
-                exposure_s: if index < bottom_layers {
-                    bottom_exposure
-                } else {
-                    header.exposure_s
-                },
-                offset,
-                size,
-            })
-            .collect();
+        let exposures_s = (bottom_layers, bottom_exposure, header.exposure_s);
+        let spans = walk_layers(&mut reads, header.layer_count, end)?;
+        let layers = entries(spans, layer_height_mm, exposures_s);
 
         let display_mm = width_mm.zip(height_mm);
         let panel = panel_of(&header, display_mm)?;
@@ -94,6 +83,29 @@ impl SlicedFileReader for CxlineReader {
             },
         })
     }
+}
+
+/// The layers at their heights, `exposures_s` being the bottom count and the bottom and
+/// ordinary exposures.
+fn entries(
+    spans: Vec<(u64, u32)>,
+    layer_height_mm: f32,
+    (bottom_layers, bottom_s, exposure_s): (u32, f32, f32),
+) -> Vec<LayerEntry> {
+    spans
+        .into_iter()
+        .zip(0u32..)
+        .map(|((offset, size), index)| LayerEntry {
+            z_mm: layer_height_mm * (index + 1) as f32,
+            exposure_s: if index < bottom_layers {
+                bottom_s
+            } else {
+                exposure_s
+            },
+            offset,
+            size,
+        })
+        .collect()
 }
 
 fn read_header<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Header, FormatError> {

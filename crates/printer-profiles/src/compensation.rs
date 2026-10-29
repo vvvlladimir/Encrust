@@ -24,10 +24,10 @@ pub struct Compensation {
     pub shrink_z_pct: f32,
 
     /// Millimetres every hole's wall moves inwards, so a positive value makes holes
-    /// smaller and the body larger. A vendor profile calls it `a`.
+    /// smaller and the body larger. A machine profile calls it `a`.
     pub hole_offset_mm: f32,
     /// Millimetres every outer wall moves outwards, so a positive value makes the body
-    /// larger. A vendor profile calls it `b`.
+    /// larger. A machine profile calls it `b`.
     pub outer_offset_mm: f32,
     /// `hole_offset_mm` for the bottom block, which cures wider under its long exposure.
     pub bottom_hole_offset_mm: f32,
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn the_layer_time_is_the_shortfall_spread_over_the_layers() {
-        // 35 m 49 s predicted against 60 m 50 s over 200 layers, as a vendor slicer reads it.
+        // 35 m 49 s predicted against 60 m 50 s over 200 layers.
         let seconds = layer_time_between(2149.0, 3650.0, 200).expect("there are layers");
         assert!((seconds - 7.505).abs() < 1e-3, "got {seconds}");
     }

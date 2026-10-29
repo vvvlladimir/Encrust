@@ -18,7 +18,7 @@ pub const CHITU_DISCLAIMER: &str = "Layout and record format for the ctb and cbd
 /// The bytes the format gives the notice.
 pub const CHITU_DISCLAIMER_BYTES: u32 = 320;
 
-/// The resin type a file states for a resin that names none, as the vendor's slicer does.
+/// The resin type a file states for a resin that names none.
 pub const CHITU_RESIN_TYPE: &str = "normal";
 
 /// Bytes of the resin block in front of its three strings.
@@ -97,8 +97,7 @@ impl ChituTotals {
     }
 }
 
-/// The low byte of the slicer info's flag word, the same with grey or without as the
-/// vendor's slicer writes it.
+/// The low byte of the slicer info's flag word, the same with grey or without.
 pub const CHITU_SLICER_FLAGS: u32 = 0x07;
 
 /// Both preview records, large then small, cut from the job's thumbnail or black, and

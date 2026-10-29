@@ -21,7 +21,7 @@ mod tests;
 
 pub(crate) use header::{HEADER_BYTES, Offsets, Totals, anti_alias_level, write_tail};
 pub use reader::{FdgReader, OpenFdg};
-pub(crate) use reader::{Head, MotionAt, open_layout};
+pub(crate) use reader::{Head, MotionAt, expect_magic, open_layout};
 pub use rle::FdgLayer;
 
 /// Two heights closer than this are one height, as the header counts them.

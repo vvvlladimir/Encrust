@@ -72,11 +72,11 @@ fn every_shipped_printer_names_the_format_its_firmware_reads() {
 }
 
 #[test]
-fn a_turned_panel_faces_the_edge_the_vendor_file_puts_in_front() {
+fn a_turned_panel_faces_the_edge_a_printed_file_puts_in_front() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
 
-    // The vendor's `Left`, `Right` and `Front`, read through the half turn between its
-    // X-mirrored layer and ours (ADR 0370); `.photons` and unmirrored panels have none.
+    // A printed file's `Left`, `Right` and `Front`, read through the half turn between its
+    // X-mirrored layer and ours (ADR 0369); `.photons` and unmirrored panels have none.
     let expected = [
         ("creality-ld-002h", FrontEdge::MaxX),
         ("elegoo-mars-2-pro", FrontEdge::MinX),
@@ -134,7 +134,7 @@ fn every_tilting_vat_states_no_lift_of_its_own() {
         let entry = catalogue.printer(id).expect("a shipped machine");
         let printed = MaterialProfile::default().on(&entry.profile);
 
-        // The vendor's own files for these carry 0.05 in every peel field, see ADR 0301.
+        // Printed files for these carry 0.05 in every peel field, see ADR 0301.
         for value in [
             printed.lift_distance_mm,
             printed.lift_speed_mm_min,
@@ -168,7 +168,7 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
     assert_eq!(
         printed.waits.mode,
         WaitMode::Rest,
-        "the vendor slicer offers no other"
+        "the machine takes no other"
     );
     assert_eq!(
         printed.waits.after_retract_s, 1.3,
@@ -177,7 +177,7 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
 }
 
 #[test]
-fn only_the_machines_the_vendor_keeps_without_grey_are_binary_only() {
+fn only_the_machines_without_grey_are_binary_only() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
 
     let expected = [
@@ -199,10 +199,10 @@ fn only_the_machines_the_vendor_keeps_without_grey_are_binary_only() {
 }
 
 #[test]
-fn a_machine_takes_the_grey_range_its_vendor_spreads_edges_over() {
+fn a_machine_takes_the_grey_range_its_edges_are_spread_over() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
 
-    // The vendor's defaults, where its edge smoothing defaults to the mode that applies them.
+    // The machines' defaults, where edge smoothing defaults to the mode that applies them.
     let expected = [
         ("elegoo-mars-2-pro", (127, 255)),
         ("elegoo-saturn-8k", (95, 255)),

@@ -31,7 +31,7 @@ bottom_lift_speed_mm_min = 60.0
 bottom_retract_speed_mm_min = 60.0
 retract_speed_mm_min = 60.0
 
-# Read off the vendor's own slicer profile for this machine; see ADR 0371.
+# The machine's stock settings; see ADR 0370.
 [buffer]
 enabled = true
 height_mm = 10.0

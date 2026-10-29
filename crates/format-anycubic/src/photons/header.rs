@@ -11,7 +11,7 @@ pub(crate) const SUBTAG: u16 = 0x31;
 /// Bytes from the start of the file to the preview: the tag, then the header proper.
 pub(crate) const HEADER_BYTES: u64 = 6 + 0x5C;
 
-/// Two words of the header the vendor writer always sets, between the preview's sides.
+/// Two words of the header every file sets, between the preview's sides.
 const PREVIEW_WORDS: [u32; 2] = [42, 10];
 
 const BACKGROUND: Rgb = [0, 0, 0];

@@ -4,8 +4,8 @@ What the Phrozen Sonic Mini reads: the `.fdg` layout (`fdg.md`) — its previews
 layer table, per-layer records and one-bit codec, in the same order — under a header of its
 own and another cipher. Written by `format-chitu`'s `phz` module, through the `.fdg` sink.
 
-Read off the vendor's own slicer, statically: its writer for this container runs the `.fdg`
-writer's layer loop and encoder instruction for instruction. No file has been printed from yet.
+Its layers are laid out and encoded as `.fdg`'s. No file has been printed from this layout
+yet.
 
 ## Header
 
@@ -21,10 +21,10 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 | 0x2C | small preview address, `u32` | |
 | 0x30 | print time, `u32` | seconds |
 | 0x34 | projector type, `u32` | 1 when either mirror flag is set, as in `.ctb` |
-| 0x38 | bilevel passes, `u32` | 1, as the vendor writes it; the level is at 0xB8 |
+| 0x38 | bilevel passes, `u32` | 1; the level is at 0xB8 |
 | 0x3C | light PWM, bottom light PWM, `u16` each | |
 | 0x40 | two words | zero, as `.ctb`'s two at 0x14 |
-| 0x48 | total height, `f32` | 0, as the vendor writes it |
+| 0x48 | total height, `f32` | 0 |
 | 0x4C | bed X, Y, Z, `f32` each | `PrinterProfile::build_volume` |
 | 0x58 | encryption key, `u32` | never zero, as for `.ctb` (ADR 0365) |
 | 0x5C | bottom light-off delay, light-off delay, `f32` each | |
@@ -35,7 +35,7 @@ writer's layer loop and encoder instruction for instruction. No file has been pr
 | 0x8C | `u32` | zero, as `.fdg` at 0xB4 |
 | 0x90 | machine name address, length, `u32` each | |
 | 0x98 | the second stage, as `.fdg` at 0x9C | |
-| 0xB0 | `u32` | `0x14`, a constant of the vendor writer |
+| 0xB0 | `u32` | `0x14`, a constant |
 | 0xB4 | modified timestamp, `u32` | minutes since the Unix epoch |
 | 0xB8 | anti-alias level, `u32` | the same again |
 | 0xBC | software version, `u32` | `0x01090000`, as `.ctb` v4 |
@@ -50,5 +50,5 @@ four bytes. We write the key `.ctb` does and read any.
 
 ## What we do not write
 
-Grey, as for `.fdg`. The vendor writer fits each preview into
-500 × 500 from whatever picture it is handed; ours are the `.fdg` sizes, which fit.
+Grey, as for `.fdg`. A preview fits into 500 × 500; ours are the
+`.fdg` sizes, which fit.

@@ -99,7 +99,7 @@ impl SlicedFileWriter for PwszWriter {
                 png,
             )?;
         }
-        // The vendor's order, as far as a stream allows: what the layers add up to waits for them.
+        // The format's order, as far as a stream allows: what the layers add up to waits for them.
         let ahead = [
             ("software_info.conf", settings::software_info()?),
             ("layers_controller.conf", settings::layers_controller(job)?),
@@ -162,8 +162,8 @@ impl LayerSink for PwszSink<'_> {
         let written = self.rows.len() as u32;
         check_layers_finished(&self.job, written)?;
 
-        // These entries state what the layers add up to, so they go in behind them, where
-        // the vendor puts them in front; a reader looks an entry up by name, not by place.
+        // These entries state what the layers add up to, so they go in behind them, not
+        // in front; a reader looks an entry up by name, not by place.
         let job = &self.job;
         let entries = [
             ("print_info.json", settings::print_info(job)?),
@@ -177,7 +177,7 @@ impl LayerSink for PwszSink<'_> {
             entry(&mut self.zip, name, bytes)?;
         }
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -202,19 +202,9 @@ fn entry(
     name: &str,
     bytes: &[u8],
 ) -> Result<(), FormatError> {
-    // Deflated as the vendor writes it: a run-length layer still shrinks to a fiftieth.
+    // Deflated: a run-length layer still shrinks to a fiftieth.
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    zip.start_file(name, options).map_err(container)?;
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }

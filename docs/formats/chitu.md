@@ -1,7 +1,6 @@
 # The Chitu container family
 
-What machines running Chitu Systems firmware read, and what the vendor slicer exports by
-default.
+What machines running Chitu Systems firmware read.
 Two containers, one lineage:
 
 | We write | Magic | Version | Grey |
@@ -25,7 +24,7 @@ and they agree except where noted.
 
 | Source | What it settles |
 |---|---|
-| Open-source readers of the container | Field order, types, block order, the addresses each block holds, the run-length codec, the values a vendor file carries |
+| Open-source readers of the container | Field order, types, block order, the addresses each block holds, the run-length codec, the values a known file carries |
 | [`cbiffle/catibo`, `doc/cbddlp-ctb.adoc`](https://github.com/cbiffle/catibo/blob/master/doc/cbddlp-ctb.adoc) | The same for version 2, and the meaning of the fields both versions share |
 
 Where they disagree, the maintained reader wins: it is the one that still writes files real
@@ -50,9 +49,9 @@ Three things neither source spells out and that cost a layer table each:
    at the resin block. A reader that loses one of those addresses cannot find what follows.
    The older container has none of those three, so its header addresses everything it has.
 
-The vendor slicer writes version 5 for a panel up to 4095 pixels a side and the encrypted
-container (`ctb-encrypted.md`) past that; it never writes version 4. We write what it writes,
-field for field, checked against its file for the LD-002H (ADR 0365).
+Known files are version 5 for a panel up to 4095 pixels a side and the encrypted
+container (`ctb-encrypted.md`) past that; none is version 4. We write the same,
+field for field, checked against a known file for the LD-002H (ADR 0365).
 
 ## Shape of a file
 
@@ -75,7 +74,7 @@ layer N
 CRC32                 u32, zlib's, of every byte before it
 ```
 
-This is the vendor's order: the fixed blocks first, then what they address.
+This is the order known files keep: the fixed blocks first, then what they address.
 
 A `.cbddlp` or `.photon` stops after the print parameters:
 
@@ -100,7 +99,7 @@ Offsets are hexadecimal, from the start of the file.
 | 0x04 | version, `u32` | 4 or 5 for `.ctb`, 2 for the older container |
 | 0x08 | bed X, Y, Z, `f32` each | `PrinterProfile::build_volume`, mm |
 | 0x14 | two unknown words | zero |
-| 0x1C | total height, `f32` | 0 in a `.ctb`, as the vendor writes it; the stack's height, mm, in the older container |
+| 0x1C | total height, `f32` | 0 in a `.ctb`, as known files carry it; the stack's height, mm, in the older container |
 | 0x20 | layer height, `f32` | the height actually sliced at, not the profile's |
 | 0x24 | exposure, `f32` | seconds |
 | 0x28 | bottom exposure, `f32` | seconds |
@@ -131,9 +130,9 @@ pass, and stacking passes would cost several times the bytes for a worse result.
 container has no grey of its own and the passes are the only way to carry any, so it is
 written at level 8; see `docs/decisions/0146`.
 
-`slicer info` carries a level of its own: the index of 2, 4 or 8 the vendor offers, 4 with
-anti-aliasing off, as it writes it. Its flag byte beside it is `0x07` with grey or
-without: the vendor's slicer sets it so unconditionally. The older
+`slicer info` carries a level of its own: the index of 2, 4 or 8, 4 with
+anti-aliasing off, as known files carry it. Its flag byte beside it is `0x07` with grey or
+without: known files set it so unconditionally. The older
 container has no slicer info block, so the header's level is all it states.
 
 ### Mirroring
@@ -174,7 +173,7 @@ the records are there either way: the header's addresses are not optional.
 | 0x14 | resin volume in ml, weight in g, cost, `f32` each |
 | 0x20 | bottom light off delay, light off delay, `f32` each |
 | 0x28 | bottom layers, `u32` |
-| 0x2C | four words: 0, 1, 0, 0, as the vendor writes them |
+| 0x2C | four words: 0, 1, 0, 0, as known files carry them |
 
 The lifts are both stages' whole climb at the first stage's speed; a reader takes the slicer
 info's second stage back off them, and the retract travels the same climb back. This holds in
@@ -189,12 +188,12 @@ without a price.
 | 0x18 | rest after lift, `f32` | |
 | 0x1C | machine name address, `u32` | the end of this block |
 | 0x20 | machine name length, `u32` | |
-| 0x24 | flags, `u8` | `0x07`, with grey or without, as the vendor writes it |
+| 0x24 | flags, `u8` | `0x07`, with grey or without, as known files carry it |
 | 0x25 | padding, `u16` | |
 | 0x27 | per-layer settings, `u8` | `0x40` for version 4, `0x50` for version 5, 0 while every layer is the header's |
 | 0x28 | modified timestamp, `u32` | **minutes** since the Unix epoch |
 | 0x2C | anti-alias level, `u32` | 2, 4 or 8; 4 with anti-aliasing off |
-| 0x30 | software version, `u32` | 0, as the vendor writes it |
+| 0x30 | software version, `u32` | 0, as known files carry it |
 | 0x34 | rest time after retract, after lift, `f32` each | the resin's rests, zero unless it rests |
 | 0x3C | transition layers, `u32` | |
 | 0x40 | print parameters v4 address, `u32` | the end of this block |
@@ -205,8 +204,8 @@ previews; the header's size, 76, does not count it.
 
 *Per-layer settings* is what allows the machine to obey the extended block in front of each
 layer rather than the header's own values. Chitu firmware reads it from 4.3.9 on; a
-machine known not to is marked `per_layer_settings = false` in its profile (ADR 0090). The
-vendor sets the byte only when a layer differs from the header, and so do we.
+machine known not to is marked `per_layer_settings = false` in its profile (ADR 0090). Known
+files set the byte only when a layer differs from the header, and so do we.
 
 ## Disclaimer, 320 bytes
 
@@ -329,8 +328,8 @@ into several chunks.
 One bit per pixel, so a layer is written eight times over. Runs are taken the same way —
 across the whole image, row by row, covering every pixel — and one byte carries one run:
 bit 7 is the pixel, bits 6:0 the length. The longest run is `0x7D`, 125, not the 127 seven
-bits would hold: that is where the reference writer stops and firmware is only known to be
-tested against what it writes. A longer run is split into several bytes.
+bits would hold: that is where known files stop and firmware is only known to be
+tested against them. A longer run is split into several bytes.
 
 Pass *k* lights a pixel whose value is at least `256 / 8 * k - 1` **as a byte**, so pass
 zero wraps to 255 and the thresholds are 255, 31, 63, 95, 127, 159, 191, 223. A machine
@@ -344,7 +343,7 @@ whether they are lit or not: a 4098 x 2560 panel cannot go below 671 kB a layer.
 ## The layer cipher
 
 A `.ctb`'s run-length data is covered by a keyed exclusive or; a `.cbddlp`'s never is.
-The vendor slicer sets the key, and other writers set a random one on every `.ctb`, so a reader
+Known files set the key, many with a random one on every `.ctb`, so a reader
 that ignored the header's key field would decode noise from almost any real file.
 
 The keystream is a word derived from the key and the layer's own index, spent a byte at a
@@ -365,7 +364,7 @@ the creation time with its lowest bit set (ADR 0365).
 
 ## What we do not write
 
-- **Deduplicated layers.** A vendor file points two identical layers at one blob of data. We
+- **Deduplicated layers.** A known file may point two identical layers at one blob of data. We
   write each layer's own bytes, because the stack is streamed a window at a time and
   nothing holds the hashes of every layer written so far.
 - **`.ctb` versions 2 and 3, `.cbddlp` version 1, and the GKtwo variant.** The encrypted

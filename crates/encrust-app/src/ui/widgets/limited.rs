@@ -12,11 +12,50 @@ use crate::ui::theme;
 /// What a machine holds one setting to, and why its maker advises the span it does.
 #[derive(Clone, Copy)]
 pub struct Held<'a> {
-    pub limit: &'a Limit,
-    pub why: Option<&'a str>,
+    limit: &'a Limit,
+    why: Option<Why>,
 }
 
-/// A `number_row` held to a machine's limit (ADR 0369): its box takes only what the machine
+/// The reasons a maker gives for its advice.
+#[derive(Clone, Copy)]
+enum Why {
+    ThinLayer,
+    FewBottomLayers,
+}
+
+impl<'a> Held<'a> {
+    /// A limit its maker gives no reason for.
+    pub fn unexplained(limit: &'a Limit) -> Self {
+        Self { limit, why: None }
+    }
+
+    /// A layer height's limit: a thinner layer prints longer.
+    pub fn layer_height(limit: &'a Limit) -> Self {
+        Self {
+            limit,
+            why: Some(Why::ThinLayer),
+        }
+    }
+
+    /// A bottom-layer count's limit: fewer may let the print come off the plate.
+    pub fn bottom_layers(limit: &'a Limit) -> Self {
+        Self {
+            limit,
+            why: Some(Why::FewBottomLayers),
+        }
+    }
+}
+
+impl Why {
+    fn text(self) -> String {
+        match self {
+            Self::ThinLayer => tr!("limit-why-thin-layer"),
+            Self::FewBottomLayers => tr!("limit-why-few-bottom-layers"),
+        }
+    }
+}
+
+/// A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine
 /// takes, and a value past that or past what the maker advises is boxed in `danger`, with
 /// the span it strays from under it.
 pub fn limited_row<N: Numeric>(
@@ -51,21 +90,24 @@ pub fn limit_verdict(ui: &mut Ui, held: Held<'_>, value: f32, unit: &str, decima
     let Some(stray) = held.limit.stray(value) else {
         return;
     };
-    hint(ui, &verdict(held.limit.span(stray), stray, unit, decimals));
+    if let Some(line) = verdict(held.limit.span(stray), stray, unit, decimals) {
+        hint(ui, &line);
+    }
     if let (Stray::Advised, Some(why)) = (stray, held.why) {
-        hint(ui, why);
+        hint(ui, &why.text());
     }
 }
 
-/// The one line saying which span a value strays from.
+/// The one line saying which span a value strays from; none for a span with no bounds.
 fn verdict(
     span: (Option<f32>, Option<f32>),
     stray: Stray,
     unit: &str,
     decimals: Option<usize>,
-) -> String {
+) -> Option<String> {
     let figure = |value: f32| format!("{value:.*}", decimals.unwrap_or(0));
-    match (stray, span) {
+    let line = match (stray, span) {
+        (_, (None, None)) => return None,
         (Stray::Refused, (Some(low), Some(high))) => {
             tr!(
                 "limit-takes-between",
@@ -77,12 +119,8 @@ fn verdict(
         (Stray::Refused, (Some(low), None)) => {
             tr!("limit-takes-from", low = figure(low), unit = unit)
         }
-        (Stray::Refused, (None, high)) => {
-            tr!(
-                "limit-takes-up-to",
-                high = figure(high.unwrap_or(0.0)),
-                unit = unit
-            )
+        (Stray::Refused, (None, Some(high))) => {
+            tr!("limit-takes-up-to", high = figure(high), unit = unit)
         }
         (Stray::Advised, (Some(low), Some(high))) => {
             tr!(
@@ -95,14 +133,11 @@ fn verdict(
         (Stray::Advised, (Some(low), None)) => {
             tr!("limit-advised-from", low = figure(low), unit = unit)
         }
-        (Stray::Advised, (None, high)) => {
-            tr!(
-                "limit-advised-up-to",
-                high = figure(high.unwrap_or(0.0)),
-                unit = unit
-            )
+        (Stray::Advised, (None, Some(high))) => {
+            tr!("limit-advised-up-to", high = figure(high), unit = unit)
         }
-    }
+    };
+    Some(line)
 }
 
 #[cfg(test)]
@@ -120,6 +155,8 @@ mod tests {
         warn_max: Some(12.0),
     };
 
+    const WHY: &str = "A thinner layer means more layers and a longer print.";
+
     /// The row on its own, holding `lift_mm`, after the theme has been put on.
     fn harness(lift_mm: f32) -> egui_kittest::Harness<'static, f32> {
         let mut dressed = false;
@@ -128,10 +165,7 @@ mod tests {
             .build_ui_state(
                 move |ui, lift_mm: &mut f32| {
                     if dressed {
-                        let held = Held {
-                            limit: &LIFT,
-                            why: Some("Too low a lift tears the layer."),
-                        };
+                        let held = Held::layer_height(&LIFT);
                         limited_row(ui, "Lift", lift_mm, "mm", 0.1, 0.1..=100.0, Some(1), held);
                     } else {
                         theme::apply(ui.ctx());
@@ -148,7 +182,7 @@ mod tests {
     fn a_value_past_the_advice_states_the_advised_span_and_why() {
         let harness = harness(6.0);
         harness.get_by_label("Its maker advises 8.0–12.0 mm.");
-        harness.get_by_label("Too low a lift tears the layer.");
+        harness.get_by_label(WHY);
     }
 
     #[test]
@@ -156,9 +190,7 @@ mod tests {
         let harness = harness(20.0);
         harness.get_by_label("This machine takes 5.0–15.0 mm.");
         assert!(
-            harness
-                .query_by_label("Too low a lift tears the layer.")
-                .is_none(),
+            harness.query_by_label(WHY).is_none(),
             "the maker's reason is for its advice, not for the machine's bound"
         );
     }

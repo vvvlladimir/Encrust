@@ -18,7 +18,7 @@ const DEFINITIONS_MARK: u8 = 0xA1;
 const MASKS_MARK: u8 = 0xA2;
 const BLOCKS_MARK: u8 = 0xA3;
 
-/// The block the vendor ends the layers with: a mark, the resin preset's name, a delimiter.
+/// The block that ends the layers: a mark, the resin preset's name, a delimiter.
 const NAME_MARK: u8 = 0x66;
 const NAME_BYTES: usize = 139;
 const NAME_BLOCK_BYTES: u32 = 1 + NAME_BYTES as u32 + 2;

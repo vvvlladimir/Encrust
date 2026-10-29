@@ -128,23 +128,7 @@ fn the_checksum_covers_every_byte_including_the_area_table_filled_in_last() {
             .expect("four bytes of checksum"),
     );
 
-    // The same reflected CRC-32 the firmware takes: no inverted register, no final xor.
-    let mut table = [0u32; 256];
-    for (index, cell) in table.iter_mut().enumerate() {
-        let mut value = index as u32;
-        for _ in 0..8 {
-            value = if value & 1 == 0 {
-                value >> 1
-            } else {
-                (value >> 1) ^ 0xEDB8_8320
-            };
-        }
-        *cell = value;
-    }
-    let mut expected = 0u32;
-    for byte in &file[..file.len() - 4] {
-        expected = table[((expected as u8) ^ byte) as usize] ^ (expected >> 8);
-    }
+    let expected = checksum(&file[..file.len() - 4]);
 
     assert_eq!(
         stated, expected,

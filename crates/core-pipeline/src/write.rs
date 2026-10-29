@@ -213,7 +213,7 @@ pub fn write(
 }
 
 /// A new, empty file at `path` to write a sliced file into, readable too: a format may hash
-/// what it wrote (ADR 0376).
+/// what it wrote (ADR 0375).
 pub(crate) fn create_sink(path: &Path) -> Result<BufferedSink<File>, PipelineError> {
     let file = OpenOptions::new()
         .read(true)

@@ -42,9 +42,8 @@ impl SlicedFileWriter for CxdlpWriter {
             what: "a CL or CT model code in the machine name, as in Halot One CL-60".to_owned(),
         })?;
 
-        // The blocks in front of the layers are built once in memory — a few hundred
-        // kilobytes, bounded by the preview sizes — because every byte of them has to go
-        // through the checksum as well as to the sink, and the sink cannot be read back.
+        // The blocks in front of the layers, a few hundred kilobytes bounded by the previews,
+        // are built in memory so the checksum takes them while streaming, with no second pass.
         let head = block(|fields| {
             blocks::write_header(fields, job, &model)?;
             blocks::write_previews(fields, job.thumbnail.as_ref())?;

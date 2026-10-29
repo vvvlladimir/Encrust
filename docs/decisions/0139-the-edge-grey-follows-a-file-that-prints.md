@@ -1,6 +1,6 @@
 # 0139. Let the edge carry every grey
 
-- **Status:** Accepted; the floor is superseded by 0379
+- **Status:** Accepted; the floor is superseded by 0378
 - **Date:** 2026-09-29
 
 ## Context
@@ -10,12 +10,12 @@ uncured rather than curing less, and admitted in its own last section that 128 w
 dressed as a measurement". The signal it named for reopening was evidence from a real
 machine.
 
-That evidence arrived. The same model was sliced for an Elegoo Saturn 4 Ultra by the vendor
-slicer and by Encrust, and the two `.goo` files decoded and compared layer by layer. The geometry
+That evidence arrived. The same model for an Elegoo Saturn 4 Ultra, in a known file and one
+sliced by Encrust: the two `.goo` files decoded and compared layer by layer. The geometry
 agrees: intersection over union between the lit masks is 0.966 to 0.997, every bounding box
 within one pixel, no mirroring difference. What differs is the edge.
 
-| | Vendor file | Encrust |
+| | Known file | Encrust |
 |---|---|---|
 | distinct greys in a layer | 254, from 1 to 254 | 123, from 128 to 250 |
 | grey pixels per boundary pixel | 1.15 | 0.48 |

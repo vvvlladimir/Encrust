@@ -16,7 +16,9 @@ use printer_profiles::{MaterialProfile, PrinterProfile};
 use crate::args::{ImportArgs, JobArgs};
 use crate::hollowing::{HollowArgs, HollowReport, support_holes};
 use crate::modelling::{self, ModelArgs};
-use crate::pipeline::{OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of};
+use crate::pipeline::{
+    OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of, warn_if_grey_ignored,
+};
 use crate::profiles::{self, Chosen};
 use crate::report::ImportReport;
 use crate::sliced_file::now_unix_s;
@@ -255,23 +257,7 @@ pub fn plate_of(
     chosen.measured()?;
     let printer = chosen.printer.as_ref();
     check_adaptive(job, printer)?;
-    let mut meshes = Vec::with_capacity(entries.len());
-    let mut found = Vec::with_capacity(entries.len());
-    for (path, shaping) in entries {
-        let (mut mesh, import, oriented) = import(
-            path,
-            &shaping.import,
-            shaping.supports.as_ref(),
-            chosen,
-            watch.talk,
-        )?;
-        if let Some(position) = shaping.position {
-            mesh = stood_at(&mesh, position)?;
-        }
-        meshes.push(mesh);
-        found.push((import, oriented));
-        watch.stop.check()?;
-    }
+    let (meshes, found) = imported(entries, chosen, watch)?;
     let mut pieces = modelling::shaped(meshes, &job.model, watch.talk)?;
     check_pieces(&pieces, entries, &job.model, arrange)?;
     watch.stop.check()?;
@@ -320,6 +306,9 @@ pub fn plate_of(
 
     check_plugs_clear(&models, &plugged, printer)?;
 
+    if watch.talk {
+        warn_if_grey_ignored(&job.raster, chosen.printer.as_ref());
+    }
     let drainage = job.slicing.check_drainage
         || entries
             .iter()
@@ -330,12 +319,41 @@ pub fn plate_of(
         printer: chosen.printer.clone(),
         material: chosen.material.clone(),
         cutting: cutting_of(job, layer_height, &chosen.material.compensation, watch.talk),
-        panel: overrides_of(&job.raster, chosen.printer.as_ref(), watch.talk),
+        panel: overrides_of(&job.raster),
         exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
         remove_islands: job.raster.remove_islands,
         hanging_passes: job.raster.hanging_passes,
         drainage,
     })
+}
+
+/// What importing one model reported, and how it was turned.
+type Found = (ImportReport, Option<OrientSummary>);
+
+/// Each entry's model imported and stood where it asks, with what its import reported.
+fn imported(
+    entries: &[(PathBuf, Shaping)],
+    chosen: &Chosen,
+    watch: &Watch,
+) -> Result<(Vec<Mesh>, Vec<Found>)> {
+    let mut meshes = Vec::with_capacity(entries.len());
+    let mut found = Vec::with_capacity(entries.len());
+    for (path, shaping) in entries {
+        let (mut mesh, import, oriented) = import(
+            path,
+            &shaping.import,
+            shaping.supports.as_ref(),
+            chosen,
+            watch.talk,
+        )?;
+        if let Some(position) = shaping.position {
+            mesh = stood_at(&mesh, position)?;
+        }
+        meshes.push(mesh);
+        found.push((import, oriented));
+        watch.stop.check()?;
+    }
+    Ok((meshes, found))
 }
 
 /// Hollows and supports one piece as `shaping` asks, ready to slice, with the plugs for

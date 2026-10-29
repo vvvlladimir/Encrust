@@ -53,7 +53,7 @@ directions. Our writer still writes a zero key; ADR 0046 stands.
 what the file states and then decodes every layer — because a header can be read from a file
 no machine would print, and the layers are where a container is really tested.
 
-Verified against independent readers and vendor output: all six reference files open, every
+Verified against independent readers and known files: all six reference files open, every
 layer decodes, and every layer covers exactly its panel. One source model in six containers
 gives a lit-pixel count that falls with each container's grey depth and nowhere else —
 5 267 914 for `.goo`, `.sl1` and `.sl1s` alike, 5 262 190 for a seven-bit `.ctb`, 5 241 477

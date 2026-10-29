@@ -76,18 +76,18 @@ pub(crate) fn write_header(
     fields.u32_le(job.layer_count())?;
     fields.u32_le(offsets.large_preview)?;
     fields.u32_le(job.print_time_s())?;
-    // The projector type, zero on a mirrored panel too, as the vendor writes it; the masks
+    // The projector type, zero on a mirrored panel too; the masks
     // already print the right way round (ADR 0366).
     fields.u32_le(0)?;
     fields.u32_le(offsets.print_parameters)?;
     fields.u32_le(PRINT_PARAMETERS_BYTES)?;
 
-    // The anti-alias level, 4 with it off, as the vendor writes it.
+    // The anti-alias level, 4 with it off.
     fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
 
-    // Zero leaves the layer data in the clear, as the vendor writes it here.
+    // Zero leaves the layer data in the clear.
     fields.u32_le(0)?;
     fields.u32_le(offsets.slicer_info)?;
     fields.u32_le(SLICER_INFO_BYTES)
@@ -165,7 +165,7 @@ fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> 
     let material = &job.material;
     let [before_lift_s, after_lift_s, after_retract_s] = material.waits.rests_s();
 
-    // Of the second stage the vendor states the ordinary lift alone; the layers carry it all.
+    // Of the second stage the header states the ordinary lift alone; the layers carry it all.
     let stage = &material.second_stage;
     fields.zeros(4 * 2)?;
     fields.f32_le(stage.lift_distance_mm)?;
@@ -175,7 +175,7 @@ fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> 
     // Per-layer settings, set only while a layer differs from the header, as in a `.ctb`.
     let per_layer = job.printer.firmware.per_layer_settings && job.varies_by_layer();
     fields.u32_le(u32::from(per_layer))?;
-    // The vendor states no time and no software version here.
+    // No time and no software version are stated here.
     fields.u32_le(0)?;
     fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
     fields.u32_le(0)?;
@@ -332,7 +332,7 @@ mod tests {
     }
 
     #[test]
-    fn a_bottom_layer_moves_in_both_stages_as_the_vendor_lays_them() {
+    fn a_bottom_layer_moves_in_both_stages() {
         let mut job = sample_job(3);
         job.material.bottom_layers = 1;
         job.material.bottom_lift_distance_mm = 5.0;

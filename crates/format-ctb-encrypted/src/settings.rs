@@ -55,7 +55,7 @@ pub(crate) const LAYER_TIME_S: usize = 0xE8;
 pub(crate) const LARGEST_LAYER_BYTES: usize = 0xEC;
 pub(crate) const LAYER_COUNT_AGAIN: usize = 0xF4;
 pub(crate) const DISCLAIMER: usize = 0x108;
-/// A word the vendor's slicer sets to one behind the disclaimer's length.
+/// A word set to one behind the disclaimer's length in every file.
 pub(crate) const ONE_AGAIN: usize = 0x110;
 pub(crate) const RESIN: usize = 0x114;
 

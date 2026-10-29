@@ -80,41 +80,13 @@ fn exposure(
     let was = slicing.rescaled().map(|rescaled| rescaled.exposure_s);
     let material = &mut slicing.material;
     if locked.bottom_layers.is_none() {
-        let why = tr!("limit-why-few-bottom-layers");
-        let held = Held {
-            limit: &limits.bottom_layers,
-            why: Some(&why),
-        };
-        let label = tr!("print-bottom-layers");
-        limited_row(
-            ui,
-            &label,
-            &mut material.bottom_layers,
-            "",
-            0.2,
-            0..=200,
-            None,
-            held,
-        );
+        bottom_layers_row(ui, material, &limits.bottom_layers);
     }
     let carried = if locked.exposure_s.is_none() {
-        carried_row(
-            ui,
-            &tr!("print-exposure"),
-            &mut material.exposure_s,
-            &tr!("unit-s"),
-            0.01,
-            limits.exposure_s.range(0.1..=300.0),
-            2,
-            was,
-        )
+        exposure_row(ui, material, &limits.exposure_s, was)
     } else {
         Carried::Untouched
     };
-    if locked.exposure_s.is_none() {
-        let held = held(&limits.exposure_s);
-        limit_verdict(ui, held, material.exposure_s, &tr!("unit-s"), Some(2));
-    }
     if locked.bottom_exposure_s.is_none() {
         limited_row(
             ui,
@@ -124,7 +96,7 @@ fn exposure(
             0.1,
             0.1..=600.0,
             Some(2),
-            held(&limits.bottom_exposure_s),
+            Held::unexplained(&limits.bottom_exposure_s),
         );
     }
     match carried {
@@ -145,6 +117,49 @@ fn exposure(
     }
 }
 
+fn bottom_layers_row(ui: &mut egui::Ui, material: &mut MaterialProfile, limit: &Limit) {
+    let label = tr!("print-bottom-layers");
+    let held = Held::bottom_layers(limit);
+    limited_row(
+        ui,
+        &label,
+        &mut material.bottom_layers,
+        "",
+        0.2,
+        0..=200,
+        None,
+        held,
+    );
+}
+
+/// The normal exposure, carried from `was` when the layer height moved, and its verdict.
+fn exposure_row(
+    ui: &mut egui::Ui,
+    material: &mut MaterialProfile,
+    limit: &Limit,
+    was: Option<f32>,
+) -> Carried {
+    let unit = tr!("unit-s");
+    let carried = carried_row(
+        ui,
+        &tr!("print-exposure"),
+        &mut material.exposure_s,
+        &unit,
+        0.01,
+        limit.range(0.1..=300.0),
+        2,
+        was,
+    );
+    limit_verdict(
+        ui,
+        Held::unexplained(limit),
+        material.exposure_s,
+        &unit,
+        Some(2),
+    );
+    carried
+}
+
 fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile, limit: &Limit) {
     subheading(ui, &tr!("print-transition"));
     let mut transition = u32::from(material.transition_layers);
@@ -157,7 +172,7 @@ fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile, limit: &Limit) 
         0.2,
         0..=100,
         None,
-        held(limit),
+        Held::unexplained(limit),
     ) {
         material.transition_layers = transition.min(u32::from(u16::MAX)) as u16;
     }
@@ -208,7 +223,7 @@ fn waiting(
                 0.05,
                 0.0..=60.0,
                 Some(2),
-                held(&limits.light_off_delay_s),
+                Held::unexplained(&limits.light_off_delay_s),
             );
         }
         WaitMode::Rest if locked.waits.is_none() => {
@@ -261,7 +276,7 @@ fn motion(
             0.1,
             0.5..=30.0,
             Some(2),
-            held(&limits.lift_distance_mm),
+            Held::unexplained(&limits.lift_distance_mm),
         );
     }
     let speeds = [
@@ -288,16 +303,11 @@ fn motion(
                 &unit,
                 1.0,
                 1.0..=1000.0,
-                Some(0),
-                held(limit),
+                Some(1),
+                Held::unexplained(limit),
             );
         }
     }
-}
-
-/// A limit the maker gives no reason for.
-fn held(limit: &Limit) -> Held<'_> {
-    Held { limit, why: None }
 }
 
 #[cfg(test)]
@@ -344,6 +354,6 @@ mod tests {
                 .is_some()
         };
         assert!(shown("elegoo-saturn-4-ultra"));
-        assert!(!shown("creality-halot-x1"), "its vendor keeps grey off");
+        assert!(!shown("creality-halot-x1"), "a binary-only machine");
     }
 }

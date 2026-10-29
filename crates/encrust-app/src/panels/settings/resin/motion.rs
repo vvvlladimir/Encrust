@@ -168,7 +168,7 @@ fn travel_rows<const N: usize>(ui: &mut egui::Ui, rows: [TravelRow<'_>; N]) {
         if locked.is_some() {
             continue;
         }
-        let held = Held { limit, why: None };
+        let held = Held::unexplained(limit);
         let (unit, step, range, decimals) = match travel {
             Travel::Distance => (tr!("unit-mm"), COARSE_STEP, 0.1..=100.0, 2),
             Travel::Stage => (tr!("unit-mm"), COARSE_STEP, 0.0..=100.0, 2),

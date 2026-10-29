@@ -19,7 +19,7 @@ fn word(bytes: &[u8], at: usize) -> u32 {
 }
 
 #[test]
-fn the_header_names_its_blocks_where_the_vendor_writer_does() {
+fn the_header_names_its_blocks_where_the_format_puts_them() {
     let bytes = written(3);
     assert_eq!((word(&bytes, 0), word(&bytes, 4)), (0x9FDA_83AE, 4));
     assert_eq!(
@@ -83,7 +83,7 @@ fn the_cipher_undoes_itself_and_zero_leaves_the_bytes_alone() {
 }
 
 #[test]
-fn the_cipher_steps_by_the_key_and_the_layer_as_the_vendor_writer_does() {
+fn the_cipher_steps_by_the_key_and_the_layer() {
     // Key 1 and layer 0: the step is 0x34A32231, the first word that times
     // 0x3FAD2212 * 0x1E1530CD, and each word after it one step more.
     let mut data = [0u8; 8];
@@ -97,7 +97,7 @@ fn the_cipher_steps_by_the_key_and_the_layer_as_the_vendor_writer_does() {
 #[test]
 fn a_written_file_covers_its_layers_with_a_key_and_reads_back() {
     let bytes = written(2);
-    assert_ne!(word(&bytes, 0x58), 0, "the vendor never writes a zero key");
+    assert_ne!(word(&bytes, 0x58), 0, "a written key is never zero");
     let mut open = PhzReader.open(Cursor::new(bytes)).expect("the header");
     let lit: u32 = open
         .layer(1)

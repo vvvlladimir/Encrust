@@ -33,7 +33,7 @@ bottom_light_pwm = 255
 layer_height_mm = { warn_min = 0.01, warn_max = 0.2 }
 bottom_layers = { warn_min = 2, warn_max = 10 }
 
-# Read off the vendor's own slicer profile for this machine; see ADR 0372.
+# The machine's stock settings; see ADR 0371.
 [plate_inset]
 min_x_mm = 1.47
 max_x_mm = 1.15

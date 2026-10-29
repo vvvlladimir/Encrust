@@ -20,8 +20,8 @@ pub enum CxdlpVersion {
     V4,
 }
 
-/// The code the vendor slicer gives a machine it knows by name, newer HALOTs having an `R`
-/// code with no `CL` in their name; one it has no code for it names as it stands.
+/// The code a machine's firmware knows it by, newer HALOTs having an `R` code with no
+/// `CL` in their name; a machine missing here is named as it stands.
 const KNOWN_CODES: [(&str, &str); 19] = [
     ("HALOT-LITE", "CL-89L"),
     ("HALOT-ONE", "CL-60"),
@@ -44,7 +44,7 @@ const KNOWN_CODES: [(&str, &str); 19] = [
     ("PIOCREAT C02", "PIOCREAT C02"),
 ];
 
-/// The model code the header must carry: the vendor slicer's own for a machine it names,
+/// The model code the header must carry: the known code for a machine listed here,
 /// else the `CL` or `CT` code picked out of `name`.
 ///
 /// The firmware matches this and nothing else, and a profile may state the model the way a
@@ -105,7 +105,7 @@ pub(crate) fn block_at<T>(
 mod tests {
     use super::*;
     #[test]
-    fn a_machine_the_vendor_names_takes_its_code() {
+    fn a_known_machine_takes_its_code() {
         assert_eq!(model_code("HALOT-X1 Max").as_deref(), Some("R012"));
         assert_eq!(model_code("HALOT-ONE").as_deref(), Some("CL-60"));
         assert_eq!(model_code("HALOT-PLAY").as_deref(), Some("HALOT-PLAY"));
@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(code("Halot Ray CL925").as_deref(), Some("CL-925"));
         assert_eq!(code("Halot Lite CL-89L").as_deref(), Some("CL-89L"));
         assert_eq!(code("CT-005 Pro").as_deref(), Some("CT-005"));
-        assert_eq!(code("Mars 4 Ultra"), None, "another vendor's machine");
+        assert_eq!(code("Mars 4 Ultra"), None, "another maker's machine");
     }
 
     #[test]

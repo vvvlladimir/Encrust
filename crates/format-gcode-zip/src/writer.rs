@@ -13,7 +13,7 @@ use crate::gcode;
 /// The entry the board runs, which is the whole of the file but its images.
 pub(crate) const PROGRAM: &str = "run.gcode";
 
-/// The previews the archive holds, in the order and at the sizes a vendor file carries.
+/// The previews the archive holds, in the order and at the sizes a printed file carries.
 pub(crate) const THUMBNAILS: [(&str, u32, u32); 2] = [
     ("preview.png", 954, 850),
     ("preview_cropping.png", 168, 150),
@@ -98,7 +98,7 @@ impl LayerSink for GcodeZipSink<'_> {
         program.push_str(&gcode::epilogue(&self.job));
         entry(&mut self.zip, PROGRAM, program.as_bytes())?;
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -133,19 +133,9 @@ fn entry(
     // A PNG is already deflated, and so is stored rather than deflated a second time; the
     // program is small enough that it makes no difference either way.
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file(name, options).map_err(container)?;
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ use crate::cipher;
 use crate::layout::{HEADER_BYTES, LAYER_DEF_BYTES, MAGIC, POINTER_BYTES, paged};
 use crate::settings::{self as at, SETTINGS_BYTES, Settings};
 
-/// The revision written: the one the vendor's own slicer writes, with the resin block.
+/// The revision written: the one the printers read, with the resin block.
 const VERSION: u32 = 5;
 
 /// The key the layer runs are covered with; a file the machine takes always states one.
@@ -146,7 +146,7 @@ impl LayerSink for CtbEncryptedSink<'_> {
         let signature = cipher::signature(CHECKSUM);
         self.patch_front(signature_at)?;
 
-        // The file ends with the CRC of everything before it, as the vendor's slicer ends it.
+        // The file ends with the CRC of everything before it.
         let crc = Crc32::of(&self.front)
             .followed_by(self.layers_crc)
             .followed_by(Crc32::of(&signature));
@@ -332,8 +332,8 @@ fn put_slicer_info(set: &mut Settings, job: &PrintJob) {
     }
 }
 
-/// In the high byte whether the machine is to obey each definition, which the vendor
-/// leaves clear for a stack the settings describe, transition ramp included.
+/// In the high byte whether the machine is to obey each definition, left clear for a
+/// stack the settings describe, transition ramp included.
 fn flags(job: &PrintJob) -> u32 {
     let per_layer =
         job.printer.firmware.per_layer_settings && (!job.exposure.is_empty() || !job.is_uniform());

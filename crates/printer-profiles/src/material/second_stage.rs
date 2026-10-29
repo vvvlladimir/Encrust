@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// The second stage of a two-speed peel: the plate climbs on past the first lift at its own
-/// speed, and slows for the last stretch of the way back down. Zero distances leave one stage.
-///
-/// A retract's second stage is part of its whole travel, not added to it; see
-/// `docs/decisions/0363-a-peel-has-two-stages.md`.
+/// The second stage of a two-speed peel; zero distances leave one stage. A retract's second
+/// stage is part of its whole travel; see `docs/decisions/0363-a-peel-has-two-stages.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SecondStage {

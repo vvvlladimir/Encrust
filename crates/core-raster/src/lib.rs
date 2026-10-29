@@ -18,6 +18,6 @@ pub use mask::LayerMask;
 pub use preview::{crop, downsample, shrink_factor};
 pub use rastered::Rastered;
 pub use rasterizer::{Rasterizer, ScanlineRasterizer};
-pub use runs::{LayerRuns, Run, RunsBuilder, lit_px};
+pub use runs::{LayerRuns, Run, RunsBuilder, lit_px, push_run};
 pub use settings::{Grey, GreyRange, PixelPitch, RasterSettings, Shading};
 pub use trace::{Ring, area_mm2, double_area_px, length_px, rings_of};

@@ -1,6 +1,6 @@
 # The Prusa `.sl1` container
 
-What a Prusa SL1 and SL1S Speed read, and what the vendor's own slicer exports for them. Alone among
+What a Prusa SL1 and SL1S Speed read. Alone among
 the formats we write it is not a binary container at all: a zip of two settings files, two
 previews and one PNG per layer.
 
@@ -22,9 +22,9 @@ The archive is the same either way; each names its own machine in `printerModel`
 Three things the reference file settles:
 
 1. **The stack's height is not stated.** A reader takes it as `numSlow + numFast`, and
-   the vendor's own slicer writes the whole count into `numFast` with `numSlow` at zero.
+   known files put the whole count into `numFast` with `numSlow` at zero.
 2. **A layer is found by the shape of its name**, not by the name itself: the pattern is
-   five digits then `.png`, with any prefix. The vendor's slicer uses the job's own name,
+   five digits then `.png`, with any prefix. Known files use the job's own name,
    and so do we, but a reader does not require it — and the two previews are safe from the pattern
    because `thumbnail400x400.png` does not end in five digits.
 3. **Layers are eight-bit greyscale PNGs**, one channel, no palette and no alpha.
@@ -76,7 +76,7 @@ The file the firmware reads. `key = value`, one per line.
 
 ## `prusaslicer.ini`
 
-What a slicer reads the machine back out of. The vendor's own writes about 136 keys here,
+What a slicer reads the machine back out of. Known files carry about 136 keys here,
 most of them its support and pad settings; we write the ones we have a real value for. An unknown
 key is one a reader skips, but a key we invented a value for is one it believes.
 
@@ -99,7 +99,7 @@ the firmware](https://gitlab.com/prusa3d/sl1/sla-fw/-/raw/master/slafw/project/p
 That is exactly one bottom layer and a ramp of `numFade - 2` of ours, which is what the
 reader states. A bottom block of several layers has no place: the writer states the
 `numFade` whose ramp reaches the normal exposure on the layer ours does, so a block of six
-fades instead of holding. The vendor's slicer takes 3 to 20, and the firmware divides by
+fades instead of holding. Known files keep it within 3 to 20, and the firmware divides by
 `numFade - 1`, so the count is held to that range (ADR 0296).
 
 ## What the container cannot carry

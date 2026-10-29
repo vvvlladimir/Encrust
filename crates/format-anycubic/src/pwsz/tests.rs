@@ -78,7 +78,7 @@ fn every_extension_round_trips_through_its_own_name() {
 }
 
 #[test]
-fn the_archive_holds_the_entries_the_vendor_writes() {
+fn the_archive_holds_the_entries_a_printer_reads() {
     let archive = written(
         PwszFlavour::Pm7,
         &[layer(centre_block), layer(centre_block)],
@@ -126,7 +126,7 @@ fn the_scene_states_a_layer_as_one_piece_with_no_extent() {
     assert_eq!(&scene[388..392], b"<---");
     assert_eq!(u32_at(&scene, 392), 1);
 
-    // Four pixels of 0.01 mm2 in two pieces, stated as the vendor states them.
+    // Four pixels of 0.01 mm2 in two pieces.
     let row = FIRST_SCENE_ROW;
     assert!((f32_at(&scene, row) - 0.05).abs() < 1e-5, "the layer's top");
     assert!(
@@ -189,13 +189,13 @@ fn the_layer_settings_state_every_layer() {
 }
 
 #[test]
-fn the_machine_settings_keep_the_suffix_of_the_vendor_template() {
+fn the_machine_settings_name_the_suffix_the_machine_reads() {
     let mut archive = written(PwszFlavour::Pm7m, &[layer(centre_block)]);
     let machine = json(&mut archive, "anycubic_photon_resins.pwsp");
     let kind = &machine["machine_type"];
     assert_eq!(
         kind["key_suffix"], "pwsz",
-        "the M7 Pro template serves the M7 Max"
+        "the M7 Max reads the M7 Pro's suffix"
     );
     assert_eq!(kind["key_image_format"], "pwszImg");
     assert_eq!(
@@ -214,7 +214,7 @@ fn the_machine_settings_keep_the_suffix_of_the_vendor_template() {
     let resin = &machine["machine_extern"]["user_resins"][0]["slicepara"];
     assert!(
         resin.get("bott_time_dual").is_some(),
-        "its template's second bottom time"
+        "the P1 Max states a second bottom time"
     );
 }
 
@@ -313,10 +313,7 @@ fn the_lift_is_stated_as_two_stages_with_the_second_climbing_nothing() {
     let machine = json(&mut archive, "anycubic_photon_resins.pwsp");
     let resin = &machine["machine_extern"]["user_resins"][0];
     let (extra, single) = (&resin["slice_extpara"], &resin["slicepara"]);
-    assert_eq!(
-        extra["multi_state_used"], 1,
-        "as the vendor's slicer states it"
-    );
+    assert_eq!(extra["multi_state_used"], 1, "as the format states it");
     let stages = &extra["multi_state_paras"];
     assert_eq!(stages["normal_0"]["height"], single["zup_height"]);
     assert_eq!(stages["normal_1"]["height"], 0.0);

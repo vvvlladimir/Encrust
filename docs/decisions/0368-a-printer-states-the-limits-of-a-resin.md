@@ -1,13 +1,13 @@
-# 0369. A printer states the limits of a resin's settings
+# 0368. A printer states the limits of a resin's settings
 
 - **Status:** Accepted
 - **Date:** 2026-10-27
 
 ## Context
 
-The vendor slicer's profile for a machine gives every setting two spans: `min..max`, past
-which its field takes nothing, and `minalarm..maxalarm`, past which the field is accepted but
-framed in its error colour, two of them with a reason (a thin layer prints longer, few bottom
+The maker's settings for a machine give every setting two spans: a hard one, past
+which nothing is accepted, and a warning one, past which a value is accepted but
+flagged, two of them with a reason (a thin layer prints longer, few bottom
 layers come off the plate). Neither stops a slice. Most spans are the empty `0.001..5000`;
 about 90 machines state real ones: a layer of 0.01 to 0.2 mm, a lift of 8 to 20 mm, a speed
 up to 2700 mm/min, an exposure of 0.5 to 10 s.
@@ -44,7 +44,7 @@ Reopen if a print shows a bound refusing what the firmware runs well.
 ### Keep the advised span only
 
 Simpler, and enough for a warning, but the window could not hold a field to what the
-machine takes, which is the half the vendor's slicer enforces.
+machine takes, which is the half the maker's settings enforce.
 
 ### Refuse the slice on a hard bound in the CLI
 

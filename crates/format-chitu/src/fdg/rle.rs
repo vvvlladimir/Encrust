@@ -1,5 +1,5 @@
 use core_format::FormatError;
-use core_raster::{LayerRuns, Run};
+use core_raster::{LayerRuns, Run, push_run};
 
 /// Most pixels one count byte carries; a longer stretch is split into several.
 const MAX_COUNT: u32 = 0x7D;
@@ -32,14 +32,17 @@ impl FdgLayer {
         }
     }
 
+    /// Pixels in a row.
     pub fn width(&self) -> u32 {
         self.width
     }
 
+    /// Rows in the layer.
     pub fn height(&self) -> u32 {
         self.height
     }
 
+    /// The encoded bytes, as the container stores them.
     pub fn data(&self) -> &[u8] {
         &self.data
     }
@@ -153,13 +156,7 @@ pub fn decode(data: &[u8], pixel_count: u32) -> Result<Vec<Run>, FormatError> {
             .checked_add(length)
             .filter(|&covered| covered <= pixel_count)
             .ok_or(FormatError::MalformedRun { offset })?;
-        match runs.last_mut() {
-            Some(last) if last.value == grey => last.length += length,
-            _ => runs.push(Run {
-                length,
-                value: grey,
-            }),
-        }
+        push_run(&mut runs, length, grey);
     }
     if covered < pixel_count {
         runs.push(Run {

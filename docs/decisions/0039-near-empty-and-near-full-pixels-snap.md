@@ -16,7 +16,7 @@ clips by about a percent — or 252, 253, 254 on the inside of the same edge. Ea
 those splits an otherwise long black or white run into three chunks, and there are tens of
 thousands of them on a 8520 × 4320 panel.
 
-Comparing one of our files against a vendor file of a similar part showed 15 198 chunks
+Comparing one of our files against a known file of a similar part showed 15 198 chunks
 per layer against 13 365, at a *smaller* panel: 19% more bytes per layer for the same job.
 The histogram said where they came from.
 

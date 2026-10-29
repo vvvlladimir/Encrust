@@ -68,5 +68,5 @@ archive written from the test file states `numFade = 10`, the override, not the
 | panel | `display_pixels_x`, `display_pixels_y` | |
 
 There is no lift, speed or light power, and no bottom-layer count beyond the fade's one: the motion keys (`tilt_*`,
-`tower_*`, `delay_*`) are for the vendor's own tilting machines, two values each by the
+`tower_*`, `delay_*`) are for the maker's own tilting machines, two values each by the
 area being exposed, and do not map to a peel.

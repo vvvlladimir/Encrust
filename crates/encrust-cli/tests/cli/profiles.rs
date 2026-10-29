@@ -162,7 +162,7 @@ fn a_user_profile_overrides_the_catalogue_by_id() {
     let printers = dir.join("printers");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&printers).expect("temp dir");
-    // The user's file of a shipped machine holds their edits over it (ADR 0373).
+    // The user's file of a shipped machine holds their edits over it (ADR 0372).
     fs::write(
         printers.join("elegoo-mars-4-ultra.toml"),
         "edits_over_shipped = true\nname = \"Test panel\"\n",

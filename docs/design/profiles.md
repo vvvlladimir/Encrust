@@ -90,7 +90,7 @@ unknown keys are refused, so a misspelt key fails to load rather than doing noth
 | Geometry | `layer_height_mm`, because an exposure is only valid at the height it was measured at |
 
 A printer's `[limits]` uses the same keys, each `{ min, max, warn_min, warn_max }`: the
-span its field takes and the span its maker advises (ADR 0369).
+span its field takes and the span its maker advises (ADR 0368).
 
 ```toml
 [limits]
@@ -202,8 +202,8 @@ board = "d85f46e4d7d90100"
 ## What the file calls the machine
 
 A sliced file names the machine it is for, and the firmware matches that string. It is
-`name` unless the profile states `machine_name`, which is what the vendor's own slicer
-writes: `Saturn 4 Ultra` in the picker, `ELEGOO Saturn 4 Ultra` in the file (ADR 0140).
+`name` unless the profile states `machine_name`, which is the string the firmware
+matches: `Saturn 4 Ultra` in the picker, `ELEGOO Saturn 4 Ultra` in the file (ADR 0140).
 
 ## What the firmware obeys
 
@@ -221,6 +221,17 @@ refused without it (ADR 0091). The Saturn 4 Ultra is the one shipped profile tha
 `per_layer_settings`: it separates a layer by tilting its vat, and obeying the per-layer
 lift stalls the plate (ADR 0142).
 
+## What the panel and plate state
+
+| Key | Meaning |
+|---|---|
+| `front_edge` | `min_x` or `max_x`: the plate edge facing the user, for the view only (ADR 0369) |
+| `[plate_inset]` | `min_x_mm` … `max_y_mm`: a margin the machine cannot cure; a part in it warns, never clips (ADR 0371) |
+| `display.binary_only` | The masks carry no grey, whatever the format could hold (ADR 0377) |
+| `display.grey_min`, `display.grey_max` | The greys an edge pixel is spread over, 0–255 (ADR 0378) |
+| `[buffer]` | The HALOT buffer's default, which a resin overrides (ADR 0370) |
+| `[limits.second_stage]`, `[locked.second_stage]` | Limits and locks of the peel's second stage (ADR 0363, 0368) |
+
 ## What the machine locks
 
 A printer file's `[locked]` table takes any key of a resin's per-printer table, and
@@ -229,7 +240,7 @@ machine: it goes over the resin's own and its per-printer table, the window leav
 out, and every file and estimate for the machine states it (ADR 0301). A shipped machine takes
 its table from the build, whatever the user's copy of it says.
 
-What is locked is what the vendor slicer hides for that machine, at the default it writes:
+What is locked is what the maker hides for that machine, at the maker's default:
 every lift and retract at 0.05 on the tilting vats, resting alone on two of them; the light
 power at 255 and the transition at 0 on older Chitu boards; light-off waiting on Anycubic and
 Halot machines; the bottom peel on a Halot Mage.
@@ -256,13 +267,13 @@ measure it: `docs/design/compensation.md` (ADR 0144).
 
 ## Where the numbers come from
 
-Every shipped file is kept by hand. A machine the vendor's own slicer has a profile for
-carries that profile's panel, travel, mirroring, front edge and machine name; the rest are transcribed
+Every shipped file is kept by hand. A machine with the maker's settings
+carries their panel, travel, mirroring, front edge and machine name; the rest are transcribed
 from a published specification (ADR 0359). None is a measurement: an exposure test on the
 actual machine is what replaces them, and a corrected file in the user directory is how it
 is kept.
 
-Adding a machine is writing one file: facts, not the vendor's file, in our own schema, and
+Adding a machine is writing one file: facts, not a copied file, in our own schema, and
 only for a container we write. A `.ctb` older than version 4 points at version 4, the
 oldest we write, says so in its header and clears `firmware.per_layer_settings`. Every
 shipped profile has to load and resolve, its pixel pitch has to be plausible, and it has to

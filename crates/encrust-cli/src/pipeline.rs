@@ -428,22 +428,19 @@ fn adaptive_settings(job: &JobArgs, layer_height: Scalar, talk: bool) -> Adaptiv
     settings
 }
 
-/// What the command line sets over the panel the printer profile describes, warning when it
-/// asks for grey a binary-only `printer` does not take.
-pub fn overrides_of(
-    args: &RasterArgs,
-    printer: Option<&PrinterProfile>,
-    talk: bool,
-) -> PanelOverrides {
+/// Warns when the command line asks for grey a binary-only `printer` does not take.
+pub fn warn_if_grey_ignored(args: &RasterArgs, printer: Option<&PrinterProfile>) {
     let asks_grey = args.grey_levels.is_some() || args.grey_range.is_some() || args.blur != 0;
-    if let Some(printer) =
-        printer.filter(|printer| talk && asks_grey && printer.display.binary_only)
-    {
+    if let Some(printer) = printer.filter(|printer| asks_grey && printer.display.binary_only) {
         tracing::warn!(
             "{} takes masks without grey, so --grey-levels, --grey-range and --blur change nothing",
             printer.name
         );
     }
+}
+
+/// What the command line sets over the panel the printer profile describes.
+pub fn overrides_of(args: &RasterArgs) -> PanelOverrides {
     PanelOverrides {
         shading: if args.no_anti_alias {
             Shading::Binary

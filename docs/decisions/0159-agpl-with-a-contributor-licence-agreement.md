@@ -10,13 +10,13 @@ The repository is private and, until now, inconsistently licensed: `Cargo.toml` 
 public forces the question, because the choice binds every later one.
 
 Three facts shape it. Encrust competes with two subscription products whose paid tiers are
-automation — supports, hollowing, risk detection — and with vendor slicers paid for by the
+automation — supports, hollowing, risk detection — and with makers' own software paid for by the
 hardware they sell. It needs printer profiles that only owners of those printers can
 produce, which is why it has to be open at all. And it must be able to carry its own cost
 one day: the nearest comparable project is AGPL with no paid tier, has around 700 000
 release downloads, and has not met a goal of 25 recurring sponsors.
 
-MPL-2.0 is weak copyleft per file. A competitor or a printer vendor could take the cores,
+MPL-2.0 is weak copyleft per file. A competitor or a printer maker could take the cores,
 build a closed product on them, and return only edits to our own files. That is the one
 outcome that would make the work unpaid *and* unattributed.
 
@@ -37,26 +37,26 @@ only ever be something that is not in that list.
 
 ## Consequences
 
-A fork, a vendor build and a hosted service all have to stay open. The profiles and fixes
+A fork, a maker's build and a hosted service all have to stay open. The profiles and fixes
 the project depends on come back. The licence is the one this corner of 3D printing already
 understands, and it was the basis on which the Software
-Freedom Conservancy held a printer vendor to account in 2025 — a precedent worth standing behind.
+Freedom Conservancy held a printer maker to account in 2025 — a precedent worth standing behind.
 
 The costs are real. AGPL is refused outright by some corporate legal departments, so a
-printer vendor wanting Encrust inside a closed product must buy an exception rather than
+printer maker wanting Encrust inside a closed product must buy an exception rather than
 just take it; the CLA is what makes selling that exception possible, and it is also
 friction on a first-time contributor and a thing some people refuse on principle. A
 contribution accepted without a signature would remove the ability to dual-licence, so the
 workflow blocks the merge rather than trusting the review.
 
-Reopen this if the AGPL is demonstrably costing more vendor conversations than exceptions
+Reopen this if the AGPL is demonstrably costing more conversations with makers than exceptions
 it sells, or if the project ever accepts an unsigned contribution it cannot remove.
 
 ## Alternatives considered
 
 ### Keep MPL-2.0
 
-Friendliest to the vendors we most want to talk to, and already written in `Cargo.toml`.
+Friendliest to the makers we most want to talk to, and already written in `Cargo.toml`.
 Rejected because it permits exactly the failure mode that matters: a closed competitor
 built on these cores, with nothing owed back.
 

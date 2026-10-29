@@ -39,7 +39,7 @@ pub(crate) fn write_definition(
     let bottom = material.is_bottom_layer(index);
 
     // Pause position, then the layer position. A layer that pauses stops where it is, as a
-    // vendor file carries it; the machine's Z travel here moves the plate off the print.
+    // printed file carries it; the machine's Z travel here moves the plate off the print.
     order.put_u16(fields, 0)?;
     order.put_f32(fields, job.layer_z_mm(index))?;
     order.put_f32(fields, job.layer_z_mm(index))?;

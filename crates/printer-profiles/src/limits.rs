@@ -1,5 +1,5 @@
-//! What a machine's own slicer profile lets each resin setting take, and the narrower span
-//! its maker advises. See `docs/decisions/0369-a-printer-states-the-limits-of-a-resin.md`.
+//! The span a machine lets each resin setting take, and the narrower span
+//! its maker advises. See `docs/decisions/0368-a-printer-states-the-limits-of-a-resin.md`.
 
 use std::ops::RangeInclusive;
 

@@ -5,9 +5,9 @@
 
 ## Context
 
-Four machines in the vendor's own catalogue read a container we did not write: the PioNext
+Four machines in the makers' line-ups read a container we did not write: the PioNext
 D158 and D160 a `.cxline`, the Phrozen Sonic Mini a `.phz`, the Anycubic Photon S a
-`.photons`. Their writers, read statically out of the vendor's slicer, settle what each is:
+`.photons`. What each is:
 
 - `.cxline` is the `.cxdlp` version 3 header, previews, settings, footer and checksum, with a
   layer held as polygons in micrometres instead of vertical lines.
@@ -45,7 +45,7 @@ is read back. Layouts are in `docs/formats/cxline.md`, `phz.md` and `photons.md`
 Four machines are in the catalogue. `core-raster` now turns a mask back into rings as well
 as contours into masks. A fix to the `.fdg` sink lands in `.phz` with it, and a break of it
 breaks both. None of the four has printed a file from here; the signal to revisit is a file
-sliced for one of them by the vendor, compared byte for byte, or a machine that refuses ours.
+printed on one of them, compared byte for byte, or a machine that refuses ours.
 
 ## Alternatives considered
 
@@ -53,7 +53,7 @@ sliced for one of them by the vendor, compared byte for byte, or a machine that 
 
 What ADR 0148 asks by default. It lost because `.cxline` would reach the `.cxdlp` blocks
 and checksum and `.phz` the `.fdg` sink only across a forbidden edge, or by moving one
-vendor's blocks into `core-format`.
+maker's blocks into `core-format`.
 
 ### A copy of the `.fdg` sink for `.phz`
 
@@ -62,6 +62,6 @@ Fewer moving parts in `fdg.rs`. It lost because the two would be the same 150 li
 ### The option that won, and what it costs
 
 `format-creality` gains two dependencies for one reader, and `format-chitu`'s `.fdg` sink
-carries a function pointer it did not need alone. The vendor's own oddities are kept where a
+carries a function pointer it did not need alone. The format's oddities are kept where a
 machine might read them — the `.photons` lit count missing a layer's last stretch, the
 D158's model code — and dropped where they lose data: the `.cxline` preview's green bits.

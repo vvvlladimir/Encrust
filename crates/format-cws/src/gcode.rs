@@ -27,7 +27,7 @@ pub(crate) fn preamble(job: &PrintJob) -> String {
     text
 }
 
-/// The settings header, `;(Key = value)` a line, in the order a vendor file carries them.
+/// The settings header, `;(Key = value)` a line, in the order a printed file carries them.
 ///
 /// The firmware ignores all of it and a slicer reads it back: the keys are spelt as the
 /// container spells them, spaces and all.

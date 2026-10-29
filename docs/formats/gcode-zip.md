@@ -16,7 +16,7 @@ whose per-layer values cost nothing — see ADR 0167.
 |---|---|
 | Two independent open-source readers and writers of the archive | The entry names, the header keys and their order, and the shape of a layer block |
 | A reference program a machine of this family printed | That the blocks are absolute moves in mm, speeds in mm/min and dwells in milliseconds |
-| The vendor's own slicer profiles of all 24 machines and a file it wrote | The extra header keys, the block markers, the bottom light-off delay and the closing climb |
+| The makers' settings for all 24 machines and a known file | The extra header keys, the block markers, the bottom light-off delay and the closing climb |
 
 Three things the reference settles:
 
@@ -128,11 +128,11 @@ A retract shorter than the lift is written as two moves, because the plate has t
 the layer's own Z before the light goes on. A bottom layer uses the bottom lift distance,
 speed and PWM, and comes back down from exactly where it went, as in every other container.
 
-The program closes the way the vendor's profile closes it on every machine of this
+The program closes the way known files close it on every machine of this
 container: one `G1` to the top of the travel at 25 mm/min.
 
-A reader takes a layer's Z from either `;PositionZ:0.05mm`, which we write, or the vendor's
-bare `;currPos:0.05`, and the light's power as an integer or a decimal, `M106 S255.000000`.
+A reader takes a layer's Z from either `;PositionZ:0.05mm`, which we write, or the
+bare `;currPos:0.05` of known files, and the light's power as an integer or a decimal, `M106 S255.000000`.
 
 ## What the container cannot carry
 

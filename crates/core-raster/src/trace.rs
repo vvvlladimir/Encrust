@@ -1,8 +1,5 @@
-//! Turning an exposure mask back into the polygons a vector container holds.
-//!
-//! The boundary between a lit pixel and a dark one is a unit step on the pixel grid, so
-//! the outline of a layer is the set of those steps stitched into closed rings. See
-//! `docs/formats/svgx.md`.
+//! Turning an exposure mask back into the polygons a vector container holds, by stitching
+//! the grid steps between lit and dark pixels into rings; see `docs/formats/svgx.md`.
 
 use crate::LayerRuns;
 
@@ -24,10 +21,7 @@ type Span = (u32, u32);
 type Edge = (Corner, Corner);
 
 /// The rings of one layer, holes included, each closed and without its first corner
-/// repeated at the end.
-///
-/// The work is proportional to the runs of the layer rather than to the panel, which is
-/// what keeps a stack of empty 4K layers from costing a second each.
+/// repeated at the end. The work grows with the layer's runs, not with the panel.
 pub fn rings_of(layer: &LayerRuns) -> Vec<Ring> {
     stitch(boundary_edges(&lit_spans(layer)))
 }
@@ -63,11 +57,8 @@ fn push_span(rows: &mut [Vec<Span>], width: u64, from: u64, to: u64) {
     }
 }
 
-/// Every step along the boundary, a whole stretch at a time.
-///
-/// A corner the outline has to turn at is always an end of one of these stretches: a
-/// vertical step can only meet a horizontal one where the row above or below changes,
-/// which is where the difference below is cut.
+/// Every step along the boundary, a whole stretch at a time; a turn only falls at a
+/// stretch's end, see `docs/formats/svgx.md`.
 fn boundary_edges(rows: &[Vec<Span>]) -> Vec<Edge> {
     let none: [Span; 0] = [];
     let mut edges = Vec::new();

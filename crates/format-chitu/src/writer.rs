@@ -40,7 +40,7 @@ impl CtbVersion {
     }
 
     /// The slicer info's flag word: in its high byte whether the machine is to obey the
-    /// per-layer blocks, which the vendor leaves clear while every layer is the header's.
+    /// per-layer blocks, left clear while every layer is the header's.
     pub(crate) fn flags(self, job: &PrintJob) -> u32 {
         let per_layer = if job.varies_by_layer() {
             self.per_layer_settings()
@@ -66,8 +66,8 @@ impl CtbVersion {
     }
 }
 
-/// The key the layers are covered with: any but zero reads the same, and the vendor's
-/// slicer never writes zero in a `.ctb`, `.fdg` or `.phz`; see `docs/decisions/0365`.
+/// The key the layers are covered with: any but zero reads the same, and a printed
+/// `.ctb`, `.fdg` or `.phz` never carries zero; see `docs/decisions/0365`.
 pub(crate) fn encryption_key(job: &PrintJob) -> u32 {
     job.created_unix_s as u32 | 1
 }
@@ -213,7 +213,7 @@ impl LayerSink for CtbSink<'_> {
         self.fields.seek_to(
             u64::from(self.offsets.layer_table) + table.len() as u64 + self.layers_crc_len(),
         )?;
-        // The file ends with the CRC of everything before it, as the vendor's slicer ends it.
+        // The file ends with the CRC of everything before it.
         self.fields.u32_le(crc.zlib())?;
         self.fields.flush()?;
         Ok(())

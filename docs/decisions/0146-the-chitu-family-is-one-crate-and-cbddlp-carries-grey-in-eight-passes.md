@@ -63,12 +63,12 @@ a new global constant.
 The shape the architecture rules point at for a new format. It lost because the shared code
 is the whole front of the file, and rule 5 would then push the header, the RGB15 preview
 codec and the print parameters down into `core-format` — where they are not common to every
-format but specific to one vendor. The readers that cover the family reach the same
+format but specific to one maker. The readers that cover the family reach the same
 conclusion, with one class for every extension in it.
 
 ### One pass, and no grey
 
-Half a megabyte a layer instead of four, and what the vendor slicer itself writes when a user turns
+Half a megabyte a layer instead of four, and what known files carry with
 anti-aliasing off. It lost on ADR 0139: a single pass thresholds at 255, so it does not
 merely coarsen the edge, it deletes it.
 

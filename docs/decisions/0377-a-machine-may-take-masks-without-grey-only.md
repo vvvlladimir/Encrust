@@ -1,15 +1,15 @@
-# 0378. A machine may take masks without grey only
+# 0377. A machine may take masks without grey only
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
 
 ## Context
 
-The vendor's slicer keeps anti-aliasing off, and hides the setting, for six machines we
+The makers keep anti-aliasing off, and do not offer the setting, for six machines we
 ship: the Creality HALOT-X1, X1 Max, X1 Neo and SKY 2025, and the PIOCREAT PioNext Mini and
 Ultra, all `.cxdlpv4`. Its machine profiles say so (`advanced.bantialiasing` hidden and
-off). We offered grey on every machine, so a file for these carried masks no file from
-the vendor ever does. Whether their firmware misreads grey is not known; no vendor file
+off). We offered grey on every machine, so a file for these carried masks no known file
+ever does. Whether their firmware misreads grey is not known; no known file
 with grey exists to compare against.
 
 ## Decision
@@ -25,7 +25,7 @@ warns when `--grey-levels`, `--grey-range` or `--blur` is given for it.
 
 Another such machine is a line in its profile. A plate or project made with grey on
 another machine slices without it here, and goes back to its own settings on a machine
-that takes grey, since the plate's choice is kept, only overruled. If a vendor file with
+that takes grey, since the plate's choice is kept, only overruled. If a known file with
 grey turns up for one of these machines, the line comes out of its profile.
 
 ## Alternatives considered

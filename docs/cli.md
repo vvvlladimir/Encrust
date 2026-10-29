@@ -33,8 +33,8 @@ is of the model as import leaves it; turns and bridges go first, drops last, bef
 so a feature thinner than a layer is kept. A mask is
 shaded as the printer profile says unless `--no-anti-alias` lights each pixel fully or not
 at all, `--grey-levels N` rounds its edges to N greys, `--grey-range MIN..MAX` spreads
-edge greys over that range in place of the profile's (ADR 0379) or `--blur PX` fades every
-edge. A printer whose profile states `binary_only` takes no grey: the three are ignored for it, with a warning (ADR 0378).
+edge greys over that range in place of the profile's (ADR 0378) or `--blur PX` fades every
+edge. A printer whose profile states `binary_only` takes no grey: the three are ignored for it, with a warning (ADR 0377).
 
 ```sh
 encrust profiles list
@@ -107,12 +107,12 @@ The output extension picks the format (ADR 0047): `.goo`, `.prz`, `.ctb`, `.cbdd
 name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
 and a run that cannot write the file it was asked for fails rather than reports success.
 A `.ctb` name is written at the revision the printer profile names: version 5, or the
-encrypted container for a panel past 4095 pixels a side, as the vendor slicer writes them
+encrypted container for a panel past 4095 pixels a side, as the printers read them
 (ADR 0298, 0365). `--ctb-version 4`, `5` or `encrypted` overrides it, and is read only by a
 `.ctb` name. A `.cxdlp` or `.cxdlpv4` name is written at the revision the printer
 profile names, as the Halot Mage and X1 lines name 4, else at the one the name says
-(ADR 0168, 0368). A `.goo` name is written at revision 5.1 where the printer profile names
-it, as the Jupiter 2's does, else at 3.0 (ADR 0377).
+(ADR 0168, 0367). A `.goo` name is written at revision 5.1 where the printer profile names
+it, as the Jupiter 2's does, else at 3.0 (ADR 0376).
 
 Each container pays for grey differently. A `.cbddlp` carries it in eight one-bit passes, so
 it is eight times the layer data of the others (ADR 0146). An Anycubic file carries four bits
@@ -354,10 +354,10 @@ resin has one, and the layers likely to fail. `--strict` fails it on the same de
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
-reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0372).
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371).
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
-advises, and write the file as asked (ADR 0369).
+advises, and write the file as asked (ADR 0368).
 
 `info --layer N` reports one layer of a sliced file, counted from one as a printer's screen
 counts: where it tops out, how thick it is, how long it burns and how much of the panel it
@@ -412,7 +412,7 @@ gives; where several share the panel and the file names none, `--printer ID` say
 (ADR 0293):
 
 ```sh
-encrust profiles import vendor.goo
+encrust profiles import printed.goo
 ```
 
 A `.cfgx` or `.ini` another program exported its resin as is read the same way, with its

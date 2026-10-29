@@ -136,6 +136,51 @@ fn a_whole_copy_an_older_release_left_keeps_its_printers_on_the_network() {
 }
 
 #[test]
+fn a_whole_copy_no_longer_valid_still_keeps_its_printers_on_the_network() {
+    in_its_own_dir("edits-old-stale", |dir, catalogue| {
+        let shipped = catalogue.shipped_printer(LD_002H).expect("shipped");
+        let old = PrinterProfile {
+            machines: vec![crate::NetworkMachine {
+                name: "Shelf".to_owned(),
+                address: "192.168.1.40".to_owned(),
+                board: None,
+            }],
+            ..shipped.clone()
+        };
+        let path = file(dir, LD_002H);
+        let mut stale: Table =
+            toml::from_str(&old.to_toml_string(&path).expect("valid")).expect("TOML");
+        stale.remove("display");
+        std::fs::create_dir_all(path.parent().expect("in a folder")).expect("writable");
+        std::fs::write(&path, toml::to_string(&stale).expect("TOML")).expect("writable");
+
+        let catalogue = Catalogue::with_root(dir).expect("reads");
+        let entry = catalogue.printer(LD_002H).expect("still installed");
+        assert_eq!(entry.profile.machines, old.machines);
+    });
+}
+
+#[test]
+fn a_whole_copy_whose_printers_do_not_read_is_left_as_it_is() {
+    in_its_own_dir("edits-old-bad-machines", |dir, _| {
+        let path = file(dir, LD_002H);
+        let copy = "machines = [{ address = 40 }]\n";
+        std::fs::create_dir_all(path.parent().expect("in a folder")).expect("writable");
+        std::fs::write(&path, copy).expect("writable");
+
+        let catalogue = Catalogue::with_root(dir).expect("reads");
+        assert!(
+            catalogue
+                .unreadable()
+                .iter()
+                .any(|bad| bad.id == LD_002H && matches!(*bad.error, ProfileError::Parse { .. })),
+            "listed as unreadable"
+        );
+        assert_eq!(std::fs::read_to_string(&path).expect("kept"), copy);
+    });
+}
+
+#[test]
 fn a_printer_of_their_own_is_read_as_it_stands() {
     in_its_own_dir("edits-own", |dir, _| {
         let path = file(dir, "my-printer");

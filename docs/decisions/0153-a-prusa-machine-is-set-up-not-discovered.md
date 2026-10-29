@@ -48,7 +48,7 @@ A machine the user set up stays in the menu whether it answered the last scan or
 configuration, not a sighting — while a board that stopped answering drops out and takes the
 destination with it. `forget_prusa` is therefore a button, because nothing else removes one.
 
-The credentials are plaintext in a file in the user's config directory. The vendor's own
+The credentials are plaintext in a file in the user's config directory. The maker's own
 client holds the same field the same way, so this is the level of protection a user of
 these machines already has, but it is worth stating rather than implying. Reopen this if the
 window ever holds a secret that is not a local printer password.

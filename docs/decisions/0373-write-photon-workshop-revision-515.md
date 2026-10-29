@@ -1,4 +1,4 @@
-# 0374. Write revision 515 of the Photon Workshop container
+# 0373. Write revision 515 of the Photon Workshop container
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
@@ -6,7 +6,7 @@
 ## Context
 
 ADR 0166 left 515 unwritten, as no published machine profile asked for it. The Photon Mono,
-Mono SE, Mono SQ and Ultra are 515 machines: it is the revision the vendor's slicer states
+Mono SE, Mono SQ and Ultra are 515 machines: it is the revision known files state
 for their extensions (`docs/formats/anycubic.md`), and they were written as 516 until now.
 
 ## Decision
@@ -17,15 +17,15 @@ revision names and passes over the rest (`docs/formats/anycubic.md`).
 
 ## Consequences
 
-The four machines get the revision the vendor writes for them, read back by our reader alike;
+The four machines get the revision their files carry, read back by our reader alike;
 a file of theirs written before this states 516 and still reads here. Reopen on a 515 machine
-that refuses a file of ours, or one the vendor writes that differs from it.
+that refuses a file of ours, or a known one that differs from it.
 
 ## Alternatives considered
 
 ### Keep writing 516 for them
 
-What the vendor never writes for these machines, which only a print on each could show safe.
+What no known file carries for these machines, which only a print on each could show safe.
 
 ### The option that won, and what it costs
 

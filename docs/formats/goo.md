@@ -61,7 +61,7 @@ profile.
 | 195318 | X and Y mirror, `bool` each | see *Mirroring* below |
 | 195320 | X, Y, Z size, `f32` each | illuminated area and the machine's Z travel, mm |
 | 195332 | layer thickness, `f32` | the height actually sliced at, not the profile's |
-| 195340 | exposure delay mode, `bool` | always `true`, as both of the vendor's writers do; see below |
+| 195340 | exposure delay mode, `bool` | always `true`, as in every known file; see below |
 | 195341 | turn off time, then six static waits, `f32` each | the light-off delay or zero; before lift, after lift, after retract, for the bottom layers and then the rest |
 | 195445 | advance mode, `bool` | see below |
 | 195458 | total price, `f32`, then its unit as 8 bytes | what the job costs in the resin's own currency, `€/L` or `$/kg`; zero for a resin with no price |
@@ -77,12 +77,12 @@ part of the fixed header, so the bytes cannot be left out either way. A pixel is
 *Advance mode* tells the printer to read exposure and motion from each
 layer rather than from the header. We set it whenever a layer's exposure differs from the
 header's — transition layers, or a band of height (ADR 0090) — and only on a machine whose
-profile says it reads the per-layer tables (ADR 0141). A vendor file leaves it clear for an
+profile says it reads the per-layer tables (ADR 0141). A known file leaves it clear for an
 Elegoo Saturn 4 Ultra and lets the machine ramp the bottom block off the header. It also
 states 0.05 in every lift and retract field, distance and speed, which the machine's
 profile locks (ADR 0301): a file stating 6 mm made the plate rise again after the tilt.
 
-*Exposure delay mode* is the constant 1 in the vendor's own `.goo` writers, V3 and V5 alike,
+*Exposure delay mode* is the constant 1 in every known `.goo`, V3 and V5 alike,
 whether its resin waits by a light-off delay or by rests: the wait not taken is written as
 zeros instead. We write the same, and a reader tells the mode from the values — any rest
 above zero is resting, else the light-off delay — never from the byte.
@@ -90,7 +90,7 @@ above zero is resting, else the light-off delay — never from the byte.
 ### Mirroring
 
 Row zero of a layer is the near edge of the plate on an X-mirrored machine and its far edge
-on any other, which is how the vendor's files print the right way round (ADR 0134, 0366).
+on any other, which is how known files print the right way round (ADR 0134, 0366).
 
 The mirror flags say how the panel is mounted, and come from `PrinterProfile::mirror_x` and
 `mirror_y` rather than from the mask, which carries no mirroring. Readers take them to
@@ -163,16 +163,16 @@ value the previous layer left behind.
 
 ## Revision 5.1
 
-What the vendor's slicer writes for the Elegoo Jupiter 2, and so what we write when a
-profile's `output` is `goo5` (ADR 0377). Read from its files and its writer.
+What the Elegoo Jupiter 2 reads, and so what we write when a
+profile's `output` is `goo5` (ADR 0376). Read from known files.
 
 **Every multi-byte field is little-endian**, the previews included. The header up to the
 transition layers is the version 3.0 header at the same offsets, but for:
 
 - the version, `V5.1`;
 - the first-stage retract, header and layers alike: the resin's retract less the layer's
-  thickness, the travel down that leaves the plate a layer higher. A vendor file with a
-  2 mm lift at 0.05 mm states 1.95; its window has no retract distance of its own.
+  thickness, the travel down that leaves the plate a layer higher. A known file with a
+  2 mm lift at 0.05 mm states 1.95.
 
 Behind the header, at 195477, come fifteen bytes and three tables, every offset absolute:
 

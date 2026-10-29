@@ -18,8 +18,8 @@ pub(crate) const VERSION: u16 = 1;
 pub(crate) const MACHINE_BLOCK_BYTES: usize = 64;
 const VOLUME_IN_BLOCK: u64 = 0x12;
 
-/// The model code the header names: the vendor writer maps the D158 to `CD60` and passes
-/// every other name through, the D160's included.
+/// The model code the header names: the D158 is `CD60` and every other name passes
+/// through as it stands, the D160's included.
 pub fn cxline_model_code(machine_name: &str) -> &str {
     match machine_name {
         "D158" => "CD60",
@@ -43,7 +43,7 @@ pub(crate) fn write_header(fields: &mut Fields<'_>, job: &PrintJob) -> io::Resul
     // masks already (`docs/design/compensation.md`).
     fields.u32_be(0)?;
     fields.f32_be(0.0)?;
-    // The blur a binary panel states, as the vendor writes it.
+    // The blur a binary panel states.
     fields.u32_be(u32::from(job.raster.stated_blur_px()))?;
     fields.u16_be(tenths(job.header_exposure_s()))?;
     fields.f32_be(job.volume_mm3 / 1000.0)?;

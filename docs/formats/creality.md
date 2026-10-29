@@ -18,15 +18,15 @@ in common; the field behind the magic is what a reader picks on (ADR 0168).
 Three things worth stating before the tables:
 
 1. **The model code is matched by the firmware.** The header carries `CL-60`, `R012` and the
-   like: the vendor slicer's own code for a machine name it knows (`HALOT-X1 Max` is `R012`),
+   like: the maker's own code for a machine name it lists (`HALOT-X1 Max` is `R012`),
    else a `CL` or `CT` code picked out of the name; a profile with neither is refused rather
-   than guessed at. A shipped machine the vendor has no code for (`HALOT-PLAY`, `HALOT-R6`,
-   `PIOCREAT C02`) carries its name, as the vendor writer does with any name it does not know.
+   than guessed at. A shipped machine with no listed code (`HALOT-PLAY`, `HALOT-R6`,
+   `PIOCREAT C02`) carries its name, as known files do for any unlisted name.
 2. **An exposure is in tenths of a second in version 3** while the bottom exposure beside
    it is in whole seconds, and the wait before cure is whole seconds with the fraction
-   dropped, as the vendor writes it.
-3. **The area fields** state what a layer cures in square millimetres times a thousand. A
-   vendor slicer writes the largest island; we write everything the layer lights, because a
+   dropped, as known files carry it.
+3. **The area fields** state what a layer cures in square millimetres times a thousand. Known
+   files state the largest island; we write everything the layer lights, because a
    writer of ours is handed runs and not contours. Nothing in the firmware is known to read
    it beyond showing it.
 
@@ -63,7 +63,7 @@ The speeds are millimetres a second where our profiles hold millimetres a minute
 corrections in the version 3 block — distortion, XY and Z compensation, each a flag and a
 little-endian value — are written off, ours being in the masks
 (`docs/design/compensation.md`). Five bytes follow: the anti-alias level (4 with it off),
-0, 0, 1 and the blur (2 with none), the vendor's bytes.
+0, 0, 1 and the blur (2 with none), the bytes known files carry.
 
 ### A layer
 
@@ -87,7 +87,7 @@ own runs, which is why this is the one codec that expands a mask to pixels first
 ## Version 4
 
 The same magic and revision field, then the tables of the `.ctb` family, little-endian.
-`docs/formats/chitu.md` describes the two blocks; what differs, checked against the vendor's
+`docs/formats/chitu.md` describes the two blocks; what differs, checked against a known
 file for the HALOT X1 Max:
 
 | Offset | Type | Field |
@@ -98,17 +98,17 @@ file for the HALOT X1 Max:
 | — | f32 ×3 | build volume x, y, z, millimetres |
 | — | f32, f32 | print height, layer height |
 | — | u32 | bottom layer count |
-| — | u32 ×6 | small preview, layer table, layer count, large preview, print time, projector type (0, as the vendor writes it on a mirrored panel too) |
+| — | u32 ×6 | small preview, layer table, layer count, large preview, print time, projector type (0, as known files carry it on a mirrored panel too) |
 | — | u32, u32 | print parameters offset and its size, 68 |
-| — | u32 | anti-alias level, 4 with it off, as the vendor writes it |
+| — | u32 | anti-alias level, 4 with it off, as known files carry it |
 | — | u16, u16 | light PWM, bottom light PWM |
-| — | u32 | encryption key, 0, as the vendor writes it here |
+| — | u32 | encryption key, 0, as known files carry it here |
 | — | u32, u32 | slicer block offset and its size, 76 |
 
 The previews are the Chitu family's run-length RGB15 records at 120×120 and 300×300,
 smallest first. The print parameters and the slicer block are the `.ctb` blocks of the same
 names at 68 and 76 bytes. The print parameters end at 0x34 with the HALOT buffer: height in mm,
-speed in mm/min, the wait after it in s, `f32` each, then `u32` 1 when it is on (ADR 0371). A row of the layer table is 40 bytes — Z, exposure, light-off,
+speed in mm/min, the wait after it in s, `f32` each, then `u32` 1 when it is on (ADR 0370). A row of the layer table is 40 bytes — Z, exposure, light-off,
 address, size, data type 0, centroid distance, the area the layer cures in whole mm², two
 reserved words — and the address points at a 44-byte motion block whose eleven floats carry this layer's own lift,
 retract and rests, with the run-length data behind it. **The size field counts that block

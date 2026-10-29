@@ -1,6 +1,6 @@
 [package]
 name = "format-goo"
-description = "Writer for the Elegoo .goo sliced-file format."
+description = "Writer and reader for the Elegoo .goo sliced-file format."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

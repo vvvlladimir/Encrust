@@ -1,4 +1,4 @@
-# 0375. Write `.prz` as `.goo` and `.crmaslice` as the gcode archive
+# 0374. Write `.prz` as `.goo` and `.crmaslice` as the gcode archive
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
@@ -20,7 +20,7 @@ No crate is added.
 
 The Phrozen and Carima profiles ship with the container their machines read, and a file of
 theirs reads back here. A change to `.goo` or the archive reaches both at once. Reopen if
-either vendor's file diverges from the container it copies.
+either maker's file diverges from the container it copies.
 
 ## Alternatives considered
 

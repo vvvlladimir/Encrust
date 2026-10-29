@@ -146,7 +146,7 @@ fn the_bottom_block_waits_its_own_light_off_delay() {
 }
 
 #[test]
-fn the_header_states_what_the_vendor_header_adds() {
+fn the_header_states_transition_drop_speed_and_shrinkage() {
     let mut job = sample_job(4);
     job.material.transition_layers = 3;
     job.material.bottom_retract_speed_mm_min = 240.0;

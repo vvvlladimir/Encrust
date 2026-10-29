@@ -4,7 +4,7 @@ mod buffer;
 mod motion;
 
 use printer_profiles::{
-    Limit, MaterialProfile, PriceUnit, PrinterLimits, PrinterTuning, ResinDetails, WaitMode,
+    Buffer, Limit, MaterialProfile, PriceUnit, PrinterLimits, PrinterTuning, ResinDetails, WaitMode,
 };
 
 use crate::i18n::tr;
@@ -37,20 +37,7 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         .as_ref()
         .map_or_else(String::new, |printer| printer.values.name.clone());
     let current = resin.draft.values.name.clone();
-    let (locked, limits, machine_buffer) = window
-        .machine
-        .slicing
-        .catalogue
-        .printer(&resin.printer)
-        .map(|entry| {
-            let profile = &entry.profile;
-            (
-                profile.locked.clone(),
-                profile.limits.clone(),
-                profile.buffer,
-            )
-        })
-        .unwrap_or_default();
+    let hold = machine_hold(window, &resin.printer);
 
     let mut renamed = None;
     form_card(ui, &tr!("resin-resin"), |ui| {
@@ -60,40 +47,14 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         }
     });
     if let Some(resin) = window.machine.settings.resin.as_mut() {
-        form_card(
-            ui,
-            &tr!("resin-exposure-on", printer = printer.clone()),
-            |ui| {
-                describe(ui, &tr!("print-exposure-help"));
-                light(ui, resin, &locked, &limits);
-            },
-        );
-        let values = &mut resin.draft.values;
-        if !locked.locks_waiting() {
-            form_card(ui, &tr!("resin-waits"), |ui| {
-                describe(ui, &tr!("print-waiting-help"));
-                waits(ui, values, &locked, &limits);
-            });
-        }
-        if !locked.locks_motion() {
-            form_card(ui, &tr!("print-motion"), |ui| {
-                describe(ui, &tr!("print-motion-help"));
-                motion::rows(ui, values, &locked, &limits);
-            });
-        }
-        if let Some(machine) = machine_buffer {
-            form_card(ui, &tr!("resin-buffer"), |ui| {
-                describe(ui, &tr!("resin-buffer-help"));
-                buffer::rows(ui, values, machine);
-            });
-        }
+        cards(ui, resin, &printer, &hold);
     }
     if let Some(resin) = window
         .machine
         .settings
         .resin
         .as_mut()
-        .filter(|_| locked.compensation.is_none())
+        .filter(|_| hold.locked.compensation.is_none())
     {
         let values = &mut resin.draft.values.compensation;
         let calculators = &mut window.machine.settings.calculators;
@@ -106,6 +67,60 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         rename(window, &name);
     } else if settled(ui) {
         autosave(window.machine);
+    }
+}
+
+/// What the printer a resin sits under holds it to.
+#[derive(Default)]
+struct MachineHold {
+    locked: PrinterTuning,
+    limits: PrinterLimits,
+    buffer: Option<Buffer>,
+}
+
+fn machine_hold(window: &Window, printer: &str) -> MachineHold {
+    window
+        .machine
+        .slicing
+        .catalogue
+        .printer(printer)
+        .map(|entry| MachineHold {
+            locked: entry.profile.locked.clone(),
+            limits: entry.profile.limits.clone(),
+            buffer: entry.profile.buffer,
+        })
+        .unwrap_or_default()
+}
+
+/// The exposure, waits, motion and buffer cards, each where the printer leaves it open.
+fn cards(ui: &mut egui::Ui, resin: &mut ResinDraft, printer: &str, hold: &MachineHold) {
+    let MachineHold {
+        locked,
+        limits,
+        buffer,
+    } = hold;
+    form_card(ui, &tr!("resin-exposure-on", printer = printer), |ui| {
+        describe(ui, &tr!("print-exposure-help"));
+        light(ui, resin, locked, limits);
+    });
+    let values = &mut resin.draft.values;
+    if !locked.locks_waiting() {
+        form_card(ui, &tr!("resin-waits"), |ui| {
+            describe(ui, &tr!("print-waiting-help"));
+            waits(ui, values, locked, limits);
+        });
+    }
+    if !locked.locks_motion() {
+        form_card(ui, &tr!("print-motion"), |ui| {
+            describe(ui, &tr!("print-motion-help"));
+            motion::rows(ui, values, locked, limits);
+        });
+    }
+    if let Some(machine) = *buffer {
+        form_card(ui, &tr!("resin-buffer"), |ui| {
+            describe(ui, &tr!("resin-buffer-help"));
+            buffer::rows(ui, values, machine);
+        });
     }
 }
 
@@ -244,7 +259,7 @@ fn waits(
     match locked.held_wait_mode().unwrap_or(values.waits.mode) {
         WaitMode::LightOff => {
             if locked.light_off_delay_s.is_none() {
-                let held = held(&limits.light_off_delay_s);
+                let held = Held::unexplained(&limits.light_off_delay_s);
                 held_seconds_row(
                     ui,
                     &tr!("print-light-off"),
@@ -257,7 +272,7 @@ fn waits(
                     .bottom_light_off_delay_s
                     .unwrap_or(values.light_off_delay_s);
                 let mut bottom = was;
-                let held = held(&limits.bottom_light_off_delay_s);
+                let held = Held::unexplained(&limits.bottom_light_off_delay_s);
                 held_seconds_row(ui, &tr!("resin-bottom-light-off"), &mut bottom, held);
                 if bottom != was {
                     values.bottom_light_off_delay_s = Some(bottom);
@@ -294,11 +309,6 @@ fn held_seconds_row(ui: &mut egui::Ui, label: &str, value: &mut f32, held: Held<
     );
 }
 
-/// A limit the maker gives no reason for.
-fn held(limit: &Limit) -> Held<'_> {
-    Held { limit, why: None }
-}
-
 /// Exposure: how long each layer is lit, and how hard. The exposure is measured at the
 /// layer height above it and follows it, saying so until it is touched.
 fn light(
@@ -307,25 +317,8 @@ fn light(
     locked: &PrinterTuning,
     limits: &PrinterLimits,
 ) {
-    let mut layer_height_mm = resin.draft.values.layer_height_mm;
-    let why = tr!("limit-why-thin-layer");
-    let held_height = Held {
-        limit: &limits.layer_height_mm,
-        why: Some(&why),
-    };
-    if locked.layer_height_mm.is_none()
-        && limited_row(
-            ui,
-            &tr!("resin-layer-height"),
-            &mut layer_height_mm,
-            &tr!("unit-mm"),
-            FINE_STEP,
-            MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
-            Some(3),
-            held_height,
-        )
-    {
-        resin.set_layer_height(layer_height_mm);
+    if locked.layer_height_mm.is_none() {
+        layer_height_row(ui, resin, &limits.layer_height_mm);
     }
     let was = resin
         .carried()
@@ -335,20 +328,53 @@ fn light(
         bottom_and_power(ui, values, locked, limits);
         return;
     }
+    let carried = exposure_row(ui, values, &limits.exposure_s, was);
+    bottom_and_power(ui, values, locked, limits);
+    match carried {
+        Carried::Edited => resin.exposure_edited(),
+        Carried::Reverted => resin.revert_exposure(),
+        Carried::Untouched => {}
+    }
+}
+
+fn layer_height_row(ui: &mut egui::Ui, resin: &mut ResinDraft, limit: &Limit) {
+    let mut layer_height_mm = resin.draft.values.layer_height_mm;
+    if limited_row(
+        ui,
+        &tr!("resin-layer-height"),
+        &mut layer_height_mm,
+        &tr!("unit-mm"),
+        FINE_STEP,
+        MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
+        Some(3),
+        Held::layer_height(limit),
+    ) {
+        resin.set_layer_height(layer_height_mm);
+    }
+}
+
+/// The normal exposure, its verdict, and where it was carried from, `was` holding the
+/// exposure and the height it was measured at.
+fn exposure_row(
+    ui: &mut egui::Ui,
+    values: &mut MaterialProfile,
+    limit: &Limit,
+    was: Option<(f32, f32)>,
+) -> Carried {
+    let unit = tr!("unit-s");
     let carried = carried_row(
         ui,
         &tr!("print-exposure"),
         &mut values.exposure_s,
-        &tr!("unit-s"),
+        &unit,
         FINE_STEP,
-        limits.exposure_s.range(0.05..=120.0),
+        limit.range(0.05..=120.0),
         2,
         was.map(|(exposure_s, _)| exposure_s),
     );
-    let unit = tr!("unit-s");
     limit_verdict(
         ui,
-        held(&limits.exposure_s),
+        Held::unexplained(limit),
         values.exposure_s,
         &unit,
         Some(2),
@@ -364,12 +390,7 @@ fn light(
             ),
         );
     }
-    bottom_and_power(ui, values, locked, limits);
-    match carried {
-        Carried::Edited => resin.exposure_edited(),
-        Carried::Reverted => resin.revert_exposure(),
-        Carried::Untouched => {}
-    }
+    carried
 }
 
 /// The bottom block, the ramp out of it and the light's power, where the printer leaves
@@ -389,15 +410,11 @@ fn bottom_and_power(
             COARSE_STEP,
             0.05..=600.0,
             Some(2),
-            held(&limits.bottom_exposure_s),
+            Held::unexplained(&limits.bottom_exposure_s),
         );
     }
     if locked.bottom_layers.is_none() {
-        let why = tr!("limit-why-few-bottom-layers");
-        let held = Held {
-            limit: &limits.bottom_layers,
-            why: Some(&why),
-        };
+        let held = Held::bottom_layers(&limits.bottom_layers);
         let label = tr!("print-bottom-layers");
         limited_row(
             ui,
@@ -411,7 +428,7 @@ fn bottom_and_power(
         );
     }
     if locked.transition_layers.is_none() {
-        transition_row(ui, values, held(&limits.transition_layers));
+        transition_row(ui, values, Held::unexplained(&limits.transition_layers));
     }
     if locked.light_pwm.is_none() {
         pwm_row(ui, &tr!("resin-light-power"), &mut values.light_pwm);

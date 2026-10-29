@@ -172,7 +172,7 @@ fn a_bottom_layer_lifts_by_its_own_numbers() {
     assert_eq!(
         (f32_at(row(1) + 8), f32_at(row(1) + 12)),
         (5.0, 60.0),
-        "a row's speed is millimetres a minute, as the vendor writes it"
+        "a row's speed is millimetres a minute"
     );
 }
 

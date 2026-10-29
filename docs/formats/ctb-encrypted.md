@@ -8,9 +8,9 @@ so that a user's own file prints on the machine they own (ADR 0298).
 ## Where the knowledge comes from
 
 There is no published specification. The layout follows the open-source readers and writers
-of the container, checked against two files a vendor slicer wrote for a Saturn 4 Ultra (a
-trimmed copy of one is the crate's fixture) and, for what the writer lays down, against files
-the board vendor's own slicer wrote for the GK3 Ultra, Sonic Mega 8K S, Whale3 Super 14K and
+of the container, checked against two known files for a Saturn 4 Ultra (a
+trimmed copy of one is the crate's fixture) and, for what the writer lays down, against known
+files for the GK3 Ultra, Sonic Mega 8K S, Whale3 Super 14K and
 Mars 4 Ultra with one resin whose two-stage peel and bottom light-off were unique (ADR 0365).
 A file we write is opened by an open-source reader with its signature accepted.
 
@@ -54,12 +54,12 @@ where a page is 2^32 bytes: the layer pointers and the data address in a definit
 The settings are AES-256 in CBC mode with no padding, under one key and initialisation
 vector every file shares; they are in `format-ctb-encrypted/src/cipher.rs`. The signature is
 the SHA-256 of the settings' first eight bytes, the checksum, enciphered the same way. A
-reader that finds them differ refuses the file. We write a checksum of zero, as the vendor's
-version 5 does.
+reader that finds them differ refuses the file. We write a checksum of zero, as known
+version 5 files do.
 
 A layer's run-length data is the plain `.ctb`'s, covered with its layer cipher under the key
-at 0x80. A definition may also name a span of the data enciphered with AES, which the vendor
-files we have never use and we never write.
+at 0x80. A definition may also name a span of the data enciphered with AES, which the known
+files never use and we never write.
 
 ## Settings, 288 bytes
 
@@ -72,7 +72,7 @@ Offsets are into the deciphered block.
 | 0x08 | layer pointers address, `u32` |
 | 0x0C | display width, height, machine Z, `f32` each, mm |
 | 0x18 | two unknown words |
-| 0x20 | total height (0, as the vendor writes it), layer height, exposure, bottom exposure, light off delay, `f32` each |
+| 0x20 | total height (0, as known files carry it), layer height, exposure, bottom exposure, light off delay, `f32` each |
 | 0x34 | bottom layers, resolution X, Y, layer count, `u32` each |
 | 0x44 | large and small preview address, print time in s, projector type, `u32` each |
 | 0x54 | bottom lift, bottom lift speed, lift, lift speed, retract speed, `f32` each, mm and mm/min; each lift is both stages' whole climb |
@@ -115,11 +115,11 @@ The definition's offset within its page, the page, 88, and 0.
 
 ## Resin parameters, 40 bytes
 
-Padding, the colour (zero, as the vendor writes it), then the address and length of the resin
+Padding, the colour (zero, as known files carry it), then the address and length of the resin
 type, the resin name and the preset's name, the density in g/ml and padding; the three strings
 follow, as in the plain `.ctb`. Version 4 has no such block and its address is zero.
 
-## What we write differently from the vendor
+## What we write differently from known files
 
-The layer cipher key is fixed and non-zero; the previews are our usual sizes, where the vendor
-writes one picture of its viewport twice.
+The layer cipher key is fixed and non-zero; the previews are our usual sizes, where known
+files carry one picture twice.

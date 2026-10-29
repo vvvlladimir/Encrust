@@ -29,13 +29,7 @@ impl SlicedFileReader for PhzReader {
 
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
         let mut reads = Reads::new(source);
-        let magic = reads.u32_le()?;
-        if magic != MAGIC {
-            return Err(FormatError::NotThisFormat {
-                format: "phz",
-                found: magic,
-            });
-        }
+        fdg::expect_magic(&mut reads, MAGIC, "phz")?;
         let version = reads.u32_le()?;
         let layer_height_mm = reads.f32_le()?;
         let exposure_s = reads.f32_le()?;

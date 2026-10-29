@@ -124,7 +124,7 @@ pub(crate) fn write_file_mark(
     ] {
         fields.u32_le(address)?;
     }
-    // The second preview's address: the vendor's own writer leaves it out, and so do we.
+    // The second preview's address: left out, as in every file of this revision.
     fields.u32_le(0)
 }
 
@@ -174,7 +174,7 @@ pub(crate) fn write_header(fields: &mut Fields<'_>, job: &PrintJob) -> io::Resul
     fields.f32_le(job.cost().unwrap_or(0.0))?;
     write_currency(fields, &material.details.currency)?;
 
-    // The per-layer flag, which the vendor's slicer leaves clear even when the rows differ.
+    // The per-layer flag, left clear even when the rows differ; the rows carry it.
     fields.u32_le(0)?;
     fields.u32_le(job.print_time_s())?;
     fields.u32_le(u32::from(material.transition_layers))?;
@@ -185,7 +185,7 @@ pub(crate) fn write_header(fields: &mut Fields<'_>, job: &PrintJob) -> io::Resul
     write_header_tail(fields, job)
 }
 
-/// The resin type the vendor's slicer states for every resin.
+/// The resin type the format states for every resin.
 const RESIN_TYPE: u32 = 10;
 
 /// The pixel the header states: the coarser of the two axes, rounded to a whole micron.
@@ -208,8 +208,8 @@ fn write_header_tail(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> 
     fields.u32_le(0)
 }
 
-/// Writes the currency of the price beside it: its first four bytes of UTF-8, as the vendor
-/// writes them, cut at a character and nul-padded. A `$` is `24 00 00 00`.
+/// Writes the currency of the price beside it: its first four bytes of UTF-8,
+/// cut at a character and nul-padded. A `$` is `24 00 00 00`.
 fn write_currency(fields: &mut Fields<'_>, currency: &str) -> io::Result<()> {
     let mut end = currency.len().min(CURRENCY_BYTES);
     while !currency.is_char_boundary(end) {
@@ -225,7 +225,7 @@ fn write_preview(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     let (width, height) = PREVIEW_PX;
     write_table_head(fields, "PREVIEW", preview_stated_bytes())?;
     fields.u32_le(width)?;
-    // A word between the two sides that the vendor's slicer always states as 42.
+    // A word between the two sides that every file states as 42.
     fields.u32_le(42)?;
     fields.u32_le(height)?;
 
@@ -257,7 +257,7 @@ pub(crate) struct LayerDef {
     pub data_address: u32,
     pub data_size: u32,
     pub lift_distance_mm: f32,
-    /// Millimetres a minute here, where the header states a second, as the vendor writes it.
+    /// Millimetres a minute here, where the header states a second.
     pub lift_speed_mm_min: f32,
     pub exposure_s: f32,
     /// This layer's own thickness, not its height above the plate.

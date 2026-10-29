@@ -113,20 +113,7 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
         return Ok(Family::Anycubic);
     }
     if head.starts_with(b"PK") {
-        // Four containers are zips, so the entries inside decide which this is.
-        source.seek(SeekFrom::Start(0))?;
-        let pwsz = format_anycubic::pwsz_claims(source);
-        source.seek(SeekFrom::Start(0))?;
-        let gcode_zip = !pwsz && format_gcode_zip::claims(source);
-        source.seek(SeekFrom::Start(0))?;
-        let cws = !pwsz && !gcode_zip && format_cws::claims(source);
-        source.seek(SeekFrom::Start(0))?;
-        return Ok(match (pwsz, gcode_zip, cws) {
-            (true, ..) => Family::Pwsz,
-            (_, true, _) => Family::GcodeZip,
-            (.., true) => Family::Cws,
-            _ => Family::Sl1,
-        });
+        return zip_family(source);
     }
     if head.starts_with(&PHOTONS_TAG) {
         return Ok(Family::Photons);
@@ -160,6 +147,23 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
         }
     }
     Err(FormatError::UnknownContainer)
+}
+
+/// Which of the four zip containers this is, by the entries inside.
+fn zip_family<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
+    source.seek(SeekFrom::Start(0))?;
+    let pwsz = format_anycubic::pwsz_claims(source);
+    source.seek(SeekFrom::Start(0))?;
+    let gcode_zip = !pwsz && format_gcode_zip::claims(source);
+    source.seek(SeekFrom::Start(0))?;
+    let cws = !pwsz && !gcode_zip && format_cws::claims(source);
+    source.seek(SeekFrom::Start(0))?;
+    Ok(match (pwsz, gcode_zip, cws) {
+        (true, ..) => Family::Pwsz,
+        (_, true, _) => Family::GcodeZip,
+        (.., true) => Family::Cws,
+        _ => Family::Sl1,
+    })
 }
 
 /// Whether the file is the encrypted `.ctb`, by its first four bytes.

@@ -2,7 +2,7 @@
 //! `docs/formats/creality.md`.
 
 use core_format::FormatError;
-use core_raster::{LayerRuns, Run};
+use core_raster::{LayerRuns, Run, push_run};
 
 /// The flag on the byte that opens a run; its low bits are the grey.
 const RUN: u8 = 0x80;
@@ -32,28 +32,16 @@ impl RowRunsLayer {
             let mut left = run.length;
             while left > 0 {
                 let take = left.min(width - column);
-                pending = match pending {
-                    Some((value, length)) if value == grey => Some((value, length + take)),
-                    other => {
-                        if let Some((value, length)) = other {
-                            push_run(&mut data, value, length);
-                        }
-                        Some((grey, take))
-                    }
-                };
+                pending = Some(join(&mut data, pending, grey, take));
                 column += take;
                 left -= take;
                 if column == width {
-                    if let Some((value, length)) = pending.take() {
-                        push_run(&mut data, value, length);
-                    }
+                    flush(&mut data, pending.take());
                     column = 0;
                 }
             }
         }
-        if let Some((value, length)) = pending {
-            push_run(&mut data, value, length);
-        }
+        flush(&mut data, pending);
         Self {
             width,
             height: layer.height(),
@@ -61,21 +49,41 @@ impl RowRunsLayer {
         }
     }
 
+    /// Pixels in a row.
     pub fn width(&self) -> u32 {
         self.width
     }
 
+    /// Rows in the layer.
     pub fn height(&self) -> u32 {
         self.height
     }
 
+    /// The encoded bytes, as the container stores them.
     pub fn data(&self) -> &[u8] {
         &self.data
     }
 }
 
+/// Lengthens the pending run by `take` pixels of `grey`, or writes it and opens a new one.
+fn join(data: &mut Vec<u8>, pending: Option<(u8, u32)>, grey: u8, take: u32) -> (u8, u32) {
+    match pending {
+        Some((value, length)) if value == grey => (value, length + take),
+        other => {
+            flush(data, other);
+            (grey, take)
+        }
+    }
+}
+
+fn flush(data: &mut Vec<u8>, pending: Option<(u8, u32)>) {
+    if let Some((value, length)) = pending {
+        write_run(data, value, length);
+    }
+}
+
 /// One run: its grey, then its length less one in seven-bit groups, none for a single pixel.
-fn push_run(data: &mut Vec<u8>, grey: u8, length: u32) {
+fn write_run(data: &mut Vec<u8>, grey: u8, length: u32) {
     data.push(RUN | grey.min(MAX_GREY));
     let stored = length - 1;
     if stored == 0 {
@@ -117,10 +125,7 @@ pub fn decode(data: &[u8], pixel_count: u32) -> Result<Vec<Run>, FormatError> {
             .checked_add(length)
             .filter(|&covered| covered <= pixel_count)
             .ok_or(FormatError::MalformedRun { offset: start })?;
-        match runs.last_mut() {
-            Some(last) if last.value == value => last.length += length,
-            _ => runs.push(Run { length, value }),
-        }
+        push_run(&mut runs, length, value);
     }
     Ok(runs)
 }
@@ -138,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn a_dark_row_of_the_vendors_panel_is_its_three_bytes() {
+    fn a_dark_row_of_a_15120_px_panel_is_three_bytes() {
         let encoded = RowRunsLayer::encode(&layer(15120, 1, &[(15120, 0)]));
         assert_eq!(encoded.data(), [0x80, 0x76, 0x0F]);
     }

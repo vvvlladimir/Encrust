@@ -42,7 +42,7 @@ The pipeline and every other writer are untouched, and the tracing is parallel w
 of the encoding because it happens in `encode`. A layer round-trips exactly: the mask written
 is the mask read back, holes and all, which the crate's integration test pins down.
 
-An outline is a stair-step of the pixel grid, as a vendor slicer's is, so a file is larger
+An outline is a stair-step of the pixel grid, as a known file's is, so a file is larger
 than the same stack as runs — one point per step, collinear runs merged. That is the shape of
 the container and not a choice of ours.
 

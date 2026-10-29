@@ -162,10 +162,7 @@ impl RunsBuilder {
         if length == 0 {
             return;
         }
-        match self.runs.last_mut() {
-            Some(last) if last.value == value => last.length += length,
-            _ => self.runs.push(Run { length, value }),
-        }
+        push_run(&mut self.runs, length, value);
         self.emitted += length;
     }
 
@@ -191,8 +188,6 @@ impl RunsBuilder {
     }
 }
 
-/// Pixels of a panel. `RasterSettings::validate` rejects one that does not fit in a
-/// `u32`, so the product is exact here.
 /// Pixels `runs` light at any grey.
 pub fn lit_px(runs: &[Run]) -> u64 {
     runs.iter()
@@ -201,16 +196,24 @@ pub fn lit_px(runs: &[Run]) -> u64 {
         .sum()
 }
 
+/// Appends `length` pixels of `value` to `runs`, joining the last run when it has that value.
+pub fn push_run(runs: &mut Vec<Run>, length: u32, value: u8) {
+    match runs.last_mut() {
+        Some(last) if last.value == value => last.length += length,
+        _ => runs.push(Run { length, value }),
+    }
+}
+
+/// Pixels of a panel. `RasterSettings::validate` rejects one that does not fit in a
+/// `u32`, so the product is exact here.
 fn pixel_count(width: u32, height: u32) -> u32 {
     (u64::from(width) * u64::from(height)).min(u64::from(u32::MAX)) as u32
 }
 
-/// Pixels compared at a time when looking for the end of a run. Most of a mask handed in
-/// from outside is one long dark run, and a byte-at-a-time scan of a panel-sized mask
-/// costs more than rasterising it did.
+/// Pixels compared at a time when looking for the end of a run: a foreign mask is mostly one
+/// dark run, and scanning it a byte at a time costs more than rasterising it did.
 const SCAN_STRIDE: usize = 16;
 
-/// How many pixels from the front of `pixels` carry `value`.
 /// What is left of `run` after `taken` pixels of it, or `None` when it is used up.
 fn remainder(run: Run, taken: u32) -> Option<Run> {
     (run.length > taken).then(|| Run {
@@ -219,6 +222,7 @@ fn remainder(run: Run, taken: u32) -> Option<Run> {
     })
 }
 
+/// How many pixels from the front of `pixels` carry `value`.
 fn run_length(pixels: &[u8], value: u8) -> usize {
     let (blocks, _) = pixels.as_chunks::<SCAN_STRIDE>();
     let run = [value; SCAN_STRIDE];

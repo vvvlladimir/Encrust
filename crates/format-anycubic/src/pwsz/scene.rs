@@ -14,8 +14,7 @@ const SCENE_RESERVED_BYTES: usize = 64 * 4;
 /// What the volumes entry opens with.
 const VOLUMES_MARK: u32 = 0x2025_1024;
 
-/// A thickness the volumes entry states behind its mark, millimetres; the vendor's slicer
-/// writes it as a constant.
+/// A thickness the volumes entry states behind its mark, millimetres; a constant in every file.
 const VOLUMES_STEP_MM: f32 = 0.2;
 
 /// One layer as the scene entry records it.
@@ -36,8 +35,8 @@ impl SceneRow {
     }
 }
 
-/// The scene entry: the model's extent, then a row per layer between two marks. As the
-/// vendor writes it, every extent is zero and a layer is one piece as large as itself.
+/// The scene entry: the model's extent, then a row per layer between two marks. Every
+/// extent is zero and a layer is one piece as large as itself, as the format has it.
 pub(crate) fn scene_slice(job: &PrintJob, rows: &[SceneRow]) -> Result<Vec<u8>, FormatError> {
     built(|fields| {
         fields.text(SCENE_MARK, 16)?;
@@ -69,7 +68,7 @@ fn write_scene_row(fields: &mut Fields<'_>, row: SceneRow) -> std::io::Result<()
 }
 
 /// The volumes entry: a row per layer stating its top, the sliced layer height and the area
-/// it cures, as the vendor's slicer writes it.
+/// it cures.
 pub(crate) fn layer_volumes(job: &PrintJob, rows: &[SceneRow]) -> Result<Vec<u8>, FormatError> {
     built(|fields| {
         fields.u32_le(VOLUMES_MARK)?;

@@ -60,8 +60,8 @@ impl Sl1Flavour {
 
     /// What the archive format key states: `SL1` whichever extension it is.
     ///
-    /// A genuine `.sl1s` from Prusa's own slicer carries `SL1` too: the key names the
-    /// container rather than the machine, and `printer_model` names the machine.
+    /// A printed `.sl1s` carries `SL1` too: the key names the container rather than the
+    /// machine, and `printer_model` names the machine.
     pub(crate) const ARCHIVE_FORMAT: &'static str = "SL1";
 }
 
@@ -181,7 +181,7 @@ impl LayerSink for Sl1Sink<'_> {
         let settings = config::prusaslicer_ini(&self.job, self.flavour);
         entry(&mut self.zip, "prusaslicer.ini", settings.as_bytes())?;
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -221,19 +221,9 @@ fn entry(
     // A PNG is already deflated, and so is stored rather than deflated a second time; the
     // two settings files are small enough that it makes no difference either way.
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file(name, options).map_err(container)?;
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 #[cfg(test)]

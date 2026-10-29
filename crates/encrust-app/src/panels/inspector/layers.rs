@@ -12,7 +12,7 @@ use crate::ui::{
     theme, tone,
 };
 
-/// Eight greys is what other slicers call anti-aliasing level 8, and the most a panel
+/// Eight greys is anti-aliasing level 8, and the most a panel
 /// holds; see `docs/decisions/0113`.
 const DEFAULT_GREY_LEVELS: NonZeroU8 = NonZeroU8::new(8).expect("eight is not zero");
 
@@ -50,11 +50,7 @@ pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
             .as_ref()
             .map(|printer| printer.limits.layer_height_mm)
             .unwrap_or_default();
-        let why = tr!("limit-why-thin-layer");
-        let held = Held {
-            limit: &limit,
-            why: Some(&why),
-        };
+        let held = Held::layer_height(&limit);
         if limited_row(
             ui,
             &label,

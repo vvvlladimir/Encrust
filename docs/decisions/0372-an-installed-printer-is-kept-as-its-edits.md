@@ -1,4 +1,4 @@
-# 0373. An installed printer is kept as its edits over the shipped one
+# 0372. An installed printer is kept as its edits over the shipped one
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
@@ -8,7 +8,7 @@
 Adding a machine from the library writes a whole copy of the shipped profile into the user's
 directory (ADR 0158), and that copy hides the shipped one by id. A later release's
 correction never reaches it, edited or not: every LD-002H installed under v0.5.0 keeps the
-`front_edge` ADR 0370 has since turned. ADR 0196 only names the difference and offers to
+`front_edge` ADR 0369 has since turned. ADR 0196 only names the difference and offers to
 write the shipped profile back, which throws away what the user did change.
 
 A whole copy cannot tell an edit from a value the release it came from shipped, and the

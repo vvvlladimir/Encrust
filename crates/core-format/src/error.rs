@@ -94,3 +94,42 @@ pub enum FormatError {
     #[error("{what} could not be encoded: {reason}")]
     Encoding { what: &'static str, reason: String },
 }
+
+impl From<zip::result::ZipError> for FormatError {
+    /// An archive container's failure: its I/O as such, anything else as a broken archive.
+    fn from(source: zip::result::ZipError) -> Self {
+        match source {
+            zip::result::ZipError::Io(source) => Self::Io(source),
+            other => Self::Encoding {
+                what: "the archive",
+                reason: other.to_string(),
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_archive_io_failure_stays_io() {
+        let error = FormatError::from(zip::result::ZipError::Io(std::io::Error::other("disk")));
+        assert!(matches!(error, FormatError::Io(_)), "got {error:?}");
+    }
+
+    #[test]
+    fn a_broken_archive_is_an_encoding_error() {
+        let error = FormatError::from(zip::result::ZipError::InvalidArchive("no end".into()));
+        assert!(
+            matches!(
+                error,
+                FormatError::Encoding {
+                    what: "the archive",
+                    ..
+                }
+            ),
+            "got {error:?}"
+        );
+    }
+}

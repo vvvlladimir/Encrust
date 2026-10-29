@@ -51,8 +51,8 @@ impl SlicedFileWriter for CxlineWriter {
             });
         }
 
-        // Built in memory, as for the `.cxdlp`, because the checksum covers it and the sink
-        // cannot be read back; it is kept because the volume in it is known only at the end.
+        // Built in memory, as for the `.cxdlp`, so the checksum takes it while streaming; it is
+        // kept because the volume in it is known only at the end.
         let (head, volume_at) = block_at(0, |fields| {
             let volume_at = blocks::write_header(fields, job)?;
             write_previews(fields, job.thumbnail.as_ref())?;

@@ -21,9 +21,8 @@ pub enum Shading {
     Binary,
 }
 
-/// The greys an edge pixel is written in, as the vendor's slicer calls its Gray Range: an
-/// edge grey is first raised to `min`, then the whole span squeezed into `min..=max`.
-/// Black and full white are left alone; see `docs/decisions/0379`.
+/// The greys an edge pixel is written in, black and full white left alone; see
+/// `docs/decisions/0378-an-edge-grey-is-spread-over-the-machines-grey-range.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GreyRange {
     pub min: u8,
@@ -95,28 +94,28 @@ pub struct RasterSettings {
     pub blur_px: u8,
 }
 
-/// The anti-alias level a file states while the masks carry no grey: the vendor slicer's
-/// default choice, inert while its flag is off; see `docs/decisions/0365`.
-pub const DORMANT_ANTI_ALIAS_LEVEL: u16 = 4;
+/// The anti-alias level a file states while the masks carry no grey, inert while its flag
+/// is off; see `docs/decisions/0365`.
+pub const INERT_ANTI_ALIAS_LEVEL: u16 = 4;
 
 /// The edge blur a file states while there is none, by the same rule.
-pub const DORMANT_BLUR_PX: u8 = 2;
+pub const INERT_BLUR_PX: u8 = 2;
 
 impl RasterSettings {
     /// The anti-alias level a sliced file states: how many greys an edge is drawn in, at
-    /// most `cap`, the container's own limit, and the dormant default for a binary panel.
+    /// most `cap`, the container's own limit, and the inert default for a binary panel.
     pub fn anti_alias_level(&self, cap: u16) -> u16 {
         match (self.shading, self.grey.levels) {
-            (Shading::Binary, _) => DORMANT_ANTI_ALIAS_LEVEL.min(cap),
+            (Shading::Binary, _) => INERT_ANTI_ALIAS_LEVEL.min(cap),
             (Shading::Coverage, Some(levels)) => u16::from(levels.get()).min(cap),
             (Shading::Coverage, None) => cap,
         }
     }
 
-    /// The edge blur a sliced file states, the dormant default where there is none.
+    /// The edge blur a sliced file states, the inert default where there is none.
     pub fn stated_blur_px(&self) -> u8 {
         if self.blur_px == 0 {
-            DORMANT_BLUR_PX
+            INERT_BLUR_PX
         } else {
             self.blur_px
         }
@@ -181,7 +180,7 @@ mod tests {
         assert_eq!(
             with(Shading::Binary, 8).anti_alias_level(16),
             4,
-            "the vendor's dormant default"
+            "the inert default"
         );
         assert_eq!(with(Shading::Coverage, 4).anti_alias_level(16), 4);
         assert_eq!(with(Shading::Coverage, 64).anti_alias_level(16), 16);
@@ -201,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn eight_levels_are_the_ladder_other_slicers_write() {
+    fn eight_levels_are_one_rung_per_eighth_covered() {
         let grey = Grey {
             levels: NonZeroU8::new(8),
             ..Grey::default()
@@ -212,8 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn an_edge_grey_is_spread_over_the_range_as_the_vendor_writes_it() {
-        // Read off the vendor's files for one model at 0..255, 127..255 and 0..200.
+    fn an_edge_grey_is_raised_to_the_bottom_then_spread_over_the_range() {
         let lifted = GreyRange { min: 127, max: 255 };
         assert_eq!(lifted.spread(3), 191, "raised to 127, then spread");
         assert_eq!(lifted.spread(127), 191);

@@ -500,18 +500,18 @@ whole-surface fill is Cmd-Shift-click.
 - Ready-made looks: **Sharp**, **Balanced**, **Soft**, **Crisp text**, **Organic curves**,
   or raw masks.
 - Or set it by hand: grey levels, edge blur, rounded edge grey.
-- Edge greys are spread over the printer's grey range, as its maker's slicer does: on the
+- Edge greys are spread over the printer's grey range: on the
   ELEGOO Mars 2 and 3 series, for one, every edge grey is at least three quarters lit.
 - How much grey reaches the printer depends on its format (see [File formats](#file-formats)).
 - Not offered for the Creality HALOT-X1, X1 Max, X1 Neo and SKY 2025, or the PIOCREAT
-  PioNext Mini and Ultra: their maker's slicer keeps it off, so their masks carry no grey.
+  PioNext Mini and Ultra: their masks carry no grey.
 
 ### Motion and waits
 - Lift distance and speed, retract speed, separate values for the bottom layers, and a
   second, slower stage of each where the printer takes one. Opening a `.ctb`, `.fdg` or `.phz`
   reads both stages back, and the bottom layers' own light-off delay.
-- A setting the printer's own slicer does not let you change is not offered either, and the
-  file states what that slicer writes. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
+- A setting the printer's firmware runs itself is not offered either, and the file states
+  the machine's default. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
   Ultra 16K and Mars 5 Ultra — there are no lift or retract settings, and the
   print time counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only.
   Older Chitu machines have no light power or transition layers, Anycubic and Halot machines
@@ -587,21 +587,21 @@ Every file Encrust writes is read back and checked. The output extension picks t
 
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
-| `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; the Jupiter 2 gets revision 5.1, as the vendor slicer writes for it, with eight levels of grey; not yet printed from. |
-| `.ctb` v5 (v4 on request) | Elegoo, Creality, EPAX, Peopoly, QIDI, UniFormation | yes | Laid out field for field as the vendor slicer writes it. |
-| `.ctb` encrypted | Chitu boards with a panel past 4095 px a side | yes | Written for every such shipped printer, as the vendor slicer does. Read whoever wrote it. |
+| `.goo`, `.prz` | Elegoo, Phrozen | yes | `.prz` is the same file under Phrozen's name; the Jupiter 2 gets revision 5.1, the revision it reads, with eight levels of grey; not yet printed from. |
+| `.ctb` v5 (v4 on request) | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, Wanhao, EMAKE3D, LYNcase | yes | Laid out field for field as the printers read it. |
+| `.ctb` encrypted | Chitu boards with a panel past 4095 px a side | yes | Written for every such shipped printer. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. The `.pm5s`, `.m5sp` and `.pm4n` of the Photon Mono M5s, M5s Pro and Mono 4 have not yet been printed from. |
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
-| `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
-| `.cxdlp`, `.cxdlpv4` | Creality | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the vendor slicer writes it for the HALOT X1 Max. |
+| `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Zortrax, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
+| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the HALOT X1 Max reads it. |
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
-| `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
-| `.fdg` | Voxelab, FlashForge Foto | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
-| `.phz` | Phrozen Sonic Mini | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. Not yet printed from. |
-| `.photons` | Anycubic Photon S | none (1 bit) | Edges below half grey are dropped, as the printer's own slicer does. One exposure for the whole print. Not yet printed from. |
+| `.cws` | Nova3D, Carima | full 8 bits | Only the plain variant is written. |
+| `.fdg` | Voxelab, FlashForge Foto | none (1 bit) | Edges below half grey are dropped. Not yet printed from. |
+| `.phz` | Phrozen Sonic Mini | none (1 bit) | Edges below half grey are dropped. Not yet printed from. |
+| `.photons` | Anycubic Photon S | none (1 bit) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
 
 Encrust also opens the `.pws` of the original Photon and Photon S, which it does not write.
@@ -796,7 +796,7 @@ by a number of your own, or support the islands and drill the suction cups Check
   with a small calibration piece and check the build area and mirroring.
 - **No bundled resins.** Calibrate your own exposure.
 - **Orientation:** a part prints the right way round on every machine; on an X-mirrored
-  one it lands in the corner opposite the one the vendor slicer puts it in.
+  one it lands in the corner opposite the one known files put it in.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.

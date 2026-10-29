@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::ProfileError;
 
 /// The band along each plate edge the maker keeps models out of, millimetres in plate axes.
-/// Only a warning: a model standing in it still slices whole. See ADR 0372.
+/// Only a warning: a model standing in it still slices whole. See ADR 0371.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PlateInset {

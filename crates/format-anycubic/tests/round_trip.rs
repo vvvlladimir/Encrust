@@ -319,7 +319,7 @@ fn the_preview_carries_the_job_thumbnail_as_five_six_five_colour() {
     assert_eq!(
         u32_at(&file, preview + 20),
         42,
-        "a word the vendor's slicer always states sits between the two sides"
+        "a word every file states sits between the two sides"
     );
     assert_eq!(u32_at(&file, preview + 24), 168);
 
@@ -362,7 +362,7 @@ fn a_band_of_height_writes_its_own_exposure_into_the_layer_table() {
     assert_eq!(
         u32_at(&file, header + 64),
         0,
-        "the per-layer flag stays clear, as the vendor's slicer leaves it; the rows carry it"
+        "the per-layer flag stays clear; the rows carry it"
     );
 }
 
@@ -405,7 +405,7 @@ fn every_revision_is_the_same_tables_under_its_own_number() {
 }
 
 #[test]
-fn the_header_states_the_panels_grey_and_ends_as_the_vendor_slicer_ends_it() {
+fn the_header_states_the_panels_grey_and_ends_as_the_format_ends_it() {
     let mut blurred = job(1);
     blurred.raster.grey.levels = std::num::NonZeroU8::new(4);
     blurred.raster.blur_px = 2;
@@ -484,7 +484,7 @@ fn the_second_layer_table_repeats_the_first() {
 }
 
 #[test]
-fn an_extension_is_written_at_the_revision_the_vendor_slicer_picks() {
+fn an_extension_is_written_at_the_revision_its_machines_read() {
     assert_eq!(AnycubicFlavour::Pwx.newest_version(), AnycubicVersion::V1);
     assert_eq!(AnycubicFlavour::Dlp.newest_version(), AnycubicVersion::V515);
     assert_eq!(

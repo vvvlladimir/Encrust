@@ -42,7 +42,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         reads.skip(4)?;
         let print_parameters = u64::from(reads.u32_le()?);
 
-        // A layer covered by the vendor's cipher would decode to noise, so a file that
+        // A layer covered by the format's cipher would decode to noise, so a file that
         // names a key is refused rather than read wrongly; see docs/formats/creality.md.
         reads.skip(4 + 4 + 2 + 2)?;
         let key = reads.u32_le()?;

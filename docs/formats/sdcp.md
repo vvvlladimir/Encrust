@@ -17,8 +17,8 @@ acknowledgements and the topics are the same, which is why it is the same crate 
 | [`WalkerFrederick/sdcp-centauri-carbon`](https://github.com/WalkerFrederick/sdcp-centauri-carbon) | What one shipping board actually does with it |
 | [`vvuk/cassini`](https://github.com/vvuk/cassini) | Version 1: every packet of it, recorded off a Saturn 3 Ultra |
 
-CBD Technology is the mainboard vendor behind the protocol, so this is what the vendor tools
-call *network sending*. Elegoo ships version 3 from the Saturn 4 Ultra and Mars 5 onwards,
+CBD Technology is the mainboard maker behind the protocol, which Elegoo calls
+*network sending*. Elegoo ships version 3 from the Saturn 4 Ultra and Mars 5 onwards,
 and version 1 on the Saturn 3 Ultra and Mars 4 Ultra.
 
 ## Version 3: the board is the server
@@ -194,7 +194,7 @@ The envelope is the version 3 envelope with one field dropped and one level adde
 What a board reports on `/sdcp/attributes/` is its status again, not its attributes. So
 version 1 says what it is in its discovery reply and nowhere else, and nothing asks it.
 
-Four commands are sent before anything else, in this order, because the vendor client sends them and
+Four commands are sent before anything else, in this order, because
 a board that has not had them reports far less often: `0`, `1`, then `512` with
 `{"TimePeriod": 5000}`. `64` looks like a disconnect and is not used.
 

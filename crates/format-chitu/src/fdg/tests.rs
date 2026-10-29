@@ -117,7 +117,7 @@ fn a_written_file_reads_back() {
 fn a_written_file_covers_its_layers_with_a_key_and_reads_back() {
     let bytes = written(2);
     let key = u32::from_le_bytes([bytes[0x5C], bytes[0x5D], bytes[0x5E], bytes[0x5F]]);
-    assert_ne!(key, 0, "the vendor never writes a zero key");
+    assert_ne!(key, 0, "a written key is never zero");
     let mut open = FdgReader.open(Cursor::new(bytes)).expect("the header");
     let lit: u32 = open
         .layer(1)
@@ -180,7 +180,7 @@ fn the_header_states_the_anti_alias_level_the_edges_were_drawn_with() {
     let word =
         |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
     assert_eq!(word(0x60), 16, "every grey, capped at sixteen");
-    assert_eq!(word(0x3C), 1, "a constant of the vendor writer");
+    assert_eq!(word(0x3C), 1, "a constant of the format");
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn the_header_states_the_bottom_light_off_and_no_height() {
     let bytes = file.into_inner();
     let f32_at =
         |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
-    assert_eq!(f32_at(0x4C), 0.0, "the vendor leaves the height zero");
+    assert_eq!(f32_at(0x4C), 0.0, "the height is left zero");
     assert_eq!(
         (f32_at(0x7C), f32_at(0x80)),
         (5.0, 0.5),

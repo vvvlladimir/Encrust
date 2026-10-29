@@ -17,22 +17,21 @@ states one; it waits for a profile that can say two.
 
 ## Where the knowledge comes from
 
-None of these machines is in the room. Two files the vendor slicer wrote, for the M7 Pro and the
+None of these machines is in the room. Two known files, for the M7 Pro and the
 Mono 4 Ultra, have been read and our archive checked against them entry by entry.
 
 | Source | What it settles |
 |---|---|
-| The vendor's own slicer's writer, read statically | Which entries it writes and in what order, the keys it sets in each and from which setting, that a layer is `layer_N.pw0Img` in the PW0 codec, the scene head (388 bytes), every field of `calc_layer_volumes.data`, and that the machine settings are a template with the panel's fields written over |
-| The same program's machine templates | Every constant below: the previews' sizes and colours, the firmware's motion and exposure constants, the resin's depth curve |
-| An open-source reader and writer of the archive | The field order of a `scene.slice` row, which the vendor's slicer fills only in part |
+| The two known files | Which entries an archive holds and in what order, the keys in each, that a layer is `layer_N.pw0Img` in the PW0 codec, the scene head (388 bytes), every field of `calc_layer_volumes.data`, and every constant below: the previews' sizes and colours, the firmware's motion and exposure constants, the resin's depth curve |
+| An open-source reader and writer of the archive | The field order of a `scene.slice` row, which known files fill only in part |
 
-Both writers write the layers in PW0, though the settings call the codec `pwszImg`: that
-name is a vector codec of contour segments, which neither writes.
+Known files and the open-source writer store the layers in PW0, though the settings call the
+codec `pwszImg`: that name is a vector codec of contour segments, which neither uses.
 
 ## Entries
 
-Every entry is deflated, as the vendor writes it: a PW0 layer still shrinks to a fiftieth. The
-vendor writes the layers last; we write what the job alone decides first, the layers as they
+Every entry is deflated, as in known files: a PW0 layer still shrinks to a fiftieth. Known
+files hold the layers last; we write what the job alone decides first, the layers as they
 come, then `print_info.json`, `scene.slice` and `calc_layer_volumes.data`, which sum them up,
 and a reader finds an entry by name.
 
@@ -40,10 +39,10 @@ and a reader finds an entry by name.
 |---|---|
 | `preview_images/preview_0.png` | 224 × 168, padded with `#024864` |
 | `preview_images/preview_1.png` | 336 × 252, padded with `#141B29` |
-| `software_info.conf` | `mark`, `os` and `version`: which program wrote it; `opengl` is `3.3-CoreProfile`, as the vendor states |
+| `software_info.conf` | `mark`, `os` and `version`: which program wrote it; `opengl` is `3.3-CoreProfile`, as known files state |
 | `layer_images/layer_N.pw0Img` | layer `N`, from 0, in the PW0 codec, nothing in front |
 | `layers_controller.conf` | `count`, then per layer `exposure_time` s, `layer_index`, `layer_minheight` mm (its floor), `layer_thickness` mm, `zup_height` mm, `zup_speed` mm/s |
-| `print_info.json` | `cost`, `currency` (always `$`, as the vendor writes it), `print_time` s, `volume` ml |
+| `print_info.json` | `cost`, `currency` (always `$`, as known files carry it), `print_time` s, `volume` ml |
 | `anycubic_photon_resins.pwsp` | the machine and its resin, below |
 | `scene.slice` | the model's extent and each layer's, below |
 | `calc_layer_volumes.data` | the area each layer cures, below |
@@ -55,26 +54,26 @@ Two objects: `machine_type` and `machine_extern`, both at version `"3"` and `"2"
 `machine_type` states the panel from the profile — `res_x`, `res_y`, `xy_pixel` and
 `xy_pixel_y` in micrometres, `print_xsize`, `print_ysize`, `print_zsize` in millimetres, one
 `child_screen` covering it — and `name`, the profile's machine name. `key_suffix` is the
-template's, `key_image_format` is `pwszImg`, `max_file_version` 518. The vendor writes the M7
-Pro's template for every machine but the P1 family, and so do we: its suffix stays `pwsz`
-under `.pm7`, `.pm7m` and `.pm4u` alike. The P1 Max's own template has `pp1m`, adds
+M7 Pro's, `key_image_format` is `pwszImg`, `max_file_version` 518. Known files carry the M7
+Pro's machine settings for every machine but the P1 family, and so do we: its suffix stays `pwsz`
+under `.pm7`, `.pm7m` and `.pm4u` alike. The P1 Max's own settings have `pp1m`, adds
 `rotate_z` 180 and `print_platform_zheights` `[0, 35]`, and gives the resin a second bottom
 exposure and the rests around a lift, all of which we write for it alone.
 
 `machine_extern` names the machine again as `alias`, carries the firmware's motion and
-exposure constants unchanged from the templates, and one user resin, which is also the
-active one: named `user_resin`, as the vendor names it whatever the resin is called, code
+exposure constants unchanged from the known files, and one user resin, which is also the
+active one: named `user_resin` whatever the resin is called, code
 `"10"` (standard resin), and the job's exposure, bottom layers, light-off (the bottom's
 apart), lift, retract and transition layers in `slicepara` and `slice_extpara`. Speeds are
-millimetres a second. `multi_state_used` is 1, as the vendor's slicer always states it.
+millimetres a second. `multi_state_used` is always 1.
 With a second stage, stage 0 is the first lift with the second retract and stage 1 the second
 lift with the first retract, as the `EXTRA` block of `anycubic.md`; without one, stage 1
 climbs nothing at stage 0's speeds, since a firmware estimating time divides by them.
-`zdown_speed` is stage 0's speed down. `gray_level` states the edge blur again, as the
-vendor's slicer does. `anti_count` and `blur_level` are the panel's anti-alias level and edge
-blur, 2 with none, as in the table container's header. The vendor also lists the machine's
+`zdown_speed` is stage 0's speed down. `gray_level` states the edge blur again, as known
+files do. `anti_count` and `blur_level` are the panel's anti-alias level and edge
+blur, 2 with none, as in the table container's header. Known files also list the machine's
 three factory resins, which we leave out.
-`intelli_mode` is 1, the vendor's value for a user resin; what the firmware does with it is
+`intelli_mode` is 1, the known value for a user resin; what the firmware does with it is
 not known.
 
 ## `scene.slice`
@@ -88,7 +87,7 @@ All little-endian.
 | 0x050 | binary type, version, slice type, model unit, `u32` | 3, 1, 0, 0 |
 | 0x060 | point ratio, `f32` | 1 |
 | 0x064 | layer count, `u32` | |
-| 0x068 | the model's near and far corner, six `f32` | zero, as the vendor writes them |
+| 0x068 | the model's near and far corner, six `f32` | zero, as known files carry them |
 | 0x080 | model stats, `u32` | 0 |
 | 0x084 | 256 reserved bytes | zero |
 | 0x184 | `<---`, then the row count `u32` | |
@@ -97,7 +96,7 @@ All little-endian.
 
 A row: the layer's top in mm, its cured area in mm², its lit box (four zero `f32`), the
 number of separate pieces it cures as a `u32`, the area of the largest in mm², and 32 zero
-bytes. As the vendor writes it, the box is zero and a layer is one piece as large as itself.
+bytes. As known files carry it, the box is zero and a layer is one piece as large as itself.
 
 ## `calc_layer_volumes.data`
 
@@ -109,7 +108,7 @@ bytes, and the area it cures in mm², `f32`, the quantity `.cxline` states per l
 
 - **The `pwszImg` vector codec**: no writer known to us uses it.
 - **The Photon P1's two panels.**
-- **`lcd_function.json`**, which the open-source writer adds and the vendor's does not.
+- **`lcd_function.json`**, which the open-source writer adds and known files do not.
 
 ## Reading
 

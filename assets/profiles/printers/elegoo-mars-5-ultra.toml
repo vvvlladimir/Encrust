@@ -2,7 +2,7 @@
 
 name = "Mars 5 Ultra"
 manufacturer = "Elegoo"
-# Verified against a file the vendor's own slicer wrote for this machine.
+# Verified against a file this machine prints.
 machine_name = "ELEGOO Mars 5 Ultra"
 mirror_x = true
 mirror_y = false
@@ -22,10 +22,10 @@ y = 77.76
 z = 165.0
 
 [firmware]
-# A tilting vat, which the vendor's files leave reading the header alone, see ADR 0142.
+# A tilting vat, which reads the header alone, see ADR 0142.
 per_layer_settings = false
 
-# The vat tilts to separate a layer, so the peel is the vendor slicer's hidden defaults, and
+# The vat tilts to separate a layer, so the peel is the firmware's defaults, and
 # it waits by resting only; see ADR 0301.
 [locked]
 lift_distance_mm = 0.05

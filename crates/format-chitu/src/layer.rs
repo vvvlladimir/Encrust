@@ -10,7 +10,7 @@ pub(crate) const LAYER_DEF_BYTES: u64 = 36;
 /// states, because the field counts the record and that block together.
 pub(crate) const LAYER_DEF_EX_BYTES: u32 = 84;
 
-/// Bytes the vendor's slicer puts behind a `.ctb` layer's data: its lit area, then a word.
+/// Bytes behind a `.ctb` layer's data: its lit area, then a word.
 pub(crate) const LAYER_TAIL_BYTES: u32 = 8;
 
 /// One row of the layer table, filled in as its layer is written.

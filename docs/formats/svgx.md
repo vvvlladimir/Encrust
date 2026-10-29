@@ -66,8 +66,8 @@ multiple of four pixels, so no row needs the padding a bitmap would otherwise ta
 
 `attachlayer` and `attachtime` are the bottom block's count and exposure, `basetime` the
 normal exposure, `buildinlayer` the transition count. A group's `area` and `perimeter` are
-what the layer cures in square millimetres and the length of its outline in millimetres; a
-vendor slicer writes other units there, and nothing in the firmware is known to read either
+what the layer cures in square millimetres and the length of its outline in millimetres; known
+files carry other units there, and nothing in the firmware is known to read either
 beyond showing them.
 
 **`volume` is a fixed-width zero-padded field** of thirteen characters. The resin a stack

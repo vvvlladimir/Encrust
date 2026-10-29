@@ -55,6 +55,7 @@ One unit and one number of decimals per quantity, everywhere — field, reading,
 | Layer height | µm | 0 |
 | Angle | ° | 1 |
 | Exposure, wait | s | 2 |
+| Lift and retract speed | mm/min | 1 |
 | Resin volume / part volume | ml / mm³ | 2 / 1 |
 | Ratio, scale / multiplier | % / × | 1 / 2 |
 | Pixels, layers, counts | px, none | 0 |

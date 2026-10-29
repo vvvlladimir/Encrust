@@ -132,7 +132,7 @@ impl PrintJob {
     }
 
     /// Each resin setting the job prints at past what its machine takes or its maker advises,
-    /// the layer height the stack's own (ADR 0369).
+    /// the layer height the stack's own (ADR 0368).
     pub fn limit_breaches(&self) -> Vec<LimitBreach> {
         let printed = MaterialProfile {
             layer_height_mm: self.nominal_height_mm(),

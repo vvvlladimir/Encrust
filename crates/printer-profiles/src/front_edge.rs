@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// The edge of the plate, in plate axes, that faces someone standing at the printer. A panel
-/// mounted portrait on a machine wider than deep puts it on a long side. See ADR 0370.
+/// mounted portrait on a machine wider than deep puts it on a long side. See ADR 0369.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FrontEdge {

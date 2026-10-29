@@ -18,7 +18,7 @@ pub struct PanelOverrides {
 }
 
 /// The panel the masks are drawn for, straight off the printer profile, without grey on a
-/// binary-only machine whatever was asked (ADR 0378). Masks go in as the plate stands, near
+/// binary-only machine whatever was asked (ADR 0377). Masks go in as the plate stands, near
 /// edge up; only the header carries the mirroring (ADR 0134).
 pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> RasterSettings {
     let (x, y) = printer.display.pixel_pitch_mm();
@@ -45,7 +45,7 @@ pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> R
 }
 
 /// The panel a file of `format` is laid out on: rows from the far edge of the plate, as the
-/// vendor slicer lays them, unless an X-mirrored machine prints the plate as it stands (ADR 0366).
+/// printers expect them, unless an X-mirrored machine prints the plate as it stands (ADR 0366).
 pub(crate) fn file_panel(
     settings: &RasterSettings,
     printer: &PrinterProfile,

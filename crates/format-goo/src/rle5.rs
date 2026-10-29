@@ -1,5 +1,5 @@
 use core_format::FormatError;
-use core_raster::{LayerRuns, Run};
+use core_raster::{LayerRuns, Run, push_run};
 
 use crate::rle::checksum;
 
@@ -231,13 +231,7 @@ impl<'r> Taker<'r> {
                 .get(self.index)
                 .ok_or(FormatError::MalformedRun { offset: self.index })?;
             let taken = count.min(run.length - self.used);
-            match into.last_mut() {
-                Some(last) if last.value == run.value => last.length += taken,
-                _ => into.push(Run {
-                    length: taken,
-                    value: run.value,
-                }),
-            }
+            push_run(into, taken, run.value);
             self.used += taken;
             count -= taken;
             if self.used == run.length {

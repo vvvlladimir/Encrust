@@ -7,7 +7,7 @@ use core_raster::Run;
 use serde_json::Value;
 use zip::ZipArchive;
 
-use super::{container, layer_name};
+use super::layer_name;
 use crate::rle::{GREY_STEPS, decode};
 
 /// The entry that names the machine and the resin, which no other archive we read carries.
@@ -28,7 +28,7 @@ impl SlicedFileReader for PwszReader {
     }
 
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
-        let mut zip = ZipArchive::new(source).map_err(container)?;
+        let mut zip = ZipArchive::new(source)?;
         let settings = json(&mut zip, SETTINGS)?;
         let machine = &settings["machine_type"];
         let resin = active_resin(&settings["machine_extern"]);
@@ -127,7 +127,7 @@ fn json<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Value, Forma
     })
 }
 
-/// An entry the vendor writes but a file can do without: absent is `Null`, broken an error.
+/// An entry a file usually carries but can do without: absent is `Null`, broken an error.
 fn optional_json<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Value, FormatError> {
     match json(zip, name) {
         Err(FormatError::Missing { .. }) => Ok(Value::Null),

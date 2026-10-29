@@ -60,7 +60,7 @@ pub(crate) fn write_header(
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.zeros(8)?;
-    // The vendor's slicer leaves the print's height zero, as in a `.ctb`.
+    // The print's height is left zero, as in a `.ctb`.
     fields.f32_le(0.0)?;
     fields.f32_le(printer.build_volume.x)?;
     fields.f32_le(printer.build_volume.y)?;
@@ -78,7 +78,7 @@ pub(crate) fn write_header(
     write_tail(fields, job, totals)
 }
 
-/// The anti-alias level the header states, as the vendor writer does: the setting the edges
+/// The anti-alias level the header states: the setting the edges
 /// were drawn with, at most 16, though the layer codec keeps only lit and unlit.
 pub(crate) fn anti_alias_level(job: &PrintJob) -> u32 {
     u32::from(job.raster.anti_alias_level(16))
@@ -97,10 +97,10 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     fields.f32_le(material.lift_speed_mm_min)?;
     fields.f32_le(material.retract_speed_mm_min)?;
     write_second_stage(fields, job)?;
-    // A word the vendor writer copies from a setting we have not found.
+    // A word of unknown meaning, written zero.
     fields.u32_le(0)?;
     fields.u32_le(job.created_minutes())?;
-    // The vendor's slicer states no software version.
+    // No software version is stated.
     fields.u32_le(0)
 }
 
@@ -122,8 +122,8 @@ pub(crate) fn write_tail(
     write_parameters(fields, job, totals)
 }
 
-/// The block from 0xD8 to the end of the header: the vendor writer copies `.ctb`'s v4
-/// parameters into its first 40 bytes.
+/// The block from 0xD8 to the end of the header: its first 40 bytes are `.ctb`'s v4
+/// parameters.
 fn write_parameters(fields: &mut Fields<'_>, job: &PrintJob, totals: Totals) -> io::Result<()> {
     write_v4_motion(fields, job)?;
     fields.f32_le(totals.stack.layer_time_s)?;

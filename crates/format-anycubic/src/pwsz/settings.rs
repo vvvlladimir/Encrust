@@ -11,10 +11,10 @@ use crate::rle::GREY_STEPS;
 /// The two previews, in pixels, and the colour each is padded with.
 const PREVIEWS: [(u32, u32, Rgb); 2] = [(224, 168, [2, 72, 100]), (336, 252, [20, 27, 41])];
 
-/// Which resin the settings name: the code the vendor gives its standard resin.
+/// Which resin the settings name: the format's code for a standard resin.
 const STANDARD_RESIN_CODE: &str = "10";
 
-/// The name the vendor gives the one resin a file prints with, whatever it is called.
+/// The name the format gives the one resin a file prints with, whatever it is called.
 const USER_RESIN: &str = "user_resin";
 
 /// The previews, smallest first, cut from the job's thumbnail.
@@ -64,14 +64,14 @@ pub(crate) fn layers_controller(job: &PrintJob) -> Result<Vec<u8>, FormatError> 
 pub(crate) fn print_info(job: &PrintJob) -> Result<Vec<u8>, FormatError> {
     text(&json!({
         "cost": job.cost().unwrap_or(0.0),
-        // The vendor's slicer states dollars here whatever the resin is priced in.
+        // Files of this format state dollars here whatever the resin is priced in.
         "currency": "$",
         "print_time": job.print_time_s(),
         "volume": job.volume_mm3 / 1000.0,
     }))
 }
 
-/// The machine and the resin it prints with, in the shape the vendor's own settings take.
+/// The machine and the resin it prints with, in the shape the format's settings take.
 pub(crate) fn machine(job: &PrintJob, flavour: PwszFlavour) -> Result<Vec<u8>, FormatError> {
     let printer = &job.printer;
     let resin = user_resin(job, flavour);
@@ -103,7 +103,7 @@ fn machine_type(job: &PrintJob, flavour: PwszFlavour) -> Value {
         "cloudprev_back_color": [0.007_812_5, 0.281_25, 0.390_625],
         "cloudprev_imag_size": [800, 600],
         "key_image_format": "pwszImg",
-        "key_suffix": template_suffix(flavour),
+        "key_suffix": key_suffix(flavour),
         "max_file_version": 518,
         "max_samples": 16,
         "name": printer.machine_name(),
@@ -134,16 +134,15 @@ fn machine_type(job: &PrintJob, flavour: PwszFlavour) -> Value {
     machine
 }
 
-/// The suffix the settings name: the vendor's slicer keeps its template's, which is the M7
-/// Pro's for every machine but the P1 Max.
-fn template_suffix(flavour: PwszFlavour) -> &'static str {
+/// The suffix the settings name: the M7 Pro's for every machine but the P1 Max.
+fn key_suffix(flavour: PwszFlavour) -> &'static str {
     match flavour {
         PwszFlavour::Pp1m => "pp1m",
         _ => "pwsz",
     }
 }
 
-/// The job's resin, named the way the vendor's settings name the one a file prints with.
+/// The job's resin, named the way the format names the one a file prints with.
 fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
     let material = &job.material;
     let used = material.second_stage.is_used();
@@ -185,7 +184,7 @@ fn user_resin(job: &PrintJob, flavour: PwszFlavour) -> Value {
     })
 }
 
-/// One lift as the two stages the vendor's slicer always states, in mm and mm/s. Without a
+/// One lift as the two stages the format always states, in mm and mm/s. Without a
 /// second stage it climbs nothing at the first's speeds, which a firmware estimating time
 /// divides by.
 fn stages(peel: &LayerPeel, used: bool) -> [Value; 2] {
@@ -209,18 +208,18 @@ fn slice_parameters(job: &PrintJob, flavour: PwszFlavour, zdown_speed: &Value) -
         "bott_off_time": material.bottom_light_off_s(),
         "bott_time": material.bottom_exposure_s,
         "exposure_time": material.exposure_s,
-        // The vendor's slicer states the edge blur here as well.
+        // The format states the edge blur here as well.
         "gray_level": job.raster.stated_blur_px(),
         "off_time": material.light_off_s(),
         "use_indivi_layerpara": u32::from(job.varies_by_layer()),
         "use_random_erode": 0,
-        // The speed of the first stage's way down, as the vendor states it.
+        // The speed of the first stage's way down.
         "zdown_speed": zdown_speed.clone(),
         "zthick": job.nominal_height_mm(),
         "zup_height": material.lift_distance_mm,
         "zup_speed": material.lift_speed_mm_min / 60.0,
     });
-    // The P1 Max's template carries a second bottom exposure and the rests around a lift.
+    // The P1 Max's settings carry a second bottom exposure and the rests around a lift.
     if flavour == PwszFlavour::Pp1m {
         let [before_s, after_s, _] = material.waits.rests_s();
         for (key, value) in [
@@ -236,7 +235,7 @@ fn slice_parameters(job: &PrintJob, flavour: PwszFlavour, zdown_speed: &Value) -
     parameters
 }
 
-/// How the resin cures with depth, as the vendor's settings state it for every resin.
+/// How the resin cures with depth, the same for every resin.
 fn penetration_constants() -> Value {
     json!({
         "current_tempcurve_selector": 0,
@@ -254,7 +253,7 @@ fn penetration_constants() -> Value {
     })
 }
 
-/// What the firmware estimates exposure with; the vendor states the same for every machine.
+/// What the firmware estimates exposure with; the same for every machine.
 fn firmware_exposure_constants() -> Value {
     json!({
         "energy_coeff": 0,
@@ -265,8 +264,7 @@ fn firmware_exposure_constants() -> Value {
     })
 }
 
-/// What the firmware estimates print time with; the vendor states the same for every
-/// machine.
+/// What the firmware estimates print time with; the same for every machine.
 fn firmware_motion_constants() -> Value {
     json!({
         "FUNCTION": 1,

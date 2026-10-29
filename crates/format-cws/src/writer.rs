@@ -15,7 +15,7 @@ use crate::gcode;
 /// a stem ending in a digit would run into that number.
 pub(crate) const STEM: &str = "encrust";
 
-/// Fewest digits an image's number is written in, as a vendor file writes it.
+/// Fewest digits an image's number is written in.
 pub(crate) const DIGITS: usize = 4;
 
 /// Writes the `.cws` archive. Layout is in `docs/formats/cws.md`.
@@ -93,7 +93,7 @@ impl LayerSink for CwsSink<'_> {
         program.push_str(&gcode::epilogue(&self.job));
         entry(&mut self.zip, &format!("{STEM}.gcode"), program.as_bytes())?;
 
-        let sink = self.zip.finish().map_err(container)?;
+        let sink = self.zip.finish()?;
         sink.flush()?;
         Ok(())
     }
@@ -124,19 +124,9 @@ fn entry(
     // A PNG is already deflated, and so is stored rather than deflated a second time; the
     // settings and the program are small enough that it makes no difference either way.
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file(name, options).map_err(container)?;
+    zip.start_file(name, options)?;
     zip.write_all(bytes)?;
     Ok(())
-}
-
-fn container(source: zip::result::ZipError) -> FormatError {
-    match source {
-        zip::result::ZipError::Io(source) => FormatError::Io(source),
-        other => FormatError::Encoding {
-            what: "the archive",
-            reason: other.to_string(),
-        },
-    }
 }
 
 #[cfg(test)]

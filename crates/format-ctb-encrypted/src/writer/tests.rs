@@ -1,5 +1,5 @@
-//! Every expected number is what the vendor's slicer wrote for the GK3 Ultra with the same
-//! resin, `local-docs` sample `GK3-Ultra.ctb`, deciphered.
+//! Every expected number is what a known GK3 Ultra file with the same resin states,
+//! deciphered.
 
 use core_format::Crc32;
 use core_raster::Shading;
@@ -101,7 +101,7 @@ fn the_settings_close_on_the_stacks_totals() {
     assert_eq!(settings.u32(at::LAYER_COUNT_AGAIN), 4);
     assert_eq!(settings.u32(0xF0), 0);
     assert_eq!(settings.u32(at::ONE_AGAIN), 1);
-    assert_eq!(settings.f32(0x20), 0.0, "the vendor states no total height");
+    assert_eq!(settings.f32(0x20), 0.0, "the format states no total height");
     let cost = job.cost().expect("the resin has a price");
     assert!((settings.f32(at::COST) - cost).abs() < 1e-6, "{cost}");
 }
@@ -120,7 +120,7 @@ fn a_stack_the_settings_describe_leaves_the_per_layer_flag_clear() {
 }
 
 #[test]
-fn a_grey_stack_states_the_flag_the_vendor_writes_without_grey() {
+fn a_grey_stack_states_the_flag_a_binary_stack_states() {
     let mut job = test_resin_job(2);
     job.raster.shading = Shading::Coverage;
     assert_eq!(deciphered(&written(&job)).u32(at::FLAGS), 7);

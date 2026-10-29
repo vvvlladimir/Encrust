@@ -28,7 +28,7 @@ Chitu family: `.ctb` versions 4 and 5 from step 8a, `.cbddlp` and `.photon` from
 from step 18c, and `gcode-zip.md` the `.zip` of greyscale PNGs from step 21d.
 `creality.md` covers the `.cxdlp` at both its revisions from step 21e and `cxline.md` the PioNext `.cxline` beside it, `svgx.md` the
 `.svgx` of polygons from step 21f, and `cws.md` the `.cws` archive from step 21g. `pwsz.md`
-covers the newer Anycubic archive, the one format written and not yet read back (ADR 0361).
+covers the newer Anycubic archive (ADR 0361).
 `fdg.md` covers the `.fdg` of Voxelab's Chitu boards and `phz.md` the Sonic Mini's `.phz` beside it, `photons.md` the Photon S's `.photons`. `ctb-encrypted.md` covers the encrypted `.ctb`, read and written for the machines that take
 nothing else (ADR 0298). `resin-profiles.md` is not a sliced file but the resin profile another program exports,
 read and never written (ADR 0295).

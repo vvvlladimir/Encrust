@@ -1,5 +1,5 @@
-//! Reads a `.goo` 5.1 the vendor's slicer wrote for an Elegoo Jupiter 2, cut to its first
-//! two layers with the tables and MD5 restated, and grey edges on at the vendor's eight levels.
+//! Reads a printed `.goo` 5.1 for an Elegoo Jupiter 2, cut to its first two layers with
+//! the tables and MD5 restated, and grey edges on at eight levels.
 #![expect(
     clippy::expect_used,
     reason = "a broken fixture must fail the run loudly"
@@ -26,13 +26,13 @@ const MASK_TABLE_FIELD: usize = 195_482;
 fn open() -> impl OpenFile {
     GooReader
         .open(File::open(FIXTURE).expect("the fixture is checked in"))
-        .expect("a vendor file reads")
+        .expect("a printed file reads")
 }
 
 /// Every pixel of layer `index`, row by row.
 fn pixels(file: &mut impl OpenFile, index: u32) -> Vec<u8> {
     file.layer(index)
-        .expect("a vendor layer decodes")
+        .expect("a printed layer decodes")
         .iter()
         .flat_map(|run| std::iter::repeat_n(run.value, run.length as usize))
         .collect()
@@ -50,7 +50,7 @@ fn the_header_states_the_machine_and_the_panel() {
 
 #[test]
 fn the_retract_reads_as_the_resin_stated_it() {
-    // The vendor states 1.95 mm for a 2 mm lift at 0.05 mm layers.
+    // The file states 1.95 mm for a 2 mm lift at 0.05 mm layers.
     let retract = open().facts().stated.retract_distance_mm;
     let retract = retract.expect("a retract is stated");
     assert!((retract - 2.0).abs() < 1e-5, "expected 2 mm, got {retract}");

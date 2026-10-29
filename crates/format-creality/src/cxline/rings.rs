@@ -1,7 +1,9 @@
 //! A layer as the container holds it: its area, then its rings as points in micrometres
 //! from the panel's corner. See `docs/formats/cxline.md`.
 
-use core_format::FormatError;
+use std::io::Cursor;
+
+use core_format::{FormatError, Reads};
 use core_raster::{Ring, area_mm2};
 use core_slicer::Contour;
 use glam::Vec2;
@@ -39,18 +41,20 @@ pub(crate) fn layer_bytes(area: u32, rings: &[Ring], pitch_mm: (f32, f32)) -> Ve
 /// The rings of one layer's bytes, area and counts included, page break not, as contours in
 /// millimetres from the panel's corner.
 pub(crate) fn contours_of(data: &[u8]) -> Result<Vec<Contour>, FormatError> {
-    let mut words = Words { data, at: 4 };
-    let rings = words.next()?;
+    let mut words = Reads::new(Cursor::new(data));
+    words.skip(4)?;
+    let rings = words.u32_be()?;
     let mut contours = Vec::new();
     for _ in 0..rings {
-        let count = words.next()?;
-        if u64::from(count) * POINT_BYTES > (data.len() - words.at) as u64 {
-            return Err(FormatError::MalformedRun { offset: words.at });
+        let count = words.u32_be()?;
+        if u64::from(count) * POINT_BYTES > words.remaining()? {
+            let offset = words.position()? as usize;
+            return Err(FormatError::MalformedRun { offset });
         }
         let mut points = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            let x = words.next()?.cast_signed();
-            let y = words.next()?.cast_signed();
+            let x = words.u32_be()?.cast_signed();
+            let y = words.u32_be()?.cast_signed();
             points.push(Vec2::new(x as f32, y as f32) / 1000.0);
         }
         if points.len() > 1 && points.first() == points.last() {
@@ -59,21 +63,4 @@ pub(crate) fn contours_of(data: &[u8]) -> Result<Vec<Contour>, FormatError> {
         contours.extend(Contour::from_points(points));
     }
     Ok(contours)
-}
-
-/// Big-endian words read off the front of a slice, refusing to run past it.
-struct Words<'a> {
-    data: &'a [u8],
-    at: usize,
-}
-
-impl Words<'_> {
-    fn next(&mut self) -> Result<u32, FormatError> {
-        let bytes = self
-            .data
-            .get(self.at..self.at + 4)
-            .ok_or(FormatError::MalformedRun { offset: self.at })?;
-        self.at += 4;
-        Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-    }
 }

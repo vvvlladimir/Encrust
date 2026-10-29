@@ -167,7 +167,7 @@ fn every_offset_in_the_header_lands_inside_the_file_in_order() {
 
     assert_eq!(
         parameters, HEADER_BYTES,
-        "the print parameters follow the header, as the vendor lays them"
+        "the print parameters follow the header"
     );
     assert!(
         parameters < slicer && slicer < large && large < small && small < table,
@@ -464,11 +464,7 @@ fn the_layers_are_covered_by_a_key_that_is_never_zero() {
         CtbVersion::V5,
         &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()],
     );
-    assert_ne!(
-        u32_at(&file, 0x64),
-        0,
-        "the vendor's slicer never writes zero"
-    );
+    assert_ne!(u32_at(&file, 0x64), 0, "a written key is never zero");
 }
 
 #[test]
@@ -514,7 +510,7 @@ fn the_version_four_block_counts_the_layers_and_adds_up_their_time() {
 }
 
 #[test]
-fn a_grey_stack_states_the_flag_the_vendor_writes_without_grey() {
+fn a_grey_stack_states_the_flag_a_binary_stack_states() {
     let pixels: Vec<u8> = (0..WIDTH_PX * HEIGHT_PX).map(|index| index as u8).collect();
     for version in [CtbVersion::V4, CtbVersion::V5] {
         let file = write(version, &[layer_from(&pixels)]);

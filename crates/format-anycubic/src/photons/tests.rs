@@ -48,7 +48,7 @@ fn runs_past_the_panel_are_refused() {
 }
 
 #[test]
-fn the_record_ends_with_the_sides_bit_reversed_as_the_vendor_files_have_them() {
+fn the_record_ends_with_the_sides_bit_reversed() {
     let mut builder = LayerRuns::builder(1440, 2560);
     builder.push(1440 * 2560, 0);
     let mut file = Cursor::new(Vec::new());
@@ -77,7 +77,11 @@ fn a_layer_that_ends_lit_does_not_count_its_last_stretch() {
             .expect("in memory");
     }
     let record = file.into_inner();
-    assert_eq!(record[..4], 1u32.to_be_bytes(), "the vendor writer's count");
+    assert_eq!(
+        record[..4],
+        1u32.to_be_bytes(),
+        "the count the format states"
+    );
 }
 
 #[test]

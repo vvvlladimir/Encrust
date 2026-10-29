@@ -1,25 +1,25 @@
-# 0372. A plate inset warns and never clips
+# 0371. A plate inset warns and never clips
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
 
 ## Context
 
-The vendor slicer's profile for a machine can give a "build area offset": four margins in mm,
-left, right, top and bottom, inside which it draws boundary lines on the plate. It is on for
+The maker's settings for a machine can give a "build area offset": four margins in mm,
+left, right, top and bottom, meant as boundary lines on the plate. It is on for
 three machines we ship: the Elegoo Mars 2 and Mars 2 Pro (1.47, 1.15, 0.26, 1.3) and the
 Mars Pro (0.26, 1.3, 1.15, 2.5). The QIDI 6.08 turns it on with zero margins, and the Mars 3
 and Mars 3 Pro carry the numbers but leave it off.
 
-None of the four margins appears in the header or settings of a file the vendor sliced for
+None of the four margins appears in the header or settings of a known file for
 the Mars 2 Pro; 1.15 turns up only at unaligned offsets inside the image data. The offset
 does not reach the file: it guides the person placing models.
 
 ## Decision
 
 `PrinterProfile.plate_inset`, `[plate_inset]` in TOML, holds the four margins in plate axes:
-`min_x_mm`, `max_x_mm`, `min_y_mm` and `max_y_mm`. We read the vendor's left, right, bottom
-and top as −X, +X, −Y and +Y, because plate axes are the vendor's. `PlateInset::area_mm` is
+`min_x_mm`, `max_x_mm`, `min_y_mm` and `max_y_mm`. We read the maker's left, right, bottom
+and top as −X, +X, −Y and +Y, because plate axes are the panel's. `PlateInset::area_mm` is
 the one place the usable rectangle is computed.
 
 The inset is a soft boundary:
@@ -37,7 +37,7 @@ The inset is a soft boundary:
 - A user sees where the maker would rather not have a model and can choose to use it anyway.
 - Arrange can still put a model in the band; the hatching shows where it did.
 - If the left/right/top/bottom reading is wrong, a dashed line sits about a millimetre off on
-  one side. A machine, or a vendor file showing the lines, would settle it.
+  one side. A machine, or a file showing the lines, would settle it.
 
 ## Alternatives considered
 
@@ -48,7 +48,7 @@ It would also have moved `core-plate` from a plate size to a rectangle at every 
 
 ### Clip the masks to the inset
 
-Throws away what the panel can print, which the vendor does not do either.
+Throws away what the panel can print, which the maker does not ask either.
 
 ### The option that won, and what it costs
 

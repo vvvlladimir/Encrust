@@ -13,10 +13,10 @@ x_px = x_mm / pitch.x
 y_px = y_mm / pitch.y
 ```
 
-Row `0` is the near edge of the plate (ADR 0134); Y is not inverted. A file for a machine
-without `mirror_x`, and every `.photons`, asks for `mirror_y` so its rows start at the far
-edge (ADR 0366); the profile's flags otherwise reach the header only — while the app asks for `mirror_y`
-to draw the plate's far edge at the top of the screen (ADR 0134). A mirror is applied here
+Y is not inverted. Rows start at the near edge of the plate on an X-mirrored machine and in
+every `.cxline` (ADR 0134), and at the far edge otherwise and in every `.photons`: such a file
+asks for `mirror_y` (ADR 0366). The profile's flags otherwise reach the header only. The
+window asks for `mirror_y` to draw the plate's far edge at the top of the screen. A mirror is applied here
 rather than in the geometry, so the mesh displayed and the mesh sliced stay one object, and
 it reverses every contour's orientation, so the rasteriser reverses a ring as it maps it
 whenever exactly one of the two is set.
@@ -89,9 +89,9 @@ The ladder at `n` levels is `256/n − 1, 2·256/n − 1, …, 255`, which is wh
 write at anti-aliasing level `n`: eight levels are `31, 63, …, 255`. A count that does not
 divide 256 lands a rung or two low, which costs nothing a printer can see.
 
-`min` and `max` are the vendor's Gray Range, `Display::grey_min` and `grey_max` in the printer
+`min` and `max` are the machine's grey range, `Display::grey_min` and `grey_max` in the printer
 profile: an edge grey is raised to `min`, then the span squeezed into `min..max`, while black
-and full white stay as they are (ADR 0379). They default to 0 and 255, which keeps every grey:
+and full white stay as they are (ADR 0378). They default to 0 and 255, which keeps every grey:
 a file that prints well on the one machine measured carries the whole ramp down to 1 (ADR 0139).
 
 This is what serious font rasterisers do (`libart`, FreeType's smooth renderer,

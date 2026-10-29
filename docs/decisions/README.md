@@ -96,14 +96,13 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0356](0356-faces-and-shells-are-edited-by-hand-and-by-number.md) | Faces and shells are edited by hand in the window and by number on the command line | Accepted |
 | [0357](0357-wrap-has-no-sampled-fallback.md) | Wrap unions exactly or leaves the repair alone, with no sampled fallback | Accepted |
 | [0358](0358-a-shell-inside-another-follows-its-holder.md) | A closed shell inside another follows its holder's turning | Accepted |
-| [0359](0359-the-printer-catalogue-is-kept-by-hand.md) | Keep the printer catalogue by hand, checked against the vendor's own profiles | Accepted |
+| [0359](0359-the-printer-catalogue-is-kept-by-hand.md) | Keep the printer catalogue by hand, checked against the makers' machine settings | Accepted |
 | [0360](0360-write-photon-workshop-revision-518.md) | Write revision 518 of the Photon Workshop container, without its second preview | Accepted |
-| [0374](0374-write-photon-workshop-revision-515.md) | Write revision 515 of the Photon Workshop container | Accepted |
-| [0361](0361-write-the-pwsz-archive-in-format-anycubic.md) | Write the PWSZ archive in `format-anycubic`, its layers in PW0 | Accepted; the `core-analysis` dependency and the scene's extents are superseded by 0367 |
-| [0367](0367-read-the-pwsz-and-write-it-as-the-vendor-does.md) | Read the PWSZ archive, and write it as the vendor slicer does | Accepted |
+| [0373](0373-write-photon-workshop-revision-515.md) | Write revision 515 of the Photon Workshop container | Accepted |
+| [0361](0361-read-and-write-the-pwsz-archive-in-format-anycubic.md) | Read and write the PWSZ archive in `format-anycubic`, its layers in PW0 | Accepted |
 | [0362](0362-write-cxline-phz-and-photons-in-the-family-crates.md) | Write `.cxline`, `.phz` and `.photons` in the crates of their families, and trace masks in `core-raster` | Accepted |
-| [0375](0375-write-prz-as-goo-and-crmaslice-as-zip.md) | Write `.prz` as `.goo` and `.crmaslice` as the gcode archive | Accepted |
-| [0377](0377-write-goo-revision-5-1-for-the-machines-that-read-it.md) | Write `.goo` revision 5.1 for the machines that read it | Accepted |
+| [0374](0374-write-prz-as-goo-and-crmaslice-as-zip.md) | Write `.prz` as `.goo` and `.crmaslice` as the gcode archive | Accepted |
+| [0376](0376-write-goo-revision-5-1-for-the-machines-that-read-it.md) | Write `.goo` revision 5.1 for the machines that read it | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
 | [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
@@ -156,10 +155,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0039](0039-near-empty-and-near-full-pixels-snap.md) | Coverage within 2% of empty or full snaps to the panel's own black and white | Accepted |
 | [0113](0113-write-only-the-grey-the-panel-cures.md) | A mask carries only the grey the panel will cure | Accepted |
 | [0117](0117-blur-the-coverage-before-the-floor.md) | Blur is a box filter on the runs' coverage, before the floor | Accepted |
-| [0139](0139-the-edge-grey-follows-a-file-that-prints.md) | Let the edge carry every grey | Accepted; the floor is superseded by 0379 |
+| [0139](0139-the-edge-grey-follows-a-file-that-prints.md) | Let the edge carry every grey | Accepted; the floor is superseded by 0378 |
 | [0145](0145-tolerance-moves-the-contours-not-the-mask.md) | Tolerance moves the contours, not the mask | Accepted |
-| [0378](0378-a-machine-may-take-masks-without-grey-only.md) | A machine may take masks without grey only | Accepted |
-| [0379](0379-an-edge-grey-is-spread-over-the-vendors-grey-range.md) | Spread an edge grey over the vendor's grey range | Accepted |
+| [0377](0377-a-machine-may-take-masks-without-grey-only.md) | A machine may take masks without grey only | Accepted |
+| [0378](0378-an-edge-grey-is-spread-over-the-machines-grey-range.md) | Spread an edge grey over the machine's grey range | Accepted |
 
 ### Exposure and the written stack
 
@@ -169,7 +168,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0013](0013-exposure-settings-in-the-material-profile.md) | Exposure and motion settings live in MaterialProfile | Accepted |
 | [0045](0045-sliced-files-are-written-to-a-seekable-sink.md) | Every sliced file is written to a seekable sink | Accepted |
 | [0175](0175-a-sliced-file-leaves-through-a-sink.md) | A sliced file leaves through a sink, not a path | Accepted |
-| [0376](0376-a-sliced-file-sink-reads-back.md) | A sliced-file sink can be read back | Accepted |
+| [0375](0375-a-sliced-file-sink-reads-back.md) | A sliced-file sink can be read back | Accepted |
 | [0067](0067-the-resin-volume-is-patched-in-at-finish.md) | The resin volume is patched into the header at `finish` | Accepted |
 | [0090](0090-exposure-is-banded-by-height.md) | Exposure varies by bands of height, and the bottom block is out of reach | Accepted |
 | [0128](0128-the-exposure-follows-the-layer-in-sight.md) | The exposure follows the layer in sight | Accepted |
@@ -353,14 +352,15 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0149](0149-a-reader-is-a-trait-and-a-container-names-itself.md) | Make a reader a trait, and let a container name itself | Accepted |
 | [0150](0150-an-open-file-owns-the-source-it-reads-from.md) | Let an open file own the source it reads from | Accepted |
 | [0167](0167-the-gcode-zip-is-its-own-crate-and-the-png-codec-moves-down.md) | Give the gcode zip its own crate, and move the PNG codec down into `core-format` | Accepted |
-| [0168](0168-one-creality-crate-holds-both-revisions-and-the-chitu-codecs-move-down.md) | Write both `.cxdlp` revisions from one crate, and move the Chitu codecs down | Accepted; the version 4 codec, extension and model rule are superseded by 0368 |
+| [0379](0379-an-archive-failure-is-turned-into-a-format-error-in-core-format.md) | Turn an archive's failure into a `FormatError` in `core-format` | Accepted |
+| [0168](0168-one-creality-crate-holds-both-revisions-and-the-chitu-codecs-move-down.md) | Write both `.cxdlp` revisions from one crate, and move the Chitu codecs down | Accepted; the version 4 codec, extension and model rule are superseded by 0367 |
 | [0169](0169-the-vector-container-traces-its-polygons-out-of-the-mask.md) | Trace the `.svgx` polygons out of the mask rather than carry contours to the writer | Accepted |
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
 | [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
 | [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
-| [0365](0365-write-the-ctb-the-vendor-slicer-writes.md) | Write the `.ctb` the vendor slicer writes, and pick its revision by the panel | Accepted |
-| [0368](0368-write-the-cxdlpv4-the-vendor-slicer-writes.md) | Write the `.cxdlpv4` the vendor slicer writes, with its own codec and model codes | Accepted |
+| [0365](0365-write-the-ctb-the-printers-read.md) | Write the `.ctb` the printers read, and pick its revision by the panel | Accepted |
+| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted |
 
 ### Printer and material profiles
 
@@ -387,15 +387,15 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0301](0301-a-printer-locks-the-settings-its-firmware-runs-itself.md) | A printer locks the settings its firmware runs itself, and a shipped machine's locks are the build's | Accepted; the lock laid over every resin is superseded by 0364 |
 | [0364](0364-a-lock-is-the-machines-default.md) | A printer's lock is its default, which a resin's table for it overrides | Accepted |
 | [0363](0363-a-peel-has-two-stages.md) | A peel has two stages, and the bottom layers a light-off delay of their own | Accepted |
-| [0369](0369-a-printer-states-the-limits-of-a-resin.md) | A printer states the limits of a resin's settings | Accepted |
-| [0370](0370-a-printer-names-the-plate-edge-that-is-its-front.md) | A printer names the plate edge that is its front | Accepted |
-| [0371](0371-a-halot-buffer-is-a-resin-setting-from-the-machines-default.md) | A HALOT buffer is a resin setting that starts from the machine's default | Accepted |
-| [0372](0372-a-plate-inset-warns-and-never-clips.md) | A plate inset warns and never clips | Accepted |
-| [0373](0373-an-installed-printer-is-kept-as-its-edits.md) | An installed printer is kept as its edits over the shipped one | Accepted |
+| [0368](0368-a-printer-states-the-limits-of-a-resin.md) | A printer states the limits of a resin's settings | Accepted |
+| [0369](0369-a-printer-names-the-plate-edge-that-is-its-front.md) | A printer names the plate edge that is its front | Accepted |
+| [0370](0370-a-halot-buffer-is-a-resin-setting-from-the-machines-default.md) | A HALOT buffer is a resin setting that starts from the machine's default | Accepted |
+| [0371](0371-a-plate-inset-warns-and-never-clips.md) | A plate inset warns and never clips | Accepted |
+| [0372](0372-an-installed-printer-is-kept-as-its-edits.md) | An installed printer is kept as its edits over the shipped one | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
-| [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted; an installed printer as a whole copy is superseded by 0373 |
+| [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted; an installed printer as a whole copy is superseded by 0372 |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |
-| [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted; 515 left unwritten is superseded by 0374 |
+| [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted; 515 left unwritten is superseded by 0373 |
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
 | [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |

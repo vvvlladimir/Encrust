@@ -41,6 +41,25 @@ pub enum SlicedFormat {
     Pwsz(PwszFlavour),
 }
 
+/// The formats one extension names whatever the revision; `.cxdlp` alone carries no revision
+/// either, and version 3 is what all but the newest of those machines read.
+const BY_EXTENSION: [(&str, SlicedFormat); 14] = [
+    ("goo", SlicedFormat::Goo),
+    ("prz", SlicedFormat::Prz),
+    ("cbddlp", SlicedFormat::Cbddlp(CbddlpFlavour::Cbddlp)),
+    ("photon", SlicedFormat::Cbddlp(CbddlpFlavour::Photon)),
+    ("zip", SlicedFormat::GcodeZip),
+    ("crmaslice", SlicedFormat::Crmaslice),
+    ("cxdlpv4", SlicedFormat::Cxdlp(CxdlpVersion::V4)),
+    ("cxdlp", SlicedFormat::Cxdlp(CxdlpVersion::V3)),
+    ("svgx", SlicedFormat::Svgx),
+    ("cws", SlicedFormat::Cws),
+    ("fdg", SlicedFormat::Fdg),
+    ("photons", SlicedFormat::Photons),
+    ("phz", SlicedFormat::Phz),
+    ("cxline", SlicedFormat::Cxline),
+];
+
 impl SlicedFormat {
     /// The twenty a front end offers, in the order it offers them. Only `.pwmx` and `.pwsz` of
     /// the Anycubic families are on the picker; the others are renames (ADR 0047).
@@ -70,51 +89,25 @@ impl SlicedFormat {
     /// The format `path` names, at `version` when it names a `.ctb`, or `None` when it
     /// names no sliced file at all — a directory for a PNG stack, say.
     pub fn of(path: &Path, version: CtbVersion) -> Option<Self> {
-        let extension = path.extension()?;
-        if extension.eq_ignore_ascii_case("goo") {
-            Some(Self::Goo)
-        } else if extension.eq_ignore_ascii_case("prz") {
-            Some(Self::Prz)
-        } else if extension.eq_ignore_ascii_case("ctb") {
-            Some(Self::Ctb(version))
-        } else if extension.eq_ignore_ascii_case("cbddlp") {
-            Some(Self::Cbddlp(CbddlpFlavour::Cbddlp))
-        } else if extension.eq_ignore_ascii_case("photon") {
-            Some(Self::Cbddlp(CbddlpFlavour::Photon))
-        } else if extension.eq_ignore_ascii_case("zip") {
-            Some(Self::GcodeZip)
-        } else if extension.eq_ignore_ascii_case("crmaslice") {
-            Some(Self::Crmaslice)
-        } else if extension.eq_ignore_ascii_case("cxdlpv4") {
-            Some(Self::Cxdlp(CxdlpVersion::V4))
-        } else if extension.eq_ignore_ascii_case("cxdlp") {
-            // The name carries no revision either, and version 3 is what all but the
-            // newest of these machines read.
-            Some(Self::Cxdlp(CxdlpVersion::V3))
-        } else if extension.eq_ignore_ascii_case("svgx") {
-            Some(Self::Svgx)
-        } else if extension.eq_ignore_ascii_case("cws") {
-            Some(Self::Cws)
-        } else if extension.eq_ignore_ascii_case("fdg") {
-            Some(Self::Fdg)
-        } else if extension.eq_ignore_ascii_case("photons") {
-            Some(Self::Photons)
-        } else if extension.eq_ignore_ascii_case("phz") {
-            Some(Self::Phz)
-        } else if extension.eq_ignore_ascii_case("cxline") {
-            Some(Self::Cxline)
-        } else {
-            let extension = extension.to_string_lossy();
-            Sl1Flavour::of_extension(&extension)
-                .map(Self::Sl1)
-                .or_else(|| {
-                    // Nothing in a file name says which revision, so an extension typed by
-                    // hand gets the newest its machines read.
-                    AnycubicFlavour::of_extension(&extension)
-                        .map(|flavour| Self::Anycubic(flavour, flavour.newest_version()))
-                })
-                .or_else(|| PwszFlavour::of_extension(&extension).map(Self::Pwsz))
+        let extension = path.extension()?.to_string_lossy();
+        if extension.eq_ignore_ascii_case("ctb") {
+            return Some(Self::Ctb(version));
         }
+        if let Some(&(_, format)) = BY_EXTENSION
+            .iter()
+            .find(|(name, _)| extension.eq_ignore_ascii_case(name))
+        {
+            return Some(format);
+        }
+        Sl1Flavour::of_extension(&extension)
+            .map(Self::Sl1)
+            .or_else(|| {
+                // Nothing in a file name says which revision, so an extension typed by
+                // hand gets the newest its machines read.
+                AnycubicFlavour::of_extension(&extension)
+                    .map(|flavour| Self::Anycubic(flavour, flavour.newest_version()))
+            })
+            .or_else(|| PwszFlavour::of_extension(&extension).map(Self::Pwsz))
     }
 
     /// This format at the revision `stated` names, where both name the same container. An output
@@ -171,7 +164,7 @@ impl SlicedFormat {
             Self::GcodeZip => "zip",
             Self::Crmaslice => "crmaslice",
             Self::Cxdlp(CxdlpVersion::V3) => "cxdlp",
-            // The vendor slicer names version 4 apart, and so do its machines.
+            // Version 4 has an extension of its own, which its machines expect.
             Self::Cxdlp(CxdlpVersion::V4) => "cxdlpv4",
             Self::Svgx => "svgx",
             Self::Cws => "cws",

@@ -1,5 +1,5 @@
 //! A shipped printer the user installed is kept as their edits over it, so every field they
-//! left alone follows the build they run. See docs/decisions/0373.
+//! left alone follows the build they run. See docs/decisions/0372.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -83,7 +83,7 @@ fn read(
     let Some(shipped) = shipped else {
         return PrinterProfile::from_toml_str(text, path);
     };
-    let carried = machines_carried_over(&shipped, text, path);
+    let carried = machines_carried_over(&shipped, &table, path)?;
     // A store that refuses either write keeps the copy, to be put back the same way next run.
     if store
         .keep_aside(Kind::Printer, id, OLD_COPY_ASIDE, text)
@@ -95,14 +95,26 @@ fn read(
 }
 
 /// `shipped` with the printers on the network an old whole copy sends to, as nothing ships them.
-fn machines_carried_over(shipped: &PrinterProfile, old: &str, path: &Path) -> PrinterProfile {
-    let machines = PrinterProfile::from_toml_str(old, path)
-        .map(|old| old.machines)
-        .unwrap_or_default();
-    PrinterProfile {
+/// Only the `machines` table is read, so a copy no release would load still gives them up.
+fn machines_carried_over(
+    shipped: &PrinterProfile,
+    old: &Table,
+    path: &Path,
+) -> Result<PrinterProfile, ProfileError> {
+    let machines = match old.get("machines") {
+        Some(machines) => machines
+            .clone()
+            .try_into()
+            .map_err(|source| ProfileError::Parse {
+                path: path.to_owned(),
+                source,
+            })?,
+        None => Vec::new(),
+    };
+    Ok(PrinterProfile {
         machines,
         ..shipped.clone()
-    }
+    })
 }
 
 /// The fields of `profile` that differ from `shipped`, with those it leaves unset listed.

@@ -1,8 +1,5 @@
 //! The reflected CRC-32 two families end their files with: `.cxdlp` with neither inversion
 //! (`docs/formats/creality.md`), `.ctb` in zlib's form (`docs/formats/chitu.md`).
-//!
-//! A file is written once and never read back, so the parts either side of a block only
-//! known later are summed separately and joined by `combine`.
 
 /// The polynomial, reflected, as the table is built from.
 const POLYNOMIAL: u32 = 0xEDB8_8320;
@@ -42,7 +39,8 @@ impl Crc32 {
         self.state ^ combine(u32::MAX, 0, self.length) ^ u32::MAX
     }
 
-    /// This CRC followed by `next`, as if the bytes of both had been summed in order.
+    /// This CRC followed by `next`, as if summed in order: a block known only later is summed
+    /// apart while streaming and joined here, with no second pass.
     #[must_use]
     pub fn followed_by(self, next: Self) -> Self {
         Self {
@@ -52,10 +50,8 @@ impl Crc32 {
     }
 }
 
-/// The CRC of `a` followed by `b`, where `b` covered `length_b` bytes.
-///
-/// A CRC is linear over GF(2): running `length_b` zero bytes through the register is a
-/// matrix, and squaring that matrix repeatedly reaches any length in a few dozen steps.
+/// The CRC of `a` followed by `b`, where `b` covered `length_b` bytes; the matrix squaring
+/// is in `docs/formats/creality.md`.
 fn combine(a: u32, b: u32, length_b: u64) -> u32 {
     if length_b == 0 {
         return a;
@@ -152,9 +148,8 @@ mod tests {
 
     #[test]
     fn the_sum_is_the_reflected_crc_with_neither_inversion() {
-        // Checked against the standard CRC-32, whose own value for this message is the
-        // known 0xCBF43926: inverting the first four bytes stands in for the register
-        // starting at all ones, and complementing the result stands in for the final xor.
+        // The standard CRC-32 of this message is 0xCBF43926; inverting the first four bytes
+        // stands in for its all-ones start, complementing the result for its final xor.
         let mut inverted = *b"123456789";
         for byte in &mut inverted[..4] {
             *byte ^= 0xFF;

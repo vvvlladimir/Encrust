@@ -1,6 +1,6 @@
 use core_format::{
     ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range, stated_pwm, stated_rests,
+    SlicedFileReader, Waits, layer_in_range, panel_in_range, stated_pwm, stated_rests,
     stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
@@ -52,13 +52,7 @@ impl SlicedFileReader for FdgReader {
 
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
         let mut reads = Reads::new(source);
-        let magic = reads.u32_le()?;
-        if magic != MAGIC {
-            return Err(FormatError::NotThisFormat {
-                format: "fdg",
-                found: magic,
-            });
-        }
+        expect_magic(&mut reads, MAGIC, "fdg")?;
         let version = reads.u32_le()?;
         let layer_count = reads.u32_le()?;
         let bottom_layers = reads.u32_le()?;
@@ -199,23 +193,15 @@ fn read_motion<S: ReadSeek>(
     let bottom_light_off = reads.f32_le()?;
     let light_off = reads.f32_le()?;
     reads.seek_to(at.lift)?;
-    let mut motion = [0.0; 5];
-    for value in &mut motion {
-        *value = reads.f32_le()?;
-    }
     let [
         bottom_lift,
         bottom_lift_speed,
         lift,
         lift_speed,
         retract_speed,
-    ] = motion;
-
-    let mut second_stage = [0.0; 6];
+    ] = f32s(reads)?;
     reads.seek_to(at.second_stage)?;
-    for value in &mut second_stage {
-        *value = reads.f32_le()?;
-    }
+    let second_stage = f32s(reads)?;
 
     reads.seek_to(TRANSITION)?;
     let transition_layers = Some(reads.u16_le()?);
@@ -224,15 +210,7 @@ fn read_motion<S: ReadSeek>(
     let stage_bottom_retract_speed = reads.f32_le()?;
     reads.seek_to(V4_MOTION + 0x24)?;
     let stage_bottom_retract = reads.f32_le()?;
-    let waits = match first {
-        Some(entry) if entry.offset >= RESTS_BEFORE_DATA => {
-            reads.seek_to(entry.offset - RESTS_BEFORE_DATA)?;
-            let before_lift_s = reads.f32_le()?;
-            let after_lift_s = reads.f32_le()?;
-            stated_rests(before_lift_s, after_lift_s, reads.f32_le()?)
-        }
-        _ => None,
-    };
+    let waits = read_rests(reads, first)?;
 
     let peel = ChituPeel {
         bottom_lift_total_mm: bottom_lift,
@@ -251,6 +229,41 @@ fn read_motion<S: ReadSeek>(
         waits,
         ..peel.stated()
     })
+}
+
+/// Fails unless the file opens with `magic`, naming `format` in the error.
+pub(crate) fn expect_magic<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    magic: u32,
+    format: &'static str,
+) -> Result<(), FormatError> {
+    let found = reads.u32_le()?;
+    if found != magic {
+        return Err(FormatError::NotThisFormat { format, found });
+    }
+    Ok(())
+}
+
+fn f32s<S: ReadSeek, const N: usize>(reads: &mut Reads<S>) -> Result<[f32; N], FormatError> {
+    let mut values = [0.0; N];
+    for value in &mut values {
+        *value = reads.f32_le()?;
+    }
+    Ok(values)
+}
+
+/// The rests the first layer's definition states before its data, if it has room for them.
+fn read_rests<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    first: Option<&LayerEntry>,
+) -> Result<Option<Waits>, FormatError> {
+    let Some(entry) = first.filter(|entry| entry.offset >= RESTS_BEFORE_DATA) else {
+        return Ok(None);
+    };
+    reads.seek_to(entry.offset - RESTS_BEFORE_DATA)?;
+    let before_lift_s = reads.f32_le()?;
+    let after_lift_s = reads.f32_le()?;
+    Ok(stated_rests(before_lift_s, after_lift_s, reads.f32_le()?))
 }
 
 fn read_table<S: ReadSeek>(

@@ -44,7 +44,7 @@ suggests but no recording confirms. A board that answers otherwise shows a refus
 card.
 
 A command opens a connection beside the watch's: two at once for a moment, inside the four
-the vendor's boards are reported to take. A picture is fetched once per print and kept for
+the maker's boards are reported to take. A picture is fetched once per print and kept for
 the session.
 
 The camera is the gap. Showing video means an RTSP client and an H.264 decoder: a C library,

@@ -1,5 +1,5 @@
 use core_format::{Fields, FormatError};
-use core_raster::{LayerRuns, Run};
+use core_raster::{LayerRuns, Run, push_run};
 
 /// Grey from which a pixel is lit; the container holds one bit a pixel.
 const THRESHOLD: u8 = 128;
@@ -34,8 +34,8 @@ impl PhotonsLayer {
             match open.as_mut() {
                 Some((colour, length)) if *colour == lit => *length += u64::from(run.length),
                 _ => {
-                    // The vendor writer counts a stretch once the next one starts, so the
-                    // last stretch of a layer is never counted; kept, being what it reads.
+                    // A stretch is counted once the next one starts, so the last stretch of a
+                    // layer is never counted; kept, being what the printer reads.
                     if let Some((colour, length)) = open.replace((lit, u64::from(run.length))) {
                         lit_px += if colour { length } else { 0 };
                         push_stretch(&mut data, colour, length);
@@ -54,14 +54,17 @@ impl PhotonsLayer {
         }
     }
 
+    /// Pixels in a row.
     pub fn width(&self) -> u32 {
         self.width
     }
 
+    /// Rows in the layer.
     pub fn height(&self) -> u32 {
         self.height
     }
 
+    /// The encoded bytes, as the container stores them.
     pub fn data(&self) -> &[u8] {
         &self.data
     }
@@ -125,10 +128,7 @@ pub fn decode(data: &[u8], pixel_count: u32) -> Result<Vec<Run>, FormatError> {
             .checked_add(length)
             .filter(|&covered| covered <= pixel_count)
             .ok_or(FormatError::MalformedRun { offset })?;
-        match runs.last_mut() {
-            Some(last) if last.value == value => last.length += length,
-            _ => runs.push(Run { length, value }),
-        }
+        push_run(&mut runs, length, value);
     }
     if covered < pixel_count {
         runs.push(Run {

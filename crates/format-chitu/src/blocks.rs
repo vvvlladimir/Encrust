@@ -24,7 +24,7 @@ pub(crate) struct Head {
     pub slicer_info_bytes: u32,
     /// The layer cipher's key, zero for data in the clear.
     pub encryption_key: u32,
-    /// Whether the header states the print's height, which the vendor leaves zero in a `.ctb`.
+    /// Whether the header states the print's height, which a `.ctb` leaves zero.
     pub states_height: bool,
 }
 
@@ -42,8 +42,8 @@ pub(crate) struct Offsets {
     pub layer_table: u32,
 }
 
-/// Writes everything between the header and the layer table, in the order the vendor's
-/// slicer lays it down: the fixed blocks, the previews, then the strings they address.
+/// Writes everything between the header and the layer table, in the order a
+/// printer finds it: the fixed blocks, the previews, then the strings they address.
 ///
 /// The header is written last, over the space this leaves at the front of the file,
 /// because half its fields are offsets into what follows.
@@ -164,7 +164,7 @@ fn write_print_parameters(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result
     fields.f32_le(material.light_off_s())?;
     fields.u32_le(material.bottom_layers)?;
     fields.u32_le(0)?;
-    // A word the vendor's slicer sets to one in every file.
+    // A word set to one in every file.
     fields.u32_le(1)?;
     fields.zeros(8)
 }
@@ -185,7 +185,7 @@ fn write_slicer_info(
     fields.u32_le(version.flags(job))?;
     fields.u32_le(job.created_minutes())?;
     fields.u32_le(u32::from(job.raster.anti_alias_level(CHITU_ANTI_ALIAS_CAP)))?;
-    // The vendor's slicer states no software version here.
+    // No software version is stated here.
     fields.u32_le(0)?;
     fields.f32_le(after_retract_s)?;
     fields.f32_le(after_lift_s)?;

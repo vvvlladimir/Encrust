@@ -47,7 +47,7 @@ There is no published specification.
 |---|---|
 | Open-source readers of the container | Table names and order, field types, which revision adds which table, the run-length codec |
 | A reference `.pwmx`, read byte by byte | Every offset and unit below, and the three things the source above leaves ambiguous |
-| The vendor's own slicer's writer, read statically | What we write, field by field: the revision each extension is written at (518 for one it does not list), that every revision gets the same tables, and every value below marked as the slicer's |
+| Files these machines print | What we write, field by field: the revision each extension is written at (518 for one not listed), that every revision gets the same tables, and every value below marked as known files' |
 
 The reference file settles three things the code alone does not:
 
@@ -135,14 +135,14 @@ Offsets are from the end of the table's 16-byte head.
 | 0x34 | weight, `f32` | grams |
 | 0x38 | price, `f32` | zero for a resin with no price |
 | 0x3C | currency, four bytes of UTF-8 | the resin's, cut at a character |
-| 0x40 | per-layer settings, `u32` | 0, as the slicer leaves it; the rows carry each layer's own |
+| 0x40 | per-layer settings, `u32` | 0, as known files leave it; the rows carry each layer's own |
 | 0x44 | print time, `u32` | seconds |
 | 0x48 | transition layers, `u32` | |
 | 0x4C | transition layer type, `u32` | 0, the linear ramp |
 | 0x50 | advanced mode, `u32` | 1 when the resin peels in two stages |
 | 0x54 | grey level, `u16` | the anti-alias level again |
-| 0x56 | blur level, `u16` | the edge blur, pixels; 2 with none, as the vendor writes it |
-| 0x58 | resin type, `u32` | 10, which the slicer states for every resin |
+| 0x56 | blur level, `u16` | the edge blur, pixels; 2 with none, as known files carry it |
+| 0x58 | resin type, `u32` | 10, which known files state for every resin |
 | 0x5C | intelligent mode, `u32` | 0: the machine keeps the exposure it is given |
 
 There is no build volume and no machine name here: the machine block carries the name.
@@ -157,15 +157,15 @@ One preview, 224 by 168 pixels.
 | Offset | Field |
 |---|---|
 | 0x00 | resolution X, `u32` |
-| 0x04 | a `u32` the slicer always states as 42 |
+| 0x04 | a `u32` known files always state as 42 |
 | 0x08 | resolution Y, `u32` |
 | 0x0C | the pixels |
 
 The pixels are raw five-six-five colour, `rrrrrggg gggbbbbb` in a **little-endian** word,
 row by row from the top left, with no run-length coding: the size is always
 `width * height * 2`. The job's thumbnail is cut to the record's shape, padded with black
-where a square image does not reach it; a job with none gets a black one, where the slicer
-would state an empty preview.
+where a square image does not reach it; a job with none gets a black one rather than an
+empty preview.
 
 The stated length is `12 + width * height * 2`: the shape and the pixels, not the head.
 
@@ -178,7 +178,7 @@ The 16-byte head, then a `u32` layer count, then one 32-byte row per layer in pr
 | 0x00 | data address, `u32` |
 | 0x04 | data size, `u32` |
 | 0x08 | lift distance, `f32`, mm |
-| 0x0C | lift speed, `f32`, **mm/min**, as the vendor writes it |
+| 0x0C | lift speed, `f32`, **mm/min**, as known files carry it |
 | 0x10 | exposure, `f32`, seconds |
 | 0x14 | layer height, `f32`: this layer's **own thickness** |
 | 0x18 | lit pixels, `u32` |
@@ -187,11 +187,11 @@ The 16-byte head, then a `u32` layer count, then one 32-byte row per layer in pr
 A bottom layer carries the bottom lift distance and speed; every other layer the ordinary
 ones. This is what lets exposure and motion change over the height of a print.
 
-The reference file from Anycubic writes a row's speed in mm/s; the vendor slicer, whose
-files these machines print, writes mm/min, and so do we.
+The reference file from Anycubic writes a row's speed in mm/s; the files these
+machines print carry mm/min, and so do we.
 
 *Lit pixels* is a count the machine displays. We count it after the grey is quantised, so it
-is what the file cures; the reference writer counts it before, and its own files disagree
+is what the file cures; known files count it before, and disagree
 with themselves by about half a per cent.
 
 ## Run-length data
@@ -222,20 +222,20 @@ The word of the long form is the one big-endian field in the container.
 ## Grey, and the anti-alias level
 
 The runs carry four bits of grey of their own, so the header's anti-alias level only says how
-many greys an edge was drawn in, as the slicer states it: the panel's grey levels, at most the
+many greys an edge was drawn in, as known files state it: the panel's grey levels, at most the
 sixteen a nibble holds, sixteen when every grey is kept, and 1 when the panel is drawn without
 grey. The `.pws` codec is the one that reads the level as a count of passes; see below.
 
 ## The blocks behind the layer table
 
-**Grey table**, 8 bytes with no name or length: two zero words, as the slicer writes it — no
+**Grey table**, 8 bytes with no name or length: two zero words, as known files carry it — no
 levels listed, since the nibble in the layer data is the grey either way.
 
 **`EXTRA`**, the two-stage motion block: for the bottom layers and then the rest, a stage
-count of 2 and, per stage, a height in mm and the speeds up and down in mm/s. As the vendor
-lays it, stage one is the first lift with the second retract and stage two the second lift
+count of 2 and, per stage, a height in mm and the speeds up and down in mm/s. As known files
+lay it, stage one is the first lift with the second retract and stage two the second lift
 with the first retract. Without a second stage it climbs nothing and retracts at the first's.
-The block **states a length of 24 and writes 56 bytes of fields**, as the slicer does.
+The block **states a length of 24 and writes 56 bytes of fields**, as known files do.
 
 **`MACHINE`**, 224 bytes with its own head counted in: the machine name in 96 bytes, the
 layer codec's name (`pw0Img`) in 16, the highest anti-alias level (16), a property count —
@@ -244,16 +244,16 @@ the colour the machine paints behind a preview, the pixel along X and along Y in
 as `f32`, eight zero words, a panel count of 1, a zero word, the resolution as two `u16`, and
 four zero words.
 
-**Software**, 164 bytes with no name: the slicer's name in 32 bytes, a length of 128 as a
-`u32`, the version in 32, the host system in 64, and the OpenGL profile the slicer states,
+**Software**, 164 bytes with no name: the writing program's name in 32 bytes, a length of 128 as a
+`u32`, the version in 32, the host system in 64, and an OpenGL profile, always
 `3.3-CoreProfile`, in 32.
 
 **`Model`**, 44 bytes, named in mixed case and with no length: the box the print stands in,
-measured from the panel's centre, then whether supports were generated and how dense. The
-slicer states its mesh's box; ours is what the layers light, from the plate to the top of
+measured from the panel's centre, then whether supports were generated and how dense. Known
+files state the mesh's box; ours is what the layers light, from the plate to the top of
 the stack, written once the last layer is in.
 
-**`SUBIMGS`**, stating one row's length, 44, whatever the layer count, as the slicer does: a
+**`SUBIMGS`**, stating one row's length, 44, whatever the layer count, as known files do: a
 `u32` layer count and a `u32` index of 1, then per layer the address, the length and the lit pixel count of the same layer data the first table
 points at, and eight floats nobody has identified, written as zero. It is filled in at the
 end, like the first table.
@@ -270,7 +270,7 @@ decode it, and a real file with four passes reads back as its model's volume.
 
 ## What we do not write
 
-- **The second preview, and the `.pws` codec.** 518 has a slot for a second preview the
-  vendor's own writer leaves empty, and so do we. A `.pws` is read, not written: see below.
-- **A checksum.** The reference writer computes one over a layer's runs and does not write
-  it; the field it would go in does not exist.
+- **The second preview, and the `.pws` codec.** 518 has a slot for a second preview that
+  known files leave empty, and so do we. A `.pws` is read, not written: see below.
+- **A checksum.** Some writers compute one over a layer's runs; none writes
+  it: the field it would go in does not exist.

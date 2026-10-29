@@ -53,7 +53,7 @@ fn write_identity(fields: &mut Fields<'_>, job: &PrintJob, version: GooVersion) 
     fields.text(job.printer.machine_name(), 32)?;
     fields.text(&job.material.name, 32)?;
 
-    // A binary file states the vendor's dormant level and blur, as a vendor file does.
+    // A binary file states the dormant level and blur a printed file states.
     order.put_u16(
         fields,
         match job.raster.shading {
@@ -61,7 +61,7 @@ fn write_identity(fields: &mut Fields<'_>, job: &PrintJob, version: GooVersion) 
             Shading::Binary => job.raster.anti_alias_level(8),
         },
     )?;
-    // Zero is what a file rounded to no ladder at all carries, as a vendor file does.
+    // Zero is what a file rounded to no ladder at all carries.
     order.put_u16(
         fields,
         match job.raster.shading {
@@ -120,7 +120,7 @@ fn write_geometry(fields: &mut Fields<'_>, job: &PrintJob, order: ByteOrder) -> 
 fn write_exposure(fields: &mut Fields<'_>, job: &PrintJob, order: ByteOrder) -> io::Result<()> {
     let material = &job.material;
     order.put_f32(fields, job.header_exposure_s())?;
-    // The delay mode is 1 whatever the resin waits by, as the vendor writes it: the field
+    // The delay mode is 1 whatever the resin waits by: the field
     // left unused, light-off delay or rests, is zero instead (`docs/formats/goo.md`).
     fields.bool(true)?;
     order.put_f32(fields, material.light_off_s())?;

@@ -6,11 +6,11 @@
 ## Context
 
 ADR 0301 laid a printer's `[locked]` over every resin last, as what the firmware runs itself.
-Files the vendor slicer wrote say otherwise. For the Voxelab Ceres 8.9 it hides a transition
-of 8 and wrote 0, the preset's value; for the PioNext D158 it hides a bottom lift of 7 mm at
+Printed files say otherwise. For the Voxelab Ceres 8.9 the machine's settings hide a transition
+of 8 and the file carries 0, the preset's value; for the PioNext D158 they hide a bottom lift of 7 mm at
 420 mm/min and wrote the preset's 5 mm and 120. A hidden field is the default the machine's
 own presets start from, not a value the file must carry. Our lock gave the Ceres an eight-
-layer ramp the vendor's file does not have: 310 s against 244.
+layer ramp the printed file does not have: 310 s against 244.
 
 The other half of 0301 still holds: a resin carried over from a peeling machine onto a
 tilting vat must not peel 6 mm.
@@ -28,8 +28,8 @@ tilting vat must not peel 6 mm.
 
 ## Consequences
 
-A resin made for a machine prints as the vendor would print its preset; a resin carried over
-from another machine starts from the machine's defaults, as a fresh vendor preset would. A
+A resin made for a machine prints as its preset reads; a resin carried over
+from another machine starts from the machine's defaults, as a fresh preset would. A
 user cannot set a hidden field from the window, only through an imported preset or a hand
 edit of the resin's table.
 
@@ -37,7 +37,7 @@ edit of the resin's table.
 
 ### The resin always wins
 
-The vendor's own behaviour, once a preset exists. Our resins are shared across machines, so
+How a preset already behaves on its own machine. Our resins are shared across machines, so
 a 6 mm peel tuned on a Mars would reach a Saturn 4 Ultra.
 
 ### Track which fields a resin's file states

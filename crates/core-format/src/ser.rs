@@ -1,7 +1,7 @@
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 
 /// A sink a sliced file can be written to. `Seek` lets a header point at a table it precedes
-/// (ADR 0045); `Read` lets a trailer hash what was written before it (ADR 0376).
+/// (ADR 0045); `Read` lets a trailer hash what was written before it (ADR 0375).
 pub trait ReadWriteSeek: Read + Write + Seek {}
 
 impl<T: Read + Write + Seek + ?Sized> ReadWriteSeek for T {}

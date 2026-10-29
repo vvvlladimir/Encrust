@@ -257,11 +257,7 @@ fn a_cube_becomes_a_printable_ctb_file() {
     assert_eq!(le_u32(&file, 0), 0x12FD_0106, "the .ctb magic");
     assert_eq!(le_u32(&file, 4), 5, "the default revision");
     assert_eq!(le_u32(&file, 0x44), 10);
-    assert_ne!(
-        le_u32(&file, 0x64),
-        0,
-        "the layers are covered, as the vendor's are"
-    );
+    assert_ne!(le_u32(&file, 0x64), 0, "the layers are covered");
 
     let layers = ctb_layers(&file);
     assert_eq!(layers.len(), 10);

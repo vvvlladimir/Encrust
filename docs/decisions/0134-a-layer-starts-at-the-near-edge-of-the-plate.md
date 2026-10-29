@@ -8,10 +8,10 @@
 `PixelSpace` mapped model Y onto rows the way a screen draws an image — row `0` was the far
 edge of the plate — and `core-pipeline` baked `PrinterProfile::mirror_x` into every mask it
 wrote. A plate arranged with a part at the right and far corner therefore reached the file
-mirrored in X and with its rows the other way up from what the vendor slicer writes for the
+mirrored in X and with its rows the other way up from what a known file carries for the
 same machine.
 
-The difference is not academic: a vendor file for the ELEGOO Saturn 4 Ultra prints
+The difference is not academic: a known file for the ELEGOO Saturn 4 Ultra prints
 where the part was put, and ours printed somewhere else. Opened side by side, its layer
 sits in one corner and ours in another.
 
@@ -37,7 +37,7 @@ file starts at the near one — `Preview::as_seen`, which already cleared the pa
 
 ## Consequences
 
-A plate carried across from a vendor slicer prints in the same corner of the vat, and both files
+A plate carried across from a known file prints in the same corner of the vat, and both files
 look the same in a reader.
 
 `core-supports` no longer turns the rasteriser's runs the right way up, so the row order is

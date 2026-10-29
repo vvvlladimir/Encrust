@@ -9,7 +9,7 @@ use crate::writer::encryption_key;
 pub(crate) const MAGIC: u32 = 0x9FDA_83AE;
 const VERSION: u32 = 4;
 
-/// A word of the header the vendor writer always sets.
+/// A word of the header that is always set.
 const CONSTANT_AT_B0: u32 = 0x14;
 
 pub(crate) fn write_header(
@@ -39,7 +39,7 @@ pub(crate) fn write_header(
     fields.u16_le(u16::from(material.light_pwm))?;
     fields.u16_le(u16::from(material.bottom_light_pwm))?;
     fields.zeros(8)?;
-    // The vendor's slicer leaves the print's height zero, as in a `.ctb`.
+    // The print's height is left zero, as in a `.ctb`.
     fields.f32_le(0.0)?;
     fields.f32_le(printer.build_volume.x)?;
     fields.f32_le(printer.build_volume.y)?;
@@ -65,7 +65,7 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob, offsets: Offsets) -> io
     fields.f32_le(job.volume_mm3 / 1000.0)?;
     fields.f32_le(job.weight_g())?;
     fields.f32_le(job.cost().unwrap_or(0.0))?;
-    // A word the vendor writer copies from a setting we have not found, as `.fdg` at 0xB4.
+    // A word of unknown meaning, written zero, as `.fdg` at 0xB4.
     fields.u32_le(0)?;
     fields.u32_le(offsets.machine_name)?;
     fields.u32_le(offsets.machine_name_bytes)?;
@@ -73,6 +73,6 @@ fn write_motion(fields: &mut Fields<'_>, job: &PrintJob, offsets: Offsets) -> io
     fields.u32_le(CONSTANT_AT_B0)?;
     fields.u32_le(job.created_minutes())?;
     fields.u32_le(anti_alias_level(job))?;
-    // The vendor's slicer states no software version.
+    // No software version is stated.
     fields.u32_le(0)
 }

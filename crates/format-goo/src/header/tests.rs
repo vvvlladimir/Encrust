@@ -32,10 +32,7 @@ fn a_resting_resin_selects_the_static_waits_and_fills_them() {
         after_retract_s: 2.0,
     };
     let header = header_of(&job);
-    assert_eq!(
-        header[DELAY_MODE_OFFSET], 1,
-        "the mode the vendor always writes"
-    );
+    assert_eq!(header[DELAY_MODE_OFFSET], 1, "the mode every file states");
     assert!(
         f32_at(&header, DELAY_MODE_OFFSET + 1).abs() < f32::EPSILON,
         "no light-off delay"
@@ -54,10 +51,7 @@ fn a_resting_resin_selects_the_static_waits_and_fills_them() {
 fn a_resin_holding_the_light_off_writes_no_waits() {
     let job = sample_job(10);
     let header = header_of(&job);
-    assert_eq!(
-        header[DELAY_MODE_OFFSET], 1,
-        "the mode the vendor always writes"
-    );
+    assert_eq!(header[DELAY_MODE_OFFSET], 1, "the mode every file states");
     assert!(
         (0..6).all(|index| f32_at(&header, DELAY_MODE_OFFSET + 5 + 4 * index) == 0.0),
         "no rest"
@@ -148,14 +142,14 @@ fn u16_at(header: &[u8], offset: usize) -> u16 {
 }
 
 #[test]
-fn binary_shading_states_the_vendors_dormant_level_and_blur() {
+fn binary_shading_states_the_dormant_level_and_blur() {
     let mut job = sample_job(10);
     job.raster.shading = Shading::Binary;
     let header = header_of(&job);
     assert_eq!(
         u16_at(&header, AA_OFFSET),
         4,
-        "a vendor file with AA off says 4"
+        "a printed file with AA off says 4"
     );
     assert_eq!(u16_at(&header, AA_OFFSET + 2), 0, "no grey ladder");
     assert_eq!(u16_at(&header, AA_OFFSET + 4), 2, "and a blur of 2");

@@ -137,8 +137,7 @@ fn autosave(window: &mut Window) {
     }
 }
 
-/// The greys an edge is spread over, as the vendor's slicer sets them for this machine; see
-/// `docs/decisions/0379`.
+/// The greys an edge is spread over on this machine; see `docs/decisions/0378`.
 fn grey_range_rows(ui: &mut egui::Ui, display: &mut Display) {
     let mut min = u32::from(display.grey_min);
     let mut max = u32::from(display.grey_max);

@@ -76,7 +76,7 @@ pub(crate) fn write_settings(fields: &mut Fields<'_>, job: &PrintJob) -> io::Res
 
 /// Writes the block version 3 added: what sliced the file, the resin, and the corrections
 /// the firmware may apply. Every correction is written off, because ours are already in
-/// the masks (`docs/design/compensation.md`); the bytes are the vendor's.
+/// the masks (`docs/design/compensation.md`).
 pub(crate) fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     write_text(fields, SLICER)?;
     write_text(fields, &job.material.name)?;
@@ -113,12 +113,12 @@ pub(crate) fn write_utf16(fields: &mut Fields<'_>, value: &str) -> io::Result<()
     Ok(())
 }
 
-/// A number as the vendor writer puts it, six decimals of the single-precision value.
+/// A number as the format states it, six decimals of the single-precision value.
 pub(crate) fn as_text(value: f32) -> String {
     format!("{:.6}", f64::from(value))
 }
 
-/// A wait as the vendor writer states it, in whole seconds with the fraction dropped.
+/// A wait as the format states it, in whole seconds with the fraction dropped.
 pub(crate) fn whole_seconds(value: f32) -> u16 {
     value.floor().clamp(0.0, f32::from(u16::MAX)) as u16
 }
@@ -194,7 +194,7 @@ mod tests {
         assert_eq!(
             u16::from_be_bytes([numbers[2], numbers[3]]),
             0,
-            "the vendor drops the fraction of a wait"
+            "a wait is stated without its fraction"
         );
         assert_eq!(u16::from_be_bytes([numbers[4], numbers[5]]), 32);
     }
@@ -213,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn the_corrections_are_the_vendors_bytes_with_anti_aliasing_off() {
+    fn the_corrections_are_written_off_with_anti_aliasing_off() {
         let mut job = sample_job(1);
         job.raster.shading = core_raster::Shading::Binary;
         let bytes = written(|fields| write_slicer_info(fields, &job));

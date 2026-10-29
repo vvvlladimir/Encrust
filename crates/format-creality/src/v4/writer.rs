@@ -41,7 +41,7 @@ impl SlicedFileWriter for CxdlpV4Writer {
         })?;
 
         // The blocks in front of the layer table are built in memory because the header
-        // addresses them and the checksum covers them, and the sink cannot be read back.
+        // addresses them and the checksum takes them while streaming, with no second pass.
         let header_bytes = blocks::header_bytes(&model);
         let (body, offsets) = block_at(header_bytes, |fields| blocks::write_body(fields, job))?;
 
@@ -158,7 +158,7 @@ impl LayerSink for CxdlpV4Sink<'_> {
 
 /// What the layer cures in square millimetres times a thousand, which is the unit the
 /// row's area field is in. It carries everything the layer lights rather than the largest
-/// island a vendor's slicer measures; see `docs/formats/creality.md`.
+/// island alone; see `docs/formats/creality.md`.
 fn area_field(job: &PrintJob, lit_px: u64) -> u32 {
     let pitch = &job.raster.pitch;
     let area = (lit_px as f64 * f64::from(pitch.x * pitch.y)).round();

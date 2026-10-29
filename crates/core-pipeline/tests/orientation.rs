@@ -146,7 +146,7 @@ fn photons_starts_at_the_far_edge_whatever_the_mirror() {
 #[test]
 fn cxline_keeps_the_plate_as_it_stands() {
     let rows = lit_rows(printer(false), SlicedFormat::Cxline, "normal.cxline");
-    assert_eq!(rows, (2, 7), "the vendor's .cxline matched without a flip");
+    assert_eq!(rows, (2, 7), "a printed .cxline matched without a flip");
 }
 
 #[test]

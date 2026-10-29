@@ -1,4 +1,4 @@
-# 0376. A sliced-file sink can be read back
+# 0375. A sliced-file sink can be read back
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
@@ -10,7 +10,7 @@ points at a table it precedes is filled in by going back over it. A trailer over
 before it was so far computed while they streamed past, as the CRC that ends a `.ctb` is,
 because a CRC of two runs of bytes combines from the CRC of each.
 
-The `.goo` revision 5.1 the vendor writes for the Jupiter 2 ends with the MD5 of every byte
+The `.goo` revision 5.1 the Jupiter 2 reads ends with the MD5 of every byte
 before it. Its tables at the front state where each layer's masks lie and how long they
 are, so they are final only after the last layer; the masks follow the tables. An MD5 does
 not combine, so it can only be taken over the finished bytes in file order. Two front ends

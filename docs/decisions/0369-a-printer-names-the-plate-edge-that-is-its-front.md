@@ -1,4 +1,4 @@
-# 0370. A printer names the plate edge that is its front
+# 0369. A printer names the plate edge that is its front
 
 - **Status:** Accepted
 - **Date:** 2026-10-28
@@ -15,18 +15,18 @@ panel turned, so the machine's front is a long side, the panel's `-X` or `+X` ed
 viewport showed it on a short side, and a user setting a part near the front of the vat put
 it at the side.
 
-The vendor slicer's profile for each machine states this as `direction_type`: `Front`,
+The maker's settings for each machine state this as `Front`,
 `Left` or `Right`. Of 194 machines, 36 say `Left` or `Right`, all but one with a portrait
 panel.
 
 ## Decision
 
 `PrinterProfile` carries `front_edge`: `min_y` (the default, and left unwritten), `min_x` or
-`max_x`, transcribed from the vendor's `direction_type` (`Front`, `Left`, `Right`). It is for
+`max_x`, transcribed from the maker's word (`Front`, `Left`, `Right`). It is for
 the viewport only: the plate keeps panel axes, so raster, files and placement do not change.
 
-The vendor's `Left` is its plate's `-X` edge, `Right` its `+X`. On an X-mirrored panel other
-than `.photons` its layer is ours turned half round (ADR 0366), so there `Left` is our `max_x`
+The maker's `Left` is the plate's `-X` edge, `Right` its `+X`. On an X-mirrored panel other
+than `.photons` a known layer is ours turned half round (ADR 0366), so there `Left` is our `max_x`
 and `Right` our `min_x`; elsewhere `min_x` and `max_x`. One LD-002H part placed alike in both
 slicers' windows showed it: the two files held it in opposite corners.
 
@@ -37,9 +37,9 @@ opening and Home camera, and the view cube's faces with their names.
 
 - A portrait machine opens looking at its real front, and the cube's Front clicks there.
 - Plate X and Y stay the panel's, so the grid's axis marks still read the panel's X along
-  the short side on these machines, as the vendor slicer shows it.
-- Profiles with no vendor record (the Nova3D machines, the SL1 and SL1S)
-  keep `min_y` until a machine or a vendor file says otherwise.
+  the short side on these machines, as the makers draw it.
+- Profiles with no maker's word (the Nova3D machines, the SL1 and SL1S)
+  keep `min_y` until a machine or a known file says otherwise.
 - The printer form does not offer the field; an own profile gets it by editing its TOML.
 
 ## Alternatives considered
@@ -48,7 +48,7 @@ opening and Home camera, and the view cube's faces with their names.
 
 The plate would read wide on these machines with X along the long side. Every writer, the
 raster's mirror flags and the sliced-file reader would gain a turn, for a change the user
-sees only in the viewport; and the vendor slicer keeps panel axes too.
+sees only in the viewport; and the makers keep panel axes too.
 
 ### Guess the front from the panel's shape
 
@@ -59,5 +59,5 @@ choose between `-X` and `+X`.
 ### The option that won, and what it costs
 
 One more profile field to transcribe and keep right per machine, read through the file
-layout as well as the vendor's word. On those X-mirrored machines the grid's X runs towards
-the front where the vendor's runs away from it.
+layout as well as the maker's word. On those X-mirrored machines the grid's X runs towards
+the front where the maker's runs away from it.

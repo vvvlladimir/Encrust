@@ -23,7 +23,7 @@ z = 170.0
 per_layer_settings = true
 variable_layer_height = false
 
-# The vendor slicer hides the light power and writes it full, see ADR 0301.
+# The firmware runs the light at full power, see ADR 0301.
 [locked]
 light_pwm = 255
 bottom_light_pwm = 255

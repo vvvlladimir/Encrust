@@ -35,7 +35,7 @@ const CODEC_NAME_BYTES: usize = 16;
 /// Bytes of the slicer block. Unnamed, and it states a length of its own in the middle.
 pub(crate) const SOFTWARE_BYTES: u32 = 32 + 4 + 32 + 64 + 32;
 
-/// What the slicer block states its length as: the vendor's slicer states 128.
+/// What the slicer block states its length as: files of this format state 128.
 const SOFTWARE_STATED_BYTES: u32 = 128;
 
 /// Bytes of the model block: a name and no length, then the box and two words.
@@ -53,7 +53,7 @@ pub(crate) fn sub_layer_table_bytes(layer_count: u32) -> u32 {
     SUB_LAYER_HEAD_BYTES + SUB_LAYER_ROW_BYTES * layer_count
 }
 
-/// Writes the grey table: two zero words, as the vendor's slicer writes it. The nibble in
+/// Writes the grey table: two zero words, as files of this format carry it. The nibble in
 /// the layer data is the grey either way; see ADR 0147.
 pub(crate) fn write_colour_table(fields: &mut Fields<'_>) -> io::Result<()> {
     fields.zeros(COLOUR_TABLE_BYTES as usize)
@@ -134,7 +134,7 @@ pub(crate) fn panel_in_sixteen_bits(job: &PrintJob, what: &'static str) -> Resul
 /// Writes the second layer table's head and leaves its rows blank; they are filled in once
 /// the layers are written, like the first table's.
 pub(crate) fn write_sub_layer_head(fields: &mut Fields<'_>, layer_count: u32) -> io::Result<()> {
-    // The vendor's slicer states one row's length here, whatever the layer count.
+    // Files of this format state one row's length here, whatever the layer count.
     write_table_head(fields, "SUBIMGS", SUB_LAYER_ROW_BYTES)?;
     fields.u32_le(layer_count)?;
     fields.u32_le(1)?;
@@ -148,19 +148,18 @@ pub(crate) fn write_software(fields: &mut Fields<'_>) -> io::Result<()> {
     fields.text(env!("CARGO_PKG_VERSION"), 32)?;
     fields.text(std::env::consts::OS, 64)?;
 
-    // The OpenGL profile the vendor's slicer states; nothing here renders through it.
+    // The OpenGL profile files of this format state; nothing here renders through it.
     fields.text("3.3-CoreProfile", 32)
 }
 
 /// Writes the model block: the box the print stands in, measured from the panel's centre,
-/// from the plate to the top of the stack. The vendor's slicer states the mesh's own box;
-/// ours is what the layers light, `None` until they are written.
+/// from the plate to the top of the stack: what the layers light, `None` until they are written.
 pub(crate) fn write_model(
     fields: &mut Fields<'_>,
     job: &PrintJob,
     box_mm: Option<[f32; 4]>,
 ) -> io::Result<()> {
-    // The vendor's slicer names this block in mixed case and gives it no length.
+    // The format names this block in mixed case and gives it no length.
     fields.text("Model", NAME_BYTES)?;
     let [left, top, right, bottom] = box_mm.unwrap_or_default();
     for value in [left, top, 0.0, right, bottom, job.height_mm()] {

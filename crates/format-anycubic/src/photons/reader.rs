@@ -54,14 +54,6 @@ impl SlicedFileReader for PhotonsReader {
         let pixel_count = panel_in_range(width_px, height_px)?;
 
         let pitch_mm = header.pixel_mm as f32;
-        let stated = PrinterTuning {
-            lift_distance_mm: stated_distance_mm(header.lift_mm as f32),
-            retract_distance_mm: stated_distance_mm(header.lift_mm as f32),
-            lift_speed_mm_min: stated_speed_mm_min(header.lift_mm_s as f32 * 60.0),
-            retract_speed_mm_min: stated_speed_mm_min(header.retract_mm_s as f32 * 60.0),
-            light_off_delay_s: stated_wait_s(header.light_off_s as f32),
-            ..PrinterTuning::default()
-        };
         Ok(OpenPhotons {
             reads,
             facts: SlicedFile {
@@ -81,11 +73,23 @@ impl SlicedFileReader for PhotonsReader {
                 print_time_s: None,
                 volume_mm3: Some(header.volume_ml as f32 * 1000.0),
                 grey_steps: 2,
-                stated,
+                stated: stated(&header),
                 layers,
             },
             pixel_count,
         })
+    }
+}
+
+/// The peel the header states: one lift, retracted the same distance.
+fn stated(header: &Header) -> PrinterTuning {
+    PrinterTuning {
+        lift_distance_mm: stated_distance_mm(header.lift_mm as f32),
+        retract_distance_mm: stated_distance_mm(header.lift_mm as f32),
+        lift_speed_mm_min: stated_speed_mm_min(header.lift_mm_s as f32 * 60.0),
+        retract_speed_mm_min: stated_speed_mm_min(header.retract_mm_s as f32 * 60.0),
+        light_off_delay_s: stated_wait_s(header.light_off_s as f32),
+        ..PrinterTuning::default()
     }
 }
 

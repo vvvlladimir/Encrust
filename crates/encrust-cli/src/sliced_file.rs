@@ -144,7 +144,7 @@ fn warn_if_exposure_was_measured_elsewhere(job: &PrintJob, material: &MaterialPr
 }
 
 /// A setting past what the machine takes, or past what its maker advises, is written as
-/// asked; the window would not have let the first be typed (ADR 0369).
+/// asked; the window would not have let the first be typed (ADR 0368).
 pub(crate) fn warn_of_limits(job: &PrintJob) {
     for breach in job.limit_breaches() {
         tracing::warn!("{}", limit_warning(&job.printer.name, &breach));

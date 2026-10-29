@@ -45,12 +45,12 @@ fn a_run_past_seven_pixels_carries_its_length_after_the_escape() {
 }
 
 #[test]
-fn a_vendor_layer_decodes_to_the_runs_it_was_cut_from() {
+fn a_printed_layer_decodes_to_the_runs_it_was_cut_from() {
     // The first bytes of a Jupiter 2 layer: a dark lead-in, then a lit and a dark run.
     let runs = decode_half(&[
         0x38, 0x73, 0xB1, 0xEB, 0x10, 0xA7, 0x59, 0x0F, 0x99, 0x6B, 0xC8, 0x01,
     ])
-    .expect("vendor bytes");
+    .expect("bytes of a printed file");
     let lengths: Vec<(u32, u8)> = runs.iter().map(|run| (run.length, run.value)).collect();
     assert_eq!(lengths, [(17_742_619, 0), (251, 255), (7309, 0)]);
 }

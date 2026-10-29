@@ -42,29 +42,9 @@ impl SlicedFileReader for GooReader {
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
         let mut reads = Reads::new(source);
 
-        let version = reads.text(4)?;
-        let revision = if version == GooVersion::V5.tag() {
-            GooVersion::V5
-        } else {
-            GooVersion::V3
-        };
+        let (version, revision) = read_revision(&mut reads)?;
         let order = revision.order();
-        if reads.array::<8>()? != MAGIC_TAG {
-            // The tag is eight bytes where every other container has a word, so the first
-            // four of it are what a mismatch can report.
-            reads.seek_to(4)?;
-            return Err(FormatError::NotThisFormat {
-                format: "goo",
-                found: reads.u32_be()?,
-            });
-        }
-
-        reads.seek_to(SOFTWARE)?;
-        let slicer = format!("{} {}", reads.text(32)?, reads.text(24)?);
-        reads.seek_to(MACHINE)?;
-        let machine = reads.text(32)?;
-        reads.seek_to(RESIN)?;
-        let resin = reads.text(32)?;
+        let (slicer, machine, resin) = read_names(&mut reads)?;
 
         reads.seek_to(GEOMETRY)?;
         let layer_count = order.u32(&mut reads)?;
@@ -123,6 +103,37 @@ impl SlicedFileReader for GooReader {
     }
 }
 
+/// The version string and the revision it names, once the tag behind it says this is a `.goo`.
+fn read_revision<S: ReadSeek>(reads: &mut Reads<S>) -> Result<(String, GooVersion), FormatError> {
+    let version = reads.text(4)?;
+    let revision = if version == GooVersion::V5.tag() {
+        GooVersion::V5
+    } else {
+        GooVersion::V3
+    };
+    if reads.array::<8>()? != MAGIC_TAG {
+        // The tag is eight bytes where every other container has a word, so the first
+        // four of it are what a mismatch can report.
+        reads.seek_to(4)?;
+        return Err(FormatError::NotThisFormat {
+            format: "goo",
+            found: reads.u32_be()?,
+        });
+    }
+    Ok((version, revision))
+}
+
+/// The software, machine and resin the header names.
+fn read_names<S: ReadSeek>(reads: &mut Reads<S>) -> Result<(String, String, String), FormatError> {
+    reads.seek_to(SOFTWARE)?;
+    let slicer = format!("{} {}", reads.text(32)?, reads.text(24)?);
+    reads.seek_to(MACHINE)?;
+    let machine = reads.text(32)?;
+    reads.seek_to(RESIN)?;
+    let resin = reads.text(32)?;
+    Ok((slicer, machine, resin))
+}
+
 /// The header's exposure block, from the layer height on.
 struct ExposureBlock {
     layer_height_mm: f32,
@@ -139,7 +150,7 @@ fn read_exposure<S: ReadSeek>(
 ) -> Result<ExposureBlock, FormatError> {
     let layer_height_mm = order.f32(reads)?;
     let exposure_s = order.f32(reads)?;
-    // The delay mode byte is 1 in every vendor file; which wait is unused is told by its zeros.
+    // The delay mode byte is 1 in every printed file; which wait is unused is told by its zeros.
     reads.skip(1)?;
     let light_off_delay_s = stated_wait_s(order.f32(reads)?);
     // Six rests, the bottom layers' three first; a resin holds one set, the common one.
@@ -340,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn a_vendor_file_holding_the_light_off_reads_as_light_off() {
+    fn a_file_holding_the_light_off_reads_as_light_off() {
         let block = read_exposure(
             &mut Reads::new(exposure_block(0.5, [0.0; 3])),
             ByteOrder::Big,
@@ -352,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn a_vendor_file_resting_reads_as_resting() {
+    fn a_file_resting_reads_as_resting() {
         let block = read_exposure(
             &mut Reads::new(exposure_block(0.0, [2.0, 3.0, 4.0])),
             ByteOrder::Big,

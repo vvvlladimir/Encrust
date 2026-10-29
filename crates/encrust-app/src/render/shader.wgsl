@@ -833,7 +833,7 @@ fn plate_fragment(in: FloorFragment) -> @location(0) vec4<f32> {
     return colour;
 }
 
-// How much darker the plate is in its inset (ADR 0372): about a third of the way from the
+// How much darker the plate is in its inset (ADR 0371): about a third of the way from the
 // plate's grey to the backdrop's, which is 0.6 of it.
 const INSET_SHADE = 0.12;
 

@@ -1,5 +1,5 @@
-//! The job the writer tests build files from: the resin the vendor's GK3 Ultra sample was
-//! cut with, on a panel small enough to check by hand.
+//! The job the writer tests build files from: the resin of a known GK3 Ultra file, on a
+//! panel small enough to check by hand.
 
 use std::io::Cursor;
 use std::path::Path;

@@ -1039,6 +1039,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "workspace-hack",
+ "zip 9.0.3",
 ]
 
 [[package]]

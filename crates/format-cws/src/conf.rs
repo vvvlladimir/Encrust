@@ -12,7 +12,7 @@ pub(crate) const CONF: &str = "slice.conf";
 /// What names us in the entry's first line, which a reader shows and a machine ignores.
 const SLICER: &str = concat!("Encrust-", env!("CARGO_PKG_VERSION"));
 
-/// Width the keys are padded to, as in a vendor file.
+/// Width the keys are padded to, as in a printed file.
 const KEY_WIDTH: usize = 24;
 
 /// The whole entry: two comment lines and then one `key = value` a line.
@@ -50,7 +50,7 @@ pub(crate) fn conf(job: &PrintJob) -> String {
 }
 
 /// The settings of an entry, by key. A line that is not a setting is skipped rather than
-/// refused: the first two are comments and a vendor file has been seen with more.
+/// refused: the first two are comments and a printed file may carry more.
 pub(crate) fn parse(text: &str) -> BTreeMap<String, String> {
     let mut settings = BTreeMap::new();
     for line in text.lines() {

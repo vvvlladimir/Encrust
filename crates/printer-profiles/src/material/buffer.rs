@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{MaterialProfile, PrinterProfile};
 
 /// A slow stretch of travel the firmware runs itself, then rests before the exposure: the
-/// HALOT line's buffer, which only `.cxdlpv4` carries. See ADR 0371.
+/// HALOT line's buffer, which only `.cxdlpv4` carries. See ADR 0370.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Buffer {
