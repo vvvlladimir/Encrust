@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use super::feed::{self, Download, FEED_URL, Offer, Version};
 use super::progress::{Progress, Step};
-use super::{UpdateError, verify};
+use super::{UpdateError, dev, verify};
 use crate::i18n::tr;
 
 /// The feed is a few kilobytes; anything near this is not the feed.
@@ -42,7 +42,8 @@ struct Binaries {
 
 /// What the feed offers a build at `running`.
 pub fn check(running: Version) -> Result<Option<Offer>, UpdateError> {
-    let text = fetch(FEED_URL, FEED_LIMIT, FEED_TIMEOUT)?;
+    let url = dev::feed_url();
+    let text = fetch(url.as_deref().unwrap_or(FEED_URL), FEED_LIMIT, FEED_TIMEOUT)?;
     feed::read(&text, running, feed::platform())
 }
 

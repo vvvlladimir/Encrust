@@ -1,6 +1,7 @@
 //! The update the window offers: a look at the release feed once a day, on until the user
 //! turns it off, and an install that only a click starts. See `docs/design/updates.md`.
 
+mod dev;
 mod feed;
 mod install;
 mod progress;
@@ -163,7 +164,8 @@ impl Updates {
             Stage::Idle | Stage::Current | Stage::Failed { .. }
         );
         let due = is_due(self.prefs.checked_at_s, now_s());
-        if (self.prefs.check || from_store()) && idle && due {
+        let first_with_switch = matches!(self.stage, Stage::Idle) && dev::active();
+        if first_with_switch || ((self.prefs.check || from_store()) && idle && due) {
             self.start_check(false);
         }
     }
@@ -199,18 +201,27 @@ impl Updates {
         else {
             return;
         };
-        let (Some(download), Ok(exe)) = (offer.download.clone(), install::current_exe()) else {
+        let Some(download) = offer.download.clone() else {
             return;
+        };
+        let exe = match install::current_exe() {
+            Ok(exe) => Some(exe),
+            Err(_) if dev::faked() => None,
+            Err(_) => return,
         };
         let offer = offer.clone();
         // Read before the swap: on Linux the path of a replaced binary reads "(deleted)".
-        self.exe = Some(exe.clone());
+        self.exe.clone_from(&exe);
         let version = offer.version;
         let (sender, reply) = mpsc::channel();
         let progress = Arc::new(Progress::default());
         let counted = Arc::clone(&progress);
         crate::job::spawn(move || {
-            let _ = sender.send(install::install(&download, version, &exe, &counted));
+            let outcome = match &exe {
+                Some(exe) => install::install(&download, version, exe, &counted),
+                None => dev::rehearse(&counted),
+            };
+            let _ = sender.send(outcome);
         });
         let started = web_time::Instant::now();
         self.stage = Stage::Installing {
@@ -280,6 +291,8 @@ impl Updates {
     pub fn blocked(offer: &Offer) -> Option<String> {
         if offer.download.is_none() {
             Some(tr!("update-no-build"))
+        } else if dev::faked() {
+            None
         } else {
             install::current_exe().err()
         }
@@ -402,6 +415,9 @@ fn look() -> Result<Option<Offer>, UpdateError> {
     #[cfg(windows)]
     if from_store() {
         return store::check();
+    }
+    if let Some(fake) = dev::fake_offer() {
+        return fake;
     }
     install::check(Updates::running())
 }

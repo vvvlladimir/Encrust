@@ -38,10 +38,10 @@ pub use egui_phosphor::regular::{
     TEST_TUBE as TEST_PRINT,
 };
 
-/// Settings' Appearance page; the update sheet's release, and a step of its install not yet
+/// Settings' Appearance page; the update sheet's changes, and a step of its install not yet
 /// reached.
 pub use egui_phosphor::regular::{
-    CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE, SPARKLE as RELEASE,
+    CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE,
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
@@ -154,7 +154,6 @@ mod tests {
         ("ERROR", ERROR),
         ("APPEARANCE", APPEARANCE),
         ("STEP_LATER", STEP_LATER),
-        ("RELEASE", RELEASE),
         ("CHANGES", CHANGES),
         ("MOVE_TO_PLATE", MOVE_TO_PLATE),
         ("UNDO", UNDO),
