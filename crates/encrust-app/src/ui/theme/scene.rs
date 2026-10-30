@@ -96,10 +96,10 @@ pub struct Lighting {
 
 /// The viewport under the dark palette.
 pub(super) const DARK: Scene = Scene {
-    object: Color32::from_rgb(0x7f, 0xa6, 0xb6),
+    object: Color32::from_rgb(0x86, 0xab, 0xbb),
     support: Color32::from_rgb(0xc9, 0xc2, 0xb6),
-    selected: Color32::from_rgb(0xf5, 0xb5, 0x4a),
-    unsound: Color32::from_rgb(0xd9, 0x6b, 0x61),
+    selected: Color32::from_rgb(0xff, 0xc1, 0x5a),
+    unsound: Color32::from_rgb(0xe0, 0x44, 0x62),
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
     trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
@@ -142,10 +142,10 @@ pub(super) const DARK: Scene = Scene {
 /// The viewport under the light palette: the same resin and marks, a pale plate, darker
 /// lines and handles so they still read on it.
 pub(super) const LIGHT: Scene = Scene {
-    object: Color32::from_rgb(0x5a, 0x8a, 0xa0),
+    object: Color32::from_rgb(0x2f, 0x7e, 0xa3),
     support: Color32::from_rgb(0xa2, 0xa8, 0xb0),
-    selected: Color32::from_rgb(0xf0, 0xa4, 0x3a),
-    unsound: Color32::from_rgb(0xc9, 0x56, 0x4c),
+    selected: Color32::from_rgb(0xc4, 0x6c, 0x00),
+    unsound: Color32::from_rgb(0xb8, 0x11, 0x3f),
     painted: Color32::from_rgb(0x3f, 0x9e, 0x7c),
     blocked: Color32::from_rgb(0x96, 0x58, 0xc8),
     fault: Color32::from_rgb(0x6e, 0x9a, 0x00),
