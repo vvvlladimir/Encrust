@@ -32,6 +32,7 @@ unit-um = µm
 unit-px = px
 unit-s = s
 unit-times = ×
+value-deg = { $value }°
 value-ml = { $value } ml
 value-mm = { $value } mm
 value-mm2 = { $value } mm²

@@ -32,6 +32,7 @@ unit-um = мкм
 unit-px = пикс.
 unit-s = с
 unit-times = ×
+value-deg = { $value }°
 value-ml = { $value } мл
 value-mm = { $value } мм
 value-mm2 = { $value } мм²

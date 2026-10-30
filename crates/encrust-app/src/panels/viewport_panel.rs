@@ -13,6 +13,10 @@ use crate::ui::theme;
 use crate::viewport_input::{Drag, Pointer};
 use crate::workspace::Tool;
 
+mod bounds;
+use bounds::draw_bounds;
+mod gizmo_drag;
+use gizmo_drag::draw_gizmo_drag;
 mod hollow;
 mod levels;
 mod marks;
@@ -31,7 +35,7 @@ use hollow::{
     remove_drain_under_cursor,
 };
 use overlays::{
-    cut_line, draw_aimed, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure,
+    cut_line, draw_aimed, draw_axis_letters, draw_cut_plane, draw_facet, draw_measure,
     draw_part_mark, draw_picked,
 };
 use paint::{draw_brush, paint_stroke};
@@ -343,7 +347,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
         point_at_face(window, rect, hovered.map(|at| egui::pos2(at.x, at.y)));
         draw_facet(ui, window, rect);
     }
-    if !window.view.options.modal() && moves_by_hand(window) {
+    if shows_gizmo(window) {
         show_gizmo(ui, window, rect);
     }
     if *window.tool == Tool::Measure {
@@ -434,14 +438,22 @@ pub(crate) fn moves_by_hand(window: &Window) -> bool {
     }
 }
 
+/// Whether the handles are out this frame: the tool moves by hand and no modal covers them.
+fn shows_gizmo(window: &Window) -> bool {
+    !window.view.options.modal() && moves_by_hand(window)
+}
+
+/// Where the handles stand on each picked model, in the order of the selection.
+fn picked_pivots(window: &Window) -> Vec<core_geometry::Transform> {
+    let scene = &window.doc.scene;
+    let picked = scene.selection().iter().filter_map(|id| scene.get(*id));
+    picked.map(|object| object.pivot()).collect()
+}
+
 /// Draws the handles over the selected objects and writes back what the user dragged.
 fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
     let picked: Vec<ObjectId> = window.doc.scene.selection().to_vec();
-    let pivots: Vec<core_geometry::Transform> = picked
-        .iter()
-        .filter_map(|id| window.doc.scene.get(*id))
-        .map(|object| object.pivot())
-        .collect();
+    let pivots = picked_pivots(window);
     if pivots.is_empty() {
         return;
     }
@@ -456,12 +468,12 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
             .max_rect(viewport),
     );
     over_viewport.set_clip_rect(viewport.intersect(ui.clip_rect()));
-    let Some(moved) =
-        window
-            .view
-            .gizmo
-            .show(&over_viewport, viewport, &window.view.camera, &pivots)
-    else {
+    let moved = window
+        .view
+        .gizmo
+        .show(&over_viewport, viewport, &window.view.camera, &pivots);
+    draw_gizmo_drag(&over_viewport, window, viewport);
+    let Some(moved) = moved else {
         return;
     };
     for (id, pivot) in picked.iter().zip(moved) {
