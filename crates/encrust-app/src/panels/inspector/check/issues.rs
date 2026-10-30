@@ -280,7 +280,7 @@ fn detail(row: &Row) -> String {
 }
 
 /// What the worst issue is, named plainly rather than as a failure.
-pub(super) fn issue_name(risk: &Risk) -> String {
+pub(crate) fn issue_name(risk: &Risk) -> String {
     match risk.kind {
         RiskKind::Island { .. } => tr!("check-issue-island"),
         RiskKind::Floating { .. } => tr!("check-issue-hanging"),

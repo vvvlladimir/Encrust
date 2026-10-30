@@ -1721,6 +1721,7 @@ section-no-layers-yet = Слоёв пока нет
 section-height-of = { $height } из { $top } мм
 section-type-layer = Введите номер слоя для перехода
 section-layer-field = Слой { $layer }, введите номер слоя для перехода
+section-go-to-issue = { $issue } на слое { $layer }: нажмите, чтобы перейти
 section-slider = Слой, всего { $count }
 section-nothing-to-cut = На платформе пока нечего сечь
 section-layers-range = Слои с { $first } по { $layer }
@@ -2049,14 +2050,7 @@ cube-home = Исходный вид
 
 mask-pick-machine = Выберите принтер, чтобы узнать, на каком экране рисовать слои.
 mask-no-stack = Набора слоёв пока нет.
-mask-layer = Слой { $layer } · { $height } мм
 mask-pixels = { $width } × { $height } пикс.
-mask-issues =
-    { $count ->
-        [one] { $count } проблема
-        [few] { $count } проблемы
-       *[many] { $count } проблем
-    }
 zoom-out = Уменьшить
 zoom-in = Увеличить
 zoom-whole = Показать целиком, или двойной щелчок
@@ -2268,7 +2262,6 @@ web-no-storage = в этом браузере нет закрытого файл
 
 picker-no-machine = Принтеров пока нет. Добавьте принтер в окне «Принтер и смола».
 picker-no-resin = Для этого принтера пока нет смол. Добавьте их в окне «Принтер и смола».
-picker-edit-resin = Изменить эту смолу...
 picker-your-machines = Ваши принтеры
 picker-machine-detail = { $maker } · .{ $extension }
 picker-add-machine = Добавить принтер

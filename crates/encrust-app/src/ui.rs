@@ -33,6 +33,5 @@ pub use widgets::{
     dropdown_search_menu,
 };
 pub use widgets::{
-    Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, tag_w,
-    zoom_bar,
+    Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, zoom_bar,
 };

@@ -40,6 +40,17 @@ pub fn notice_card(
             }
             ui.with_layout(Layout::top_down(Align::Min), |ui| {
                 ui.spacing_mut().item_spacing.y = 1.0;
+                // Level with the glyph and the buttons, one line or two.
+                let line = |font| {
+                    ui.painter()
+                        .layout_no_wrap(" ".into(), font, egui::Color32::WHITE)
+                };
+                let mut used = line(theme::label()).size().y;
+                if detail.is_some() {
+                    used += 1.0 + line(theme::small()).size().y;
+                }
+                let inner_h = NOTICE_H - NOTICE_MARGIN.sum().y;
+                ui.add_space(((inner_h - used) / 2.0).max(0.0));
                 words(ui, text);
                 if let Some(detail) = detail {
                     let detail = RichText::new(detail)

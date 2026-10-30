@@ -49,7 +49,7 @@ pub use layout::{
     progress_bar_of, readings, stats, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
-pub use list::{found_row, issue_list, issue_row, list, list_row, tag, tag_w, two_lines};
+pub use list::{found_row, issue_list, issue_row, list, list_row, tag, two_lines};
 pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, zoom_bar};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};

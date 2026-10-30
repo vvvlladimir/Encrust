@@ -143,7 +143,6 @@ struct Places {
     name: egui::Rect,
     count_right: f32,
     icons: egui::Rect,
-    tick: egui::Pos2,
 }
 
 impl<'a> Line<'a> {
@@ -178,15 +177,9 @@ impl<'a> Line<'a> {
         self.group.map(|row| row.holds).or(self.count)
     }
 
-    /// Right to left: the tick of the line in hand, the eye and the bin, the count; the
-    /// name takes what is left.
+    /// Right to left: the eye and the bin, the count; the name takes what is left.
     fn places(&self, rect: egui::Rect) -> Places {
-        let y = rect.center().y;
         let mut right = rect.right() - RIGHT_PAD;
-        let tick = egui::pos2(right - TICK_MARGIN - TICK_W / 2.0, y);
-        if self.selected {
-            right -= TICK_MARGIN + TICK_W + GAP;
-        }
         let icons = egui::Rect::from_x_y_ranges(right - ICONS_W..=right, rect.y_range());
         let count_right = icons.left() - GAP;
         if self.holds().is_some() {
@@ -197,7 +190,6 @@ impl<'a> Line<'a> {
             name: egui::Rect::from_x_y_ranges(left..=right, rect.y_range()),
             count_right,
             icons,
-            tick,
         }
     }
 
@@ -244,15 +236,6 @@ impl<'a> Line<'a> {
             (false, None) => colors.text_mid,
             (false, Some(_)) => colors.text_high,
         };
-        if self.selected {
-            painter.text(
-                places.tick,
-                egui::Align2::CENTER_CENTER,
-                icon::IN_HAND,
-                theme::icon(TICK_W),
-                colors.accent_soft,
-            );
-        }
         if let Some(count) = self.holds() {
             count_at(painter, places.count_right, y, count);
         }
@@ -267,14 +250,13 @@ impl<'a> Line<'a> {
 }
 
 /// A line's room at its ends, the square its dot stands in, the room between its parts,
-/// the least a count takes, the tick and the room after it, points.
+/// the least a count takes, and a glyph of the foot, points.
 const LEFT_PAD: f32 = 10.0;
 const RIGHT_PAD: f32 = 4.0;
 const DOT_W: f32 = 8.0;
 const GAP: f32 = 8.0;
 const COUNT_W: f32 = 20.0;
-const TICK_W: f32 = 14.0;
-const TICK_MARGIN: f32 = 6.0;
+const GLYPH_W: f32 = 14.0;
 /// The eye and the bin, each a 26 square, and the glyph in one.
 const ICON_SQUARE: f32 = 26.0;
 const ICONS_W: f32 = 2.0 * ICON_SQUARE;
@@ -380,26 +362,26 @@ fn edit_profiles(ui: &mut egui::Ui) -> bool {
     };
     let painter = ui.painter();
     let y = rect.center().y;
-    let glyph_x = rect.left() + LEFT_PAD + TICK_W / 2.0;
+    let glyph_x = rect.left() + LEFT_PAD + GLYPH_W / 2.0;
     painter.text(
         egui::pos2(glyph_x, y),
         egui::Align2::CENTER_CENTER,
         icon::PROFILES,
-        theme::icon(TICK_W),
+        theme::icon(GLYPH_W),
         ink,
     );
     painter.text(
-        egui::pos2(glyph_x + TICK_W / 2.0 + GAP, y),
+        egui::pos2(glyph_x + GLYPH_W / 2.0 + GAP, y),
         egui::Align2::LEFT_CENTER,
         &text,
         theme::label(),
         ink,
     );
     painter.text(
-        egui::pos2(rect.right() - LEFT_PAD - TICK_W / 2.0, y),
+        egui::pos2(rect.right() - LEFT_PAD - GLYPH_W / 2.0, y),
         egui::Align2::CENTER_CENTER,
         icon::ELSEWHERE,
-        theme::icon(TICK_W),
+        theme::icon(GLYPH_W),
         ink,
     );
     focus_ring(ui, &response, theme::R_CONTROL);

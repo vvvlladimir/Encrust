@@ -9,9 +9,8 @@ use crate::job::SlicedFormat;
 use crate::network::{Network, Reach};
 use crate::panels::Window;
 use crate::plate::BuildPlate;
-use crate::settings::{Library, installed, installed_printers, new_resin};
+use crate::settings::{Library, installed, installed_printers};
 use crate::state::Machine;
-use crate::status::Status;
 use crate::ui::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_group, chooser_row, hairline, hint, icon, theme,
 };
@@ -55,11 +54,6 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
         window.machine.settings.library = Some(Library::default());
         return;
     }
-    if chooser_foot(ui, icon::PRINTER, &tr!("menu-machine-and-resin")).clicked() {
-        ui.close();
-        crate::panels::open_machines(window.machine);
-        return;
-    }
     if let Some((id, profile)) = picked {
         ui.close();
         apply_printer(window, profile, Some(id));
@@ -81,8 +75,8 @@ fn answers(network: &Network, profile: &PrinterProfile) -> Option<egui::Color32>
 }
 
 /// The resins set up on the printer in hand, a printer's resins being its own presets, each
-/// with its colour, kind, layer height and exposure there; then the ways to edit the one in
-/// hand and to add one.
+/// with its colour, kind, layer height and exposure there; then the way to the printer's
+/// resins in Machine and resin, to add one.
 pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
     let slicing = &mut machine.slicing;
     let chosen = slicing.resin_id.clone();
@@ -127,30 +121,12 @@ pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
         hint(ui, &tr!("picker-no-resin"));
     }
     hairline(ui);
-    let (printer, resin) = (slicing.printer_id.clone(), slicing.resin_id.clone());
-    if resin.is_some() && chooser_foot(ui, icon::EDIT, &tr!("picker-edit-resin")).clicked() {
+    let printer = slicing.printer_id.clone();
+    if printer.is_some() && chooser_foot(ui, icon::ADD, &tr!("picker-add-resin")).clicked() {
         ui.close();
         machine
             .settings
-            .open_machines(&slicing.catalogue, printer.as_deref(), resin.as_deref());
-        return;
-    }
-    if let Some(printer) = printer
-        && chooser_foot(ui, icon::ADD, &tr!("picker-add-resin")).clicked()
-    {
-        ui.close();
-        match new_resin(&mut slicing.catalogue, &printer) {
-            Ok(resin) => {
-                machine.settings.editing_resin = true;
-                machine
-                    .settings
-                    .open_machines(&slicing.catalogue, Some(&printer), Some(&resin));
-            }
-            Err(error) => {
-                let error = anyhow::Error::from(error).context(tr!("machines-cannot-add-a-resin"));
-                machine.status = Status::failed(&error);
-            }
-        }
+            .open_machines(&slicing.catalogue, printer.as_deref(), None);
         return;
     }
     if let Some((id, resin)) = picked {

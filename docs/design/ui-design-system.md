@@ -167,7 +167,7 @@ paints from tokens only.
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, 4 inside and 4 apart, centred by its parent |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
-| `tag`, `tag_w` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more. `tag_w` is its width, for a row of them |
+| `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
 | `found_row` | Something found that is not the user's yet: a dashed row of glyph, name, a figure and Add |
 | `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |
 | `split_readings` | Figures split two ways, the models' and the supports': the two heads in medium `text_mid` over their columns, a row a name and its two figures, a hairline under every row |
@@ -298,8 +298,9 @@ beside it, or the primary when nothing can be sent. Every plate at once is in th
 The layer strip stands the stage's full height at its right edge, in every view, its top
 the top of the print. It switches the view — the model, the model beside its layer, the
 layer alone, which M steps through and Shift M steps back — reads the layer and its height, and its track moves the cut, with a layer
-up over it and a layer down and play under it. The track carries the cured area as a dashed
-profile either side of the rule and a bar across it at each risk, `warn` or `danger`; a
+up over it and a layer down and play under it. The track carries the cured area as a filled
+silhouette either side of the rule and a bar across it at each risk, `warn` or `danger`, a
+press on which goes to it; a
 click on the layer figure opens it for typing, and Enter goes there. The profile and the risks show in the model view too while
 the stack is still the plate's. See `docs/decisions/0061` and `0217`.
 

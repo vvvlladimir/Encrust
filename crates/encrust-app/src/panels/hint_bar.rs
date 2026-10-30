@@ -13,9 +13,10 @@ use crate::supports::Placing as Supports;
 use crate::ui::{hint_bar, hint_bar_names, icon};
 use crate::workspace::Tool;
 
-/// The bar, when the tool in hand has one, at the top of `room` and no wider: centred while
-/// it names what each key does, the keys alone flush with the tool `row`'s left.
-pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>) {
+/// The bar, when the tool in hand has one, at the top of `room` and no wider: centred under
+/// the tool `row` while it names what each key does, the keys alone flush with its left. `keys_only`
+/// shows the keys alone whatever the room, as beside the mask.
+pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>, keys_only: bool) {
     let Some(named) = pairs(window, &Keys::words(ui.ctx())) else {
         return;
     };
@@ -25,20 +26,30 @@ pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>) {
         .map(|(key, what)| (key.as_str(), what.as_str()))
         .collect();
     let keys: Vec<&str> = glyphs.iter().map(|(key, _)| key.as_str()).collect();
-    let flush = row.filter(|_| !hint_bar_names(ui, &named, room.width()));
+    let centred = row.map_or(room, |row| centred_on(room, row.center().x));
+    let names_room = if keys_only { 0.0 } else { centred.width() };
+    let flush = row.filter(|_| !hint_bar_names(ui, &named, names_room));
     let (corner, pivot, width) = match flush {
         Some(row) => (
             pos2(row.left(), room.top()),
             Align2::LEFT_TOP,
             room.right() - row.left(),
         ),
-        None => (room.center_top(), Align2::CENTER_TOP, room.width()),
+        None => (centred.center_top(), Align2::CENTER_TOP, centred.width()),
     };
     egui::Area::new(Id::new("hint-bar"))
         .order(egui::Order::Middle)
         .fixed_pos(corner)
         .pivot(pivot)
-        .show(ui.ctx(), |ui| hint_bar(ui, &named, &keys, width));
+        .show(ui.ctx(), |ui| {
+            hint_bar(ui, &named, &keys, width.min(names_room))
+        });
+}
+
+/// The widest stretch of `room` centred on `x`.
+fn centred_on(room: Rect, x: f32) -> Rect {
+    let half = (x - room.left()).min(room.right() - x).max(0.0);
+    Rect::from_x_y_ranges(x - half..=x + half, room.y_range())
 }
 
 /// What the keys and the pointer's moves are called: in words, or as glyphs where the bar
@@ -175,4 +186,17 @@ fn brush(keys: &Keys, what: String) -> Vec<(String, String)> {
         (keys.drag.clone(), what),
         (keys.drag_with(&keys.alt), tr!("hint-erase")),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_bar_centres_on_the_row_whatever_room_the_inspector_leaves() {
+        let room = Rect::from_min_max(pos2(0.0, 0.0), pos2(1000.0, 28.0));
+        let centred = centred_on(room, 700.0);
+        assert_eq!(centred.center().x, 700.0, "under the row's middle");
+        assert_eq!(centred.width(), 600.0, "kept within the room's right edge");
+    }
 }

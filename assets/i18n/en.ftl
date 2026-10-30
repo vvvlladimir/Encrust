@@ -1627,6 +1627,7 @@ section-no-layers-yet = No layers yet
 section-height-of = { $height } of { $top } mm
 section-type-layer = Type a layer to go to
 section-layer-field = Layer { $layer }, type a layer to go to
+section-go-to-issue = { $issue } on layer { $layer }: click to go to it
 section-slider = Layer, of { $count }
 section-nothing-to-cut = Nothing on the plate to cut through yet
 section-layers-range = Layers { $first } to { $layer }
@@ -1944,13 +1945,7 @@ cube-home = Home view
 
 mask-pick-machine = Pick a machine to know the panel to draw the layers on.
 mask-no-stack = No stack to show yet.
-mask-layer = Layer { $layer } · { $height } mm
 mask-pixels = { $width } × { $height } px
-mask-issues =
-    { $count ->
-        [one] One issue
-       *[other] { $count } issues
-    }
 zoom-out = Zoom out
 zoom-in = Zoom in
 zoom-whole = Show the whole of it, or double click
@@ -2153,7 +2148,6 @@ web-no-storage = this browser has no private file storage
 
 picker-no-machine = No machine yet. Add one in Machine and resin.
 picker-no-resin = No resins on this printer yet. Add them in Machine and resin.
-picker-edit-resin = Edit this resin...
 picker-your-machines = Your machines
 picker-machine-detail = { $maker } · .{ $extension }
 picker-add-machine = Add a machine
