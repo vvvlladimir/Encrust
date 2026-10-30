@@ -155,13 +155,15 @@ impl Counted {
             Step::Reading => tr!("job-step-reading"),
             Step::Combining => tr!("job-step-combining"),
             Step::Finishing => tr!("job-step-finishing"),
+            Step::Mending => tr!("job-step-mending"),
+            Step::Crossing => tr!("job-step-crossing"),
         }
     }
 }
 
-/// Where each step starts and ends in the share of one run, a field's or an exact boolean's,
-/// as weighed on a figurine and a bust; see ADR 0317.
-const STEP_SPANS: [(Step, f32, f32); 9] = [
+/// Where each step starts and ends in the share of one run, a field's, an exact boolean's
+/// or a repair's, as weighed in ADR 0317 and 0384.
+const STEP_SPANS: [(Step, f32, f32); 11] = [
     (Step::Preparing, 0.0, 0.1),
     (Step::Seeding, 0.1, 0.2),
     (Step::Carrying, 0.2, 0.62),
@@ -171,6 +173,8 @@ const STEP_SPANS: [(Step, f32, f32); 9] = [
     (Step::Reading, 0.0, 0.45),
     (Step::Combining, 0.45, 0.9),
     (Step::Finishing, 0.9, 1.0),
+    (Step::Mending, 0.0, 0.2),
+    (Step::Crossing, 0.2, 0.45),
 ];
 
 /// The share of one run done, from its step and the pieces of the step done.

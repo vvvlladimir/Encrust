@@ -108,8 +108,14 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         }
         return;
     }
-    if window.tools.drain.job.is_some() {
-        busy(ui, &tr!("hollow-looking"), None, false);
+    if let Some(job) = &window.tools.drain.job {
+        let counted = job.counted();
+        let step = counted
+            .as_ref()
+            .map(|(label, share)| (label.as_str(), *share));
+        if busy(ui, &tr!("hollow-looking"), step, true) {
+            window.tools.drain.cancel(&mut window.machine.status);
+        }
         return;
     }
     let layer_height_mm = window.machine.slicing.layer_height_mm();

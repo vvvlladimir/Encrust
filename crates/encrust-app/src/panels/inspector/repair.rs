@@ -265,7 +265,8 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
             .counted()
             .map(|counted| (counted.label(), counted.share));
         let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
-        if busy(ui, &tr!("repair-repairing"), step, true) {
+        let label = repairs.models().unwrap_or_else(|| tr!("repair-repairing"));
+        if busy(ui, &label, step, true) {
             repairs.cancel(&mut window.machine.status);
         }
         return;

@@ -64,7 +64,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Open the **Repair** tool: what was found in the picked models (or every model on the
   plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
   press, how many pairs of faces cross. Pick the method, set the seam tolerance and the
-  smallest speck, and repair with progress and Cancel. The tool row's
+  smallest speck, and repair with Cancel and a bar naming the step — mending, finding
+  crossings, joining the shells — and how many models are done. The tool row's
   Repair button carries a dot while a model on the plate is broken.
 - Click a finding to mark it on the models while the Repair tool is open: the rims of the
   holes as lines, faces without area, drawn twice or crossing others as patches. The
@@ -336,8 +337,8 @@ whole-surface fill is Cmd-Shift-click.
   only at its two ends.
 - Settings work as in **Hollow**: one picked model keeps its own.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
-  of resin with no way out. Pockets are painted in the view, and you can see through the
-  model to find them.
+  of resin with no way out, showing the layer and model it is on, with Cancel. Pockets are
+  painted in the view, and you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
 - Drain settings can be saved as presets too.
 

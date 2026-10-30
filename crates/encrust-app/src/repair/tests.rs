@@ -376,3 +376,29 @@ fn a_cancelled_repair_leaves_the_model_as_it_was() {
         "the mesh is the one it had"
     );
 }
+
+#[test]
+fn repairs_started_together_are_counted_as_one_run_and_the_next_starts_afresh() {
+    let mut scene = Scene::default();
+    let (one, other) = (open_box(&mut scene), open_box(&mut scene));
+    let mut repairs = Repairs::default();
+    repairs.start(&scene, one, RepairState::default(), &mut Status::default());
+    repairs.start(
+        &scene,
+        other,
+        RepairState::default(),
+        &mut Status::default(),
+    );
+    assert_eq!(
+        repairs.models(),
+        Some(tr!("repair-repairing-models", done = 0, total = 2))
+    );
+    settle(&mut repairs, &mut scene);
+
+    repairs.start(&scene, one, RepairState::default(), &mut Status::default());
+    assert_eq!(
+        repairs.models(),
+        None,
+        "one repair alone is not counted in models"
+    );
+}
