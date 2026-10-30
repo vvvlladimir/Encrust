@@ -10,8 +10,12 @@ use egui_kittest::{Harness, SnapshotResults};
 use printer_profiles::{Bracing, BracingPreset};
 
 use super::SlicerApp;
-use super::states::{SETTLE_FRAMES, app, drawn, with_machines, with_nothing};
+use super::states::{SETTLE_FRAMES, app, cut, drawn, with_machines, with_nothing};
 use crate::workspace::{Mode, Tool};
+
+mod network;
+
+use network::{board, listed, on_the_network};
 
 /// The size the window opens at, `lib::viewport`.
 const WINDOW: egui::Vec2 = egui::vec2(1280.0, 800.0);
@@ -24,14 +28,35 @@ fn picture(name: &str, app: SlicerApp) -> SnapshotResults {
     harness.take_snapshot_results()
 }
 
+/// The window as the mockup draws it: a project of two plates open, a cube picked on the
+/// first, a priced resin, and Bench B ready to take the plate.
+fn pictured() -> SlicerApp {
+    let mut app = listed(app(true), &[("Bench B", 140, "bb")]);
+    app.doc.project.path = Some(PathBuf::from("/plates/Bench project.encrust"));
+    let scene = &mut app.doc.scene;
+    let cube = scene.selection().first().copied();
+    scene.add_plate();
+    scene.show_plate(0);
+    scene.select(cube);
+    app.machine.slicing.material.details.price = 35.0;
+    app
+}
+
 #[test]
 fn the_start_page() {
     let mut app = app(false);
-    let yesterday = crate::updates::now_s() - 90_000;
-    for name in ["Hex tray.stl", "Dragon bust.encrust", "Bench.encrust"] {
+    let day_s = 86_400;
+    let now_s = crate::updates::now_s();
+    for (name, ago_s) in [
+        ("Calibration.goo", 8 * day_s),
+        ("Chess rook.3mf", 7 * day_s),
+        ("Hex tray.stl", 2 * day_s + 3_600),
+        ("Dragon bust.encrust", day_s + 7_200),
+        ("Bench.encrust", day_s + 3_600),
+    ] {
         app.machine
             .recent
-            .note(&PathBuf::from("/plates").join(name), yesterday);
+            .note(&PathBuf::from("/plates").join(name), now_s - ago_s);
     }
     picture("start", app);
 }
@@ -45,22 +70,39 @@ fn an_empty_plate() {
 
 #[test]
 fn a_picked_model() {
-    picture("picked_model", app(true));
+    picture("picked_model", pictured());
 }
 
 #[test]
 fn every_tool_on_a_picked_model() {
     let mut results = SnapshotResults::new();
-    for tool in Tool::ALL {
-        let mut app = app(true);
+    for tool in Tool::ALL.into_iter().filter(|tool| *tool != Tool::Check) {
+        let mut app = pictured();
         app.tool = tool;
         results.extend(picture(&format!("tool_{tool:?}").to_lowercase(), app));
     }
 }
 
+/// Check over a cube with a block beside it 10 mm up on nothing: that block an island.
+#[test]
+fn the_check_finding_an_island() {
+    use core_geometry::{Vec3, cuboid};
+
+    let mut app = pictured();
+    app.tool = Tool::Check;
+    let mut two = cuboid(Vec3::ZERO, Vec3::splat(20.0));
+    two.append(&cuboid(
+        Vec3::new(22.0, 0.0, 10.0),
+        Vec3::new(26.0, 4.0, 12.0),
+    ));
+    let shaped = crate::scene::Shaped::of(std::sync::Arc::new(two));
+    app.doc.scene.objects_mut()[0].reshape(shaped);
+    picture("tool_check", cut(app));
+}
+
 #[test]
 fn the_supports_tool_sizing_automatically() {
-    let mut app = app(true);
+    let mut app = pictured();
     app.tool = Tool::Supports;
     let catalogue = app.machine.slicing.catalogue.clone();
     app.tools.supports.set_automatic(true, &catalogue);
@@ -82,7 +124,7 @@ fn the_shape_tool_on_bracing_from_a_preset_and_by_the_numbers() {
         ("tool_shape_brace_preset", BracingPreset::Standard.bracing()),
         ("tool_shape_brace_numbers", own),
     ] {
-        let mut app = app(true);
+        let mut app = pictured();
         app.tool = Tool::Shape;
         app.tools.supports.profile.bracing = bracing;
         let mut harness = drawn(Harness::builder().with_size(TALL_WINDOW).wgpu(), app);
@@ -100,7 +142,7 @@ fn the_hollow_tool_with_each_kind_of_infill() {
         ("tool_hollow_hive", InfillPattern::Hive),
         ("tool_hollow_scaffold", InfillPattern::Scaffold),
     ] {
-        let mut app = app(true);
+        let mut app = pictured();
         app.tool = Tool::Hollow;
         app.tools.hollow.state.infill_on = true;
         app.tools.hollow.state.infill.pattern = pattern;
@@ -110,7 +152,7 @@ fn the_hollow_tool_with_each_kind_of_infill() {
 
 #[test]
 fn the_repair_tool_wrapping() {
-    let mut app = app(true);
+    let mut app = pictured();
     app.tool = Tool::Repair;
     app.tools.repair.state.method = core_volume::RepairMethod::Wrap;
     let mut results = SnapshotResults::new();
@@ -124,7 +166,7 @@ fn the_repair_tool_picking_faces_and_edges_by_hand() {
         ("tool_repair_faces", crate::repair::Picking::Faces),
         ("tool_repair_edges", crate::repair::Picking::Edges),
     ] {
-        let mut app = app(true);
+        let mut app = pictured();
         app.tool = Tool::Repair;
         app.tools.repair.mode = crate::repair::RepairMode::Faces;
         app.tools.repair.picking = picking;
@@ -134,7 +176,7 @@ fn the_repair_tool_picking_faces_and_edges_by_hand() {
 
 #[test]
 fn the_repair_tool_listing_two_shells_one_picked() {
-    let mut app = app(true);
+    let mut app = pictured();
     app.tool = Tool::Repair;
     let mut two =
         core_geometry::cuboid(core_geometry::Vec3::ZERO, core_geometry::Vec3::splat(20.0));
@@ -158,7 +200,7 @@ fn the_repair_tool_listing_two_shells_one_picked() {
 
 #[test]
 fn the_repair_tool_marking_what_it_found() {
-    let mut app = app(true);
+    let mut app = pictured();
     app.tool = Tool::Repair;
     let found = &mut app.doc.scene.objects_mut()[0].summary.diagnostics;
     (found.holes, found.boundary_edges, found.duplicate_faces) = (2, 12, 4);
@@ -178,12 +220,12 @@ fn the_relief_tool_in_each_mode() {
         ("tool_relief_text", crate::relief::ReliefMode::Text),
         ("tool_relief_combine", crate::relief::ReliefMode::Combine),
     ] {
-        let mut app = app(true);
+        let mut app = pictured();
         app.tool = Tool::Relief;
         app.tools.relief.mode = mode;
         results.extend(picture(name, app));
     }
-    let mut app = app(true);
+    let mut app = pictured();
     app.tool = Tool::Relief;
     crate::relief::choose_builtin(&mut app.tools.relief, &mut app.machine.status, 2);
     results.extend(picture("tool_relief_picture", app));
@@ -196,7 +238,7 @@ fn the_cut_tool_joining_its_halves() {
         ("tool_cut_dowels", core_joint::JointKind::Dowels),
         ("tool_cut_key", core_joint::JointKind::Key),
     ] {
-        let mut app = app(true);
+        let mut app = pictured();
         app.tool = Tool::Cut;
         app.tools.cut.state.joints.kind = Some(kind);
         results.extend(picture(name, app));
@@ -204,10 +246,11 @@ fn the_cut_tool_joining_its_halves() {
 }
 
 #[test]
-fn the_preview_of_an_empty_plate() {
-    let mut app = app(false);
-    app.view.options.started = true;
+fn the_preview_of_a_cut_cube() {
+    let mut app = pictured();
     app.mode = Mode::Preview;
+    let mut app = cut(app);
+    app.machine.preview.set_layer(211);
     picture("preview", app);
 }
 
@@ -253,7 +296,7 @@ fn the_sheet_of_keys() {
 /// Find over a picked model, nothing typed: every tool, action and model by group.
 #[test]
 fn the_find_palette() {
-    let mut app = app(true);
+    let mut app = pictured();
     app.view.options.find = true;
     picture("find", app);
 }
@@ -296,133 +339,11 @@ fn the_printers_on_the_network() {
     results.extend(picture("printer_sheet", sheet));
 }
 
-/// The pictured window with Workshop printing and Studio idle on the network, the profile
-/// listing `listing` as (name, address's last byte, board).
-fn on_the_network(listing: &[(&str, u8, &str)]) -> SlicerApp {
-    use crate::network::{Picture, Reading};
-    use printer_link::State;
-
-    let board = |name: &str, id: &str, last: u8| net_sdcp::Printer {
-        name: name.to_owned(),
-        model: "Saturn 4 Ultra".to_owned(),
-        brand: "ELEGOO".to_owned(),
-        address: std::net::IpAddr::from([192, 168, 1, last]),
-        mainboard_id: id.to_owned(),
-        brand_id: "00".to_owned(),
-        firmware: "V1.5.2".to_owned(),
-        protocol: "V3.0.0".to_owned(),
-        transport: net_sdcp::Transport::WebSocket,
-    };
-    let printing = State {
-        state: "printing".to_owned(),
-        busy: true,
-        stage: Some("exposing".to_owned()),
-        file: Some("Dragon bust.goo".to_owned()),
-        progress: Some(0.42),
-        layer: Some(336),
-        layer_count: Some(800),
-        remaining_s: Some(4_920),
-        uv_led_c: Some(34.0),
-        job_id: Some("0e8a".to_owned()),
-        film_lifts: Some(668),
-        film_lifts_max: Some(60_000),
-        camera: true,
-        ..State::default()
-    };
-    let idle = State {
-        state: "idle".to_owned(),
-        stage: Some("complete".to_owned()),
-        file: Some("Hex tray.goo".to_owned()),
-        uv_led_c: Some(22.0),
-        ..State::default()
-    };
-    let mut app = app(true);
-    let profile = app
-        .machine
-        .slicing
-        .printer
-        .as_mut()
-        .expect("the pictured printer is in hand");
-    profile.connection = printer_profiles::Connection::Sdcp;
-    profile.machines = listing
-        .iter()
-        .map(|(name, last, board)| printer_profiles::NetworkMachine {
-            name: (*name).to_owned(),
-            address: format!("192.168.1.{last}"),
-            board: Some((*board).to_owned()),
-        })
-        .collect();
-    let profile = profile.clone();
-    app.machine
-        .network
-        .bind_to(Some(super::states::PRINTER.to_owned()), Some(&profile));
-    app.machine.network.learn_names([&profile]);
-    let network = &mut app.machine.network;
-    network.printers = vec![board("Workshop", "aa", 133), board("Studio", "bb", 140)];
-    network.hear("sdcp:aa", Reading::State(printing));
-    network.hear("sdcp:bb", Reading::State(idle));
-    let extras = network.extras_mut("sdcp:aa");
-    extras
-        .pictures
-        .insert("0e8a".to_owned(), Picture::Decoded(a_plate_picture()));
-    extras.camera = Some("rtsp://192.168.1.133:554/video".to_owned());
-    extras.history_asked = true;
-    extras.history = Some(remembered());
-    app
-}
-
-/// A plate as a board pictures it: a dark field with a lit model in the middle.
-fn a_plate_picture() -> egui::ColorImage {
-    let (width, height) = (96usize, 72usize);
-    let mut pixels = Vec::with_capacity(width * height * 4);
-    for y in 0..height {
-        for x in 0..width {
-            let inside = (30..66).contains(&x) && (14..58).contains(&y);
-            let shade = if inside { 190 } else { 28 };
-            pixels.extend_from_slice(&[shade, shade, shade + 10, 255]);
-        }
-    }
-    egui::ColorImage::from_rgba_unmultiplied([width, height], &pixels)
-}
-
-/// Two prints a board remembers: one finished, one stopped part of the way.
-fn remembered() -> Vec<printer_link::Task> {
-    let now_s = crate::updates::now_s();
-    let slice = |layers| {
-        Some(net_sdcp::SliceInformation {
-            total_layer_numbers: layers,
-            ..net_sdcp::SliceInformation::default()
-        })
-    };
-    vec![
-        printer_link::Task {
-            task_id: "3add".to_owned(),
-            task_name: "/media/sda1/Hex tray.goo".to_owned(),
-            begin_s: now_s - 90_000,
-            end_s: now_s - 86_400,
-            task_status: 1,
-            already_print_layer: 412,
-            slice_information: slice(412),
-            ..printer_link::Task::default()
-        },
-        printer_link::Task {
-            task_id: "10f2".to_owned(),
-            task_name: "/media/sda1/Bench.goo".to_owned(),
-            begin_s: now_s - 3 * 86_400,
-            end_s: now_s - 3 * 86_400 + 600,
-            task_status: 3,
-            already_print_layer: 240,
-            slice_information: slice(1710),
-            ..printer_link::Task::default()
-        },
-    ]
-}
-
-/// A file waiting on a printer, a model that came in broken, and what happened last,
-/// stacked at the foot of the stage.
+/// A preview being cut, a file waiting on a printer, a model that came in broken, and
+/// what happened last, stacked at the foot of the stage.
 #[test]
 fn the_notices_at_the_foot_of_the_stage() {
-    let mut app = app(true);
+    let mut app = pictured();
     let cube = app.doc.scene.objects_mut().first_mut();
     cube.expect("the pictured plate holds a cube")
         .summary
@@ -433,6 +354,12 @@ fn the_notices_at_the_foot_of_the_stage() {
         filename: "Dragon bust.goo".to_owned(),
     });
     app.machine.status = crate::status::Status::Info("Dragon bust.goo is on Workshop".to_owned());
+    // Never polled, so the cut stays under way while the window is drawn.
+    let cutting = app.machine.slicing.cutting();
+    app.machine
+        .preview
+        .build(&app.doc.scene, cutting)
+        .expect("the plate holds a cube");
     app.machine.slicing.resin_id = None;
     picture("notices", app);
 }
@@ -443,17 +370,6 @@ fn the_notices_at_the_foot_of_the_stage() {
 fn the_printers_a_profile_sends_to() {
     let mut app = with_machines(app(false), "network");
     app.machine.settings.tab = crate::settings::Tab::Network;
-    let board = |name: &str, id: &str, last: u8| net_sdcp::Printer {
-        name: name.to_owned(),
-        model: "Saturn 4 Ultra".to_owned(),
-        brand: "ELEGOO".to_owned(),
-        address: std::net::IpAddr::from([192, 168, 1, last]),
-        mainboard_id: id.to_owned(),
-        brand_id: "00".to_owned(),
-        firmware: "V1.5.2".to_owned(),
-        protocol: "V3.0.0".to_owned(),
-        transport: net_sdcp::Transport::WebSocket,
-    };
     app.machine.network.printers = vec![
         board("3D Printer", "aa", 133),
         board("3D Printer", "bb", 140),
@@ -481,7 +397,7 @@ fn the_printers_a_profile_sends_to() {
 fn the_chip_opening_its_machines_and_its_resins() {
     let mut results = SnapshotResults::new();
     for (name, part) in [("chip_machines", "Machine, "), ("chip_resins", "Resin, ")] {
-        let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app(true));
+        let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), pictured());
         harness.get_by_label_contains(part).click();
         harness.run_steps(SETTLE_FRAMES);
         harness.snapshot(name);
