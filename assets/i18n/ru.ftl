@@ -32,7 +32,6 @@ unit-um = мкм
 unit-px = пикс.
 unit-s = с
 unit-times = ×
-value-g = { $value } г
 value-ml = { $value } мл
 value-mm = { $value } мм
 value-mm2 = { $value } мм²
@@ -434,22 +433,12 @@ check-filter-levers = Рычаги
 check-filter-peel = Отрыв
 check-filter-cups = Присоски
 check-filter-thin = Тонкие
-check-support-islands = Поддержать все острова
-check-drill-cups = Просверлить присоски
-check-issues = Проблемы
+check-support-islands = Поддержать
+check-drill-cups = Просверлить
+check-issues = Найдено
 check-estimate = Оценка
-check-previous = Назад
-check-next = Дальше
-check-found =
-    { $issues ->
-        [one] { $issues } проблема
-        [few] { $issues } проблемы
-       *[many] { $issues } проблем
-    } на { $layers ->
-        [one] { $layers } слое
-        [few] { $layers } слоях
-       *[many] { $layers } слоях
-    }
+check-previous = Предыдущая проблема
+check-next = Следующая проблема
 check-stood =
     { $count ->
         [0] Ни у одного острова не нашлось нижней стороны для поддержки
@@ -479,14 +468,8 @@ check-nothing-found = Ничего, что привело бы к браку
 check-nothing-found-why = Нет островов, нет перемычек, перегруженных сверх предела, и нет слоёв, которые слишком сильно тянут плёнку.
 check-issues-help = Острова начинаются в воздухе и остаются на плёнке. Рычаги — тонкие перемычки, которые может сломать тяга вбок; присоски — закрытые полости, которые подъём тянет вакуумом; тонкие участки могут вовсе не напечататься. Щелчок по строке переходит к её слою.
 check-peel-help = Каждый подъём отрывает свежий слой от плёнки, и чем шире слой, тем сильнее тяга. «Сильнейшая тяга» — худший слой, показанный как диск с той же силой отрыва; «Самый большой скачок» — где площадь сильнее всего растёт от слоя к слою. Наклон модели или полость уменьшают и то и другое.
-check-worst = { $issue }, слой { $layer }
 check-put-islands-back = Вернуть острова
-check-remove-islands =
-    { $count ->
-        [one] Удалить { $count } остров
-        [few] Удалить { $count } острова
-       *[many] Удалить { $count } островов
-    }
+check-remove-islands = Удалить
 check-remove-islands-note = Стирает их из записываемого файла и проверяет снова. Уходят только острова; то, что на них стояло, остаётся и попадает в список для поддержки.
 check-hanging-passes =
     { $count ->
@@ -503,7 +486,6 @@ check-remove-next =
 check-remove-next-note = Снимает ещё по одному слою с каждой повисшей части, с того, с которого она начинается, и проверяет снова.
 check-no-islands-to-take = Островов для удаления нет
 check-erased-note = Стёрто из файла; всё, что осталось висеть, перечислено ниже.
-check-layer = Слой { $layer }
 check-more-layers =
     { $count ->
         [one] и ещё { $count } слой
@@ -544,12 +526,6 @@ check-issue-lever = Слабая перемычка
 check-issue-peel = Тяжёлый отрыв
 check-issue-cup = Присоска
 check-issue-thin = Тонкий участок
-check-explain-hanging = Остров под ним удалён, поэтому { $area } мм² здесь висят над пустотой, а вместе с ними и остальная часть. Поставьте поддержку.
-check-explain-island = Остров площадью { $area } мм² засвечивается над пустотой: он прилипнет к плёнке и останется в ванне. Поставьте поддержку или удалите его.
-check-explain-lever = Перемычка под ним ({ $neck } мм²) испытывает около { $stress } МПа от тяги со смещением в { $lever } мм в сторону. Поставьте поддержку ближе к её середине.
-check-explain-peel = Плёнка тянет этот слой с силой около { $force } Н. Наклоните модель, сделайте её полой или поднимайте медленнее.
-check-explain-cup = Полость площадью { $area } мм² и объёмом { $volume } мл закрыта снизу, поэтому при каждом подъёме на неё действует тяга. Дренажное отверстие впустит воздух.
-check-explain-thin = Участок шириной { $width } мм возвышается больше чем на миллиметр. Он может не сформироваться; если это важно, сделайте его толще.
 check-removed =
     { $count ->
         [one] { $count } остров удалён из файла
@@ -564,7 +540,6 @@ summary-layer-range = от { $fewest } до { $most }
 summary-layers = Слои
 summary-vertices = Вершины
 summary-triangles = Треугольники
-summary-model-supports = Модель/поддержки
 summary-price = Стоимость
 summary-exposure = Экспозиция
 summary-cured-area = Площадь засветки
@@ -572,6 +547,7 @@ summary-volume = Объём
 summary-weight = Масса
 summary-time = Время
 summary-resin = Смола
+summary-ml-g = { $ml } мл · { $g } г
 summary-block = Блок
 summary-details = Подробнее
 summary-model = Модель
@@ -606,6 +582,13 @@ ago-days =
         [one] { $count } день назад
         [few] { $count } дня назад
        *[many] { $count } дней назад
+    }
+ago-weeks =
+    { $count ->
+        [1] на прошлой неделе
+        [one] { $count } неделю назад
+        [few] { $count } недели назад
+       *[many] { $count } недель назад
     }
 
 ## ui/widgets/field.rs
@@ -1654,11 +1637,12 @@ updates-more-notes = И ещё больше на странице выпуска
 start-title = Новая платформа
 start-setup = { $machine } · { $resin } · { $layer } мкм
 start-zone = Откройте модель или проект
-start-drop-here = Перетащите модель сюда
-start-drop-formats = STL, OBJ, 3MF или проект .encrust
+start-drop-here = Перетащите модель или проект
+start-drop-formats = STL, OBJ, 3MF, нарезанный файл или проект .encrust
 start-open-model = Открыть модель
 start-open-project = Открыть проект
 start-recent = Недавние
+start-shelf = Недавние
 start-test-prints = Пробные печати
 start-clear-recent = Очистить список
 start-models =
@@ -1700,6 +1684,8 @@ notice-keep-as-is = Оставить как есть
 notice-no-printer-resin = Принтера и смолы пока нет
 notice-no-printer = Принтера пока нет
 notice-no-resin = На этом принтере пока нет смолы
+notice-no-resin-why = Для нарезки нужны времена засветки.
+notice-no-printer-why = Для нарезки нужны экран и объём машины.
 notice-set-up = Настроить
 notice-put-away = Убрать
 
@@ -2062,9 +2048,17 @@ cube-home = Исходный вид
 
 mask-pick-machine = Выберите принтер, чтобы узнать, на каком экране рисовать слои.
 mask-no-stack = Набора слоёв пока нет.
-mask-zoomed = ×{ $zoom }   двойной щелчок — вписать
-mask-how = прокрутка — масштаб, перетаскивание — сдвиг
-mask-caption = Маска слоя   1 : { $scale }   { $hint }
+mask-layer = Слой { $layer } · { $height } мм
+mask-pixels = { $width } × { $height } пикс.
+mask-issues =
+    { $count ->
+        [one] { $count } проблема
+        [few] { $count } проблемы
+       *[many] { $count } проблем
+    }
+zoom-out = Уменьшить
+zoom-in = Увеличить
+zoom-whole = Показать целиком, или двойной щелчок
 mask-cannot-draw = не удалось нарисовать слой
 mask-cannot-draw-full = не удалось нарисовать слой целиком
 
@@ -2252,6 +2246,7 @@ library-machines =
 ## panels/stage.rs
 
 stage-empty = На платформе ничего нет
+stage-empty-how = Перетащите модель в окно
 stage-open = Открыть модель
 
 ## plate.rs

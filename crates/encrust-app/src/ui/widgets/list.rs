@@ -151,13 +151,15 @@ const ISSUE_GAP: f32 = 8.0;
 
 /// How strongly the accent rings the finding in hand.
 const ISSUE_RING: f32 = 0.35;
+/// Room between a finding's name and the aside after it, points.
+const ASIDE_GAP: f32 = 8.0;
 
-/// One finding in a list of them: a dot in its colour, where it is, and what it is at the
-/// right. The whole row is the button that goes there.
+/// One finding in a list of them: a dot in its colour, what it is, any `aside` quieter
+/// beside it, and `detail` at the right. The whole row is the button that goes there.
 pub fn issue_row(
     ui: &mut Ui,
     tint: Color32,
-    place: &str,
+    (place, aside): (&str, Option<&str>),
     detail: &str,
     selected: bool,
 ) -> Response {
@@ -185,13 +187,22 @@ pub fn issue_row(
 
     let dot = rect.left_center() + vec2(12.0, 0.0);
     painter.circle_filled(dot, 4.0, tint);
-    painter.text(
+    let named = painter.text(
         dot + vec2(11.0, 0.0),
         Align2::LEFT_CENTER,
         place,
         theme::label(),
         colors.text_high,
     );
+    if let Some(aside) = aside {
+        painter.text(
+            named.right_center() + vec2(ASIDE_GAP, 0.0),
+            Align2::LEFT_CENTER,
+            aside,
+            theme::small(),
+            colors.text_low,
+        );
+    }
     painter.text(
         rect.right_center() - vec2(12.0, 0.0),
         Align2::RIGHT_CENTER,
@@ -229,6 +240,14 @@ pub fn tag(
     painter.galley(rect.min + TAG_PAD, word, ink);
     focus_ring(ui, &response, TAG_R);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// How wide a [`tag`] saying `text` stands, points.
+pub fn tag_w(ui: &Ui, text: &str) -> f32 {
+    let word = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), Color32::PLACEHOLDER);
+    word.size().x + 2.0 * TAG_PAD.x
 }
 
 /// Room around a tag's word, and how much of its ink washes it under the pointer.

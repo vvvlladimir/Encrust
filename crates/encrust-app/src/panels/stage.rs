@@ -26,7 +26,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
         seen.max.x = middle;
         let pane = Rect::from_x_y_ranges(middle..=stage.right(), stage.y_range());
         ui.painter().rect_filled(pane, 0.0, theme::colors().sunken);
-        let beside = Rect::from_x_y_ranges(middle..=clear.right(), clear.y_range());
+        // The plate's card stands at the top, so below it the mask's room runs to the strip.
+        let strip = stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
+        let beside = Rect::from_x_y_ranges(middle..=strip, clear.y_range());
         mask(ui, window, pane, beside);
         divider(ui, window, stage, clear, middle);
     }

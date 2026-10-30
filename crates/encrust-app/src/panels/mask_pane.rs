@@ -9,6 +9,8 @@ use crate::state::Machine;
 use crate::status::Status;
 use crate::ui::theme;
 
+mod over;
+
 /// Points between the mask and the edge of the pane it is centred in.
 const INSET: f32 = 18.0;
 /// How much a point of scrolling zooms by: a notch of a wheel is about a fifth.
@@ -29,25 +31,17 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
     }
 
     let risks = layer_risks(machine);
-    let full = picture(
+    let fit = picture(
         ui,
         &mut machine.preview,
         &settings,
         &risks,
         &mut machine.status,
     );
-    let scale = if full {
-        1
-    } else {
-        machine.preview.downsample_factor(&settings)
-    };
-    let zoom = machine.preview.view.zoom;
-    let hint = if zoom > 1.0 {
-        tr!("mask-zoomed", zoom = format!("{zoom:.1}"))
-    } else {
-        tr!("mask-how")
-    };
-    caption(ui, clear, &tr!("mask-caption", scale = scale, hint = hint));
+    let panel_px = Vec2::new(settings.width_px as f32, settings.height_px as f32);
+    let clear = ui.max_rect().intersect(clear);
+    over::tags(ui, clear, &machine.preview, panel_px, &risks);
+    over::zoom(ui, clear, &mut machine.preview, fit, panel_px);
 }
 
 /// What the check found on the layer shown, once the stack is measured.
@@ -78,29 +72,26 @@ fn caption(ui: &egui::Ui, clear: Rect, text: &str) {
     );
 }
 
-/// Draws the mask as the view has it and answers the pointer; returns whether the panel's own
-/// pixels are on screen. Only a failure reaches the stage notice, never per frame.
+/// Draws the mask as the view has it and answers the pointer; returns the rect the whole
+/// panel fills at no zoom. Only a failure reaches the stage notice, never per frame.
 fn picture(
     ui: &mut egui::Ui,
     preview: &mut Preview,
     settings: &RasterSettings,
     risks: &[Risk],
     status: &mut Status,
-) -> bool {
-    let texture = match preview.texture(ui.ctx(), settings) {
-        Ok(texture) => texture,
-        Err(error) => {
-            *status = Status::failed(&error.context(tr!("mask-cannot-draw")));
-            return false;
-        }
-    };
-
-    // The panel's pixels are not square in millimetres, so the picture is sized by the
-    // area it covers rather than by the texture.
+) -> Rect {
     let panel_px = Vec2::new(settings.width_px as f32, settings.height_px as f32);
     let panel_mm = panel_px * Vec2::new(settings.pitch.x, settings.pitch.y);
     let room = ui.max_rect().shrink(INSET);
     let fit_rect = Rect::from_center_size(room.center(), fit(room.size(), panel_mm.x / panel_mm.y));
+    let texture = match preview.texture(ui.ctx(), settings) {
+        Ok(texture) => texture,
+        Err(error) => {
+            *status = Status::failed(&error.context(tr!("mask-cannot-draw")));
+            return fit_rect;
+        }
+    };
 
     steer(ui, preview, room, fit_rect, panel_px);
     let placed = preview.view.placement(fit_rect, panel_px);
@@ -118,23 +109,19 @@ fn picture(
     egui::Image::from_texture((texture.id(), placed.size())).paint_at(&clipped, placed);
 
     let visible = visible_pixels(room.intersect(placed), placed, settings);
-    let full = match preview.detail(ui.ctx(), settings, visible) {
+    match preview.detail(ui.ctx(), settings, visible) {
         Ok(Some((region, detail))) => {
             let at = |x: u32, y: u32| {
                 placed.min + Vec2::new(x as f32, y as f32) / panel_px * placed.size()
             };
             let rect = Rect::from_min_max(at(region.x0, region.y0), at(region.x1, region.y1));
             egui::Image::from_texture((detail.id(), rect.size())).paint_at(&clipped, rect);
-            true
         }
-        Ok(None) => false,
-        Err(error) => {
-            *status = Status::failed(&error.context(tr!("mask-cannot-draw-full")));
-            false
-        }
-    };
+        Ok(None) => {}
+        Err(error) => *status = Status::failed(&error.context(tr!("mask-cannot-draw-full"))),
+    }
     ring_risks(&clipped, risks, placed, panel_mm);
-    full
+    fit_rect
 }
 
 /// A ring in its colour around each issue on the layer, where the check found it: a cup,

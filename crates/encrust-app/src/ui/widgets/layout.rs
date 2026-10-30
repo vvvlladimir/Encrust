@@ -182,8 +182,9 @@ pub fn mode_group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// Room inside a mode group around its toggles.
 const MODE_GROUP_PAD: f32 = 2.0;
 
-/// What a card says when it has nothing to work on: a large glyph over one line, centred.
-pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str) {
+/// What a card says when it has nothing to work on: a large glyph over what is missing and
+/// how to put it there, centred.
+pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str, how: &str) {
     let colors = theme::colors();
     ui.vertical_centered(|ui| {
         ui.add_space(EMPTY_PAD);
@@ -195,10 +196,16 @@ pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str) {
         ui.add_space(theme::ITEM_GAP);
         ui.label(
             RichText::new(text)
-                .font(theme::body())
+                .font(theme::section())
                 .color(colors.text_high),
         );
-        ui.add_space(EMPTY_PAD);
+        ui.add_space(2.0);
+        ui.label(
+            RichText::new(how)
+                .font(theme::small())
+                .color(colors.text_mid),
+        );
+        ui.add_space(theme::ITEM_GAP + 4.0);
     });
 }
 

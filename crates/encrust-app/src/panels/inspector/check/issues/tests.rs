@@ -30,8 +30,8 @@ fn islands_on_one_layer_are_one_row_with_their_area_summed() {
     assert_eq!(
         described,
         vec![
-            (465, "2 islands · 0.02 mm2".to_owned()),
-            (516, "2 islands · 4.30 mm2".to_owned()),
+            (465, "2 islands · 0.02 mm²".to_owned()),
+            (516, "2 islands · 4.30 mm²".to_owned()),
             (516, "peel · 60 N".to_owned()),
         ]
     );
@@ -48,7 +48,7 @@ fn what_hangs_over_a_removed_island_is_its_own_row_and_asks_for_supports() {
     let described: Vec<String> = rows.iter().map(detail).collect();
     assert_eq!(
         described,
-        ["island · 1.00 mm2", "hangs over nothing · 3.50 mm2"]
+        ["island · 1.00 mm²", "hangs over nothing · 3.50 mm²"]
     );
     assert!(
         Filter::Islands.admits(&hanging.kind),
@@ -73,7 +73,7 @@ fn a_cup_and_a_thin_section_read_as_what_they_measure() {
         kind: RiskKind::Thin { width_mm: 0.08 },
     };
     let described: Vec<String> = rows(&[cup, thin]).iter().map(detail).collect();
-    assert_eq!(described, ["suction cup · 25 mm2", "thin · 0.08 mm"]);
+    assert_eq!(described, ["suction cup · 25 mm²", "thin · 0.08 mm"]);
 }
 
 #[test]

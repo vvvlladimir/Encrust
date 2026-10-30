@@ -119,7 +119,7 @@ fn marking(ui: &mut egui::Ui, found: &mut Found, scene: &Scene, rows: &[(String,
         for (name, count, finding) in rows {
             let shown = found.shown() == Some(*finding);
             let tint = theme::scene().fault;
-            if issue_row(ui, tint, name, &count.to_string(), shown).clicked() {
+            if issue_row(ui, tint, (name, None), &count.to_string(), shown).clicked() {
                 found.press(scene, *finding);
             }
         }

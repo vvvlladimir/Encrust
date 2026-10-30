@@ -4,7 +4,7 @@
 use egui::{Align, Layout, Margin, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, vec2};
 
 use super::button::{Skin, filled_button};
-use super::{card, icon_button, progress_bar, quiet_button};
+use super::{card, icon_button, progress_bar, quiet_button, small_icon_button};
 use crate::i18n::tr;
 use crate::ui::{icon, theme, theme::motion};
 
@@ -77,13 +77,14 @@ pub struct NoticeReply {
 }
 
 /// A notice over the stage's foot, in a card of its own: the glyph in `tint` and nothing
-/// else coloured, the words, at most one `action` as a small button washed in the accent,
+/// else coloured, the words with any `detail` under them, at most one `action` as a small button washed in the accent,
 /// and, given `close` saying what closing it does, a close square.
 pub fn notice_card(
     ui: &mut Ui,
     glyph: &str,
     tint: egui::Color32,
     text: &str,
+    detail: Option<&str>,
     action: Option<&str>,
     close: Option<&str>,
 ) -> NoticeReply {
@@ -97,7 +98,16 @@ pub fn notice_card(
             if let Some(action) = action {
                 reply.acted = washed_button(ui, action).clicked();
             }
-            ui.with_layout(Layout::left_to_right(Align::Center), |ui| words(ui, text));
+            ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                words(ui, text);
+                if let Some(detail) = detail {
+                    let detail = RichText::new(detail)
+                        .font(theme::small())
+                        .color(theme::colors().text_low);
+                    ui.add(egui::Label::new(detail).truncate());
+                }
+            });
         });
     });
     reply
@@ -238,6 +248,7 @@ mod tests {
                     theme::colors().warn,
                     &long,
                     None,
+                    None,
                     Some("Put away"),
                 )
             });
@@ -250,3 +261,39 @@ mod tests {
         );
     }
 }
+
+/// What was pressed on a [`zoom_bar`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZoomPress {
+    Out,
+    In,
+    Whole,
+}
+
+/// Zoom out, the zoom in percent, zoom in and *show the whole*, in a row; drawn inside the
+/// card the caller places. `zoom` is 1 at the whole picture.
+pub fn zoom_bar(ui: &mut Ui, zoom: f32) -> Option<ZoomPress> {
+    ui.spacing_mut().item_spacing.x = 2.0;
+    let mut pressed = None;
+    if small_icon_button(ui, icon::ZOOM_OUT, &tr!("zoom-out")).clicked() {
+        pressed = Some(ZoomPress::Out);
+    }
+    let percent = format!("{:.0}%", zoom * 100.0);
+    ui.add_space(ZOOM_TEXT_PAD);
+    ui.label(
+        RichText::new(percent)
+            .font(theme::small())
+            .color(theme::colors().text_mid),
+    );
+    ui.add_space(ZOOM_TEXT_PAD);
+    if small_icon_button(ui, icon::ZOOM_IN, &tr!("zoom-in")).clicked() {
+        pressed = Some(ZoomPress::In);
+    }
+    if small_icon_button(ui, icon::FIT, &tr!("zoom-whole")).clicked() {
+        pressed = Some(ZoomPress::Whole);
+    }
+    pressed
+}
+
+/// Room either side of the zoom's percent, points.
+const ZOOM_TEXT_PAD: f32 = 6.0;

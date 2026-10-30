@@ -98,7 +98,10 @@ fn heading(ui: &mut Ui, window: &Window) {
     let slicing = &window.machine.slicing;
     let setup = tr!(
         "start-setup",
-        machine = window.doc.plate.display_name(),
+        machine = slicing.printer.as_ref().map_or_else(
+            || window.doc.plate.display_name(),
+            |profile| profile.name.clone()
+        ),
         resin = slicing.resin_name(),
         layer = format!("{:.0}", slicing.layer_height_mm() * 1000.0)
     );
@@ -274,6 +277,12 @@ fn shelf(ctx: &egui::Context) -> Shelf {
 fn shelf_head(ui: &mut Ui, window: &mut Window) {
     let mut shown = shelf(ui.ctx());
     ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(tr!("start-shelf"))
+                .font(theme::section())
+                .color(theme::colors().text_high),
+        );
+        ui.add_space(theme::ITEM_GAP);
         let segments = [
             Segment::new(Shelf::Recent, tr!("start-recent")),
             Segment::new(Shelf::TestPrints, tr!("start-test-prints")),

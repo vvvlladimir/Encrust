@@ -66,6 +66,7 @@ impl Filter {
 /// Every issue of one kind on one layer, which is one row of the list.
 pub(super) struct Row {
     pub(super) layer: usize,
+    pub(super) name: String,
     pub(super) filter: Filter,
     /// What stood on an island taken out, rather than an island itself.
     pub(super) hanging: bool,
@@ -116,6 +117,7 @@ pub(super) fn rows(risks: &[Risk]) -> Vec<Row> {
             }
             _ => rows.push(Row {
                 layer: risk.layer,
+                name: issue_name(risk),
                 filter,
                 hanging,
                 tint: tint(risk),
@@ -191,9 +193,12 @@ pub(super) fn listing(
     let picked = issue_list(ui, |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
-            let place = tr!("check-layer", layer = row.layer + 1);
+            let layer = tr!("check-layer-lower", layer = row.layer + 1);
             let selected = row.layer == shown;
-            if issue_row(ui, row.tint, &place, &detail(row), selected).clicked() {
+            let place = (row.name.as_str(), Some(layer.as_str()));
+            let count = row.count.to_string();
+            let response = issue_row(ui, row.tint, place, &count, selected);
+            if response.on_hover_text(detail(row)).clicked() {
                 picked = Some(
                     risks
                         .iter()
@@ -283,42 +288,6 @@ pub(super) fn issue_name(risk: &Risk) -> String {
         RiskKind::Peel { .. } => tr!("check-issue-peel"),
         RiskKind::SuctionCup { .. } => tr!("check-issue-cup"),
         RiskKind::Thin { .. } => tr!("check-issue-thin"),
-    }
-}
-
-/// Why the worst issue fails the print, in a sentence.
-pub(super) fn explain(risk: &Risk) -> String {
-    match risk.kind {
-        RiskKind::Floating { area_mm2 } => {
-            tr!("check-explain-hanging", area = format!("{area_mm2:.2}"))
-        }
-        RiskKind::Island { area_mm2 } => {
-            tr!("check-explain-island", area = format!("{area_mm2:.2}"))
-        }
-        RiskKind::Lever {
-            stress_mpa,
-            lever_mm,
-            neck_mm2,
-        } => tr!(
-            "check-explain-lever",
-            neck = format!("{neck_mm2:.2}"),
-            stress = format!("{stress_mpa:.0}"),
-            lever = format!("{lever_mm:.1}")
-        ),
-        RiskKind::Peel { force_n } => {
-            tr!("check-explain-peel", force = format!("{force_n:.0}"))
-        }
-        RiskKind::SuctionCup {
-            area_mm2,
-            volume_mm3,
-        } => tr!(
-            "check-explain-cup",
-            area = format!("{area_mm2:.0}"),
-            volume = format!("{:.2}", volume_mm3 / 1000.0)
-        ),
-        RiskKind::Thin { width_mm } => {
-            tr!("check-explain-thin", width = format!("{width_mm:.2}"))
-        }
     }
 }
 

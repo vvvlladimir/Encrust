@@ -28,4 +28,7 @@ pub use widgets::{
     vertical_hairline, zone_button,
 };
 pub use widgets::{Confirm, any_armed, confirm_button, keycap};
-pub use widgets::{Figure, details_fold, figure_grid, small_icon_button, split_readings, tag};
+pub use widgets::{
+    Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, tag_w,
+    zoom_bar,
+};

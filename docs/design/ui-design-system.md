@@ -139,10 +139,10 @@ paints from tokens only.
 | `hover_mix` | A fill easing to its hover by `FAST`, for every control painted by hand |
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
-| `issue_row` | One finding: a dot in its colour, where it is, what it is; the row goes there |
+| `issue_row` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
-| `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
+| `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
@@ -164,7 +164,8 @@ paints from tokens only.
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
-| `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
+| `tag`, `tag_w` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more. `tag_w` is its width, for a row of them |
+| `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |
 | `split_readings` | Figures split two ways, the models' and the supports': the two heads over their columns, a row a name and its two figures |
 | `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |
 | `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it, Esc reaching it before the window it stands in. What it costs is its tooltip. The bin's framed look is a `companion_square` |
@@ -230,6 +231,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Preset, save | `BOOKMARK_SIMPLE`, `FLOPPY_DISK` |
 | Warning, error, job, armed | `WARNING`, `WARNING_OCTAGON`, `CIRCLE_NOTCH`, `QUESTION` |
 | Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION_MARK` |
+| Zoom | `MAGNIFYING_GLASS_MINUS`, `MAGNIFYING_GLASS_PLUS`, `ARROWS_OUT` |
 
 A glyph in a button other than the primary is 16, in the tool row 19, in a 26 square 15, in an empty state 30.
 

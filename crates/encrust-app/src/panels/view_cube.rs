@@ -166,7 +166,7 @@ fn cube(ui: &mut egui::Ui, camera: &OrbitCamera, turn: Quat) -> Option<Vec3> {
         for cell in cells {
             let fill = match Some(cell.towards) == hovered {
                 true => colors.accent_wash,
-                false => colors.raised,
+                false => lit(face),
             };
             painter.add(Shape::convex_polygon(
                 cell.corners.to_vec(),
@@ -187,6 +187,17 @@ fn cube(ui: &mut egui::Ui, camera: &OrbitCamera, turn: Quat) -> Option<Vec3> {
             .on_hover_cursor(egui::CursorIcon::PointingHand);
     }
     response.clicked().then_some(hovered).flatten()
+}
+
+/// A face's fill as though lit from above and the front: the top lightest, then the
+/// front and back, then the sides, so the cube reads as a solid.
+fn lit(face: &Face) -> egui::Color32 {
+    let colors = theme::colors();
+    match face.normal {
+        normal if normal.z.abs() > 0.5 => colors.hover,
+        normal if normal.y.abs() > 0.5 => colors.raised,
+        _ => colors.panel,
+    }
 }
 
 /// The corner of a face that cell `index` of its 3 by 3 grid holds, for a corner cell.

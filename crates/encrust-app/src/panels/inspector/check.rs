@@ -10,58 +10,35 @@ use crate::preview::{on_plate, plate_fingerprint};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::supports::ISLANDS_GROUP;
-use crate::ui::{describe, focus_ring, hint, icon, readings, secondary_button, section, theme};
+use crate::ui::{
+    describe, hint, icon, readings, secondary_button, section, section_with_actions, theme,
+};
 use crate::workspace::{Mode, Tool};
 
 mod issues;
 
-use issues::{Filter, explain, filter, issue_name, listing, neighbour, rows};
+use issues::{Filter, filter, listing, neighbour};
 
 /// What the stack will fail on: the verdict, a way to take the islands out, every issue a
 /// click away from its layer, and what pulls hardest on the film.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    let Some((risks, worst, removed)) = window.measured().map(|measured| {
-        (
-            measured.risks(),
-            measured.worst(),
-            measured.removed_islands(),
-        )
-    }) else {
+    let Some((risks, removed)) = window
+        .measured()
+        .map(|measured| (measured.risks(), measured.removed_islands()))
+    else {
         waiting(ui, window);
         return;
     };
 
-    let found = tr!(
-        "check-found",
-        issues = risks.len(),
-        layers = layer_count(&risks)
-    );
-    section(ui, &tr!("check-issues"), Some(&found), |ui| {
-        if verdict(ui, worst.as_ref())
-            && let Some(worst) = worst
-        {
-            go_to(window, &[worst]);
-        }
-        if risks.is_empty() {
-            return;
-        }
-        describe(ui, &tr!("check-issues-help"));
-        let filter = filter(ui, &risks);
-        let shown = window.machine.preview.layer();
-        if let Some(picked) = listing(ui, shown, &risks, filter) {
-            go_to(window, &picked);
-        }
-        if let Some(picked) = stepping(ui, &risks, filter, shown) {
-            go_to(window, &picked);
-        }
-    });
+    if risks.is_empty() {
+        section(ui, &tr!("check-issues"), None, verdict);
+    } else {
+        found(ui, window, &risks);
+    }
     let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
     if islands || removed > 0 {
         section(ui, &tr!("check-filter-islands"), None, |ui| {
-            islands_action(ui, window.machine, &risks, removed);
-            if islands
-                && secondary_button(ui, icon::SUPPORTS, &tr!("check-support-islands")).clicked()
-            {
+            if islands_action(ui, window.machine, &risks, removed) {
                 support_islands(window, &risks);
             }
         });
@@ -79,38 +56,27 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 }
 
-/// How many layers the issues stand on.
-fn layer_count(risks: &[Risk]) -> usize {
-    rows(risks)
-        .iter()
-        .map(|row| row.layer)
-        .collect::<std::collections::BTreeSet<_>>()
-        .len()
-}
-
-/// Previous and Next, to the issue rows either side of the layer in view.
-fn stepping(ui: &mut egui::Ui, risks: &[Risk], filter: Filter, shown: usize) -> Option<Vec<Risk>> {
-    let mut picked = None;
-    ui.columns(2, |columns| {
-        let before = neighbour(risks, filter, shown, false);
-        let after = neighbour(risks, filter, shown, true);
-        let back = columns[0]
-            .add_enabled_ui(before.is_some(), |ui| {
-                secondary_button(ui, icon::LAYER_DOWN, &tr!("check-previous"))
-            })
-            .inner;
-        let on = columns[1]
-            .add_enabled_ui(after.is_some(), |ui| {
-                secondary_button(ui, icon::LAYER_UP, &tr!("check-next"))
-            })
-            .inner;
-        picked = match (back.clicked(), on.clicked()) {
-            (true, _) => before,
-            (_, true) => after,
-            _ => None,
-        };
+/// Every issue a click away from its layer, narrowed to one kind, and the heading's
+/// arrows to the issues either side of the layer in view.
+fn found(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
+    let shown = window.machine.preview.layer();
+    let arrows = [
+        (icon::LAYER_UP, tr!("check-previous")),
+        (icon::LAYER_DOWN, tr!("check-next")),
+    ];
+    let arrows = arrows
+        .each_ref()
+        .map(|(glyph, name)| (*glyph, name.as_str()));
+    let (arrow, listed) = section_with_actions(ui, &tr!("check-issues"), &arrows, |ui| {
+        describe(ui, &tr!("check-issues-help"));
+        let filter = filter(ui, risks);
+        (filter, listing(ui, shown, risks, filter))
     });
-    picked
+    let (filter, picked) = listed.unwrap_or_default();
+    let stepped = arrow.and_then(|index| neighbour(risks, filter, shown, index == 1));
+    if let Some(picked) = picked.or(stepped) {
+        go_to(window, &picked);
+    }
 }
 
 /// Stands a support under every island the check found, in a group of their own built
@@ -229,71 +195,47 @@ pub fn tint(risk: &Risk) -> Color32 {
     }
 }
 
-/// The worst issue, where it is and what to do about it, on a card that goes there when
-/// clicked. Answers whether it was clicked.
-fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> bool {
+/// The card that says the check found nothing to fail on.
+fn verdict(ui: &mut egui::Ui) {
     let colors = theme::colors();
-    let (glyph, tint, wash, title, why) = match worst {
-        None => (
-            icon::CLEAR,
-            colors.ok,
-            colors.ok_wash,
-            tr!("check-nothing-found"),
-            tr!("check-nothing-found-why"),
-        ),
-        Some(risk) => {
-            let wash = match risk.kind {
-                RiskKind::Island { .. } | RiskKind::Floating { .. } => colors.danger_wash,
-                _ => colors.warn_wash,
-            };
-            (
-                icon::WARNING,
-                tint(risk),
-                wash,
-                tr!(
-                    "check-worst",
-                    issue = issue_name(risk),
-                    layer = risk.layer + 1
-                ),
-                explain(risk),
-            )
-        }
-    };
-    let name = title.clone();
-    let card = egui::Frame::new()
-        .fill(wash)
+    egui::Frame::new()
+        .fill(colors.ok_wash)
         .corner_radius(theme::R_SURFACE)
         .inner_margin(theme::CARD_MARGIN)
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {
-                ui.label(RichText::new(glyph).font(theme::icon(22.0)).color(tint));
+                ui.label(
+                    RichText::new(icon::CLEAR)
+                        .font(theme::icon(22.0))
+                        .color(colors.ok),
+                );
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 3.0;
+                    let title = tr!("check-nothing-found");
                     ui.label(RichText::new(title).heading().color(colors.text_high));
                     ui.label(
-                        RichText::new(why)
+                        RichText::new(tr!("check-nothing-found-why"))
                             .font(theme::small())
                             .color(colors.text_mid),
                     );
                 });
             });
         });
-    if worst.is_none() {
-        return false;
-    }
-    let response = card
-        .response
-        .interact(egui::Sense::click())
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
-    focus_ring(ui, &response, theme::R_SURFACE);
-    response.clicked()
 }
 
-/// Taking every island out of the written file, or putting them back.
-fn islands_action(ui: &mut egui::Ui, machine: &mut Machine, risks: &[Risk], removed: usize) {
+/// Supporting the islands or taking them out of the written file, side by side, or once
+/// taken out, putting them back. Answers whether Support was pressed.
+fn islands_action(
+    ui: &mut egui::Ui,
+    machine: &mut Machine,
+    risks: &[Risk],
+    removed: usize,
+) -> bool {
     let slicing = &mut machine.slicing;
+    let islands = risks
+        .iter()
+        .any(|risk| matches!(risk.kind, RiskKind::Island { .. }));
     if slicing.remove_islands {
         removed_block(ui, removed);
         hanging_action(ui, slicing, risks);
@@ -301,20 +243,26 @@ fn islands_action(ui: &mut egui::Ui, machine: &mut Machine, risks: &[Risk], remo
             slicing.remove_islands = false;
             slicing.hanging_passes = 0;
         }
-        return;
+        return islands
+            && secondary_button(ui, icon::SUPPORTS, &tr!("check-support-islands")).clicked();
     }
-    let islands = risks
-        .iter()
-        .filter(|risk| Filter::Islands.admits(&risk.kind))
-        .count();
-    if islands == 0 {
-        return;
+    if !islands {
+        return false;
     }
-    let label = tr!("check-remove-islands", count = islands);
-    if secondary_button(ui, icon::ERASE, &label).clicked() {
-        machine.slicing.remove_islands = true;
-    }
+    let mut support = false;
+    ui.columns(2, |columns| {
+        support = secondary_button(
+            &mut columns[0],
+            icon::SUPPORTS,
+            &tr!("check-support-islands"),
+        )
+        .clicked();
+        if secondary_button(&mut columns[1], icon::ERASE, &tr!("check-remove-islands")).clicked() {
+            slicing.remove_islands = true;
+        }
+    });
     describe(ui, &tr!("check-remove-islands-note"));
+    support
 }
 
 /// Taking out the next layer of what the islands already taken out left hanging, one

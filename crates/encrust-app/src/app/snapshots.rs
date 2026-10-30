@@ -79,8 +79,20 @@ fn every_tool_on_a_picked_model() {
     for tool in Tool::ALL.into_iter().filter(|tool| *tool != Tool::Check) {
         let mut app = pictured();
         app.tool = tool;
+        if tool == Tool::Measure {
+            across_the_top(&mut app.tools.measure);
+        }
         results.extend(picture(&format!("tool_{tool:?}").to_lowercase(), app));
     }
+}
+
+/// A span across the top of the pictured cube, corner to opposite corner: 28.28 mm.
+fn across_the_top(measure: &mut crate::measure::Measure) {
+    use crate::measure::Snapped;
+    use core_geometry::Vec3;
+
+    measure.pick(Vec3::new(99.44, 51.44, 20.0), Snapped::Corner);
+    measure.pick(Vec3::new(119.44, 71.44, 20.0), Snapped::Corner);
 }
 
 /// Check over a cube with a block beside it 10 mm up on nothing: that block an island.

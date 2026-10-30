@@ -32,10 +32,9 @@ unit-um = µm
 unit-px = px
 unit-s = s
 unit-times = ×
-value-g = { $value } g
 value-ml = { $value } ml
 value-mm = { $value } mm
-value-mm2 = { $value } mm2
+value-mm2 = { $value } mm²
 value-s = { $value } s
 value-um = { $value } µm
 
@@ -417,20 +416,12 @@ check-filter-levers = Levers
 check-filter-peel = Peel
 check-filter-cups = Cups
 check-filter-thin = Thin
-check-support-islands = Support every island
-check-drill-cups = Drill the suction cups
-check-issues = Issues
+check-support-islands = Support them
+check-drill-cups = Drill them
+check-issues = Found
 check-estimate = Estimate
-check-previous = Previous
-check-next = Next
-check-found =
-    { $issues ->
-        [one] { $issues } issue
-       *[other] { $issues } issues
-    } on { $layers ->
-        [one] { $layers } layer
-       *[other] { $layers } layers
-    }
+check-previous = Previous issue
+check-next = Next issue
 check-stood =
     { $count ->
         [0] No island had an underside to stand a support on
@@ -458,13 +449,8 @@ check-nothing-found = Nothing found to fail on
 check-nothing-found-why = No islands, no neck pulled past its limit, and no layer pulling the film too hard.
 check-issues-help = Islands start in mid-air and stay stuck to the film. Levers are thin necks a pull to one side can snap, cups are closed hollows the lift sucks on, and thin sections may not form at all. Click a row to go to its layer.
 check-peel-help = Each lift tears the fresh layer off the film, and a wider layer pulls harder. The hardest pull is the worst layer, shown as the disc that would pull the same; the widest step is where the area grows most from one layer to the next. Tilting or hollowing the model lowers both.
-check-worst = { $issue } on layer { $layer }
 check-put-islands-back = Put the islands back
-check-remove-islands =
-    { $count ->
-        [one] Remove { $count } island
-       *[other] Remove { $count } islands
-    }
+check-remove-islands = Remove them
 check-remove-islands-note = Erases them from the written file and checks again. Only the islands go; what stood on them stays, and is listed to be supported.
 check-hanging-passes =
     { $count ->
@@ -479,36 +465,29 @@ check-remove-next =
 check-remove-next-note = Takes one layer more off each part left hanging, the one it starts on, and checks again.
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
-check-layer = Layer { $layer }
 check-more-layers = and { $count } more layers
-check-row-hanging = hangs over nothing · { $area } mm2
+check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->
-        [one] island · { $area } mm2
-       *[other] { $count } islands · { $area } mm2
+        [one] island · { $area } mm²
+       *[other] { $count } islands · { $area } mm²
     }
 check-row-lever = lever · { $lever } mm · { $stress } MPa
 check-row-levers = { $count } levers · { $stress } MPa
-check-row-cup = suction cup · { $area } mm2
-check-row-cups = { $count } suction cups · { $area } mm2
+check-row-cup = suction cup · { $area } mm²
+check-row-cups = { $count } suction cups · { $area } mm²
 check-row-thin =
     { $count ->
         [one] thin · { $width } mm
        *[other] { $count } thin · { $width } mm
     }
 check-row-peel = peel · { $force } N
-check-issue-island = Unsupported island
+check-issue-island = Island
 check-issue-hanging = Part left hanging
 check-issue-lever = Weak neck
 check-issue-peel = Hard peel
 check-issue-cup = Suction cup
 check-issue-thin = Thin section
-check-explain-hanging = An island under it was taken out, so { $area } mm2 here hangs over nothing and the rest of that part with it. Support it.
-check-explain-island = An island of { $area } mm2 cures over nothing: it sticks to the film and stays in the vat. Support it, or remove it.
-check-explain-lever = The neck under it, { $neck } mm2, takes about { $stress } MPa from a pull { $lever } mm off to one side. Support it nearer its middle.
-check-explain-peel = The film pulls on this layer with about { $force } N. Tilt the model, hollow it, or lift slower.
-check-explain-cup = A hole of { $area } mm2 holding { $volume } ml is sealed from below, so each lift pulls on it. A drain hole lets the air in.
-check-explain-thin = A section { $width } mm across stands over a millimetre tall. It may not form; thicken it if it matters.
 check-removed =
     { $count ->
         [one] { $count } island taken out of the file
@@ -522,7 +501,6 @@ summary-layer-range = { $fewest } to { $most }
 summary-layers = Layers
 summary-vertices = Vertices
 summary-triangles = Triangles
-summary-model-supports = Model/supports
 summary-price = Price
 summary-exposure = Exposure
 summary-cured-area = Cured area
@@ -530,6 +508,7 @@ summary-volume = Volume
 summary-weight = Weight
 summary-time = Time
 summary-resin = Resin
+summary-ml-g = { $ml } ml · { $g } g
 summary-block = Block
 summary-details = Details
 summary-model = Model
@@ -561,6 +540,11 @@ ago-days =
     { $count ->
         [1] yesterday
        *[other] { $count } days ago
+    }
+ago-weeks =
+    { $count ->
+        [1] last week
+       *[other] { $count } weeks ago
     }
 
 ## ui/widgets/field.rs
@@ -1566,11 +1550,12 @@ updates-more-notes = And more on the release page.
 start-title = Start a plate
 start-setup = { $machine } · { $resin } · { $layer } µm
 start-zone = Open a model or a project
-start-drop-here = Drop a model here
-start-drop-formats = STL, OBJ, 3MF, or an .encrust project
+start-drop-here = Drop a model or a project
+start-drop-formats = STL, OBJ, 3MF, a sliced file, or an .encrust project
 start-open-model = Open a model
 start-open-project = Open a project
 start-recent = Recent
+start-shelf = Recent
 start-test-prints = Test prints
 start-clear-recent = Clear the list
 start-models =
@@ -1605,6 +1590,8 @@ notice-keep-as-is = Keep as it is
 notice-no-printer-resin = No printer or resin yet
 notice-no-printer = No printer yet
 notice-no-resin = No resin on this printer yet
+notice-no-resin-why = Slicing needs exposure times.
+notice-no-printer-why = Slicing needs the screen and the volume of a machine.
 notice-set-up = Set up
 notice-put-away = Put away
 
@@ -1956,9 +1943,16 @@ cube-home = Home view
 
 mask-pick-machine = Pick a machine to know the panel to draw the layers on.
 mask-no-stack = No stack to show yet.
-mask-zoomed = x{ $zoom }   double-click to fit
-mask-how = scroll to zoom, drag to move
-mask-caption = Layer mask   1 : { $scale }   { $hint }
+mask-layer = Layer { $layer } · { $height } mm
+mask-pixels = { $width } × { $height } px
+mask-issues =
+    { $count ->
+        [one] One issue
+       *[other] { $count } issues
+    }
+zoom-out = Zoom out
+zoom-in = Zoom in
+zoom-whole = Show the whole of it, or double click
 mask-cannot-draw = cannot draw the layer
 mask-cannot-draw-full = cannot draw the layer in full
 
@@ -2137,6 +2131,7 @@ library-machines =
 ## panels/stage.rs
 
 stage-empty = Nothing on the plate
+stage-empty-how = Drop a model into the window
 stage-open = Open a model
 
 ## plate.rs
