@@ -255,6 +255,11 @@ fn a_file_written_before_the_general_page_opens_on_the_start_page() {
     assert!(read.general.start_page);
     assert!(!read.general.invert_zoom);
     assert!(!read.general.reduce_motion);
+    assert_eq!(
+        read.general.appearance,
+        Appearance::System,
+        "an old file follows the system"
+    );
 }
 
 #[test]
@@ -265,6 +270,7 @@ fn how_the_window_behaves_survives_the_round_trip() {
         sliced_dir: Some(std::path::PathBuf::from("/prints")),
         language: Some(crate::i18n::Language::Russian),
         reduce_motion: true,
+        appearance: Appearance::Light,
     };
     let prefs = Preferences::default().with_general(&general);
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");

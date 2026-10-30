@@ -13,7 +13,7 @@ pub fn chooser_frame() -> Frame {
         .fill(colors.raised)
         .stroke(egui::Stroke::new(1.0, colors.hairline))
         .corner_radius(theme::R_SURFACE)
-        .shadow(theme::WINDOW_SHADOW)
+        .shadow(theme::window_shadow())
         .inner_margin(theme::TOOLBAR_PAD)
 }
 

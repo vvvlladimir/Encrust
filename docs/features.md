@@ -768,6 +768,7 @@ address in a video player).
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **Reduce motion** in Settings → General stops every animation in the window.
+- **Appearance** in Settings → General: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
   Hollow, Drain, Relief's text and brush, Supports' pick, place and area, Repair's faces and
   edges, Cut's part mark — a pill under the tool row names the keys and what each does,

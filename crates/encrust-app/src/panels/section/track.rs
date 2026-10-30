@@ -220,7 +220,7 @@ pub(super) fn paint_track(
         painter.rect(
             handle,
             egui::CornerRadius::same(4),
-            colors.text_high,
+            colors.knob,
             Stroke::new(2.0, colors.accent),
             egui::StrokeKind::Outside,
         );

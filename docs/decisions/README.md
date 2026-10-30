@@ -468,6 +468,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
 | [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382 |
 | [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Accepted |
+| [0383](0383-a-light-palette-chosen-each-frame.md) | Add a light palette, chosen each frame from egui's resolved theme | Accepted |
 | [0312](0312-the-command-line-shapes-models-before-it-slices-them.md) | Combine, label, cut and split models on the command line before slicing them | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |
