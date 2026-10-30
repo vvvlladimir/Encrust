@@ -64,6 +64,9 @@ struct Feed {
     /// One archive per platform, keyed by [`platform`].
     #[serde(default)]
     platforms: BTreeMap<String, Build>,
+    /// When the release went out, `YYYY-MM-DDTHH:MM:SSZ`; absent from a feed written before.
+    #[serde(default)]
+    published: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +74,9 @@ struct Build {
     url: String,
     /// The archive's detached minisign signature, the whole `.minisig` file.
     signature: String,
+    /// The archive's size, bytes; absent from a feed written before.
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 /// A newer release than this build.
@@ -80,6 +86,8 @@ pub struct Offer {
     pub notes: Vec<Note>,
     /// The archive for this platform, when the release has one.
     pub download: Option<Download>,
+    /// When the release went out, seconds since the Unix epoch, when the feed says.
+    pub published_s: Option<u64>,
 }
 
 /// One archive of a release and the signature it has to carry.
@@ -89,6 +97,8 @@ pub struct Download {
     /// The archive's file name, which its signature names too.
     pub archive: String,
     pub signature: String,
+    /// Bytes, when the feed says.
+    pub size: Option<u64>,
 }
 
 /// One line of the release notes, as the Updates page sets it.
@@ -118,6 +128,7 @@ pub fn read(
         version,
         notes: notes_of(&feed.notes, version),
         download,
+        published_s: feed.published.as_deref().and_then(unix_seconds),
     }))
 }
 
@@ -135,7 +146,39 @@ fn download(build: &Build, version: Version) -> Result<Download, UpdateError> {
         url: build.url.clone(),
         archive: archive.to_owned(),
         signature: build.signature.clone(),
+        size: build.size,
     })
+}
+
+/// Seconds since the Unix epoch of a UTC time written `YYYY-MM-DDTHH:MM:SSZ`, or `None` for
+/// anything else: a date the window cannot read is left out, not a reason to refuse the offer.
+fn unix_seconds(text: &str) -> Option<u64> {
+    let (date, time) = text.strip_suffix('Z')?.split_once('T')?;
+    let mut date = date.splitn(3, '-').map(str::parse::<i64>);
+    let (year, month, day) = (date.next()?.ok()?, date.next()?.ok()?, date.next()?.ok()?);
+    let mut time = time.splitn(3, ':').map(str::parse::<i64>);
+    let (hour, minute, second) = (time.next()?.ok()?, time.next()?.ok()?, time.next()?.ok()?);
+    let in_range = (1..=12).contains(&month)
+        && (1..=31).contains(&day)
+        && (0..24).contains(&hour)
+        && (0..60).contains(&minute)
+        && (0..61).contains(&second);
+    if !in_range {
+        return None;
+    }
+    let seconds = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second;
+    u64::try_from(seconds).ok()
+}
+
+/// Days from 1970-01-01 to a date of the proleptic Gregorian calendar, Hinnant's closed form:
+/// see `https://howardhinnant.github.io/date_algorithms.html#days_from_civil`.
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let of_era = year - era * 400;
+    let of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    let of_cycle = of_era * 365 + of_era / 4 - of_era / 100 + of_year;
+    era * 146_097 + of_cycle - 719_468
 }
 
 /// The key this build's archive has in the feed, the name `release.yml` gives it.
@@ -251,6 +294,48 @@ pub mod tests {
             "platforms": { "macos-aarch64": { "url": url, "signature": "sig" } },
         })
         .to_string()
+    }
+
+    #[test]
+    fn a_feed_dates_its_release_and_sizes_each_archive() {
+        let url = format!("{REPO}/releases/download/v0.3.0/a.tar.gz");
+        let text = serde_json::json!({
+            "version": "0.3.0",
+            "published": "2026-10-28T12:00:00Z",
+            "platforms": { "macos-aarch64": { "url": url, "signature": "sig", "size": 39_845_888 } },
+        })
+        .to_string();
+        let offer = read(text.as_bytes(), version("0.1.0"), Some("macos-aarch64"))
+            .expect("the feed reads")
+            .expect("and offers 0.3.0");
+        assert_eq!(
+            offer.published_s,
+            Some(1_793_188_800),
+            "2026-10-28 12:00 UTC"
+        );
+        let size = offer.download.and_then(|download| download.size);
+        assert_eq!(size, Some(39_845_888));
+    }
+
+    #[test]
+    fn a_feed_written_before_dates_and_sizes_still_offers() {
+        let offer = an_offer("0.3.0");
+        assert_eq!(offer.published_s, None);
+        assert_eq!(offer.download.and_then(|download| download.size), None);
+    }
+
+    #[test]
+    fn a_time_the_window_cannot_read_is_left_out() {
+        assert_eq!(unix_seconds("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(unix_seconds("2000-03-01T00:00:00Z"), Some(951_868_800));
+        for text in [
+            "",
+            "2026-10-28",
+            "2026-13-01T00:00:00Z",
+            "2026-10-28T12:00:00+02:00",
+        ] {
+            assert_eq!(unix_seconds(text), None, "{text:?}");
+        }
     }
 
     fn version(text: &str) -> Version {

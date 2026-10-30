@@ -363,15 +363,20 @@ jobs:
             platform="${archive#encrust-}"
             platform="${platform%.tar.gz}"
             platform="${platform%.zip}"
+            # The size lets the window say what it will download before it does.
             platforms=$(jq --arg platform "$platform" \
               --arg url "$repository/releases/download/$TAG/$archive" \
               --rawfile signature "$path.minisig" \
-              '.[$platform] = {url: $url, signature: $signature}' <<<"$platforms")
+              --argjson size "$(stat -c %s "$path")" \
+              '.[$platform] = {url: $url, signature: $signature, size: $size}' <<<"$platforms")
           done
           rm -f "$key"
 
           gh release view "$TAG" --json body --jq .body --repo "$GITHUB_REPOSITORY" > notes.md
+          # The draft has no publish time yet: this stands in until the release-notes command
+          # restamps it as the release goes out.
           jq -n --arg version "$version" --rawfile notes notes.md --argjson platforms "$platforms" \
-            '{version: $version, notes: $notes, platforms: $platforms}' > dist/latest.json
+            '{version: $version, published: (now | todate), notes: $notes, platforms: $platforms}' \
+            > dist/latest.json
           gh release upload "$TAG" dist/*.minisig dist/latest.json --clobber \
             --repo "$GITHUB_REPOSITORY"

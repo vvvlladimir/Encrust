@@ -14,10 +14,11 @@ release each time it opens, and `ureq` panics on wasm reading a clock it does no
 ```json
 {
   "version": "0.3.0",
-  "notes": "<the release body release-please wrote, markdown>",
+  "published": "2026-10-28T12:00:00Z",
+  "notes": "<the release notes, markdown, as the release-notes skill writes them>",
   "platforms": {
     "macos-aarch64":  { "url": "<repository>/releases/download/v0.3.0/encrust-macos-aarch64.tar.gz",
-                        "signature": "<the whole .minisig file>" },
+                        "signature": "<the whole .minisig file>", "size": 39845888 },
     "macos-x86_64":   { "...": "..." },
     "linux-x86_64":   { "...": "..." },
     "windows-x86_64": { "url": ".../encrust-windows-x86_64.zip", "signature": "..." }
@@ -30,6 +31,12 @@ The window reads `<repository>/releases/latest/download/latest.json`, `<reposito
 release, so a draft is never offered. A platform key is the archive name between `encrust-`
 and the extension; a platform the feed has no key for still hears about the release and is
 sent to the release page.
+
+`published` (UTC) and each `size` (bytes) are what the update sheet shows; a feed without
+them still offers, and a time the window cannot read is left out. The job writes the time it
+runs, since the draft has none yet; the release-notes skill's publish command restamps it.
+Notes headed `### <Area>`, `## ⚡ Faster`, `## 🐛 Fixed` and `## Before you update` are
+tinted by the sheet, an area green, Faster orange, the others grey.
 
 A version is `major.minor.patch` and compares as numbers. Nothing at or below the running
 version is offered.

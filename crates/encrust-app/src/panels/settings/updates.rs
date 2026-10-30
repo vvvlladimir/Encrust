@@ -41,6 +41,9 @@ fn release(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
     ui.horizontal(|ui| {
         tag_label(ui, &tr!("update-group-new"), (colors.ok, colors.ok_wash));
         hint(ui, &format!("Encrust {}", offer.version));
+        if let Some(at) = offer.published_s {
+            hint(ui, &tr!("update-released", when = ago(Some(at), now_s())));
+        }
     });
     let items: Vec<&str> = offer
         .notes
