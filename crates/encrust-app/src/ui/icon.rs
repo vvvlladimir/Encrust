@@ -26,8 +26,9 @@ pub use egui_phosphor::regular::{
 };
 
 pub use egui_phosphor::regular::{
-    BOOKMARK_SIMPLE as PRESET, CHECKERBOARD as TEXTURE, LINE_SEGMENT as POINTS,
-    PARALLELOGRAM as PLANES, TEXT_AA as FONT, WARNING_OCTAGON as ERROR,
+    ARROW_UP_RIGHT as ELSEWHERE, BOOKMARK_SIMPLE as PRESET, CHECKERBOARD as TEXTURE,
+    LINE_SEGMENT as POINTS, PARALLELOGRAM as PLANES, SLIDERS as PROFILES, TEXT_AA as FONT,
+    WARNING_OCTAGON as ERROR,
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
@@ -131,6 +132,8 @@ mod tests {
         ("CANCEL", CANCEL),
         ("DROP_TO_PLATE", DROP_TO_PLATE),
         ("PRESET", PRESET),
+        ("ELSEWHERE", ELSEWHERE),
+        ("PROFILES", PROFILES),
         ("TEXTURE", TEXTURE),
         ("POINTS", POINTS),
         ("PLANES", PLANES),
@@ -146,8 +149,9 @@ mod tests {
         ("KEY_DRAG", KEY_DRAG),
     ];
 
-    /// Names the glyph table gives one glyph: a caret folds a block and steps a layer down alike.
-    const SHARED: &[[&str; 2]] = &[["CARET_DOWN", "LAYER_DOWN"]];
+    /// Names the glyph table gives one glyph: a caret folds a block and steps a layer down alike,
+    /// and Settings' General and its profiles share the sliders.
+    const SHARED: &[[&str; 2]] = &[["CARET_DOWN", "LAYER_DOWN"], ["GENERAL", "PROFILES"]];
 
     #[test]
     fn no_glyph_stands_for_two_meanings() {

@@ -1,7 +1,7 @@
 use super::rows::{Act, InHand, Pick, Presets, Row};
 use super::{LINE_H, SHAPE_INDENT, count_at, swatch};
 use crate::i18n::tr;
-use crate::ui::{BinLook, confirm_bin, icon, theme};
+use crate::ui::{BinLook, chooser_group, confirm_bin, focus_ring, hairline, icon, theme};
 use egui::{Sense, vec2};
 
 /// The open picker: what stands on the plate — the automatic preset with the shapes it
@@ -16,15 +16,12 @@ pub(super) struct List<'a> {
 
 impl List<'_> {
     pub(super) fn show(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
-        Line::caption(&tr!("supports-on-plate")).show(ui, 0, acts);
+        chooser_group(ui, &tr!("supports-on-plate"));
         let auto = self.auto(ui, acts);
         let by_hand = self.by_hand(ui, acts, true);
-        Line::caption(&tr!("supports-profiles")).show(ui, 0, acts);
+        chooser_group(ui, &tr!("supports-profiles"));
         let idle = self.by_hand(ui, acts, false);
-        ui.separator();
-        let edit = Line::preset(&tr!("supports-edit-profiles"), None)
-            .show(ui, 0, acts)
-            .then_some(Pick::EditProfiles);
+        let edit = edit_profiles(ui).then_some(Pick::EditProfiles);
         auto.or(by_hand).or(idle).or(edit)
     }
 
@@ -99,7 +96,6 @@ impl List<'_> {
             let on = !self.hand.in_auto && self.hand.name == offered.name;
             if Line::preset(&offered.name, group)
                 .selected(on)
-                .idle(!standing)
                 .show(ui, self.rows.len(), acts)
             {
                 match group {
@@ -140,8 +136,14 @@ pub(super) struct Line<'a> {
     pub(super) indent: f32,
     /// A heading only names what is under it, and takes no click.
     pub(super) heading: bool,
-    /// A profile holding nothing, quieter than a group that stands.
-    pub(super) idle: bool,
+}
+
+/// Where a line's parts stand: the name's room, the count's right edge, the eye and the bin.
+struct Places {
+    name: egui::Rect,
+    count_right: f32,
+    icons: egui::Rect,
+    tick: egui::Pos2,
 }
 
 impl<'a> Line<'a> {
@@ -153,20 +155,7 @@ impl<'a> Line<'a> {
             selected: false,
             indent: 0.0,
             heading: false,
-            idle: false,
         }
-    }
-
-    /// The name of a part of the list, in capitals' stead the quiet tone, taking no click.
-    pub(super) fn caption(name: &'a str) -> Self {
-        Self {
-            heading: true,
-            ..Self::preset(name, None)
-        }
-    }
-
-    pub(super) fn idle(self, idle: bool) -> Self {
-        Self { idle, ..self }
     }
 
     pub(super) fn heading(name: &'a str, total: usize, heading: bool) -> Self {
@@ -185,6 +174,33 @@ impl<'a> Line<'a> {
         Self { indent, ..self }
     }
 
+    fn holds(&self) -> Option<usize> {
+        self.group.map(|row| row.holds).or(self.count)
+    }
+
+    /// Right to left: the tick of the line in hand, the eye and the bin, the count; the
+    /// name takes what is left.
+    fn places(&self, rect: egui::Rect) -> Places {
+        let y = rect.center().y;
+        let mut right = rect.right() - RIGHT_PAD;
+        let tick = egui::pos2(right - TICK_MARGIN - TICK_W / 2.0, y);
+        if self.selected {
+            right -= TICK_MARGIN + TICK_W + GAP;
+        }
+        let icons = egui::Rect::from_x_y_ranges(right - ICONS_W..=right, rect.y_range());
+        let count_right = icons.left() - GAP;
+        if self.holds().is_some() {
+            right = count_right - COUNT_W - GAP;
+        }
+        let left = rect.left() + LEFT_PAD + self.indent + DOT_W + GAP;
+        Places {
+            name: egui::Rect::from_x_y_ranges(left..=right, rect.y_range()),
+            count_right,
+            icons,
+            tick,
+        }
+    }
+
     /// Draws the line; a group's eye and bin show under the pointer. Answers whether the
     /// line itself was clicked, which closes the list.
     pub(super) fn show(&self, ui: &mut egui::Ui, groups: usize, acts: &mut Vec<Act>) -> bool {
@@ -195,9 +211,10 @@ impl<'a> Line<'a> {
         };
         let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), LINE_H), sense);
         let hovered = ui.rect_contains_pointer(rect);
-        self.paint(ui, rect, hovered);
+        let places = self.places(rect);
+        self.paint(ui, rect, &places, hovered);
         let on_icon = match self.group {
-            Some(row) => group_icons(ui, rect, response.id, row, groups, hovered, acts),
+            Some(row) => group_icons(ui, places.icons, response.id, row, groups, hovered, acts),
             None => false,
         };
         let clicked = response.clicked() && !on_icon;
@@ -207,7 +224,7 @@ impl<'a> Line<'a> {
         clicked
     }
 
-    pub(super) fn paint(&self, ui: &egui::Ui, rect: egui::Rect, hovered: bool) {
+    fn paint(&self, ui: &egui::Ui, rect: egui::Rect, places: &Places, hovered: bool) {
         let colors = theme::colors();
         let fill = match (self.selected, hovered && !self.heading) {
             (true, _) => colors.picked_wash,
@@ -216,34 +233,31 @@ impl<'a> Line<'a> {
         };
         let painter = ui.painter();
         painter.rect_filled(rect, theme::R_CONTROL, fill);
-        let left = rect.left() + 8.0 + self.indent;
-        let hidden = self.group.is_some_and(|row| row.hidden);
+        let y = rect.center().y;
         if let Some(row) = self.group {
-            swatch(painter, egui::pos2(left + 4.0, rect.center().y), row);
+            let dot = rect.left() + LEFT_PAD + self.indent + DOT_W / 2.0;
+            swatch(painter, egui::pos2(dot, y), row);
         }
-        let ink = match (self.heading, hidden, self.idle) {
-            (true, ..) => colors.text_low,
-            (false, true, _) => colors.text_low,
-            (false, false, true) => colors.text_mid,
-            (false, false, false) => colors.text_high,
+        let hidden = self.group.is_some_and(|row| row.hidden);
+        let ink = match (self.heading || hidden, self.holds()) {
+            (true, _) => colors.text_low,
+            (false, None) => colors.text_mid,
+            (false, Some(_)) => colors.text_high,
         };
-        if self.selected && !hovered {
+        if self.selected {
             painter.text(
-                egui::pos2(rect.right() - ICONS_W / 2.0, rect.center().y),
+                places.tick,
                 egui::Align2::CENTER_CENTER,
                 icon::IN_HAND,
-                theme::icon(13.0),
+                theme::icon(TICK_W),
                 colors.accent_soft,
             );
         }
-        let icons_left = rect.right() - ICONS_W;
-        let mut right = icons_left - 40.0;
-        if let Some(count) = self.group.map(|row| row.holds).or(self.count) {
-            right = count_at(painter, icons_left - 6.0, rect.center().y, count) - 6.0;
+        if let Some(count) = self.holds() {
+            count_at(painter, places.count_right, y, count);
         }
-        let clip = egui::Rect::from_x_y_ranges(left + 16.0..=right, rect.y_range());
-        painter.with_clip_rect(clip).text(
-            egui::pos2(left + 16.0, rect.center().y),
+        painter.with_clip_rect(places.name).text(
+            places.name.left_center(),
             egui::Align2::LEFT_CENTER,
             self.name,
             theme::label(),
@@ -252,22 +266,40 @@ impl<'a> Line<'a> {
     }
 }
 
-/// Room at the right of a line for a group's eye and bin, points.
-pub(super) const ICONS_W: f32 = 44.0;
+/// A line's room at its ends, the square its dot stands in, the room between its parts,
+/// the least a count takes, the tick and the room after it, points.
+const LEFT_PAD: f32 = 10.0;
+const RIGHT_PAD: f32 = 4.0;
+const DOT_W: f32 = 8.0;
+const GAP: f32 = 8.0;
+const COUNT_W: f32 = 20.0;
+const TICK_W: f32 = 14.0;
+const TICK_MARGIN: f32 = 6.0;
+/// The eye and the bin, each a 26 square, and the glyph in one.
+const ICON_SQUARE: f32 = 26.0;
+const ICONS_W: f32 = 2.0 * ICON_SQUARE;
+const ICON_GLYPH: f32 = 15.0;
+/// The foot's height and the room above its rule.
+const FOOT_H: f32 = 34.0;
+const FOOT_GAP: f32 = 4.0;
 
 /// The eye of a group, shown under the pointer or while it is hidden, and its bin, shown
-/// under the pointer. Answers whether either took the click.
-pub(super) fn group_icons(
+/// under the pointer, in `icons`. Answers whether either took the click.
+fn group_icons(
     ui: &mut egui::Ui,
-    rect: egui::Rect,
+    icons: egui::Rect,
     id: egui::Id,
     row: &Row,
     groups: usize,
     hovered: bool,
     acts: &mut Vec<Act>,
 ) -> bool {
-    let at =
-        |x: f32| egui::Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(20.0, 20.0));
+    let at = |x: f32| {
+        egui::Rect::from_center_size(
+            egui::pos2(x, icons.center().y),
+            vec2(ICON_SQUARE, ICON_SQUARE),
+        )
+    };
     let mut took = false;
     if hovered || row.hidden {
         let (glyph, tip) = if row.hidden {
@@ -275,7 +307,8 @@ pub(super) fn group_icons(
         } else {
             (icon::VISIBLE, tr!("list-hide"))
         };
-        let eye = ui.interact(at(rect.right() - 32.0), id.with("eye"), Sense::click());
+        let eye_at = at(icons.left() + ICON_SQUARE / 2.0);
+        let eye = ui.interact(eye_at, id.with("eye"), Sense::click());
         eye_glyph(ui, eye.rect, glyph, eye.hovered());
         if eye.on_hover_text(tip).clicked() {
             acts.push(Act::Toggle(row.group));
@@ -283,7 +316,8 @@ pub(super) fn group_icons(
         }
     }
     if hovered {
-        let bin = ui.interact(at(rect.right() - 11.0), id.with("bin"), Sense::click());
+        let bin_at = at(icons.right() - ICON_SQUARE / 2.0);
+        let bin = ui.interact(bin_at, id.with("bin"), Sense::click());
         took |= bin.clicked();
         let (act, tip) = removal(groups, row);
         if confirm_bin(ui, bin, BinLook::Quiet, &tip, true) {
@@ -309,7 +343,7 @@ pub(super) fn removal(groups: usize, row: &Row) -> (Act, String) {
     }
 }
 
-pub(super) fn eye_glyph(ui: &egui::Ui, rect: egui::Rect, glyph: &str, hot: bool) {
+fn eye_glyph(ui: &egui::Ui, rect: egui::Rect, glyph: &str, hot: bool) {
     let colors = theme::colors();
     if hot {
         ui.painter()
@@ -318,13 +352,61 @@ pub(super) fn eye_glyph(ui: &egui::Ui, rect: egui::Rect, glyph: &str, hot: bool)
     let ink = if hot {
         colors.text_high
     } else {
-        colors.text_low
+        colors.text_mid
     };
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
         glyph,
-        theme::icon(13.0),
+        theme::icon(ICON_GLYPH),
         ink,
     );
+}
+
+/// The list's foot under a rule: Settings, at the support profiles. Answers whether it was
+/// pressed, which closes the list.
+fn edit_profiles(ui: &mut egui::Ui) -> bool {
+    let colors = theme::colors();
+    let text = tr!("supports-edit-profiles");
+    ui.add_space(FOOT_GAP);
+    hairline(ui);
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(ui.available_width(), FOOT_H), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &text));
+    let ink = if response.hovered() {
+        colors.text_high
+    } else {
+        colors.text_mid
+    };
+    let painter = ui.painter();
+    let y = rect.center().y;
+    let glyph_x = rect.left() + LEFT_PAD + TICK_W / 2.0;
+    painter.text(
+        egui::pos2(glyph_x, y),
+        egui::Align2::CENTER_CENTER,
+        icon::PROFILES,
+        theme::icon(TICK_W),
+        ink,
+    );
+    painter.text(
+        egui::pos2(glyph_x + TICK_W / 2.0 + GAP, y),
+        egui::Align2::LEFT_CENTER,
+        &text,
+        theme::label(),
+        ink,
+    );
+    painter.text(
+        egui::pos2(rect.right() - LEFT_PAD - TICK_W / 2.0, y),
+        egui::Align2::CENTER_CENTER,
+        icon::ELSEWHERE,
+        theme::icon(TICK_W),
+        ink,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    if response.clicked() {
+        ui.close();
+    }
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
 }

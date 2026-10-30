@@ -122,6 +122,22 @@ fn the_supports_tool_sizing_automatically() {
     results.extend(picture("tool_supports_auto", app));
 }
 
+#[test]
+fn the_supports_tool_opening_its_groups() {
+    let mut app = pictured();
+    app.tool = Tool::Supports;
+    let catalogue = app.machine.slicing.catalogue.clone();
+    app.tools.supports.set_automatic(true, &catalogue);
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
+    let pickers = harness.query_all_by_role(egui::accesskit::Role::ComboBox);
+    let left = pickers
+        .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+        .expect("the supports card holds the group picker");
+    left.click();
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("tool_supports_groups");
+}
+
 /// Tall enough for the Shape tool to show the bracing's drawing and every number under it.
 const TALL_WINDOW: egui::Vec2 = egui::vec2(1280.0, 1200.0);
 

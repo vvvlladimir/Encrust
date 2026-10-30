@@ -105,7 +105,7 @@ fn chip_parts(
         ui,
         icon::PARAMETERS,
         &layers,
-        colors.text_mid,
+        colors.text_high,
         "",
         f32::INFINITY,
     );
@@ -122,7 +122,7 @@ fn chip_parts(
     let resin_tint = if untuned {
         colors.warn
     } else {
-        colors.text_mid
+        colors.text_high
     };
     Some([
         Part::new(

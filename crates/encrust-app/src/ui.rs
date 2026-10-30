@@ -28,7 +28,10 @@ pub use widgets::{
     text_row, toggle_button, tone, two_lines, unit_field, vertical_hairline, zone_button,
 };
 pub use widgets::{Confirm, any_armed, confirm_button, key_row, keycap, keycap_width};
-pub use widgets::{DropdownFace, DropdownRow, dropdown, dropdown_menu, dropdown_row};
+pub use widgets::{
+    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
+    dropdown_search_menu,
+};
 pub use widgets::{
     Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, tag_w,
     zoom_bar,

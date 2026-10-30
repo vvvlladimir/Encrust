@@ -332,7 +332,7 @@ fn mirror_label(mirror: Mirror) -> String {
 fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     let chosen = SlicedFormat::from(profile.output);
     let offered: Vec<SlicedFormat> = SlicedFormat::choices_for(profile).collect();
-    let face = DropdownFace::plain(icon::SLICE, label_of(chosen));
+    let face = DropdownFace::plain(icon::SLICE, label_of(chosen)).empty(offered.is_empty());
     let response = dropdown(ui, &face, ui.available_width());
     dropdown_menu(&response, |ui| {
         for choice in offered {

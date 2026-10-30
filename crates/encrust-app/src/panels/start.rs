@@ -277,12 +277,6 @@ fn shelf(ctx: &egui::Context) -> Shelf {
 fn shelf_head(ui: &mut Ui, window: &mut Window) {
     let mut shown = shelf(ui.ctx());
     ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(tr!("start-shelf"))
-                .font(theme::section())
-                .color(theme::colors().text_high),
-        );
-        ui.add_space(theme::ITEM_GAP);
         let segments = [
             Segment::new(Shelf::Recent, tr!("start-recent")),
             Segment::new(Shelf::TestPrints, tr!("start-test-prints")),

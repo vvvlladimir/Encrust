@@ -28,7 +28,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Layer strip | the stage's right edge, its full height | 64 |
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred while it names what each key does, the keys alone flush with the row's left | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card: level with the tool row while 8 clear of it, else 8 under it | 80 square |
-| View tools | 8 left of the models card, 16 above the stage's foot | a column of 26 squares |
+| View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
 
 Everything over the stage is a `card` on `CARD_SHADOW`; nothing over the stage carries a
@@ -42,8 +42,8 @@ the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key shee
 squares.
 
 The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
-flask glyph and resin with a caret, sliders glyph and `layer height · exposure`. Each part
-is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
+flask glyph and resin with a caret, sliders glyph and `layer height · exposure`, all three
+in `text_high` (the resin in `warn` while untuned). Each part is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
 chip drops the maker; under 720 the right end is glyphs only.
 
 The machine and resin parts each open a chooser hanging 6 under the chip from its part's
@@ -113,7 +113,11 @@ each side, on `raised` with a window's shadow:
    (always while hidden) hide and a `bin_button`. The group in hand is washed and ticked.
    Auto has no dot of its own; the shapes it built stand set in under it with theirs.
 2. **Profiles** — the profiles holding nothing, in `text_mid`, no count.
-3. A foot row, *Edit the profiles*, opening Settings → Supports.
+3. A foot row under a rule, sliders, *Edit the profiles* and an arrow out at its right,
+   opening Settings → Supports.
+
+Rows are 32 tall, the dot at 10 in, Auto's shapes 20 further; from the right the tick, the
+26 squares of hide and bin, the count. The list hangs 6 under the box, as every dropdown's.
 
 Choosing a row takes its profile in hand and closes the list. The preset's bin removes the
 group in hand with its supports; the foot's bin every support; both ask twice.
@@ -256,7 +260,7 @@ names — Tools, The plate, then The window, The layers, Files — each a row of
 Under the top bar, padded 48 × 140 (the sides give way down to one tile's width): *Start a
 plate* at 26 and the machine without its maker, resin and layer height under it; the drop zone, a 1.5 point dashed `line` box rounded 12 with a 52 square of
 the drop glyph on `accent_wash`, its words, and Open a model (primary) and Open a project at
-its right; then a shelf heading, *Recent*, with Recent / Test prints as a `Segmented` 220 wide and, on Recent with
+its right; then Recent / Test prints as a `Segmented` 220 wide and, on Recent with
 anything in it, Clear the list at its right; then tiles of at least 180 on `panel` ringed in
 `hairline` (`line` under the pointer), a 120 picture over the name, when and kind.
 

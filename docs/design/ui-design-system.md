@@ -146,7 +146,8 @@ paints from tokens only.
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule; short of room, the keys alone as glyphs, what each does on hover |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
-| `dropdown`, `dropdown_menu`, `dropdown_row` | Every list that drops from a box, one look: the box on `raised` with a hairline, `FIELD_H` tall — a glyph or a colour's dot, what is chosen, `· edited` in `warn`, a count, the caret; the list in the chooser card, each row as tall with its lead, name, a figure at its right and, when chosen, a wash and a tick. The supports' list is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
+| `dropdown`, `dropdown_menu`, `dropdown_row` | Every list that drops from a box, one look: the box on `raised` with a hairline, `FIELD_H` tall — a glyph or a colour's dot, what is chosen, `· edited` in `warn`, a count, the caret — none, and no press, over a list holding nothing; the list in the chooser card 6 under the box, each row as tall with its lead, name, a figure at its right and, when chosen, a wash and a tick. The supports' list is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
+| `dropdown_search_menu` | A `dropdown_menu` a click inside keeps open, headed by a field that filters its rows: the text tool's font families |
 | `picker_row` | A `dropdown` under a `field_label` of its own, for a choice too long for a field box |
 | `primary_button` | The one action a screen is for: its words alone, in Medium, `on_accent` on `accent`, no glyph — the tool's glyph already heads the card. There is never a second in view |
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
@@ -216,7 +217,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Select, Measure | `CURSOR`, `RULER` |
 | Repair, Hollow, Drain | `BANDAIDS`, `CIRCLE_DASHED`, `DROP_HALF_BOTTOM` |
 | Cut, Relief, Supports, Check | `KNIFE`, `STAMP`, `TREE_STRUCTURE`, `LIST_CHECKS` |
-| Print settings, General | `SLIDERS_HORIZONTAL`, `SLIDERS` |
+| Print settings, General and the profiles | `SLIDERS_HORIZONTAL`, `SLIDERS` |
 | Machine, resin, network | `PRINTER`, `FLASK`, `WIFI_HIGH` |
 | Model view, model beside layer, layer | `CUBE`, `COLUMNS`, `SQUARE_HALF` |
 | Frame, grid, see through, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `PERSPECTIVE` |
@@ -233,6 +234,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Texture, text, combine | `CHECKERBOARD`, `TEXT_T`, `UNITE` |
 | Split | `SPLIT_HORIZONTAL` |
 | Preset, save | `BOOKMARK_SIMPLE`, `FLOPPY_DISK` |
+| Leads to another window | `ARROW_UP_RIGHT` |
 | Warning, error, job, armed | `WARNING`, `WARNING_OCTAGON`, `CIRCLE_NOTCH`, `QUESTION` |
 | Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION_MARK` |
 | Zoom | `MAGNIFYING_GLASS_MINUS`, `MAGNIFYING_GLASS_PLUS`, `ARROWS_OUT` |

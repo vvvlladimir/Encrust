@@ -127,6 +127,7 @@ fn row<T>(
                 label: named.shown,
                 edited: named.edited,
                 count: None,
+                empty: catalogue.presets(kind).next().is_none(),
             };
             let response = dropdown(ui, &face, ui.available_width());
             dropdown_menu(&response, |ui| {
