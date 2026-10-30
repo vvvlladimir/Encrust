@@ -480,6 +480,21 @@ pub fn figure() -> FontId {
     FontId::new(15.0, FontFamily::Name(MEDIUM.into()))
 }
 
+/// The heads over the columns of a split: Model, Supports.
+pub fn split_head() -> FontId {
+    FontId::new(12.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The layer the layer strip stands at, in its box.
+pub fn strip_layer() -> FontId {
+    FontId::new(16.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// The layer strip's height in mm under the layer.
+pub fn strip_height() -> FontId {
+    FontId::new(10.5, FontFamily::Name(MEDIUM.into()))
+}
+
 /// What a tool does with the pointer, and the key that does it, in the hint bar.
 pub fn hint() -> FontId {
     FontId::proportional(12.0)

@@ -25,7 +25,7 @@ known gaps are at the end, each closed in its own commit.
 | Part | Content |
 |---|---|
 | Heading | Glyph, name, `help_mark`; at the right either the tool's modes (pick, add, paint) as `icon_toggle`s, or one fact summing up its state (the wall, the picked model) |
-| Preset | If the tool keeps presets (ADR 0226): one `picker` showing the preset or "Unsaved", save and delete `icon_button`s; save asks the name in a popup |
+| Preset | If the tool keeps presets (ADR 0226): one `dropdown` showing the preset or "Unsaved", save and delete `icon_button`s; save asks the name in a popup |
 | Sections | `section`s ordered what it acts on → how → rarely changed, folded; a switch enabling a section sits in its heading |
 | Foot | One `primary_button`, at most one other action — an icon one is a square as tall as the primary; the only text is why the action cannot run |
 

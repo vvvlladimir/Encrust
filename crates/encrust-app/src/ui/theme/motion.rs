@@ -51,9 +51,19 @@ impl Motion {
     }
 }
 
-/// How far `id` has moved towards `on`, 0 to 1, by one motion both ways.
+/// How far `id` has moved towards `on`, 0 to 1, by one motion both ways. Held for the
+/// frame: a pass laid out again must find everything as tall as the one before it.
 pub fn toggle(ctx: &Context, id: Id, on: bool, motion: Motion) -> f32 {
-    ctx.animate_bool_with_time_and_easing(id, on, motion.seconds(ctx), motion.easing)
+    let frame = ctx.cumulative_frame_nr();
+    let held = id.with("this-frame");
+    if let Some((at, towards, value)) = ctx.data(|data| data.get_temp::<(u64, bool, f32)>(held))
+        && (at, towards) == (frame, on)
+    {
+        return value;
+    }
+    let value = ctx.animate_bool_with_time_and_easing(id, on, motion.seconds(ctx), motion.easing);
+    ctx.data_mut(|data| data.insert_temp(held, (frame, on, value)));
+    value
 }
 
 /// How far `id` is open, 0 to 1: coming in by `OPEN`, going away by `CLOSE`.

@@ -15,8 +15,9 @@ use crate::settings::{Node, ResinDraft, rename_resin};
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Held, Segment, Segmented, carried_row, describe, field_label, hint, limit_verdict,
-    limited_row, number_field, number_row, text_row, theme,
+    Carried, DropdownFace, DropdownRow, Held, Segment, Segmented, carried_row, describe, dropdown,
+    dropdown_menu, dropdown_row, field_label, hint, limit_verdict, limited_row, number_field,
+    number_row, text_row, theme,
 };
 
 const FINE_STEP: f64 = 0.01;
@@ -24,6 +25,9 @@ const COARSE_STEP: f64 = 0.5;
 
 /// The currencies a price can be quoted in.
 const CURRENCIES: [&str; 6] = ["€", "$", "£", "₽", "¥", "₴"];
+
+/// A dropdown holding a currency or `kg`, points: room for the symbol and its caret.
+const SMALL_DROPDOWN_W: f32 = 64.0;
 
 /// The resin open in the list, as the printer it sits under has it, written back as it
 /// is edited.
@@ -211,23 +215,41 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
     ui.horizontal(|ui| {
         field_label(ui, &tr!("summary-price"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            egui::ComboBox::from_id_salt("resin-price-per")
-                .width(56.0)
-                .selected_text(unit_label(details.price_per))
-                .show_ui(ui, |ui| {
-                    for unit in [PriceUnit::Kilogram, PriceUnit::Litre] {
-                        ui.selectable_value(&mut details.price_per, unit, unit_label(unit));
+            let shown = unit_label(details.price_per);
+            let face = DropdownFace {
+                lead: None,
+                label: &shown,
+                edited: false,
+                count: None,
+            };
+            let response = dropdown(ui, &face, SMALL_DROPDOWN_W);
+            dropdown_menu(&response, |ui| {
+                for unit in [PriceUnit::Kilogram, PriceUnit::Litre] {
+                    let name = unit_label(unit);
+                    let row = DropdownRow::named(&name, details.price_per == unit);
+                    if dropdown_row(ui, &row).clicked() {
+                        details.price_per = unit;
+                        ui.close();
                     }
-                });
+                }
+            });
             ui.label(egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low));
-            egui::ComboBox::from_id_salt("resin-currency")
-                .width(44.0)
-                .selected_text(details.currency.clone())
-                .show_ui(ui, |ui| {
-                    for currency in CURRENCIES {
-                        ui.selectable_value(&mut details.currency, currency.to_owned(), currency);
+            let face = DropdownFace {
+                lead: None,
+                label: &details.currency,
+                edited: false,
+                count: None,
+            };
+            let response = dropdown(ui, &face, SMALL_DROPDOWN_W);
+            dropdown_menu(&response, |ui| {
+                for currency in CURRENCIES {
+                    let row = DropdownRow::named(currency, details.currency == currency);
+                    if dropdown_row(ui, &row).clicked() {
+                        details.currency = currency.to_owned();
+                        ui.close();
                     }
-                });
+                }
+            });
             number_field(
                 ui,
                 &tr!("summary-price"),

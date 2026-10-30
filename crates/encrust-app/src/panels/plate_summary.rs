@@ -15,7 +15,7 @@ use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::ui::{
-    Figure, card_foot, details_fold, duration, figure_grid, heading, icon, notice, readings,
+    Figure, card_foot, card_title, details_fold, duration, figure_grid, icon, notice, readings,
     split_readings, theme,
 };
 use crate::workspace::Mode;
@@ -61,16 +61,17 @@ const BODY_MARGIN: egui::Margin = egui::Margin {
 fn title_row(ui: &mut egui::Ui, title: &str, aside: Option<&str>) {
     let size = vec2(ui.available_width(), theme::SECTION_H);
     let layout = Layout::left_to_right(Align::Center);
-    ui.allocate_ui_with_layout(size, layout, |ui| heading(ui, title, aside));
+    ui.allocate_ui_with_layout(size, layout, |ui| card_title(ui, title, aside));
 }
 
-/// The plate's time, resin, weight and price, the rest of them under Details, and a word
-/// on any model left broken.
+/// A word on any model left broken, then the plate's time, resin, weight and price, and
+/// the rest of them under Details.
 fn plate(ui: &mut egui::Ui, window: &Window) {
     let scene = &window.doc.scene;
     let material = &window.machine.slicing.material;
     let name = scene.plates().get(scene.active_plate() as usize);
     title_row(ui, name.map_or("", String::as_str), Some(&material.name));
+    broken_verdict(ui, scene);
     let tally = tally(ui.ctx(), scene);
     let split = (tally.triangles > 0).then(|| Split::of(&tally, material));
     let time = split.as_ref().and_then(|_| plate_time(window));
@@ -82,11 +83,11 @@ fn plate(ui: &mut egui::Ui, window: &Window) {
             details(ui, &tally, split, &material.details.currency);
         });
     }
-    broken_verdict(ui, scene);
 }
 
-/// Room between the figures and the Details row, points.
-const FIGURES_GAP: f32 = 4.0;
+/// Room between the figures and the Details row, and under the word on a broken model,
+/// points.
+const FIGURES_GAP: f32 = 8.0;
 
 /// The four cells of the plate's grid, `—` in each it cannot state yet.
 fn plate_figures(
@@ -163,6 +164,7 @@ fn details(ui: &mut egui::Ui, tally: &Tally, split: &Split, currency: &str) {
         ));
     }
     split_readings(ui, [&tr!("summary-model"), &tr!("summary-supports")], &rows);
+    ui.add_space(theme::NOTE_GAP);
     readings(
         ui,
         &[
@@ -170,6 +172,7 @@ fn details(ui: &mut egui::Ui, tally: &Tally, split: &Split, currency: &str) {
             (tr!("summary-triangles"), tally.triangles.to_string()),
         ],
     );
+    ui.add_space(theme::NOTE_GAP);
 }
 
 /// A model left broken is a verdict here rather than a blocker: what is sliced from it may
@@ -179,7 +182,6 @@ fn broken_verdict(ui: &mut egui::Ui, scene: &Scene) {
     if broken == 0 {
         return;
     }
-    ui.add_space(theme::ITEM_GAP);
     notice(
         ui,
         icon::WARNING,
@@ -187,17 +189,7 @@ fn broken_verdict(ui: &mut egui::Ui, scene: &Scene) {
         &tr!("summary-broken", count = broken),
         &tr!("summary-broken-why", count = broken),
     );
-}
-
-/// What printing the plate takes — time, resin, weight and price — as the Check tool's
-/// estimate reads them.
-pub fn estimate(ctx: &egui::Context, window: &Window) -> Vec<(String, String)> {
-    let tally = tally(ctx, &window.doc.scene);
-    let mut rows = tally_readings(&tally, &window.machine.slicing.material);
-    if let Some(time) = plate_time(window) {
-        rows.insert(0, (tr!("summary-time"), time));
-    }
-    rows
+    ui.add_space(FIGURES_GAP);
 }
 
 /// What the machine takes over the plate: as planned once a stack cut from the plate as it
@@ -235,23 +227,6 @@ fn estimated_time_s(scene: &Scene, slicing: &Slicing) -> Option<(u32, Option<u32
         None => None,
     };
     Some((time_s(most, thinnest_mm(slicing))?, shortest))
-}
-
-/// The plate's resin in ml and g, and what it costs once the resin has a price.
-fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(String, String)> {
-    let split = Split::of(tally, material);
-    let resin = tr!(
-        "summary-ml-g",
-        ml = two_places(total(split.ml)),
-        g = two_places(total(split.g))
-    );
-    let mut readings = vec![(tr!("summary-resin"), resin)];
-    if let Some(price) = split.price {
-        let currency = &material.details.currency;
-        let price = format!("{} {currency}", two_places(total(price)));
-        readings.push((tr!("summary-price"), price));
-    }
-    readings
 }
 
 /// What the plate's resin comes to, the models' first and the supports' second.

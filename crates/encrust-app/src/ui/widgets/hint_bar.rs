@@ -22,23 +22,19 @@ const RULE_W: f32 = 2.0 * HINT_GAP + 1.0;
 /// a key in `text_high` then what it does in `text_mid`, split by short rules. Short of room,
 /// only the `keys` show, each saying what it does under the pointer.
 pub fn hint_bar(ui: &mut Ui, pairs: &[(&str, &str)], keys: &[&str], room: f32) -> Response {
-    let colors = theme::colors();
-    let painter = ui.painter();
-    let layout = |text: &str, font, color| painter.layout_no_wrap(text.to_owned(), font, color);
-    let mut items: Vec<Vec<Arc<Galley>>> = pairs
-        .iter()
-        .map(|(key, what)| {
-            vec![
-                layout(key, theme::hint_key(), colors.text_high),
-                layout(what, theme::hint(), colors.text_mid),
-            ]
-        })
-        .collect();
+    let mut items = named(ui, pairs);
     let named = width(&items) <= room;
     if !named {
+        let colors = theme::colors();
         items = keys
             .iter()
-            .map(|key| vec![layout(key, theme::hint_key(), colors.text_high)])
+            .map(|key| {
+                let key = (*key).to_owned();
+                vec![
+                    ui.painter()
+                        .layout_no_wrap(key, theme::hint_key(), colors.text_high),
+                ]
+            })
             .collect();
     }
     let (rect, response) = ui.allocate_exact_size(vec2(width(&items), HINT_H), Sense::hover());
@@ -55,6 +51,27 @@ pub fn hint_bar(ui: &mut Ui, pairs: &[(&str, &str)], keys: &[&str], room: f32) -
         }
     }
     response
+}
+
+/// Whether the [`hint_bar`] of `pairs` names what each key does in `room`, rather than
+/// showing the keys alone.
+pub fn hint_bar_names(ui: &Ui, pairs: &[(&str, &str)], room: f32) -> bool {
+    width(&named(ui, pairs)) <= room
+}
+
+fn named(ui: &Ui, pairs: &[(&str, &str)]) -> Vec<Vec<Arc<Galley>>> {
+    let colors = theme::colors();
+    let painter = ui.painter();
+    let layout = |text: &str, font, color| painter.layout_no_wrap(text.to_owned(), font, color);
+    pairs
+        .iter()
+        .map(|(key, what)| {
+            vec![
+                layout(key, theme::hint_key(), colors.text_high),
+                layout(what, theme::hint(), colors.text_mid),
+            ]
+        })
+        .collect()
 }
 
 /// The bar's width holding `items`, each a run of galleys.

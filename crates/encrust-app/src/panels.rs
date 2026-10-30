@@ -25,7 +25,6 @@ mod view_column;
 mod view_cube;
 mod viewport_panel;
 
-pub use plate_summary::estimate as plate_estimate;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use settings::{import_dropped, import_profile};
@@ -34,6 +33,7 @@ pub use start::{open_recent, still_starting};
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
 pub use viewport_panel::{frame_view, set_orthographic};
 
+use egui::emath::TSTransform;
 use egui::{Align2, Id, Pos2, Rect, Sense, pos2, vec2};
 
 use crate::state::{Doc, Machine, Tools, View};
@@ -278,20 +278,37 @@ fn card_at(
     max_h: f32,
     add: impl FnOnce(&mut egui::Ui),
 ) -> Rect {
-    egui::Area::new(Id::new(id))
+    let mut drawn_at = corner;
+    let shown = egui::Area::new(Id::new(id))
         .order(egui::Order::Middle)
         .fixed_pos(corner)
         .pivot(pivot)
         .show(ctx, |ui| {
+            drawn_at = ui.max_rect().min;
+            // Clipped to the window before the shift below, what it grew past the edge would
+            // be cut off until it stopped growing.
+            ui.set_clip_rect(Rect::EVERYTHING);
             card().inner_margin(0).show(ui, |ui| {
                 ui.set_max_height(max_h);
                 ui.spacing_mut().item_spacing.y = 0.0;
                 add(ui);
             });
         })
-        .response
-        .rect
+        .response;
+    // egui places an area from last frame's size, so a card held by any corner but its top
+    // left is drawn off it by what it grew; its layer is moved there for the frame instead.
+    let meant = shown.rect;
+    let shift = meant.min - drawn_at;
+    let transform = match shift.length() > SHIFT_SLACK {
+        true => TSTransform::from_translation(shift),
+        false => TSTransform::IDENTITY,
+    };
+    ctx.set_transform_layer(shown.layer_id, transform);
+    meant
 }
+
+/// Points a card may stand off where it is meant to and be left there.
+const SHIFT_SLACK: f32 = 0.01;
 
 /// Lays `add` out in `width` points and takes exactly that much: what a long word pushes
 /// past it is cut at the edge rather than widening the card, in every language.

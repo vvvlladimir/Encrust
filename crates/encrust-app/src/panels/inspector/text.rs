@@ -1,7 +1,10 @@
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::text::{TextState, TextTool, reason};
-use crate::ui::{Segment, Segmented, busy, describe, hint, number_row, section, theme, tone};
+use crate::ui::{
+    DropdownRow, Segment, Segmented, busy, describe, dropdown_row, hint, number_row, section,
+    theme, tone,
+};
 
 /// Bounds on the letters, millimetres: under a millimetre a capital is finer than resin
 /// holds, past a hundred one letter is the model.
@@ -159,10 +162,8 @@ fn choices(ui: &mut egui::Ui, tool: &mut TextTool, query: &str) -> bool {
         .show(ui, |ui| {
             for index in found.iter().copied() {
                 let name = &tool.families.list[index].name;
-                if ui
-                    .selectable_label(*name == tool.state.family, name)
-                    .clicked()
-                {
+                let row = DropdownRow::named(name, *name == tool.state.family);
+                if dropdown_row(ui, &row).clicked() {
                     tool.state.family = name.clone();
                     picked = true;
                 }

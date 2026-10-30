@@ -139,15 +139,15 @@ paints from tokens only.
 | `hover_mix` | A fill easing to its hover by `FAST`, for every control painted by hand |
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
-| `issue_row` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there |
+| `issue_row`, `issue_list` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there. The list shows seven and scrolls the rest inside itself |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
 | `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule; short of room, the keys alone as glyphs, what each does on hover |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
-| `picker` | A row that opens a chooser: glyph, what is chosen, caret. The support picker's chooser is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
-| `picker_row` | A `picker` under a `field_label` of its own, for a choice too long for a field box |
+| `dropdown`, `dropdown_menu`, `dropdown_row` | Every list that drops from a box, one look: the box on `raised` with a hairline, `FIELD_H` tall — a glyph or a colour's dot, what is chosen, `· edited` in `warn`, a count, the caret; the list in the chooser card, each row as tall with its lead, name, a figure at its right and, when chosen, a wash and a tick. The supports' list is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
+| `picker_row` | A `dropdown` under a `field_label` of its own, for a choice too long for a field box |
 | `primary_button` | The one action a screen is for: its words alone, in Medium, `on_accent` on `accent`, no glyph — the tool's glyph already heads the card. There is never a second in view |
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
@@ -163,12 +163,14 @@ paints from tokens only.
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
+| `mode_column` | Toggles stacked in one sunken group as narrow as they are, 4 inside and 4 apart, centred by its parent |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
 | `tag`, `tag_w` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more. `tag_w` is its width, for a row of them |
 | `found_row` | Something found that is not the user's yet: a dashed row of glyph, name, a figure and Add |
 | `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |
-| `split_readings` | Figures split two ways, the models' and the supports': the two heads over their columns, a row a name and its two figures |
+| `split_readings` | Figures split two ways, the models' and the supports': the two heads in medium `text_mid` over their columns, a row a name and its two figures, a hairline under every row |
+| `card_title` | The title of a card that states figures rather than a tool, in `text_high`, an aside quieter at its right |
 | `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |
 | `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it, Esc reaching it before the window it stands in. What it costs is its tooltip. The bin's framed look is a `companion_square` |
 | `rail_button` | A tool in the tool row, a glyph over its name, washed in the accent when it is the tool in use, with a dot while the tool needs attention and its key's digit while the pointer is on the row |
@@ -179,7 +181,7 @@ paints from tokens only.
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |
 | `text_box` | The shape of every box text is typed in: `FIELD_H` tall, as a button is, the text centred in it |
-| `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure |
+| `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure, in a slot as wide as the widest short unit, so a column's figures stand on one line |
 | `carried_row` | A `number_row` the window changed for the user: its name in `warn` and a button that puts the old value back |
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |

@@ -8,7 +8,7 @@ const CAP_H: f32 = 18.0;
 const CAP_MIN_W: f32 = 18.0;
 
 /// The width a keycap saying `text` takes.
-fn keycap_width(painter: &Painter, text: &str) -> f32 {
+pub fn keycap_width(painter: &Painter, text: &str) -> f32 {
     let galley = painter.layout_no_wrap(text.to_owned(), theme::keycap(), theme::colors().text_mid);
     (galley.size().x + CAP_PAD_X * 2.0).max(CAP_MIN_W)
 }

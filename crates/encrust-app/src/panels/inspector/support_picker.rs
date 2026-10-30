@@ -1,10 +1,10 @@
-use egui::{Sense, vec2};
-
 use super::scope;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::status::Status;
-use crate::ui::{BinLook, bin_button, hairline, icon, theme};
+use crate::ui::{
+    BinLook, DropdownFace, Lead, bin_button, chooser_frame, dropdown, hairline, theme,
+};
 use crate::workspace::Tool;
 
 mod list;
@@ -48,16 +48,13 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     ui.spacing_mut().item_spacing.x = 4.0;
     let beside = 2.0 * (theme::BUTTON_H + 4.0);
     let width = (ui.available_width() - beside).max(80.0);
-    let (_, response) = ui.allocate_exact_size(vec2(width, theme::FIELD_H), Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, tr!("supports-preset"))
-    });
-    let label = if hand.edited {
-        tr!("shape-edited", name = hand.name.clone())
-    } else {
-        hand.name.clone()
+    let face = DropdownFace {
+        lead: (active.holds > 0).then(|| Lead::Dot(tint(active))),
+        label: &hand.name,
+        edited: hand.edited,
+        count: (active.holds > 0).then_some(active.holds),
     };
-    closed(ui, &response, active, &label);
+    let response = dropdown(ui, &face, width);
     let list = List {
         rows: &rows,
         presets: &presets,
@@ -67,6 +64,7 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     let mut pick = None;
     egui::Popup::menu(&response)
         .width(width + beside)
+        .frame(chooser_frame())
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.set_min_width(width + beside - 12.0);
@@ -82,47 +80,6 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     acts
 }
 
-/// The closed picker, drawn as every list of the window is: the group's colour and count
-/// while it holds supports, the preset's name, and the caret.
-fn closed(ui: &egui::Ui, response: &egui::Response, row: &Row, label: &str) {
-    let rect = response.rect;
-    let visuals = ui.style().interact(response);
-    let painter = ui.painter();
-    painter.rect(
-        rect,
-        visuals.corner_radius,
-        visuals.weak_bg_fill,
-        visuals.bg_stroke,
-        egui::StrokeKind::Inside,
-    );
-    let caret = painter.text(
-        egui::pos2(rect.right() - 16.0, rect.center().y),
-        egui::Align2::CENTER_CENTER,
-        icon::CARET_DOWN,
-        theme::icon(14.0),
-        theme::colors().text_low,
-    );
-    let mut right = caret.left() - 10.0;
-    let mut left = rect.left() + 10.0;
-    if row.holds > 0 {
-        right = count_at(painter, right, rect.center().y, row.holds) - 8.0;
-        swatch(
-            painter,
-            egui::pos2(rect.left() + 14.0, rect.center().y),
-            row,
-        );
-        left = rect.left() + 26.0;
-    }
-    let clip = egui::Rect::from_x_y_ranges(left..=right, rect.y_range());
-    painter.with_clip_rect(clip).text(
-        egui::pos2(left, rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        label,
-        theme::label(),
-        visuals.text_color(),
-    );
-}
-
 /// The count ending at `right`; answers where it begins.
 fn count_at(painter: &egui::Painter, right: f32, y: f32, count: usize) -> f32 {
     let low = theme::colors().text_low;
@@ -132,19 +89,19 @@ fn count_at(painter: &egui::Painter, right: f32, y: f32, count: usize) -> f32 {
     left
 }
 
-/// The group's colour, faded while it is hidden.
+/// The group's colour as a dot, faded while it is hidden.
 fn swatch(painter: &egui::Painter, center: egui::Pos2, row: &Row) {
+    painter.circle_filled(center, 4.5, tint(row));
+}
+
+/// The group's colour, faded while it is hidden.
+fn tint(row: &Row) -> egui::Color32 {
     let tint = theme::support_tint(row.group as usize);
-    let tint = if row.hidden {
+    if row.hidden {
         tint.gamma_multiply(0.35)
     } else {
         tint
-    };
-    painter.rect_filled(
-        egui::Rect::from_center_size(center, vec2(8.0, 8.0)),
-        2.0,
-        tint,
-    );
+    }
 }
 
 /// Takes up the preset chosen: an automatic one switches the sizing on, one by hand off.

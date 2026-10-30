@@ -5,7 +5,7 @@ use egui::Ui;
 use crate::i18n::{self, Language, tr};
 use crate::panels::settings::form_card;
 use crate::state::Machine;
-use crate::ui::{hint, switch};
+use crate::ui::{DropdownFace, DropdownRow, dropdown, dropdown_menu, dropdown_row, hint, switch};
 
 pub fn form(ui: &mut Ui, machine: &mut Machine) {
     let general = &mut machine.general;
@@ -41,15 +41,23 @@ fn language(ui: &mut Ui, choice: &mut Option<Language>) {
         || system.clone(),
         |language| language.native_name().to_owned(),
     );
-    egui::ComboBox::from_id_salt("general-language")
-        .width(ui.available_width())
-        .selected_text(shown)
-        .show_ui(ui, |ui| {
-            ui.selectable_value(choice, None, system);
-            for language in Language::ALL {
-                ui.selectable_value(choice, Some(language), language.native_name());
+    let face = DropdownFace {
+        lead: None,
+        label: &shown,
+        edited: false,
+        count: None,
+    };
+    let response = dropdown(ui, &face, ui.available_width());
+    dropdown_menu(&response, |ui| {
+        let offered = std::iter::once((None, system.as_str()))
+            .chain(Language::ALL.map(|language| (Some(language), language.native_name())));
+        for (language, name) in offered {
+            if dropdown_row(ui, &DropdownRow::named(name, *choice == language)).clicked() {
+                *choice = language;
+                ui.close();
             }
-        });
+        }
+    });
     if choice.is_none()
         && let Some(tag) = i18n::system_untranslated()
     {

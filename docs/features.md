@@ -421,6 +421,7 @@ whole-surface fill is Cmd-Shift-click.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
+  Shift-click adds a part to what is picked, or takes it back out.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports
@@ -768,13 +769,14 @@ address in a video player).
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **Reduce motion** in Settings → General stops every animation in the window.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
-  Drain, Relief's text and brush, Supports' pick and place, Cut's part mark — a pill under
-  the tool row names the keys and what each does. In a narrow window only the keys show,
-  as icons where there is one, each saying what it does under the pointer.
-- With nothing on the plate the inspector says so and offers Open a model; the stage stays
-  clear.
+  Hollow, Drain, Relief's text and brush, Supports' pick, place and area, Repair's faces and
+  edges, Cut's part mark — a pill under the tool row names the keys and what each does,
+  every one a click or a drag with its modifier. In a narrow window only the keys show, as
+  icons, at the tool row's left, each saying what it does under the pointer.
+- With nothing on the plate the models card says so and offers Open a model; the stage
+  stays clear.
 - **Check:** Previous and Next step through the layers with issues; the islands and the
-  suction cups each have their own section with what fixes them, and Estimate gives the
+  suction cups each have their own section with what fixes them; the plate card gives the
   plate's time, resin, weight and price.
 - The support group picker lists what stands on the plate, then the profiles holding
   nothing, then *Edit the profiles*.

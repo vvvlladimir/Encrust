@@ -96,7 +96,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .filter(|_| slot.is_none() && blocker.is_none())
         .and_then(|bound| bound.blocker)
         .map(|why| tr!("slice-saved-instead", why = why));
-    if let Some(why) = blocker.or(saved_instead) {
+    // An empty plate is said so in the models card; the button's tooltip still tells why.
+    let scene = &window.doc.scene;
+    let printable = scene.has_printable(scene.active_plate());
+    if let Some(why) = blocker.filter(|_| printable).or(saved_instead) {
         ui.add_space(theme::NOTE_GAP);
         hint(ui, &why);
     }
@@ -164,7 +167,7 @@ fn send_button(
             Press::StartPrint,
         ),
         SendStep::Offer | SendStep::Running(_) => (
-            tr!("slice-send", name = slot.name.clone()),
+            tr!("slice-send"),
             tr!("slice-send-tooltip"),
             free && slot.step == SendStep::Offer,
             Press::Slice(Via::Printer),

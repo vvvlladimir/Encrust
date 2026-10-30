@@ -6,7 +6,7 @@ use crate::panels::Window;
 use crate::pick::Shown;
 use crate::preview::Preview;
 use crate::shortcuts::{self, Action};
-use crate::ui::{icon, icon_button, icon_toggle, mode_group, theme};
+use crate::ui::{icon, icon_button, icon_toggle, mode_column, theme};
 use crate::workspace::{Mode, Section};
 
 mod playback;
@@ -23,8 +23,8 @@ const PLAY_LAYERS_PER_S: f32 = 30.0;
 
 /// The readout under the views; the box the layer stands in, and the least room the typed
 /// layer is given, so an emptied box still takes a click; and the room between groups.
-const READOUT_H: f32 = 56.0;
-const LAYER_BOX_H: f32 = 20.0;
+const READOUT_H: f32 = 62.0;
+const LAYER_BOX_H: f32 = 26.0;
 const LAYER_FIELD_MIN_W: f32 = 8.0;
 const GAP: f32 = 10.0;
 
@@ -113,16 +113,13 @@ fn views(ui: &mut egui::Ui, window: &mut Window) {
         (icon::MASK, tr!("view-mask")),
     ];
     let mut picked = None;
-    mode_group(ui, |ui| {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
-            for (index, (glyph, name)) in views.iter().enumerate() {
-                let tooltip = format!("{name}  {keys}");
-                if icon_toggle(ui, glyph, &tooltip, index == showing).clicked() {
-                    picked = Some(index);
-                }
+    mode_column(ui, |ui| {
+        for (index, (glyph, name)) in views.iter().enumerate() {
+            let tooltip = format!("{name}  {keys}");
+            if icon_toggle(ui, glyph, &tooltip, index == showing).clicked() {
+                picked = Some(index);
             }
-        });
+        }
     });
     if let Some(index) = picked {
         show_view(window, index);
