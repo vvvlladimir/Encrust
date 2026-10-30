@@ -25,6 +25,8 @@ pub enum Section {
     Hollow,
     /// The Drain tool's named settings.
     Drain,
+    /// How the window looks: light or dark, its language, whether it moves.
+    Appearance,
     /// How the window itself behaves: where it starts, how it zooms, where files go.
     General,
     /// Whether to look for a new release, and the one found.
@@ -36,17 +38,18 @@ impl Section {
     pub const PROFILES: [Self; 3] = [Self::Supports, Self::Hollow, Self::Drain];
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub const OWN: [Self; 2] = [Self::General, Self::Updates];
+    pub const OWN: [Self; 3] = [Self::Appearance, Self::General, Self::Updates];
 
     /// A page loads the latest release every time it is opened, so it has nothing to update.
     #[cfg(target_arch = "wasm32")]
-    pub const OWN: [Self; 1] = [Self::General];
+    pub const OWN: [Self; 2] = [Self::Appearance, Self::General];
 
     pub fn label(self) -> String {
         match self {
             Self::Supports => tr!("settings-page-supports"),
             Self::Hollow => tr!("settings-page-hollow"),
             Self::Drain => tr!("settings-page-drain"),
+            Self::Appearance => tr!("settings-page-appearance"),
             Self::General => tr!("settings-page-general"),
             Self::Updates => tr!("settings-page-updates"),
         }
@@ -58,7 +61,7 @@ impl Section {
             Self::Supports => Some(Kind::Support),
             Self::Hollow => Some(Kind::Hollow),
             Self::Drain => Some(Kind::Drain),
-            Self::General | Self::Updates => None,
+            Self::Appearance | Self::General | Self::Updates => None,
         }
     }
 }
@@ -198,6 +201,8 @@ pub struct Settings {
     pub node: Option<Node>,
     /// What the machine list is filtered by, as it is being typed.
     pub search: String,
+    /// What the line over the Settings pages narrows them to.
+    pub find: String,
     /// The machine library, while it stands in the tabs' place.
     pub library: Option<Library>,
     pub printer: Option<Draft<PrinterProfile>>,

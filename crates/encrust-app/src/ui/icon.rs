@@ -31,6 +31,19 @@ pub use egui_phosphor::regular::{
     WARNING_OCTAGON as ERROR,
 };
 
+/// The menus' own: what a row of File or Edit does where no tool glyph says it.
+pub use egui_phosphor::regular::{
+    ARROW_SQUARE_RIGHT as MOVE_TO_PLATE, ARROW_U_UP_LEFT as UNDO, ARROW_U_UP_RIGHT as REDO,
+    CLOCK_COUNTER_CLOCKWISE as RECENT, FILE_PLUS as NEW_PROJECT, SELECTION_ALL as SELECT_ALL,
+    TEST_TUBE as TEST_PRINT,
+};
+
+/// Settings' Appearance page; the update sheet's release, and a step of its install not yet
+/// reached.
+pub use egui_phosphor::regular::{
+    CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE, SPARKLE as RELEASE,
+};
+
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
 /// the rest of a Mac keyboard's symbols; a click and a drag of the mouse.
 pub use egui_phosphor::regular::{
@@ -139,6 +152,17 @@ mod tests {
         ("PLANES", PLANES),
         ("FONT", FONT),
         ("ERROR", ERROR),
+        ("APPEARANCE", APPEARANCE),
+        ("STEP_LATER", STEP_LATER),
+        ("RELEASE", RELEASE),
+        ("CHANGES", CHANGES),
+        ("MOVE_TO_PLATE", MOVE_TO_PLATE),
+        ("UNDO", UNDO),
+        ("REDO", REDO),
+        ("RECENT", RECENT),
+        ("NEW_PROJECT", NEW_PROJECT),
+        ("SELECT_ALL", SELECT_ALL),
+        ("TEST_PRINT", TEST_PRINT),
         ("KEY_SHIFT", KEY_SHIFT),
         ("KEY_BACKSPACE", KEY_BACKSPACE),
         ("KEY_COMMAND", KEY_COMMAND),

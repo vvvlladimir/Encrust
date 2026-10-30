@@ -18,7 +18,8 @@ system theme eframe reports (winit on macOS, Windows and Linux where the desktop
 surfaces under a white panel, the ember accent unchanged, a burnt orange where the accent is
 text). `theme::apply` installs a style for each of egui's two themes. The user's choice,
 `Appearance` (System, Light, Dark) in `General`, is handed to egui as its `ThemePreference`;
-once a frame, before drawing, `theme::follow` stores whether egui resolved light, and
+once a frame, before drawing, `theme::follow` stores in a thread-local whether egui resolved
+light, and
 `colors()` and `scene()` return the matching set. Every call site stays as it was.
 
 ## Consequences
@@ -39,5 +40,6 @@ Explicit, and a second window could differ, but every one of the hundred files r
 
 ### The option that won, and what it costs
 
-A process-wide flag the frame sets: a test that flips it would race the snapshot tests in the
-same binary, so no test flips it, and the light palette is checked as data instead.
+A flag the frame sets rather than a value passed down: what `colors()` returns depends on
+which thread asks and when. It is per thread so the snapshot tests, each on its own, cannot
+repaint one another; a panel drawn off the frame's thread would get the dark palette.

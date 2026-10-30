@@ -1,6 +1,7 @@
 //! The Settings window: support profiles, Hollow and Drain presets, behaviour and updates,
 //! a page each. Edits are written as made; see `docs/decisions/0233`, `docs/design/profiles.md`.
 
+mod appearance;
 mod compensation;
 mod confirm;
 mod frame;
@@ -47,37 +48,106 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
     ask(ctx, window);
 }
 
-/// The pages down the left under their group names, the profiles over the window's own,
-/// and at the list's foot the window the rest of the setup lives in.
+/// The pages down the left under their group names, narrowed by the line over them: the
+/// profiles, the window's own, then help; at the list's foot the window the rest lives in.
 fn pages(ui: &mut Ui, window: &mut Window) {
     ui.spacing_mut().item_spacing.y = 2.0;
-    let settings = &mut window.machine.settings;
+    find_line(ui, &mut window.machine.settings.find);
+    ui.add_space(FIND_GAP);
+    let find = window.machine.settings.find.to_lowercase();
     let groups = [
         (tr!("settings-group-profiles"), &Section::PROFILES[..]),
         (tr!("settings-group-window"), &Section::OWN[..]),
     ];
     for (index, (name, group)) in groups.into_iter().enumerate() {
+        let shown: Vec<Section> = group
+            .iter()
+            .copied()
+            .filter(|section| matches(*section, &find))
+            .collect();
+        if shown.is_empty() {
+            continue;
+        }
         if index > 0 {
             ui.add_space(GROUP_GAP);
         }
         chooser_group(ui, &name);
-        for section in group {
-            let active = settings.section == *section;
-            if nav_row(ui, section_icon(*section), &section.label(), active).clicked() {
-                settings.turn_to(*section);
+        for section in shown {
+            let active = window.machine.settings.section == section;
+            let aside = aside_of(window, section);
+            if nav_row(ui, section_icon(section), &section.label(), active, aside).clicked() {
+                window.machine.settings.turn_to(section);
             }
         }
     }
     // The keys are a sheet rather than a page: there is nothing to edit, and one listing
     // is enough. See `crate::shortcuts`.
-    if nav_row(ui, icon::KEYBOARD, &tr!("settings-shortcuts"), false).clicked() {
-        window.machine.settings.close();
-        window.view.options.sheet = true;
+    let keys = tr!("settings-shortcuts");
+    if keys.to_lowercase().contains(&find) {
+        ui.add_space(GROUP_GAP);
+        chooser_group(ui, &tr!("settings-group-help"));
+        if nav_row(ui, icon::KEYBOARD, &keys, false, NavAside::Elsewhere).clicked() {
+            window.machine.settings.close();
+            window.view.options.sheet = true;
+        }
     }
     ui.add_space((ui.available_height() - NAV_ROW_H).max(0.0));
-    if nav_row(ui, icon::PRINTER, &tr!("machines-title"), false).clicked() {
+    let machines = tr!("machines-title");
+    if nav_row(ui, icon::PRINTER, &machines, false, NavAside::Elsewhere).clicked() {
         window.machine.settings.close();
         crate::panels::open_machines(window.machine);
+    }
+}
+
+/// The line that narrows the pages, `⌘F` reaching it from anywhere in the window.
+fn find_line(ui: &mut Ui, find: &mut String) {
+    let keys = format!("{}F", icon::KEY_COMMAND);
+    let field = ui.add(
+        crate::ui::text_box(egui::TextEdit::singleline(find))
+            .hint_text(format!("{}  {}", icon::FIND, tr!("settings-find")))
+            .desired_width(ui.available_width()),
+    );
+    if ui.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
+        field.request_focus();
+    }
+    if find.is_empty() {
+        let right = field.rect.right() - FIND_CAP_INSET;
+        crate::ui::keycap(ui.painter(), &keys, right, field.rect.center().y);
+    }
+}
+
+/// Whether a page answers what was typed: by its name, or by a setting it holds.
+fn matches(section: Section, find: &str) -> bool {
+    if find.is_empty() {
+        return true;
+    }
+    let words = match section {
+        Section::Appearance => tr!("settings-words-appearance"),
+        Section::General => tr!("settings-words-general"),
+        Section::Updates => tr!("settings-words-updates"),
+        Section::Supports | Section::Hollow | Section::Drain => String::new(),
+    };
+    format!("{} {words}", section.label())
+        .to_lowercase()
+        .contains(find)
+}
+
+/// What a page's row carries at its right: how many profiles it lists, or that a release
+/// waits on Updates.
+fn aside_of(window: &Window, section: Section) -> NavAside {
+    let catalogue = &window.machine.slicing.catalogue;
+    match section {
+        Section::Supports => {
+            let by_hand = catalogue
+                .supports()
+                .filter(|entry| !catalogue.is_auto_shape(&entry.id))
+                .count();
+            NavAside::Count(catalogue.autos().count() + by_hand)
+        }
+        Section::Hollow => NavAside::Count(catalogue.presets(Kind::Hollow).count()),
+        Section::Drain => NavAside::Count(catalogue.presets(Kind::Drain).count()),
+        Section::Updates if window.machine.updates.waiting().is_some() => NavAside::Waiting,
+        Section::Appearance | Section::General | Section::Updates => NavAside::None,
     }
 }
 
@@ -86,6 +156,7 @@ fn section_icon(section: Section) -> &'static str {
         Section::Supports => icon::SUPPORTS,
         Section::Hollow => icon::HOLLOW,
         Section::Drain => icon::DRAIN,
+        Section::Appearance => icon::APPEARANCE,
         Section::General => icon::GENERAL,
         Section::Updates => icon::UPDATE,
     }
@@ -102,6 +173,9 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     match section {
         Section::Supports => supports::page(ui, content, window),
         Section::Hollow | Section::Drain => presets::page(ui, content, window),
+        Section::Appearance => scrolled(&mut child(ui, content), |ui| {
+            appearance::form(ui, window.machine);
+        }),
         Section::General => scrolled(&mut child(ui, content), |ui| {
             general::form(ui, window.machine);
         }),
@@ -144,7 +218,8 @@ fn form_heading(ui: &mut Ui, name: &str) -> Option<Heading> {
     .inner
 }
 
-/// The page's name on the left, and on a page of profiles the ways to add one.
+/// The page's name on the left, beside it on Updates the build this is, and on a page of
+/// profiles the ways to add one.
 fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     let mut pressed = None;
     ui.horizontal_centered(|ui| {
@@ -153,6 +228,14 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
                 .font(theme::page_title(theme::PAGE_TITLE_PT))
                 .color(theme::colors().text_high),
         );
+        if section == Section::Updates {
+            let running = crate::updates::Updates::running().to_string();
+            ui.label(
+                RichText::new(tr!("updates-this-build", version = running))
+                    .font(theme::page_title(theme::PAGE_TITLE_PT))
+                    .color(theme::colors().text_low),
+            );
+        }
         let Some(kind) = section.kind() else {
             return;
         };
@@ -172,11 +255,35 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
 }
 
 const NAV_ROW_H: f32 = theme::BUTTON_H + 4.0;
-/// Room over a group name of the list but the first.
+/// Room over a group name of the list but the first, and under the find line.
 const GROUP_GAP: f32 = 10.0;
+const FIND_GAP: f32 = 12.0;
+/// From the find line's right edge to its keycap's, points.
+const FIND_CAP_INSET: f32 = 6.0;
+/// The badge on a page a release waits on, points across.
+const BADGE_D: f32 = 16.0;
 
-/// One entry of the list of pages: a glyph and a name, washed while it is the page open.
-pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::Response {
+/// What stands at the right of a page's row.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum NavAside {
+    None,
+    /// How many profiles the page lists.
+    Count(usize),
+    /// A release waits to be installed.
+    Waiting,
+    /// The row opens something other than a page of this window.
+    Elsewhere,
+}
+
+/// One entry of the list of pages: a glyph and a name, washed while it is the page open,
+/// and at its right what [`NavAside`] says.
+pub(super) fn nav_row(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    label: &str,
+    active: bool,
+    aside: NavAside,
+) -> egui::Response {
     let colors = theme::colors();
     let size = vec2(ui.available_width(), NAV_ROW_H);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
@@ -208,6 +315,35 @@ pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool)
         theme::body(),
         text,
     );
+    let right = rect.right_center() - vec2(12.0, 0.0);
+    match aside {
+        NavAside::None => {}
+        NavAside::Count(count) => {
+            let ink = if active {
+                colors.accent_soft
+            } else {
+                colors.text_low
+            };
+            let at = egui::Align2::RIGHT_CENTER;
+            painter.text(right, at, count.to_string(), theme::figures(12.0), ink);
+        }
+        NavAside::Waiting => {
+            let centre = right - vec2(BADGE_D / 2.0, 0.0);
+            painter.circle_filled(centre, BADGE_D / 2.0, colors.accent);
+            let at = egui::Align2::CENTER_CENTER;
+            painter.text(centre, at, "1", theme::figures(11.0), colors.on_accent);
+        }
+        NavAside::Elsewhere => {
+            let at = egui::Align2::RIGHT_CENTER;
+            painter.text(
+                right,
+                at,
+                icon::ELSEWHERE,
+                theme::icon(13.0),
+                colors.text_low,
+            );
+        }
+    }
     focus_ring(ui, &response, theme::R_CONTROL);
     response
 }

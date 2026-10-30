@@ -496,11 +496,6 @@ impl eframe::App for SlicerApp {
         let started = web_time::Instant::now();
         crate::i18n::choose(self.machine.general.language);
         crate::ui::theme::motion::reduce(ui.ctx(), self.machine.general.reduce_motion);
-        let appearance = self.machine.general.appearance.preference();
-        if ui.ctx().options(|options| options.theme_preference) != appearance {
-            ui.ctx().set_theme(appearance);
-        }
-        crate::ui::theme::follow(ui.ctx());
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);

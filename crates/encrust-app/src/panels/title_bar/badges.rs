@@ -1,6 +1,4 @@
-use super::toggle_settings;
 use crate::i18n::tr;
-use crate::settings::Section;
 use crate::state::Machine;
 use crate::ui::{focus_ring, icon, theme};
 use crate::updates::Stage;
@@ -12,17 +10,21 @@ const PILL_PAD: f32 = 8.0;
 const PILL_H: f32 = 22.0;
 const PILL_RING: f32 = 0.35;
 
-/// A release newer than this build, offered and never applied: a click opens the Updates
-/// page, or restarts into a build already installed. See `crate::updates`.
+/// A release newer than this build, offered and never applied: a click opens the update
+/// sheet, or restarts into a build already installed. See `crate::updates`.
 pub(super) fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
     let Some(offer) = machine.updates.waiting() else {
         return;
     };
     let installed = matches!(machine.updates.stage, Stage::Installed(_));
-    let text = if installed {
-        tr!("bar-restart-to-update")
-    } else {
-        format!("Encrust {}", offer.version)
+    let downloading = machine.updates.progress().and_then(|(progress, _)| {
+        let (received, total) = progress.bytes();
+        total.map(|total| received * 100 / total.max(1))
+    });
+    let text = match (installed, downloading) {
+        (true, _) => tr!("bar-restart-to-update"),
+        (false, Some(percent)) => tr!("bar-update-percent", percent = percent),
+        (false, None) => format!("Encrust {}", offer.version),
     };
     let colors = theme::colors();
     let response = pill(
@@ -42,10 +44,7 @@ pub(super) fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bo
         if installed {
             machine.updates.restart();
         } else {
-            if !machine.settings.open {
-                toggle_settings(machine);
-            }
-            machine.settings.turn_to(Section::Updates);
+            machine.updates.sheet = true;
         }
     }
     ui.add_space(6.0);

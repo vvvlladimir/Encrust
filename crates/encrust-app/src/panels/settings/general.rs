@@ -1,24 +1,15 @@
-//! The General page: how the window behaves, set once and kept in `preferences.json`.
+//! The General page: how the window behaves and where its files go, kept in
+//! `preferences.json`.
 
 use egui::Ui;
 
-use crate::i18n::{self, Language, tr};
+use crate::i18n::tr;
 use crate::panels::settings::form_card;
-use crate::prefs::Appearance;
 use crate::state::Machine;
-use crate::ui::{
-    DropdownFace, DropdownRow, Segment, Segmented, dropdown, dropdown_menu, dropdown_row, hint,
-    switch,
-};
+use crate::ui::{hint, switch};
 
 pub fn form(ui: &mut Ui, machine: &mut Machine) {
     let general = &mut machine.general;
-    form_card(ui, &tr!("general-language"), |ui| {
-        language(ui, &mut general.language)
-    });
-    form_card(ui, &tr!("general-appearance"), |ui| {
-        appearance(ui, &mut general.appearance);
-    });
     form_card(ui, &tr!("general-start"), |ui| {
         switch(ui, &mut general.start_page, &tr!("general-start-page"));
         hint(ui, &tr!("general-start-page-hint"));
@@ -26,62 +17,8 @@ pub fn form(ui: &mut Ui, machine: &mut Machine) {
     form_card(ui, &tr!("general-viewport"), |ui| {
         switch(ui, &mut general.invert_zoom, &tr!("general-invert-zoom"));
     });
-    form_card(ui, &tr!("general-motion"), |ui| {
-        switch(
-            ui,
-            &mut general.reduce_motion,
-            &tr!("general-reduce-motion"),
-        );
-    });
     #[cfg(not(target_arch = "wasm32"))]
     desk(ui, machine);
-}
-
-fn appearance(ui: &mut Ui, choice: &mut Appearance) {
-    let segments = [
-        Segment::new(Appearance::System, tr!("general-appearance-system")),
-        Segment::new(Appearance::Light, tr!("general-appearance-light")),
-        Segment::new(Appearance::Dark, tr!("general-appearance-dark")),
-    ];
-    Segmented::new(&segments)
-        .width(ui.available_width())
-        .show(ui, choice);
-}
-
-/// The language the window is written in. Each is named in itself, so a user who cannot
-/// read the current one still finds theirs.
-fn language(ui: &mut Ui, choice: &mut Option<Language>) {
-    let system = tr!(
-        "general-language-system",
-        name = i18n::system().native_name()
-    );
-    let shown = choice.map_or_else(
-        || system.clone(),
-        |language| language.native_name().to_owned(),
-    );
-    let face = DropdownFace {
-        lead: None,
-        label: &shown,
-        edited: false,
-        count: None,
-        empty: false,
-    };
-    let response = dropdown(ui, &face, ui.available_width());
-    dropdown_menu(&response, |ui| {
-        let offered = std::iter::once((None, system.as_str()))
-            .chain(Language::ALL.map(|language| (Some(language), language.native_name())));
-        for (language, name) in offered {
-            if dropdown_row(ui, &DropdownRow::named(name, *choice == language)).clicked() {
-                *choice = language;
-                ui.close();
-            }
-        }
-    });
-    if choice.is_none()
-        && let Some(tag) = i18n::system_untranslated()
-    {
-        hint(ui, &tr!("general-language-untranslated", tag = tag));
-    }
 }
 
 /// What only a desk has: folders.
@@ -89,26 +26,27 @@ fn language(ui: &mut Ui, choice: &mut Option<Language>) {
 fn desk(ui: &mut Ui, machine: &mut Machine) {
     use anyhow::Context as _;
 
-    use crate::ui::{icon, inline_button, quiet_button};
+    use crate::ui::{icon, icon_button, inline_button};
 
     let general = &mut machine.general;
     form_card(ui, &tr!("general-sliced-files"), |ui| {
-        let shown = general.sliced_dir.as_ref().map_or_else(
-            || tr!("general-sliced-dir-system"),
-            |dir| tr!("general-sliced-dir", dir = dir.display().to_string()),
-        );
-        hint(ui, &shown);
+        let shown = general
+            .sliced_dir
+            .as_deref()
+            .map_or_else(|| tr!("general-sliced-dir-none"), tilde);
         ui.horizontal(|ui| {
+            path_box(ui, &shown, PATH_BUTTONS_W);
             if inline_button(ui, icon::OPEN, &tr!("general-choose-folder"), false, true).clicked()
                 && let Some(dir) = rfd::FileDialog::new().pick_folder()
             {
                 general.sliced_dir = Some(dir);
             }
-            let set = general.sliced_dir.is_some();
-            if quiet_button(ui, icon::RESET, &tr!("general-forget-folder"), false, set).clicked() {
+            let forget = tr!("general-forget-folder");
+            if general.sliced_dir.is_some() && icon_button(ui, icon::RESET, &forget).clicked() {
                 general.sliced_dir = None;
             }
         });
+        hint(ui, &tr!("general-sliced-dir-system"));
     });
     form_card(ui, &tr!("general-profiles"), |ui| {
         let Some(dir) = printer_profiles::user_dir() else {
@@ -116,16 +54,48 @@ fn desk(ui: &mut Ui, machine: &mut Machine) {
             return;
         };
         let shown = dir.display().to_string();
-        hint(ui, &tr!("general-profiles-dir", dir = shown.clone()));
-        if inline_button(ui, icon::OPEN, &tr!("general-open-folder"), false, true).clicked() {
-            let opened =
-                reveal(&dir).with_context(|| tr!("error-cannot-open", path = shown.clone()));
-            machine
-                .status
-                .report(&tr!("status-opened", path = shown), opened);
-        }
+        ui.horizontal(|ui| {
+            path_box(ui, &tilde(&dir), PATH_BUTTONS_W);
+            if inline_button(ui, icon::OPEN, &tr!("general-open-folder"), false, true).clicked() {
+                let opened =
+                    reveal(&dir).with_context(|| tr!("error-cannot-open", path = shown.clone()));
+                machine
+                    .status
+                    .report(&tr!("status-opened", path = shown), opened);
+            }
+        });
+        hint(ui, &tr!("general-profiles-dir"));
     });
 }
+
+/// A folder as the user knows it, read but not typed into, leaving `buttons` points beside it.
+#[cfg(not(target_arch = "wasm32"))]
+fn path_box(ui: &mut Ui, path: &str, buttons: f32) {
+    let mut text = path.to_owned();
+    ui.add(
+        crate::ui::text_box(egui::TextEdit::singleline(&mut text))
+            .font(crate::ui::theme::code(12.0))
+            .interactive(false)
+            .desired_width((ui.available_width() - buttons).max(0.0)),
+    );
+}
+
+/// `path` with the home folder written as `~`, as a file manager shows it.
+#[cfg(not(target_arch = "wasm32"))]
+fn tilde(path: &std::path::Path) -> String {
+    let home = std::env::home_dir();
+    match home
+        .as_deref()
+        .and_then(|home| path.strip_prefix(home).ok())
+    {
+        Some(rest) => format!("~/{}", rest.display()),
+        None => path.display().to_string(),
+    }
+}
+
+/// What a path box leaves for the buttons beside it, points.
+#[cfg(not(target_arch = "wasm32"))]
+const PATH_BUTTONS_W: f32 = 170.0;
 
 /// Shows `dir` in the system's file manager, making it first: most users have never
 /// saved a profile, so it may not be there yet.

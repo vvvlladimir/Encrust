@@ -284,6 +284,7 @@ fn the_update_check_survives_the_round_trip() {
         check: true,
         checked_at_s: Some(1_700_000_000),
         skipped: Some("0.3.0".to_owned()),
+        noticed: Some("0.3.0".to_owned()),
     };
     let prefs = Preferences::of(
         &Slicing::default(),

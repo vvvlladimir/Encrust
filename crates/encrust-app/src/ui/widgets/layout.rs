@@ -318,6 +318,24 @@ pub fn body_and_foot<T>(
     }
 }
 
+/// A box set into a page on `raised`, ringed in a hairline: a release found, under its name.
+pub fn boxed<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let colors = theme::colors();
+    Frame::new()
+        .fill(colors.raised)
+        .stroke(egui::Stroke::new(1.0, colors.hairline))
+        .corner_radius(theme::R_SURFACE)
+        .inner_margin(egui::Margin::same(BOXED_PAD))
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = theme::NOTE_GAP;
+            add(ui)
+        })
+        .inner
+}
+
+/// Room inside a [`boxed`] box, points.
+const BOXED_PAD: i8 = 14;
+
 /// The frame of anything that floats over the viewport.
 pub fn card() -> Frame {
     Frame::new()
