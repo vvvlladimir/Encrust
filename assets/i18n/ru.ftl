@@ -2344,3 +2344,4 @@ hint-let-go = отпустить
 hint-supports-place = по модели, чтобы поставить опору
 hint-supports-line = поставить их линией
 hint-cut-part = по части, чтобы отметить её
+hint-gizmo-steps = за ручку шагами по 1 мм и 15°

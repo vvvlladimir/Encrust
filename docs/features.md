@@ -105,6 +105,7 @@ whole-surface fill is Cmd-Shift-click.
 
 **Position tool:**
 - Move, rotate and scale with typed numbers or the on-screen gizmo, in global or local axes.
+  The gizmo's square slides a model on the plate; hold Shift to drag in 1 mm and 15° steps.
 - Scale uniformly or per axis, keep the proportions, scale to fit the build volume, or go
   back to the imported size.
 - **Mirror** the model, or mirror a copy beside it.

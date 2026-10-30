@@ -97,7 +97,9 @@ selection and a point on the cut for a Keep solid blocker (`pick_material`).
 `transform-gizmo-egui` draws the handles with egui shapes after the wgpu callback and with
 no depth test, so they are never hidden inside the model. It is two of the crate's gizmos on one
 pivot, the arrows longer than the rings, since the crate draws both at one size; where
-both catch a press the arrow wins. The bounds brackets are egui shapes too, cut into
+both catch a press the arrow wins, and while one is dragged the other is not drawn. A square
+moves on the plate; there is no view ring or screen-plane handle. Shift keeps a drag to
+1 mm and 15° steps, and the rings show the steps as ticks. The bounds brackets are egui shapes too, cut into
 pieces and each tested with a ray from the eye through the `Bvh`, so the model hides them. `gizmo.rs` is the only module
 naming a type from that crate (ADR 0017). Two boundary details: the crate takes matrices
 row by row where `glam` stores columns, and it works in `f64`, so a rotation comes back

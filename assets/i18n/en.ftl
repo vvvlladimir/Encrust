@@ -2230,3 +2230,4 @@ hint-let-go = let go
 hint-supports-place = the model to place a support
 hint-supports-line = a line of them
 hint-cut-part = the part to mark
+hint-gizmo-steps = a handle in 1 mm and 15° steps

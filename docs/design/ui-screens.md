@@ -200,7 +200,7 @@ track. With no stack it reads *No layers*.
   `text_high`, what it does in `text_mid`, pairs split by a 12 point rule. Every key is
   Click or Drag, any modifier named before it (Shift click, Option drag), or Esc. Drawn only
   while the tool in hand has something the pointer does in the viewport (Measure, Hollow,
-  Drain, Relief, Supports' Pick, Place and Area, Repair's faces and edges, Cut's part). Short of room, only the keys show, as glyphs where
+  Drain, Relief, Supports' Pick, Place and Area, Repair's faces and edges, Cut's part, the gizmo's Shift drag). Short of room, only the keys show, as glyphs where
   there is one (mouse click, hand grabbing, on a Mac ⇧ ⌥ ⌘), each naming what it does on hover.
 - **View tools:** Frame the view, Plate grid, See through, Perspective, as 26 squares in one
   card; the on ones washed.
