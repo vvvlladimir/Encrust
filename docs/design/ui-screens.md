@@ -22,12 +22,12 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 |---|---|---|
 | Top bar | the window's top, its own title bar (ADR 0104) | 44 tall |
 | Inspector | the stage's left edge, from its top | 316 until dragged; as tall as its content, at most the stage |
-| Tool row | over the stage, from 8 right of the inspector to 8 left of the models card | that width, 58 tall |
+| Tool row | over the stage, centred between 8 right of the inspector and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
 | Layer strip | the stage's right edge, its full height | 64 |
-| Hint bar | centred under the tool row, 8 below it | as wide as what it says |
-| View cube | 8 left of the models card, 8 under the tool row | 64 square |
+| Hint bar | centred under the tool row, 8 below it, kept 8 clear of the view cube on both sides | as wide as what it says, at most that room; one line, 28 tall |
+| View cube | 8 left of the models card: level with the tool row while 8 clear of it, else 8 under it | 80 square |
 | View tools | 8 left of the models card, 16 above the stage's foot | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
 
@@ -69,7 +69,7 @@ printer answers.
 
 Nine tools in three groups split by a vertical rule: Select, Measure | Repair, Hollow, Drain,
 Cut, Relief | Supports, Check. Each is a `rail_button`: glyph 19 over its name in 10.5, 50
-tall, the row's width shared equally, 2 apart. The tool in hand is washed in
+tall, the room shared equally but no wider than 56 (its height, or the least a name needs), 2 apart. The tool in hand is washed in
 `accent_wash` with its glyph and name in `accent_soft`; a tool that needs attention carries
 a 7 point `warn` dot at its top right. While the pointer is on the row each tool shows its
 key's digit, 1 to 9, at its top left in `text_low`. Narrower than 9 × 56, the names go and
@@ -175,7 +175,8 @@ track. With no stack it reads *No layers*.
 - **Hint bar:** a pill on `base` at 88 % with a hairline, 12 point text: the key in
   `text_high`, what it does in `text_mid`, pairs split by a 12 point rule. Drawn only while
   the tool in hand has something the pointer does in the viewport (Measure, Drain, Relief,
-  Supports' Pick and Place, Cut's plane).
+  Supports' Pick and Place, Cut's plane). Short of room, only the keys show, as glyphs where
+  there is one (mouse click, hand grabbing, on a Mac ⇧ ⌥ ⌘), each naming what it does on hover.
 - **View tools:** Frame the view, Plate grid, See through, Perspective, as 26 squares in one
   card; the on ones washed.
 - **Notices:** each a card 40 tall: glyph in its colour (`warn` warning, `danger`

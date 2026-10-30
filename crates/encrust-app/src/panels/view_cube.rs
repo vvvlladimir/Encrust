@@ -10,7 +10,7 @@ use crate::panels::Window;
 use crate::ui::{icon, icon_button, theme};
 
 /// The square the cube is drawn in, points.
-const SIZE: f32 = 64.0;
+pub const SIZE: f32 = 80.0;
 
 /// How much of a face's half-width its middle takes; the band past it belongs to an edge,
 /// and where two bands cross, to a corner.
@@ -91,9 +91,9 @@ struct Cell {
     towards: Vec3,
 }
 
-/// Top right of the viewport: the cube and, under it while the pointer is over the cube,
-/// the way back to the opening view.
-pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
+/// The cube from its top right `corner`, kept to `viewport`, and under it while the pointer
+/// is over the cube the way back to the opening view. Answers the room both take.
+pub fn ui(ui: &egui::Ui, window: &mut Window, corner: Pos2, viewport: Rect) -> Rect {
     let id = Id::new("view-cube");
     // Last frame's area, which holds the room for Home whether or not it is drawn, so the
     // button does not vanish under the pointer on its way down to it.
@@ -104,9 +104,9 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
         .is_some_and(|(area, at)| area.contains(at));
     egui::Area::new(id)
         .order(egui::Order::Middle)
-        .fixed_pos(viewport.right_top())
+        .fixed_pos(corner)
         .pivot(Align2::RIGHT_TOP)
-        .constrain_to(viewport)
+        .constrain_to(viewport.with_min_y(corner.y))
         .show(ui.ctx(), |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
@@ -124,7 +124,9 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
                     turn(ui, window, to);
                 }
             });
-        });
+        })
+        .response
+        .rect
 }
 
 /// Starts the camera swinging to `to` from wherever it stands now.

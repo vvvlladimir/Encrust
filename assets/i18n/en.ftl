@@ -2171,7 +2171,6 @@ hint-drag = Drag
 hint-shift = Shift
 hint-esc = Esc
 hint-modifier-click = { $key } click
-hint-shift-click = Shift click
 hint-clear = clear
 hint-remove = remove
 hint-add = add

@@ -2286,7 +2286,6 @@ hint-drag = Перетаскивание
 hint-shift = Shift
 hint-esc = Esc
 hint-modifier-click = { $key } + щелчок
-hint-shift-click = Shift + щелчок
 hint-clear = сбросить
 hint-remove = убрать
 hint-add = добавить
