@@ -294,7 +294,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
 | [0316](0316-many-solids-are-unioned-by-groups-and-set-apart-ones-side-by-side.md) | Union many solids by groups, and set apart ones side by side | Accepted |
 | [0317](0317-a-run-tells-how-far-it-has-got-through-its-cancel.md) | A run tells how far it has got through its `Cancel` | Accepted |
-| [0384](0384-repair-and-the-drainage-check-tell-how-far-they-have-got.md) | Repair and the drainage check tell how far they have got | Accepted |
+| [0384](0384-repair-the-drainage-check-and-auto-orient-tell-how-far-they-have-got.md) | Repair, the drainage check and Auto-orient tell how far they have got | Accepted |
 | [0304](0304-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted; amended by 0321, which patches a torn model first |
 | [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
 | [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |

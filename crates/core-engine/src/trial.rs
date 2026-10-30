@@ -13,8 +13,8 @@ use core_geometry::{
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{
-    LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Readings, Ruling,
-    finalists, rank, rulings,
+    LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Phase, Pieces, Printed, Readings,
+    Ruling, Watch, finalists, rank, rulings,
 };
 use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
@@ -34,6 +34,9 @@ const FINALISTS: usize = 4;
 const MOST_FINALISTS: usize = 16;
 const FINALIST_FACES: usize = 2_000_000;
 const LIGHT_REACH_MM: Scalar = 200.0;
+
+/// What a pose's print is told in: its supports stood, its stack measured, its islands counted.
+const PRINT_STEPS: usize = 3;
 
 fn finalists_for(faces: usize, reach_mm: Scalar) -> usize {
     if reach_mm > LIGHT_REACH_MM {
@@ -164,8 +167,9 @@ pub fn orient_for_print(
     printed: &Printed,
     settings: &OrientSettings,
     trial: Option<&Trial>,
+    watch: Watch<'_>,
 ) -> Result<Vec<Choice>, EngineError> {
-    let found = finalists(printed, settings, usize::MAX)?;
+    let found = finalists(printed, settings, usize::MAX, watch)?;
     let Some(trial) = trial else {
         return Ok(found
             .into_iter()
@@ -176,7 +180,7 @@ pub fn orient_for_print(
             })
             .collect());
     };
-    let tried = prove(printed, settings, &found, trial)?;
+    let tried = prove(printed, settings, &found, trial, watch)?;
     Ok(tried
         .into_iter()
         .map(|tried| Choice {
@@ -188,12 +192,14 @@ pub fn orient_for_print(
 }
 
 /// Prints the search's best few of `found` and the way the model stands, and answers them
-/// ranked by [`core_plate::rank`] on what they printed. See `docs/design/orientation.md`.
+/// ranked by [`core_plate::rank`] on what they printed. `watch` is told each step of each
+/// print, and may stop them. See `docs/design/orientation.md`.
 pub fn prove(
     printed: &Printed,
     settings: &OrientSettings,
     found: &[Oriented],
     trial: &Trial,
+    watch: Watch<'_>,
 ) -> Result<Vec<Tried>, EngineError> {
     let reach_mm = printed
         .outer
@@ -214,14 +220,21 @@ pub fn prove(
         finalists_for(printed.outer.faces.len(), reach_mm),
         is_standing,
     );
+    let steps = Pieces::start(watch, Phase::Proving, poses.len() * PRINT_STEPS)?;
     let tried = poses
         .into_par_iter()
         .map(|pose| {
-            print_held(printed, pose.rotation, pose.on_plate, trial, Some(print)).map(|printout| {
-                Proven {
-                    oriented: *pose,
-                    printout,
-                }
+            let steps = Some(&steps);
+            print_held(
+                printed,
+                pose.rotation,
+                pose.on_plate,
+                trial,
+                (Some(print), steps),
+            )
+            .map(|printout| Proven {
+                oriented: *pose,
+                printout,
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
@@ -303,18 +316,20 @@ pub fn print_out(
     on_plate: bool,
     trial: &Trial,
 ) -> Result<Printout, EngineError> {
-    print_held(printed, rotation, on_plate, trial, None)
+    print_held(printed, rotation, on_plate, trial, (None, None))
 }
 
 /// The same cured as coarse as `trial`, for a `print` finer than it: supports are placed on
-/// the print's own layer, and its islands counted at its own pixel and layer.
+/// the print's own layer, and its islands counted at its own pixel and layer. `steps` is told
+/// as each of the [`PRINT_STEPS`] ends.
 fn print_held(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
-    print: Option<&Trial>,
+    (print, steps): (Option<&Trial>, Option<&Pieces<'_>>),
 ) -> Result<Printout, EngineError> {
+    let told = || steps.map_or(Ok(()), Pieces::finish);
     let turn = Transform {
         rotation,
         ..Transform::default()
@@ -339,6 +354,7 @@ fn print_held(
         drill_exactly: false,
     };
     let stood = stand(model, trial.support, layer_mm)?;
+    told()?;
     let mut held = Held {
         contacts: stood.contacts.len(),
         supports_mm3: signed_volume(&stood.supports).abs(),
@@ -357,9 +373,11 @@ fn print_held(
     let measured = Run::measuring(&plate)?
         .measure(&mut ())?
         .ok_or(EngineError::EmptyPlate)?;
+    told()?;
     let mut printout = printout(&held, &measured, trial.material.layer_height_mm);
     if let Some(print) = print {
         printout.islands = islands_printed(&placed, cuts.as_ref(), &supports, print)?;
+        told()?;
     }
     Ok(Printout {
         overflows,

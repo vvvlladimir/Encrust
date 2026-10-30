@@ -6,7 +6,7 @@ use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     transform_mesh,
 };
-use core_plate::{OrientSettings, Printed};
+use core_plate::{OrientSettings, Printed, Watch};
 use printer_profiles::{PrinterProfile, SupportProfile};
 
 /// The turn auto-orientation applied, and why it chose it.
@@ -134,11 +134,16 @@ pub(super) fn orientation(
         support,
         raster_window: rayon::current_num_threads(),
     });
-    let found = orient_for_print(&Printed::solid(mesh), &settings, trial.as_ref())
-        .context("cannot find an orientation for this model")?
-        .into_iter()
-        .next()
-        .context("the search found no orientation for this model")?;
+    let found = orient_for_print(
+        &Printed::solid(mesh),
+        &settings,
+        trial.as_ref(),
+        Watch::never(),
+    )
+    .context("cannot find an orientation for this model")?
+    .into_iter()
+    .next()
+    .context("the search found no orientation for this model")?;
     Ok(OrientSummary {
         rotation: found.oriented.rotation,
         peak_mm2: found.oriented.score.peak_mm2.unwrap_or_default(),

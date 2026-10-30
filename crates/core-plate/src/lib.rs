@@ -16,6 +16,7 @@ mod score;
 mod section;
 mod select;
 mod spot;
+mod watch;
 
 pub use arrange::{ArrangeSettings, Arranged, Placed, arrange};
 pub use candidates::{FlatFace, flat_faces};
@@ -26,3 +27,4 @@ pub use policy::{Noise, Readings, Ruling, rank, rulings};
 pub use printed::Printed;
 pub use score::{LOOKS_UP, OrientGoal, OrientPreset, Score};
 pub use spot::{Rect, nearest_free};
+pub use watch::{Phase, Pieces, Watch};

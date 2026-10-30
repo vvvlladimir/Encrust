@@ -85,32 +85,15 @@ impl TrapJob {
         self.worker.poll()
     }
 
-    /// The layer and the model in hand in words, and the share of the plate looked
-    /// through, or `None` before the first model's layers are counted.
-    pub fn counted(&self) -> Option<(String, f32)> {
-        let done = self.looked.models.load(Relaxed);
+    /// The share of the plate looked through, or `None` before the first model's layers
+    /// are counted.
+    pub fn fraction(&self) -> Option<f32> {
         let layers_total = self.looked.layers_total.load(Relaxed);
-        if layers_total == 0 {
-            return None;
-        }
-        let layer = self.looked.layers.load(Relaxed).min(layers_total);
-        let share = (done as f32 + layer as f32 / layers_total as f32) / self.models as f32;
-        let label = if self.models > 1 {
-            tr!(
-                "drain-progress-models",
-                index = (done + 1).min(self.models),
-                total = self.models,
-                layer = layer,
-                layers = layers_total
-            )
-        } else {
-            tr!(
-                "drain-progress-layers",
-                layer = layer,
-                layers = layers_total
-            )
-        };
-        Some((label, share.min(1.0)))
+        (layers_total > 0).then(|| {
+            let layer = self.looked.layers.load(Relaxed).min(layers_total);
+            let done = self.looked.models.load(Relaxed);
+            ((done as f32 + layer as f32 / layers_total as f32) / self.models as f32).min(1.0)
+        })
     }
 }
 

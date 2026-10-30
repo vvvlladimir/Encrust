@@ -10,8 +10,8 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, busy, count_row, describe, hint, icon, inline_button, inset, notice,
-    number_row, primary_button, secondary_button, section, theme, tone,
+    Segment, Segmented, count_row, describe, hint, icon, inline_button, inset, notice, number_row,
+    primary_button, secondary_button, section, step_bar, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -109,11 +109,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
     if let Some(job) = &window.tools.drain.job {
-        let counted = job.counted();
-        let step = counted
-            .as_ref()
-            .map(|(label, share)| (label.as_str(), *share));
-        if busy(ui, &tr!("hollow-looking"), step, true) {
+        if step_bar(ui, &tr!("hollow-looking"), job.fraction(), true) {
             window.tools.drain.cancel(&mut window.machine.status);
         }
         return;

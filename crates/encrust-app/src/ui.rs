@@ -24,7 +24,7 @@ pub use widgets::{
     number_field, number_row, palette_dialog, picker_row, primary_button, primary_with_companion,
     progress_bar, progress_bar_of, quiet_button, quiet_square, rail_button, readings, rename_box,
     row_name, secondary_button, section, section_with_action, section_with_actions,
-    section_with_switch, spinner, start_rename, stats, stepped_row, subheading,
+    section_with_switch, spinner, start_rename, stats, step_bar, stepped_row, subheading,
     subheading_with_switch, summary_button, swatch, switch, text_box, text_row, toggle_button,
     tone, two_lines, unit_field, vertical_hairline, zone_button,
 };

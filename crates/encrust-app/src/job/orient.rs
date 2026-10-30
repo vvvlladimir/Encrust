@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use core_engine::{SupportPlan, Trial, orient_for_print};
 use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
-use core_plate::{OrientSettings, Printed};
+use core_plate::{OrientSettings, Phase, Printed, Watch};
 use core_volume::ModelHollow;
 #[cfg(test)]
 use printer_profiles::SupportProfile;
@@ -11,8 +11,13 @@ use printer_profiles::{MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
 
 use crate::i18n::tr;
-use crate::job::pipeline::{thread_pool, worker_threads};
+use crate::job::pipeline::worker_threads;
+use crate::job::{Worker, pooled};
 use crate::scene::{ObjectId, Scene, SceneObject};
+
+mod seen;
+
+use seen::Seen;
 
 /// One model to find an orientation for, owned so that it can cross to the worker thread.
 #[derive(Clone)]
@@ -134,34 +139,41 @@ pub enum OrientOutcome {
     Failed(String),
 }
 
-/// An orientation run on its own thread.
+/// An orientation run on its own thread. Dropping the job asks the run to stop.
 ///
 /// Every candidate is measured over the whole mesh and the best few are sliced, which is
 /// seconds on a detailed model and far too much for a frame.
 #[derive(Debug)]
 pub struct OrientJob {
-    outcome: Receiver<OrientOutcome>,
+    worker: Worker<OrientOutcome>,
+    seen: Arc<Seen>,
 }
 
 impl OrientJob {
     /// Starts the run. The thread is detached: it ends on its own.
     pub fn spawn(request: OrientRequest) -> Self {
-        let (sender, outcome) = mpsc::channel();
-        crate::job::spawn(move || {
-            let _ = sender.send(run(&request));
-        });
-        Self { outcome }
+        let seen = Arc::new(Seen::new(request.tasks.len()));
+        let told = Arc::clone(&seen);
+        let worker = Worker::spawn(
+            move |stop, _| pooled(|| run(&request, (stop, &told)), OrientOutcome::Failed),
+            || OrientOutcome::Failed(tr!("job-thread-stopped-orientation")),
+        );
+        Self { worker, seen }
     }
 
     /// Returns the outcome on the frame the run ends, and `None` while it is going.
     pub fn poll(&mut self) -> Option<OrientOutcome> {
-        match self.outcome.try_recv() {
-            Ok(outcome) => Some(outcome),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                Some(OrientOutcome::Failed(tr!("job-thread-stopped-orientation")))
-            }
-        }
+        self.worker.poll()
+    }
+
+    /// What the run is at in words and the share of it done, or `None` before any model
+    /// has begun.
+    pub fn counted(&self) -> Option<(String, f32)> {
+        let label = match self.seen.phase()? {
+            Phase::Looking => tr!("orient-looking"),
+            Phase::Proving => tr!("orient-proving"),
+        };
+        Some((label, self.seen.share()?))
     }
 }
 
@@ -205,6 +217,7 @@ fn choose(
     settings: &OrientSettings,
     support: &SupportPlan,
     proof: Option<&Proof>,
+    watch: Watch<'_>,
 ) -> Result<Vec<Pose>, String> {
     let trial = proof.map(|proof| Trial {
         printer: &proof.printer,
@@ -212,8 +225,8 @@ fn choose(
         support,
         raster_window: worker_threads(),
     });
-    let chosen =
-        orient_for_print(printed, settings, trial.as_ref()).map_err(|error| error.to_string())?;
+    let chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
+        .map_err(|error| error.to_string())?;
     Ok(offered(chosen.iter().map(|choice| {
         let pose = Pose {
             rotation: choice.oriented.rotation,
@@ -255,52 +268,61 @@ fn vents_of(hollow: &ModelHollow) -> Vec<Vec3> {
     holes.iter().map(|hole| -hole.axis).chain(ends).collect()
 }
 
-fn run(request: &OrientRequest) -> OrientOutcome {
-    let pool = match thread_pool(worker_threads()) {
-        Ok(pool) => pool,
-        Err(error) => return OrientOutcome::Failed(error.to_string()),
+fn run(request: &OrientRequest, (stop, seen): (&AtomicBool, &Seen)) -> OrientOutcome {
+    let turned: Result<Vec<Turn>, String> = request
+        .tasks
+        .par_iter()
+        .enumerate()
+        .map(|(at, task)| {
+            let told = |phase, done, total| {
+                seen.told(at, phase, done, total);
+                !stop.load(Relaxed)
+            };
+            turn_of(task, request, Watch::by(&told))
+        })
+        .collect();
+
+    match turned {
+        Ok(turns) => OrientOutcome::Turned(turns),
+        Err(message) => OrientOutcome::Failed(message),
+    }
+}
+
+/// How `task`'s model should be turned, judged as the shell and cuts it will print.
+fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Result<Turn, String> {
+    let placing = task.support.placing();
+    let settings = OrientSettings {
+        down_now: task.down_now,
+        max_overhang_deg: placing.max_overhang_deg,
+        contact_spacing_mm: placing.contact_spacing_mm,
+        lift_mm: placing.lift_mm(),
+        ..request.settings
     };
-
-    pool.install(|| {
-        let turned: Result<Vec<Turn>, String> = request
-            .tasks
-            .par_iter()
-            .map(|task| {
-                let placing = task.support.placing();
-                let settings = OrientSettings {
-                    down_now: task.down_now,
-                    max_overhang_deg: placing.max_overhang_deg,
-                    contact_spacing_mm: placing.contact_spacing_mm,
-                    lift_mm: placing.lift_mm(),
-                    ..request.settings
-                };
-                let outer = task.sized(&task.mesh);
-                let shell = task.shell.as_ref().map(|shell| task.sized(shell));
-                let cuts = task.cuts.as_ref().map(|cuts| task.sized(cuts));
-                let sizing = task.sizing.linear();
-                let vents: Vec<Vec3> = task.vents.iter().map(|out| sizing * *out).collect();
-                let printed = Printed {
-                    outer: &outer,
-                    shell: shell.as_deref(),
-                    cuts: cuts.as_deref(),
-                    vents: &vents,
-                };
-                let poses = choose(&printed, &settings, &task.support, request.proof.as_ref())?;
-                if poses.is_empty() {
-                    return Err(tr!("job-orient-none"));
-                }
-                Ok(Turn {
-                    id: task.id,
-                    poses,
-                    lift_mm: placing.z_lift_mm,
-                })
-            })
-            .collect();
-
-        match turned {
-            Ok(turns) => OrientOutcome::Turned(turns),
-            Err(message) => OrientOutcome::Failed(message),
-        }
+    let outer = task.sized(&task.mesh);
+    let shell = task.shell.as_ref().map(|shell| task.sized(shell));
+    let cuts = task.cuts.as_ref().map(|cuts| task.sized(cuts));
+    let sizing = task.sizing.linear();
+    let vents: Vec<Vec3> = task.vents.iter().map(|out| sizing * *out).collect();
+    let printed = Printed {
+        outer: &outer,
+        shell: shell.as_deref(),
+        cuts: cuts.as_deref(),
+        vents: &vents,
+    };
+    let poses = choose(
+        &printed,
+        &settings,
+        &task.support,
+        request.proof.as_ref(),
+        watch,
+    )?;
+    if poses.is_empty() {
+        return Err(tr!("job-orient-none"));
+    }
+    Ok(Turn {
+        id: task.id,
+        poses,
+        lift_mm: placing.z_lift_mm,
     })
 }
 
@@ -312,6 +334,12 @@ mod tests {
     /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
     fn cuboid(size: Vec3) -> Mesh {
         core_geometry::cuboid(Vec3::ZERO, size)
+    }
+
+    /// `request` run with nobody watching.
+    fn quietly(request: &OrientRequest) -> OrientOutcome {
+        let seen = Seen::new(request.tasks.len());
+        run(request, (&AtomicBool::new(false), &seen))
     }
 
     #[test]
@@ -328,7 +356,7 @@ mod tests {
             proof: None,
         };
 
-        let OrientOutcome::Turned(turns) = run(&request) else {
+        let OrientOutcome::Turned(turns) = quietly(&request) else {
             panic!("two sound models can be oriented");
         };
         assert_eq!(turns.len(), 2);
@@ -387,9 +415,32 @@ mod tests {
             proof: None,
         };
 
-        let OrientOutcome::Failed(message) = run(&request) else {
+        let OrientOutcome::Failed(message) = quietly(&request) else {
             panic!("an empty mesh has no orientation");
         };
         assert!(message.contains("orientation"), "got {message}");
+    }
+
+    #[test]
+    fn a_run_tells_how_far_each_model_has_got_and_stops_when_asked() {
+        let request = OrientRequest {
+            tasks: vec![OrientTask::solid(
+                ObjectId::for_test(1),
+                Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
+            )],
+            settings: OrientSettings::default(),
+            proof: None,
+        };
+        let seen = Seen::new(1);
+        run(&request, (&AtomicBool::new(false), &seen));
+        assert_eq!(seen.phase(), Some(Phase::Looking), "no machine, no proof");
+        let share = seen.share().expect("the shortlist was cut");
+        assert!(
+            (share - 0.12).abs() < 1e-6,
+            "the search ends at 12 %, got {share}"
+        );
+
+        let stopped = run(&request, (&AtomicBool::new(true), &Seen::new(1)));
+        assert!(matches!(stopped, OrientOutcome::Failed(_)));
     }
 }

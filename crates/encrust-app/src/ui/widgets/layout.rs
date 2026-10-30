@@ -587,6 +587,16 @@ pub fn busy(ui: &mut Ui, label: &str, step: Option<(&str, f32)>, stoppable: bool
         && super::secondary_button(ui, crate::ui::icon::CANCEL, &tr!("common-cancel")).clicked()
 }
 
+/// A run that tells its step: `what` above the bar, in words, then the bar filled to `share`
+/// or running on its own for a run that does not count, and where the run can be stopped a
+/// way to stop it. Answers whether it was asked to stop.
+pub fn step_bar(ui: &mut Ui, what: &str, share: Option<f32>, stoppable: bool) -> bool {
+    super::tone(ui, what, theme::colors().text_mid);
+    progress_bar(ui, share);
+    stoppable
+        && super::secondary_button(ui, crate::ui::icon::CANCEL, &tr!("common-cancel")).clicked()
+}
+
 /// A one pixel divider across the full width of whatever is drawing it.
 pub fn hairline(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());

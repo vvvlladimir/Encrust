@@ -1436,6 +1436,9 @@ position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
 position-auto-orient = Auto-orient
+orient-looking = Scoring the ways to stand
+orient-proving = Printing the best ones to compare
+orient-cancelled = Auto-orient cancelled
 orient-preset-supports = Supports
 orient-preset-peel = Peel
 orient-preset-shortest = Time
@@ -1504,8 +1507,6 @@ drain-check = Check drainage
 drain-check-tooltip = Cuts the plate and follows the air through it, looking for resin with no way out.
 drain-checking = Checking drainage
 drain-cancelled = Drainage check cancelled
-drain-progress-layers = Layer { $layer } of { $layers }
-drain-progress-models = Model { $index } of { $total }, layer { $layer } of { $layers }
 drain-hole = Hole
 drain-channel = Channel
 drain-channel-note = Each click adds a point; the channel takes the hole's width and outline and runs under all of them, open at its two ends alone.
@@ -1982,7 +1983,6 @@ repair-seam-tolerance = Seam tolerance
 repair-smallest-shell = Smallest speck
 repair-repair = Repair
 repair-repairing = Repairing
-repair-repairing-models = Repaired { $done } of { $total }
 
 ## panels/view_cube.rs
 

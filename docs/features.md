@@ -64,8 +64,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Open the **Repair** tool: what was found in the picked models (or every model on the
   plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
   press, how many pairs of faces cross. Pick the method, set the seam tolerance and the
-  smallest speck, and repair with Cancel and a bar naming the step — mending, finding
-  crossings, joining the shells — and how many models are done. The tool row's
+  smallest speck, and repair with Cancel and the step named over its bar — mending,
+  finding crossings, joining the shells. The tool row's
   Repair button carries a dot while a model on the plate is broken.
 - Click a finding to mark it on the models while the Repair tool is open: the rims of the
   holes as lines, faces without area, drawn twice or crossing others as patches. The
@@ -121,6 +121,9 @@ whole-surface fill is Cmd-Shift-click.
   peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
   plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
   the window reopens.
+- The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
+  then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
+  as they stand.
 - **Auto** balances the other three for each model. It never lets one of supports, pull
   or print time go far worse for the sake of the others. Where some pose is about as good
   as the best on all three, it takes that one. Otherwise it takes the pose where each
@@ -337,8 +340,8 @@ whole-surface fill is Cmd-Shift-click.
   only at its two ends.
 - Settings work as in **Hollow**: one picked model keeps its own.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
-  of resin with no way out, showing the layer and model it is on, with Cancel. Pockets are
-  painted in the view, and you can see through the model to find them.
+  of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
+  you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
 - Drain settings can be saved as presets too.
 
