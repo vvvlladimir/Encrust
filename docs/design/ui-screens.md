@@ -210,8 +210,8 @@ and the one that applies right.
   Shortcuts) under 10.5 capital group names, and Machine and resin at the list's foot.
 - A set of profiles is a `table`: words left, figures right, group rows in `text_low`, the
   picked row washed. The bar: Edit, Duplicate, Export, Delete (`confirm_button`).
-- A profile's form is blocks: a 180 title column beside at most 460 of fields, a hairline
-  under each; Reset to defaults in the header. A text row's name stands in a 150 column so
+- A profile's form is blocks one under another, its header the way back, the profile's
+  name and its kind: a 180 title column beside at most 460 of fields, a hairline under each; Reset to defaults in the header. A text row's name stands in a 150 column so
   every box starts on one line; every box ends on the block's right edge, and a figure
   worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. General holds Language, Opening, Motion
   (*Reduce motion*), Sliced files, the Prusa login and the bug report.
@@ -235,9 +235,11 @@ a 60 tall tile on `panel` of a 44 picture beside the file and its outcome in `ok
 
 **Find**, 500 wide, 70 from the stage's top over a 40 % scrim: a 48 tall field over a
 hairline, results grouped under capital names as Tools, Actions, Models with their keys,
-the lit row on `picked_wash`, and a `hint_bar` of the keys to move, open and close at its foot.
+the lit row on `picked_wash`, Esc as a keycap at the field's right, and a strip over a
+hairline at its foot with the keys to move and open (`key_row`).
 
-**Keyboard shortcuts**, 800 wide: the keys in two columns of groups under 10.5 capital
+**Keyboard shortcuts**, 800 wide, *Find a key* in its title row narrowing the rows by name:
+the keys in two columns of groups under 10.5 capital
 names — Tools, The plate, then The window, The layers, Files — each a row of name and keys.
 
 ## Start page

@@ -155,7 +155,8 @@ paints from tokens only.
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
-| `dialog`, `palette_dialog`, `dialog_head` | A window over the plate on the stage dimmed by the scrim, rising as it comes in: its frame ringed in `line`, Find's hanging from the top over a lighter scrim, and its glyph, name and close button |
+| `dialog`, `palette_dialog`, `dialog_head`, `dialog_head_searching` | A window over the plate on the stage dimmed by the scrim, rising as it comes in: its frame ringed in `line`, Find's hanging from the top over a lighter scrim, and its glyph, name and close button, with a search line after the name where it narrows a list |
+| `key_row` | The keys that work a window at its foot: each set of keycaps then what they do |
 | `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
 | `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |
 | `field_note` | A figure worked out from the fields over it, flush with their right edge |
@@ -165,6 +166,7 @@ paints from tokens only.
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
 | `tag`, `tag_w` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more. `tag_w` is its width, for a row of them |
+| `found_row` | Something found that is not the user's yet: a dashed row of glyph, name, a figure and Add |
 | `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |
 | `split_readings` | Figures split two ways, the models' and the supports': the two heads over their columns, a row a name and its two figures |
 | `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |

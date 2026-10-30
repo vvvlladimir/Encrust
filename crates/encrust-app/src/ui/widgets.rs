@@ -34,15 +34,15 @@ pub use field::{
     number_row, picker_row, row_name, stepped_row, text_box, text_row, unit_field,
 };
 pub use figures::{Figure, details_fold, figure_grid, split_readings};
-pub use keycap::keycap;
+pub use keycap::{key_row, keycap};
 pub use layout::{
     body_and_foot, busy, card, card_foot, describe, described, describing, dialog, dialog_head,
-    empty_state, field_note, hairline, heading, help_mark, hint, inset, meta, mode_group, nested,
-    notice, palette_dialog, progress_bar, progress_bar_of, readings, stats, subheading,
-    subheading_with_switch, vertical_hairline,
+    dialog_head_searching, empty_state, field_note, hairline, heading, help_mark, hint, inset,
+    meta, mode_group, nested, notice, palette_dialog, progress_bar, progress_bar_of, readings,
+    stats, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
-pub use list::{issue_list, issue_row, list, list_row, tag, tag_w, two_lines};
+pub use list::{found_row, issue_list, issue_row, list, list_row, tag, tag_w, two_lines};
 pub use over_stage::{
     NoticeReply, ZoomPress, hint_bar, job_notice, notice_card, spinner, zoom_bar,
 };

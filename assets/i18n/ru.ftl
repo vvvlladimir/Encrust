@@ -233,7 +233,7 @@ action-save-project = Сохранить проект
 action-save-project-as = Сохранить проект как
 action-import-model = Импортировать модель
 action-slice = Нарезать
-shortcut-group-tools = Инструменты, по порядку на панели
+shortcut-group-tools = Инструменты
 shortcut-group-plate = Платформа
 shortcut-group-window = Окно
 shortcut-group-layers = Слои
@@ -270,6 +270,7 @@ status-removed-models =
 ## panels/shortcuts_sheet.rs
 
 shortcuts-title = Горячие клавиши
+shortcuts-find = Найти клавишу
 shortcuts-note = Инструмент вызывается цифрой, соответствующей его месту на панели. Пока курсор в поле ввода, клавиши отключены.
 shortcuts-or = или
 
@@ -286,6 +287,7 @@ settings-tab-network = Сеть
 settings-new-resin = Новая смола
 settings-new-printer = Новый принтер
 settings-new-profile = Новый профиль
+settings-support-profile = Профиль поддержек
 settings-copy-name = { $name } (копия)
 
 ## supports.rs
@@ -415,6 +417,7 @@ machines-remove = Удалить этот принтер
 machines-import-file = Импортировать принтер из файла
 machines-pick = Выберите принтер или добавьте его из библиотеки.
 machines-in-hand = Платформа печатается на этом принтере
+machines-maker-format = { $maker } · .{ $format }
 machines-use = Использовать этот принтер
 machines-cannot-add-printer = не удалось добавить принтер
 machines-cannot-add-machine = не удалось добавить принтер
@@ -1272,12 +1275,14 @@ network-usb-only = Только USB
 ## panels/settings/printer/connection.rs
 
 connection-usb-note = Нарезанное сохраняется в файл и переносится на флешке.
-connection-found = Найдены в сети
+connection-protocol = Протокол
+connection-printers = Принтеры
+connection-found = Найдены рядом
+found-add = Добавить
 connection-scanning = Сканирование...
 connection-scan-again = Сканировать снова
 connection-add = Добавить
 connection-address-hint = Добавить по адресу, 192.168.1.42
-connection-listed = Принтеры, на которые отправляет этот принтер
 connection-none-listed = Пока нет: отметьте их ниже или добавьте по адресу.
 connection-speaks = Работает по { $theirs }, а не по { $ours }
 connection-not-found = Не найден в сети
@@ -1793,6 +1798,7 @@ scope-plate = все модели на платформе ({ $count })
 
 models-broken = Повреждена
 models-title = Модели
+models-nothing-here = На этой платформе ничего нет
 models-selected = Выбрано: { $count }
 models-picked = выбрано: { $count }
 models-project = · { $name }
@@ -2183,11 +2189,8 @@ exchange-choose-printer-resin = сначала выберите принтер, 
 find-group-tools = Инструменты
 find-group-actions = Действия
 find-group-models = Модели
-find-keys-move = ↑ ↓
 find-move = выбрать
-find-keys-open = Enter
 find-open = открыть
-find-close = закрыть
 find-nothing = Под таким названием ничего нет
 
 ## panels/inspector/scope.rs

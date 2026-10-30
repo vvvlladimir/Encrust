@@ -305,12 +305,18 @@ fn the_sheet_of_keys() {
     picture("sheet", app);
 }
 
-/// Find over a picked model, nothing typed: every tool, action and model by group.
+/// Find over a picked model with `hol` typed: the tool, the actions and the models it finds.
 #[test]
 fn the_find_palette() {
     let mut app = pictured();
     app.view.options.find = true;
-    picture("find", app);
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
+    harness
+        .ctx
+        .data_mut(|data| data.insert_temp(egui::Id::new("find"), "hol".to_owned()));
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("find");
+    let _ = harness.take_snapshot_results();
 }
 
 #[test]
@@ -387,6 +393,15 @@ fn the_printers_a_profile_sends_to() {
         board("3D Printer", "bb", 140),
         board("3D Printer", "cc", 151),
     ];
+    let heard = |state: &str, busy: bool| {
+        crate::network::Reading::State(printer_link::State {
+            state: state.to_owned(),
+            busy,
+            ..printer_link::State::default()
+        })
+    };
+    app.machine.network.hear("sdcp:aa", heard("printing", true));
+    app.machine.network.hear("sdcp:bb", heard("idle", false));
     if let Some(draft) = app.machine.settings.printer.as_mut() {
         draft.values.connection = printer_profiles::Connection::Sdcp;
         draft.values.machines = vec![

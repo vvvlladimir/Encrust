@@ -311,16 +311,20 @@ pub fn scan_notes(ui: &mut egui::Ui, network: &Network) {
     }
 }
 
-/// One line for a printer's state, for the list in the printer settings.
-pub fn summary(reach: Reach, reading: Option<&Reading>) -> String {
+/// One line for a printer's state, for the list in the printer settings, and its colour.
+pub fn summary(reach: Reach, reading: Option<&Reading>) -> (String, Color32) {
     let face = face(reach, reading);
+    let tint = colour_of(face.light);
     match face.job {
         Some(Job {
             file,
             progress: Some(progress),
             ..
-        }) => format!("{}, {file}, {:.0}%", face.word, progress * 100.0),
-        _ => face.word,
+        }) => (
+            format!("{}, {file}, {:.0}%", face.word, progress * 100.0),
+            tint,
+        ),
+        _ => (face.word, tint),
     }
 }
 
@@ -512,9 +516,12 @@ mod tests {
     #[test]
     fn the_settings_line_carries_the_share_done() {
         let reading = Reading::State(printing());
+        let (line, tint) = summary(Reach::Answered, Some(&reading));
+        assert_eq!(line, "Exposing, dragon.goo, 15%");
         assert_eq!(
-            summary(Reach::Answered, Some(&reading)),
-            "Exposing, dragon.goo, 15%"
+            tint,
+            theme::colors().accent,
+            "a print running is in the accent"
         );
     }
 

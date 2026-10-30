@@ -176,7 +176,7 @@ fn arc_points(center: Pos2, radius: f32, from: f32, share: f32) -> Vec<Pos2> {
 
 /// The line the ring says on hover: the printer and what it is doing.
 fn hover_line(network: &Network, target: &Target<'_>) -> String {
-    let state = super::summary(network.reach(target), network.reading(target));
+    let (state, _) = super::summary(network.reach(target), network.reading(target));
     format!("{}: {state}", network.label(target))
 }
 

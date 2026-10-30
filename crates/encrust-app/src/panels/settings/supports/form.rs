@@ -4,18 +4,16 @@
 use egui::Ui;
 use printer_profiles::SupportProfile;
 
-use super::{TWO_COLUMNS_W, reset_row};
+use super::reset_row;
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::{
-    card_cell, card_row, form_card, name_row, report, settled, switched_card,
-};
+use crate::panels::settings::{form_card, name_row, report, settled, switched_card};
 use crate::panels::support_fields::Group;
 use crate::state::Machine;
 use crate::ui::describe;
 
-/// The groups row by row, the shape on the left and the placing on the right, so a row's
-/// titles stand level. Narrow, the left column comes first, then the right.
+/// The groups in the order the form lists them, one under another: each shape beside the
+/// placing it pairs with.
 const ROWS: [[Option<Group>; 2]; 5] = [
     [Some(Group::Top), Some(Group::Automatic)],
     [Some(Group::Main), Some(Group::Branching)],
@@ -46,32 +44,12 @@ pub(super) fn form(ui: &mut Ui, window: &mut Window) {
     });
 
     let saved = shipped.as_ref();
-    if ui.available_width() < TWO_COLUMNS_W {
-        let columns = [0, 1].map(|column| ROWS.iter().filter_map(move |row| row[column]));
-        for group in columns.into_iter().flatten() {
-            let mut on = group.switch(profile).map(|on| *on);
-            switched_card(ui, &group.label(), on.as_mut(), |ui| {
-                group.show(ui, profile, saved)
-            });
-            take_switch(ui, group, profile, on);
-        }
-    } else {
-        ui.spacing_mut().item_spacing.x = 12.0;
-        for row in ROWS {
-            let mut switches = row.map(|group| group.and_then(|g| g.switch(profile).map(|on| *on)));
-            card_row(ui, 2, |ui, column| {
-                let Some(group) = row[column] else {
-                    return;
-                };
-                let on = switches[column].as_mut();
-                card_cell(ui, &group.label(), on, |ui| group.show(ui, profile, saved));
-            });
-            for (group, on) in row.into_iter().zip(switches) {
-                if let Some(group) = group {
-                    take_switch(ui, group, profile, on);
-                }
-            }
-        }
+    for group in ROWS.into_iter().flatten().flatten() {
+        let mut on = group.switch(profile).map(|on| *on);
+        switched_card(ui, &group.label(), on.as_mut(), |ui| {
+            group.show(ui, profile, saved)
+        });
+        take_switch(ui, group, profile, on);
     }
 
     if settled(ui) {

@@ -8,7 +8,7 @@ use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
 use crate::ui::{
-    chooser_group, focus_ring, hint, hint_bar, hover_mix, icon, palette_dialog, theme,
+    chooser_group, focus_ring, hint, hover_mix, icon, key_row, keycap, palette_dialog, theme,
 };
 use crate::workspace::Tool;
 
@@ -171,6 +171,9 @@ fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
     if !response.has_focus() {
         response.request_focus();
     }
+    let esc = tr!("hint-esc");
+    let rect = response.rect;
+    keycap(ui.painter(), &esc, rect.right() - 16.0, rect.center().y);
     let line = response.rect.bottom();
     ui.painter().hline(
         response.rect.x_range(),
@@ -180,21 +183,23 @@ fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
     response.changed()
 }
 
-/// The keys that work the palette, at its foot.
+/// The keys that work the palette, on a strip of its own at its foot.
 fn foot(ui: &mut egui::Ui) {
-    let pairs = [
-        (tr!("find-keys-move"), tr!("find-move")),
-        (tr!("find-keys-open"), tr!("find-open")),
-        (tr!("hint-esc"), tr!("find-close")),
-    ];
-    let pairs: Vec<(&str, &str)> = pairs
-        .iter()
-        .map(|(key, what)| (key.as_str(), what.as_str()))
-        .collect();
-    ui.add_space(PAD);
-    ui.vertical_centered(|ui| hint_bar(ui, &pairs));
-    ui.add_space(PAD);
+    let (move_to, open) = (tr!("find-move"), tr!("find-open"));
+    let keys: [(&[&str], &str); 2] = [(&["↑", "↓"], &move_to), (&[icon::KEY_RETURN], &open)];
+    let top = ui.cursor().top();
+    ui.painter().hline(
+        ui.max_rect().x_range(),
+        top,
+        egui::Stroke::new(1.0, theme::colors().hairline),
+    );
+    egui::Frame::new()
+        .inner_margin(egui::Margin::symmetric(16, 6))
+        .show(ui, |ui| key_row(ui, &keys, FOOT_H));
 }
+
+/// The foot's row, points.
+const FOOT_H: f32 = 22.0;
 
 /// The entries found, the lit one washed. Answers the one clicked.
 fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
