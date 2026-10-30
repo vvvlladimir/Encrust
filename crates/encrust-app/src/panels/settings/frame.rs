@@ -151,6 +151,11 @@ pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response
     response
 }
 
+/// The mark down the left edge of the picked row, points.
+const PICKED_MARK_W: f32 = 2.0;
+/// How much of the name column the box a name is typed in takes.
+const NAME_BOX_SHARE: f32 = 0.6;
+
 /// The columns of a table: names, each start as a share of the width, how many lead with
 /// words before figures, and the room before the first, where a row may draw a mark.
 pub(super) struct Table {
@@ -192,8 +197,20 @@ impl Table {
         (pos2(right, y), egui::Align2::RIGHT_CENTER)
     }
 
-    /// One row named `name`, washed while `picked`, with `cells` drawn in their columns:
-    /// the name in full, the other words dimmer, the figures in the figure face.
+    /// Where the name of a row in `rect` is typed in: from the name's start over most of its
+    /// column.
+    pub fn name_box(&self, rect: Rect) -> Rect {
+        let column = rect.width() * self.columns.get(1).copied().unwrap_or(1.0) - self.lead;
+        let left = rect.left() + self.lead;
+        Rect::from_center_size(
+            pos2(left + column * NAME_BOX_SHARE / 2.0, rect.center().y),
+            vec2(column * NAME_BOX_SHARE, theme::FIELD_H),
+        )
+    }
+
+    /// One row named `name`, washed and marked at its left edge while `picked`, with `cells`
+    /// drawn in their columns: the name in full, the other words dimmer, the figures in the
+    /// figure face, dimmer too but on the picked row.
     pub fn row(&self, ui: &mut Ui, name: &str, picked: bool, cells: &[String]) -> egui::Response {
         let colors = theme::colors();
         let size = vec2(ui.available_width(), theme::TABLE_ROW_H);
@@ -207,12 +224,20 @@ impl Table {
         };
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, theme::R_CONTROL, fill);
+        if picked {
+            let mark = rect.with_max_x(rect.left() + PICKED_MARK_W);
+            painter.rect_filled(mark, 0.0, colors.accent);
+        }
+        let figures = match picked {
+            true => colors.text_high,
+            false => colors.text_mid,
+        };
         for (index, text) in cells.iter().enumerate() {
             let (at, align) = self.cell(rect, index);
             let (font, tint) = match index {
                 0 => (theme::label(), colors.text_high),
                 _ if index < self.words => (theme::label(), colors.text_mid),
-                _ => (theme::figures(12.5), colors.text_high),
+                _ => (theme::figures(12.5), figures),
             };
             painter.text(at, align, text, font, tint);
         }

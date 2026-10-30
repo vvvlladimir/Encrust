@@ -168,7 +168,7 @@ pub fn mode_group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         Frame::new()
             .fill(colors.sunken)
             .stroke(egui::Stroke::new(1.0, colors.hairline))
-            .corner_radius(theme::R_CONTROL)
+            .corner_radius(around_controls(MODE_GROUP_PAD))
             .inner_margin(MODE_GROUP_PAD)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
@@ -183,18 +183,18 @@ pub fn mode_group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 const MODE_GROUP_PAD: f32 = 2.0;
 
 /// A [`mode_group`] standing as a column, as narrow as its toggles, placed by its parent's
-/// layout: the toggles `add` puts in stacked, `MODE_COLUMN_GAP` apart.
+/// layout: the toggles `add` puts in stacked.
 pub fn mode_column<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let colors = theme::colors();
     Frame::new()
         .fill(colors.sunken)
         .stroke(egui::Stroke::new(1.0, colors.hairline))
-        .corner_radius(theme::R_CONTROL)
-        .inner_margin(MODE_COLUMN_PAD)
+        .corner_radius(around_controls(MODE_GROUP_PAD))
+        .inner_margin(MODE_GROUP_PAD)
         .show(ui, |ui| {
             ui.set_width(theme::ICON_SIZE);
             ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = MODE_COLUMN_GAP;
+                ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
                 add(ui)
             })
             .inner
@@ -202,9 +202,11 @@ pub fn mode_column<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         .inner
 }
 
-/// Room inside a mode column around its toggles, and between them.
-const MODE_COLUMN_PAD: f32 = 4.0;
-const MODE_COLUMN_GAP: f32 = 4.0;
+/// The rounding of a bordered group whose controls sit `pad` inside its 1-point stroke,
+/// concentric with theirs.
+fn around_controls(pad: f32) -> egui::CornerRadius {
+    egui::CornerRadius::same(theme::R_CONTROL.nw + (pad + 1.0) as u8)
+}
 
 /// What a card says when it has nothing to work on: a large glyph over what is missing and
 /// how to put it there, centred.

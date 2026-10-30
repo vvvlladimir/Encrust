@@ -1,5 +1,5 @@
 use egui::{
-    Align, Align2, Color32, Frame, Id, Layout, Response, RichText, Sense, Ui, UiBuilder,
+    Align, Align2, Color32, Frame, Id, Layout, Rect, Response, RichText, Sense, Ui, UiBuilder,
     WidgetInfo, WidgetType, vec2,
 };
 
@@ -95,7 +95,7 @@ pub fn list_row(
                 }
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     match rename.filter(|id| is_renaming(ui, *id)) {
-                        Some(id) => action.renamed = rename_field(ui, id),
+                        Some(id) => action.renamed = rename_field(ui, id, |edit| edit),
                         None => {
                             ui.label(RichText::new(label).font(theme::label()).color(text));
                         }
@@ -107,28 +107,47 @@ pub fn list_row(
     if let Some(id) = rename
         && row.double_clicked()
     {
-        ui.data_mut(|data| data.insert_temp(id, label.to_owned()));
-        ui.memory_mut(|memory| memory.request_focus(id));
+        start_rename(ui, id, label);
     }
     action.picked = !action.removed && !action.toggled && row.clicked();
     action.row = Some(row);
     action
 }
 
-fn is_renaming(ui: &Ui, id: Id) -> bool {
+/// Turns the name under `id` into a field holding `name`, focused, for [`rename_box`].
+pub fn start_rename(ui: &Ui, id: Id, name: &str) {
+    ui.data_mut(|data| data.insert_temp(id, name.to_owned()));
+    ui.memory_mut(|memory| memory.request_focus(id));
+}
+
+/// Whether the name under `id` is being typed.
+pub fn is_renaming(ui: &Ui, id: Id) -> bool {
     ui.data(|data| data.get_temp::<String>(id).is_some())
+}
+
+/// A table row's name being typed, boxed in `rect`: the new name once Enter or a click
+/// elsewhere takes it.
+pub fn rename_box(ui: &mut Ui, rect: Rect, id: Id) -> Option<String> {
+    let layout = Layout::left_to_right(Align::Center);
+    let mut child = ui.new_child(UiBuilder::new().max_rect(rect).layout(layout));
+    rename_field(&mut child, id, |edit| {
+        super::text_box(edit).background_color(theme::colors().sunken)
+    })
 }
 
 /// The field a name is typed in. The buffer lives in memory so a keystroke renames
 /// nothing; an empty name is refused, and a retype is the only undo it needs.
-fn rename_field(ui: &mut Ui, id: Id) -> Option<String> {
+fn rename_field(
+    ui: &mut Ui,
+    id: Id,
+    style: impl FnOnce(egui::TextEdit<'_>) -> egui::TextEdit<'_>,
+) -> Option<String> {
     let mut text = ui.data(|data| data.get_temp::<String>(id).unwrap_or_default());
-    let response = ui.add(
-        egui::TextEdit::singleline(&mut text)
-            .id(id)
-            .font(theme::label())
-            .desired_width(ui.available_width()),
-    );
+    let edit = egui::TextEdit::singleline(&mut text)
+        .id(id)
+        .font(theme::label())
+        .desired_width(ui.available_width());
+    let response = ui.add(style(edit));
     if !response.lost_focus() {
         ui.data_mut(|data| data.insert_temp(id, text));
         return None;
