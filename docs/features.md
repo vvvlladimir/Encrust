@@ -783,6 +783,9 @@ address in a video player).
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
+- **File name** in Settings → General: a template a sliced file is named by, saved or sent
+  to the printer — `{model}`, `{ext}` (the model's file type), `{printer}`, `{resin}`, `{layer}` (µm), `{plate}`, `{date}`,
+  `{time}` — with the name it makes now shown under it; `encrust batch --name` takes the same.
 - **Reduce motion** in Settings → General stops every animation in the window.
 - **Appearance** in Settings → General: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,

@@ -22,6 +22,7 @@ core-joint.workspace = true
 core-text.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true
+jiff.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-slicer.workspace = true
@@ -97,6 +98,8 @@ wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
 # A browser names its languages through `navigator.languages`.
 sys-locale = { workspace = true, features = ["js"] }
+# A browser tells the time and its zone, which a sliced file's name may carry, through JavaScript.
+jiff = { workspace = true, features = ["js"] }
 web-sys = { workspace = true, features = [
     "Blob",
     "Document",

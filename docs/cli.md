@@ -509,6 +509,16 @@ encrust batch models/ \
   --printer elegoo-mars-4-ultra --center --orient --supports light -o out/
 ```
 
+`--name` names each file by a template, as the window's File name setting does: `{model}`,
+`{ext}` (the model's own extension), `{printer}`, `{resin}`, `{layer}` in µm, `{plate}`,
+`{date}` and `{time}` (local, `09-05`); the printer's extension follows, and what a file
+system refuses becomes `_`. A template giving two models one file is refused:
+
+```sh
+encrust batch models/ --printer elegoo-mars-4-ultra --resin my-grey \
+  --name "{model}_{resin}_{layer}um_{date}" -o out/
+```
+
 ## The window
 
 The window, optionally opening a model on startup:

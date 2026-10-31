@@ -23,6 +23,7 @@ core-slicer.workspace = true
 core-supports.workspace = true
 core-thumbnail.workspace = true
 core-volume.workspace = true
+jiff.workspace = true
 printer-profiles.workspace = true
 rayon.workspace = true
 serde.workspace = true

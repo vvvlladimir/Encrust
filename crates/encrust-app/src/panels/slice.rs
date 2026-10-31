@@ -1,4 +1,5 @@
 use anyhow::Context as _;
+use core_engine::{NameFields, file_stem};
 use printer_profiles::Connection;
 
 use crate::i18n::tr;
@@ -7,6 +8,7 @@ use crate::job::SlicedFormat;
 use crate::job::{applied_to, label_of};
 use crate::network::{Reach, temporary_path};
 use crate::panels::{Window, destination};
+use crate::prefs::General;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
@@ -34,7 +36,7 @@ fn slice_to_file(window: &mut Window, run: Run) {
         &mut window.machine.status,
         run,
         Via::File,
-        window.machine.general.sliced_dir.as_deref(),
+        &window.machine.general,
     );
 }
 
@@ -84,7 +86,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             &mut window.machine.status,
             Run::ThisPlate,
             via,
-            window.machine.general.sliced_dir.as_deref(),
+            &window.machine.general,
         ),
         Some(Press::StartPrint) => window
             .machine
@@ -279,18 +281,20 @@ enum Run {
     EveryPlate,
 }
 
-/// Slices into a file the user names, the dialog opening in `folder` when there is one.
+/// Slices into a file the user names, the dialog opening on the name `general` makes and in
+/// its folder when there is one.
 fn start(
     scene: &Scene,
     slicing: &mut Slicing,
     status: &mut Status,
     run: Run,
     via: Via,
-    folder: Option<&std::path::Path>,
+    general: &General,
 ) {
     let format = slicing.format;
+    let name = file_name(scene, slicing, &general.file_name);
     if via == Via::Printer {
-        let path = temporary_path(&default_file_name(scene, format));
+        let path = temporary_path(&name);
         slicing.send_when_written();
         let started = slicing
             .start(scene, scene.active_plate(), path)
@@ -298,7 +302,7 @@ fn start(
         let _ = status.report(&tr!("slice-slicing"), started);
         return;
     }
-    let name = default_file_name(scene, format);
+    let folder = general.sliced_dir.as_deref();
     let Some(path) = save_path(&name, format, slicing.printer.as_ref(), folder) else {
         return;
     };
@@ -358,21 +362,49 @@ fn save_path(
     Some(name.into())
 }
 
-/// The selected model's name, or the first one's, so the dialog opens on something
-/// recognisable.
-fn default_file_name(scene: &Scene, format: SlicedFormat) -> String {
-    let stem = scene
+/// What a file sliced now is called: `template` over the selected model, or the first one,
+/// the machine, the resin and the plate in hand, with the chosen format's extension.
+pub fn file_name(scene: &Scene, slicing: &Slicing, template: &str) -> String {
+    let name = scene
         .selected()
         .and_then(|id| scene.get(id))
         .or_else(|| scene.objects().first())
         .map_or("model", |object| object.name.as_str());
-    format!("{stem}.{}", format.extension())
+    let (model, model_ext) = split_mesh_extension(name);
+    let fields = NameFields {
+        model,
+        model_ext,
+        printer: slicing.printer.as_ref().map_or("", |printer| &printer.name),
+        resin: &slicing.material.name,
+        layer_height_mm: slicing.layer_height_mm(),
+        plate: scene.active_plate() + 1,
+        when: jiff::Zoned::now().datetime(),
+    };
+    let stem = file_stem(template, &fields);
+    format!("{stem}.{}", slicing.format.extension())
+}
+
+/// A model's name, which keeps the extension of the file it came from, and that extension
+/// apart; a name ending in no mesh extension is all name.
+fn split_mesh_extension(name: &str) -> (&str, &str) {
+    match name.rsplit_once('.') {
+        Some((stem, ext))
+            if !stem.is_empty()
+                && crate::files::MESHES
+                    .iter()
+                    .any(|mesh| mesh.eq_ignore_ascii_case(ext)) =>
+        {
+            (stem, ext)
+        }
+        _ => (name, ""),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scene::ImportSummary;
+    use core_engine::DEFAULT_TEMPLATE;
     use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
 
     fn scene_with_a_model(name: &str) -> Scene {
@@ -406,16 +438,41 @@ mod tests {
 
     #[test]
     fn the_save_dialog_opens_on_the_selected_models_name() {
-        let scene = scene_with_a_model("bracket");
-        assert_eq!(default_file_name(&scene, SlicedFormat::Goo), "bracket.goo");
+        let scene = scene_with_a_model("bracket.stl");
+        let mut slicing = Slicing::default();
+        slicing.format = SlicedFormat::Goo;
         assert_eq!(
-            default_file_name(&scene, SlicedFormat::Ctb(core_pipeline::CtbVersion::V5)),
+            file_name(&scene, &slicing, DEFAULT_TEMPLATE),
+            "bracket.goo",
+            "the model's own extension is not part of its name"
+        );
+        assert_eq!(
+            file_name(&scene, &slicing, "{model}_{ext}"),
+            "bracket_stl.goo"
+        );
+        assert_eq!(
+            file_name(&Scene::default(), &slicing, DEFAULT_TEMPLATE),
+            "model.goo"
+        );
+        slicing.format = SlicedFormat::Ctb(core_pipeline::CtbVersion::V5);
+        assert_eq!(
+            file_name(&scene, &slicing, DEFAULT_TEMPLATE),
             "bracket.ctb",
             "the chosen format names the file the dialog opens on"
         );
+    }
+
+    #[test]
+    fn the_name_follows_the_template_written_in_settings() {
+        let scene = scene_with_a_model("bracket.v2");
+        let mut slicing = Slicing::default();
+        slicing.format = SlicedFormat::Goo;
+        slicing.material.name = "Grey".to_owned();
+        slicing.material.layer_height_mm = 0.05;
         assert_eq!(
-            default_file_name(&Scene::default(), SlicedFormat::Goo),
-            "model.goo"
+            file_name(&scene, &slicing, "{model}_{resin}_{layer}um_p{plate}"),
+            "bracket.v2_Grey_50um_p1.goo",
+            "a dot that ends no mesh extension stays in the name"
         );
     }
 
