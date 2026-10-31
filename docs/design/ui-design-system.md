@@ -191,7 +191,8 @@ paints from tokens only.
 | `split_readings` | Figures split two ways, the models' and the supports': the two heads in medium `text_mid` over their columns, a row a name and its two figures, a hairline under every row |
 | `card_title` | The title of a card that states figures rather than a tool, in `text_high`, an aside quieter at its right |
 | `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |
-| `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it, Esc reaching it before the window it stands in. What it costs is its tooltip. The bin's framed look is a `companion_square` |
+| `quiet_square` | The same square bare, its glyph in the mid tone: a preset row's Save, lighter than the picker it serves. Both, the bin and the key sheet's glyphs paint through `SquareLook` |
+| `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it, Esc reaching it before the window it stands in. What it costs is its tooltip. The bin's framed look is a `companion_square`, its quiet one a `quiet_square` |
 | `rail_button` | A tool in the tool row, a glyph over its name, washed in the accent when it is the tool in use, with a dot while the tool needs attention and its key's digit while the pointer is on the row |
 | `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
 | `Segmented` | Mutually exclusive choices sunk in one bordered track, the chosen one a pill raised in the accent's wash and ringed in `line` |

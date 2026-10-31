@@ -3,7 +3,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::status::Status;
 use crate::ui::{
-    BinLook, DropdownFace, Lead, MENU_GAP, bin_button, chooser_frame, dropdown, hairline, theme,
+    DropdownFace, Lead, MENU_GAP, SquareLook, bin_button, chooser_frame, dropdown, hairline, theme,
 };
 use crate::workspace::Tool;
 
@@ -77,7 +77,13 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
         });
     save_button(ui, window, &hand);
     let (act, tip) = removal(rows.len(), active);
-    if bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, active.holds > 0) {
+    if bin_button(
+        ui,
+        theme::BUTTON_H,
+        SquareLook::Quiet,
+        &tip,
+        active.holds > 0,
+    ) {
         acts.push(act);
     }
     take(window, pick);

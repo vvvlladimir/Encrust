@@ -44,6 +44,24 @@ pub fn keycap(painter: &Painter, text: &str, right: f32, center_y: f32) -> f32 {
 
 /// The keys that work a window, at its foot: each set of caps then what they do in
 /// `text_low`, left to right on one row of `height` points.
+/// The caps of one chord drawn leftwards from `right`, `KEY_GAP` apart; returns the left edge.
+pub fn chord_caps(painter: &Painter, chord: &[&str], right: f32, center_y: f32) -> f32 {
+    let mut left = right;
+    for cap in chord.iter().rev() {
+        left = keycap(painter, cap, left, center_y) - KEY_GAP;
+    }
+    left + KEY_GAP
+}
+
+/// How wide [`chord_caps`] draws `chord`.
+pub fn chord_width(painter: &Painter, chord: &[&str]) -> f32 {
+    let caps: f32 = chord
+        .iter()
+        .map(|cap| keycap_width(painter, cap) + KEY_GAP)
+        .sum();
+    caps - KEY_GAP
+}
+
 pub fn key_row(ui: &mut Ui, keys: &[(&[&str], &str)], height: f32) {
     let colors = theme::colors();
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -51,11 +69,9 @@ pub fn key_row(ui: &mut Ui, keys: &[(&[&str], &str)], height: f32) {
     let y = rect.center().y;
     let mut x = rect.left();
     for (caps, what) in keys {
-        for cap in *caps {
-            let width = keycap_width(painter, cap);
-            keycap(painter, cap, x + width, y);
-            x += width + KEY_GAP;
-        }
+        let width = chord_width(painter, caps);
+        chord_caps(painter, caps, x + width, y);
+        x += width + KEY_GAP;
         let words = painter.text(
             pos2(x + 2.0, y),
             egui::Align2::LEFT_CENTER,

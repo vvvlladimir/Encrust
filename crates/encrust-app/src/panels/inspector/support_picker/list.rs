@@ -1,7 +1,7 @@
 use super::rows::{Act, InHand, Pick, Presets, Row};
 use super::{LINE_H, SHAPE_INDENT, count_at, swatch};
 use crate::i18n::tr;
-use crate::ui::{BinLook, chooser_group, confirm_bin, focus_ring, hairline, icon, theme};
+use crate::ui::{SquareLook, chooser_group, confirm_bin, focus_ring, hairline, icon, theme};
 use egui::{Sense, vec2};
 
 /// The open picker: the automatic preset and its shapes, each group by hand, the empty
@@ -325,7 +325,7 @@ fn group_icons(
         let bin = ui.interact(bin_at, id.with("bin"), Sense::click());
         took |= bin.clicked();
         let (act, tip) = removal(groups, row);
-        if confirm_bin(ui, bin, BinLook::Quiet, &tip, true) {
+        if confirm_bin(ui, bin, SquareLook::Quiet, &tip, true) {
             acts.push(act);
         }
     }

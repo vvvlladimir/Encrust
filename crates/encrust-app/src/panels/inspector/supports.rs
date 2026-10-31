@@ -13,8 +13,8 @@ use crate::state::Doc;
 use crate::status::Status;
 use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
-    BinLook, bin_button, compact_button, companion_button, describe, icon, icon_toggle, number_row,
-    primary_button, progress_bar, readings, secondary_button, section, theme, tone,
+    SquareLook, bin_button, compact_button, companion_button, describe, icon, icon_toggle,
+    number_row, primary_button, progress_bar, readings, secondary_button, section, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -218,7 +218,7 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
             start(window, Side::Outside);
         }
         let tip = tr!("supports-remove-all-tooltip");
-        all = bin_button(ui, theme::PRIMARY_H, BinLook::Framed, &tip, points > 0);
+        all = bin_button(ui, theme::PRIMARY_H, SquareLook::Framed, &tip, points > 0);
     });
     if all {
         for object in window.doc.scene.targets_mut() {
@@ -309,7 +309,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         regroup = compact_button(ui, &tr!("supports-move-to-group"), width).clicked();
         regrow = compact_button(ui, &tr!("supports-grow-these-again"), width).clicked();
         let tip = tr!("supports-remove-these");
-        remove = bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, true);
+        remove = bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, true);
     });
     if regroup {
         let active = window.tools.supports.active;

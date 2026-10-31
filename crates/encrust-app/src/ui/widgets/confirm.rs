@@ -1,9 +1,9 @@
 //! An action undo cannot take back asks by a second press: the first arms the control for
 //! `motion::ARMED_S`, the second acts, and Esc, a click elsewhere or the time disarms it.
 
-use egui::{Id, Key, Modifiers, Response, Sense, Ui, WidgetInfo, WidgetType, vec2};
+use egui::{Id, Key, Modifiers, Response, Ui, WidgetInfo, WidgetType, vec2};
 
-use super::button::{Face, GLYPH_W, Skin, paint_button};
+use super::button::{Face, GLYPH_W, Skin, paint_button, sense_for};
 use crate::i18n::tr;
 use crate::ui::{icon, theme, theme::motion};
 
@@ -95,68 +95,15 @@ pub struct Confirm<'a> {
 /// its `glyph` at rest, armed `asked` on the danger's wash with a question mark. Answers
 /// the second press.
 pub fn confirm_button(ui: &mut Ui, confirm: &Confirm<'_>) -> bool {
-    let &Confirm {
-        glyph,
-        text,
-        asked,
-        tooltip,
-        enabled,
-    } = confirm;
-    let colors = theme::colors();
-    let widest = [text, asked]
-        .iter()
-        .map(|words| {
-            let galley =
-                ui.painter()
-                    .layout_no_wrap((*words).to_owned(), theme::label(), colors.text_high);
-            galley.size().x
-        })
-        .fold(0.0, f32::max);
-    let size = vec2(widest + GLYPH_W + 24.0, theme::BUTTON_H);
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (_, response) = ui.allocate_exact_size(size, sense);
-    let Arming { armed, fired } = arm(ui, &response, enabled);
-    let (face, skin) = if armed {
-        let face = Face {
-            glyph: icon::ARMED,
-            text: asked,
-            font: theme::label(),
-        };
-        let skin = Skin {
-            fill: colors.danger_wash,
-            foreground: colors.danger,
-            border: Some(armed_ring(ui.ctx())),
-            hovered: colors.danger_wash,
-            pressed: colors.danger_wash,
-        };
-        (face, skin)
-    } else {
-        let face = Face {
-            glyph,
-            text,
-            font: theme::label(),
-        };
-        let foreground = if enabled {
-            colors.danger
-        } else {
-            colors.text_low
-        };
-        let skin = Skin {
-            fill: egui::Color32::TRANSPARENT,
-            foreground,
-            border: None,
-            hovered: colors.danger_wash,
-            pressed: colors.active,
-        };
-        (face, skin)
-    };
+    let size = vec2(widest(ui, confirm) + GLYPH_W + 24.0, theme::BUTTON_H);
+    let (_, response) = ui.allocate_exact_size(size, sense_for(confirm.enabled));
+    let Arming { armed, fired } = arm(ui, &response, confirm.enabled);
+    let (face, skin) = face_and_skin(ui, confirm, armed);
     let label = face.text.to_owned();
+    let enabled = confirm.enabled;
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &label));
     paint_button(ui, &response, &face, &skin, enabled);
+    let tooltip = confirm.tooltip;
     let response = match tooltip.is_empty() {
         true => response,
         false => response
@@ -167,6 +114,59 @@ pub fn confirm_button(ui: &mut Ui, confirm: &Confirm<'_>) -> bool {
         response.on_hover_text(tr!("confirm-click-again"));
     }
     fired
+}
+
+/// The wider of what the button says at rest and armed, so arming never moves its row.
+fn widest(ui: &Ui, confirm: &Confirm<'_>) -> f32 {
+    let colors = theme::colors();
+    [confirm.text, confirm.asked]
+        .iter()
+        .map(|words| {
+            let font = theme::label();
+            let galley = ui
+                .painter()
+                .layout_no_wrap((*words).to_owned(), font, colors.text_high);
+            galley.size().x
+        })
+        .fold(0.0, f32::max)
+}
+
+/// What the button says and how it is painted: the question on the danger's wash while
+/// armed, its glyph and words in the danger at rest.
+fn face_and_skin<'a>(ui: &Ui, confirm: &Confirm<'a>, armed: bool) -> (Face<'a>, Skin) {
+    let colors = theme::colors();
+    if armed {
+        let face = Face {
+            glyph: icon::ARMED,
+            text: confirm.asked,
+            font: theme::label(),
+        };
+        let skin = Skin {
+            fill: colors.danger_wash,
+            foreground: colors.danger,
+            border: Some(armed_ring(ui.ctx())),
+            hovered: colors.danger_wash,
+            pressed: colors.danger_wash,
+        };
+        return (face, skin);
+    }
+    let face = Face {
+        glyph: confirm.glyph,
+        text: confirm.text,
+        font: theme::label(),
+    };
+    let skin = Skin {
+        fill: egui::Color32::TRANSPARENT,
+        foreground: if confirm.enabled {
+            colors.danger
+        } else {
+            colors.text_low
+        },
+        border: None,
+        hovered: colors.danger_wash,
+        pressed: colors.active,
+    };
+    (face, skin)
 }
 
 /// How much of the danger an armed control's ring keeps at the top of its pulse, and at
@@ -191,7 +191,7 @@ mod tests {
     fn frame(ctx: &egui::Context, input: RawInput) -> Arming {
         let mut arming = None;
         fixtures::frame(ctx, input, |ui| {
-            let (_, response) = ui.allocate_exact_size(vec2(40.0, 32.0), Sense::click());
+            let (_, response) = ui.allocate_exact_size(vec2(40.0, 32.0), egui::Sense::click());
             arming = Some(arm(ui, &response, true));
         });
         arming.expect("the area draws its control every frame")

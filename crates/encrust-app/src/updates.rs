@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::i18n::tr;
 use crate::status::Status;
 
-pub use feed::{Note, Offer, Version};
+pub use feed::{Note, NoteGroup, Offer, Version};
 pub use install::{from_store, sweep};
 pub use progress::{Progress, Step};
 
