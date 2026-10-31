@@ -4,7 +4,7 @@ use core_geometry::Scalar;
 use egui::emath::Numeric;
 use egui::{Align, Color32, DragValue, Layout, Rect, Sense, TextStyle, Ui, UiBuilder, pos2, vec2};
 
-use super::{compact_button, icon_button};
+use super::icon_button;
 use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
@@ -259,44 +259,6 @@ pub fn number_row(
     };
     row(ui, label, |ui| {
         boxed_field(ui, &field, value, speed, range, Some(decimals))
-    })
-}
-
-/// A `number_row` with its unit after the label and a button either side of its box,
-/// taking `step` off the value and putting it on, inside `range`.
-#[allow(clippy::too_many_arguments)]
-pub fn stepped_row(
-    ui: &mut Ui,
-    label: &str,
-    value: &mut Scalar,
-    unit: &str,
-    speed: f64,
-    step: Scalar,
-    range: RangeInclusive<Scalar>,
-    decimals: usize,
-) -> bool {
-    let field = Field {
-        name: label,
-        unit: "",
-        width: theme::FIELD_W - 2.0 * theme::FIELD_H,
-        flagged: false,
-    };
-    let (least, most) = (*range.start(), *range.end());
-    labelled(ui, label, theme::colors().text_mid, unit, |ui| {
-        let more = compact_button(ui, "+", theme::FIELD_H)
-            .on_hover_text(tr!("field-step-more", step = step, unit = unit))
-            .clicked();
-        let typed = boxed_field(ui, &field, value, speed, range, Some(decimals));
-        let less = compact_button(ui, "\u{2212}", theme::FIELD_H)
-            .on_hover_text(tr!("field-step-less", step = step, unit = unit))
-            .clicked();
-        if more {
-            *value = (*value + step).min(most);
-        }
-        if less {
-            *value = (*value - step).max(least);
-        }
-        typed || more || less
     })
 }
 

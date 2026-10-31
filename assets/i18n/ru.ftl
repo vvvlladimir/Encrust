@@ -480,6 +480,7 @@ check-hardest-pull = Сильнейшая тяга
 check-disc = Тянет как диск площадью
 check-widest-step = Самый большой скачок
 check-grows-by = Прирост
+check-layer = Слой { $layer }
 check-layer-lower = слой { $layer }
 check-peel = Отрыв
 check-nothing-found = Ничего, что привело бы к браку
@@ -610,8 +611,6 @@ ago-weeks =
 
 ## ui/widgets/field.rs
 
-field-step-more = Больше на { $step } { $unit }
-field-step-less = Меньше на { $step } { $unit }
 field-back-to = Вернуть { $value } { $unit }
 field-printer-address = Адрес принтера
 

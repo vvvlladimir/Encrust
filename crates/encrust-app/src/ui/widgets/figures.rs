@@ -224,8 +224,10 @@ fn details_row(
     let caret = painter.layout_no_wrap(icon::CARET_DOWN.to_owned(), theme::icon(12.0), ink);
     let caret_at = rect.left_center() + vec2(DETAILS_PAD + 6.0, 0.0);
     let corner = caret_at - caret.size() / 2.0;
-    let turned = egui::epaint::TextShape::new(corner, caret, ink)
-        .with_angle_and_anchor(std::f32::consts::PI * how_open, Align2::CENTER_CENTER);
+    let turned = egui::epaint::TextShape::new(corner, caret, ink).with_angle_and_anchor(
+        std::f32::consts::PI * (1.0 - how_open),
+        Align2::CENTER_CENTER,
+    );
     painter.add(turned);
     painter.text(
         caret_at + vec2(12.0, 0.0),

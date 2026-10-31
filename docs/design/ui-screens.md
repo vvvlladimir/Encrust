@@ -101,7 +101,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (Lay on face, Centre, Mirror, Mirror a copy, Lift off the plate); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (Lay on face, Centre, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size; a click on the model places one); Already done | Hollow |
@@ -109,7 +109,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues | — | Islands (Support them · Remove them side by side); Found (`issue_row`s: kind, layer, count, the numbers on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Cups (Drill them); Peel | — (the check runs by itself) |
+| Check | the number of issues | — | Islands (Support them · Remove them side by side); Found (`issue_row`s: the layer, and at its right the kind with its reading — N, mm and MPa, mm² — the kind's name on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Cups (Drill them); Peel | — (the check runs by itself) |
 | Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
@@ -149,7 +149,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 | Heading | `card_title`: *Plate n* in `text_high`, the resin's name at the right in `text_low` | 36 |
 | Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
 | Figures | `figure_grid`: Time (`≈ 17 m 26 s`), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
-| Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; open, its row stays washed in `raised` | 26 closed |
+| Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
 | Foot | the printer row, then the action row | on `base` |
 
 The printer row is 34 tall on `raised`: printer glyph, name, a status dot and word (`ok`
