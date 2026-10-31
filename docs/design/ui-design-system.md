@@ -206,6 +206,7 @@ paints from tokens only.
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
 | `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
+| `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
 | `verdict_card` | A verdict on a card of its own in a wash: a glyph in its tint, the verdict, a line on what it means |
 | `figure_line`, `name_line`, `title_line`, `state_word`, `address_label`, `status_glyph`, `share_figure` | One line that may be cut short: a figure in its tint, a name low or plain, a state in its colour, an address in the code face; a message's glyph; a job's share, large |
 | `picker_line`, `eye_square`, `picker_foot` | A line of a picker's open list (a group's dot, its name, its count, room for an eye and a bin); the eye on it; the list's foot that leads elsewhere |
@@ -218,6 +219,7 @@ paints from tokens only.
 | `device_row`, `print_picture` | A printer as one row on `raised`, its state word and dot breathing while busy; a print's picture, or the model glyph on `sunken` |
 | `paint_layer_track`, `layer_readout` | The layer strip: its rule with the cured area behind it, scale, fill, risk bars and thumbs; the layer in a sunken box to type into, the count and the height |
 | `window_frame` | The Settings and Machine and resin windows' frame: title row, list, header, page, action bar, tabs and table |
+| `section_tab` | One of the tabs over a form that scroll to its blocks: a pill washed in the accent while its block is in view, a quiet *OFF* after it while switched off |
 | `start_title`, `drop_zone_box`, `picture_tile` | The start page's title and lede; the dashed zone a file is dropped on; a tile of a picture over a name |
 
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under

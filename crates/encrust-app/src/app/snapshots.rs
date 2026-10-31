@@ -89,6 +89,14 @@ fn the_settings_window() {
     settings.pick_support(&form.machine.slicing.catalogue, "heavy");
     settings.editing_support = true;
     results.extend(picture("settings_support_form", form));
+    let mut leaving = with_settings();
+    let settings = &mut leaving.machine.settings;
+    settings.pick_support(&leaving.machine.slicing.catalogue, "heavy");
+    settings.editing_support = true;
+    let draft = settings.support.as_mut().expect("Heavy ships");
+    draft.values.middle.diameter_mm += 0.5;
+    settings.close();
+    results.extend(picture("settings_unsaved_question", leaving));
     let mut auto = with_settings();
     let settings = &mut auto.machine.settings;
     settings.pick_auto(&auto.machine.slicing.catalogue, "default");

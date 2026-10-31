@@ -68,8 +68,8 @@ pub use layout::{
     address_label, block_title, body_and_foot, boxed, busy, card, card_foot, card_title, describe,
     described, describing, dialog, dialog_head, empty_state, field_note, figure_line, hairline,
     heading, help_mark, hint, inset, meta, mode_column, mode_group, name_line, nested, notice,
-    page_title, palette_dialog, progress_bar, progress_bar_of, readings, share_figure, state_word,
-    status_glyph, step_bar, subheading, subheading_with_switch, title_line, tool_title,
+    page_title, page_trail, palette_dialog, progress_bar, progress_bar_of, readings, share_figure,
+    state_word, status_glyph, step_bar, subheading, subheading_with_switch, title_line, tool_title,
     verdict_card, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};

@@ -1,6 +1,6 @@
 use egui::{Frame, RichText, Ui};
 
-use crate::ui::theme;
+use crate::ui::{icon, theme};
 
 /// What a card says when it has nothing to work on: a large glyph over what is missing and
 /// how to put it there, centred.
@@ -185,6 +185,34 @@ pub fn page_title(ui: &mut Ui, title: &str, aside: Option<&str>) {
     if let Some(aside) = aside {
         ui.label(RichText::new(aside).font(font).color(colors.text_low));
     }
+}
+
+/// A page's title under the page it was opened from: `parent`, which takes the way back
+/// when pressed, a caret, the title and a quieter `aside`. Answers the parent's press.
+pub fn page_trail(ui: &mut Ui, parent: &str, title: &str, aside: Option<&str>) -> egui::Response {
+    let colors = theme::colors();
+    let font = theme::page_title(theme::PAGE_TITLE_PT);
+    let back = egui::Label::new(
+        RichText::new(parent)
+            .font(theme::page_trail())
+            .color(colors.text_mid),
+    )
+    .sense(egui::Sense::click());
+    let back = ui.add(back).on_hover_cursor(egui::CursorIcon::PointingHand);
+    ui.label(
+        RichText::new(icon::CARET_RIGHT)
+            .font(theme::icon(12.0))
+            .color(colors.text_low),
+    );
+    ui.label(RichText::new(title).font(font).color(colors.text_high));
+    if let Some(aside) = aside {
+        ui.label(
+            RichText::new(aside)
+                .font(theme::page_trail())
+                .color(colors.text_low),
+        );
+    }
+    back
 }
 
 /// A verdict standing on its own card in `wash`: a glyph in `tint`, the verdict, and a line

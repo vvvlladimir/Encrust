@@ -321,7 +321,6 @@ settings-tab-network = Network
 settings-new-resin = New resin
 settings-new-printer = New printer
 settings-new-profile = New profile
-settings-support-profile = Supports profile
 settings-copy-name = { $name } copy
 
 ## supports.rs
@@ -973,6 +972,8 @@ support-thin-down-off = A support that lands on the model keeps the regular pill
 support-small-pillar-note = Used where a support runs from one part of the model to another. Both ends sink into a surface; a longer run keeps the regular width.
 support-no-branching = Every tip stands on a column of its own.
 support-no-grid = Trunks stand where the tips merge, wherever that is.
+support-no-raft = The feet stand straight on the plate.
+support-no-bracing = Every trunk stands on its own.
 support-tip-help = The only part that touches the model. A wider contact holds better but leaves a bigger mark; the bite sinks it in so it does not tear off mid-print. Length is the cone from the tip to the column, and a sphere grips a heavy overhang harder than a plane.
 support-body-help = Diameter is how thick the column is: thicker is stiffer and takes more resin. Clearance is the air the column keeps from the model, so it never cures onto the part. Trunk cap is the widest a trunk may grow at its base.
 support-foot-help = The foot holds the support to the plate. Wider and thicker grips harder and is harder to take off; Tapered and Skate leave an edge a scraper gets under. Flare is how wide the column spreads before it meets the foot.
@@ -1014,14 +1015,20 @@ support-buttress-one-above = One above
 ## panels/settings/supports.rs
 
 support-table-auto = Automatic sizing
+support-tab-off = OFF
+settings-save = Save
+support-save-first = Save the profile first: this takes it as last saved.
+unsaved-title = Save the changes to { $name }?
+unsaved-what = Your edits to this profile are not saved yet.
+unsaved-discard = Discard
 support-table-manual = By hand
 support-table-tip = Tip
 support-table-spacing = Spacing
 support-cannot-add = cannot add a support profile
 support-pick-profile = Pick a support profile.
 support-reset = Reset to defaults
-support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name; under its shipped name it then changes with each update. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
-support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with; from then on it changes with each update. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
+support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name; under its shipped name it then changes with each update. A number in amber is not saved yet; the arrow beside it puts back the saved one. Undo takes a reset back.
+support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with; from then on it changes with each update. A number in amber is not saved yet; the arrow beside it puts back the saved one. Undo takes a reset back.
 support-reset-stock-help = Reset to defaults puts back the numbers a new profile starts with and keeps its name. Undo takes a reset back.
 support-cannot-save = cannot save the support profile
 

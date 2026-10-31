@@ -4,13 +4,14 @@
 use egui::Ui;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, SupportProfile};
 
-use super::reset_row;
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::{form_card, report, settled};
+use crate::panels::settings::jump::{self, Tab};
+use crate::panels::settings::{form_card, report};
 use crate::panels::support_fields::{held_up, sizes, steadying, steps};
+use crate::settings::Draft;
 use crate::state::Machine;
-use crate::ui::{field_label, theme};
+use crate::ui::{row_name, title_line};
 
 /// The cards of the form, one under another.
 #[derive(Clone, Copy)]
@@ -21,7 +22,17 @@ enum Card {
     Steadying,
 }
 
-const ROWS: [[Card; 2]; 2] = [[Card::Placing, Card::Sizes], [Card::Steps, Card::Steadying]];
+const ORDER: [Card; 4] = [Card::Placing, Card::Sizes, Card::Steps, Card::Steadying];
+
+/// The tabs over the form: a card each.
+pub(super) fn tabs() -> Vec<Tab> {
+    ORDER
+        .map(|card| Tab {
+            name: card.title(),
+            off: false,
+        })
+        .into()
+}
 
 impl Card {
     fn title(self) -> String {
@@ -37,53 +48,59 @@ impl Card {
         self,
         ui: &mut Ui,
         auto: &mut AutoProfile,
-        shipped: Option<&AutoProfile>,
+        saved: Option<&AutoProfile>,
         shapes: &[String; AUTO_SIZES],
     ) {
         match self {
-            Self::Placing => placing(ui, auto, shipped),
-            Self::Sizes => sizes(ui, auto, shipped, shapes),
-            Self::Steps => steps(ui, auto, shipped, shapes),
-            Self::Steadying => steadying(ui, auto, shipped),
+            Self::Placing => placing(ui, auto, saved),
+            Self::Sizes => sizes(ui, auto, saved, shapes),
+            Self::Steps => steps(ui, auto, saved, shapes),
+            Self::Steadying => steadying(ui, auto, saved),
         }
     }
 }
 
-/// The automatic profile open in the form, written back as it is edited.
-pub(super) fn form(ui: &mut Ui, window: &mut Window) {
+/// The automatic profile open in the form, kept until it is saved. Its name is the
+/// shipped one's, so it is shown rather than typed.
+pub(super) fn form(ui: &mut Ui, window: &mut Window, tabs: egui::Id) {
     let catalogue = &window.machine.slicing.catalogue;
     let Some(draft) = window.machine.settings.auto.as_mut() else {
         return;
     };
-    let shipped = draft.as_shipped().cloned();
+    let saved = draft.as_saved().clone();
     let shapes = shape_names(catalogue, &draft.values);
     let auto = &mut draft.values;
 
     form_card(ui, &tr!("table-profile"), |ui| {
-        field_label(ui, &auto.name, theme::colors().text_mid, "");
-        if let Some(shipped) = &shipped {
-            let stock = AutoProfile {
-                name: auto.name.clone(),
-                ..shipped.clone()
-            };
-            reset_row(ui, auto, stock, &tr!("support-reset-auto-help"));
-        }
+        ui.horizontal(|ui| {
+            row_name(ui, &tr!("settings-name"));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                title_line(ui, &auto.name);
+            });
+        });
     });
 
-    let saved = shipped.as_ref();
-    for card in ROWS.into_iter().flatten() {
+    let saved = Some(&saved);
+    for (index, card) in ORDER.into_iter().enumerate() {
+        jump::section(ui, tabs, index, ui.cursor().top());
         form_card(ui, &card.title(), |ui| card.show(ui, auto, saved, &shapes));
-    }
-
-    if settled(ui) {
-        autosave(window.machine);
     }
 }
 
+/// What Reset to defaults puts back in `draft`: the shipped numbers under its own name, or
+/// nothing for a profile this build does not ship.
+pub(super) fn stock(draft: &Draft<AutoProfile>) -> Option<AutoProfile> {
+    let shipped = draft.as_shipped()?;
+    Some(AutoProfile {
+        name: draft.values.name.clone(),
+        ..shipped.clone()
+    })
+}
+
 /// Where the profile puts supports, read through the fields a support profile has for it.
-fn placing(ui: &mut Ui, auto: &mut AutoProfile, shipped: Option<&AutoProfile>) {
+fn placing(ui: &mut Ui, auto: &mut AutoProfile, saved: Option<&AutoProfile>) {
     let stock = SupportProfile::default();
-    let saved = shipped.map(|shipped| shipped.placing_with(&stock));
+    let saved = saved.map(|saved| saved.placing_with(&stock));
     let mut placing = auto.placing_with(&stock);
     held_up(ui, &mut placing, saved.as_ref());
     auto.take_placing(&placing);
@@ -99,18 +116,22 @@ fn shape_names(catalogue: &Catalogue, auto: &AutoProfile) -> [String; AUTO_SIZES
     })
 }
 
-fn autosave(machine: &mut Machine) {
+/// Writes the profile open in the form when it holds anything unsaved. Answers whether it
+/// is written, the status saying why where it is not.
+pub(super) fn save(machine: &mut Machine) -> bool {
     let Some(draft) = machine.settings.auto.as_mut() else {
-        return;
+        return false;
     };
     if !draft.is_dirty() {
-        return;
+        return true;
     }
     let outcome = machine
         .slicing
         .catalogue
         .save_auto(&draft.id, &draft.values);
-    if report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some() {
+    let saved = report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some();
+    if saved {
         draft.mark_saved();
     }
+    saved
 }

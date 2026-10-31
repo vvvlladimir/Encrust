@@ -15,6 +15,6 @@ pub use progress::{busy, progress_bar, progress_bar_of, step_bar};
 pub use reading_rows::readings;
 pub use text::{
     address_label, block_title, card_title, empty_state, field_note, figure_line, heading, hint,
-    meta, name_line, notice, page_title, share_figure, state_word, status_glyph, subheading,
-    subheading_with_switch, title_line, tool_title, verdict_card,
+    meta, name_line, notice, page_title, page_trail, share_figure, state_word, status_glyph,
+    subheading, subheading_with_switch, title_line, tool_title, verdict_card,
 };
