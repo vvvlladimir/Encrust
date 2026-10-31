@@ -18,14 +18,16 @@ mod support_picker;
 mod supports;
 mod text;
 
-pub use check::tint as risk_tint;
+pub(crate) use check::issue_name;
+pub use check::{go_to as go_to_risks, tint as risk_tint};
 pub(super) use position::auto_orient;
 
-use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
+use egui::{Align, Layout, Sense, UiBuilder, vec2};
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::ui::{body_and_foot, card_foot, hairline, help_mark, theme};
+use crate::ui::{body_and_foot, card_foot, hairline, help_mark, mode_group, theme};
+use crate::ui::{figure_line, tool_title};
 use crate::workspace::Tool;
 
 /// The card beside the rail: the open tool, no taller than `max_h` points; its sections
@@ -33,6 +35,10 @@ use crate::workspace::Tool;
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     let tool = window.tool.card();
     header(ui, window, tool);
+    // With nothing on the plate the models card offers the way to put something there.
+    if window.doc.scene.is_empty() && tool != Tool::PrintSettings {
+        return;
+    }
     if tool == Tool::Supports {
         supports::top(ui, window);
     }
@@ -104,29 +110,20 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
     match tool {
         Tool::Position => select::fact(window.doc).and_then(plain),
         Tool::Hollow => plain(tr!(
-            "value-mm",
+            "hollow-fact",
             value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
         )),
-        Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
+        Tool::Drain => drain::fact(window),
         Tool::Check => check::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
-        Tool::Measure => match window.tools.measure.target {
-            crate::measure::Target::Points => window
-                .tools
-                .measure
-                .snapped()
-                .and_then(|snapped| plain(snapped.label())),
-            crate::measure::Target::Planes => window
-                .tools
-                .measure
-                .plane_gap()
-                .filter(crate::measure::PlaneGap::is_parallel)
-                .and_then(|_| plain(tr!("inspector-parallel"))),
-        },
-        // The Supports and Repair cards have their modes where the fact would stand.
-        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape | Tool::Repair => {
-            None
-        }
+        Tool::Cut => Some((cut::fact(window), colors.text_mid)),
+        // These cards have their modes where the fact would stand.
+        Tool::Measure
+        | Tool::Relief
+        | Tool::Supports
+        | Tool::Paint
+        | Tool::Shape
+        | Tool::Repair => None,
     }
 }
 
@@ -148,7 +145,7 @@ fn help(tool: Tool) -> String {
 
 /// The tool's glyph, name and help, its fact at the right, and the fold beside it.
 fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
-    let colors = theme::colors();
+    let _colors = theme::colors();
     let (rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), theme::INSPECTOR_HEAD_H),
         Sense::hover(),
@@ -156,28 +153,24 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     let inner = rect.shrink2(vec2(theme::PANEL_PAD, 0.0));
     let layout = Layout::left_to_right(Align::Center);
     let mut child = ui.new_child(UiBuilder::new().max_rect(inner).layout(layout));
-    child.spacing_mut().item_spacing.x = 8.0;
-    child.label(
-        RichText::new(tool.glyph())
-            .font(theme::icon(16.0))
-            .color(colors.text_low),
-    );
-    child.label(
-        RichText::new(tool.label())
-            .font(theme::tool_title())
-            .color(colors.text_high),
-    );
-    help_mark(&mut child, &[help(tool)]);
+    tool_title(&mut child, tool.glyph(), &tool.label());
+    let mut texts = vec![help(tool)];
+    if tool == Tool::Relief {
+        texts.push(relief::mode_note(window));
+    }
+    help_mark(&mut child, &texts);
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if tool == Tool::Supports {
-            supports::modes(ui, window);
-        } else if tool == Tool::Repair {
-            repair::modes(ui, window);
+        let modes: Option<fn(&mut egui::Ui, &mut Window)> = match tool {
+            Tool::Supports | Tool::Paint | Tool::Shape => Some(supports::modes),
+            Tool::Repair => Some(repair::modes),
+            Tool::Measure => Some(measure::modes),
+            Tool::Relief => Some(relief::modes),
+            _ => None,
+        };
+        if let Some(modes) = modes {
+            mode_group(ui, |ui| modes(ui, window));
         } else if let Some((text, color)) = fact(window, tool) {
-            ui.add(
-                egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))
-                    .truncate(),
-            );
+            figure_line(ui, &text, color);
         }
     });
     hairline(ui);

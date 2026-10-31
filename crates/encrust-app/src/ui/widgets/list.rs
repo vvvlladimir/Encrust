@@ -1,9 +1,9 @@
 use egui::{
-    Align, Align2, Color32, Frame, Id, Layout, Response, RichText, Sense, Ui, UiBuilder,
+    Align, Align2, Color32, Frame, Id, Layout, Rect, Response, RichText, Sense, Ui, UiBuilder,
     WidgetInfo, WidgetType, vec2,
 };
 
-use super::focus_ring;
+use super::{focus_ring, hover_mix};
 use crate::i18n::tr;
 use crate::ui::theme;
 
@@ -58,10 +58,10 @@ pub fn list_row(
     let colors = theme::colors();
     let (rect, row) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    let (fill, text) = match (selected, row.hovered()) {
-        (true, _) => (colors.picked_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (colors.raised, colors.text_high),
+    let text = colors.text_high;
+    let fill = match selected {
+        true => colors.picked_wash,
+        false => hover_mix(ui, &row, colors.raised, colors.hover),
     };
     ui.painter().rect_filled(rect, 0.0, fill);
     row.widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, label));
@@ -95,7 +95,7 @@ pub fn list_row(
                 }
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     match rename.filter(|id| is_renaming(ui, *id)) {
-                        Some(id) => action.renamed = rename_field(ui, id),
+                        Some(id) => action.renamed = rename_field(ui, id, |edit| edit),
                         None => {
                             ui.label(RichText::new(label).font(theme::label()).color(text));
                         }
@@ -107,28 +107,47 @@ pub fn list_row(
     if let Some(id) = rename
         && row.double_clicked()
     {
-        ui.data_mut(|data| data.insert_temp(id, label.to_owned()));
-        ui.memory_mut(|memory| memory.request_focus(id));
+        start_rename(ui, id, label);
     }
     action.picked = !action.removed && !action.toggled && row.clicked();
     action.row = Some(row);
     action
 }
 
-fn is_renaming(ui: &Ui, id: Id) -> bool {
+/// Turns the name under `id` into a field holding `name`, focused, for [`rename_box`].
+pub fn start_rename(ui: &Ui, id: Id, name: &str) {
+    ui.data_mut(|data| data.insert_temp(id, name.to_owned()));
+    ui.memory_mut(|memory| memory.request_focus(id));
+}
+
+/// Whether the name under `id` is being typed.
+pub fn is_renaming(ui: &Ui, id: Id) -> bool {
     ui.data(|data| data.get_temp::<String>(id).is_some())
+}
+
+/// A table row's name being typed, boxed in `rect`: the new name once Enter or a click
+/// elsewhere takes it.
+pub fn rename_box(ui: &mut Ui, rect: Rect, id: Id) -> Option<String> {
+    let layout = Layout::left_to_right(Align::Center);
+    let mut child = ui.new_child(UiBuilder::new().max_rect(rect).layout(layout));
+    rename_field(&mut child, id, |edit| {
+        super::text_box(edit).background_color(theme::colors().sunken)
+    })
 }
 
 /// The field a name is typed in. The buffer lives in memory so a keystroke renames
 /// nothing; an empty name is refused, and a retype is the only undo it needs.
-fn rename_field(ui: &mut Ui, id: Id) -> Option<String> {
+fn rename_field(
+    ui: &mut Ui,
+    id: Id,
+    style: impl FnOnce(egui::TextEdit<'_>) -> egui::TextEdit<'_>,
+) -> Option<String> {
     let mut text = ui.data(|data| data.get_temp::<String>(id).unwrap_or_default());
-    let response = ui.add(
-        egui::TextEdit::singleline(&mut text)
-            .id(id)
-            .font(theme::label())
-            .desired_width(ui.available_width()),
-    );
+    let edit = egui::TextEdit::singleline(&mut text)
+        .id(id)
+        .font(theme::label())
+        .desired_width(ui.available_width());
+    let response = ui.add(style(edit));
     if !response.lost_focus() {
         ui.data_mut(|data| data.insert_temp(id, text));
         return None;
@@ -138,22 +157,49 @@ fn rename_field(ui: &mut Ui, id: Id) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
-/// One finding in a list of them: a dot in its colour, where it is, and what it is at the
-/// right. The whole row is the button that goes there.
+/// Findings one under another, each its own rounded row, `ISSUE_GAP` apart; past
+/// `ISSUE_ROWS_SHOWN` they scroll inside the list, so the sections under it stay put.
+pub fn issue_list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let shown = ISSUE_ROWS_SHOWN as f32;
+    egui::ScrollArea::vertical()
+        .id_salt("issue-list")
+        .max_height(shown * theme::BUTTON_H + (shown - 1.0) * ISSUE_GAP)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = ISSUE_GAP;
+            add(ui)
+        })
+        .inner
+}
+
+const ISSUE_GAP: f32 = 8.0;
+/// Rows a list of findings shows before the rest scroll inside it.
+const ISSUE_ROWS_SHOWN: usize = 7;
+
+/// How strongly the accent rings the finding in hand.
+const ISSUE_RING: f32 = 0.35;
+/// Room between a finding's name and the aside after it, points.
+const ASIDE_GAP: f32 = 8.0;
+
+/// One finding in a list of them: a dot in its colour, what it is, any `aside` quieter
+/// beside it, and `detail` at the right. The whole row is the button that goes there.
 pub fn issue_row(
     ui: &mut Ui,
     tint: Color32,
-    place: &str,
+    (place, aside): (&str, Option<&str>),
     detail: &str,
     selected: bool,
 ) -> Response {
     let colors = theme::colors();
     let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    let fill = match (selected, response.hovered()) {
-        (true, _) => colors.picked_wash,
-        (false, true) => colors.hover,
-        (false, false) => colors.raised,
+        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), Sense::click());
+    let fill = match selected {
+        true => colors.picked_wash,
+        false => hover_mix(ui, &response, colors.raised, colors.hover),
+    };
+    let ring = match selected {
+        true => egui::Stroke::new(1.0, colors.accent.gamma_multiply(ISSUE_RING)),
+        false => egui::Stroke::NONE,
     };
     response.widget_info(|| {
         WidgetInfo::selected(
@@ -164,32 +210,231 @@ pub fn issue_row(
         )
     });
     let painter = ui.painter();
-    painter.rect_filled(rect, 0.0, fill);
+    painter.rect(rect, theme::R_CONTROL, fill, ring, egui::StrokeKind::Inside);
 
-    let dot = rect.left_center() + vec2(14.0, 0.0);
-    painter.circle_filled(dot, 3.5, tint);
-    let place_color = if selected {
-        colors.accent_soft
-    } else {
-        colors.text_high
-    };
-    painter.text(
-        dot + vec2(11.0, 0.0),
+    issue_words(painter, rect, tint, (place, aside), detail);
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// An issue row's dot in `tint`, its place and aside, and its detail at the right end.
+fn issue_words(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    tint: Color32,
+    (place, aside): (&str, Option<&str>),
+    detail: &str,
+) {
+    let colors = theme::colors();
+    let dot = rect.left_center() + vec2(12.0, 0.0);
+    painter.circle_filled(dot, 4.0, tint);
+    let at = dot + vec2(11.0, 0.0);
+    let named = painter.text(
+        at,
         Align2::LEFT_CENTER,
         place,
         theme::label(),
-        place_color,
+        colors.text_high,
     );
+    if let Some(aside) = aside {
+        let at = named.right_center() + vec2(ASIDE_GAP, 0.0);
+        painter.text(
+            at,
+            Align2::LEFT_CENTER,
+            aside,
+            theme::small(),
+            colors.text_low,
+        );
+    }
+    let at = rect.right_center() - vec2(12.0, 0.0);
     painter.text(
-        rect.right_center() - vec2(12.0, 0.0),
+        at,
         Align2::RIGHT_CENTER,
         detail,
-        theme::figures(11.0),
+        theme::figures(12.0),
         colors.text_mid,
     );
-    focus_ring(ui, &response, 0.0);
+}
+
+/// Something found that is not yet the user's: a dashed row of a glyph, its name (`text_low`
+/// unless `matches`), a figure such as an address, and an Add button. Answers whether Add
+/// was pressed.
+pub fn found_row(ui: &mut Ui, glyph: &str, name: &str, figure: &str, matches: bool) -> Response {
+    let colors = theme::colors();
+    let (rect, _) = ui.allocate_exact_size(
+        vec2(ui.available_width(), theme::BUTTON_H + 8.0),
+        Sense::hover(),
+    );
+    found_words(ui.painter(), rect, (glyph, name), matches);
+    let mut end = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect.shrink(4.0))
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    let add = super::inline_button(
+        &mut end,
+        crate::ui::icon::ADD,
+        &tr!("found-add"),
+        false,
+        true,
+    );
+    ui.painter().text(
+        add.rect.left_center() - vec2(10.0, 0.0),
+        Align2::RIGHT_CENTER,
+        figure,
+        theme::figures(12.0),
+        colors.text_mid,
+    );
+    add
+}
+
+/// A found row's dashed outline, its glyph and its name, `text_low` unless it `matches`.
+fn found_words(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    (glyph, name): (&str, &str),
+    matches: bool,
+) {
+    let colors = theme::colors();
+    let corners = [
+        rect.left_top(),
+        rect.right_top(),
+        rect.right_bottom(),
+        rect.left_bottom(),
+        rect.left_top(),
+    ];
+    let stroke = egui::Stroke::new(1.0, colors.line);
+    painter.extend(egui::Shape::dashed_line(
+        &corners, stroke, FOUND_DASH, FOUND_DASH,
+    ));
+    let ink = if matches {
+        colors.text_high
+    } else {
+        colors.text_low
+    };
+    let left = rect.left_center() + vec2(12.0, 0.0);
+    painter.text(
+        left,
+        Align2::LEFT_CENTER,
+        glyph,
+        theme::icon(14.0),
+        colors.text_mid,
+    );
+    painter.text(
+        left + vec2(20.0, 0.0),
+        Align2::LEFT_CENTER,
+        name,
+        theme::label(),
+        ink,
+    );
+}
+
+/// A quiet glyph at the end of a row, `right_center` its right end, that says more on a
+/// click: a model repair only had to tidy.
+pub fn row_mark(
+    ui: &mut Ui,
+    right_center: egui::Pos2,
+    id: Id,
+    glyph: &str,
+    label: &str,
+) -> Response {
+    let colors = theme::colors();
+    let spot = egui::Rect::from_center_size(
+        right_center - vec2(MARK_SIDE / 2.0, 0.0),
+        vec2(MARK_SIDE, MARK_SIDE),
+    );
+    let response = ui.interact(spot, id, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, label));
+    let ink = if response.hovered() {
+        colors.text_high
+    } else {
+        colors.text_low
+    };
+    ui.painter().text(
+        spot.center(),
+        Align2::CENTER_CENTER,
+        glyph,
+        theme::icon(14.0),
+        ink,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response
+}
+
+/// A row mark's square, points.
+const MARK_SIDE: f32 = 18.0;
+
+/// The dashes round a found row, points.
+const FOUND_DASH: f32 = 4.0;
+
+/// A state named at the end of a row, `right_center` its right end: the word in `ink` on
+/// `wash`, a pill. A click on it says more, so it is a button of its own.
+pub fn tag(
+    ui: &mut Ui,
+    right_center: egui::Pos2,
+    id: Id,
+    text: &str,
+    (ink, wash): (Color32, Color32),
+) -> Response {
+    let word = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), ink);
+    let size = word.size() + 2.0 * TAG_PAD;
+    let rect = egui::Rect::from_min_size(right_center - vec2(size.x, size.y / 2.0), size);
+    let response = ui.interact(rect, id, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, text));
+    let fill = if response.hovered() {
+        ink.gamma_multiply(TAG_HOVER_WASH)
+    } else {
+        wash
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, TAG_R, fill);
+    painter.galley(rect.min + TAG_PAD, word, ink);
+    focus_ring(ui, &response, TAG_R);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
+
+/// The same pill standing in the flow and taking no press: a heading of release notes.
+pub fn tag_label(ui: &mut Ui, text: &str, (ink, wash): (Color32, Color32)) -> Response {
+    let word = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), ink);
+    let (rect, response) = ui.allocate_exact_size(word.size() + 2.0 * TAG_PAD, Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, TAG_R, wash);
+    painter.galley(rect.min + TAG_PAD, word, ink);
+    response
+}
+
+/// One line of a list in prose, after a bullet, wrapping under its own first word.
+pub fn bullet(ui: &mut Ui, text: &str) {
+    let colors = theme::colors();
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = BULLET_GAP;
+        ui.label(
+            egui::RichText::new("\u{2022}")
+                .font(theme::label())
+                .color(colors.text_mid),
+        );
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(text)
+                    .font(theme::label())
+                    .color(colors.text_high),
+            )
+            .wrap(),
+        );
+    });
+}
+
+/// Between a bullet and its words, points.
+const BULLET_GAP: f32 = 10.0;
+
+/// Room around a tag's word, and how much of its ink washes it under the pointer.
+const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
+const TAG_HOVER_WASH: f32 = 0.24;
+const TAG_R: egui::CornerRadius = egui::CornerRadius::same(4);
 
 /// A name over the line that says more about it, drawn from `left_center`: a machine over
 /// its maker and the file it is sliced into.

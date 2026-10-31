@@ -1,7 +1,8 @@
 //! What the window remembers between runs: the machine, the resin, the values every tool
 //! is set to, the printer on the network each machine sends to, whether to look for
 //! updates, how the window behaves, how wide the two side cards were dragged, where
-//! Preview divides the model from the mask, and what each panel was switched to.
+//! Preview divides the model from the mask, what each panel was switched to, and the keys
+//! the user chose.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -24,6 +25,7 @@ use crate::profiles;
 use crate::recent::Recent;
 use crate::relief::ReliefChoice;
 use crate::repair::{Picking, RepairMode};
+use crate::shortcuts::keymap::{self, Keymap};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::status::Status;
@@ -74,9 +76,9 @@ pub struct Preferences {
     #[serde(default)]
     mask_split: Option<f32>,
     /// How wide the inspector and the plate panel were dragged, points, or `None` for the
-    /// defaults; `left_w` is new so a width saved before ADR 0348 is not taken for a drag.
+    /// defaults; `inspector_w` is new so a column dragged before ADR 0382 is forgotten.
     #[serde(default)]
-    left_w: Option<f32>,
+    inspector_w: Option<f32>,
     #[serde(default)]
     plate_w: Option<f32>,
     #[serde(default)]
@@ -86,6 +88,9 @@ pub struct Preferences {
     /// Which sections were folded and which tab of a panel was open, by widget.
     #[serde(default)]
     kept: Kept,
+    /// The keys the user put in place of the table's, by action.
+    #[serde(default)]
+    keys: Keymap,
 }
 
 /// What each tool's panel was switched to that is neither a value of the tool nor undone,
@@ -141,8 +146,36 @@ pub struct General {
     pub invert_zoom: bool,
     /// Where the dialog a sliced file is saved from opens, or `None` for the system's choice.
     pub sliced_dir: Option<std::path::PathBuf>,
+    /// What a sliced file is named after, `{model}` and the like; see `core_engine::file_stem`.
+    pub file_name: String,
     /// The language the window is written in, or `None` for the system's.
     pub language: Option<Language>,
+    /// Whether nothing in the window animates.
+    pub reduce_motion: bool,
+    /// Whether the window is light, dark, or follows the system.
+    pub appearance: Appearance,
+}
+
+/// The palette the user asked for. `System` follows the platform's own setting as it
+/// changes; see `docs/decisions/0383-a-light-palette-chosen-each-frame.md`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl Appearance {
+    /// What egui is told, so it resolves the theme each frame.
+    pub fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
 }
 
 impl Default for General {
@@ -151,7 +184,10 @@ impl Default for General {
             start_page: true,
             invert_zoom: false,
             sliced_dir: None,
+            file_name: core_engine::DEFAULT_TEMPLATE.to_owned(),
             language: None,
+            reduce_motion: false,
+            appearance: Appearance::System,
         }
     }
 }
@@ -175,11 +211,12 @@ impl Preferences {
             relief: tools.relief.choice(),
             recent: Recent::default(),
             mask_split: None,
-            left_w: None,
+            inspector_w: None,
             plate_w: None,
             general: General::default(),
             modes: Modes::of(tools, Axes::default()),
             kept: Kept::default(),
+            keys: Keymap::default(),
         }
     }
 
@@ -205,6 +242,11 @@ impl Preferences {
         }
     }
 
+    /// The same, with the keys the user chose.
+    pub fn with_keys(self, keys: Keymap) -> Self {
+        Self { keys, ..self }
+    }
+
     /// The same, with the files opened lately.
     pub fn with_recent(self, recent: &Recent) -> Self {
         Self {
@@ -218,7 +260,7 @@ impl Preferences {
     pub fn with_layout(self, options: &ViewOptions) -> Self {
         Self {
             mask_split: Some(options.mask_split),
-            left_w: options.inspector_w,
+            inspector_w: options.inspector_w,
             plate_w: Some(options.plate_w),
             ..self
         }
@@ -254,6 +296,7 @@ impl Preferences {
         window.machine.updates.prefs.clone_from(&self.updates);
         window.machine.recent.clone_from(&self.recent);
         window.machine.general.clone_from(&self.general);
+        keymap::install(self.keys.clone());
         let options = &mut window.view.options;
         if !self.general.start_page {
             options.started = true;
@@ -272,7 +315,7 @@ impl Preferences {
         }
         let range = theme::INSPECTOR_W_RANGE;
         options.inspector_w = self
-            .left_w
+            .inspector_w
             .filter(|stored| stored.is_finite())
             .map(|stored| stored.clamp(*range.start(), *range.end()));
         // Before the printer, so that applying it points the window at the machine this

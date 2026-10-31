@@ -10,6 +10,7 @@ use crate::policy::Ruling;
 use crate::printed::Printed;
 use crate::score::{Faces, OrientGoal, OrientPreset, Score};
 use crate::select::{Candidate, ranked};
+use crate::watch::{Phase, Pieces, Watch};
 
 /// The most drain holes tried as the way down: each is a candidate cut through.
 const VENTS_TRIED: usize = 8;
@@ -111,7 +112,7 @@ pub fn orient_printed(
     printed: &Printed,
     settings: &OrientSettings,
 ) -> Result<Oriented, PlateError> {
-    finalists(printed, settings, 1)?
+    finalists(printed, settings, 1, Watch::never())?
         .into_iter()
         .next()
         .ok_or(PlateError::NothingToOrient)
@@ -119,11 +120,12 @@ pub fn orient_printed(
 
 /// The best `count` ways to stand, best first and no two within `apart_deg` of each
 /// other: what a caller able to print them judges between. The first is the answer of
-/// [`orient_printed`].
+/// [`orient_printed`]. `watch` is told how far the cuts have got and may stop them.
 pub fn finalists(
     printed: &Printed,
     settings: &OrientSettings,
     count: usize,
+    watch: Watch<'_>,
 ) -> Result<Vec<Oriented>, PlateError> {
     let mesh = printed.outer;
     let faces = Faces::of(mesh)
@@ -139,13 +141,9 @@ pub fn finalists(
     let mut candidates = within_tilt(directions(mesh, settings.samples), now, settings);
     candidates.extend(&kept[1..]);
     let ranked = first_pass(&faces, settings, &candidates, envelope);
-    let mut measured = measure(
-        printed,
-        &faces,
-        settings,
-        shortlist(&ranked, settings.shortlist, kept),
-        envelope,
-    )?;
+    let shortlisted = shortlist(&ranked, settings.shortlist, kept);
+    let cuts = Pieces::start(watch, Phase::Looking, shortlisted.len())?;
+    let mut measured = measure(printed, &faces, settings, shortlisted, (envelope, &cuts))?;
     measured.extend(seated(printed, &faces, settings, now, envelope)?);
     let considered = ranked.len();
     Ok(ordered(&faces, settings, &measured, now)
@@ -210,7 +208,7 @@ fn measure(
     faces: &Faces,
     settings: &OrientSettings,
     shortlisted: Vec<Vec3>,
-    envelope: Option<&Envelope>,
+    (envelope, cuts): (Option<&Envelope>, &Pieces<'_>),
 ) -> Result<Vec<Candidate>, PlateError> {
     let lift_mm = lift_of(settings);
     let on_plate = !settings.on_supports;
@@ -224,6 +222,7 @@ fn measure(
                 on_plate,
                 settings.min_cup_mm2,
             )?;
+            cuts.finish()?;
             Ok(Candidate {
                 down,
                 score: faces.with_cut(faces.score(down), sections),

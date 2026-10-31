@@ -1,10 +1,13 @@
 //! The resin form: the exposure and motion of one resin, on one machine.
 
 mod buffer;
+mod light;
 mod motion;
 
+use light::light;
+
 use printer_profiles::{
-    Buffer, Limit, MaterialProfile, PriceUnit, PrinterLimits, PrinterTuning, ResinDetails, WaitMode,
+    Buffer, MaterialProfile, PriceUnit, PrinterLimits, PrinterTuning, ResinDetails, WaitMode,
 };
 
 use crate::i18n::tr;
@@ -12,11 +15,10 @@ use crate::panels::Window;
 use crate::panels::edge_fields;
 use crate::panels::settings::{compensation, form_card, name_row, report, settled};
 use crate::settings::{Node, ResinDraft, rename_resin};
-use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Held, Segment, Segmented, carried_row, describe, field_label, hint, limit_verdict,
-    limited_row, number_field, number_row, text_row, theme,
+    DropdownFace, DropdownRow, Held, Segment, Segmented, describe, dropdown, dropdown_menu,
+    dropdown_row, field_label, hint, limited_row, number_field, number_row, text_row, theme,
 };
 
 const FINE_STEP: f64 = 0.01;
@@ -24,6 +26,9 @@ const COARSE_STEP: f64 = 0.5;
 
 /// The currencies a price can be quoted in.
 const CURRENCIES: [&str; 6] = ["€", "$", "£", "₽", "¥", "₴"];
+
+/// A dropdown holding a currency or `kg`, points: room for the symbol and its caret.
+const SMALL_DROPDOWN_W: f32 = 64.0;
 
 /// The resin open in the list, as the printer it sits under has it, written back as it
 /// is edited.
@@ -211,23 +216,43 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
     ui.horizontal(|ui| {
         field_label(ui, &tr!("summary-price"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            egui::ComboBox::from_id_salt("resin-price-per")
-                .width(56.0)
-                .selected_text(unit_label(details.price_per))
-                .show_ui(ui, |ui| {
-                    for unit in [PriceUnit::Kilogram, PriceUnit::Litre] {
-                        ui.selectable_value(&mut details.price_per, unit, unit_label(unit));
+            let shown = unit_label(details.price_per);
+            let face = DropdownFace {
+                lead: None,
+                label: &shown,
+                edited: false,
+                count: None,
+                empty: false,
+            };
+            let response = dropdown(ui, &face, SMALL_DROPDOWN_W);
+            dropdown_menu(&response, |ui| {
+                for unit in [PriceUnit::Kilogram, PriceUnit::Litre] {
+                    let name = unit_label(unit);
+                    let row = DropdownRow::named(&name, details.price_per == unit);
+                    if dropdown_row(ui, &row).clicked() {
+                        details.price_per = unit;
+                        ui.close();
                     }
-                });
+                }
+            });
             ui.label(egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low));
-            egui::ComboBox::from_id_salt("resin-currency")
-                .width(44.0)
-                .selected_text(details.currency.clone())
-                .show_ui(ui, |ui| {
-                    for currency in CURRENCIES {
-                        ui.selectable_value(&mut details.currency, currency.to_owned(), currency);
+            let face = DropdownFace {
+                lead: None,
+                label: &details.currency,
+                edited: false,
+                count: None,
+                empty: false,
+            };
+            let response = dropdown(ui, &face, SMALL_DROPDOWN_W);
+            dropdown_menu(&response, |ui| {
+                for currency in CURRENCIES {
+                    let row = DropdownRow::named(currency, details.currency == currency);
+                    if dropdown_row(ui, &row).clicked() {
+                        details.currency = currency.to_owned();
+                        ui.close();
                     }
-                });
+                }
+            });
             number_field(
                 ui,
                 &tr!("summary-price"),
@@ -318,158 +343,4 @@ fn held_seconds_row(ui: &mut egui::Ui, label: &str, value: &mut f32, held: Held<
         Some(2),
         held,
     );
-}
-
-/// Exposure: how long each layer is lit, and how hard. The exposure is measured at the
-/// layer height above it and follows it, saying so until it is touched.
-fn light(
-    ui: &mut egui::Ui,
-    resin: &mut ResinDraft,
-    locked: &PrinterTuning,
-    limits: &PrinterLimits,
-) {
-    if locked.layer_height_mm.is_none() {
-        layer_height_row(ui, resin, &limits.layer_height_mm);
-    }
-    let was = resin
-        .carried()
-        .map(|carried| (carried.exposure_s, carried.from_mm));
-    let values = &mut resin.draft.values;
-    if locked.exposure_s.is_some() {
-        bottom_and_power(ui, values, locked, limits);
-        return;
-    }
-    let carried = exposure_row(ui, values, &limits.exposure_s, was);
-    bottom_and_power(ui, values, locked, limits);
-    match carried {
-        Carried::Edited => resin.exposure_edited(),
-        Carried::Reverted => resin.revert_exposure(),
-        Carried::Untouched => {}
-    }
-}
-
-fn layer_height_row(ui: &mut egui::Ui, resin: &mut ResinDraft, limit: &Limit) {
-    let mut layer_height_mm = resin.draft.values.layer_height_mm;
-    if limited_row(
-        ui,
-        &tr!("resin-layer-height"),
-        &mut layer_height_mm,
-        &tr!("unit-mm"),
-        FINE_STEP,
-        MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
-        Some(3),
-        Held::layer_height(limit),
-    ) {
-        resin.set_layer_height(layer_height_mm);
-    }
-}
-
-/// The normal exposure, its verdict, and where it was carried from, `was` holding the
-/// exposure and the height it was measured at.
-fn exposure_row(
-    ui: &mut egui::Ui,
-    values: &mut MaterialProfile,
-    limit: &Limit,
-    was: Option<(f32, f32)>,
-) -> Carried {
-    let unit = tr!("unit-s");
-    let carried = carried_row(
-        ui,
-        &tr!("print-exposure"),
-        &mut values.exposure_s,
-        &unit,
-        FINE_STEP,
-        limit.range(0.05..=120.0),
-        2,
-        was.map(|(exposure_s, _)| exposure_s),
-    );
-    limit_verdict(
-        ui,
-        Held::unexplained(limit),
-        values.exposure_s,
-        &unit,
-        Some(2),
-    );
-    if let Some((exposure_s, from_mm)) = was {
-        hint(
-            ui,
-            &tr!(
-                "resin-carried",
-                exposure = format!("{exposure_s:.2}"),
-                from = format!("{from_mm:.3}"),
-                to = format!("{:.3}", values.layer_height_mm)
-            ),
-        );
-    }
-    carried
-}
-
-/// The bottom block, the ramp out of it and the light's power, where the printer leaves
-/// them to the resin.
-fn bottom_and_power(
-    ui: &mut egui::Ui,
-    values: &mut MaterialProfile,
-    locked: &PrinterTuning,
-    limits: &PrinterLimits,
-) {
-    if locked.bottom_exposure_s.is_none() {
-        limited_row(
-            ui,
-            &tr!("print-bottom-exposure"),
-            &mut values.bottom_exposure_s,
-            &tr!("unit-s"),
-            COARSE_STEP,
-            0.05..=600.0,
-            Some(2),
-            Held::unexplained(&limits.bottom_exposure_s),
-        );
-    }
-    if locked.bottom_layers.is_none() {
-        let held = Held::bottom_layers(&limits.bottom_layers);
-        let label = tr!("print-bottom-layers");
-        limited_row(
-            ui,
-            &label,
-            &mut values.bottom_layers,
-            "",
-            1.0,
-            1..=200,
-            None,
-            held,
-        );
-    }
-    if locked.transition_layers.is_none() {
-        transition_row(ui, values, Held::unexplained(&limits.transition_layers));
-    }
-    if locked.light_pwm.is_none() {
-        pwm_row(ui, &tr!("resin-light-power"), &mut values.light_pwm);
-    }
-    if locked.bottom_light_pwm.is_none() {
-        pwm_row(ui, &tr!("resin-bottom-power"), &mut values.bottom_light_pwm);
-    }
-}
-
-/// The transition block is a `u16` in the profile, and a count on screen like any other.
-fn transition_row(ui: &mut egui::Ui, values: &mut MaterialProfile, held: Held<'_>) {
-    let mut layers = u32::from(values.transition_layers);
-    let label = tr!("print-transition-layers");
-    if limited_row(ui, &label, &mut layers, "", 1.0, 0..=200, None, held) {
-        values.transition_layers = layers as u16;
-    }
-    if values.transition_layers > 0 {
-        let step = (values.bottom_exposure_s - values.exposure_s)
-            / (f32::from(values.transition_layers) + 1.0);
-        hint(
-            ui,
-            &tr!("resin-transition-note", step = format!("{step:.2}")),
-        );
-    }
-}
-
-/// UV power runs 0 to 255, which is a byte in the profile and a count on screen.
-fn pwm_row(ui: &mut egui::Ui, label: &str, value: &mut u8) {
-    let mut power = u32::from(*value);
-    if crate::ui::count_row(ui, label, &mut power, "", 1.0, 0..=255) {
-        *value = power as u8;
-    }
 }

@@ -1,8 +1,9 @@
 use super::playback::{fraction, run_up};
 use super::reading::Reading;
-use super::track::{Marks, grabs_floor, span_fraction};
+use super::track::{grabs_floor, marks_of};
 use super::*;
 use crate::preview::Preview;
+use crate::ui::{LayerMark, LayerMarks, span_fraction};
 use crate::workspace::{Mode, Section};
 
 /// BUG: typing a layer pulled the track and its knob up over the readout.
@@ -18,6 +19,7 @@ fn typing_a_layer_moves_nothing_under_the_readout() {
     };
     let below = |typing: bool| {
         let ctx = egui::Context::default();
+        crate::ui::theme::apply(&ctx);
         if typing {
             ctx.data_mut(|data| data.insert_temp(egui::Id::new("layer-readout"), "7".to_owned()));
         }
@@ -56,10 +58,34 @@ fn the_strip_marks_the_widest_layer_full_height_and_an_island_where_it_starts() 
         measured.push(layer(lit), 0.05);
     }
 
-    let marks = Marks::of(&measured, 4);
+    let marks = marks_of(&measured, 4);
     assert_eq!(marks.widths, vec![0.25, 1.0, 0.25, 0.25]);
     assert_eq!(marks.risks.len(), 1);
-    assert!((marks.risks[0].0 - 1.0).abs() < 1e-6, "the top layer");
+    assert!((marks.risks[0].at - 1.0).abs() < 1e-6, "the top layer");
+}
+
+#[test]
+fn a_press_on_a_risk_bar_takes_the_nearest_risk_and_misses_beside_the_bar() {
+    let mark = |at: f32, layer| LayerMark {
+        at,
+        tint: egui::Color32::RED,
+        layer,
+    };
+    let marks = LayerMarks {
+        widths: Vec::new(),
+        risks: vec![mark(0.10, 10), mark(0.12, 12), mark(0.50, 50)],
+    };
+    // A 200 point track from y 0 at its top: a share `at` up stands at 200 * (1 - at).
+    let span = egui::Rangef::new(0.0, 200.0);
+    let at = |x: f32, y: f32| marks.under(span, 50.0, egui::pos2(x, y));
+    assert_eq!(
+        at(50.0, 176.5),
+        Some(1),
+        "nearer 0.12 at y 176 than 0.10 at y 180"
+    );
+    assert_eq!(at(50.0, 100.0), Some(2), "0.50 stands at y 100");
+    assert_eq!(at(50.0, 140.0), None, "no bar within reach");
+    assert_eq!(at(90.0, 100.0), None, "beside the bar");
 }
 
 #[test]

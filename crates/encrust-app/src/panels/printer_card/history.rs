@@ -1,31 +1,25 @@
-use egui::RichText;
 use printer_link::{Ending, Task};
 
-use super::picture_of;
 use crate::i18n::tr;
 use crate::network::{Errand, Extras};
-use crate::ui::{ago, hint, icon, quiet_button, theme, tone};
+use crate::ui::{ago, hint, icon, quiet_button, theme};
+use crate::ui::{print_picture, state_word, title_line};
 
-/// The least width a tile takes, and the gap between two, in points.
-const TILE_MIN_W: f32 = 130.0;
+/// Tiles to a row, the gap between two, and a tile's height and picture, points.
+const COLUMNS: usize = 3;
 const TILE_GAP: f32 = 10.0;
-/// A board's thumbnail is 400 by 300.
-const PICTURE_ASPECT: f32 = 0.75;
-/// What a tile holds under its picture: the file, and how it ended over up to two lines.
-const CAPTION_H: f32 = 54.0;
+const TILE_H: f32 = 60.0;
+const PICTURE: f32 = 44.0;
+const TILE_PAD: i8 = 8;
 
-/// How many tiles a row of `width` holds, and how wide each is drawn.
-pub(super) fn columns(width: f32) -> (usize, f32) {
-    let count = (((width + TILE_GAP) / (TILE_MIN_W + TILE_GAP)).floor() as usize).max(1);
-    let tile_w = (width - TILE_GAP * (count - 1) as f32) / count as f32;
-    (count, tile_w)
+/// How wide each of a row's tiles is drawn in a row of `width`.
+pub(super) fn tile_w(width: f32) -> f32 {
+    ((width - TILE_GAP * (COLUMNS - 1) as f32) / COLUMNS as f32).max(0.0)
 }
 
-/// How tall the tiles for `prints` stand in a row of `width`.
-pub(super) fn height(width: f32, prints: usize) -> f32 {
-    let (count, tile_w) = columns(width);
-    let rows = prints.div_ceil(count).max(1);
-    rows as f32 * (tile_w * PICTURE_ASPECT + CAPTION_H + TILE_GAP)
+/// How tall the tiles for `prints` stand.
+pub(super) fn height(prints: usize) -> f32 {
+    prints.div_ceil(COLUMNS).max(1) as f32 * (TILE_H + TILE_GAP)
 }
 
 /// The prints the printer remembers as tiles, several to a row, each with its picture;
@@ -38,7 +32,7 @@ pub(super) fn list(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand>
         None if !asked => errand = Some(Errand::History),
         None => {
             if reading {
-                ui.spinner();
+                crate::ui::spinner(ui);
             }
         }
         Some([]) => hint(ui, &tr!("history-none")),
@@ -54,22 +48,23 @@ pub(super) fn list(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand>
 }
 
 fn tiles(ui: &mut egui::Ui, tasks: &[Task], extras: Option<&Extras>) {
-    let (count, tile_w) = columns(ui.available_width());
+    let width = tile_w(ui.available_width());
     let now_s = crate::updates::now_s();
     ui.spacing_mut().item_spacing = egui::vec2(TILE_GAP, TILE_GAP);
-    for row in tasks.chunks(count) {
+    for row in tasks.chunks(COLUMNS) {
         ui.horizontal_top(|ui| {
             for task in row {
                 let picture = extras
                     .and_then(|extras| extras.pictures.get(&task.task_id))
                     .and_then(|picture| picture.texture());
-                tile(ui, task, picture, tile_w, now_s);
+                tile(ui, task, picture, width, now_s);
             }
         });
     }
 }
 
-/// One remembered print: its picture, its file under it, and how and when it ended.
+/// One remembered print: its picture beside its file and how and when it ended, in the
+/// colour of how it ended.
 fn tile(
     ui: &mut egui::Ui,
     task: &Task,
@@ -78,39 +73,37 @@ fn tile(
     now_s: u64,
 ) {
     let colors = theme::colors();
-    let size = egui::vec2(width, width * PICTURE_ASPECT);
+    let frame = egui::Frame::new()
+        .fill(colors.panel)
+        .stroke(egui::Stroke::new(1.0, colors.hairline))
+        .corner_radius(theme::R_PANEL)
+        .inner_margin(TILE_PAD);
+    let inner_w = (width - 2.0 * f32::from(TILE_PAD)).max(0.0);
+    frame.show(ui, |ui| {
+        ui.set_width(inner_w);
+        ui.set_height(TILE_H - 2.0 * f32::from(TILE_PAD));
+        ui.horizontal_centered(|ui| {
+            let size = egui::vec2(PICTURE, PICTURE);
+            print_picture(ui, picture, size);
+            file_and_ending(ui, task, now_s);
+        });
+    });
+}
+
+/// The file's name over how and when it ended, in the colour of how.
+fn file_and_ending(ui: &mut egui::Ui, task: &Task, now_s: u64) {
+    let colors = theme::colors();
     ui.vertical(|ui| {
-        ui.set_width(width);
         ui.spacing_mut().item_spacing.y = 2.0;
-        match picture {
-            Some(texture) => picture_of(ui, texture, size),
-            None => {
-                let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-                ui.painter()
-                    .rect_filled(rect, theme::R_CONTROL, colors.sunken);
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    icon::MODEL,
-                    theme::icon(22.0),
-                    colors.text_low,
-                );
-            }
-        }
-        let name = ui.add(
-            egui::Label::new(
-                RichText::new(task.file_name())
-                    .font(theme::label())
-                    .color(colors.text_high),
-            )
-            .truncate(),
-        );
+        let name = title_line(ui, task.file_name());
         name.on_hover_text(task.file_name());
         let tint = match task.ending() {
-            Ending::Failed => colors.warn,
-            Ending::Finished | Ending::Stopped | Ending::Other => colors.text_low,
+            Ending::Finished => colors.ok,
+            Ending::Stopped => colors.warn,
+            Ending::Failed => colors.danger,
+            Ending::Other => colors.text_low,
         };
-        tone(ui, &ended(task, now_s), tint);
+        state_word(ui, &ended(task, now_s), tint).on_hover_text(ended(task, now_s));
     });
 }
 
@@ -159,15 +152,11 @@ mod tests {
     }
 
     #[test]
-    fn a_row_holds_as_many_tiles_as_fit_and_shares_what_is_left() {
-        let (count, tile_w) = columns(584.0);
-        assert_eq!(count, 4, "four of 130 with three gaps of 10 fit in 584");
-        assert!((tile_w * 4.0 + TILE_GAP * 3.0 - 584.0).abs() < 1e-3);
-        assert_eq!(columns(90.0).0, 1, "a narrow row still holds one");
-        assert!(
-            height(584.0, 5) > height(584.0, 4),
-            "a fifth print starts a second row"
-        );
+    fn three_tiles_share_a_row_and_a_fourth_starts_the_next() {
+        assert!((tile_w(620.0) * 3.0 + TILE_GAP * 2.0 - 620.0).abs() < 1e-3);
+        assert_eq!(tile_w(0.0), 0.0, "a row with no room draws nothing");
+        assert_eq!(height(3), height(1));
+        assert!(height(4) > height(3), "a fourth print starts a second row");
     }
 
     #[test]

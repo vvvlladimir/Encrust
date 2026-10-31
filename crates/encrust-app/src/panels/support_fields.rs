@@ -6,15 +6,18 @@ use std::ops::RangeInclusive;
 use printer_profiles::{Catalogue, Entry, SupportProfile};
 
 use crate::i18n::tr;
-use crate::ui::{Carried, carried_row};
+use crate::ui::{Carried, carried_row, describe, field_label, theme};
 
 mod automatic;
 mod bracing;
 mod sections;
 use automatic::automatic;
 pub use automatic::{held_up, sizes, steadying, steps};
-use bracing::bracing;
-use sections::{bottom, branching, grid, main, raft, small_pillar, top};
+use bracing::{bracing, bracing_fields};
+use sections::{
+    bottom, branching, branching_fields, grid, grid_fields, main, raft, raft_fields, small_pillar,
+    top,
+};
 
 /// Millimetres per point of drag. The tip is measured in tenths and the foot in whole
 /// millimetres, so they do not share a step.
@@ -72,8 +75,50 @@ impl Group {
         match self {
             Self::Branching => Some(&mut profile.branching.enabled),
             Self::Grid => Some(&mut profile.grid.enabled),
+            Self::Raft => Some(&mut profile.raft.enabled),
+            Self::Bracing => Some(&mut profile.bracing.enabled),
             _ => None,
         }
+    }
+
+    /// What a group with a switch does, and what stands in its place while it is off.
+    fn help_and_off(self) -> Option<(String, String)> {
+        match self {
+            Self::Branching => Some((tr!("support-branching-help"), tr!("support-no-branching"))),
+            Self::Grid => Some((tr!("support-grid-help"), tr!("support-no-grid"))),
+            Self::Raft => Some((tr!("support-raft-help"), tr!("support-no-raft"))),
+            Self::Bracing => Some((tr!("support-bracing-help"), tr!("support-no-bracing"))),
+            _ => None,
+        }
+    }
+
+    /// A group switched off in its heading: the line saying what stands in its place.
+    pub fn off(self, ui: &mut egui::Ui) {
+        if let Some((help, off)) = self.help_and_off() {
+            describe(ui, &help);
+            field_label(ui, &off, theme::colors().text_mid, "");
+        }
+    }
+
+    /// The group's fields under a switch its heading carries, while that switch is on; a
+    /// group with none draws as [`Self::show`] does.
+    pub fn fields(
+        self,
+        ui: &mut egui::Ui,
+        profile: &mut SupportProfile,
+        saved: Option<&SupportProfile>,
+    ) {
+        if let Some((help, _)) = self.help_and_off() {
+            describe(ui, &help);
+        }
+        match self {
+            Self::Branching => branching_fields(ui, &mut profile.branching, saved),
+            Self::Grid => grid_fields(ui, &mut profile.grid, saved),
+            Self::Raft => raft_fields(ui, &mut profile.raft, saved),
+            Self::Bracing => bracing_fields(ui, profile, saved),
+            _ => return self.show(ui, profile, saved),
+        }
+        keep_in_order(profile);
     }
 
     /// Draws the group's fields, then puts the widths back in order. With `saved`, a

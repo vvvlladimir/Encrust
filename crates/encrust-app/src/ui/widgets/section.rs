@@ -3,7 +3,9 @@
 
 use egui::{Frame, Sense, Ui, UiBuilder, vec2};
 
+use super::figures::{Grows, unfold};
 use super::layout::{described, describing, help_mark, hint};
+use crate::ui::theme::motion;
 use crate::ui::{kept, theme};
 
 /// One block of the inspector: a heading that folds it, an optional hint on the right,
@@ -77,17 +79,35 @@ fn block<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (Option<usize>, Option<R>) {
     let id = ui.id().with(("section", title));
-    let open = kept::get::<bool>(ui.ctx(), id.with("open")) != Some(false);
+    // A block whose switch is off is folded: what it holds does nothing until it is on.
+    let switched_off = matches!(&trailing, Trailing::Switch(on) if !**on);
+    let open = kept::get::<bool>(ui.ctx(), id.with("open")) != Some(false) && !switched_off;
     let pressed = block_heading(ui, id, title, open, hint_text, trailing);
-    let inner = open.then(|| {
-        Frame::new()
-            .inner_margin(BODY_MARGIN)
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                describing(ui, id, add)
-            })
-            .inner
+    let how_open = motion::fold(ui.ctx(), id.with("fold"), open);
+    if how_open <= 0.0 && switched_off {
+        // Laid out unseen, so the question mark still reads what the body describes.
+        let unseen = UiBuilder::new().max_rect(ui.max_rect()).invisible();
+        let inner = describing(&mut ui.new_child(unseen), id, add);
+        trailing_rule(ui);
+        return (pressed, Some(inner));
+    }
+    let inner = (how_open > 0.0).then(|| {
+        unfold(ui, id, how_open, Grows::Down, |ui| {
+            Frame::new()
+                .inner_margin(BODY_MARGIN)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = theme::ROW_GAP;
+                    describing(ui, id, add)
+                })
+                .inner
+        })
     });
+    trailing_rule(ui);
+    (pressed, inner)
+}
+
+/// The hairline under a block, kept so a card ending on it can take it away.
+fn trailing_rule(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     let shape = ui.painter().add(egui::Shape::rect_filled(
         rect,
@@ -95,7 +115,6 @@ fn block<R>(
         theme::colors().hairline,
     ));
     ui.data_mut(|data| data.insert_temp(trailing_hairline(), (shape, rect.bottom())));
-    (pressed, inner)
 }
 
 /// Where the hairline under the last block drawn is kept, so a card ending on it can
@@ -128,7 +147,7 @@ fn block_heading(
     };
     let mut text = egui::text::LayoutJob::default();
     let format = |font, color| egui::TextFormat::simple(font, color);
-    text.append(caret, 0.0, format(theme::icon(11.0), colors.text_mid));
+    text.append(caret, 0.0, format(theme::icon(11.0), colors.text_low));
     text.append(title, 6.0, format(theme::section(), colors.text_high));
     let fold = child.add(
         egui::Label::new(text)

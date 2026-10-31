@@ -1,7 +1,10 @@
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::text::{TextState, TextTool, reason};
-use crate::ui::{Segment, Segmented, busy, describe, hint, number_row, section, theme, tone};
+use crate::ui::{
+    DropdownFace, DropdownRow, Segment, Segmented, busy, describe, dropdown, dropdown_row,
+    dropdown_search_menu, hint, icon, number_row, section, theme, tone,
+};
 
 /// Bounds on the letters, millimetres: under a millimetre a capital is finer than resin
 /// holds, past a hundred one letter is the model.
@@ -13,9 +16,6 @@ const MAX_DEPTH_MM: f32 = 10.0;
 
 /// How tall the list of families stands, points: some ten names.
 const LIST_H: f32 = 280.0;
-/// The room the family field keeps on its right for the caret, and the caret's size, points.
-const CARET_W: f32 = 28.0;
-const CARET_GLYPH: f32 = 14.0;
 
 /// Per point of drag.
 const SIZE_STEP: f64 = 0.1;
@@ -54,74 +54,51 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let tool = &window.tools.text;
     match tool.shapes() {
-        Ok(_) => tone(ui, &tr!("text-click-note"), theme::colors().text_mid),
+        Ok(_) => {
+            ui.vertical_centered(|ui| hint(ui, &tr!("text-click-note")));
+        }
         Err(error) => hint(ui, &reason(&error)),
     }
 }
 
-/// The family to write in, filtered as a name is typed. The machine's faces are read on
-/// first focus: reading every installed face takes a while.
+/// The family to write in, from a list filtered as a name is typed. The machine's faces are
+/// read on first open: reading every installed face takes a while.
 fn family(ui: &mut egui::Ui, tool: &mut TextTool) {
-    let id = ui.make_persistent_id("text-family");
-    let list = id.with("list");
-    let ctx = ui.ctx().clone();
-    let open = egui::Popup::is_id_open(&ctx, list);
     let current = tool
         .family()
         .map(|family| family.name.clone())
         .unwrap_or_default();
-    let mut query: String = ui.data(|data| data.get_temp(id)).unwrap_or_default();
-    let mut shown = if open { query.clone() } else { current.clone() };
-    let response = family_field(ui, &mut shown, current);
-    if response.gained_focus() || (response.clicked() && !open) {
+    let face = DropdownFace::plain(icon::FONT, &current);
+    let response = dropdown(ui, &face, ui.available_width());
+    let id = response.id.with("query");
+    if response.clicked() {
         tool.families.ask();
-        query.clear();
-        egui::Popup::open_id(&ctx, list);
-    } else if open && response.changed() {
-        query = shown;
+        ui.data_mut(|data| data.remove::<String>(id));
     }
-    let first = matching(tool, &query).next();
-    if open && response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
-        if let Some(index) = first {
-            tool.state.family = tool.families.list[index].name.clone();
+    dropdown_search_menu(&response, |ui| {
+        let mut query: String = ui.data(|data| data.get_temp(id)).unwrap_or_default();
+        let field = crate::ui::text_box(egui::TextEdit::singleline(&mut query))
+            .hint_text(tr!("text-find-family"))
+            .font(theme::label())
+            .desired_width(ui.available_width());
+        let search = ui.add(field);
+        if response.clicked() {
+            search.request_focus();
         }
-        egui::Popup::close_id(&ctx, list);
-    }
-    let shown = egui::Popup::new(list, ctx.clone(), &response, ui.layer_id())
-        .open_memory(None)
-        .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
-        .width(response.rect.width())
-        .show(|ui| choices(ui, tool, &query));
-    if let Some(shown) = shown {
-        let picked = shown.inner;
-        if picked || (shown.response.clicked_elsewhere() && response.clicked_elsewhere()) {
-            egui::Popup::close_id(&ctx, list);
+        let entered = search.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+        let first = matching(tool, &query).next();
+        let picked = match (entered, first) {
+            (true, Some(index)) => {
+                tool.state.family = tool.families.list[index].name.clone();
+                true
+            }
+            _ => choices(ui, tool, &query),
+        };
+        if picked {
+            ui.close();
         }
-    }
-    ui.data_mut(|data| data.insert_temp(id, query));
-}
-
-/// The field the family is typed into, with the caret that says a list drops from it.
-fn family_field(ui: &mut egui::Ui, shown: &mut String, current: String) -> egui::Response {
-    let field = crate::ui::text_box(egui::TextEdit::singleline(shown))
-        .hint_text(current)
-        .font(theme::label())
-        .margin(egui::Margin {
-            left: 10,
-            right: CARET_W as i8,
-            ..egui::Margin::ZERO
-        })
-        .desired_width(ui.available_width());
-    let response = ui.add(field);
-    let caret = response.rect.right_center() - egui::vec2(CARET_W / 2.0, 0.0);
-    ui.painter().text(
-        caret,
-        egui::Align2::CENTER_CENTER,
-        crate::ui::icon::CARET_DOWN,
-        theme::icon(CARET_GLYPH),
-        theme::colors().text_mid,
-    );
-    response
+        ui.data_mut(|data| data.insert_temp(id, query));
+    });
 }
 
 /// The families whose name holds `query`, any case, by their place in the list.
@@ -148,10 +125,8 @@ fn choices(ui: &mut egui::Ui, tool: &mut TextTool, query: &str) -> bool {
         .show(ui, |ui| {
             for index in found.iter().copied() {
                 let name = &tool.families.list[index].name;
-                if ui
-                    .selectable_label(*name == tool.state.family, name)
-                    .clicked()
-                {
+                let row = DropdownRow::named(name, *name == tool.state.family);
+                if dropdown_row(ui, &row).clicked() {
                     tool.state.family = name.clone();
                     picked = true;
                 }
@@ -212,7 +187,7 @@ fn shape(ui: &mut egui::Ui, state: &mut TextState) {
         ui,
         &tr!("text-angle"),
         &mut state.angle_deg,
-        &tr!("unit-degrees"),
+        &tr!("unit-deg"),
         1.0,
         0.0..=360.0,
         0,

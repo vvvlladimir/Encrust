@@ -5,9 +5,6 @@ use egui::{Align2, Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, 
 use super::focus_ring;
 use crate::ui::theme;
 
-/// How long the knob takes to cross the track, seconds.
-const SLIDE_S: f32 = 0.12;
-
 /// Track and knob of a switch, points.
 const TRACK: egui::Vec2 = vec2(28.0, 16.0);
 const KNOB: f32 = 12.0;
@@ -60,7 +57,7 @@ fn flip(ui: &mut Ui, size: egui::Vec2, on: &mut bool, name: &str) -> (Rect, Resp
 fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
     let colors = theme::colors();
     let enabled = ui.is_enabled();
-    let how_on = ui.ctx().animate_bool_with_time(response.id, on, SLIDE_S);
+    let how_on = theme::motion::toggle(ui.ctx(), response.id, on, theme::motion::FAST);
     let reached = if enabled { colors.accent } else { colors.line };
     let fill = colors.active.lerp_to_gamma(reached, how_on);
     let painter = ui.painter();
@@ -75,7 +72,7 @@ fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
         egui::Vec2::splat(KNOB),
     );
     let knob_color = if enabled {
-        colors.text_high
+        colors.knob
     } else {
         colors.text_low
     };
@@ -83,8 +80,11 @@ fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
     focus_ring(ui, response, theme::R_CONTROL);
 }
 
-/// Points kept clear either side of a segment's label.
+/// Points kept clear either side of a segment's label, between the track and a pill, and
+/// a pill's rounding.
 const SEGMENT_PAD: f32 = 12.0;
+const SEGMENT_INSET: f32 = 2.0;
+const PILL_R: f32 = 4.0;
 
 /// One choice inside a [`Segmented`] group.
 pub struct Segment<'a, T> {
@@ -101,7 +101,8 @@ impl<'a, T> Segment<'a, T> {
     }
 }
 
-/// A row of mutually exclusive choices in one bordered box, the chosen one in the wash.
+/// A row of mutually exclusive choices sunk in one bordered track, the chosen one a raised
+/// pill ringed by a line, its words in the soft accent.
 pub struct Segmented<'a, T> {
     segments: &'a [Segment<'a, T>],
     width: Option<f32>,
@@ -152,13 +153,14 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
                     &segment.label,
                 )
             });
-            self.paint(ui, slot, index, segment, active, response.hovered());
+            Self::paint(ui, slot, segment, active, response.hovered());
             focus_ring(ui, &response, theme::R_CONTROL);
         }
 
-        let frame = egui::epaint::RectShape::stroke(
+        let frame = egui::epaint::RectShape::new(
             rect,
             theme::R_CONTROL,
+            colors.sunken,
             egui::Stroke::new(1.0, colors.hairline),
             egui::StrokeKind::Inside,
         );
@@ -166,38 +168,22 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
         changed
     }
 
-    fn paint(
-        &self,
-        ui: &Ui,
-        slot: Rect,
-        index: usize,
-        segment: &Segment<'_, T>,
-        active: bool,
-        hovered: bool,
-    ) {
+    fn paint(ui: &Ui, slot: Rect, segment: &Segment<'_, T>, active: bool, hovered: bool) {
         let colors = theme::colors();
-        let (fill, foreground) = match (active, hovered) {
-            (true, _) => (colors.accent_wash, colors.accent_soft),
-            (false, true) => (colors.hover, colors.text_high),
-            (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
+        let (fill, ring, foreground) = match (active, hovered) {
+            (true, _) => (colors.raised, colors.line, colors.accent_soft),
+            (false, true) => (colors.hover, egui::Color32::TRANSPARENT, colors.text_high),
+            (false, false) => (
+                egui::Color32::TRANSPARENT,
+                egui::Color32::TRANSPARENT,
+                colors.text_mid,
+            ),
         };
 
         let painter = ui.painter();
-        let last = index + 1 == self.segments.len();
-        let radius = egui::CornerRadius {
-            nw: if index == 0 { theme::R_CONTROL.nw } else { 0 },
-            sw: if index == 0 { theme::R_CONTROL.sw } else { 0 },
-            ne: if last { theme::R_CONTROL.ne } else { 0 },
-            se: if last { theme::R_CONTROL.se } else { 0 },
-        };
-        painter.rect_filled(slot, radius, fill);
-        if index > 0 {
-            painter.vline(
-                slot.left(),
-                slot.y_range(),
-                egui::Stroke::new(1.0, colors.hairline),
-            );
-        }
+        let pill = slot.shrink(SEGMENT_INSET);
+        let stroke = egui::Stroke::new(1.0, ring);
+        painter.rect(pill, PILL_R, fill, stroke, egui::StrokeKind::Inside);
 
         let galley =
             painter.layout_no_wrap(segment.label.to_string(), theme::segment(), foreground);

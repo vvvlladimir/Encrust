@@ -32,6 +32,7 @@ pub fn check() -> Result<Option<Offer>, UpdateError> {
         version,
         notes: Vec::new(),
         download: None,
+        published_s: None,
     }))
 }
 

@@ -167,3 +167,31 @@ fn a_feed_that_cannot_be_reached_is_a_fetch_failure() {
     let fetched = fetch("http://127.0.0.1:9/latest.json", FEED_LIMIT, FEED_TIMEOUT);
     assert!(matches!(fetched, Err(UpdateError::Fetch { .. })));
 }
+
+#[test]
+fn a_download_cancelled_before_it_starts_is_cancelled_not_failed() {
+    let progress = Progress::default();
+    progress.cancel();
+    let fetched = fetch_counted("http://127.0.0.1:9/encrust.tar.gz", &progress);
+    assert!(matches!(fetched, Err(UpdateError::Cancelled)));
+    assert_eq!(progress.bytes(), (0, None), "nothing was read");
+}
+
+#[test]
+fn an_install_walks_its_steps_from_the_download() {
+    let progress = Progress::default();
+    let download = Download {
+        url: "http://127.0.0.1:9/encrust.tar.gz".to_owned(),
+        archive: "encrust.tar.gz".to_owned(),
+        signature: String::new(),
+        size: None,
+    };
+    let exe = scratch("steps").join("encrust-app");
+    let installed = install(&download, Version::default(), &exe, &progress);
+    assert!(matches!(installed, Err(UpdateError::Fetch { .. })));
+    assert_eq!(
+        progress.step(),
+        Step::Download,
+        "it failed where it started"
+    );
+}

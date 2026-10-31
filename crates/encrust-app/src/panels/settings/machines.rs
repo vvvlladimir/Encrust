@@ -9,16 +9,17 @@ mod resins;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::frame::{
-    self, LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
-};
 use crate::panels::settings::{compensation, confirm, export_profile, printer, report};
 use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
 };
+use crate::ui::window_frame::{
+    LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
+};
 use crate::ui::{
-    focus_ring, icon, icon_button, inline_button, quiet_button, theme, two_lines, zone_button,
+    SquareLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
+    two_lines, zone_button,
 };
 
 /// Room between two zones offered in an empty list.
@@ -50,8 +51,8 @@ enum Action {
     },
     /// The library of every shipped machine, in the tabs' place.
     OpenLibrary,
-    /// Something that cannot be undone, which the window asks about before doing it.
-    Ask(Deleting),
+    /// Something that cannot be undone, asked for by a second press.
+    Delete(Deleting),
     /// A file asked for and taken in as a machine, or as a resin on this machine.
     Import(Kind),
     /// A machine or a resin written out to a file.
@@ -64,7 +65,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
         return;
     }
     let mut action = None;
-    let close = frame::show(
+    let close = crate::ui::window_frame::show(
         ctx,
         "machine-and-resin",
         icon::PRINTER,
@@ -79,7 +80,6 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
         return;
     }
     calculators(ctx, window);
-    ask(ctx, window);
 }
 
 /// The machines down the left, and the library or the machine picked beside them.
@@ -144,7 +144,15 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
         .is_none()
         .then_some(open)
         .filter(|id| !id.is_empty());
-    add_machine(&mut child(ui, foot.shrink(12.0)), picked, action);
+    let tooltip = picked.map_or_else(String::new, |id| {
+        confirm::cost(catalogue, &Deleting::Printer(id.to_owned()))
+    });
+    add_machine(
+        &mut child(ui, foot.shrink(theme::PANEL_PAD)),
+        picked,
+        &tooltip,
+        action,
+    );
 }
 
 fn no_match(ui: &mut Ui) {
@@ -184,16 +192,19 @@ fn machine_row(
         let name = &entry.profile.name;
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
     });
-    let fill = match (picked, response.hovered()) {
-        (true, _) => colors.accent_wash,
-        (false, true) => colors.hover,
-        (false, false) => Color32::TRANSPARENT,
+    let fill = match picked {
+        true => colors.picked_wash,
+        false => crate::ui::hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
     };
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, fill);
     let profile = &entry.profile;
     let format = core_pipeline::SlicedFormat::from(profile.output).extension();
-    let detail = format!("{}, .{format}", profile.manufacturer);
+    let detail = tr!(
+        "machines-maker-format",
+        maker = profile.manufacturer.clone(),
+        format = format
+    );
     two_lines(
         &painter,
         rect.left_center() + vec2(14.0, 0.0),
@@ -224,14 +235,18 @@ fn machine_row(
 }
 
 /// The way into the library, a machine taken in from a file beside it, and the machine
-/// picked in the list removed.
-fn add_machine(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
+/// picked in the list removed by a second press, `cost` on its hover.
+fn add_machine(ui: &mut Ui, picked: Option<&str>, cost: &str, action: &mut Option<Action>) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.add_enabled_ui(picked.is_some(), |ui| {
-            if icon_button(ui, icon::REMOVE, &tr!("machines-remove")).clicked() {
-                *action = picked.map(|id| Action::Ask(Deleting::Printer(id.to_owned())));
-            }
-        });
+        let enabled = picked.is_some();
+        let tip = if enabled {
+            cost.to_owned()
+        } else {
+            tr!("machines-remove")
+        };
+        if bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, enabled) {
+            *action = picked.map(|id| Action::Delete(Deleting::Printer(id.to_owned())));
+        }
         if icon_button(ui, icon::IMPORT, &tr!("machines-import-file")).clicked() {
             *action = Some(Action::Import(Kind::Printer));
         }
@@ -269,12 +284,12 @@ fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
     ui.horizontal_centered(|ui| {
         ui.label(
             RichText::new(name)
-                .font(theme::page_title(18.0))
+                .font(theme::page_title(theme::PAGE_TITLE_PT))
                 .color(colors.text_high),
         );
         ui.label(
             RichText::new(maker)
-                .font(theme::page_title(18.0))
+                .font(theme::page_title(theme::PAGE_SUBTITLE_PT))
                 .color(colors.text_low),
         );
         ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
@@ -300,7 +315,8 @@ fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<A
         } else {
             tr!("machines-use")
         };
-        if inline_button(ui, "", &label, !in_hand, !in_hand).clicked() {
+        let glyph = if in_hand { icon::IN_HAND } else { "" };
+        if inline_button(ui, glyph, &label, !in_hand, !in_hand).clicked() {
             *action = Some(Action::UsePrinter(id.to_owned()));
         }
     });
@@ -321,6 +337,7 @@ fn shop(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
         .inner;
     match picked {
         Some(library::Picked::Custom) => *action = Some(Action::NewPrinter),
+        Some(library::Picked::Import) => *action = Some(Action::Import(Kind::Printer)),
         Some(library::Picked::Printer(id)) => *action = Some(Action::InstallPrinter(id)),
         None => {}
     }
@@ -343,10 +360,7 @@ fn apply(window: &mut Window, action: Action) {
         }
         Action::UsePrinter(id) => return use_printer(window, &id),
         Action::UseResin { printer, resin } => return use_resin(window, &printer, &resin),
-        Action::Ask(deleting) => {
-            settings.confirm = Some(deleting);
-            None
-        }
+        Action::Delete(deleting) => return delete(window, deleting),
         Action::Import(kind) => return crate::panels::settings::ask_for_profile(window, kind),
         Action::Export(kind, id) => return export_profile(window.machine, kind, &id),
         writing => write(window.machine, writing),
@@ -427,8 +441,8 @@ fn use_resin(window: &mut Window, printer: &str, resin: &str) {
     slicing.set_material(profile);
 }
 
-/// Carries out a deletion the question was answered for. Everything here writes the
-/// user's directory and cannot be taken back; see `confirm`.
+/// Carries out a deletion its second press asked for. Everything here writes the user's
+/// directory and cannot be taken back; see `confirm`.
 fn delete(window: &mut Window, deleting: Deleting) {
     let picked = match deleting {
         Deleting::Printer(id) => {
@@ -468,8 +482,8 @@ fn delete(window: &mut Window, deleting: Deleting) {
             // open is never the resin that just went.
             None
         }
-        // Asked from the Settings window, which answers it itself.
-        Deleting::Profile(..) | Deleting::Unreadable => None,
+        // Deleted from the Settings window, which carries it out itself.
+        Deleting::Profile(..) => None,
     };
     window.machine.slicing.reload_resin();
     pick(window, picked);
@@ -561,24 +575,6 @@ fn calculators(ctx: &egui::Context, window: &mut Window) {
         &mut settings.calculators,
         &mut resin.draft.values.compensation,
     );
-}
-
-/// The question over the window, while a deletion is waiting to be answered for.
-fn ask(ctx: &egui::Context, window: &mut Window) {
-    let Some(deleting) = window.machine.settings.confirm.clone() else {
-        return;
-    };
-    // Asked from outside this window, so `settings::window` answers it whether or not it is open.
-    if deleting == Deleting::Unreadable {
-        return;
-    }
-    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
-        return;
-    };
-    window.machine.settings.confirm = None;
-    if matches!(answer, confirm::Answer::Confirmed) {
-        delete(window, deleting);
-    }
 }
 
 #[cfg(test)]

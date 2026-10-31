@@ -31,29 +31,6 @@ fn scene_with_a_model(height_mm: Scalar) -> Scene {
     scene
 }
 
-#[test]
-fn the_summary_states_both_volumes_and_prices_them_only_when_the_resin_has_a_price() {
-    let tally = Tally {
-        vertices: 22_579,
-        triangles: 43_834,
-        model_mm3: 6_660.0,
-        supports_mm3: 1_520.0,
-    };
-    let mut resin = MaterialProfile::default();
-    let keys = |readings: Vec<(String, String)>| {
-        readings.into_iter().map(|(key, _)| key).collect::<Vec<_>>()
-    };
-    assert_eq!(
-        keys(tally_readings(&tally, &resin)),
-        ["Vertices", "Triangles", "Model/supports", "Weight"]
-    );
-
-    resin.details.price = 30.0;
-    let priced = tally_readings(&tally, &resin);
-    assert_eq!(priced[2].1, "6.66/1.52 ml");
-    assert_eq!(priced[4].0, "Price");
-}
-
 fn slicing_on_a_printer() -> Slicing {
     let mut slicing = Slicing::default();
     let printer = slicing
@@ -164,12 +141,4 @@ fn a_transition_layer_reads_its_own_step_of_the_ramp() {
         "still the bottom block"
     );
     assert_eq!(layer_exposure_s(&machine, 10), 5.2, "past the ramp");
-}
-
-#[test]
-fn the_heading_names_the_block_the_layer_is_in() {
-    let machine = machine_with_a_ramp();
-    assert_eq!(block(&machine, 4), "bottom block");
-    assert_eq!(block(&machine, 5), "transition");
-    assert_eq!(block(&machine, 10), "body");
 }

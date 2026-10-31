@@ -6,7 +6,6 @@
 common-already-done = Уже сделано
 common-cancel = Отмена
 common-export = Экспорт
-common-settings = Настройки
 error-cannot-hand-over = не удалось передать { $name }
 error-cannot-open = не удалось открыть { $path }
 error-cannot-read = не удалось прочитать { $path }
@@ -19,8 +18,9 @@ status-exported = Экспортировано: { $path }
 status-opened = Открыто: { $path }
 status-saved = Сохранено: { $name }
 table-profile = Профиль
-unit-deg = град.
-unit-degrees = °
+unit-deg = °
+unit-g = г
+unit-ml = мл
 unit-g-ml = г/мл
 unit-h = ч
 unit-m = мин
@@ -31,7 +31,8 @@ unit-mm-min = мм/мин
 unit-um = мкм
 unit-px = пикс.
 unit-s = с
-value-g = { $value } г
+unit-times = ×
+value-deg = { $value }°
 value-ml = { $value } мл
 value-mm = { $value } мм
 value-mm2 = { $value } мм²
@@ -45,22 +46,46 @@ general-language-system = Как в системе ({ $name })
 general-language-untranslated = Интерфейс ещё не переведён на язык системы ({ $tag }), поэтому показан на английском.
 general-start = Запуск
 general-start-page = Открывать стартовую страницу
-general-start-page-hint = Область для перетаскивания файлов, недавно открытые файлы и пробные печати смолы, пока нет модели. Если выключить, программа сразу откроется на платформе.
+general-start-page-hint = Если выключено, окно открывается сразу на платформе.
+general-appearance = Тема
+general-appearance-system = Системное
+general-appearance-light = Светлое
+general-appearance-dark = Тёмное
+general-appearance-light-sub = Сланец и белый
+general-appearance-dark-sub = Графит
+general-appearance-now-light = Сейчас светлая
+general-appearance-now-dark = Сейчас тёмная
+general-appearance-hint = Системная следует за рабочим столом, когда он меняется, вместе с областью просмотра.
+settings-page-appearance = Оформление
+settings-group-help = Помощь
+settings-find = Найти настройку
+settings-words-appearance = тема светлая тёмная системная язык анимация движение
+settings-words-general = начальная страница область просмотра масштаб нарезанные файлы папка имя файла шаблон профили
+settings-words-updates = обновление выпуск версия
+updates-this-build = Это { $version }
 general-viewport = Область просмотра
 general-invert-zoom = Прокрутка вниз приближает
+general-motion = Анимация
+general-reduce-motion = Уменьшить движение
 general-sliced-files = Нарезанные файлы
-general-sliced-dir-system = Диалог сохранения открывается там, где система его оставила в прошлый раз.
-general-sliced-dir = Диалог сохранения открывается в папке { $dir }
-general-choose-folder = Выбрать папку
+general-sliced-dir-system = Окно сохранения открывается здесь; если папку забыть, там, где система оставила его в прошлый раз.
+general-sliced-dir-none = Не выбрана
+general-choose-folder = Выбрать
 general-forget-folder = Забыть папку
+general-file-name = Имя файла
+general-file-name-reset = Вернуть имя модели
+general-file-name-example = Сейчас сохранится как { $name }
+general-file-name-unknown = Не подстановка, остаётся как написано: { $tags }
+general-file-name-help = Как называется нарезанный файл; расширение добавляется, а то, чего не принимает файловая система, заменяется подчёркиванием: {"{"}model{"}"}, {"{"}ext{"}"} — тип её файла, {"{"}printer{"}"}, {"{"}resin{"}"}, {"{"}layer{"}"} в мкм, {"{"}plate{"}"}, {"{"}date{"}"} и {"{"}time{"}"}.
 general-profiles = Профили
 general-profiles-nowhere = В этой системе негде хранить ваши профили.
-general-profiles-dir = Ваши принтеры, смолы и профили хранятся в { $dir }
+general-profiles-dir = Здесь хранятся ваши принтеры, смолы и профили.
 general-open-folder = Открыть папку
 
 ## panels/inspector/cut.rs
 
 cut-plane = Плоскость
+cut-fact = { $axis } { $height } мм
 cut-select-model = Выберите модель для разреза.
 cut-height = Высота
 cut-offset = Смещение
@@ -100,7 +125,7 @@ cut-parts-smallest = Наименьшая часть
 cut-parts-smallest-note = Кусок меньше этого присоединяется к части, которой касается, или отбрасывается, если не касается ни одной.
 cut-replaces = Одна модель заменяется двумя. Отмена вернёт её.
 cut-cut = Разрезать
-cut-split = Разделить на части
+cut-split = Разделить
 
 ## cut.rs
 
@@ -185,7 +210,7 @@ cut-mended =
 
 ## panels/inspector/cut.rs
 
-cut-keep-both = Обе
+cut-keep-both = Оставить обе
 cut-keep-lower = Нижняя
 cut-keep-upper = Верхняя
 
@@ -230,11 +255,13 @@ action-save-project = Сохранить проект
 action-save-project-as = Сохранить проект как
 action-import-model = Импортировать модель
 action-slice = Нарезать
-shortcut-group-tools = Инструменты, по порядку на панели
+shortcut-group-tools = Инструменты
 shortcut-group-plate = Платформа
 shortcut-group-window = Окно
 shortcut-group-layers = Слои
 shortcut-group-files = Файлы
+shortcut-group-view = Вид
+shortcut-group-pointer = Мышь и трекпад
 gesture-move-focus = Переход между элементами
 gesture-move-focus-keys = Tab, Shift Tab
 gesture-press-focus = Нажать элемент в фокусе
@@ -267,8 +294,35 @@ status-removed-models =
 ## panels/shortcuts_sheet.rs
 
 shortcuts-title = Горячие клавиши
-shortcuts-note = Инструмент вызывается цифрой, соответствующей его месту на панели. Пока курсор в поле ввода, клавиши отключены.
-shortcuts-or = или
+shortcuts-find = Найти клавишу
+shortcuts-all = Все клавиши
+shortcuts-list-keyboard = Клавиатура
+shortcuts-list-pointer = Указатель
+shortcuts-changed =
+    { $count ->
+        [one] { $count } изменена
+        [few] { $count } изменены
+       *[many] { $count } изменено
+    }
+shortcuts-none-found = Нет клавиши с таким названием
+shortcuts-taken = { $keys } уже вызывает «{ $action }»
+shortcuts-taken-why = «Заменить» заберёт её у «{ $action }», остальные клавиши действия останутся.
+shortcuts-replace = Заменить
+shortcuts-keep = Отмена
+shortcuts-reset-all = Сбросить все клавиши
+shortcuts-reset-all-asked = Сбросить все клавиши?
+shortcuts-reset-all-tooltip = Каждое действие вернётся к своим исходным клавишам
+shortcuts-stop = Остановить, ничего не меняя
+
+## ui/widgets/binding.rs
+
+binding-change = Нажмите, чтобы записать другую клавишу
+binding-listening = Нажмите клавиши
+binding-done = Готово
+binding-stop = Остановить, ничего не меняя
+binding-add = Добавить клавишу
+binding-clear = Убрать эту клавишу
+binding-reset = Вернуть исходные клавиши
 
 ## settings.rs
 
@@ -334,7 +388,6 @@ supports-removed-inside =
     }
 supports-where = Где
 supports-picked = Выбрано
-supports-pick-hint = Щёлкните по наконечнику, распорке, соединению, стволу или опоре, чтобы выбрать. Перетаскивание переносит, Shift добавляет, Alt убирает.
 supports-picked-help = «Вырастить заново» возвращает выбранные поддержки автоматике, и следующее выращивание строит их заново. «В группу» строит их по профилю текущей группы.
 supports-stat-parts = Части
 supports-stat-supports = Поддержки
@@ -360,7 +413,9 @@ support-steady-lean = Наклон
 support-steady-spacing = Шаг
 support-steady-area = Наименьший склон
 supports-remove-all-tooltip = Убрать все поддержки
-supports-preset = Пресет поддержек
+supports-on-plate = На платформе
+supports-profiles = Профили
+supports-edit-profiles = Изменить профили
 supports-mode-pick = Выбрать поддержки
 supports-mode-place = Ставить поддержки
 supports-mode-area = Закрасить или запретить область
@@ -388,7 +443,9 @@ bin-click-again = Нажмите ещё раз, чтобы удалить
 ## panels/settings.rs
 
 settings-title = Настройки
-settings-shortcuts = Горячие клавиши
+settings-group-profiles = Профили инструментов
+settings-group-window = Приложение
+settings-shortcuts = Сочетания клавиш
 settings-import = Импорт
 settings-cannot-export = не удалось экспортировать профиль
 settings-cannot-delete = не удалось удалить профиль
@@ -408,6 +465,7 @@ machines-remove = Удалить этот принтер
 machines-import-file = Импортировать принтер из файла
 machines-pick = Выберите принтер или добавьте его из библиотеки.
 machines-in-hand = Платформа печатается на этом принтере
+machines-maker-format = { $maker } · .{ $format }
 machines-use = Использовать этот принтер
 machines-cannot-add-printer = не удалось добавить принтер
 machines-cannot-add-machine = не удалось добавить принтер
@@ -426,20 +484,11 @@ check-filter-levers = Рычаги
 check-filter-peel = Отрыв
 check-filter-cups = Присоски
 check-filter-thin = Тонкие
-check-verdict = Заключение
-check-support-islands = Поддержать все острова
-check-drill-cups = Просверлить присоски
-check-issues = Проблемы
-check-found =
-    { $issues ->
-        [one] { $issues } проблема
-        [few] { $issues } проблемы
-       *[many] { $issues } проблем
-    } на { $layers ->
-        [one] { $layers } слое
-        [few] { $layers } слоях
-       *[many] { $layers } слоях
-    }
+check-support-islands = Поддержать
+check-drill-cups = Просверлить
+check-issues = Найдено
+check-previous = Предыдущая проблема
+check-next = Следующая проблема
 check-stood =
     { $count ->
         [0] Ни у одного острова не нашлось нижней стороны для поддержки
@@ -463,20 +512,15 @@ check-hardest-pull = Сильнейшая тяга
 check-disc = Тянет как диск площадью
 check-widest-step = Самый большой скачок
 check-grows-by = Прирост
+check-layer = Слой { $layer }
 check-layer-lower = слой { $layer }
 check-peel = Отрыв
 check-nothing-found = Ничего, что привело бы к браку
 check-nothing-found-why = Нет островов, нет перемычек, перегруженных сверх предела, и нет слоёв, которые слишком сильно тянут плёнку.
 check-issues-help = Острова начинаются в воздухе и остаются на плёнке. Рычаги — тонкие перемычки, которые может сломать тяга вбок; присоски — закрытые полости, которые подъём тянет вакуумом; тонкие участки могут вовсе не напечататься. Щелчок по строке переходит к её слою.
 check-peel-help = Каждый подъём отрывает свежий слой от плёнки, и чем шире слой, тем сильнее тяга. «Сильнейшая тяга» — худший слой, показанный как диск с той же силой отрыва; «Самый большой скачок» — где площадь сильнее всего растёт от слоя к слою. Наклон модели или полость уменьшают и то и другое.
-check-worst = { $issue }, слой { $layer }
 check-put-islands-back = Вернуть острова
-check-remove-islands =
-    { $count ->
-        [one] Удалить { $count } остров
-        [few] Удалить { $count } острова
-       *[many] Удалить { $count } островов
-    }
+check-remove-islands = Удалить
 check-remove-islands-note = Стирает их из записываемого файла и проверяет снова. Уходят только острова; то, что на них стояло, остаётся и попадает в список для поддержки.
 check-hanging-passes =
     { $count ->
@@ -493,7 +537,6 @@ check-remove-next =
 check-remove-next-note = Снимает ещё по одному слою с каждой повисшей части, с того, с которого она начинается, и проверяет снова.
 check-no-islands-to-take = Островов для удаления нет
 check-erased-note = Стёрто из файла; всё, что осталось висеть, перечислено ниже.
-check-layer = Слой { $layer }
 check-more-layers =
     { $count ->
         [one] и ещё { $count } слой
@@ -534,12 +577,6 @@ check-issue-lever = Слабая перемычка
 check-issue-peel = Тяжёлый отрыв
 check-issue-cup = Присоска
 check-issue-thin = Тонкий участок
-check-explain-hanging = Остров под ним удалён, поэтому { $area } мм² здесь висят над пустотой, а вместе с ними и остальная часть. Поставьте поддержку.
-check-explain-island = Остров площадью { $area } мм² засвечивается над пустотой: он прилипнет к плёнке и останется в ванне. Поставьте поддержку или удалите его.
-check-explain-lever = Перемычка под ним ({ $neck } мм²) испытывает около { $stress } МПа от тяги со смещением в { $lever } мм в сторону. Поставьте поддержку ближе к её середине.
-check-explain-peel = Плёнка тянет этот слой с силой около { $force } Н. Наклоните модель, сделайте её полой или поднимайте медленнее.
-check-explain-cup = Полость площадью { $area } мм² и объёмом { $volume } мл закрыта снизу, поэтому при каждом подъёме на неё действует тяга. Дренажное отверстие впустит воздух.
-check-explain-thin = Участок шириной { $width } мм возвышается больше чем на миллиметр. Он может не сформироваться; если это важно, сделайте его толще.
 check-removed =
     { $count ->
         [one] { $count } остров удалён из файла
@@ -549,27 +586,34 @@ check-removed =
 
 ## panels/plate_summary.rs
 
-summary-layer = Слой { $layer }
-summary-this-plate = Эта платформа
+summary-layer = Слой
 summary-layer-range = от { $fewest } до { $most }
-summary-height = Высота
 summary-layers = Слои
 summary-vertices = Вершины
 summary-triangles = Треугольники
-summary-model-supports = Модель/поддержки
 summary-price = Стоимость
-summary-z-height = Высота по Z
 summary-exposure = Экспозиция
 summary-cured-area = Площадь засветки
-summary-not-priced = цена не задана
 summary-volume = Объём
 summary-weight = Масса
-summary-measuring = замер
 summary-time = Время
+summary-resin = Смола
+summary-time-to-layer = Время до слоя
+summary-details = Подробнее
+summary-model = Модель
+summary-supports = Поддержки
+summary-broken =
+    { $count ->
+        [one] { $count } модель сломана
+        [few] { $count } модели сломаны
+       *[many] { $count } моделей сломано
+    }
+summary-broken-why =
+    { $count ->
+        [one] То, что из неё нарезано, может не напечататься.
+       *[other] То, что из них нарезано, может не напечататься.
+    }
 summary-estimate = ≈ { $value }
-summary-block-bottom = нижние слои
-summary-block-transition = переход
-summary-block-body = основная часть
 
 ## ui/widgets.rs
 
@@ -586,11 +630,16 @@ ago-days =
         [few] { $count } дня назад
        *[many] { $count } дней назад
     }
+ago-weeks =
+    { $count ->
+        [1] на прошлой неделе
+        [one] { $count } неделю назад
+        [few] { $count } недели назад
+       *[many] { $count } недель назад
+    }
 
 ## ui/widgets/field.rs
 
-field-step-more = Больше на { $step } { $unit }
-field-step-less = Меньше на { $step } { $unit }
 field-back-to = Вернуть { $value } { $unit }
 field-printer-address = Адрес принтера
 
@@ -605,9 +654,8 @@ list-show = Показать в окне просмотра
 
 ## panels/inspector/measure.rs
 
-measure-settings = Настройки
-measure-measure = Замер
-measure-esc-clears = Esc сбрасывает.
+measure-reading = Показания
+measure-caught = Привязка
 measure-clear = Сбросить
 measure-points = Точки
 measure-planes = Плоскости
@@ -618,8 +666,6 @@ measure-snap-free = Свободно
 measure-snap-corner-note = Щелчок захватывает ближайший угол, где поверхность меняет направление.
 measure-snap-edge-note = Щелчок захватывает ближайшее ребро, где поверхность меняет направление.
 measure-snap-free-note = Точно там, где пришёлся щелчок.
-measure-free-while-alt = Свободно, пока зажат Alt.
-measure-hold-alt = Удерживайте Alt для свободного замера.
 measure-show-axes = Показывать dX, dY, dZ в окне просмотра
 measure-second-point = Щёлкните по второй точке.
 measure-two-points = Щёлкните по двум точкам на модели.
@@ -652,7 +698,9 @@ hollow-inside = Внутрь
 hollow-outside = Наружу
 hollow-inside-note = Стенка растёт внутрь; снаружи ничего не меняется.
 hollow-outside-note = Стенка растёт наружу, получается форма для отливки модели.
-hollow-bottom-through = Сквозь дно
+hollow-bottom-through = Открытое дно
+hollow-fact = Стенка { $value } мм
+hollow-nothing-done = Пока ничего не выдолблено
 hollow-bottom-through-note = Стенка растёт внутрь, а дно, на котором стоит модель, вырезается, и смола стекает без отверстий. На платформе полость закрыта ею, пока отпечаток не снят, поэтому добавьте маленькое вентиляционное отверстие наверху.
 hollow-shell-help = Полая модель расходует меньше смолы и слабее тянет плёнку. Стенка — толщина оболочки; около 2 мм подходит большинству деталей. Полости нужно дренажное отверстие, иначе запертая внутри смола может позже разорвать деталь.
 hollow-wall = Стенка
@@ -702,7 +750,7 @@ print-use-profiles = Взять настройки профилей
 print-exposure-help = Сколько экран засвечивает каждый слой. Мало — тонкие части не печатаются или слои расслаиваются; много — детали разбухают, а отверстия зарастают. Нижние слои засвечиваются дольше, чтобы печать держалась на платформе, а слои перехода плавно снижают время между ними.
 print-waiting-help = Паузы, чтобы смола успокоилась. «Свет выключен» — одна пауза перед засветкой каждого слоя; время отдыха — паузы после засветки, наверху подъёма и после возврата платформы. Длинные паузы помогают густой смоле и большим слоям, но удлиняют печать.
 print-motion-help = После каждого слоя платформа поднимается, отрывая его от плёнки, и возвращается. Медленный подъём отрывает мягче — это нужно большим и хрупким слоям, а высоты подъёма должно хватать, чтобы плёнка отпустила слой.
-print-waiting = Паузы
+print-motion-waits = Движение и паузы
 print-motion = Движение
 print-carried = Перенесено с { $exposure } с при { $from } мкм на слой { $to } мкм.
 print-transition = Переход
@@ -740,7 +788,6 @@ relief-hold-top = Грани вверх
 relief-hold-note = Грани, отклонённые от направления на платформу или прямо вверх не больше чем на столько градусов, сохраняют форму, и рельеф обрывается на их краю. Ноль не оставляет ни одной.
 relief-paint = Где
 relief-paint-brush = Рисовать, где выдавить
-relief-paint-hint = Ведите по модели, чтобы закрасить; Alt — стереть.
 relief-paint-note = Как только на модели закрашена хоть одна грань, текстура выдавливается только в закрашенные грани, остальная модель сохраняет свою сетку, и вид показывает текстуру только там.
 relief-paint-clear = Очистить закрашенные области
 relief-nothing-painted = Ничего не закрашено: закрасьте, где нужна текстура, или отключите кисть, чтобы выдавить на всю модель.
@@ -769,6 +816,7 @@ relief-pressing-status = Вдавливание рельефа
 text-words = Текст
 text-words-hint = Что написать; новая строка начинает второй ряд
 text-reading-fonts = Читаю шрифты, установленные на этом компьютере...
+text-find-family = Найти шрифт
 text-no-family = Шрифта с таким названием нет
 text-raised = Выпуклые
 text-sunk = Вдавленные
@@ -779,7 +827,7 @@ text-flat = Плоские
 text-follow = По поверхности
 text-shape-note = Буквы выступают из грани или уходят в неё на глубину, отсчитанную от грани в точке щелчка, и следуют за ней не дальше этой глубины; на кривой грани буквы остаются плоскими.
 text-follow-note = Каждая буква ложится на грань под собой и выступает из неё или уходит в неё на всю глубину по всей площади, как бы грань ни изгибалась.
-text-click-note = Щёлкните по модели, чтобы написать на ней текст; предпросмотр под курсором показывает, что получится. Щелчок с Shift или Cmd выбирает модель, ничего на ней не написав.
+text-click-note = Щёлкните по модели, чтобы поставить текст.
 text-stamping = Ставлю надпись
 text-cancelled = Надпись отменена
 text-nothing-under = здесь нет модели, на которой писать
@@ -789,7 +837,6 @@ text-missing-glyph = в этом шрифте нет буквы { $character }
 text-blank = писать нечего
 text-bad-size = буквам нужны высота и глубина
 text-off-the-model = здесь надпись не встаёт на модель
-relief-mode = Режим
 relief-mode-texture = Текстура
 relief-mode-text = Текст
 relief-mode-combine = Объединение
@@ -853,7 +900,8 @@ chip-resin = Смола: { $name }
 chip-machine-tooltip = Принтер, на котором печатается эта платформа
 chip-resin-untuned = Смола, не откалибрована на этом принтере
 chip-resin-tooltip = Смола
-chip-layers = { $layer } мкм, { $exposure } с
+chip-layers = { $layer } мкм · { $exposure } с
+chip-settings = { $tool }, { $summary }
 find-button = Найти
 find-tooltip = Найти инструмент, действие или модель
 bar-source = Исходный код
@@ -865,21 +913,49 @@ bar-minimise = Свернуть
 bar-restart-to-update = Перезапустить для обновления
 bar-restart-tooltip = Закрыть окно и запустить новую сборку
 bar-update-tooltip = Вышла новая версия: посмотрите, что изменилось
+bar-update-percent = Обновление · { $percent } %
+update-sheet-title = Обновление
+update-sheet-from-to = { $from } → { $to }
+update-group-new = Новое
+update-released = вышел { $when }
+update-size = { $mb } МБ
+update-later = Позже
+update-downloading-of = Загрузка · { $got } из { $total } МБ
+update-downloading = Загрузка · { $got } МБ
+update-time-left = осталось около { $seconds } с
+update-step-download = Загрузка
+update-step-verify = Проверка подписи
+update-step-install = Установка
+update-cancel = Отмена
+notice-release-out = Вышел Encrust { $version }
+app-version = Encrust { $version }
+name-numbered = { $name } { $number }
+name-and-detail = { $name }, { $detail }
+value-percent = { $value }%
+printer-last-print = { $how }: { $file }
+notice-release-and-more = { $first } и ещё { $count }
+notice-what-is-new = Что нового
+notice-release-later = Позже: значок останется в верхней панели
+updates-release-found = Найден релиз
+updates-looking-block = Проверка
+updates-every-change = Все изменения
+updates-and-more = И ещё { $count }.
+updates-last-looked = Последняя проверка { $when }
 bar-alpha = Альфа
 bar-alpha-tooltip = Encrust в альфа-версии: расскажите, что пошло не так
 menu-new-plate = Новая платформа
 menu-new-project = Новый проект
 menu-open-project = Открыть проект...
 menu-open-recent = Открыть недавние
-menu-save-project = Сохранить проект
-menu-save-project-as = Сохранить проект как...
-menu-open-model = Открыть модель...
-menu-open-test-print = Открыть пробную печать
-menu-import-machine = Импортировать принтер...
-menu-import-resin = Импортировать смолу...
+menu-save-project = Сохранить
+menu-save-project-as = Сохранить как...
+menu-open-model = Добавить модель...
+menu-open-test-print = Пробные печати
+menu-import-machine = Профиль принтера...
+menu-import-resin = Профиль смолы...
 menu-machine-and-resin = Принтер и смола...
 menu-settings = Настройки...
-menu-quit = Выход
+menu-quit = Выйти из Encrust
 menu-nothing-recent = Пока ничего не открывалось
 menu-arrange-plate = Расставить на платформе
 menu-auto-orient-plate = Автоориентация платформы
@@ -888,6 +964,15 @@ menu-frame-view = Показать всё
 menu-plate-grid = Сетка платформы
 menu-xray = Просвечивать модели
 menu-orthographic = Ортогональный вид
+menu-import = Импорт
+menu-clear-recent = Очистить список
+menu-slicing-already = Платформа уже нарезается
+menu-pick-first = Сначала выберите модель
+menu-plate-empty = Платформа пуста
+menu-camera = Камера
+menu-camera-perspective = Перспектива
+menu-camera-orthographic = Ортогональная
+menu-show = Показывать
 
 ## panels/support_fields.rs
 
@@ -939,6 +1024,8 @@ support-thin-down-off = Поддержка, опирающаяся на моде
 support-small-pillar-note = Применяется там, где поддержка идёт от одной части модели к другой. Оба конца уходят в поверхность; более длинный участок сохраняет обычную ширину.
 support-no-branching = Каждый наконечник стоит на собственной колонне.
 support-no-grid = Стволы стоят там, где сходятся кончики.
+support-no-raft = Опоры стоят прямо на платформе.
+support-no-bracing = Каждый ствол стоит сам по себе.
 support-tip-help = Единственная часть, которая касается модели. Широкий контакт держит крепче, но оставляет след больше; врезка утапливает кончик в поверхность, чтобы он не оторвался во время печати. Длина — конус от кончика до колонны, а сфера держит тяжёлое нависание крепче плоскости.
 support-body-help = Диаметр — толщина колонны: толще значит жёстче, но смолы уходит больше. Зазор — воздух между колонной и моделью, чтобы колонна не приросла к детали. Шапка ствола — наибольшая ширина ствола у основания.
 support-foot-help = Основание держит поддержку на платформе. Шире и толще — держит крепче, но труднее снимается; у конусной и полоза есть край, под который заходит шпатель. Раструб — насколько колонна расширяется перед основанием.
@@ -980,14 +1067,20 @@ support-buttress-one-above = Одна выше
 ## panels/settings/supports.rs
 
 support-table-auto = Автоматический подбор
+support-tab-off = ВЫКЛ
+settings-save = Сохранить
+support-save-first = Сначала сохраните профиль: берётся последняя сохранённая версия.
+unsaved-title = Сохранить изменения в { $name }?
+unsaved-what = Правки этого профиля ещё не сохранены.
+unsaved-discard = Не сохранять
 support-table-manual = Вручную
 support-table-tip = Наконечник
 support-table-spacing = Шаг
 support-cannot-add = не удалось добавить профиль поддержек
 support-pick-profile = Выберите профиль поддержек.
 support-reset = Сбросить к стандартным
-support-reset-shipped-help = «Сбросить к стандартным» возвращает все числа, с которыми профиль поставляется, и сохраняет его имя; под поставочным именем он после этого обновляется вместе с программой. Число, выделенное янтарным, отличается от поставляемого; стрелка рядом возвращает только его. Сброс можно отменить.
-support-reset-auto-help = «Сбросить к стандартным» возвращает все числа, с которыми поставляется автоматический профиль; после этого он обновляется вместе с программой. Число, выделенное янтарным, отличается от поставляемого; стрелка рядом возвращает только его. Сброс можно отменить.
+support-reset-shipped-help = «Сбросить к стандартным» возвращает все числа, с которыми профиль поставляется, и сохраняет его имя; под поставочным именем он после этого обновляется вместе с программой. Число, выделенное янтарным, ещё не сохранено; стрелка рядом возвращает сохранённое. Сброс можно отменить.
+support-reset-auto-help = «Сбросить к стандартным» возвращает все числа, с которыми поставляется автоматический профиль; после этого он обновляется вместе с программой. Число, выделенное янтарным, ещё не сохранено; стрелка рядом возвращает сохранённое. Сброс можно отменить.
 support-reset-stock-help = «Сбросить к стандартным» возвращает числа, с которых начинается новый профиль, и сохраняет его имя. Сброс можно отменить.
 support-cannot-save = не удалось сохранить профиль поддержек
 
@@ -999,7 +1092,6 @@ shape-raft-own = Подложка принадлежит этой модели, 
 shape-raft-plate = Подложка принадлежит платформе: на ней стоят все модели.
 shape-use-plate-raft = Использовать подложку платформы
 shape-use-profile-raft = Использовать подложку из «{ $name }»
-shape-edited = { $name } (изменён)
 shape-save = Сохранить
 shape-save-tooltip = Сохранить поверх профиля, с которого взяты эти значения
 shape-save-as-new = Сохранить как новый
@@ -1034,12 +1126,19 @@ presets-empty =
         [hollow] Профилей полости пока нет. Сохраните один из строки «Профиль» инструмента или импортируйте.
        *[drain] Профилей дренажа пока нет. Сохраните один из строки «Профиль» инструмента или импортируйте.
     }
+presets-open-tool =
+    { $kind ->
+        [hollow] Открыть инструмент «Полость»
+       *[drain] Открыть инструмент «Дренаж»
+    }
 presets-none = Нет
 presets-cannot-rename = не удалось переименовать профиль
 
 ## panels/inspector/presets.rs
 
 presets-unsaved = Не сохранено
+presets-edited = · изменено
+presets-new-name = Мои настройки
 presets-none-saved = Пока ничего не сохранено
 presets-delete-named = Удалить «{ $name }»
 presets-deleted =
@@ -1047,7 +1146,6 @@ presets-deleted =
         [hollow] Профиль полости удалён
        *[drain] Профиль дренажа удалён
     }
-presets-name-hint = Назовите эти настройки
 
 ## panels/settings/machines/resins.rs
 
@@ -1228,14 +1326,14 @@ printer-build-volume = Область построения
 printer-output = Вывод
 printer-firmware = Прошивка
 printer-browser-sends-nothing = Браузер не может достучаться до принтера в вашей сети. Нарезанный файл скачивается, и его нужно переносить на флешке или через приложение самого принтера.
-printer-own-copy = Это ваша копия принтера, который поставляется и в этой сборке, и они различаются. Приоритет у вашей, даже если в новом выпуске исправлены поставляемые значения.
+printer-own-copy = Это ваша копия принтера, который поставляется и в этой сборке, и они различаются. Приоритет у вашей, даже если в новом релизе исправлены поставляемые значения.
 printer-use-shipped = Использовать поставляемый профиль
 printer-cannot-put-back = не удалось вернуть поставляемый профиль
 printer-cannot-save = не удалось сохранить принтер
 printer-grey-min = Самый тусклый серый края
 printer-grey-max = Самый яркий серый края
-printer-grey-range-full = серый края записывается как есть
-printer-grey-range-spread = серый края поднимается до самого тусклого и растягивается до самого яркого; чёрный и сплошной белый не меняются
+printer-grey-range-full = Серый края записывается как есть.
+printer-grey-range-spread = Серый края поднимается до самого тусклого и растягивается до самого яркого; чёрный и сплошной белый не меняются.
 printer-pitch = { $x } × { $y } мкм на пиксель
 printer-mirror = Зеркало
 printer-mirror-normal = Обычное
@@ -1248,8 +1346,8 @@ printer-inset-max-x = Отступ у +X
 printer-inset-min-y = Отступ у −Y
 printer-inset-max-y = Отступ у +Y
 printer-inset-note = Модель в полосе отступа помечается, но нарезается целиком.
-printer-per-layer-on = экспозиция и движение читаются из каждого слоя; в .goo это называют расширенным режимом
-printer-per-layer-off = каждый слой печатается по значениям из заголовка, а нижние слои принтер плавно проходит сам
+printer-per-layer-on = Экспозиция и движение читаются из каждого слоя; в .goo это называют расширенным режимом.
+printer-per-layer-off = Каждый слой печатается по значениям из заголовка, а нижние слои принтер плавно проходит сам.
 printer-variable-height-note = Если выключено, платформа двигается на высоту из заголовка, поэтому адаптивный набор слоёв отклоняется.
 printer-output-note = Формат, в который нарезается для этого принтера, и для диалога, и для самого принтера.
 
@@ -1270,12 +1368,14 @@ network-usb-only = Только USB
 ## panels/settings/printer/connection.rs
 
 connection-usb-note = Нарезанное сохраняется в файл и переносится на флешке.
-connection-found = Найдены в сети
+connection-protocol = Протокол
+connection-printers = Принтеры
+connection-found = Найдены рядом
+found-add = Добавить
 connection-scanning = Сканирование...
 connection-scan-again = Сканировать снова
 connection-add = Добавить
 connection-address-hint = Добавить по адресу, 192.168.1.42
-connection-listed = Принтеры, на которые отправляет этот принтер
 connection-none-listed = Пока нет: отметьте их ниже или добавьте по адресу.
 connection-speaks = Работает по { $theirs }, а не по { $ours }
 connection-not-found = Не найден в сети
@@ -1302,8 +1402,7 @@ connection-api-key = или ключ API
 card-open-printer = Открыть принтер
 card-search-failed = Поиск не удалось отправить ни в одну сеть
 card-nothing-answered = Никто не ответил по адресу { $address }
-card-destination-several = Принтер, на который отправляет этот профиль; нажмите, чтобы увидеть остальные в списке
-card-destination = Принтер, на который отправляет этот профиль
+card-destination-several = Принтер, на который отправляет этот профиль; нажмите, чтобы увидеть остальные в списке и искать снова
 card-not-answering = Не отвечает
 card-connecting = Подключение
 card-not-asked = Пока не опрашивался
@@ -1328,15 +1427,10 @@ slice-to = Нарезать в .{ $extension }
 slice-tooltip = Растеризовать платформу в файл для печати
 slice-send-tooltip = Растеризовать платформу и отправить файл на принтер
 slice-all = Нарезать все платформы ({ $count }) в .{ $extension }
-slice-send = Нарезать и отправить на { $name }
+slice-send = Нарезать и отправить
 slice-start-tooltip = Начать печать файла, загруженного на { $name }
 slice-start-print = Начать печать
-slice-broken =
-    { $count ->
-        [one] { $count } модель на этой платформе повреждена; нарезанное из неё может не напечататься
-        [few] { $count } модели на этой платформе повреждены; нарезанное из них может не напечататься
-       *[many] { $count } моделей на этой платформе повреждены; нарезанное из них может не напечататься
-    }
+slice-saved-instead = { $why }; файл сохраняется на диск.
 slice-cannot-send = не удалось нарезать набор слоёв для отправки
 slice-slicing = Нарезка
 slice-all-started = Нарезка платформ ({ $count }) рядом с { $path }
@@ -1445,7 +1539,7 @@ position-local = Локально
 position-move = Перемещение
 position-move-reset = В центр платформы
 position-move-along = Сдвиг по { $axis }
-position-rotation = Поворот
+position-rotation = Повернуть
 position-rotation-reset = Как при импорте модели
 position-rotation-about = Поворот вокруг { $axis }
 position-scale = Масштаб
@@ -1458,24 +1552,25 @@ position-axis-ratio = Коэффициент по { $axis }
 position-place = Размещение
 position-on-plate = На платформе
 position-centre = По центру
-position-scale-to-fit = Вписать
+position-scale-to-fit = Вписать в объём
 position-lift = Поднять
 position-click-face = Щёлкните по грани
 position-lay-on-face = Положить на грань
 position-auto-orient = Автоориентация
-orient-preset-supports = Меньше поддержек
-orient-preset-peel = Меньше усилие отрыва
-orient-preset-shortest = Самая быстрая печать
+orient-looking = Оценка вариантов положения
+orient-proving = Пробная печать лучших вариантов
+orient-cancelled = Автоориентация отменена
+orient-preset-supports = Опоры
+orient-preset-peel = Отрыв
+orient-preset-shortest = Время
 orient-preset-auto = Авто
 orient-preset-supports-hint = Меньше всего смолы в поддержках, в каком бы положении ни стояла модель.
 orient-preset-peel-hint = Самая слабая тяга на плёнку, без присосок; при усилии меньше 10 Н — меньше всего поддержек.
 orient-preset-shortest-hint = Наименьшее число слоёв, при котором модель ещё печатается.
 orient-preset-auto-hint = Баланс поддержек, тяги и времени печати: ни в чём не приходится сильно уступать.
-position-mirror = Зеркало
-position-across = По { $axis }
-position-keep-original = Сохранить оригинал
-position-keep-original-note = Вместо этого зеркальная копия рядом.
-position-place-help = «На платформе» ставит модель на платформу, «По центру» переносит её в середину, а «Вписать» увеличивает до размеров области печати. «Автоориентация» поворачивает модель так, как ей лучше печататься; «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете.
+position-mirror-across = Отразить по { $axis }
+position-mirror-copy = Отражать копию
+position-place-help = «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете; «По центру» ставит модель над серединой платформы; «Отразить» переворачивает выбранные модели или их копии, поставленные рядом.
 
 ## panels/inspector/paint.rs
 
@@ -1522,6 +1617,7 @@ drain-trapped-resin = Запертая смола
 drain-opening = Отверстие
 drain-opening-note = Щёлкните по модели, её поддержкам или подложке, чтобы поставить отверстие, Alt + щелчок по отверстию убирает его. Каждое вырезается сразу при установке, полая модель или нет, а щелчок по дну отверстия сверлит дальше сквозь него.
 drain-fact = заперто: { $count }
+drain-fact-unchecked = Не проверено
 drain-dig = Прорыть канал (точек: { $count })
 drain-dig-tooltip = Под каждой точкой проходит трубка с размером отверстия, открытая только на двух концах.
 drain-dug =
@@ -1534,6 +1630,7 @@ drain-check-again = Проверить снова
 drain-check = Проверить дренаж
 drain-check-tooltip = Сечёт платформу и прослеживает путь воздуха, ища смолу без выхода.
 drain-checking = Проверка дренажа
+drain-cancelled = Проверка дренажа отменена
 drain-hole = Отверстие
 drain-channel = Канал
 drain-channel-note = Каждый щелчок добавляет точку; канал повторяет ширину и контур отверстия и проходит под всеми ними и открытая только на двух концах.
@@ -1574,7 +1671,8 @@ drain-clear-cuts =
     }
 drain-rehollowing = Повторное выдалбливание вокруг каналов и отверстий со стенкой
 drain-nothing-trapped = Ничего не заперто: смола может вытечь из каждой модели на платформе.
-drain-not-checked = Ещё не проверялось.
+drain-not-checked = Ещё не проверялось
+drain-not-checked-why = Проверка находит полости, из которых смола не вытечет.
 drain-held = { $volume } мл не могут вытечь
 drain-held-note = Она засвечивается внутри и добавляет вес, который должен преодолеть отрыв. Каждый карман на рентгене закрашен красным, и каждому нужно собственное отверстие.
 drain-holes-placed =
@@ -1593,15 +1691,16 @@ drain-drill-tooltip = Отверстие в самой нижней точке �
 
 update-error-fetch = не удалось получить { $url }
 update-error-feed = источник обновлений нечитаем
-update-error-version = `{ $version }` не является версией выпуска
+update-error-version = `{ $version }` не является версией релиза
 update-error-foreign = источник указывает за пределы выпусков этого проекта: { $url }
-update-error-signature = загрузка не подписана ключом выпусков Encrust
+update-error-signature = загрузка не подписана ключом релиза Encrust
 update-error-signed = подпись относится к `{ $found }`, а не к `{ $expected }`
 update-error-archive = не удалось распаковать загруженный архив
 update-error-missing = в загруженном архиве нет `{ $name }`
 update-error-replace = не удалось заменить { $path }
+update-error-cancelled = загрузка отменена
 update-error-store = Microsoft Store не ответил
-update-no-build = В этом выпуске нет сборки для этой платформы.
+update-no-build = В этом релизе нет сборки для этой платформы.
 update-cannot-check = не удалось проверить обновления
 update-installed = Encrust { $version } установлен
 update-cannot-install = не удалось установить Encrust { $version }
@@ -1616,42 +1715,32 @@ update-by-package = Эта копия обновляется загрузкой 
 
 ## panels/settings/updates.rs
 
-updates-checking = Проверка
 updates-by-store = Microsoft Store поддерживает эту копию в актуальном состоянии.
 updates-store-link = Encrust в Microsoft Store
-updates-daily = Искать новый выпуск раз в сутки
-updates-privacy = Один запрос в сутки к GitHub за самым новым выпуском. В нём только версия этой сборки, ничего больше, но GitHub видит ваш адрес. Ничего не скачивается и не устанавливается, пока вы не попросите.
+updates-daily = Искать новый релиз раз в сутки
+updates-privacy = Один запрос в сутки к GitHub за самым новым релизом. В нём только версия этой сборки, ничего больше, но GitHub видит ваш адрес. Ничего не скачивается и не устанавливается, пока вы не попросите.
 updates-check-now = Проверить сейчас
-updates-this-is = Это { $version }, последняя проверка: { $when }
-updates-looking = Поиск нового выпуска
-updates-newest = Это самый новый выпуск.
+updates-looking = Поиск нового релиза
+updates-newest = Это самый новый релиз.
 updates-installing = Загрузка и проверка подписи
-updates-installed = Установлено. Заработает при следующем запуске.
 updates-restart-now = Перезапустить сейчас
-updates-store-has-it = В Microsoft Store для этой копии есть этот выпуск.
 updates-in-store = Обновить в Microsoft Store
-updates-install = Установить и перезапустить
+updates-install = Загрузить и установить
 updates-skip = Пропустить эту версию
-updates-release-page = Страница выпуска
-updates-more-notes = И ещё больше на странице выпуска.
+updates-release-page = Страница релиза
 
 ## panels/start.rs
 
 start-title = Новая платформа
-start-subtitle = Откройте модель или продолжите с того места, где остановились.
+start-setup = { $machine } · { $resin } · { $layer } мкм
 start-zone = Откройте модель или проект
-start-drop-here = Перетащите модель сюда
-start-drop-formats = STL, OBJ, 3MF или проект .encrust
+start-drop-here = Перетащите модель или проект
+start-drop-formats = STL, OBJ, 3MF, нарезанный файл или проект .encrust
 start-open-model = Открыть модель
 start-open-project = Открыть проект
 start-recent = Недавние
 start-test-prints = Пробные печати
-start-files =
-    { $count ->
-        [one] { $count } файл
-        [few] { $count } файла
-       *[many] { $count } файлов
-    }
+start-clear-recent = Очистить список
 start-models =
     { $count ->
         [one] { $count } модель
@@ -1691,6 +1780,8 @@ notice-keep-as-is = Оставить как есть
 notice-no-printer-resin = Принтера и смолы пока нет
 notice-no-printer = Принтера пока нет
 notice-no-resin = На этом принтере пока нет смолы
+notice-no-resin-why = Для нарезки нужны времена засветки.
+notice-no-printer-why = Для нарезки нужны экран и объём машины.
 notice-set-up = Настроить
 notice-put-away = Убрать
 
@@ -1719,11 +1810,13 @@ view-model = Модель
 view-side-by-side = Модель и слой рядом
 view-mask = Маска слоя
 section-pause = Пауза
+section-of = из { $count }
 section-no-layers = Нет слоёв
 section-no-layers-yet = Слоёв пока нет
 section-height-of = { $height } из { $top } мм
 section-type-layer = Введите номер слоя для перехода
 section-layer-field = Слой { $layer }, введите номер слоя для перехода
+section-go-to-issue = { $issue } на слое { $layer }: нажмите, чтобы перейти
 section-slider = Слой, всего { $count }
 section-nothing-to-cut = На платформе пока нечего сечь
 section-layers-range = Слои с { $first } по { $layer }
@@ -1731,20 +1824,15 @@ section-layers-range = Слои с { $first } по { $layer }
 ## panels/settings/confirm.rs
 
 confirm-cannot-undo = Это нельзя отменить.
-confirm-remove-machine = Удалить «{ $name }» и всё, что вы на нём изменили?
-confirm-remove = Удалить
+confirm-click-again = Нажмите ещё раз, чтобы продолжить
+confirm-asked-delete = Удалить?
+confirm-asked-take-off = Убрать?
+confirm-asked-stop = Остановить?
 confirm-machine-stays = Принтер остаётся в библиотеке, поэтому его можно добавить снова со значениями, поставляемыми в этой сборке.
-confirm-take-resin-off = Убрать эту смолу
-confirm-delete-named = Удалить «{ $name }»?
 confirm-untouched-resin = В неё ничего не вводилось, поэтому она не сохраняется в общем списке.
-confirm-take-off-named = Убрать «{ $name }» с этого принтера?
-confirm-take-off = Убрать
 confirm-stays-in-pool = Она остаётся в общем списке, и этот или любой другой принтер может взять её обратно.
 confirm-stays-measured = Она остаётся в общем списке, откалибрована на: { $printers }.
-confirm-delete-resin = Удалить эту смолу
-confirm-delete-resin-named = Удалить «{ $name }» и подобранные для неё экспозиции?
 confirm-comes-off = Она также убирается с: { $printers }.
-confirm-delete-profile = Удалить этот профиль
 confirm-reset-unreadable = Сбросить нечитаемые профили
 confirm-delete-unreadable = Удалить нечитаемые профили
 confirm-reset-named = Удалить ваши копии профилей { $names } и использовать те, что поставляются с этой версией?
@@ -1800,9 +1888,11 @@ scope-plate = все модели на платформе ({ $count })
 
 ## panels/scene_panel.rs
 
-models-broken = повреждена
+models-broken = Повреждена
 models-title = Модели
 models-selected = Выбрано: { $count }
+models-picked = выбрано: { $count }
+models-project = · { $name }
 models-arrange = Расставить на платформе
 models-duplicate = Дублировать моделей: { $count }
 models-array = Массив
@@ -1839,7 +1929,6 @@ job-cannot-measure = не удалось измерить набор слоёв
 
 ## panels/inspector.rs
 
-inspector-parallel = параллельно
 inspector-about-select = Выберите модель, затем перемещайте, поворачивайте, масштабируйте, кладите и зеркальте её.
 inspector-about-measure = Щёлкните по двум точкам или двум плоским граням модели.
 inspector-about-hollow = Вырежьте полость, чтобы сэкономить смолу и облегчить отрыв.
@@ -1868,9 +1957,7 @@ preview-cannot-rasterise = не удалось растеризовать сло
 
 ## panels/printer_card/controls.rs
 
-controls-stop-question = Остановить печать? Её нельзя будет возобновить.
-controls-stop = Остановить печать
-controls-keep-printing = Продолжить печать
+controls-stop-cost = Остановленную печать нельзя возобновить.
 controls-film = Освобождение плёнки: подъём { $lifts } из { $max }
 controls-copy = Копировать
 controls-camera-off = Выключить камеру
@@ -2058,9 +2145,10 @@ cube-home = Исходный вид
 
 mask-pick-machine = Выберите принтер, чтобы узнать, на каком экране рисовать слои.
 mask-no-stack = Набора слоёв пока нет.
-mask-zoomed = ×{ $zoom }   двойной щелчок — вписать
-mask-how = прокрутка — масштаб, перетаскивание — сдвиг
-mask-caption = Маска слоя   1 : { $scale }   { $hint }
+mask-pixels = { $width } × { $height } пикс.
+zoom-out = Уменьшить
+zoom-in = Увеличить
+zoom-whole = Показать целиком, или двойной щелчок
 mask-cannot-draw = не удалось нарисовать слой
 mask-cannot-draw-full = не удалось нарисовать слой целиком
 
@@ -2091,6 +2179,8 @@ job-step-shaping = Завершение
 job-step-reading = Чтение моделей
 job-step-combining = Объединение
 job-step-finishing = Сборка результата
+job-step-mending = Починка сетки
+job-step-crossing = Поиск самопересечений
 job-hollow-preparing = Проверка модели
 job-hollow-seeding = Замер поверхности
 job-hollow-carrying = Проход через стенку
@@ -2119,6 +2209,7 @@ job-orient-none = поиск не нашёл ни одной ориентаци�
 
 job-thread-stopped-support = поток поддержек остановился, не закончив
 job-placing = Расстановка поддержек, { $percent } %
+printer-printing-file = { $state }, { $file }, { $percent }%
 job-cutting-plate = Нарезка платформы...
 
 ## job/preview.rs
@@ -2182,6 +2273,11 @@ exchange-choose-printer-resin = сначала выберите принтер, 
 
 ## panels/find.rs
 
+find-group-tools = Инструменты
+find-group-actions = Действия
+find-group-models = Модели
+find-move = выбрать
+find-open = открыть
 find-nothing = Под таким названием ничего нет
 
 ## panels/inspector/scope.rs
@@ -2227,6 +2323,7 @@ sheet-firmware = прошивка { $version }
 ## panels/settings/machines/library.rs
 
 library-all-brands = Все производители
+library-import = Импортировать профиль
 library-custom = Свой принтер
 library-search = Искать среди всех принтеров
 library-machines =
@@ -2238,9 +2335,9 @@ library-machines =
 
 ## panels/stage.rs
 
-stage-empty = На платформе нет модели
-stage-empty-hint = Откройте модель или проект либо перетащите их в окно.
-stage-open = Открыть...
+stage-empty = На платформе ничего нет
+stage-empty-how = Перетащите модель в окно
+stage-open = Открыть модель
 
 ## plate.rs
 
@@ -2263,4 +2360,42 @@ web-no-storage = в этом браузере нет закрытого файл
 
 picker-no-machine = Принтеров пока нет. Добавьте принтер в окне «Принтер и смола».
 picker-no-resin = Для этого принтера пока нет смол. Добавьте их в окне «Принтер и смола».
-picker-edit-resin = Изменить эту смолу...
+picker-your-machines = Ваши принтеры
+picker-machine-detail = { $maker } · .{ $extension }
+picker-add-machine = Добавить принтер
+picker-on-machine = На { $name }
+picker-resin-detail = { $kind } · { $layer } мкм
+picker-add-resin = Добавить смолу
+
+hint-click = Щелчок
+hint-drag = Перетаскивание
+hint-shift = Shift
+hint-esc = Esc
+hint-modifier-click = { $key } + щелчок
+hint-modifier-drag = { $key } + перетаскивание
+hint-clear = сбросить
+hint-remove = убрать
+hint-paint = закрасить
+hint-erase = стереть
+hint-measure-two-points = по двум точкам
+hint-measure-second-point = по второй точке
+hint-measure-two-faces = по двум плоским граням
+hint-measure-second-face = по второй плоской грани
+hint-measure-freely = мерить свободно
+hint-drain-hole = по модели, чтобы прорезать отверстие
+hint-drain-channel = по модели, чтобы добавить точку канала
+hint-relief-write = по модели, чтобы написать там
+hint-pick-without-writing = выбрать, не создавая надпись
+hint-supports-pick = по части опоры, чтобы выбрать её
+hint-supports-carry = перенести выбранное
+hint-supports-add = добавить к выбранному
+hint-hollow-solid = по модели, чтобы оставить там сплошную стенку
+hint-area-paint = где опоры нужны
+hint-area-block = где опор быть не должно
+hint-repair-faces = выбрать грани
+hint-repair-edge = по открытому краю, чтобы выбрать его
+hint-let-go = отпустить
+hint-supports-place = по модели, чтобы поставить опору
+hint-supports-line = поставить их линией
+hint-cut-part = по части, чтобы отметить её
+hint-gizmo-steps = за ручку шагами по 1 мм и 15°

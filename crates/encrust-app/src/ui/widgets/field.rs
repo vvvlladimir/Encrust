@@ -4,7 +4,7 @@ use core_geometry::Scalar;
 use egui::emath::Numeric;
 use egui::{Align, Color32, DragValue, Layout, Rect, Sense, TextStyle, Ui, UiBuilder, pos2, vec2};
 
-use super::{compact_button, icon_button};
+use super::icon_button;
 use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
@@ -98,6 +98,51 @@ fn name_for_reader(ui: &Ui, id: egui::Id, name: &str) {
 /// Points kept clear either side of the unit inside a box.
 const UNIT_PAD: f32 = 8.0;
 
+/// The units whose slot every box shares, so the figures of a column stand on one line
+/// whichever unit follows them; a longer unit widens its own box's slot.
+const SLOT_UNITS: [&str; 7] = [
+    "unit-mm",
+    "unit-mm2",
+    "unit-mm3",
+    "unit-um",
+    "unit-deg",
+    "unit-times",
+    "unit-px",
+];
+
+/// How wide the unit's slot is in a box: the widest of `SLOT_UNITS`, or `unit` if wider.
+fn unit_slot_w(ui: &Ui, unit: &egui::Galley) -> f32 {
+    let low = theme::colors().text_low;
+    let widest = SLOT_UNITS
+        .iter()
+        .map(|key| {
+            let text = crate::i18n::text(key, None);
+            ui.painter()
+                .layout_no_wrap(text, theme::unit(), low)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max);
+    widest.max(unit.size().x)
+}
+
+/// The decimals the standard gives a quantity in `unit` (`docs/design/ui-standards.md`,
+/// Numbers), so a field cannot show its own; `None` for a unit the table lacks.
+fn standard_decimals(unit: &str) -> Option<usize> {
+    [
+        ("unit-mm", 2),
+        ("unit-um", 0),
+        ("unit-deg", 1),
+        ("unit-s", 2),
+        ("unit-mm-min", 1),
+        ("unit-mm3", 1),
+        ("unit-times", 2),
+        ("unit-px", 0),
+    ]
+    .into_iter()
+    .find_map(|(key, decimals)| (crate::i18n::text(key, None) == unit).then_some(decimals))
+}
+
 /// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
 /// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
 pub(super) fn boxed_field<N: Numeric>(
@@ -110,6 +155,7 @@ pub(super) fn boxed_field<N: Numeric>(
 ) -> bool {
     let colors = theme::colors();
     let unit = field.unit;
+    let decimals = standard_decimals(unit).or(decimals);
     let size = vec2(field.width.max(40.0), theme::FIELD_H);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let frame = ui.painter().add(egui::Shape::Noop);
@@ -117,7 +163,9 @@ pub(super) fn boxed_field<N: Numeric>(
         ui.painter()
             .layout_no_wrap(unit.to_owned(), theme::unit(), colors.text_low)
     });
-    let unit_w = unit.as_ref().map_or(0.0, |unit| unit.size().x + UNIT_PAD);
+    let unit_w = unit
+        .as_ref()
+        .map_or(0.0, |unit| unit_slot_w(ui, unit) + UNIT_PAD);
     let value_rect = Rect::from_min_max(rect.min, pos2(rect.right() - unit_w, rect.bottom()));
 
     let layout = Layout::top_down(Align::Max).with_main_align(Align::Center);
@@ -140,6 +188,9 @@ pub(super) fn boxed_field<N: Numeric>(
             ui.add(drag)
         })
         .inner;
+    // The scope above leaves the cursor after the figure, short of the unit: put it back
+    // after the whole box, or the next control in a row would sit over the unit.
+    ui.advance_cursor_after_rect(rect);
     name_for_reader(ui, response.id, field.name);
 
     let border = if response.has_focus() {
@@ -171,7 +222,7 @@ pub(super) fn boxed_field<N: Numeric>(
 fn borderless(style: &mut egui::Style, size: egui::Vec2) {
     style
         .text_styles
-        .insert(TextStyle::Button, theme::figures(12.0));
+        .insert(TextStyle::Button, theme::figures(13.0));
     style.spacing.interact_size = size;
     style.spacing.button_padding.x = UNIT_PAD;
     let visuals = &mut style.visuals;
@@ -208,44 +259,6 @@ pub fn number_row(
     };
     row(ui, label, |ui| {
         boxed_field(ui, &field, value, speed, range, Some(decimals))
-    })
-}
-
-/// A `number_row` with its unit after the label and a button either side of its box,
-/// taking `step` off the value and putting it on, inside `range`.
-#[allow(clippy::too_many_arguments)]
-pub fn stepped_row(
-    ui: &mut Ui,
-    label: &str,
-    value: &mut Scalar,
-    unit: &str,
-    speed: f64,
-    step: Scalar,
-    range: RangeInclusive<Scalar>,
-    decimals: usize,
-) -> bool {
-    let field = Field {
-        name: label,
-        unit: "",
-        width: theme::FIELD_W - 2.0 * theme::FIELD_H,
-        flagged: false,
-    };
-    let (least, most) = (*range.start(), *range.end());
-    labelled(ui, label, theme::colors().text_mid, unit, |ui| {
-        let more = compact_button(ui, "+", theme::FIELD_H)
-            .on_hover_text(tr!("field-step-more", step = step, unit = unit))
-            .clicked();
-        let typed = boxed_field(ui, &field, value, speed, range, Some(decimals));
-        let less = compact_button(ui, "\u{2212}", theme::FIELD_H)
-            .on_hover_text(tr!("field-step-less", step = step, unit = unit))
-            .clicked();
-        if more {
-            *value = (*value + step).min(most);
-        }
-        if less {
-            *value = (*value - step).max(least);
-        }
-        typed || more || less
     })
 }
 
@@ -322,11 +335,12 @@ pub fn count_row(
     })
 }
 
-/// A `picker` under a `field_label` of its own, for a choice too long for a `FIELD_W` box.
+/// A `dropdown` under a `field_label` of its own, for a choice too long for a `FIELD_W` box.
 pub fn picker_row(ui: &mut Ui, label: &str, glyph: &str, chosen: &str) -> egui::Response {
     field_label(ui, label, theme::colors().text_mid, "");
     ui.add_space(4.0);
-    super::picker(ui, glyph, chosen)
+    let face = super::DropdownFace::plain(glyph, chosen);
+    super::dropdown(ui, &face, ui.available_width())
 }
 
 pub(super) fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
@@ -375,11 +389,22 @@ pub fn text_box(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
         .margin(egui::Margin::symmetric(10, 0))
 }
 
-/// A named line of text: the label on the left, the field taking what is left.
+/// The name of a row whose box takes what is left, in a column of `ROW_NAME_W` so every
+/// such box of a form starts on one line; a longer name is cut.
+pub fn row_name(ui: &mut Ui, text: &str) {
+    let cell = vec2(theme::ROW_NAME_W, theme::FIELD_H);
+    let layout = egui::Layout::left_to_right(Align::Center);
+    ui.allocate_ui_with_layout(cell, layout, |ui| {
+        ui.set_width(theme::ROW_NAME_W);
+        field_label(ui, text, theme::colors().text_mid, "");
+    });
+}
+
+/// A named line of text: the name in its column, the field taking what is left.
 pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
-        field_label(ui, label, theme::colors().text_mid, "");
+        row_name(ui, label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let field = text_box(egui::TextEdit::singleline(value))
                 .font(theme::label())
@@ -395,6 +420,18 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_unit_of_the_standard_brings_its_own_decimals() {
+        assert_eq!(standard_decimals("mm"), Some(2));
+        assert_eq!(standard_decimals("°"), Some(1));
+        assert_eq!(standard_decimals("µm"), Some(0));
+        assert_eq!(
+            standard_decimals("g/ml"),
+            None,
+            "a unit the table lacks keeps the caller's"
+        );
+    }
 
     #[test]
     fn a_value_outside_the_range_is_left_alone_until_it_is_edited() {

@@ -5,7 +5,7 @@ use egui::Color32;
 
 use crate::check::covered_mm2;
 use crate::i18n::tr;
-use crate::ui::{Segment, Segmented, hint, issue_row, kept, list};
+use crate::ui::{Segment, Segmented, hint, issue_list, issue_row, kept};
 
 use super::tint;
 
@@ -66,6 +66,7 @@ impl Filter {
 /// Every issue of one kind on one layer, which is one row of the list.
 pub(super) struct Row {
     pub(super) layer: usize,
+    pub(super) name: String,
     pub(super) filter: Filter,
     /// What stood on an island taken out, rather than an island itself.
     pub(super) hanging: bool,
@@ -116,6 +117,7 @@ pub(super) fn rows(risks: &[Risk]) -> Vec<Row> {
             }
             _ => rows.push(Row {
                 layer: risk.layer,
+                name: issue_name(risk),
                 filter,
                 hanging,
                 tint: tint(risk),
@@ -188,12 +190,13 @@ pub(super) fn listing(
         .into_iter()
         .filter(|row| filter == Filter::All || row.filter == filter)
         .collect();
-    let picked = list(ui, |ui| {
+    let picked = issue_list(ui, |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
             let place = tr!("check-layer", layer = row.layer + 1);
             let selected = row.layer == shown;
-            if issue_row(ui, row.tint, &place, &detail(row), selected).clicked() {
+            let response = issue_row(ui, row.tint, (&place, None), &detail(row), selected);
+            if response.on_hover_text(&row.name).clicked() {
                 picked = Some(
                     risks
                         .iter()
@@ -209,6 +212,31 @@ pub(super) fn listing(
         hint(ui, &tr!("check-more-layers", count = rows.len() - LISTED));
     }
     picked
+}
+
+/// The issues of the row `filter` admits on the next layer past `shown`, or the one
+/// before it when not `forward`.
+pub(super) fn neighbour(
+    risks: &[Risk],
+    filter: Filter,
+    shown: usize,
+    forward: bool,
+) -> Option<Vec<Risk>> {
+    let rows: Vec<Row> = rows(risks)
+        .into_iter()
+        .filter(|row| filter == Filter::All || row.filter == filter)
+        .collect();
+    let row = match forward {
+        true => rows.iter().find(|row| row.layer > shown),
+        false => rows.iter().rev().find(|row| row.layer < shown),
+    }?;
+    Some(
+        risks
+            .iter()
+            .filter(|risk| row.holds(risk))
+            .copied()
+            .collect(),
+    )
 }
 
 /// What one row holds, short enough for the right of it.
@@ -250,7 +278,7 @@ fn detail(row: &Row) -> String {
 }
 
 /// What the worst issue is, named plainly rather than as a failure.
-pub(super) fn issue_name(risk: &Risk) -> String {
+pub(crate) fn issue_name(risk: &Risk) -> String {
     match risk.kind {
         RiskKind::Island { .. } => tr!("check-issue-island"),
         RiskKind::Floating { .. } => tr!("check-issue-hanging"),
@@ -258,42 +286,6 @@ pub(super) fn issue_name(risk: &Risk) -> String {
         RiskKind::Peel { .. } => tr!("check-issue-peel"),
         RiskKind::SuctionCup { .. } => tr!("check-issue-cup"),
         RiskKind::Thin { .. } => tr!("check-issue-thin"),
-    }
-}
-
-/// Why the worst issue fails the print, in a sentence.
-pub(super) fn explain(risk: &Risk) -> String {
-    match risk.kind {
-        RiskKind::Floating { area_mm2 } => {
-            tr!("check-explain-hanging", area = format!("{area_mm2:.2}"))
-        }
-        RiskKind::Island { area_mm2 } => {
-            tr!("check-explain-island", area = format!("{area_mm2:.2}"))
-        }
-        RiskKind::Lever {
-            stress_mpa,
-            lever_mm,
-            neck_mm2,
-        } => tr!(
-            "check-explain-lever",
-            neck = format!("{neck_mm2:.2}"),
-            stress = format!("{stress_mpa:.0}"),
-            lever = format!("{lever_mm:.1}")
-        ),
-        RiskKind::Peel { force_n } => {
-            tr!("check-explain-peel", force = format!("{force_n:.0}"))
-        }
-        RiskKind::SuctionCup {
-            area_mm2,
-            volume_mm3,
-        } => tr!(
-            "check-explain-cup",
-            area = format!("{area_mm2:.0}"),
-            volume = format!("{:.2}", volume_mm3 / 1000.0)
-        ),
-        RiskKind::Thin { width_mm } => {
-            tr!("check-explain-thin", width = format!("{width_mm:.2}"))
-        }
     }
 }
 

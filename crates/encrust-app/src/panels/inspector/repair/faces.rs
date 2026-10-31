@@ -51,7 +51,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 2,
             );
             let angle = &mut state.flood_angle_deg;
-            let degrees = tr!("unit-degrees");
+            let degrees = tr!("unit-deg");
             number_row(
                 ui,
                 &tr!("repair-flood-angle"),
@@ -131,7 +131,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
             let none = hand.picked_faces(scene).is_none();
             let blocked = none.then(|| tr!("repair-pick-faces-first"));
             let drop = companion_button(ui, icon::REMOVE, &tr!("repair-delete-faces"), !none);
-            let flip = primary_button(ui, icon::FLIP, &tr!("repair-flip-faces"), !none);
+            let flip = primary_button(ui, &tr!("repair-flip-faces"), !none);
             match (blocked_hover(flip, blocked).clicked(), drop.clicked()) {
                 (true, _) => Some(HandEdit::Flip),
                 (_, true) => Some(HandEdit::Remove),
@@ -141,7 +141,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         Picking::Edges => {
             let two = hand.picked_edges(scene).len() == 2;
             let blocked = (!two).then(|| tr!("repair-pick-two-edges"));
-            let bridge = primary_button(ui, icon::LINKED, &tr!("repair-bridge"), two);
+            let bridge = primary_button(ui, &tr!("repair-bridge"), two);
             blocked_hover(bridge, blocked)
                 .clicked()
                 .then_some(HandEdit::Bridge)

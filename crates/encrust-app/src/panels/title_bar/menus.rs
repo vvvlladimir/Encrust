@@ -6,7 +6,8 @@ use crate::project;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action};
 use crate::state::Doc;
-use crate::ui::theme;
+use crate::ui::{MENU_W, MenuRow, icon, menu_row, menu_rule, menu_style, menu_sub, theme};
+use egui::containers::menu::MenuConfig;
 use egui::{Align, Layout, vec2};
 
 /// The menu titles, File, Edit and View, in the window's language.
@@ -15,19 +16,29 @@ pub(super) fn menus() -> [String; 3] {
 }
 
 /// Points inside a menu title either side of its name, and between two titles.
-pub(super) const MENU_PAD: f32 = 8.0;
+pub(super) const MENU_PAD: f32 = 12.0;
 
 pub(super) const MENU_GAP: f32 = 4.0;
 
 /// egui draws its own menu bar: there is no native one on the platforms this runs on.
 pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
     ui.scope(|ui| {
+        let colors = theme::colors();
         let visuals = ui.visuals_mut();
+        // The titles take the bar's icon squares' inks, which the theme's override would hide.
+        visuals.override_text_color = None;
         visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
         visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.inactive.fg_stroke.color = theme::colors().text_mid;
-        visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+        visuals.widgets.inactive.fg_stroke.color = colors.text_mid;
+        for state in [
+            &mut visuals.widgets.hovered,
+            &mut visuals.widgets.active,
+            &mut visuals.widgets.open,
+        ] {
+            state.weak_bg_fill = colors.hover;
+            state.bg_stroke = egui::Stroke::NONE;
+            state.fg_stroke.color = colors.text_high;
+        }
         // Room inside and between the titles, so each reads as a button of its own.
         ui.spacing_mut().button_padding.x = MENU_PAD;
         ui.spacing_mut().item_spacing.x = MENU_GAP;
@@ -47,124 +58,227 @@ pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
             .sum();
         let size = vec2(width, ui.available_height());
         ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
+            let config = MenuConfig::new().style(menu_style);
+            egui::MenuBar::new().config(config).ui(ui, |ui| {
                 let [file, edit, view] = menus;
-                ui.menu_button(file, |ui| file_menu(ui, window));
-                ui.menu_button(edit, |ui| edit_menu(ui, window));
-                ui.menu_button(view, |ui| view_menu(ui, window));
+                ui.menu_button(file, |ui| wide(ui, |ui| file_menu(ui, window)));
+                ui.menu_button(edit, |ui| wide(ui, |ui| edit_menu(ui, window)));
+                ui.menu_button(view, |ui| wide(ui, |ui| view_menu(ui, window)));
             });
         });
     });
     ui.add_space(PAD);
 }
 
-/// A menu row that names its key beside itself: the menu is where a shortcut is learned.
-pub(super) fn item(ui: &mut egui::Ui, label: &str, action: Action) -> egui::Response {
-    let keys = shortcuts::text(action);
-    ui.add(egui::Button::new(label).shortcut_text(keys))
+fn wide(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.set_width(MENU_W);
+    add(ui);
 }
 
-pub(super) fn item_enabled(
-    ui: &mut egui::Ui,
-    label: &str,
-    action: Action,
-    enabled: bool,
-) -> egui::Response {
-    let keys = shortcuts::text(action);
-    ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(keys))
+/// A row that runs `action`, its keys beside it: the menu is where a shortcut is learned.
+fn action_row<'a>(glyph: Option<&'a str>, label: &'a str, action: Action) -> MenuRow<'a> {
+    MenuRow::new(glyph, label).keys(shortcuts::text(action))
 }
 
+fn clicked(ui: &mut egui::Ui, row: &MenuRow<'_>) -> bool {
+    let pressed = menu_row(ui, row).clicked();
+    if pressed {
+        ui.close();
+    }
+    pressed
+}
+
+/// Create, open, save, slice, set up, leave: one group each. See `docs/design/ui-screens.md`.
 pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
-    if item(ui, &tr!("menu-new-plate"), Action::NewPlate).clicked() {
-        ui.close();
-        project::new_plate(window);
-    }
-    if item(ui, &tr!("menu-new-project"), Action::NewProject).clicked() {
-        ui.close();
-        project::new_project(window);
-    }
-    if item(ui, &tr!("menu-open-project"), Action::OpenProject).clicked() {
-        ui.close();
-        project::open_dialog(window);
-    }
-    // A browser hands over bytes and keeps no paths to reopen.
-    if cfg!(not(target_arch = "wasm32")) {
-        ui.menu_button(tr!("menu-open-recent"), |ui| recent_menu(ui, window));
-    }
-    if item(ui, &tr!("menu-save-project"), Action::SaveProject).clicked() {
-        ui.close();
-        project::save_open(window);
-    }
-    if item(ui, &tr!("menu-save-project-as"), Action::SaveProjectAs).clicked() {
-        ui.close();
-        project::save_dialog(window);
-    }
-    ui.separator();
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::ADD),
+                tr!("menu-new-plate"),
+                Action::NewPlate,
+                project::new_plate,
+            ),
+            (
+                Some(icon::NEW_PROJECT),
+                tr!("menu-new-project"),
+                Action::NewProject,
+                project::new_project,
+            ),
+        ],
+    );
+    menu_rule(ui);
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::OPEN),
+                tr!("menu-open-project"),
+                Action::OpenProject,
+                project::open_dialog,
+            ),
+            (
+                Some(icon::MODEL),
+                tr!("menu-open-model"),
+                Action::OpenModel,
+                crate::import::open_dialog,
+            ),
+        ],
+    );
+    open_subs(ui, window);
+    menu_rule(ui);
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::SAVE),
+                tr!("menu-save-project"),
+                Action::SaveProject,
+                |window| {
+                    project::save_open(window);
+                },
+            ),
+            (
+                None,
+                tr!("menu-save-project-as"),
+                Action::SaveProjectAs,
+                |window| {
+                    project::save_dialog(window);
+                },
+            ),
+        ],
+    );
+    menu_rule(ui);
     slice_items(ui, window);
-    ui.separator();
-    if item(ui, &tr!("menu-open-model"), Action::OpenModel).clicked() {
-        ui.close();
-        crate::import::open_dialog(window);
-    }
-    ui.menu_button(tr!("menu-open-test-print"), |ui| {
-        test_print_menu(ui, window);
-    });
-    if ui.button(tr!("menu-import-machine")).clicked() {
-        ui.close();
-        profiles::open_printer(window);
-    }
-    if ui.button(tr!("menu-import-resin")).clicked() {
-        ui.close();
-        profiles::open_material(window.machine);
-    }
-    ui.separator();
-    if ui.button(tr!("menu-machine-and-resin")).clicked() {
-        ui.close();
-        open_machines(window.machine);
-    }
-    if item(ui, &tr!("menu-settings"), Action::Settings).clicked() {
-        ui.close();
-        toggle_settings(window.machine);
-    }
+    menu_rule(ui);
+    setup_items(ui, window);
     // A page is left by closing its tab.
     if cfg!(not(target_arch = "wasm32")) {
-        ui.separator();
-        if ui.button(tr!("menu-quit")).clicked() {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        menu_rule(ui);
+        quit_row(ui);
+    }
+}
+
+/// A menu row's glyph, name and action, and what it runs.
+type RunRow<'a> = (Option<&'a str>, String, Action, fn(&mut Window));
+
+/// Rows that each run an action with its keys beside it.
+fn run_rows<const N: usize>(ui: &mut egui::Ui, window: &mut Window, rows: [RunRow<'_>; N]) {
+    for (glyph, label, action, run) in rows {
+        if clicked(ui, &action_row(glyph, &label, action)) {
+            run(window);
         }
     }
 }
 
-/// Slicing into a file whatever the plate's press is set to, and every plate at once.
-fn slice_items(ui: &mut egui::Ui, window: &mut Window) {
-    let free = crate::panels::can_slice(window);
-    let extension = window.machine.slicing.format.extension();
-    let label = tr!("slice-to", extension = extension);
-    if item_enabled(ui, &label, Action::Slice, free).clicked() {
-        ui.close();
-        crate::panels::slice_this_plate(window);
+/// The recent files and the test prints, each a submenu.
+fn open_subs(ui: &mut egui::Ui, window: &mut Window) {
+    // A browser hands over bytes and keeps no paths to reopen.
+    if cfg!(not(target_arch = "wasm32")) {
+        let recent = tr!("menu-open-recent");
+        menu_sub(ui, &MenuRow::new(Some(icon::RECENT), &recent), |ui| {
+            recent_menu(ui, window);
+        });
     }
-    let plates = window.doc.scene.plates().len();
-    let every = egui::Button::new(tr!("slice-all", count = plates, extension = extension));
-    if plates > 1 && ui.add_enabled(free, every).clicked() {
-        ui.close();
-        crate::panels::slice_every_plate(window);
+    let tests = tr!("menu-open-test-print");
+    menu_sub(ui, &MenuRow::new(Some(icon::TEST_PRINT), &tests), |ui| {
+        test_print_menu(ui, window);
+    });
+}
+
+fn quit_row(ui: &mut egui::Ui) {
+    // macOS binds Quit to Command-Q itself; elsewhere the menu is the way out.
+    let keys = if cfg!(target_os = "macos") {
+        format!("{}Q", icon::KEY_COMMAND)
+    } else {
+        String::new()
+    };
+    if clicked(ui, &MenuRow::new(None, &tr!("menu-quit")).keys(keys)) {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
     }
 }
 
-/// The files opened lately, newest first, each with how long ago.
+/// Slicing into a file whatever the plate's press is set to, and every plate at once. Off,
+/// the row says what stands in the way.
+fn slice_items(ui: &mut egui::Ui, window: &mut Window) {
+    let slicing = &window.machine.slicing;
+    let blocker = slicing
+        .blocker(&window.doc.scene)
+        .or_else(|| slicing.job.is_some().then(|| tr!("menu-slicing-already")));
+    let extension = slicing.format.extension();
+    let label = tr!("slice-to", extension = extension);
+    let row = action_row(Some(icon::SLICE), &label, Action::Slice).unless(blocker.as_deref());
+    if clicked(ui, &row) {
+        crate::panels::slice_this_plate(window);
+    }
+    let plates = window.doc.scene.plates().len();
+    if plates > 1 {
+        let every = tr!("slice-all", count = plates, extension = extension);
+        if clicked(ui, &MenuRow::new(None, &every).enabled(blocker.is_none())) {
+            crate::panels::slice_every_plate(window);
+        }
+    }
+}
+
+/// Profiles brought in, the window that keeps them, and Settings.
+fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
+    let import = tr!("menu-import");
+    menu_sub(ui, &MenuRow::new(Some(icon::IMPORT), &import), |ui| {
+        if clicked(
+            ui,
+            &MenuRow::new(Some(icon::PRINTER), &tr!("menu-import-machine")),
+        ) {
+            profiles::open_printer(window);
+        }
+        if clicked(
+            ui,
+            &MenuRow::new(Some(icon::RESIN), &tr!("menu-import-resin")),
+        ) {
+            profiles::open_material(window.machine);
+        }
+    });
+    let machines = tr!("menu-machine-and-resin");
+    if clicked(ui, &MenuRow::new(Some(icon::PRINTER), &machines)) {
+        open_machines(window.machine);
+    }
+    let settings = tr!("menu-settings");
+    if clicked(
+        ui,
+        &action_row(Some(icon::SETTINGS), &settings, Action::Settings),
+    ) {
+        toggle_settings(window.machine);
+    }
+}
+
+/// The files opened lately, newest first, each with how long ago, and a way to forget them.
 pub(super) fn recent_menu(ui: &mut egui::Ui, window: &mut Window) {
+    ui.set_width(RECENT_W);
     let now = crate::updates::now_s();
     let mut picked = None;
     for file in window.machine.recent.files() {
         let when = crate::ui::ago(Some(file.opened_at_s), now);
-        let row = ui.add(egui::Button::new(file.name()).shortcut_text(when));
-        if row.on_hover_text(file.path.display().to_string()).clicked() {
+        let name = file.name();
+        let row = MenuRow::new(Some(icon::MODEL), &name).keys(when);
+        if menu_row(ui, &row)
+            .on_hover_text(file.path.display().to_string())
+            .clicked()
+        {
             picked = Some(file.path.clone());
         }
     }
     if window.machine.recent.files().is_empty() {
-        ui.add_enabled(false, egui::Button::new(tr!("menu-nothing-recent")));
+        menu_row(
+            ui,
+            &MenuRow::new(None, &tr!("menu-nothing-recent")).enabled(false),
+        );
+        return;
+    }
+    menu_rule(ui);
+    if clicked(ui, &MenuRow::new(None, &tr!("menu-clear-recent"))) {
+        window.machine.recent.clear();
     }
     if let Some(path) = picked {
         ui.close();
@@ -175,8 +289,8 @@ pub(super) fn recent_menu(ui: &mut egui::Ui, window: &mut Window) {
 /// The test prints drawn for the window, the ones the start page offers.
 pub(super) fn test_print_menu(ui: &mut egui::Ui, window: &mut Window) {
     for sample in &crate::samples::SAMPLES {
-        if ui
-            .button(sample.name())
+        let name = sample.name();
+        if menu_row(ui, &MenuRow::new(None, &name))
             .on_hover_text(sample.about())
             .clicked()
         {
@@ -186,68 +300,97 @@ pub(super) fn test_print_menu(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
+/// History, the selection, the plate, and Find.
 pub(super) fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
-    let can_undo = window.doc.history.can_undo();
-    if item_enabled(ui, &tr!("action-undo"), Action::Undo, can_undo).clicked() {
-        ui.close();
+    let history = &window.doc.history;
+    let (can_undo, can_redo) = (history.can_undo(), history.can_redo());
+    let (undo, redo) = (tr!("action-undo"), tr!("action-redo"));
+    let undo = action_row(Some(icon::UNDO), &undo, Action::Undo).enabled(can_undo);
+    if clicked(ui, &undo) {
         window.doc.history.undo(
             &mut window.doc.scene,
             window.tools,
             &mut window.machine.slicing,
         );
     }
-    let can_redo = window.doc.history.can_redo();
-    if item_enabled(ui, &tr!("action-redo"), Action::Redo, can_redo).clicked() {
-        ui.close();
+    let redo = action_row(Some(icon::REDO), &redo, Action::Redo).enabled(can_redo);
+    if clicked(ui, &redo) {
         window.doc.history.redo(
             &mut window.doc.scene,
             window.tools,
             &mut window.machine.slicing,
         );
     }
-
-    ui.separator();
-    if item(ui, &tr!("action-select-all"), Action::SelectAll).clicked() {
-        ui.close();
-        window.doc.scene.select_here();
+    menu_rule(ui);
+    selection_items(ui, window);
+    menu_rule(ui);
+    plate_items(ui, window);
+    menu_rule(ui);
+    if clicked(
+        ui,
+        &action_row(Some(icon::FIND), &tr!("action-find"), Action::Find),
+    ) {
+        window.view.options.find = true;
     }
-    let picked = !window.doc.scene.selection().is_empty();
-    if item_enabled(ui, &tr!("action-duplicate"), Action::Duplicate, picked).clicked() {
-        ui.close();
-        crate::panels::duplicate_selection(window);
-    }
+}
 
-    ui.separator();
-    move_to_plate(ui, window.doc);
-
-    ui.separator();
+/// Every model, none, a copy, gone, and another plate. The first that is off says why.
+fn selection_items(ui: &mut egui::Ui, window: &mut Window) {
     let anything = window
         .doc
         .scene
         .has_printable(window.doc.scene.active_plate());
-    if ui
-        .add_enabled(anything, egui::Button::new(tr!("menu-arrange-plate")))
-        .clicked()
-    {
-        ui.close();
+    let all = tr!("action-select-all");
+    let all = action_row(Some(icon::SELECT_ALL), &all, Action::SelectAll).enabled(anything);
+    if clicked(ui, &all) {
+        window.doc.scene.select_here();
+    }
+    let picked = !window.doc.scene.selection().is_empty();
+    let none = tr!("action-deselect");
+    let none = action_row(None, &none, Action::Deselect).enabled(picked);
+    if clicked(ui, &none) {
+        shortcuts::act(window, Action::Deselect);
+    }
+    let pick_first = tr!("menu-pick-first");
+    let why = (!picked).then_some(pick_first.as_str());
+    let duplicate = tr!("action-duplicate");
+    let duplicate = action_row(Some(icon::DUPLICATE), &duplicate, Action::Duplicate).unless(why);
+    if clicked(ui, &duplicate) {
+        crate::panels::duplicate_selection(window);
+    }
+    let remove = tr!("action-remove");
+    let remove = action_row(Some(icon::REMOVE), &remove, Action::Remove).enabled(picked);
+    if clicked(ui, &remove) {
+        shortcuts::act(window, Action::Remove);
+    }
+    move_to_plate(ui, window.doc);
+}
+
+/// Laying the plate out, and turning every model on it.
+fn plate_items(ui: &mut egui::Ui, window: &mut Window) {
+    let anything = window
+        .doc
+        .scene
+        .has_printable(window.doc.scene.active_plate());
+    let empty = tr!("menu-plate-empty");
+    let why = (!anything).then_some(empty.as_str());
+    let arrange = tr!("menu-arrange-plate");
+    if clicked(ui, &MenuRow::new(Some(icon::ARRANGE), &arrange).unless(why)) {
         let gap_mm = window.tools.array.gap_mm;
         window.machine.status =
             crate::arrange::arrange_plate(&mut window.doc.scene, &window.doc.plate, gap_mm);
     }
-
     let can_orient = window.tools.orient.blocker(&window.doc.scene).is_none()
         && !window.tools.orient.is_running();
-    if ui
-        .add_enabled(can_orient, egui::Button::new(tr!("menu-auto-orient-plate")))
-        .clicked()
-    {
-        ui.close();
+    let orient = tr!("menu-auto-orient-plate");
+    let orient = MenuRow::new(Some(icon::AUTO_ORIENT), &orient).enabled(can_orient);
+    if clicked(ui, &orient) {
         crate::panels::inspector::auto_orient(window, None);
     }
 }
 
-/// Sends everything selected to another plate. Greyed out with nothing selected, and with
-/// only one plate to send it to.
+/// Sends everything selected to another plate, the one it stands on ticked. Off with
+/// nothing selected, and with only one plate to send it to.
 pub(super) fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
     let selected: Vec<ObjectId> = doc.scene.selection().to_vec();
     let plates: Vec<String> = doc.scene.plates().to_vec();
@@ -255,19 +398,18 @@ pub(super) fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
     let enabled = !selected.is_empty() && plates.len() > 1;
 
     let mut moved = None;
-    ui.add_enabled_ui(enabled, |ui| {
-        ui.menu_button(tr!("menu-move-to-plate"), |ui| {
-            for (index, name) in plates.iter().enumerate() {
-                let plate = index as u32;
-                if ui
-                    .add_enabled(plate != active, egui::Button::new(name))
-                    .clicked()
-                {
-                    moved = Some(plate);
-                    ui.close();
-                }
+    let label = tr!("menu-move-to-plate");
+    let row = MenuRow::new(Some(icon::MOVE_TO_PLATE), &label).enabled(enabled);
+    menu_sub(ui, &row, |ui| {
+        for (index, name) in plates.iter().enumerate() {
+            let plate = index as u32;
+            let here = plate == active;
+            let row = MenuRow::new(None, name).ticked(here).enabled(!here);
+            if menu_row(ui, &row).clicked() {
+                moved = Some(plate);
+                ui.close();
             }
-        });
+        }
     });
     if let Some(plate) = moved {
         for id in selected {
@@ -276,24 +418,51 @@ pub(super) fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
     }
 }
 
+/// Framing, the camera as a choice of two, what is drawn over the plate, and the sheet.
 pub(super) fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
-    if item(ui, &tr!("menu-frame-view"), Action::FrameView).clicked() {
-        ui.close();
+    let frame = tr!("menu-frame-view");
+    if clicked(
+        ui,
+        &action_row(Some(icon::FRAME), &frame, Action::FrameView),
+    ) {
         frame_view(
             &window.doc.scene,
             &window.doc.plate,
             &mut window.view.camera,
         );
     }
-    ui.checkbox(&mut window.view.options.grid, tr!("menu-plate-grid"));
-    ui.checkbox(&mut window.view.options.xray, tr!("menu-xray"));
-    let mut flat = window.view.camera.orthographic;
-    if ui.checkbox(&mut flat, tr!("menu-orthographic")).changed() {
-        crate::panels::set_orthographic(window.view, flat);
+    menu_rule(ui);
+    crate::ui::chooser_group(ui, &tr!("menu-camera"));
+    let flat = window.view.camera.orthographic;
+    for (orthographic, label) in [
+        (false, tr!("menu-camera-perspective")),
+        (true, tr!("menu-camera-orthographic")),
+    ] {
+        if clicked(ui, &MenuRow::new(None, &label).ticked(flat == orthographic)) {
+            crate::panels::set_orthographic(window.view, orthographic);
+        }
     }
-    ui.separator();
-    if item(ui, &tr!("shortcuts-title"), Action::Sheet).clicked() {
-        ui.close();
+    menu_rule(ui);
+    crate::ui::chooser_group(ui, &tr!("menu-show"));
+    let options = &mut window.view.options;
+    if clicked(
+        ui,
+        &MenuRow::new(None, &tr!("menu-plate-grid")).ticked(options.grid),
+    ) {
+        options.grid = !options.grid;
+    }
+    if clicked(
+        ui,
+        &MenuRow::new(None, &tr!("menu-xray")).ticked(options.xray),
+    ) {
+        options.xray = !options.xray;
+    }
+    menu_rule(ui);
+    let sheet = tr!("shortcuts-title");
+    if clicked(ui, &action_row(Some(icon::KEYBOARD), &sheet, Action::Sheet)) {
         window.view.options.sheet = true;
     }
 }
+
+/// How wide the list of recent files stands at least, points: room for a name and its age.
+const RECENT_W: f32 = 250.0;

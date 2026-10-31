@@ -25,6 +25,8 @@ const MODELS: [&str; 3] = ["stl", "obj", "3mf"];
 pub struct Batch<'a> {
     pub input: &'a Path,
     pub output: &'a Path,
+    /// What each file is named after; see `core_engine::file_stem`.
+    pub name: &'a str,
     pub job: &'a JobArgs,
     pub jobs: usize,
 }
@@ -36,6 +38,7 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
     if models.is_empty() {
         bail!("no models in {}", batch.input.display());
     }
+    let outputs = outputs_for(&models, batch, chosen)?;
     let out_dir = batch.output;
     std::fs::create_dir_all(out_dir)
         .with_context(|| format!("cannot make the output directory {}", out_dir.display()))?;
@@ -60,8 +63,9 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
     let reports: Vec<Option<ModelReport>> = pool.install(|| {
         models
             .par_iter()
-            .map(|model| {
-                let report = one(model, batch, chosen, watch.stop);
+            .zip(&outputs)
+            .map(|(model, output)| {
+                let report = one(model, output, batch, chosen, watch.stop);
                 if let Some(progress) = &progress {
                     progress.inc(1);
                 }
@@ -93,21 +97,22 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
 
 /// One model, and its report written beside its output; a failing model does not stop the run.
 /// `None` once Ctrl-C is pressed: a model not started is skipped, one stopped is not a failure.
-fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> Option<ModelReport> {
+fn one(
+    model: &Path,
+    output: &Path,
+    batch: &Batch,
+    chosen: &Chosen,
+    stop: &Stop,
+) -> Option<ModelReport> {
     if stop.requested() {
         return None;
     }
-    let output = output_for(model, batch.output, chosen);
     let started = std::time::Instant::now();
-    let quiet = Watch {
-        talk: false,
-        progress: false,
-        stop,
-    };
-    let report = match pipeline::slice_one(model, &output, batch.job, chosen, &quiet) {
+    let quiet = Watch::quiet(stop);
+    let report = match pipeline::slice_one(model, output, batch.job, chosen, &quiet) {
         Ok(outcome) => ModelReport::sliced(&outcome, started.elapsed()),
         Err(error) if is_cancelled(&error) => return None,
-        Err(error) => ModelReport::failed(model, &output, &error, started.elapsed()),
+        Err(error) => ModelReport::failed(model, output, &error, started.elapsed()),
     };
 
     let beside = batch.output.join(format!(
@@ -120,15 +125,59 @@ fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> Option<Mode
     Some(report)
 }
 
-/// Where one model's output goes: its name in the output directory, with the printer's extension.
-/// A run with no printer writes a PNG stack, which is a directory.
-fn output_for(model: &Path, out_dir: &Path, chosen: &Chosen) -> PathBuf {
-    let stem = model.file_stem().unwrap_or_default();
-    let path = out_dir.join(stem);
-    match chosen.printer.as_ref().map(|printer| printer.output) {
-        Some(format) => path.with_extension(SlicedFormat::from(format).extension()),
-        None => path,
+/// Where each model's output goes: `batch.name` made of it in the output directory, with the
+/// printer's extension, refused when two models would land on one file.
+fn outputs_for(models: &[PathBuf], batch: &Batch, chosen: &Chosen) -> Result<Vec<PathBuf>> {
+    for tag in core_engine::unknown_tags(batch.name) {
+        tracing::warn!("--name: {{{tag}}} stands for nothing and is kept as written");
     }
+    let when = jiff::Zoned::now().datetime();
+    let outputs: Vec<PathBuf> = models
+        .iter()
+        .map(|model| output_for(model, batch, chosen, when))
+        .collect();
+    // Case folded: on macOS and Windows `Part` and `part` are one file.
+    let mut seen = std::collections::HashSet::with_capacity(outputs.len());
+    let folded = |output: &PathBuf| output.to_string_lossy().to_lowercase();
+    if let Some(twice) = outputs.iter().find(|output| !seen.insert(folded(output))) {
+        bail!(
+            "--name {} gives two models the one file {}; put {{model}} in it",
+            batch.name,
+            twice.display()
+        );
+    }
+    Ok(outputs)
+}
+
+/// A run with no printer writes a PNG stack, which is a directory, so it gets no extension.
+fn output_for(
+    model: &Path,
+    batch: &Batch,
+    chosen: &Chosen,
+    when: jiff::civil::DateTime,
+) -> PathBuf {
+    let printer = chosen.printer.as_ref();
+    let fields = core_engine::NameFields {
+        model: &model.file_stem().unwrap_or_default().to_string_lossy(),
+        model_ext: &model.extension().unwrap_or_default().to_string_lossy(),
+        printer: printer.map_or("", |printer| &printer.name),
+        resin: &chosen.material.name,
+        layer_height_mm: batch
+            .job
+            .slicing
+            .layer_height
+            .unwrap_or(chosen.material.layer_height_mm),
+        plate: 1,
+        when,
+    };
+    let stem = core_engine::file_stem(batch.name, &fields);
+    // Not `with_extension`, which would cut a stem holding a dot at it.
+    batch
+        .output
+        .join(match printer.map(|printer| printer.output) {
+            Some(format) => format!("{stem}.{}", SlicedFormat::from(format).extension()),
+            None => stem,
+        })
 }
 
 /// Every model in `input`, sorted by name so two runs over one directory report in the
@@ -150,106 +199,4 @@ fn models_in(input: &Path) -> Result<Vec<PathBuf>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_models_are_picked_up_and_they_come_out_sorted() {
-        let dir = std::env::temp_dir().join("encrust-batch-listing");
-        std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
-        for name in [
-            "b.stl",
-            "a.STL",
-            "c.obj",
-            "d.3mf",
-            "notes.txt",
-            "batch.json",
-        ] {
-            std::fs::write(dir.join(name), b"").expect("the temporary directory is writable");
-        }
-
-        let models = models_in(&dir).expect("the directory reads");
-        let names: Vec<&str> = models
-            .iter()
-            .filter_map(|path| path.file_name()?.to_str())
-            .collect();
-        assert_eq!(
-            names,
-            ["a.STL", "b.stl", "c.obj", "d.3mf"],
-            "case is not what makes a model"
-        );
-
-        std::fs::remove_dir_all(&dir).expect("the directory was just made");
-    }
-
-    #[test]
-    fn a_directory_with_nothing_in_it_is_an_error_rather_than_an_empty_run() {
-        let dir = std::env::temp_dir().join("encrust-batch-empty");
-        std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
-
-        let cli = <crate::Cli as clap::Parser>::parse_from([
-            "encrust",
-            "batch",
-            dir.to_str().expect("ascii path"),
-        ]);
-        let crate::Command::Batch(command) = &cli.command else {
-            unreachable!("the batch subcommand was parsed");
-        };
-        let chosen = crate::profiles::Chosen {
-            printer: None,
-            material: printer_profiles::MaterialProfile::default(),
-            invented_exposure: false,
-        };
-        let watch = Watch {
-            talk: false,
-            progress: false,
-            stop: &Stop::default(),
-        };
-        let error = run(&command.batch(), &chosen, &watch).expect_err("there is nothing to slice");
-        assert!(error.to_string().contains("no models"));
-
-        std::fs::remove_dir_all(&dir).expect("the directory was just made");
-    }
-
-    #[test]
-    fn a_batch_stopped_by_ctrl_c_starts_no_model_and_reports_none() {
-        let dir = std::env::temp_dir().join("encrust-batch-stopped");
-        let out = dir.join("out");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
-        for name in ["a.stl", "b.stl"] {
-            std::fs::write(dir.join(name), b"").expect("the temporary directory is writable");
-        }
-
-        let cli = <crate::Cli as clap::Parser>::parse_from([
-            "encrust",
-            "batch",
-            dir.to_str().expect("ascii path"),
-            "-o",
-            out.to_str().expect("ascii path"),
-        ]);
-        let crate::Command::Batch(command) = &cli.command else {
-            unreachable!("the batch subcommand was parsed");
-        };
-        let chosen = crate::profiles::Chosen {
-            printer: None,
-            material: printer_profiles::MaterialProfile::default(),
-            invented_exposure: false,
-        };
-        let stop = Stop::default();
-        stop.request();
-        let watch = Watch {
-            talk: false,
-            progress: false,
-            stop: &stop,
-        };
-        let error = run(&command.batch(), &chosen, &watch).expect_err("the batch was stopped");
-        assert!(is_cancelled(&error), "got {error:#}");
-        assert!(
-            !out.join("a.json").exists() && !out.join("b.json").exists(),
-            "a model Ctrl-C kept from starting is not reported as failed"
-        );
-
-        std::fs::remove_dir_all(&dir).expect("the directory was just made");
-    }
-}
+mod tests;

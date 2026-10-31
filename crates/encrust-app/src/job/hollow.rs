@@ -164,7 +164,12 @@ impl HollowJob {
             Step::Carrying => tr!("job-hollow-carrying"),
             Step::Refining => tr!("job-hollow-refining"),
             Step::Surfacing => tr!("job-hollow-surfacing"),
-            Step::Shaping | Step::Reading | Step::Combining | Step::Finishing => {
+            Step::Shaping
+            | Step::Reading
+            | Step::Combining
+            | Step::Finishing
+            | Step::Mending
+            | Step::Crossing => {
                 tr!("job-hollow-shaping")
             }
         }

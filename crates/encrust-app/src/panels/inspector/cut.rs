@@ -8,8 +8,8 @@ use crate::panels::Window;
 use crate::scene::{Axis, SceneObject};
 use crate::status::Status;
 use crate::ui::{
-    Segment, Segmented, busy, count_row, describe, hint, icon, nested, number_row, primary_button,
-    secondary_button, section, switch,
+    Segment, Segmented, busy, count_row, describe, hint, icon, nested, number_row,
+    primary_with_companion, secondary_button, section, switch,
 };
 
 /// The most fixings one piece of a cut face takes.
@@ -23,6 +23,18 @@ const OFFSET_STEP: f64 = 0.1;
 
 /// Cubic millimetres per point of drag on the smallest part.
 const VOLUME_STEP: f64 = 0.1;
+
+/// The plane's axis and where it crosses it, for the card's heading.
+pub fn fact(window: &Window) -> String {
+    let state = &window.tools.cut.state;
+    let axis = match state.axis {
+        Axis::X => "X",
+        Axis::Y => "Y",
+        Axis::Z => "Z",
+    };
+    let height = format!("{:.2}", state.height_mm);
+    tr!("cut-fact", axis = axis, height = height)
+}
 
 /// Where the plane cuts the selected model, and what to do with the halves.
 /// The section slider is a view of its own, neither moved by the plane nor moving it.
@@ -280,19 +292,20 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let picked = window.doc.scene.selected();
     let what = tr!("cut-replaces");
-    if primary_button(ui, icon::SECTION, &tr!("cut-cut"), picked.is_some())
-        .on_hover_text(&what)
-        .clicked()
+    let split_text = tr!("cut-split");
+    let enabled = picked.is_some();
+    let (cut, split) = primary_with_companion(
+        ui,
+        (&tr!("cut-cut"), enabled),
+        (icon::SPLIT, &split_text, enabled),
+    );
+    let split = split.on_hover_text(&what);
+    if cut.on_hover_text(&what).clicked()
         && let Some(id) = picked
         && let Err(error) = window.tools.cut.start(&window.doc.scene, id)
     {
         window.machine.status = Status::Error(error.to_string());
     }
-    let split = ui
-        .add_enabled_ui(picked.is_some(), |ui| {
-            secondary_button(ui, icon::SPLIT, &tr!("cut-split")).on_hover_text(&what)
-        })
-        .inner;
     if split.clicked()
         && let Some(id) = picked
         && let Err(error) = window.tools.cut.start_split(&window.doc.scene, id)

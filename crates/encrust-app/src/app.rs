@@ -114,6 +114,7 @@ impl SlicerApp {
         .with_recent(&self.machine.recent)
         .with_layout(&self.view.options)
         .with_general(&self.machine.general)
+        .with_keys(shortcuts::keymap::current())
         .with_panels(self.view.gizmo.axes, ctx);
         if now != self.prefs {
             self.prefs = now;
@@ -495,6 +496,7 @@ impl eframe::App for SlicerApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let started = web_time::Instant::now();
         crate::i18n::choose(self.machine.general.language);
+        crate::ui::theme::motion::reduce(ui.ctx(), self.machine.general.reduce_motion);
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
@@ -538,11 +540,17 @@ impl eframe::App for SlicerApp {
 }
 
 #[cfg(test)]
+mod plate_card;
+#[cfg(test)]
+mod sheet_keys;
+#[cfg(test)]
 mod small_window;
 #[cfg(all(test, feature = "snapshots"))]
 mod snapshots;
 #[cfg(test)]
 mod states;
+#[cfg(test)]
+mod support_picking;
 
 #[cfg(test)]
 mod tests;

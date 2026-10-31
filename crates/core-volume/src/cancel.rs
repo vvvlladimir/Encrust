@@ -60,8 +60,7 @@ impl<'a> Cancel<'a> {
     }
 }
 
-/// The steps a field and what is cut from it go through, in order, and those of an exact
-/// boolean, which a run takes instead of a field or before falling back to one.
+/// The steps a field, an exact boolean or a repair goes through, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Step {
@@ -81,13 +80,17 @@ pub enum Step {
     Reading,
     /// The exact boolean itself, which counts nothing inside it.
     Combining,
-    /// The exact result made back into a mesh.
+    /// The exact result made back into a mesh, or the last mend of a deep repair.
     Finishing,
+    /// A repair on the mesh alone: seams, holes, specks and doubled faces.
+    Mending,
+    /// The faces that cross each other, found before a wrap joins the shells.
+    Crossing,
 }
 
 impl Step {
     /// Every step, in the order of its discriminant.
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 11] = [
         Self::Preparing,
         Self::Seeding,
         Self::Carrying,
@@ -97,6 +100,8 @@ impl Step {
         Self::Reading,
         Self::Combining,
         Self::Finishing,
+        Self::Mending,
+        Self::Crossing,
     ];
 }
 

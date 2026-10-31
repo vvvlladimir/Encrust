@@ -1,11 +1,14 @@
+use super::SHAPE_INDENT;
 use super::rows::{Act, InHand, Pick, Presets, Row};
-use super::{LINE_H, SHAPE_INDENT, count_at, swatch};
 use crate::i18n::tr;
-use crate::ui::{BinLook, confirm_bin, icon, theme};
+use crate::ui::{
+    PICKER_ICON_SQUARE, PickerLine, SquareLook, chooser_group, confirm_bin, eye_square, hairline,
+    icon, picker_foot, picker_line, theme,
+};
 use egui::{Sense, vec2};
 
-/// The open picker: the automatic preset with the shapes it built under it, then the
-/// presets by hand, each line the group built to it where one stands.
+/// The open picker: the automatic preset and its shapes, each group by hand, the empty
+/// profiles and the way to edit them; on Shape, every shape a click away.
 pub(super) struct List<'a> {
     pub(super) rows: &'a [Row],
     pub(super) presets: &'a Presets,
@@ -15,21 +18,18 @@ pub(super) struct List<'a> {
 
 impl List<'_> {
     pub(super) fn show(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+        chooser_group(ui, &tr!("supports-on-plate"));
         let auto = self.auto(ui, acts);
-        ui.separator();
-        let by_hand = self.by_hand(ui, acts);
-        auto.or(by_hand)
+        let by_hand = self.by_hand(ui, acts, true);
+        chooser_group(ui, &tr!("supports-profiles"));
+        let idle_auto = self.idle_autos(ui, acts);
+        let idle = self.by_hand(ui, acts, false);
+        let edit = edit_profiles(ui).then_some(Pick::EditProfiles);
+        auto.or(by_hand).or(idle_auto).or(idle).or(edit)
     }
 
-    pub(super) fn standing(&self, name: &str) -> Option<&Row> {
-        self.rows
-            .iter()
-            .find(|row| row.holds > 0 && row.name == name)
-    }
-
-    /// Auto, and under it its shapes: those that stand, or on Shape every one, since each
-    /// is edited there and Auto itself is not.
-    pub(super) fn auto(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+    /// The shapes Auto built that stand, lightest first.
+    fn built(&self) -> Vec<&Row> {
         let shape = |row: &&Row| {
             self.presets
                 .shapes
@@ -43,9 +43,43 @@ impl List<'_> {
             .filter(shape)
             .collect();
         built.sort_by(|a, b| a.weight.total_cmp(&b.weight));
+        built
+    }
+
+    /// The automatic presets among the profiles holding nothing, while Auto built none.
+    fn idle_autos(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+        if self.shaping || !self.built().is_empty() {
+            return None;
+        }
+        let mut pick = None;
+        for offered in &self.presets.autos {
+            let on = self.hand.in_auto && self.hand.name == offered.name;
+            if Line::preset(&offered.name, None)
+                .selected(on)
+                .show(ui, self.rows.len(), acts)
+            {
+                pick = Some(Pick::Auto(offered.id.clone()));
+            }
+        }
+        pick
+    }
+
+    pub(super) fn standing(&self, name: &str) -> Option<&Row> {
+        self.rows
+            .iter()
+            .find(|row| row.holds > 0 && row.name == name)
+    }
+
+    /// Auto, and under it its shapes: those that stand, or on Shape every one, since each
+    /// is edited there and Auto itself is not.
+    pub(super) fn auto(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+        let built = self.built();
         let total: usize = built.iter().map(|row| row.holds).sum();
         let mut pick = None;
         for offered in &self.presets.autos {
+            if !self.shaping && total == 0 {
+                continue;
+            }
             let line = Line::heading(&offered.name, total, self.shaping)
                 .selected(!self.shaping && self.hand.in_auto && self.hand.name == offered.name);
             if line.show(ui, self.rows.len(), acts) {
@@ -71,11 +105,20 @@ impl List<'_> {
         pick
     }
 
-    /// The presets by hand, then any group whose preset is in neither list.
-    pub(super) fn by_hand(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+    /// The presets by hand with a group standing, then any group whose preset is in
+    /// neither list; or, not `standing`, the profiles holding nothing.
+    pub(super) fn by_hand(
+        &self,
+        ui: &mut egui::Ui,
+        acts: &mut Vec<Act>,
+        standing: bool,
+    ) -> Option<Pick> {
         let mut pick = None;
         for offered in &self.presets.by_hand {
             let group = self.standing(&offered.name);
+            if group.is_some() != standing {
+                continue;
+            }
             let on = !self.hand.in_auto && self.hand.name == offered.name;
             if Line::preset(&offered.name, group)
                 .selected(on)
@@ -86,6 +129,9 @@ impl List<'_> {
                     None => pick = Some(Pick::Preset(offered.id.clone())),
                 }
             }
+        }
+        if !standing {
+            return pick;
         }
         let presets = &self.presets;
         let listed = |name: &str| {
@@ -146,80 +192,60 @@ impl<'a> Line<'a> {
         Self { indent, ..self }
     }
 
+    fn holds(&self) -> Option<usize> {
+        self.group.map(|row| row.holds).or(self.count)
+    }
+
     /// Draws the line; a group's eye and bin show under the pointer. Answers whether the
     /// line itself was clicked, which closes the list.
     pub(super) fn show(&self, ui: &mut egui::Ui, groups: usize, acts: &mut Vec<Act>) -> bool {
-        let sense = if self.heading {
-            Sense::hover()
-        } else {
-            Sense::click()
+        let line = PickerLine {
+            name: self.name,
+            dot: self
+                .group
+                .map(|row| theme::support_tint(row.group as usize)),
+            count: self.holds(),
+            selected: self.selected,
+            indent: self.indent,
+            heading: self.heading,
+            quiet: self.group.is_some_and(|row| row.hidden),
         };
-        let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), LINE_H), sense);
-        let hovered = ui.rect_contains_pointer(rect);
-        self.paint(ui, rect, hovered);
+        let drawn = picker_line(ui, &line);
         let on_icon = match self.group {
-            Some(row) => group_icons(ui, rect, response.id, row, groups, hovered, acts),
+            Some(row) => {
+                let id = drawn.response.id;
+                group_icons(ui, drawn.icons, id, row, groups, drawn.hovered, acts)
+            }
             None => false,
         };
-        let clicked = response.clicked() && !on_icon;
+        let clicked = drawn.response.clicked() && !on_icon;
         if clicked {
             ui.close();
         }
         clicked
     }
-
-    pub(super) fn paint(&self, ui: &egui::Ui, rect: egui::Rect, hovered: bool) {
-        let colors = theme::colors();
-        let fill = match (self.selected, hovered && !self.heading) {
-            (true, _) => colors.picked_wash,
-            (false, true) => colors.hover,
-            (false, false) => egui::Color32::TRANSPARENT,
-        };
-        let painter = ui.painter();
-        painter.rect_filled(rect, theme::R_CONTROL, fill);
-        let left = rect.left() + 8.0 + self.indent;
-        let hidden = self.group.is_some_and(|row| row.hidden);
-        if let Some(row) = self.group {
-            swatch(painter, egui::pos2(left + 4.0, rect.center().y), row);
-        }
-        let ink = match (self.heading, hidden, self.selected) {
-            (true, ..) => colors.text_mid,
-            (false, true, _) => colors.text_low,
-            (false, false, true) => colors.accent_soft,
-            (false, false, false) => colors.text_high,
-        };
-        let icons_left = rect.right() - ICONS_W;
-        let mut right = icons_left - 40.0;
-        if let Some(count) = self.group.map(|row| row.holds).or(self.count) {
-            right = count_at(painter, icons_left - 6.0, rect.center().y, count) - 6.0;
-        }
-        let clip = egui::Rect::from_x_y_ranges(left + 16.0..=right, rect.y_range());
-        painter.with_clip_rect(clip).text(
-            egui::pos2(left + 16.0, rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            self.name,
-            theme::label(),
-            ink,
-        );
-    }
 }
 
-/// Room at the right of a line for a group's eye and bin, points.
-pub(super) const ICONS_W: f32 = 44.0;
+/// The room above the foot's rule.
+const FOOT_GAP: f32 = 4.0;
 
 /// The eye of a group, shown under the pointer or while it is hidden, and its bin, shown
-/// under the pointer. Answers whether either took the click.
-pub(super) fn group_icons(
+/// under the pointer, in `icons`. Answers whether either took the click.
+fn group_icons(
     ui: &mut egui::Ui,
-    rect: egui::Rect,
+    icons: egui::Rect,
     id: egui::Id,
     row: &Row,
     groups: usize,
     hovered: bool,
     acts: &mut Vec<Act>,
 ) -> bool {
-    let at =
-        |x: f32| egui::Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(20.0, 20.0));
+    let at = |x: f32| {
+        egui::Rect::from_center_size(
+            egui::pos2(x, icons.center().y),
+            vec2(PICKER_ICON_SQUARE, PICKER_ICON_SQUARE),
+        )
+    };
     let mut took = false;
     if hovered || row.hidden {
         let (glyph, tip) = if row.hidden {
@@ -227,18 +253,20 @@ pub(super) fn group_icons(
         } else {
             (icon::VISIBLE, tr!("list-hide"))
         };
-        let eye = ui.interact(at(rect.right() - 32.0), id.with("eye"), Sense::click());
-        eye_glyph(ui, eye.rect, glyph, eye.hovered());
+        let eye_at = at(icons.left() + PICKER_ICON_SQUARE / 2.0);
+        let eye = ui.interact(eye_at, id.with("eye"), Sense::click());
+        eye_square(ui, eye.rect, glyph, eye.hovered());
         if eye.on_hover_text(tip).clicked() {
             acts.push(Act::Toggle(row.group));
             took = true;
         }
     }
-    if hovered {
-        let bin = ui.interact(at(rect.right() - 11.0), id.with("bin"), Sense::click());
+    if hovered || crate::ui::is_armed(ui.ctx(), id.with("bin")) {
+        let bin_at = at(icons.right() - PICKER_ICON_SQUARE / 2.0);
+        let bin = ui.interact(bin_at, id.with("bin"), Sense::click());
         took |= bin.clicked();
         let (act, tip) = removal(groups, row);
-        if confirm_bin(ui, bin, BinLook::Quiet, &tip, true) {
+        if confirm_bin(ui, bin, SquareLook::Quiet, &tip, true) {
             acts.push(act);
         }
     }
@@ -261,22 +289,14 @@ pub(super) fn removal(groups: usize, row: &Row) -> (Act, String) {
     }
 }
 
-pub(super) fn eye_glyph(ui: &egui::Ui, rect: egui::Rect, glyph: &str, hot: bool) {
-    let colors = theme::colors();
-    if hot {
-        ui.painter()
-            .rect_filled(rect, theme::R_CONTROL, colors.raised);
+/// The list's foot under a rule: Settings, at the support profiles. Answers whether it was
+/// pressed, which closes the list.
+fn edit_profiles(ui: &mut egui::Ui) -> bool {
+    ui.add_space(FOOT_GAP);
+    hairline(ui);
+    let pressed = picker_foot(ui, icon::PROFILES, &tr!("supports-edit-profiles")).clicked();
+    if pressed {
+        ui.close();
     }
-    let ink = if hot {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(13.0),
-        ink,
-    );
+    pressed
 }

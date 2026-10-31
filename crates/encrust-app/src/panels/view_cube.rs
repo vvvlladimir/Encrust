@@ -9,16 +9,12 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{icon, icon_button, theme};
 
-/// Points between the cube and the corner of the viewport, and the square it is drawn in.
-const INSET: f32 = 12.0;
-const SIZE: f32 = 76.0;
+/// The square the cube is drawn in, points.
+pub const SIZE: f32 = 80.0;
 
 /// How much of a face's half-width its middle takes; the band past it belongs to an edge,
 /// and where two bands cross, to a corner.
 const FACE_MIDDLE: f32 = 0.5;
-
-/// How long the camera takes to swing to a picked view, seconds.
-const TURN_S: f64 = 0.35;
 
 /// A face turned further from the camera than this is drawn as nothing: seen edge on it
 /// would be a hairline along the cube's side.
@@ -95,9 +91,9 @@ struct Cell {
     towards: Vec3,
 }
 
-/// Top right of the viewport: the cube and, under it while the pointer is over the cube,
-/// the way back to the opening view.
-pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
+/// The cube from its top right `corner`, kept to `viewport`, and under it while the pointer
+/// is over the cube the way back to the opening view. Answers the room both take.
+pub fn ui(ui: &egui::Ui, window: &mut Window, corner: Pos2, viewport: Rect) -> Rect {
     let id = Id::new("view-cube");
     // Last frame's area, which holds the room for Home whether or not it is drawn, so the
     // button does not vanish under the pointer on its way down to it.
@@ -108,9 +104,9 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
         .is_some_and(|(area, at)| area.contains(at));
     egui::Area::new(id)
         .order(egui::Order::Middle)
-        .fixed_pos(viewport.right_top() + vec2(-INSET, INSET))
+        .fixed_pos(corner)
         .pivot(Align2::RIGHT_TOP)
-        .constrain_to(viewport)
+        .constrain_to(viewport.with_min_y(corner.y))
         .show(ui.ctx(), |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
@@ -128,7 +124,9 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
                     turn(ui, window, to);
                 }
             });
-        });
+        })
+        .response
+        .rect
 }
 
 /// Starts the camera swinging to `to` from wherever it stands now.
@@ -137,7 +135,7 @@ fn turn(ui: &egui::Ui, window: &mut Window, to: OrbitCamera) {
         from: window.view.camera,
         to,
         started_s: ui.input(|input| input.time),
-        length_s: TURN_S,
+        length_s: crate::ui::theme::motion::turn_s(ui.ctx()),
     });
     ui.ctx().request_repaint();
 }
@@ -170,7 +168,7 @@ fn cube(ui: &mut egui::Ui, camera: &OrbitCamera, turn: Quat) -> Option<Vec3> {
         for cell in cells {
             let fill = match Some(cell.towards) == hovered {
                 true => colors.accent_wash,
-                false => colors.raised,
+                false => lit(face),
             };
             painter.add(Shape::convex_polygon(
                 cell.corners.to_vec(),
@@ -191,6 +189,17 @@ fn cube(ui: &mut egui::Ui, camera: &OrbitCamera, turn: Quat) -> Option<Vec3> {
             .on_hover_cursor(egui::CursorIcon::PointingHand);
     }
     response.clicked().then_some(hovered).flatten()
+}
+
+/// A face's fill as though lit from above and the front: the top lightest, then the
+/// front and back, then the sides, so the cube reads as a solid.
+fn lit(face: &Face) -> egui::Color32 {
+    let colors = theme::colors();
+    match face.normal {
+        normal if normal.z.abs() > 0.5 => colors.hover,
+        normal if normal.y.abs() > 0.5 => colors.raised,
+        _ => colors.panel,
+    }
 }
 
 /// The corner of a face that cell `index` of its 3 by 3 grid holds, for a corner cell.

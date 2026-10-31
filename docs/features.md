@@ -37,7 +37,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   to open (a minute for a full 16K stack). A file
   with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
-  file.
+  file in the window's light or dark colours and can be cleared from the start page or File →
+  Open recent.
+- The **File, Edit and View menus** list every action with its keys; one that cannot run says
+  why under itself (Slice to a file with no model, Duplicate with nothing picked).
 - Start from one of **four built-in test prints**: detail test, exposure check, surface
   finish and fit gauge.
 
@@ -62,7 +65,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Open the **Repair** tool: what was found in the picked models (or every model on the
   plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
   press, how many pairs of faces cross. Pick the method, set the seam tolerance and the
-  smallest speck, and repair with progress and Cancel. The rail's
+  smallest speck, and repair with Cancel and the step named over its bar — mending,
+  finding crossings, joining the shells. The tool row's
   Repair button carries a dot while a model on the plate is broken.
 - Click a finding to mark it on the models while the Repair tool is open: the rims of the
   holes as lines, faces without area, drawn twice or crossing others as patches. The
@@ -103,6 +107,8 @@ whole-surface fill is Cmd-Shift-click.
 
 **Position tool:**
 - Move, rotate and scale with typed numbers or the on-screen gizmo, in global or local axes.
+  Hold Shift to drag in 1 mm and 15° steps; a drag shows how far it has moved or turned
+  beside the cursor, and where the model started.
 - Scale uniformly or per axis, keep the proportions, scale to fit the build volume, or go
   back to the imported size.
 - **Mirror** the model, or mirror a copy beside it.
@@ -116,6 +122,9 @@ whole-surface fill is Cmd-Shift-click.
   peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
   plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
   the window reopens.
+- The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
+  then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
+  as they stand.
 - **Auto** balances the other three for each model. It never lets one of supports, pull
   or print time go far worse for the sake of the others. Where some pose is about as good
   as the best on all three, it takes that one. Otherwise it takes the pose where each
@@ -332,8 +341,8 @@ whole-surface fill is Cmd-Shift-click.
   only at its two ends.
 - Settings work as in **Hollow**: one picked model keeps its own.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
-  of resin with no way out. Pockets are painted in the view, and you can see through the
-  model to find them.
+  of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
+  you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
 - Drain settings can be saved as presets too.
 
@@ -421,6 +430,7 @@ whole-surface fill is Cmd-Shift-click.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
+  Shift-click adds a part to what is picked, or takes it back out.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports
@@ -440,9 +450,11 @@ whole-surface fill is Cmd-Shift-click.
   lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand. In a profile's form every group is there,
-  in rows whose titles stand level, branching and the grid turned on or off in their titles;
-  a number changed from the bundled one is marked with an arrow putting it back, and
-  **Reset to defaults** puts back them all, undoably. The automatic profile opens in a form
+  from the tip down, tabs over it scrolling to each; branching, the grid, the raft and
+  cross bracing turn on or off in their titles, saying while off what stands instead;
+  a number changed since the last save is marked with an arrow putting it back, and
+  **Reset to defaults** puts back them all, undoably. Edits are kept until **Save**;
+  leaving the form with any unsaved asks whether to save or discard them. The automatic profile opens in a form
   of its own: where its supports go, the island, load and step that move a support to a
   heavier shape, how far above a step it reaches, and how gentle slopes are steadied; it
   is edited in place, never duplicated or exported.
@@ -561,8 +573,11 @@ smoothing, not the original model.
 - **Drill the suction cups.**
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
-Resin is counted from what is actually cured. Before slicing, the plate's summary states
-them from the meshes, and the time, marked ≈, from the plate's height.
+Resin is counted from what is actually cured. Before slicing, the plate's card states
+them from the meshes, and the time, marked ≈, from the plate's height: time, resin, weight
+and price in view, the models' and the supports' share, vertices and triangles under
+*Details*, which stays open or shut between runs. In Preview the card states the layer
+shown: its exposure, the print time until it is done, the area it cures and the resin that comes to.
 
 ---
 
@@ -652,6 +667,13 @@ transition, light power, lifts, retracts, waits, density, price, colour and comp
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 
+**Switching in the top bar:** the machine and the resin in the chip each open a list: your
+machines with their maker, the file they write and whether a printer they list answers;
+the resins set up on the machine with their colour, kind, layer height and exposure. A
+row takes it in hand; *Add a machine*, *Machine and resin…*, *Edit this resin…* and *Add a
+resin* lead to the window. In a narrow window the chip names the machine without its
+maker.
+
 **Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
 printer's resins (**Import a resin** on a printer with none yet) and pick a file another slicer wrote for it; the resin is saved on that
 printer. You get what the
@@ -709,8 +731,10 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   controls. Stop needs a second press, because a stopped print cannot be resumed.
 - Slice to a file from the plate's card, or, while the printer answers and is free, slice
   and send in one press from the button over it: a bar shows the slicing and the upload,
-  then the same button starts the print. The card names the printer and what it is doing,
-  with a button to scan again. **File > Slice to .goo** (Cmd Enter, named for the
+  then the same button starts the print, Slice to a file the square beside it; Cancel
+  stops the slice or the upload. The card names the printer and what it is doing; a press
+  on it lists the others and scans again. A printer busy printing gets no file: the card
+  says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
 - A Prusa login is kept in the window's settings, never in the profile.
 
@@ -731,25 +755,60 @@ address in a video player).
 
 ## Working in the window
 
-- **Find (⌘K):** search every tool, action and model on the plate by name.
-- **Tool rail:** shows each tool's name under its icon whenever the window has room, and
-  icons alone when it does not. Drag the column's edge to set your own width; double-click
-  it to go back to fitting the names. The plate column's edge resets the same way.
-- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
+- **Find (⌘K):** search every tool, action and model on the plate by name, found under
+  those three headings.
+- **Tool row:** sits centred at the top of the stage between the inspector and the models,
+  no wider than its tools need, each tool's name under its icon while there is room, icons alone when there is not. Drag
+  the inspector's edge to set its width; double-click it to go back to the default. The
+  plate column's edge resets the same way. A width dragged before this row moved is
+  forgotten once.
+- **Keyboard:** digits 1 to 9 pick the tools of the row in order, each shown on its tool while
+  the pointer is on the row, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
+- **Your own keys:** in Keyboard shortcuts click a key, press the combination (press again
+  to correct it) and Done, or `+` to give an action a second; Esc leaves it as it was. A key another action holds asks before it moves; the arrow puts an
+  action's keys back, Reset every key all of them. Menus, tooltips and Find follow at once,
+  and the keys are remembered between runs.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.
 - Tool values are remembered between runs, and so is how each panel was left: which
   sections are folded, which tab is open, what a click places, and what Measure snaps to.
   A panel left unopened for twenty runs opens as it ships.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
-  installs only when you press it. You can skip a version. A copy from the Microsoft Store
-  is updated by the Store instead: it says when the Store has a new version, and its button
-  opens Encrust in the Store app to update.
+  installs only when you press it. A release found is announced once by a notice and kept
+  as a pill in the top bar; its sheet lists every change, and shows the download's amount,
+  time left and steps, with Cancel while it downloads. You can skip a version. A copy from
+  the Microsoft Store is updated by the Store instead: it says when the Store has a new
+  version, and its button opens Encrust in the Store app to update.
+- **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`).
 - **Bug report:** builds a Markdown report (what happened, how to reproduce it, settings,
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
+- **File name** in Settings → General: a template a sliced file is named by, saved or sent
+  to the printer — `{model}`, `{ext}` (the model's file type), `{printer}`, `{resin}`, `{layer}` (µm), `{plate}`, `{date}`,
+  `{time}` — with the name it makes now shown under it; `encrust batch --name` takes the same.
+- **Reduce motion** in Settings → General stops every animation in the window.
+- **Appearance** in Settings → General: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
+- **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
+  Hollow, Drain, Relief's text and brush, Supports' pick, place and area, Repair's faces and
+  edges, Cut's part mark — a pill under the tool row names the keys and what each does,
+  every one a click or a drag with its modifier. In a narrow window only the keys show, as
+  icons, at the tool row's left, each saying what it does under the pointer.
+- With nothing on the plate the models card says so and offers Open a model; the stage
+  stays clear.
+- **Check:** Previous and Next step through the layers with issues; the islands and the
+  suction cups each have their own section with what fixes them; the plate card gives the
+  plate's time, resin, weight and price.
+- The support group picker lists what stands on the plate, then the profiles holding
+  nothing, then *Edit the profiles*.
+- Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
+  Save over the one in use or as a new one, and a bin that asks before it deletes. In
+  Settings a preset is renamed by a double click on its name, and a link opens its tool.
+- A bin asks before it removes: the first press arms it for 3 s, the second removes; Esc or a
+  click elsewhere puts it back. Deleting a profile, a preset or a machine, taking a resin off
+  a machine and stopping a print ask the same way, the cost read on hover; none opens a
+  dialog.
 - **Language:** the window follows the system's or the browser's first language, or the one
   you pick in Settings → General. A system language with no translation shows the window in
   English, and Settings says so. English and Russian are complete; a message a translation

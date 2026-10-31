@@ -228,7 +228,7 @@ fn take_button(ui: &mut egui::Ui, text: &str, enabled: bool, note: Option<&str>)
         hint(ui, note);
         ui.add_space(4.0);
     }
-    primary_button(ui, "", text, enabled).clicked()
+    primary_button(ui, text, enabled).clicked()
 }
 
 /// `value` as the field will hold it. A correction past the field's range is held at its

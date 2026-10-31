@@ -87,6 +87,13 @@ impl DrainTool {
         Ok(())
     }
 
+    /// Gives up on the check going, which leaves what the last one found.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.job.take().is_some() {
+            *status = Status::Info(tr!("drain-cancelled"));
+        }
+    }
+
     /// Says that the plate has moved under the last check: a cavity was cut, or a hole or
     /// a channel went in or came out, so what the panel shows is no longer current.
     pub fn stale(&mut self) {

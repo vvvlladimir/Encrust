@@ -1,11 +1,20 @@
 // The one file a colour may be spelled in; `clippy.toml` keeps the rest of the crate out.
 #![expect(clippy::disallowed_methods, reason = "the palette is defined here")]
 
+use std::cell::Cell;
 use std::ops::RangeInclusive;
 
-use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle};
+use egui::epaint::Shadow;
+use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle, Theme};
 
 use crate::ui::fonts;
+
+pub mod motion;
+mod palette;
+mod scene;
+
+pub use palette::Palette;
+pub use scene::Scene;
 
 /// Named font families the bundled faces are registered under.
 pub const MEDIUM: &str = "plex-sans-medium";
@@ -13,92 +22,6 @@ pub const SEMIBOLD: &str = "plex-sans-semibold";
 
 /// Text styles this application adds to egui's own, addressed by name.
 pub const SECTION: &str = "section";
-
-/// Every colour the window is allowed to paint with.
-///
-/// Graphite surfaces, one ember accent, and colours kept for state. See
-/// `docs/design/ui-design-system.md`.
-pub struct Palette {
-    /// Viewport backdrop and any trough a control is sunk into.
-    pub sunken: Color32,
-    /// The logo's own background: window chrome, the top bar, the rail and the layer strip.
-    pub base: Color32,
-    /// Inspector, tool rail and floating cards.
-    pub panel: Color32,
-    /// Inputs, unpressed buttons, list rows.
-    pub raised: Color32,
-    pub hover: Color32,
-    /// A pressed control, and the track of a switch that is off.
-    pub active: Color32,
-    /// Section dividers and panel edges.
-    pub hairline: Color32,
-    /// Input borders and the base of a focus ring.
-    pub line: Color32,
-    /// Values and headings.
-    pub text_high: Color32,
-    /// Field labels.
-    pub text_mid: Color32,
-    /// Units and hints, never body text.
-    pub text_low: Color32,
-    /// Primary action, selection, active tool.
-    pub accent: Color32,
-    /// Pressed state and the far stop of the accent gradient.
-    pub accent_deep: Color32,
-    /// The accent as text or a glyph on a dark surface: the open tool, the active segment.
-    pub accent_soft: Color32,
-    /// Selected row background and active segment.
-    pub accent_wash: Color32,
-    /// Text drawn on an accent fill.
-    pub on_accent: Color32,
-    /// A machine that answered the last scan, and anything else reported good.
-    pub ok: Color32,
-    /// Mesh repair notices, out-of-volume.
-    pub warn: Color32,
-    /// Non-orientable mesh, write failure.
-    pub danger: Color32,
-    /// The washes behind a verdict a print fails on, or only might, 14 % of each.
-    pub danger_wash: Color32,
-    pub warn_wash: Color32,
-    /// Transform field letters, in the CAD convention X red, Y green, Z blue.
-    pub axis: [Color32; 3],
-    /// A picked model: the part of a support the pointer has hold of, the row of a
-    /// selected model, and the tally that counts them.
-    pub picked: Color32,
-    /// The wash behind a selected row, 10 % of the accent.
-    pub picked_wash: Color32,
-}
-
-const ENCRUST: Palette = Palette {
-    sunken: Color32::from_rgb(0x0c, 0x0e, 0x11),
-    base: Color32::from_rgb(0x11, 0x14, 0x18),
-    panel: Color32::from_rgb(0x16, 0x1a, 0x1f),
-    raised: Color32::from_rgb(0x1e, 0x23, 0x29),
-    hover: Color32::from_rgb(0x27, 0x2d, 0x34),
-    active: Color32::from_rgb(0x31, 0x38, 0x40),
-    hairline: Color32::from_rgb(0x25, 0x2a, 0x31),
-    line: Color32::from_rgb(0x39, 0x41, 0x4b),
-    text_high: Color32::from_rgb(0xef, 0xeb, 0xe5),
-    text_mid: Color32::from_rgb(0xa9, 0xa7, 0xa3),
-    text_low: Color32::from_rgb(0x8a, 0x8e, 0x94),
-    accent: Color32::from_rgb(0xf2, 0x76, 0x3a),
-    accent_deep: Color32::from_rgb(0xc9, 0x53, 0x1f),
-    accent_soft: Color32::from_rgb(0xff, 0xb1, 0x84),
-    // 14 % of the accent: the wash behind an active segment or tool.
-    accent_wash: Color32::from_rgba_unmultiplied_const(0xf2, 0x76, 0x3a, 36),
-    on_accent: Color32::from_rgb(0x1a, 0x0e, 0x07),
-    ok: Color32::from_rgb(0x4f, 0xcf, 0x8a),
-    warn: Color32::from_rgb(0xe8, 0xb0, 0x43),
-    danger: Color32::from_rgb(0xef, 0x5b, 0x4b),
-    danger_wash: Color32::from_rgba_unmultiplied_const(0xef, 0x5b, 0x4b, 36),
-    warn_wash: Color32::from_rgba_unmultiplied_const(0xe8, 0xb0, 0x43, 36),
-    axis: [
-        Color32::from_rgb(0xe0, 0x57, 0x4f),
-        Color32::from_rgb(0x5f, 0xbf, 0x62),
-        Color32::from_rgb(0x4f, 0x9c, 0xff),
-    ],
-    picked: Color32::from_rgb(0xff, 0xb1, 0x84),
-    picked_wash: Color32::from_rgba_unmultiplied_const(0xf2, 0x76, 0x3a, 26),
-};
 
 /// What an exposure band is tinted with, on the model and beside its own fields. Six
 /// hues that stay apart from the model's grey and from the accent.
@@ -116,10 +39,9 @@ pub fn band_tint(index: usize) -> Color32 {
     BAND_TINTS[index % BAND_TINTS.len()]
 }
 
-/// What each group of supports is drawn in, on the plate and beside its row. The first is
-/// the scene's own support colour; the rest stay cool and apart from the marks.
-const SUPPORT_TINTS: [Color32; 6] = [
-    ENCRUST_SCENE.support,
+/// What each group of supports past the first is drawn in, on the plate and beside its
+/// row; the first is the scene's own support colour. Cool and apart from the marks.
+const SUPPORT_TINTS: [Color32; 5] = [
     Color32::from_rgb(0x3f, 0x9e, 0x8c),
     Color32::from_rgb(0x8c, 0x6c, 0xc4),
     Color32::from_rgb(0x6f, 0x9a, 0x45),
@@ -129,7 +51,10 @@ const SUPPORT_TINTS: [Color32; 6] = [
 
 /// The colour supports of `group` are drawn in, cycling once the palette runs out.
 pub fn support_tint(group: usize) -> Color32 {
-    SUPPORT_TINTS[group % SUPPORT_TINTS.len()]
+    match group % (SUPPORT_TINTS.len() + 1) {
+        0 => scene().support,
+        tint => SUPPORT_TINTS[tint - 1],
+    }
 }
 
 /// The colour a resin's own profile gives it, for its swatch: data the user chose, not a
@@ -148,144 +73,28 @@ pub fn mask_pixel(grey: u8, island: bool) -> Color32 {
     }
 }
 
-/// Every colour the viewport paints the plate and what stands on it with.
-///
-/// Separate from the `Palette` because none of it is window chrome: it is the grey of
-/// printed resin and the marks laid over it, and the luminance ladder the surfaces are
-/// tested against does not apply. Reaches the shader through `gamma`.
-pub struct Scene {
-    /// Unmarked model surface: a cool resin, so the warm marks and the selection read on it.
-    pub object: Color32,
-    /// A warm light grey apart from the model's blue, so scaffolding does not read as part
-    /// of the part.
-    pub support: Color32,
-    /// A model or a support in the selection.
-    pub selected: Color32,
-    /// A mesh that could not be oriented outward.
-    pub unsound: Color32,
-    /// A hollowing blocker: a marker the user placed, not geometry that is printed.
-    /// Translucent and apart from every colour a model is drawn in, so it never reads as
-    /// a lump of the part.
-    pub blocker: Color32,
-    /// The space inside a model that fills with resin no hole lets out. Laid down twice —
-    /// the near wall of the cavity and its far wall both paint it — so it is translucent
-    /// enough that the lattice standing in it still reads. Cold rather than warm, so it
-    /// parts from the amber a picked model is drawn in as well as from the grey of one
-    /// that is not.
-    pub trapped: Color32,
-    /// The patch painted to be filled with supports.
-    pub painted: Color32,
-    /// The patch painted to keep supports off. Violet, not red: an overhang is already
-    /// washed red, and what is closed to supports has to read apart from what hangs.
-    pub blocked: Color32,
-    /// What the Repair tool marks on a model: an open edge, a face without area, drawn
-    /// twice or crossing another. Acid yellow-green, apart from every other mark and pick.
-    pub fault: Color32,
-    /// The same marks where the camera is not: a darker olive, so the one in view leads.
-    pub fault_rest: Color32,
-    /// An open edge picked by hand to be bridged: magenta, opposite the fault's
-    /// yellow-green, so a pick reads apart from the edges it was picked among.
-    pub fault_picked: Color32,
-    /// The face a cut leaves behind, flat-lit. See `docs/decisions/0062`.
-    pub section_cap: Color32,
-    /// What the inside of a model shows as, through a cut or a drain hole.
-    pub section_wash: Color32,
-    /// A surface leaning far enough to need holding up.
-    pub overhang: Color32,
-    /// Whatever stands past the build volume, which the printer cannot reach.
-    pub outside: Color32,
-    /// The plate's grid: a line every centimetre, and a stronger one every five.
-    pub grid_minor: Color32,
-    pub grid_major: Color32,
-    /// The plate's outline, and the wireframe of the build volume, both translucent so
-    /// they recede behind the models.
-    pub plate_border: Color32,
-    pub volume: Color32,
-    /// The dashed outline of the plate drawn at the height the section cuts at.
-    pub section_frame: Color32,
-    /// The plate's own surface: a shade off the backdrop, so the plate reads as a floor.
-    pub plate: Color32,
-    /// How dark the plate goes under a model standing on it, as black at that alpha.
-    pub shadow: Color32,
-    /// What the models are lit by; see `docs/design/viewport.md`.
-    pub light: Lighting,
-    /// The word written in front of the plate.
-    pub label: Color32,
-    /// The brackets on the corners of a picked model's bounds.
-    pub bounds: Color32,
-    /// The flat face Orient to Face would lay on the plate, over the model.
-    pub facet: Color32,
-    /// Where the Cut tool's plane crosses the model: darker than the selection it is
-    /// traced over, and apart from the red that marks a model past the build volume.
-    pub cut_line: Color32,
-    /// The X, Y and Z arrows in the plate's corner, in the same CAD convention as
-    /// `Palette::axis`.
-    pub plate_axis: [Color32; 3],
-    /// The move and rotate handles, per axis, and the one being hovered or dragged:
-    /// brighter than the field letters, since they are drawn over a lit model.
-    pub gizmo: [Color32; 3],
-    pub gizmo_hot: Color32,
+thread_local! {
+    /// Whether this frame paints light: set by `follow`, read by `colors` and `scene`. Per
+    /// thread, so two windows drawn on two threads, as tests do, keep their own.
+    static LIGHT: Cell<bool> = const { Cell::new(false) };
 }
 
-/// A sky and a ground the ambient light is mixed from by how far a surface faces up, a key
-/// light from above the front left and a weak warm fill from the back right.
-pub struct Lighting {
-    pub sky: Color32,
-    pub ground: Color32,
-    pub key: Color32,
-    pub fill: Color32,
-    /// Directions the two lights travel towards, in plate coordinates, Z up.
-    pub key_towards: [f32; 3],
-    pub fill_towards: [f32; 3],
+/// Hands egui the user's `preference` and points the window at the palette it resolves,
+/// the system's when the user left it to the system. Called once a frame, before drawing.
+pub fn follow(ctx: &egui::Context, preference: egui::ThemePreference) {
+    if ctx.options(|options| options.theme_preference) != preference {
+        ctx.set_theme(preference);
+    }
+    LIGHT.set(ctx.theme() == Theme::Light);
 }
 
-const ENCRUST_SCENE: Scene = Scene {
-    object: Color32::from_rgb(0x7f, 0xa6, 0xb6),
-    support: Color32::from_rgb(0xc9, 0xc2, 0xb6),
-    selected: Color32::from_rgb(0xf5, 0xb5, 0x4a),
-    unsound: Color32::from_rgb(0xd9, 0x6b, 0x61),
-    blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
-    trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
-    painted: Color32::from_rgb(0x59, 0xb8, 0x94),
-    blocked: Color32::from_rgb(0xa7, 0x64, 0xd6),
-    fault: Color32::from_rgb(0xc8, 0xf0, 0x3c),
-    fault_rest: Color32::from_rgb(0x7d, 0x92, 0x2c),
-    fault_picked: Color32::from_rgb(0xff, 0x4f, 0xc8),
-    section_cap: Color32::from_rgb(0xff, 0xb1, 0x84),
-    section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
-    overhang: Color32::from_rgb(0xf0, 0x61, 0x40),
-    outside: Color32::from_rgb(0xe0, 0x2f, 0x2f),
-    grid_minor: Color32::from_rgb(0x26, 0x2c, 0x34),
-    grid_major: Color32::from_rgb(0x39, 0x41, 0x4b),
-    plate_border: Color32::from_rgba_unmultiplied_const(0x8a, 0x93, 0xa3, 0xb3),
-    volume: Color32::from_rgba_unmultiplied_const(0x59, 0x61, 0x6d, 0x59),
-    section_frame: Color32::from_rgb(0x8a, 0x8e, 0x94),
-    plate: Color32::from_rgb(0x14, 0x18, 0x1d),
-    shadow: Color32::from_black_alpha(0x8c),
-    light: Lighting {
-        sky: Color32::from_rgb(0xdf, 0xe7, 0xf2),
-        ground: Color32::from_rgb(0x1a, 0x14, 0x10),
-        key: Color32::from_rgb(0xff, 0xff, 0xff),
-        fill: Color32::from_rgb(0xff, 0xc9, 0xa8),
-        key_towards: [0.4, 0.55, -0.85],
-        fill_towards: [-0.75, -0.55, -0.3],
-    },
-    label: Color32::from_rgba_premultiplied(0x96, 0x9b, 0xa6, 0xc8),
-    bounds: Color32::from_rgb(0xf2, 0xf2, 0xf2),
-    facet: Color32::from_rgba_premultiplied(0xd9, 0x6b, 0x33, 0xd9),
-    cut_line: Color32::from_rgb(0xa8, 0x3a, 0x12),
-    plate_axis: ENCRUST.axis,
-    gizmo: [
-        Color32::from_rgb(0xff, 0x4f, 0x4f),
-        Color32::from_rgb(0x5f, 0xe0, 0x5f),
-        Color32::from_rgb(0x4f, 0xa3, 0xff),
-    ],
-    gizmo_hot: Color32::from_rgb(0xff, 0xe0, 0x66),
-};
-
-/// The one set of colours the viewport paints with.
-pub const fn scene() -> &'static Scene {
-    &ENCRUST_SCENE
+/// The set of colours the viewport paints with this frame.
+pub fn scene() -> &'static Scene {
+    if LIGHT.get() {
+        &scene::LIGHT
+    } else {
+        &scene::DARK
+    }
 }
 
 /// How much of itself a surface keeps at most when the viewport is drawing the models
@@ -305,24 +114,47 @@ pub fn gamma(color: Color32) -> [f32; 4] {
     color.to_normalized_gamma_f32()
 }
 
-/// The one palette the window paints with.
-pub const fn colors() -> &'static Palette {
-    &ENCRUST
+/// The palette egui's `theme` paints with, whichever is in force: for a preview of it.
+pub fn palette_of(theme: Theme) -> &'static Palette {
+    match theme {
+        Theme::Light => &palette::LIGHT,
+        Theme::Dark => &palette::DARK,
+    }
+}
+
+/// The palette the window paints with this frame.
+pub fn colors() -> &'static Palette {
+    if LIGHT.get() {
+        &palette::LIGHT
+    } else {
+        &palette::DARK
+    }
 }
 
 /// Heights, widths and gaps, in points. One density, applied everywhere.
 pub const ROW_H: f32 = 30.0;
+/// A model's row in the models card, and the printer's row over the plate's Slice.
+pub const MODEL_ROW_H: f32 = 32.0;
+pub const PRINTER_ROW_H: f32 = 34.0;
 /// Every box a value is typed in stands as tall as a button.
 pub const FIELD_H: f32 = BUTTON_H;
 /// Width of the value box in a named row.
 pub const FIELD_W: f32 = 128.0;
 pub const PANEL_PAD: f32 = 12.0;
 pub const ITEM_GAP: f32 = 8.0;
+/// Between the rows of a section's body.
+pub const ROW_GAP: f32 = 6.0;
 /// Between buttons sharing one row, and between a tool heading's mode icons.
 pub const BUTTON_GAP: f32 = 6.0;
 pub const ICON_GAP: f32 = 2.0;
 /// Between a reading and the row of buttons under it.
 pub const NOTE_GAP: f32 = 4.0;
+/// Between the groups of a sheet or a page.
+pub const SECTION_GAP: f32 = 14.0;
+/// Between the start page's title and the zone under it.
+pub const PAGE_GAP: f32 = 34.0;
+/// How far a palette's rows and foot stand in from its sides.
+pub const PALETTE_INSET: f32 = 16.0;
 /// Height of a section's heading row, which folds it.
 pub const SECTION_H: f32 = 36.0;
 pub const SCENE_W: f32 = 272.0;
@@ -331,6 +163,8 @@ pub const INSPECTOR_HEAD_H: f32 = 48.0;
 /// How far either column may be dragged.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
+/// The inspector's width until it is dragged.
+pub const INSPECTOR_W: f32 = 316.0;
 /// Where Preview divides the model from the mask, as a fraction of the stage's width, and
 /// how far the divide may be dragged.
 pub const MASK_SPLIT: f32 = 0.5;
@@ -345,21 +179,29 @@ pub const TOP_BAR_H: f32 = 44.0;
 /// working in, and the bar's names are cut rather than lost.
 pub const WINDOW_MIN_W: f32 = 900.0;
 pub const WINDOW_MIN_H: f32 = 560.0;
-pub const LAYER_STRIP_W: f32 = 56.0;
+pub const LAYER_STRIP_W: f32 = 64.0;
 /// A rail button holds a glyph over its name, or stands a square of the glyph alone.
-pub const RAIL_BUTTON_H: f32 = 46.0;
-pub const RAIL_ICON_H: f32 = 34.0;
+pub const RAIL_BUTTON_H: f32 = 50.0;
+pub const RAIL_ICON_H: f32 = 36.0;
 /// Between a card of buttons, the rail or the layer strip, and its buttons.
 pub const TOOLBAR_PAD: f32 = 4.0;
 /// The chips and buttons standing in the top bar and the layer strip.
 pub const CHIP_H: f32 = 32.0;
+/// A list the chip opens, and how far under the chip it hangs.
+pub const CHOOSER_W: f32 = 300.0;
+pub const CHOOSER_GAP: f32 = 6.0;
 pub const ICON_SIZE: f32 = 28.0;
+/// The squares of a card's own rows: its plates and the actions under its models.
+pub const SMALL_ICON_SIZE: f32 = 26.0;
 pub const PRIMARY_H: f32 = 40.0;
-/// The ring a control wears while it holds the keyboard's focus, points.
-pub const FOCUS_W: f32 = 1.5;
+/// The ring a control wears while it holds the keyboard's focus, and the halo of the
+/// accent's wash around it, points.
+pub const FOCUS_W: f32 = 1.0;
+pub const FOCUS_HALO_W: f32 = 3.0;
 pub const BUTTON_H: f32 = 32.0;
-/// Height of a running job's progress bar.
-pub const BAR_H: f32 = 6.0;
+/// Height of a running job's progress bar, and of a print's in the printer sheet.
+pub const BAR_H: f32 = 4.0;
+pub const SHEET_BAR_H: f32 = 6.0;
 /// A form block: its title's column, the most its fields take, and the room between them.
 pub const BLOCK_TITLE_W: f32 = 180.0;
 pub const BLOCK_FIELDS_W: f32 = 460.0;
@@ -370,6 +212,15 @@ pub const DIALOG_HEAD_H: f32 = 48.0;
 pub const DIALOG_MARGIN: f32 = 24.0;
 pub const DIALOG_LIST_W: f32 = 260.0;
 pub const DIALOG_LIST_SHARE: f32 = 0.28;
+/// How much a window over the plate dims the stage behind it, and how much Find does.
+pub const SCRIM_SHARE: f32 = 0.62;
+pub const FIND_SCRIM_SHARE: f32 = 0.4;
+/// The bar along the foot of a window's page, and the name column of a form's text row.
+pub const DIALOG_BAR_H: f32 = 56.0;
+pub const ROW_NAME_W: f32 = 150.0;
+/// A window page's title, and the muted second name beside it, pt.
+pub const PAGE_TITLE_PT: f32 = 17.0;
+pub const PAGE_SUBTITLE_PT: f32 = 15.0;
 /// A row of a table, and of a list whose entries carry a second line.
 pub const TABLE_ROW_H: f32 = 36.0;
 pub const TWO_LINE_ROW_H: f32 = 48.0;
@@ -380,7 +231,8 @@ pub const CARD_MARGIN: Margin = Margin::symmetric(10, 8);
 /// Side padding of the top bar and the layer strip.
 pub const STRIP_MARGIN: Margin = Margin::symmetric(8, 0);
 
-/// Controls are rounded by 6 points, cards by 8 and windows by 10; nothing else is rounded.
+/// Controls are rounded by 6 points, cards by 8 and windows by 10; a group of controls
+/// nests around theirs.
 pub const R_CONTROL: CornerRadius = CornerRadius::same(6);
 pub const R_SURFACE: CornerRadius = CornerRadius::same(8);
 pub const R_PANEL: CornerRadius = CornerRadius::same(10);
@@ -402,7 +254,7 @@ pub fn small() -> FontId {
 
 /// Both halves of a reading: the name and the figure after its leader.
 pub fn reading() -> FontId {
-    FontId::proportional(12.0)
+    FontId::proportional(12.5)
 }
 
 /// The label of a segment in a row of choices.
@@ -412,17 +264,24 @@ pub fn segment() -> FontId {
 
 /// A unit inside a number's box.
 pub fn unit() -> FontId {
-    FontId::proportional(10.5)
+    FontId::proportional(11.5)
 }
 
 /// A section heading in the inspector or on a floating card.
 pub fn section() -> FontId {
-    FontId::new(12.0, FontFamily::Name(SEMIBOLD.into()))
+    FontId::new(12.5, FontFamily::Name(SEMIBOLD.into()))
 }
 
 /// The title of a form block, in the column beside its fields.
 pub fn block_title() -> FontId {
     FontId::new(13.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The stage dimmed under a window over the plate, `share` of the way to black.
+pub fn scrim(share: f32) -> Color32 {
+    let [r, g, b, most] = colors().scrim.to_srgba_unmultiplied();
+    let alpha = share.clamp(0.0, 1.0) * f32::from(most);
+    Color32::from_rgba_unmultiplied(r, g, b, alpha as u8)
 }
 
 /// The name of a window over the plate.
@@ -435,14 +294,58 @@ pub fn page_title(size_pt: f32) -> FontId {
     FontId::new(size_pt, FontFamily::Name(SEMIBOLD.into()))
 }
 
+/// The page a title was opened from, and its kind after it, beside that title.
+pub fn page_trail() -> FontId {
+    FontId::proportional(15.0)
+}
+
+/// A path or a template as it is typed, in the code face.
+pub fn typed_path() -> FontId {
+    code(12.0)
+}
+
 /// The line under a page's title that says what the page is for.
 pub fn lede() -> FontId {
     FontId::proportional(14.0)
 }
 
+/// A figure of the plate card's grid.
+pub fn figure() -> FontId {
+    FontId::new(15.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The heads over the columns of a split: Model, Supports.
+pub fn split_head() -> FontId {
+    FontId::new(12.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The layer the layer strip stands at, in its box.
+pub fn strip_layer() -> FontId {
+    FontId::new(16.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// The layer strip's height in mm under the layer.
+pub fn strip_height() -> FontId {
+    FontId::new(10.5, FontFamily::Name(MEDIUM.into()))
+}
+
+/// What a tool does with the pointer, and the key that does it, in the hint bar.
+pub fn hint() -> FontId {
+    FontId::proportional(12.0)
+}
+
+pub fn hint_key() -> FontId {
+    FontId::new(12.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The words of the primary button.
+pub fn primary() -> FontId {
+    FontId::new(13.0, FontFamily::Name(MEDIUM.into()))
+}
+
 /// The open tool's name, at the head of the inspector.
 pub fn tool_title() -> FontId {
-    FontId::new(14.0, FontFamily::Name(SEMIBOLD.into()))
+    FontId::new(14.5, FontFamily::Name(SEMIBOLD.into()))
 }
 
 /// X, Y or Z beside the arrows in the corner of the plate.
@@ -452,7 +355,17 @@ pub fn axis_letter() -> FontId {
 
 /// A tool's name under its glyph on the rail.
 pub fn rail_name() -> FontId {
-    FontId::proportional(10.0)
+    FontId::proportional(10.5)
+}
+
+/// A key's face on a keycap.
+pub fn keycap() -> FontId {
+    FontId::new(10.5, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The digit that picks a tool, in the corner of its rail button.
+pub fn rail_key() -> FontId {
+    FontId::proportional(9.0)
 }
 
 /// Every millimetre, second, layer index, triangle count and byte size: the text face,
@@ -471,15 +384,17 @@ pub fn icon(size_pt: f32) -> FontId {
     FontId::proportional(size_pt)
 }
 
-/// Installs the fonts and the tokens above on a context. Called once, at startup.
+/// Installs the fonts and the tokens above on a context, a style for each theme egui may
+/// resolve to. Called once, at startup.
 pub fn apply(ctx: &egui::Context) {
     ctx.set_fonts(fonts::definitions());
-    ctx.all_styles_mut(style);
+    ctx.style_mut_of(Theme::Dark, |into| style(into, Theme::Dark, &palette::DARK));
+    ctx.style_mut_of(Theme::Light, |into| {
+        style(into, Theme::Light, &palette::LIGHT)
+    });
 }
 
-fn style(style: &mut egui::Style) {
-    let colors = colors();
-
+fn style(style: &mut egui::Style, theme: Theme, colors: &Palette) {
     style.text_styles = [
         (TextStyle::Body, body()),
         (TextStyle::Button, label()),
@@ -505,13 +420,14 @@ fn style(style: &mut egui::Style) {
     spacing.scroll.bar_width = 9.0;
     spacing.scroll.bar_inner_margin = 3.0;
 
-    style.visuals = visuals(colors);
+    style.visuals = visuals(theme, colors);
     style.interaction.tooltip_delay = 0.35;
+    style.animation_time = motion::FAST.unreduced_s();
     style.interaction.selectable_labels = false;
 }
 
-fn visuals(colors: &Palette) -> egui::Visuals {
-    let mut visuals = egui::Visuals::dark();
+fn visuals(theme: Theme, colors: &Palette) -> egui::Visuals {
+    let mut visuals = theme.default_visuals();
 
     visuals.panel_fill = colors.panel;
     visuals.window_fill = colors.panel;
@@ -532,8 +448,8 @@ fn visuals(colors: &Palette) -> egui::Visuals {
     };
     visuals.slider_trailing_fill = true;
     visuals.handle_shape = egui::style::HandleShape::Circle;
-    visuals.window_shadow = shadow();
-    visuals.popup_shadow = shadow();
+    visuals.window_shadow = window_shadow_of(colors);
+    visuals.popup_shadow = window_shadow_of(colors);
 
     let widgets = &mut visuals.widgets;
     widgets.noninteractive = widget(colors.panel, colors.hairline, colors.text_mid);
@@ -565,101 +481,29 @@ fn widget(fill: Color32, stroke: Color32, text: Color32) -> egui::style::WidgetV
     }
 }
 
-/// The one shadow: a floating card, a menu and a tooltip all cast it.
-pub fn shadow() -> egui::epaint::Shadow {
-    egui::epaint::Shadow {
+/// The one shadow every card over the stage stands on.
+pub fn card_shadow() -> Shadow {
+    Shadow {
+        offset: [0, 8],
+        blur: 24,
+        spread: 0,
+        color: colors().shadow,
+    }
+}
+
+/// What a window over the plate, a menu and a tooltip cast.
+pub fn window_shadow() -> Shadow {
+    window_shadow_of(colors())
+}
+
+fn window_shadow_of(colors: &Palette) -> Shadow {
+    Shadow {
         offset: [0, 10],
         blur: 30,
         spread: 0,
-        color: Color32::from_black_alpha(115),
+        color: colors.shadow,
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// WCAG relative luminance of an opaque colour.
-    fn luminance(color: Color32) -> f64 {
-        let channel = |value: u8| {
-            let value = f64::from(value) / 255.0;
-            if value <= 0.039_28 {
-                value / 12.92
-            } else {
-                ((value + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
-    }
-
-    fn contrast(a: Color32, b: Color32) -> f64 {
-        let (high, low) = {
-            let (a, b) = (luminance(a), luminance(b));
-            (a.max(b), a.min(b))
-        };
-        (high + 0.05) / (low + 0.05)
-    }
-
-    #[test]
-    fn every_text_colour_meets_aa_on_the_panel() {
-        let colors = colors();
-        // 4.5:1 is WCAG AA for body text, 3:1 for the large or incidental text the low
-        // tone is reserved for.
-        assert!(contrast(colors.text_high, colors.panel) >= 4.5);
-        assert!(contrast(colors.text_mid, colors.panel) >= 4.5);
-        assert!(contrast(colors.text_low, colors.panel) >= 3.0);
-    }
-
-    #[test]
-    fn the_accent_carries_its_own_label() {
-        let colors = colors();
-        assert!(contrast(colors.accent, colors.panel) >= 4.5);
-        assert!(contrast(colors.on_accent, colors.accent) >= 4.5);
-    }
-
-    /// The cardinal mistake this helper exists to prevent: a decode to linear would make
-    /// mid grey read as 0.216 and wash the whole viewport out.
-    #[test]
-    fn gamma_does_not_linearise_a_token() {
-        let [red, ..] = gamma(Color32::from_gray(128));
-        assert!(
-            (red - 128.0 / 255.0).abs() < 1e-6,
-            "a token reaches the buffers in the gamma space egui-wgpu writes"
-        );
-    }
-
-    /// A blocker used to be the colour a picked model is drawn in, which left it
-    /// indistinguishable from a lump of the model itself.
-    #[test]
-    fn a_marker_is_its_own_colour_and_lets_the_model_through() {
-        let scene = scene();
-        for marker in [scene.blocker, scene.trapped] {
-            for surface in [scene.object, scene.selected, scene.support, scene.unsound] {
-                assert_ne!(marker, surface, "a marker is not a surface of the part");
-            }
-            assert!(
-                marker.a() < u8::MAX,
-                "a marker is translucent, so what it covers is still there"
-            );
-        }
-    }
-
-    #[test]
-    fn the_surfaces_are_ordered_from_sunken_to_hover() {
-        let colors = colors();
-        let ladder = [
-            colors.sunken,
-            colors.base,
-            colors.panel,
-            colors.raised,
-            colors.hover,
-            colors.active,
-        ];
-        for pair in ladder.windows(2) {
-            assert!(
-                luminance(pair[0]) < luminance(pair[1]),
-                "each surface is lighter than the one it sits on"
-            );
-        }
-    }
-}
+mod tests;

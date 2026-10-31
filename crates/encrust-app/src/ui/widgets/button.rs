@@ -1,167 +1,55 @@
 use egui::{
-    Align2, Color32, CornerRadius, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType,
-    vec2,
+    Align2, Color32, CornerRadius, FontId, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo,
+    WidgetType, vec2,
 };
 
 use crate::ui::theme;
+use crate::ui::theme::motion;
 
-/// The ring a control wears while it holds the keyboard's focus, inside its own edge so no
-/// card clips it.
+mod square;
+mod tile;
+
+pub(in crate::ui::widgets) use square::paint_square;
+pub use square::{
+    RailButton, SquareLook, companion_square, icon_button, icon_toggle, numbered_square,
+    quiet_square, rail_button, small_icon_button,
+};
+pub use tile::{bar_pill, summary_button, swatch, zone_button};
+
+/// The ring a control wears while it holds the keyboard's focus: the accent inside its own
+/// edge, and a halo of the accent's wash outside it.
 pub fn focus_ring(ui: &Ui, response: &Response, radius: impl Into<CornerRadius>) {
     if response.has_focus() {
-        let stroke = egui::Stroke::new(theme::FOCUS_W, theme::colors().accent);
-        ui.painter()
-            .rect_stroke(response.rect, radius, stroke, StrokeKind::Inside);
+        let (radius, colors) = (radius.into(), theme::colors());
+        let halo = egui::Stroke::new(theme::FOCUS_HALO_W, colors.accent_wash);
+        let ring = egui::Stroke::new(theme::FOCUS_W, colors.accent);
+        let painter = ui.painter();
+        painter.rect_stroke(response.rect, radius, halo, StrokeKind::Outside);
+        painter.rect_stroke(response.rect, radius, ring, StrokeKind::Inside);
     }
 }
 
-/// A picture to pick from a grid, `side` points square, ringed in the accent while it is
-/// the one picked.
-pub fn swatch(
-    ui: &mut Ui,
-    texture: &egui::TextureHandle,
-    side: f32,
-    picked: bool,
-    name: &str,
-) -> Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
-    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, picked, name));
-    let colors = theme::colors();
-    egui::Image::new(texture)
-        .corner_radius(theme::R_CONTROL)
-        .paint_at(ui, rect);
-    let stroke = match (picked, response.hovered()) {
-        (true, _) => egui::Stroke::new(theme::FOCUS_W, colors.accent),
-        (false, true) => egui::Stroke::new(1.0, colors.text_low),
-        (false, false) => egui::Stroke::new(1.0, colors.line),
-    };
-    ui.painter()
-        .rect_stroke(rect, theme::R_CONTROL, stroke, StrokeKind::Inside);
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_text(name)
+/// `rest` easing to `hovered` by `FAST` while the pointer is on `response`.
+pub fn hover_mix(ui: &Ui, response: &Response, rest: Color32, hovered: Color32) -> Color32 {
+    let id = response.id.with("hover");
+    let how = motion::toggle(ui.ctx(), id, response.hovered(), motion::FAST);
+    rest.lerp_to_gamma(hovered, how)
 }
 
-/// A borderless square with one glyph in it: the top bar and the overlay cards.
-pub fn icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
-    square(ui, glyph, tooltip, Square::icon())
+/// Where a control is painted: its own rect, shrunk towards its centre while it is pressed.
+pub(super) fn pressed_rect(ui: &Ui, response: &Response) -> Rect {
+    let id = response.id.with("pressed");
+    let down = response.is_pointer_button_down_on();
+    let pressed = motion::toggle(ui.ctx(), id, down, motion::FAST);
+    let scale = 1.0 - (1.0 - PRESSED_SCALE) * pressed;
+    Rect::from_center_size(response.rect.center(), response.rect.size() * scale)
 }
 
-/// An icon square that stays lit while `on`: a lock, a link, a mode held down.
-pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Response {
-    square(
-        ui,
-        glyph,
-        tooltip,
-        Square {
-            active: on,
-            ..Square::icon()
-        },
-    )
-}
+/// How far a pressed control shrinks.
+const PRESSED_SCALE: f32 = 0.96;
 
-/// A rail button filling the room it is given: a glyph over the tool's name, or the glyph
-/// alone, raised in the accent while it is the tool in use, and a dot in `badge` at its
-/// corner while the tool needs attention.
-pub fn rail_button(
-    ui: &mut Ui,
-    glyph: &str,
-    name: &str,
-    labelled: bool,
-    tooltip: &str,
-    active: bool,
-    badge: Option<Color32>,
-) -> Response {
-    let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click());
-    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
-    let colors = theme::colors();
-    let (fill, foreground) = match (active, response.hovered()) {
-        (true, _) => (colors.raised, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
-    };
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let glyph_at = if labelled {
-        rect.center_top() + vec2(0.0, 16.0)
-    } else {
-        rect.center()
-    };
-    painter.text(
-        glyph_at,
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(17.0),
-        foreground,
-    );
-    if labelled {
-        painter.text(
-            rect.center_bottom() - vec2(0.0, 9.0),
-            Align2::CENTER_CENTER,
-            name,
-            theme::rail_name(),
-            foreground,
-        );
-    }
-    if let Some(badge) = badge {
-        let at = glyph_at + vec2(RAIL_BADGE_OFFSET.x, RAIL_BADGE_OFFSET.y - 16.0);
-        painter.circle_filled(at, RAIL_BADGE_R + 1.5, colors.base);
-        painter.circle_filled(at, RAIL_BADGE_R, badge);
-    }
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_text(tooltip)
-}
-
-/// Where a rail button's dot sits from the top of its glyph, and its radius, points.
-const RAIL_BADGE_OFFSET: egui::Vec2 = vec2(10.0, 8.0);
-const RAIL_BADGE_R: f32 = 3.0;
-
-/// Every square icon control is the same drawing with different numbers.
-struct Square {
-    size: f32,
-    glyph_size: f32,
-    active: bool,
-}
-
-impl Square {
-    fn icon() -> Self {
-        Self {
-            size: theme::ICON_SIZE,
-            glyph_size: 16.0,
-            active: false,
-        }
-    }
-}
-
-fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), Sense::click());
-    response.widget_info(|| {
-        WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), config.active, tooltip)
-    });
-    let colors = theme::colors();
-
-    let (fill, foreground) = match (config.active, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
-    };
-
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(config.glyph_size),
-        foreground,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-
-    if tooltip.is_empty() {
-        response
-    } else {
-        response.on_hover_text(tooltip)
-    }
-}
+/// How much of itself a glyph keeps on a control that cannot be used.
+pub(super) const DISABLED_GLYPH: f32 = 0.4;
 
 /// The ordinary full-width button: raised, bordered, an optional leading glyph.
 pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
@@ -233,6 +121,48 @@ pub fn companion_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> 
     )
 }
 
+/// What a companion button adds to its words: its glyph and the room either side.
+const COMPANION_CHROME_W: f32 = 50.0;
+
+/// The primary action and its companion in one row, the companion as wide as its words:
+/// `(text, enabled)` and `(glyph, text, enabled)`. Returns both responses.
+pub fn primary_with_companion(
+    ui: &mut Ui,
+    (text, enabled): (&str, bool),
+    (glyph, companion, companion_enabled): (&str, &str, bool),
+) -> (Response, Response) {
+    let words = ui.painter().layout_no_wrap(
+        companion.to_owned(),
+        theme::label(),
+        theme::colors().text_high,
+    );
+    let companion_w = words.size().x + COMPANION_CHROME_W;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
+        let room = ui.available_width() - companion_w - theme::BUTTON_GAP;
+        let primary = ui
+            .allocate_ui(vec2(room, theme::PRIMARY_H), |ui| {
+                primary_button(ui, text, enabled)
+            })
+            .inner;
+        let second = companion_button(ui, glyph, companion, companion_enabled);
+        (primary, second)
+    })
+    .inner
+}
+
+/// How wide an [`inline_button`] saying `text`, with `glyph` if any, stands.
+pub fn inline_button_w(ui: &Ui, glyph: &str, text: &str) -> f32 {
+    let high = theme::colors().text_high;
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), high)
+        .size()
+        .x;
+    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
+    text_w + glyph_w + 32.0
+}
+
 /// A button as wide as what it says, to stand in a row of several. `primary` paints it
 /// as the one action of the screen.
 pub fn inline_button(
@@ -243,13 +173,7 @@ pub fn inline_button(
     enabled: bool,
 ) -> Response {
     let colors = theme::colors();
-    let text_w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
-        .size()
-        .x;
-    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
-    let size = vec2(text_w + glyph_w + 32.0, theme::BUTTON_H);
+    let size = vec2(inline_button_w(ui, glyph, text), theme::BUTTON_H);
     let skin = match (primary, enabled) {
         (true, true) => Skin {
             fill: colors.accent,
@@ -352,28 +276,29 @@ pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     )
 }
 
-/// The one action a screen is for. There is never a second one of these in view.
-pub fn primary_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Response {
+/// The one action a screen is for, in words alone: the tool's glyph already heads the
+/// card. There is never a second one of these in view.
+pub fn primary_button(ui: &mut Ui, text: &str, enabled: bool) -> Response {
     let colors = theme::colors();
     let (fill, foreground) = if enabled {
         (colors.accent, colors.on_accent)
     } else {
         (colors.raised, colors.text_low)
     };
-    filled_button(
-        ui,
-        glyph,
+    let skin = Skin {
+        fill,
+        foreground,
+        border: None,
+        hovered: colors.accent_soft,
+        pressed: colors.accent_deep,
+    };
+    let size = vec2(ui.available_width(), theme::PRIMARY_H);
+    let face = Face {
+        glyph: "",
         text,
-        vec2(ui.available_width(), theme::PRIMARY_H),
-        &Skin {
-            fill,
-            foreground,
-            border: None,
-            hovered: colors.accent_soft,
-            pressed: colors.accent_deep,
-        },
-        enabled,
-    )
+        font: theme::primary(),
+    };
+    painted_button(ui, &face, size, &skin, enabled)
 }
 
 /// Why a button cannot be pressed, shown only while the pointer is on it; nothing while it can.
@@ -384,76 +309,37 @@ pub fn blocked_hover(response: Response, blocker: Option<String>) -> Response {
     }
 }
 
-/// A row that opens a chooser: a leading glyph, what is chosen, and a caret.
-pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
-    let colors = theme::colors();
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label));
-
-    let border = if response.hovered() {
-        colors.line
+/// What a control listens for: a click while it can be used, the hover for its reason
+/// while it cannot.
+pub(in crate::ui::widgets) fn sense_for(enabled: bool) -> Sense {
+    if enabled {
+        Sense::click()
     } else {
-        colors.hairline
-    };
-    let painter = ui.painter();
-    painter.rect(
-        rect,
-        theme::R_CONTROL,
-        colors.sunken,
-        egui::Stroke::new(1.0, border),
-        StrokeKind::Inside,
-    );
-    painter.text(
-        egui::pos2(rect.left() + 9.0 + 7.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    painter.text(
-        egui::pos2(rect.right() - 9.0 - 7.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        crate::ui::icon::CARET_DOWN,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    let text_rect = Rect::from_min_max(
-        egui::pos2(rect.left() + 26.0, rect.top()),
-        egui::pos2(rect.right() - 26.0, rect.bottom()),
-    );
-    let galley = painter.layout(
-        label.to_owned(),
-        theme::label(),
-        colors.text_high,
-        text_rect.width(),
-    );
-    painter.galley(
-        egui::pos2(
-            text_rect.left(),
-            text_rect.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        colors.text_high,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-
-    response
+        Sense::hover()
+    }
 }
 
 /// Space kept clear either side of a button's label.
 const LABEL_PAD: f32 = 10.0;
 
 /// What a text button is painted in, in each of the states it can be in.
-struct Skin {
-    fill: Color32,
-    foreground: Color32,
-    border: Option<Color32>,
-    hovered: Color32,
-    pressed: Color32,
+pub(in crate::ui::widgets) struct Skin {
+    pub fill: Color32,
+    pub foreground: Color32,
+    pub border: Option<Color32>,
+    pub hovered: Color32,
+    pub pressed: Color32,
 }
 
-/// One drawing behind every text button: a filled rounded rect, a glyph and a label.
-fn filled_button(
+/// What a text button says: its glyph, if any, and its label in `font`.
+pub(in crate::ui::widgets) struct Face<'a> {
+    pub glyph: &'a str,
+    pub text: &'a str,
+    pub font: FontId,
+}
+
+/// A text button in the label face.
+pub(in crate::ui::widgets) fn filled_button(
     ui: &mut Ui,
     glyph: &str,
     text: &str,
@@ -461,43 +347,60 @@ fn filled_button(
     skin: &Skin,
     enabled: bool,
 ) -> Response {
-    let Skin {
-        fill,
-        foreground,
-        border,
-        hovered,
-        pressed,
-    } = *skin;
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
+    let face = Face {
+        glyph,
+        text,
+        font: theme::label(),
     };
-    let (rect, response) = ui.allocate_exact_size(size, sense);
+    painted_button(ui, &face, size, skin, enabled)
+}
+
+/// One drawing behind every text button: a filled rounded rect, a glyph and a label.
+fn painted_button(
+    ui: &mut Ui,
+    face: &Face<'_>,
+    size: egui::Vec2,
+    skin: &Skin,
+    enabled: bool,
+) -> Response {
+    let sense = sense_for(enabled);
+    let (_, response) = ui.allocate_exact_size(size, sense);
+    let text = face.text;
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, text));
+    paint_button(ui, &response, face, skin, enabled);
+    response
+}
 
-    let fill = match (
-        enabled,
-        response.is_pointer_button_down_on(),
-        response.hovered(),
-    ) {
-        (false, _, _) => fill,
-        (true, true, _) => pressed,
-        (true, false, true) => hovered,
-        (true, false, false) => fill,
+/// Paints a text button over a response already laid out.
+pub(in crate::ui::widgets) fn paint_button(
+    ui: &Ui,
+    response: &Response,
+    face: &Face<'_>,
+    skin: &Skin,
+    enabled: bool,
+) {
+    let Face { glyph, text, .. } = *face;
+    let fill = match (enabled, response.is_pointer_button_down_on()) {
+        (false, _) => skin.fill,
+        (true, true) => skin.pressed,
+        (true, false) => hover_mix(ui, response, skin.fill, skin.hovered),
     };
+    let foreground = skin.foreground;
 
+    let rect = pressed_rect(ui, response);
     let painter = ui.painter();
-    let stroke = border.map_or(egui::Stroke::NONE, |border| egui::Stroke::new(1.0, border));
+    let stroke = skin
+        .border
+        .map_or(egui::Stroke::NONE, |border| egui::Stroke::new(1.0, border));
     painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
 
-    let font = theme::label();
-    let glyph_width = if glyph.is_empty() { 0.0 } else { 22.0 };
+    let glyph_width = if glyph.is_empty() { 0.0 } else { GLYPH_W };
     // A label longer than its button is cut rather than drawn past the edge: the text
     // comes from a file name or a printer, and neither has a length we chose.
-    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, foreground);
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(text.to_owned(), face.font.clone(), foreground);
     job.wrap = egui::text::TextWrapping::truncate_at_width(
-        (size.x - glyph_width - 2.0 * LABEL_PAD).max(0.0),
+        (response.rect.width() - glyph_width - 2.0 * LABEL_PAD).max(0.0),
     );
     let galley = painter.layout_job(job);
     let content_left = rect.center().x - (glyph_width + galley.size().x) / 2.0;
@@ -507,7 +410,11 @@ fn filled_button(
             Align2::CENTER_CENTER,
             glyph,
             theme::icon(16.0),
-            foreground,
+            if enabled {
+                foreground
+            } else {
+                foreground.gamma_multiply(DISABLED_GLYPH)
+            },
         );
     }
     painter.galley(
@@ -518,118 +425,8 @@ fn filled_button(
         galley,
         foreground,
     );
-    focus_ring(ui, &response, theme::R_CONTROL);
-
-    response
+    focus_ring(ui, response, theme::R_CONTROL);
 }
 
-/// A card that opens a view of its own: a glyph in the colour of what it found, a title,
-/// a line under it, and a chevron saying it leads somewhere.
-pub fn summary_button(
-    ui: &mut Ui,
-    glyph: &str,
-    tint: egui::Color32,
-    title: &str,
-    subtitle: &str,
-) -> Response {
-    let colors = theme::colors();
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), SUMMARY_H), Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        colors.raised
-    };
-    let painter = ui.painter();
-    painter.rect(
-        rect,
-        theme::R_SURFACE,
-        fill,
-        egui::Stroke::new(1.0, colors.line),
-        egui::StrokeKind::Inside,
-    );
-
-    let glyph_at = rect.left_center() + vec2(20.0, 0.0);
-    painter.text(
-        glyph_at,
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(20.0),
-        tint,
-    );
-    let text_x = rect.left() + 42.0;
-    painter.text(
-        egui::pos2(text_x, rect.center().y - 1.0),
-        Align2::LEFT_BOTTOM,
-        title,
-        theme::label(),
-        colors.text_high,
-    );
-    painter.text(
-        egui::pos2(text_x, rect.center().y + 2.0),
-        Align2::LEFT_TOP,
-        subtitle,
-        theme::small(),
-        colors.text_low,
-    );
-    painter.text(
-        rect.right_center() - vec2(14.0, 0.0),
-        Align2::CENTER_CENTER,
-        crate::ui::icon::CARET_RIGHT,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    focus_ring(ui, &response, theme::R_SURFACE);
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
-/// Height of a summary card: two lines of text and room around them.
-const SUMMARY_H: f32 = 52.0;
-
-/// A large target filling `rect`: a glyph over a title and a line under it, for the few
-/// things a view with nothing in it yet offers.
-pub fn zone_button(ui: &mut Ui, rect: Rect, glyph: &str, title: &str, detail: &str) -> Response {
-    let colors = theme::colors();
-    let response = ui.allocate_rect(rect, Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
-    let (fill, line) = if response.hovered() {
-        (colors.hover, colors.accent_soft)
-    } else {
-        (colors.raised, colors.line)
-    };
-    let painter = ui.painter_at(rect);
-    painter.rect(
-        rect,
-        theme::R_SURFACE,
-        fill,
-        egui::Stroke::new(1.0, line),
-        StrokeKind::Inside,
-    );
-    let middle = rect.center();
-    let wrap = (rect.width() - 2.0 * ZONE_PAD).max(0.0);
-    painter.text(
-        middle - vec2(0.0, 22.0),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(30.0),
-        colors.text_mid,
-    );
-    painter.text(
-        middle + vec2(0.0, 12.0),
-        Align2::CENTER_CENTER,
-        title,
-        theme::page_title(16.0),
-        colors.text_high,
-    );
-    let mut job =
-        egui::text::LayoutJob::simple(detail.to_owned(), theme::small(), colors.text_low, wrap);
-    job.halign = egui::Align::Center;
-    let words = painter.layout_job(job);
-    painter.galley(middle + vec2(0.0, 26.0), words, colors.text_low);
-    focus_ring(ui, &response, theme::R_SURFACE);
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
-/// Room a zone's line keeps from its edges.
-const ZONE_PAD: f32 = 24.0;
+/// Room a leading glyph takes in a text button, points.
+pub(in crate::ui::widgets) const GLYPH_W: f32 = 22.0;

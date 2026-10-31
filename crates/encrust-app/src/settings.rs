@@ -1,5 +1,5 @@
 //! The Settings window's state: which page is open, what is picked on it, and the profile
-//! being edited, which is written back as it changes. See `docs/design/profiles.md`.
+//! being edited. See `docs/design/profiles.md`.
 
 pub use printer_profiles::unique_id;
 use printer_profiles::{AutoProfile, Catalogue, Kind, PrinterProfile, SupportProfile};
@@ -8,8 +8,10 @@ use crate::i18n::tr;
 use crate::undo::Frame;
 
 mod drafts;
+mod leaving;
 mod library;
 pub use drafts::{Draft, ResinDraft};
+pub use leaving::Leaving;
 pub use library::{
     add_resin, can_delete, delete_resin, duplicate_resin, installed, installed_printers,
     is_thrown_away_with_the_printer, keep_support, new_printer, new_resin, new_support,
@@ -25,6 +27,8 @@ pub enum Section {
     Hollow,
     /// The Drain tool's named settings.
     Drain,
+    /// How the window looks: light or dark, its language, whether it moves.
+    Appearance,
     /// How the window itself behaves: where it starts, how it zooms, where files go.
     General,
     /// Whether to look for a new release, and the one found.
@@ -36,17 +40,18 @@ impl Section {
     pub const PROFILES: [Self; 3] = [Self::Supports, Self::Hollow, Self::Drain];
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub const OWN: [Self; 2] = [Self::General, Self::Updates];
+    pub const OWN: [Self; 3] = [Self::Appearance, Self::General, Self::Updates];
 
     /// A page loads the latest release every time it is opened, so it has nothing to update.
     #[cfg(target_arch = "wasm32")]
-    pub const OWN: [Self; 1] = [Self::General];
+    pub const OWN: [Self; 2] = [Self::Appearance, Self::General];
 
     pub fn label(self) -> String {
         match self {
             Self::Supports => tr!("settings-page-supports"),
             Self::Hollow => tr!("settings-page-hollow"),
             Self::Drain => tr!("settings-page-drain"),
+            Self::Appearance => tr!("settings-page-appearance"),
             Self::General => tr!("settings-page-general"),
             Self::Updates => tr!("settings-page-updates"),
         }
@@ -58,7 +63,7 @@ impl Section {
             Self::Supports => Some(Kind::Support),
             Self::Hollow => Some(Kind::Hollow),
             Self::Drain => Some(Kind::Drain),
-            Self::General | Self::Updates => None,
+            Self::Appearance | Self::General | Self::Updates => None,
         }
     }
 }
@@ -148,8 +153,8 @@ impl Calculators {
     }
 }
 
-/// A deletion waiting to be answered for. The only one this screen takes back is a resin
-/// added again from the pool, so each is asked first; see ADR 0196 and 0197.
+/// A deletion, armed by a first press and carried out by the second; undo never reaches the
+/// user's directory, see ADR 0196 and 0197.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Deleting {
     /// The user's copy of a machine. Its resins stay in the pool.
@@ -160,8 +165,6 @@ pub enum Deleting {
     Resin(String),
     /// A support profile or a tool's preset of the user's own, from the Settings window.
     Profile(Kind, String),
-    /// Every copy of a shipped profile that would not read, the shipped one in use instead.
-    Unreadable,
 }
 
 /// What the machine library has open: a brand, and what its models are filtered by.
@@ -200,6 +203,8 @@ pub struct Settings {
     pub node: Option<Node>,
     /// What the machine list is filtered by, as it is being typed.
     pub search: String,
+    /// What the line over the Settings pages narrows them to.
+    pub find: String,
     /// The machine library, while it stands in the tabs' place.
     pub library: Option<Library>,
     pub printer: Option<Draft<PrinterProfile>>,
@@ -208,8 +213,11 @@ pub struct Settings {
     /// The automatic profile picked on the Supports page, in the support profile's place.
     pub auto: Option<Draft<AutoProfile>>,
     pub calculators: Calculators,
-    /// The deletion the window is waiting for an answer on.
-    pub confirm: Option<Deleting>,
+    /// Whether the question over the profiles that would not read is waiting for an answer.
+    pub reset_unreadable: bool,
+    /// Where the support profile's form was being left for, while the question over its
+    /// unsaved edits waits for an answer.
+    pub leaving: Option<Leaving>,
 }
 
 impl Settings {
@@ -259,7 +267,7 @@ impl Settings {
         self.machines = false;
         self.editing_resin = false;
         self.library = None;
-        self.confirm = None;
+        self.reset_unreadable = false;
         self.calculators.open = None;
     }
 
@@ -334,11 +342,16 @@ impl Settings {
         }
     }
 
-    /// Closes the Settings window, and the question over it.
+    /// Closes the Settings window, once the question over unsaved edits, if any, is answered.
     pub fn close(&mut self) {
+        self.leave(Leaving::Close);
+    }
+
+    /// Closes the Settings window, and the question over it.
+    fn shut(&mut self) {
         self.open = false;
         self.editing_support = false;
-        self.confirm = None;
+        self.reset_unreadable = false;
     }
 
     /// Loads a support profile into the form, over what the build ships under its id.

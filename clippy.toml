@@ -14,6 +14,13 @@ disallowed-methods = [
   { path = "egui::Color32::from_white_alpha", reason = "read a colour from ui::theme" },
   { path = "egui::Color32::from_additive_luminance", reason = "read a colour from ui::theme" },
   { path = "egui::Color32::from_hex", reason = "read a colour from ui::theme" },
+  # A motion is a token too: timed in `ui/theme/motion.rs`, so *Reduce motion* stops it.
+  { path = "egui::Context::animate_bool", reason = "move by ui::theme::motion" },
+  { path = "egui::Context::animate_bool_responsive", reason = "move by ui::theme::motion" },
+  { path = "egui::Context::animate_bool_with_easing", reason = "move by ui::theme::motion" },
+  { path = "egui::Context::animate_bool_with_time", reason = "move by ui::theme::motion" },
+  { path = "egui::Context::animate_bool_with_time_and_easing", reason = "move by ui::theme::motion" },
+  { path = "egui::Context::animate_value_with_time", reason = "move by ui::theme::motion" },
 ]
 
 allow-unwrap-in-tests = true

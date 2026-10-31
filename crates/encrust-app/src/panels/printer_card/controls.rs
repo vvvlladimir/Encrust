@@ -4,13 +4,13 @@ use printer_link::{Command, State};
 use super::paused;
 use crate::i18n::tr;
 use crate::network::{Errand, Extras};
-use crate::ui::{hint, icon, quiet_button, theme, tone};
+use crate::ui::{Confirm, confirm_button, hint, icon, quiet_button, theme, tone};
 
 /// Share of its rated lifts past which a release film is called worn.
 const WORN_SHARE: f64 = 0.9;
 
-/// Pause or Resume and Stop while a print is under way; Stop asks once more, because a
-/// stopped print cannot be resumed. What is running instead, while it runs.
+/// Pause or Resume and Stop while a print is under way; Stop asks by a second press,
+/// because a stopped print cannot be resumed. What is running instead, while it runs.
 pub(super) fn buttons(
     ui: &mut egui::Ui,
     key: &str,
@@ -22,40 +22,32 @@ pub(super) fn buttons(
     }
     if let Some(doing) = extras.and_then(|extras| extras.doing.as_deref()) {
         ui.horizontal(|ui| {
-            ui.spinner();
+            crate::ui::spinner(ui);
             tone(ui, doing, theme::colors().text_mid);
         });
         return None;
     }
-    let armed_id = egui::Id::new(("printer-stop-armed", key));
-    let armed = ui.data(|data| data.get_temp::<bool>(armed_id).unwrap_or(false));
     let mut errand = None;
-    let mut arm = armed;
-    if armed {
-        tone(ui, &tr!("controls-stop-question"), theme::colors().warn);
-        ui.horizontal(|ui| {
-            if quiet_button(ui, icon::STOP, &tr!("controls-stop"), true, true).clicked() {
-                errand = Some(Errand::Control(Command::Stop));
-                arm = false;
-            }
-            if quiet_button(ui, "", &tr!("controls-keep-printing"), false, true).clicked() {
-                arm = false;
-            }
-        });
-    } else {
-        ui.horizontal(|ui| {
-            let (glyph, command) = if paused(state) {
-                (icon::PLAY, Command::Resume)
-            } else {
-                (icon::PAUSE, Command::Pause)
-            };
-            if quiet_button(ui, glyph, command.label(), false, true).clicked() {
-                errand = Some(Errand::Control(command));
-            }
-            arm = quiet_button(ui, icon::STOP, Command::Stop.label(), true, true).clicked();
-        });
-    }
-    ui.data_mut(|data| data.insert_temp(armed_id, arm));
+    ui.horizontal(|ui| {
+        let (glyph, command) = if paused(state) {
+            (icon::PLAY, Command::Resume)
+        } else {
+            (icon::PAUSE, Command::Pause)
+        };
+        if quiet_button(ui, glyph, command.label(), false, true).clicked() {
+            errand = Some(Errand::Control(command));
+        }
+        let stop = Confirm {
+            glyph: icon::STOP,
+            text: Command::Stop.label(),
+            asked: &tr!("confirm-asked-stop"),
+            tooltip: &tr!("controls-stop-cost"),
+            enabled: true,
+        };
+        if ui.push_id(key, |ui| confirm_button(ui, &stop)).inner {
+            errand = Some(Errand::Control(Command::Stop));
+        }
+    });
     errand
 }
 

@@ -1,20 +1,25 @@
+mod marks;
+
+use marks::{import_mark, trouble};
+
 use egui::{Align2, Rect, Sense, vec2};
 
 use core_geometry::{Vec2, Vec3};
 
+use crate::files::{self, Wanted};
 use crate::i18n::tr;
-use crate::panels::plate_summary;
-use crate::panels::{Window, destination, plate_strip, slice};
+use crate::panels::{Window, plate_strip};
 use crate::project;
-use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
+use crate::ui::name_line;
 use crate::ui::{
-    body_and_foot, count_row, focus_ring, hairline, hint, icon, icon_button, number_row,
-    secondary_button, theme,
+    body_and_foot, count_row, empty_state, focus_ring, hairline, heading, icon, inline_button,
+    number_row, secondary_button, small_icon_button, theme, tone,
 };
 
-/// The heading over the list, as tall as an inspector's.
-const HEADER_H: f32 = 40.0;
+/// The heading over the list, as tall as a section's.
+const HEADER_H: f32 = theme::SECTION_H;
 
 /// More copies than this in one go is a slip of the mouse, not an intention.
 const ARRAY_MAX: u32 = 20;
@@ -39,52 +44,39 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     body_and_foot(ui, max_h, window, rows, actions);
 }
 
-/// What the plate comes to, the printer it goes to and the button that makes the file: a
-/// card of its own on the stage's foot, under the models.
-pub fn this_plate(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            plate_summary::ui(ui, window);
-            ui.add_space(theme::ITEM_GAP);
-            destination::ui(ui, window);
-            slice::ui(ui, window);
-        });
-}
-
-/// Points around the row of plates at the card's head.
+/// Points around the row of plates at the card's head, which stands 42 tall.
 const PLATES_MARGIN: egui::Margin = egui::Margin::symmetric(12, 8);
 
-/// What the plate holds and how much of it the tools are aimed at, with the way to add
-/// another model.
+/// The card's heading: *Models*, the open project, how many models the tools are aimed
+/// at, and the way to add another model.
 fn header(ui: &mut egui::Ui, window: &mut Window) {
-    let colors = theme::colors();
-    let (tint, tally) = tally(&window.doc.scene);
+    let picked = window.doc.scene.selection().len();
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
-    let inner = rect.shrink2(vec2(theme::PANEL_PAD, 0.0));
+    let inner = rect
+        .shrink2(vec2(theme::PANEL_PAD, 0.0))
+        .with_max_x(rect.right() - theme::ROW_GAP);
     ui.scope_builder(
         egui::UiBuilder::new()
             .max_rect(inner)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
         |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            ui.label(
-                egui::RichText::new(tr!("models-title"))
-                    .font(theme::section())
-                    .color(colors.text_mid),
-            );
-            ui.label(
-                egui::RichText::new(tally)
-                    .font(theme::figures(11.0))
-                    .color(tint),
-            );
+            heading(ui, &tr!("models-title"), None);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let tooltip = shortcuts::tooltip(Action::OpenModel);
-                if icon_button(ui, icon::ADD, &tooltip).clicked() {
+                if small_icon_button(ui, icon::ADD, &tooltip).clicked() {
                     crate::import::open_dialog(window);
                 }
-                project_name(ui, &window.doc.project);
+                if picked > 0 {
+                    tone(
+                        ui,
+                        &tr!("models-picked", count = picked),
+                        theme::colors().accent_soft,
+                    );
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    project_name(ui, &window.doc.project);
+                });
             });
         },
     );
@@ -95,20 +87,7 @@ fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
     let Some(name) = opened.name() else {
         return;
     };
-    let text = egui::RichText::new(name)
-        .font(theme::label())
-        .color(theme::colors().text_low);
-    ui.add(egui::Label::new(text).truncate());
-}
-
-/// How many models are picked, in the selection's colour, or with none picked how many
-/// stand on the plate.
-fn tally(scene: &Scene) -> (egui::Color32, String) {
-    let colors = theme::colors();
-    match scene.selection().len() {
-        0 => (colors.text_low, scene.here().count().to_string()),
-        picked => (colors.picked, tr!("models-selected", count = picked)),
-    }
+    name_line(ui, &tr!("models-project", name = name.to_owned()));
 }
 
 /// What can be done to what stands on the plate. These belong to the contents rather
@@ -116,16 +95,16 @@ fn tally(scene: &Scene) -> (egui::Color32, String) {
 fn actions(ui: &mut egui::Ui, window: &mut Window) {
     hairline(ui);
     egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
+        .inner_margin(theme::TOOLBAR_PAD)
         .show(ui, |ui| {
             let picked: Vec<ObjectId> = window.doc.scene.selection().to_vec();
             let aimed = !picked.is_empty();
-            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.spacing_mut().item_spacing.x = 0.0;
             ui.columns(4, |columns| {
                 cell(&mut columns[0], aimed, |ui| duplicate(ui, window, &picked));
                 cell(&mut columns[1], aimed, |ui| array(ui, window, &picked));
                 cell(&mut columns[2], true, |ui| {
-                    if icon_button(ui, icon::ARRANGE, &tr!("models-arrange")).clicked() {
+                    if small_icon_button(ui, icon::ARRANGE, &tr!("models-arrange")).clicked() {
                         window.machine.status = crate::arrange::arrange_plate(
                             &mut window.doc.scene,
                             &window.doc.plate,
@@ -135,7 +114,7 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
                 });
                 cell(&mut columns[3], aimed, |ui| {
                     let tooltip = shortcuts::tooltip(Action::Remove);
-                    if icon_button(ui, icon::REMOVE, &tooltip).clicked() {
+                    if small_icon_button(ui, icon::REMOVE, &tooltip).clicked() {
                         window.doc.scene.remove_selected();
                     }
                 });
@@ -158,7 +137,7 @@ fn duplicate(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     } else {
         shortcuts::tooltip(Action::Duplicate)
     };
-    if icon_button(ui, icon::DUPLICATE, &tooltip).clicked() {
+    if small_icon_button(ui, icon::DUPLICATE, &tooltip).clicked() {
         duplicate_selection(window);
     }
 }
@@ -179,7 +158,7 @@ pub fn duplicate_selection(window: &mut Window) {
 /// The grid and the gap it leaves, behind the button that lays it out.
 /// The popup stays open on a click inside, which a field needs to open for typing.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
-    let response = icon_button(ui, icon::ARRAY, &tr!("models-array"));
+    let response = small_icon_button(ui, icon::ARRAY, &tr!("models-array"));
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
@@ -215,6 +194,29 @@ fn beside(scene: &Scene, id: ObjectId, gap_mm: f32) -> Vec3 {
     Vec3::new(width + gap_mm, 0.0, 0.0)
 }
 
+/// No model on this plate: what is missing, and the way to put one there.
+fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
+    egui::Frame::new()
+        .inner_margin(theme::PANEL_MARGIN)
+        .show(ui, |ui| {
+            empty_state(
+                ui,
+                icon::EMPTY_PLATE,
+                &tr!("stage-empty"),
+                &tr!("stage-empty-how"),
+            );
+            let open = ui.vertical_centered(|ui| {
+                inline_button(ui, icon::OPEN, &tr!("stage-open"), false, true).clicked()
+            });
+            if open.inner
+                && let Some(file) = files::pick(Wanted::ModelOrProject)
+            {
+                crate::app::open_by_what_it_is(window, file);
+            }
+            ui.add_space(theme::ITEM_GAP);
+        });
+}
+
 fn rows(ui: &mut egui::Ui, window: &mut Window) {
     // What a click means, as every list on the desktop reads it: plain picks one, cmd
     // adds or drops one, shift takes everything between the last pick and this.
@@ -225,6 +227,10 @@ fn rows(ui: &mut egui::Ui, window: &mut Window) {
     let mut clicked = None;
 
     let scene = &mut window.doc.scene;
+    if scene.here().next().is_none() {
+        empty_plate(ui, window);
+        return;
+    }
     for object in scene.here() {
         let selected = scene.is_selected(object.id);
         match row(ui, object, selected, &plates, active) {
@@ -291,8 +297,10 @@ fn row(
     plates: &[String],
     active: u32,
 ) -> Option<Clicked> {
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(ui.available_width(), theme::MODEL_ROW_H),
+        Sense::click(),
+    );
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::SelectableLabel,
@@ -306,36 +314,20 @@ fn row(
     let asked = row_menu(&response, object, plates, active);
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
-    let end = rect.right() - 10.0;
+    let end = rect.right() - theme::ITEM_GAP;
     let (name_right, repair) = match trouble(&object.summary) {
         Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
         None => (end, false),
     };
 
-    let colors = theme::colors();
-    let painter = ui.painter();
-    let name_color = if object.visible {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    // A row is one line tall, so a name longer than it is cut rather than wrapped over
-    // the row below it; the whole of it is on the tooltip.
-    let mut job =
-        egui::text::LayoutJob::simple_singleline(object.name.clone(), theme::label(), name_color);
-    job.wrap = egui::text::TextWrapping::truncate_at_width(
-        (name_right - 8.0 - eye.right() - 4.0).max(0.0),
+    let name_left = eye.right() + theme::NOTE_GAP;
+    name_text(
+        ui,
+        object,
+        rect,
+        (name_left, name_right - theme::ITEM_GAP),
+        &response,
     );
-    let name = painter.layout_job(job);
-    let elided = name.elided;
-    painter.galley(
-        egui::pos2(eye.right() + 4.0, rect.center().y - name.size().y / 2.0),
-        name,
-        name_color,
-    );
-    if elided {
-        response.clone().on_hover_text(&object.name);
-    }
 
     if let Some(asked) = asked {
         return Some(asked);
@@ -350,6 +342,38 @@ fn row(
         return Some(Clicked::Select);
     }
     None
+}
+
+/// The model's name between `left` and `right`, cut short with its whole on the tooltip.
+fn name_text(
+    ui: &egui::Ui,
+    object: &SceneObject,
+    rect: egui::Rect,
+    (left, right): (f32, f32),
+    response: &egui::Response,
+) {
+    let colors = theme::colors();
+    let painter = ui.painter();
+    let name_color = if object.visible {
+        colors.text_high
+    } else {
+        colors.text_low
+    };
+    // A row is one line tall, so a name longer than it is cut rather than wrapped over
+    // the row below it; the whole of it is on the tooltip.
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(object.name.clone(), theme::label(), name_color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width((right - left).max(0.0));
+    let name = painter.layout_job(job);
+    let elided = name.elided;
+    painter.galley(
+        egui::pos2(left, rect.center().y - name.size().y / 2.0),
+        name,
+        name_color,
+    );
+    if elided {
+        response.clone().on_hover_text(&object.name);
+    }
 }
 
 /// The row's own menu, where a model is where the hand already is: sending it to another
@@ -428,190 +452,5 @@ fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect,
     (eye, response)
 }
 
-/// What the end of a row says about a model: a model that will not slice as it stands is
-/// named broken in words, a model repair only had to tidy gets the quiet sign.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mark {
-    Repaired,
-    Broken,
-}
-
-/// The mark at the end of the row, with what import found behind a click, and the repair on a
-/// broken model. Returns where it starts, and whether repair was asked for.
-fn import_mark(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    object: &SceneObject,
-    right: f32,
-    mark: Mark,
-    lines: &[String],
-) -> (f32, bool) {
-    let spot = match mark {
-        Mark::Repaired => {
-            Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0))
-        }
-        Mark::Broken => {
-            let width =
-                ui.painter()
-                    .layout_no_wrap(broken(), theme::small(), theme::colors().danger);
-            let width = width.size().x + 8.0;
-            Rect::from_center_size(
-                egui::pos2(right - width / 2.0, rect.center().y),
-                vec2(width, 18.0),
-            )
-        }
-    };
-    let response = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("models-import-found"))
-    });
-    paint_mark(ui.painter(), spot, mark, response.hovered());
-    focus_ring(ui, &response, theme::R_CONTROL);
-    let mut repair = false;
-    egui::Popup::menu(&response).show(|ui| {
-        ui.set_max_width(POPUP_W);
-        for line in lines {
-            hint(ui, line);
-        }
-        if mark == Mark::Broken {
-            ui.add_space(4.0);
-            repair = ui.button(tr!("notice-repair")).clicked();
-        }
-    });
-    (spot.left(), repair)
-}
-
-/// What the end of the row of a model that will not slice as it stands reads.
-fn broken() -> String {
-    tr!("models-broken")
-}
-
-fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
-    let colors = theme::colors();
-    let (text, font, color) = match mark {
-        Mark::Repaired => (icon::WARNING.to_owned(), theme::icon(14.0), colors.text_low),
-        Mark::Broken => (broken(), theme::small(), colors.danger),
-    };
-    let color = if hovered { colors.text_high } else { color };
-    painter.text(spot.center(), Align2::CENTER_CENTER, text, font, color);
-}
-
-/// What is wrong with a model, what is odd about it and what repair did, and how loudly.
-/// `None` when the mesh came in clean.
-fn trouble(summary: &ImportSummary) -> Option<(Mark, Vec<String>)> {
-    let defects = summary.defects();
-    let mark = if defects.is_empty() {
-        Mark::Repaired
-    } else {
-        Mark::Broken
-    };
-    let lines = [defects, summary.notes(), summary.repairs()].concat();
-    (!lines.is_empty()).then_some((mark, lines))
-}
-
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use core_geometry::{Mesh, MeshDiagnostics, Orientation, Transform, Vec3};
-
-    use super::*;
-    use crate::scene::Imported;
-
-    fn summary(unbalanced_edges: usize, boundary_edges: usize) -> ImportSummary {
-        let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
-        ImportSummary {
-            vertices_merged: 0,
-            faces_removed: 0,
-            orientation: Orientation {
-                flipped_faces: 0,
-                inverted_shells: 0,
-                orientable: unbalanced_edges == boundary_edges,
-            },
-            diagnostics: MeshDiagnostics {
-                boundary_edges,
-                unbalanced_edges,
-                ..core_geometry::diagnose(&mesh)
-            },
-        }
-    }
-
-    /// A plate of `count` models, none of them selected.
-    fn plate_of(count: usize) -> (Scene, Vec<ObjectId>) {
-        let mesh = Arc::new(Mesh::new(
-            vec![Vec3::ZERO, Vec3::X, Vec3::Y],
-            vec![[0, 1, 2]],
-        ));
-        let mut scene = Scene::default();
-        let ids = (0..count)
-            .map(|at| {
-                scene.insert(Imported::new(
-                    format!("model-{at}.stl"),
-                    Arc::clone(&mesh),
-                    Transform::default(),
-                    summary(0, 0),
-                ))
-            })
-            .collect();
-        scene.clear_selection();
-        (scene, ids)
-    }
-
-    #[test]
-    fn a_rows_menu_moves_everything_picked_when_that_row_is_one_of_them() {
-        let (mut scene, ids) = plate_of(3);
-        scene.select_many(&ids[..2]);
-
-        assert_eq!(with_the_selection(&scene, ids[1]), ids[..2].to_vec());
-    }
-
-    #[test]
-    fn a_rows_menu_moves_that_row_alone_when_it_is_not_picked() {
-        let (mut scene, ids) = plate_of(3);
-        scene.select_many(&ids[..2]);
-
-        assert_eq!(with_the_selection(&scene, ids[2]), vec![ids[2]]);
-    }
-
-    #[test]
-    fn a_clean_import_says_nothing() {
-        assert!(trouble(&summary(0, 0)).is_none());
-    }
-
-    #[test]
-    fn merging_the_vertices_of_an_stl_is_not_trouble() {
-        let merged = ImportSummary {
-            vertices_merged: 28,
-            ..summary(0, 0)
-        };
-        assert!(
-            trouble(&merged).is_none(),
-            "every STL merges vertices, so a mark for it would stand on every row"
-        );
-    }
-
-    #[test]
-    fn a_mesh_with_a_hole_is_named_broken() {
-        let (mark, lines) = trouble(&summary(4, 4)).expect("a torn mesh has something to say");
-        assert_eq!(mark, Mark::Broken);
-        assert_eq!(lines.len(), 1, "the open edges, and nothing more");
-    }
-
-    #[test]
-    fn faces_folded_onto_each_other_get_the_quiet_mark() {
-        let (mark, lines) = trouble(&summary(4, 0)).expect("a fold is worth a line");
-        assert_eq!(mark, Mark::Repaired);
-        assert_eq!(lines.len(), 1);
-    }
-
-    #[test]
-    fn a_mesh_repair_only_tidied_gets_the_quiet_mark() {
-        let tidied = ImportSummary {
-            faces_removed: 2,
-            ..summary(0, 0)
-        };
-        let (mark, lines) = trouble(&tidied).expect("a dropped face is worth a line");
-        assert_eq!(mark, Mark::Repaired);
-        assert_eq!(lines.len(), 1);
-    }
-}
+mod tests;

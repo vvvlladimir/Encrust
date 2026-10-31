@@ -3,22 +3,23 @@
 
 use egui::{Align, Color32, Layout, Rect, Sense, Ui, UiBuilder, pos2, vec2};
 
-use crate::ui::{dialog_frame, dialog_head, focus_ring, theme};
+use crate::ui::theme::motion;
+use crate::ui::{dialog, dialog_head, focus_ring, hover_mix, theme};
 
 /// The most of the screen a window takes, where the screen has it.
 const MOST: egui::Vec2 = vec2(1080.0, 720.0);
 /// The page's name over the right side, and the action bar under it.
 const HEADER_H: f32 = 64.0;
 /// The action bar, and the foot of the list beside it at the same height so the two
-/// hairlines over them meet: one button and the room either side of it.
-const FOOTER_H: f32 = theme::BUTTON_H + 24.0;
-pub(super) const LIST_FOOT_H: f32 = FOOTER_H;
+/// hairlines over them meet.
+const FOOTER_H: f32 = theme::DIALOG_BAR_H;
+pub const LIST_FOOT_H: f32 = FOOTER_H;
 /// Room either side of what the right side shows.
-pub(super) const SIDE_PAD: f32 = 20.0;
+pub const SIDE_PAD: f32 = 20.0;
 
 /// Shows a window over the plate under `title`, and hands `add` the list's rect down the
 /// left and the side's beside it. Answers whether the window was asked to close.
-pub(super) fn show(
+pub fn show(
     ctx: &egui::Context,
     id: &str,
     glyph: &str,
@@ -28,33 +29,37 @@ pub(super) fn show(
     let screen = ctx.content_rect().size() - egui::Vec2::splat(2.0 * theme::DIALOG_MARGIN);
     let size = screen.min(MOST).max(egui::Vec2::ZERO);
     let mut close = false;
-    let modal = egui::Modal::new(egui::Id::new(id))
-        .frame(dialog_frame())
-        .show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
-            let list_w = theme::DIALOG_LIST_W.min(rect.width() * theme::DIALOG_LIST_SHARE);
-            let list = Rect::from_min_max(
-                pos2(rect.left(), head.bottom()),
-                pos2(rect.left() + list_w, rect.bottom()),
-            );
-            let side = Rect::from_min_max(pos2(list.right() + 1.0, head.bottom()), rect.max);
-            let mut title_row = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(head.shrink2(vec2(16.0, 0.0)))
-                    .layout(Layout::left_to_right(Align::Center)),
-            );
-            close = dialog_head(&mut title_row, glyph, title);
-            let painter = ui.painter();
-            painter.hline(rect.x_range(), head.bottom(), stroke());
-            painter.vline(list.right(), list.y_range(), stroke());
-            add(ui, list, side);
-        });
+    let modal = dialog(ctx, egui::Id::new(id), 0).show(ctx, |ui| {
+        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+        let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
+        let list_w = theme::DIALOG_LIST_W.min(rect.width() * theme::DIALOG_LIST_SHARE);
+        let list = Rect::from_min_max(
+            pos2(rect.left(), head.bottom()),
+            pos2(rect.left() + list_w, rect.bottom()),
+        );
+        let side = Rect::from_min_max(pos2(list.right() + 1.0, head.bottom()), rect.max);
+        let list_corner = egui::CornerRadius {
+            sw: theme::R_PANEL.sw,
+            ..egui::CornerRadius::ZERO
+        };
+        ui.painter()
+            .rect_filled(list, list_corner, theme::colors().base);
+        let mut title_row = ui.new_child(
+            UiBuilder::new()
+                .max_rect(head.shrink2(vec2(16.0, 0.0)))
+                .layout(Layout::left_to_right(Align::Center)),
+        );
+        close = dialog_head(&mut title_row, glyph, title);
+        let painter = ui.painter();
+        painter.hline(rect.x_range(), head.bottom(), stroke());
+        painter.vline(list.right(), list.y_range(), stroke());
+        add(ui, list, side);
+    });
     close || modal.should_close()
 }
 
 /// A child laid out top down inside `rect`, and clipped to it.
-pub(super) fn child(ui: &mut Ui, rect: Rect) -> Ui {
+pub fn child(ui: &mut Ui, rect: Rect) -> Ui {
     let mut child = ui.new_child(
         UiBuilder::new()
             .max_rect(rect)
@@ -64,12 +69,12 @@ pub(super) fn child(ui: &mut Ui, rect: Rect) -> Ui {
     child
 }
 
-pub(super) fn stroke() -> egui::Stroke {
+pub fn stroke() -> egui::Stroke {
     egui::Stroke::new(1.0, theme::colors().hairline)
 }
 
 /// The side split into its header and the rest under it.
-pub(super) fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
+pub fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
     let header = side.with_max_y(side.top() + HEADER_H);
     ui.painter()
         .hline(side.x_range(), header.bottom(), stroke());
@@ -79,10 +84,16 @@ pub(super) fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
 }
 
 /// `content` split into what scrolls and the action bar along its foot.
-pub(super) fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
+pub fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
     let split = content.bottom() - FOOTER_H;
-    ui.painter().hline(content.x_range(), split, stroke());
     let bar = Rect::from_min_max(pos2(content.left(), split + 1.0), content.max);
+    let bar_corner = egui::CornerRadius {
+        se: theme::R_PANEL.se,
+        ..egui::CornerRadius::ZERO
+    };
+    ui.painter()
+        .rect_filled(bar, bar_corner, theme::colors().base);
+    ui.painter().hline(content.x_range(), split, stroke());
     let mut bar = ui.new_child(
         UiBuilder::new()
             .max_rect(bar.shrink2(vec2(SIDE_PAD, 0.0)))
@@ -93,7 +104,7 @@ pub(super) fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
 }
 
 /// A form, scrolled, with the window's own room either side of it.
-pub(super) fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+pub fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -110,7 +121,7 @@ pub(super) fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 }
 
 /// One tab: its name, with the accent under it while it is the one open.
-pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
+pub fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
     let colors = theme::colors();
     let galley = ui
         .painter()
@@ -119,23 +130,70 @@ pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     response
         .widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, open, label));
-    let text = match (open, response.hovered()) {
-        (true, _) | (false, true) => colors.text_high,
-        (false, false) => colors.text_low,
+    let text = match open {
+        true => colors.text_high,
+        false => hover_mix(ui, &response, colors.text_low, colors.text_high),
     };
     let at = pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
     ui.painter().galley(at, galley, text);
-    if open {
-        let line = Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom());
+    // The underline grows out from the middle of the tab coming open.
+    let how_open = motion::toggle(ui.ctx(), response.id.with("open"), open, motion::FAST);
+    if how_open > 0.0 {
+        let half = rect.width() * how_open / 2.0;
+        let x = rect.center().x;
+        let line = Rect::from_min_max(
+            pos2(x - half, rect.bottom() - 2.0),
+            pos2(x + half, rect.bottom()),
+        );
         ui.painter().rect_filled(line, 0.0, colors.accent);
     }
     focus_ring(ui, &response, theme::R_CONTROL);
     response
 }
 
+/// A section tab's height, and the room either side of its words.
+const SECTION_TAB_H: f32 = 28.0;
+const SECTION_TAB_PAD: f32 = 12.0;
+
+/// One of the tabs over a form that scroll it to a section: its name, a quiet `off` after
+/// it while the section is switched off, washed in the accent while it is the one in view.
+pub fn section_tab(ui: &mut Ui, label: &str, off: Option<&str>, lit: bool) -> egui::Response {
+    let colors = theme::colors();
+    let painter = ui.painter();
+    let name = painter.layout_no_wrap(label.to_owned(), theme::label(), colors.text_high);
+    let off =
+        off.map(|off| painter.layout_no_wrap(off.to_owned(), theme::small(), colors.text_low));
+    let off_w = off.as_ref().map_or(0.0, |off| off.size().x + 5.0);
+    let size = vec2(name.size().x + off_w + 2.0 * SECTION_TAB_PAD, SECTION_TAB_H);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, lit, label));
+    let (fill, text) = match lit {
+        true => (colors.accent_wash, colors.accent_soft),
+        false if response.hovered() => (colors.hover, colors.text_high),
+        false => (Color32::TRANSPARENT, colors.text_mid),
+    };
+    let round = egui::CornerRadius::same((SECTION_TAB_H / 2.0) as u8);
+    ui.painter().rect_filled(rect, round, fill);
+    let at = |galley: &egui::Galley, x: f32| pos2(x, rect.center().y - galley.size().y / 2.0);
+    let name_at = at(&name, rect.left() + SECTION_TAB_PAD);
+    let name_right = name_at.x + name.size().x;
+    ui.painter().galley(name_at, name, text);
+    if let Some(off) = off {
+        ui.painter()
+            .galley(at(&off, name_right + 5.0), off, colors.text_low);
+    }
+    focus_ring(ui, &response, round);
+    response
+}
+
+/// The mark down the left edge of the picked row, points.
+const PICKED_MARK_W: f32 = 2.0;
+/// How much of the name column the box a name is typed in takes.
+const NAME_BOX_SHARE: f32 = 0.6;
+
 /// The columns of a table: names, each start as a share of the width, how many lead with
 /// words before figures, and the room before the first, where a row may draw a mark.
-pub(super) struct Table {
+pub struct Table {
     /// The column names, in the window's language.
     pub heads: fn() -> Vec<String>,
     pub columns: &'static [f32],
@@ -174,8 +232,20 @@ impl Table {
         (pos2(right, y), egui::Align2::RIGHT_CENTER)
     }
 
-    /// One row named `name`, washed while `picked`, with `cells` drawn in their columns:
-    /// the name in full, the other words dimmer, the figures in the figure face.
+    /// Where the name of a row in `rect` is typed in: from the name's start over most of its
+    /// column.
+    pub fn name_box(&self, rect: Rect) -> Rect {
+        let column = rect.width() * self.columns.get(1).copied().unwrap_or(1.0) - self.lead;
+        let left = rect.left() + self.lead;
+        Rect::from_center_size(
+            pos2(left + column * NAME_BOX_SHARE / 2.0, rect.center().y),
+            vec2(column * NAME_BOX_SHARE, theme::FIELD_H),
+        )
+    }
+
+    /// One row named `name`, washed and marked at its left edge while `picked`, with `cells`
+    /// drawn in their columns: the name in full, the other words dimmer, the figures in the
+    /// figure face, dimmer too but on the picked row.
     pub fn row(&self, ui: &mut Ui, name: &str, picked: bool, cells: &[String]) -> egui::Response {
         let colors = theme::colors();
         let size = vec2(ui.available_width(), theme::TABLE_ROW_H);
@@ -183,19 +253,26 @@ impl Table {
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
         });
-        let fill = match (picked, response.hovered()) {
-            (true, _) => colors.accent_wash,
-            (false, true) => colors.hover,
-            (false, false) => Color32::TRANSPARENT,
+        let fill = match picked {
+            true => colors.picked_wash,
+            false => hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
         };
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, theme::R_CONTROL, fill);
+        if picked {
+            let mark = rect.with_max_x(rect.left() + PICKED_MARK_W);
+            painter.rect_filled(mark, 0.0, colors.accent);
+        }
+        let figures = match picked {
+            true => colors.text_high,
+            false => colors.text_mid,
+        };
         for (index, text) in cells.iter().enumerate() {
             let (at, align) = self.cell(rect, index);
             let (font, tint) = match index {
                 0 => (theme::label(), colors.text_high),
                 _ if index < self.words => (theme::label(), colors.text_mid),
-                _ => (theme::figures(12.5), colors.text_high),
+                _ => (theme::figures(12.5), figures),
             };
             painter.text(at, align, text, font, tint);
         }

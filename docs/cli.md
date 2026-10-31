@@ -271,7 +271,7 @@ into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), a
 as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
-(ADR 0290). A turned model is stood on the plate over the middle it stood over in x and y.
+(ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
 A model the search sets on the plate gets supports only under what would hang there, and none
 if nothing does; with supports and a raft it stands on the raft's top. A `--rotate` that tips
 it off that face stands it on supports. For example:
@@ -507,6 +507,16 @@ that fails does not stop the others; it is exit code 4 at the end:
 ```sh
 encrust batch models/ \
   --printer elegoo-mars-4-ultra --center --orient --supports light -o out/
+```
+
+`--name` names each file by a template, as the window's File name setting does: `{model}`,
+`{ext}` (the model's own extension), `{printer}`, `{resin}`, `{layer}` in µm, `{plate}`,
+`{date}` and `{time}` (local, `09-05`); the printer's extension follows, and what a file
+system refuses becomes `_`. A template giving two models one file is refused:
+
+```sh
+encrust batch models/ --printer elegoo-mars-4-ultra --resin my-grey \
+  --name "{model}_{resin}_{layer}um_{date}" -o out/
 ```
 
 ## The window

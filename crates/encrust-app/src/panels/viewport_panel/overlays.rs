@@ -24,12 +24,6 @@ const MEASURE_END_R: f32 = 4.0;
 const MEASURE_DASH: f32 = 6.0;
 const MEASURE_LEG_MIN_MM: f32 = 0.005;
 
-/// How far along each edge a bounds bracket reaches, as a fraction of that edge.
-const BRACKET_ARM: f32 = 0.15;
-
-/// How many pieces each arm is tested for being hidden in.
-const BRACKET_PIECES: u32 = 6;
-
 /// A face bigger than this is washed only in part; the lay-down still takes all of it.
 const MAX_FACET_TRIANGLES: usize = 200_000;
 
@@ -314,81 +308,6 @@ pub(super) fn draw_cut_plane(ui: &egui::Ui, window: &Window, viewport: egui::Rec
         corners,
         egui::Stroke::new(1.0, theme::colors().accent.gamma_multiply(0.6)),
     ));
-}
-
-/// Brackets on the corners of each picked model's bounds, and the size of each side, the
-/// way a slicer shows what a model measures without hiding it inside a box.
-pub(super) fn draw_bounds(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
-    let on_screen = projector(&window.view.camera, viewport);
-    let camera = &window.view.camera;
-    let seen = |point: Vec3| {
-        on_screen(point).filter(|_| !occluded(&window.doc.scene, camera.sight_to(point), point))
-    };
-    let painter = ui.painter_at(viewport);
-    let stroke = egui::Stroke::new(1.5, theme::scene().bounds);
-    let picked = window.doc.scene.selection().iter();
-    let boxes = picked.filter_map(|id| window.doc.scene.get(*id)?.world_bounds());
-    for bounds in boxes {
-        let (lo, hi) = (bounds.mins, bounds.maxs);
-        let arm = (hi - lo) * BRACKET_ARM;
-        for corner in 0..8 {
-            let pick = |bit: usize, axis: usize| {
-                if corner >> bit & 1 == 0 {
-                    lo[axis]
-                } else {
-                    hi[axis]
-                }
-            };
-            let at = Vec3::new(pick(0, 0), pick(1, 1), pick(2, 2));
-            let inward = (lo + hi) * 0.5 - at;
-            for axis in 0..3 {
-                let mut end = at;
-                end[axis] += arm[axis].copysign(inward[axis]);
-                // Cut into pieces, so an arm half behind the model shows its other half.
-                for piece in 0..BRACKET_PIECES {
-                    let along = |t: f32| at.lerp(end, t / BRACKET_PIECES as f32);
-                    let (from, to) = (along(piece as f32), along(piece as f32 + 1.0));
-                    let middle = seen(from.lerp(to, 0.5));
-                    if let (Some(_), Some(from), Some(to)) =
-                        (middle, on_screen(from), on_screen(to))
-                    {
-                        painter.line_segment([from, to], stroke);
-                    }
-                }
-            }
-        }
-        size_labels(&painter, &seen, lo, hi);
-    }
-}
-
-/// The length of each side, written beside the bottom front edge for X and Y and up the
-/// front left edge for Z, in the axis colour its field uses.
-fn size_labels(
-    painter: &egui::Painter,
-    on_screen: &impl Fn(Vec3) -> Option<egui::Pos2>,
-    lo: Vec3,
-    hi: Vec3,
-) {
-    let size = hi - lo;
-    let middles = [
-        Vec3::new((lo.x + hi.x) * 0.5, lo.y, lo.z),
-        Vec3::new(hi.x, (lo.y + hi.y) * 0.5, lo.z),
-        Vec3::new(lo.x, lo.y, (lo.z + hi.z) * 0.5),
-    ];
-    for (axis, middle) in middles.into_iter().enumerate() {
-        let Some(at) = on_screen(middle) else {
-            continue;
-        };
-        let text = format!("{:.2}", size[axis]);
-        let galley = painter.layout_no_wrap(text, theme::figures(11.0), theme::colors().axis[axis]);
-        let plate = egui::Rect::from_center_size(at, galley.size() + egui::vec2(8.0, 4.0));
-        painter.rect_filled(plate, theme::R_CONTROL, theme::colors().panel);
-        painter.galley(
-            plate.center() - galley.size() / 2.0,
-            galley,
-            theme::colors().axis[axis],
-        );
-    }
 }
 
 /// Washes the face a click would lay down, over the model, so the user sees which one.

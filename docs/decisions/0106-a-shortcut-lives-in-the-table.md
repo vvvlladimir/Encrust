@@ -1,6 +1,6 @@
 # 0106. Keep every key in one table
 
-- **Status:** Accepted
+- **Status:** Accepted; keys that cannot be rebound are superseded by 0386
 - **Date:** 2026-09-27
 
 ## Context

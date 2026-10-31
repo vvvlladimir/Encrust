@@ -7,11 +7,19 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
-use crate::ui::{dialog_frame, focus_ring, icon, theme};
+use crate::ui::{
+    chooser_group, focus_ring, hint, hover_mix, icon, key_foot, palette_dialog, palette_field,
+    theme,
+};
 use crate::workspace::Tool;
 
-const PALETTE_W: f32 = 520.0;
+const PALETTE_W: f32 = 500.0;
+/// How far under the stage's top the palette hangs, and the field it opens with.
+const TOP_GAP: f32 = 70.0;
+const FIELD_H: f32 = 48.0;
 const ROW_H: f32 = 32.0;
+/// Room either side of the field and the rows.
+const PAD: f32 = 8.0;
 /// The most rows shown at once: past it the list scrolls.
 const LIST_H: f32 = ROW_H * 10.0;
 
@@ -21,6 +29,25 @@ enum Found {
     Open(Tool),
     Act(Action),
     Pick(ObjectId),
+}
+
+impl Found {
+    /// The group the row is listed under, in the order the groups stand.
+    fn group(self) -> usize {
+        match self {
+            Found::Open(_) => 0,
+            Found::Act(_) => 1,
+            Found::Pick(_) => 2,
+        }
+    }
+
+    fn group_label(self) -> String {
+        match self {
+            Found::Open(_) => tr!("find-group-tools"),
+            Found::Act(_) => tr!("find-group-actions"),
+            Found::Pick(_) => tr!("find-group-models"),
+        }
+    }
 }
 
 struct Entry {
@@ -70,11 +97,14 @@ fn matches(name: &str, query: &str) -> bool {
         .all(|word| name.contains(word))
 }
 
-/// The entries `query` finds, those whose name starts with it first.
+/// The entries `query` finds by group, in each those whose name starts with it first.
 fn found(mut entries: Vec<Entry>, query: &str) -> Vec<Entry> {
     entries.retain(|entry| matches(&entry.name, query));
     let lead = query.trim().to_lowercase();
-    entries.sort_by_key(|entry| !entry.name.to_lowercase().starts_with(&lead));
+    entries.sort_by_key(|entry| {
+        let starts = entry.name.to_lowercase().starts_with(&lead);
+        (entry.found.group(), !starts)
+    });
     entries
 }
 
@@ -86,19 +116,23 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     let mut lit: usize = ctx.data(|data| data.get_temp(id.with("lit"))).unwrap_or(0);
     let list = found(entries(window), &query);
     let mut chosen = None;
-    let modal = egui::Modal::new(id)
-        .frame(dialog_frame().inner_margin(egui::Margin::same(10)))
-        .show(ctx, |ui| {
-            ui.set_width(PALETTE_W);
-            lit = steer(ui, lit, list.len());
-            if field(ui, id, &mut query) {
-                lit = 0;
-            }
-            if ui.input(|input| input.key_pressed(Key::Enter)) {
-                chosen = list.get(lit).map(|entry| entry.found);
-            }
-            chosen = chosen.or(rows(ui, &list, lit));
-        });
+    let top = theme::TOP_BAR_H + TOP_GAP;
+    let modal = palette_dialog(ctx, id, top).show(ctx, |ui| {
+        ui.set_width(PALETTE_W);
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let steered = steer(ui, lit, list.len());
+        let mut moved = steered != lit;
+        lit = steered;
+        if field(ui, id, &mut query) {
+            lit = 0;
+            moved = true;
+        }
+        if ui.input(|input| input.key_pressed(Key::Enter)) {
+            chosen = list.get(lit).map(|entry| entry.found);
+        }
+        chosen = chosen.or(rows(ui, &list, lit, moved));
+        foot(ui);
+    });
     let closing = modal.should_close() || chosen.is_some();
     if closing {
         ctx.data_mut(|data| {
@@ -126,33 +160,30 @@ fn steer(ui: &mut egui::Ui, lit: usize, count: usize) -> usize {
     (lit + down).saturating_sub(up).min(count.saturating_sub(1))
 }
 
-/// The field the name is typed in, which holds the focus while the palette is up.
-/// Answers whether what is typed changed.
+/// The field the name is typed in, 48 tall over a hairline, which holds the focus while
+/// the palette is up. Answers whether what is typed changed.
 fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
-    let colors = theme::colors();
-    let response = ui.add(
-        crate::ui::text_box(egui::TextEdit::singleline(query))
-            .id(id.with("field"))
-            .hint_text(tr!("find-tooltip"))
-            .font(theme::body())
-            .background_color(colors.sunken)
-            .desired_width(f32::INFINITY),
-    );
-    if !response.has_focus() {
-        response.request_focus();
-    }
-    ui.add_space(6.0);
-    response.changed()
+    let (hint, close) = (tr!("find-tooltip"), tr!("hint-esc"));
+    let size = (PALETTE_W, FIELD_H);
+    palette_field(ui, id.with("field"), query, size, (&hint, &close))
 }
 
-/// The entries found, the lit one washed. Answers the one clicked.
-fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
+/// The keys that work the palette, on a strip of its own at its foot.
+fn foot(ui: &mut egui::Ui) {
+    let (move_to, open) = (tr!("find-move"), tr!("find-open"));
+    let keys: [(&[&str], &str); 2] = [(&["↑", "↓"], &move_to), (&[icon::KEY_RETURN], &open)];
+    key_foot(ui, &keys);
+}
+
+/// The entries found, the lit one washed and scrolled to on the frame it `moved`, so the wheel
+/// can leave it. Answers the one clicked.
+fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize, moved: bool) -> Option<Found> {
     if list.is_empty() {
-        ui.label(
-            egui::RichText::new(tr!("find-nothing"))
-                .font(theme::small())
-                .color(theme::colors().text_low),
-        );
+        ui.add_space(PAD);
+        ui.horizontal(|ui| {
+            ui.add_space(theme::PALETTE_INSET);
+            hint(ui, &tr!("find-nothing"));
+        });
         return None;
     }
     let mut clicked = None;
@@ -161,9 +192,18 @@ fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
         .auto_shrink([false, true])
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add_space(PAD / 2.0);
+            let mut group = None;
             for (index, entry) in list.iter().enumerate() {
+                if group != Some(entry.found.group()) {
+                    group = Some(entry.found.group());
+                    ui.horizontal(|ui| {
+                        ui.add_space(PAD);
+                        chooser_group(ui, &entry.found.group_label());
+                    });
+                }
                 let response = row(ui, entry, index == lit);
-                if index == lit {
+                if moved && index == lit {
                     response.scroll_to_me(None);
                 }
                 if response.clicked() {
@@ -178,13 +218,16 @@ fn row(ui: &mut egui::Ui, entry: &Entry, lit: bool) -> egui::Response {
     let colors = theme::colors();
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
+    let rect = rect.shrink2(vec2(PAD, 0.0));
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, lit, &entry.name)
     });
-    let (fill, ink) = match (lit, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.text_high),
+    let (fill, ink) = match lit {
+        true => (colors.picked_wash, colors.text_high),
+        false => (
+            hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover),
+            colors.text_high,
+        ),
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
@@ -249,5 +292,41 @@ mod tests {
         };
         let list = found(vec![entry("Frame the view"), entry("View cube")], "view");
         assert_eq!(list[0].name, "View cube");
+    }
+
+    /// How far the list has scrolled after a few frames with `lit` on its last row.
+    fn scrolled_after(moved: bool) -> f32 {
+        let list: Vec<Entry> = (0..40)
+            .map(|index| Entry {
+                found: Found::Act(Action::Undo),
+                glyph: "",
+                name: format!("Entry {index}"),
+                keys: String::new(),
+            })
+            .collect();
+        let ctx = egui::Context::default();
+        let mut offset = 0.0;
+        for _ in 0..3 {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.push_id("find-test", |ui| {
+                    rows(ui, &list, list.len() - 1, moved);
+                    let id = ui.make_persistent_id(egui::IdSalt::new("scroll_area"));
+                    let state = egui::containers::scroll_area::State::load(ui.ctx(), id);
+                    offset = state.map_or(0.0, |state| state.offset.y);
+                });
+            });
+            output.textures_delta.clear();
+        }
+        offset
+    }
+
+    /// BUG: the lit row was scrolled to on every frame, so the wheel could not leave it.
+    #[test]
+    fn the_list_follows_the_lit_row_only_on_the_frame_it_moved() {
+        assert!(
+            scrolled_after(true) > 0.0,
+            "a lit row that moved is scrolled to"
+        );
+        assert_eq!(scrolled_after(false), 0.0, "the wheel is left to the list");
     }
 }

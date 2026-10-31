@@ -1,81 +1,68 @@
-//! A support profile's form: its groups in rows of two, the shape from the tip down on the
-//! left beside how supports are placed and joined.
+//! A support profile's form: its name, then its groups one under another from the tip down
+//! to the plate, then how supports are placed.
 
 use egui::Ui;
 use printer_profiles::SupportProfile;
 
-use super::{TWO_COLUMNS_W, reset_row};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::{
-    card_cell, card_row, form_card, name_row, report, settled, switched_card,
-};
+use crate::panels::settings::jump::{self, Tab};
+use crate::panels::settings::{form_card, name_row, report, switched_card};
 use crate::panels::support_fields::Group;
+use crate::settings::Draft;
 use crate::state::Machine;
 use crate::ui::describe;
 
-/// The groups row by row, the shape on the left and the placing on the right, so a row's
-/// titles stand level. Narrow, the left column comes first, then the right.
-const ROWS: [[Option<Group>; 2]; 5] = [
-    [Some(Group::Top), Some(Group::Automatic)],
-    [Some(Group::Main), Some(Group::Branching)],
-    [Some(Group::Bottom), Some(Group::Raft)],
-    [Some(Group::SmallPillar), Some(Group::Grid)],
-    [None, Some(Group::Bracing)],
+/// The groups in the order the form lists them and its tabs name them.
+const ORDER: [Group; 9] = [
+    Group::Top,
+    Group::Main,
+    Group::Bottom,
+    Group::SmallPillar,
+    Group::Branching,
+    Group::Grid,
+    Group::Raft,
+    Group::Bracing,
+    Group::Automatic,
 ];
 
-/// The profile open in the form, written back as it is edited. A shipped profile's numbers
-/// are marked where they leave the shipped ones; see `docs/design/profiles.md`.
-pub(super) fn form(ui: &mut Ui, window: &mut Window) {
+/// The tabs over the form: a group each, marked while its switch is off.
+pub(super) fn tabs(profile: &mut SupportProfile) -> Vec<Tab> {
+    ORDER
+        .iter()
+        .map(|group| Tab {
+            name: group.label(),
+            off: group.switch(profile).is_some_and(|on| !*on),
+        })
+        .collect()
+}
+
+/// The profile open in the form, kept until it is saved. A number is marked where it leaves
+/// the saved one; see `docs/design/profiles.md`.
+pub(super) fn form(ui: &mut Ui, window: &mut Window, tabs: egui::Id) {
     let Some(draft) = window.machine.settings.support.as_mut() else {
         describe(ui, &tr!("support-pick-profile"));
         return;
     };
-    let shipped = draft.as_shipped().cloned();
+    let saved = draft.as_saved().clone();
     let profile = &mut draft.values;
 
     form_card(ui, &tr!("table-profile"), |ui| {
         if let Some(name) = name_row(ui, "support", &profile.name) {
             profile.name = name;
         }
-        let help = match shipped {
-            Some(_) => tr!("support-reset-shipped-help"),
-            None => tr!("support-reset-stock-help"),
-        };
-        reset_row(ui, profile, defaults(profile, shipped.as_ref()), &help);
     });
 
-    let saved = shipped.as_ref();
-    if ui.available_width() < TWO_COLUMNS_W {
-        let columns = [0, 1].map(|column| ROWS.iter().filter_map(move |row| row[column]));
-        for group in columns.into_iter().flatten() {
-            let mut on = group.switch(profile).map(|on| *on);
-            switched_card(ui, &group.label(), on.as_mut(), |ui| {
-                group.show(ui, profile, saved)
-            });
-            take_switch(ui, group, profile, on);
-        }
-    } else {
-        ui.spacing_mut().item_spacing.x = 12.0;
-        for row in ROWS {
-            let mut switches = row.map(|group| group.and_then(|g| g.switch(profile).map(|on| *on)));
-            card_row(ui, 2, |ui, column| {
-                let Some(group) = row[column] else {
-                    return;
-                };
-                let on = switches[column].as_mut();
-                card_cell(ui, &group.label(), on, |ui| group.show(ui, profile, saved));
-            });
-            for (group, on) in row.into_iter().zip(switches) {
-                if let Some(group) = group {
-                    take_switch(ui, group, profile, on);
-                }
-            }
-        }
-    }
-
-    if settled(ui) {
-        autosave(window.machine);
+    let saved = Some(&saved);
+    for (index, group) in ORDER.into_iter().enumerate() {
+        jump::section(ui, tabs, index, ui.cursor().top());
+        let mut on = group.switch(profile).map(|on| *on);
+        let shown = on != Some(false);
+        switched_card(ui, &group.label(), on.as_mut(), |ui| match shown {
+            true => group.fields(ui, profile, saved),
+            false => group.off(ui),
+        });
+        take_switch(ui, group, profile, on);
     }
 }
 
@@ -89,6 +76,16 @@ fn take_switch(ui: &Ui, group: Group, profile: &mut SupportProfile, on: Option<b
     }
 }
 
+/// What Reset to defaults puts back in `draft`, and why.
+pub(super) fn stock(draft: &Draft<SupportProfile>) -> (SupportProfile, String) {
+    let shipped = draft.as_shipped();
+    let help = match shipped {
+        Some(_) => tr!("support-reset-shipped-help"),
+        None => tr!("support-reset-stock-help"),
+    };
+    (defaults(&draft.values, shipped), help)
+}
+
 /// What `profile` resets to: the shipped profile, or a new one's stock numbers, under its
 /// own name.
 fn defaults(profile: &SupportProfile, shipped: Option<&SupportProfile>) -> SupportProfile {
@@ -98,20 +95,24 @@ fn defaults(profile: &SupportProfile, shipped: Option<&SupportProfile>) -> Suppo
     }
 }
 
-fn autosave(machine: &mut Machine) {
+/// Writes the profile open in the form when it holds anything unsaved. Answers whether it
+/// is written, the status saying why where it is not.
+pub(super) fn save(machine: &mut Machine) -> bool {
     let Some(draft) = machine.settings.support.as_mut() else {
-        return;
+        return false;
     };
     if !draft.is_dirty() {
-        return;
+        return true;
     }
     let outcome = machine
         .slicing
         .catalogue
         .save_support(&draft.id, &draft.values);
-    if report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some() {
+    let saved = report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some();
+    if saved {
         draft.mark_saved();
     }
+    saved
 }
 
 #[cfg(test)]
@@ -144,12 +145,11 @@ mod tests {
     }
 
     #[test]
-    fn every_group_has_one_place_in_the_rows() {
-        let placed: Vec<_> = ROWS.iter().flatten().flatten().collect();
-        assert_eq!(placed.len(), 9, "the nine groups of a support profile");
-        for group in &placed {
-            let times = placed.iter().filter(|other| *other == group).count();
-            assert_eq!(times, 1, "{group:?} stands once in the rows");
+    fn every_group_has_one_place_in_the_form() {
+        assert_eq!(ORDER.len(), 9, "the nine groups of a support profile");
+        for group in &ORDER {
+            let times = ORDER.iter().filter(|other| *other == group).count();
+            assert_eq!(times, 1, "{group:?} stands once in the form");
         }
     }
 }

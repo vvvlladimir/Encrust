@@ -1,5 +1,5 @@
-//! The Hollow and Drain pages: each tool's named settings (ADR 0226) as a table. Numbers are
-//! edited in the tool's Profile row; here they are named, written, taken in and removed.
+//! The Hollow and Drain pages: each tool's named settings (ADR 0226) as a table, renamed,
+//! written, taken in and removed here; their numbers are edited in the tool's Profile row.
 
 use std::path::Path;
 
@@ -10,11 +10,13 @@ use printer_profiles::{Entry, Kind, Preset};
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::frame::{SIDE_PAD, Table, child, with_footer};
-use crate::panels::settings::{export_profile, form_card, name_row, report};
-use crate::settings::Deleting;
+use crate::panels::settings::{export_profile, forget_profile, report};
 use crate::state::Machine;
-use crate::ui::{describe, icon, quiet_button};
+use crate::ui::window_frame::{SIDE_PAD, Table, child, with_footer};
+use crate::ui::{
+    Confirm, confirm_button, describe, icon, is_renaming, quiet_button, rename_box, start_rename,
+};
+use crate::workspace::Tool;
 
 const HOLLOW: Table = Table {
     heads: || {
@@ -49,7 +51,8 @@ enum Action {
     Pick(String),
     Rename(String, String),
     Export(String),
-    Ask(String),
+    Delete(String),
+    OpenTool,
 }
 
 /// The page of the tool the Settings window has open, laid out in `content`.
@@ -65,21 +68,8 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
         pos2(top.right() - SIDE_PAD, top.bottom()),
     );
     let mut action = None;
-    let catalogue = &window.machine.slicing.catalogue;
-    let picked_entry = picked
-        .as_deref()
-        .and_then(|id| catalogue.presets(kind).find(|entry| entry.id == id));
-    let mut rows = child(&mut body, rows);
-    if let Some(entry) = picked_entry {
-        form_card(&mut rows, &tr!("settings-name"), |ui| {
-            if let Some(name) = name_row(ui, kind.dir(), &entry.profile.name) {
-                action = Some(Action::Rename(entry.id.clone(), name));
-            }
-        });
-        rows.add_space(8.0);
-    }
     table(
-        &mut rows,
+        &mut child(&mut body, rows),
         window.machine,
         kind,
         picked.as_deref(),
@@ -87,8 +77,18 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     );
     actions(&mut bar, picked.as_deref(), &mut action);
     if let Some(action) = action {
-        apply(window.machine, kind, action);
+        apply(window, kind, action);
     }
+}
+
+/// Closes the window on the tool whose presets the page lists, its card open.
+fn open_tool(window: &mut Window, kind: Kind) {
+    window.machine.settings.close();
+    *window.tool = match kind {
+        Kind::Hollow => Tool::Hollow,
+        _ => Tool::Drain,
+    };
+    window.view.options.inspector = true;
 }
 
 /// Every preset the tool keeps, with the numbers that tell them apart.
@@ -116,18 +116,50 @@ fn table(
             };
             empty = false;
             let chosen = picked == Some(entry.id.as_str());
-            if columns
-                .row(ui, &entry.profile.name, chosen, &cells)
-                .clicked()
-            {
-                *action = Some(Action::Pick(entry.id.clone()));
+            if let Some(asked) = row(ui, columns, entry, chosen, cells) {
+                *action = Some(asked);
             }
         }
         if empty {
-            ui.add_space(12.0);
+            ui.add_space(crate::ui::theme::PANEL_PAD);
             describe(ui, &tr!("presets-empty", kind = kind.dir()));
         }
+        ui.add_space(crate::ui::theme::PANEL_PAD);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+            let open = tr!("presets-open-tool", kind = kind.dir());
+            if quiet_button(ui, icon::ELSEWHERE, &open, false, true).clicked() {
+                *action = Some(Action::OpenTool);
+            }
+        });
     });
+}
+
+/// One preset's row: a click picks it, a double click turns its name into a box to type a
+/// new one in.
+fn row(
+    ui: &mut Ui,
+    columns: &Table,
+    entry: &Entry<Preset>,
+    chosen: bool,
+    mut cells: Vec<String>,
+) -> Option<Action> {
+    let name = &entry.profile.name;
+    let id = ui.id().with(("rename-preset", &entry.id));
+    let renaming = is_renaming(ui, id);
+    if renaming {
+        cells[0].clear();
+    }
+    let response = columns.row(ui, name, chosen, &cells);
+    if renaming {
+        let typed = rename_box(ui, columns.name_box(response.rect), id);
+        return typed
+            .filter(|typed| typed != name)
+            .map(|typed| Action::Rename(entry.id.clone(), typed));
+    }
+    if response.double_clicked() {
+        start_rename(ui, id, name);
+    }
+    (response.clicked() || response.double_clicked()).then(|| Action::Pick(entry.id.clone()))
 }
 
 fn cells(kind: Kind, entry: &Entry<Preset>) -> Option<Vec<String>> {
@@ -169,17 +201,26 @@ fn actions(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
     if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(owned).map(Action::Export);
     }
-    if quiet_button(ui, icon::REMOVE, &tr!("profiles-delete"), true, some).clicked() {
-        *action = picked.map(owned).map(Action::Ask);
+    let delete = Confirm {
+        glyph: icon::REMOVE,
+        text: &tr!("profiles-delete"),
+        asked: &tr!("confirm-asked-delete"),
+        tooltip: &tr!("confirm-cannot-undo"),
+        enabled: some,
+    };
+    if confirm_button(ui, &delete) {
+        *action = picked.map(owned).map(Action::Delete);
     }
 }
 
-fn apply(machine: &mut Machine, kind: Kind, action: Action) {
+fn apply(window: &mut Window, kind: Kind, action: Action) {
+    let machine = &mut *window.machine;
     match action {
         Action::Pick(id) => machine.settings.preset = Some(id),
         Action::Rename(id, name) => rename(machine, kind, &id, name),
         Action::Export(id) => export_profile(machine, kind, &id),
-        Action::Ask(id) => machine.settings.confirm = Some(Deleting::Profile(kind, id)),
+        Action::Delete(id) => forget_profile(machine, kind, &id),
+        Action::OpenTool => open_tool(window, kind),
     }
 }
 

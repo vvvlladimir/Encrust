@@ -1,26 +1,27 @@
+mod place;
+
 use core_geometry::glam::EulerRot;
 use core_geometry::{Mat3, Quat, Transform, Vec3};
-use core_plate::{OrientGoal, OrientPreset};
 
 use crate::gizmo::Axes;
 use crate::i18n::tr;
 use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
-use crate::scene::{Axis, ObjectId, Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, icon,
-    icon_toggle, inline_button, kept, number_field, picker, progress_bar, secondary_button,
-    section, section_with_action, stepped_row, switch, theme,
+    Segment, Segmented, axis_label, compact_button, field_label, hairline, icon, kept,
+    secondary_button, section_with_action, section_with_actions, switch, theme, unit_field,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
 pub(super) const POSITION_DRAG: f64 = 0.1;
 const ANGLE_DRAG: f64 = 0.5;
 const PERCENT_DRAG: f64 = 0.5;
-/// The column the axis letters and their units stand in, in every block, so the fields
-/// of all three line up.
-const AXIS_W: f32 = 46.0;
+/// The column the axis letters stand in, in every block, so the fields of all three line up.
+const AXIS_W: f32 = 14.0;
+/// Height of the Size and Ratio titles over their columns.
+const CAPTION_H: f32 = 16.0;
 /// Width of a ±45° button.
 const TURN_W: f32 = 48.0;
 /// What a turn button adds about its axis, degrees.
@@ -30,13 +31,8 @@ const TURN_DEG: f32 = 45.0;
 /// picked nor sliced.
 const MIN_SCALE: f32 = 1e-3;
 
-/// The highest a model may be lifted off the plate by typing, and how far a press of
-/// either button beside it moves it, millimetres.
+/// The highest a model may be lifted off the plate by typing, millimetres.
 pub(super) const MAX_LIFT_MM: f32 = 100.0;
-const LIFT_STEP_MM: f32 = 1.0;
-
-/// The gap between a model and the mirrored copy stood beside it, millimetres.
-const COPY_GAP_MM: f32 = 5.0;
 
 /// Position and angle take any value.
 const ANY: std::ops::RangeInclusive<f32> = f32::MIN..=f32::MAX;
@@ -54,9 +50,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let axes = window.view.gizmo.axes;
     position(ui, &mut window.doc.scene, &window.doc.plate, id);
     rotation(ui, window, id, axes);
-    scale(ui, &mut window.doc.scene, id, axes);
-    place(ui, window, id);
-    mirror(ui, &mut window.doc.scene);
+    scale(ui, &mut window.doc.scene, &window.doc.plate, id, axes);
+    place::place(ui, window, id);
+    place::auto_orient_section(ui, window, id);
 }
 
 /// Whether the handles, the turn buttons and the sizes follow the plate's axes or the
@@ -77,31 +73,45 @@ fn axes(ui: &mut egui::Ui, axes: &mut Axes) {
 }
 
 fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
-    let tooltip = tr!("position-move-reset");
-    let (reset, _) =
-        section_with_action(ui, &tr!("position-move"), (icon::RESET, &tooltip), |ui| {
-            let Some(object) = scene.get_mut(id) else {
-                return;
-            };
-            let mut pivot = object.pivot();
-            let mut changed = false;
-            for (axis, axis_name) in AXIS_NAMES.iter().enumerate() {
-                ui.horizontal(|ui| {
-                    label_column(ui, axis, &tr!("unit-mm"));
-                    let width = ui.available_width();
-                    let value = &mut pivot.translation[axis];
-                    let name = tr!("position-move-along", axis = *axis_name);
-                    changed |= number_field(ui, &name, value, POSITION_DRAG, ANY, Some(2), width);
-                });
+    let actions = [
+        (icon::RESET, tr!("position-move-reset")),
+        (icon::DROP_TO_PLATE, tr!("position-on-plate")),
+    ];
+    let actions: Vec<(&str, &str)> = actions
+        .iter()
+        .map(|(glyph, tip)| (*glyph, tip.as_str()))
+        .collect();
+    let (pressed, _) = section_with_actions(ui, &tr!("position-move"), &actions, |ui| {
+        let Some(object) = scene.get_mut(id) else {
+            return;
+        };
+        let mut pivot = object.pivot();
+        let mut changed = false;
+        for (axis, axis_name) in AXIS_NAMES.iter().enumerate() {
+            ui.horizontal(|ui| {
+                label_column(ui, axis);
+                let width = ui.available_width();
+                let value = &mut pivot.translation[axis];
+                let name = tr!("position-move-along", axis = *axis_name);
+                let mm = tr!("unit-mm");
+                changed |= unit_field(ui, &name, value, &mm, POSITION_DRAG, ANY, Some(2), width);
+            });
+        }
+        // Written back only on a frame the user changed a number: settling every frame
+        // would let the round trip through the centre of mass accumulate.
+        if changed {
+            object.settle(pivot);
+        }
+    });
+    match pressed {
+        Some(0) => recentre(scene, plate, id),
+        Some(_) => {
+            if let Some(object) = scene.get_mut(id) {
+                object.stand_on_plate();
+                object.lift_mm = None;
             }
-            // Written back only on a frame the user changed a number: settling every frame
-            // would let the round trip through the centre of mass accumulate.
-            if changed {
-                object.settle(pivot);
-            }
-        });
-    if reset {
-        recentre(scene, plate, id);
+        }
+        None => {}
     }
 }
 
@@ -133,21 +143,23 @@ fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
 /// plate's axes, so a stretch the model carries turns with it.
 fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> {
     let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
-    // Rounded to what the field shows, plus zero, so float dust never reads as "-0.00".
-    let shown = |radians: f32| (radians.to_degrees() * 100.0).round() / 100.0 + 0.0;
+    // Rounded to what the field shows, plus zero, so float dust never reads as "-0.0".
+    let shown = |radians: f32| (radians.to_degrees() * 10.0).round() / 10.0 + 0.0;
     let mut degrees = Vec3::new(shown(x), shown(y), shown(z));
     let mut typed = false;
     let mut turn = Quat::IDENTITY;
     for axis in 0..3 {
         ui.horizontal(|ui| {
-            label_column(ui, axis, "°");
+            label_column(ui, axis);
             let spacing = ui.spacing().item_spacing.x;
             let width = ui.available_width() - 2.0 * (TURN_W + spacing);
             let degrees = &mut degrees[axis];
             let name = tr!("position-rotation-about", axis = AXIS_NAMES[axis]);
-            typed |= number_field(ui, &name, degrees, ANGLE_DRAG, ANY, Some(2), width);
+            let deg = tr!("unit-deg");
+            typed |= unit_field(ui, &name, degrees, &deg, ANGLE_DRAG, ANY, Some(1), width);
             for sign in [-1.0, 1.0] {
-                let text = format!("{:+}°", sign * TURN_DEG);
+                // The true minus sign, as the standard writes a negative figure.
+                let text = format!("{:+}°", sign * TURN_DEG).replace('-', "\u{2212}");
                 let clicked = compact_button(ui, &text, TURN_W).clicked();
                 if clicked {
                     let about = Vec3::AXES[axis];
@@ -178,36 +190,58 @@ fn about_plate(rotation: Quat, turn: Quat, axes: Axes) -> Quat {
 }
 
 /// The model's size and stretch along the plate's axes or along its own.
-fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
+fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId, axes: Axes) {
     let linked_id = ui.id().with("scale-linked");
     let mut linked = kept::get(ui.ctx(), linked_id).unwrap_or(true);
     let tooltip = tr!("position-scale-reset");
+    let mut asked = None;
     let (reset, _) =
         section_with_action(ui, &tr!("position-scale"), (icon::RESET, &tooltip), |ui| {
             if let Some(object) = scene.get_mut(id) {
                 scale_rows(ui, object, &mut linked, axes);
             }
+            switch(ui, &mut linked, &tr!("position-keep-proportions"));
+            if secondary_button(ui, icon::FIT, &tr!("position-scale-to-fit")).clicked() {
+                asked = Some(Resize::Fit);
+            }
         });
     kept::set(ui.ctx(), linked_id, &linked);
-    if reset && let Some(object) = scene.get_mut(id) {
-        let pivot = object.pivot();
-        object.settle(Transform {
-            scale: keeping_mirror(pivot.scale, Vec3::ONE),
-            stretch: Mat3::IDENTITY,
-            ..pivot
-        });
-        object.stand_on_plate();
+    let Some(object) = scene.get_mut(id) else {
+        return;
+    };
+    match asked.or(reset.then_some(Resize::Imported)) {
+        Some(Resize::Fit) => {
+            fit(object, plate);
+            recentre(scene, plate, id);
+        }
+        Some(Resize::Imported) => {
+            let pivot = object.pivot();
+            object.settle(Transform {
+                scale: keeping_mirror(pivot.scale, Vec3::ONE),
+                stretch: Mat3::IDENTITY,
+                ..pivot
+            });
+            object.stand_on_plate();
+        }
+        None => {}
     }
+}
+
+/// The two ways the Scale section sizes a model at one press.
+#[derive(Clone, Copy)]
+enum Resize {
+    Fit,
+    Imported,
 }
 
 fn scale_rows(ui: &mut egui::Ui, object: &mut SceneObject, linked: &mut bool, axes: Axes) {
     let pivot = object.pivot();
     let shown = Shown::of(object, axes);
-    let column = scale_header(ui, linked);
+    let column = scale_header(ui);
     let mut asked = None;
     for axis in 0..3 {
         ui.horizontal(|ui| {
-            label_column(ui, axis, "");
+            label_column(ui, axis);
             if let Some(grow) = scale_row(ui, &shown, axis, column) {
                 asked = Some((axis, grow));
             }
@@ -255,35 +289,25 @@ impl Shown {
     }
 }
 
-/// The two column titles and the link that keeps the three axes in proportion. Returns
-/// the width each column's field gets.
-fn scale_header(ui: &mut egui::Ui, linked: &mut bool) -> f32 {
+/// The two column titles. Returns the width each column's field gets.
+fn scale_header(ui: &mut egui::Ui) -> f32 {
     let spacing = ui.spacing().item_spacing.x;
     let column = (ui.available_width() - AXIS_W - 2.0 * spacing) / 2.0;
     ui.horizontal(|ui| {
         ui.add_space(AXIS_W + spacing);
-        caption(ui, &tr!("position-size"), &tr!("unit-mm"), column);
-        caption(
-            ui,
-            &tr!("position-ratio"),
-            "%",
-            column - theme::ICON_SIZE - spacing,
-        );
-        let tooltip = tr!("position-keep-proportions");
-        if icon_toggle(ui, icon::LINKED, &tooltip, *linked).clicked() {
-            *linked = !*linked;
-        }
+        caption(ui, &tr!("position-size"), column);
+        caption(ui, &tr!("position-ratio"), column);
     });
     column
 }
 
-fn caption(ui: &mut egui::Ui, text: &str, unit: &str, width: f32) {
+fn caption(ui: &mut egui::Ui, text: &str, width: f32) {
     ui.allocate_ui_with_layout(
-        egui::vec2(width.max(0.0), theme::ICON_SIZE),
+        egui::vec2(width.max(0.0), CAPTION_H),
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.set_min_width(width.max(0.0));
-            field_label(ui, text, theme::colors().text_mid, unit);
+            field_label(ui, text, theme::colors().text_low, "");
         },
     );
 }
@@ -296,10 +320,11 @@ fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Optio
 
     let size_name = tr!("position-axis-size", axis = AXIS_NAMES[axis]);
     let least_mm = was_mm / was_ratio.max(MIN_SCALE) * MIN_SCALE;
-    let sized = number_field(
+    let sized = unit_field(
         ui,
         &size_name,
         &mut size_mm,
+        &tr!("unit-mm"),
         POSITION_DRAG,
         least_mm..=f32::MAX,
         Some(2),
@@ -307,13 +332,14 @@ fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Optio
     );
     let ratio_name = tr!("position-axis-ratio", axis = AXIS_NAMES[axis]);
     let percents = MIN_SCALE * 100.0..=f32::MAX;
-    let ratioed = number_field(
+    let ratioed = unit_field(
         ui,
         &ratio_name,
         &mut percent,
+        "%",
         PERCENT_DRAG,
         percents,
-        Some(2),
+        Some(1),
         width,
     );
     match (sized, ratioed) {
@@ -352,208 +378,16 @@ fn grown(
     }
 }
 
-/// The axis letter, and its unit, in a column of one width so the fields line up.
-fn label_column(ui: &mut egui::Ui, axis: usize, unit: &str) {
+/// The axis letter in a column of one width so the fields line up.
+fn label_column(ui: &mut egui::Ui, axis: usize) {
     ui.allocate_ui_with_layout(
         egui::vec2(AXIS_W, theme::FIELD_H),
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.set_min_width(AXIS_W);
-            axis_label(ui, axis, unit);
+            axis_label(ui, axis, "");
         },
     );
-}
-
-/// Standing the selection on the plate, over its middle, as large as the volume takes, or
-/// turned the way it prints best.
-fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    section(ui, &tr!("position-place"), None, |ui| {
-        describe(ui, &tr!("position-place-help"));
-        let scene = &mut window.doc.scene;
-        let plate = &window.doc.plate;
-        let mut fitted = false;
-        ui.columns(3, |columns| {
-            let Some(object) = scene.get_mut(id) else {
-                return;
-            };
-            if secondary_button(&mut columns[0], "", &tr!("position-on-plate")).clicked() {
-                object.stand_on_plate();
-                object.lift_mm = None;
-            }
-            if secondary_button(&mut columns[1], "", &tr!("position-centre")).clicked()
-                && let Some(bounds) = object.world_bounds()
-            {
-                let offset = plate.center() - bounds.center();
-                object.transform.translation += offset * Vec3::new(1.0, 1.0, 0.0);
-            }
-            if secondary_button(&mut columns[2], "", &tr!("position-scale-to-fit")).clicked() {
-                fit(object, plate);
-                fitted = true;
-            }
-        });
-        if fitted {
-            recentre(scene, plate, id);
-        }
-        lift(ui, scene, id);
-        turn(ui, window, id);
-    });
-}
-
-/// How high the model stands over the plate, a millimetre a press. The height typed is the
-/// one auto-orient stands it on supports at; nought hands that back to the support profile.
-pub fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
-    let Some(object) = scene.get_mut(id) else {
-        return;
-    };
-    let Some(now_mm) = object.lift() else {
-        return;
-    };
-    let mut lift_mm = now_mm;
-    let range = 0.0..=MAX_LIFT_MM;
-    if stepped_row(
-        ui,
-        &tr!("position-lift"),
-        &mut lift_mm,
-        &tr!("unit-mm"),
-        POSITION_DRAG,
-        LIFT_STEP_MM,
-        range,
-        2,
-    ) {
-        object.lift_to(lift_mm);
-    }
-}
-
-/// What auto-orient is for and Auto-orient beside it, which pressed again with nothing
-/// changed stands the model the next good way it found; under them, Lay on face.
-fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    let running = window.tools.orient.is_running();
-    let preset = &mut window.tools.orient.settings.preset;
-    let oriented = ui
-        .add_enabled_ui(!running, |ui| preset_row(ui, preset))
-        .inner;
-    if running {
-        // The search measures every candidate over the whole mesh, which is no share to
-        // count: the bar runs rather than standing at nought.
-        progress_bar(ui, None);
-    }
-    let label = if window.tools.orient.picking_face {
-        tr!("position-click-face")
-    } else {
-        tr!("position-lay-on-face")
-    };
-    // A run replaces the rotation when it lands, so a face laid meanwhile would be lost.
-    let laid = ui
-        .add_enabled_ui(!running, |ui| secondary_button(ui, icon::SELECT, &label))
-        .inner
-        .clicked();
-
-    if oriented {
-        auto_orient(window, Some(id));
-    }
-    if laid {
-        let orient = &mut window.tools.orient;
-        if orient.picking_face {
-            orient.stop_picking();
-        } else {
-            orient.picking_face = true;
-        }
-    }
-}
-
-/// The preset auto-orient searches for, filling the row beside Auto-orient. Answers
-/// whether Auto-orient was pressed.
-fn preset_row(ui: &mut egui::Ui, chosen: &mut OrientPreset) -> bool {
-    let size = egui::vec2(ui.available_width(), theme::BUTTON_H);
-    let layout = egui::Layout::right_to_left(egui::Align::Center);
-    ui.allocate_ui_with_layout(size, layout, |ui| {
-        let enabled = ui.is_enabled();
-        let oriented = inline_button(
-            ui,
-            icon::ORIENT,
-            &tr!("position-auto-orient"),
-            false,
-            enabled,
-        )
-        .clicked();
-        let response = picker(ui, icon::PARAMETERS, &preset_label(*chosen))
-            .on_hover_text(preset_hint(*chosen));
-        egui::Popup::menu(&response).show(|ui| {
-            let goals = OrientGoal::ALL.into_iter().map(OrientPreset::Goal);
-            for choice in std::iter::once(OrientPreset::Auto).chain(goals) {
-                if ui
-                    .selectable_label(choice == *chosen, preset_label(choice))
-                    .clicked()
-                {
-                    *chosen = choice;
-                    ui.close();
-                }
-            }
-        });
-        oriented
-    })
-    .inner
-}
-
-/// What a preset is called in the picker.
-fn preset_label(preset: OrientPreset) -> String {
-    match preset {
-        OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports"),
-        OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel"),
-        OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest"),
-        OrientPreset::Auto => tr!("orient-preset-auto"),
-    }
-}
-
-fn preset_hint(preset: OrientPreset) -> String {
-    match preset {
-        OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports-hint"),
-        OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel-hint"),
-        OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest-hint"),
-        OrientPreset::Auto => tr!("orient-preset-auto-hint"),
-    }
-}
-
-/// Every flip works on the whole selection, so a plate of four does not need the same
-/// button pressed four times. Keeping the original flips a copy stood beside it instead.
-fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
-    let keep_id = ui.id().with("mirror-keep");
-    let mut keep = kept::get(ui.ctx(), keep_id).unwrap_or(false);
-    section(ui, &tr!("position-mirror"), None, |ui| {
-        let picked = scene.selection().to_vec();
-        let mut flipped = None;
-        ui.columns(Axis::ALL.len(), |columns| {
-            for (column, axis) in columns.iter_mut().zip(Axis::ALL) {
-                let label = tr!("position-across", axis = axis.label());
-                if secondary_button(column, "", &label).clicked() {
-                    flipped = Some(axis);
-                }
-            }
-        });
-        if let Some(axis) = flipped {
-            let flipped = if keep { copies(scene, &picked) } else { picked };
-            for id in &flipped {
-                scene.mirror(*id, axis);
-            }
-        }
-        switch(ui, &mut keep, &tr!("position-keep-original"));
-        describe(ui, &tr!("position-keep-original-note"));
-    });
-    kept::set(ui.ctx(), keep_id, &keep);
-}
-
-/// A copy of each of `ids` stood clear of it to the right, all of them selected.
-fn copies(scene: &mut Scene, ids: &[ObjectId]) -> Vec<ObjectId> {
-    let copied: Vec<ObjectId> = ids
-        .iter()
-        .filter_map(|id| {
-            let bounds = scene.get(*id)?.world_bounds()?;
-            let width = bounds.maxs.x - bounds.mins.x;
-            scene.duplicate(*id, Vec3::new(width + COPY_GAP_MM, 0.0, 0.0))
-        })
-        .collect();
-    scene.select_many(&copied);
-    copied
 }
 
 /// Stretches the model evenly until its bounds meet the build volume on the tightest side.

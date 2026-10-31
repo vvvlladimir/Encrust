@@ -1,19 +1,19 @@
-use egui::{Align2, Id, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
+use egui::{Id, Pos2, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
-use crate::files::{self, Wanted};
-use crate::i18n::tr;
-use crate::panels::{Window, mask_pane, stage_notice, view_column, view_cube, viewport_panel};
-use crate::ui::{card, icon, primary_button, theme};
+use crate::panels::{
+    Window, hint_bar, mask_pane, stage_notice, view_column, view_cube, viewport_panel,
+};
+use crate::ui::theme;
 use crate::workspace::Mode;
 
-/// The stage: the viewport under the whole of it, the mask beside the model or in its
-/// place, and the cards over them, which keep to `clear`, the room the side cards leave.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
+/// The stage: the viewport, the mask beside or instead of the model, and the cards over
+/// them within `clear`, the room the side cards leave under the tool `row`.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>) {
     let stage = ui.available_rect_before_wrap();
 
     if *window.mode == Mode::Preview && window.view.options.mask_only {
         ui.painter().rect_filled(stage, 0.0, theme::colors().sunken);
-        mask(ui, window, stage, clear);
+        mask(ui, window, stage, to_strip(stage, clear, clear.left()));
         stage_notice::ui(ui, window, clear);
         return;
     }
@@ -26,8 +26,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
         seen.max.x = middle;
         let pane = Rect::from_x_y_ranges(middle..=stage.right(), stage.y_range());
         ui.painter().rect_filled(pane, 0.0, theme::colors().sunken);
-        let beside = Rect::from_x_y_ranges(middle..=clear.right(), clear.y_range());
-        mask(ui, window, pane, beside);
+        mask(ui, window, pane, to_strip(stage, clear, middle));
         divider(ui, window, stage, clear, middle);
     }
 
@@ -37,13 +36,38 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
         })
         .inner;
     let clear = clear.intersect(viewport);
-    if window.doc.scene.is_empty() {
-        empty_state(ui, clear.center(), viewport, window);
-    }
-    view_cube::ui(ui, window, clear);
+    let cube = view_cube::ui(ui, window, cube_corner(clear, row), clear);
+    // Centred under the tool row, so it keeps clear of the cube on both sides.
+    let inset = (clear.right() - cube.left() + theme::FLOAT_GAP).min(clear.width() / 2.0);
+    let beside_mask = *window.mode == Mode::Preview;
+    hint_bar::ui(
+        ui,
+        window,
+        clear.shrink2(egui::vec2(inset, 0.0)),
+        row,
+        beside_mask,
+    );
     let column = view_column::ui(ui, window, clear);
     let beside = clear.with_max_x((column.left() - theme::FLOAT_GAP).max(clear.left()));
     stage_notice::ui(ui, window, beside);
+}
+
+/// Where the view cube's top right stands: level with the tool row while it fits beside
+/// it, under the row when it does not.
+fn cube_corner(clear: Rect, row: Option<Rect>) -> Pos2 {
+    match row {
+        Some(row) if clear.right() - row.right() - theme::FLOAT_GAP >= view_cube::SIZE => {
+            pos2(clear.right(), row.top())
+        }
+        _ => clear.right_top(),
+    }
+}
+
+/// The mask's room over the stage from `left`: the plate's card stands on the foot, so over
+/// it the room runs to the layer strip.
+fn to_strip(stage: Rect, clear: Rect, left: f32) -> Rect {
+    let strip = stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
+    Rect::from_x_y_ranges(left..=strip, clear.y_range())
 }
 
 /// The exposure mask, drawn in `rect`, its caption kept to `clear`.
@@ -110,53 +134,22 @@ fn split_at(stage: Rect, clear: Rect, x: f32) -> f32 {
     (divide(stage, clear, raw) - stage.left()) / stage.width()
 }
 
-/// The whole viewport when there is nothing on the plate: one card, one thing to do,
-/// centred on `at` and kept inside the viewport.
-fn empty_state(ui: &egui::Ui, at: egui::Pos2, viewport: Rect, window: &mut Window) {
-    egui::Area::new(Id::new("empty-plate"))
-        .order(egui::Order::Middle)
-        .fixed_pos(at)
-        .pivot(Align2::CENTER_CENTER)
-        .constrain_to(viewport)
-        .show(ui.ctx(), |ui| {
-            card()
-                .inner_margin(egui::Margin::symmetric(26, 22))
-                .show(ui, |ui| {
-                    ui.set_width(250.0);
-                    ui.vertical_centered(|ui| {
-                        ui.label(
-                            egui::RichText::new(icon::EMPTY_PLATE)
-                                .font(theme::icon(32.0))
-                                .color(theme::colors().text_low),
-                        );
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(tr!("stage-empty"))
-                                .font(theme::body())
-                                .color(theme::colors().text_high),
-                        );
-                        ui.label(
-                            egui::RichText::new(tr!("stage-empty-hint"))
-                                .font(theme::label())
-                                .color(theme::colors().text_mid),
-                        );
-                        ui.add_space(14.0);
-                        if primary_button(ui, icon::OPEN, &tr!("stage-open"), true).clicked()
-                            && let Some(file) = files::pick(Wanted::ModelOrProject)
-                        {
-                            crate::app::open_by_what_it_is(window, file);
-                        }
-                    });
-                });
-        });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn stage() -> Rect {
         Rect::from_min_max(pos2(0.0, 0.0), pos2(1000.0, 600.0))
+    }
+
+    #[test]
+    fn the_cube_stands_level_with_the_row_while_it_fits_beside_it() {
+        let clear = Rect::from_min_max(pos2(200.0, 70.0), pos2(800.0, 600.0));
+        let row = |right: f32| Some(Rect::from_min_max(pos2(400.0, 4.0), pos2(right, 62.0)));
+        let fits = 800.0 - theme::FLOAT_GAP - view_cube::SIZE;
+        assert_eq!(cube_corner(clear, row(fits)), pos2(800.0, 4.0));
+        assert_eq!(cube_corner(clear, row(fits + 1.0)), pos2(800.0, 70.0));
+        assert_eq!(cube_corner(clear, None), pos2(800.0, 70.0));
     }
 
     #[test]

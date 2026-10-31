@@ -1,28 +1,36 @@
 //! The Settings window: support profiles, Hollow and Drain presets, behaviour and updates,
-//! a page each. Edits are written as made; see `docs/decisions/0233`, `docs/design/profiles.md`.
+//! a page each. See `docs/decisions/0233`, `docs/design/profiles.md`.
 
+mod appearance;
 mod compensation;
 mod confirm;
-mod frame;
 mod general;
+mod jump;
 pub(super) mod machines;
 mod presets;
 mod printer;
+mod profile_files;
 mod resin;
 mod supports;
+mod unsaved;
 mod updates;
 
-use egui::{Align, Layout, RichText, Ui, vec2};
+use egui::{Align, Layout, Ui, vec2};
 use printer_profiles::Kind;
 
-use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::settings::{Deleting, Node, Section, Tab};
-use crate::state::Machine;
+use crate::settings::{Leaving, Section};
 use crate::status::Status;
-use crate::ui::{focus_ring, hairline, icon, inline_button, theme};
+use crate::ui::window_frame as frame;
+use crate::ui::{
+    NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
+    nav_row, quiet_button, theme,
+};
+use crate::ui::{block_title, page_title, page_trail};
 use frame::{child, scrolled, with_header};
+pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
+pub use profile_files::{import_dropped, import_profile};
 
 /// The window, while it is open, and the question over it, which may be asked without it.
 pub fn window(ctx: &egui::Context, window: &mut Window) {
@@ -38,38 +46,108 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
             },
         );
         if close {
-            window.machine.settings.close();
-            return;
+            leave(window, Leaving::Close);
         }
     }
     ask(ctx, window);
 }
 
-/// The pages down the left, the profiles over the window's own settings, and the window
-/// and the sheet the rest of the setup lives in.
+/// The pages down the left under their group names, narrowed by the line over them: the
+/// profiles, the window's own, then help; at the list's foot the window the rest lives in.
 fn pages(ui: &mut Ui, window: &mut Window) {
     ui.spacing_mut().item_spacing.y = 2.0;
-    let settings = &mut window.machine.settings;
-    for group in [&Section::PROFILES[..], &Section::OWN[..]] {
-        for section in group {
-            let active = settings.section == *section;
-            if nav_row(ui, section_icon(*section), &section.label(), active).clicked() {
-                settings.turn_to(*section);
+    find_line(ui, &mut window.machine.settings.find, &tr!("settings-find"));
+    ui.add_space(FIND_GAP);
+    let find = window.machine.settings.find.to_lowercase();
+    let groups = [
+        (tr!("settings-group-profiles"), &Section::PROFILES[..]),
+        (tr!("settings-group-window"), &Section::OWN[..]),
+    ];
+    for (index, (name, group)) in groups.into_iter().enumerate() {
+        let shown: Vec<Section> = group
+            .iter()
+            .copied()
+            .filter(|section| matches(*section, &find))
+            .collect();
+        if shown.is_empty() {
+            continue;
+        }
+        if index > 0 {
+            ui.add_space(GROUP_GAP);
+        }
+        chooser_group(ui, &name);
+        for section in shown {
+            let active = window.machine.settings.section == section;
+            let aside = aside_of(window, section);
+            if nav_row(ui, section_icon(section), &section.label(), active, aside).clicked() {
+                leave(window, Leaving::Turn(section));
             }
         }
-        ui.add_space(10.0);
-        hairline(ui);
-        ui.add_space(10.0);
     }
-    if nav_row(ui, icon::PRINTER, &tr!("machines-title"), false).clicked() {
-        window.machine.settings.close();
-        crate::panels::open_machines(window.machine);
+    // The keys are a window of their own, which `?` reaches from anywhere; see ADR 0386.
+    let keys = tr!("settings-shortcuts");
+    if keys.to_lowercase().contains(&find) {
+        ui.add_space(GROUP_GAP);
+        chooser_group(ui, &tr!("settings-group-help"));
+        if nav_row(ui, icon::KEYBOARD, &keys, false, NavAside::Elsewhere).clicked() {
+            leave(window, Leaving::Keys);
+        }
     }
-    // The keys are a sheet rather than a page: there is nothing to edit, and one listing
-    // is enough. See `crate::shortcuts`.
-    if nav_row(ui, icon::KEYBOARD, &tr!("settings-shortcuts"), false).clicked() {
-        window.machine.settings.close();
-        window.view.options.sheet = true;
+    ui.add_space((ui.available_height() - NAV_ROW_H).max(0.0));
+    let machines = tr!("machines-title");
+    if nav_row(ui, icon::PRINTER, &machines, false, NavAside::Elsewhere).clicked() {
+        leave(window, Leaving::Machines);
+    }
+}
+
+/// Goes where `to` leads, once the question over unsaved edits, if any, is answered.
+fn leave(window: &mut Window, to: Leaving) {
+    if window.machine.settings.leave(to) {
+        arrive(window, to);
+    }
+}
+
+/// What leaving for `to` opens beyond the window it closes.
+fn arrive(window: &mut Window, to: Leaving) {
+    match to {
+        Leaving::Keys => window.view.options.sheet = true,
+        Leaving::Machines => crate::panels::open_machines(window.machine),
+        Leaving::Back | Leaving::Close | Leaving::Turn(_) => {}
+    }
+}
+
+/// Whether a page answers what was typed: by its name, or by a setting it holds.
+fn matches(section: Section, find: &str) -> bool {
+    if find.is_empty() {
+        return true;
+    }
+    let words = match section {
+        Section::Appearance => tr!("settings-words-appearance"),
+        Section::General => tr!("settings-words-general"),
+        Section::Updates => tr!("settings-words-updates"),
+        Section::Supports | Section::Hollow | Section::Drain => String::new(),
+    };
+    format!("{} {words}", section.label())
+        .to_lowercase()
+        .contains(find)
+}
+
+/// What a page's row carries at its right: how many profiles it lists, or that a release
+/// waits on Updates.
+fn aside_of(window: &Window, section: Section) -> NavAside {
+    let catalogue = &window.machine.slicing.catalogue;
+    match section {
+        Section::Supports => {
+            let by_hand = catalogue
+                .supports()
+                .filter(|entry| !catalogue.is_auto_shape(&entry.id))
+                .count();
+            NavAside::Count(catalogue.autos().count() + by_hand)
+        }
+        Section::Hollow => NavAside::Count(catalogue.presets(Kind::Hollow).count()),
+        Section::Drain => NavAside::Count(catalogue.presets(Kind::Drain).count()),
+        Section::Updates if window.machine.updates.waiting().is_some() => NavAside::Waiting,
+        Section::Appearance | Section::General | Section::Updates => NavAside::None,
     }
 }
 
@@ -78,6 +156,7 @@ fn section_icon(section: Section) -> &'static str {
         Section::Supports => icon::SUPPORTS,
         Section::Hollow => icon::HOLLOW,
         Section::Drain => icon::DRAIN,
+        Section::Appearance => icon::APPEARANCE,
         Section::General => icon::GENERAL,
         Section::Updates => icon::UPDATE,
     }
@@ -87,12 +166,18 @@ fn section_icon(section: Section) -> &'static str {
 fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     let section = window.machine.settings.section;
     let (mut head, content) = with_header(ui, side);
-    let pressed = heading(&mut head, section);
+    let pressed = match supports::editing(&window.machine.settings) {
+        Some(open) if section == Section::Supports => form_heading(&mut head, &open),
+        _ => heading(&mut head, section),
+    };
     match section {
         Section::Supports => supports::page(ui, content, window),
         Section::Hollow | Section::Drain => presets::page(ui, content, window),
+        Section::Appearance => scrolled(&mut child(ui, content), |ui| {
+            appearance::form(ui, window.machine);
+        }),
         Section::General => scrolled(&mut child(ui, content), |ui| {
-            general::form(ui, window.machine);
+            general::form(ui, window.machine, &window.doc.scene);
         }),
         Section::Updates => scrolled(&mut child(ui, content), |ui| {
             updates::form(ui, &mut window.machine.updates);
@@ -101,6 +186,8 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     match pressed {
         Some(Heading::Import(kind)) => ask_for_profile(window, kind),
         Some(Heading::New) => supports::add(window.machine, None),
+        Some(Heading::Back) => leave(window, Leaving::Back),
+        Some(Heading::Reset) => supports::reset(&mut window.machine.settings),
         None => {}
     }
 }
@@ -109,17 +196,47 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
 enum Heading {
     Import(Kind),
     New,
+    Back,
+    Reset,
 }
 
-/// The page's name on the left, and on a page of profiles the ways to add one.
+/// The way back to every profile, the trail to the profile open in the form, and at the
+/// right Reset to defaults.
+fn form_heading(ui: &mut Ui, open: &supports::Open) -> Option<Heading> {
+    ui.horizontal_centered(|ui| {
+        let mut pressed = None;
+        if icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked() {
+            pressed = Some(Heading::Back);
+        }
+        ui.add_space(4.0);
+        let parent = Section::Supports.label();
+        if page_trail(ui, &parent, &open.name, open.kind.as_deref()).clicked() {
+            pressed = Some(Heading::Back);
+        }
+        if let Some(reset) = &open.reset {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let text = tr!("support-reset");
+                let button = quiet_button(ui, icon::RESET, &text, false, reset.changed);
+                if button.on_hover_text(&reset.help).clicked() {
+                    pressed = Some(Heading::Reset);
+                }
+            });
+        }
+        pressed
+    })
+    .inner
+}
+
+/// The page's name on the left, beside it on Updates the build this is, and on a page of
+/// profiles the ways to add one.
 fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     let mut pressed = None;
     ui.horizontal_centered(|ui| {
-        ui.label(
-            RichText::new(section.label())
-                .font(theme::page_title(18.0))
-                .color(theme::colors().text_high),
-        );
+        let running = (section == Section::Updates).then(|| {
+            let version = crate::updates::Updates::running().to_string();
+            tr!("updates-this-build", version = version)
+        });
+        page_title(ui, &section.label(), running.as_deref());
         let Some(kind) = section.kind() else {
             return;
         };
@@ -138,160 +255,52 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     pressed
 }
 
-/// One entry of the list of pages: a glyph and a name, washed while it is the page open.
-pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::Response {
-    let colors = theme::colors();
-    let size = vec2(ui.available_width(), theme::BUTTON_H + 4.0);
-    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, label)
-    });
-    let (fill, text) = match (active, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
-    };
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let glyph_at = rect.left_center() + vec2(12.0, 0.0);
-    painter.text(
-        glyph_at,
-        egui::Align2::LEFT_CENTER,
-        glyph,
-        theme::icon(15.0),
-        text,
-    );
-    let label_at = rect.left_center() + vec2(36.0, 0.0);
-    painter.text(
-        label_at,
-        egui::Align2::LEFT_CENTER,
-        label,
-        theme::body(),
-        text,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response
-}
-
-/// Asks for a profile's file and takes it in. A browser answers on a later frame, through
-/// [`import_profile`].
-pub(super) fn ask_for_profile(window: &mut Window, kind: Kind) {
-    if let Some(file) = files::pick(Wanted::Profile(kind)) {
-        import_profile(window, kind, &file);
-    }
-}
-
-/// Takes `file` in as a profile of `kind` and opens it where it was asked for from: a
-/// resin goes on the machine the Machine and resin window has open.
-pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
-    let machine = &mut *window.machine;
-    let printer = match kind {
-        Kind::Resin => machine
-            .settings
-            .node
-            .as_ref()
-            .map(|node| node.printer().to_owned()),
-        _ => None,
-    };
-    let Some(id) = crate::exchange::import_file(machine, kind, file, printer.as_deref()) else {
-        return;
-    };
-    let settings = &mut machine.settings;
-    let catalogue = &machine.slicing.catalogue;
-    match (kind, printer) {
-        (Kind::Printer, _) => {
-            settings.library = None;
-            settings.pick(catalogue, Node::Printer(id.clone()));
-            machines::fill_empty_plate(window, &id);
-        }
-        (Kind::Resin, Some(printer)) => {
-            settings.editing_resin = false;
-            settings.pick(catalogue, Node::Resin { printer, resin: id });
-        }
-        (Kind::Support, _) => {
-            settings.editing_support = false;
-            settings.pick_support(catalogue, &id);
-        }
-        (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
-        (Kind::Resin, None) | (Kind::Auto, _) => {}
-    }
-    // A plate with no resin takes the first one its machine now has.
-    if matches!(kind, Kind::Printer | Kind::Resin) {
-        window.machine.slicing.reload_resin();
-    }
-}
-
-/// Takes a file dropped on the Machine and resin window in as a profile: a resin when the
-/// window shows a machine's resins or the file can be nothing else, a machine otherwise.
-pub fn import_dropped(window: &mut Window, file: &Handed) {
-    let settings = &window.machine.settings;
-    let resins_in_view =
-        settings.library.is_none() && settings.node.is_some() && settings.tab == Tab::Resins;
-    let path = file.path();
-    let only_a_resin =
-        printer_profiles::ForeignResin::reads(path) || core_pipeline::reads_sliced_file(path);
-    let kind = match resins_in_view || only_a_resin {
-        true => Kind::Resin,
-        false => Kind::Printer,
-    };
-    import_profile(window, kind, file);
-}
-
-/// Writes the profile of `kind` under `id` out to a file the user names.
-pub(super) fn export_profile(machine: &mut Machine, kind: Kind, id: &str) {
-    let text = machine.slicing.catalogue.export(kind, id);
-    let Some(text) = report(&mut machine.status, &tr!("settings-cannot-export"), text) else {
-        return;
-    };
-    let name = crate::exchange::file_name(id);
-    match files::save_text(&name, Wanted::Profile(kind), &text) {
-        Ok(Some(path)) => {
-            machine.status =
-                Status::Info(tr!("status-exported", path = path.display().to_string()));
-        }
-        Ok(None) => {}
-        Err(error) => machine.status = Status::failed(&error),
-    }
-}
-
-/// The question over the window, while a deletion is waiting to be answered for.
+/// Room over a group name of the list but the first, and under the find line.
+pub(super) const GROUP_GAP: f32 = 10.0;
+pub(super) const FIND_GAP: f32 = 12.0;
+/// The questions over the window: the profiles that would not read, which may be asked
+/// without it, and the unsaved edits of the form being left.
 fn ask(ctx: &egui::Context, window: &mut Window) {
-    let settings = &mut window.machine.settings;
-    let Some(deleting) = settings.confirm.clone() else {
+    ask_unsaved(ctx, window);
+    if !window.machine.settings.reset_unreadable {
+        return;
+    }
+    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue) else {
         return;
     };
-    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
-        return;
-    };
-    settings.confirm = None;
-    match (answer, deleting) {
-        (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) => {
-            forget_profile(window.machine, kind, &id);
-        }
-        (confirm::Answer::Confirmed, Deleting::Unreadable) => {
-            let machine = &mut *window.machine;
-            let outcome = machine.slicing.catalogue.discard_unreadable();
-            report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
-        }
-        _ => {}
+    window.machine.settings.reset_unreadable = false;
+    if matches!(answer, confirm::Answer::Confirmed) {
+        let machine = &mut *window.machine;
+        let outcome = machine.slicing.catalogue.discard_unreadable();
+        report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
     }
 }
 
-/// Throws away a support profile or a tool's preset, and leaves nothing of it open.
-fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
-    let catalogue = &mut machine.slicing.catalogue;
-    let outcome = catalogue.forget_user_copy(kind, id);
-    report(&mut machine.status, &tr!("settings-cannot-delete"), outcome);
-    let settings = &mut machine.settings;
-    settings.editing_support = false;
-    settings.preset = None;
-    if kind == Kind::Support {
-        let first = catalogue.supports().next().map(|entry| entry.id.clone());
-        settings.support = None;
-        if let Some(first) = first {
-            settings.pick_support(catalogue, &first);
+/// Saves or drops the form's edits as answered, then goes where it was being left for.
+fn ask_unsaved(ctx: &egui::Context, window: &mut Window) {
+    let settings = &window.machine.settings;
+    let (Some(to), Some(open)) = (settings.leaving, supports::editing(settings)) else {
+        return;
+    };
+    let Some(answer) = unsaved::ask(ctx, &open.name) else {
+        return;
+    };
+    let settings = &mut window.machine.settings;
+    match answer {
+        unsaved::Answer::Cancel => {
+            settings.leaving = None;
+            return;
+        }
+        unsaved::Answer::Discard => settings.discard(),
+        unsaved::Answer::Save => {
+            if !supports::save(window.machine) {
+                window.machine.settings.leaving = None;
+                return;
+            }
         }
     }
+    window.machine.settings.go(to);
+    arrive(window, to);
 }
 
 /// Room above and below the fields of a block.
@@ -319,23 +328,8 @@ pub(super) fn switched_card<R>(
     inner
 }
 
-/// Cards side by side in `columns`, each title level with its neighbours' and one hairline
-/// under the tallest, so a title never lines up with another card's field.
-pub(super) fn card_row(
-    ui: &mut egui::Ui,
-    columns: usize,
-    mut add: impl FnMut(&mut egui::Ui, usize),
-) {
-    ui.columns(columns, |cells| {
-        for (column, ui) in cells.iter_mut().enumerate() {
-            add(ui, column);
-        }
-    });
-    close_cards(ui);
-}
-
 /// A card's title and fields, open below for [`close_cards`].
-pub(super) fn card_cell<R>(
+fn card_cell<R>(
     ui: &mut egui::Ui,
     title: &str,
     on: Option<&mut bool>,
@@ -380,12 +374,9 @@ fn close_cards(ui: &mut egui::Ui) {
 /// A form card's title, the question mark that reads out what its fields described, and at
 /// the right the card's switch when it has one.
 fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String], on: Option<&mut bool>) {
-    let title_text = egui::RichText::new(title)
-        .font(theme::block_title())
-        .color(theme::colors().text_mid);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(title_text);
+        block_title(ui, title);
         if !texts.is_empty() {
             crate::ui::help_mark(ui, texts);
         }
@@ -407,7 +398,7 @@ pub(super) fn name_row(ui: &mut egui::Ui, salt: &str, name: &str) -> Option<Stri
     });
     let mut response = None;
     ui.horizontal(|ui| {
-        crate::ui::field_label(ui, &tr!("settings-name"), theme::colors().text_mid, "");
+        crate::ui::row_name(ui, &tr!("settings-name"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let field = crate::ui::text_box(egui::TextEdit::singleline(&mut text))
                 .font(theme::label())

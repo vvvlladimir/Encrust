@@ -6,7 +6,6 @@
 common-already-done = Already done
 common-cancel = Cancel
 common-export = Export
-common-settings = Settings
 error-cannot-hand-over = cannot hand over { $name }
 error-cannot-open = cannot open { $path }
 error-cannot-read = cannot read { $path }
@@ -19,8 +18,9 @@ status-exported = Exported { $path }
 status-opened = Opened { $path }
 status-saved = Saved { $name }
 table-profile = Profile
-unit-deg = deg
-unit-degrees = °
+unit-deg = °
+unit-g = g
+unit-ml = ml
 unit-g-ml = g/ml
 unit-h = h
 unit-m = m
@@ -31,10 +31,11 @@ unit-mm-min = mm/min
 unit-um = µm
 unit-px = px
 unit-s = s
-value-g = { $value } g
+unit-times = ×
+value-deg = { $value }°
 value-ml = { $value } ml
 value-mm = { $value } mm
-value-mm2 = { $value } mm2
+value-mm2 = { $value } mm²
 value-s = { $value } s
 value-um = { $value } µm
 
@@ -45,22 +46,46 @@ general-language-system = As the system ({ $name })
 general-language-untranslated = The window is not translated into the system's language ({ $tag }) yet, so it shows in English.
 general-start = Start
 general-start-page = Open on the start page
-general-start-page-hint = The drop zone, the files opened lately and the resin test prints, until a model arrives. Off, a run opens straight on the plate.
+general-start-page-hint = Off, a run opens straight on the plate.
+general-appearance = Theme
+general-appearance-system = System
+general-appearance-light = Light
+general-appearance-dark = Dark
+general-appearance-light-sub = Slate and white
+general-appearance-dark-sub = Graphite
+general-appearance-now-light = Now light
+general-appearance-now-dark = Now dark
+general-appearance-hint = System follows the desktop as it changes, the viewport with it.
+settings-page-appearance = Appearance
+settings-group-help = Help
+settings-find = Find a setting
+settings-words-appearance = theme light dark system language motion animation
+settings-words-general = start page viewport zoom sliced files folder file name template profiles
+settings-words-updates = update release version
+updates-this-build = This is { $version }
 general-viewport = Viewport
 general-invert-zoom = Scroll down to zoom in
+general-motion = Motion
+general-reduce-motion = Reduce motion
 general-sliced-files = Sliced files
-general-sliced-dir-system = The save dialog opens wherever the system last left it.
-general-sliced-dir = The save dialog opens in { $dir }
-general-choose-folder = Choose a folder
+general-sliced-dir-system = The save dialog opens here; forgotten, wherever the system last left it.
+general-sliced-dir-none = Not chosen
+general-choose-folder = Choose
 general-forget-folder = Forget it
+general-file-name = File name
+general-file-name-reset = Back to the model's name
+general-file-name-example = Now saved as { $name }
+general-file-name-unknown = Not a placeholder, kept as written: { $tags }
+general-file-name-help = What a sliced file is called, the extension added and what no file system takes made an underscore: {"{"}model{"}"}, {"{"}ext{"}"} its file type, {"{"}printer{"}"}, {"{"}resin{"}"}, {"{"}layer{"}"} in µm, {"{"}plate{"}"}, {"{"}date{"}"} and {"{"}time{"}"}.
 general-profiles = Profiles
 general-profiles-nowhere = This system has nowhere to keep your profiles.
-general-profiles-dir = Your machines, resins and profiles are kept in { $dir }
+general-profiles-dir = Your machines, resins and profiles are kept here.
 general-open-folder = Open the folder
 
 ## panels/inspector/cut.rs
 
 cut-plane = Plane
+cut-fact = { $axis } { $height } mm
 cut-select-model = Select a model to cut.
 cut-height = Height
 cut-offset = Offset
@@ -100,7 +125,7 @@ cut-parts-smallest = Smallest part
 cut-parts-smallest-note = A smaller piece is joined to the part it touches, or dropped if it touches none.
 cut-replaces = Two models replace one. Undo puts it back.
 cut-cut = Cut
-cut-split = Split into its parts
+cut-split = Split
 
 ## cut.rs
 
@@ -171,7 +196,7 @@ cut-mended =
 
 ## panels/inspector/cut.rs
 
-cut-keep-both = Both
+cut-keep-both = Keep both
 cut-keep-lower = Lower
 cut-keep-upper = Upper
 
@@ -216,11 +241,13 @@ action-save-project = Save the project
 action-save-project-as = Save the project as
 action-import-model = Import a model
 action-slice = Slice
-shortcut-group-tools = Tools, by their place on the rail
+shortcut-group-tools = Tools
 shortcut-group-plate = The plate
 shortcut-group-window = The window
 shortcut-group-layers = The layers
 shortcut-group-files = Files
+shortcut-group-view = The view
+shortcut-group-pointer = Mouse and trackpad
 gesture-move-focus = Move between the controls
 gesture-move-focus-keys = Tab, Shift Tab
 gesture-press-focus = Press the control in focus
@@ -252,8 +279,34 @@ status-removed-models =
 ## panels/shortcuts_sheet.rs
 
 shortcuts-title = Keyboard shortcuts
-shortcuts-note = A tool takes the digit of its place on the rail. Keys are off while a field has the cursor.
-shortcuts-or = or
+shortcuts-find = Find a key
+shortcuts-all = All keys
+shortcuts-list-keyboard = Keyboard
+shortcuts-list-pointer = Pointer
+shortcuts-changed =
+    { $count ->
+        [one] { $count } changed
+       *[other] { $count } changed
+    }
+shortcuts-none-found = No key by that name
+shortcuts-taken = { $keys } already does { $action }
+shortcuts-taken-why = Replace takes it from { $action }, which keeps its other keys.
+shortcuts-replace = Replace
+shortcuts-keep = Cancel
+shortcuts-reset-all = Reset every key
+shortcuts-reset-all-asked = Reset every key?
+shortcuts-reset-all-tooltip = Every action goes back to the keys it came with
+shortcuts-stop = Stop without keeping it
+
+## ui/widgets/binding.rs
+
+binding-change = Press to record another key
+binding-listening = Press the keys
+binding-done = Done
+binding-stop = Stop without keeping it
+binding-add = Add a key
+binding-clear = Take this key off
+binding-reset = Back to the keys it came with
 
 ## settings.rs
 
@@ -320,7 +373,6 @@ supports-removed-inside =
     }
 supports-where = Where
 supports-picked = Picked
-supports-pick-hint = Click a tip, a strut, a joint, the trunk or the foot to pick it. Drag to carry it, shift adds, alt removes.
 supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
 supports-stat-parts = Parts
 supports-stat-supports = Supports
@@ -346,7 +398,9 @@ support-steady-lean = Lean
 support-steady-spacing = Spacing
 support-steady-area = Least slope
 supports-remove-all-tooltip = Take every support away
-supports-preset = Support preset
+supports-on-plate = On the plate
+supports-profiles = Profiles
+supports-edit-profiles = Edit the profiles
 supports-mode-pick = Pick supports
 supports-mode-place = Place supports
 supports-mode-area = Paint or block an area
@@ -371,7 +425,9 @@ bin-click-again = Click again to remove
 ## panels/settings.rs
 
 settings-title = Settings
-settings-shortcuts = Shortcuts
+settings-group-profiles = Tool profiles
+settings-group-window = Application
+settings-shortcuts = Keyboard shortcuts
 settings-import = Import
 settings-cannot-export = cannot export the profile
 settings-cannot-delete = cannot delete the profile
@@ -391,6 +447,7 @@ machines-remove = Remove this machine
 machines-import-file = Import a machine from a file
 machines-pick = Pick a machine, or add one from the library.
 machines-in-hand = The plate prints on this
+machines-maker-format = { $maker } · .{ $format }
 machines-use = Use this machine
 machines-cannot-add-printer = cannot add a printer
 machines-cannot-add-machine = cannot add the machine
@@ -409,18 +466,11 @@ check-filter-levers = Levers
 check-filter-peel = Peel
 check-filter-cups = Cups
 check-filter-thin = Thin
-check-verdict = Verdict
-check-support-islands = Support every island
-check-drill-cups = Drill the suction cups
-check-issues = Issues
-check-found =
-    { $issues ->
-        [one] { $issues } issue
-       *[other] { $issues } issues
-    } on { $layers ->
-        [one] { $layers } layer
-       *[other] { $layers } layers
-    }
+check-support-islands = Support them
+check-drill-cups = Drill them
+check-issues = Found
+check-previous = Previous issue
+check-next = Next issue
 check-stood =
     { $count ->
         [0] No island had an underside to stand a support on
@@ -442,19 +492,15 @@ check-hardest-pull = Hardest pull
 check-disc = Pulls like a disc of
 check-widest-step = Widest step
 check-grows-by = Grows by
+check-layer = Layer { $layer }
 check-layer-lower = layer { $layer }
 check-peel = Peel
 check-nothing-found = Nothing found to fail on
 check-nothing-found-why = No islands, no neck pulled past its limit, and no layer pulling the film too hard.
 check-issues-help = Islands start in mid-air and stay stuck to the film. Levers are thin necks a pull to one side can snap, cups are closed hollows the lift sucks on, and thin sections may not form at all. Click a row to go to its layer.
 check-peel-help = Each lift tears the fresh layer off the film, and a wider layer pulls harder. The hardest pull is the worst layer, shown as the disc that would pull the same; the widest step is where the area grows most from one layer to the next. Tilting or hollowing the model lowers both.
-check-worst = { $issue } on layer { $layer }
 check-put-islands-back = Put the islands back
-check-remove-islands =
-    { $count ->
-        [one] Remove { $count } island
-       *[other] Remove { $count } islands
-    }
+check-remove-islands = Remove them
 check-remove-islands-note = Erases them from the written file and checks again. Only the islands go; what stood on them stays, and is listed to be supported.
 check-hanging-passes =
     { $count ->
@@ -469,36 +515,29 @@ check-remove-next =
 check-remove-next-note = Takes one layer more off each part left hanging, the one it starts on, and checks again.
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
-check-layer = Layer { $layer }
 check-more-layers = and { $count } more layers
-check-row-hanging = hangs over nothing · { $area } mm2
+check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->
-        [one] island · { $area } mm2
-       *[other] { $count } islands · { $area } mm2
+        [one] island · { $area } mm²
+       *[other] { $count } islands · { $area } mm²
     }
 check-row-lever = lever · { $lever } mm · { $stress } MPa
 check-row-levers = { $count } levers · { $stress } MPa
-check-row-cup = suction cup · { $area } mm2
-check-row-cups = { $count } suction cups · { $area } mm2
+check-row-cup = suction cup · { $area } mm²
+check-row-cups = { $count } suction cups · { $area } mm²
 check-row-thin =
     { $count ->
         [one] thin · { $width } mm
        *[other] { $count } thin · { $width } mm
     }
 check-row-peel = peel · { $force } N
-check-issue-island = Unsupported island
+check-issue-island = Island
 check-issue-hanging = Part left hanging
 check-issue-lever = Weak neck
 check-issue-peel = Hard peel
 check-issue-cup = Suction cup
 check-issue-thin = Thin section
-check-explain-hanging = An island under it was taken out, so { $area } mm2 here hangs over nothing and the rest of that part with it. Support it.
-check-explain-island = An island of { $area } mm2 cures over nothing: it sticks to the film and stays in the vat. Support it, or remove it.
-check-explain-lever = The neck under it, { $neck } mm2, takes about { $stress } MPa from a pull { $lever } mm off to one side. Support it nearer its middle.
-check-explain-peel = The film pulls on this layer with about { $force } N. Tilt the model, hollow it, or lift slower.
-check-explain-cup = A hole of { $area } mm2 holding { $volume } ml is sealed from below, so each lift pulls on it. A drain hole lets the air in.
-check-explain-thin = A section { $width } mm across stands over a millimetre tall. It may not form; thicken it if it matters.
 check-removed =
     { $count ->
         [one] { $count } island taken out of the file
@@ -507,27 +546,33 @@ check-removed =
 
 ## panels/plate_summary.rs
 
-summary-layer = Layer { $layer }
-summary-this-plate = This plate
+summary-layer = Layer
 summary-layer-range = { $fewest } to { $most }
-summary-height = Height
 summary-layers = Layers
 summary-vertices = Vertices
 summary-triangles = Triangles
-summary-model-supports = Model/supports
 summary-price = Price
-summary-z-height = Z height
 summary-exposure = Exposure
 summary-cured-area = Cured area
-summary-not-priced = not priced
 summary-volume = Volume
 summary-weight = Weight
-summary-measuring = measuring
 summary-time = Time
+summary-resin = Resin
+summary-time-to-layer = Time to here
+summary-details = Details
+summary-model = Model
+summary-supports = Supports
+summary-broken =
+    { $count ->
+        [one] { $count } model is broken
+       *[other] { $count } models are broken
+    }
+summary-broken-why =
+    { $count ->
+        [one] What is sliced from it may not print.
+       *[other] What is sliced from them may not print.
+    }
 summary-estimate = ≈ { $value }
-summary-block-bottom = bottom block
-summary-block-transition = transition
-summary-block-body = body
 
 ## ui/widgets.rs
 
@@ -542,11 +587,14 @@ ago-days =
         [1] yesterday
        *[other] { $count } days ago
     }
+ago-weeks =
+    { $count ->
+        [1] last week
+       *[other] { $count } weeks ago
+    }
 
 ## ui/widgets/field.rs
 
-field-step-more = { $step } { $unit } more
-field-step-less = { $step } { $unit } less
 field-back-to = Back to { $value } { $unit }
 field-printer-address = Printer address
 
@@ -561,9 +609,8 @@ list-show = Show in the view
 
 ## panels/inspector/measure.rs
 
-measure-settings = Settings
-measure-measure = Measure
-measure-esc-clears = Esc clears.
+measure-reading = Reading
+measure-caught = Caught
 measure-clear = Clear
 measure-points = Points
 measure-planes = Planes
@@ -574,8 +621,6 @@ measure-snap-free = Free
 measure-snap-corner-note = The nearest corner where the surface turns catches a click.
 measure-snap-edge-note = The nearest edge where the surface turns catches a click.
 measure-snap-free-note = Exactly where the click lands.
-measure-free-while-alt = Free while Alt is held.
-measure-hold-alt = Hold Alt to measure freely.
 measure-show-axes = Show dX, dY, dZ in the view
 measure-second-point = Click the second point.
 measure-two-points = Click two points on a model.
@@ -607,7 +652,9 @@ hollow-inside = Inside
 hollow-outside = Outside
 hollow-inside-note = The wall grows inward; the outside is untouched.
 hollow-outside-note = The wall grows outward, making a mould of the model.
-hollow-bottom-through = Bottom through
+hollow-bottom-through = Bottom open
+hollow-fact = Wall { $value } mm
+hollow-nothing-done = Nothing hollowed yet
 hollow-bottom-through-note = The wall grows inward and the floor the model stands on is cut away, so the cavity drains with no hole. On the plate it stays sealed until the print comes off, so add a small vent near the top.
 hollow-shell-help = A hollow model takes less resin and pulls less on the film. The wall is how thick its skin stays; about 2 mm suits most parts. A cavity needs a drain hole, or the resin trapped inside can crack the part later.
 hollow-wall = Wall
@@ -656,7 +703,7 @@ print-use-profiles = Use the profiles' settings
 print-exposure-help = How long the screen lights each layer. Too short and thin parts fail or layers come apart; too long and detail swells and holes close up. The bottom layers are lit longer so the print sticks to the plate, and transition layers step down between the two.
 print-waiting-help = Pauses that let the resin settle. Light off is one wait before each layer is lit; rest times wait after the exposure, at the top of the lift and once the plate is back. Longer waits help thick resin and large layers, at the cost of print time.
 print-motion-help = After each layer the plate lifts to peel it off the film, then comes back down. A slower lift peels gentler, which large or fragile layers need, and the lift has to be high enough for the film to let go.
-print-waiting = Waiting
+print-motion-waits = Motion and waits
 print-motion = Motion
 print-carried = Carried from { $exposure } s at { $from } µm to the { $to } µm layer.
 print-transition = Transition
@@ -694,7 +741,6 @@ relief-hold-top = Faces up
 relief-hold-note = Faces within this many degrees of facing the plate, or of facing straight up, keep their shape, and the relief stops at their edge. Zero leaves none.
 relief-paint = Where
 relief-paint-brush = Paint where to press
-relief-paint-hint = Drag over the model to paint, alt to erase.
 relief-paint-note = Once any face of a model is painted, the texture is pressed into the painted faces only, the rest of the model keeps its own mesh, and the view shows the texture only there.
 relief-paint-clear = Clear painted areas
 relief-nothing-painted = Nothing painted to press into: paint where the texture goes, or put the brush down to press the whole model.
@@ -721,6 +767,7 @@ relief-pressing-status = Pressing the relief
 text-words = Text
 text-words-hint = What to write; a new line starts a second row
 text-reading-fonts = Reading the fonts installed on this machine...
+text-find-family = Find a font
 text-no-family = No installed font has that name
 text-raised = Raised
 text-sunk = Sunk
@@ -728,10 +775,10 @@ text-height = Letter height
 text-depth = Depth
 text-angle = Angle
 text-flat = Flat
-text-follow = On the surface
+text-follow = Follow the surface
 text-shape-note = The letters stand the depth out of the face or into it, measured from the face where you click, and follow it no further than that depth; on a curved face they stay flat.
 text-follow-note = Every letter is bent onto the face under it and stands the depth out of it or into it all over, however the face curves.
-text-click-note = Click a model to write the text there; the preview under the cursor shows what the click will write. Shift or Cmd click picks a model without writing on it.
+text-click-note = Click the model to place the text.
 text-stamping = Stamping the text
 text-cancelled = Lettering cancelled
 text-nothing-under = there is no model there to write on
@@ -741,7 +788,6 @@ text-missing-glyph = this font has no letter for { $character }
 text-blank = there is nothing to write
 text-bad-size = the letters need a height and a depth
 text-off-the-model = the text does not stand on the model there
-relief-mode = Mode
 relief-mode-texture = Texture
 relief-mode-text = Text
 relief-mode-combine = Combine
@@ -802,7 +848,8 @@ chip-resin = Resin, { $name }
 chip-machine-tooltip = The machine this plate is printed on
 chip-resin-untuned = The resin, not measured on this printer
 chip-resin-tooltip = The resin
-chip-layers = { $layer } µm, { $exposure } s
+chip-layers = { $layer } µm · { $exposure } s
+chip-settings = { $tool }, { $summary }
 find-button = Find
 find-tooltip = Find a tool, an action or a model
 bar-source = Source
@@ -814,21 +861,49 @@ bar-minimise = Minimise
 bar-restart-to-update = Restart to update
 bar-restart-tooltip = Close the window and start the new build
 bar-update-tooltip = A new release is out: see what changed
+bar-update-percent = Updating · { $percent } %
+update-sheet-title = Update
+update-sheet-from-to = { $from } → { $to }
+update-group-new = New
+update-released = released { $when }
+update-size = { $mb } MB
+update-later = Later
+update-downloading-of = Downloading · { $got } of { $total } MB
+update-downloading = Downloading · { $got } MB
+update-time-left = about { $seconds } s left
+update-step-download = Download
+update-step-verify = Check the signature
+update-step-install = Install
+update-cancel = Cancel
+notice-release-out = Encrust { $version } is out
+app-version = Encrust { $version }
+name-numbered = { $name } { $number }
+name-and-detail = { $name }, { $detail }
+value-percent = { $value }%
+printer-last-print = { $how }: { $file }
+notice-release-and-more = { $first } and { $count } more
+notice-what-is-new = What is new
+notice-release-later = Later: the pill stays in the top bar
+updates-release-found = Release found
+updates-looking-block = Looking
+updates-every-change = Every change
+updates-and-more = And { $count } more.
+updates-last-looked = Last looked { $when }
 bar-alpha = Alpha
 bar-alpha-tooltip = Encrust is in alpha: say what went wrong
 menu-new-plate = New plate
 menu-new-project = New project
 menu-open-project = Open project...
 menu-open-recent = Open recent
-menu-save-project = Save project
-menu-save-project-as = Save project as...
-menu-open-model = Open model...
-menu-open-test-print = Open test print
-menu-import-machine = Import a machine...
-menu-import-resin = Import a resin...
+menu-save-project = Save
+menu-save-project-as = Save as...
+menu-open-model = Add model...
+menu-open-test-print = Test prints
+menu-import-machine = Machine profile...
+menu-import-resin = Resin profile...
 menu-machine-and-resin = Machine and resin...
 menu-settings = Settings...
-menu-quit = Quit
+menu-quit = Quit Encrust
 menu-nothing-recent = Nothing opened yet
 menu-arrange-plate = Arrange plate
 menu-auto-orient-plate = Auto-orient plate
@@ -837,6 +912,15 @@ menu-frame-view = Frame view
 menu-plate-grid = Plate grid
 menu-xray = See through models
 menu-orthographic = Orthographic view
+menu-import = Import
+menu-clear-recent = Clear the list
+menu-slicing-already = A plate is slicing already
+menu-pick-first = Pick a model first
+menu-plate-empty = The plate is empty
+menu-camera = Camera
+menu-camera-perspective = Perspective
+menu-camera-orthographic = Orthographic
+menu-show = Show
 
 ## panels/support_fields.rs
 
@@ -888,6 +972,8 @@ support-thin-down-off = A support that lands on the model keeps the regular pill
 support-small-pillar-note = Used where a support runs from one part of the model to another. Both ends sink into a surface; a longer run keeps the regular width.
 support-no-branching = Every tip stands on a column of its own.
 support-no-grid = Trunks stand where the tips merge, wherever that is.
+support-no-raft = The feet stand straight on the plate.
+support-no-bracing = Every trunk stands on its own.
 support-tip-help = The only part that touches the model. A wider contact holds better but leaves a bigger mark; the bite sinks it in so it does not tear off mid-print. Length is the cone from the tip to the column, and a sphere grips a heavy overhang harder than a plane.
 support-body-help = Diameter is how thick the column is: thicker is stiffer and takes more resin. Clearance is the air the column keeps from the model, so it never cures onto the part. Trunk cap is the widest a trunk may grow at its base.
 support-foot-help = The foot holds the support to the plate. Wider and thicker grips harder and is harder to take off; Tapered and Skate leave an edge a scraper gets under. Flare is how wide the column spreads before it meets the foot.
@@ -929,14 +1015,20 @@ support-buttress-one-above = One above
 ## panels/settings/supports.rs
 
 support-table-auto = Automatic sizing
+support-tab-off = OFF
+settings-save = Save
+support-save-first = Save the profile first: this takes it as last saved.
+unsaved-title = Save the changes to { $name }?
+unsaved-what = Your edits to this profile are not saved yet.
+unsaved-discard = Discard
 support-table-manual = By hand
 support-table-tip = Tip
 support-table-spacing = Spacing
 support-cannot-add = cannot add a support profile
 support-pick-profile = Pick a support profile.
 support-reset = Reset to defaults
-support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name; under its shipped name it then changes with each update. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
-support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with; from then on it changes with each update. A number in amber differs from the shipped one; the arrow beside it puts back that one. Undo takes a reset back.
+support-reset-shipped-help = Reset to defaults puts back every number this build ships the profile with and keeps its name; under its shipped name it then changes with each update. A number in amber is not saved yet; the arrow beside it puts back the saved one. Undo takes a reset back.
+support-reset-auto-help = Reset to defaults puts back every number this build ships the automatic profile with; from then on it changes with each update. A number in amber is not saved yet; the arrow beside it puts back the saved one. Undo takes a reset back.
 support-reset-stock-help = Reset to defaults puts back the numbers a new profile starts with and keeps its name. Undo takes a reset back.
 support-cannot-save = cannot save the support profile
 
@@ -948,7 +1040,6 @@ shape-raft-own = The raft is this model's own, brought by its project.
 shape-raft-plate = The raft is the plate's: every model stands on it.
 shape-use-plate-raft = Use the plate's raft
 shape-use-profile-raft = Use the raft of { $name }
-shape-edited = { $name } (edited)
 shape-save = Save
 shape-save-tooltip = Save over the profile these numbers were taken from
 shape-save-as-new = Save as new
@@ -983,12 +1074,19 @@ presets-empty =
         [hollow] No hollow profile yet. Keep one from the tool's Profile row, or import one.
        *[drain] No drain profile yet. Keep one from the tool's Profile row, or import one.
     }
+presets-open-tool =
+    { $kind ->
+        [hollow] Open the Hollow tool
+       *[drain] Open the Drain tool
+    }
 presets-none = None
 presets-cannot-rename = cannot rename the profile
 
 ## panels/inspector/presets.rs
 
 presets-unsaved = Unsaved
+presets-edited = · edited
+presets-new-name = My settings
 presets-none-saved = None saved yet
 presets-delete-named = Delete { $name }
 presets-deleted =
@@ -996,7 +1094,6 @@ presets-deleted =
         [hollow] Deleted the hollow profile
        *[drain] Deleted the drain profile
     }
-presets-name-hint = Name these settings
 
 ## panels/settings/machines/resins.rs
 
@@ -1172,9 +1269,9 @@ printer-cannot-put-back = cannot put the shipped profile back
 printer-cannot-save = cannot save the printer
 printer-grey-min = Dimmest edge grey
 printer-grey-max = Brightest edge grey
-printer-grey-range-full = every edge grey is written as it is
-printer-grey-range-spread = an edge grey is raised to the dimmest, then spread up to the brightest; black and full white stay as they are
-printer-pitch = { $x } x { $y } um a pixel
+printer-grey-range-full = Every edge grey is written as it is.
+printer-grey-range-spread = An edge grey is raised to the dimmest, then spread up to the brightest; black and full white stay as they are.
+printer-pitch = { $x } × { $y } µm a pixel
 printer-mirror = Mirror
 printer-mirror-normal = Normal
 printer-mirror-lcd = LCD mirror
@@ -1186,8 +1283,8 @@ printer-inset-max-x = Inset at +X
 printer-inset-min-y = Inset at −Y
 printer-inset-max-y = Inset at +Y
 printer-inset-note = A model standing in the band is marked, and still slices whole.
-printer-per-layer-on = exposure and motion are read from each layer; .goo calls this advance mode
-printer-per-layer-off = every layer prints at the header's numbers, and the machine ramps the bottom block itself
+printer-per-layer-on = Exposure and motion are read from each layer; .goo calls this advance mode.
+printer-per-layer-off = Every layer prints at the header's numbers, and the machine ramps the bottom block itself.
 printer-variable-height-note = Off means the plate steps by the header's height, so an adaptive stack is refused.
 printer-output-note = What this machine is sliced into, dialog and printer alike.
 
@@ -1208,12 +1305,14 @@ network-usb-only = USB only
 ## panels/settings/printer/connection.rs
 
 connection-usb-note = What is sliced is saved to a file and carried over on a stick.
-connection-found = Found on the network
+connection-protocol = Protocol
+connection-printers = Printers
+connection-found = Found nearby
+found-add = Add
 connection-scanning = Scanning...
 connection-scan-again = Scan again
 connection-add = Add
 connection-address-hint = Add by address, 192.168.1.42
-connection-listed = Printers this machine sends to
 connection-none-listed = None yet: tick them below, or add one by its address.
 connection-speaks = Speaks { $theirs }, not { $ours }
 connection-not-found = Not found on the network
@@ -1235,8 +1334,7 @@ connection-api-key = or an API key
 card-open-printer = Open the printer
 card-search-failed = The search could not go out on any network
 card-nothing-answered = Nothing answered at { $address }
-card-destination-several = The printer this profile sends to; press for the others it lists
-card-destination = The printer this profile sends to
+card-destination-several = The printer this profile sends to; press for the others it lists and a new scan
 card-not-answering = Not answering
 card-connecting = Connecting
 card-not-asked = Not asked yet
@@ -1261,14 +1359,10 @@ slice-to = Slice to .{ $extension }
 slice-tooltip = Rasterise the plate into a printable file
 slice-send-tooltip = Rasterise the plate and send the file to the printer
 slice-all = Slice all { $count } plates to .{ $extension }
-slice-send = Slice and send to { $name }
+slice-send = Slice and send
 slice-start-tooltip = Start printing the file that landed on { $name }
 slice-start-print = Start print
-slice-broken =
-    { $count ->
-        [one] { $count } model on this plate is broken; what is sliced from it may not print
-       *[other] { $count } models on this plate are broken; what is sliced from them may not print
-    }
+slice-saved-instead = { $why }; the file is saved instead.
 slice-cannot-send = cannot slice the stack to send
 slice-slicing = Slicing
 slice-all-started = Slicing { $count } plates beside { $path }
@@ -1365,37 +1459,38 @@ position-local = Local
 position-move = Move
 position-move-reset = Back to the middle of the plate
 position-move-along = Move along { $axis }
-position-rotation = Rotation
+position-rotation = Rotate
 position-rotation-reset = Back to the way the model was imported
 position-rotation-about = Rotation about { $axis }
 position-scale = Scale
 position-scale-reset = Back to the size the model was imported at
 position-size = Size
 position-ratio = Ratio
-position-keep-proportions = Keep the proportions
+position-keep-proportions = Keep proportions
 position-axis-size = { $axis } size
 position-axis-ratio = { $axis } ratio
 position-place = Place
 position-on-plate = On the plate
 position-centre = Centre
-position-scale-to-fit = Scale to fit
+position-scale-to-fit = Fit the volume
 position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
 position-auto-orient = Auto-orient
-orient-preset-supports = Fewest supports
-orient-preset-peel = Least peel force
-orient-preset-shortest = Shortest print
+orient-looking = Scoring the ways to stand
+orient-proving = Printing the best ones to compare
+orient-cancelled = Auto-orient cancelled
+orient-preset-supports = Supports
+orient-preset-peel = Peel
+orient-preset-shortest = Time
 orient-preset-auto = Auto
 orient-preset-supports-hint = The least resin in supports, whichever way up.
 orient-preset-peel-hint = The lightest pull on the film, no cups; under 10 N, the fewest supports.
 orient-preset-shortest-hint = The fewest layers that still print.
 orient-preset-auto-hint = Supports, pull and print time balanced: none gives up much for the others.
-position-mirror = Mirror
-position-across = Across { $axis }
-position-keep-original = Keep the original
-position-keep-original-note = Mirror a copy beside it instead.
-position-place-help = On the plate stands the model on it, Centre moves it to the middle, and Scale to fit makes it as large as the build volume allows. Auto-orient turns it the way it prints best; Lay on face turns the face you click down onto the plate.
+position-mirror-across = Mirror across { $axis }
+position-mirror-copy = Mirror a copy
+position-place-help = Lay on face turns the face you click down onto the plate; Centre moves the model over the middle of the plate; Mirror flips the picked models, or copies of them stood beside them.
 
 ## panels/inspector/paint.rs
 
@@ -1440,6 +1535,7 @@ drain-trapped-resin = Trapped resin
 drain-opening = Opening
 drain-opening-note = Click the model, its supports or its raft to put one down, alt-click a hole to take it away. Each one is cut the moment it is placed, hollow or not, and a click on the floor of a hole drills on through it.
 drain-fact = { $count } trapped
+drain-fact-unchecked = Not checked
 drain-dig = Dig the channel ({ $count } points)
 drain-dig-tooltip = A tube of the hole size runs under every point, open at its two ends alone.
 drain-dug =
@@ -1451,6 +1547,7 @@ drain-check-again = Check again
 drain-check = Check drainage
 drain-check-tooltip = Cuts the plate and follows the air through it, looking for resin with no way out.
 drain-checking = Checking drainage
+drain-cancelled = Drainage check cancelled
 drain-hole = Hole
 drain-channel = Channel
 drain-channel-note = Each click adds a point; the channel takes the hole's width and outline and runs under all of them, open at its two ends alone.
@@ -1487,7 +1584,8 @@ drain-clear-cuts =
     }
 drain-rehollowing = Hollowing again around the channels and walled holes
 drain-nothing-trapped = Nothing is trapped: the resin can get out of every model on the plate.
-drain-not-checked = Not checked yet.
+drain-not-checked = Not checked yet
+drain-not-checked-why = Check finds the cavities resin cannot leave.
 drain-held = { $volume } ml cannot get out
 drain-held-note = It cures inside and adds weight the peel has to pull. Each pocket is painted red under the x-ray, and each needs a hole of its own.
 drain-holes-placed =
@@ -1512,6 +1610,7 @@ update-error-signed = the signature is for `{ $found }`, not `{ $expected }`
 update-error-archive = the downloaded archive cannot be unpacked
 update-error-missing = the downloaded archive holds no `{ $name }`
 update-error-replace = cannot replace { $path }
+update-error-cancelled = the download was cancelled
 update-error-store = the Microsoft Store did not answer
 update-no-build = This release has no build for this platform.
 update-cannot-check = cannot check for updates
@@ -1528,41 +1627,32 @@ update-by-package = This copy is updated by downloading the new package.
 
 ## panels/settings/updates.rs
 
-updates-checking = Checking
 updates-by-store = The Microsoft Store keeps this copy up to date.
 updates-store-link = Encrust in the Microsoft Store
 updates-daily = Look for a new release once a day
 updates-privacy = One request a day to GitHub for the newest release. It carries this build's version and nothing else, and GitHub sees your address. Nothing is downloaded or installed until you ask.
 updates-check-now = Check now
-updates-this-is = This is { $version }, last looked { $when }
 updates-looking = Looking for a new release
 updates-newest = This is the newest release.
 updates-installing = Downloading and checking the signature
-updates-installed = Installed. It runs from the next start.
 updates-restart-now = Restart now
-updates-store-has-it = The Microsoft Store has this release for this copy.
 updates-in-store = Update in the Microsoft Store
-updates-install = Install and restart
+updates-install = Download and install
 updates-skip = Skip this version
 updates-release-page = Release page
-updates-more-notes = And more on the release page.
 
 ## panels/start.rs
 
 start-title = Start a plate
-start-subtitle = Open a model, or pick up where you left off.
+start-setup = { $machine } · { $resin } · { $layer } µm
 start-zone = Open a model or a project
-start-drop-here = Drop a model here
-start-drop-formats = STL, OBJ, 3MF, or an .encrust project
+start-drop-here = Drop a model or a project
+start-drop-formats = STL, OBJ, 3MF, a sliced file, or an .encrust project
 start-open-model = Open a model
 start-open-project = Open a project
 start-recent = Recent
 start-test-prints = Test prints
-start-files =
-    { $count ->
-        [one] { $count } file
-       *[other] { $count } files
-    }
+start-clear-recent = Clear the list
 start-models =
     { $count ->
         [one] { $count } model
@@ -1595,6 +1685,8 @@ notice-keep-as-is = Keep as it is
 notice-no-printer-resin = No printer or resin yet
 notice-no-printer = No printer yet
 notice-no-resin = No resin on this printer yet
+notice-no-resin-why = Slicing needs exposure times.
+notice-no-printer-why = Slicing needs the screen and the volume of a machine.
 notice-set-up = Set up
 notice-put-away = Put away
 
@@ -1623,11 +1715,13 @@ view-model = Model
 view-side-by-side = Model and layer side by side
 view-mask = Layer mask
 section-pause = Pause
+section-of = of { $count }
 section-no-layers = No layers
 section-no-layers-yet = No layers yet
 section-height-of = { $height } of { $top } mm
 section-type-layer = Type a layer to go to
 section-layer-field = Layer { $layer }, type a layer to go to
+section-go-to-issue = { $issue } on layer { $layer }: click to go to it
 section-slider = Layer, of { $count }
 section-nothing-to-cut = Nothing on the plate to cut through yet
 section-layers-range = Layers { $first } to { $layer }
@@ -1635,20 +1729,15 @@ section-layers-range = Layers { $first } to { $layer }
 ## panels/settings/confirm.rs
 
 confirm-cannot-undo = This cannot be undone.
-confirm-remove-machine = Remove { $name } and everything you changed on it?
-confirm-remove = Remove
+confirm-click-again = Click again to go ahead
+confirm-asked-delete = Delete?
+confirm-asked-take-off = Take off?
+confirm-asked-stop = Stop?
 confirm-machine-stays = The machine stays in the library, so it can be added again with the numbers this build ships.
-confirm-take-resin-off = Take this resin off
-confirm-delete-named = Delete { $name }?
 confirm-untouched-resin = Nothing was ever typed into it, so it is not kept in the pool.
-confirm-take-off-named = Take { $name } off this printer?
-confirm-take-off = Take off
 confirm-stays-in-pool = It stays in the pool, for this or any other printer to take back.
 confirm-stays-measured = It stays in the pool, measured on { $printers }.
-confirm-delete-resin = Delete this resin
-confirm-delete-resin-named = Delete { $name } and the exposures measured for it?
 confirm-comes-off = It comes off { $printers } as well.
-confirm-delete-profile = Delete this profile
 confirm-reset-unreadable = Reset the profiles that would not read
 confirm-delete-unreadable = Delete the profiles that would not read
 confirm-reset-named = Throw away your copies of { $names } and use the ones this version ships?
@@ -1704,9 +1793,11 @@ scope-plate = all { $count } models on the plate
 
 ## panels/scene_panel.rs
 
-models-broken = broken
+models-broken = Broken
 models-title = Models
 models-selected = { $count } selected
+models-picked = { $count } picked
+models-project = · { $name }
 models-arrange = Arrange the plate
 models-duplicate = Duplicate { $count } models
 models-array = Array
@@ -1743,7 +1834,6 @@ job-cannot-measure = cannot measure the stack
 
 ## panels/inspector.rs
 
-inspector-parallel = parallel
 inspector-about-select = Pick a model, then move, turn, size, lay down and mirror it.
 inspector-about-measure = Click two points or two flat faces on a model.
 inspector-about-hollow = Cut a cavity to save resin and lighten the peel.
@@ -1772,9 +1862,7 @@ preview-cannot-rasterise = cannot rasterise the layer at z = { $z } mm
 
 ## panels/printer_card/controls.rs
 
-controls-stop-question = Stop the print? It cannot be resumed.
-controls-stop = Stop the print
-controls-keep-printing = Keep printing
+controls-stop-cost = A stopped print cannot be resumed.
 controls-film = Release film { $lifts } of { $max } lifts
 controls-copy = Copy
 controls-camera-off = Turn the camera off
@@ -1951,9 +2039,10 @@ cube-home = Home view
 
 mask-pick-machine = Pick a machine to know the panel to draw the layers on.
 mask-no-stack = No stack to show yet.
-mask-zoomed = x{ $zoom }   double-click to fit
-mask-how = scroll to zoom, drag to move
-mask-caption = Layer mask   1 : { $scale }   { $hint }
+mask-pixels = { $width } × { $height } px
+zoom-out = Zoom out
+zoom-in = Zoom in
+zoom-whole = Show the whole of it, or double click
 mask-cannot-draw = cannot draw the layer
 mask-cannot-draw-full = cannot draw the layer in full
 
@@ -1984,6 +2073,8 @@ job-step-shaping = Finishing
 job-step-reading = Reading the models
 job-step-combining = Combining them
 job-step-finishing = Building the result
+job-step-mending = Repairing the mesh
+job-step-crossing = Finding where it crosses itself
 job-hollow-preparing = Checking the model
 job-hollow-seeding = Measuring the surface
 job-hollow-carrying = Reaching across the wall
@@ -2012,6 +2103,7 @@ job-orient-none = the search found no orientation
 
 job-thread-stopped-support = the support thread stopped without finishing
 job-placing = Placing supports, { $percent } %
+printer-printing-file = { $state }, { $file }, { $percent }%
 job-cutting-plate = Cutting the plate...
 
 ## job/preview.rs
@@ -2068,6 +2160,11 @@ exchange-choose-printer-resin = choose the printer this resin was set up for fir
 
 ## panels/find.rs
 
+find-group-tools = Tools
+find-group-actions = Actions
+find-group-models = Models
+find-move = move
+find-open = open
 find-nothing = Nothing goes by that name
 
 ## panels/inspector/scope.rs
@@ -2112,6 +2209,7 @@ sheet-firmware = firmware { $version }
 ## panels/settings/machines/library.rs
 
 library-all-brands = All brands
+library-import = Import a profile
 library-custom = Custom printer
 library-search = Search every machine
 library-machines =
@@ -2122,9 +2220,9 @@ library-machines =
 
 ## panels/stage.rs
 
-stage-empty = No model on the plate
-stage-empty-hint = Open a model or a project, or drop one into the window.
-stage-open = Open...
+stage-empty = Nothing on the plate
+stage-empty-how = Drop a model into the window
+stage-open = Open a model
 
 ## plate.rs
 
@@ -2147,4 +2245,42 @@ web-no-storage = this browser has no private file storage
 
 picker-no-machine = No machine yet. Add one in Machine and resin.
 picker-no-resin = No resins on this printer yet. Add them in Machine and resin.
-picker-edit-resin = Edit this resin...
+picker-your-machines = Your machines
+picker-machine-detail = { $maker } · .{ $extension }
+picker-add-machine = Add a machine
+picker-on-machine = On { $name }
+picker-resin-detail = { $kind } · { $layer } µm
+picker-add-resin = Add a resin
+
+hint-click = Click
+hint-drag = Drag
+hint-shift = Shift
+hint-esc = Esc
+hint-modifier-click = { $key } click
+hint-modifier-drag = { $key } drag
+hint-clear = clear
+hint-remove = remove
+hint-paint = paint
+hint-erase = erase
+hint-measure-two-points = two points
+hint-measure-second-point = the second point
+hint-measure-two-faces = two flat faces
+hint-measure-second-face = the second flat face
+hint-measure-freely = measure freely
+hint-drain-hole = the model to cut a hole
+hint-drain-channel = the model to add a point to the channel
+hint-relief-write = a model to write there
+hint-pick-without-writing = pick without writing
+hint-supports-pick = a part of a support to pick it
+hint-supports-carry = carry what is picked
+hint-supports-add = add to what is picked
+hint-hollow-solid = the model to keep it solid there
+hint-area-paint = where supports must go
+hint-area-block = where no support may go
+hint-repair-faces = the faces to pick
+hint-repair-edge = an open edge to pick it
+hint-let-go = let go
+hint-supports-place = the model to place a support
+hint-supports-line = a line of them
+hint-cut-part = the part to mark
+hint-gizmo-steps = a handle in 1 mm and 15° steps

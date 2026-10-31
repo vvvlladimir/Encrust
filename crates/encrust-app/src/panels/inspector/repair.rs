@@ -2,12 +2,14 @@ use core_geometry::{MendMethod, MeshDiagnostics};
 use core_volume::RepairMethod;
 
 use crate::i18n::tr;
+use crate::job::Counted;
 use crate::panels::Window;
 use crate::repair::{Finding, Found, RepairMode, RepairState};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    blocked_hover, busy, describe, icon, icon_toggle, issue_row, list, list_row, number_row,
-    picker, primary_button, readings, section, section_with_action, theme, tone,
+    DropdownFace, DropdownRow, blocked_hover, describe, dropdown, dropdown_menu, dropdown_row,
+    icon, icon_toggle, issue_list, issue_row, number_row, primary_button, readings, section,
+    section_with_action, step_bar, theme, tone,
 };
 
 /// Every repair the Method picker offers, in the order it lists them.
@@ -65,7 +67,7 @@ fn found(ui: &mut egui::Ui, window: &mut Window) {
     if window.doc.repairs.found.shown().is_some() {
         window.doc.repairs.found.place(&window.doc.scene, &ids);
     }
-    let action = (icon::FIND, tr!("repair-count-crossings"));
+    let action = (icon::RESCAN, tr!("repair-count-crossings"));
     let (pressed, _) = section_with_action(ui, &tr!("repair-found"), (action.0, &action.1), |ui| {
         describe(ui, &tr!("repair-found-note"));
         if ids.is_empty() {
@@ -115,11 +117,11 @@ fn marking(ui: &mut egui::Ui, found: &mut Found, scene: &Scene, rows: &[(String,
         tone(ui, &tr!("repair-nothing-found"), theme::colors().ok);
         return;
     }
-    list(ui, |ui| {
+    issue_list(ui, |ui| {
         for (name, count, finding) in rows {
             let shown = found.shown() == Some(*finding);
             let tint = theme::scene().fault;
-            if issue_row(ui, tint, name, &count.to_string(), shown).clicked() {
+            if issue_row(ui, tint, (name, None), &count.to_string(), shown).clicked() {
                 found.press(scene, *finding);
             }
         }
@@ -201,21 +203,19 @@ fn crossings(found: &Found, objects: &[&SceneObject]) -> Crossings {
 fn method(ui: &mut egui::Ui, state: &mut RepairState) {
     section(ui, &tr!("repair-method"), None, |ui| {
         describe(ui, &note(state.method));
-        let response = picker(ui, icon::REPAIR, &name(state.method));
-        egui::Popup::menu(&response)
-            .width(response.rect.width())
-            .show(|ui| {
-                list(ui, |ui| {
-                    for method in METHODS {
-                        let chosen = method == state.method;
-                        let row = list_row(ui, &name(method), None, chosen, None, None, None, None);
-                        if row.picked {
-                            state.method = method;
-                            ui.close();
-                        }
-                    }
-                });
-            });
+        let shown = name(state.method);
+        let face = DropdownFace::plain(icon::REPAIR, &shown);
+        let response = dropdown(ui, &face, ui.available_width());
+        dropdown_menu(&response, |ui| {
+            for method in METHODS {
+                let named = name(method);
+                let row = DropdownRow::named(&named, method == state.method);
+                if dropdown_row(ui, &row).clicked() {
+                    state.method = method;
+                    ui.close();
+                }
+            }
+        });
     });
 }
 
@@ -262,18 +262,18 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     shells::drop_picked(ui, window);
     let repairs = &mut window.doc.repairs;
     if repairs.is_busy() {
-        let step = repairs
-            .counted()
-            .map(|counted| (counted.label(), counted.share));
-        let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
-        if busy(ui, &tr!("repair-repairing"), step, true) {
+        let counted = repairs.counted();
+        let what = counted
+            .as_ref()
+            .map_or_else(|| tr!("repair-repairing"), Counted::label);
+        if step_bar(ui, &what, counted.map(|counted| counted.share), true) {
             repairs.cancel(&mut window.machine.status);
         }
         return;
     }
     let ids: Vec<ObjectId> = window.doc.scene.targets().map(|object| object.id).collect();
     let blocked = ids.is_empty().then(|| tr!("repair-nothing-on-plate"));
-    let button = primary_button(ui, icon::REPAIR, &tr!("repair-repair"), blocked.is_none());
+    let button = primary_button(ui, &tr!("repair-repair"), blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
         let state = window.tools.repair.state;
         for id in ids {

@@ -17,6 +17,11 @@ pub struct BatchCommand {
     #[arg(short, long, default_value = "out")]
     pub output: PathBuf,
 
+    /// What each file is named after: `{model}`, `{ext}`, `{printer}`, `{resin}`, `{layer}` in µm,
+    /// `{plate}`, `{date}` and `{time}`, as the window's File name setting; the printer's extension follows.
+    #[arg(long, value_name = "TEMPLATE", default_value = core_engine::DEFAULT_TEMPLATE)]
+    pub name: String,
+
     /// Models cut at once. Each one already uses every core, so more of them at once buys
     /// throughput on small models and costs peak memory.
     #[arg(long, value_name = "N", default_value_t = 1)]
@@ -31,6 +36,7 @@ impl BatchCommand {
         Batch {
             input: &self.input,
             output: &self.output,
+            name: &self.name,
             job: &self.job,
             jobs: self.jobs,
         }

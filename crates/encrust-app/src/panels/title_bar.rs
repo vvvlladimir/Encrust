@@ -1,10 +1,10 @@
-use egui::{Align, Align2, Layout, Sense, Stroke, UiBuilder, pos2, vec2};
+use egui::{Align, Layout, UiBuilder};
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::shortcuts::{self, Action};
 use crate::state::Machine;
-use crate::ui::{focus_ring, icon, icon_button, theme};
+use crate::ui::{icon, icon_button, search_button};
 
 mod badges;
 mod chip;
@@ -47,8 +47,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 window_buttons(ui);
-                find_button(ui, window, compact);
                 window_controls(ui, window);
+                find_button(ui, window, compact);
                 update_badge(ui, window.machine, compact);
                 alpha_badge(ui, window.machine, compact);
             },
@@ -86,65 +86,9 @@ fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Where the search over every tool, field and setting will open. Drawn already, so the
-/// bar keeps its shape. TODO(step-5): the palette behind it, with its own ADR.
 fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
-    let colors = theme::colors();
-    let tint = colors.text_low;
-    let label = ui
-        .painter()
-        .layout_no_wrap(tr!("find-button"), theme::label(), tint);
-    let keys = ui
-        .painter()
-        .layout_no_wrap(shortcuts::text(Action::Find), theme::small(), tint);
-    let width = match compact {
-        true => PAD + 12.0 + PAD,
-        false => PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD,
-    };
-    let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("find-button"))
-    });
-    let painter = ui.painter();
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        egui::Color32::TRANSPARENT
-    };
-    painter.rect(
-        rect,
-        theme::R_CONTROL,
-        fill,
-        Stroke::new(1.0, colors.hairline),
-        egui::StrokeKind::Inside,
-    );
-    painter.text(
-        pos2(rect.left() + PAD + 6.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        icon::FIND,
-        theme::icon(13.0),
-        tint,
-    );
-    let label_w = label.size().x;
-    if !compact {
-        painter.galley(
-            pos2(
-                rect.left() + PAD + 18.0,
-                rect.center().y - label.size().y / 2.0,
-            ),
-            label,
-            tint,
-        );
-        painter.galley(
-            pos2(
-                rect.left() + PAD + 18.0 + label_w + 16.0,
-                rect.center().y - keys.size().y / 2.0,
-            ),
-            keys,
-            tint,
-        );
-    }
-    focus_ring(ui, &response, theme::R_CONTROL);
+    let keys = shortcuts::text(Action::Find);
+    let response = search_button(ui, &tr!("find-button"), &keys, compact);
     if response.on_hover_text(tr!("find-tooltip")).clicked() {
         window.view.options.find = true;
     }

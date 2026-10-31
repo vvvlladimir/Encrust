@@ -130,15 +130,15 @@ The machines and their resins are edited in the **Machine and resin** window, a 
 the plate opened from the top bar's chip, the File menu, the Settings window and the start
 page; Esc closes it. The support profiles and the Hollow and Drain presets are in the
 **Settings** window, which the gear in the top bar opens: a table of each, and a support
-profile's form in the table's place. Either way every edit is written to the user's
-directory as soon as the value settles — no Save. ADR 0120, 0220, 0233. Its General and
+profile's form in the table's place. A machine's or a resin's edit is written to the user's
+directory as soon as the value settles — no Save (ADR 0120, 0220, 0233); a support profile's
+form holds its edits until Save, and asks before it is left with any unsaved (ADR 0389). Its General and
 Updates pages hold no profile: see `docs/design/updates.md` for the second.
 
-- A support profile's form lays its groups in rows of two, the shape from the tip down on
-  the left beside how supports are placed and joined; each row ends in one hairline under
-  its taller card, so a title never stands level with a field of its neighbour. A group
-  that can be off carries its switch in its title. A shipped profile's number that leaves
-  the shipped one is marked, with an arrow putting it back. **Reset to defaults** puts back
+- A support profile's form lays its groups one under another, from the tip down to the
+  plate and then how supports are placed, under tabs that scroll to each. A group that can
+  be off carries its switch in its title. A number that leaves the saved one is marked,
+  with an arrow putting it back, until Save. **Reset to defaults** puts back
   every number — the shipped profile's, or a new profile's for one nobody shipped — and
   keeps the name; the form's undo takes it back.
 - The automatic profiles head the table's automatic part, over the shapes they build to,
