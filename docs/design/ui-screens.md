@@ -42,7 +42,7 @@ the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key shee
 squares.
 
 A menu of the bar is a `menu_row` list 264 wide on `raised` ringed in `line`, the open title
-on `active`. Rows 28, glyph column 18, keys right in `text_low`; a hairline between groups; a
+on `hover`. Rows 28, glyph column 18, keys right in `text_low`; a hairline between groups; a
 row that cannot run is `text_low`, the first of its group with why under it. File: New plate,
 New project · Open project, Add model, Open recent ▸ (files with their age, Clear the list),
 Test prints ▸ · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
