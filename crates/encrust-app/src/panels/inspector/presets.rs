@@ -28,15 +28,7 @@ pub fn bar<T>(
         entry.profile.read::<T>(Path::new(&entry.id)).ok()
     };
     let source_key = egui::Id::new(("preset-source", kind.dir()));
-    let matching = catalogue
-        .presets(kind)
-        .find(|entry| read(entry).as_ref() == Some(current))
-        .map(|entry| (entry.id.clone(), entry.profile.name.clone()));
-    let source = matching.clone().or_else(|| {
-        let id = ui.data(|data| data.get_temp::<String>(source_key))?;
-        let entry = catalogue.presets(kind).find(|entry| entry.id == id)?;
-        Some((entry.id.clone(), entry.profile.name.clone()))
-    });
+    let (matching, source) = find_source(ui, catalogue, kind, current, source_key);
     let edited = matching.is_none() && source.is_some();
     let shown = match (&source, catalogue.presets(kind).next()) {
         (Some((_, name)), _) => name.clone(),
@@ -75,6 +67,35 @@ pub fn bar<T>(
             ui.data_mut(|data| data.insert_temp(source_key, id));
         }
     }
+}
+
+/// A preset as (id, name).
+type Shown = Option<(String, String)>;
+
+/// The preset the panel matches and the one it came from.
+fn find_source<T>(
+    ui: &egui::Ui,
+    catalogue: &Catalogue,
+    kind: Kind,
+    current: &T,
+    source_key: egui::Id,
+) -> (Shown, Shown)
+where
+    T: DeserializeOwned + PartialEq,
+{
+    let matching = catalogue
+        .presets(kind)
+        .find(|entry| {
+            let read = entry.profile.read::<T>(Path::new(&entry.id)).ok();
+            read.as_ref() == Some(current)
+        })
+        .map(|entry| (entry.id.clone(), entry.profile.name.clone()));
+    let source = matching.clone().or_else(|| {
+        let id = ui.data(|data| data.get_temp::<String>(source_key))?;
+        let entry = catalogue.presets(kind).find(|entry| entry.id == id)?;
+        Some((entry.id.clone(), entry.profile.name.clone()))
+    });
+    (matching, source)
 }
 
 /// The preset a panel shows: the one it matches, the one it came from, and how it reads.

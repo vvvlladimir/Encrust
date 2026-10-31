@@ -853,6 +853,7 @@ chip-machine-tooltip = The machine this plate is printed on
 chip-resin-untuned = The resin, not measured on this printer
 chip-resin-tooltip = The resin
 chip-layers = { $layer } µm · { $exposure } s
+chip-settings = { $tool }, { $summary }
 find-button = Find
 find-tooltip = Find a tool, an action or a model
 bar-source = Source

@@ -4,15 +4,15 @@
 use egui::{KeyboardShortcut, RichText, Ui, vec2};
 
 use super::settings::frame::{child, scrolled, show, with_footer, with_header};
-use super::settings::{FIND_GAP, GROUP_GAP, NavAside, find_line, nav_row};
+use super::settings::{FIND_GAP, GROUP_GAP};
 use crate::i18n::tr;
 use crate::shortcuts::keymap::{self, MOST_CHORDS, Slot};
 use crate::shortcuts::{
     Action, BINDINGS, GESTURES, Group, chord_keys, chord_text, chords, modifier_keys,
 };
 use crate::ui::{
-    BindingPress, BindingRow, Confirm, Recording, binding_row, chooser_group, confirm_button,
-    group_name, icon, inline_button, key_row, notice, theme,
+    BindingPress, BindingRow, Confirm, NavAside, Recording, binding_row, chooser_group,
+    confirm_button, find_line, group_name, icon, inline_button, key_row, nav_row, notice, theme,
 };
 
 /// What the window holds between frames while it is open.

@@ -3,7 +3,7 @@ use crate::measure::{Measure, Snap, Target};
 use crate::panels::Window;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, icon, icon_toggle, secondary_button, section, stats, switch,
+    Segment, Segmented, describe, icon, icon_toggle, readings, secondary_button, section, switch,
 };
 
 /// What a click is caught by, and what the two picked points or planes are apart.
@@ -85,7 +85,7 @@ fn points(ui: &mut egui::Ui, measure: &Measure) -> bool {
     if let Some(snapped) = measure.snapped() {
         entries.push((tr!("measure-caught"), snapped.label()));
     }
-    stats(ui, &entries);
+    readings(ui, &entries);
     true
 }
 
@@ -103,7 +103,7 @@ fn planes(ui: &mut egui::Ui, measure: &Measure) -> bool {
     let centres = mm(gap.centres_mm);
     if gap.is_parallel() {
         let thickness = mm(gap.gap_mm);
-        stats(
+        readings(
             ui,
             &[
                 (tr!("measure-gap"), thickness),
@@ -111,7 +111,7 @@ fn planes(ui: &mut egui::Ui, measure: &Measure) -> bool {
             ],
         );
     } else {
-        stats(
+        readings(
             ui,
             &[
                 (tr!("measure-angle"), angle),

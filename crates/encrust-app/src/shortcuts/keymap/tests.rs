@@ -21,6 +21,17 @@ fn a_key_given_to_one_action_leaves_the_one_that_held_it() {
 }
 
 #[test]
+fn a_table_key_the_user_gave_another_action_stays_theirs_on_load() {
+    let stored = BTreeMap::from([(Action::Undo.id().to_owned(), vec![spec(&cmd(Key::D))])]);
+    let keymap = Keymap::from(stored);
+    assert_eq!(keymap.chords(Action::Undo), vec![cmd(Key::D)]);
+    assert!(
+        keymap.chords(Action::Duplicate).is_empty(),
+        "Cmd+D is Undo's alone"
+    );
+}
+
+#[test]
 fn a_key_put_back_as_the_table_has_it_is_not_kept() {
     let mut keymap = Keymap::default();
     keymap.assign(Action::Undo, 0, cmd(Key::U));

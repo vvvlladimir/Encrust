@@ -18,8 +18,10 @@ mod layout;
 mod limited;
 mod list;
 mod menu;
+mod nav;
 mod over_stage;
 mod release;
+mod search;
 mod section;
 mod theme_card;
 mod toggle;
@@ -51,7 +53,7 @@ pub use layout::{
     body_and_foot, boxed, busy, card, card_foot, card_title, describe, described, describing,
     dialog, dialog_head, empty_state, field_note, hairline, heading, help_mark, hint, inset, meta,
     mode_column, mode_group, nested, notice, palette_dialog, progress_bar, progress_bar_of,
-    readings, stats, step_bar, subheading, subheading_with_switch, vertical_hairline,
+    readings, step_bar, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
@@ -59,8 +61,10 @@ pub use list::{
     start_rename, tag, tag_label, two_lines,
 };
 pub use menu::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
+pub use nav::{NAV_ROW_H, NavAside, nav_row};
 pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, zoom_bar};
 pub use release::{StepState, release_hero, steps};
+pub use search::{find_line, palette_field};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use theme_card::{CardLook, theme_card};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};

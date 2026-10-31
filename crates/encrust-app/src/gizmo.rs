@@ -118,25 +118,8 @@ impl TransformGizmo {
             return None;
         }
 
-        let aspect = viewport.width() / viewport.height();
         let snapping = ui.input(|input| input.modifiers.shift);
-        let config = |modes, size| GizmoConfig {
-            view_matrix: row_matrix(camera.view()),
-            projection_matrix: row_matrix(camera.projection(aspect)),
-            viewport,
-            modes,
-            orientation: match self.axes {
-                Axes::Global => GizmoOrientation::Global,
-                Axes::Local => GizmoOrientation::Local,
-            },
-            snapping,
-            snap_angle: SNAP_ANGLE,
-            snap_distance: SNAP_MM,
-            visuals: visuals(size),
-            ..GizmoConfig::default()
-        };
-        self.rings.update_config(config(rings(), RING_SIZE));
-        self.arrows.update_config(config(arrows(), ARROW_SIZE));
+        self.configure(viewport, camera, snapping);
 
         let targets: Vec<GizmoTransform> = placements.iter().copied().map(into_gizmo).collect();
         // Where an arrow crosses a ring both can take the press; the arrow wins.
@@ -165,6 +148,28 @@ impl TransformGizmo {
         };
         self.drag = read(result, from, centre(&placed));
         Some(placed)
+    }
+
+    /// Points both gizmos at the camera's view of `viewport`; `snapping` holds the steps.
+    fn configure(&mut self, viewport: egui::Rect, camera: &OrbitCamera, snapping: bool) {
+        let aspect = viewport.width() / viewport.height();
+        let config = |modes, size| GizmoConfig {
+            view_matrix: row_matrix(camera.view()),
+            projection_matrix: row_matrix(camera.projection(aspect)),
+            viewport,
+            modes,
+            orientation: match self.axes {
+                Axes::Global => GizmoOrientation::Global,
+                Axes::Local => GizmoOrientation::Local,
+            },
+            snapping,
+            snap_angle: SNAP_ANGLE,
+            snap_distance: SNAP_MM,
+            visuals: visuals(size),
+            ..GizmoConfig::default()
+        };
+        self.rings.update_config(config(rings(), RING_SIZE));
+        self.arrows.update_config(config(arrows(), ARROW_SIZE));
     }
 }
 
@@ -386,5 +391,24 @@ mod tests {
         {
             assert!((f64::from(*expected) - actual).abs() < 1e-12);
         }
+    }
+
+    /// BUG: a drag that ended on a frame the handles were not shown stayed in `drag` and
+    /// kept the gizmo hidden.
+    #[test]
+    fn a_drag_left_over_from_a_frame_without_handles_is_dropped_once_the_button_is_up() {
+        let mut gizmo = TransformGizmo {
+            drag: Some(GizmoDrag::Turn {
+                axis: Some(2),
+                by_deg: 10.0,
+            }),
+            ..TransformGizmo::default()
+        };
+        let camera = OrbitCamera::default();
+        let mut output = egui::Context::default().run_ui(egui::RawInput::default(), |ui| {
+            gizmo.show(ui, egui::Rect::NOTHING, &camera, &[]);
+        });
+        output.textures_delta.clear();
+        assert_eq!(gizmo.drag(), None, "no button is down, so no drag stands");
     }
 }

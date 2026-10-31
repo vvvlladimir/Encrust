@@ -85,47 +85,63 @@ fn tile(
         ui.set_height(TILE_H - 2.0 * f32::from(TILE_PAD));
         ui.horizontal_centered(|ui| {
             let size = egui::vec2(PICTURE, PICTURE);
-            match picture {
-                Some(texture) => picture_of(ui, texture, size),
-                None => {
-                    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-                    ui.painter()
-                        .rect_filled(rect, theme::R_CONTROL, colors.sunken);
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        icon::MODEL,
-                        theme::icon(18.0),
-                        colors.text_low,
-                    );
-                }
-            }
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                let name = ui.add(
-                    egui::Label::new(
-                        RichText::new(task.file_name())
-                            .font(theme::label())
-                            .color(colors.text_high),
-                    )
-                    .truncate(),
-                );
-                name.on_hover_text(task.file_name());
-                let tint = match task.ending() {
-                    Ending::Finished => colors.ok,
-                    Ending::Stopped => colors.warn,
-                    Ending::Failed => colors.danger,
-                    Ending::Other => colors.text_low,
-                };
-                let ending = egui::Label::new(
-                    RichText::new(ended(task, now_s))
-                        .font(theme::small())
-                        .color(tint),
-                )
-                .truncate();
-                ui.add(ending).on_hover_text(ended(task, now_s));
-            });
+            picture_or_placeholder(ui, picture, size);
+            file_and_ending(ui, task, now_s);
         });
+    });
+}
+
+/// The print's picture, or a model glyph on a sunken square before the printer sent one.
+fn picture_or_placeholder(
+    ui: &mut egui::Ui,
+    picture: Option<&egui::TextureHandle>,
+    size: egui::Vec2,
+) {
+    let colors = theme::colors();
+    match picture {
+        Some(texture) => picture_of(ui, texture, size),
+        None => {
+            let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+            ui.painter()
+                .rect_filled(rect, theme::R_CONTROL, colors.sunken);
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                icon::MODEL,
+                theme::icon(18.0),
+                colors.text_low,
+            );
+        }
+    }
+}
+
+/// The file's name over how and when it ended, in the colour of how.
+fn file_and_ending(ui: &mut egui::Ui, task: &Task, now_s: u64) {
+    let colors = theme::colors();
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        let name = ui.add(
+            egui::Label::new(
+                RichText::new(task.file_name())
+                    .font(theme::label())
+                    .color(colors.text_high),
+            )
+            .truncate(),
+        );
+        name.on_hover_text(task.file_name());
+        let tint = match task.ending() {
+            Ending::Finished => colors.ok,
+            Ending::Stopped => colors.warn,
+            Ending::Failed => colors.danger,
+            Ending::Other => colors.text_low,
+        };
+        let ending = egui::Label::new(
+            RichText::new(ended(task, now_s))
+                .font(theme::small())
+                .color(tint),
+        )
+        .truncate();
+        ui.add(ending).on_hover_text(ended(task, now_s));
     });
 }
 

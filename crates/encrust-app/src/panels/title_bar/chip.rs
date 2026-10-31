@@ -65,10 +65,10 @@ pub(super) fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32, sho
     let names = [
         tr!("chip-machine", name = window.doc.plate.display_name()),
         tr!("chip-resin", name = window.machine.slicing.resin_name()),
-        format!(
-            "{}, {}",
-            Tool::PrintSettings.label(),
-            layers_and_exposure(window.machine)
+        tr!(
+            "chip-settings",
+            tool = Tool::PrintSettings.label(),
+            summary = layers_and_exposure(window.machine)
         ),
     ];
     let responses = std::array::from_fn(|index: usize| {

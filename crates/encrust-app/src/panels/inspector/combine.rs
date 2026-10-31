@@ -3,7 +3,8 @@ use core_volume::Boolean;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{
-    Segment, Segmented, blocked_hover, busy, describe, primary_button, section, stats, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, primary_button, readings, section, theme,
+    tone,
 };
 
 /// What the picked models are to become, and which of them they are.
@@ -39,7 +40,7 @@ pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
             .enumerate()
             .map(|(index, name)| (name, role(op, index)))
             .collect();
-        stats(ui, &rows);
+        readings(ui, &rows);
         describe(ui, &tr!("boolean-models-note"));
     });
 }

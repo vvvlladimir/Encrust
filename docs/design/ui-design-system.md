@@ -169,6 +169,12 @@ paints from tokens only.
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
 | `dialog`, `palette_dialog`, `dialog_head` | A window over the plate on the stage dimmed by the scrim, rising as it comes in: its frame ringed in `line`, Find's hanging from the top over a lighter scrim, and its glyph, name and close button |
 | `binding_row` | An action of the key sheet, 38 tall: its name, then at the right its keys, each a 26 tall button of keycaps with no surface until hovered that records a new chord, a faint `+` while it has room for a second, and the reset arrow while its keys are the user's; a key recording is `accent_wash` ringed in `accent`, asking for the keys until it shows the modifiers held or the chord pressed last, then Done (`accent`, quiet until a chord is pressed) and, on a key the action has, a `×` taking it off. A gesture's keys stand in the same column, no button |
+| `find_line` | A window's box that narrows its list: a `text_box` with the find glyph in its hint and a faint `⌘F` keycap while empty, `⌘F` focusing it |
+| `palette_field` | Find's typed field, 48 tall over a hairline, inset 16, holding the focus while the palette is up, an `Esc` keycap at its right |
+| `nav_row`, `NavAside` | One page of a window's list, `BUTTON_H + 4` tall: glyph and name, washed in `accent_wash` while open, and at its right a count, a badge for a waiting release or the elsewhere arrow |
+| `find_line` | A window's box that narrows its list: a `text_box` with the find glyph in its hint and a faint `⌘F` keycap while empty, `⌘F` focusing it |
+| `palette_field` | Find's typed field, 48 tall over a hairline, inset 16, holding the focus while the palette is up, an `Esc` keycap at its right |
+| `nav_row`, `NavAside` | One page of a window's list, `BUTTON_H + 4` tall: glyph and name, washed in `accent_wash` while open, and at its right a count, a badge for a waiting release or the elsewhere arrow |
 | `key_row` | The keys that work a window at its foot: each set of keycaps then what they do |
 | `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
 | `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |

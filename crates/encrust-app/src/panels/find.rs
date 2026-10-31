@@ -8,7 +8,7 @@ use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
 use crate::ui::{
-    chooser_group, focus_ring, hint, hover_mix, icon, key_row, keycap, palette_dialog, theme,
+    chooser_group, focus_ring, hint, hover_mix, icon, key_row, palette_dialog, palette_field, theme,
 };
 use crate::workspace::Tool;
 
@@ -162,28 +162,9 @@ fn steer(ui: &mut egui::Ui, lit: usize, count: usize) -> usize {
 /// The field the name is typed in, 48 tall over a hairline, which holds the focus while
 /// the palette is up. Answers whether what is typed changed.
 fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
-    let colors = theme::colors();
-    let edit = egui::TextEdit::singleline(query)
-        .id(id.with("field"))
-        .hint_text(format!("{}  {}", icon::FIND, tr!("find-tooltip")))
-        .font(theme::body())
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(16, 0)))
-        .vertical_align(egui::Align::Center)
-        .desired_width(f32::INFINITY);
-    let response = ui.add_sized(vec2(PALETTE_W, FIELD_H), edit);
-    if !response.has_focus() {
-        response.request_focus();
-    }
-    let esc = tr!("hint-esc");
-    let rect = response.rect;
-    keycap(ui.painter(), &esc, rect.right() - 16.0, rect.center().y);
-    let line = response.rect.bottom();
-    ui.painter().hline(
-        response.rect.x_range(),
-        line,
-        egui::Stroke::new(1.0, colors.hairline),
-    );
-    response.changed()
+    let (hint, close) = (tr!("find-tooltip"), tr!("hint-esc"));
+    let size = (PALETTE_W, FIELD_H);
+    palette_field(ui, id.with("field"), query, size, (&hint, &close))
 }
 
 /// The keys that work the palette, on a strip of its own at its foot.
@@ -321,5 +302,41 @@ mod tests {
         };
         let list = found(vec![entry("Frame the view"), entry("View cube")], "view");
         assert_eq!(list[0].name, "View cube");
+    }
+
+    /// How far the list has scrolled after a few frames with `lit` on its last row.
+    fn scrolled_after(moved: bool) -> f32 {
+        let list: Vec<Entry> = (0..40)
+            .map(|index| Entry {
+                found: Found::Act(Action::Undo),
+                glyph: "",
+                name: format!("Entry {index}"),
+                keys: String::new(),
+            })
+            .collect();
+        let ctx = egui::Context::default();
+        let mut offset = 0.0;
+        for _ in 0..3 {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.push_id("find-test", |ui| {
+                    rows(ui, &list, list.len() - 1, moved);
+                    let id = ui.make_persistent_id(egui::IdSalt::new("scroll_area"));
+                    let state = egui::containers::scroll_area::State::load(ui.ctx(), id);
+                    offset = state.map_or(0.0, |state| state.offset.y);
+                });
+            });
+            output.textures_delta.clear();
+        }
+        offset
+    }
+
+    /// BUG: the lit row was scrolled to on every frame, so the wheel could not leave it.
+    #[test]
+    fn the_list_follows_the_lit_row_only_on_the_frame_it_moved() {
+        assert!(
+            scrolled_after(true) > 0.0,
+            "a lit row that moved is scrolled to"
+        );
+        assert_eq!(scrolled_after(false), 0.0, "the wheel is left to the list");
     }
 }

@@ -1,5 +1,7 @@
+use super::Watch;
 use super::place::{OrientSummary, centred, euler_degrees, place};
 use crate::args::ImportArgs;
+use crate::exit::{Stop, is_cancelled};
 use crate::profiles::Chosen;
 use core_engine::SupportPlan;
 use core_geometry::{Mesh, Quat, Scalar, Vec3};
@@ -82,6 +84,7 @@ fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {
             &args,
             Some(&SupportPlan::of(supports.clone())),
             &chosen,
+            &quiet(&Stop::default()),
         )
         .expect("a cube orients");
         oriented.expect("--orient reports its turn").on_plate
@@ -121,8 +124,14 @@ fn an_oriented_model_is_stood_on_the_plate_over_the_middle_it_stood_over() {
         invented_exposure: false,
     };
 
-    let (mesh, oriented) =
-        place(Mesh::new(vertices, faces), &args, None, &chosen).expect("a pyramid orients");
+    let (mesh, oriented) = place(
+        Mesh::new(vertices, faces),
+        &args,
+        None,
+        &chosen,
+        &quiet(&Stop::default()),
+    )
+    .expect("a pyramid orients");
     let bounds = mesh.aabb().expect("the mesh has vertices");
     let middle = (bounds.mins + bounds.maxs) / 2.0;
 
@@ -155,5 +164,40 @@ fn the_angles_reported_are_the_angles_rotate_would_apply() {
     assert!(
         summary.axis_name().is_none(),
         "two axes are not one of them"
+    );
+}
+
+fn quiet(stop: &Stop) -> Watch<'_> {
+    Watch {
+        talk: false,
+        progress: false,
+        stop,
+    }
+}
+
+#[test]
+fn an_orientation_search_stopped_beforehand_is_cancelled() {
+    use clap::Parser;
+
+    let args = Flags::parse_from(["encrust", "--orient"]).import;
+    let chosen = Chosen {
+        printer: None,
+        material: MaterialProfile::default(),
+        invented_exposure: false,
+    };
+    let stop = Stop::default();
+    stop.request();
+    let error = place(
+        core_geometry::cuboid(Vec3::ZERO, Vec3::new(10.0, 20.0, 30.0)),
+        &args,
+        None,
+        &chosen,
+        &quiet(&stop),
+    )
+    .err()
+    .expect("the search was told to stop first");
+    assert!(
+        is_cancelled(&error),
+        "a stop is a cancellation, not a failure"
     );
 }

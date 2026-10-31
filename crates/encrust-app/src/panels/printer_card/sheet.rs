@@ -5,7 +5,7 @@ use egui::RichText;
 
 use super::{colour_of, controls, face, history, job_lines, picture_of, trouble_lines};
 use crate::i18n::tr;
-use crate::network::{Errand, Network, Reading, Target};
+use crate::network::{Errand, Extras, Network, Reading, Target};
 use crate::panels::Window;
 use crate::ui::{dialog, dialog_head, hairline, icon, subheading, theme, tone};
 
@@ -102,27 +102,31 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
         });
     });
     if state.is_some() && matches!(target, Target::Sdcp(_)) {
-        ui.add_space(14.0);
-        hairline(ui);
-        ui.add_space(6.0);
-        subheading(ui, &tr!("sheet-recent-prints"));
-        // As tall as the tiles, up to what the window has left under them: a short window
-        // scrolls the history rather than pushing the sheet off the screen.
-        let prints = extras
-            .and_then(|extras| extras.history.as_ref())
-            .map_or(1, Vec::len);
-        let wanted = history::height(prints) + HISTORY_MIN_H / 2.0;
-        let left = ui.ctx().content_rect().bottom() - CHROME_H / 2.0 - ui.cursor().top();
-        let height = wanted.min(left.max(HISTORY_MIN_H));
-        let listed = egui::ScrollArea::vertical()
-            .max_height(height)
-            .min_scrolled_height(height)
-            .auto_shrink([false, false])
-            .show(ui, |ui| history::list(ui, extras))
-            .inner;
-        errand = errand.take().or(listed);
+        errand = errand.take().or(recent_prints(ui, extras));
     }
     errand
+}
+
+/// The prints the printer remembers, under a rule, as tall as its tiles allow.
+fn recent_prints(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand> {
+    ui.add_space(14.0);
+    hairline(ui);
+    ui.add_space(6.0);
+    subheading(ui, &tr!("sheet-recent-prints"));
+    // As tall as the tiles, up to what the window has left under them: a short window
+    // scrolls the history rather than pushing the sheet off the screen.
+    let prints = extras
+        .and_then(|extras| extras.history.as_ref())
+        .map_or(1, Vec::len);
+    let wanted = history::height(prints) + HISTORY_MIN_H / 2.0;
+    let left = ui.ctx().content_rect().bottom() - CHROME_H / 2.0 - ui.cursor().top();
+    let height = wanted.min(left.max(HISTORY_MIN_H));
+    egui::ScrollArea::vertical()
+        .max_height(height)
+        .min_scrolled_height(height)
+        .auto_shrink([false, false])
+        .show(ui, |ui| history::list(ui, extras))
+        .inner
 }
 
 /// Where the picture of the plate goes before the printer has sent one.

@@ -85,15 +85,16 @@ pub fn import(
     args: &ImportArgs,
     supports: Option<&SupportPlan>,
     chosen: &Chosen,
-    talk: bool,
+    watch: &Watch,
 ) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
+    let talk = watch.talk;
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     if talk {
         talk_mapping(&loaded);
     }
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, oriented) = place(welded.mesh.clone(), args, supports, chosen)?;
+    let (mesh, oriented) = place(welded.mesh.clone(), args, supports, chosen, watch)?;
     if talk && let Some(summary) = &oriented {
         println!(
             "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang{}\n",
@@ -394,7 +395,12 @@ pub fn inspect(
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, _) = place(welded.mesh.clone(), args, None, chosen)?;
+    let quiet = Watch {
+        talk: false,
+        progress: false,
+        stop: &Stop::default(),
+    };
+    let (mesh, _) = place(welded.mesh.clone(), args, None, chosen, &quiet)?;
     // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
     if args.transform.center {

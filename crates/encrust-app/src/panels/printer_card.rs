@@ -221,16 +221,7 @@ fn destination_row(
         colors.text_low,
     );
     let status = paint_status(painter, face, rect, right - 30.0);
-    let ink = colors.text_high;
-    let room = (status.left() - 8.0 - rect.left() - 30.0).max(0.0);
-    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), ink);
-    job.wrap = egui::text::TextWrapping::truncate_at_width(room);
-    let galley = painter.layout_job(job);
-    painter.galley(
-        pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
-        galley,
-        ink,
-    );
+    paint_name(painter, name, rect, status.left());
     focus_ring(ui, &response, theme::R_CONTROL);
     let response = if !notes.is_empty() && ui.rect_contains_pointer(status) {
         response.on_hover_ui(|ui| note_lines(ui, notes))
@@ -239,6 +230,20 @@ fn destination_row(
     };
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, name));
     response
+}
+
+/// The printer's name at the row's left, cut short where the status word begins.
+fn paint_name(painter: &egui::Painter, name: &str, rect: egui::Rect, status_left: f32) {
+    let ink = theme::colors().text_high;
+    let room = (status_left - 8.0 - rect.left() - 30.0).max(0.0);
+    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), ink);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(room);
+    let galley = painter.layout_job(job);
+    painter.galley(
+        pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        ink,
+    );
 }
 
 /// How dim a busy printer's dot breathes down to.
