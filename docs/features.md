@@ -37,7 +37,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   to open (a minute for a full 16K stack). A file
   with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
-  file and can be cleared from the start page or File → Open recent.
+  file in the window's light or dark colours and can be cleared from the start page or File →
+  Open recent.
 - The **File, Edit and View menus** list every action with its keys; one that cannot run says
   why under itself (Slice to a file with no model, Duplicate with nothing picked).
 - Start from one of **four built-in test prints**: detail test, exposure check, surface
