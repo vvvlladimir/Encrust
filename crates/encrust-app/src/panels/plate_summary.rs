@@ -30,9 +30,8 @@ pub struct Tally {
     pub supports_mm3: f32,
 }
 
-/// The plate's card on the stage's foot, under the models: what the plate comes to — or in
-/// Preview the layer shown — then the printer its file goes to and the press that makes the
-/// file. The card grows upward as Details opens (ADR 0348, 0382).
+/// The plate's card on the stage's foot: what the plate, or in Preview the layer, comes to,
+/// the printer and the press that makes the file (ADR 0348, 0382).
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     egui::Frame::new().inner_margin(BODY_MARGIN).show(ui, |ui| {
         ui.set_width(ui.available_width());

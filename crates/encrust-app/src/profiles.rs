@@ -74,9 +74,8 @@ fn answers(network: &Network, profile: &PrinterProfile) -> Option<egui::Color32>
     Some(if answered { colors.ok } else { colors.text_low })
 }
 
-/// The resins set up on the printer in hand, a printer's resins being its own presets, each
-/// with its colour, kind, layer height and exposure there; then the way to the printer's
-/// resins in Machine and resin, to add one.
+/// The printer in hand's resins with their colour, kind, layer height and exposure, then
+/// the way to its resins in Machine and resin.
 pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
     let slicing = &mut machine.slicing;
     let chosen = slicing.resin_id.clone();

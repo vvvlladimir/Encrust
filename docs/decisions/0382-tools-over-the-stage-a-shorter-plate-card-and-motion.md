@@ -21,7 +21,8 @@ judged alone.
   The layout was worked out on an HTML sketch kept out of the repository; the pages, not the
   sketch, are the record.
 - **Tools over the stage.** The rail is one row standing over the top of the stage between
-  the two side cards, as wide as the room between them, 8 points from each; it no longer
+  the two side cards, centred in the room 8 points in from each and as wide as its tools,
+  at most that room; it no longer
   sets the inspector's width, which starts at the stage's top. Each tool is a glyph over
   its name, the digit of its key shown while the pointer is on the row; a window too
   narrow drops the names. This supersedes ADR 0348's rail over the inspector.

@@ -42,6 +42,17 @@ pub struct Watch<'a> {
     pub stop: &'a Stop,
 }
 
+impl<'a> Watch<'a> {
+    /// A run that prints nothing and stops on `stop`.
+    pub fn quiet(stop: &'a Stop) -> Self {
+        Self {
+            talk: false,
+            progress: false,
+            stop,
+        }
+    }
+}
+
 /// What one run found and wrote: a part per model on the plate, and the stack they made.
 pub struct Outcome {
     pub parts: Vec<Part>,
@@ -395,11 +406,8 @@ pub fn inspect(
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let quiet = Watch {
-        talk: false,
-        progress: false,
-        stop: &Stop::default(),
-    };
+    let never = Stop::default();
+    let quiet = Watch::quiet(&never);
     let (mesh, _) = place(welded.mesh.clone(), args, None, chosen, &quiet)?;
     // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;

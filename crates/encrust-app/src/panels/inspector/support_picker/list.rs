@@ -4,9 +4,8 @@ use crate::i18n::tr;
 use crate::ui::{BinLook, chooser_group, confirm_bin, focus_ring, hairline, icon, theme};
 use egui::{Sense, vec2};
 
-/// The open picker: what stands on the plate — the automatic preset with the shapes it
-/// built set in under it, then each group by hand — the profiles holding nothing, and the
-/// way to edit them. On Shape, every shape a click away.
+/// The open picker: the automatic preset and its shapes, each group by hand, the empty
+/// profiles and the way to edit them; on Shape, every shape a click away.
 pub(super) struct List<'a> {
     pub(super) rows: &'a [Row],
     pub(super) presets: &'a Presets,
@@ -321,7 +320,7 @@ fn group_icons(
             took = true;
         }
     }
-    if hovered {
+    if hovered || crate::ui::is_armed(ui.ctx(), id.with("bin")) {
         let bin_at = at(icons.right() - ICON_SQUARE / 2.0);
         let bin = ui.interact(bin_at, id.with("bin"), Sense::click());
         took |= bin.clicked();

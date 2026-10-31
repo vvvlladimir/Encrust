@@ -24,8 +24,6 @@ const OFFSET_STEP: f64 = 0.1;
 /// Cubic millimetres per point of drag on the smallest part.
 const VOLUME_STEP: f64 = 0.1;
 
-/// Where the plane cuts the selected model, and what to do with the halves.
-/// The section slider is a view of its own, neither moved by the plane nor moving it.
 /// The plane's axis and where it crosses it, for the card's heading.
 pub fn fact(window: &Window) -> String {
     let state = &window.tools.cut.state;
@@ -38,6 +36,8 @@ pub fn fact(window: &Window) -> String {
     tr!("cut-fact", axis = axis, height = height)
 }
 
+/// Where the plane cuts the selected model, and what to do with the halves.
+/// The section slider is a view of its own, neither moved by the plane nor moving it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let Some(id) = window.doc.scene.selected() else {
         section(ui, &tr!("cut-plane"), None, |ui| {

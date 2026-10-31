@@ -7,11 +7,13 @@ use super::button::{Face, GLYPH_W, Skin, paint_button};
 use crate::i18n::tr;
 use crate::ui::{icon, theme, theme::motion};
 
-/// The one control armed in the window, and when it was, s of the input's clock.
+/// The one control armed in the window, when it was, s of the input's clock, and the pass
+/// that last drew it.
 #[derive(Clone, Copy)]
 struct Armed {
     id: Id,
     at_s: f64,
+    drawn_pass: u64,
 }
 
 fn armed_key() -> Id {
@@ -38,6 +40,11 @@ pub(super) fn arm(ui: &Ui, response: &Response, enabled: bool) -> Arming {
         if fired || timed_out || escaped || response.clicked_elsewhere() {
             ui.data_mut(|data| data.remove::<Armed>(armed_key()));
         } else {
+            let drawn = Armed {
+                drawn_pass: ui.ctx().cumulative_pass_nr(),
+                ..armed
+            };
+            ui.data_mut(|data| data.insert_temp(armed_key(), drawn));
             let left_s = (motion::ARMED_S - (now - armed.at_s)).max(0.0);
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_secs_f64(left_s));
@@ -46,6 +53,7 @@ pub(super) fn arm(ui: &Ui, response: &Response, enabled: bool) -> Arming {
         let armed = Armed {
             id: response.id,
             at_s: now,
+            drawn_pass: ui.ctx().cumulative_pass_nr(),
         };
         ui.data_mut(|data| data.insert_temp(armed_key(), armed));
         let wait = std::time::Duration::from_secs_f64(motion::ARMED_S);
@@ -57,11 +65,19 @@ pub(super) fn arm(ui: &Ui, response: &Response, enabled: bool) -> Arming {
     Arming { armed, fired }
 }
 
-/// Whether a control stands armed and still waiting, so Esc is left to it this frame.
+/// Whether the control `id` stands armed, so a row draws it though the pointer has left.
+pub fn is_armed(ctx: &egui::Context, id: Id) -> bool {
+    ctx.data(|data| data.get_temp::<Armed>(armed_key()))
+        .is_some_and(|armed| armed.id == id)
+}
+
+/// Whether a control drawn last pass stands armed and still waiting, so Esc is left to it
+/// this frame.
 pub fn any_armed(ctx: &egui::Context) -> bool {
     let now = ctx.input(|input| input.time);
+    let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<Armed>(armed_key()))
-        .is_some_and(|armed| now - armed.at_s <= motion::ARMED_S)
+        .is_some_and(|armed| now - armed.at_s <= motion::ARMED_S && armed.drawn_pass + 1 >= pass)
 }
 
 /// What a `confirm_button` says and does.
@@ -246,6 +262,18 @@ mod tests {
             !any_armed(&ctx),
             "a control not drawn since cannot hold Esc for ever"
         );
+    }
+
+    #[test]
+    fn an_armed_control_no_longer_drawn_leaves_escape_to_the_window() {
+        let ctx = fixtures::context();
+        click(&ctx, ON, 0.0);
+        let soon = RawInput {
+            time: Some(0.5),
+            ..RawInput::default()
+        };
+        fixtures::frame(&ctx, soon, |_| {});
+        assert!(!any_armed(&ctx), "its panel closed while it was armed");
     }
 
     #[test]

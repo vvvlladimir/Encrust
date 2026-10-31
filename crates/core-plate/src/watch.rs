@@ -11,6 +11,21 @@ pub enum Phase {
     Proving,
 }
 
+/// Where a bar stands when the shortlist is cut: weighed on three models, whose search took
+/// 3 to 19 % of a run and whose proof took the rest; see ADR 0384.
+const LOOKING_END: f32 = 0.12;
+
+impl Phase {
+    /// The share of a whole search done once `done` of `total` pieces of this phase are.
+    pub fn share(self, done: usize, total: usize) -> f32 {
+        let within = done.min(total.max(1)) as f32 / total.max(1) as f32;
+        match self {
+            Self::Looking => LOOKING_END * within,
+            Self::Proving => LOOKING_END + (1.0 - LOOKING_END) * within,
+        }
+    }
+}
+
 /// Whether the caller has given up on a search, and how far it has got, told at the same
 /// places. A search nobody watches passes [`Watch::never`].
 #[derive(Clone, Copy, Default)]
@@ -92,6 +107,23 @@ mod tests {
                 (Phase::Proving, 1, 3),
                 (Phase::Proving, 2, 3)
             ]
+        );
+    }
+
+    #[test]
+    fn a_search_never_steps_back_from_looking_to_proving() {
+        assert!(
+            (Phase::Looking.share(0, 4) - 0.0).abs() < 1e-6,
+            "nothing done is 0"
+        );
+        let looked = Phase::Looking.share(4, 4);
+        assert!(
+            (Phase::Proving.share(0, 3) - looked).abs() < 1e-6,
+            "proving starts there"
+        );
+        assert!(
+            (Phase::Proving.share(3, 3) - 1.0).abs() < 1e-6,
+            "all proven is 1"
         );
     }
 

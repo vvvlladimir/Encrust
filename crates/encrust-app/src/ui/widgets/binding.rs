@@ -18,6 +18,8 @@ const CHIP_GAP: f32 = 6.0;
 
 /// How a row of the key sheet stands.
 pub struct BindingRow<'a> {
+    /// Tells this row's controls apart from another's, whatever the language.
+    pub id: egui::Id,
     pub name: &'a str,
     /// The caps of each key that fires the action, modifiers first.
     pub chords: &'a [Vec<&'a str>],
@@ -29,6 +31,19 @@ pub struct BindingRow<'a> {
     pub changed: bool,
     /// Whether its keys are listed only, as a gesture of the pointer is.
     pub fixed: bool,
+}
+
+/// The row a control stands on: its id tells it apart, its name is read out with it.
+#[derive(Clone, Copy)]
+struct Owner<'a> {
+    id: egui::Id,
+    name: &'a str,
+}
+
+impl std::fmt::Display for Owner<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name)
+    }
 }
 
 /// A key of a [`binding_row`] recording, until Done keeps what was pressed.
@@ -85,7 +100,10 @@ pub fn binding_row(ui: &mut Ui, row: &BindingRow<'_>) -> Option<BindingPress> {
         }
         return None;
     }
-    let name = row.name;
+    let name = Owner {
+        id: row.id,
+        name: row.name,
+    };
     let mut pressed = None;
     let reset = (icon::RESET, tr!("binding-reset"));
     let reset = (reset.0, reset.1.as_str());
@@ -161,14 +179,14 @@ fn chip(
     row: Rect,
     right: &mut f32,
     width: f32,
-    place: (&str, Place),
+    place: (Owner<'_>, Place),
 ) -> (Rect, Response) {
     let rect = Rect::from_min_size(
         pos2(*right - width, row.center().y - CHIP_H / 2.0),
         vec2(width, CHIP_H),
     );
     *right = rect.left() - CHIP_GAP;
-    let id = egui::Id::new(("binding", place));
+    let id = place.0.id.with(("binding", place.1));
     (rect, ui.interact(rect, id, Sense::click()))
 }
 
@@ -178,7 +196,7 @@ fn key_button(
     row: Rect,
     right: &mut f32,
     chord: &[&str],
-    place: (&str, Place),
+    place: (Owner<'_>, Place),
 ) -> Response {
     let name = place.0;
     let colors = theme::colors();
@@ -209,7 +227,7 @@ fn recording_key(
     row: Rect,
     right: &mut f32,
     (recording, held): (&Recording<'_>, bool),
-    name: &str,
+    name: Owner<'_>,
 ) -> Option<BindingPress> {
     let mut pressed = None;
     let index = recording.index;
@@ -234,7 +252,7 @@ fn listening(
     row: Rect,
     right: &mut f32,
     recording: &Recording<'_>,
-    place: (&str, Place),
+    place: (Owner<'_>, Place),
 ) -> Response {
     let name = place.0;
     let colors = theme::colors();
@@ -273,7 +291,7 @@ fn listening(
 }
 
 /// Done: the accent's own button once a whole chord was pressed, quiet before.
-fn done_button(ui: &mut Ui, row: Rect, right: &mut f32, enabled: bool, name: &str) -> bool {
+fn done_button(ui: &mut Ui, row: Rect, right: &mut f32, enabled: bool, name: Owner<'_>) -> bool {
     let colors = theme::colors();
     let text = tr!("binding-done");
     let galley = ui
@@ -302,7 +320,7 @@ fn glyph_button(
     row: Rect,
     right: &mut f32,
     (glyph, tooltip): (&str, &str),
-    place: (&str, Place),
+    place: (Owner<'_>, Place),
 ) -> bool {
     let colors = theme::colors();
     let (rect, response) = chip(ui, row, right, CHIP_H, place);

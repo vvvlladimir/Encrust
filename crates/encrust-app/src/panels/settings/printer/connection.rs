@@ -139,9 +139,8 @@ fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network
     }
 }
 
-/// One listed printer: a dot in the colour of what it is doing, its name to edit, where it
-/// is, what it is doing, and the button that takes it off the list. Answers whether it was
-/// pressed.
+/// One listed printer: state dot, editable name, address, state and the button taking it
+/// off the list. Answers whether that was pressed.
 fn listed_row(
     ui: &mut egui::Ui,
     machine: &mut NetworkMachine,

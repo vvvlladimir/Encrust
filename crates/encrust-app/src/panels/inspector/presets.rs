@@ -8,13 +8,12 @@ use crate::i18n::tr;
 use crate::settings::unique_id;
 use crate::status::Status;
 use crate::ui::{
-    BinLook, DropdownFace, DropdownRow, Lead, bin_button, dropdown, dropdown_menu, dropdown_row,
-    icon, quiet_square, theme,
+    BinLook, DropdownFace, DropdownRow, Lead, MenuRow, bin_button, dropdown, dropdown_menu,
+    dropdown_row, icon, menu_row, quiet_square, theme,
 };
 
-/// The named settings of one tool, as the Supports card has them: a picker showing the
-/// preset the panel matches, or the one it came from and `· edited`; Save, over that one or
-/// as a new one; and a bin that asks before it throws the one in use away. See ADR 0226.
+/// A tool's named settings as the Supports card has them: the picker, Save over it or as a
+/// new one, and a bin asking by a second press (ADR 0226).
 pub fn bar<T>(
     ui: &mut egui::Ui,
     catalogue: &mut Catalogue,
@@ -139,9 +138,11 @@ fn row<T>(
             let save_tip = tr!("shape-save-tooltip");
             let save = quiet_square(ui, icon::SAVE, &save_tip, theme::BUTTON_H, !held);
             egui::Popup::menu(&save).show(|ui| {
-                let over = egui::Button::new(tr!("shape-save"));
-                pressed.over = ui.add_enabled(named.edited, over).clicked();
-                pressed.as_new = ui.button(tr!("shape-save-as-new")).clicked();
+                let over = tr!("shape-save");
+                let over = MenuRow::new(Some(icon::SAVE), &over).enabled(named.edited);
+                pressed.over = menu_row(ui, &over).clicked();
+                let as_new = tr!("shape-save-as-new");
+                pressed.as_new = menu_row(ui, &MenuRow::new(Some(icon::ADD), &as_new)).clicked();
             });
             let face = DropdownFace {
                 lead: Some(Lead::Glyph(icon::PRESET)),
@@ -209,7 +210,7 @@ fn free_name(catalogue: &Catalogue, kind: Kind, base: &str) -> String {
     (1..=1000)
         .map(|n| match n {
             1 => base.to_owned(),
-            n => format!("{base} {n}"),
+            n => tr!("name-numbered", name = base.to_owned(), number = n),
         })
         .find(|name| !taken(name))
         .unwrap_or_else(|| base.to_owned())

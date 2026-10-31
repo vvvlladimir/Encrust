@@ -14,9 +14,8 @@ use crate::supports::Placing as Supports;
 use crate::ui::{hint_bar, hint_bar_names, icon};
 use crate::workspace::Tool;
 
-/// The bar, when the tool in hand has one, at the top of `room` and no wider: centred under
-/// the tool `row` while it names what each key does, the keys alone flush with its left. `keys_only`
-/// shows the keys alone whatever the room, as beside the mask.
+/// The tool in hand's hint bar at the top of `room`, centred under the tool `row`; the keys
+/// alone, flush left, when it is narrow or `keys_only`, as beside the mask.
 pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>, keys_only: bool) {
     let Some(named) = pairs(window, &Keys::words(ui.ctx())) else {
         return;
@@ -108,9 +107,8 @@ impl Keys {
     }
 }
 
-/// The key and what it does, pair by pair, for the tool in hand; `None` for a tool the
-/// pointer does nothing with in the viewport. Every key is a click or a drag, with the
-/// modifier it needs named before it.
+/// Each key, a click or drag with its modifier, and what it does for the tool in hand;
+/// `None` for a tool the pointer does nothing with in the viewport.
 fn pairs(window: &Window, keys: &Keys) -> Option<Vec<(String, String)>> {
     let click = |what: String| (keys.click.clone(), what);
     let remove = || (keys.click_with(&keys.alt), tr!("hint-remove"));

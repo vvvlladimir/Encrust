@@ -27,7 +27,7 @@ fn release(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
     let colors = theme::colors();
     ui.horizontal(|ui| {
         tag_label(ui, &tr!("update-group-new"), (colors.ok, colors.ok_wash));
-        hint(ui, &format!("Encrust {}", offer.version));
+        hint(ui, &tr!("app-version", version = offer.version.to_string()));
         if let Some(at) = offer.published_s {
             hint(ui, &tr!("update-released", when = ago(Some(at), now_s())));
         }

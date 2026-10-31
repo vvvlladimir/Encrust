@@ -1,7 +1,7 @@
 //! The Machine and resin window: machines at the left, and the resins, profile and network of
 //! the picked one in tabs. See `docs/decisions/0220`.
 
-use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, Vec2, pos2, vec2};
+use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
 use printer_profiles::{Catalogue, Connection, Entry, Kind, PrinterProfile, ProfileError};
 
 mod library;
@@ -18,7 +18,7 @@ use crate::settings::{
     new_resin, take_resin_off,
 };
 use crate::ui::{
-    BinLook, confirm_bin, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
+    BinLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
     two_lines, zone_button,
 };
 
@@ -234,18 +234,12 @@ fn machine_row(
 fn add_machine(ui: &mut Ui, picked: Option<&str>, cost: &str, action: &mut Option<Action>) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         let enabled = picked.is_some();
-        let sense = if enabled {
-            Sense::click()
+        let tip = if enabled {
+            cost.to_owned()
         } else {
-            Sense::hover()
+            tr!("machines-remove")
         };
-        let (_, bin) = ui.allocate_exact_size(Vec2::splat(theme::BUTTON_H), sense);
-        let bin = if enabled {
-            bin.on_hover_text(cost)
-        } else {
-            bin
-        };
-        if confirm_bin(ui, bin, BinLook::Quiet, &tr!("machines-remove"), enabled) {
+        if bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, enabled) {
             *action = picked.map(|id| Action::Delete(Deleting::Printer(id.to_owned())));
         }
         if icon_button(ui, icon::IMPORT, &tr!("machines-import-file")).clicked() {

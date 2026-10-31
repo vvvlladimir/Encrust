@@ -58,21 +58,16 @@ impl Keymap {
     pub fn assign(&mut self, action: Action, index: usize, chord: KeyboardShortcut) {
         let mut keys = self.chords(action);
         if let Some(at) = keys.iter().position(|held| same(*held, chord)) {
-            if at == index {
-                return;
+            if index < keys.len() {
+                keys.swap(at, index);
+                self.set(action, keys);
             }
-            keys.remove(at);
+            return;
         }
         if index >= keys.len() && keys.len() >= MOST_CHORDS {
             return;
         }
-        for other in BINDINGS.iter().map(|binding| binding.action) {
-            let theirs = self.chords(other);
-            if other != action && theirs.iter().any(|held| same(*held, chord)) {
-                let kept = theirs.into_iter().filter(|held| !same(*held, chord));
-                self.set(other, kept.collect());
-            }
-        }
+        self.take_from_others(action, chord);
         match keys.get_mut(index) {
             Some(place) => *place = chord,
             None => keys.push(chord),
@@ -89,9 +84,22 @@ impl Keymap {
         }
     }
 
-    /// Gives `action` back the table's keys.
+    /// Gives `action` back the table's keys, taking them from whatever held them since.
     pub fn reset(&mut self, action: Action) {
+        for chord in defaults(action) {
+            self.take_from_others(action, *chord);
+        }
         self.chosen.remove(action.id());
+    }
+
+    fn take_from_others(&mut self, action: Action, chord: KeyboardShortcut) {
+        for other in BINDINGS.iter().map(|binding| binding.action) {
+            let theirs = self.chords(other);
+            if other != action && theirs.iter().any(|held| same(*held, chord)) {
+                let kept = theirs.into_iter().filter(|held| !same(*held, chord));
+                self.set(other, kept.collect());
+            }
+        }
     }
 
     fn set(&mut self, action: Action, keys: Vec<KeyboardShortcut>) {
@@ -99,6 +107,19 @@ impl Keymap {
             self.chosen.remove(action.id());
         } else {
             self.chosen.insert(action.id(), keys);
+        }
+    }
+
+    /// A table key the user gave another action, as a later build may add one, is theirs:
+    /// the action the table gave it to answers it no more.
+    fn free_taken_defaults(&mut self) {
+        let taken: Vec<KeyboardShortcut> = self.chosen.values().flatten().copied().collect();
+        let is_taken = |key: &KeyboardShortcut| taken.iter().any(|held| same(*held, *key));
+        for binding in BINDINGS {
+            if !self.chosen.contains_key(binding.action.id()) && binding.keys.iter().any(is_taken) {
+                let kept = binding.keys.iter().filter(|key| !is_taken(key)).copied();
+                self.chosen.insert(binding.action.id(), kept.collect());
+            }
         }
     }
 }
@@ -118,21 +139,6 @@ impl From<BTreeMap<String, Vec<String>>> for Keymap {
         let mut keymap = Self { chosen };
         keymap.free_taken_defaults();
         keymap
-    }
-}
-
-impl Keymap {
-    /// A table key the user gave another action, as a later build may add one, is theirs:
-    /// the action the table gave it to answers it no more.
-    fn free_taken_defaults(&mut self) {
-        let taken: Vec<KeyboardShortcut> = self.chosen.values().flatten().copied().collect();
-        let is_taken = |key: &KeyboardShortcut| taken.iter().any(|held| same(*held, *key));
-        for binding in BINDINGS {
-            if !self.chosen.contains_key(binding.action.id()) && binding.keys.iter().any(is_taken) {
-                let kept = binding.keys.iter().filter(|key| !is_taken(key)).copied();
-                self.chosen.insert(binding.action.id(), kept.collect());
-            }
-        }
     }
 }
 
@@ -195,10 +201,12 @@ pub fn install(keymap: Keymap) {
     KEYMAP.set(keymap);
 }
 
+/// Reads the user's keys without a copy.
 pub fn read<R>(look: impl FnOnce(&Keymap) -> R) -> R {
     KEYMAP.with_borrow(look)
 }
 
+/// Edits the user's keys in place.
 pub fn change(edit: impl FnOnce(&mut Keymap)) {
     KEYMAP.with_borrow_mut(edit);
 }
@@ -210,6 +218,7 @@ pub fn record(slot: Option<Slot>) {
     PRESSED.set(None);
 }
 
+/// The slot the sheet is recording a chord for, if any.
 pub fn recording() -> Option<Slot> {
     RECORDING.get()
 }

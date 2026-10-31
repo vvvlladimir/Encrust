@@ -60,9 +60,7 @@ impl<'a> Cancel<'a> {
     }
 }
 
-/// The steps a field and what is cut from it go through, in order, those of an exact
-/// boolean, which a run takes instead of a field or before falling back to one, and those
-/// of a repair.
+/// The steps a field, an exact boolean or a repair goes through, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Step {
@@ -82,7 +80,7 @@ pub enum Step {
     Reading,
     /// The exact boolean itself, which counts nothing inside it.
     Combining,
-    /// The exact result made back into a mesh.
+    /// The exact result made back into a mesh, or the last mend of a deep repair.
     Finishing,
     /// A repair on the mesh alone: seams, holes, specks and doubled faces.
     Mending,

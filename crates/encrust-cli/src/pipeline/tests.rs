@@ -84,7 +84,7 @@ fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {
             &args,
             Some(&SupportPlan::of(supports.clone())),
             &chosen,
-            &quiet(&Stop::default()),
+            &Watch::quiet(&Stop::default()),
         )
         .expect("a cube orients");
         oriented.expect("--orient reports its turn").on_plate
@@ -129,7 +129,7 @@ fn an_oriented_model_is_stood_on_the_plate_over_the_middle_it_stood_over() {
         &args,
         None,
         &chosen,
-        &quiet(&Stop::default()),
+        &Watch::quiet(&Stop::default()),
     )
     .expect("a pyramid orients");
     let bounds = mesh.aabb().expect("the mesh has vertices");
@@ -167,14 +167,6 @@ fn the_angles_reported_are_the_angles_rotate_would_apply() {
     );
 }
 
-fn quiet(stop: &Stop) -> Watch<'_> {
-    Watch {
-        talk: false,
-        progress: false,
-        stop,
-    }
-}
-
 #[test]
 fn an_orientation_search_stopped_beforehand_is_cancelled() {
     use clap::Parser;
@@ -192,7 +184,7 @@ fn an_orientation_search_stopped_beforehand_is_cancelled() {
         &args,
         None,
         &chosen,
-        &quiet(&stop),
+        &Watch::quiet(&stop),
     )
     .err()
     .expect("the search was told to stop first");

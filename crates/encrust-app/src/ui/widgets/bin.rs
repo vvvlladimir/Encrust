@@ -38,12 +38,10 @@ pub fn confirm_bin(
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, tooltip));
     paint(ui, &response, look, armed, enabled);
     super::focus_ring(ui, &response, theme::R_CONTROL);
-    let tip = if armed {
-        tr!("bin-click-again")
-    } else {
-        tooltip.to_owned()
-    };
-    response.on_hover_text(tip);
+    let response = response.on_hover_text(tooltip);
+    if armed {
+        response.on_hover_text(tr!("bin-click-again"));
+    }
     fired
 }
 

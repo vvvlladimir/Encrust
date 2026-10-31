@@ -46,10 +46,8 @@ pub fn can_slice(window: &Window) -> bool {
     slicing.job.is_none() && slicing.blocker(&window.doc.scene).is_none()
 }
 
-/// The one action the window is for, at the foot of the plate's card: Slice and send with
-/// Slice to a file the square beside it while the bound machine can take the file, the
-/// errand's bar and Cancel while it runs, then Start print once the file has landed; Slice
-/// to a file alone otherwise. See `docs/decisions/0348`, `0382`.
+/// The plate card's primary action and its square: Slice and send, its bar and Cancel, then
+/// Start print; Slice to a file alone without a machine to take it (ADR 0348, 0382).
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let blocker = window.machine.slicing.blocker(&window.doc.scene);
     let free = can_slice(window);

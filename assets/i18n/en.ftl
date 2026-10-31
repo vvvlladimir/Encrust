@@ -880,6 +880,8 @@ update-step-verify = Check the signature
 update-step-install = Install
 update-cancel = Cancel
 notice-release-out = Encrust { $version } is out
+app-version = Encrust { $version }
+name-numbered = { $name } { $number }
 notice-release-and-more = { $first } and { $count } more
 notice-what-is-new = What is new
 notice-release-later = Later: the pill stays in the top bar
@@ -2094,6 +2096,7 @@ job-orient-none = the search found no orientation
 
 job-thread-stopped-support = the support thread stopped without finishing
 job-placing = Placing supports, { $percent } %
+printer-printing-file = { $state }, { $file }, { $percent }%
 job-cutting-plate = Cutting the plate...
 
 ## job/preview.rs

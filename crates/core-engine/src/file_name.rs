@@ -45,7 +45,11 @@ pub fn file_stem(template: &str, fields: &NameFields) -> String {
     for piece in pieces(template) {
         match piece {
             Piece::Text(text) => filled.push_str(text),
-            Piece::Tag(tag) => filled.push_str(&value(tag, fields)),
+            Piece::Tag(name) => {
+                let tag = Tag::named(name);
+                filled
+                    .push_str(&tag.map_or_else(|| format!("{{{name}}}"), |tag| tag.value(fields)));
+            }
         }
     }
     safe(&filled)
@@ -56,15 +60,54 @@ pub fn unknown_tags(template: &str) -> Vec<&str> {
     pieces(template)
         .into_iter()
         .filter_map(|piece| match piece {
-            Piece::Tag(tag) if !TAGS.contains(&tag) => Some(tag),
+            Piece::Tag(name) if Tag::named(name).is_none() => Some(name),
             _ => None,
         })
         .collect()
 }
 
-const TAGS: [&str; 8] = [
-    "model", "ext", "printer", "resin", "layer", "plate", "date", "time",
-];
+/// A placeholder a template may hold, `{model}` and the rest.
+#[derive(Clone, Copy)]
+enum Tag {
+    Model,
+    Ext,
+    Printer,
+    Resin,
+    Layer,
+    Plate,
+    Date,
+    Time,
+}
+
+impl Tag {
+    fn named(name: &str) -> Option<Self> {
+        Some(match name {
+            "model" => Self::Model,
+            "ext" => Self::Ext,
+            "printer" => Self::Printer,
+            "resin" => Self::Resin,
+            "layer" => Self::Layer,
+            "plate" => Self::Plate,
+            "date" => Self::Date,
+            "time" => Self::Time,
+            _ => return None,
+        })
+    }
+
+    fn value(self, fields: &NameFields) -> String {
+        match self {
+            Self::Model => fields.model.to_owned(),
+            Self::Ext => fields.model_ext.to_owned(),
+            Self::Printer => fields.printer.to_owned(),
+            Self::Resin => fields.resin.to_owned(),
+            Self::Layer => format!("{:.0}", fields.layer_height_mm * 1000.0),
+            Self::Plate => fields.plate.to_string(),
+            Self::Date => fields.when.strftime("%Y-%m-%d").to_string(),
+            // A colon is refused on Windows and shown as a slash on macOS.
+            Self::Time => fields.when.strftime("%H-%M").to_string(),
+        }
+    }
+}
 
 enum Piece<'a> {
     Text(&'a str),
@@ -91,21 +134,6 @@ fn pieces(template: &str) -> Vec<Piece<'_>> {
     }
     pieces.push(Piece::Text(rest));
     pieces
-}
-
-fn value(tag: &str, fields: &NameFields) -> String {
-    match tag {
-        "model" => fields.model.to_owned(),
-        "ext" => fields.model_ext.to_owned(),
-        "printer" => fields.printer.to_owned(),
-        "resin" => fields.resin.to_owned(),
-        "layer" => format!("{:.0}", fields.layer_height_mm * 1000.0),
-        "plate" => fields.plate.to_string(),
-        "date" => fields.when.strftime("%Y-%m-%d").to_string(),
-        // A colon is refused on Windows and shown as a slash on macOS.
-        "time" => fields.when.strftime("%H-%M").to_string(),
-        _ => format!("{{{tag}}}"),
-    }
 }
 
 /// `name` with what a file system refuses replaced, not dropped, so two names stay apart.

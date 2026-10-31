@@ -227,6 +227,7 @@ fn entry_row(ui: &mut Ui, entry: &Entry, sheet: &mut Sheet) {
         Entry::Gesture(_, keys) => {
             let keys = keys();
             let row = BindingRow {
+                id: egui::Id::new(&label),
                 name: &label,
                 chords: &[vec![keys.as_str()]],
                 recording: None,
@@ -242,6 +243,7 @@ fn entry_row(ui: &mut Ui, entry: &Entry, sheet: &mut Sheet) {
     let keys = chords(action);
     let caps: Vec<Vec<&str>> = keys.iter().map(chord_keys).collect();
     let row = BindingRow {
+        id: egui::Id::new(action.id()),
         name: &label,
         chords: &caps,
         recording: keymap::recording()
