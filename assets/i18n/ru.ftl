@@ -599,7 +599,7 @@ summary-volume = Объём
 summary-weight = Масса
 summary-time = Время
 summary-resin = Смола
-summary-block = Блок
+summary-time-to-layer = Время до слоя
 summary-details = Подробнее
 summary-model = Модель
 summary-supports = Поддержки
@@ -615,9 +615,6 @@ summary-broken-why =
        *[other] То, что из них нарезано, может не напечататься.
     }
 summary-estimate = ≈ { $value }
-summary-block-bottom = Нижние слои
-summary-block-transition = Переход
-summary-block-body = Основная часть
 
 ## ui/widgets.rs
 

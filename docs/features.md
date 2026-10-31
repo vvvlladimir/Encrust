@@ -575,7 +575,7 @@ Resin is counted from what is actually cured. Before slicing, the plate's card s
 them from the meshes, and the time, marked ≈, from the plate's height: time, resin, weight
 and price in view, the models' and the supports' share, vertices and triangles under
 *Details*, which stays open or shut between runs. In Preview the card states the layer
-shown: its exposure, its block of the ramp, the area it cures and the resin that comes to.
+shown: its exposure, the print time until it is done, the area it cures and the resin that comes to.
 
 ---
 

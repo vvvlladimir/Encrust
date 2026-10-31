@@ -13,7 +13,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
 
     if *window.mode == Mode::Preview && window.view.options.mask_only {
         ui.painter().rect_filled(stage, 0.0, theme::colors().sunken);
-        mask(ui, window, stage, clear);
+        mask(ui, window, stage, to_strip(stage, clear, clear.left()));
         stage_notice::ui(ui, window, clear);
         return;
     }
@@ -26,10 +26,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
         seen.max.x = middle;
         let pane = Rect::from_x_y_ranges(middle..=stage.right(), stage.y_range());
         ui.painter().rect_filled(pane, 0.0, theme::colors().sunken);
-        // The plate's card stands on the foot, so over it the mask's room runs to the strip.
-        let strip = stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
-        let beside = Rect::from_x_y_ranges(middle..=strip, clear.y_range());
-        mask(ui, window, pane, beside);
+        mask(ui, window, pane, to_strip(stage, clear, middle));
         divider(ui, window, stage, clear, middle);
     }
 
@@ -64,6 +61,13 @@ fn cube_corner(clear: Rect, row: Option<Rect>) -> Pos2 {
         }
         _ => clear.right_top(),
     }
+}
+
+/// The mask's room over the stage from `left`: the plate's card stands on the foot, so over
+/// it the room runs to the layer strip.
+fn to_strip(stage: Rect, clear: Rect, left: f32) -> Rect {
+    let strip = stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
+    Rect::from_x_y_ranges(left..=strip, clear.y_range())
 }
 
 /// The exposure mask, drawn in `rect`, its caption kept to `clear`.
