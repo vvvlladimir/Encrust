@@ -8,7 +8,8 @@ use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
 use crate::ui::{
-    chooser_group, focus_ring, hint, hover_mix, icon, key_row, palette_dialog, palette_field, theme,
+    chooser_group, focus_ring, hint, hover_mix, icon, key_foot, palette_dialog, palette_field,
+    theme,
 };
 use crate::workspace::Tool;
 
@@ -171,19 +172,8 @@ fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
 fn foot(ui: &mut egui::Ui) {
     let (move_to, open) = (tr!("find-move"), tr!("find-open"));
     let keys: [(&[&str], &str); 2] = [(&["↑", "↓"], &move_to), (&[icon::KEY_RETURN], &open)];
-    let top = ui.cursor().top();
-    ui.painter().hline(
-        ui.max_rect().x_range(),
-        top,
-        egui::Stroke::new(1.0, theme::colors().hairline),
-    );
-    egui::Frame::new()
-        .inner_margin(egui::Margin::symmetric(16, 6))
-        .show(ui, |ui| key_row(ui, &keys, FOOT_H));
+    key_foot(ui, &keys);
 }
-
-/// The foot's row, points.
-const FOOT_H: f32 = 22.0;
 
 /// The entries found, the lit one washed and scrolled to on the frame it `moved`, so the wheel
 /// can leave it. Answers the one clicked.
@@ -191,7 +181,7 @@ fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize, moved: bool) -> Option<Fo
     if list.is_empty() {
         ui.add_space(PAD);
         ui.horizontal(|ui| {
-            ui.add_space(16.0);
+            ui.add_space(theme::PALETTE_INSET);
             hint(ui, &tr!("find-nothing"));
         });
         return None;

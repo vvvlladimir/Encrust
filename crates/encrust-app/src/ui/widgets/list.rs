@@ -329,6 +329,41 @@ fn found_words(
     );
 }
 
+/// A quiet glyph at the end of a row, `right_center` its right end, that says more on a
+/// click: a model repair only had to tidy.
+pub fn row_mark(
+    ui: &mut Ui,
+    right_center: egui::Pos2,
+    id: Id,
+    glyph: &str,
+    label: &str,
+) -> Response {
+    let colors = theme::colors();
+    let spot = egui::Rect::from_center_size(
+        right_center - vec2(MARK_SIDE / 2.0, 0.0),
+        vec2(MARK_SIDE, MARK_SIDE),
+    );
+    let response = ui.interact(spot, id, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, label));
+    let ink = if response.hovered() {
+        colors.text_high
+    } else {
+        colors.text_low
+    };
+    ui.painter().text(
+        spot.center(),
+        Align2::CENTER_CENTER,
+        glyph,
+        theme::icon(14.0),
+        ink,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response
+}
+
+/// A row mark's square, points.
+const MARK_SIDE: f32 = 18.0;
+
 /// The dashes round a found row, points.
 const FOUND_DASH: f32 = 4.0;
 

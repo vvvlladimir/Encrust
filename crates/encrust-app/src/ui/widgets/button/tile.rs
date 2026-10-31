@@ -132,3 +132,46 @@ pub fn zone_button(ui: &mut Ui, rect: Rect, glyph: &str, title: &str, detail: &s
 
 /// Room a zone's line keeps from its edges.
 const ZONE_PAD: f32 = 24.0;
+
+/// A rounded tag in the bar ringed in its tint, the one shape both badges are drawn as;
+/// its glyph alone when `compact`, its words alone otherwise.
+pub fn bar_pill(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    text: &str,
+    compact: bool,
+    tint: egui::Color32,
+    wash: egui::Color32,
+) -> egui::Response {
+    let (shown, font) = if compact {
+        (glyph, theme::icon(13.0))
+    } else {
+        (text, theme::small())
+    };
+    let label = ui.painter().layout_no_wrap(shown.to_owned(), font, tint);
+    let size = vec2(label.size().x + PILL_PAD * 2.0, PILL_H);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
+    let fill = if response.hovered() {
+        wash
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let painter = ui.painter();
+    painter.rect(
+        rect,
+        egui::CornerRadius::same(255),
+        fill,
+        egui::Stroke::new(1.0, tint.gamma_multiply(PILL_RING)),
+        egui::StrokeKind::Inside,
+    );
+    painter.galley(rect.center() - label.size() / 2.0, label, tint);
+    focus_ring(ui, &response, egui::CornerRadius::same(255));
+    response
+}
+
+/// A badge's padding either side of its words, its height, and how strongly its ring
+/// carries the tint.
+const PILL_PAD: f32 = 8.0;
+const PILL_H: f32 = 22.0;
+const PILL_RING: f32 = 0.35;

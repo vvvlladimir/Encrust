@@ -86,3 +86,16 @@ pub fn key_row(ui: &mut Ui, keys: &[(&[&str], &str)], height: f32) {
 /// Room between two caps of a chord, and between one key's words and the next key.
 const KEY_GAP: f32 = 3.0;
 const PAIR_GAP: f32 = 16.0;
+
+/// The keys that work a palette, on a strip of their own under a rule at its foot.
+pub fn key_foot(ui: &mut Ui, keys: &[(&[&str], &str)]) {
+    let top = ui.cursor().top();
+    let stroke = egui::Stroke::new(1.0, theme::colors().hairline);
+    ui.painter().hline(ui.max_rect().x_range(), top, stroke);
+    egui::Frame::new()
+        .inner_margin(egui::Margin::symmetric(16, 6))
+        .show(ui, |ui| key_row(ui, keys, KEY_FOOT_H));
+}
+
+/// A palette's key strip, points.
+const KEY_FOOT_H: f32 = 22.0;

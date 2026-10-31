@@ -1,15 +1,16 @@
 //! The window of keys: every action of `crate::shortcuts` by group, each key a button that
 //! records another in its place. See `docs/decisions/0386`.
 
-use egui::{KeyboardShortcut, RichText, Ui, vec2};
+use egui::{KeyboardShortcut, Ui, vec2};
 
-use super::settings::frame::{child, scrolled, show, with_footer, with_header};
 use super::settings::{FIND_GAP, GROUP_GAP};
 use crate::i18n::tr;
 use crate::shortcuts::keymap::{self, MOST_CHORDS, Slot};
 use crate::shortcuts::{
     Action, BINDINGS, GESTURES, Group, chord_keys, chord_text, chords, modifier_keys,
 };
+use crate::ui::page_title;
+use crate::ui::window_frame::{child, scrolled, show, with_footer, with_header};
 use crate::ui::{
     BindingPress, BindingRow, Confirm, NavAside, Recording, binding_row, chooser_group,
     confirm_button, find_line, group_name, icon, inline_button, key_row, nav_row, notice, theme,
@@ -58,7 +59,10 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
         icon::KEYBOARD,
         &title,
         |ui, list, side| {
-            groups(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), &mut sheet);
+            groups(
+                &mut child(ui, list.shrink2(vec2(theme::PANEL_PAD, theme::SECTION_GAP))),
+                &mut sheet,
+            );
             page(ui, side, &mut sheet);
         },
     );
@@ -127,7 +131,7 @@ fn group_icon(group: Group) -> &'static str {
 /// The groups down the left under the line that narrows them: every key, those of the
 /// keyboard by group, then the pointer's.
 fn groups(ui: &mut Ui, sheet: &mut Sheet) {
-    ui.spacing_mut().item_spacing.y = 2.0;
+    ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
     find_line(ui, &mut sheet.query, &tr!("shortcuts-find"));
     ui.add_space(FIND_GAP);
     let counts: Vec<(Group, usize)> = Group::ALL
@@ -174,22 +178,12 @@ fn page(ui: &mut Ui, side: egui::Rect, sheet: &mut Sheet) {
 }
 
 fn heading(ui: &mut Ui, page: Option<Group>) {
-    let colors = theme::colors();
+    let _colors = theme::colors();
     let changed = keymap::read(keymap::Keymap::changed);
     ui.horizontal_centered(|ui| {
         let name = page.map_or_else(|| tr!("shortcuts-all"), Group::label);
-        ui.label(
-            RichText::new(name)
-                .font(theme::page_title(theme::PAGE_TITLE_PT))
-                .color(colors.text_high),
-        );
-        if changed > 0 {
-            ui.label(
-                RichText::new(tr!("shortcuts-changed", count = changed))
-                    .font(theme::page_title(theme::PAGE_TITLE_PT))
-                    .color(colors.text_low),
-            );
-        }
+        let changed = (changed > 0).then(|| tr!("shortcuts-changed", count = changed));
+        page_title(ui, &name, changed.as_deref());
     });
 }
 

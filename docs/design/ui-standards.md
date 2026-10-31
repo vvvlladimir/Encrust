@@ -125,3 +125,5 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
   `scene_panel.rs`, `settings/machines/resins.rs`, `plate_strip.rs`, `project.rs`,
   `profiles.rs`; ~120 bare `ui.label` calls outside `ui::widgets`, most in `stage_notice.rs`,
   `inspector/check.rs` and `settings/`.
+- Viewport overlays (`viewport_panel/`): the bounds, the gizmo's trail and readout and the
+  other marks of the scene are painted in place, sized in points there.

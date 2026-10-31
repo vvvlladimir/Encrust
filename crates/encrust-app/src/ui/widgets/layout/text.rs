@@ -171,3 +171,125 @@ pub fn meta(ui: &mut Ui, lines: &[String]) {
         );
     }
 }
+
+/// A page's title, with `aside` after it in the same face, quieter: Settings' pages and the
+/// key sheet's.
+pub fn page_title(ui: &mut Ui, title: &str, aside: Option<&str>) {
+    let colors = theme::colors();
+    let font = theme::page_title(theme::PAGE_TITLE_PT);
+    ui.label(
+        RichText::new(title)
+            .font(font.clone())
+            .color(colors.text_high),
+    );
+    if let Some(aside) = aside {
+        ui.label(RichText::new(aside).font(font).color(colors.text_low));
+    }
+}
+
+/// A verdict standing on its own card in `wash`: a glyph in `tint`, the verdict, and a line
+/// under it saying what it means.
+pub fn verdict_card(
+    ui: &mut Ui,
+    glyph: &str,
+    (tint, wash): (egui::Color32, egui::Color32),
+    title: &str,
+    note: &str,
+) {
+    let colors = theme::colors();
+    Frame::new()
+        .fill(wash)
+        .corner_radius(theme::R_SURFACE)
+        .inner_margin(theme::CARD_MARGIN)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.label(RichText::new(glyph).font(theme::icon(20.0)).color(tint));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.label(
+                        RichText::new(title)
+                            .font(theme::label())
+                            .color(colors.text_high),
+                    );
+                    ui.label(
+                        RichText::new(note)
+                            .font(theme::small())
+                            .color(colors.text_mid),
+                    );
+                });
+            });
+        });
+}
+
+/// A tool card's title: the tool's glyph in the accent, then its name.
+pub fn tool_title(ui: &mut Ui, glyph: &str, name: &str) {
+    let colors = theme::colors();
+    ui.spacing_mut().item_spacing.x = 8.0;
+    ui.label(
+        RichText::new(glyph)
+            .font(theme::icon(16.0))
+            .color(colors.accent_soft),
+    );
+    ui.label(
+        RichText::new(name)
+            .font(theme::tool_title())
+            .color(colors.text_high),
+    );
+}
+
+/// A figure in `tint`, cut short when the room runs out: a tool's fact beside its title.
+pub fn figure_line(ui: &mut Ui, text: &str, tint: egui::Color32) {
+    let text = RichText::new(text).font(theme::figures(12.0)).color(tint);
+    ui.add(egui::Label::new(text).truncate());
+}
+
+/// A state in its colour, cut short when the room runs out: a listed printer's.
+pub fn state_word(ui: &mut Ui, text: &str, tint: egui::Color32) -> egui::Response {
+    let text = RichText::new(text).font(theme::small()).color(tint);
+    ui.add(egui::Label::new(text).truncate())
+}
+
+/// A network address as it is typed, in the code face.
+pub fn address_label(ui: &mut Ui, text: &str) {
+    let mid = theme::colors().text_mid;
+    ui.label(RichText::new(text).font(theme::code(11.0)).color(mid));
+}
+
+/// A name in the low tone, cut short when the room runs out: the project over its models.
+pub fn name_line(ui: &mut Ui, text: &str) {
+    let low = theme::colors().text_low;
+    let text = RichText::new(text).font(theme::label()).color(low);
+    ui.add(egui::Label::new(text).truncate());
+}
+
+/// A name in plain ink, cut short when the room runs out: a print's file.
+pub fn title_line(ui: &mut Ui, text: &str) -> egui::Response {
+    let high = theme::colors().text_high;
+    let text = RichText::new(text).font(theme::label()).color(high);
+    ui.add(egui::Label::new(text).truncate())
+}
+
+/// The share of a job done, large: a print in its sheet.
+pub fn share_figure(ui: &mut Ui, text: &str) {
+    let high = theme::colors().text_high;
+    ui.label(
+        RichText::new(text)
+            .font(theme::figures(SHARE_PT))
+            .color(high),
+    );
+}
+
+/// A [`share_figure`]'s size, points.
+const SHARE_PT: f32 = 22.0;
+
+/// A form block's title, quieter than the fields under it.
+pub fn block_title(ui: &mut Ui, title: &str) {
+    let mid = theme::colors().text_mid;
+    ui.label(RichText::new(title).font(theme::block_title()).color(mid));
+}
+
+/// A glyph saying how a message stands, in `tint`, before its words.
+pub fn status_glyph(ui: &mut Ui, glyph: &str, tint: egui::Color32) {
+    ui.label(RichText::new(glyph).font(theme::icon(16.0)).color(tint));
+}

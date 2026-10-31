@@ -1,14 +1,7 @@
-use egui::{Align2, Sense, vec2};
-
 use crate::i18n::tr;
 use crate::scene::{ObjectId, Scene};
 use crate::shortcuts::{self, Action};
-use crate::ui::{focus_ring, icon, small_icon_button, theme};
-
-/// How big a plate's square is: as the card's other squares.
-const SIDE: f32 = theme::SMALL_ICON_SIZE;
-/// How strongly the accent rings the plate in front.
-const ACTIVE_RING: f32 = 0.4;
+use crate::ui::{icon, numbered_square, small_icon_button};
 
 /// The row at the head of the plate panel: one numbered square per plate and the way to add
 /// another, scrolling past `max_w` points. A one-plate project still shows it.
@@ -97,40 +90,14 @@ enum Asked {
 /// One plate: its number, lit while it is the plate in front, with its name and what
 /// stands on it on hover, and the rest on a right click.
 fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<Asked> {
-    let colors = theme::colors();
-    let (rect, response) = ui.allocate_exact_size(vec2(SIDE + 2.0, SIDE), Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Button, true, place.active, name)
-    });
-    let (fill, ring, ink) = match (place.active, response.hovered()) {
-        (true, _) => (
-            colors.accent_wash,
-            colors.accent.gamma_multiply(ACTIVE_RING),
-            colors.accent_soft,
-        ),
-        (false, true) => (colors.hover, colors.hairline, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.hairline, colors.text_mid),
-    };
-    let painter = ui.painter();
-    let stroke = egui::Stroke::new(1.0, ring);
-    painter.rect(
-        rect,
-        theme::R_CONTROL,
-        fill,
-        stroke,
-        egui::StrokeKind::Inside,
-    );
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        (place.plate + 1).to_string(),
-        theme::figures(12.0),
-        ink,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
+    let response = numbered_square(ui, place.plate as usize + 1, place.active, name);
 
     let models = tr!("start-models", count = count);
-    let response = response.on_hover_text(format!("{name}, {models}"));
+    let response = response.on_hover_text(tr!(
+        "name-and-detail",
+        name = name.to_owned(),
+        detail = models
+    ));
     let asked = menu(&response, place);
     asked.or_else(|| response.clicked().then_some(Asked::Show))
 }

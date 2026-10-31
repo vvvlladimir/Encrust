@@ -4,6 +4,7 @@ use crate::i18n::tr;
 use crate::panels::{Window, unreadable_profiles};
 use crate::scene::ObjectId;
 use crate::status::{Change, Status};
+use crate::ui::status_glyph;
 use crate::ui::{
     NoticeReply, card, icon, icon_button, job_notice, notice_card, theme, theme::motion,
 };
@@ -326,8 +327,7 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if error {
-                    let glyph = RichText::new(icon::ERROR).font(theme::icon(16.0));
-                    ui.label(glyph.color(colors.danger));
+                    status_glyph(ui, icon::ERROR, colors.danger);
                 }
                 // A message longer than the room wraps rather than running past the card.
                 let close_w = if error { theme::ICON_SIZE + 8.0 } else { 0.0 };

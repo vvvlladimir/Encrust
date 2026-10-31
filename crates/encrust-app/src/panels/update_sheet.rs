@@ -19,6 +19,8 @@ const SCREEN_MARGIN: f32 = 96.0;
 const CHROME_H: f32 = 230.0;
 const CHANGES_MAX_H: f32 = 380.0;
 const CHANGES_MIN_H: f32 = 120.0;
+/// Room kept at the hero's right for its button.
+const HERO_BUTTON_W: f32 = 140.0;
 /// Room above a group of the changes but the first.
 const GROUP_GAP: f32 = 12.0;
 
@@ -63,10 +65,12 @@ fn hero(ui: &mut Ui, offer: &Offer) {
         let to = offer.version.to_string();
         let page = format!("{RELEASES}/tag/v{to}");
         let line = hero_line(offer, &from, &to);
-        let button_w = 140.0;
-        ui.allocate_ui(egui::vec2(ui.available_width() - button_w, 40.0), |ui| {
-            release_hero(ui, &tr!("app-version", version = to.clone()), &line);
-        });
+        ui.allocate_ui(
+            egui::vec2(ui.available_width() - HERO_BUTTON_W, theme::PRIMARY_H),
+            |ui| {
+                release_hero(ui, &tr!("app-version", version = to.clone()), &line);
+            },
+        );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let label = tr!("updates-release-page");
             if quiet_button(ui, icon::ELSEWHERE, &label, false, true).clicked() {

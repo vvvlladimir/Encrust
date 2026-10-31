@@ -75,13 +75,13 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
             .show(ui, |ui| {
                 // The privacy notice as well, so it says what does not happen first (ADR 0212).
                 hint(ui, &tr!("report-nothing-sent"));
-                ui.add_space(12.0);
+                ui.add_space(theme::PANEL_PAD);
                 asked(ui, &tr!("report-what-happened"), &mut report.what);
                 asked(ui, &tr!("report-steps"), &mut report.steps);
                 carried(ui, report);
-                ui.add_space(8.0);
+                ui.add_space(theme::ITEM_GAP);
                 hint(ui, &tr!("report-no-model"));
-                ui.add_space(12.0);
+                ui.add_space(theme::PANEL_PAD);
 
                 // Drawn after the fields so that a key pressed this frame is already in it.
                 let text = report.markdown(&facts);
@@ -89,7 +89,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
                 text
             })
             .inner;
-        ui.add_space(12.0);
+        ui.add_space(theme::PANEL_PAD);
         handed_over(ui, report, &facts, &text, status);
     });
 

@@ -3,10 +3,11 @@
 
 use egui::RichText;
 
-use super::{colour_of, controls, face, history, job_lines, picture_of, trouble_lines};
+use super::{colour_of, controls, face, history, job_lines, trouble_lines};
 use crate::i18n::tr;
 use crate::network::{Errand, Extras, Network, Reading, Target};
 use crate::panels::Window;
+use crate::ui::print_picture;
 use crate::ui::{dialog, dialog_head, hairline, icon, subheading, theme, tone};
 
 /// How wide the sheet is, and the picture of the plate at its left.
@@ -35,9 +36,9 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
         ui.set_width(SHEET_W);
         close = dialog_head(ui, icon::PRINTER, &network.label(&target));
         tone(ui, &about(&target), theme::colors().text_low);
-        ui.add_space(8.0);
+        ui.add_space(theme::ITEM_GAP);
         hairline(ui);
-        ui.add_space(12.0);
+        ui.add_space(theme::PANEL_PAD);
         errand = body(ui, network, &target);
     });
     if close || modal.should_close() {
@@ -67,7 +68,7 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
                 .and_then(|state| state.job_id.as_ref())
                 .and_then(|id| extras?.pictures.get(id)?.texture());
             match texture {
-                Some(texture) => picture_of(ui, texture, PICTURE),
+                Some(texture) => print_picture(ui, Some(texture), PICTURE),
                 None => empty_picture(ui),
             }
             if let Some(state) = state {
@@ -109,9 +110,9 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
 
 /// The prints the printer remembers, under a rule, as tall as its tiles allow.
 fn recent_prints(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand> {
-    ui.add_space(14.0);
+    ui.add_space(theme::SECTION_GAP);
     hairline(ui);
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     subheading(ui, &tr!("sheet-recent-prints"));
     // As tall as the tiles, up to what the window has left under them: a short window
     // scrolls the history rather than pushing the sheet off the screen.

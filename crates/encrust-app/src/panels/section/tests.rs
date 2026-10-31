@@ -1,8 +1,9 @@
 use super::playback::{fraction, run_up};
 use super::reading::Reading;
-use super::track::{Mark, Marks, grabs_floor, outline, span_fraction};
+use super::track::{grabs_floor, marks_of};
 use super::*;
 use crate::preview::Preview;
+use crate::ui::{LayerMark, LayerMarks, span_fraction};
 use crate::workspace::{Mode, Section};
 
 /// BUG: typing a layer pulled the track and its knob up over the readout.
@@ -57,35 +58,20 @@ fn the_strip_marks_the_widest_layer_full_height_and_an_island_where_it_starts() 
         measured.push(layer(lit), 0.05);
     }
 
-    let marks = Marks::of(&measured, 4);
+    let marks = marks_of(&measured, 4);
     assert_eq!(marks.widths, vec![0.25, 1.0, 0.25, 0.25]);
     assert_eq!(marks.risks.len(), 1);
     assert!((marks.risks[0].at - 1.0).abs() < 1e-6, "the top layer");
 }
 
 #[test]
-fn the_outline_joins_close_peaks_and_never_dips_under_a_row() {
-    let comb = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
-    let joined = outline(&comb, 1);
-    assert!(
-        joined.iter().all(|width| (width - 1.0).abs() < 1e-6),
-        "{joined:?}"
-    );
-    let lone = [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.25];
-    let drawn = outline(&lone, 2);
-    for (row, (raw, drawn)) in lone.iter().zip(&drawn).enumerate() {
-        assert!(drawn >= raw, "row {row}: {drawn} under {raw}");
-    }
-}
-
-#[test]
 fn a_press_on_a_risk_bar_takes_the_nearest_risk_and_misses_beside_the_bar() {
-    let mark = |at: f32, layer| Mark {
+    let mark = |at: f32, layer| LayerMark {
         at,
         tint: egui::Color32::RED,
         layer,
     };
-    let marks = Marks {
+    let marks = LayerMarks {
         widths: Vec::new(),
         risks: vec![mark(0.10, 10), mark(0.12, 12), mark(0.50, 50)],
     };

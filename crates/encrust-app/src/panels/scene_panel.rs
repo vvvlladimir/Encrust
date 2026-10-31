@@ -12,6 +12,7 @@ use crate::panels::{Window, plate_strip};
 use crate::project;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
+use crate::ui::name_line;
 use crate::ui::{
     body_and_foot, count_row, empty_state, focus_ring, hairline, heading, icon, inline_button,
     number_row, secondary_button, small_icon_button, theme, tone,
@@ -53,7 +54,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
     let inner = rect
         .shrink2(vec2(theme::PANEL_PAD, 0.0))
-        .with_max_x(rect.right() - 6.0);
+        .with_max_x(rect.right() - theme::ROW_GAP);
     ui.scope_builder(
         egui::UiBuilder::new()
             .max_rect(inner)
@@ -86,10 +87,7 @@ fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
     let Some(name) = opened.name() else {
         return;
     };
-    let text = egui::RichText::new(tr!("models-project", name = name.to_owned()))
-        .font(theme::label())
-        .color(theme::colors().text_low);
-    ui.add(egui::Label::new(text).truncate());
+    name_line(ui, &tr!("models-project", name = name.to_owned()));
 }
 
 /// What can be done to what stands on the plate. These belong to the contents rather
@@ -316,14 +314,20 @@ fn row(
     let asked = row_menu(&response, object, plates, active);
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
-    let end = rect.right() - 8.0;
+    let end = rect.right() - theme::ITEM_GAP;
     let (name_right, repair) = match trouble(&object.summary) {
         Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
         None => (end, false),
     };
 
-    let name_left = eye.right() + 4.0;
-    name_text(ui, object, rect, (name_left, name_right - 8.0), &response);
+    let name_left = eye.right() + theme::NOTE_GAP;
+    name_text(
+        ui,
+        object,
+        rect,
+        (name_left, name_right - theme::ITEM_GAP),
+        &response,
+    );
 
     if let Some(asked) = asked {
         return Some(asked);

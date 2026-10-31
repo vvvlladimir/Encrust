@@ -13,6 +13,7 @@ use crate::ui::{
     Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list, subheading, theme,
     tone,
 };
+use crate::ui::{address_label, state_word};
 
 /// How wide a field here is: enough for a host name, not enough to stretch the card.
 const FIELD_W: f32 = 230.0;
@@ -161,19 +162,10 @@ fn listed_row(
                         .hint_text(machine.address.clone())
                         .desired_width(NAME_W),
                 );
-                ui.label(
-                    egui::RichText::new(&machine.address)
-                        .font(theme::code(11.0))
-                        .color(colors.text_mid),
-                );
+                address_label(ui, &machine.address);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     removed = icon_button(ui, icon::REMOVE, &tr!("connection-take-off")).clicked();
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(state).font(theme::small()).color(tint),
-                        )
-                        .truncate(),
-                    );
+                    state_word(ui, &state, tint);
                 });
             });
         });

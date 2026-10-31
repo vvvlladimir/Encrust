@@ -49,7 +49,7 @@ fn release(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
             &tr!("updates-and-more", count = items.len() - CHANGES_SHOWN),
         );
     }
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     ui.horizontal(|ui| {
         act(ui, updates, offer);
         let every = tr!("updates-every-change");

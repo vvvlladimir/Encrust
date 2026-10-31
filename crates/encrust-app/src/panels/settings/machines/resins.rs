@@ -8,9 +8,9 @@ use super::{Action, ZONE_GAP};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::confirm::cost;
-use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
+use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::ui::{
     Confirm, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon, inline_button,
     quiet_button, theme, zone_button,

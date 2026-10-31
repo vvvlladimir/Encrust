@@ -34,7 +34,7 @@ fn file_name(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
             let buttons = if reset { RESET_W } else { 0.0 };
             ui.add(
                 crate::ui::text_box(egui::TextEdit::singleline(template))
-                    .font(crate::ui::theme::code(12.0))
+                    .font(crate::ui::theme::typed_path())
                     .desired_width((ui.available_width() - buttons).max(0.0)),
             );
             if reset && icon_button(ui, icon::RESET, &tr!("general-file-name-reset")).clicked() {
@@ -118,7 +118,7 @@ fn path_box(ui: &mut Ui, path: &str, buttons: f32) {
     let mut text = path.to_owned();
     ui.add(
         crate::ui::text_box(egui::TextEdit::singleline(&mut text))
-            .font(crate::ui::theme::code(12.0))
+            .font(crate::ui::theme::typed_path())
             .interactive(false)
             .desired_width((ui.available_width() - buttons).max(0.0)),
     );

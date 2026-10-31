@@ -4,7 +4,6 @@
 mod appearance;
 mod compensation;
 mod confirm;
-pub(super) mod frame;
 mod general;
 pub(super) mod machines;
 mod presets;
@@ -14,17 +13,19 @@ mod resin;
 mod supports;
 mod updates;
 
-use egui::{Align, Layout, RichText, Ui, vec2};
+use egui::{Align, Layout, Ui, vec2};
 use printer_profiles::Kind;
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::settings::Section;
 use crate::status::Status;
+use crate::ui::window_frame as frame;
 use crate::ui::{
     NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
     nav_row, theme,
 };
+use crate::ui::{block_title, page_title};
 use frame::{child, scrolled, with_header};
 pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
 pub use profile_files::{import_dropped, import_profile};
@@ -187,16 +188,7 @@ enum Heading {
 fn form_heading(ui: &mut Ui, name: &str) -> Option<Heading> {
     ui.horizontal_centered(|ui| {
         let back = icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked();
-        ui.label(
-            RichText::new(name)
-                .font(theme::page_title(theme::PAGE_TITLE_PT))
-                .color(theme::colors().text_high),
-        );
-        ui.label(
-            RichText::new(tr!("settings-support-profile"))
-                .font(theme::body())
-                .color(theme::colors().text_low),
-        );
+        page_title(ui, name, Some(&tr!("settings-support-profile")));
         back.then_some(Heading::Back)
     })
     .inner
@@ -207,19 +199,11 @@ fn form_heading(ui: &mut Ui, name: &str) -> Option<Heading> {
 fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     let mut pressed = None;
     ui.horizontal_centered(|ui| {
-        ui.label(
-            RichText::new(section.label())
-                .font(theme::page_title(theme::PAGE_TITLE_PT))
-                .color(theme::colors().text_high),
-        );
-        if section == Section::Updates {
-            let running = crate::updates::Updates::running().to_string();
-            ui.label(
-                RichText::new(tr!("updates-this-build", version = running))
-                    .font(theme::page_title(theme::PAGE_TITLE_PT))
-                    .color(theme::colors().text_low),
-            );
-        }
+        let running = (section == Section::Updates).then(|| {
+            let version = crate::updates::Updates::running().to_string();
+            tr!("updates-this-build", version = version)
+        });
+        page_title(ui, &section.label(), running.as_deref());
         let Some(kind) = section.kind() else {
             return;
         };
@@ -328,12 +312,9 @@ fn close_cards(ui: &mut egui::Ui) {
 /// A form card's title, the question mark that reads out what its fields described, and at
 /// the right the card's switch when it has one.
 fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String], on: Option<&mut bool>) {
-    let title_text = egui::RichText::new(title)
-        .font(theme::block_title())
-        .color(theme::colors().text_mid);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(title_text);
+        block_title(ui, title);
         if !texts.is_empty() {
             crate::ui::help_mark(ui, texts);
         }

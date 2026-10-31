@@ -1,6 +1,6 @@
 use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use core_geometry::Vec3;
-use egui::{Color32, RichText};
+use egui::Color32;
 
 use crate::check::{Place, Stage};
 use crate::i18n::tr;
@@ -10,6 +10,7 @@ use crate::preview::{on_plate, plate_fingerprint};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::supports::ISLANDS_GROUP;
+use crate::ui::verdict_card;
 use crate::ui::{
     describe, hint, icon, readings, secondary_button, section, section_with_actions, theme,
 };
@@ -196,30 +197,9 @@ pub fn tint(risk: &Risk) -> Color32 {
 /// The card that says the check found nothing to fail on.
 fn verdict(ui: &mut egui::Ui) {
     let colors = theme::colors();
-    egui::Frame::new()
-        .fill(colors.ok_wash)
-        .corner_radius(theme::R_SURFACE)
-        .inner_margin(theme::CARD_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
-                ui.label(
-                    RichText::new(icon::CLEAR)
-                        .font(theme::icon(22.0))
-                        .color(colors.ok),
-                );
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 3.0;
-                    let title = tr!("check-nothing-found");
-                    ui.label(RichText::new(title).heading().color(colors.text_high));
-                    ui.label(
-                        RichText::new(tr!("check-nothing-found-why"))
-                            .font(theme::small())
-                            .color(colors.text_mid),
-                    );
-                });
-            });
-        });
+    let title = tr!("check-nothing-found");
+    let why = tr!("check-nothing-found-why");
+    verdict_card(ui, icon::CLEAR, (colors.ok, colors.ok_wash), &title, &why);
 }
 
 /// Supporting the islands or taking them out of the written file, side by side, or once
@@ -290,33 +270,14 @@ fn hanging_action(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing, risk
 fn removed_block(ui: &mut egui::Ui, removed: usize) {
     let colors = theme::colors();
     let title = removed_note(removed).unwrap_or_else(|| tr!("check-no-islands-to-take"));
-    egui::Frame::new()
-        .fill(colors.raised)
-        .corner_radius(theme::R_SURFACE)
-        .inner_margin(theme::CARD_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
-                ui.label(
-                    RichText::new(icon::ERASE)
-                        .font(theme::icon(18.0))
-                        .color(colors.text_mid),
-                );
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    ui.label(
-                        RichText::new(title)
-                            .font(theme::label())
-                            .color(colors.text_high),
-                    );
-                    ui.label(
-                        RichText::new(tr!("check-erased-note"))
-                            .font(theme::small())
-                            .color(colors.text_low),
-                    );
-                });
-            });
-        });
+    let note = tr!("check-erased-note");
+    verdict_card(
+        ui,
+        icon::ERASE,
+        (colors.text_mid, colors.raised),
+        &title,
+        &note,
+    );
 }
 
 /// Goes to the layer `risks` lie on: the slider there, the view cut at it, and the camera

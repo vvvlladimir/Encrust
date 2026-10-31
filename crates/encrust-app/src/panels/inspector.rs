@@ -22,11 +22,12 @@ pub(crate) use check::issue_name;
 pub use check::{go_to as go_to_risks, tint as risk_tint};
 pub(super) use position::auto_orient;
 
-use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
+use egui::{Align, Layout, Sense, UiBuilder, vec2};
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{body_and_foot, card_foot, hairline, help_mark, mode_group, theme};
+use crate::ui::{figure_line, tool_title};
 use crate::workspace::Tool;
 
 /// The card beside the rail: the open tool, no taller than `max_h` points; its sections
@@ -144,7 +145,7 @@ fn help(tool: Tool) -> String {
 
 /// The tool's glyph, name and help, its fact at the right, and the fold beside it.
 fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
-    let colors = theme::colors();
+    let _colors = theme::colors();
     let (rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), theme::INSPECTOR_HEAD_H),
         Sense::hover(),
@@ -152,17 +153,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     let inner = rect.shrink2(vec2(theme::PANEL_PAD, 0.0));
     let layout = Layout::left_to_right(Align::Center);
     let mut child = ui.new_child(UiBuilder::new().max_rect(inner).layout(layout));
-    child.spacing_mut().item_spacing.x = 8.0;
-    child.label(
-        RichText::new(tool.glyph())
-            .font(theme::icon(16.0))
-            .color(colors.accent_soft),
-    );
-    child.label(
-        RichText::new(tool.label())
-            .font(theme::tool_title())
-            .color(colors.text_high),
-    );
+    tool_title(&mut child, tool.glyph(), &tool.label());
     let mut texts = vec![help(tool)];
     if tool == Tool::Relief {
         texts.push(relief::mode_note(window));
@@ -179,10 +170,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         if let Some(modes) = modes {
             mode_group(ui, |ui| modes(ui, window));
         } else if let Some((text, color)) = fact(window, tool) {
-            ui.add(
-                egui::Label::new(RichText::new(text).font(theme::figures(12.0)).color(color))
-                    .truncate(),
-            );
+            figure_line(ui, &text, color);
         }
     });
     hairline(ui);
