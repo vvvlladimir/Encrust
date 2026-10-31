@@ -241,6 +241,8 @@ shortcut-group-plate = The plate
 shortcut-group-window = The window
 shortcut-group-layers = The layers
 shortcut-group-files = Files
+shortcut-group-view = The view
+shortcut-group-pointer = Mouse and trackpad
 gesture-move-focus = Move between the controls
 gesture-move-focus-keys = Tab, Shift Tab
 gesture-press-focus = Press the control in focus
@@ -273,8 +275,33 @@ status-removed-models =
 
 shortcuts-title = Keyboard shortcuts
 shortcuts-find = Find a key
-shortcuts-note = A tool takes the digit of its place on the rail. Keys are off while a field has the cursor.
-shortcuts-or = or
+shortcuts-all = All keys
+shortcuts-list-keyboard = Keyboard
+shortcuts-list-pointer = Pointer
+shortcuts-changed =
+    { $count ->
+        [one] { $count } changed
+       *[other] { $count } changed
+    }
+shortcuts-none-found = No key by that name
+shortcuts-taken = { $keys } already does { $action }
+shortcuts-taken-why = Replace takes it from { $action }, which keeps its other keys.
+shortcuts-replace = Replace
+shortcuts-keep = Cancel
+shortcuts-reset-all = Reset every key
+shortcuts-reset-all-asked = Reset every key?
+shortcuts-reset-all-tooltip = Every action goes back to the keys it came with
+shortcuts-stop = Stop without keeping it
+
+## ui/widgets/binding.rs
+
+binding-change = Press to record another key
+binding-listening = Press the keys
+binding-done = Done
+binding-stop = Stop without keeping it
+binding-add = Add a key
+binding-clear = Take this key off
+binding-reset = Back to the keys it came with
 
 ## settings.rs
 

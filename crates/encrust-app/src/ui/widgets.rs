@@ -3,6 +3,7 @@
 use crate::i18n::tr;
 
 mod bin;
+mod binding;
 mod button;
 mod chooser;
 mod confirm;
@@ -24,6 +25,7 @@ mod theme_card;
 mod toggle;
 
 pub use bin::{BinLook, bin_button, confirm_bin};
+pub use binding::{BindingPress, BindingRow, Recording, binding_row};
 pub use button::{
     RailButton, blocked_hover, compact_button, companion_button, companion_square, filter_chip,
     focus_ring, hover_mix, icon_button, icon_toggle, inline_button, primary_button,
@@ -47,10 +49,9 @@ pub use hint_bar::{hint_bar, hint_bar_names};
 pub use keycap::{key_row, keycap, keycap_width};
 pub use layout::{
     body_and_foot, boxed, busy, card, card_foot, card_title, describe, described, describing,
-    dialog, dialog_head, dialog_head_searching, empty_state, field_note, hairline, heading,
-    help_mark, hint, inset, meta, mode_column, mode_group, nested, notice, palette_dialog,
-    progress_bar, progress_bar_of, readings, stats, step_bar, subheading, subheading_with_switch,
-    vertical_hairline,
+    dialog, dialog_head, empty_state, field_note, hairline, heading, help_mark, hint, inset, meta,
+    mode_column, mode_group, nested, notice, palette_dialog, progress_bar, progress_bar_of,
+    readings, stats, step_bar, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{

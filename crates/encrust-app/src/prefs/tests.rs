@@ -296,3 +296,26 @@ fn the_update_check_survives_the_round_trip() {
     let read: Preferences = serde_json::from_str(&text).expect("and read back");
     assert_eq!(read.updates, updates);
 }
+
+/// The same text goes to a file on the desktop and to the page's storage in a browser.
+#[test]
+fn the_keys_the_user_chose_survive_the_round_trip() {
+    use crate::shortcuts::Action;
+    let mut keys = Keymap::default();
+    let chord = egui::KeyboardShortcut::new(
+        egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+        egui::Key::K,
+    );
+    keys.assign(Action::Find, 0, chord);
+    let prefs = Preferences::default().with_keys(keys.clone());
+    let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+    assert!(text.contains(r#""find":["Shift+Cmd+K"]"#), "{text}");
+    let read: Preferences = serde_json::from_str(&text).expect("and read back");
+    assert_eq!(read.keys, keys);
+}
+
+#[test]
+fn a_file_written_before_keys_could_be_chosen_keeps_the_tables() {
+    let read: Preferences = serde_json::from_str("{}").expect("an empty file reads");
+    assert_eq!(read.keys, Keymap::default());
+}

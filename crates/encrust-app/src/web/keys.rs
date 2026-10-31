@@ -1,16 +1,21 @@
-//! Keeps the window's chords from the browser, which acts only on the keys eframe names.
+//! Keeps the window's chords from the browser, which acts only on the keys eframe names,
+//! and every chord while the key sheet records one.
 
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::prelude::*;
 
-use crate::shortcuts::kept_from_browser;
+use crate::shortcuts::{kept_from_browser, keymap};
 
 /// Listens on the whole page from the capture phase, so a chord pressed while a field has the
 /// focus is kept as well; the window still sees every key.
 pub fn keep_from_browser() -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
     let keydown = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(|event| {
-        if pressed(&event).is_some_and(|(key, modifiers)| kept_from_browser(key, modifiers)) {
+        // A chord recording must not also bookmark the page on Cmd D or save it on Cmd S.
+        let recording = keymap::recording().is_some();
+        if recording
+            || pressed(&event).is_some_and(|(key, modifiers)| kept_from_browser(key, modifiers))
+        {
             event.prevent_default();
         }
     });

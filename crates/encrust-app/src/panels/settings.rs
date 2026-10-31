@@ -4,7 +4,7 @@
 mod appearance;
 mod compensation;
 mod confirm;
-mod frame;
+pub(super) mod frame;
 mod general;
 pub(super) mod machines;
 mod presets;
@@ -52,7 +52,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
 /// profiles, the window's own, then help; at the list's foot the window the rest lives in.
 fn pages(ui: &mut Ui, window: &mut Window) {
     ui.spacing_mut().item_spacing.y = 2.0;
-    find_line(ui, &mut window.machine.settings.find);
+    find_line(ui, &mut window.machine.settings.find, &tr!("settings-find"));
     ui.add_space(FIND_GAP);
     let find = window.machine.settings.find.to_lowercase();
     let groups = [
@@ -80,8 +80,7 @@ fn pages(ui: &mut Ui, window: &mut Window) {
             }
         }
     }
-    // The keys are a sheet rather than a page: there is nothing to edit, and one listing
-    // is enough. See `crate::shortcuts`.
+    // The keys are a window of their own, which `?` reaches from anywhere; see ADR 0386.
     let keys = tr!("settings-shortcuts");
     if keys.to_lowercase().contains(&find) {
         ui.add_space(GROUP_GAP);
@@ -99,12 +98,12 @@ fn pages(ui: &mut Ui, window: &mut Window) {
     }
 }
 
-/// The line that narrows the pages, `⌘F` reaching it from anywhere in the window.
-fn find_line(ui: &mut Ui, find: &mut String) {
+/// The line that narrows a window's list, `⌘F` reaching it from anywhere in the window.
+pub(super) fn find_line(ui: &mut Ui, find: &mut String, hint: &str) {
     let keys = format!("{}F", icon::KEY_COMMAND);
     let field = ui.add(
         crate::ui::text_box(egui::TextEdit::singleline(find))
-            .hint_text(format!("{}  {}", icon::FIND, tr!("settings-find")))
+            .hint_text(format!("{}  {hint}", icon::FIND))
             .desired_width(ui.available_width()),
     );
     if ui.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
@@ -256,8 +255,8 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
 
 const NAV_ROW_H: f32 = theme::BUTTON_H + 4.0;
 /// Room over a group name of the list but the first, and under the find line.
-const GROUP_GAP: f32 = 10.0;
-const FIND_GAP: f32 = 12.0;
+pub(super) const GROUP_GAP: f32 = 10.0;
+pub(super) const FIND_GAP: f32 = 12.0;
 /// From the find line's right edge to its keycap's, points.
 const FIND_CAP_INSET: f32 = 6.0;
 /// The badge on a page a release waits on, points across.

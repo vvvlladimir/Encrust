@@ -290,9 +290,14 @@ top bar showing the percent. A release found is said once a version by a notice 
 stage's foot (*Encrust 0.15.0 is out*, its first change and how many more, What is new,
 the cross leaving the pill).
 
-**Keyboard shortcuts**, 800 wide, *Find a key* in its title row narrowing the rows by name:
-the keys in two columns of groups under 10.5 capital
-names — Tools, The plate, then The window, The layers, Files — each a row of name and keys.
+**Keyboard shortcuts** shares the Settings frame. The list: *Find a key* (`⌘F`, narrowing
+the rows by name), All keys, then Keyboard (Tools, The plate, The view, The layers, Files,
+The window) and Pointer (Mouse and trackpad), each with its count. The page: its name, *N
+changed* in `text_low` after it, then `binding_row`s, under a `group_name` each group on
+All keys. A key recording shows the chord pressed last, or the modifiers held, then Done
+(accent once a chord was pressed). Done is answered under its row, if another action holds
+the chord, by a warn `notice` (*⌘D already does Duplicate*) over Replace (accent) and Cancel. The bar:
+Reset every key (`confirm_button`), and while a key records `Esc` Stop without keeping it.
 
 ## Start page
 

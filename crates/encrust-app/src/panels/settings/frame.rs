@@ -13,13 +13,13 @@ const HEADER_H: f32 = 64.0;
 /// The action bar, and the foot of the list beside it at the same height so the two
 /// hairlines over them meet.
 const FOOTER_H: f32 = theme::DIALOG_BAR_H;
-pub(super) const LIST_FOOT_H: f32 = FOOTER_H;
+pub(in crate::panels) const LIST_FOOT_H: f32 = FOOTER_H;
 /// Room either side of what the right side shows.
-pub(super) const SIDE_PAD: f32 = 20.0;
+pub(in crate::panels) const SIDE_PAD: f32 = 20.0;
 
 /// Shows a window over the plate under `title`, and hands `add` the list's rect down the
 /// left and the side's beside it. Answers whether the window was asked to close.
-pub(super) fn show(
+pub(in crate::panels) fn show(
     ctx: &egui::Context,
     id: &str,
     glyph: &str,
@@ -59,7 +59,7 @@ pub(super) fn show(
 }
 
 /// A child laid out top down inside `rect`, and clipped to it.
-pub(super) fn child(ui: &mut Ui, rect: Rect) -> Ui {
+pub(in crate::panels) fn child(ui: &mut Ui, rect: Rect) -> Ui {
     let mut child = ui.new_child(
         UiBuilder::new()
             .max_rect(rect)
@@ -69,12 +69,12 @@ pub(super) fn child(ui: &mut Ui, rect: Rect) -> Ui {
     child
 }
 
-pub(super) fn stroke() -> egui::Stroke {
+pub(in crate::panels) fn stroke() -> egui::Stroke {
     egui::Stroke::new(1.0, theme::colors().hairline)
 }
 
 /// The side split into its header and the rest under it.
-pub(super) fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
+pub(in crate::panels) fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
     let header = side.with_max_y(side.top() + HEADER_H);
     ui.painter()
         .hline(side.x_range(), header.bottom(), stroke());
@@ -84,7 +84,7 @@ pub(super) fn with_header(ui: &mut Ui, side: Rect) -> (Ui, Rect) {
 }
 
 /// `content` split into what scrolls and the action bar along its foot.
-pub(super) fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
+pub(in crate::panels) fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
     let split = content.bottom() - FOOTER_H;
     let bar = Rect::from_min_max(pos2(content.left(), split + 1.0), content.max);
     let bar_corner = egui::CornerRadius {
@@ -104,7 +104,7 @@ pub(super) fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
 }
 
 /// A form, scrolled, with the window's own room either side of it.
-pub(super) fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+pub(in crate::panels) fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -121,7 +121,7 @@ pub(super) fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 }
 
 /// One tab: its name, with the accent under it while it is the one open.
-pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
+pub(in crate::panels) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
     let colors = theme::colors();
     let galley = ui
         .painter()
@@ -158,7 +158,7 @@ const NAME_BOX_SHARE: f32 = 0.6;
 
 /// The columns of a table: names, each start as a share of the width, how many lead with
 /// words before figures, and the room before the first, where a row may draw a mark.
-pub(super) struct Table {
+pub(in crate::panels) struct Table {
     /// The column names, in the window's language.
     pub heads: fn() -> Vec<String>,
     pub columns: &'static [f32],
