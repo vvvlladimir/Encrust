@@ -20,20 +20,14 @@ impl List<'_> {
         let auto = self.auto(ui, acts);
         let by_hand = self.by_hand(ui, acts, true);
         chooser_group(ui, &tr!("supports-profiles"));
+        let idle_auto = self.idle_autos(ui, acts);
         let idle = self.by_hand(ui, acts, false);
         let edit = edit_profiles(ui).then_some(Pick::EditProfiles);
-        auto.or(by_hand).or(idle).or(edit)
+        auto.or(by_hand).or(idle_auto).or(idle).or(edit)
     }
 
-    pub(super) fn standing(&self, name: &str) -> Option<&Row> {
-        self.rows
-            .iter()
-            .find(|row| row.holds > 0 && row.name == name)
-    }
-
-    /// Auto, and under it its shapes: those that stand, or on Shape every one, since each
-    /// is edited there and Auto itself is not.
-    pub(super) fn auto(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+    /// The shapes Auto built that stand, lightest first.
+    fn built(&self) -> Vec<&Row> {
         let shape = |row: &&Row| {
             self.presets
                 .shapes
@@ -47,11 +41,41 @@ impl List<'_> {
             .filter(shape)
             .collect();
         built.sort_by(|a, b| a.weight.total_cmp(&b.weight));
+        built
+    }
+
+    /// The automatic presets among the profiles holding nothing, while Auto built none.
+    fn idle_autos(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+        if self.shaping || !self.built().is_empty() {
+            return None;
+        }
+        let mut pick = None;
+        for offered in &self.presets.autos {
+            let on = self.hand.in_auto && self.hand.name == offered.name;
+            if Line::preset(&offered.name, None)
+                .selected(on)
+                .show(ui, self.rows.len(), acts)
+            {
+                pick = Some(Pick::Auto(offered.id.clone()));
+            }
+        }
+        pick
+    }
+
+    pub(super) fn standing(&self, name: &str) -> Option<&Row> {
+        self.rows
+            .iter()
+            .find(|row| row.holds > 0 && row.name == name)
+    }
+
+    /// Auto, and under it its shapes: those that stand, or on Shape every one, since each
+    /// is edited there and Auto itself is not.
+    pub(super) fn auto(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>) -> Option<Pick> {
+        let built = self.built();
         let total: usize = built.iter().map(|row| row.holds).sum();
         let mut pick = None;
-        let in_auto = self.hand.in_auto;
         for offered in &self.presets.autos {
-            if !self.shaping && total == 0 && !(in_auto && self.hand.name == offered.name) {
+            if !self.shaping && total == 0 {
                 continue;
             }
             let line = Line::heading(&offered.name, total, self.shaping)

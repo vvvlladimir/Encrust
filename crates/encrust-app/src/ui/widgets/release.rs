@@ -3,7 +3,7 @@
 
 use egui::{Align2, Sense, Ui, pos2, vec2};
 
-use crate::ui::{icon, theme};
+use crate::ui::{icon, theme, theme::motion};
 
 /// The release a sheet offers: its name, and a line under it.
 pub fn release_hero(ui: &mut Ui, title: &str, line: &str) {
@@ -60,18 +60,17 @@ pub fn steps(ui: &mut Ui, steps: &[(&str, StepState)]) {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             let painter = ui.painter();
             let glyph_at = pos2(rect.left() + GLYPH_W / 2.0 - 2.0, rect.center().y);
-            painter.text(
-                glyph_at,
-                Align2::CENTER_CENTER,
-                glyph,
-                theme::icon(12.0),
-                ink,
-            );
+            let glyph = painter.layout_no_wrap(glyph.to_owned(), theme::icon(12.0), ink);
+            let turn = match state {
+                StepState::Now => motion::spin(ui.ctx()).unwrap_or(0.0) * std::f32::consts::TAU,
+                StepState::Done | StepState::Later => 0.0,
+            };
+            let corner = glyph_at - glyph.size() / 2.0;
+            let shape = egui::epaint::TextShape::new(corner, glyph, ink)
+                .with_angle_and_anchor(turn, Align2::CENTER_CENTER);
+            painter.add(shape);
             let word_at = pos2(rect.left() + GLYPH_W, rect.center().y - word.size().y / 2.0);
             painter.galley(word_at, word, text_ink);
-            if *state == StepState::Now {
-                ui.ctx().request_repaint();
-            }
         }
     });
 }

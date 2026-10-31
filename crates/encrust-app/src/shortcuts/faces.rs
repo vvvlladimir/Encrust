@@ -68,8 +68,9 @@ fn key_text(key: Key) -> &'static str {
 /// when moved between machines.
 pub fn spec(chord: &KeyboardShortcut) -> String {
     let modifiers = chord.modifiers;
+    let ctrl_alone = cfg!(target_os = "macos") || !modifiers.command;
     let held = [
-        (modifiers.ctrl && !modifiers.command, "Ctrl"),
+        (modifiers.ctrl && ctrl_alone, "Ctrl"),
         (modifiers.alt, "Alt"),
         (modifiers.shift, "Shift"),
         (modifiers.command || modifiers.mac_cmd, "Cmd"),

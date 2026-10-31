@@ -52,7 +52,7 @@ string functions are a language to maintain for little gain.
 No dependency, but a UTC time an evening print carries is the next day's date, and a date
 is the most asked-for field.
 
-### `jiff`, and what it costs
+### The option that won, `jiff`, and what it costs
 
 One dependency more and its time-zone database reader at the desk; in a browser it rides
 on `js-sys`, which is already there.

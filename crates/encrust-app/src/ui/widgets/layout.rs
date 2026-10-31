@@ -556,7 +556,9 @@ pub fn progress_bar_of(ui: &mut Ui, fraction: Option<f32>, height: f32) {
         // A job that cannot count runs a stretch of the bar along it; still, a stretch.
         None => {
             let width = track.width() * RUNNING_SHARE;
-            let left = track.left() + phase.unwrap_or(0.0) * (track.width() + width) - width;
+            let left = phase.map_or(track.left(), |phase| {
+                track.left() + phase * (track.width() + width) - width
+            });
             Rect::from_x_y_ranges(left..=left + width, track.y_range())
         }
     };

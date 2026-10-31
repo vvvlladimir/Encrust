@@ -16,9 +16,8 @@ pub struct NoticeReply {
     pub closed: bool,
 }
 
-/// A notice over the stage's foot, in a card of its own: the glyph in `tint` and nothing
-/// else coloured, the words with any `detail` under them, at most one `action` as a small button washed in the accent,
-/// and, given `close` saying what closing it does, a close square.
+/// A notice over the stage's foot in a card of its own: the glyph in `tint`, the words over
+/// any `detail`, at most one `action` washed in the accent, and a close square given `close`.
 pub fn notice_card(
     ui: &mut Ui,
     glyph: &str,
@@ -162,41 +161,6 @@ const NOTICE_MARGIN: Margin = Margin {
     bottom: 6,
 };
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ui::widgets::fixtures;
-
-    fn run(add: impl FnMut(&mut Ui)) {
-        fixtures::frame(&fixtures::context(), egui::RawInput::default(), add);
-    }
-
-    #[test]
-    fn a_notice_is_never_wider_than_its_limit() {
-        let mut width = 0.0;
-        run(|ui| {
-            let long = "A model on the plate will not print as it stands ".repeat(8);
-            let shown = ui.scope(|ui| {
-                notice_card(
-                    ui,
-                    icon::WARNING,
-                    theme::colors().warn,
-                    &long,
-                    None,
-                    None,
-                    Some("Put away"),
-                )
-            });
-            let _ = shown.inner;
-            width = shown.response.rect.width();
-        });
-        assert!(
-            width <= NOTICE_MAX_W + 1.0,
-            "at most {NOTICE_MAX_W} wide, got {width}"
-        );
-    }
-}
-
 /// What was pressed on a [`zoom_bar`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZoomPress {
@@ -232,3 +196,38 @@ pub fn zoom_bar(ui: &mut Ui, zoom: f32) -> Option<ZoomPress> {
 
 /// Room either side of the zoom's percent, points.
 const ZOOM_TEXT_PAD: f32 = 6.0;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::widgets::fixtures;
+
+    fn run(add: impl FnMut(&mut Ui)) {
+        fixtures::frame(&fixtures::context(), egui::RawInput::default(), add);
+    }
+
+    #[test]
+    fn a_notice_is_never_wider_than_its_limit() {
+        let mut width = 0.0;
+        run(|ui| {
+            let long = "A model on the plate will not print as it stands ".repeat(8);
+            let shown = ui.scope(|ui| {
+                notice_card(
+                    ui,
+                    icon::WARNING,
+                    theme::colors().warn,
+                    &long,
+                    None,
+                    None,
+                    Some("Put away"),
+                )
+            });
+            let _ = shown.inner;
+            width = shown.response.rect.width();
+        });
+        assert!(
+            width <= NOTICE_MAX_W + 1.0,
+            "at most {NOTICE_MAX_W} wide, got {width}"
+        );
+    }
+}

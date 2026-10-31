@@ -27,7 +27,7 @@ pub fn ui(ctx: &egui::Context, machine: &mut Machine) {
     if !updates.sheet {
         return;
     }
-    let Some(offer) = in_hand(updates).cloned() else {
+    let Some(offer) = updates.in_hand().cloned() else {
         updates.sheet = false;
         return;
     };
@@ -51,19 +51,6 @@ pub fn ui(ctx: &egui::Context, machine: &mut Machine) {
     });
     if shown.inner || shown.should_close() {
         updates.sheet = false;
-    }
-}
-
-/// The release the window holds: offered, being installed, installed or failed on.
-fn in_hand(updates: &Updates) -> Option<&Offer> {
-    match &updates.stage {
-        Stage::Offered(offer)
-        | Stage::Installing { offer, .. }
-        | Stage::Installed(offer)
-        | Stage::Failed {
-            offer: Some(offer), ..
-        } => Some(offer),
-        _ => None,
     }
 }
 
@@ -235,7 +222,11 @@ fn installing(
     let fraction = total.map(|total| (received as f64 / total as f64) as f32);
     progress_bar(
         ui,
-        fraction.filter(|_| step == Step::Download).or(Some(1.0)),
+        if step == Step::Download {
+            fraction
+        } else {
+            Some(1.0)
+        },
     );
     ui.horizontal(|ui| {
         let state = |at: Step| match (at as u8).cmp(&(step as u8)) {

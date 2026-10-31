@@ -26,6 +26,25 @@ fn leave_settings(machine: &mut crate::state::Machine) {
     }
 }
 
+/// The printer's sheet over the update sheet, as they are drawn: modal, and Esc has to reach
+/// them here for the same reason as the report's.
+fn held_by_a_sheet(machine: &mut crate::state::Machine, action: Action) -> bool {
+    let leave = matches!(action, Action::Deselect);
+    if machine.network.open.is_some() {
+        if leave {
+            machine.network.open = None;
+        }
+        return true;
+    }
+    if machine.updates.sheet {
+        if leave {
+            machine.updates.sheet = false;
+        }
+        return true;
+    }
+    false
+}
+
 /// Answers `action` for the modal window in view, if one is, which holds the keyboard
 /// until it closes. Answers whether one was.
 fn held_by_a_modal(window: &mut Window, action: Action) -> bool {
@@ -43,6 +62,9 @@ fn held_by_a_modal(window: &mut Window, action: Action) -> bool {
         if matches!(action, Action::Deselect) {
             window.machine.report.open = false;
         }
+        return true;
+    }
+    if held_by_a_sheet(window.machine, action) {
         return true;
     }
     // The Machine and resin window is modal as well: it holds the keyboard, Esc takes

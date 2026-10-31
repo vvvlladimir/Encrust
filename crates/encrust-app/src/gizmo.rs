@@ -110,6 +110,10 @@ impl TransformGizmo {
         camera: &OrbitCamera,
         placements: &[Transform],
     ) -> Option<Vec<Transform>> {
+        // A drag may end on a frame the handles are not shown; a fresh press starts anew.
+        if ui.input(|input| input.pointer.primary_pressed() || !input.pointer.primary_down()) {
+            self.drag = None;
+        }
         if viewport.width() <= 0.0 || viewport.height() <= 0.0 {
             return None;
         }

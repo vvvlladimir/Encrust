@@ -14,25 +14,12 @@ use crate::updates::{Note, Offer, STORE_PAGE, Stage, Updates, from_store, now_s,
 const CHANGES_SHOWN: usize = 3;
 
 pub fn form(ui: &mut Ui, updates: &mut Updates) {
-    if let Some(offer) = in_hand(updates).cloned() {
+    if let Some(offer) = updates.in_hand().cloned() {
         form_card(ui, &tr!("updates-release-found"), |ui| {
             boxed(ui, |ui| release(ui, updates, &offer));
         });
     }
     form_card(ui, &tr!("updates-looking-block"), |ui| looking(ui, updates));
-}
-
-/// The release the window holds: offered, being installed, installed or failed on.
-fn in_hand(updates: &Updates) -> Option<&Offer> {
-    match &updates.stage {
-        Stage::Offered(offer)
-        | Stage::Installing { offer, .. }
-        | Stage::Installed(offer)
-        | Stage::Failed {
-            offer: Some(offer), ..
-        } => Some(offer),
-        _ => None,
-    }
 }
 
 /// Its name, its first changes, and what can be done with it.
@@ -87,7 +74,7 @@ fn act(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
         Stage::Installing { .. } => {
             let percent = updates.progress().and_then(|(progress, _)| {
                 let (received, total) = progress.bytes();
-                total.map(|total| received * 100 / total.max(1))
+                total.map(|total| (received * 100 / total.max(1)).min(100))
             });
             let text = percent.map_or_else(
                 || tr!("updates-installing"),
