@@ -9,12 +9,14 @@ use crate::settings::Library;
 use crate::ui::{hint, icon, inline_button, list, list_row, summary_button, theme};
 
 /// How many brand cards stand side by side.
-const COLUMNS: usize = 3;
+const COLUMNS: usize = 4;
 
 /// What the page was asked for, carried out by the caller.
 pub enum Picked {
     /// A machine of the user's own, with nothing filled in.
     Custom,
+    /// A machine taken in from a profile file.
+    Import,
     /// A catalogue profile, by id.
     Printer(String),
 }
@@ -50,34 +52,39 @@ pub fn page(ui: &mut Ui, catalogue: &Catalogue, library: &mut Library) -> Option
     picked
 }
 
-/// The title, the way back out of a brand, and the machine nobody shipped.
+/// The search over every machine, a profile file and the machine nobody shipped beside it,
+/// and inside a brand the way back out of it.
 fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     let mut picked = None;
     ui.horizontal(|ui| {
-        let title = library.brand.clone().unwrap_or_else(|| tr!("machines-add"));
-        if library.brand.is_some() {
-            if inline_button(ui, icon::BACK, &tr!("library-all-brands"), false, true).clicked() {
-                library.brand = None;
-            }
-            ui.add_space(8.0);
-        }
-        ui.label(
-            RichText::new(title)
-                .font(theme::section())
-                .color(theme::colors().text_mid),
-        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if inline_button(ui, icon::ADD, &tr!("library-custom"), false, true).clicked() {
                 picked = Some(Picked::Custom);
             }
+            if inline_button(ui, icon::IMPORT, &tr!("library-import"), false, true).clicked() {
+                picked = Some(Picked::Import);
+            }
+            ui.add(
+                crate::ui::text_box(egui::TextEdit::singleline(&mut library.search))
+                    .hint_text(format!("{}  {}", icon::FIND, tr!("library-search")))
+                    .desired_width(ui.available_width()),
+            );
         });
     });
-    ui.add_space(8.0);
-    ui.add(
-        crate::ui::text_box(egui::TextEdit::singleline(&mut library.search))
-            .hint_text(tr!("library-search"))
-            .desired_width(ui.available_width()),
-    );
+    if let Some(brand) = library.brand.clone() {
+        ui.add_space(10.0);
+        ui.horizontal(|ui| {
+            if inline_button(ui, icon::BACK, &tr!("library-all-brands"), false, true).clicked() {
+                library.brand = None;
+            }
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(brand)
+                    .font(theme::section())
+                    .color(theme::colors().text_mid),
+            );
+        });
+    }
     picked
 }
 

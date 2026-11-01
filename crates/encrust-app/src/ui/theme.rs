@@ -387,6 +387,15 @@ pub const DIALOG_HEAD_H: f32 = 48.0;
 pub const DIALOG_MARGIN: f32 = 24.0;
 pub const DIALOG_LIST_W: f32 = 260.0;
 pub const DIALOG_LIST_SHARE: f32 = 0.28;
+/// How much a window over the plate dims the stage behind it, and how much Find does.
+pub const SCRIM_SHARE: f32 = 0.62;
+pub const FIND_SCRIM_SHARE: f32 = 0.4;
+/// The bar along the foot of a window's page, and the name column of a form's text row.
+pub const DIALOG_BAR_H: f32 = 56.0;
+pub const ROW_NAME_W: f32 = 150.0;
+/// A window page's title, and the muted second name beside it, pt.
+pub const PAGE_TITLE_PT: f32 = 17.0;
+pub const PAGE_SUBTITLE_PT: f32 = 15.0;
 /// A row of a table, and of a list whose entries carry a second line.
 pub const TABLE_ROW_H: f32 = 36.0;
 pub const TWO_LINE_ROW_H: f32 = 48.0;
@@ -443,6 +452,11 @@ pub fn block_title() -> FontId {
 }
 
 /// The name of a window over the plate.
+/// The stage dimmed under a window over the plate, `share` of the way to black.
+pub fn scrim(share: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(5, 6, 8, (share.clamp(0.0, 1.0) * 255.0) as u8)
+}
+
 pub fn dialog_title() -> FontId {
     FontId::new(15.0, FontFamily::Name(SEMIBOLD.into()))
 }

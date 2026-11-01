@@ -57,14 +57,35 @@ pub(super) fn arm(ui: &Ui, response: &Response, enabled: bool) -> Arming {
     Arming { armed, fired }
 }
 
+/// Whether a control stands armed and still waiting, so Esc is left to it this frame.
+pub fn any_armed(ctx: &egui::Context) -> bool {
+    let now = ctx.input(|input| input.time);
+    ctx.data(|data| data.get_temp::<Armed>(armed_key()))
+        .is_some_and(|armed| now - armed.at_s <= motion::ARMED_S)
+}
+
+/// What a `confirm_button` says and does.
+pub struct Confirm<'a> {
+    pub glyph: &'a str,
+    pub text: &'a str,
+    /// What it asks while armed: *Delete?*
+    pub asked: &'a str,
+    /// What the action costs, or why it cannot be taken; read on hover.
+    pub tooltip: &'a str,
+    pub enabled: bool,
+}
+
 /// A lesser action of a row that cannot be undone, as wide as what it says: `text` with
-/// its `glyph` at rest, armed `asked` — *Delete?* — on the danger's wash with a question
-/// mark. Answers the second press.
-#[expect(
-    dead_code,
-    reason = "TODO(step-10): deleting a profile, a machine, a preset"
-)]
-pub fn confirm_button(ui: &mut Ui, glyph: &str, text: &str, asked: &str, enabled: bool) -> bool {
+/// its `glyph` at rest, armed `asked` on the danger's wash with a question mark. Answers
+/// the second press.
+pub fn confirm_button(ui: &mut Ui, confirm: &Confirm<'_>) -> bool {
+    let &Confirm {
+        glyph,
+        text,
+        asked,
+        tooltip,
+        enabled,
+    } = confirm;
     let colors = theme::colors();
     let widest = [text, asked]
         .iter()
@@ -120,8 +141,14 @@ pub fn confirm_button(ui: &mut Ui, glyph: &str, text: &str, asked: &str, enabled
     let label = face.text.to_owned();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &label));
     paint_button(ui, &response, &face, &skin, enabled);
+    let response = match tooltip.is_empty() {
+        true => response,
+        false => response
+            .on_hover_text(tooltip)
+            .on_disabled_hover_text(tooltip),
+    };
     if armed {
-        response.on_hover_text(tr!("bin-click-again"));
+        response.on_hover_text(tr!("confirm-click-again"));
     }
     fired
 }
@@ -191,6 +218,26 @@ mod tests {
         click(&ctx, ON, 0.0);
         let late = click(&ctx, ON, motion::ARMED_S + 1.0);
         assert!(!late.fired, "the wait ran out, so the press only disarms");
+    }
+
+    #[test]
+    fn an_armed_control_holds_escape_until_its_wait_runs_out() {
+        let ctx = fixtures::context();
+        assert!(!any_armed(&ctx));
+        click(&ctx, ON, 0.0);
+        assert!(
+            any_armed(&ctx),
+            "Esc is the armed control's, not the window's"
+        );
+        let late = RawInput {
+            time: Some(motion::ARMED_S + 1.0),
+            ..RawInput::default()
+        };
+        fixtures::frame(&ctx, late, |_| {});
+        assert!(
+            !any_armed(&ctx),
+            "a control not drawn since cannot hold Esc for ever"
+        );
     }
 
     #[test]

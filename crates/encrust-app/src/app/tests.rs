@@ -651,10 +651,9 @@ fn escape_closes_the_question_and_then_the_settings_window() {
     shortcuts::act(&mut app.window(), shortcuts::Action::Settings);
     assert!(app.machine.settings.open);
 
-    let deleting = crate::settings::Deleting::Profile(printer_profiles::Kind::Support, "x".into());
-    app.machine.settings.confirm = Some(deleting);
+    app.machine.settings.reset_unreadable = true;
     shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
-    assert!(app.machine.settings.confirm.is_none());
+    assert!(!app.machine.settings.reset_unreadable);
     assert!(app.machine.settings.open, "the window is still there");
 
     shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
@@ -669,9 +668,9 @@ fn escape_closes_the_question_and_then_the_machine_and_resin_window() {
     crate::panels::open_machines(&mut app.machine);
     assert!(app.machine.settings.machines);
 
-    app.machine.settings.confirm = Some(crate::settings::Deleting::Resin("grey".to_owned()));
+    app.machine.settings.reset_unreadable = true;
     shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
-    assert!(app.machine.settings.confirm.is_none());
+    assert!(!app.machine.settings.reset_unreadable);
     assert!(app.machine.settings.machines, "the window is still there");
 
     shortcuts::act(&mut app.window(), shortcuts::Action::SelectAll);

@@ -8,21 +8,28 @@ use crate::i18n::tr;
 use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
-use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone};
+use crate::ui::{
+    Segment, Segmented, ago, describe, focus_ring, icon, inline_button, quiet_button, theme, tone,
+};
 use crate::workspace::Tool;
 
-/// The page's column, and the recent files' tiles across it with the gap between two: as
-/// many as fit at their least width, never more than `COLUMNS`.
-const COLUMN_W: f32 = 980.0;
-const COLUMNS: usize = 4;
-const TILE_MIN_W: f32 = 160.0;
-const TILE_GAP: f32 = 16.0;
-/// The height of the drop zone and of the switch beside it.
-const ACTIONS_H: f32 = 112.0;
-/// The dashes of the zone's edge.
+/// The page's room under the top bar and either side of it.
+const PAD_TOP: f32 = 48.0;
+const PAD_SIDE: f32 = 140.0;
+/// Tiles stand as many to a row as fit at their least width, the gap between two.
+const TILE_MIN_W: f32 = 180.0;
+const TILE_GAP: f32 = 14.0;
+/// The drop zone: its height, its edge's dashes and weight, its corner, and the square of
+/// its glyph.
+const ZONE_H: f32 = 104.0;
 const DASH: f32 = 4.0;
-/// The room around a tile's picture, and the height under it for the name and the age.
-const TILE_PAD: f32 = 8.0;
+const ZONE_EDGE_W: f32 = 1.5;
+const ZONE_R: f32 = 12.0;
+const ZONE_SQUARE: f32 = 52.0;
+/// The switch between the two shelves.
+const SHELF_SWITCH_W: f32 = 220.0;
+/// A tile's picture, and the room under it for the name and the two words.
+const PICTURE_H: f32 = 120.0;
 const CAPTION_H: f32 = 52.0;
 
 /// Whether the window is still on its start page. It leaves for good the moment anything
@@ -42,16 +49,18 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            let width = COLUMN_W.min(ui.available_width() - 4.0 * TILE_GAP).max(0.0);
-            let top = ui.max_rect().top() + 40.0;
-            let left = ui.max_rect().center().x - width / 2.0;
+            let room = ui.available_width();
+            let side = PAD_SIDE.min(((room - TILE_MIN_W) / 2.0).max(0.0));
+            let width = (room - 2.0 * side).max(0.0);
+            let top = ui.max_rect().top() + PAD_TOP;
+            let left = ui.max_rect().left() + side;
             let column = Rect::from_min_max(pos2(left, top), pos2(left + width, f32::INFINITY));
             let mut page = ui.new_child(
                 UiBuilder::new()
                     .max_rect(column)
                     .layout(Layout::top_down(Align::Min)),
             );
-            heading(&mut page);
+            heading(&mut page, window);
             // The stage's notice is not on this page, so a failure is said here instead.
             if window.machine.status.is_error() {
                 page.add_space(8.0);
@@ -66,15 +75,18 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                 unreadable_profiles::row(&mut page, window);
             }
             page.add_space(28.0);
-            actions(&mut page, window, width);
-            page.add_space(36.0);
+            drop_zone(&mut page, window, vec2(width, ZONE_H));
+            page.add_space(34.0);
+            shelf_head(&mut page, window);
+            page.add_space(14.0);
             shelf_tiles(&mut page, window, width);
-            let used = page.min_rect().bottom() - ui.max_rect().top() + 48.0;
+            let used = page.min_rect().bottom() - ui.max_rect().top() + PAD_TOP;
             ui.allocate_space(vec2(ui.available_width(), used));
         });
 }
 
-fn heading(ui: &mut Ui) {
+/// The page's title, and under it what a plate opened now is set up with.
+fn heading(ui: &mut Ui, window: &Window) {
     let colors = theme::colors();
     ui.label(
         RichText::new(tr!("start-title"))
@@ -82,8 +94,15 @@ fn heading(ui: &mut Ui) {
             .color(colors.text_high),
     );
     ui.add_space(4.0);
+    let slicing = &window.machine.slicing;
+    let setup = tr!(
+        "start-setup",
+        machine = window.doc.plate.display_name(),
+        resin = slicing.resin_name(),
+        layer = format!("{:.0}", slicing.layer_height_mm() * 1000.0)
+    );
     ui.label(
-        RichText::new(tr!("start-subtitle"))
+        RichText::new(setup)
             .font(theme::lede())
             .color(colors.text_mid),
     );
@@ -92,7 +111,7 @@ fn heading(ui: &mut Ui) {
 /// How many tiles stand in a row across `width`.
 fn columns(width: f32) -> usize {
     let fit = ((width + TILE_GAP) / (TILE_MIN_W + TILE_GAP)).floor();
-    (fit as usize).clamp(1, COLUMNS)
+    (fit as usize).max(1)
 }
 
 /// One tile's width when `columns(width)` of them span `width`.
@@ -103,27 +122,6 @@ fn tile_w(width: f32) -> f32 {
         .max(0.0)
 }
 
-/// The drop zone across every column but the last, the switch between the shelves in it,
-/// or the two one over the other when a row holds one tile.
-fn actions(ui: &mut Ui, window: &mut Window, width: f32) {
-    if columns(width) == 1 {
-        drop_zone(ui, window, vec2(width, ACTIONS_H));
-        ui.add_space(TILE_GAP);
-        switch(ui, window, vec2(width, ACTIONS_H));
-        return;
-    }
-    let folder_w = tile_w(width);
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = TILE_GAP;
-        drop_zone(
-            ui,
-            window,
-            vec2((width - folder_w - TILE_GAP).max(0.0), ACTIONS_H),
-        );
-        switch(ui, window, vec2(folder_w, ACTIONS_H));
-    });
-}
-
 /// Where a file dropped on the window goes, said where the user is looking. A click on it
 /// asks for a model or a project.
 fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
@@ -132,9 +130,9 @@ fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("start-zone"))
     });
     // The edge's stroke straddles the rect, so the clip is a point wider.
-    let painter = ui.painter_at(rect.expand(1.0));
+    let painter = ui.painter_at(rect.expand(ZONE_EDGE_W));
     let words_end = paint_zone(&painter, rect, response.hovered());
-    focus_ring(ui, &response, theme::R_PANEL);
+    focus_ring(ui, &response, ZONE_R as u8);
     let (model, project) = buttons_row(ui, rect, words_end);
     let wanted = match (model, project, response.clicked()) {
         (true, _, _) => Some(Wanted::Model),
@@ -147,54 +145,79 @@ fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
     }
 }
 
-/// The zone's dashed edge and what it says on its left, lit in the accent under the pointer.
-/// Answers where the words end.
+/// The zone's dashed, rounded edge, the glyph on its square and the words beside it, the
+/// edge lit in the accent under the pointer. Answers where the words end.
 fn paint_zone(painter: &egui::Painter, rect: Rect, hovered: bool) -> f32 {
     let colors = theme::colors();
-    let (fill, edge, glyph) = match hovered {
-        true => (colors.accent_wash, colors.accent_deep, colors.accent_soft),
-        false => (colors.base, colors.line, colors.text_low),
+    let edge = match hovered {
+        true => colors.accent,
+        false => colors.line,
     };
-    painter.rect_filled(rect, theme::R_PANEL, fill);
-    let corners = [
-        rect.left_top(),
-        rect.right_top(),
-        rect.right_bottom(),
-        rect.left_bottom(),
-        rect.left_top(),
-    ];
-    let edge = Stroke::new(1.0, edge);
-    painter.extend(egui::Shape::dashed_line(&corners, edge, DASH, DASH));
-    let left = rect.left_center();
+    painter.rect_filled(rect, ZONE_R, colors.base);
+    let outline = rounded_outline(rect, ZONE_R);
+    let stroke = Stroke::new(ZONE_EDGE_W, edge);
+    painter.extend(egui::Shape::dashed_line(&outline, stroke, DASH, DASH));
+    let square = Rect::from_min_size(
+        pos2(rect.left() + 28.0, rect.center().y - ZONE_SQUARE / 2.0),
+        vec2(ZONE_SQUARE, ZONE_SQUARE),
+    );
+    painter.rect_filled(square, ZONE_R, colors.accent_wash);
+    painter.text(
+        square.center(),
+        Align2::CENTER_CENTER,
+        icon::DROP_HERE,
+        theme::icon(24.0),
+        colors.accent_soft,
+    );
+    let words_at = pos2(square.right() + 18.0, rect.center().y);
     let lines = [
         (
-            vec2(40.0, 0.0),
-            icon::DROP_HERE.to_owned(),
-            theme::icon(26.0),
-            glyph,
-        ),
-        (
-            vec2(72.0, -11.0),
+            vec2(0.0, -10.0),
             tr!("start-drop-here"),
-            theme::page_title(17.0),
+            theme::page_title(16.0),
             colors.text_high,
         ),
         (
-            vec2(72.0, 13.0),
+            vec2(0.0, 12.0),
             tr!("start-drop-formats"),
             theme::small(),
             colors.text_low,
         ),
     ];
-    let mut words_end = left.x;
+    let mut words_end = square.right();
     for (offset, text, font, tint) in lines {
-        let align = match offset.x < 60.0 {
-            true => Align2::CENTER_CENTER,
-            false => Align2::LEFT_CENTER,
-        };
-        words_end = words_end.max(painter.text(left + offset, align, text, font, tint).right());
+        let drawn = painter.text(words_at + offset, Align2::LEFT_CENTER, text, font, tint);
+        words_end = words_end.max(drawn.right());
     }
     words_end
+}
+
+/// The points round `rect` with its corners rounded at `radius`, closed, for a dashed edge.
+fn rounded_outline(rect: Rect, radius: f32) -> Vec<egui::Pos2> {
+    const STEPS: usize = 6;
+    let radius = radius
+        .min(rect.width() / 2.0)
+        .min(rect.height() / 2.0)
+        .max(0.0);
+    let corners = [
+        (pos2(rect.right() - radius, rect.top() + radius), -90.0_f32),
+        (pos2(rect.right() - radius, rect.bottom() - radius), 0.0),
+        (pos2(rect.left() + radius, rect.bottom() - radius), 90.0),
+        (pos2(rect.left() + radius, rect.top() + radius), 180.0),
+    ];
+    let mut points: Vec<egui::Pos2> = corners
+        .iter()
+        .flat_map(|(centre, from_deg)| {
+            (0..=STEPS).map(move |step| {
+                let angle = (from_deg + 90.0 * step as f32 / STEPS as f32).to_radians();
+                *centre + radius * vec2(angle.cos(), angle.sin())
+            })
+        })
+        .collect();
+    if let Some(&first) = points.first() {
+        points.push(first);
+    }
+    points
 }
 
 /// The zone's two buttons, set against its right edge, or none where they would cover the
@@ -211,7 +234,7 @@ fn buttons_row(ui: &mut Ui, zone: Rect, words_end: f32) -> (bool, bool) {
     let (open_model, open_project) = (tr!("start-open-model"), tr!("start-open-project"));
     let both = width(&open_model) + width(&open_project) + theme::ITEM_GAP;
     let at = pos2(
-        zone.right() - 24.0 - both,
+        zone.right() - 28.0 - both,
         zone.center().y - theme::BUTTON_H / 2.0,
     );
     if at.x < words_end + 24.0 {
@@ -240,27 +263,6 @@ impl Shelf {
     fn id() -> egui::Id {
         egui::Id::new("start-shelf")
     }
-
-    fn other(self) -> Self {
-        match self {
-            Self::Recent => Self::TestPrints,
-            Self::TestPrints => Self::Recent,
-        }
-    }
-
-    fn title(self) -> String {
-        match self {
-            Self::Recent => tr!("start-recent"),
-            Self::TestPrints => tr!("start-test-prints"),
-        }
-    }
-
-    fn glyph(self) -> &'static str {
-        match self {
-            Self::Recent => icon::RECENT,
-            Self::TestPrints => icon::TEST_PRINTS,
-        }
-    }
 }
 
 /// The shelf the tiles show, kept for the window's run.
@@ -269,79 +271,38 @@ fn shelf(ctx: &egui::Context) -> Shelf {
         .unwrap_or_default()
 }
 
-/// The card beside the drop zone: it names the shelf not shown, and a click shows it.
-fn switch(ui: &mut Ui, window: &Window, size: egui::Vec2) {
-    let colors = theme::colors();
-    let to = shelf(ui.ctx()).other();
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, to.title()));
-    let (fill, edge, glyph) = match response.hovered() {
-        true => (colors.raised, colors.accent_deep, colors.accent_soft),
-        false => (colors.base, colors.line, colors.text_mid),
-    };
-    let painter = ui.painter_at(rect);
-    painter.rect(
-        rect,
-        theme::R_PANEL,
-        fill,
-        Stroke::new(1.0, edge),
-        egui::StrokeKind::Inside,
-    );
-    let inner = rect.shrink(18.0);
-    let count = match to {
-        Shelf::Recent => window.machine.recent.files().len(),
-        Shelf::TestPrints => SAMPLES.len(),
-    };
-    let count = match (to, count) {
-        (Shelf::Recent, count) => tr!("start-files", count = count),
-        (Shelf::TestPrints, count) => tr!("start-models", count = count),
-    };
-    let title = to.title();
-    let marks = [
-        (inner.left_top(), to.glyph(), theme::icon(22.0), glyph),
-        (
-            inner.left_bottom() - vec2(0.0, 18.0),
-            &title,
-            theme::block_title(),
-            colors.text_high,
-        ),
-        (inner.left_bottom(), &count, theme::small(), colors.text_low),
-    ];
-    for (at, text, font, tint) in marks {
-        let align = match at.y < inner.center().y {
-            true => Align2::LEFT_TOP,
-            false => Align2::LEFT_BOTTOM,
-        };
-        painter.text(at, align, text, font, tint);
-    }
-    focus_ring(ui, &response, theme::R_PANEL);
-    if response.clicked() {
-        ui.ctx().data_mut(|data| data.insert_temp(Shelf::id(), to));
-    }
+/// The switch between the files opened lately and the test prints, and on the first a way
+/// to clear them.
+fn shelf_head(ui: &mut Ui, window: &mut Window) {
+    let mut shown = shelf(ui.ctx());
+    ui.horizontal(|ui| {
+        let segments = [
+            Segment::new(Shelf::Recent, tr!("start-recent")),
+            Segment::new(Shelf::TestPrints, tr!("start-test-prints")),
+        ];
+        if Segmented::new(&segments)
+            .width(SHELF_SWITCH_W)
+            .show(ui, &mut shown)
+        {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(Shelf::id(), shown));
+        }
+        let recent = &mut window.machine.recent;
+        if shown == Shelf::Recent && !recent.files().is_empty() {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if quiet_button(ui, "", &tr!("start-clear-recent"), false, true).clicked() {
+                    recent.clear();
+                }
+            });
+        }
+    });
 }
 
-/// The shelf's title, and its tiles as many to a row as fit.
+/// The shelf's tiles, as many to a row as fit.
 fn shelf_tiles(ui: &mut Ui, window: &mut Window, width: f32) {
-    let colors = theme::colors();
-    let shown = shelf(ui.ctx());
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(shown.glyph())
-                .font(theme::icon(15.0))
-                .color(colors.text_low),
-        );
-        ui.label(
-            RichText::new(shown.title())
-                .font(theme::block_title())
-                .color(colors.text_high),
-        );
-    });
-    ui.add_space(12.0);
-    let tile = tile_w(width);
-    let picture_h = ((tile - 2.0 * TILE_PAD) * 2.0 / 3.0).round().max(0.0);
-    let size = vec2(tile, TILE_PAD + picture_h + CAPTION_H);
+    let size = vec2(tile_w(width), PICTURE_H + CAPTION_H);
     let columns = columns(width);
-    match shown {
+    match shelf(ui.ctx()) {
         Shelf::Recent => recent(ui, window, size, columns),
         Shelf::TestPrints => test_prints(ui, window, size, columns),
     }
@@ -440,51 +401,60 @@ fn tile(ui: &mut Ui, shown: &Tile<'_>, size: egui::Vec2) -> egui::Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, shown.name));
-    let (fill, edge) = match response.hovered() {
-        true => (colors.raised, colors.accent_deep),
-        false => (colors.base, colors.line),
+    let edge = match response.hovered() {
+        true => colors.line,
+        false => colors.hairline,
     };
     let painter = ui.painter_at(rect);
-    painter.rect(
-        rect,
-        theme::R_PANEL,
-        fill,
-        Stroke::new(1.0, edge),
-        egui::StrokeKind::Inside,
-    );
-    let inner = rect.shrink(TILE_PAD);
-    let stage = Rect::from_min_size(
-        inner.min,
-        vec2(inner.width(), size.y - TILE_PAD - CAPTION_H),
-    );
+    painter.rect_filled(rect, theme::R_PANEL, colors.panel);
+    let stage = rect.with_max_y(rect.top() + PICTURE_H);
+    let top_corners = egui::CornerRadius {
+        nw: theme::R_PANEL.nw,
+        ne: theme::R_PANEL.ne,
+        ..egui::CornerRadius::ZERO
+    };
+    painter.rect_filled(stage, top_corners, colors.sunken);
     match &shown.picture {
         Some(texture) => {
             let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-            let shape =
-                egui::epaint::RectShape::filled(stage, theme::R_CONTROL, egui::Color32::WHITE)
-                    .with_texture(texture.id(), uv);
+            let fitted = fit(texture.size_vec2(), stage);
+            let shape = egui::epaint::RectShape::filled(fitted, 0.0, egui::Color32::WHITE)
+                .with_texture(texture.id(), uv);
             painter.add(shape);
         }
         None => {
-            painter.rect_filled(stage, theme::R_CONTROL, colors.sunken);
-            let glyph = theme::icon(28.0);
             painter.text(
                 stage.center(),
                 Align2::CENTER_CENTER,
                 icon::MODEL,
-                glyph,
+                theme::icon(28.0),
                 colors.text_low,
             );
         }
     }
+    painter.rect_stroke(
+        rect,
+        theme::R_PANEL,
+        Stroke::new(1.0, edge),
+        egui::StrokeKind::Inside,
+    );
     caption(
         &painter,
         shown,
-        inner.shrink2(vec2(4.0, 0.0)),
+        rect.shrink2(vec2(12.0, 0.0)),
         stage.bottom(),
     );
     focus_ring(ui, &response, theme::R_PANEL);
     response
+}
+
+/// The largest rect of `size`'s shape centred in `room`.
+fn fit(size: egui::Vec2, room: Rect) -> Rect {
+    if size.x <= 0.0 || size.y <= 0.0 {
+        return room;
+    }
+    let scale = (room.width() / size.x).min(room.height() / size.y);
+    Rect::from_center_size(room.center(), size * scale)
 }
 
 /// The name on one line, cut short to fit, and the two words under it at either end.
@@ -559,13 +529,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_wide_page_holds_four_tiles_to_a_row() {
-        assert_eq!(columns(COLUMN_W), 4);
-        assert_eq!(columns(4000.0), COLUMNS, "never more than COLUMNS");
-    }
-
-    #[test]
-    fn a_narrow_page_holds_fewer_tiles_no_narrower_than_the_least() {
+    fn a_page_holds_as_many_tiles_to_a_row_as_fit_at_their_least() {
+        assert_eq!(columns(1000.0), 5, "1280 less 140 either side");
         let width = 2.0 * TILE_MIN_W + TILE_GAP + 10.0;
         assert_eq!(columns(width), 2);
         assert!(tile_w(width) >= TILE_MIN_W);
@@ -576,5 +541,29 @@ mod tests {
         assert_eq!(columns(40.0), 1);
         assert_eq!(columns(0.0), 1);
         assert_eq!(tile_w(0.0), 0.0);
+    }
+
+    #[test]
+    fn a_picture_keeps_its_shape_inside_the_tile() {
+        let room = Rect::from_min_size(pos2(0.0, 0.0), vec2(200.0, 120.0));
+        let fitted = fit(vec2(300.0, 300.0), room);
+        assert_eq!(
+            fitted.size(),
+            vec2(120.0, 120.0),
+            "a square stands 120 tall"
+        );
+        assert_eq!(fitted.center(), room.center());
+    }
+
+    #[test]
+    fn a_rounded_outline_closes_on_itself_inside_the_rect() {
+        let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(100.0, 40.0));
+        let outline = rounded_outline(rect, ZONE_R);
+        assert_eq!(outline.first(), outline.last());
+        assert!(
+            outline
+                .iter()
+                .all(|point| rect.expand(0.01).contains(*point))
+        );
     }
 }

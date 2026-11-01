@@ -37,7 +37,8 @@ judged alone.
   taken off a machine, a saved preset, a group with its supports, every support, Stop on a
   running print. The first press turns the control `danger` with a question mark for
   three seconds; Esc, another click or the time puts it back. What undo takes back acts at
-  once.
+  once. This replaces ADR 0196's question before a deletion: what goes with it is the
+  control's tooltip. Giving up profiles that would not read, listed by name, stays a dialog.
 - **Viewport instructions** are a hint bar over the stage under the tool row — key, then
   what it does — never a paragraph in a panel.
 - **Motion** shows a change of state and nothing else, from `theme::motion` only, and is

@@ -147,7 +147,10 @@ paints from tokens only.
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
-| `dialog_frame`, `dialog_head` | A window over the plate: its frame, and its glyph, name and close button |
+| `dialog`, `dialog_head` | A window over the plate on the stage dimmed by the scrim: its frame ringed in `line`, and its glyph, name and close button |
+| `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
+| `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |
+| `field_note` | A figure worked out from the fields over it, flush with their right edge |
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
@@ -156,7 +159,7 @@ paints from tokens only.
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
 | `split_readings` | Figures split two ways, the models' and the supports': the two heads over their columns, a row a name and its two figures |
 | `companion_square` | A raised, bordered square of one glyph standing beside a bigger control and as tall as it: 40 beside a primary, 32 beside a picker |
-| `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it. The bin's framed look is a `companion_square` |
+| `confirm_button`, `bin_button` | An action undo cannot take back: the first press arms it — `danger_wash`, a question mark for its glyph, its name asked (*Delete?*) — for `ARMED`; the second acts; Esc, a click elsewhere or the time disarms it, Esc reaching it before the window it stands in. What it costs is its tooltip. The bin's framed look is a `companion_square` |
 | `rail_button` | A tool in the tool row, a glyph over its name, washed in the accent when it is the tool in use, with a dot while the tool needs attention and its key's digit while the pointer is on the row |
 | `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
 | `Segmented` | Mutually exclusive choices sunk in one bordered track, the chosen one a pill raised in the accent's wash and ringed in `line` |
@@ -307,7 +310,7 @@ above its floor and widen again with the window; the dragged widths are kept
 ellipsis, the longer first; under 720 the
 bar's right end shows its glyphs alone. A window over the plate keeps 24 points from the
 window's edge, its list giving way to the page down to 28 % of it. The start page holds as
-many tiles to a row as fit at 160, and its drop zone drops its two buttons where they would
+many tiles to a row as fit at 180, and its drop zone drops its two buttons where they would
 cover its words; a click on the zone still asks.
 
 A browser's canvas has no floor, so no panel may ask egui for a negative size: a room is

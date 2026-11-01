@@ -1,5 +1,5 @@
-//! The question asked before a profile is thrown away. Undo reaches a form's numbers and
-//! never a deleted file (ADR 0268), so a deletion is asked about first; see ADR 0196.
+//! What a deletion costs, read on its `confirm_button` before the second press, and the one
+//! question still asked in a modal: giving up the profiles that would not read (ADR 0196).
 
 use printer_profiles::{Catalogue, Kind, Unreadable};
 
@@ -16,17 +16,11 @@ struct Question {
     cost: Option<String>,
     /// What the button that answers yes says, which is the verb of the question.
     verb: String,
-    /// Whether what goes is gone for good, rather than kept somewhere it comes back from.
-    gone: bool,
 }
 
-/// The dialog over the window, if a deletion is waiting. Answers with what was confirmed.
-pub(super) fn ask(
-    ctx: &egui::Context,
-    catalogue: &Catalogue,
-    deleting: &Deleting,
-) -> Option<Answer> {
-    let question = question(catalogue, deleting);
+/// The dialog over the window. Answers with what was confirmed.
+pub(super) fn ask(ctx: &egui::Context, catalogue: &Catalogue) -> Option<Answer> {
+    let question = reset_question(catalogue);
     let mut answer = None;
     // A modal of its own, so it stands over the window it was asked from.
     let modal = egui::Modal::new(egui::Id::new("confirm-deletion"))
@@ -43,9 +37,7 @@ pub(super) fn ask(
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
             }
-            if question.gone {
-                describe(ui, &tr!("confirm-cannot-undo"));
-            }
+            describe(ui, &tr!("confirm-cannot-undo"));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if inline_button(ui, "", &question.verb, true, true).clicked() {
@@ -68,72 +60,30 @@ pub(super) enum Answer {
     Cancelled,
 }
 
-/// What is about to go, and what goes with it.
-fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
+/// What a deletion costs beyond what goes, said in the tooltip of the button that arms it.
+pub(in crate::panels::settings) fn cost(catalogue: &Catalogue, deleting: &Deleting) -> String {
     match deleting {
-        Deleting::Printer(id) => {
-            let name = catalogue.printer(id).map_or_else(
-                |_| id.clone(),
-                |entry| format!("{} {}", entry.profile.manufacturer, entry.profile.name),
-            );
-            Question {
-                title: tr!("machines-remove"),
-                what: tr!("confirm-remove-machine", name = name),
-                verb: tr!("confirm-remove"),
-                gone: true,
-                cost: catalogue
-                    .is_shipped(Kind::Printer, id)
-                    .then(|| tr!("confirm-machine-stays")),
-            }
+        Deleting::Printer(id) if catalogue.is_shipped(Kind::Printer, id) => {
+            tr!("confirm-machine-stays")
         }
         Deleting::ResinOff { printer, resin } => {
-            let name = profile_name(catalogue, Kind::Resin, resin);
             let others = other_printers(catalogue, printer, resin).unwrap_or_default();
             let thrown_away =
                 is_thrown_away_with_the_printer(catalogue, printer, resin).unwrap_or(false);
-            match thrown_away {
-                true => Question {
-                    title: tr!("confirm-take-resin-off"),
-                    what: tr!("confirm-delete-named", name = name),
-                    verb: tr!("profiles-delete"),
-                    gone: true,
-                    cost: Some(tr!("confirm-untouched-resin")),
-                },
-                false => Question {
-                    title: tr!("confirm-take-resin-off"),
-                    what: tr!("confirm-take-off-named", name = name),
-                    verb: tr!("confirm-take-off"),
-                    gone: false,
-                    cost: Some(match others.is_empty() {
-                        true => tr!("confirm-stays-in-pool"),
-                        false => tr!("confirm-stays-measured", printers = others.join(", ")),
-                    }),
-                },
+            match (thrown_away, others.is_empty()) {
+                (true, _) => tr!("confirm-untouched-resin"),
+                (false, true) => tr!("confirm-stays-in-pool"),
+                (false, false) => tr!("confirm-stays-measured", printers = others.join(", ")),
             }
         }
         Deleting::Resin(resin) => {
-            let name = profile_name(catalogue, Kind::Resin, resin);
             let others = other_printers(catalogue, "", resin).unwrap_or_default();
-            Question {
-                title: tr!("confirm-delete-resin"),
-                what: tr!("confirm-delete-resin-named", name = name),
-                verb: tr!("profiles-delete"),
-                gone: true,
-                cost: (!others.is_empty())
-                    .then(|| tr!("confirm-comes-off", printers = others.join(", "))),
+            match others.is_empty() {
+                true => tr!("confirm-cannot-undo"),
+                false => tr!("confirm-comes-off", printers = others.join(", ")),
             }
         }
-        Deleting::Profile(kind, id) => Question {
-            title: tr!("confirm-delete-profile"),
-            what: tr!(
-                "confirm-delete-named",
-                name = profile_name(catalogue, *kind, id)
-            ),
-            verb: tr!("profiles-delete"),
-            gone: true,
-            cost: None,
-        },
-        Deleting::Unreadable => reset_question(catalogue),
+        Deleting::Printer(_) | Deleting::Profile(..) => tr!("confirm-cannot-undo"),
     }
 }
 
@@ -156,7 +106,6 @@ fn reset_question(catalogue: &Catalogue) -> Question {
             title: tr!("confirm-delete-unreadable"),
             what: tr!("confirm-delete-own-named", names = names(&own)),
             verb: tr!("confirm-delete"),
-            gone: true,
             cost: None,
         };
     }
@@ -164,7 +113,6 @@ fn reset_question(catalogue: &Catalogue) -> Question {
         title: tr!("confirm-reset-unreadable"),
         what: tr!("confirm-reset-named", names = names(&copies)),
         verb: tr!("confirm-reset"),
-        gone: true,
         cost: (!own.is_empty()).then(|| tr!("confirm-reset-own-gone", names = names(&own))),
     }
 }

@@ -103,7 +103,7 @@ an unknown one is ignored. A setting applies as it changes: no Apply, no OK.
 - A job's progress and Cancel stand in the notice stack (ADR 0263); a failure stays until put
   away, anything else four seconds. A notice is coloured by its glyph and action only, never a
   stripe. A modal only asks what a second press cannot: closing unsaved work, renaming or
-  overwriting a profile.
+  overwriting a profile, giving up the profiles that would not read.
 - A value the window changed for the user is a `carried_row`, in `warn`, with the way back.
 - Every action is an `Action` in the key table, so menu, Find, tooltip and key sheet know it.
   Every painted control names itself and takes focus (ADR 0229); Esc closes the topmost.
@@ -118,16 +118,15 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 ## Known gaps
 
 - **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row, the glyphs, the hint bar,
-  the notices, the empty plate, the plate and models cards, the layer strip and the top
-  bar's chip and choosers are; a
-  deleted profile or machine does not ask, and a notice that goes away fades only when it
-  is a message, a job's or a broken model's card going at once. `confirm_button` is built
-  but drawn nowhere yet; `ok_wash` is still to be built. The printer list the plate card
-  opens and a model's import popup are stock egui menus.
+  the notices, the empty plate, the plate and models cards, the layer strip, the top
+  bar's chip and choosers, the windows' frame, Find, the key sheet, the machine library and
+  the start page are. A notice that goes away fades only when it is a message, a job's or a
+  broken model's card going at once; `ok_wash` is still to be built; the printer sheet keeps
+  its old state column and tiles. The printer list the plate card opens, a model's import
+  popup and the Add a resin menu are stock egui menus.
 
 - Decimals: a unit of the table brings its own (`field.rs`, `standard_decimals`); `%`
   and units the table lacks (g/ml, the compensation's) still take the caller's.
-- Machine and resin prints lowercase explanations under fields, its boxes misaligned.
 - Stock egui controls in `title_bar/menus.rs`, `settings/printer/connection.rs`,
   `scene_panel.rs`, `settings/machines/resins.rs`, `plate_strip.rs`, `project.rs`,
   `profiles.rs`; ~120 bare `ui.label` calls outside `ui::widgets`, most in `stage_notice.rs`,

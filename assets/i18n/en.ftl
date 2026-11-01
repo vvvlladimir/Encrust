@@ -377,6 +377,8 @@ bin-click-again = Click again to remove
 ## panels/settings.rs
 
 settings-title = Settings
+settings-group-profiles = Tool profiles
+settings-group-window = Window
 settings-shortcuts = Shortcuts
 settings-import = Import
 settings-cannot-export = cannot export the profile
@@ -1186,9 +1188,9 @@ printer-cannot-put-back = cannot put the shipped profile back
 printer-cannot-save = cannot save the printer
 printer-grey-min = Dimmest edge grey
 printer-grey-max = Brightest edge grey
-printer-grey-range-full = every edge grey is written as it is
-printer-grey-range-spread = an edge grey is raised to the dimmest, then spread up to the brightest; black and full white stay as they are
-printer-pitch = { $x } x { $y } um a pixel
+printer-grey-range-full = Every edge grey is written as it is.
+printer-grey-range-spread = An edge grey is raised to the dimmest, then spread up to the brightest; black and full white stay as they are.
+printer-pitch = { $x } × { $y } µm a pixel
 printer-mirror = Mirror
 printer-mirror-normal = Normal
 printer-mirror-lcd = LCD mirror
@@ -1200,8 +1202,8 @@ printer-inset-max-x = Inset at +X
 printer-inset-min-y = Inset at −Y
 printer-inset-max-y = Inset at +Y
 printer-inset-note = A model standing in the band is marked, and still slices whole.
-printer-per-layer-on = exposure and motion are read from each layer; .goo calls this advance mode
-printer-per-layer-off = every layer prints at the header's numbers, and the machine ramps the bottom block itself
+printer-per-layer-on = Exposure and motion are read from each layer; .goo calls this advance mode.
+printer-per-layer-off = Every layer prints at the header's numbers, and the machine ramps the bottom block itself.
 printer-variable-height-note = Off means the plate steps by the header's height, so an adaptive stack is refused.
 printer-output-note = What this machine is sliced into, dialog and printer alike.
 
@@ -1557,7 +1559,7 @@ updates-more-notes = And more on the release page.
 ## panels/start.rs
 
 start-title = Start a plate
-start-subtitle = Open a model, or pick up where you left off.
+start-setup = { $machine } · { $resin } · { $layer } µm
 start-zone = Open a model or a project
 start-drop-here = Drop a model here
 start-drop-formats = STL, OBJ, 3MF, or an .encrust project
@@ -1565,11 +1567,7 @@ start-open-model = Open a model
 start-open-project = Open a project
 start-recent = Recent
 start-test-prints = Test prints
-start-files =
-    { $count ->
-        [one] { $count } file
-       *[other] { $count } files
-    }
+start-clear-recent = Clear the list
 start-models =
     { $count ->
         [one] { $count } model
@@ -1643,20 +1641,15 @@ section-layers-range = Layers { $first } to { $layer }
 ## panels/settings/confirm.rs
 
 confirm-cannot-undo = This cannot be undone.
-confirm-remove-machine = Remove { $name } and everything you changed on it?
-confirm-remove = Remove
+confirm-click-again = Click again to go ahead
+confirm-asked-delete = Delete?
+confirm-asked-take-off = Take off?
+confirm-asked-stop = Stop?
 confirm-machine-stays = The machine stays in the library, so it can be added again with the numbers this build ships.
-confirm-take-resin-off = Take this resin off
-confirm-delete-named = Delete { $name }?
 confirm-untouched-resin = Nothing was ever typed into it, so it is not kept in the pool.
-confirm-take-off-named = Take { $name } off this printer?
-confirm-take-off = Take off
 confirm-stays-in-pool = It stays in the pool, for this or any other printer to take back.
 confirm-stays-measured = It stays in the pool, measured on { $printers }.
-confirm-delete-resin = Delete this resin
-confirm-delete-resin-named = Delete { $name } and the exposures measured for it?
 confirm-comes-off = It comes off { $printers } as well.
-confirm-delete-profile = Delete this profile
 confirm-reset-unreadable = Reset the profiles that would not read
 confirm-delete-unreadable = Delete the profiles that would not read
 confirm-reset-named = Throw away your copies of { $names } and use the ones this version ships?
@@ -1781,9 +1774,7 @@ preview-cannot-rasterise = cannot rasterise the layer at z = { $z } mm
 
 ## panels/printer_card/controls.rs
 
-controls-stop-question = Stop the print? It cannot be resumed.
-controls-stop = Stop the print
-controls-keep-printing = Keep printing
+controls-stop-cost = A stopped print cannot be resumed.
 controls-film = Release film { $lifts } of { $max } lifts
 controls-copy = Copy
 controls-camera-off = Turn the camera off
@@ -2077,6 +2068,14 @@ exchange-choose-printer-resin = choose the printer this resin was set up for fir
 
 ## panels/find.rs
 
+find-group-tools = Tools
+find-group-actions = Actions
+find-group-models = Models
+find-keys-move = ↑ ↓
+find-move = move
+find-keys-open = Enter
+find-open = open
+find-close = close
 find-nothing = Nothing goes by that name
 
 ## panels/inspector/scope.rs
@@ -2121,6 +2120,7 @@ sheet-firmware = firmware { $version }
 ## panels/settings/machines/library.rs
 
 library-all-brands = All brands
+library-import = Import a profile
 library-custom = Custom printer
 library-search = Search every machine
 library-machines =

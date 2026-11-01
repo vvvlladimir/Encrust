@@ -25,17 +25,17 @@ pub use button::{
     toggle_button, zone_button,
 };
 pub use chooser::{
-    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row,
+    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
 };
-pub use confirm::confirm_button;
+pub use confirm::{Confirm, any_armed, confirm_button};
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
-    number_row, picker_row, stepped_row, text_box, text_row, unit_field,
+    number_row, picker_row, row_name, stepped_row, text_box, text_row, unit_field,
 };
 pub use figures::{Figure, details_fold, figure_grid, split_readings};
 pub use layout::{
-    body_and_foot, busy, card, card_foot, describe, described, describing, dialog_frame,
-    dialog_head, empty_state, hairline, heading, help_mark, hint, inset, meta, mode_group, nested,
+    body_and_foot, busy, card, card_foot, describe, described, describing, dialog, dialog_head,
+    empty_state, field_note, hairline, heading, help_mark, hint, inset, meta, mode_group, nested,
     notice, progress_bar, readings, stats, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};

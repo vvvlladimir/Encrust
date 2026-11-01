@@ -7,11 +7,13 @@ use printer_profiles::{Kind, MaterialProfile};
 use super::{Action, ZONE_GAP};
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::panels::settings::confirm::cost;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
 use crate::ui::{
-    describe, filter_chip, icon, icon_button, inline_button, quiet_button, theme, zone_button,
+    BinLook, Confirm, confirm_bin, confirm_button, describe, filter_chip, icon, inline_button,
+    quiet_button, theme, zone_button,
 };
 
 /// The resins' columns, each starting at a share of the width; the figures are set flush
@@ -151,7 +153,10 @@ fn add_menu(
     action: &mut Option<Action>,
 ) {
     let button = inline_button(ui, icon::ADD, &tr!("resins-add"), false, true);
-    egui::Popup::menu(&button).show(|ui| add_choices(ui, catalogue, printer, action));
+    // A pool resin's bin asks by a second press, so a click inside leaves the menu open.
+    egui::Popup::menu(&button)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| add_choices(ui, catalogue, printer, action));
 }
 
 /// What the menu of a new resin offers: one from nothing, or one out of the pool.
@@ -164,6 +169,7 @@ fn add_choices(
     ui.set_width(MENU_W);
     if ui.button(tr!("settings-new-resin")).clicked() {
         *action = Some(Action::NewResin(printer.to_owned()));
+        ui.close();
     }
     ui.separator();
     ui.label(
@@ -180,10 +186,15 @@ fn add_choices(
                     printer: printer.to_owned(),
                     resin: id.to_owned(),
                 });
+                ui.close();
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if icon_button(ui, icon::REMOVE, &tr!("resins-delete")).clicked() {
-                    *action = Some(Action::Ask(Deleting::Resin(id.to_owned())));
+                let deleting = Deleting::Resin(id.to_owned());
+                let side = theme::BUTTON_H;
+                let (_, bin) = ui.allocate_exact_size(vec2(side, side), egui::Sense::click());
+                let bin = bin.on_hover_text(cost(catalogue, &deleting));
+                if confirm_bin(ui, bin, BinLook::Quiet, &tr!("resins-delete"), true) {
+                    *action = Some(Action::Delete(deleting));
                 }
             });
         });
@@ -301,13 +312,22 @@ fn actions(
     if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(|resin| Action::Export(Kind::Resin, resin.to_owned()));
     }
-    if quiet_button(ui, icon::REMOVE, &tr!("resins-take-off"), true, some).clicked() {
-        *action = picked.map(|resin| {
-            Action::Ask(Deleting::ResinOff {
-                printer: printer.to_owned(),
-                resin: resin.to_owned(),
-            })
-        });
+    let take_off = picked.map(|resin| Deleting::ResinOff {
+        printer: printer.to_owned(),
+        resin: resin.to_owned(),
+    });
+    let tooltip = take_off.as_ref().map_or_else(String::new, |deleting| {
+        cost(&window.machine.slicing.catalogue, deleting)
+    });
+    let button = Confirm {
+        glyph: icon::REMOVE,
+        text: &tr!("resins-take-off"),
+        asked: &tr!("confirm-asked-take-off"),
+        tooltip: &tooltip,
+        enabled: some,
+    };
+    if confirm_button(ui, &button) {
+        *action = take_off.map(Action::Delete);
     }
     let slicing = &window.machine.slicing;
     let in_hand =

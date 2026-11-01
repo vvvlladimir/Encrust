@@ -7,11 +7,16 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
-use crate::ui::{dialog_frame, focus_ring, icon, theme};
+use crate::ui::{chooser_group, dialog, focus_ring, hint, hint_bar, icon, theme};
 use crate::workspace::Tool;
 
-const PALETTE_W: f32 = 520.0;
+const PALETTE_W: f32 = 500.0;
+/// How far under the stage's top the palette hangs, and the field it opens with.
+const TOP_GAP: f32 = 70.0;
+const FIELD_H: f32 = 48.0;
 const ROW_H: f32 = 32.0;
+/// Room either side of the field and the rows.
+const PAD: f32 = 8.0;
 /// The most rows shown at once: past it the list scrolls.
 const LIST_H: f32 = ROW_H * 10.0;
 
@@ -21,6 +26,25 @@ enum Found {
     Open(Tool),
     Act(Action),
     Pick(ObjectId),
+}
+
+impl Found {
+    /// The group the row is listed under, in the order the groups stand.
+    fn group(self) -> usize {
+        match self {
+            Found::Open(_) => 0,
+            Found::Act(_) => 1,
+            Found::Pick(_) => 2,
+        }
+    }
+
+    fn group_label(self) -> String {
+        match self {
+            Found::Open(_) => tr!("find-group-tools"),
+            Found::Act(_) => tr!("find-group-actions"),
+            Found::Pick(_) => tr!("find-group-models"),
+        }
+    }
 }
 
 struct Entry {
@@ -70,11 +94,14 @@ fn matches(name: &str, query: &str) -> bool {
         .all(|word| name.contains(word))
 }
 
-/// The entries `query` finds, those whose name starts with it first.
+/// The entries `query` finds by group, in each those whose name starts with it first.
 fn found(mut entries: Vec<Entry>, query: &str) -> Vec<Entry> {
     entries.retain(|entry| matches(&entry.name, query));
     let lead = query.trim().to_lowercase();
-    entries.sort_by_key(|entry| !entry.name.to_lowercase().starts_with(&lead));
+    entries.sort_by_key(|entry| {
+        let starts = entry.name.to_lowercase().starts_with(&lead);
+        (entry.found.group(), !starts)
+    });
     entries
 }
 
@@ -86,10 +113,14 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     let mut lit: usize = ctx.data(|data| data.get_temp(id.with("lit"))).unwrap_or(0);
     let list = found(entries(window), &query);
     let mut chosen = None;
-    let modal = egui::Modal::new(id)
-        .frame(dialog_frame().inner_margin(egui::Margin::same(10)))
+    let top = theme::TOP_BAR_H + TOP_GAP;
+    let area = egui::Modal::default_area(id).anchor(Align2::CENTER_TOP, vec2(0.0, top));
+    let modal = dialog(id, 0)
+        .area(area)
+        .backdrop_color(theme::scrim(theme::FIND_SCRIM_SHARE))
         .show(ctx, |ui| {
             ui.set_width(PALETTE_W);
+            ui.spacing_mut().item_spacing.y = 0.0;
             lit = steer(ui, lit, list.len());
             if field(ui, id, &mut query) {
                 lit = 0;
@@ -98,6 +129,7 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
                 chosen = list.get(lit).map(|entry| entry.found);
             }
             chosen = chosen.or(rows(ui, &list, lit));
+            foot(ui);
         });
     let closing = modal.should_close() || chosen.is_some();
     if closing {
@@ -126,33 +158,54 @@ fn steer(ui: &mut egui::Ui, lit: usize, count: usize) -> usize {
     (lit + down).saturating_sub(up).min(count.saturating_sub(1))
 }
 
-/// The field the name is typed in, which holds the focus while the palette is up.
-/// Answers whether what is typed changed.
+/// The field the name is typed in, 48 tall over a hairline, which holds the focus while
+/// the palette is up. Answers whether what is typed changed.
 fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
     let colors = theme::colors();
-    let response = ui.add(
-        crate::ui::text_box(egui::TextEdit::singleline(query))
-            .id(id.with("field"))
-            .hint_text(tr!("find-tooltip"))
-            .font(theme::body())
-            .background_color(colors.sunken)
-            .desired_width(f32::INFINITY),
-    );
+    let edit = egui::TextEdit::singleline(query)
+        .id(id.with("field"))
+        .hint_text(format!("{}  {}", icon::FIND, tr!("find-tooltip")))
+        .font(theme::body())
+        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(16, 0)))
+        .vertical_align(egui::Align::Center)
+        .desired_width(f32::INFINITY);
+    let response = ui.add_sized(vec2(PALETTE_W, FIELD_H), edit);
     if !response.has_focus() {
         response.request_focus();
     }
-    ui.add_space(6.0);
+    let line = response.rect.bottom();
+    ui.painter().hline(
+        response.rect.x_range(),
+        line,
+        egui::Stroke::new(1.0, colors.hairline),
+    );
     response.changed()
+}
+
+/// The keys that work the palette, at its foot.
+fn foot(ui: &mut egui::Ui) {
+    let pairs = [
+        (tr!("find-keys-move"), tr!("find-move")),
+        (tr!("find-keys-open"), tr!("find-open")),
+        (tr!("hint-esc"), tr!("find-close")),
+    ];
+    let pairs: Vec<(&str, &str)> = pairs
+        .iter()
+        .map(|(key, what)| (key.as_str(), what.as_str()))
+        .collect();
+    ui.add_space(PAD);
+    ui.vertical_centered(|ui| hint_bar(ui, &pairs));
+    ui.add_space(PAD);
 }
 
 /// The entries found, the lit one washed. Answers the one clicked.
 fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
     if list.is_empty() {
-        ui.label(
-            egui::RichText::new(tr!("find-nothing"))
-                .font(theme::small())
-                .color(theme::colors().text_low),
-        );
+        ui.add_space(PAD);
+        ui.horizontal(|ui| {
+            ui.add_space(16.0);
+            hint(ui, &tr!("find-nothing"));
+        });
         return None;
     }
     let mut clicked = None;
@@ -161,7 +214,16 @@ fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
         .auto_shrink([false, true])
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add_space(PAD / 2.0);
+            let mut group = None;
             for (index, entry) in list.iter().enumerate() {
+                if group != Some(entry.found.group()) {
+                    group = Some(entry.found.group());
+                    ui.horizontal(|ui| {
+                        ui.add_space(PAD);
+                        chooser_group(ui, &entry.found.group_label());
+                    });
+                }
                 let response = row(ui, entry, index == lit);
                 if index == lit {
                     response.scroll_to_me(None);
@@ -178,11 +240,12 @@ fn row(ui: &mut egui::Ui, entry: &Entry, lit: bool) -> egui::Response {
     let colors = theme::colors();
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
+    let rect = rect.shrink2(vec2(PAD, 0.0));
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, lit, &entry.name)
     });
     let (fill, ink) = match (lit, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent_soft),
+        (true, _) => (colors.picked_wash, colors.text_high),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (egui::Color32::TRANSPARENT, colors.text_high),
     };

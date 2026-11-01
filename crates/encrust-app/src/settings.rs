@@ -148,8 +148,8 @@ impl Calculators {
     }
 }
 
-/// A deletion waiting to be answered for. The only one this screen takes back is a resin
-/// added again from the pool, so each is asked first; see ADR 0196 and 0197.
+/// A deletion, armed by a first press and carried out by the second; undo never reaches the
+/// user's directory, see ADR 0196 and 0197.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Deleting {
     /// The user's copy of a machine. Its resins stay in the pool.
@@ -160,8 +160,6 @@ pub enum Deleting {
     Resin(String),
     /// A support profile or a tool's preset of the user's own, from the Settings window.
     Profile(Kind, String),
-    /// Every copy of a shipped profile that would not read, the shipped one in use instead.
-    Unreadable,
 }
 
 /// What the machine library has open: a brand, and what its models are filtered by.
@@ -208,8 +206,8 @@ pub struct Settings {
     /// The automatic profile picked on the Supports page, in the support profile's place.
     pub auto: Option<Draft<AutoProfile>>,
     pub calculators: Calculators,
-    /// The deletion the window is waiting for an answer on.
-    pub confirm: Option<Deleting>,
+    /// Whether the question over the profiles that would not read is waiting for an answer.
+    pub reset_unreadable: bool,
 }
 
 impl Settings {
@@ -259,7 +257,7 @@ impl Settings {
         self.machines = false;
         self.editing_resin = false;
         self.library = None;
-        self.confirm = None;
+        self.reset_unreadable = false;
         self.calculators.open = None;
     }
 
@@ -338,7 +336,7 @@ impl Settings {
     pub fn close(&mut self) {
         self.open = false;
         self.editing_support = false;
-        self.confirm = None;
+        self.reset_unreadable = false;
     }
 
     /// Loads a support profile into the form, over what the build ships under its id.

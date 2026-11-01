@@ -37,7 +37,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   to open (a minute for a full 16K stack). A file
   with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
-  file.
+  file and can be cleared from the start page.
 - Start from one of **four built-in test prints**: detail test, exposure check, surface
   finish and fit gauge.
 
@@ -743,7 +743,8 @@ address in a video player).
 
 ## Working in the window
 
-- **Find (⌘K):** search every tool, action and model on the plate by name.
+- **Find (⌘K):** search every tool, action and model on the plate by name, found under
+  those three headings.
 - **Tool row:** runs across the top of the stage between the inspector and the models,
   each tool's name under its icon while there is room, icons alone when there is not. Drag
   the inspector's edge to set its width; double-click it to go back to the default. The
@@ -779,7 +780,9 @@ address in a video player).
 - Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
   Save over the one in use or as a new one, and a bin that asks before it deletes.
 - A bin asks before it removes: the first press arms it for 3 s, the second removes; Esc or a
-  click elsewhere puts it back.
+  click elsewhere puts it back. Deleting a profile, a preset or a machine, taking a resin off
+  a machine and stopping a print ask the same way, the cost read on hover; none opens a
+  dialog.
 - **Language:** the window follows the system's or the browser's first language, or the one
   you pick in Settings → General. A system language with no translation shows the window in
   English, and Settings says so. English and Russian are complete; a message a translation

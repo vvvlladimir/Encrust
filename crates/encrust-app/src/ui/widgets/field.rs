@@ -393,11 +393,22 @@ pub fn text_box(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
         .margin(egui::Margin::symmetric(10, 0))
 }
 
-/// A named line of text: the label on the left, the field taking what is left.
+/// The name of a row whose box takes what is left, in a column of `ROW_NAME_W` so every
+/// such box of a form starts on one line; a longer name is cut.
+pub fn row_name(ui: &mut Ui, text: &str) {
+    let cell = vec2(theme::ROW_NAME_W, theme::FIELD_H);
+    let layout = egui::Layout::left_to_right(Align::Center);
+    ui.allocate_ui_with_layout(cell, layout, |ui| {
+        ui.set_width(theme::ROW_NAME_W);
+        field_label(ui, text, theme::colors().text_mid, "");
+    });
+}
+
+/// A named line of text: the name in its column, the field taking what is left.
 pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
-        field_label(ui, label, theme::colors().text_mid, "");
+        row_name(ui, label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let field = text_box(egui::TextEdit::singleline(value))
                 .font(theme::label())
