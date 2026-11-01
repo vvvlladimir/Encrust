@@ -249,6 +249,19 @@ impl Updates {
         }
     }
 
+    /// The release the window holds: offered, being installed, installed or failed on.
+    pub fn in_hand(&self) -> Option<&Offer> {
+        match &self.stage {
+            Stage::Offered(offer)
+            | Stage::Installing { offer, .. }
+            | Stage::Installed(offer)
+            | Stage::Failed {
+                offer: Some(offer), ..
+            } => Some(offer),
+            _ => None,
+        }
+    }
+
     /// The release the stage's foot announces: offered, not skipped, its notice not put by.
     pub fn notice(&self) -> Option<&Offer> {
         match &self.stage {

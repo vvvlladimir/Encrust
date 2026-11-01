@@ -29,10 +29,16 @@ fn the_plate_card_keeps_its_foot_while_details_opens_and_closes() {
             app,
         );
     harness.run_steps(SETTLE_FRAMES);
-    // Where the press at the card's foot is drawn, not where egui keeps the area: the area's
-    // rect in memory already holds this frame's size at the place it will be drawn next.
-    let foot =
-        |harness: &Harness<'_, SlicerApp>| harness.get_by_label_contains("Slice").rect().bottom();
+    // Where the press at the card's foot is drawn: accesskit bounds stay in the layer's own
+    // space, so the shift `card_at` gives the layer is added back.
+    let foot = |harness: &Harness<'_, SlicerApp>| {
+        let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new("this-plate"));
+        let shift = harness
+            .ctx
+            .layer_transform_to_global(layer)
+            .map_or(0.0, |transform| transform.translation.y);
+        harness.get_by_label_contains("Slice").rect().bottom() + shift
+    };
     let standing = foot(&harness);
     for way in ["opening", "closing"] {
         harness.get_by_label("Details").click();

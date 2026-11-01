@@ -8,7 +8,7 @@ use core_supports::{TrapScan, Trapped};
 use core_engine::{Baked, Cutting, cut};
 
 use crate::i18n::tr;
-use crate::job::{Worker, pooled};
+use crate::job::{Highest, Worker, pooled};
 use crate::scene::{ObjectId, Scene};
 
 /// One model to look through, owned so that it can cross to the worker thread.
@@ -54,6 +54,7 @@ pub struct TrapJob {
     worker: Worker<TrapOutcome>,
     looked: Arc<Looked>,
     models: usize,
+    shown: Highest,
 }
 
 /// How far a check has got: the models done, and the layers cut of the one in hand.
@@ -77,6 +78,7 @@ impl TrapJob {
             worker,
             looked,
             models,
+            shown: Highest::default(),
         }
     }
 
@@ -92,7 +94,8 @@ impl TrapJob {
         (layers_total > 0).then(|| {
             let layer = self.looked.layers.load(Relaxed).min(layers_total);
             let done = self.looked.models.load(Relaxed);
-            ((done as f32 + layer as f32 / layers_total as f32) / self.models as f32).min(1.0)
+            let share = (done as f32 + layer as f32 / layers_total as f32) / self.models as f32;
+            self.shown.keep(share.min(1.0))
         })
     }
 }

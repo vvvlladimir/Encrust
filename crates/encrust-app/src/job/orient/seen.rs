@@ -2,6 +2,8 @@ use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering::Relaxed};
 
 use core_plate::Phase;
 
+use crate::job::Highest;
+
 /// Where the bar stands when the shortlist is cut: weighed on three models, whose search took
 /// 3 to 19 % of a run and whose proof took the rest; see ADR 0384.
 const LOOKING_END: f32 = 0.12;
@@ -11,6 +13,7 @@ const LOOKING_END: f32 = 0.12;
 #[derive(Debug)]
 pub(super) struct Seen {
     models: Vec<Model>,
+    shown: Highest,
 }
 
 #[derive(Debug, Default)]
@@ -25,6 +28,7 @@ impl Seen {
     pub fn new(models: usize) -> Self {
         Self {
             models: (0..models).map(|_| Model::default()).collect(),
+            shown: Highest::default(),
         }
     }
 
@@ -42,7 +46,8 @@ impl Seen {
     pub fn share(&self) -> Option<f32> {
         let shares: Vec<Option<f32>> = self.models.iter().map(Model::share).collect();
         shares.iter().any(Option::is_some).then(|| {
-            shares.iter().map(|share| share.unwrap_or(0.0)).sum::<f32>() / shares.len() as f32
+            let share = shares.iter().map(|share| share.unwrap_or(0.0)).sum::<f32>();
+            self.shown.keep(share / shares.len() as f32)
         })
     }
 

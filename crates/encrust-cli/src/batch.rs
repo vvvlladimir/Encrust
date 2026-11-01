@@ -132,6 +132,9 @@ fn one(
 /// Where each model's output goes: `batch.name` made of it in the output directory, with the
 /// printer's extension, refused when two models would land on one file.
 fn outputs_for(models: &[PathBuf], batch: &Batch, chosen: &Chosen) -> Result<Vec<PathBuf>> {
+    for tag in core_engine::unknown_tags(batch.name) {
+        tracing::warn!("--name: {{{tag}}} stands for nothing and is kept as written");
+    }
     let when = jiff::Zoned::now().datetime();
     let outputs: Vec<PathBuf> = models
         .iter()

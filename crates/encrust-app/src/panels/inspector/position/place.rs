@@ -1,12 +1,13 @@
 //! The Select card's Place and Auto-orient sections: where the picked model stands and
 //! which way up, short of typing it.
 
-use core_geometry::Vec3;
+use core_geometry::{Vec3, center_over_plate};
 use core_plate::{OrientGoal, OrientPreset};
 
 use super::{MAX_LIFT_MM, POSITION_DRAG};
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene};
 use crate::ui::{
     Segment, Segmented, describe, icon, kept, number_row, secondary_button, section, step_bar,
@@ -25,7 +26,7 @@ pub(super) fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         ui.columns(2, |columns| {
             lay_on_face(&mut columns[0], window);
             if secondary_button(&mut columns[1], icon::CENTRE, &tr!("position-centre")).clicked() {
-                centre(&mut window.doc.scene, window.doc.plate.center(), id);
+                centre(&mut window.doc.scene, &window.doc.plate, id);
             }
         });
         mirror(ui, &mut window.doc.scene, copy);
@@ -58,13 +59,12 @@ fn lay_on_face(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-fn centre(scene: &mut Scene, middle: Vec3, id: ObjectId) {
+fn centre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     let Some(object) = scene.get_mut(id) else {
         return;
     };
     if let Some(bounds) = object.world_bounds() {
-        let offset = middle - bounds.center();
-        object.transform.translation += offset * Vec3::new(1.0, 1.0, 0.0);
+        object.transform.translation += center_over_plate(&bounds, plate.x_mm, plate.y_mm);
     }
 }
 

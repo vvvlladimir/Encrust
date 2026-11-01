@@ -308,7 +308,7 @@ fn glyph_button(
     let (rect, response) = chip(ui, row, right, CHIP_H, place);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tooltip));
     let fill = hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover);
-    let ink = hover_mix(ui, &response, colors.line, colors.text_high);
+    let ink = hover_mix(ui, &response, colors.text_low, colors.text_high);
     ui.painter().rect_filled(rect, theme::R_CONTROL, fill);
     ui.painter().text(
         rect.center(),

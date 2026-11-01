@@ -95,3 +95,15 @@ fn every_key_of_the_table_reads_back_from_its_line() {
         }
     }
 }
+
+/// On the Mac Ctrl is a key of its own, so Ctrl Cmd F must not come back as Cmd F.
+#[test]
+fn a_chord_holding_ctrl_and_cmd_reads_back_from_its_line() {
+    let held = normal(Modifiers::CTRL.plus(Modifiers::COMMAND));
+    let chord = KeyboardShortcut::new(held, Key::F);
+    let read = parse(&spec(&chord)).expect("its own line reads");
+    assert_eq!(
+        KeyboardShortcut::new(normal(read.modifiers), read.logical_key),
+        chord
+    );
+}

@@ -4,6 +4,7 @@ mod cut;
 mod drill;
 mod edit;
 mod format;
+mod highest;
 mod hollow;
 mod import;
 mod measure;
@@ -30,6 +31,7 @@ pub use edit::{Edit, EditJob, EditOutcome};
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;
 pub use format::label_of;
+pub use highest::Highest;
 pub use hollow::{
     HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks,
     lock as lock_fields, rebuild_tasks,

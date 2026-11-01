@@ -126,7 +126,8 @@ fn safe(name: &str) -> String {
     if stem.is_empty() {
         return FALLBACK.to_owned();
     }
-    let device = stem.split('.').next().unwrap_or_default();
+    // Windows ignores spaces after a device name: `con .v2` is `con` too.
+    let device = stem.split('.').next().unwrap_or_default().trim_end();
     if RESERVED
         .iter()
         .any(|reserved| reserved.eq_ignore_ascii_case(device))
@@ -218,6 +219,7 @@ mod tests {
         };
         assert_eq!(file_stem("{model}", &model), "con_");
         assert_eq!(file_stem("{model}.v2", &model), "con_.v2");
+        assert_eq!(file_stem("{model} .v2", &model), "con_ .v2");
         assert_eq!(file_stem("{model}sole", &model), "console");
     }
 
