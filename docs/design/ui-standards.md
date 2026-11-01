@@ -117,7 +117,7 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 
 ## Known gaps
 
-- **The redesign (ADR 0382)** is written in `ui-screens.md`, not built: the rail still stands over the inspector,
+- **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row and the glyphs are;
   the plate card states seven dotted rows with Slice to a file under the primary, Supports,
   Cut and Relief print viewport instructions, a deleted profile or machine does not ask,
   and only a switch's knob and a pressed control move. `hint_bar`,

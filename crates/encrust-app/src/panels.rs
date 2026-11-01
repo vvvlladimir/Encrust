@@ -37,7 +37,6 @@ use egui::{Align2, Id, Pos2, Rect, Sense, pos2, vec2};
 use crate::state::{Doc, Machine, Tools, View};
 use crate::ui::{card, theme};
 use crate::workspace::{Mode, Tool, ViewOptions};
-use tool_rail::RailWidths;
 
 /// Everything the chrome draws against, borrowed for one frame.
 ///
@@ -97,9 +96,9 @@ impl Window<'_> {
             .show(ui, |ui| stage::ui(ui, self, room));
     }
 
-    /// The cards over the stage: the rail over the inspector at its left, the layer strip
-    /// and the plate down its right. Answers the room they leave between them, which the
-    /// stage's own cards are placed in.
+    /// The cards over the stage: the inspector at its left, the layer strip and the plate
+    /// down its right, the tool row across the top between them (ADR 0382). Answers the
+    /// room they leave under the row, which the stage's own cards are placed in.
     fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> Rect {
         let gap = theme::FLOAT_GAP;
         let options = self.view.options;
@@ -119,12 +118,12 @@ impl Window<'_> {
         });
 
         let between = strip.left() - stage.left();
-        let wanted = left_column_w(&options, *self.mode, tool_rail::widths(ctx));
+        let wanted = inspector_w(&options, *self.mode);
         let (left_w, plate_w) = fit_side_cards(between, wanted.unwrap_or(0.0), options.plate_w);
         let left = match wanted {
             Some(_) => {
                 let corner = pos2(stage.left() + gap, top);
-                self.left_column(ctx, corner, max_h, left_w).right()
+                self.inspector_card(ctx, corner, max_h, left_w).right()
             }
             None => stage.left(),
         };
@@ -143,36 +142,50 @@ impl Window<'_> {
 
         let left = left + gap;
         let right = (models.left() - gap).max(left);
-        Rect::from_x_y_ranges(left..=right, top..=(stage.bottom() - gap).max(top))
+        let under_row = match row_shown(&options, *self.mode) {
+            true => {
+                let width = (right - left - 2.0 * CARD_STROKE).max(0.0);
+                let row = card_at(
+                    ctx,
+                    "tool-row",
+                    pos2(left, top),
+                    Align2::LEFT_TOP,
+                    max_h,
+                    |ui| {
+                        tool_rail::ui(ui, self, width);
+                    },
+                );
+                row.bottom() + gap
+            }
+            false => top,
+        };
+        let bottom = (stage.bottom() - gap).max(under_row);
+        Rect::from_x_y_ranges(left..=right, under_row..=bottom)
     }
 }
 
 impl Window<'_> {
-    /// The rail from `corner`, the open tool's card under it, both `width` wide, and the
-    /// edge that sizes them, a double click giving it back to the rail's names (ADR 0348).
-    fn left_column(&mut self, ctx: &egui::Context, corner: Pos2, max_h: f32, width: f32) -> Rect {
-        let gap = theme::FLOAT_GAP;
-        let rail = card_at(ctx, "rail", corner, Align2::LEFT_TOP, max_h, |ui| {
-            tool_rail::ui(ui, self, width);
-        });
-        if !self.view.options.inspector {
-            return rail;
-        }
-        let below = pos2(corner.x, rail.bottom() + gap);
-        let max_h = (max_h - rail.height() - gap).max(0.0);
-        let inspector = card_at(ctx, "inspector", below, Align2::LEFT_TOP, max_h, |ui| {
+    /// The open tool's card from `corner`, `width` wide, and the edge that sizes it, a
+    /// double click giving it back its default width.
+    fn inspector_card(
+        &mut self,
+        ctx: &egui::Context,
+        corner: Pos2,
+        max_h: f32,
+        width: f32,
+    ) -> Rect {
+        let inspector = card_at(ctx, "inspector", corner, Align2::LEFT_TOP, max_h, |ui| {
             exactly_wide(ui, width, |ui| inspector::ui(ui, self, max_h));
         });
-        let column = rail.union(inspector);
         let range = theme::INSPECTOR_W_RANGE;
-        match drag_edge(ctx, "inspector-edge", column, true) {
+        match drag_edge(ctx, "inspector-edge", inspector, true) {
             Some(Edge::To(raw)) => {
                 self.view.options.inspector_w = Some(raw.clamp(*range.start(), *range.end()));
             }
             Some(Edge::Reset) => self.view.options.inspector_w = None,
             None => {}
         }
-        column
+        inspector
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
@@ -206,24 +219,25 @@ impl Window<'_> {
     }
 }
 
-/// The left column's width before the window has its say, or `None` while Preview gives
-/// the whole stage to the mask: the rail's glyphs alone with the inspector put away, else
-/// the width it was dragged to, else as wide as the rail with its names.
-fn left_column_w(options: &ViewOptions, mode: Mode, rail: RailWidths) -> Option<f32> {
-    if mode == Mode::Preview && options.mask_only {
+/// The inspector's width before the window has its say: the width it was dragged to, else
+/// the default; `None` while it is put away or Preview gives the whole stage to the mask.
+fn inspector_w(options: &ViewOptions, mode: Mode) -> Option<f32> {
+    if !row_shown(options, mode) || !options.inspector {
         return None;
     }
-    if !options.inspector {
-        return Some(rail.glyphs);
-    }
     let range = theme::INSPECTOR_W_RANGE;
-    let wanted = options.inspector_w.unwrap_or(rail.named);
+    let wanted = options.inspector_w.unwrap_or(theme::INSPECTOR_W);
     Some(wanted.clamp(*range.start(), *range.end()))
 }
 
-/// The least of the stage the side cards leave clear, in points: room for the view cube
-/// and the view buttons beside it.
-const STAGE_MIN_W: f32 = 240.0;
+/// Whether the tool row stands over the stage: everywhere but the mask alone.
+fn row_shown(options: &ViewOptions, mode: Mode) -> bool {
+    !(mode == Mode::Preview && options.mask_only)
+}
+
+/// The least of the stage the side cards leave clear, in points: the tool row's glyphs, and
+/// the view cube and the view buttons under it.
+const STAGE_MIN_W: f32 = 300.0;
 
 /// The left column's width and the plate cards' width that fit `between` the stage's left
 /// edge and the layer strip with `STAGE_MIN_W` of stage left between them. Each gives way
@@ -385,48 +399,44 @@ mod tests {
         assert_eq!(fitted, (260.0, 232.0));
     }
 
-    const RAIL: RailWidths = RailWidths {
-        named: 380.0,
-        glyphs: 316.0,
-    };
-
     #[test]
-    fn an_undragged_column_stands_as_wide_as_the_rail_with_its_names() {
+    fn an_undragged_inspector_stands_at_its_default_width() {
         let options = ViewOptions::default();
-        assert_eq!(left_column_w(&options, Mode::Prepare, RAIL), Some(380.0));
+        assert_eq!(
+            inspector_w(&options, Mode::Prepare),
+            Some(theme::INSPECTOR_W)
+        );
     }
 
     #[test]
-    fn a_dragged_column_keeps_the_width_it_was_dragged_to() {
+    fn a_dragged_inspector_keeps_the_width_it_was_dragged_to() {
         let options = ViewOptions {
             inspector_w: Some(300.0),
             ..ViewOptions::default()
         };
-        assert_eq!(left_column_w(&options, Mode::Prepare, RAIL), Some(300.0));
+        assert_eq!(inspector_w(&options, Mode::Prepare), Some(300.0));
     }
 
     #[test]
-    fn a_closed_inspector_leaves_its_room_to_the_plate_cards() {
+    fn a_closed_inspector_leaves_its_room_and_the_row_stays() {
         let options = ViewOptions {
             inspector: false,
             inspector_w: Some(440.0),
             ..ViewOptions::default()
         };
-        assert_eq!(
-            left_column_w(&options, Mode::Prepare, RAIL),
-            Some(316.0),
-            "the rail alone, in its squares"
-        );
+        assert_eq!(inspector_w(&options, Mode::Prepare), None);
+        assert!(row_shown(&options, Mode::Prepare));
     }
 
     #[test]
-    fn the_mask_alone_takes_the_left_column_too() {
+    fn the_mask_alone_takes_the_inspector_and_the_row() {
         let options = ViewOptions {
             mask_only: true,
             ..ViewOptions::default()
         };
-        assert_eq!(left_column_w(&options, Mode::Preview, RAIL), None);
-        assert!(left_column_w(&options, Mode::Prepare, RAIL).is_some());
+        assert_eq!(inspector_w(&options, Mode::Preview), None);
+        assert!(!row_shown(&options, Mode::Preview));
+        assert!(inspector_w(&options, Mode::Prepare).is_some());
     }
 
     #[test]

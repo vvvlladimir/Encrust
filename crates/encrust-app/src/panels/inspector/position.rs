@@ -470,7 +470,7 @@ fn preset_row(ui: &mut egui::Ui, chosen: &mut OrientPreset) -> bool {
         let enabled = ui.is_enabled();
         let oriented = inline_button(
             ui,
-            icon::ORIENT,
+            icon::AUTO_ORIENT,
             &tr!("position-auto-orient"),
             false,
             enabled,

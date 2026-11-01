@@ -62,7 +62,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Open the **Repair** tool: what was found in the picked models (or every model on the
   plate) — holes, open edges, faces without area, faces drawn twice, shells — and, on a
   press, how many pairs of faces cross. Pick the method, set the seam tolerance and the
-  smallest speck, and repair with progress and Cancel. The rail's
+  smallest speck, and repair with progress and Cancel. The tool row's
   Repair button carries a dot while a model on the plate is broken.
 - Click a finding to mark it on the models while the Repair tool is open: the rims of the
   holes as lines, faces without area, drawn twice or crossing others as patches. The
@@ -732,11 +732,13 @@ address in a video player).
 ## Working in the window
 
 - **Find (⌘K):** search every tool, action and model on the plate by name.
-- **Tool rail:** shows each tool's name under its icon whenever the window has room, and
-  icons alone when it does not. Drag the column's edge to set your own width; double-click
-  it to go back to fitting the names. The plate column's edge resets the same way.
-- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, each shown on its tool while
-  the pointer is on the rail, there is a shortcut sheet, Tab walks
+- **Tool row:** runs across the top of the stage between the inspector and the models,
+  each tool's name under its icon while there is room, icons alone when there is not. Drag
+  the inspector's edge to set its width; double-click it to go back to the default. The
+  plate column's edge resets the same way. A width dragged before this row moved is
+  forgotten once.
+- **Keyboard:** digits 1 to 9 pick the tools of the row in order, each shown on its tool while
+  the pointer is on the row, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.

@@ -179,8 +179,17 @@ fn the_preview_divide_and_the_card_widths_survive_the_round_trip() {
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");
     let read: Preferences = serde_json::from_str(&text).expect("and read back");
     assert_eq!(read.mask_split, Some(0.62));
-    assert_eq!(read.left_w, Some(400.0));
+    assert_eq!(read.inspector_w, Some(400.0));
     assert_eq!(read.plate_w, Some(200.0));
+}
+
+/// The inspector no longer shares its width with the tool row, so a width dragged before
+/// ADR 0382 would leave it oddly wide: it is forgotten.
+#[test]
+fn a_column_dragged_before_the_tool_row_moved_is_forgotten() {
+    let read: Preferences =
+        serde_json::from_str(r#"{"left_w": 420.0}"#).expect("an old key is not an error");
+    assert_eq!(read.inspector_w, None);
 }
 
 /// A wall thickness typed in once is the user's from then on, so it travels through
