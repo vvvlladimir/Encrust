@@ -54,10 +54,6 @@ pub fn coin() -> Mesh {
     revolve(Vec3::ZERO, Vec3::Z, &rings, &round)
 }
 
-fn disc([diameter, height]: [Scalar; 2]) -> Mesh {
-    cylinder(Vec3::ZERO, Vec3::Z * height, diameter / 2.0, ROUND)
-}
-
 /// A drinks can: a narrower foot and a necked-in neck round a straight wall, its lid sunk
 /// inside a rolled rim, and the tab that opens it lying on the lid.
 pub fn can() -> Mesh {
