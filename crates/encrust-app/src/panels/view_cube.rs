@@ -16,9 +16,6 @@ const SIZE: f32 = 64.0;
 /// and where two bands cross, to a corner.
 const FACE_MIDDLE: f32 = 0.5;
 
-/// How long the camera takes to swing to a picked view, seconds.
-const TURN_S: f64 = 0.35;
-
 /// A face turned further from the camera than this is drawn as nothing: seen edge on it
 /// would be a hairline along the cube's side.
 const SEEN_FACING: f32 = 0.08;
@@ -136,7 +133,7 @@ fn turn(ui: &egui::Ui, window: &mut Window, to: OrbitCamera) {
         from: window.view.camera,
         to,
         started_s: ui.input(|input| input.time),
-        length_s: TURN_S,
+        length_s: crate::ui::theme::motion::turn_s(ui.ctx()),
     });
     ui.ctx().request_repaint();
 }

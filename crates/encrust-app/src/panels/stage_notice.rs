@@ -85,44 +85,66 @@ impl Stack {
     }
 }
 
-/// One card per job that reports progress here, the latest to start nearest the foot.
+/// One card per job that reports progress here, the latest to start nearest the foot; a
+/// job that ended fades out by `CLOSE` as it last stood.
 fn jobs(stack: &mut Stack, window: &mut Window) {
-    if window.machine.preview.is_building()
-        && job_card(
-            stack,
-            "preview",
-            &tr!("notice-cutting-preview"),
-            None,
-            false,
-        )
-    {
+    let preview = window
+        .machine
+        .preview
+        .is_building()
+        .then(|| (tr!("notice-cutting-preview"), None, false));
+    if job_card(stack, "preview", preview) {
         window.machine.preview.cancel();
     }
-    if let Some(job) = window.machine.slicing.job.as_ref() {
-        let (label, fraction) = (job.label(), job.fraction());
-        if job_card(stack, "slicing", &label, fraction, job.is_cancelling()) {
-            job.cancel();
-        }
+    let slicing = window.machine.slicing.job.as_ref();
+    let shown = slicing.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
+    if job_card(stack, "slicing", shown) {
+        slicing.inspect(|job| job.cancel());
     }
-    if let Some(job) = window.machine.network.job.as_ref() {
-        let (label, fraction) = (job.label(), job.fraction());
-        if job_card(stack, "network", &label, fraction, job.is_cancelling()) {
-            job.cancel();
-        }
+    let network = window.machine.network.job.as_ref();
+    let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
+    if job_card(stack, "network", shown) {
+        network.inspect(|job| job.cancel());
     }
 }
 
-/// What is happening, how far along, and a way out. Answers whether to stop.
-fn job_card(
-    stack: &mut Stack,
+/// What a job is doing — its words, how far along, whether it is stopping — and a way out,
+/// or the card it last stood as while that fades. Answers whether to stop.
+fn job_card(stack: &mut Stack, name: &str, job: Option<(String, Option<f32>, bool)>) -> bool {
+    let Some(((label, fraction, cancelling), left)) = remembered(&stack.ctx, name, job) else {
+        return false;
+    };
+    let going = left < 1.0;
+    let stop = stack
+        .fading_card(name, left, |ui| {
+            job_notice(ui, &label, fraction, cancelling || going)
+        })
+        .inner;
+    stop && !going
+}
+
+/// What card `name` shows: `now` while it stands, kept as it goes; once gone, what it last
+/// showed for the `CLOSE` it fades out over. Answers it with how much of the card is left.
+fn remembered<T: Clone + Send + Sync + 'static>(
+    ctx: &egui::Context,
     name: &str,
-    label: &str,
-    fraction: Option<f32>,
-    cancelling: bool,
-) -> bool {
-    stack
-        .card(name, |ui| job_notice(ui, label, fraction, cancelling))
-        .inner
+    now: Option<T>,
+) -> Option<(T, f32)> {
+    let key = Id::new("stage-notice-last").with(name);
+    let time = ctx.input(|input| input.time);
+    if let Some(now) = now {
+        ctx.data_mut(|data| data.insert_temp(key, (now.clone(), time)));
+        return Some((now, 1.0));
+    }
+    let (last, at_s) = ctx.data(|data| data.get_temp::<(T, f64)>(key))?;
+    let close_s = f64::from(motion::CLOSE.seconds(ctx));
+    let gone_s = time - at_s;
+    if gone_s >= close_s {
+        ctx.data_mut(|data| data.remove::<(T, f64)>(key));
+        return None;
+    }
+    ctx.request_repaint();
+    Some((last, (1.0 - gone_s / close_s) as f32))
 }
 
 /// The user's profile files that would not read, and the way to reset them.
@@ -146,22 +168,26 @@ fn broken(stack: &mut Stack, window: &mut Window) {
         .offered(&window.doc.scene)
         .map(|object| (object.id, object.name.clone(), object.summary.defects()))
         .collect();
-    let label = match offered.as_slice() {
-        [] => return,
-        [(_, name, _)] => tr!("notice-broken-one", name = name.clone()),
-        several => tr!("notice-broken-several", count = several.len()),
+    let words = match offered.as_slice() {
+        [] => None,
+        [(_, name, _)] => Some((
+            tr!("notice-broken-one", name = name.clone()),
+            tr!("notice-repair"),
+        )),
+        several => Some((
+            tr!("notice-broken-several", count = several.len()),
+            tr!("notice-repair-all"),
+        )),
+    };
+    let Some(((label, wording), left)) = remembered(&stack.ctx, "broken", words) else {
+        return;
     };
     let lines: Vec<&str> = offered
         .iter()
         .flat_map(|(_, _, defects)| defects.iter().map(String::as_str))
         .collect();
-    let wording = if offered.len() == 1 {
-        tr!("notice-repair")
-    } else {
-        tr!("notice-repair-all")
-    };
     let colors = theme::colors();
-    let shown = stack.card("broken", |ui| {
+    let shown = stack.fading_card("broken", left, |ui| {
         notice_card(
             ui,
             icon::WARNING,
@@ -334,4 +360,45 @@ pub(super) fn show_again(ctx: &egui::Context) {
 fn seen_now(ctx: &egui::Context, status: &Status, now: f64) {
     let key = Id::new(status).value();
     ctx.data_mut(|data| data.insert_temp(Id::new(SEEN), (key, now)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What `remembered` answers for a card in a frame at `time_s`.
+    fn at(ctx: &egui::Context, time_s: f64, now: Option<&str>) -> Option<(String, f32)> {
+        let input = egui::RawInput {
+            time: Some(time_s),
+            ..egui::RawInput::default()
+        };
+        let mut answer = None;
+        let mut output = ctx.run_ui(input, |ui| {
+            answer = remembered(ui.ctx(), "job", now.map(str::to_owned));
+        });
+        output.textures_delta.clear();
+        answer
+    }
+
+    #[test]
+    fn a_card_whose_job_ended_fades_out_as_it_last_stood() {
+        let ctx = egui::Context::default();
+        assert_eq!(
+            at(&ctx, 0.0, Some("Slicing")),
+            Some(("Slicing".into(), 1.0))
+        );
+        let close_s = f64::from(motion::CLOSE.seconds(&ctx));
+        let (words, left) = at(&ctx, close_s / 2.0, None).expect("still fading");
+        assert_eq!(words, "Slicing", "the words it last had");
+        assert!((left - 0.5).abs() < 1e-3, "half of it is left, got {left}");
+        assert_eq!(at(&ctx, close_s, None), None, "gone once the fade is over");
+    }
+
+    #[test]
+    fn under_reduce_motion_a_card_goes_at_once() {
+        let ctx = egui::Context::default();
+        motion::reduce(&ctx, true);
+        at(&ctx, 0.0, Some("Slicing"));
+        assert_eq!(at(&ctx, 0.01, None), None);
+    }
 }

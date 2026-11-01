@@ -3,7 +3,7 @@ use egui::{
     WidgetInfo, WidgetType, vec2,
 };
 
-use super::focus_ring;
+use super::{focus_ring, hover_mix};
 use crate::i18n::tr;
 use crate::ui::theme;
 
@@ -58,10 +58,10 @@ pub fn list_row(
     let colors = theme::colors();
     let (rect, row) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    let (fill, text) = match (selected, row.hovered()) {
-        (true, _) => (colors.picked_wash, colors.text_high),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (colors.raised, colors.text_high),
+    let text = colors.text_high;
+    let fill = match selected {
+        true => colors.picked_wash,
+        false => hover_mix(ui, &row, colors.raised, colors.hover),
     };
     ui.painter().rect_filled(rect, 0.0, fill);
     row.widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, label));
@@ -150,10 +150,9 @@ pub fn issue_row(
     let colors = theme::colors();
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    let fill = match (selected, response.hovered()) {
-        (true, _) => colors.picked_wash,
-        (false, true) => colors.hover,
-        (false, false) => colors.raised,
+    let fill = match selected {
+        true => colors.picked_wash,
+        false => hover_mix(ui, &response, colors.raised, colors.hover),
     };
     response.widget_info(|| {
         WidgetInfo::selected(

@@ -21,8 +21,6 @@ const ROW_W: f32 = 300.0;
 const ROW_H: f32 = 46.0;
 /// Share of a turn the arc spans while a print runs without a count yet.
 const SPINNER_SHARE: f32 = 0.25;
-/// Turns a second the spinner makes.
-const SPINNER_TURNS_S: f32 = 0.8;
 
 /// Draws the ring when the window knows any printer, and answers the width it took.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
@@ -104,8 +102,7 @@ fn paint(ui: &egui::Ui, center: Pos2, radius: f32, look: &Look, hovered: bool) {
     };
     painter.circle_stroke(center, radius - TRACK_W / 2.0, Stroke::new(TRACK_W, track));
     let arc = if look.spinning {
-        let turn = (ui.input(|input| input.time) as f32 * SPINNER_TURNS_S).fract();
-        ui.ctx().request_repaint();
+        let turn = crate::ui::theme::motion::spin(ui.ctx()).unwrap_or(0.0);
         Some((turn, SPINNER_SHARE))
     } else {
         look.progress.map(|share| (0.0, share))

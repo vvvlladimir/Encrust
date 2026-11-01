@@ -27,6 +27,13 @@ pub fn focus_ring(ui: &Ui, response: &Response, radius: impl Into<CornerRadius>)
     }
 }
 
+/// `rest` easing to `hovered` by `FAST` while the pointer is on `response`.
+pub fn hover_mix(ui: &Ui, response: &Response, rest: Color32, hovered: Color32) -> Color32 {
+    let id = response.id.with("hover");
+    let how = motion::toggle(ui.ctx(), id, response.hovered(), motion::FAST);
+    rest.lerp_to_gamma(hovered, how)
+}
+
 /// Where a control is painted: its own rect, shrunk towards its centre while it is pressed.
 pub(super) fn pressed_rect(ui: &Ui, response: &Response) -> Rect {
     let id = response.id.with("pressed");
@@ -329,15 +336,10 @@ pub(in crate::ui::widgets) fn paint_button(
     enabled: bool,
 ) {
     let Face { glyph, text, .. } = *face;
-    let fill = match (
-        enabled,
-        response.is_pointer_button_down_on(),
-        response.hovered(),
-    ) {
-        (false, _, _) => skin.fill,
-        (true, true, _) => skin.pressed,
-        (true, false, true) => skin.hovered,
-        (true, false, false) => skin.fill,
+    let fill = match (enabled, response.is_pointer_button_down_on()) {
+        (false, _) => skin.fill,
+        (true, true) => skin.pressed,
+        (true, false) => hover_mix(ui, response, skin.fill, skin.hovered),
     };
     let foreground = skin.foreground;
 

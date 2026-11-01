@@ -162,7 +162,7 @@ fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.preview.is_measuring() || window.machine.preview.is_building() {
         section(ui, &tr!("check-checking"), None, |ui| {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::ui::spinner(ui);
                 hint(ui, &tr!("check-reading"));
             });
         });
@@ -236,8 +236,8 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> bool {
     let (glyph, tint, wash, title, why) = match worst {
         None => (
             icon::CLEAR,
-            colors.text_mid,
-            colors.raised,
+            colors.ok,
+            colors.ok_wash,
             tr!("check-nothing-found"),
             tr!("check-nothing-found-why"),
         ),

@@ -227,8 +227,9 @@ and the one that applies right.
 **Printer sheet**, 700 by 640: under its title the model, address and firmware; the plate's
 picture beside the state (its word in the state's colour, the file, the percent at 22, a 6
 point bar, layer and time left), Pause and Stop (`confirm_button`), light source and film
-readings; the camera's address with copy and its switch; Recent prints as three tiles with
-their outcome.
+readings; the camera's address with copy and its switch; Recent prints three to a row, each
+a 60 tall tile on `panel` of a 44 picture beside the file and its outcome in `ok`, `warn` or
+`danger`.
 
 **Find**, 500 wide, 70 from the stage's top over a 40 % scrim: a 48 tall field over a
 hairline, results grouped under capital names as Tools, Actions, Models with their keys,

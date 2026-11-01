@@ -1,5 +1,5 @@
 use egui::layers::ShapeIdx;
-use egui::{Frame, Rect, RichText, Sense, Ui, vec2};
+use egui::{Align2, Frame, Rect, RichText, Sense, Ui, vec2};
 
 use super::section::trailing_hairline;
 use crate::i18n::tr;
@@ -419,8 +419,13 @@ pub fn readings(ui: &mut Ui, entries: &[(String, String)]) {
 /// The bar of a running job: filled to `fraction` where it is known, and running on its
 /// own where it is not, which is a job that cannot honestly count its work.
 pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
+    progress_bar_of(ui, fraction, theme::BAR_H);
+}
+
+/// The same bar `height` points tall, as the printer sheet's.
+pub fn progress_bar_of(ui: &mut Ui, fraction: Option<f32>, height: f32) {
     let colors = theme::colors();
-    let size = egui::vec2(ui.available_width(), theme::BAR_H);
+    let size = egui::vec2(ui.available_width(), height);
     let (track, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::new(egui::WidgetType::ProgressIndicator);
@@ -428,9 +433,9 @@ pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
         info
     });
     let painter = ui.painter_at(track);
-    let round = egui::CornerRadius::same((theme::BAR_H / 2.0) as u8);
+    let round = egui::CornerRadius::same((height / 2.0) as u8);
     painter.rect_filled(track, round, colors.active);
-    let phase = motion::looping(ui.ctx(), SHEEN_S);
+    let phase = motion::sheen(ui.ctx());
     let fill = match fraction {
         Some(fraction) => track.with_max_x(track.left() + track.width() * fraction.clamp(0.0, 1.0)),
         // A job that cannot count runs a stretch of the bar along it; still, a stretch.
@@ -449,9 +454,8 @@ pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
     }
 }
 
-/// How long the sheen takes to cross a bar, s, how much of the bar it and a running stretch
-/// cover, and how much of the light ink the sheen keeps.
-const SHEEN_S: f64 = 1.4;
+/// How much of the bar the sheen and a running stretch cover, and how much of the light ink
+/// the sheen keeps.
 const RUNNING_SHARE: f32 = 0.3;
 const SHEEN_ALPHA: f32 = 0.25;
 
@@ -507,11 +511,41 @@ pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
 }
 
 /// A window over the plate: on the panel's fill, ringed in `line`, `margin` inside it, over
-/// the stage dimmed by the scrim.
-pub fn dialog(id: egui::Id, margin: i8) -> egui::Modal {
+/// the stage dimmed by the scrim; both come in by `OPEN`, the window rising as it does.
+pub fn dialog(ctx: &egui::Context, id: egui::Id, margin: i8) -> egui::Modal {
+    placed(
+        ctx,
+        id,
+        margin,
+        (Align2::CENTER_CENTER, 0.0),
+        theme::SCRIM_SHARE,
+    )
+}
+
+/// The same hanging `top` points under the window's top over a lighter scrim, as Find does.
+pub fn palette_dialog(ctx: &egui::Context, id: egui::Id, top: f32) -> egui::Modal {
+    placed(
+        ctx,
+        id,
+        0,
+        (Align2::CENTER_TOP, top),
+        theme::FIND_SCRIM_SHARE,
+    )
+}
+
+fn placed(
+    ctx: &egui::Context,
+    id: egui::Id,
+    margin: i8,
+    (anchor, top): (Align2, f32),
+    scrim_share: f32,
+) -> egui::Modal {
+    let came_in = motion::appear(ctx, id.with("dialog"));
+    let lift = vec2(0.0, top + motion::LIFT_PT * (1.0 - came_in));
     egui::Modal::new(id)
+        .area(egui::Modal::default_area(id).anchor(anchor, lift))
         .frame(dialog_frame().inner_margin(egui::Margin::same(margin)))
-        .backdrop_color(theme::scrim(theme::SCRIM_SHARE))
+        .backdrop_color(theme::scrim(scrim_share * came_in))
 }
 
 fn dialog_frame() -> Frame {

@@ -3,7 +3,9 @@
 
 use egui::{Frame, Sense, Ui, UiBuilder, vec2};
 
+use super::figures::{Grows, unfold};
 use super::layout::{described, describing, help_mark, hint};
+use crate::ui::theme::motion;
 use crate::ui::{kept, theme};
 
 /// One block of the inspector: a heading that folds it, an optional hint on the right,
@@ -79,14 +81,17 @@ fn block<R>(
     let id = ui.id().with(("section", title));
     let open = kept::get::<bool>(ui.ctx(), id.with("open")) != Some(false);
     let pressed = block_heading(ui, id, title, open, hint_text, trailing);
-    let inner = open.then(|| {
-        Frame::new()
-            .inner_margin(BODY_MARGIN)
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                describing(ui, id, add)
-            })
-            .inner
+    let how_open = motion::fold(ui.ctx(), id.with("fold"), open);
+    let inner = (how_open > 0.0).then(|| {
+        unfold(ui, id, how_open, Grows::Down, |ui| {
+            Frame::new()
+                .inner_margin(BODY_MARGIN)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
+                    describing(ui, id, add)
+                })
+                .inner
+        })
     });
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     let shape = ui.painter().add(egui::Shape::rect_filled(

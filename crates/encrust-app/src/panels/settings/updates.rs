@@ -146,7 +146,7 @@ fn notes(ui: &mut Ui, notes: &[Note]) {
 
 fn busy(ui: &mut Ui, text: &str) {
     ui.horizontal(|ui| {
-        ui.spinner();
+        crate::ui::spinner(ui);
         hint(ui, text);
     });
 }

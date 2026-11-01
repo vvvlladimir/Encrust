@@ -2,7 +2,7 @@
 
 use egui::{Align2, Color32, Frame, Response, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 
-use super::{focus_ring, two_lines};
+use super::{focus_ring, hover_mix, two_lines};
 use crate::ui::{icon, theme};
 
 /// The frame a chooser hangs in under its part of the chip, on `raised` with a window's
@@ -69,10 +69,9 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
     response.widget_info(|| {
         WidgetInfo::selected(WidgetType::SelectableLabel, true, row.chosen, row.name)
     });
-    let fill = match (row.chosen, response.hovered()) {
-        (true, _) => colors.picked_wash,
-        (false, true) => colors.hover,
-        (false, false) => Color32::TRANSPARENT,
+    let fill = match row.chosen {
+        true => colors.picked_wash,
+        false => hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
@@ -133,10 +132,11 @@ pub fn chooser_foot(ui: &mut Ui, glyph: &str, text: &str) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), FOOT_H), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, text));
-    let (fill, ink) = if response.hovered() {
-        (colors.hover, colors.text_high)
+    let fill = hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover);
+    let ink = if response.hovered() {
+        colors.text_high
     } else {
-        (Color32::TRANSPARENT, colors.text_mid)
+        colors.text_mid
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);

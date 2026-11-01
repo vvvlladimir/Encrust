@@ -7,7 +7,9 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
-use crate::ui::{chooser_group, dialog, focus_ring, hint, hint_bar, icon, theme};
+use crate::ui::{
+    chooser_group, focus_ring, hint, hint_bar, hover_mix, icon, palette_dialog, theme,
+};
 use crate::workspace::Tool;
 
 const PALETTE_W: f32 = 500.0;
@@ -114,23 +116,19 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     let list = found(entries(window), &query);
     let mut chosen = None;
     let top = theme::TOP_BAR_H + TOP_GAP;
-    let area = egui::Modal::default_area(id).anchor(Align2::CENTER_TOP, vec2(0.0, top));
-    let modal = dialog(id, 0)
-        .area(area)
-        .backdrop_color(theme::scrim(theme::FIND_SCRIM_SHARE))
-        .show(ctx, |ui| {
-            ui.set_width(PALETTE_W);
-            ui.spacing_mut().item_spacing.y = 0.0;
-            lit = steer(ui, lit, list.len());
-            if field(ui, id, &mut query) {
-                lit = 0;
-            }
-            if ui.input(|input| input.key_pressed(Key::Enter)) {
-                chosen = list.get(lit).map(|entry| entry.found);
-            }
-            chosen = chosen.or(rows(ui, &list, lit));
-            foot(ui);
-        });
+    let modal = palette_dialog(ctx, id, top).show(ctx, |ui| {
+        ui.set_width(PALETTE_W);
+        ui.spacing_mut().item_spacing.y = 0.0;
+        lit = steer(ui, lit, list.len());
+        if field(ui, id, &mut query) {
+            lit = 0;
+        }
+        if ui.input(|input| input.key_pressed(Key::Enter)) {
+            chosen = list.get(lit).map(|entry| entry.found);
+        }
+        chosen = chosen.or(rows(ui, &list, lit));
+        foot(ui);
+    });
     let closing = modal.should_close() || chosen.is_some();
     if closing {
         ctx.data_mut(|data| {
@@ -244,10 +242,12 @@ fn row(ui: &mut egui::Ui, entry: &Entry, lit: bool) -> egui::Response {
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, lit, &entry.name)
     });
-    let (fill, ink) = match (lit, response.hovered()) {
-        (true, _) => (colors.picked_wash, colors.text_high),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.text_high),
+    let (fill, ink) = match lit {
+        true => (colors.picked_wash, colors.text_high),
+        false => (
+            hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover),
+            colors.text_high,
+        ),
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);

@@ -187,10 +187,9 @@ fn machine_row(
         let name = &entry.profile.name;
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
     });
-    let fill = match (picked, response.hovered()) {
-        (true, _) => colors.picked_wash,
-        (false, true) => colors.hover,
-        (false, false) => Color32::TRANSPARENT,
+    let fill = match picked {
+        true => colors.picked_wash,
+        false => crate::ui::hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
     };
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, fill);

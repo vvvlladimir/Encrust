@@ -398,7 +398,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted; an installed printer as a whole copy is superseded by 0372 |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted; 515 left unwritten is superseded by 0373 |
-| [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
+| [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) and 0382 (the question before a deletion) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
 | [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |
 | [0267](0267-a-compensation-group-is-switched-off-without-losing-its-numbers.md) | Switch a compensation group off without losing its numbers | Accepted |
@@ -466,8 +466,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
 | [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
-| [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted |
-| [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Proposed |
+| [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382 |
+| [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Accepted |
 | [0312](0312-the-command-line-shapes-models-before-it-slices-them.md) | Combine, label, cut and split models on the command line before slicing them | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |

@@ -1,6 +1,6 @@
 # 0348. Slice and send from the plate's card, and stand the rail over the inspector
 
-- **Status:** Accepted
+- **Status:** Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382
 - **Date:** 2026-10-25
 
 ## Context

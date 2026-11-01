@@ -22,7 +22,7 @@ pub(super) fn buttons(
     }
     if let Some(doing) = extras.and_then(|extras| extras.doing.as_deref()) {
         ui.horizontal(|ui| {
-            ui.spinner();
+            crate::ui::spinner(ui);
             tone(ui, doing, theme::colors().text_mid);
         });
         return None;

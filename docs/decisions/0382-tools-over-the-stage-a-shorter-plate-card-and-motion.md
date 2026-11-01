@@ -1,6 +1,6 @@
 # 0382. Stand the tools over the stage, shorten the plate card, ask by a second press, and move
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-29
 
 ## Context

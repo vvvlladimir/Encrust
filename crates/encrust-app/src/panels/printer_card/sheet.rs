@@ -31,7 +31,7 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     };
     let mut close = false;
     let mut errand = None;
-    let modal = dialog(egui::Id::new("printer-sheet"), 18).show(ctx, |ui| {
+    let modal = dialog(ctx, egui::Id::new("printer-sheet"), 18).show(ctx, |ui| {
         ui.set_width(SHEET_W);
         close = dialog_head(ui, icon::PRINTER, &network.label(&target));
         tone(ui, &about(&target), theme::colors().text_low);
@@ -111,7 +111,7 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
         let prints = extras
             .and_then(|extras| extras.history.as_ref())
             .map_or(1, Vec::len);
-        let wanted = history::height(ui.available_width(), prints) + HISTORY_MIN_H / 2.0;
+        let wanted = history::height(prints) + HISTORY_MIN_H / 2.0;
         let left = ui.ctx().content_rect().bottom() - CHROME_H / 2.0 - ui.cursor().top();
         let height = wanted.min(left.max(HISTORY_MIN_H));
         let listed = egui::ScrollArea::vertical()

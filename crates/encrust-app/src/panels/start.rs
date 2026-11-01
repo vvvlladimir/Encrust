@@ -9,7 +9,8 @@ use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
 use crate::ui::{
-    Segment, Segmented, ago, describe, focus_ring, icon, inline_button, quiet_button, theme, tone,
+    Segment, Segmented, ago, describe, focus_ring, hover_mix, icon, inline_button, quiet_button,
+    theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -131,7 +132,8 @@ fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
     });
     // The edge's stroke straddles the rect, so the clip is a point wider.
     let painter = ui.painter_at(rect.expand(ZONE_EDGE_W));
-    let words_end = paint_zone(&painter, rect, response.hovered());
+    let edge = hover_mix(ui, &response, theme::colors().line, theme::colors().accent);
+    let words_end = paint_zone(&painter, rect, edge);
     focus_ring(ui, &response, ZONE_R as u8);
     let (model, project) = buttons_row(ui, rect, words_end);
     let wanted = match (model, project, response.clicked()) {
@@ -145,14 +147,10 @@ fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
     }
 }
 
-/// The zone's dashed, rounded edge, the glyph on its square and the words beside it, the
-/// edge lit in the accent under the pointer. Answers where the words end.
-fn paint_zone(painter: &egui::Painter, rect: Rect, hovered: bool) -> f32 {
+/// The zone's dashed, rounded edge in `edge`, the glyph on its square and the words beside
+/// it. Answers where the words end.
+fn paint_zone(painter: &egui::Painter, rect: Rect, edge: egui::Color32) -> f32 {
     let colors = theme::colors();
-    let edge = match hovered {
-        true => colors.accent,
-        false => colors.line,
-    };
     painter.rect_filled(rect, ZONE_R, colors.base);
     let outline = rounded_outline(rect, ZONE_R);
     let stroke = Stroke::new(ZONE_EDGE_W, edge);
@@ -401,10 +399,7 @@ fn tile(ui: &mut Ui, shown: &Tile<'_>, size: egui::Vec2) -> egui::Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, shown.name));
-    let edge = match response.hovered() {
-        true => colors.line,
-        false => colors.hairline,
-    };
+    let edge = hover_mix(ui, &response, colors.hairline, colors.line);
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, theme::R_PANEL, colors.panel);
     let stage = rect.with_max_y(rect.top() + PICTURE_H);

@@ -25,17 +25,9 @@ pub use egui_phosphor::regular::{
     WRENCH as SHAPE, X as CANCEL,
 };
 
-/// Glyphs of the glyph table no panel draws yet.
-#[cfg_attr(
-    not(test),
-    expect(
-        unused_imports,
-        reason = "TODO(step-5, step-6): the panels that draw them"
-    )
-)]
 pub use egui_phosphor::regular::{
     BOOKMARK_SIMPLE as PRESET, CHECKERBOARD as TEXTURE, LINE_SEGMENT as POINTS,
-    PARALLELOGRAM as PLANES, SHIELD as BLOCKER, WARNING_OCTAGON as ERROR,
+    PARALLELOGRAM as PLANES, WARNING_OCTAGON as ERROR,
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
@@ -141,7 +133,6 @@ mod tests {
         ("TEXTURE", TEXTURE),
         ("POINTS", POINTS),
         ("PLANES", PLANES),
-        ("BLOCKER", BLOCKER),
         ("ERROR", ERROR),
         ("KEY_SHIFT", KEY_SHIFT),
         ("KEY_BACKSPACE", KEY_BACKSPACE),

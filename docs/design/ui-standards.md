@@ -117,16 +117,10 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 
 ## Known gaps
 
-- **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row, the glyphs, the hint bar,
-  the notices, the empty plate, the plate and models cards, the layer strip, the top
-  bar's chip and choosers, the windows' frame, Find, the key sheet, the machine library and
-  the start page are. A notice that goes away fades only when it is a message, a job's or a
-  broken model's card going at once; `ok_wash` is still to be built; the printer sheet keeps
-  its old state column and tiles. The printer list the plate card opens, a model's import
-  popup and the Add a resin menu are stock egui menus.
-
 - Decimals: a unit of the table brings its own (`field.rs`, `standard_decimals`); `%`
   and units the table lacks (g/ml, the compensation's) still take the caller's.
+- Stock egui menus: the printer list the plate card opens, a model's import popup, Add a
+  resin.
 - Stock egui controls in `title_bar/menus.rs`, `settings/printer/connection.rs`,
   `scene_panel.rs`, `settings/machines/resins.rs`, `plate_strip.rs`, `project.rs`,
   `profiles.rs`; ~120 bare `ui.label` calls outside `ui::widgets`, most in `stage_notice.rs`,

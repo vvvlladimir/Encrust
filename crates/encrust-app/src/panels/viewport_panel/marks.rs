@@ -41,6 +41,10 @@ pub(super) fn fly_to_marked(ui: &egui::Ui, window: &mut Window, rect: egui::Rect
     let hidden = |eye, point| crate::pick::sight_blocked(scene, eye, point, shown);
     let to = window.view.camera.focusing(&spot, aspect, hidden);
     let now = ui.input(|input| input.time);
-    window.view.turn = Some(CameraTurn::flight(window.view.camera, to, now));
+    let mut flight = CameraTurn::flight(window.view.camera, to, now);
+    if crate::ui::theme::motion::reduced(ui.ctx()) {
+        flight.length_s = 0.0;
+    }
+    window.view.turn = Some(flight);
     ui.ctx().request_repaint();
 }

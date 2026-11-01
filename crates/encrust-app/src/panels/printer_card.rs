@@ -11,7 +11,7 @@ use printer_link::State;
 
 use crate::i18n::tr;
 use crate::network::{Network, Reach, Reading, Trouble};
-use crate::ui::{focus_ring, hint, icon, icon_button, progress_bar, theme, tone};
+use crate::ui::{focus_ring, hint, icon, icon_button, progress_bar_of, theme, tone};
 
 /// What the card says about one printer, worked out before anything is drawn.
 #[derive(Debug, Clone, PartialEq)]
@@ -212,6 +212,9 @@ fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, notes: &[Note]) -
     response
 }
 
+/// How dim a busy printer's dot breathes down to.
+const BREATH_LOW: f32 = 0.35;
+
 /// The status word and its dot, right-aligned on `right` in the row; answers where they
 /// stand, the full height of the row.
 fn paint_status(painter: &egui::Painter, face: &Face, rect: egui::Rect, right: f32) -> egui::Rect {
@@ -220,7 +223,14 @@ fn paint_status(painter: &egui::Painter, face: &Face, rect: egui::Rect, right: f
     let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
     painter.galley(at, word, colour);
     let dot = pos2(at.x - 8.0, rect.center().y);
-    painter.circle_filled(dot, 3.5, colour);
+    let dot_colour = match face.light {
+        Light::Working => {
+            let breath = crate::ui::theme::motion::breathe(painter.ctx());
+            colour.gamma_multiply(BREATH_LOW + (1.0 - BREATH_LOW) * breath)
+        }
+        _ => colour,
+    };
+    painter.circle_filled(dot, 3.5, dot_colour);
     egui::Rect::from_x_y_ranges(dot.x - 4.0..=right, rect.y_range())
 }
 
@@ -234,7 +244,10 @@ fn note_lines(ui: &mut egui::Ui, notes: &[Note]) {
     }
 }
 
-/// The file over its bar and the line under it while it prints; one line for the last
+/// The share done of a print in the sheet, pt.
+const SHARE_PT: f32 = 22.0;
+
+/// The file, the share done and its bar, and the line under them while it prints; one line for the last
 /// print once it is over.
 fn job_lines(ui: &mut egui::Ui, job: &Job) {
     let colors = theme::colors();
@@ -246,24 +259,20 @@ fn job_lines(ui: &mut egui::Ui, job: &Job) {
         );
         return;
     };
-    ui.horizontal(|ui| {
-        let share = RichText::new(format!("{:.0}%", progress * 100.0))
-            .font(theme::figures(12.0))
-            .color(colors.text_high);
-        let share_w = 40.0;
-        let file = egui::Label::new(
+    ui.add(
+        egui::Label::new(
             RichText::new(&job.file)
                 .font(theme::label())
                 .color(colors.text_high),
         )
-        .truncate();
-        let file_w = (ui.available_width() - share_w).max(0.0);
-        ui.allocate_ui(egui::vec2(file_w, theme::ROW_H), |ui| ui.add(file));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(share);
-        });
-    });
-    progress_bar(ui, Some(progress));
+        .truncate(),
+    );
+    ui.label(
+        RichText::new(format!("{:.0}%", progress * 100.0))
+            .font(theme::figures(SHARE_PT))
+            .color(colors.text_high),
+    );
+    progress_bar_of(ui, Some(progress), theme::SHEET_BAR_H);
     tone(ui, &job.detail, colors.text_mid);
 }
 

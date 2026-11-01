@@ -26,7 +26,7 @@ const CAP_MIN_W: f32 = 22.0;
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, open: &mut bool) {
-    let sheet = dialog(egui::Id::new("shortcuts"), 18).show(ctx, |ui| {
+    let sheet = dialog(ctx, egui::Id::new("shortcuts"), 18).show(ctx, |ui| {
         ui.set_width(COLUMN_W * 2.0 + COLUMN_GAP);
         header(ui, open);
         ui.add_space(10.0);
