@@ -50,7 +50,8 @@ Test prints ▸ · Save, Save as · Slice to .ext (why when off), Slice all N pl
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
 Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,
-See through models, Show as printed, Depth of field when shown as printed, ticked when on ·
+See through models, Show as printed, Depth of field when shown as printed, Supports taken
+off when shown as printed, ticked when on ·
 Keyboard shortcuts.
 
 The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,

@@ -550,6 +550,11 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   plane in focus stands still. Averaged over the frames, what stands off it blurs with true
   occlusion and no post-process. It needs perspective; without, the lens is a pinhole.
 
+- **Supports taken off.** With the View menu's *Supports taken off*, the render view hides
+  every support group and leaves a nub on the model where each support touched it: a
+  0.6 mm ball in the resin at every contact `ModelSupports::contacts` gives, the break
+  standing proud of the surface, drawn and lit as the model is.
+
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.
 

@@ -469,6 +469,12 @@ pub(super) fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
     ) {
         options.depth_of_field = !options.depth_of_field;
     }
+    if clicked(
+        ui,
+        &MenuRow::new(None, &tr!("menu-supports-removed")).ticked(options.supports_removed),
+    ) {
+        options.supports_removed = !options.supports_removed;
+    }
     menu_rule(ui);
     let sheet = tr!("shortcuts-title");
     if clicked(ui, &action_row(Some(icon::KEYBOARD), &sheet, Action::Sheet)) {

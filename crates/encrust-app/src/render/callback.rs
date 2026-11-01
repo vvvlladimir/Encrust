@@ -19,7 +19,7 @@ use crate::render::gpu::{
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::lod::Light;
-use crate::render::print_look::PrintLook;
+use crate::render::print_look::{self, PrintLook};
 use crate::render::references;
 use crate::render::vertex::{LabelVertex, LineVertex, NOT_MARKED, WideLine};
 use crate::scene::{ObjectId, Scene};
@@ -296,15 +296,24 @@ impl Stage {
 
 /// What the objects on the plate come to this frame, the ghost of a click included.
 fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
+    // Supports taken off leave every group hidden and a nub on the model where each stood.
+    let removed = shading.print_look.filter(|look| look.supports_removed);
+    let hidden = match removed {
+        Some(_) => &print_look::EVERY_GROUP[..],
+        None => shading.hidden_groups,
+    };
     let mut draws = Draws::of(
         scene,
         shading.overhang_deg.map_or(NOT_MARKED, marking),
         shading.textures,
-        shading.hidden_groups,
+        hidden,
         shading.light,
         shading.stand_in,
         shading.print_look.map(|look| look.resin),
     );
+    if let Some(look) = removed {
+        draws.models.extend(print_look::nubs(scene, look.resin));
+    }
     if let Some(ghost) = shading.ghost {
         draws.ghost(scene, shading.light, ghost);
     }

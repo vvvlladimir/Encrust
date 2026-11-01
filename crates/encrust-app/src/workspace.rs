@@ -158,6 +158,8 @@ pub struct ViewOptions {
     /// Whether the render view at rest blurs what stands off the point the camera turns
     /// about, as a lens focused on it does. The View menu turns it on.
     pub depth_of_field: bool,
+    /// Whether the render view shows the supports taken off. The View menu turns it on.
+    pub supports_removed: bool,
     /// Whether the open tool's inspector is unfolded beside the rail.
     pub inspector: bool,
     /// Whether the sheet of keys is up over the window.
@@ -194,6 +196,7 @@ impl Default for ViewOptions {
             xray: false,
             render: false,
             depth_of_field: false,
+            supports_removed: false,
             inspector: true,
             sheet: false,
             find: false,
