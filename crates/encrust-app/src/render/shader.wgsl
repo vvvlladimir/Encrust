@@ -125,6 +125,8 @@ struct Globals {
 @group(0) @binding(4) var environment_sampler: sampler;
 @group(0) @binding(5) var can_print_texture: texture_2d<f32>;
 @group(0) @binding(6) var can_print_sampler: sampler;
+// The key's map again as plain floats, for its depths: GLSL cannot load a texel of a depth texture.
+@group(0) @binding(7) var key_shadow_depths: texture_2d<f32>;
 
 struct ModelVertex {
     @location(0) position: vec3<f32>,

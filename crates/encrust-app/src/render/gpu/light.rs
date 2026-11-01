@@ -101,6 +101,10 @@ impl KeyShadow {
                     binding: 6,
                     resource: wgpu::BindingResource::Sampler(&can_print.sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: wgpu::BindingResource::TextureView(map),
+                },
             ],
         })
     }

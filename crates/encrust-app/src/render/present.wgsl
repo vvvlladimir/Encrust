@@ -2,7 +2,8 @@
 // shading creases from the depth plane on the way at rest. See docs/design/viewport.md.
 
 @group(0) @binding(0) var frame: texture_2d<f32>;
-@group(0) @binding(1) var depth_plane: texture_depth_2d;
+// Plain floats, not a depth texture: GLSL cannot load a texel of one.
+@group(0) @binding(1) var depth_plane: texture_2d<f32>;
 
 struct Occlusion {
     inverse_projection: mat4x4<f32>,
@@ -37,7 +38,7 @@ fn present_vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<
 fn depth_at(pixel: vec2<f32>) -> f32 {
     let low = occlusion.viewport.xy;
     let high = low + occlusion.viewport.zw - vec2<f32>(1.0);
-    return textureLoad(depth_plane, vec2<i32>(clamp(pixel, low, high)), 0);
+    return textureLoad(depth_plane, vec2<i32>(clamp(pixel, low, high)), 0).r;
 }
 
 // The point the camera sees at a pixel's centre and depth, in its own millimetres.
@@ -139,7 +140,7 @@ fn present_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4
     let colour = textureLoad(frame, vec2<i32>(position.xy), 0);
     var kept = vignette(position.xy);
     if (occlusion.shading.x > 0.5) {
-        let depth = textureLoad(depth_plane, vec2<i32>(position.xy), 0);
+        let depth = textureLoad(depth_plane, vec2<i32>(position.xy), 0).r;
         if (depth < 1.0) {
             kept = kept * clamp(1.0 - occlusion.shading.z * enclosed(position.xy, depth), 0.0, 1.0);
         }

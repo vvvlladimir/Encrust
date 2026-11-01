@@ -49,7 +49,7 @@ impl SceneTarget {
             label: Some("viewport_frame_layout"),
             entries: &[
                 plane(0, wgpu::TextureSampleType::Float { filterable: false }),
-                plane(1, wgpu::TextureSampleType::Depth),
+                plane(1, wgpu::TextureSampleType::Float { filterable: false }),
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,

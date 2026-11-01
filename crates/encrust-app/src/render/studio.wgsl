@@ -61,7 +61,7 @@ fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
         let offset_mm = spiral(tap) * KEY_SEARCH_MM;
         let probe = uv + offset_mm * texels_per_mm / size;
         let texel = vec2<i32>(clamp(probe, vec2<f32>(0.0), vec2<f32>(1.0)) * (size - 1.0));
-        let stood = textureLoad(key_shadow_map, texel, 0);
+        let stood = textureLoad(key_shadow_depths, texel, 0).r;
         let across = right * offset_mm.x - up * offset_mm.y;
         let along_mm = clamp(-dot(normal, across) / select(facing, -1e-3, abs(facing) < 1e-3), -KEY_SEARCH_MM * 4.0, KEY_SEARCH_MM * 4.0);
         let surface = at.z + along_mm / depth_mm;
