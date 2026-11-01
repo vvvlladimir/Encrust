@@ -31,6 +31,9 @@ pub use egui_phosphor::regular::{
     WARNING_OCTAGON as ERROR,
 };
 
+/// The key sheet's groups.
+pub use egui_phosphor::regular::{APP_WINDOW as WINDOW, MOUSE as POINTER, TOOLBOX as TOOLS};
+
 /// The menus' own: what a row of File or Edit does where no tool glyph says it.
 pub use egui_phosphor::regular::{
     ARROW_SQUARE_RIGHT as MOVE_TO_PLATE, ARROW_U_UP_LEFT as UNDO, ARROW_U_UP_RIGHT as REDO,

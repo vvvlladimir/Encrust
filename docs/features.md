@@ -763,6 +763,10 @@ address in a video player).
 - **Keyboard:** digits 1 to 9 pick the tools of the row in order, each shown on its tool while
   the pointer is on the row, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
+- **Your own keys:** in Keyboard shortcuts click a key, press the combination (press again
+  to correct it) and Done, or `+` to give an action a second; Esc leaves it as it was. A key another action holds asks before it moves; the arrow puts an
+  action's keys back, Reset every key all of them. Menus, tooltips and Find follow at once,
+  and the keys are remembered between runs.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.
 - Tool values are remembered between runs, and so is how each panel was left: which

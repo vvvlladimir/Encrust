@@ -167,7 +167,8 @@ paints from tokens only.
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
-| `dialog`, `palette_dialog`, `dialog_head`, `dialog_head_searching` | A window over the plate on the stage dimmed by the scrim, rising as it comes in: its frame ringed in `line`, Find's hanging from the top over a lighter scrim, and its glyph, name and close button, with a search line after the name where it narrows a list |
+| `dialog`, `palette_dialog`, `dialog_head` | A window over the plate on the stage dimmed by the scrim, rising as it comes in: its frame ringed in `line`, Find's hanging from the top over a lighter scrim, and its glyph, name and close button |
+| `binding_row` | An action of the key sheet, 38 tall: its name, then at the right its keys, each a 26 tall button of keycaps with no surface until hovered that records a new chord, a faint `+` while it has room for a second, and the reset arrow while its keys are the user's; a key recording is `accent_wash` ringed in `accent`, asking for the keys until it shows the modifiers held or the chord pressed last, then Done (`accent`, quiet until a chord is pressed) and, on a key the action has, a `×` taking it off. A gesture's keys stand in the same column, no button |
 | `key_row` | The keys that work a window at its foot: each set of keycaps then what they do |
 | `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
 | `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |
@@ -248,6 +249,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Leads to another window | `ARROW_UP_RIGHT` |
 | Warning, error, job, armed | `WARNING`, `WARNING_OCTAGON`, `CIRCLE_NOTCH`, `QUESTION` |
 | Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION_MARK` |
+| The key sheet's tools, window, pointer | `TOOLBOX`, `APP_WINDOW`, `MOUSE` |
 | Zoom | `MAGNIFYING_GLASS_MINUS`, `MAGNIFYING_GLASS_PLUS`, `ARROWS_OUT` |
 | New project, recent, test prints | `FILE_PLUS`, `CLOCK_COUNTER_CLOCKWISE`, `TEST_TUBE` |
 | Undo, redo, select all, move to plate | `ARROW_U_UP_LEFT`, `ARROW_U_UP_RIGHT`, `SELECTION_ALL`, `ARROW_SQUARE_RIGHT` |

@@ -1,7 +1,8 @@
 //! What the window remembers between runs: the machine, the resin, the values every tool
 //! is set to, the printer on the network each machine sends to, whether to look for
 //! updates, how the window behaves, how wide the two side cards were dragged, where
-//! Preview divides the model from the mask, and what each panel was switched to.
+//! Preview divides the model from the mask, what each panel was switched to, and the keys
+//! the user chose.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -24,6 +25,7 @@ use crate::profiles;
 use crate::recent::Recent;
 use crate::relief::ReliefChoice;
 use crate::repair::{Picking, RepairMode};
+use crate::shortcuts::keymap::{self, Keymap};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::status::Status;
@@ -86,6 +88,9 @@ pub struct Preferences {
     /// Which sections were folded and which tab of a panel was open, by widget.
     #[serde(default)]
     kept: Kept,
+    /// The keys the user put in place of the table's, by action.
+    #[serde(default)]
+    keys: Keymap,
 }
 
 /// What each tool's panel was switched to that is neither a value of the tool nor undone,
@@ -208,6 +213,7 @@ impl Preferences {
             general: General::default(),
             modes: Modes::of(tools, Axes::default()),
             kept: Kept::default(),
+            keys: Keymap::default(),
         }
     }
 
@@ -231,6 +237,11 @@ impl Preferences {
             general: general.clone(),
             ..self
         }
+    }
+
+    /// The same, with the keys the user chose.
+    pub fn with_keys(self, keys: Keymap) -> Self {
+        Self { keys, ..self }
     }
 
     /// The same, with the files opened lately.
@@ -282,6 +293,7 @@ impl Preferences {
         window.machine.updates.prefs.clone_from(&self.updates);
         window.machine.recent.clone_from(&self.recent);
         window.machine.general.clone_from(&self.general);
+        keymap::install(self.keys.clone());
         let options = &mut window.view.options;
         if !self.general.start_page {
             options.started = true;

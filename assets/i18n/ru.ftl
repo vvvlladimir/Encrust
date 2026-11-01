@@ -255,6 +255,8 @@ shortcut-group-plate = Платформа
 shortcut-group-window = Окно
 shortcut-group-layers = Слои
 shortcut-group-files = Файлы
+shortcut-group-view = Вид
+shortcut-group-pointer = Мышь и трекпад
 gesture-move-focus = Переход между элементами
 gesture-move-focus-keys = Tab, Shift Tab
 gesture-press-focus = Нажать элемент в фокусе
@@ -288,8 +290,34 @@ status-removed-models =
 
 shortcuts-title = Горячие клавиши
 shortcuts-find = Найти клавишу
-shortcuts-note = Инструмент вызывается цифрой, соответствующей его месту на панели. Пока курсор в поле ввода, клавиши отключены.
-shortcuts-or = или
+shortcuts-all = Все клавиши
+shortcuts-list-keyboard = Клавиатура
+shortcuts-list-pointer = Указатель
+shortcuts-changed =
+    { $count ->
+        [one] { $count } изменена
+        [few] { $count } изменены
+       *[many] { $count } изменено
+    }
+shortcuts-none-found = Нет клавиши с таким названием
+shortcuts-taken = { $keys } уже вызывает «{ $action }»
+shortcuts-taken-why = «Заменить» заберёт её у «{ $action }», остальные клавиши действия останутся.
+shortcuts-replace = Заменить
+shortcuts-keep = Отмена
+shortcuts-reset-all = Сбросить все клавиши
+shortcuts-reset-all-asked = Сбросить все клавиши?
+shortcuts-reset-all-tooltip = Каждое действие вернётся к своим исходным клавишам
+shortcuts-stop = Остановить, ничего не меняя
+
+## ui/widgets/binding.rs
+
+binding-change = Нажмите, чтобы записать другую клавишу
+binding-listening = Нажмите клавиши
+binding-done = Готово
+binding-stop = Остановить, ничего не меняя
+binding-add = Добавить клавишу
+binding-clear = Убрать эту клавишу
+binding-reset = Вернуть исходные клавиши
 
 ## settings.rs
 

@@ -321,6 +321,38 @@ fn the_sheet_of_keys() {
     picture("sheet", app);
 }
 
+/// A second key of the user's on Select, with the way back to its own, and Measure
+/// recording with Cmd Shift K pressed, waiting for Done.
+#[test]
+fn the_sheet_of_keys_recording_one() {
+    use crate::shortcuts::Action;
+    use crate::shortcuts::keymap::{self, Keymap, Slot};
+    let mut app = app(false);
+    app.view.options.started = true;
+    app.view.options.sheet = true;
+    let chord = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::U);
+    keymap::change(|keymap| keymap.assign(Action::Pick(Tool::Position), 1, chord));
+    keymap::record(Some(Slot {
+        action: Action::Pick(Tool::Measure),
+        index: 0,
+    }));
+    let mut pressed = egui::RawInput {
+        events: vec![egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+        }],
+        ..Default::default()
+    };
+    crate::shortcuts::take(&egui::Context::default(), &mut pressed);
+    let results = picture("sheet_recording", app);
+    keymap::record(None);
+    keymap::install(Keymap::default());
+    drop(results);
+}
+
 /// Find over a picked model with `hol` typed: the tool, the actions and the models it finds.
 #[test]
 fn the_find_palette() {

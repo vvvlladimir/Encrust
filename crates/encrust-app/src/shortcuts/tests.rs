@@ -1,4 +1,6 @@
+use super::table::{Binding, cmd, cmd_shift, plain, shift};
 use super::*;
+use crate::workspace::Tool;
 
 fn every_chord() -> Vec<(&'static Binding, &'static KeyboardShortcut)> {
     BINDINGS
@@ -207,13 +209,7 @@ fn a_page_keeps_the_chords_a_browser_would_also_act_on() {
 
 #[test]
 fn every_group_of_the_sheet_lists_something() {
-    for group in [
-        Group::Tools,
-        Group::Plate,
-        Group::Window,
-        Group::Layers,
-        Group::Files,
-    ] {
+    for group in Group::ALL {
         assert!(
             BINDINGS.iter().any(|binding| binding.group == group)
                 || GESTURES.iter().any(|gesture| gesture.group == group),
@@ -221,4 +217,75 @@ fn every_group_of_the_sheet_lists_something() {
             group.label()
         );
     }
+}
+
+/// Puts the table's own keys back when a test that changed them ends.
+struct TableKeys;
+
+impl Drop for TableKeys {
+    fn drop(&mut self) {
+        keymap::install(keymap::Keymap::default());
+        keymap::record(None);
+    }
+}
+
+#[test]
+fn a_key_the_user_chose_fires_in_place_of_the_tables() {
+    let _restore = TableKeys;
+    keymap::change(|keymap| keymap.assign(Action::Undo, 0, cmd(Key::U)));
+    assert_eq!(press(Key::U, Modifiers::COMMAND), vec![Action::Undo]);
+    assert!(press(Key::Z, Modifiers::COMMAND).is_empty());
+    assert_eq!(text(Action::Undo), chord_text(&cmd(Key::U)));
+}
+
+fn recording_play() -> keymap::Slot {
+    let slot = keymap::Slot {
+        action: Action::Play,
+        index: 0,
+    };
+    keymap::record(Some(slot));
+    slot
+}
+
+#[test]
+fn recording_keeps_the_last_chord_pressed_until_done() {
+    let _restore = TableKeys;
+    let slot = recording_play();
+    assert!(
+        press(Key::M, Modifiers::SHIFT).is_empty(),
+        "the table hears nothing"
+    );
+    assert_eq!(keymap::pressed(), Some(shift(Key::M)));
+    assert!(press(Key::K, Modifiers::COMMAND.plus(Modifiers::SHIFT)).is_empty());
+    assert_eq!(
+        keymap::recording(),
+        Some(slot),
+        "a chord does not end the recording"
+    );
+    assert_eq!(keymap::finish(), Some((slot, cmd_shift(Key::K))));
+    assert_eq!(keymap::recording(), None);
+}
+
+#[test]
+fn esc_stops_recording_and_keeps_nothing() {
+    let _restore = TableKeys;
+    recording_play();
+    press(Key::M, Modifiers::SHIFT);
+    assert!(press(Key::Escape, Modifiers::NONE).is_empty());
+    assert_eq!(keymap::recording(), None);
+    assert_eq!(keymap::finish(), None);
+}
+
+/// The desktop sends Cmd C as a copy and never as a key, so it is recorded from that.
+#[test]
+fn a_copy_while_recording_is_recorded_as_cmd_c() {
+    let _restore = TableKeys;
+    recording_play();
+    let mut input = egui::RawInput {
+        events: vec![egui::Event::Copy],
+        ..Default::default()
+    };
+    assert!(take(&egui::Context::default(), &mut input).is_empty());
+    assert!(input.events.is_empty(), "nothing is copied either");
+    assert_eq!(keymap::pressed(), Some(cmd(Key::C)));
 }

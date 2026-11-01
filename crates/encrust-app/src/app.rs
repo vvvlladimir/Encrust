@@ -114,6 +114,7 @@ impl SlicerApp {
         .with_recent(&self.machine.recent)
         .with_layout(&self.view.options)
         .with_general(&self.machine.general)
+        .with_keys(shortcuts::keymap::current())
         .with_panels(self.view.gizmo.axes, ctx);
         if now != self.prefs {
             self.prefs = now;
