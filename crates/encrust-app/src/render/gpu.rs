@@ -296,7 +296,7 @@ impl ViewportResources {
             .filter(|look| look.aperture_mm > 0.0)
             .map(|look| settle::Lens {
                 aperture_mm: look.aperture_mm,
-                focus_mm: look.pivot_mm,
+                focus_mm: look.focus_mm,
                 projection: look.projection,
             });
         self.frame.sample = self.settle(&frame, &globals);

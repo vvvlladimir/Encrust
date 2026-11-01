@@ -223,7 +223,7 @@ impl ViewportCallback {
             cut_line,
             look: print_look.map(|look| Look {
                 desk: stage.desk,
-                ..look.shading(camera, rect.width() / rect.height())
+                ..look.shading(camera, rect.size(), scene.world_bounds().as_ref())
             }),
             xray: view.xray,
             grid: view.grid && print_look.is_none(),

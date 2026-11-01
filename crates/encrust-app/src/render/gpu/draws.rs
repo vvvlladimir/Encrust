@@ -150,8 +150,9 @@ pub struct Look {
     pub projection: Mat4,
     /// The mat and the props laid round the models.
     pub desk: Desk,
-    /// The radius of the lens a picture at rest is seen through, mm, focused at `pivot_mm`;
-    /// 0.0 for a pinhole, everything sharp.
+    /// Millimetres from the eye to the plane the lens of a picture at rest is focused on.
+    pub focus_mm: f32,
+    /// The radius of that lens, mm; 0.0 for a pinhole, everything sharp.
     pub aperture_mm: f32,
 }
 

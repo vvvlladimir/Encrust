@@ -48,9 +48,9 @@ pub(super) struct Lens {
     pub projection: Mat4,
 }
 
-/// `view_projection` seen from the `sample`-th point of `lens`'s aperture, as Blender's
-/// Eevee jitters its camera: the eye moved across the aperture and the view sheared back so
-/// that the plane in focus stands still. Averaged over the frames, what stands off it blurs.
+/// `view_projection` seen from the `sample`-th point of `lens`'s aperture: the eye moved
+/// across it and the view sheared back so the plane in focus stands still. Averaged over the
+/// frames, what stands off it blurs.
 pub(super) fn through_lens(view_projection: Mat4, lens: &Lens, sample: u32) -> Mat4 {
     let out = halton(sample + 1, 5).sqrt() * lens.aperture_mm;
     let around = halton(sample + 1, 7) * std::f32::consts::TAU;
@@ -82,6 +82,21 @@ pub(super) fn jittered(view_projection: Mat4, jitter_px: [f32; 2], size_px: [f32
     shift * view_projection
 }
 
+/// The picture at rest as one number: what the shader is told, the lens it is seen through
+/// and what `casters` adds, so a change to any of them starts the average again.
+fn picture_of(
+    globals: &Globals,
+    lens: Option<&Lens>,
+    casters: impl FnOnce(&mut DefaultHasher),
+) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    bytemuck::bytes_of(globals).hash(&mut hasher);
+    lens.map(|lens| [lens.aperture_mm.to_bits(), lens.focus_mm.to_bits()])
+        .hash(&mut hasher);
+    casters(&mut hasher);
+    hasher.finish()
+}
+
 impl ViewportResources {
     /// Where the window hears how many frames the picture at rest has averaged.
     pub fn report_samples_to(&mut self, report: Arc<AtomicU32>) {
@@ -92,12 +107,9 @@ impl ViewportResources {
     /// changed; `None` while the render view moves or is off.
     pub(super) fn settle(&mut self, frame: &FrameInput<'_>, globals: &Globals) -> Option<u32> {
         let resting = frame.look.is_some() && !frame.light && self.reads_planes;
-        let picture = resting.then(|| {
-            let mut hasher = DefaultHasher::new();
-            bytemuck::bytes_of(globals).hash(&mut hasher);
-            hash_casters(frame, &mut hasher);
-            hasher.finish()
-        });
+        let lens = self.frame.lens.as_ref();
+        let picture =
+            resting.then(|| picture_of(globals, lens, |hasher| hash_casters(frame, hasher)));
         let settling = &mut self.settling;
         settling.samples = match picture.is_some() && picture == settling.picture {
             true => settling.samples.saturating_add(1),
@@ -155,6 +167,18 @@ mod tests {
             near.truncate().length() > 1e-3,
             "a point off it stayed still"
         );
+    }
+
+    #[test]
+    fn opening_the_lens_starts_the_picture_at_rest_again() {
+        let globals = <Globals as bytemuck::Zeroable>::zeroed();
+        let lens = Lens {
+            aperture_mm: 0.4,
+            focus_mm: 25.0,
+            projection: Mat4::IDENTITY,
+        };
+        let pinhole = picture_of(&globals, None, |_| {});
+        assert_ne!(pinhole, picture_of(&globals, Some(&lens), |_| {}));
     }
 
     #[test]

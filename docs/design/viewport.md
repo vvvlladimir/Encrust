@@ -539,16 +539,21 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   RGBA16Float plane by a constant blend of `1/(n+1)` for the n-th, a running mean the copy
   then shows. After sixteen frames the picture is held and nothing is drawn until it
   changes; the window asks for a frame at a time until then. What it is a picture of is
-  hashed on the card — the whole uniform and every mesh, face range and placement drawn — so
+  hashed on the card — the whole uniform, the lens and every mesh, face range and placement
+  drawn — so
   any change, not only the camera's, starts it again. Edges lose their steps, and the grain
   of the crease shading, the frosting and the soft shadows averages away.
 
 - **Depth of field.** With the View menu's *Depth of field*, a picture at rest is seen
-  through a lens focused on the point the camera turns about, as Blender's Eevee jitters its
-  camera: each of its frames is drawn from another point of an aperture 1.6 % of the focus
-  distance across in radius, by Halton (5, 7) on the disc, and the view sheared back so the
-  plane in focus stands still. Averaged over the frames, what stands off it blurs with true
-  occlusion and no post-process. It needs perspective; without, the lens is a pinhole.
+  through a lens: each of its frames is drawn from another point of the aperture, by
+  Halton (5, 7) on the disc, and the view sheared back so the plane in focus stands still.
+  Averaged over the frames, what stands off it blurs with true occlusion and no
+  post-process. The models stay sharp: the plane lies at the harmonic mean of their nearest
+  and farthest depth, where both blur alike, and the aperture opens to 1.6 % of the focus
+  distance in radius but no wider than keeps that blur within half a point. Close to a
+  model, its own depth leaves the lens nearly a pinhole and the set behind barely blurs;
+  further out the set blurs more. Without a model the lens focuses on the point the camera
+  turns about. It needs perspective; without, the lens is a pinhole.
 
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.
