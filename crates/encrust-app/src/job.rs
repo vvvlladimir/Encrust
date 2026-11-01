@@ -139,10 +139,7 @@ pub struct Counted {
 impl Counted {
     /// What `progress` says, or `None` before the run has begun a step.
     pub fn of(progress: &core_volume::Progress) -> Option<Self> {
-        progress.read().map(|read| Self {
-            share: step_share(read),
-            step: read.0,
-        })
+        progress.share().map(|(step, share)| Self { share, step })
     }
 
     /// The step in words a user knows.
@@ -161,35 +158,6 @@ impl Counted {
             Step::Crossing => tr!("job-step-crossing"),
         }
     }
-}
-
-/// Where each step starts and ends in the share of one run, a field's, an exact boolean's
-/// or a repair's, as weighed in ADR 0317 and 0384.
-const STEP_SPANS: [(Step, f32, f32); 11] = [
-    (Step::Preparing, 0.0, 0.1),
-    (Step::Seeding, 0.1, 0.2),
-    (Step::Carrying, 0.2, 0.62),
-    (Step::Refining, 0.62, 0.9),
-    (Step::Surfacing, 0.9, 0.98),
-    (Step::Shaping, 0.98, 1.0),
-    (Step::Reading, 0.0, 0.45),
-    (Step::Combining, 0.45, 0.9),
-    (Step::Finishing, 0.9, 1.0),
-    (Step::Mending, 0.0, 0.2),
-    (Step::Crossing, 0.2, 0.45),
-];
-
-/// The share of one run done, from its step and the pieces of the step done.
-fn step_share((step, done, total): (Step, usize, usize)) -> f32 {
-    let within = if total == 0 {
-        0.0
-    } else {
-        done as f32 / total as f32
-    };
-    STEP_SPANS
-        .iter()
-        .find(|(at, _, _)| *at == step)
-        .map_or(0.0, |(_, from, to)| from + (to - from) * within)
 }
 
 /// Runs `work` with its parallel loops on a pool of the worker threads, or answers
@@ -368,16 +336,6 @@ impl Drop for SliceJob {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn half_the_refine_is_three_quarters_of_a_run() {
-        let share = step_share((Step::Refining, 50, 100));
-        assert!(
-            (share - 0.76).abs() < 1e-6,
-            "0.62 + 0.28 x 0.5 is 0.76, got {share}"
-        );
-        assert!((step_share((Step::Shaping, 0, 0)) - 0.98).abs() < 1e-6);
-    }
 
     #[test]
     fn a_run_that_counts_nothing_shows_no_share() {

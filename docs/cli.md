@@ -20,7 +20,9 @@ model as it came if that would leave more wrong (ADR 0349). `--repair=close-hole
 `=close-small-holes` or `=turn` runs part of it (ADR 0351), `=wrap` wraps every shell in one
 outer surface by the exact union of its shells and `=deep` repairs, wraps and repairs
 again, leaving the repair alone where the shells do not union exactly (ADR 0352, 0357); a
-cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358).
+cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358). A repair
+draws a bar on a terminal, spanned by its steps as the window's is, and Ctrl-C stops it
+(exit 130); the drainage check rides the layers' bar of the slice it is made in (ADR 0384).
 `inspect --intersections` counts the pairs of faces that cross (ADR 0353).
 `--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell

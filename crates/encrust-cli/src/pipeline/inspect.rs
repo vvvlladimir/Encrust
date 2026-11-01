@@ -59,7 +59,14 @@ pub fn inspect(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    let mut report = checked(&mut mesh, input, welded, args, profile, asked.shells)?;
+    let mut report = checked(
+        &mut mesh,
+        (input, welded),
+        args,
+        profile,
+        asked.shells,
+        &quiet,
+    )?;
     if asked.intersections {
         report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
     }
