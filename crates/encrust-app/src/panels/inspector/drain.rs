@@ -82,9 +82,13 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// How many pockets hold resin, for the inspector's heading.
-pub fn fact(window: &Window) -> Option<String> {
+pub fn fact(window: &Window) -> Option<(String, egui::Color32)> {
+    let colors = theme::colors();
     let trapped = pockets(window).len();
-    (trapped > 0).then(|| tr!("drain-fact", count = trapped))
+    if trapped > 0 {
+        return Some((tr!("drain-fact", count = trapped), colors.danger));
+    }
+    (!window.tools.drain.checked).then(|| (tr!("drain-fact-unchecked"), colors.text_mid))
 }
 
 /// Digging the channel laid out, while there is one; otherwise the check for resin with
@@ -191,7 +195,7 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
         ui,
         &tr!("presets-taper"),
         &mut tools.drain.state.taper,
-        "",
+        &tr!("unit-times"),
         FINE_STEP,
         0.1..=1.0,
         2,
@@ -298,12 +302,19 @@ pub(in crate::panels) fn rebuild_around_cuts(window: &mut Window) {
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     let pockets = pockets(window);
     if pockets.is_empty() {
-        let text = if window.tools.drain.checked {
-            tr!("drain-nothing-trapped")
+        let colors = theme::colors();
+        if window.tools.drain.checked {
+            tone(ui, &tr!("drain-nothing-trapped"), colors.ok);
         } else {
-            tr!("drain-not-checked")
-        };
-        hint(ui, &text);
+            let why = tr!("drain-not-checked-why");
+            notice(
+                ui,
+                icon::DRAIN,
+                colors.warn,
+                &tr!("drain-not-checked"),
+                &why,
+            );
+        }
         return;
     }
 

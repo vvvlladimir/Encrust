@@ -10,7 +10,8 @@ mod square;
 mod tile;
 
 pub use square::{
-    RailButton, companion_square, icon_button, icon_toggle, rail_button, small_icon_button,
+    RailButton, companion_square, icon_button, icon_toggle, quiet_square, rail_button,
+    small_icon_button,
 };
 pub use tile::{picker, preset_picker, summary_button, swatch, zone_button};
 
@@ -117,6 +118,36 @@ pub fn companion_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> 
         },
         enabled,
     )
+}
+
+/// What a companion button adds to its words: its glyph and the room either side.
+const COMPANION_CHROME_W: f32 = 50.0;
+
+/// The primary action and its companion in one row, the companion as wide as its words:
+/// `(text, enabled)` and `(glyph, text, enabled)`. Returns both responses.
+pub fn primary_with_companion(
+    ui: &mut Ui,
+    (text, enabled): (&str, bool),
+    (glyph, companion, companion_enabled): (&str, &str, bool),
+) -> (Response, Response) {
+    let words = ui.painter().layout_no_wrap(
+        companion.to_owned(),
+        theme::label(),
+        theme::colors().text_high,
+    );
+    let companion_w = words.size().x + COMPANION_CHROME_W;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
+        let room = ui.available_width() - companion_w - theme::BUTTON_GAP;
+        let primary = ui
+            .allocate_ui(vec2(room, theme::PRIMARY_H), |ui| {
+                primary_button(ui, text, enabled)
+            })
+            .inner;
+        let second = companion_button(ui, glyph, companion, companion_enabled);
+        (primary, second)
+    })
+    .inner
 }
 
 /// A button as wide as what it says, to stand in a row of several. `primary` paints it

@@ -127,10 +127,10 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
     match tool {
         Tool::Position => select::fact(window.doc).and_then(plain),
         Tool::Hollow => plain(tr!(
-            "value-mm",
+            "hollow-fact",
             value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
         )),
-        Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
+        Tool::Drain => drain::fact(window),
         Tool::Check => check::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
         Tool::Cut => Some((cut::fact(window), colors.text_mid)),
@@ -198,7 +198,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
             mode_group(ui, |ui| modes(ui, window));
         } else if let Some((text, color)) = fact(window, tool) {
             ui.add(
-                egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))
+                egui::Label::new(RichText::new(text).font(theme::figures(12.0)).color(color))
                     .truncate(),
             );
         }

@@ -158,6 +158,9 @@ pub(super) fn boxed_field<N: Numeric>(
             ui.add(drag)
         })
         .inner;
+    // The scope above leaves the cursor after the figure, short of the unit: put it back
+    // after the whole box, or the next control in a row would sit over the unit.
+    ui.advance_cursor_after_rect(rect);
     name_for_reader(ui, response.id, field.name);
 
     let border = if response.has_focus() {
@@ -189,7 +192,7 @@ pub(super) fn boxed_field<N: Numeric>(
 fn borderless(style: &mut egui::Style, size: egui::Vec2) {
     style
         .text_styles
-        .insert(TextStyle::Button, theme::figures(12.0));
+        .insert(TextStyle::Button, theme::figures(13.0));
     style.spacing.interact_size = size;
     style.spacing.button_padding.x = UNIT_PAD;
     let visuals = &mut style.visuals;

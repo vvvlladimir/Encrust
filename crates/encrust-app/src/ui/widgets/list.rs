@@ -138,6 +138,20 @@ fn rename_field(ui: &mut Ui, id: Id) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
+/// Findings one under another, each its own rounded row, `ISSUE_GAP` apart.
+pub fn issue_list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = ISSUE_GAP;
+        add(ui)
+    })
+    .inner
+}
+
+const ISSUE_GAP: f32 = 8.0;
+
+/// How strongly the accent rings the finding in hand.
+const ISSUE_RING: f32 = 0.35;
+
 /// One finding in a list of them: a dot in its colour, where it is, and what it is at the
 /// right. The whole row is the button that goes there.
 pub fn issue_row(
@@ -149,10 +163,14 @@ pub fn issue_row(
 ) -> Response {
     let colors = theme::colors();
     let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
+        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), Sense::click());
     let fill = match selected {
         true => colors.picked_wash,
         false => hover_mix(ui, &response, colors.raised, colors.hover),
+    };
+    let ring = match selected {
+        true => egui::Stroke::new(1.0, colors.accent.gamma_multiply(ISSUE_RING)),
+        false => egui::Stroke::NONE,
     };
     response.widget_info(|| {
         WidgetInfo::selected(
@@ -163,10 +181,10 @@ pub fn issue_row(
         )
     });
     let painter = ui.painter();
-    painter.rect_filled(rect, 0.0, fill);
+    painter.rect(rect, theme::R_CONTROL, fill, ring, egui::StrokeKind::Inside);
 
-    let dot = rect.left_center() + vec2(14.0, 0.0);
-    painter.circle_filled(dot, 3.5, tint);
+    let dot = rect.left_center() + vec2(12.0, 0.0);
+    painter.circle_filled(dot, 4.0, tint);
     painter.text(
         dot + vec2(11.0, 0.0),
         Align2::LEFT_CENTER,
@@ -178,10 +196,10 @@ pub fn issue_row(
         rect.right_center() - vec2(12.0, 0.0),
         Align2::RIGHT_CENTER,
         detail,
-        theme::figures(11.0),
+        theme::figures(12.0),
         colors.text_mid,
     );
-    focus_ring(ui, &response, 0.0);
+    focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -207,15 +225,16 @@ pub fn tag(
         wash
     };
     let painter = ui.painter();
-    painter.rect_filled(rect, egui::CornerRadius::same(u8::MAX), fill);
+    painter.rect_filled(rect, TAG_R, fill);
     painter.galley(rect.min + TAG_PAD, word, ink);
-    focus_ring(ui, &response, egui::CornerRadius::same(u8::MAX));
+    focus_ring(ui, &response, TAG_R);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Room around a tag's word, and how much of its ink washes it under the pointer.
 const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
 const TAG_HOVER_WASH: f32 = 0.24;
+const TAG_R: egui::CornerRadius = egui::CornerRadius::same(4);
 
 /// A name over the line that says more about it, drawn from `left_center`: a machine over
 /// its maker and the file it is sliced into.

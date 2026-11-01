@@ -64,7 +64,7 @@ general-open-folder = Open the folder
 ## panels/inspector/cut.rs
 
 cut-plane = Plane
-cut-fact = { $axis } at { $height } mm
+cut-fact = { $axis } { $height } mm
 cut-select-model = Select a model to cut.
 cut-height = Height
 cut-offset = Offset
@@ -104,7 +104,7 @@ cut-parts-smallest = Smallest part
 cut-parts-smallest-note = A smaller piece is joined to the part it touches, or dropped if it touches none.
 cut-replaces = Two models replace one. Undo puts it back.
 cut-cut = Cut
-cut-split = Split into its parts
+cut-split = Split
 
 ## cut.rs
 
@@ -175,7 +175,7 @@ cut-mended =
 
 ## panels/inspector/cut.rs
 
-cut-keep-both = Both
+cut-keep-both = Keep both
 cut-keep-lower = Lower
 cut-keep-upper = Upper
 
@@ -624,7 +624,9 @@ hollow-inside = Inside
 hollow-outside = Outside
 hollow-inside-note = The wall grows inward; the outside is untouched.
 hollow-outside-note = The wall grows outward, making a mould of the model.
-hollow-bottom-through = Bottom through
+hollow-bottom-through = Bottom open
+hollow-fact = Wall { $value } mm
+hollow-nothing-done = Nothing hollowed yet
 hollow-bottom-through-note = The wall grows inward and the floor the model stands on is cut away, so the cavity drains with no hole. On the plate it stays sealed until the print comes off, so add a small vent near the top.
 hollow-shell-help = A hollow model takes less resin and pulls less on the film. The wall is how thick its skin stays; about 2 mm suits most parts. A cavity needs a drain hole, or the resin trapped inside can crack the part later.
 hollow-wall = Wall
@@ -744,10 +746,10 @@ text-height = Letter height
 text-depth = Depth
 text-angle = Angle
 text-flat = Flat
-text-follow = On the surface
+text-follow = Follow the surface
 text-shape-note = The letters stand the depth out of the face or into it, measured from the face where you click, and follow it no further than that depth; on a curved face they stay flat.
 text-follow-note = Every letter is bent onto the face under it and stands the depth out of it or into it all over, however the face curves.
-text-click-note = Click a model to write the text there; the preview under the cursor shows what the click will write. Shift or Cmd click picks a model without writing on it.
+text-click-note = Click the model to place the text.
 text-stamping = Stamping the text
 text-cancelled = Lettering cancelled
 text-nothing-under = there is no model there to write on
@@ -1376,20 +1378,21 @@ position-local = Local
 position-move = Move
 position-move-reset = Back to the middle of the plate
 position-move-along = Move along { $axis }
-position-rotation = Rotation
+position-rotation = Rotate
 position-rotation-reset = Back to the way the model was imported
 position-rotation-about = Rotation about { $axis }
 position-scale = Scale
 position-scale-reset = Back to the size the model was imported at
 position-size = Size
 position-ratio = Ratio
-position-keep-proportions = Keep the proportions
+position-keep-proportions = Keep proportions
 position-axis-size = { $axis } size
 position-axis-ratio = { $axis } ratio
 position-place = Place
 position-on-plate = On the plate
 position-centre = Centre
-position-scale-to-fit = Scale to fit
+position-scale-to-fit = Fit the volume
+position-imported-size = Imported size
 position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
@@ -1449,6 +1452,7 @@ drain-trapped-resin = Trapped resin
 drain-opening = Opening
 drain-opening-note = Click the model, its supports or its raft to put one down, alt-click a hole to take it away. Each one is cut the moment it is placed, hollow or not, and a click on the floor of a hole drills on through it.
 drain-fact = { $count } trapped
+drain-fact-unchecked = Not checked
 drain-dig = Dig the channel ({ $count } points)
 drain-dig-tooltip = A tube of the hole size runs under every point, open at its two ends alone.
 drain-dug =
@@ -1496,7 +1500,8 @@ drain-clear-cuts =
     }
 drain-rehollowing = Hollowing again around the channels and walled holes
 drain-nothing-trapped = Nothing is trapped: the resin can get out of every model on the plate.
-drain-not-checked = Not checked yet.
+drain-not-checked = Not checked yet
+drain-not-checked-why = Check finds the cavities resin cannot leave.
 drain-held = { $volume } ml cannot get out
 drain-held-note = It cures inside and adds weight the peel has to pull. Each pocket is painted red under the x-ray, and each needs a hole of its own.
 drain-holes-placed =
@@ -1705,7 +1710,7 @@ scope-plate = all { $count } models on the plate
 
 ## panels/scene_panel.rs
 
-models-broken = broken
+models-broken = Broken
 models-title = Models
 models-selected = { $count } selected
 models-picked = { $count } picked

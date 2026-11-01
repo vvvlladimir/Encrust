@@ -66,9 +66,10 @@ pub fn describe(ui: &mut Ui, text: &str) {
     }
 }
 
-/// The help glyph's size, the round target around it a pointer hits, and the most its text
-/// runs across before wrapping, points.
-const HELP_GLYPH: f32 = 14.0;
+/// The ring the question mark stands in, the mark, the round target around it a pointer hits, and the
+/// most its text runs across before wrapping, points.
+const HELP_RING_D: f32 = 16.0;
+const HELP_GLYPH: f32 = 10.0;
 const HELP_D: f32 = 20.0;
 const HELP_W: f32 = 280.0;
 
@@ -88,12 +89,17 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
     } else if response.hovered() {
         colors.text_high
     } else {
-        colors.text_low.gamma_multiply(0.75)
+        colors.text_low
     };
     let painter = ui.painter();
     if open || response.hovered() {
         painter.circle_filled(rect.center(), HELP_D / 2.0, colors.hover);
     }
+    painter.circle_stroke(
+        rect.center(),
+        HELP_RING_D / 2.0 - 0.5,
+        egui::Stroke::new(1.0, colors.line),
+    );
     painter.text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -153,17 +159,28 @@ pub fn inset<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// A tool's modes in its heading: icon toggles sunk together in one bordered group.
 pub fn mode_group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let colors = theme::colors();
-    Frame::new()
-        .fill(colors.sunken)
-        .stroke(egui::Stroke::new(1.0, colors.hairline))
-        .corner_radius(theme::R_CONTROL)
-        .inner_margin(2)
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
-            add(ui)
-        })
-        .inner
+    // Held to the group's own height: a heading's row is taller, and a frame laid in it
+    // unbounded would reach from its top.
+    let height = theme::ICON_SIZE + 2.0 * MODE_GROUP_PAD;
+    let size = vec2(ui.available_width(), height);
+    let layout = egui::Layout::right_to_left(egui::Align::Center);
+    ui.allocate_ui_with_layout(size, layout, |ui| {
+        Frame::new()
+            .fill(colors.sunken)
+            .stroke(egui::Stroke::new(1.0, colors.hairline))
+            .corner_radius(theme::R_CONTROL)
+            .inner_margin(MODE_GROUP_PAD)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
+                add(ui)
+            })
+            .inner
+    })
+    .inner
 }
+
+/// Room inside a mode group around its toggles.
+const MODE_GROUP_PAD: f32 = 2.0;
 
 /// What a card says when it has nothing to work on: a large glyph over one line, centred.
 pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str) {
@@ -188,27 +205,48 @@ pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str) {
 /// Room above and below an empty state, points.
 const EMPTY_PAD: f32 = 16.0;
 
-/// A verdict that has to be seen before anything else in its block: a glyph in `tint`,
-/// the verdict in plain ink, and a line saying what to do about it.
+/// A verdict that has to be seen before anything else in its block, on a wash of `tint`:
+/// a glyph in `tint`, the verdict in plain ink, and a line saying what to do about it.
 pub fn notice(ui: &mut Ui, glyph: &str, tint: egui::Color32, title: &str, why: &str) {
     let colors = theme::colors();
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        ui.label(RichText::new(glyph).font(theme::icon(14.0)).color(tint));
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            ui.label(
-                RichText::new(title)
-                    .font(theme::label())
-                    .color(colors.text_high),
-            );
-            ui.label(
-                RichText::new(why)
-                    .font(theme::small())
-                    .color(colors.text_mid),
-            );
+    Frame::new()
+        .fill(wash_of(tint))
+        .corner_radius(theme::R_CONTROL)
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.label(RichText::new(glyph).font(theme::icon(16.0)).color(tint));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    ui.label(
+                        RichText::new(title)
+                            .font(theme::label())
+                            .color(colors.text_high),
+                    );
+                    ui.label(
+                        RichText::new(why)
+                            .font(theme::small())
+                            .color(colors.text_mid),
+                    );
+                });
+            });
         });
-    });
+}
+
+/// The palette's wash of a state colour, so a verdict reads in its state at a glance.
+fn wash_of(tint: egui::Color32) -> egui::Color32 {
+    let colors = theme::colors();
+    [
+        (colors.warn, colors.warn_wash),
+        (colors.danger, colors.danger_wash),
+        (colors.ok, colors.ok_wash),
+        (colors.accent, colors.accent_wash),
+    ]
+    .into_iter()
+    .find_map(|(state, wash)| (state == tint).then_some(wash))
+    .unwrap_or(colors.raised)
 }
 
 /// A body that scrolls once it outgrows the card, and a foot under it that stays in
@@ -363,7 +401,7 @@ pub fn stats(ui: &mut Ui, entries: &[(String, String)]) {
 const READING_GAP: f32 = 10.0;
 
 /// Height of a reading's row, and the room kept between the leader and the text.
-const READING_H: f32 = 24.0;
+const READING_H: f32 = 22.0;
 const LEADER_GAP: f32 = 6.0;
 
 /// Lines a value may wrap to before it is cut: a panel size states pixels and
@@ -376,14 +414,23 @@ const VALUE_ROWS: usize = 2;
 /// A value too long for the row wraps and then is cut, so that the name beside it stays
 /// readable: nothing here is drawn over anything else.
 pub fn readings(ui: &mut Ui, entries: &[(String, String)]) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (key, value) in entries {
+            reading(ui, key, value);
+        }
+    });
+}
+
+fn reading(ui: &mut Ui, key: &str, value: &str) {
     let colors = theme::colors();
-    for (key, value) in entries {
+    {
         let name = ui
             .painter()
-            .layout_no_wrap(key.clone(), theme::reading(), colors.text_low);
+            .layout_no_wrap(key.to_owned(), theme::reading(), colors.text_mid);
         let room = ui.available_width() - name.size().x - READING_GAP;
         let mut job = egui::text::LayoutJob::simple(
-            value.clone(),
+            value.to_owned(),
             theme::reading(),
             colors.text_high,
             room.max(READING_GAP),
@@ -402,12 +449,12 @@ pub fn readings(ui: &mut Ui, entries: &[(String, String)]) {
         if reading.rows.len() == 1 && to > from {
             painter.extend(egui::Shape::dotted_line(
                 &[egui::pos2(from, baseline), egui::pos2(to, baseline)],
-                colors.hairline.gamma_multiply(1.6),
-                3.0,
+                colors.line,
+                2.0,
                 0.6,
             ));
         }
-        painter.galley(name_at, name, colors.text_low);
+        painter.galley(name_at, name, colors.text_mid);
         painter.galley(
             rect.right_center() - vec2(0.0, reading.size().y / 2.0),
             reading,

@@ -72,6 +72,40 @@ pub fn companion_square(
     response.on_hover_text(tooltip)
 }
 
+/// A borderless square `side` points across beside a picker, its glyph in the mid tone:
+/// the preset row's Save, lighter than the picker it serves.
+pub fn quiet_square(ui: &mut Ui, glyph: &str, tooltip: &str, side: f32, enabled: bool) -> Response {
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
+    let (_, response) = ui.allocate_exact_size(vec2(side, side), sense);
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, tooltip));
+    let colors = theme::colors();
+    let fill = match enabled {
+        true => hover_mix(ui, &response, Color32::TRANSPARENT, colors.raised),
+        false => Color32::TRANSPARENT,
+    };
+    let ink = match (enabled, response.hovered()) {
+        (false, _) => colors.text_mid.gamma_multiply(DISABLED_GLYPH),
+        (true, true) => colors.text_high,
+        (true, false) => colors.text_mid,
+    };
+    let rect = pressed_rect(ui, &response);
+    let painter = ui.painter();
+    painter.rect_filled(rect, theme::R_CONTROL, fill);
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        glyph,
+        theme::icon(16.0),
+        ink,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_text(tooltip)
+}
+
 /// One tool of the tool row, filling the room it is given: a glyph over the tool's name,
 /// or the glyph alone. Washed in the accent while it is the tool in use; a dot in `badge`
 /// at its top right while the tool needs attention; `key`, the digit that picks it, at its

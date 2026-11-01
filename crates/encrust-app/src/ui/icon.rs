@@ -14,20 +14,20 @@ pub use egui_phosphor::regular::{
     DROP_HALF_BOTTOM as DRAIN, ERASER as ERASE, EXPORT, EYE as VISIBLE, EYE_SLASH as HIDDEN,
     FLASK as RESIN, FLOPPY_DISK as SAVE, FOLDER_OPEN as OPEN, FRAME_CORNERS as FRAME,
     GEAR as SETTINGS, GRID_FOUR as GRID, GRID_NINE as ARRAY, HAND_POINTING as LAY_ON_FACE,
-    HOUSE as HOME, INFO, KEYBOARD, KNIFE as CUT, LINK as LINKED, LIST_CHECKS as CHECK,
-    MAGIC_WAND as AUTO_ORIENT, MAGNIFYING_GLASS as FIND, PAINT_BRUSH as PAINT, PAUSE,
-    PENCIL_SIMPLE as EDIT, PERSPECTIVE, PLAY, PLUS as ADD, PRINTER, QUESTION as HELP,
-    QUESTION as ARMED, RULER as MEASURE, SELECTION_INVERSE as INVERT, SELECTION_PLUS as PICK_SMALL,
-    SLIDERS as GENERAL, SLIDERS_HORIZONTAL as PARAMETERS, SPLIT_HORIZONTAL as SPLIT,
-    SQUARE_HALF as MASK, STACK as SLICE, STAMP as RELIEF, STOP, SWAP as FLIP, TEXT_T as TEXT,
-    TRASH as REMOVE, TRAY_ARROW_DOWN as IMPORT, TREE_STRUCTURE as SUPPORTS, UNITE as COMBINE,
+    HOUSE as HOME, INFO, KEYBOARD, KNIFE as CUT, LIST_CHECKS as CHECK, MAGIC_WAND as AUTO_ORIENT,
+    MAGNIFYING_GLASS as FIND, PAINT_BRUSH as PAINT, PAUSE, PENCIL_SIMPLE as EDIT, PERSPECTIVE,
+    PLAY, PLUS as ADD, PRINTER, QUESTION as ARMED, QUESTION_MARK as HELP, RULER as MEASURE,
+    SELECTION_INVERSE as INVERT, SELECTION_PLUS as PICK_SMALL, SLIDERS as GENERAL,
+    SLIDERS_HORIZONTAL as PARAMETERS, SPLIT_HORIZONTAL as SPLIT, SQUARE_HALF as MASK,
+    STACK as SLICE, STAMP as RELIEF, STOP, SWAP as FLIP, TEXT_T as TEXT, TRASH as REMOVE,
+    TRAY_ARROW_DOWN as IMPORT, TREE_STRUCTURE as SUPPORTS, UNITE as COMBINE,
     UPLOAD_SIMPLE as DROP_HERE, VIDEO_CAMERA as CAMERA, WARNING, WIFI_HIGH as NETWORK,
     WRENCH as SHAPE, X as CANCEL,
 };
 
 pub use egui_phosphor::regular::{
     BOOKMARK_SIMPLE as PRESET, CHECKERBOARD as TEXTURE, LINE_SEGMENT as POINTS,
-    PARALLELOGRAM as PLANES, WARNING_OCTAGON as ERROR,
+    PARALLELOGRAM as PLANES, TEXT_AA as FONT, WARNING_OCTAGON as ERROR,
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
@@ -89,7 +89,6 @@ mod tests {
         ("INFO", INFO),
         ("KEYBOARD", KEYBOARD),
         ("CUT", CUT),
-        ("LINKED", LINKED),
         ("CHECK", CHECK),
         ("FIND", FIND),
         ("PAINT", PAINT),
@@ -133,6 +132,7 @@ mod tests {
         ("TEXTURE", TEXTURE),
         ("POINTS", POINTS),
         ("PLANES", PLANES),
+        ("FONT", FONT),
         ("ERROR", ERROR),
         ("KEY_SHIFT", KEY_SHIFT),
         ("KEY_BACKSPACE", KEY_BACKSPACE),
@@ -142,9 +142,8 @@ mod tests {
         ("KEY_OPTION", KEY_OPTION),
     ];
 
-    /// Names the glyph table gives one glyph: Help and Armed are both a question; a caret
-    /// folds a block and steps a layer down alike.
-    const SHARED: &[[&str; 2]] = &[["HELP", "ARMED"], ["CARET_DOWN", "LAYER_DOWN"]];
+    /// Names the glyph table gives one glyph: a caret folds a block and steps a layer down alike.
+    const SHARED: &[[&str; 2]] = &[["CARET_DOWN", "LAYER_DOWN"]];
 
     #[test]
     fn no_glyph_stands_for_two_meanings() {

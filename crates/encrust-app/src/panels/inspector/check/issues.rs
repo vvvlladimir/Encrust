@@ -5,7 +5,7 @@ use egui::Color32;
 
 use crate::check::covered_mm2;
 use crate::i18n::tr;
-use crate::ui::{Segment, Segmented, hint, issue_row, kept, list};
+use crate::ui::{Segment, Segmented, hint, issue_list, issue_row, kept};
 
 use super::tint;
 
@@ -188,7 +188,7 @@ pub(super) fn listing(
         .into_iter()
         .filter(|row| filter == Filter::All || row.filter == filter)
         .collect();
-    let picked = list(ui, |ui| {
+    let picked = issue_list(ui, |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
             let place = tr!("check-layer", layer = row.layer + 1);

@@ -10,7 +10,7 @@ use crate::ui::{icon, theme};
 pub enum BinLook {
     /// A bare glyph in the low tone, for a row or beside a field.
     Quiet,
-    /// A `companion_square` with the glyph in the danger tone, beside a primary button.
+    /// A `companion_square`, beside a primary button.
     Framed,
 }
 
@@ -65,11 +65,16 @@ fn paint(ui: &Ui, response: &Response, look: BinLook, armed: bool, enabled: bool
     paint_box(ui, rect, fill, ring);
     let ink = match (enabled, armed, look, hovered) {
         (false, ..) => colors.text_low.gamma_multiply(DISABLED_GLYPH),
-        (true, true, ..) | (true, false, BinLook::Framed, _) => colors.danger,
-        (true, false, BinLook::Quiet, true) => colors.text_high,
+        (true, true, ..) => colors.danger,
+        (true, false, _, true) => colors.text_high,
+        (true, false, BinLook::Framed, false) => colors.text_mid,
+        (true, false, BinLook::Quiet, false) if rect.height() >= theme::BUTTON_H - 2.0 => {
+            colors.text_mid
+        }
         (true, false, BinLook::Quiet, false) => colors.text_low,
     };
     let size_pt = match look {
+        BinLook::Quiet if rect.height() >= theme::BUTTON_H - 2.0 => 16.0,
         BinLook::Quiet => 13.0,
         BinLook::Framed if rect.height() >= theme::PRIMARY_H - 2.0 => 18.0,
         BinLook::Framed => 16.0,

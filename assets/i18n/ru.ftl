@@ -64,7 +64,7 @@ general-open-folder = Открыть папку
 ## panels/inspector/cut.rs
 
 cut-plane = Плоскость
-cut-fact = { $axis } на { $height } мм
+cut-fact = { $axis } { $height } мм
 cut-select-model = Выберите модель для разреза.
 cut-height = Высота
 cut-offset = Смещение
@@ -104,7 +104,7 @@ cut-parts-smallest = Наименьшая часть
 cut-parts-smallest-note = Кусок меньше этого присоединяется к части, которой касается, или отбрасывается, если не касается ни одной.
 cut-replaces = Одна модель заменяется двумя. Отмена вернёт её.
 cut-cut = Разрезать
-cut-split = Разделить на части
+cut-split = Разделить
 
 ## cut.rs
 
@@ -189,7 +189,7 @@ cut-mended =
 
 ## panels/inspector/cut.rs
 
-cut-keep-both = Обе
+cut-keep-both = Оставить обе
 cut-keep-lower = Нижняя
 cut-keep-upper = Верхняя
 
@@ -670,7 +670,9 @@ hollow-inside = Внутрь
 hollow-outside = Наружу
 hollow-inside-note = Стенка растёт внутрь; снаружи ничего не меняется.
 hollow-outside-note = Стенка растёт наружу, получается форма для отливки модели.
-hollow-bottom-through = Сквозь дно
+hollow-bottom-through = Открытое дно
+hollow-fact = Стенка { $value } мм
+hollow-nothing-done = Пока ничего не выдолблено
 hollow-bottom-through-note = Стенка растёт внутрь, а дно, на котором стоит модель, вырезается, и смола стекает без отверстий. На платформе полость закрыта ею, пока отпечаток не снят, поэтому добавьте маленькое вентиляционное отверстие наверху.
 hollow-shell-help = Полая модель расходует меньше смолы и слабее тянет плёнку. Стенка — толщина оболочки; около 2 мм подходит большинству деталей. Полости нужно дренажное отверстие, иначе запертая внутри смола может позже разорвать деталь.
 hollow-wall = Стенка
@@ -796,7 +798,7 @@ text-flat = Плоские
 text-follow = По поверхности
 text-shape-note = Буквы выступают из грани или уходят в неё на глубину, отсчитанную от грани в точке щелчка, и следуют за ней не дальше этой глубины; на кривой грани буквы остаются плоскими.
 text-follow-note = Каждая буква ложится на грань под собой и выступает из неё или уходит в неё на всю глубину по всей площади, как бы грань ни изгибалась.
-text-click-note = Щёлкните по модели, чтобы написать на ней текст; предпросмотр под курсором показывает, что получится. Щелчок с Shift или Cmd выбирает модель, ничего на ней не написав.
+text-click-note = Щёлкните по модели, чтобы поставить текст.
 text-stamping = Ставлю надпись
 text-cancelled = Надпись отменена
 text-nothing-under = здесь нет модели, на которой писать
@@ -1456,7 +1458,7 @@ position-local = Локально
 position-move = Перемещение
 position-move-reset = В центр платформы
 position-move-along = Сдвиг по { $axis }
-position-rotation = Поворот
+position-rotation = Повернуть
 position-rotation-reset = Как при импорте модели
 position-rotation-about = Поворот вокруг { $axis }
 position-scale = Масштаб
@@ -1469,7 +1471,8 @@ position-axis-ratio = Коэффициент по { $axis }
 position-place = Размещение
 position-on-plate = На платформе
 position-centre = По центру
-position-scale-to-fit = Вписать
+position-scale-to-fit = Вписать в объём
+position-imported-size = Исходный размер
 position-lift = Поднять
 position-click-face = Щёлкните по грани
 position-lay-on-face = Положить на грань
@@ -1531,6 +1534,7 @@ drain-trapped-resin = Запертая смола
 drain-opening = Отверстие
 drain-opening-note = Щёлкните по модели, её поддержкам или подложке, чтобы поставить отверстие, Alt + щелчок по отверстию убирает его. Каждое вырезается сразу при установке, полая модель или нет, а щелчок по дну отверстия сверлит дальше сквозь него.
 drain-fact = заперто: { $count }
+drain-fact-unchecked = Не проверено
 drain-dig = Прорыть канал (точек: { $count })
 drain-dig-tooltip = Под каждой точкой проходит трубка с размером отверстия, открытая только на двух концах.
 drain-dug =
@@ -1583,7 +1587,8 @@ drain-clear-cuts =
     }
 drain-rehollowing = Повторное выдалбливание вокруг каналов и отверстий со стенкой
 drain-nothing-trapped = Ничего не заперто: смола может вытечь из каждой модели на платформе.
-drain-not-checked = Ещё не проверялось.
+drain-not-checked = Ещё не проверялось
+drain-not-checked-why = Проверка находит полости, из которых смола не вытечет.
 drain-held = { $volume } мл не могут вытечь
 drain-held-note = Она засвечивается внутри и добавляет вес, который должен преодолеть отрыв. Каждый карман на рентгене закрашен красным, и каждому нужно собственное отверстие.
 drain-holes-placed =
@@ -1800,7 +1805,7 @@ scope-plate = все модели на платформе ({ $count })
 
 ## panels/scene_panel.rs
 
-models-broken = повреждена
+models-broken = Повреждена
 models-title = Модели
 models-selected = Выбрано: { $count }
 models-picked = выбрано: { $count }
