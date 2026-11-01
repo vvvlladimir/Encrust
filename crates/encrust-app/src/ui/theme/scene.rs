@@ -49,6 +49,8 @@ pub struct Scene {
     pub overhang: Color32,
     /// Whatever stands past the build volume, which the printer cannot reach.
     pub outside: Color32,
+    /// The seam two models cut where they meet: a full red, so the line reads on any resin.
+    pub meets: Color32,
     /// The plate's grid: a line every centimetre, and a stronger one every five.
     pub grid_minor: Color32,
     pub grid_major: Color32,
@@ -111,6 +113,7 @@ pub(super) const DARK: Scene = Scene {
     section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
     overhang: Color32::from_rgb(0xf0, 0x61, 0x40),
     outside: Color32::from_rgb(0xe0, 0x2f, 0x2f),
+    meets: Color32::from_rgb(0xff, 0x2a, 0x2a),
     grid_minor: Color32::from_rgb(0x26, 0x2c, 0x34),
     grid_major: Color32::from_rgb(0x39, 0x41, 0x4b),
     plate_border: Color32::from_rgba_unmultiplied_const(0x8a, 0x93, 0xa3, 0xb3),
@@ -153,6 +156,7 @@ pub(super) const LIGHT: Scene = Scene {
     fault_picked: Color32::from_rgb(0xe0, 0x3a, 0xae),
     overhang: Color32::from_rgb(0xd9, 0x48, 0x1f),
     outside: Color32::from_rgb(0xd4, 0x2a, 0x2a),
+    meets: Color32::from_rgb(0xe0, 0x10, 0x10),
     grid_minor: Color32::from_rgb(0xd6, 0xdc, 0xe3),
     grid_major: Color32::from_rgb(0xb3, 0xbc, 0xc7),
     plate_border: Color32::from_rgba_unmultiplied_const(0x7f, 0x8a, 0x98, 0xb3),

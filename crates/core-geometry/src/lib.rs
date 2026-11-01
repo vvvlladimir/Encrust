@@ -36,7 +36,7 @@ pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangl
 pub use faults::{Faults, faults};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
-pub use intersect::{PlacedMesh, placed_faces_cross, self_intersections};
+pub use intersect::{Crossing, PlacedMesh, placed_crossings, self_intersections};
 pub use mend::{MendMethod, MendSettings, Mended, mend};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};

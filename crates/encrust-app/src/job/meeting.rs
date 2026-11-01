@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use core_geometry::{Bvh, Mesh, Transform};
-use core_plate::{Body, BodyKind, crossings};
+use core_plate::{Body, BodyKind, Meeting, crossings};
 
 use crate::job::{Worker, pooled};
 
@@ -15,18 +15,19 @@ pub struct MeetingBody {
     pub transform: Transform,
 }
 
-/// The pairs of models that meet, by their `owner`, found on a thread of their own (ADR 0390).
-pub type MeetingJob = Worker<Vec<[usize; 2]>>;
+/// The models that meet, by their `owner`, and where, found on a thread of their own
+/// (ADR 0390).
+pub type MeetingJob = Worker<Vec<Meeting>>;
 
 /// Starts the search. A thread that fails finds nothing: the warning is only a warning.
-pub fn spawn_meeting(bodies: Vec<MeetingBody>) -> MeetingJob {
+pub fn spawn_meeting(bodies: Arc<[MeetingBody]>) -> MeetingJob {
     Worker::spawn(
         move |_, _| pooled(|| met(&bodies), |_| Vec::new()),
         Vec::new,
     )
 }
 
-fn met(bodies: &[MeetingBody]) -> Vec<[usize; 2]> {
+fn met(bodies: &[MeetingBody]) -> Vec<Meeting> {
     let bodies: Vec<Body<'_>> = bodies
         .iter()
         .map(|body| Body {

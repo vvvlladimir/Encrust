@@ -104,7 +104,7 @@ fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
 
 /// The one fact the open tool owns, in the heading's right end, and the colour it is
 /// read in.
-fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
+fn fact(ctx: &egui::Context, window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
     let colors = theme::colors();
     let plain = |text: String| Some((text, colors.text_mid));
     match tool {
@@ -114,7 +114,7 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
             value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
         )),
         Tool::Drain => drain::fact(window),
-        Tool::Check => check::fact(window),
+        Tool::Check => check::fact(ctx, window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
         Tool::Cut => Some((cut::fact(window), colors.text_mid)),
         // These cards have their modes where the fact would stand.
@@ -169,7 +169,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         };
         if let Some(modes) = modes {
             mode_group(ui, |ui| modes(ui, window));
-        } else if let Some((text, color)) = fact(window, tool) {
+        } else if let Some((text, color)) = fact(ui.ctx(), window, tool) {
             figure_line(ui, &text, color);
         }
     });

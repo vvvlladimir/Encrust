@@ -97,7 +97,7 @@ fn cubes_cross(at: Transform) -> bool {
     let cube = cuboid(Vec3::ZERO, Vec3::ONE);
     let bvh = Bvh::build(&cube);
     let still = placed(&cube, &bvh, Transform::default());
-    placed_faces_cross(&still, &placed(&cube, &bvh, at))
+    !placed_crossings(&still, &placed(&cube, &bvh, at)).is_empty()
 }
 
 #[test]
@@ -105,6 +105,65 @@ fn a_cube_moved_half_its_width_into_another_crosses_it() {
     assert!(cubes_cross(Transform::from_translation(Vec3::new(
         0.5, 0.25, 0.0
     ))));
+}
+
+#[test]
+fn each_crossing_names_a_face_of_the_first_and_one_of_the_second_that_cross() {
+    let cube = cuboid(Vec3::ZERO, Vec3::ONE);
+    let bvh = Bvh::build(&cube);
+    let still = placed(&cube, &bvh, Transform::default());
+    let moved = Transform::from_translation(Vec3::new(0.5, 0.25, 0.1));
+    let crossed = placed_crossings(&still, &placed(&cube, &bvh, moved));
+    assert!(!crossed.is_empty());
+    let placed_corners = |face: u32, at: Transform| {
+        let matrix = at.to_matrix();
+        cube.faces[face as usize].map(|corner| {
+            matrix
+                .transform_point3(cube.vertices[corner as usize])
+                .as_dvec3()
+        })
+    };
+    for Crossing {
+        faces: [one, other],
+        ..
+    } in crossed
+    {
+        let (a, b) = (
+            placed_corners(one, Transform::default()),
+            placed_corners(other, moved),
+        );
+        assert!(
+            cross(&a, &b, Rim::Closed),
+            "faces {one} and {other} were named but do not cross"
+        );
+    }
+}
+
+#[test]
+fn the_seam_of_two_cubes_lies_on_both_their_surfaces() {
+    // Moved (0.5, 0.25, 0.1), the second cube's walls cut the first's along x = 1, y = 1
+    // and z = 1, and the first's cut the second's along x = 0.5, y = 0.25 and z = 0.1.
+    let cube = cuboid(Vec3::ZERO, Vec3::ONE);
+    let bvh = Bvh::build(&cube);
+    let moved = Transform::from_translation(Vec3::new(0.5, 0.25, 0.1));
+    let still = placed(&cube, &bvh, Transform::default());
+    let crossed = placed_crossings(&still, &placed(&cube, &bvh, moved));
+    let on_a_wall = |point: Vec3, low: Vec3, high: Vec3| {
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-5;
+        (0..3).any(|axis| near(point[axis], low[axis]) || near(point[axis], high[axis]))
+    };
+    let seams: Vec<[Vec3; 2]> = crossed
+        .iter()
+        .filter_map(|crossing| crossing.seam_mm)
+        .collect();
+    assert!(!seams.is_empty(), "walls crossing at an angle cut a seam");
+    for end in seams.iter().flatten() {
+        assert!(
+            on_a_wall(*end, Vec3::ZERO, Vec3::ONE)
+                && on_a_wall(*end, Vec3::new(0.5, 0.25, 0.1), Vec3::new(1.5, 1.25, 1.1)),
+            "{end} lies on a wall of each cube"
+        );
+    }
 }
 
 #[test]
@@ -143,7 +202,7 @@ fn a_cube_wholly_inside_another_crosses_none_of_its_faces() {
     let outer = placed(&big, &big_bvh, Transform::default());
     let inner = placed(&small, &small_bvh, Transform::default());
     assert!(
-        !placed_faces_cross(&outer, &inner),
+        placed_crossings(&outer, &inner).is_empty(),
         "inside is not crossing"
     );
 }

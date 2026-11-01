@@ -15,7 +15,10 @@ pub fn mark(parts: &mut [Part], models: &[Model], owners: &[usize], talk: bool) 
         .zip(owners)
         .flat_map(|(model, &owner)| bodies_of(model, owner))
         .collect();
-    let met = crossings(&bodies);
+    let met: Vec<[usize; 2]> = crossings(&bodies)
+        .iter()
+        .map(|meeting| meeting.owners)
+        .collect();
     for &[one, other] in &met {
         let (one_input, other_input) = (parts[one].input.clone(), parts[other].input.clone());
         parts[one].meets.push(other_input);

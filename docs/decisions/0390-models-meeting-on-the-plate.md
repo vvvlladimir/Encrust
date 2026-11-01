@@ -13,8 +13,11 @@ often overlap without harm. A warning that fires on those is soon ignored.
 
 ## Decision
 
-**`core_plate::crossings` names each pair of models that meet**: a face of one, or of
-its supports and raft, crosses a face of the other, or one stands wholly inside it.
+**`core_plate::crossings` names each pair of models that meet, and where**: a face of
+one, or of its supports and raft, crosses a face of the other, or one stands wholly inside
+it. Each `Meeting` carries the seam their faces cut and the places they meet: the box
+round each run of the seam, runs a millimetre apart being one place, round faces lying on
+each other, or the inner body's box.
 Touching counts, faces lying on each other included; a gap of any width does not. The
 bodies of one model never meet each other, and supports never meet supports.
 
@@ -22,14 +25,22 @@ It runs in three steps, so the cost follows the faces where bodies meet, not the
 
 - the bodies' boxes go into `Buckets` 10 mm across, and only pairs sharing a bucket whose
   boxes meet go on;
-- `core_geometry::placed_faces_cross` asks one body's `Bvh` for its faces in the box both
+- `core_geometry::placed_crossings` asks one body's `Bvh` for its faces in the box both
   stand in, carries each into the other's space and asks the other's `Bvh`, testing pairs
-  in f64 on `rayon`. Unlike `self_intersections` an edge through a triangle's rim counts:
+  in f64 on `rayon`, and answers every pair of faces that cross. Unlike `self_intersections` an edge through a triangle's rim counts:
   between two meshes a crossing at a round offset lands there;
 - with no face crossing, a body whose box lies in the other's is inside where one of its
   vertices is, by the other's `Winding`.
 
 A `Bvh` or `Winding` a caller does not hand in is built the first time a pair needs it.
+
+**The window traces the seam in the scene's `meets` red, in every tool**: each segment two
+crossing faces cut each other along, between the points where the edges of each pierce
+the other, drawn as the Repair tool's marked edges are, a line a few pixels wide pulled a
+hair towards the eye. The Check tool lists each pair that meets under *On the plate*, with
+the models past the build volume or in the inset, before any layer is read, and the
+models' rows carry *Meets*; a press on either flies the camera to a place, the next press
+to the next. The CLI names the pairs and fails `--strict`.
 
 ## Consequences
 

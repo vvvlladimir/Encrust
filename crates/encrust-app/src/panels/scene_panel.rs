@@ -261,6 +261,9 @@ fn rows(ui: &mut egui::Ui, window: &mut Window) {
                 .repairs
                 .start(scene, id, state, &mut window.machine.status);
         }
+        Some((id, Clicked::FlyToMeeting)) => {
+            window.doc.meeting.fly_to(scene, |ids| ids.contains(&id))
+        }
         Some((_, Clicked::Select)) | None => {}
     }
 }
@@ -280,6 +283,7 @@ enum Clicked {
     Visibility,
     MoveTo(u32),
     Repair,
+    FlyToMeeting,
 }
 
 /// The names of the models each model on the plate in hand meets, in the order of its rows.
@@ -314,7 +318,7 @@ fn row(
         eye_name: &eye_name,
         eye_id: ui.id().with(object.id),
     };
-    let mut repair = false;
+    let (mut repair, mut fly) = (false, false);
     let pressed = model_row(ui, &model, |ui, rect, end| {
         let (end, gap) = match trouble(&object.summary) {
             Some((mark, lines)) => {
@@ -324,10 +328,12 @@ fn row(
             }
             None => (end, 0.0),
         };
-        match meets.is_empty() {
-            true => end,
-            false => meeting_mark(ui, rect, object, end - gap, meets),
+        if meets.is_empty() {
+            return end;
         }
+        let (left, pressed) = meeting_mark(ui, rect, object, end - gap, meets);
+        fly |= pressed;
+        left
     });
     let asked = row_menu(&pressed.row, object, plates, active);
     if let Some(asked) = asked {
@@ -335,6 +341,9 @@ fn row(
     }
     if repair {
         return Some(Clicked::Repair);
+    }
+    if fly {
+        return Some(Clicked::FlyToMeeting);
     }
     if pressed.eye.clicked() {
         return Some(Clicked::Visibility);

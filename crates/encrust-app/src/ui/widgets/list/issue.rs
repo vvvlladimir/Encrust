@@ -5,10 +5,11 @@ use crate::ui::widgets::{focus_ring, hover_mix};
 
 /// Findings one under another, each its own rounded row, `ISSUE_GAP` apart; past
 /// `ISSUE_ROWS_SHOWN` they scroll inside the list, so the sections under it stay put.
-pub fn issue_list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+/// `name` tells two lists on one panel apart, and their rows with them.
+pub fn issue_list<R>(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     let shown = ISSUE_ROWS_SHOWN as f32;
     egui::ScrollArea::vertical()
-        .id_salt("issue-list")
+        .id_salt(("issue-list", name))
         .max_height(shown * theme::BUTTON_H + (shown - 1.0) * ISSUE_GAP)
         .auto_shrink([false, true])
         .show(ui, |ui| {
@@ -102,4 +103,40 @@ fn issue_words(
         theme::figures(12.0),
         colors.text_mid,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::widgets::fixtures::context;
+
+    /// Whether a frame drawing `add` paints egui's warning of an id used twice.
+    fn clashes(add: impl FnMut(&mut Ui)) -> bool {
+        let ctx = context();
+        ctx.options_mut(|options| options.warn_on_id_clash = true);
+        let mut add = add;
+        let mut said = false;
+        for _ in 0..2 {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| add(ui));
+            // No renderer takes the font atlas here.
+            output.textures_delta.clear();
+            said = output.shapes.iter().any(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => text.galley.text().contains("use of"),
+                _ => false,
+            });
+        }
+        said
+    }
+
+    #[test]
+    fn two_lists_on_one_panel_never_share_an_id() {
+        let two_lists = |ui: &mut Ui| {
+            for name in ["plate", "layers"] {
+                issue_list(ui, name, |ui| {
+                    issue_row(ui, Color32::RED, ("Layer 1", None), "an island", false);
+                });
+            }
+        };
+        assert!(!clashes(two_lists), "egui warns of an id used twice");
+    }
 }

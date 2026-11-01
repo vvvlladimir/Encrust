@@ -172,15 +172,16 @@ whole-surface fill is Cmd-Shift-click.
 **Past the plate:**
 - Whatever stands past the build volume, model, supports or raft, is striped red in the
   view, and so is what reaches into the plate inset a printer keeps clear along its edges.
-- With a printer chosen, the plate card says how many models stand past the build volume,
-  whose overhang is cut off the layers, and how many only reach into the inset, which still
-  slices whole. Neither stops the slice.
 - Models standing into each other, or a model's supports or raft reaching into another
-  model, are found once the plate stops moving: the plate card says how many, with **Pick
-  them**, and each such row in the models card is tagged **Meets**, naming the others
-  behind a click. Touching counts, a gap of any width does not; a model's own supports, and
-  supports or rafts meeting each other, never do. They would slice as one piece; the slice
-  goes ahead.
+  model, are found once the plate stops moving, and the seam they cut is traced in a thin
+  red line, in every tool. Their rows in the models card are tagged **Meets**, naming the others on hover.
+  Touching counts, a gap of any width does not; a model's own supports, and supports or
+  rafts meeting each other, never do. They would slice as one piece.
+- With a printer chosen, the Check tool lists each of these under **On the plate** at once,
+  before any layer is read: past the build volume (its overhang is cut off the layers), in
+  the inset (it still slices whole), or meeting another model. A click on a row, or on a
+  **Meets** tag, flies the camera there; on a meeting each further click goes to the next
+  place. None of it stops the slice.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.

@@ -28,24 +28,34 @@ pub fn self_intersections(mesh: &Mesh, bvh: &Bvh) -> Vec<[u32; 2]> {
     pairs
 }
 
-/// Whether a face of `one` crosses a face of `other`, each where it stands. Only faces in
-/// the box both stand in are asked; a placement scaled flat crosses nothing.
-pub fn placed_faces_cross(one: &PlacedMesh<'_>, other: &PlacedMesh<'_>) -> bool {
+/// Two faces that cross, one of each mesh, and where.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Crossing {
+    /// The face of the first mesh and the face of the second.
+    pub faces: [u32; 2],
+    /// The segment the two cut each other along, plate mm; `None` for faces in one plane.
+    pub seam_mm: Option<[Vec3; 2]>,
+}
+
+/// Each face of `one` and face of `other` that cross, each where it stands, in no set order.
+/// Only faces in the box both stand in are asked; a placement scaled flat crosses nothing.
+pub fn placed_crossings(one: &PlacedMesh<'_>, other: &PlacedMesh<'_>) -> Vec<Crossing> {
     let low = one.bounds_mm.mins.max(other.bounds_mm.mins);
     let high = one.bounds_mm.maxs.min(other.bounds_mm.maxs);
     if low.cmpgt(high).any() {
-        return false;
+        return Vec::new();
     }
     let (Some(into_one), Some(into_other)) = (
         one.transform.inverse_matrix(),
         other.transform.inverse_matrix(),
     ) else {
-        return false;
+        return Vec::new();
     };
     let mut near = Vec::new();
     one.bvh
         .faces_meeting(&box_through(into_one, low, high), &mut near);
     let one_to_other = into_other * one.transform.to_matrix();
+    let other_to_plate = other.transform.to_matrix();
     near.par_iter()
         .map_init(Vec::new, |found, &face| {
             let corners = one.mesh.faces[face as usize].map(|corner| {
@@ -53,15 +63,40 @@ pub fn placed_faces_cross(one: &PlacedMesh<'_>, other: &PlacedMesh<'_>) -> bool 
                 one_to_other.transform_point3(vertex).as_dvec3()
             });
             other.bvh.faces_meeting(&bounds_of(&corners), found);
-            found.iter().any(|&face| {
-                cross(
-                    &corners,
-                    &points(other.mesh, other.mesh.faces[face as usize]),
-                    Rim::Closed,
-                )
-            })
+            let crossed = found.iter().filter_map(|&across| {
+                let others = points(other.mesh, other.mesh.faces[across as usize]);
+                cross(&corners, &others, Rim::Closed).then(|| Crossing {
+                    faces: [face, across],
+                    seam_mm: seam(&corners, &others)
+                        .map(|ends| ends.map(|end| other_to_plate.transform_point3(end.as_vec3()))),
+                })
+            });
+            crossed.collect::<Vec<_>>()
         })
-        .any(|crossed| crossed)
+        .flatten_iter()
+        .collect()
+}
+
+/// Where two crossing triangles cut each other: between the points their edges pierce the
+/// other at, farthest apart; `None` for triangles in one plane, which pierce nothing.
+fn seam(one: &Corners, other: &Corners) -> Option<[DVec3; 2]> {
+    let pierced = |triangle: &Corners, edges_of: &Corners| {
+        let triangle = *triangle;
+        edges(edges_of)
+            .filter(move |&edge| through(&triangle, edge, Rim::Closed))
+            .map(move |[from, to]| {
+                let (near, far) = (orient(&triangle, from), orient(&triangle, to));
+                from + (to - from) * (near / (near - far))
+            })
+            .collect::<Vec<_>>()
+    };
+    let points = [pierced(other, one), pierced(one, other)].concat();
+    let first = *points.first()?;
+    let last = points.iter().copied().max_by(|a, b| {
+        a.distance_squared(first)
+            .total_cmp(&b.distance_squared(first))
+    })?;
+    Some([first, last])
 }
 
 /// The box the box `low`..`high` stands in once carried by `matrix`.

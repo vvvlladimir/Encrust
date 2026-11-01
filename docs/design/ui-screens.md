@@ -109,7 +109,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues | — | Islands (Support them · Remove them side by side); Found (`issue_row`s: the layer, and at its right the kind with its reading — N, mm and MPa, mm² — the kind's name on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Cups (Drill them); Peel | — (the check runs by itself) |
+| Check | the number of issues, the plate's with the layers' | — | On the plate, first and before any layer is read (`issue_row`s: the model, and at its right past the build volume in `danger`, in the plate inset in `warn`, or meets and the other model in `danger`; a press flies the camera there, on a meeting to its next place); Islands (Support them · Remove them side by side); Found (`issue_row`s: the layer, and at its right the kind with its reading — N, mm and MPa, mm² — the kind's name on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Cups (Drill them); Peel | — (the check runs by itself) |
 | Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
@@ -139,7 +139,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 |---|---|---|
 | Plates | numbered 26 squares, the current washed in `accent_wash`; + | row 42 |
 | Heading | *Models*, `· project name` in `text_low`, `n picked` in `accent_soft`, + | 36 |
-| Rows | eye or eye-slash, name cut with an ellipsis, state tags from the right: `Broken` in `danger_wash`, then `Meets` in `warn_wash` naming the models it meets behind a click | 32; picked washed in `picked_wash`, no stripe |
+| Rows | eye or eye-slash, name cut with an ellipsis, state tags from the right: `Broken` in `danger_wash`, then `Meets` in `danger_wash` naming the models it meets on hover, a click flying the camera to where they meet, the next click to the next place | 32; picked washed in `picked_wash`, no stripe |
 | Actions | Duplicate, Array, Arrange, Remove as 26 squares, spread evenly | 34, hairline over it |
 
 ## Plate card
@@ -147,7 +147,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 | Part | Content | Size |
 |---|---|---|
 | Heading | `card_title`: *Plate n* in `text_high`, the resin's name at the right in `text_low` | 36 |
-| Verdicts | a `warn` `notice` each when a model on the plate is broken, stands past the build volume, reaches into the inset or meets another, 8 apart and over the figures; the last with *Pick them* (`inline_button`, select glyph) under it | as tall as its text |
+| Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
 | Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell in a long language), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
 | Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
 | Foot | the printer row, then the action row | on `base` |
@@ -173,10 +173,7 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 | Nothing to slice | Slice to .goo disabled, and why under it |
 
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
-not print.* With a printer chosen, a model whose box, its supports and raft with it, runs past
-the build volume reads *1 model stands past the build volume*; one only in the inset reads
-*1 model reaches into the plate inset*. Models standing into another read *2 models meet another*,
-*They, or their supports, stand into another model, and slice as one piece.* In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
+not print.* What stands past the plate or meets another model is Check's, not the card's. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
 print until that layer is done), Cured area and Volume of the layer shown, and there is no Details.
 
 ## Layer strip

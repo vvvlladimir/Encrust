@@ -1,6 +1,6 @@
 mod standing;
 
-pub use standing::{Standing, standing};
+pub use standing::{Astray, astray};
 
 use crate::i18n::tr;
 use core_geometry::{Aabb, Quat, Vec2, Vec3};

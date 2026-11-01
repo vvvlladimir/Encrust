@@ -228,10 +228,10 @@ fn the_notices_at_the_foot_of_the_stage() {
     picture("notices", app);
 }
 
-/// The plate card warning of a copy of the cube standing into it and another past the
-/// plate's edge, and the models card tagging the two that meet.
+/// Check listing, before any layer is read, a copy of the cube past the plate's edge and the
+/// cube with the copy standing into it, which the models card tags.
 #[test]
-fn the_plate_card_warning_of_models_that_may_not_print() {
+fn check_listing_models_past_the_plate_and_models_that_meet() {
     let mut app = pictured();
     let scene = &mut app.doc.scene;
     let cube = scene
@@ -249,7 +249,8 @@ fn the_plate_card_warning_of_models_that_may_not_print() {
         }
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
-    picture("plate_verdicts", app);
+    app.tool = Tool::Check;
+    picture("check_plate", app);
 }
 
 /// The printer's Network tab with two boards of its model listed and named, and a third

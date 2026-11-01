@@ -4,10 +4,14 @@
 use std::sync::OnceLock;
 
 use core_geometry::{
-    Aabb, Buckets, Bvh, FastMap, FastSet, Mesh, PlacedMesh, Scalar, Transform, Winding,
-    placed_aabb, placed_faces_cross,
+    Aabb, Buckets, Bvh, FastMap, FastSet, Mesh, PlacedMesh, Scalar, Transform, Vec3, Winding,
+    placed_aabb, placed_crossings,
 };
 use rayon::prelude::*;
+
+use places::places;
+
+mod places;
 
 /// How wide a bucket of the search for neighbours is, millimetres: about a small model, so
 /// one meets few buckets and a bucket holds few bodies.
@@ -32,25 +36,49 @@ pub struct Body<'a> {
     pub transform: Transform,
 }
 
-/// The pairs of models that meet, lower owner first, ascending. Supports meeting supports
-/// are not a meeting: they print as one and come off together.
-pub fn crossings(bodies: &[Body<'_>]) -> Vec<[usize; 2]> {
+/// Two models that meet, and where.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Meeting {
+    /// The two models, lower first.
+    pub owners: [usize; 2],
+    /// Each place they meet, plate mm: round one run of the seam their faces cut, round
+    /// faces lying on each other, or the body standing inside the other.
+    pub places_mm: Vec<Aabb>,
+    /// The segments their crossing faces cut each other along, plate mm, in no set order.
+    pub seam_mm: Vec<[Vec3; 2]>,
+}
+
+/// The models that meet, lower owner first, ascending. Supports meeting supports are not a
+/// meeting: they print as one and come off together.
+pub fn crossings(bodies: &[Body<'_>]) -> Vec<Meeting> {
     let bounds: Vec<Option<Aabb>> = bodies
         .par_iter()
         .map(|body| placed_aabb(body.mesh, body.transform))
         .collect();
     let lazy = Lazy::new(bodies.len());
-    let mut met: Vec<[usize; 2]> = candidates(bodies, &bounds)
+    let mut met: Vec<Meeting> = candidates(bodies, &bounds)
         .into_par_iter()
-        .filter(|(_, pairs)| {
-            pairs
-                .iter()
-                .any(|&[one, other]| meet(bodies, &bounds, &lazy, one, other))
+        .filter_map(|(owners, pairs)| {
+            let (mut places_mm, mut seam_mm) = (Vec::new(), Vec::new());
+            for &[one, other] in &pairs {
+                if let Some((places, seam)) = meet(bodies, &bounds, &lazy, one, other) {
+                    places_mm.extend(places);
+                    seam_mm.extend(seam);
+                }
+            }
+            (!places_mm.is_empty()).then_some(Meeting {
+                owners,
+                places_mm,
+                seam_mm,
+            })
         })
-        .map(|(owners, _)| owners)
         .collect();
-    met.sort_unstable();
+    met.sort_unstable_by_key(|meeting| meeting.owners);
     met
+}
+
+fn merged(one: Aabb, other: Aabb) -> Aabb {
+    Aabb::new(one.mins.min(other.mins), one.maxs.max(other.maxs))
 }
 
 /// The pairs of bodies whose boxes meet, grouped by the two models they belong to.
@@ -102,17 +130,16 @@ impl Lazy {
     }
 }
 
-/// Whether two bodies meet: their faces cross, or one stands wholly inside the other.
+/// Where two bodies meet, and the seam their faces cut: round each run of it, round faces
+/// lying on each other where they cut none, or the box of one standing wholly inside.
 fn meet(
     bodies: &[Body<'_>],
     bounds: &[Option<Aabb>],
     lazy: &Lazy,
     one: usize,
     other: usize,
-) -> bool {
-    let (Some(box_one), Some(box_other)) = (bounds[one], bounds[other]) else {
-        return false;
-    };
+) -> Option<(Vec<Aabb>, Vec<[Vec3; 2]>)> {
+    let (box_one, box_other) = (bounds[one]?, bounds[other]?);
     let placed = |index: usize, bounds_mm: Aabb| {
         let body = &bodies[index];
         let bvh = body
@@ -125,9 +152,41 @@ fn meet(
             bounds_mm,
         }
     };
-    placed_faces_cross(&placed(one, box_one), &placed(other, box_other))
-        || inside(bodies, lazy, (one, &box_one), (other, &box_other))
-        || inside(bodies, lazy, (other, &box_other), (one, &box_one))
+    let crossed = placed_crossings(&placed(one, box_one), &placed(other, box_other));
+    let seam: Vec<[Vec3; 2]> = crossed
+        .iter()
+        .filter_map(|crossing| crossing.seam_mm)
+        .collect();
+    if !seam.is_empty() {
+        return Some((places(&seam), seam));
+    }
+    let faces: Vec<(usize, u32)> = crossed
+        .iter()
+        .flat_map(|crossing| [(one, crossing.faces[0]), (other, crossing.faces[1])])
+        .collect();
+    if let Some(lying) = faces_box(bodies, &faces) {
+        return Some((vec![lying], Vec::new()));
+    }
+    if inside(bodies, lazy, (one, &box_one), (other, &box_other)) {
+        return Some((vec![box_one], Vec::new()));
+    }
+    inside(bodies, lazy, (other, &box_other), (one, &box_one))
+        .then(|| (vec![box_other], Vec::new()))
+}
+
+/// The box `faces` stand in, plate mm, or `None` for none.
+fn faces_box(bodies: &[Body<'_>], faces: &[(usize, u32)]) -> Option<Aabb> {
+    let corners = faces.iter().flat_map(|&(body, face)| {
+        let Body {
+            mesh, transform, ..
+        } = bodies[body];
+        let matrix = transform.to_matrix();
+        mesh.faces[face as usize]
+            .map(|corner| matrix.transform_point3(mesh.vertices[corner as usize]))
+    });
+    corners
+        .map(|corner| Aabb::new(corner, corner))
+        .reduce(merged)
 }
 
 /// Whether `inner`, crossing none of `outer`'s faces, stands inside it: then any one of its

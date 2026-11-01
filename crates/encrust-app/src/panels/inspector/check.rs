@@ -17,6 +17,7 @@ use crate::ui::{
 use crate::workspace::{Mode, Tool};
 
 mod issues;
+mod plate;
 
 pub(crate) use issues::issue_name;
 use issues::{Filter, filter, listing, neighbour};
@@ -24,6 +25,7 @@ use issues::{Filter, filter, listing, neighbour};
 /// What the stack will fail on: a way to take the islands out, the verdict, every issue a
 /// click away from its layer, and what pulls hardest on the film.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    plate::ui(ui, window);
     let Some((risks, removed)) = window
         .measured()
         .map(|measured| (measured.risks(), measured.removed_islands()))
@@ -103,23 +105,30 @@ fn support_islands(window: &mut Window, risks: &[Risk]) {
     window.machine.status = Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP));
 }
 
-/// What the check has found so far, for the inspector's heading, and its colour.
-pub fn fact(window: &Window) -> Option<(String, Color32)> {
+/// What the check has found so far, the plate's own issues with the layers', for the
+/// inspector's heading, and its colour.
+pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
     let colors = theme::colors();
+    let on_plate = plate::count(ctx, window);
+    let issues = |count: usize, colour| Some((tr!("check-fact-issues", count = count), colour));
     let Some(measured) = window.measured() else {
+        if on_plate > 0 {
+            return issues(on_plate, colors.danger);
+        }
         return window
             .machine
             .preview
             .is_measuring()
             .then(|| (tr!("check-fact-checking"), colors.text_low));
     };
-    Some(match measured.worst() {
-        None => (tr!("check-fact-none"), colors.text_mid),
-        Some(worst) => (
-            tr!("check-fact-issues", count = measured.risks().len()),
-            tint(&worst),
-        ),
-    })
+    match (measured.worst(), on_plate) {
+        (None, 0) => Some((tr!("check-fact-none"), colors.text_mid)),
+        (None, _) => issues(on_plate, colors.danger),
+        (Some(_), on_plate) if on_plate > 0 => {
+            issues(measured.risks().len() + on_plate, colors.danger)
+        }
+        (Some(worst), _) => issues(measured.risks().len(), tint(&worst)),
+    }
 }
 
 /// Before there is anything to read: the stack being read, or the way to have it cut.

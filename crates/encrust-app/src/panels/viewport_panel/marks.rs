@@ -1,4 +1,5 @@
-//! What the Repair and Check tools mark over the models, and the camera's flight to it.
+//! What the Repair and Check tools mark over the models, and the camera's flight to it or
+//! to where models meet.
 
 use core_geometry::Scalar;
 
@@ -7,9 +8,21 @@ use crate::camera::CameraTurn;
 use crate::panels::{Window, section};
 use crate::workspace::Tool;
 
-/// What the Repair tool found, or the issues Check went to while the plate and the cut at
-/// `section_mm` stay as they were, marked only while that tool is in hand.
+/// The seam where models meet, in every tool, then what the Repair tool found or the issues
+/// Check went to while the plate and the cut at `section_mm` stay as they were, in hand.
 pub(super) fn marked(
+    window: &Window,
+    section_mm: Option<Scalar>,
+    (rect, cursor): (egui::Rect, Option<egui::Pos2>),
+) -> crate::highlight::Highlight {
+    let mut marked = window.doc.meeting.highlight(&window.doc.scene);
+    let tool = by_tool(window, section_mm, (rect, cursor));
+    marked.faces.extend(tool.faces);
+    marked.edges.extend(tool.edges);
+    marked
+}
+
+fn by_tool(
     window: &Window,
     section_mm: Option<Scalar>,
     (rect, cursor): (egui::Rect, Option<egui::Pos2>),
@@ -24,14 +37,16 @@ pub(super) fn marked(
     }
 }
 
-/// Flies the camera to where the Repair tool's last press or Check's last pick went, on
-/// the frame that place is worked out, seen past what the section leaves drawn.
+/// Flies the camera to where models meet, from a press on a tag, or where the Repair tool's
+/// last press or Check's last pick went, on the frame that place is worked out, seen past
+/// what the section leaves drawn.
 pub(super) fn fly_to_marked(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
-    let spot = match *window.tool {
+    let by_tool = match *window.tool {
         Tool::Repair => repair::flight(window),
         Tool::Check => window.tools.check.take_flight(),
         _ => None,
     };
+    let spot = window.doc.meeting.take_flight().or(by_tool);
     let Some(spot) = spot else {
         return;
     };

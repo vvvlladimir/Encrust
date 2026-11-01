@@ -516,6 +516,12 @@ check-remove-next-note = Takes one layer more off each part left hanging, the on
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
 check-more-layers = and { $count } more layers
+check-plate = On the plate
+check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
+check-row-past = past the build volume
+check-row-inset = in the plate inset
+# The other model's name.
+check-row-meets = meets { $name }
 check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->
@@ -572,31 +578,6 @@ summary-broken-why =
         [one] What is sliced from it may not print.
        *[other] What is sliced from them may not print.
     }
-summary-off-plate =
-    { $count ->
-        [one] { $count } model stands past the build volume
-       *[other] { $count } models stand past the build volume
-    }
-# The supports and raft count with the model they stand under.
-summary-off-plate-why = Whatever stands past it, supports and raft included, is cut off the layers.
-summary-in-inset =
-    { $count ->
-        [one] { $count } model reaches into the plate inset
-       *[other] { $count } models reach into the plate inset
-    }
-summary-in-inset-why = The printer's maker keeps that band clear. It still slices whole.
-summary-meeting =
-    { $count ->
-        [one] { $count } model meets another
-       *[other] { $count } models meet another
-    }
-# Overlapping models are united when sliced.
-summary-meeting-why =
-    { $count ->
-        [one] It, or its supports, stands into another model, and they slice as one piece.
-       *[other] They, or their supports, stand into another model, and slice as one piece.
-    }
-summary-meeting-pick = Pick them
 
 ## ui/widgets.rs
 
@@ -1820,7 +1801,8 @@ scope-plate = all { $count } models on the plate
 models-broken = Broken
 # A model standing into another model, or its supports into one.
 models-meets = Meets
-models-meets-name = Meets { $name }
+# The models it meets, by name, joined by commas.
+models-meets-names = Meets { $names }. Click to go to where they meet.
 models-title = Models
 models-selected = { $count } selected
 models-picked = { $count } picked
