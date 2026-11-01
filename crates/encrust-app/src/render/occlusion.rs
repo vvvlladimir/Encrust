@@ -6,9 +6,9 @@ use core_geometry::Mat4;
 use egui::epaint::ViewportInPixels;
 
 /// Millimetres around a point that can shade it: the crevices of a miniature, not the room.
-const REACH_MM: f32 = 2.5;
+const REACH_MM: f32 = 4.0;
 /// How dark a fully enclosed crease goes, as a share taken off its light.
-const STRENGTH: f32 = 1.1;
+const STRENGTH: f32 = 1.0;
 
 /// The copy pass's uniform: how to turn a pixel and its depth back into a point the camera
 /// sees, and how far and how hard to shade.

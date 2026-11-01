@@ -15,14 +15,16 @@ struct Occlusion {
 
 @group(0) @binding(2) var<uniform> occlusion: Occlusion;
 
-// Samples a pixel takes, on a spiral turned by a per-pixel noise so their pattern reads as
-// grain rather than rings.
-const SAMPLES = 16;
-const GOLDEN_ANGLE = 2.39996323;
+// Ground-truth ambient occlusion (Jimenez et al. 2016) as Intel's XeGTAO lays it out: a few
+// slices round each pixel, the horizon found both ways along each, and the light it lets
+// in integrated over the arc the normal sees. See docs/design/viewport.md.
+const SLICES = 3;
+const STEPS = 4;
+const PI_HALF = 1.5707963;
 // The most pixels a crease reaches across, so a close zoom costs no more than a far one.
-const MOST_REACH_PX = 40.0;
-// Below this a surface counts as flat towards a sample, so a plane never shades itself.
-const BIAS = 0.15;
+const MOST_REACH_PX = 48.0;
+// The share of the reach over which a sample's say fades out, as XeGTAO's falloff.
+const FALLOFF_SHARE = 0.615;
 
 // One triangle covering the whole viewport; egui's viewport and scissor trim it.
 @vertex
@@ -62,7 +64,8 @@ fn noise(pixel: vec2<f32>) -> f32 {
 fn enclosed(pixel: vec2<f32>, depth: f32) -> f32 {
     let here = seen_at(pixel, depth);
     var normal = normalize(cross(step_along(here, pixel, vec2<f32>(0.0, 1.0)), step_along(here, pixel, vec2<f32>(1.0, 0.0))));
-    normal = select(normal, -normal, dot(normal, -here) < 0.0);
+    let view = normalize(-here);
+    normal = select(normal, -normal, dot(normal, view) < 0.0);
     let reach_mm = occlusion.shading.y;
     let clip = occlusion.projection * vec4<f32>(here, 1.0);
     let px_per_mm = occlusion.projection[1][1] * occlusion.viewport.w * 0.5 / clip.w;
@@ -70,25 +73,49 @@ fn enclosed(pixel: vec2<f32>, depth: f32) -> f32 {
     if (reach_px < 1.5) {
         return 0.0;
     }
-    let turn = noise(pixel) * 6.2831853;
-    var shut = 0.0;
-    for (var index = 0; index < SAMPLES; index = index + 1) {
-        let angle = f32(index) * GOLDEN_ANGLE + turn;
-        let out = sqrt((f32(index) + 0.5) / f32(SAMPLES)) * reach_px;
-        let at = pixel + vec2<f32>(cos(angle), sin(angle)) * out;
-        let there_depth = depth_at(at);
-        if (there_depth >= 1.0) {
-            continue;
+    let falloff_mm = FALLOFF_SHARE * reach_mm;
+    let falloff_mul = -1.0 / falloff_mm;
+    let falloff_add = (reach_mm - falloff_mm) / falloff_mm + 1.0;
+    let turn = noise(pixel);
+    let jitter = fract(turn * 7.31);
+    var visible = 0.0;
+    for (var slice = 0; slice < SLICES; slice = slice + 1) {
+        let angle = (f32(slice) + turn) * 3.14159265 / f32(SLICES);
+        // Up the screen is up the view; the screen's rows run down.
+        let direction = vec3<f32>(cos(angle), sin(angle), 0.0);
+        let on_screen = vec2<f32>(direction.x, -direction.y);
+        let ortho = direction - dot(direction, view) * view;
+        let axis = normalize(cross(ortho, view));
+        let projected = normal - axis * dot(normal, axis);
+        let projected_length = length(projected);
+        let cos_n = clamp(dot(projected, view) / max(projected_length, 1e-4), -1.0, 1.0);
+        let n = sign(dot(ortho, projected)) * acos(cos_n);
+        let low0 = cos(n + PI_HALF);
+        let low1 = cos(n - PI_HALF);
+        var horizon0 = low0;
+        var horizon1 = low1;
+        for (var step = 0; step < STEPS; step = step + 1) {
+            var share = (f32(step) + jitter) / f32(STEPS);
+            share = share * share;
+            let offset = on_screen * max(share * reach_px, 1.0);
+            let ahead = seen_at(pixel + offset, depth_at(pixel + offset)) - here;
+            let behind = seen_at(pixel - offset, depth_at(pixel - offset)) - here;
+            let far0 = length(ahead);
+            let far1 = length(behind);
+            let weight0 = clamp(far0 * falloff_mul + falloff_add, 0.0, 1.0);
+            let weight1 = clamp(far1 * falloff_mul + falloff_add, 0.0, 1.0);
+            horizon0 = max(horizon0, mix(low0, dot(ahead / max(far0, 1e-4), view), weight0));
+            horizon1 = max(horizon1, mix(low1, dot(behind / max(far1, 1e-4), view), weight1));
         }
-        let towards = seen_at(at, there_depth) - here;
-        let apart = length(towards);
-        if (apart < 1e-4) {
-            continue;
-        }
-        let near = 1.0 - smoothstep(reach_mm, 2.0 * reach_mm, apart);
-        shut = shut + max(dot(normal, towards / apart) - BIAS, 0.0) * near;
+        var h0 = -acos(clamp(horizon1, -1.0, 1.0));
+        var h1 = acos(clamp(horizon0, -1.0, 1.0));
+        h0 = n + clamp(h0 - n, -PI_HALF, PI_HALF);
+        h1 = n + clamp(h1 - n, -PI_HALF, PI_HALF);
+        let arc0 = (cos_n + 2.0 * h0 * sin(n) - cos(2.0 * h0 - n)) / 4.0;
+        let arc1 = (cos_n + 2.0 * h1 * sin(n) - cos(2.0 * h1 - n)) / 4.0;
+        visible = visible + projected_length * (arc0 + arc1);
     }
-    return shut / f32(SAMPLES);
+    return 1.0 - clamp(visible / f32(SLICES), 0.0, 1.0);
 }
 
 // How much a lens darkens the frame's corners in the render view, and from how far out of

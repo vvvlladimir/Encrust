@@ -466,12 +466,16 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   surface. Where the copy holds nothing, the backdrop shows. Off under the x-ray, and
   while the camera moves, when the part is drawn opaque (ADR 0391).
 - **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
-  shades creases from the depth plane, which is kept past the scene pass for it.
-  `present.wgsl` rebuilds each pixel's point through the inverse projection, takes its
-  normal from the shorter step to a neighbour so a silhouette does not tear it, and samples
-  sixteen points on a golden-angle spiral turned by interleaved-gradient noise, up to
-  `REACH_MM` (2.5 mm) away and at most 40 px. A sample above the surface's tangent plane
-  shuts out light by its angle, fading out past the reach. It only ever darkens.
+  shades creases from the depth plane, which is kept past the scene pass for it, by
+  ground-truth ambient occlusion (Jimenez et al. 2016) as Intel's XeGTAO lays it out.
+  `present.wgsl` rebuilds each pixel's point through the inverse projection and its normal
+  from the shorter step to a neighbour, so a silhouette does not tear it; along three
+  slices turned by interleaved-gradient noise it finds the horizon both ways in four steps
+  each, spaced quadratically out to `REACH_MM` (4 mm) and at most 48 px, each sample's say
+  fading over the outer 61.5 % of the reach; and integrates the light the horizons let in
+  over the arc the normal projected into the slice sees, cosine-weighted. It only ever
+  darkens, in linear light. The paper's spatio-temporal denoise is the picture at rest:
+  sixteen jittered frames average its noise away, so it has no blur pass of its own.
 - **The room.** The printer is put away: no plate, grid, outline or Front word. The scene
   pass starts with `backdrop_fragment` in `props.wgsl`, which turns each pixel back into a
   line of sight through the inverse view-projection and finds where it meets a
