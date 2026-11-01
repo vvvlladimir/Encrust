@@ -50,11 +50,13 @@ The machine and resin parts each open a chooser hanging 6 under the chip from it
 left edge, 300 wide, on `raised` with a window's shadow, a capital group name over its rows:
 
 - *Your machines*: a 44 two-line row a machine — glyph, name over maker and output format in
-  `text_low`, an `ok` dot when it answers on the network (`text_low` when it is silent), the
-  one in hand washed and ticked; under a rule, *Add a machine* and *Machine and resin…*.
+  `text_low`, an `ok` dot when a printer it lists answers on the network (`text_low` when none does,
+  none when it lists none), the one in hand washed and ticked; under a rule, *Add a machine*
+  (the library) and *Machine and resin…*.
 - *On the machine's name*: a row a resin on that machine — its colour as a 10 point dot,
   name over type and layer height, its exposure at the right in `text_mid`, the one in hand
-  washed and ticked; under a rule, *Edit this resin…* and *Add a resin*.
+  washed and ticked; under a rule, *Edit this resin…* and *Add a resin* (a new resin, open
+  in its form).
 
 Choosing a row takes it in hand and closes the chooser, as Esc or a click elsewhere does; a
 footer row opens Machine and resin on that machine's page or that resin's form.

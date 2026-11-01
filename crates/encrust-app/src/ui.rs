@@ -12,6 +12,9 @@ mod widgets;
 #[expect(unused_imports, reason = "TODO(step-10): the windows it is built for")]
 pub use widgets::confirm_button;
 pub use widgets::{
+    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row,
+};
+pub use widgets::{
     BinLook, Carried, Held, NoticeReply, RailButton, Segment, Segmented, address_field, ago,
     axis_label, bare_switch, bin_button, blocked_hover, body_and_foot, busy, card, card_foot,
     carried_row, compact_button, companion_button, companion_square, confirm_bin, count_row,

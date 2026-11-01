@@ -151,6 +151,7 @@ paints from tokens only.
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
+| `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
 | `split_readings` | Figures split two ways, the models' and the supports': the two heads over their columns, a row a name and its two figures |

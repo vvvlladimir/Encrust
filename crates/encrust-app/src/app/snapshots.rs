@@ -468,3 +468,15 @@ fn the_printers_a_profile_sends_to() {
     }
     picture("machines_network", app);
 }
+
+#[test]
+fn the_chip_opening_its_machines_and_its_resins() {
+    let mut results = SnapshotResults::new();
+    for (name, part) in [("chip_machines", "Machine, "), ("chip_resins", "Resin, ")] {
+        let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app(true));
+        harness.get_by_label_contains(part).click();
+        harness.run_steps(SETTLE_FRAMES);
+        harness.snapshot(name);
+        results.extend(harness.take_snapshot_results());
+    }
+}

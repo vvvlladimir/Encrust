@@ -655,6 +655,13 @@ transition, light power, lifts, retracts, waits, density, price, colour and comp
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 
+**Switching in the top bar:** the machine and the resin in the chip each open a list: your
+machines with their maker, the file they write and whether a printer they list answers;
+the resins set up on the machine with their colour, kind, layer height and exposure. A
+row takes it in hand; *Add a machine*, *Machine and resin…*, *Edit this resin…* and *Add a
+resin* lead to the window. In a narrow window the chip names the machine without its
+maker.
+
 **Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
 printer's resins (**Import a resin** on a printer with none yet) and pick a file another slicer wrote for it; the resin is saved on that
 printer. You get what the

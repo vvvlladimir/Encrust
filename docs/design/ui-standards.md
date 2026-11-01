@@ -118,7 +118,8 @@ above → the same in `encrust-cli` → panel pictures before and after (ADR 021
 ## Known gaps
 
 - **The redesign (ADR 0382)** is written in `ui-screens.md`, partly built: the tool row, the glyphs, the hint bar,
-  the notices, the empty plate, the plate and models cards and the layer strip are; a
+  the notices, the empty plate, the plate and models cards, the layer strip and the top
+  bar's chip and choosers are; a
   deleted profile or machine does not ask, and a notice that goes away fades only when it
   is a message, a job's or a broken model's card going at once. `confirm_button` is built
   but drawn nowhere yet; `ok_wash` is still to be built. The printer list the plate card
