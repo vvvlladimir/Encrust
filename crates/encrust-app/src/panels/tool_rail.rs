@@ -8,6 +8,9 @@ use crate::workspace::Tool;
 /// The least a named button is wide: narrower, the names go (`ui-screens.md`, Tool row).
 const NAMED_MIN_W: f32 = 56.0;
 
+/// The most a named button is wide: its height, or the least a name needs if that is more.
+const NAMED_MAX_W: f32 = theme::RAIL_BUTTON_H.max(NAMED_MIN_W);
+
 /// What the row takes besides its buttons: its padding, the gaps and the rules.
 fn chrome() -> f32 {
     let tools: usize = Tool::RAIL.iter().map(|group| group.len()).sum();
@@ -18,8 +21,8 @@ fn chrome() -> f32 {
 }
 
 /// How the row fits `width`: each button's width, their height, and whether the names
-/// show. Named, the buttons share the width equally, a name wider than its share cut short;
-/// under `NAMED_MIN_W` each, the glyphs stand alone in squares.
+/// show. Named, the buttons share the width equally up to `NAMED_MAX_W`, a name wider than
+/// its share cut short; under `NAMED_MIN_W` each, the glyphs stand alone in squares.
 #[derive(Debug, Clone, PartialEq)]
 struct Fit {
     buttons_w: Vec<f32>,
@@ -32,7 +35,7 @@ impl Fit {
         let share = ((width - chrome()) / count as f32).max(0.0);
         if share >= NAMED_MIN_W {
             return Self {
-                buttons_w: vec![share; count],
+                buttons_w: vec![share.min(NAMED_MAX_W); count],
                 button_h: theme::RAIL_BUTTON_H,
                 labelled: true,
             };
@@ -45,34 +48,37 @@ impl Fit {
         }
     }
 
-    /// What is left of `width` once the buttons stand, split either side of them.
-    fn margin(&self, width: f32) -> f32 {
-        let used: f32 = chrome() + self.buttons_w.iter().sum::<f32>();
-        ((width - used) / 2.0).max(0.0)
+    /// The row's width with its buttons standing, padding included.
+    fn width(&self) -> f32 {
+        chrome() + self.buttons_w.iter().sum::<f32>()
     }
 }
 
-/// The tool row over the stage, `width` points wide: every tool in the order a plate is
-/// worked, a rule between each group (ADR 0382).
-pub fn ui(ui: &mut egui::Ui, window: &mut Window, width: f32) {
-    let fit = Fit::into(width, Tool::on_rail().count());
-    ui.set_width(width);
+/// How wide the tool row is given `room`: as wide as its buttons, never wider than `room`.
+fn width(room: f32) -> f32 {
+    Fit::into(room, Tool::on_rail().count()).width().min(room)
+}
+
+/// The tool row over the stage, at most `room` points wide: every tool in the order a
+/// plate is worked, a rule between each group (ADR 0382).
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, room: f32) {
+    let fit = Fit::into(room, Tool::on_rail().count());
+    ui.set_width(width(room));
     // The row's rect is last frame's: the digits show while the pointer is anywhere on it.
     let row_id = ui.id().with("tool-row");
     let last_row = ui.data(|data| data.get_temp::<egui::Rect>(row_id));
     let keys = last_row.is_some_and(|row| ui.rect_contains_pointer(row));
     let row = egui::Frame::new()
         .inner_margin(theme::TOOLBAR_PAD)
-        .show(ui, |ui| tools(ui, window, &fit, fit.margin(width), keys))
+        .show(ui, |ui| tools(ui, window, &fit, keys))
         .response
         .rect;
     ui.data_mut(|data| data.insert_temp(row_id, row));
 }
 
-fn tools(ui: &mut egui::Ui, window: &mut Window, fit: &Fit, margin: f32, keys: bool) {
+fn tools(ui: &mut egui::Ui, window: &mut Window, fit: &Fit, keys: bool) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(margin);
         let mut widths = fit.buttons_w.iter();
         for (index, group) in Tool::RAIL.into_iter().enumerate() {
             if index > 0 {
@@ -140,11 +146,12 @@ mod tests {
     }
 
     #[test]
-    fn a_row_with_room_shares_it_equally_among_named_buttons() {
-        let fit = Fit::into(row_w(70.0), 9);
+    fn a_row_short_of_room_shares_it_equally_among_named_buttons() {
+        let share = (NAMED_MIN_W + NAMED_MAX_W) / 2.0;
+        let fit = Fit::into(row_w(share), 9);
         assert!(fit.labelled);
         assert!(
-            fit.buttons_w.iter().all(|&w| (w - 70.0).abs() < 1e-3),
+            fit.buttons_w.iter().all(|&w| (w - share).abs() < 1e-3),
             "{:?}",
             fit.buttons_w
         );
@@ -173,11 +180,24 @@ mod tests {
     }
 
     #[test]
-    fn glyphs_with_room_to_spare_stand_centred() {
-        let width = row_w(theme::RAIL_ICON_H) + 20.0;
-        let fit = Fit::into(width, 9);
-        assert!(!fit.labelled);
-        assert!((fit.margin(width) - 10.0).abs() < 1e-4);
+    fn named_buttons_grow_no_wider_than_their_cap() {
+        let room = row_w(NAMED_MAX_W) + 400.0;
+        let fit = Fit::into(room, 9);
+        assert!(
+            fit.buttons_w
+                .iter()
+                .all(|&w| (w - NAMED_MAX_W).abs() < 1e-4),
+            "every button {NAMED_MAX_W} wide, got {:?}",
+            fit.buttons_w
+        );
+        assert!((width(room) - row_w(NAMED_MAX_W)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn glyphs_with_room_to_spare_take_only_their_squares() {
+        let room = row_w(theme::RAIL_ICON_H) + 20.0;
+        assert!(!Fit::into(room, 9).labelled);
+        assert!((width(room) - row_w(theme::RAIL_ICON_H)).abs() < 1e-3);
     }
 
     /// What the row is given in a window of `width`: the stage between the inspector and

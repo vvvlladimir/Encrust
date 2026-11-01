@@ -1,71 +1,11 @@
-//! What floats over the stage besides the cards: how to work the viewport, and the notices
-//! stacked over its foot. See `docs/design/ui-screens.md`, Over the stage.
+//! The notices stacked over the stage's foot. See `docs/design/ui-screens.md`, Over the stage.
 
-use egui::{Align, Layout, Margin, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, vec2};
+use egui::{Align, Layout, Margin, Response, RichText, Sense, Ui, vec2};
 
 use super::button::{Skin, filled_button};
 use super::{card, icon_button, progress_bar, quiet_button, small_icon_button};
 use crate::i18n::tr;
 use crate::ui::{icon, theme, theme::motion};
-
-/// How to work the viewport with the tool in hand: a pill of pairs, each a key in
-/// `text_high` then what it does in `text_mid`, the pairs split by a short rule.
-pub fn hint_bar(ui: &mut Ui, pairs: &[(&str, &str)]) -> Response {
-    let colors = theme::colors();
-    let painter = ui.painter();
-    let galleys: Vec<_> = pairs
-        .iter()
-        .map(|(key, what)| {
-            let key =
-                painter.layout_no_wrap((*key).to_owned(), theme::hint_key(), colors.text_high);
-            let what = painter.layout_no_wrap((*what).to_owned(), theme::hint(), colors.text_mid);
-            (key, what)
-        })
-        .collect();
-    let pairs_w: f32 = galleys
-        .iter()
-        .map(|(key, what)| key.size().x + HINT_KEY_GAP + what.size().x)
-        .sum();
-    let rules = galleys.len().saturating_sub(1) as f32;
-    let width = pairs_w + rules * (2.0 * HINT_GAP + 1.0) + 2.0 * HINT_PAD;
-    let (rect, response) = ui.allocate_exact_size(vec2(width, HINT_H), Sense::hover());
-    let read: Vec<String> = pairs
-        .iter()
-        .map(|(key, what)| format!("{key} {what}"))
-        .collect();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, read.join(", ")));
-
-    let painter = ui.painter();
-    let pill = egui::CornerRadius::same((HINT_H / 2.0) as u8);
-    let stroke = egui::Stroke::new(1.0, colors.hairline);
-    let fill = colors.base.gamma_multiply(HINT_OPACITY);
-    painter.rect(rect, pill, fill, stroke, egui::StrokeKind::Inside);
-    let mut left = rect.left() + HINT_PAD;
-    for (at, (key, what)) in galleys.into_iter().enumerate() {
-        if at > 0 {
-            left += HINT_GAP;
-            let rule = egui::Rangef::new(rect.center().y - 6.0, rect.center().y + 6.0);
-            painter.vline(left, rule, egui::Stroke::new(1.0, colors.line));
-            left += 1.0 + HINT_GAP;
-        }
-        let top = rect.center().y - key.size().y / 2.0;
-        let key_w = key.size().x;
-        painter.galley(egui::pos2(left, top), key, colors.text_high);
-        left += key_w + HINT_KEY_GAP;
-        let what_w = what.size().x;
-        painter.galley(egui::pos2(left, top), what, colors.text_mid);
-        left += what_w;
-    }
-    response
-}
-
-/// The hint bar's height, the room at its ends, between pairs and inside one, points, and
-/// how much of the window's colour it keeps.
-const HINT_H: f32 = 28.0;
-const HINT_PAD: f32 = 14.0;
-const HINT_GAP: f32 = 10.0;
-const HINT_KEY_GAP: f32 = 5.0;
-const HINT_OPACITY: f32 = 0.88;
 
 /// What was pressed on a [`notice_card`].
 #[derive(Default)]
@@ -218,22 +158,6 @@ mod tests {
 
     fn run(add: impl FnMut(&mut Ui)) {
         fixtures::frame(&fixtures::context(), egui::RawInput::default(), add);
-    }
-
-    #[test]
-    fn a_hint_bar_is_as_wide_as_what_it_says() {
-        let (mut one, mut two) = (0.0, 0.0);
-        run(|ui| one = hint_bar(ui, &[("Click", "a point")]).rect.width());
-        run(|ui| {
-            two = hint_bar(ui, &[("Click", "a point"), ("Esc", "start again")])
-                .rect
-                .width()
-        });
-        assert!(
-            two > one + 2.0 * HINT_GAP,
-            "a second pair widens the pill: {one} then {two}"
-        );
-        assert!(one < 300.0, "one short pair stays short, got {one}");
     }
 
     #[test]

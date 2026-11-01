@@ -88,7 +88,7 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
-section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool row as wide as the room between the side cards, padded 4, its tools sharing that width at 50 tall, 2 apart and 4 either side of a rule, 36 tall without their names; plate
+section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool row centred between the side cards and at most that room, padded 4, its tools sharing it at 50 tall and at most 56 wide, 2 apart and 4 either side of a rule, 36 tall without their names; plate
 panel 272, inspector 316 until dragged, top bar 44, layer strip 64, a chip 32. An icon button beside a bigger control is a square of its height: 40 beside a primary, 32 beside a picker or a box.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
 fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
@@ -143,7 +143,7 @@ paints from tokens only.
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
 | `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
-| `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule |
+| `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule; short of room, the keys alone as glyphs, what each does on hover |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret. The support picker's chooser is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
@@ -234,6 +234,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Warning, error, job, armed | `WARNING`, `WARNING_OCTAGON`, `CIRCLE_NOTCH`, `QUESTION` |
 | Find, keys, settings, help | `MAGNIFYING_GLASS`, `KEYBOARD`, `GEAR_SIX`, `QUESTION_MARK` |
 | Zoom | `MAGNIFYING_GLASS_MINUS`, `MAGNIFYING_GLASS_PLUS`, `ARROWS_OUT` |
+| Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
 A glyph in a button other than the primary is 16, in the tool row 19, in a 26 square 15, in an empty state 30.
 
@@ -274,7 +275,7 @@ tool, every action of the key table and every model on the plate (`panels/find.r
 The tools are one row over the top of the stage, between the two side cards and 8 from
 each, in groups split by a rule: what is picked opens in the inspector, which starts at the
 stage's top. A window too narrow drops the names to glyphs in squares, and they return
-when it widens (ADR 0382). The `hint_bar` stands under the row's centre while the tool in
+when it widens (ADR 0382). The `hint_bar` stands under the row's centre, clear of the view cube, while the tool in
 hand has something to say about the viewport. The plates are a row of numbered squares at the head of
 the models card; a right click on one duplicates,
 removes or gathers the selection onto it. The open project's name stands in the

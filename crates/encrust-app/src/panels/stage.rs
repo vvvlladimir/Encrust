@@ -1,4 +1,4 @@
-use egui::{Id, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
+use egui::{Id, Pos2, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
 use crate::panels::{
     Window, hint_bar, mask_pane, stage_notice, view_column, view_cube, viewport_panel,
@@ -7,8 +7,9 @@ use crate::ui::theme;
 use crate::workspace::Mode;
 
 /// The stage: the viewport under the whole of it, the mask beside the model or in its
-/// place, and the cards over them, which keep to `clear`, the room the side cards leave.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
+/// place, and the cards over them, which keep to `clear`, the room the side cards leave
+/// under the tool `row`.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>) {
     let stage = ui.available_rect_before_wrap();
 
     if *window.mode == Mode::Preview && window.view.options.mask_only {
@@ -39,11 +40,24 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
         })
         .inner;
     let clear = clear.intersect(viewport);
-    hint_bar::ui(ui, window, clear.center_top());
-    view_cube::ui(ui, window, clear);
+    let cube = view_cube::ui(ui, window, cube_corner(clear, row), clear);
+    // Centred under the tool row, so it keeps clear of the cube on both sides.
+    let inset = (clear.right() - cube.left() + theme::FLOAT_GAP).min(clear.width() / 2.0);
+    hint_bar::ui(ui, window, clear.shrink2(egui::vec2(inset, 0.0)));
     let column = view_column::ui(ui, window, clear);
     let beside = clear.with_max_x((column.left() - theme::FLOAT_GAP).max(clear.left()));
     stage_notice::ui(ui, window, beside);
+}
+
+/// Where the view cube's top right stands: level with the tool row while it fits beside
+/// it, under the row when it does not.
+fn cube_corner(clear: Rect, row: Option<Rect>) -> Pos2 {
+    match row {
+        Some(row) if clear.right() - row.right() - theme::FLOAT_GAP >= view_cube::SIZE => {
+            pos2(clear.right(), row.top())
+        }
+        _ => clear.right_top(),
+    }
 }
 
 /// The exposure mask, drawn in `rect`, its caption kept to `clear`.
@@ -116,6 +130,16 @@ mod tests {
 
     fn stage() -> Rect {
         Rect::from_min_max(pos2(0.0, 0.0), pos2(1000.0, 600.0))
+    }
+
+    #[test]
+    fn the_cube_stands_level_with_the_row_while_it_fits_beside_it() {
+        let clear = Rect::from_min_max(pos2(200.0, 70.0), pos2(800.0, 600.0));
+        let row = |right: f32| Some(Rect::from_min_max(pos2(400.0, 4.0), pos2(right, 62.0)));
+        let fits = 800.0 - theme::FLOAT_GAP - view_cube::SIZE;
+        assert_eq!(cube_corner(clear, row(fits)), pos2(800.0, 4.0));
+        assert_eq!(cube_corner(clear, row(fits + 1.0)), pos2(800.0, 70.0));
+        assert_eq!(cube_corner(clear, None), pos2(800.0, 70.0));
     }
 
     #[test]

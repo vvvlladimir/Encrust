@@ -92,16 +92,16 @@ impl Window<'_> {
         }
 
         let stage = ui.available_rect_before_wrap();
-        let room = self.columns(ui.ctx(), stage);
+        let (clear, row) = self.columns(ui.ctx(), stage);
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
-            .show(ui, |ui| stage::ui(ui, self, room));
+            .show(ui, |ui| stage::ui(ui, self, clear, row));
     }
 
     /// The cards over the stage: the inspector at its left, the layer strip and the plate
     /// down its right, the tool row across the top between them (ADR 0382). Answers the
-    /// room they leave under the row, which the stage's own cards are placed in.
-    fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> Rect {
+    /// room they leave under the row, which the stage's own cards are placed in, and the row.
+    fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> (Rect, Option<Rect>) {
         let gap = theme::FLOAT_GAP;
         let options = self.view.options;
         let top = stage.top() + gap;
@@ -144,25 +144,26 @@ impl Window<'_> {
 
         let left = left + gap;
         let right = (models.left() - gap).max(left);
-        let under_row = match row_shown(&options, *self.mode) {
+        let row = match row_shown(&options, *self.mode) {
             true => {
-                let width = (right - left - 2.0 * CARD_STROKE).max(0.0);
+                let room = (right - left - 2.0 * CARD_STROKE).max(0.0);
                 let row = card_at(
                     ctx,
                     "tool-row",
-                    pos2(left, top),
-                    Align2::LEFT_TOP,
+                    pos2((left + right) / 2.0, top),
+                    Align2::CENTER_TOP,
                     max_h,
                     |ui| {
-                        tool_rail::ui(ui, self, width);
+                        tool_rail::ui(ui, self, room);
                     },
                 );
-                row.bottom() + gap
+                Some(row)
             }
-            false => top,
+            false => None,
         };
+        let under_row = row.map_or(top, |row| row.bottom() + gap);
         let bottom = (stage.bottom() - gap).max(under_row);
-        Rect::from_x_y_ranges(left..=right, under_row..=bottom)
+        (Rect::from_x_y_ranges(left..=right, under_row..=bottom), row)
     }
 }
 

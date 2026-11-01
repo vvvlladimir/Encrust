@@ -31,10 +31,11 @@ pub use egui_phosphor::regular::{
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
-/// the rest of a Mac keyboard's symbols.
+/// the rest of a Mac keyboard's symbols; a click and a drag of the mouse.
 pub use egui_phosphor::regular::{
     ARROW_FAT_UP as KEY_SHIFT, BACKSPACE as KEY_BACKSPACE, COMMAND as KEY_COMMAND,
-    CONTROL as KEY_CONTROL, KEY_RETURN, OPTION as KEY_OPTION,
+    CONTROL as KEY_CONTROL, HAND_GRABBING as KEY_DRAG, KEY_RETURN, MOUSE_LEFT_CLICK as KEY_CLICK,
+    OPTION as KEY_OPTION,
 };
 
 /// The window buttons the strip draws itself. macOS keeps its own over the content view,
@@ -141,6 +142,8 @@ mod tests {
         ("KEY_CONTROL", KEY_CONTROL),
         ("KEY_RETURN", KEY_RETURN),
         ("KEY_OPTION", KEY_OPTION),
+        ("KEY_CLICK", KEY_CLICK),
+        ("KEY_DRAG", KEY_DRAG),
     ];
 
     /// Names the glyph table gives one glyph: a caret folds a block and steps a layer down alike.

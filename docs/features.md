@@ -745,8 +745,8 @@ address in a video player).
 
 - **Find (⌘K):** search every tool, action and model on the plate by name, found under
   those three headings.
-- **Tool row:** runs across the top of the stage between the inspector and the models,
-  each tool's name under its icon while there is room, icons alone when there is not. Drag
+- **Tool row:** sits centred at the top of the stage between the inspector and the models,
+  no wider than its tools need, each tool's name under its icon while there is room, icons alone when there is not. Drag
   the inspector's edge to set its width; double-click it to go back to the default. The
   plate column's edge resets the same way. A width dragged before this row moved is
   forgotten once.
@@ -769,7 +769,8 @@ address in a video player).
 - **Reduce motion** in Settings → General stops every animation in the window.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
   Drain, Relief's text and brush, Supports' pick and place, Cut's part mark — a pill under
-  the tool row names the keys and what each does.
+  the tool row names the keys and what each does. In a narrow window only the keys show,
+  as icons where there is one, each saying what it does under the pointer.
 - With nothing on the plate the inspector says so and offers Open a model; the stage stays
   clear.
 - **Check:** Previous and Next step through the layers with issues; the islands and the
