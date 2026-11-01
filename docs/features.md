@@ -599,8 +599,9 @@ shown: its exposure, the print time until it is done, the area it cures and the 
   what stands behind it at both faces, frosts it across the layers as an unpolished print
   does, a flat top staying glossy, tints it as deep as the part is thick, hazes as cured
   resin does, and shows the walls inside a hollowed model. Creases are softly shaded once the
-  camera rests. A view only: the command line has nothing to show it in, and the file is
-  written the same. In a browser on WebGL the resin is drawn opaque and unshaded.
+  camera rests, and the picture sharpens over a few frames; the View menu can focus it on
+  the model as a macro lens does, blurring what stands in front and behind. A view only:
+  the command line has nothing to show it in, and the file is written the same. In a browser on WebGL the resin is drawn opaque and unshaded.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
   inside the model through the cap.

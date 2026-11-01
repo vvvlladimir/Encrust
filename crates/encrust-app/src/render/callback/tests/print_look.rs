@@ -43,6 +43,7 @@ fn references_stand_beside_the_plate_only_in_the_render_view() {
         resin: resin(),
         layer_height_mm: 0.05,
         clarity: 0.0,
+        depth_of_field: false,
     };
     assert_eq!(
         markers(None),

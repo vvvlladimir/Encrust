@@ -155,6 +155,9 @@ pub struct ViewOptions {
     /// Whether the plate is drawn as it will be printed: resin colour, layers and references
     /// of known size. The view tools and the View menu are the only things that turn it on.
     pub render: bool,
+    /// Whether the render view at rest blurs what stands off the point the camera turns
+    /// about, as a lens focused on it does. The View menu turns it on.
+    pub depth_of_field: bool,
     /// Whether the open tool's inspector is unfolded beside the rail.
     pub inspector: bool,
     /// Whether the sheet of keys is up over the window.
@@ -190,6 +193,7 @@ impl Default for ViewOptions {
             grid: true,
             xray: false,
             render: false,
+            depth_of_field: false,
             inspector: true,
             sheet: false,
             find: false,

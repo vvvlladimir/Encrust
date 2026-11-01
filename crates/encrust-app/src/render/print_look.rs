@@ -15,7 +15,13 @@ pub struct PrintLook {
     pub layer_height_mm: Scalar,
     /// How clear the resin is, 0.0 opaque to 1.0 water-clear: `ResinDetails::clarity`.
     pub clarity: f32,
+    /// Whether what stands off the point the camera turns about is blurred, as by a lens.
+    pub depth_of_field: bool,
 }
+
+/// The lens's aperture radius as a share of its distance to what it is focused on: a macro
+/// shot of a miniature at f/8 or so, blurred enough to read, soft over sixteen frames.
+const APERTURE_SHARE: f32 = 0.016;
 
 /// Millimetres of the clearest resin light crosses before it clouds over: a water-clear
 /// part reads through at any size a printer makes.
@@ -37,6 +43,10 @@ impl PrintLook {
             attenuation_mm,
             pivot_mm: camera.distance_mm,
             projection: camera.projection(aspect),
+            aperture_mm: match self.depth_of_field && !camera.orthographic {
+                true => camera.distance_mm * APERTURE_SHARE,
+                false => 0.0,
+            },
             desk: Desk::default(),
         }
     }
@@ -52,6 +62,7 @@ mod tests {
             resin: theme::resin_swatch([0x80, 0x80, 0x80]),
             layer_height_mm: 0.05,
             clarity,
+            depth_of_field: false,
         }
         .shading(&OrbitCamera::default(), 1.0)
     }

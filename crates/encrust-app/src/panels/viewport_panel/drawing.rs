@@ -132,6 +132,7 @@ pub(super) fn paint_plate(
                 resin: theme::resin_swatch(window.machine.slicing.material.details.color),
                 layer_height_mm: window.machine.slicing.layer_height_mm(),
                 clarity: window.machine.slicing.material.details.clarity,
+                depth_of_field: window.view.options.depth_of_field,
             }),
         },
         rect,

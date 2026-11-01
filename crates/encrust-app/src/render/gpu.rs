@@ -212,6 +212,8 @@ struct Frame {
     occlusion: Option<core_geometry::Mat4>,
     /// The frame's view before any jitter, and which frame of the picture at rest it is.
     view_projection: core_geometry::Mat4,
+    /// The lens a picture at rest is seen through, where the render view asks for one.
+    lens: Option<settle::Lens>,
     sample: Option<u32>,
 }
 
@@ -289,6 +291,14 @@ impl ViewportResources {
         let globals = globals_of(&frame);
         queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
         self.frame.view_projection = frame.view_projection;
+        self.frame.lens = frame
+            .look
+            .filter(|look| look.aperture_mm > 0.0)
+            .map(|look| settle::Lens {
+                aperture_mm: look.aperture_mm,
+                focus_mm: look.pivot_mm,
+                projection: look.projection,
+            });
         self.frame.sample = self.settle(&frame, &globals);
         self.write_geometry(device, queue, &frame);
         self.count_frame(&frame);

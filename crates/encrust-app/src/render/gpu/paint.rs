@@ -66,11 +66,11 @@ impl ViewportResources {
         // Each frame of a picture at rest is drawn a fraction of a pixel aside.
         if let Some(sample) = self.frame.sample {
             let size_px = [screen[2], screen[3]];
-            let moved = settle::jittered(
-                self.frame.view_projection,
-                settle::jitter_px(sample),
-                size_px,
-            );
+            let seen = match &self.frame.lens {
+                Some(lens) => settle::through_lens(self.frame.view_projection, lens, sample),
+                None => self.frame.view_projection,
+            };
+            let moved = settle::jittered(seen, settle::jitter_px(sample), size_px);
             let at = std::mem::offset_of!(Globals, view_projection) as wgpu::BufferAddress;
             queue.write_buffer(
                 &self.globals,

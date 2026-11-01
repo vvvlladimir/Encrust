@@ -39,6 +39,33 @@ pub(super) fn jitter_px(sample: u32) -> [f32; 2] {
     [halton(sample + 1, 2) - 0.5, halton(sample + 1, 3) - 0.5]
 }
 
+/// A lens a picture at rest is seen through: its aperture radius and where it is focused,
+/// mm, and the projection behind it.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Lens {
+    pub aperture_mm: f32,
+    pub focus_mm: f32,
+    pub projection: Mat4,
+}
+
+/// `view_projection` seen from the `sample`-th point of `lens`'s aperture, as Blender's
+/// Eevee jitters its camera: the eye moved across the aperture and the view sheared back so
+/// that the plane in focus stands still. Averaged over the frames, what stands off it blurs.
+pub(super) fn through_lens(view_projection: Mat4, lens: &Lens, sample: u32) -> Mat4 {
+    let out = halton(sample + 1, 5).sqrt() * lens.aperture_mm;
+    let around = halton(sample + 1, 7) * std::f32::consts::TAU;
+    let (x, y) = (out * around.cos(), out * around.sin());
+    let focus = lens.focus_mm.max(1e-3);
+    let shear = Mat4::from_cols(
+        Vec4::X,
+        Vec4::Y,
+        Vec4::new(-x / focus, -y / focus, 1.0, 0.0),
+        Vec4::new(-x, -y, 0.0, 1.0),
+    );
+    let view = lens.projection.inverse() * view_projection;
+    lens.projection * shear * view
+}
+
 /// `view_projection` moved `jitter_px` pixels over a viewport `size_px` large.
 pub(super) fn jittered(view_projection: Mat4, jitter_px: [f32; 2], size_px: [f32; 2]) -> Mat4 {
     let shift = Mat4::from_cols(
@@ -101,6 +128,33 @@ mod tests {
         for (index, one) in offsets.iter().enumerate() {
             assert!(!offsets[index + 1..].contains(one), "{one:?} repeats");
         }
+    }
+
+    #[test]
+    fn a_lens_keeps_the_plane_in_focus_still_and_moves_what_stands_off_it() {
+        let projection =
+            core_geometry::glam::camera::rh::proj::directx::perspective(0.8, 1.0, 1.0, 1000.0);
+        let lens = Lens {
+            aperture_mm: 5.0,
+            focus_mm: 200.0,
+            projection,
+        };
+        let seen = |sample, z: f32| {
+            through_lens(projection, &lens, sample)
+                .project_point3(core_geometry::Vec3::new(10.0, 5.0, -z))
+        };
+        let (focused, near) = (
+            seen(3, 200.0) - seen(7, 200.0),
+            seen(3, 60.0) - seen(7, 60.0),
+        );
+        assert!(
+            focused.truncate().length() < 1e-4,
+            "the plane in focus moved by {focused}"
+        );
+        assert!(
+            near.truncate().length() > 1e-3,
+            "a point off it stayed still"
+        );
     }
 
     #[test]

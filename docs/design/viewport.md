@@ -543,6 +543,13 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   any change, not only the camera's, starts it again. Edges lose their steps, and the grain
   of the crease shading, the frosting and the soft shadows averages away.
 
+- **Depth of field.** With the View menu's *Depth of field*, a picture at rest is seen
+  through a lens focused on the point the camera turns about, as Blender's Eevee jitters its
+  camera: each of its frames is drawn from another point of an aperture 1.6 % of the focus
+  distance across in radius, by Halton (5, 7) on the disc, and the view sheared back so the
+  plane in focus stands still. Averaged over the frames, what stands off it blurs with true
+  occlusion and no post-process. It needs perspective; without, the lens is a pinhole.
+
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.
 
