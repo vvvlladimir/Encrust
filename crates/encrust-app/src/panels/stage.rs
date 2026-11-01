@@ -27,7 +27,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
         seen.max.x = middle;
         let pane = Rect::from_x_y_ranges(middle..=stage.right(), stage.y_range());
         ui.painter().rect_filled(pane, 0.0, theme::colors().sunken);
-        // The plate's card stands at the top, so below it the mask's room runs to the strip.
+        // The plate's card stands on the foot, so over it the mask's room runs to the strip.
         let strip = stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
         let beside = Rect::from_x_y_ranges(middle..=strip, clear.y_range());
         mask(ui, window, pane, beside);
@@ -43,7 +43,14 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
     let cube = view_cube::ui(ui, window, cube_corner(clear, row), clear);
     // Centred under the tool row, so it keeps clear of the cube on both sides.
     let inset = (clear.right() - cube.left() + theme::FLOAT_GAP).min(clear.width() / 2.0);
-    hint_bar::ui(ui, window, clear.shrink2(egui::vec2(inset, 0.0)), row);
+    let beside_mask = *window.mode == Mode::Preview;
+    hint_bar::ui(
+        ui,
+        window,
+        clear.shrink2(egui::vec2(inset, 0.0)),
+        row,
+        beside_mask,
+    );
     let column = view_column::ui(ui, window, clear);
     let beside = clear.with_max_x((column.left() - theme::FLOAT_GAP).max(clear.left()));
     stage_notice::ui(ui, window, beside);

@@ -144,13 +144,21 @@ impl Window<'_> {
 
         let left = left + gap;
         let right = (models.left() - gap).max(left);
+        // The row stands where it would beside the inspector, put away or not.
+        let row_left = match (wanted, inspector_room_w(&options, *self.mode)) {
+            (None, Some(width)) => {
+                let (width, _) = fit_side_cards(between, width, options.plate_w);
+                (stage.left() + 2.0 * gap + width + 2.0 * CARD_STROKE).clamp(left, right)
+            }
+            _ => left,
+        };
         let row = match row_shown(&options, *self.mode) {
             true => {
-                let room = (right - left - 2.0 * CARD_STROKE).max(0.0);
+                let room = (right - row_left - 2.0 * CARD_STROKE).max(0.0);
                 let row = card_at(
                     ctx,
                     "tool-row",
-                    pos2((left + right) / 2.0, top),
+                    pos2((row_left + right) / 2.0, top),
                     Align2::CENTER_TOP,
                     max_h,
                     |ui| {
@@ -192,7 +200,7 @@ impl Window<'_> {
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
-    /// stage's foot under them, both `width` wide; in Preview the plate's alone, at `corner`.
+    /// stage's foot under them, both `width` wide; in Preview the plate's alone.
     /// Answers the two cards.
     fn plate_cards(
         &mut self,
@@ -202,16 +210,19 @@ impl Window<'_> {
         width: f32,
     ) -> (Rect, Rect) {
         let gap = theme::FLOAT_GAP;
-        let preview = *self.mode == Mode::Preview;
-        let (at, pivot) = match preview {
-            true => (corner, Align2::RIGHT_TOP),
-            false => (pos2(corner.x, stage.bottom() - gap), Align2::RIGHT_BOTTOM),
-        };
-        let plate = card_at(ctx, "this-plate", at, pivot, f32::INFINITY, |ui| {
-            ui.set_width(width);
-            plate_summary::ui(ui, self);
-        });
-        if preview {
+        let at = pos2(corner.x, stage.bottom() - gap);
+        let plate = card_at(
+            ctx,
+            "this-plate",
+            at,
+            Align2::RIGHT_BOTTOM,
+            f32::INFINITY,
+            |ui| {
+                ui.set_width(width);
+                plate_summary::ui(ui, self);
+            },
+        );
+        if *self.mode == Mode::Preview {
             return (plate, plate);
         }
         let max_h = (plate.top() - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);
@@ -226,7 +237,13 @@ impl Window<'_> {
 /// The inspector's width before the window has its say: the width it was dragged to, else
 /// the default; `None` while it is put away or Preview gives the whole stage to the mask.
 fn inspector_w(options: &ViewOptions, mode: Mode) -> Option<f32> {
-    if !row_shown(options, mode) || !options.inspector {
+    inspector_room_w(options, mode).filter(|_| options.inspector)
+}
+
+/// The inspector's width shown or put away; `None` where Preview gives the whole stage to
+/// the mask.
+fn inspector_room_w(options: &ViewOptions, mode: Mode) -> Option<f32> {
+    if !row_shown(options, mode) {
         return None;
     }
     let range = theme::INSPECTOR_W_RANGE;
@@ -447,6 +464,12 @@ mod tests {
         };
         assert_eq!(inspector_w(&options, Mode::Prepare), None);
         assert!(row_shown(&options, Mode::Prepare));
+        let (min, max) = theme::INSPECTOR_W_RANGE.into_inner();
+        assert_eq!(
+            inspector_room_w(&options, Mode::Prepare),
+            Some(440.0_f32.clamp(min, max)),
+            "the row keeps standing beside the room it leaves"
+        );
     }
 
     #[test]

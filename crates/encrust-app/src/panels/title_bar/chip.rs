@@ -140,7 +140,8 @@ fn chip_parts(
             resin_tint,
             icon::CARET_DOWN,
             resin_w,
-        ),
+        )
+        .glyph_tint(theme::resin_swatch(slicing.material.details.color)),
         settings,
     ])
 }
@@ -229,6 +230,8 @@ pub(super) struct Part {
     pub(super) text: std::sync::Arc<egui::Galley>,
     pub(super) caret: &'static str,
     pub(super) width: f32,
+    /// The glyph's own colour, lit or not: the resin's.
+    pub(super) glyph_tint: Option<egui::Color32>,
 }
 
 impl Part {
@@ -259,6 +262,15 @@ impl Part {
             text,
             caret,
             width,
+            glyph_tint: None,
+        }
+    }
+
+    /// The same part with its glyph in `tint`.
+    pub(super) fn glyph_tint(self, tint: egui::Color32) -> Self {
+        Self {
+            glyph_tint: Some(tint),
+            ..self
         }
     }
 
@@ -282,10 +294,10 @@ impl Part {
         } else if hovered {
             painter.rect_filled(zone, radius, colors.hover);
         }
-        let glyph_tint = if lit {
-            colors.accent_soft
-        } else {
-            colors.text_low
+        let glyph_tint = match (self.glyph_tint, lit) {
+            (Some(tint), _) => tint,
+            (None, true) => colors.accent_soft,
+            (None, false) => colors.text_low,
         };
         painter.text(
             pos2(zone.left() + PAD + 7.0, zone.center().y),

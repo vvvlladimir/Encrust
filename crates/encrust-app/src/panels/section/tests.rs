@@ -1,6 +1,6 @@
 use super::playback::{fraction, run_up};
 use super::reading::Reading;
-use super::track::{Marks, grabs_floor, span_fraction};
+use super::track::{Mark, Marks, grabs_floor, outline, span_fraction};
 use super::*;
 use crate::preview::Preview;
 use crate::workspace::{Mode, Section};
@@ -60,20 +60,46 @@ fn the_strip_marks_the_widest_layer_full_height_and_an_island_where_it_starts() 
     let marks = Marks::of(&measured, 4);
     assert_eq!(marks.widths, vec![0.25, 1.0, 0.25, 0.25]);
     assert_eq!(marks.risks.len(), 1);
-    assert!((marks.risks[0].0 - 1.0).abs() < 1e-6, "the top layer");
+    assert!((marks.risks[0].at - 1.0).abs() < 1e-6, "the top layer");
 }
 
 #[test]
-fn only_the_first_risk_of_a_run_of_one_colour_stands_larger() {
-    let (warn, danger) = (egui::Color32::YELLOW, egui::Color32::RED);
+fn the_outline_joins_close_peaks_and_never_dips_under_a_row() {
+    let comb = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+    let joined = outline(&comb, 1);
+    assert!(
+        joined.iter().all(|width| (width - 1.0).abs() < 1e-6),
+        "{joined:?}"
+    );
+    let lone = [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.25];
+    let drawn = outline(&lone, 2);
+    for (row, (raw, drawn)) in lone.iter().zip(&drawn).enumerate() {
+        assert!(drawn >= raw, "row {row}: {drawn} under {raw}");
+    }
+}
+
+#[test]
+fn a_press_on_a_risk_bar_takes_the_nearest_risk_and_misses_beside_the_bar() {
+    let mark = |at: f32, layer| Mark {
+        at,
+        tint: egui::Color32::RED,
+        layer,
+    };
     let marks = Marks {
         widths: Vec::new(),
-        risks: vec![(0.10, warn), (0.11, warn), (0.12, danger), (0.50, warn)],
+        risks: vec![mark(0.10, 10), mark(0.12, 12), mark(0.50, 50)],
     };
-    // A 200 point track: a hundredth of it is two points, well inside one run.
+    // A 200 point track from y 0 at its top: a share `at` up stands at 200 * (1 - at).
     let span = egui::Rangef::new(0.0, 200.0);
-    let firsts: Vec<bool> = (0..4).map(|index| marks.starts_run(index, span)).collect();
-    assert_eq!(firsts, [true, false, true, true]);
+    let at = |x: f32, y: f32| marks.under(span, 50.0, egui::pos2(x, y));
+    assert_eq!(
+        at(50.0, 176.5),
+        Some(1),
+        "nearer 0.12 at y 176 than 0.10 at y 180"
+    );
+    assert_eq!(at(50.0, 100.0), Some(2), "0.50 stands at y 100");
+    assert_eq!(at(50.0, 140.0), None, "no bar within reach");
+    assert_eq!(at(90.0, 100.0), None, "beside the bar");
 }
 
 #[test]

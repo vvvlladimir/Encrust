@@ -22,11 +22,11 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 |---|---|---|
 | Top bar | the window's top, its own title bar (ADR 0104) | 44 tall |
 | Inspector | the stage's left edge, from its top | 316 until dragged; as tall as its content, at most the stage |
-| Tool row | over the stage, centred between 8 right of the inspector and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
+| Tool row | over the stage, centred between 8 right of the inspector, shown or put away, and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
 | Layer strip | the stage's right edge, its full height | 64 |
-| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred while it names what each key does, the keys alone flush with the row's left | as wide as what it says, at most that room; one line, 28 tall |
+| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card: level with the tool row while 8 clear of it, else 8 under it | 80 square |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
@@ -42,8 +42,8 @@ the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key shee
 squares.
 
 The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
-flask glyph and resin with a caret, sliders glyph and `layer height · exposure`, all three
-in `text_high` (the resin in `warn` while untuned). Each part is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
+flask glyph in the resin's colour and resin with a caret, sliders glyph and `layer height ·
+exposure`, all three in `text_high` (the resin in `warn` while untuned). Each part is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
 chip drops the maker; under 720 the right end is glyphs only.
 
 The machine and resin parts each open a chooser hanging 6 under the chip from its part's
@@ -52,11 +52,11 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
 - *Your machines*: a 44 two-line row a machine — glyph, name over maker and output format in
   `text_low`, an `ok` dot when a printer it lists answers on the network (`text_low` when none does,
   none when it lists none), the one in hand washed and ticked; under a rule, *Add a machine*
-  (the library) and *Machine and resin…*.
+  (the library).
 - *On the machine's name*: a row a resin on that machine — its colour as a 10 point dot,
   name over type and layer height, its exposure at the right in `text_mid`, the one in hand
-  washed and ticked; under a rule, *Edit this resin…* and *Add a resin* (a new resin, open
-  in its form).
+  washed and ticked; under a rule, *Add a resin*, opening Machine and resin on the
+  machine's resins.
 
 Choosing a row takes it in hand and closes the chooser, as Esc or a click elsewhere does; a
 footer row opens Machine and resin on that machine's page or that resin's form.
@@ -110,14 +110,14 @@ support count, caret. Open, it is a list over the sections, as wide as the card 
 each side, on `raised` with a window's shadow:
 
 1. **On the plate** — one row per group holding supports: colour dot, name, count; on hover
-   (always while hidden) hide and a `bin_button`. The group in hand is washed and ticked.
+   (always while hidden) hide and a `bin_button`. The group in hand is washed, with no tick.
    Auto has no dot of its own; the shapes it built stand set in under it with theirs.
 2. **Profiles** — the profiles holding nothing, in `text_mid`, no count.
 3. A foot row under a rule, sliders, *Edit the profiles* and an arrow out at its right,
    opening Settings → Supports.
 
-Rows are 32 tall, the dot at 10 in, Auto's shapes 20 further; from the right the tick, the
-26 squares of hide and bin, the count. The list hangs 6 under the box, as every dropdown's.
+Rows are 32 tall, the dot at 10 in, Auto's shapes 20 further; from the right the 26 squares
+of hide and bin, the count. The list hangs 6 under the box, as every dropdown's.
 
 Choosing a row takes its profile in hand and closes the list. The preset's bin removes the
 group in hand with its supports; the foot's bin every support; both ask twice.
@@ -173,12 +173,14 @@ sunken box 26 tall in `accent_soft` that a click opens for typing; `of n` in `te
 the layer's height in mm in medium `text_mid` under it; layer up; the track;
 layer down; play. The track is a 3 point rule, filled in `accent` between its two thumbs —
 26 × 12, ringed in `accent`, the upper one the cut, the lower the first layer shown. Behind
-the rule, every 4 points up it, the widest cured area there is a dashed `text_low` line
-centred on it, at most 44 across, so the supports' base reads wide and the model narrow.
+the rule, every 2 points up it, the widest cured area there sets one filled silhouette, each row the widest within 8 points averaged over as many so
+peaks run into each other, in
+`text_low` at 35 % centred on it, at most 44 across, so the supports' base reads wide and
+the model narrow.
 Across the rule a bar marks each risk the check found, in the colour the Check tool gives
 it: `danger` for one that will fail (an island, a part left floating), `warn` for one that
-may (a thin section, a hard peel, a lever, a suction cup), 22 × 3; the first of a run of
-one colour, none within 12 points under it, 32 × 5. Scale ticks stand at the right edge in `line`. Nothing else is drawn on the
+may (a thin section, a hard peel, a lever, a suction cup), 28 × 3, 32 × 5 under the pointer
+with what it is and its layer as a tip; a press goes to it as the Check tool's list does. Scale ticks stand at the right edge in `line`. Nothing else is drawn on the
 track. With no stack it reads *No layers*.
 
 ## Over the stage
@@ -203,10 +205,10 @@ track. With no stack it reads *No layers*.
 ## Preview
 
 The stage splits at its middle (ADR 0103): the model cut at the layer on the left, the mask
-on black on the right, a pixel grid under it. Over the mask's top left, tags for the layer
-and its height, the panel's pixels, and any issue on this layer in `danger_wash`; at its
-bottom right, zoom out, the zoom in percent, zoom in and *show the whole mask* in one card.
-The models card gives way to the plate card at the stage's top.
+on black on the right, a pixel grid under it. At the mask's top right, beside the layer
+strip and level with its top, zoom out, the zoom in percent, zoom in and *show the whole
+mask* in one card, and under it, flush with its right, a tag for the panel's pixels. The models card gives way, the plate card staying
+on the stage's foot. Beside the mask the hint bar shows the keys alone.
 
 ## Windows over the plate
 

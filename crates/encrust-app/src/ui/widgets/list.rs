@@ -316,14 +316,6 @@ pub fn tag(
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// How wide a [`tag`] saying `text` stands, points.
-pub fn tag_w(ui: &Ui, text: &str) -> f32 {
-    let word = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::small(), Color32::PLACEHOLDER);
-    word.size().x + 2.0 * TAG_PAD.x
-}
-
 /// Room around a tag's word, and how much of its ink washes it under the pointer.
 const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
 const TAG_HOVER_WASH: f32 = 0.24;

@@ -36,15 +36,15 @@ const HANDLE: egui::Vec2 = vec2(26.0, 12.0);
 const TICKS: usize = 18;
 const TICK_W: f32 = 8.0;
 const TICK_INSET: f32 = 4.0;
-/// The cured-area profile: a dashed line every so many points up the track, the widest
+/// The cured-area profile: one width every so many points up the track, the widest
 /// standing so far either side of the rule.
-const PROFILE_PITCH: f32 = 4.0;
+const PROFILE_PITCH: f32 = 2.0;
 const PROFILE_HALF_W: f32 = 22.0;
-/// A risk's bar across the rule, the first of a run's, and how close two risks stand to be
-/// one run, points.
-const RISK: egui::Vec2 = vec2(22.0, 3.0);
-const RISK_FIRST: egui::Vec2 = vec2(32.0, 5.0);
-const RISK_RUN_GAP: f32 = 12.0;
+/// A risk's bar across the rule, as it stands and under the pointer, and how far above or
+/// below it a press still takes it, points.
+const RISK: egui::Vec2 = vec2(28.0, 3.0);
+const RISK_HOT: egui::Vec2 = vec2(32.0, 5.0);
+const RISK_REACH: f32 = 3.0;
 
 /// Where the viewport cuts the plate's contents, plate millimetres, or `None` for the whole
 /// model. Preview always cuts at its layer; Prepare only once the strip leaves the top.

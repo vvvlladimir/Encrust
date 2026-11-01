@@ -39,9 +39,10 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
         &mut machine.status,
     );
     let panel_px = Vec2::new(settings.width_px as f32, settings.height_px as f32);
-    let clear = ui.max_rect().intersect(clear);
-    over::tags(ui, clear, &machine.preview, panel_px, &risks);
-    over::zoom(ui, clear, &mut machine.preview, fit, panel_px);
+    let pane = ui.max_rect();
+    let clear = pane.intersect(clear);
+    let zoom = over::zoom(ui, (pane, clear), &mut machine.preview, fit, panel_px);
+    over::tags(ui, zoom, panel_px);
 }
 
 /// What the check found on the layer shown, once the stack is measured.

@@ -17,6 +17,7 @@ use crate::workspace::{Mode, Tool};
 
 mod issues;
 
+pub(crate) use issues::issue_name;
 use issues::{Filter, filter, listing, neighbour};
 
 /// What the stack will fail on: a way to take the islands out, the verdict, every issue a
@@ -320,7 +321,7 @@ fn removed_block(ui: &mut egui::Ui, removed: usize) {
 
 /// Goes to the layer `risks` lie on: the slider there, the view cut at it, and the camera
 /// flown to them ringed on the cut.
-fn go_to(window: &mut Window, risks: &[Risk]) {
+pub fn go_to(window: &mut Window, risks: &[Risk]) {
     let Some(first) = risks.first() else {
         return;
     };
