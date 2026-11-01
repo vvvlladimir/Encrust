@@ -10,8 +10,8 @@ use crate::network::{Network, PrusaDraft, Target, connection_label};
 use crate::panels::printer_card;
 use crate::panels::settings::form_card;
 use crate::ui::{
-    Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list, subheading, theme,
-    tone,
+    Inline, Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list,
+    subheading, theme, tone,
 };
 use crate::ui::{address_label, state_word};
 
@@ -63,7 +63,12 @@ fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) 
             } else {
                 tr!("connection-scan-again")
             };
-            if inline_button(ui, icon::RESCAN, &label, false, !scanning).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&label).glyph(icon::RESCAN).enabled(!scanning),
+            )
+            .clicked()
+            {
                 network.scan();
             }
         });
@@ -79,10 +84,9 @@ fn by_address(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Net
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let add = inline_button(
                 ui,
-                icon::ADD,
-                &tr!("connection-add"),
-                false,
-                address.is_some(),
+                Inline::new(&tr!("connection-add"))
+                    .glyph(icon::ADD)
+                    .enabled(address.is_some()),
             );
             if add.clicked()
                 && let Some(address) = address
@@ -217,10 +221,7 @@ fn found(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
     if same.len() > 1
         && inline_button(
             ui,
-            icon::ADD,
-            &tr!("connection-add-all", count = same.len()),
-            false,
-            true,
+            Inline::new(&tr!("connection-add-all", count = same.len())).glyph(icon::ADD),
         )
         .clicked()
     {

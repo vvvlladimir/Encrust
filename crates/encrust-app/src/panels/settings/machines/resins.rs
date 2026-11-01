@@ -12,8 +12,8 @@ use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::ui::{
-    Confirm, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon, inline_button,
-    quiet_button, theme, zone_button,
+    Confirm, Inline, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon,
+    inline_button, quiet_button, theme, zone_button,
 };
 
 /// The resins' columns, each starting at a share of the width; the figures are set flush
@@ -138,7 +138,8 @@ fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Opti
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             add_menu(ui, catalogue, printer, action);
-            if inline_button(ui, icon::IMPORT, &tr!("settings-import"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("settings-import")).glyph(icon::IMPORT)).clicked()
+            {
                 *action = Some(Action::Import(Kind::Resin));
             }
         });
@@ -152,7 +153,7 @@ fn add_menu(
     printer: &str,
     action: &mut Option<Action>,
 ) {
-    let button = inline_button(ui, icon::ADD, &tr!("resins-add"), false, true);
+    let button = inline_button(ui, Inline::new(&tr!("resins-add")).glyph(icon::ADD));
     // A pool resin's bin asks by a second press, so a click inside leaves the menu open.
     egui::Popup::menu(&button)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
@@ -341,7 +342,15 @@ fn actions(
         };
         let enabled = some && !in_hand;
         let glyph = if some && in_hand { icon::IN_HAND } else { "" };
-        if inline_button(ui, glyph, &label, enabled, enabled).clicked() {
+        if inline_button(
+            ui,
+            Inline::new(&label)
+                .glyph(glyph)
+                .primary_if(enabled)
+                .enabled(enabled),
+        )
+        .clicked()
+        {
             *action = picked.map(|resin| Action::UseResin {
                 printer: printer.to_owned(),
                 resin: resin.to_owned(),

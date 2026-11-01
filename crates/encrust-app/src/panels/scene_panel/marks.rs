@@ -3,8 +3,8 @@
 use super::POPUP_W;
 use crate::i18n::tr;
 use crate::scene::{ImportSummary, SceneObject};
+use crate::ui::{Inline, inline_button, row_mark};
 use crate::ui::{hint, icon, tag, theme};
-use crate::ui::{inline_button, row_mark};
 use egui::Rect;
 
 /// What the end of a row says about a model: a model that will not slice as it stands is
@@ -45,7 +45,8 @@ pub(super) fn import_mark(
         }
         if mark == Mark::Broken {
             ui.add_space(theme::NOTE_GAP);
-            repair = inline_button(ui, icon::REPAIR, &tr!("notice-repair"), false, true).clicked();
+            repair =
+                inline_button(ui, Inline::new(&tr!("notice-repair")).glyph(icon::REPAIR)).clicked();
         }
     });
     (response.rect.left(), repair)

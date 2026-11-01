@@ -2,7 +2,7 @@
 //! (ADR 0389).
 
 use crate::i18n::tr;
-use crate::ui::{card, describe, inline_button, theme};
+use crate::ui::{Inline, card, describe, inline_button, theme};
 
 /// How the question was answered.
 pub(super) enum Answer {
@@ -29,13 +29,13 @@ pub(super) fn ask(ctx: &egui::Context, name: &str) -> Option<Answer> {
             describe(ui, &tr!("unsaved-what"));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if inline_button(ui, "", &tr!("settings-save"), true, true).clicked() {
+                if inline_button(ui, Inline::new(&tr!("settings-save")).primary()).clicked() {
                     answer = Some(Answer::Save);
                 }
-                if inline_button(ui, "", &tr!("unsaved-discard"), false, true).clicked() {
+                if inline_button(ui, Inline::new(&tr!("unsaved-discard"))).clicked() {
                     answer = Some(Answer::Discard);
                 }
-                if inline_button(ui, "", &tr!("common-cancel"), false, true).clicked() {
+                if inline_button(ui, Inline::new(&tr!("common-cancel"))).clicked() {
                     answer = Some(Answer::Cancel);
                 }
             });

@@ -16,8 +16,8 @@ pub use widgets::{
 pub use widgets::{BindingPress, BindingRow, Recording, binding_row};
 pub use widgets::{CardLook, StepState, boxed, bullet, release_hero, steps, tag_label, theme_card};
 pub use widgets::{
-    Carried, Held, NoticeReply, RailButton, Segment, Segmented, SquareLook, address_field, ago,
-    axis_label, bar_pill, bare_switch, bin_button, blocked_hover, body_and_foot, busy, card,
+    Carried, Held, Inline, NoticeReply, RailButton, Segment, Segmented, SquareLook, address_field,
+    ago, axis_label, bar_pill, bare_switch, bin_button, blocked_hover, body_and_foot, busy, card,
     card_foot, card_title, carried_row, compact_button, companion_button, companion_square,
     confirm_bin, count_row, describe, described, describing, dialog, dialog_head, duration,
     empty_state, field_label, field_note, filter_chip, focus_ring, found_row, hairline, heading,

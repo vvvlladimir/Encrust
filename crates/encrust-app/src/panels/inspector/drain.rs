@@ -10,8 +10,8 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, count_row, describe, hint, icon, inline_button, inset, notice, number_row,
-    primary_button, secondary_button, section, step_bar, theme, tone,
+    Inline, Segment, Segmented, count_row, describe, hint, icon, inline_button, inset, notice,
+    number_row, primary_button, secondary_button, section, step_bar, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -370,7 +370,7 @@ fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) -> bool {
         );
         tone(ui, &tr!("drain-pocket", index = index + 1), colors.text_mid);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            drill = inline_button(ui, icon::DRAIN, &tr!("drain-drill"), false, true)
+            drill = inline_button(ui, Inline::new(&tr!("drain-drill")).glyph(icon::DRAIN))
                 .on_hover_text(tr!("drain-drill-tooltip"))
                 .clicked();
         });

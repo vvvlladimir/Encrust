@@ -6,8 +6,8 @@ use egui::{Align, Layout, ScrollArea, Ui};
 use crate::i18n::tr;
 use crate::state::Machine;
 use crate::ui::{
-    StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button, progress_bar,
-    quiet_button, release_hero, steps, tag_label, theme,
+    Inline, StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button,
+    progress_bar, quiet_button, release_hero, steps, tag_label, theme,
 };
 use crate::updates::{
     Note, NoteGroup, Offer, Progress, RELEASES, Stage, Step, Updates, from_store, now_s, open_store,
@@ -146,7 +146,7 @@ fn foot(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             put_by |= act(ui, updates, offer);
-            if inline_button(ui, "", &tr!("update-later"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("update-later"))).clicked() {
                 put_by = true;
             }
         });
@@ -161,19 +161,26 @@ fn foot(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
 fn act(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
     match &updates.stage {
         Stage::Installed(_) => {
-            if inline_button(ui, "", &tr!("updates-restart-now"), true, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("updates-restart-now")).primary()).clicked() {
                 updates.restart();
             }
         }
         _ if from_store() => {
-            if inline_button(ui, "", &tr!("updates-in-store"), true, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("updates-in-store")).primary()).clicked() {
                 open_store();
                 return true;
             }
         }
         _ => {
             let blocked = Updates::blocked(offer);
-            if inline_button(ui, "", &tr!("updates-install"), true, blocked.is_none()).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&tr!("updates-install"))
+                    .primary()
+                    .enabled(blocked.is_none()),
+            )
+            .clicked()
+            {
                 updates.install();
             }
             if let Some(why) = blocked {

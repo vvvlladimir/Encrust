@@ -14,8 +14,8 @@ use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::name_line;
 use crate::ui::{
-    body_and_foot, count_row, empty_state, focus_ring, hairline, heading, icon, inline_button,
-    number_row, secondary_button, small_icon_button, theme, tone,
+    Inline, body_and_foot, count_row, empty_state, focus_ring, hairline, heading, icon,
+    inline_button, number_row, secondary_button, small_icon_button, theme, tone,
 };
 
 /// The heading over the list, as tall as a section's.
@@ -206,7 +206,7 @@ fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
                 &tr!("stage-empty-how"),
             );
             let open = ui.vertical_centered(|ui| {
-                inline_button(ui, icon::OPEN, &tr!("stage-open"), false, true).clicked()
+                inline_button(ui, Inline::new(&tr!("stage-open")).glyph(icon::OPEN)).clicked()
             });
             if open.inner
                 && let Some(file) = files::pick(Wanted::ModelOrProject)

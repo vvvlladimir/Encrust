@@ -18,8 +18,8 @@ use crate::ui::window_frame::{
     LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
 };
 use crate::ui::{
-    SquareLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
-    two_lines, zone_button,
+    Inline, SquareLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button,
+    theme, two_lines, zone_button,
 };
 
 /// Room between two zones offered in an empty list.
@@ -318,7 +318,15 @@ fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<A
             tr!("machines-use")
         };
         let glyph = if in_hand { icon::IN_HAND } else { "" };
-        if inline_button(ui, glyph, &label, !in_hand, !in_hand).clicked() {
+        if inline_button(
+            ui,
+            Inline::new(&label)
+                .glyph(glyph)
+                .primary_if(!in_hand)
+                .enabled(!in_hand),
+        )
+        .clicked()
+        {
             *action = Some(Action::UsePrinter(id.to_owned()));
         }
     });

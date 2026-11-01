@@ -71,7 +71,11 @@ fn sliced_folder(ui: &mut Ui, machine: &mut Machine) {
             .map_or_else(|| tr!("general-sliced-dir-none"), tilde);
         ui.horizontal(|ui| {
             path_box(ui, &shown, PATH_BUTTONS_W);
-            if inline_button(ui, icon::OPEN, &tr!("general-choose-folder"), false, true).clicked()
+            if inline_button(
+                ui,
+                crate::ui::Inline::new(&tr!("general-choose-folder")).glyph(icon::OPEN),
+            )
+            .clicked()
                 && let Some(dir) = rfd::FileDialog::new().pick_folder()
             {
                 general.sliced_dir = Some(dir);
@@ -100,7 +104,12 @@ fn profiles_folder(ui: &mut Ui, machine: &mut Machine) {
         let shown = dir.display().to_string();
         ui.horizontal(|ui| {
             path_box(ui, &tilde(&dir), PATH_BUTTONS_W);
-            if inline_button(ui, icon::OPEN, &tr!("general-open-folder"), false, true).clicked() {
+            if inline_button(
+                ui,
+                crate::ui::Inline::new(&tr!("general-open-folder")).glyph(icon::OPEN),
+            )
+            .clicked()
+            {
                 let opened =
                     reveal(&dir).with_context(|| tr!("error-cannot-open", path = shown.clone()));
                 machine

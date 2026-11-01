@@ -7,7 +7,7 @@ use printer_profiles::{Catalogue, Entry, PrinterProfile};
 use crate::i18n::tr;
 use crate::settings::Library;
 use crate::ui::heading;
-use crate::ui::{hint, icon, inline_button, list, list_row, summary_button, theme};
+use crate::ui::{Inline, hint, icon, inline_button, list, list_row, summary_button, theme};
 
 /// How many brand cards stand side by side.
 const COLUMNS: usize = 4;
@@ -59,10 +59,11 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     let mut picked = None;
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if inline_button(ui, icon::ADD, &tr!("library-custom"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("library-custom")).glyph(icon::ADD)).clicked() {
                 picked = Some(Picked::Custom);
             }
-            if inline_button(ui, icon::IMPORT, &tr!("library-import"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("library-import")).glyph(icon::IMPORT)).clicked()
+            {
                 picked = Some(Picked::Import);
             }
             ui.add(
@@ -75,7 +76,12 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     if let Some(brand) = library.brand.clone() {
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            if inline_button(ui, icon::BACK, &tr!("library-all-brands"), false, true).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&tr!("library-all-brands")).glyph(icon::BACK),
+            )
+            .clicked()
+            {
                 library.brand = None;
             }
             ui.add_space(theme::ITEM_GAP);

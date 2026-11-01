@@ -273,10 +273,7 @@ pub fn found_row(ui: &mut Ui, glyph: &str, name: &str, figure: &str, matches: bo
     );
     let add = super::inline_button(
         &mut end,
-        crate::ui::icon::ADD,
-        &tr!("found-add"),
-        false,
-        true,
+        crate::ui::Inline::new(&tr!("found-add")).glyph(crate::ui::icon::ADD),
     );
     ui.painter().text(
         add.rect.left_center() - vec2(10.0, 0.0),

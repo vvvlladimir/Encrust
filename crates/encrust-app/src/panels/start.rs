@@ -9,10 +9,12 @@ use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
 use crate::ui::{
+    Inline, Segment, Segmented, ago, describe, inline_button, quiet_button, theme, tone,
+};
+use crate::ui::{
     PictureTile, TILE_PICTURE_H, ZONE_INSET, ZoneWords, drop_zone_box, inline_button_w,
     picture_tile, start_title,
 };
-use crate::ui::{Segment, Segmented, ago, describe, inline_button, quiet_button, theme, tone};
 use crate::workspace::Tool;
 
 /// The page's room under the top bar and either side of it.
@@ -151,8 +153,8 @@ fn buttons_row(ui: &mut Ui, zone: Rect, words_end: f32) -> (bool, bool) {
             .layout(Layout::left_to_right(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = theme::ITEM_GAP;
-    let model = inline_button(&mut row, "", &open_model, true, true).clicked();
-    let project = inline_button(&mut row, "", &open_project, false, true).clicked();
+    let model = inline_button(&mut row, Inline::new(&open_model).primary()).clicked();
+    let project = inline_button(&mut row, Inline::new(&open_project)).clicked();
     (model, project)
 }
 

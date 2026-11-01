@@ -25,8 +25,8 @@ use crate::status::Status;
 use crate::ui::window_frame as frame;
 use crate::ui::{HELP_D, SWITCH_TRACK, block_title, page_title, page_trail};
 use crate::ui::{
-    NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
-    nav_row, quiet_button, theme,
+    Inline, NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button,
+    inline_button, nav_row, quiet_button, theme,
 };
 use frame::{child, scrolled, with_header};
 pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
@@ -243,11 +243,16 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             if kind == Kind::Support
-                && inline_button(ui, icon::ADD, &tr!("settings-new-profile"), false, true).clicked()
+                && inline_button(
+                    ui,
+                    Inline::new(&tr!("settings-new-profile")).glyph(icon::ADD),
+                )
+                .clicked()
             {
                 pressed = Some(Heading::New);
             }
-            if inline_button(ui, icon::IMPORT, &tr!("settings-import"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("settings-import")).glyph(icon::IMPORT)).clicked()
+            {
                 pressed = Some(Heading::Import(kind));
             }
         });

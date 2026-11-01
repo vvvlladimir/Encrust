@@ -14,7 +14,7 @@ use crate::panels::settings::{export_profile, forget_profile, jump, report};
 use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, stroke, with_footer};
-use crate::ui::{Confirm, confirm_button, icon, inline_button, quiet_button, subheading};
+use crate::ui::{Confirm, Inline, confirm_button, icon, inline_button, quiet_button, subheading};
 
 const TABLE: Table = Table {
     heads: || {
@@ -350,7 +350,14 @@ fn actions(
     }
     if editing {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if inline_button(ui, "", &tr!("settings-save"), true, unsaved).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&tr!("settings-save"))
+                    .primary()
+                    .enabled(unsaved),
+            )
+            .clicked()
+            {
                 *action = Some(Action::Save);
             }
         });

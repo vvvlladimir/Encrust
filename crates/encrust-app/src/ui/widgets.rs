@@ -37,7 +37,7 @@ pub use bin::{bin_button, confirm_bin};
 pub use binding::{BindingPress, BindingRow, Recording, binding_row};
 pub use button::inline_button_w;
 pub use button::{
-    RailButton, SquareLook, bar_pill, blocked_hover, compact_button, companion_button,
+    Inline, RailButton, SquareLook, bar_pill, blocked_hover, compact_button, companion_button,
     companion_square, filter_chip, focus_ring, hover_mix, icon_button, icon_toggle, inline_button,
     numbered_square, primary_button, primary_with_companion, quiet_button, quiet_square,
     rail_button, secondary_button, small_icon_button, summary_button, swatch, toggle_button,

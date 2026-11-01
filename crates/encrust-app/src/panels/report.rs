@@ -9,7 +9,7 @@ use crate::scene::Scene;
 use crate::state::{Machine, Tools};
 use crate::status::Status;
 use crate::tool_settings::ToolSettings;
-use crate::ui::{dialog, dialog_head, hairline, hint, icon, inline_button, switch, theme};
+use crate::ui::{Inline, dialog, dialog_head, hairline, hint, icon, inline_button, switch, theme};
 
 /// The sheet's width where there is room for it, and the narrowest it is still drawn at.
 const SHEET_W: f32 = 520.0;
@@ -167,18 +167,25 @@ fn handed_over(
     status: &mut Status,
 ) {
     ui.horizontal(|ui| {
-        if inline_button(ui, icon::BUG, &tr!("report-open-issue"), true, true).clicked() {
+        if inline_button(
+            ui,
+            Inline::new(&tr!("report-open-issue"))
+                .glyph(icon::BUG)
+                .primary(),
+        )
+        .clicked()
+        {
             ui.ctx().copy_text(text.to_owned());
             ui.ctx()
                 .open_url(egui::OpenUrl::new_tab(report.issue_url(facts)));
             *status = Status::Info(tr!("report-copied-for-issue"));
         }
         ui.add_space(6.0);
-        if inline_button(ui, icon::CLIPBOARD, &tr!("report-copy"), false, true).clicked() {
+        if inline_button(ui, Inline::new(&tr!("report-copy")).glyph(icon::CLIPBOARD)).clicked() {
             ui.ctx().copy_text(text.to_owned());
             *status = Status::Info(tr!("report-copied"));
         }
-        if inline_button(ui, icon::SAVE, &tr!("report-save"), false, true).clicked() {
+        if inline_button(ui, Inline::new(&tr!("report-save")).glyph(icon::SAVE)).clicked() {
             save(text, status);
         }
     });

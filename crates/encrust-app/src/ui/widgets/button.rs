@@ -53,43 +53,14 @@ pub(super) const DISABLED_GLYPH: f32 = 0.4;
 
 /// The ordinary full-width button: raised, bordered, an optional leading glyph.
 pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
-    let width = ui.available_width();
-    filled_button(
-        ui,
-        glyph,
-        text,
-        vec2(width, theme::BUTTON_H),
-        &Skin {
-            fill: theme::colors().raised,
-            foreground: theme::colors().text_high,
-            border: Some(theme::colors().line),
-            hovered: theme::colors().hover,
-            pressed: theme::colors().active,
-        },
-        true,
-    )
+    let size = vec2(ui.available_width(), theme::BUTTON_H);
+    filled_button(ui, glyph, text, size, &Skin::raised(), true)
 }
 
 /// A full-width button that stays pressed: washed in the accent while `on`, so a click
 /// takes up a tool and the next one puts it down.
 pub fn toggle_button(ui: &mut Ui, glyph: &str, text: &str, on: bool) -> Response {
-    let colors = theme::colors();
-    let skin = match on {
-        true => Skin {
-            fill: colors.accent_wash,
-            foreground: colors.accent_soft,
-            border: Some(colors.accent_deep),
-            hovered: colors.accent_wash,
-            pressed: colors.accent_wash,
-        },
-        false => Skin {
-            fill: colors.raised,
-            foreground: colors.text_high,
-            border: Some(colors.line),
-            hovered: colors.hover,
-            pressed: colors.active,
-        },
-    };
+    let skin = if on { Skin::on() } else { Skin::raised() };
     let size = vec2(ui.available_width(), theme::BUTTON_H);
     let response = filled_button(ui, glyph, text, size, &skin, true);
     response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, text));
@@ -99,24 +70,13 @@ pub fn toggle_button(ui: &mut Ui, glyph: &str, text: &str, on: bool) -> Response
 /// A second action standing beside the primary one: raised rather than accented, and as
 /// tall as it, so the row reads as one control.
 pub fn companion_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Response {
-    let colors = theme::colors();
-    let foreground = if enabled {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
+    let size = vec2(ui.available_width(), theme::PRIMARY_H);
     filled_button(
         ui,
         glyph,
         text,
-        vec2(ui.available_width(), theme::PRIMARY_H),
-        &Skin {
-            fill: colors.raised,
-            foreground,
-            border: Some(colors.line),
-            hovered: colors.hover,
-            pressed: colors.active,
-        },
+        size,
+        &Skin::raised_or_off(enabled),
         enabled,
     )
 }
@@ -131,12 +91,7 @@ pub fn primary_with_companion(
     (text, enabled): (&str, bool),
     (glyph, companion, companion_enabled): (&str, &str, bool),
 ) -> (Response, Response) {
-    let words = ui.painter().layout_no_wrap(
-        companion.to_owned(),
-        theme::label(),
-        theme::colors().text_high,
-    );
-    let companion_w = words.size().x + COMPANION_CHROME_W;
+    let companion_w = label_w(ui, companion) + COMPANION_CHROME_W;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
         let room = ui.available_width() - companion_w - theme::BUTTON_GAP;
@@ -151,66 +106,91 @@ pub fn primary_with_companion(
     .inner
 }
 
-/// How wide an [`inline_button`] saying `text`, with `glyph` if any, stands.
-pub fn inline_button_w(ui: &Ui, glyph: &str, text: &str) -> f32 {
-    let high = theme::colors().text_high;
-    let text_w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::label(), high)
+/// How wide `text` stands in the label face.
+fn label_w(ui: &Ui, text: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), theme::colors().text_high)
         .size()
-        .x;
-    let glyph_w = if glyph.is_empty() { 0.0 } else { GLYPH_W };
-    text_w + glyph_w + 32.0
+        .x
 }
 
-/// A button as wide as what it says, to stand in a row of several. `primary` paints it
-/// as the one action of the screen.
-pub fn inline_button(
-    ui: &mut Ui,
-    glyph: &str,
-    text: &str,
+/// How wide a button as wide as what it says stands: its words, its glyph if any, `pad`.
+fn words_w(ui: &Ui, glyph: &str, text: &str, pad: f32) -> f32 {
+    let glyph_w = if glyph.is_empty() { 0.0 } else { GLYPH_W };
+    label_w(ui, text) + glyph_w + pad
+}
+
+/// What an [`inline_button`] says and how it stands: plain and usable unless told.
+#[derive(Clone, Copy)]
+pub struct Inline<'a> {
+    glyph: &'a str,
+    text: &'a str,
     primary: bool,
     enabled: bool,
-) -> Response {
-    let colors = theme::colors();
+}
+
+impl<'a> Inline<'a> {
+    pub fn new(text: &'a str) -> Self {
+        Self {
+            glyph: "",
+            text,
+            primary: false,
+            enabled: true,
+        }
+    }
+
+    /// A leading glyph from `ui::icon`.
+    pub fn glyph(self, glyph: &'a str) -> Self {
+        Self { glyph, ..self }
+    }
+
+    /// Painted as the one action of the screen.
+    pub fn primary(self) -> Self {
+        self.primary_if(true)
+    }
+
+    pub fn primary_if(self, primary: bool) -> Self {
+        Self { primary, ..self }
+    }
+
+    pub fn enabled(self, enabled: bool) -> Self {
+        Self { enabled, ..self }
+    }
+}
+
+/// How wide an [`inline_button`] saying `text`, with `glyph` if any, stands.
+pub fn inline_button_w(ui: &Ui, glyph: &str, text: &str) -> f32 {
+    words_w(ui, glyph, text, INLINE_PAD)
+}
+
+/// Room an inline button keeps around its words, both sides together.
+const INLINE_PAD: f32 = 32.0;
+
+/// A button as wide as what it says, to stand in a row of several.
+pub fn inline_button(ui: &mut Ui, button: Inline<'_>) -> Response {
+    let Inline {
+        glyph,
+        text,
+        primary,
+        enabled,
+    } = button;
     let size = vec2(inline_button_w(ui, glyph, text), theme::BUTTON_H);
-    let skin = match (primary, enabled) {
-        (true, true) => Skin {
-            fill: colors.accent,
-            foreground: colors.on_accent,
-            border: None,
-            hovered: colors.accent_soft,
-            pressed: colors.accent_deep,
-        },
-        (_, false) => Skin {
-            fill: colors.raised,
-            foreground: colors.text_low,
-            border: Some(colors.line),
-            hovered: colors.raised,
-            pressed: colors.raised,
-        },
-        (false, true) => Skin {
-            fill: colors.raised,
-            foreground: colors.text_high,
-            border: Some(colors.line),
-            hovered: colors.hover,
-            pressed: colors.active,
-        },
+    let skin = if primary && enabled {
+        Skin::accent()
+    } else {
+        Skin::raised_or_off(enabled)
     };
     filled_button(ui, glyph, text, size, &skin, enabled)
 }
+
+/// Room a quiet button keeps around its words, both sides together.
+const QUIET_PAD: f32 = 24.0;
 
 /// A button with no surface until it is hovered, for the lesser actions of a row: as wide
 /// as what it says, and `danger` when what it does cannot be taken back.
 pub fn quiet_button(ui: &mut Ui, glyph: &str, text: &str, danger: bool, enabled: bool) -> Response {
     let colors = theme::colors();
-    let text_w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
-        .size()
-        .x;
-    let glyph_w = if glyph.is_empty() { 0.0 } else { GLYPH_W };
-    let size = vec2(text_w + glyph_w + 24.0, theme::BUTTON_H);
+    let size = vec2(words_w(ui, glyph, text, QUIET_PAD), theme::BUTTON_H);
     let (foreground, hovered) = match (danger, enabled) {
         (_, false) => (colors.text_low, Color32::TRANSPARENT),
         (true, true) => (colors.danger, colors.danger_wash),
@@ -230,50 +210,29 @@ pub fn quiet_button(ui: &mut Ui, glyph: &str, text: &str, danger: bool, enabled:
     filled_button(ui, glyph, text, size, &skin, enabled)
 }
 
+/// Room a filter chip keeps around its words, both sides together.
+const CHIP_PAD: f32 = 20.0;
+
 /// One of a row of filters: bordered, and washed in the accent while it is the one on.
 pub fn filter_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
     let colors = theme::colors();
-    let text_w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
-        .size()
-        .x;
-    let size = vec2(text_w + 20.0, theme::FIELD_H);
-    let skin = match on {
-        true => Skin {
-            fill: colors.accent_wash,
-            foreground: colors.accent_soft,
-            border: Some(colors.accent_deep),
-            hovered: colors.accent_wash,
-            pressed: colors.accent_wash,
-        },
-        false => Skin {
+    let size = vec2(words_w(ui, "", text, CHIP_PAD), theme::FIELD_H);
+    let skin = if on {
+        Skin::on()
+    } else {
+        Skin {
             fill: Color32::TRANSPARENT,
             foreground: colors.text_mid,
-            border: Some(colors.line),
-            hovered: colors.hover,
-            pressed: colors.active,
-        },
+            ..Skin::raised()
+        }
     };
     filled_button(ui, "", text, size, &skin, true)
 }
 
 /// A button as tall as a field and `width` wide, to stand in a row of fields.
 pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
-    filled_button(
-        ui,
-        "",
-        text,
-        vec2(width, theme::FIELD_H),
-        &Skin {
-            fill: theme::colors().raised,
-            foreground: theme::colors().text_high,
-            border: Some(theme::colors().line),
-            hovered: theme::colors().hover,
-            pressed: theme::colors().active,
-        },
-        true,
-    )
+    let size = vec2(width, theme::FIELD_H);
+    filled_button(ui, "", text, size, &Skin::raised(), true)
 }
 
 /// The one action a screen is for, in words alone: the tool's glyph already heads the
@@ -288,9 +247,7 @@ pub fn primary_button(ui: &mut Ui, text: &str, enabled: bool) -> Response {
     let skin = Skin {
         fill,
         foreground,
-        border: None,
-        hovered: colors.accent_soft,
-        pressed: colors.accent_deep,
+        ..Skin::accent()
     };
     let size = vec2(ui.available_width(), theme::PRIMARY_H);
     let face = Face {
@@ -329,6 +286,58 @@ pub(in crate::ui::widgets) struct Skin {
     pub border: Option<Color32>,
     pub hovered: Color32,
     pub pressed: Color32,
+}
+
+impl Skin {
+    /// The ordinary raised, bordered button.
+    pub fn raised() -> Self {
+        let colors = theme::colors();
+        Self {
+            fill: colors.raised,
+            foreground: colors.text_high,
+            border: Some(colors.line),
+            hovered: colors.hover,
+            pressed: colors.active,
+        }
+    }
+
+    /// The raised button, or its look when it cannot be used: low ink, nothing on hover.
+    pub fn raised_or_off(enabled: bool) -> Self {
+        let colors = theme::colors();
+        if enabled {
+            return Self::raised();
+        }
+        Self {
+            foreground: colors.text_low,
+            hovered: colors.raised,
+            pressed: colors.raised,
+            ..Self::raised()
+        }
+    }
+
+    /// The one action of a screen, on the accent.
+    pub fn accent() -> Self {
+        let colors = theme::colors();
+        Self {
+            fill: colors.accent,
+            foreground: colors.on_accent,
+            border: None,
+            hovered: colors.accent_soft,
+            pressed: colors.accent_deep,
+        }
+    }
+
+    /// A control that stays on: the accent's wash, bordered in its deep tone.
+    pub fn on() -> Self {
+        let colors = theme::colors();
+        Self {
+            fill: colors.accent_wash,
+            foreground: colors.accent_soft,
+            border: Some(colors.accent_deep),
+            hovered: colors.accent_wash,
+            pressed: colors.accent_wash,
+        }
+    }
 }
 
 /// What a text button says: its glyph, if any, and its label in `font`.

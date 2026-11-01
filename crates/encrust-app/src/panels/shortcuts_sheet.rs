@@ -12,7 +12,7 @@ use crate::shortcuts::{
 use crate::ui::page_title;
 use crate::ui::window_frame::{child, scrolled, show, with_footer, with_header};
 use crate::ui::{
-    BindingPress, BindingRow, Confirm, NavAside, Recording, binding_row, chooser_group,
+    BindingPress, BindingRow, Confirm, Inline, NavAside, Recording, binding_row, chooser_group,
     confirm_button, find_line, group_name, icon, inline_button, key_row, nav_row, notice, theme,
 };
 
@@ -311,12 +311,12 @@ fn ask_to_take(ui: &mut Ui, sheet: &mut Sheet, taken: Taken) {
     ui.add_space(theme::ROW_GAP);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
-        if inline_button(ui, "", &tr!("shortcuts-replace"), true, true).clicked() {
+        if inline_button(ui, Inline::new(&tr!("shortcuts-replace")).primary()).clicked() {
             let Taken { slot, chord, .. } = taken;
             keymap::change(|keymap| keymap.assign(slot.action, slot.index, chord));
             sheet.taken = None;
         }
-        if inline_button(ui, "", &tr!("shortcuts-keep"), false, true).clicked() {
+        if inline_button(ui, Inline::new(&tr!("shortcuts-keep"))).clicked() {
             sheet.taken = None;
         }
     });

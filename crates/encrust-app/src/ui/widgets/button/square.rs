@@ -86,9 +86,6 @@ pub(in crate::ui::widgets) fn paint_square(
         (None, SquareLook::Framed) => (eased(colors.raised, colors.hover), Some(colors.hairline)),
         (None, SquareLook::Quiet) => (eased(Color32::TRANSPARENT, colors.raised), None),
     };
-    let stroke = ring.map_or(egui::Stroke::NONE, |ring| egui::Stroke::new(1.0, ring));
-    let painter = ui.painter();
-    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
     let tall = match look {
         SquareLook::Framed => rect.height() >= theme::PRIMARY_H - 2.0,
         SquareLook::Quiet => rect.height() >= theme::BUTTON_H - 2.0,
@@ -109,6 +106,19 @@ pub(in crate::ui::widgets) fn paint_square(
         (SquareLook::Framed, false) | (SquareLook::Quiet, true) => 16.0,
         (SquareLook::Quiet, false) => 13.0,
     };
+    draw_square(ui, rect, (fill, ring), (glyph, size_pt, ink));
+}
+
+/// The one drawing of every icon square: a rounded fill, its ring if any, the glyph centred.
+fn draw_square(
+    ui: &Ui,
+    rect: egui::Rect,
+    (fill, ring): (Color32, Option<Color32>),
+    (glyph, size_pt, ink): (&str, f32, Color32),
+) {
+    let stroke = ring.map_or(egui::Stroke::NONE, |ring| egui::Stroke::new(1.0, ring));
+    let painter = ui.painter();
+    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -300,14 +310,11 @@ fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
     };
 
     let rect = pressed_rect(ui, &response);
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(config.glyph_size),
-        foreground,
+    draw_square(
+        ui,
+        rect,
+        (fill, None),
+        (glyph, config.glyph_size, foreground),
     );
     focus_ring(ui, &response, theme::R_CONTROL);
 
