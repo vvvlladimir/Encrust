@@ -57,7 +57,7 @@ pub struct Palette {
     pub picked: Color32,
     /// The wash behind a selected row, 10 % of the accent.
     pub picked_wash: Color32,
-    /// The face of a handle: a switch's knob, the layer thumbs. Light
+    /// The face of a handle: a switch's knob, the layer thumbs, the gizmo's circle. Light
     /// on both palettes, so it stands off the track or the stage under it.
     pub knob: Color32,
     /// What a scrim over the stage is mixed from; its alpha is the most it ever covers.

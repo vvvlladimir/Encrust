@@ -202,6 +202,9 @@ track. With no stack it reads *No layers*.
   while the tool in hand has something the pointer does in the viewport (Measure, Hollow,
   Drain, Relief, Supports' Pick, Place and Area, Repair's faces and edges, Cut's part, the gizmo's Shift drag). Short of room, only the keys show, as glyphs where
   there is one (mouse click, hand grabbing, on a Mac ⇧ ⌥ ⌘), each naming what it does on hover.
+- **Gizmo drag:** the amount by the cursor on a size label's plate, signed, in the axis
+  colour (text colour for the circle); for a move, a 3 point dot at the start, a dashed line
+  to the pivot, and the arrow's line through the start at 45 %. Size labels clear the rings.
 - **View tools:** Frame the view, Plate grid, See through, Perspective, as 26 squares in one
   card; the on ones washed.
 - **Notices:** each a card 40 tall: glyph in its colour (`warn` warning, `danger`
