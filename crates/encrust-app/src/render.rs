@@ -21,7 +21,7 @@ pub use gpu::CutLine;
 pub use gpu::MULTISAMPLING;
 pub use grid::AXIS_LENGTH_MM;
 pub use label::prime as prime_label;
-pub use lod::{Budget, Candidate, Light, Lods, Step, allot, px_per_mm, refine};
+pub use lod::{Budget, Candidate, Level, Light, Lods, Step, allot, px_per_mm, refine};
 pub use print_look::PrintLook;
 
 use gpu::ViewportResources;

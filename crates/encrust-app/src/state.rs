@@ -62,12 +62,23 @@ pub struct View {
     /// What this machine draws and keeps up while the camera moves, and what the last
     /// frame drew, faces: the next frame's time is what that cost.
     pub budget: crate::render::Budget,
+    /// Whether `budget` was learnt in the render view, which costs more a face and a frame.
+    pub budget_rendered: bool,
     pub drawn_faces: Option<usize>,
     /// The level each model was last drawn at, 0 for its own mesh.
     pub levels: core_geometry::FastMap<crate::scene::ObjectId, usize>,
 }
 
 impl View {
+    /// Learns the budget afresh when the render view is turned on or off: what one view
+    /// keeps up says little of the other.
+    pub fn budget_for(&mut self, rendered: bool) {
+        if self.budget_rendered != rendered {
+            self.budget = crate::render::Budget::default();
+            self.budget_rendered = rendered;
+        }
+    }
+
     /// A view framing `plate` from the default angle.
     pub fn framing(plate: &BuildPlate) -> Self {
         Self {
@@ -82,6 +93,7 @@ impl View {
             moved_s: f64::NEG_INFINITY,
             lods: crate::render::Lods::default(),
             budget: crate::render::Budget::default(),
+            budget_rendered: false,
             drawn_faces: None,
             levels: core_geometry::FastMap::default(),
         }

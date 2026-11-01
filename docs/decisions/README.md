@@ -143,7 +143,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted; the floor is answered the same way by 0203 |
 | [0203](0203-a-bake-says-how-low-the-material-stands.md) | A bake says how low the material stands, and the plate is warned about that | Accepted |
 | [0258](0258-copies-of-a-model-are-cut-once.md) | Cut a model once however many copies of it stand on the plate | Accepted |
-| [0259](0259-the-viewport-draws-heavy-models-at-levels-the-card-can-afford.md) | Draw heavy models at levels the card can afford, chosen by what they show on screen | Accepted |
+| [0259](0259-the-viewport-draws-heavy-models-at-levels-the-card-can-afford.md) | Draw heavy models at levels the card can afford, chosen by what they show on screen | Accepted; any step while moving is superseded by 0391 |
+| [0391](0391-a-moving-frame-gives-up-only-so-much.md) | Let a moving frame give up only so much, and give up effects before faces | Accepted |
 | [0260](0260-the-window-keeps-cavity-fields-to-a-budget.md) | Keep cavity fields in the window, to a fixed budget, so cuts re-carve without a build | Accepted |
 
 ### Rasterisation

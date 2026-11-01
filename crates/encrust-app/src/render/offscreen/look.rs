@@ -171,3 +171,23 @@ fn layers_too_fine_to_see_still_frost_a_clear_part() {
         "0.05 mm layers frost a ball 80 mm across, got {changed} pixels changed"
     );
 }
+
+#[test]
+fn a_clear_resin_is_drawn_opaque_while_the_camera_moves() {
+    let frame = |attenuation_mm| {
+        paint_marked_ball(Marks {
+            look: Some(Look {
+                attenuation_mm,
+                ..studio()
+            }),
+            presented: true,
+            moving: true,
+            ..Marks::default()
+        })
+    };
+    let Some(opaque) = frame(0.0) else {
+        return;
+    };
+    let clear = frame(40.0).expect("the adapter drew once");
+    assert!(opaque == clear, "a moving frame draws no clear pass");
+}

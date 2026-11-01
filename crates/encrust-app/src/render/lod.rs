@@ -14,7 +14,7 @@ use crate::scene::ObjectId;
 
 pub use allot::{Candidate, Step, allot, refine};
 pub use budget::Budget;
-pub use chain::Lods;
+pub use chain::{Level, Lods};
 
 /// What a frame draws in place of models' own meshes, by object, and whether those are
 /// still changing from frame to frame: the shadow is baked only once they settle.

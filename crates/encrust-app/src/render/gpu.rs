@@ -318,8 +318,11 @@ impl ViewportResources {
         self.frame.cutting_bottom = frame.bottom_cut_mm.is_some_and(|mm| frame.eye.z < mm);
         self.frame.xray = frame.xray;
         self.frame.staged = frame.look.is_some();
+        // While the camera moves a clear resin is drawn opaque: its four passes over every
+        // model would leave the levels a quarter of the faces.
         self.frame.clear = self.reads_planes
             && !frame.xray
+            && !frame.light
             && frame.look.is_some_and(|look| look.attenuation_mm > 0.0);
         self.frame.occlusion = frame
             .look

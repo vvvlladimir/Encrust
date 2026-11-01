@@ -7,7 +7,7 @@ use core_geometry::{FastMap, Mesh};
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
-use crate::render::{Budget, Candidate, Light, Lods, Step, allot, px_per_mm, refine};
+use crate::render::{Budget, Candidate, Level, Light, Lods, Step, allot, px_per_mm, refine};
 use crate::scene::{ObjectId, SceneObject};
 use crate::state::View;
 
@@ -16,6 +16,12 @@ use crate::state::View;
 const SETTLE_S: f64 = 0.3;
 /// The most a resting frame's levels may show, pixels: half of one is not seen.
 const UNSEEN_PX: f32 = 0.5;
+/// The most a moving frame's levels may show, pixels: a model drawn lighter while it turns
+/// still reads as itself. Past it the frame is slower instead.
+const MOVING_MOST_PX: f32 = 4.0;
+/// The least share of its faces a picked model is drawn with, however the camera moves:
+/// the model in hand is the one being looked at.
+const PICKED_LEAST_SHARE: f32 = 0.2;
 
 /// What the frame draws in place of models' own meshes, and the models' faces it draws,
 /// or `None` for a frame the card's time is not to be learnt from.
@@ -36,6 +42,7 @@ struct Model {
 /// while the camera moves, detail back a level a frame at rest. A capped cut draws whole.
 pub(super) fn levels(ui: &egui::Ui, window: &mut Window, capped: bool, height_px: f32) -> Levels {
     let view = &mut *window.view;
+    view.budget_for(view.options.render);
     let moving = camera_moving(ui, view, capped);
     if capped {
         view.levels.clear();
@@ -47,7 +54,17 @@ pub(super) fn levels(ui: &egui::Ui, window: &mut Window, capped: bool, height_px
     let scene = &window.doc.scene;
     let models: Vec<Model> = scene
         .printable(scene.active_plate())
-        .map(|object| model(object, &mut view.lods, &view.camera, height_px, moving))
+        .map(|object| {
+            let picked = scene.is_selected(object.id);
+            model(
+                object,
+                &mut view.lods,
+                &view.camera,
+                height_px,
+                moving,
+                picked,
+            )
+        })
         .collect();
     let wanted = wanted(&view.budget, &models, moving);
     let (chosen, settling) = if moving {
@@ -121,7 +138,7 @@ fn wanted(budget: &Budget, models: &[Model], moving: bool) -> Vec<usize> {
     let allotted = if moving {
         budget
             .moving()
-            .map(|budget| allot(&candidates, budget, f32::INFINITY))
+            .map(|budget| allot(&candidates, budget, MOVING_MOST_PX))
     } else {
         budget
             .resting()
@@ -152,6 +169,7 @@ fn model(
     camera: &OrbitCamera,
     height_px: f32,
     moving: bool,
+    picked: bool,
 ) -> Model {
     let mesh = object.printed();
     let mut steps = vec![Step {
@@ -164,6 +182,7 @@ fn model(
         _ => built,
     };
     let px = px_per_model_mm(object, camera, height_px);
+    let levels = &levels[..kept_levels(mesh.faces.len(), levels, picked)];
     steps.extend(levels.iter().map(|level| Step {
         faces: level.mesh.faces.len(),
         error_px: level.error_mm * px,
@@ -173,6 +192,19 @@ fn model(
         steps,
         lighter: levels.iter().map(|level| Arc::clone(&level.mesh)).collect(),
     }
+}
+
+/// How many of a model's lighter `levels` it may be drawn at: all, or for a picked model
+/// those keeping at least `PICKED_LEAST_SHARE` of its `faces`.
+fn kept_levels(faces: usize, levels: &[Level], picked: bool) -> usize {
+    if !picked {
+        return levels.len();
+    }
+    let least = (faces as f32 * PICKED_LEAST_SHARE) as usize;
+    levels
+        .iter()
+        .take_while(|level| level.mesh.faces.len() >= least)
+        .count()
 }
 
 /// Pixels a millimetre of `object`'s own mesh spans at its nearest to the eye. An eye
@@ -193,4 +225,75 @@ fn px_per_model_mm(object: &SceneObject, camera: &OrbitCamera, height_px: f32) -
         .max(linear.y_axis.length())
         .max(linear.z_axis.length());
     px_per_mm(camera, nearest_mm, height_px) * scale
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plate::BuildPlate;
+
+    /// Levels of a mesh of `faces` faces, each holding `share` of the one before.
+    fn levels_of(faces: usize, share: f32, count: usize) -> Vec<Level> {
+        (1..=count)
+            .map(|step| {
+                let kept = (faces as f32 * share.powi(step as i32)) as usize;
+                let mesh = Mesh::new(vec![core_geometry::Vec3::ZERO; 3], vec![[0, 1, 2]; kept]);
+                Level {
+                    mesh: Arc::new(mesh),
+                    error_mm: step as f32,
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_picked_model_keeps_a_fifth_of_its_faces_however_the_camera_moves() {
+        let levels = levels_of(100_000, 0.5, 5);
+        // 50 000 and 25 000 hold a fifth; 12 500 and finer do not.
+        assert_eq!(kept_levels(100_000, &levels, true), 2);
+    }
+
+    #[test]
+    fn a_model_not_picked_may_be_drawn_at_any_of_its_levels() {
+        let levels = levels_of(100_000, 0.5, 5);
+        assert_eq!(kept_levels(100_000, &levels, false), levels.len());
+    }
+
+    #[test]
+    fn a_moving_frame_never_draws_a_model_coarser_than_its_cap() {
+        let candidates = vec![vec![
+            Step {
+                faces: 1_000_000,
+                error_px: 0.0,
+            },
+            Step {
+                faces: 200_000,
+                error_px: 1.0,
+            },
+            Step {
+                faces: 2_000,
+                error_px: 40.0,
+            },
+        ]];
+        assert_eq!(allot(&candidates, 1_000, MOVING_MOST_PX), vec![1]);
+    }
+
+    #[test]
+    fn the_budget_is_learnt_afresh_when_the_render_view_is_turned_on() {
+        let mut view = View::framing(&BuildPlate::default());
+        for _ in 0..3 {
+            view.budget.observe(0.05, 1_000_000);
+        }
+        assert!(view.budget.moving().is_some(), "slow frames cut the budget");
+        view.budget_for(false);
+        assert!(
+            view.budget.moving().is_some(),
+            "the same view keeps what it learnt"
+        );
+        view.budget_for(true);
+        assert!(
+            view.budget.moving().is_none(),
+            "the render view starts from nothing"
+        );
+    }
 }

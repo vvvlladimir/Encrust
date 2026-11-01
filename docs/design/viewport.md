@@ -445,7 +445,8 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   `1 − e^(−d/D)`, within 400 mm even in the clearest resin as curing hazes it, and a rough
   surface scatters 0.28 of its roughness back as a white haze, all into the resin lit as an
   opaque one; Schlick's Fresnel shares it with the studio's reflection off the stepped
-  surface. Where the copy holds nothing, the backdrop shows. Off under the x-ray.
+  surface. Where the copy holds nothing, the backdrop shows. Off under the x-ray, and
+  while the camera moves, when the part is drawn opaque (ADR 0391).
 - **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
   shades creases from the depth plane, which is kept past the scene pass for it.
   `present.wgsl` rebuilds each pixel's point through the inverse projection, takes its
@@ -536,9 +537,12 @@ nothing raises it, and a resting frame draws everything whole.
 **Which level.** A level's error times the pixels a millimetre spans at the model's
 nearest to the eye is what it shows on screen. `allot` starts every model whole and, while
 the frame is over its budget, takes the step that shows least next. While the camera
-moves any step may be taken; at rest only those under half a pixel, which cannot be seen,
-so a card with room to spare draws everything whole and one without gives up only what
-is not seen. Once the camera stops, every model comes back a level a frame towards what
+moves no step past 4 px may be taken (ADR 0391), so a model in motion still reads as
+itself and a frame past that is slower instead; at rest only those under half a pixel,
+which cannot be seen, so a card with room to spare draws everything whole and one without
+gives up only what is not seen. A picked model keeps a fifth of its faces at least. The
+budget is learnt afresh when the render view is turned on or off, which costs more a face
+and a frame, and while the camera moves that view draws a clear resin opaque. Once the camera stops, every model comes back a level a frame towards what
 the rest allows, never coarser than it is, so detail sharpens over a few frames instead
 of all at once.
 
