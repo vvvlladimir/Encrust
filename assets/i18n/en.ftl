@@ -585,6 +585,18 @@ summary-in-inset =
        *[other] { $count } models reach into the plate inset
     }
 summary-in-inset-why = The printer's maker keeps that band clear. It still slices whole.
+summary-meeting =
+    { $count ->
+        [one] { $count } model meets another
+       *[other] { $count } models meet another
+    }
+# Overlapping models are united when sliced.
+summary-meeting-why =
+    { $count ->
+        [one] It, or its supports, stands into another model, and they slice as one piece.
+       *[other] They, or their supports, stand into another model, and slice as one piece.
+    }
+summary-meeting-pick = Pick them
 
 ## ui/widgets.rs
 
@@ -1806,6 +1818,9 @@ scope-plate = all { $count } models on the plate
 ## panels/scene_panel.rs
 
 models-broken = Broken
+# A model standing into another model, or its supports into one.
+models-meets = Meets
+models-meets-name = Meets { $name }
 models-title = Models
 models-selected = { $count } selected
 models-picked = { $count } picked

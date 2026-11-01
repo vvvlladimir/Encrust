@@ -175,6 +175,12 @@ whole-surface fill is Cmd-Shift-click.
 - With a printer chosen, the plate card says how many models stand past the build volume,
   whose overhang is cut off the layers, and how many only reach into the inset, which still
   slices whole. Neither stops the slice.
+- Models standing into each other, or a model's supports or raft reaching into another
+  model, are found once the plate stops moving: the plate card says how many, with **Pick
+  them**, and each such row in the models card is tagged **Meets**, naming the others
+  behind a click. Touching counts, a gap of any width does not; a model's own supports, and
+  supports or rafts meeting each other, never do. They would slice as one piece; the slice
+  goes ahead.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.

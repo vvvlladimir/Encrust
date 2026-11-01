@@ -81,3 +81,69 @@ fn faces_only_touching_along_an_edge_are_no_crossing() {
         "a wall meeting a wall at its edge only touches it"
     );
 }
+
+/// `mesh` where `transform` stands it, its box read off its vertices.
+fn placed<'a>(mesh: &'a Mesh, bvh: &'a Bvh, transform: Transform) -> PlacedMesh<'a> {
+    let bounds_mm = crate::placed_aabb(mesh, transform).expect("a cube has vertices");
+    PlacedMesh {
+        mesh,
+        bvh,
+        transform,
+        bounds_mm,
+    }
+}
+
+fn cubes_cross(at: Transform) -> bool {
+    let cube = cuboid(Vec3::ZERO, Vec3::ONE);
+    let bvh = Bvh::build(&cube);
+    let still = placed(&cube, &bvh, Transform::default());
+    placed_faces_cross(&still, &placed(&cube, &bvh, at))
+}
+
+#[test]
+fn a_cube_moved_half_its_width_into_another_crosses_it() {
+    assert!(cubes_cross(Transform::from_translation(Vec3::new(
+        0.5, 0.25, 0.0
+    ))));
+}
+
+#[test]
+fn a_cube_moved_by_a_round_half_crosses_though_every_crossing_lands_on_a_rim() {
+    // Half a width on every axis puts each crossing point on a face's diagonal.
+    assert!(cubes_cross(Transform::from_translation(Vec3::splat(0.5))));
+}
+
+#[test]
+fn a_cube_moved_clear_of_another_crosses_nothing() {
+    assert!(!cubes_cross(Transform::from_translation(Vec3::new(
+        1.5, 0.0, 0.0
+    ))));
+}
+
+#[test]
+fn a_turned_cube_whose_box_overlaps_but_whose_faces_stop_short_crosses_nothing() {
+    // Turned 45° about Z and centred at (1.6, 1.6), its box reaches x = 1.6 - √2/2 = 0.89 mm,
+    // inside the other's, but its face towards the corner (1, 1) stands 0.5 mm from its
+    // centre and the corner 0.6·√2 = 0.85 mm.
+    let turn = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+    let centre = Vec3::new(1.6, 1.6, 0.5);
+    let at = Transform::from_scale_rotation_translation(
+        Vec3::ONE,
+        turn,
+        centre - turn * Vec3::splat(0.5),
+    );
+    assert!(!cubes_cross(at));
+}
+
+#[test]
+fn a_cube_wholly_inside_another_crosses_none_of_its_faces() {
+    let big = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let small = cuboid(Vec3::splat(4.0), Vec3::splat(6.0));
+    let (big_bvh, small_bvh) = (Bvh::build(&big), Bvh::build(&small));
+    let outer = placed(&big, &big_bvh, Transform::default());
+    let inner = placed(&small, &small_bvh, Transform::default());
+    assert!(
+        !placed_faces_cross(&outer, &inner),
+        "inside is not crossing"
+    );
+}

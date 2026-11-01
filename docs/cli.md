@@ -364,7 +364,11 @@ band a maker keeps clear along the plate's edges still fits, and the line names 
 reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371). Once
 `--supports` has stood them, or for each model of a project, an *On the plate* block answers
 again for the model with its supports and raft where it was put down; `--strict` fails on
-it, and a `batch` model's `fit` is that answer.
+it, and a `batch` model's `fit` is that answer. Two models standing into each other, or the
+supports of one reaching into another, are named once under *Plate* as `meeting a.stl and
+b.stl`: they would slice as one piece. Touching counts, a gap does not, and supports meeting
+supports never do; `--strict` fails on it, and each `batch` model lists the others in
+`meets` (ADR 0390).
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).

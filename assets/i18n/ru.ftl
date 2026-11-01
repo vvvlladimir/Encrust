@@ -627,6 +627,18 @@ summary-in-inset =
        *[many] { $count } моделей заходят в отступ от краёв платформы
     }
 summary-in-inset-why = Производитель принтера советует держать эту полосу свободной. Нарезается всё целиком.
+summary-meeting =
+    { $count ->
+        [one] { $count } модель касается другой
+        [few] { $count } модели касаются других
+       *[many] { $count } моделей касаются других
+    }
+summary-meeting-why =
+    { $count ->
+        [one] Она или её поддержки заходят в другую модель, и при нарезке они срастаются в одну деталь.
+       *[other] Они или их поддержки заходят в другие модели, и при нарезке срастаются с ними в одну деталь.
+    }
+summary-meeting-pick = Выбрать их
 
 ## ui/widgets.rs
 
@@ -1907,6 +1919,8 @@ scope-plate =
 ## panels/scene_panel.rs
 
 models-broken = Повреждена
+models-meets = Касается
+models-meets-name = Касается: { $name }
 models-title = Модели
 models-selected = Выбрано: { $count }
 models-picked = выбрано: { $count }

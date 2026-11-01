@@ -1,6 +1,6 @@
 mod marks;
 
-use marks::{import_mark, trouble};
+use marks::{import_mark, meeting_mark, trouble};
 
 use egui::{Sense, vec2};
 
@@ -8,6 +8,7 @@ use core_geometry::{Vec2, Vec3};
 
 use crate::files::{self, Wanted};
 use crate::i18n::tr;
+use crate::meeting::Meeting;
 use crate::panels::{Window, plate_strip};
 use crate::project;
 use crate::scene::{ObjectId, Scene, SceneObject};
@@ -218,14 +219,15 @@ fn rows(ui: &mut egui::Ui, window: &mut Window) {
     let mut select = None;
     let mut clicked = None;
 
-    let scene = &mut window.doc.scene;
-    if scene.here().next().is_none() {
+    if window.doc.scene.here().next().is_none() {
         empty_plate(ui, window);
         return;
     }
-    for object in scene.here() {
+    let meets = met_names(&window.doc.scene, &window.doc.meeting);
+    let scene = &mut window.doc.scene;
+    for (object, meets) in scene.here().zip(&meets) {
         let selected = scene.is_selected(object.id);
-        match row(ui, object, selected, &plates, active) {
+        match row(ui, object, (selected, meets), &plates, active) {
             Some(Clicked::Select) => select = Some(object.id),
             Some(what) => clicked = Some((object.id, what)),
             None => {}
@@ -280,12 +282,27 @@ enum Clicked {
     Repair,
 }
 
+/// The names of the models each model on the plate in hand meets, in the order of its rows.
+fn met_names(scene: &Scene, meeting: &Meeting) -> Vec<Vec<String>> {
+    let name = |id| scene.get(id).map(|object| object.name.clone());
+    scene
+        .here()
+        .map(|object| {
+            meeting
+                .met_by(scene, object.id)
+                .into_iter()
+                .filter_map(name)
+                .collect()
+        })
+        .collect()
+}
+
 /// One model: whether it is drawn and what it is called, with what import found about it
-/// at the end of the row.
+/// and the models it meets at the end of the row.
 fn row(
     ui: &mut egui::Ui,
     object: &SceneObject,
-    selected: bool,
+    (selected, meets): (bool, &[String]),
     plates: &[String],
     active: u32,
 ) -> Option<Clicked> {
@@ -298,13 +315,19 @@ fn row(
         eye_id: ui.id().with(object.id),
     };
     let mut repair = false;
-    let pressed = model_row(ui, &model, |ui, rect, end| match trouble(&object.summary) {
-        Some((mark, lines)) => {
-            let (left, asked) = import_mark(ui, rect, object, end, mark, &lines);
-            repair = asked;
-            left
+    let pressed = model_row(ui, &model, |ui, rect, end| {
+        let (end, gap) = match trouble(&object.summary) {
+            Some((mark, lines)) => {
+                let (left, asked) = import_mark(ui, rect, object, end, mark, &lines);
+                repair = asked;
+                (left, theme::ITEM_GAP)
+            }
+            None => (end, 0.0),
+        };
+        match meets.is_empty() {
+            true => end,
+            false => meeting_mark(ui, rect, object, end - gap, meets),
         }
-        None => end,
     });
     let asked = row_menu(&pressed.row, object, plates, active);
     if let Some(asked) = asked {

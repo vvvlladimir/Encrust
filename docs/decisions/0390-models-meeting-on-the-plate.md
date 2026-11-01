@@ -1,0 +1,61 @@
+# 0390. Warn of models that meet on the plate, by their faces and by winding
+
+- **Status:** Proposed
+- **Date:** 2026-11-01
+
+## Context
+
+Two models standing into each other, or a support of one reaching into another, slice
+into one piece: the slicer fills by positive winding, so what overlaps is united. Nothing
+breaks and nothing says so; the user finds two figures fused on the plate. Supports are
+grown per model and bite into their own model by design, and the rafts of neighbours
+often overlap without harm. A warning that fires on those is soon ignored.
+
+## Decision
+
+**`core_plate::crossings` names each pair of models that meet**: a face of one, or of
+its supports and raft, crosses a face of the other, or one stands wholly inside it.
+Touching counts, faces lying on each other included; a gap of any width does not. The
+bodies of one model never meet each other, and supports never meet supports.
+
+It runs in three steps, so the cost follows the faces where bodies meet, not the plate:
+
+- the bodies' boxes go into `Buckets` 10 mm across, and only pairs sharing a bucket whose
+  boxes meet go on;
+- `core_geometry::placed_faces_cross` asks one body's `Bvh` for its faces in the box both
+  stand in, carries each into the other's space and asks the other's `Bvh`, testing pairs
+  in f64 on `rayon`. Unlike `self_intersections` an edge through a triangle's rim counts:
+  between two meshes a crossing at a round offset lands there;
+- with no face crossing, a body whose box lies in the other's is inside where one of its
+  vertices is, by the other's `Winding`.
+
+A `Bvh` or `Winding` a caller does not hand in is built the first time a pair needs it.
+
+## Consequences
+
+The window and the CLI ask one function and agree. A cavity is not inside: a model
+standing in another's hollow does not meet it. A model meeting another on purpose, to be
+fused, is warned of too; the warning never stops the slice. A gap thinner than resin can
+hold apart is missed; a tolerance would reopen this.
+
+## Alternatives considered
+
+### The footprint grid, or the layers' masks
+
+`Footprint` already rasterises each model and its supports at 1 mm. Two shadows sharing a
+cell is not two bodies meeting: a figure leaning over its neighbour shares cells and
+prints apart. Masks per model and per layer would be exact to the pixel, but the stack is
+cut for the whole plate at once, and cutting it per model for a warning doubles a slice.
+
+### Closest points under a clearance
+
+Warning of a gap under, say, 0.3 mm would catch the models resin bridges, but each face
+asks a distance rather than a crossing, and the clearance would need a home and a reason.
+
+### Faces and winding, and what they cost
+
+A first check of a large plate builds a `Bvh` for every support mesh near another model,
+and a `Winding` for a body another may stand in; a move redoes the pairs it touches only
+where the caller keeps the hierarchies. Faces crossing exactly at a shared vertex or edge
+are touching and missed, which the vertex-inside step does not cover for two bodies only
+grazing.

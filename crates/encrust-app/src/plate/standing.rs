@@ -2,7 +2,6 @@
 //! reach into the plate's inset: what the plate card warns of beside the red the view marks.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::Arc;
 
 use core_geometry::Aabb;
 
@@ -61,37 +60,22 @@ fn bounds(object: &SceneObject) -> Option<Aabb> {
 
 fn fingerprint(scene: &Scene, plate: &BuildPlate) -> u64 {
     let mut hasher = DefaultHasher::new();
+    scene.standing_fingerprint().hash(&mut hasher);
     [plate.x_mm, plate.y_mm, plate.z_mm]
         .map(f32::to_bits)
         .hash(&mut hasher);
-    plate
-        .usable_area()
-        .0
-        .to_array()
-        .map(f32::to_bits)
+    let (low, high) = plate.usable_area();
+    [low, high]
+        .map(|corner| corner.to_array().map(f32::to_bits))
         .hash(&mut hasher);
-    plate
-        .usable_area()
-        .1
-        .to_array()
-        .map(f32::to_bits)
-        .hash(&mut hasher);
-    for object in scene.printable(scene.active_plate()) {
-        Arc::as_ptr(&object.mesh).hash(&mut hasher);
-        let placed = object.transform.to_matrix().to_cols_array();
-        placed.map(f32::to_bits).hash(&mut hasher);
-        for group in object.supports.drawn() {
-            Arc::as_ptr(&group.mesh).hash(&mut hasher);
-        }
-    }
     hasher.finish()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::{ImportSummary, Imported};
-    use core_geometry::{Transform, Vec3, cuboid, diagnose};
+    use crate::scene::fixtures::scene_of_boxes;
+    use core_geometry::Vec3;
 
     /// A 150 × 80 × 165 mm plate with a 5 mm inset along its low X edge.
     fn plate() -> BuildPlate {
@@ -100,25 +84,9 @@ mod tests {
         plate
     }
 
-    fn scene_of(boxes: &[(Vec3, Vec3)]) -> Scene {
-        let mut scene = Scene::default();
-        for (low, high) in boxes {
-            let mesh = cuboid(*low, *high);
-            let summary = ImportSummary::made(diagnose(&mesh));
-            let mesh = Arc::new(mesh);
-            scene.insert(Imported::new(
-                "box".to_owned(),
-                mesh,
-                Transform::default(),
-                summary,
-            ));
-        }
-        scene
-    }
-
     #[test]
     fn a_model_past_the_plate_and_one_in_its_inset_are_counted_apart() {
-        let scene = scene_of(&[
+        let scene = scene_of_boxes(&[
             (Vec3::new(20.0, 20.0, 0.0), Vec3::new(30.0, 30.0, 10.0)),
             (Vec3::new(145.0, 20.0, 0.0), Vec3::new(155.0, 30.0, 10.0)),
             (Vec3::new(2.0, 20.0, 0.0), Vec3::new(12.0, 30.0, 10.0)),

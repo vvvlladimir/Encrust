@@ -3,6 +3,7 @@
 
 mod arrange;
 mod candidates;
+mod crossings;
 mod cups;
 mod cut;
 mod error;
@@ -21,6 +22,7 @@ mod watch;
 
 pub use arrange::{ArrangeSettings, Arranged, Placed, arrange};
 pub use candidates::{FlatFace, flat_faces};
+pub use crossings::{Body, BodyKind, crossings};
 pub use error::PlateError;
 pub use mask::Footprint;
 pub use orient::{OrientSettings, Oriented, finalists, orient, orient_printed, rotation_for};

@@ -52,6 +52,34 @@ pub(super) fn import_mark(
     (response.rect.left(), repair)
 }
 
+/// The tag of a model standing into others, naming them behind a click. Returns where it
+/// starts.
+pub(super) fn meeting_mark(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    object: &SceneObject,
+    right: f32,
+    meets: &[String],
+) -> f32 {
+    let colors = theme::colors();
+    let id = ui.id().with((object.id, "meeting"));
+    let at = egui::pos2(right, rect.center().y);
+    let response = tag(
+        ui,
+        at,
+        id,
+        &tr!("models-meets"),
+        (colors.warn, colors.warn_wash),
+    );
+    crate::ui::popup_menu(&response).show(|ui| {
+        ui.set_max_width(POPUP_W);
+        for name in meets {
+            hint(ui, &tr!("models-meets-name", name = name.clone()));
+        }
+    });
+    response.rect.left()
+}
+
 /// The quiet sign of a model repair only had to tidy, `right` its right end.
 pub(super) fn quiet_mark(
     ui: &mut egui::Ui,

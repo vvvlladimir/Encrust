@@ -7,6 +7,7 @@ use crate::growth::SupportGrowth;
 use crate::hollow::HollowTool;
 use crate::import::Imports;
 use crate::measure::Measure;
+use crate::meeting::Meeting;
 use crate::network::Network;
 use crate::orient::OrientTool;
 use crate::plate::BuildPlate;
@@ -40,6 +41,7 @@ pub struct Doc {
     pub drilling: Drilling,
     pub surfaces: SupportSurfaces,
     pub growth: SupportGrowth,
+    pub meeting: Meeting,
 }
 
 /// How the plate is looked at: none of it changes what is printed.

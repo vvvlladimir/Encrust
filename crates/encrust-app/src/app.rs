@@ -324,6 +324,7 @@ impl SlicerApp {
             .drain
             .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled, asked_by);
         self.doc.drilling.start(&self.doc.scene, frame.settled);
+        self.doc.meeting.start(&self.doc.scene, frame.settled);
         self.doc.history.observe(
             &self.doc.scene,
             &ToolSettings::of(&self.tools, &self.machine.slicing),
@@ -430,6 +431,7 @@ impl SlicerApp {
         working |= doc.drilling.poll(scene, status);
         working |= doc.surfaces.poll(scene, status);
         working |= doc.growth.poll(scene, status);
+        working |= doc.meeting.poll();
         working |= machine.slicing.poll(scene, status);
         working |= machine.network.poll(status);
         working |= machine.preview.poll(status);

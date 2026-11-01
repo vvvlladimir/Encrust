@@ -10,17 +10,18 @@ use egui::{Align, Layout, vec2};
 
 use crate::i18n::tr;
 use crate::panels::{Window, destination, slice};
-use crate::plate::{Standing, standing};
 use crate::preview::stack_fingerprint;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::ui::theme::layout::plate_summary::{BODY_MARGIN, FIGURES_GAP};
 use crate::ui::{
-    Figure, card_foot, card_title, details_fold, duration, figure_grid, icon, notice, readings,
-    split_readings, theme,
+    Figure, card_foot, card_title, details_fold, duration, figure_grid, readings, split_readings,
+    theme,
 };
 use crate::workspace::Mode;
+
+mod verdicts;
 
 /// What stands on the plate, as the summary states it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -57,14 +58,15 @@ fn title_row(ui: &mut egui::Ui, title: &str, aside: Option<&str>) {
     ui.allocate_ui_with_layout(size, layout, |ui| card_title(ui, title, aside));
 }
 
-/// A word on any model left broken, then the plate's time, resin, weight and price, and
-/// the rest of them under Details.
-fn plate(ui: &mut egui::Ui, window: &Window) {
+/// A word on any model that may not print as it stands, then the plate's time, resin,
+/// weight and price, and the rest of them under Details.
+fn plate(ui: &mut egui::Ui, window: &mut Window) {
     let scene = &window.doc.scene;
-    let material = &window.machine.slicing.material;
-    let name = scene.plates().get(scene.active_plate() as usize);
-    title_row(ui, name.map_or("", String::as_str), Some(&material.name));
-    verdicts(ui, window);
+    let name = scene.plates().get(scene.active_plate() as usize).cloned();
+    let resin = &window.machine.slicing.material.name;
+    title_row(ui, name.as_deref().unwrap_or(""), Some(resin));
+    verdicts::ui(ui, window);
+    let (scene, material) = (&window.doc.scene, &window.machine.slicing.material);
     let tally = tally(ui.ctx(), scene);
     let split = (tally.triangles > 0).then(|| Split::of(&tally, material));
     let time = split.as_ref().and_then(|_| plate_time(window));
@@ -162,41 +164,6 @@ fn details(ui: &mut egui::Ui, tally: &Tally, split: &Split, currency: &str) {
         ],
     );
     ui.add_space(theme::NOTE_GAP);
-}
-
-/// A model left broken, past the build volume or in the inset is a verdict here rather than a
-/// blocker: this is the last place to turn back before what is sliced is nothing like it.
-fn verdicts(ui: &mut egui::Ui, window: &Window) {
-    let scene = &window.doc.scene;
-    let broken = crate::repair::broken_on_the_plate(scene);
-    let plate = &window.doc.plate;
-    let standing = match plate.name {
-        Some(_) => standing(ui.ctx(), scene, plate),
-        None => Standing::default(),
-    };
-    let off = standing.off;
-    let in_inset = standing.in_inset;
-    let said = [
-        (
-            broken,
-            tr!("summary-broken", count = broken),
-            tr!("summary-broken-why", count = broken),
-        ),
-        (
-            off,
-            tr!("summary-off-plate", count = off),
-            tr!("summary-off-plate-why"),
-        ),
-        (
-            in_inset,
-            tr!("summary-in-inset", count = in_inset),
-            tr!("summary-in-inset-why"),
-        ),
-    ];
-    for (_, text, why) in said.iter().filter(|(count, _, _)| *count > 0) {
-        notice(ui, icon::WARNING, theme::colors().warn, text, why);
-        ui.add_space(FIGURES_GAP);
-    }
 }
 
 /// What the machine takes over the plate: as planned once a stack cut from the plate as it

@@ -228,6 +228,30 @@ fn the_notices_at_the_foot_of_the_stage() {
     picture("notices", app);
 }
 
+/// The plate card warning of a copy of the cube standing into it and another past the
+/// plate's edge, and the models card tagging the two that meet.
+#[test]
+fn the_plate_card_warning_of_models_that_may_not_print() {
+    let mut app = pictured();
+    let scene = &mut app.doc.scene;
+    let cube = scene
+        .selection()
+        .first()
+        .copied()
+        .expect("the pictured plate picks a cube");
+    scene.duplicate(cube, core_geometry::Vec3::new(4.0, 2.0, 0.0));
+    scene.duplicate(cube, core_geometry::Vec3::new(app.doc.plate.x_mm, 0.0, 0.0));
+    scene.select(Some(cube));
+    app.doc.meeting.start(&app.doc.scene, true);
+    for _ in 0..10_000 {
+        if !app.doc.meeting.poll() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    picture("plate_verdicts", app);
+}
+
 /// The printer's Network tab with two boards of its model listed and named, and a third
 /// found on the network still to tick.
 #[test]

@@ -23,7 +23,7 @@ use crate::profiles::{self, Chosen};
 use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
 use crate::supports::{SupportReport, stand_under};
-use crate::{plate_file, project};
+use crate::{meeting, plate_file, project};
 
 /// What is done to one model on its way onto the plate.
 #[derive(Debug, Clone)]
@@ -59,6 +59,8 @@ pub struct Part {
     pub supports: Option<SupportReport>,
     /// How the model with its supports and raft sits on the plate where it was put down.
     pub standing: Option<FitCheck>,
+    /// The inputs of the other parts it, or its supports, meet (ADR 0390).
+    pub meets: Vec<PathBuf>,
 }
 
 impl Part {
@@ -67,6 +69,7 @@ impl Part {
         self.import.as_ref().is_none_or(ImportReport::is_clean)
             && self.hollow.as_ref().is_none_or(HollowReport::is_clean)
             && self.standing.as_ref().is_none_or(FitCheck::fits)
+            && self.meets.is_empty()
     }
 
     /// How the model sits on the plate: where it was put down, or else as imported.
@@ -185,10 +188,12 @@ pub fn stage(
             let plate = plate
                 .map(|number| project::chosen_plate(&project.manifest, number))
                 .transpose()?;
-            let staged = project::stage(path, &project, plate, job)?;
+            let mut staged = project::stage(path, &project, plate, job)?;
             if watch.talk {
                 print_off_the_plate(&staged.parts);
             }
+            let owners: Vec<usize> = (0..staged.models.len()).collect();
+            meeting::mark(&mut staged.parts, &staged.models, &owners, watch.talk);
             Ok(staged)
         }
     }
@@ -293,46 +298,16 @@ pub fn plate_of(
         spread_pieces(&mut pieces, entries, printer)?;
     }
 
-    let mut parts = Vec::with_capacity(entries.len());
-    let mut models = Vec::with_capacity(entries.len());
-    let mut plugged = Vec::new();
     let drift_mm = chosen.material.compensation.fit_drift_mm();
-    for ((meshes, (import, oriented)), (path, shaping)) in
-        pieces.into_iter().zip(found).zip(entries)
-    {
-        // The imports are all reported before the first model is shaped, so on a plate
-        // these lines would otherwise read as the last model's.
-        if watch.talk && entries.len() > 1 && shapes_anything(shaping) {
-            println!("{}", path.display());
-        }
-        let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
-        let (mut hollow, mut supports) = (None, None);
-        let mut stands_in = None;
-        for mesh in meshes {
-            let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
-            stands_in = [stands_in, bounds(&down.model)]
-                .into_iter()
-                .flatten()
-                .reduce(merged);
-            models.push(down.model);
-            let first = models.len();
-            models.extend(down.plugs);
-            plugged.push((first..models.len(), path.as_path()));
-            hollow = hollow.or(down.hollow);
-            supports = supports.or(down.supports);
-        }
-        let standing = standing_of(stands_in, printer, supports.is_some(), watch.talk);
-        parts.push(Part {
-            input: path.clone(),
-            import: Some(import),
-            oriented,
-            hollow,
-            supports,
-            standing,
-        });
-    }
-
+    let held = (printer, layer_height, drift_mm);
+    let Laid {
+        mut parts,
+        models,
+        owners,
+        plugged,
+    } = put_down_every(pieces, found, entries, held, watch)?;
     check_plugs_clear(&models, &plugged, printer)?;
+    meeting::mark(&mut parts, &models, &owners, watch.talk);
 
     if watch.talk {
         warn_if_grey_ignored(&job.raster, chosen.printer.as_ref());
@@ -509,6 +484,71 @@ pub(crate) fn bounds(model: &Model) -> Option<Aabb> {
         .into_iter()
         .chain(supports)
         .reduce(merged)
+}
+
+/// Every model of a plate put down, and which part each model, plug or piece is of.
+struct Laid<'a> {
+    parts: Vec<Part>,
+    models: Vec<Model>,
+    /// The part each of `models` belongs to, by its index in `parts`.
+    owners: Vec<usize>,
+    /// The plugs of each piece, by their range in `models`, and the file it came from.
+    plugged: Vec<(Range<usize>, &'a Path)>,
+}
+
+/// Hollows, supports and puts down every piece of every entry, with its plugs beside it;
+/// `held` is the printer, the layer height and the resin's drift, millimetres.
+fn put_down_every<'a>(
+    pieces: Vec<Vec<Mesh>>,
+    found: Vec<Found>,
+    entries: &'a [(PathBuf, Shaping)],
+    (printer, layer_height, drift_mm): (Option<&PrinterProfile>, Scalar, Scalar),
+    watch: &Watch,
+) -> Result<Laid<'a>> {
+    let mut laid = Laid {
+        parts: Vec::with_capacity(entries.len()),
+        models: Vec::with_capacity(entries.len()),
+        owners: Vec::with_capacity(entries.len()),
+        plugged: Vec::new(),
+    };
+    for ((meshes, (import, oriented)), (path, shaping)) in
+        pieces.into_iter().zip(found).zip(entries)
+    {
+        // The imports are all reported before the first model is shaped, so on a plate
+        // these lines would otherwise read as the last model's.
+        if watch.talk && entries.len() > 1 && shapes_anything(shaping) {
+            println!("{}", path.display());
+        }
+        let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
+        let (mut hollow, mut supports) = (None, None);
+        let mut stands_in = None;
+        for mesh in meshes {
+            let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
+            stands_in = [stands_in, bounds(&down.model)]
+                .into_iter()
+                .flatten()
+                .reduce(merged);
+            laid.models.push(down.model);
+            let first = laid.models.len();
+            laid.models.extend(down.plugs);
+            laid.plugged
+                .push((first..laid.models.len(), path.as_path()));
+            laid.owners.resize(laid.models.len(), laid.parts.len());
+            hollow = hollow.or(down.hollow);
+            supports = supports.or(down.supports);
+        }
+        let standing = standing_of(stands_in, printer, supports.is_some(), watch.talk);
+        laid.parts.push(Part {
+            input: path.clone(),
+            import: Some(import),
+            oriented,
+            hollow,
+            supports,
+            standing,
+            meets: Vec::new(),
+        });
+    }
+    Ok(laid)
 }
 
 /// Spreads every piece of every entry over `printer`'s plate.

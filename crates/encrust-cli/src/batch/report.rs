@@ -122,6 +122,9 @@ pub struct PartReport {
     pub hollow: Option<Hollow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports: Option<Supports>,
+    /// The inputs of the other models it or its supports meet on the plate.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub meets: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -250,6 +253,11 @@ impl PartReport {
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
             }),
+            meets: part
+                .meets
+                .iter()
+                .map(|input| input.display().to_string())
+                .collect(),
         }
     }
 
@@ -262,6 +270,7 @@ impl PartReport {
             oriented: None,
             hollow: None,
             supports: None,
+            meets: Vec::new(),
         }
     }
 }
