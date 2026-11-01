@@ -209,7 +209,7 @@ impl Window<'_> {
             f32::INFINITY,
             |ui| {
                 ui.set_width(width);
-                scene_panel::this_plate(ui, self);
+                plate_summary::ui(ui, self);
             },
         );
         let max_h = (plate.top() - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);

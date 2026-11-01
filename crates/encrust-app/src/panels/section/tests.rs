@@ -63,6 +63,19 @@ fn the_strip_marks_the_widest_layer_full_height_and_an_island_where_it_starts() 
 }
 
 #[test]
+fn only_the_first_risk_of_a_run_of_one_colour_stands_larger() {
+    let (warn, danger) = (egui::Color32::YELLOW, egui::Color32::RED);
+    let marks = Marks {
+        widths: Vec::new(),
+        risks: vec![(0.10, warn), (0.11, warn), (0.12, danger), (0.50, warn)],
+    };
+    // A 200 point track: a hundredth of it is two points, well inside one run.
+    let span = egui::Rangef::new(0.0, 200.0);
+    let firsts: Vec<bool> = (0..4).map(|index| marks.starts_run(index, span)).collect();
+    assert_eq!(firsts, [true, false, true, true]);
+}
+
+#[test]
 fn the_prepare_mode_cuts_where_the_strip_was_left() {
     let section = Section {
         height_mm: Some(3.5),

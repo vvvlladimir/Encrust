@@ -19,6 +19,8 @@ status-opened = Opened { $path }
 status-saved = Saved { $name }
 table-profile = Profile
 unit-deg = °
+unit-g = g
+unit-ml = ml
 unit-g-ml = g/ml
 unit-h = h
 unit-m = m
@@ -513,27 +515,37 @@ check-removed =
 
 ## panels/plate_summary.rs
 
-summary-layer = Layer { $layer }
-summary-this-plate = This plate
+summary-layer = Layer
 summary-layer-range = { $fewest } to { $most }
-summary-height = Height
 summary-layers = Layers
 summary-vertices = Vertices
 summary-triangles = Triangles
 summary-model-supports = Model/supports
 summary-price = Price
-summary-z-height = Z height
 summary-exposure = Exposure
 summary-cured-area = Cured area
-summary-not-priced = not priced
 summary-volume = Volume
 summary-weight = Weight
-summary-measuring = measuring
 summary-time = Time
+summary-resin = Resin
+summary-block = Block
+summary-details = Details
+summary-model = Model
+summary-supports = Supports
+summary-broken =
+    { $count ->
+        [one] { $count } model is broken
+       *[other] { $count } models are broken
+    }
+summary-broken-why =
+    { $count ->
+        [one] What is sliced from it may not print.
+       *[other] What is sliced from them may not print.
+    }
 summary-estimate = ≈ { $value }
-summary-block-bottom = bottom block
-summary-block-transition = transition
-summary-block-body = body
+summary-block-bottom = Bottom
+summary-block-transition = Transition
+summary-block-body = Body
 
 ## ui/widgets.rs
 
@@ -1237,8 +1249,7 @@ connection-api-key = or an API key
 card-open-printer = Open the printer
 card-search-failed = The search could not go out on any network
 card-nothing-answered = Nothing answered at { $address }
-card-destination-several = The printer this profile sends to; press for the others it lists
-card-destination = The printer this profile sends to
+card-destination-several = The printer this profile sends to; press for the others it lists and a new scan
 card-not-answering = Not answering
 card-connecting = Connecting
 card-not-asked = Not asked yet
@@ -1266,11 +1277,7 @@ slice-all = Slice all { $count } plates to .{ $extension }
 slice-send = Slice and send to { $name }
 slice-start-tooltip = Start printing the file that landed on { $name }
 slice-start-print = Start print
-slice-broken =
-    { $count ->
-        [one] { $count } model on this plate is broken; what is sliced from it may not print
-       *[other] { $count } models on this plate are broken; what is sliced from them may not print
-    }
+slice-saved-instead = { $why }; the file is saved instead.
 slice-cannot-send = cannot slice the stack to send
 slice-slicing = Slicing
 slice-all-started = Slicing { $count } plates beside { $path }
@@ -1623,6 +1630,7 @@ view-model = Model
 view-side-by-side = Model and layer side by side
 view-mask = Layer mask
 section-pause = Pause
+section-of = of { $count }
 section-no-layers = No layers
 section-no-layers-yet = No layers yet
 section-height-of = { $height } of { $top } mm
@@ -1707,6 +1715,8 @@ scope-plate = all { $count } models on the plate
 models-broken = broken
 models-title = Models
 models-selected = { $count } selected
+models-picked = { $count } picked
+models-project = · { $name }
 models-arrange = Arrange the plate
 models-duplicate = Duplicate { $count } models
 models-array = Array

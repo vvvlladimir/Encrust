@@ -1,6 +1,9 @@
 use super::playback::{fraction, height_range, step};
 use super::reading::Reading;
-use super::{BAND_W, HANDLE, PROFILE_W, RISK, RULE_W, TICKS, TRACK_W};
+use super::{
+    HANDLE, PROFILE_HALF_W, PROFILE_PITCH, RISK, RISK_FIRST, RISK_RUN_GAP, RULE_W, TICK_INSET,
+    TICK_W, TICKS,
+};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::inspector::risk_tint;
@@ -14,7 +17,7 @@ use egui::{Rect, Sense, Stroke, pos2, vec2};
 pub(super) fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading: &Reading) {
     // An id of its own rather than the next in line: a button appearing before the track
     // mid-drag would otherwise hand the drag to another widget.
-    let (rect, _) = ui.allocate_exact_size(vec2(TRACK_W, height), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     let sense = if reading.at.is_some() {
         Sense::click_and_drag()
     } else {
@@ -153,6 +156,8 @@ pub(super) fn up(span: egui::Rangef, at: f32) -> f32 {
     egui::lerp(span.max..=span.min, at)
 }
 
+/// The rule, the cured-area profile behind it, the scale at the right, the fill between
+/// the two thumbs, the risks across it and the thumbs themselves, in that order.
 pub(super) fn paint_track(
     ui: &egui::Ui,
     window: &Window,
@@ -169,21 +174,14 @@ pub(super) fn paint_track(
         ),
         span.expand(HANDLE.y / 2.0),
     );
+    let round = egui::CornerRadius::same(u8::MAX);
 
-    let marks = marked(window, span)
-        .map(|(measured, along)| (Marks::of(measured, along.span().max(1.0) as usize), along));
+    let rows = (span.span() / PROFILE_PITCH).max(1.0) as usize;
+    let marks = marked(window, span).map(|(measured, along)| (Marks::of(measured, rows), along));
     if let Some((marks, along)) = &marks {
         marks.paint_profile(painter, *along, rule);
     }
-    exposure_bands(painter, window, span, rect.left());
-
-    painter.rect(
-        rule,
-        egui::CornerRadius::same(255),
-        colors.sunken,
-        Stroke::new(1.0, colors.hairline),
-        egui::StrokeKind::Outside,
-    );
+    painter.rect_filled(rule, round, colors.active);
     // With nothing to cut through the rule stands alone: a scale would measure nothing.
     let Some(at) = at else {
         if let Some((marks, along)) = &marks {
@@ -191,33 +189,28 @@ pub(super) fn paint_track(
         }
         return;
     };
+    let ticks_x = egui::Rangef::new(
+        rect.right() - TICK_INSET - TICK_W,
+        rect.right() - TICK_INSET,
+    );
     for tick in 0..TICKS {
         let y = egui::lerp(span, tick as f32 / (TICKS - 1) as f32);
-        painter.hline(
-            egui::Rangef::new(rect.right() - 6.0, rect.right()),
-            y,
-            Stroke::new(1.0, colors.line),
-        );
+        painter.hline(ticks_x, y, Stroke::new(1.0, colors.line));
     }
     let y = up(span, at);
-    let fill_bottom = floor.map_or(rule.max.y, |(floor_at, _)| up(span, floor_at));
-    let filled = rule.with_min_y(y).with_max_y(fill_bottom.max(y));
-    painter.rect_filled(
-        filled,
-        egui::CornerRadius::same(255),
-        colors.accent.gamma_multiply(0.75),
-    );
+    let floor_y = floor.map_or(up(span, 0.0), |(floor_at, _)| up(span, floor_at));
+    let filled = rule.with_min_y(y).with_max_y(floor_y.max(y));
+    painter.rect_filled(filled, round, colors.accent);
     if let Some((marks, along)) = &marks {
         marks.paint_risks(painter, *along, rule);
     }
-    let floor_y = floor.map_or(up(span, 0.0), |(floor_at, _)| up(span, floor_at));
     for y in [floor_y, y] {
         let handle = Rect::from_center_size(pos2(rect.center().x, y), HANDLE);
         painter.rect(
             handle,
-            egui::CornerRadius::same(3),
+            egui::CornerRadius::same(4),
             colors.text_high,
-            Stroke::new(2.0, colors.accent.gamma_multiply(0.6)),
+            Stroke::new(2.0, colors.accent),
             egui::StrokeKind::Outside,
         );
     }
@@ -245,46 +238,13 @@ pub(super) fn marked<'a>(
     Some((measured, egui::Rangef::new(to, from)))
 }
 
-/// The exposure bands down the left of the track, each in its own tint, over the height
-/// the strip spans.
-pub(super) fn exposure_bands(
-    painter: &egui::Painter,
-    window: &Window,
-    span: egui::Rangef,
-    left: f32,
-) {
-    let (bottom_mm, top_mm) = match *window.mode {
-        Mode::Preview => match window.machine.preview.stack_top_mm() {
-            Some(top) => (0.0, top),
-            None => return,
-        },
-        Mode::Prepare => match height_range(window.doc) {
-            Some(range) => range,
-            None => return,
-        },
-    };
-    for (index, band) in window.machine.slicing.exposure.iter().enumerate() {
-        let from = fraction(bottom_mm, top_mm, band.from_mm);
-        let to = fraction(bottom_mm, top_mm, band.to_mm);
-        if to <= from {
-            continue;
-        }
-        let strip = Rect::from_x_y_ranges(left..=left + BAND_W, up(span, to)..=up(span, from));
-        painter.rect_filled(
-            strip,
-            egui::CornerRadius::same(255),
-            theme::band_tint(index),
-        );
-    }
-}
-
 /// What the strip shows of the stack along its track: the cured area up the print, as a
-/// profile either side of the rule, and a tick at every layer named as a risk.
+/// profile either side of the rule, and a bar at every layer named as a risk.
 pub(super) struct Marks {
     /// The widest layer in each row of the track, from the plate up, over the widest of
     /// all.
     pub(super) widths: Vec<f32>,
-    /// Where each risk sits up the stack, from zero to one, and its colour.
+    /// Where each risk sits up the stack, from zero to one, and its colour, lowest first.
     pub(super) risks: Vec<(f32, egui::Color32)>,
 }
 
@@ -302,40 +262,67 @@ impl Marks {
             widths.iter_mut().for_each(|width| *width /= widest);
         }
         let last = layers.len().saturating_sub(1).max(1) as f32;
-        let risks = measured
+        let mut risks: Vec<_> = measured
             .risks()
             .iter()
             .map(|risk| (risk.layer as f32 / last, risk_tint(risk)))
             .collect();
+        risks.sort_by(|a, b| a.0.total_cmp(&b.0));
         Self { widths, risks }
     }
 
+    /// A dashed line a row, centred on the rule and as wide as the row's widest layer.
     pub(super) fn paint_profile(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
-        let colors = theme::colors();
+        let ink = theme::colors().text_low.gamma_multiply(PROFILE_ALPHA);
         let rows = self.widths.len() as f32;
-        let profile = self
-            .widths
-            .iter()
-            .enumerate()
-            .filter(|(_, width)| **width > 0.0)
-            .map(|(row, width)| {
-                let y = up(span, (row as f32 + 0.5) / rows);
-                let half = RULE_W / 2.0 + width * PROFILE_W;
-                let bar = Rect::from_center_size(
-                    pos2(rule.center().x, y),
-                    vec2(2.0 * half, (span.span() / rows).max(1.0)),
-                );
-                egui::Shape::rect_filled(bar, 0.0, colors.line)
-            })
-            .collect();
-        painter.add(egui::Shape::Vec(profile));
+        let mut profile = Vec::new();
+        for (row, width) in self.widths.iter().enumerate() {
+            if *width <= 0.0 {
+                continue;
+            }
+            let y = up(span, (row as f32 + 0.5) / rows);
+            let half = RULE_W / 2.0 + width * (PROFILE_HALF_W - RULE_W / 2.0);
+            let line = [
+                pos2(rule.center().x - half, y),
+                pos2(rule.center().x + half, y),
+            ];
+            profile.extend(egui::Shape::dashed_line(
+                &line,
+                Stroke::new(1.0, ink),
+                2.0,
+                2.0,
+            ));
+        }
+        painter.extend(profile);
     }
 
-    /// Over the rule and its fill, so a risk under the cut reads as well as one above it.
+    /// Over the rule and its fill, so a risk under the cut reads as well as one above it;
+    /// the first of a run of one colour stands larger.
     pub(super) fn paint_risks(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
-        for (at, tint) in &self.risks {
-            let tick = Rect::from_center_size(pos2(rule.center().x, up(span, *at)), RISK);
-            painter.rect_filled(tick, egui::CornerRadius::same(255), *tint);
+        for (index, (at, tint)) in self.risks.iter().enumerate() {
+            let y = up(span, *at);
+            let size = if self.starts_run(index, span) {
+                RISK_FIRST
+            } else {
+                RISK
+            };
+            let bar = Rect::from_center_size(pos2(rule.center().x, y), size);
+            painter.rect_filled(bar, egui::CornerRadius::same(1), *tint);
         }
     }
+
+    /// Whether risk `index` opens a run: no risk of its colour stands within
+    /// `RISK_RUN_GAP` points under it on a track along `span`.
+    pub(super) fn starts_run(&self, index: usize, span: egui::Rangef) -> bool {
+        let (at, tint) = self.risks[index];
+        let gap = RISK_RUN_GAP / span.span().max(1.0);
+        !self.risks[..index]
+            .iter()
+            .rev()
+            .take_while(|(below, _)| at - below <= gap)
+            .any(|(_, other)| *other == tint)
+    }
 }
+
+/// How much of `text_low` the cured-area profile keeps.
+const PROFILE_ALPHA: f32 = 0.55;

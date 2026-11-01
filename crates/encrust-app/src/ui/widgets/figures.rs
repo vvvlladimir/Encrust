@@ -16,10 +16,6 @@ pub struct Figure<'a> {
 
 /// Two by two figures in one bordered box: each name over its figure, the name cut with
 /// an ellipsis, the figure never wrapped.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "TODO(step-7): the plate card's figures")
-)]
 pub fn figure_grid(ui: &mut Ui, figures: &[Figure<'_>; 4]) {
     let width = ui.available_width();
     let (rect, _) =
@@ -101,10 +97,6 @@ const FIGURE_PAD: egui::Vec2 = vec2(10.0, 6.0);
 /// A *Details* row that opens what `add` draws between whatever stands above it and the
 /// row itself, so a card standing on the stage's foot grows upward. `summary` stands at the
 /// row's right while it is closed. The row's state is kept between runs.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "TODO(step-7): the plate card's Details")
-)]
 pub fn details_fold<R>(
     ui: &mut Ui,
     label: &str,
@@ -201,6 +193,59 @@ fn details_row(
 
 const DETAILS_ROW_H: f32 = 26.0;
 const DETAILS_PAD: f32 = 4.0;
+
+/// Figures split two ways, as Details splits the plate's into the models' and the
+/// supports': a row of `heads` over the columns, then each row's name and its two figures.
+pub fn split_readings(ui: &mut Ui, heads: [&str; 2], rows: &[(String, String, String)]) {
+    let colors = theme::colors();
+    let width = ui.available_width();
+    let column_w = width * SPLIT_COLUMN_SHARE;
+    let rights = |rect: Rect| [rect.right() - column_w - SPLIT_GAP, rect.right()];
+    let (rect, _) = ui.allocate_exact_size(vec2(width, SPLIT_ROW_H), Sense::hover());
+    for (head, right) in heads.iter().zip(rights(rect)) {
+        ui.painter().text(
+            pos2(right, rect.center().y),
+            Align2::RIGHT_CENTER,
+            head,
+            theme::small(),
+            colors.text_low,
+        );
+    }
+    for (name, first, second) in rows {
+        let (rect, response) = ui.allocate_exact_size(vec2(width, SPLIT_ROW_H), Sense::hover());
+        let read = format!("{name}: {} {first}, {} {second}", heads[0], heads[1]);
+        response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &read));
+        let painter = ui.painter();
+        let room = (rights(rect)[0] - column_w - rect.left()).max(0.0);
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            name.clone(),
+            theme::reading(),
+            colors.text_mid,
+        );
+        job.wrap = egui::text::TextWrapping::truncate_at_width(room);
+        let name = painter.layout_job(job);
+        painter.galley(
+            rect.left_center() - vec2(0.0, name.size().y / 2.0),
+            name,
+            colors.text_mid,
+        );
+        for (figure, right) in [first, second].into_iter().zip(rights(rect)) {
+            painter.text(
+                pos2(right, rect.center().y),
+                Align2::RIGHT_CENTER,
+                figure,
+                theme::figures(12.0),
+                colors.text_high,
+            );
+        }
+    }
+}
+
+/// A row of a split, the share of its width each figure's column takes, and the room
+/// between the two columns, points.
+const SPLIT_ROW_H: f32 = 24.0;
+const SPLIT_COLUMN_SHARE: f32 = 0.3;
+const SPLIT_GAP: f32 = 8.0;
 
 #[cfg(test)]
 mod tests {

@@ -19,6 +19,8 @@ status-opened = Открыто: { $path }
 status-saved = Сохранено: { $name }
 table-profile = Профиль
 unit-deg = °
+unit-g = г
+unit-ml = мл
 unit-g-ml = г/мл
 unit-h = ч
 unit-m = мин
@@ -555,27 +557,38 @@ check-removed =
 
 ## panels/plate_summary.rs
 
-summary-layer = Слой { $layer }
-summary-this-plate = Эта платформа
+summary-layer = Слой
 summary-layer-range = от { $fewest } до { $most }
-summary-height = Высота
 summary-layers = Слои
 summary-vertices = Вершины
 summary-triangles = Треугольники
 summary-model-supports = Модель/поддержки
 summary-price = Стоимость
-summary-z-height = Высота по Z
 summary-exposure = Экспозиция
 summary-cured-area = Площадь засветки
-summary-not-priced = цена не задана
 summary-volume = Объём
 summary-weight = Масса
-summary-measuring = замер
 summary-time = Время
+summary-resin = Смола
+summary-block = Блок
+summary-details = Подробнее
+summary-model = Модель
+summary-supports = Поддержки
+summary-broken =
+    { $count ->
+        [one] { $count } модель сломана
+        [few] { $count } модели сломаны
+       *[many] { $count } моделей сломано
+    }
+summary-broken-why =
+    { $count ->
+        [one] То, что из неё нарезано, может не напечататься.
+       *[other] То, что из них нарезано, может не напечататься.
+    }
 summary-estimate = ≈ { $value }
-summary-block-bottom = нижние слои
-summary-block-transition = переход
-summary-block-body = основная часть
+summary-block-bottom = Нижние слои
+summary-block-transition = Переход
+summary-block-body = Основная часть
 
 ## ui/widgets.rs
 
@@ -1304,8 +1317,7 @@ connection-api-key = или ключ API
 card-open-printer = Открыть принтер
 card-search-failed = Поиск не удалось отправить ни в одну сеть
 card-nothing-answered = Никто не ответил по адресу { $address }
-card-destination-several = Принтер, на который отправляет этот профиль; нажмите, чтобы увидеть остальные в списке
-card-destination = Принтер, на который отправляет этот профиль
+card-destination-several = Принтер, на который отправляет этот профиль; нажмите, чтобы увидеть остальные в списке и искать снова
 card-not-answering = Не отвечает
 card-connecting = Подключение
 card-not-asked = Пока не опрашивался
@@ -1333,12 +1345,7 @@ slice-all = Нарезать все платформы ({ $count }) в .{ $exten
 slice-send = Нарезать и отправить на { $name }
 slice-start-tooltip = Начать печать файла, загруженного на { $name }
 slice-start-print = Начать печать
-slice-broken =
-    { $count ->
-        [one] { $count } модель на этой платформе повреждена; нарезанное из неё может не напечататься
-        [few] { $count } модели на этой платформе повреждены; нарезанное из них может не напечататься
-       *[many] { $count } моделей на этой платформе повреждены; нарезанное из них может не напечататься
-    }
+slice-saved-instead = { $why }; файл сохраняется на диск.
 slice-cannot-send = не удалось нарезать набор слоёв для отправки
 slice-slicing = Нарезка
 slice-all-started = Нарезка платформ ({ $count }) рядом с { $path }
@@ -1719,6 +1726,7 @@ view-model = Модель
 view-side-by-side = Модель и слой рядом
 view-mask = Маска слоя
 section-pause = Пауза
+section-of = из { $count }
 section-no-layers = Нет слоёв
 section-no-layers-yet = Слоёв пока нет
 section-height-of = { $height } из { $top } мм
@@ -1803,6 +1811,8 @@ scope-plate = все модели на платформе ({ $count })
 models-broken = повреждена
 models-title = Модели
 models-selected = Выбрано: { $count }
+models-picked = выбрано: { $count }
+models-project = · { $name }
 models-arrange = Расставить на платформе
 models-duplicate = Дублировать моделей: { $count }
 models-array = Массив

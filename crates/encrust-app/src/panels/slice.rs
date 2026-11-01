@@ -11,7 +11,7 @@ use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{companion_button, hint, icon, primary_button, progress_bar, theme, tone};
+use crate::ui::{busy, companion_square, hint, icon, primary_button, theme};
 
 /// What the keyboard shortcut and the File menu do: this plate into a file, refused for the
 /// same reasons the press is greyed out.
@@ -44,37 +44,39 @@ pub fn can_slice(window: &Window) -> bool {
     slicing.job.is_none() && slicing.blocker(&window.doc.scene).is_none()
 }
 
-/// The one action the window is for, at the foot of the plate's card: Slice and send over
-/// Slice to a file while the bound machine can take the file, its bar over it while it
-/// runs, then Start print once the file has landed. See `docs/decisions/0348`.
+/// The one action the window is for, at the foot of the plate's card: Slice and send with
+/// Slice to a file the square beside it while the bound machine can take the file, the
+/// errand's bar and Cancel while it runs, then Start print once the file has landed; Slice
+/// to a file alone otherwise. See `docs/decisions/0348`, `0382`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let blocker = window.machine.slicing.blocker(&window.doc.scene);
-    // Nothing on the plate means nothing to start either.
-    if blocker.is_none() {
-        broken_reminder(ui, &window.doc.scene);
-    }
     let free = can_slice(window);
-    let slot = send_slot(window.machine);
-    let mut press = None;
-    if let Some(slot) = &slot {
-        press = send_button(ui, slot, free, blocker.as_deref());
-        ui.add_space(theme::BUTTON_GAP);
-    }
+    let bound = bound_machine(window.machine);
+    let slot = bound
+        .as_ref()
+        .and_then(|bound| send_slot(window.machine, bound));
     let label = tr!(
         "slice-to",
         extension = window.machine.slicing.format.extension()
     );
     let tooltip = tr!("slice-tooltip");
-    let file = match slot {
-        Some(_) => companion_button(ui, icon::SLICE, &label, free),
-        None => primary_button(ui, &label, free),
+    let file_tip = blocker.as_deref().unwrap_or(&tooltip);
+    let press = match &slot {
+        Some(SendSlot {
+            step: SendStep::Running(fraction),
+            name,
+        }) => {
+            if running(ui, window.machine, name, *fraction) {
+                cancel_send(window.machine);
+            }
+            None
+        }
+        Some(slot) => paired(ui, slot, (free, blocker.as_deref()), (&label, file_tip)),
+        None => primary_button(ui, &label, free)
+            .on_hover_text(file_tip)
+            .clicked()
+            .then_some(Press::Slice(Via::File)),
     };
-    if file
-        .on_hover_text(blocker.as_deref().unwrap_or(&tooltip))
-        .clicked()
-    {
-        press = Some(Press::Slice(Via::File));
-    }
     match press {
         Some(Press::Slice(via)) => start(
             &window.doc.scene,
@@ -90,23 +92,70 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .start_print(&mut window.machine.status),
         None => {}
     }
-    if let Some(why) = blocker {
-        ui.add_space(4.0);
+    let saved_instead = bound
+        .filter(|_| slot.is_none() && blocker.is_none())
+        .and_then(|bound| bound.blocker)
+        .map(|why| tr!("slice-saved-instead", why = why));
+    if let Some(why) = blocker.or(saved_instead) {
+        ui.add_space(theme::NOTE_GAP);
         hint(ui, &why);
     }
 }
 
-/// The button over the press, with the running errand's bar over it.
+/// The primary that sends or starts the print, and Slice to a file the square beside it,
+/// as tall. `label` and `tip` are the square's; answers what was pressed.
+fn paired(
+    ui: &mut egui::Ui,
+    slot: &SendSlot,
+    (free, blocker): (bool, Option<&str>),
+    (label, tip): (&str, &str),
+) -> Option<Press> {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
+        let width = (ui.available_width() - theme::PRIMARY_H - theme::BUTTON_GAP).max(0.0);
+        let sent = ui
+            .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
+                send_button(ui, slot, free, blocker)
+            })
+            .inner;
+        let file = companion_square(ui, icon::SLICE_TO_FILE, label, theme::PRIMARY_H, free);
+        let file = file.on_hover_text(tip).clicked();
+        sent.or(file.then_some(Press::Slice(Via::File)))
+    })
+    .inner
+}
+
+/// The errand running for the bound machine: the slice, then the upload, its share and the
+/// way to stop it. Answers whether Cancel was pressed.
+fn running(ui: &mut egui::Ui, machine: &Machine, name: &str, fraction: Option<f32>) -> bool {
+    let label = if machine.slicing.is_sending() {
+        tr!("slice-slicing")
+    } else {
+        tr!("network-sending", name = name.to_owned())
+    };
+    let share = fraction.map(|share| (format!("{:.0}%", share * 100.0), share));
+    let step = share
+        .as_ref()
+        .map(|(percent, share)| (percent.as_str(), *share));
+    busy(ui, &label, step, true)
+}
+
+/// Stops whichever half of the errand is running: the slice, or the upload after it.
+fn cancel_send(machine: &Machine) {
+    match (&machine.slicing.job, &machine.network.job) {
+        (Some(job), _) if machine.slicing.is_sending() => job.cancel(),
+        (_, Some(job)) => job.cancel(),
+        _ => {}
+    }
+}
+
+/// Slice and send, or Start print once the file has landed.
 fn send_button(
     ui: &mut egui::Ui,
     slot: &SendSlot,
     free: bool,
     blocker: Option<&str>,
 ) -> Option<Press> {
-    if let SendStep::Running(fraction) = slot.step {
-        progress_bar(ui, fraction);
-        ui.add_space(theme::BUTTON_GAP);
-    }
     let (label, tooltip, enabled, press) = match slot.step {
         SendStep::Start => (
             tr!("slice-start-print"),
@@ -153,8 +202,7 @@ enum Press {
     StartPrint,
 }
 
-fn send_slot(machine: &Machine) -> Option<SendSlot> {
-    let bound = bound_machine(machine)?;
+fn send_slot(machine: &Machine, bound: &Bound) -> Option<SendSlot> {
     let network = &machine.network;
     let running = match (&machine.slicing.job, &network.job) {
         (Some(job), _) if machine.slicing.is_sending() => Some(job.fraction()),
@@ -162,8 +210,8 @@ fn send_slot(machine: &Machine) -> Option<SendSlot> {
         _ => None,
     };
     Some(SendSlot {
-        step: step(&bound, running, network.sent.is_some())?,
-        name: bound.name,
+        step: step(bound, running, network.sent.is_some())?,
+        name: bound.name.clone(),
     })
 }
 
@@ -177,18 +225,6 @@ fn step(bound: &Bound, running: Option<Option<f32>>, sent: bool) -> Option<SendS
             (bound.reach == Reach::Answered && bound.blocker.is_none()).then_some(SendStep::Offer)
         }
     }
-}
-
-/// A model left broken is a reminder here rather than a blocker: what is sliced from it
-/// may be nothing like the model, and this is the last place to turn back.
-fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
-    let broken = crate::repair::broken_on_the_plate(scene);
-    if broken == 0 {
-        return;
-    }
-    let line = tr!("slice-broken", count = broken);
-    tone(ui, &line, theme::colors().warn);
-    ui.add_space(4.0);
 }
 
 /// The machine the printer in hand is bound to, as the row needs it: a profile that

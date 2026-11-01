@@ -167,9 +167,9 @@ fn a_transition_layer_reads_its_own_step_of_the_ramp() {
 }
 
 #[test]
-fn the_heading_names_the_block_the_layer_is_in() {
+fn the_layer_card_names_the_block_the_layer_is_in() {
     let machine = machine_with_a_ramp();
-    assert_eq!(block(&machine, 4), "bottom block");
-    assert_eq!(block(&machine, 5), "transition");
-    assert_eq!(block(&machine, 10), "body");
+    assert_eq!(block(&machine, 4), "Bottom");
+    assert_eq!(block(&machine, 5), "Transition");
+    assert_eq!(block(&machine, 10), "Body");
 }

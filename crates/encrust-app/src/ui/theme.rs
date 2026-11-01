@@ -317,6 +317,9 @@ pub const fn colors() -> &'static Palette {
 
 /// Heights, widths and gaps, in points. One density, applied everywhere.
 pub const ROW_H: f32 = 30.0;
+/// A model's row in the models card, and the printer's row over the plate's Slice.
+pub const MODEL_ROW_H: f32 = 32.0;
+pub const PRINTER_ROW_H: f32 = 34.0;
 /// Every box a value is typed in stands as tall as a button.
 pub const FIELD_H: f32 = BUTTON_H;
 /// Width of the value box in a named row.
@@ -352,7 +355,7 @@ pub const TOP_BAR_H: f32 = 44.0;
 /// working in, and the bar's names are cut rather than lost.
 pub const WINDOW_MIN_W: f32 = 900.0;
 pub const WINDOW_MIN_H: f32 = 560.0;
-pub const LAYER_STRIP_W: f32 = 56.0;
+pub const LAYER_STRIP_W: f32 = 64.0;
 /// A rail button holds a glyph over its name, or stands a square of the glyph alone.
 pub const RAIL_BUTTON_H: f32 = 50.0;
 pub const RAIL_ICON_H: f32 = 36.0;
@@ -361,6 +364,8 @@ pub const TOOLBAR_PAD: f32 = 4.0;
 /// The chips and buttons standing in the top bar and the layer strip.
 pub const CHIP_H: f32 = 32.0;
 pub const ICON_SIZE: f32 = 28.0;
+/// The squares of a card's own rows: its plates and the actions under its models.
+pub const SMALL_ICON_SIZE: f32 = 26.0;
 pub const PRIMARY_H: f32 = 40.0;
 /// The ring a control wears while it holds the keyboard's focus, and the halo of the
 /// accent's wash around it, points.

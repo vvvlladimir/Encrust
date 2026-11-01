@@ -120,7 +120,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 
 | Part | Content | Size |
 |---|---|---|
-| Plates | numbered 26 squares, the current washed; + ; at the right every plate | row 42 |
+| Plates | numbered 26 squares, the current washed in `accent_wash`; + | row 42 |
 | Heading | *Models*, `· project name` in `text_low`, `n picked` in `accent_soft`, + | 36 |
 | Rows | eye or eye-slash, name cut with an ellipsis, a state tag (`Broken` in `danger_wash`) | 32; picked washed in `picked_wash`, no stripe |
 | Actions | Duplicate, Array, Arrange, Remove as 26 squares, spread evenly | 34, hairline over it |
@@ -136,35 +136,36 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 | Foot | the printer row, then the action row | on `base` |
 
 The printer row is 34 tall on `raised`: printer glyph, name, a status dot and word (`ok`
-Ready, `accent` breathing Printing n %, `text_low` Not answering), caret, open-sheet square.
-With no printer it reads *No printer on the network* with a rescan square.
+Ready, `accent` breathing Printing n %, `text_low` Not answering), caret, and the open-sheet
+square beside it. A profile listing no printer has no row.
 
 | State | Action row |
 |---|---|
 | No printer, or the profile sends on a stick | Slice to .goo as the primary |
 | A printer ready | Slice and send primary, Slice to .goo as the 40 square beside it |
-| Choosing | the printer row opens a list of printers over the foot, each with its state, and *Scan again* last |
-| Sending | the bar of the slice then the upload with its percent, Cancel under it |
+| Choosing | the printer row opens a list of printers, each with its state, and *Scan again* last |
+| Sending | the slice then the upload named over its bar, its percent under it, Cancel under that |
 | The file landed | Start print primary, the 40 square beside it |
-| The printer busy | Slice to .goo primary; under it *Bench A is printing; the file is saved instead* |
+| The printer busy | Slice to .goo primary; under it *Bench A is printing a.goo; the file is saved instead.* |
 | Nothing to slice | Slice to .goo disabled, and why under it |
 
-The card keeps its height across these states but for the printer list. In Preview the
-heading is *Layer*, the figures are Exposure, Block (bottom, transition, body), Cured area
-and Volume of the layer shown, and there is no Details.
+A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
+not print.* In Preview the heading is *Layer*, the figures are Exposure, Block (bottom,
+transition, body), Cured area and Volume of the layer shown, and there is no Details.
 
 ## Layer strip
 
 Top to bottom, centred in its 64: the three views — model, model beside layer, layer — as
-`icon_toggle`s in one sunken group; the layer number in a sunken box in `accent_soft` that a
-click opens for typing; `of n` and the layer's height in mm under it; layer up; the track;
+`icon_toggle`s in one sunken group, stacked; the layer number in a sunken box 20 tall in
+`accent_soft` that a click opens for typing; `of n` and the layer's height in mm under it; layer up; the track;
 layer down; play. The track is a 3 point rule, filled in `accent` between its two thumbs —
 26 × 12, ringed in `accent`, the upper one the cut, the lower the first layer shown. Behind
-the rule each layer's cured area is a dashed `text_low` line either side of it, as wide as
-the area is large, so the supports' base reads wide and the model narrow. Across the rule a
-bar marks each risk the check found: `warn` for one that may print (a thin section, a hard
-peel), `danger` for one that will fail (an island, a suction cup), 22 × 3, the first of a
-run 32 × 5. Scale ticks stand at the right edge in `line`. Nothing else is drawn on the
+the rule, every 4 points up it, the widest cured area there is a dashed `text_low` line
+centred on it, at most 44 across, so the supports' base reads wide and the model narrow.
+Across the rule a bar marks each risk the check found, in the colour the Check tool gives
+it: `danger` for one that will fail (an island, a part left floating), `warn` for one that
+may (a thin section, a hard peel, a lever, a suction cup), 22 × 3; the first of a run of
+one colour, none within 12 points under it, 32 × 5. Scale ticks stand at the right edge in `line`. Nothing else is drawn on the
 track. With no stack it reads *No layers*.
 
 ## Over the stage
@@ -240,6 +241,6 @@ at its right; then tiles of at least 180, a 120 picture over the name, when and 
 
 ## A small window
 
-At 900 by 560 the inspector is 272, the models and plate cards 232, the layer strip 44, the
+At 900 by 560 the inspector is 272, the models and plate cards 232, the layer strip 64, the
 tool row its glyphs alone, 36 tall, from 8 right of the inspector to 8 left of the models
 card, the chip without the maker and the bar's right end glyphs only.
