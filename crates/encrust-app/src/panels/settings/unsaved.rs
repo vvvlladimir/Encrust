@@ -25,9 +25,9 @@ pub(super) fn ask(ctx: &egui::Context, name: &str) -> Option<Answer> {
                     .font(theme::dialog_title())
                     .color(theme::colors().text_high),
             );
-            ui.add_space(6.0);
+            ui.add_space(theme::ROW_GAP);
             describe(ui, &tr!("unsaved-what"));
-            ui.add_space(8.0);
+            ui.add_space(theme::ITEM_GAP);
             ui.horizontal(|ui| {
                 if inline_button(ui, Inline::new(&tr!("settings-save")).primary()).clicked() {
                     answer = Some(Answer::Save);

@@ -12,12 +12,10 @@ mod rows;
 mod save;
 #[cfg(test)]
 mod tests;
+use crate::ui::theme::layout::inspector_support_picker::SHAPE_INDENT;
 use list::{List, removal};
 use rows::{Act, Pick, Row, in_hand, presets, rows};
 use save::save_button;
-
-/// How far the shapes of the automatic preset stand in under it, points.
-const SHAPE_INDENT: f32 = 20.0;
 
 /// The preset in hand on one line under the card's heading: the picker that is also the
 /// list of groups standing, Save, and the bin. See `docs/decisions/0336`.

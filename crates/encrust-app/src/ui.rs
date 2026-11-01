@@ -40,7 +40,7 @@ pub use widgets::{
     DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
     dropdown_search_menu,
 };
-pub use widgets::{EntryRow, entry_row};
+pub use widgets::{EntryRow, ModelRow, entry_row, model_row};
 pub use widgets::{
     Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, zoom_bar,
 };

@@ -10,8 +10,9 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Inline, Segment, Segmented, count_row, describe, hint, icon, inline_button, inset, notice,
-    number_row, primary_button, secondary_button, section, step_bar, theme, tone,
+    Inline, Segment, Segmented, count_row, describe, figure_line, hint, icon, inline_button, inset,
+    notice, number_row, primary_button, secondary_button, section, status_dot, step_bar, theme,
+    tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -357,17 +358,9 @@ fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) -> bool {
     let colors = theme::colors();
     let mut drill = false;
     ui.horizontal(|ui| {
-        let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-        ui.painter().circle_filled(dot.center(), 3.5, colors.danger);
-        crate::ui::paragraph(
-            ui,
-            egui::RichText::new(tr!(
-                "value-ml",
-                value = format!("{:.2}", volume_mm3 / 1000.0)
-            ))
-            .font(theme::figures(12.0))
-            .color(colors.text_high),
-        );
+        status_dot(ui, colors.danger);
+        let volume = tr!("value-ml", value = format!("{:.2}", volume_mm3 / 1000.0));
+        figure_line(ui, &volume, colors.text_high);
         tone(ui, &tr!("drain-pocket", index = index + 1), colors.text_mid);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             drill = inline_button(ui, Inline::new(&tr!("drain-drill")).glyph(icon::DRAIN))

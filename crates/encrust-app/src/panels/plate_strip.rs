@@ -1,6 +1,7 @@
 use crate::i18n::tr;
 use crate::scene::{ObjectId, Scene};
 use crate::shortcuts::{self, Action};
+use crate::ui::theme;
 use crate::ui::{icon, numbered_square, small_icon_button};
 
 /// The row at the head of the plate panel: one numbered square per plate and the way to add
@@ -18,7 +19,7 @@ pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) -> bool {
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.spacing_mut().item_spacing.x = theme::NOTE_GAP;
                 for (index, name) in names.iter().enumerate() {
                     let plate = index as u32;
                     let place = Place {

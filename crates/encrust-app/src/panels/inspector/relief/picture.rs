@@ -5,14 +5,13 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture};
 use crate::state::Doc;
+pub(super) use crate::ui::theme::layout::inspector_relief_picture::{GALLERY_GAP, THUMB_PT};
 use crate::ui::{
     file_line, icon, picture_square, secondary_button, subheading, swatch, theme, tone,
 };
 use core_geometry::Vec2;
 use std::sync::Arc;
 
-/// The edge of the thumbnail a chosen picture is shown at, points.
-pub(super) const THUMB_PT: f32 = 56.0;
 /// Pixels a side of that thumbnail.
 pub(super) const THUMB_PX: usize = 64;
 
@@ -96,7 +95,6 @@ pub(super) fn thumbnail(ctx: &egui::Context, picture: &Picture) -> egui::Texture
 
 /// Textures in a row of the gallery, and the gap between two, points.
 pub(super) const GALLERY_COLUMNS: usize = 4;
-pub(super) const GALLERY_GAP: f32 = 6.0;
 
 /// The textures that come with the window, a click on one taking it as the picture.
 pub(super) fn gallery(ui: &mut egui::Ui, window: &mut Window) {

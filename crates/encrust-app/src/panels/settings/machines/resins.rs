@@ -10,6 +10,7 @@ use crate::panels::Window;
 use crate::panels::settings::confirm::cost;
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
+use crate::ui::theme::layout::settings_machines_resins::{FILTERS_H, MENU_W};
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::ui::{
     Confirm, Inline, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon,
@@ -32,11 +33,6 @@ const TABLE: Table = Table {
     words: 2,
     lead: 26.0,
 };
-/// The row of filters over the table.
-const FILTERS_H: f32 = 52.0;
-/// The Add a resin menu: wide enough for a resin's name beside its delete button, and no
-/// wider, because a row with its button at the right end takes whatever it is offered.
-const MENU_W: f32 = 240.0;
 
 /// The tab, laid out in `content`: the form of the resin being edited, the table, or the
 /// ways to a first resin when there is nothing to put in it.
@@ -127,7 +123,7 @@ fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Opti
     kinds.dedup();
     let chosen = &mut window.machine.settings.kind;
     ui.horizontal_centered(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
         if filter_chip(ui, &tr!("resins-all-types"), chosen.is_none()).clicked() {
             *chosen = None;
         }
@@ -228,7 +224,7 @@ fn table(
     scroll.auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if shown.is_empty() {
-            ui.add_space(12.0);
+            ui.add_space(theme::PANEL_PAD);
             describe(ui, &tr!("resins-none-here"));
         }
         for (id, resin) in shown {
@@ -267,25 +263,9 @@ fn resin_row(
         tr!("value-s", value = format!("{:.0}", here.bottom_exposure_s)),
     ];
     let response = TABLE.row(ui, &resin.name, picked, &cells);
-    let rect = response.rect;
-    let painter = ui.painter_at(rect);
-    let chip = Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(9.0, 9.0));
-    painter.rect_filled(
-        chip,
-        theme::R_MARK,
-        theme::resin_swatch(resin.details.color),
-    );
-    if in_hand {
-        let at = pos2(rect.right() - 10.0, rect.center().y);
-        let glyph = theme::icon(theme::glyph::ASIDE);
-        painter.text(
-            at,
-            egui::Align2::RIGHT_CENTER,
-            icon::IN_HAND,
-            glyph,
-            colors.accent_soft,
-        );
-    }
+    let swatch = theme::resin_swatch(resin.details.color);
+    let end = in_hand.then_some((icon::IN_HAND, colors.accent_soft));
+    TABLE.mark_row(ui, &response, swatch, end);
     response.on_hover_text_at_pointer(match in_hand {
         true => tr!("resins-row-in-hand"),
         false => tr!("resins-row"),

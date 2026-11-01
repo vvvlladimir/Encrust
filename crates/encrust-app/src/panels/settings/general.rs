@@ -7,6 +7,9 @@ use crate::i18n::tr;
 use crate::panels::settings::form_card;
 use crate::scene::Scene;
 use crate::state::Machine;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::ui::theme::layout::settings_general::PATH_BUTTONS_W;
+use crate::ui::theme::layout::settings_general::RESET_W;
 use crate::ui::{describe, hint, icon, icon_button, switch};
 
 pub fn form(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
@@ -145,13 +148,6 @@ fn tilde(path: &std::path::Path) -> String {
         None => path.display().to_string(),
     }
 }
-
-/// What a path box leaves for the buttons beside it, points.
-#[cfg(not(target_arch = "wasm32"))]
-const PATH_BUTTONS_W: f32 = 170.0;
-
-/// What the template's box leaves for Reset beside it, points.
-const RESET_W: f32 = 40.0;
 
 /// Shows `dir` in the system's file manager, making it first: most users have never
 /// saved a profile, so it may not be there yet.

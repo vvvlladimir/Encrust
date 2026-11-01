@@ -1,6 +1,7 @@
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::text::{TextState, TextTool, reason};
+use crate::ui::theme::layout::inspector_text::LIST_H;
 use crate::ui::{
     DropdownFace, DropdownRow, Segment, Segmented, busy, describe, dropdown, dropdown_row,
     dropdown_search_menu, hint, icon, number_row, section, theme, tone,
@@ -13,9 +14,6 @@ const MAX_HEIGHT_MM: f32 = 100.0;
 /// Past ten millimetres a label is a part of its own rather than lettering on one.
 const MIN_DEPTH_MM: f32 = 0.1;
 const MAX_DEPTH_MM: f32 = 10.0;
-
-/// How tall the list of families stands, points: some ten names.
-const LIST_H: f32 = 280.0;
 
 /// Per point of drag.
 const SIZE_STEP: f64 = 0.1;

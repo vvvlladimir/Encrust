@@ -25,7 +25,7 @@ pub enum Picked {
 /// The library over the form. Answers with what was picked, if anything was.
 pub fn page(ui: &mut Ui, catalogue: &Catalogue, library: &mut Library) -> Option<Picked> {
     let mut picked = header(ui, library);
-    ui.add_space(10.0);
+    ui.add_space(theme::LINE_GAP);
 
     let needle = library.search.trim().to_lowercase();
     let entries = super::sorted(catalogue, &needle);
@@ -74,7 +74,7 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
         });
     });
     if let Some(brand) = library.brand.clone() {
-        ui.add_space(10.0);
+        ui.add_space(theme::LINE_GAP);
         ui.horizontal(|ui| {
             if inline_button(
                 ui,
@@ -125,7 +125,7 @@ fn brands(ui: &mut Ui, catalogue: &Catalogue) -> Option<String> {
                 }
             }
         });
-        ui.add_space(8.0);
+        ui.add_space(theme::ITEM_GAP);
     }
     opened
 }

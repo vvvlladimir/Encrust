@@ -3,10 +3,9 @@
 
 use egui::{Align, Id, Rect, Ui, pos2, vec2};
 
+use crate::ui::theme;
+use crate::ui::theme::layout::settings_jump::IN_VIEW;
 use crate::ui::window_frame::section_tab;
-
-/// Points under the top of the view within which a section counts as the one in view.
-const IN_VIEW: f32 = 24.0;
 
 /// One form's tabs, kept from frame to frame: the tab lit, the one the sections drawn so far
 /// would light, and the one pressed and not yet reached or scrolled away from.
@@ -34,7 +33,7 @@ pub(super) fn tabs(ui: &mut Ui, id: Id, tabs: &[Tab], off: &str) {
     spy.lit = spy.reached.unwrap_or(spy.seen);
     spy.seen = 0;
     ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
         for (index, tab) in tabs.iter().enumerate() {
             let off = tab.off.then_some(off);
             if section_tab(ui, &tab.name, off, spy.lit == index).clicked() {

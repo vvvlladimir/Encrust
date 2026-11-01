@@ -9,16 +9,12 @@ use crate::i18n::tr;
 use crate::network::{Network, PrusaDraft, Target, connection_label};
 use crate::panels::printer_card;
 use crate::panels::settings::form_card;
+use crate::ui::theme::layout::settings_printer_connection::{FIELD_W, LISTED_MARGIN, NAME_W};
 use crate::ui::{
     Inline, Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list,
     subheading, theme, tone,
 };
 use crate::ui::{address_label, state_word, status_dot};
-
-/// How wide a field here is: enough for a host name, not enough to stretch the card.
-const FIELD_W: f32 = 230.0;
-/// How wide a listed printer's name is edited.
-const NAME_W: f32 = 170.0;
 
 /// What this machine takes a file over, the printers it is sent to, and those found that
 /// it could be, each a block of the form.
@@ -155,7 +151,7 @@ fn listed_row(
     let mut removed = false;
     egui::Frame::new()
         .fill(colors.raised)
-        .inner_margin(egui::Margin::symmetric(8, 4))
+        .inner_margin(LISTED_MARGIN)
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {

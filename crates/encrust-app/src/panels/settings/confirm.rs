@@ -33,13 +33,13 @@ pub(super) fn ask(ctx: &egui::Context, catalogue: &Catalogue) -> Option<Answer> 
                     .font(theme::dialog_title())
                     .color(theme::colors().text_high),
             );
-            ui.add_space(6.0);
-            crate::ui::paragraph(ui, egui::RichText::new(&question.what).font(theme::label()));
+            ui.add_space(theme::ROW_GAP);
+            ui.label(egui::RichText::new(&question.what).font(theme::label()));
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
             }
             describe(ui, &tr!("confirm-cannot-undo"));
-            ui.add_space(8.0);
+            ui.add_space(theme::ITEM_GAP);
             ui.horizontal(|ui| {
                 if inline_button(ui, Inline::new(&question.verb).primary()).clicked() {
                     answer = Some(Answer::Confirmed);

@@ -14,6 +14,7 @@ use crate::preview::stack_fingerprint;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
+use crate::ui::theme::layout::plate_summary::{BODY_MARGIN, FIGURES_GAP};
 use crate::ui::{
     Figure, card_foot, card_title, details_fold, duration, figure_grid, icon, notice, readings,
     split_readings, theme,
@@ -48,14 +49,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 }
 
-/// Room around the card's heading and figures, over its foot.
-const BODY_MARGIN: egui::Margin = egui::Margin {
-    left: 12,
-    right: 12,
-    top: 0,
-    bottom: 8,
-};
-
 /// The card's heading, `aside` at its right.
 fn title_row(ui: &mut egui::Ui, title: &str, aside: Option<&str>) {
     let size = vec2(ui.available_width(), theme::SECTION_H);
@@ -83,10 +76,6 @@ fn plate(ui: &mut egui::Ui, window: &Window) {
         });
     }
 }
-
-/// Room between the figures and the Details row, and under the word on a broken model,
-/// points.
-const FIGURES_GAP: f32 = 8.0;
 
 /// The four cells of the plate's grid, `—` in each it cannot state yet.
 fn plate_figures(

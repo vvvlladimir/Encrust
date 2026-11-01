@@ -161,7 +161,7 @@ pub(super) fn bracing_numbers(
         1.0..=40.0,
         1,
     );
-    ui.add_space(2.0);
+    ui.add_space(theme::ICON_GAP);
     pattern_row(ui, &tr!("support-brace-top"), &mut bracing.top.pattern);
     levels_row(
         ui,
@@ -179,7 +179,7 @@ pub(super) fn bracing_numbers(
         &tr!("support-brace-bottom-levels"),
         &mut bracing.bottom.levels,
     );
-    ui.add_space(2.0);
+    ui.add_space(theme::ICON_GAP);
     buttress(ui, bracing, saved);
 }
 

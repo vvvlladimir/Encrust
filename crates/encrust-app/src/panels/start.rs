@@ -8,6 +8,9 @@ use crate::i18n::tr;
 use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
+use crate::ui::theme::layout::start::{
+    CAPTION_H, PAD_SIDE, PAD_TOP, SHELF_SWITCH_W, TILE_GAP, TILE_MIN_W, ZONE_H, ZONE_TOP,
+};
 use crate::ui::{
     Inline, Segment, Segmented, ago, describe, inline_button, quiet_button, theme, tone,
 };
@@ -16,20 +19,6 @@ use crate::ui::{
     picture_tile, start_title,
 };
 use crate::workspace::Tool;
-
-/// The page's room under the top bar and either side of it.
-const PAD_TOP: f32 = 48.0;
-const PAD_SIDE: f32 = 140.0;
-/// Tiles stand as many to a row as fit at their least width, the gap between two.
-const TILE_MIN_W: f32 = 180.0;
-const TILE_GAP: f32 = 14.0;
-/// The drop zone: its height, its edge's dashes and weight, its corner, and the square of
-/// its glyph.
-const ZONE_H: f32 = 104.0;
-/// The switch between the two shelves.
-const SHELF_SWITCH_W: f32 = 220.0;
-/// A tile's picture, and the room under it for the name and the two words.
-const CAPTION_H: f32 = 52.0;
 
 /// Whether the window is still on its start page. It leaves for good the moment anything
 /// is on the plate or under the layer strip, or a tool is picked.
@@ -62,7 +51,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
             heading(&mut page, window);
             // The stage's notice is not on this page, so a failure is said here instead.
             if window.machine.status.is_error() {
-                page.add_space(8.0);
+                page.add_space(theme::ITEM_GAP);
                 tone(
                     &mut page,
                     &window.machine.status.text(),
@@ -73,7 +62,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                 page.add_space(theme::ITEM_GAP);
                 unreadable_profiles::row(&mut page, window);
             }
-            page.add_space(28.0);
+            page.add_space(ZONE_TOP);
             drop_zone(&mut page, window, vec2(width, ZONE_H));
             page.add_space(theme::PAGE_GAP);
             shelf_head(&mut page, window);

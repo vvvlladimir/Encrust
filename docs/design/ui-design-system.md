@@ -91,10 +91,11 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
-section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool row centred between the side cards and at most that room, padded 4, its tools sharing it at 50 tall and at most 56 wide, 2 apart and 4 either side of a rule, 36 tall without their names; plate
+section heading 36, panel padding 12, item gap 8, the lines of a sheet 10 apart, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool row centred between the side cards and at most that room, padded 4, its tools sharing it at 50 tall and at most 56 wide, 2 apart and 4 either side of a rule, 36 tall without their names; plate
 panel 272, inspector 316 until dragged, top bar 44, layer strip 64, a chip 32. An icon button beside a bigger control is a square of its height: 40 beside a primary, 32 beside a picker or a box.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
-fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
+fixed. A size one screen alone uses is a constant of `theme::layout`, a module per panel, so
+no panel writes a number of points. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
 the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
 two-line row 48. Controls are rounded by 6 points (`R_CONTROL`), cards by 8 (`R_SURFACE`),
 windows by 10 (`R_PANEL`), a keycap, a tag or a thumb inside a control by 4 (`R_KEY`), a
@@ -182,6 +183,7 @@ paints from tokens only.
 | `field_note` | A figure worked out from the fields over it, flush with their right edge |
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `entry_row`, `EntryRow` | An entry of a window's list, `TWO_LINE_ROW_H` tall: its `two_lines`, quiet glyphs in their tints at its right; picked in `picked_wash`: a machine |
+| `model_row`, `ModelRow` | A model of the models card, `MODEL_ROW_H` tall: an eye that shows and hides it, its name cut short with the whole on hover, and the marks its panel draws at its right |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
@@ -212,6 +214,7 @@ paints from tokens only.
 | `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
 | `verdict_card` | A verdict on a card of its own in a wash: a glyph in its tint, the verdict, a line on what it means |
 | `figure_line`, `name_line`, `title_line`, `state_word`, `address_label`, `status_glyph`, `share_figure` | One line that may be cut short: a figure in its tint, a name low or plain, a state in its colour, an address in the code face; a message's glyph; a job's share, large |
+| `TABLE.mark_row` | A table row's swatch before its name and a glyph at its end: a resin and the one in hand |
 | `status_dot`, `file_line` | A dot in a state's tint, a listed printer's; a file's name in the code face, cut short |
 | `picker_line`, `eye_square`, `picker_foot` | A line of a picker's open list (a group's dot, its name, its count, room for an eye and a bin); the eye on it; the list's foot that leads elsewhere |
 | `numbered_square` | A plate of the strip by its number, lit in the accent while in front |

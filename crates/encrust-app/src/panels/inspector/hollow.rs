@@ -189,7 +189,7 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
     ) {
         *precision = percent / 100.0;
     }
-    ui.add_space(2.0);
+    ui.add_space(theme::ICON_GAP);
     let lattice_mm = core_volume::lattice_mm(
         window.tools.hollow.state.thickness_mm,
         window.tools.hollow.state.precision,
@@ -216,13 +216,13 @@ fn widest(doc: &Doc) -> f32 {
 /// What stands in the cavity, if anything.
 fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
     if !tools.hollow.state.infill_on {
-        ui.add_space(2.0);
+        ui.add_space(theme::ICON_GAP);
         describe(ui, &tr!("hollow-empty"));
         return;
     }
 
     nested(ui, |ui| {
-        ui.add_space(2.0);
+        ui.add_space(theme::ICON_GAP);
         let segments = [
             Segment::new(InfillPattern::Hive, tr!("hollow-hive")),
             Segment::new(InfillPattern::Grid, tr!("hollow-grid")),
@@ -233,7 +233,7 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
             .width(width)
             .show(ui, &mut tools.hollow.state.infill.pattern);
 
-        ui.add_space(2.0);
+        ui.add_space(theme::ICON_GAP);
         let infill = &mut tools.hollow.state.infill;
         let cell = match infill.pattern {
             InfillPattern::Hive => tr!("hollow-cell-hive"),
@@ -250,7 +250,7 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         infill.density = percent / 100.0;
         thickness(ui, infill);
 
-        ui.add_space(2.0);
+        ui.add_space(theme::ICON_GAP);
         describe(
             ui,
             &match infill.pattern.has_walls() {
@@ -300,7 +300,7 @@ fn blockers(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
 
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     if secondary_button(
         ui,
         icon::REMOVE,
@@ -343,7 +343,7 @@ pub(super) fn running(ui: &mut egui::Ui, job: &HollowJob) {
         tone(ui, &models, theme::colors().text_low);
     }
 
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     ui.add_enabled_ui(!job.is_cancelling(), |ui| {
         if secondary_button(ui, icon::CANCEL, &tr!("common-cancel")).clicked() {
             job.cancel();
@@ -390,7 +390,7 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
         .find_map(|object| object.hollow.lattice())
         && coarsened
     {
-        ui.add_space(4.0);
+        ui.add_space(theme::NOTE_GAP);
         hint(
             ui,
             &tr!("hollow-coarsened", lattice = format!("{voxel_mm:.2}")),
@@ -404,11 +404,11 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
             .is_stale(&hollow.settings_for(object), object.transform)
     });
     if stale {
-        ui.add_space(4.0);
+        ui.add_space(theme::NOTE_GAP);
         hint(ui, &tr!("hollow-stale"));
     }
 
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     if secondary_button(ui, icon::REMOVE, &tr!("hollow-make-solid")).clicked() {
         for object in window.doc.scene.targets_mut() {
             object.hollow.clear();

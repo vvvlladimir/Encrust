@@ -53,7 +53,7 @@ pub use dropdown::{
     DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
     dropdown_search_menu,
 };
-pub use entry_row::{EntryRow, entry_row};
+pub use entry_row::{EntryRow, ModelRow, entry_row, model_row};
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
     number_row, picker_row, row_name, text_box, text_row, unit_field,

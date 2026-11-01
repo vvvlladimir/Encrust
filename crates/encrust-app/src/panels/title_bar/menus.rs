@@ -6,6 +6,8 @@ use crate::project;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action};
 use crate::state::Doc;
+use crate::ui::theme::layout::title_bar_menus::RECENT_W;
+pub(super) use crate::ui::theme::layout::title_bar_menus::{MENU_GAP, MENU_PAD};
 use crate::ui::{MENU_W, MenuRow, icon, menu_row, menu_rule, menu_style, menu_sub, theme};
 use egui::containers::menu::MenuConfig;
 use egui::{Align, Layout, vec2};
@@ -14,11 +16,6 @@ use egui::{Align, Layout, vec2};
 pub(super) fn menus() -> [String; 3] {
     [tr!("menu-file"), tr!("menu-edit"), tr!("menu-view")]
 }
-
-/// Points inside a menu title either side of its name, and between two titles.
-pub(super) const MENU_PAD: f32 = 12.0;
-
-pub(super) const MENU_GAP: f32 = 4.0;
 
 /// egui draws its own menu bar: there is no native one on the platforms this runs on.
 pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
@@ -463,6 +460,3 @@ pub(super) fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
         window.view.options.sheet = true;
     }
 }
-
-/// How wide the list of recent files stands at least, points: room for a name and its age.
-const RECENT_W: f32 = 250.0;

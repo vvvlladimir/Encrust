@@ -7,13 +7,11 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
+use crate::ui::theme::layout::find::LIST_H;
 use crate::ui::{
     chooser_group, hint, icon, key_foot, palette_dialog, palette_field, palette_row, theme,
 };
 use crate::workspace::Tool;
-
-/// The most rows shown at once: past it the list scrolls.
-const LIST_H: f32 = theme::PALETTE_ROW_H * 10.0;
 
 /// What a row of the palette does once chosen.
 #[derive(Debug, Clone, Copy, PartialEq)]

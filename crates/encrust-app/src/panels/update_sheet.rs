@@ -5,6 +5,9 @@ use egui::{Align, Layout, ScrollArea, Ui};
 
 use crate::i18n::tr;
 use crate::state::Machine;
+use crate::ui::theme::layout::update_sheet::{
+    CHANGES_MAX_H, CHANGES_MIN_H, CHROME_H, GROUP_GAP, HERO_BUTTON_W, SCREEN_MARGIN, SHEET_W,
+};
 use crate::ui::{
     Inline, StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button,
     progress_bar, quiet_button, release_hero, steps, tag_label, theme,
@@ -12,17 +15,6 @@ use crate::ui::{
 use crate::updates::{
     Note, NoteGroup, Offer, Progress, RELEASES, Stage, Step, Updates, from_store, now_s, open_store,
 };
-
-/// The sheet's width, the room left round it, and the height of what is not the changes.
-const SHEET_W: f32 = 640.0;
-const SCREEN_MARGIN: f32 = 96.0;
-const CHROME_H: f32 = 230.0;
-const CHANGES_MAX_H: f32 = 380.0;
-const CHANGES_MIN_H: f32 = 120.0;
-/// Room kept at the hero's right for its button.
-const HERO_BUTTON_W: f32 = 140.0;
-/// Room above a group of the changes but the first.
-const GROUP_GAP: f32 = 12.0;
 
 /// Shows the sheet while it is open and a release is in hand; Escape or the cross puts it
 /// away, and a download goes on behind it.

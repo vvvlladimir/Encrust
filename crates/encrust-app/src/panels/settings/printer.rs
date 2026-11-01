@@ -10,6 +10,7 @@ use crate::i18n::tr;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
+use crate::ui::theme;
 use crate::ui::{
     DropdownFace, DropdownRow, count_row, describe, dropdown, dropdown_menu, dropdown_row,
     field_note, hint, icon, number_row, picker_row, secondary_button, switch, text_row,
@@ -73,9 +74,9 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
 /// Says this machine is the user's copy of a shipped one and no longer matches it (P-11).
 /// Answers whether the shipped profile was asked for back.
 fn own_copy_note(ui: &mut egui::Ui) -> bool {
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     hint(ui, &tr!("printer-own-copy"));
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     secondary_button(ui, icon::UPDATE, &tr!("printer-use-shipped")).clicked()
 }
 
@@ -237,10 +238,10 @@ fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         2,
     );
 
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     mirror(ui, &mut profile.mirror);
 
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     let plate_mm = (profile.build_volume.x, profile.build_volume.y);
     inset(ui, &mut profile.plate_inset, plate_mm);
 }
@@ -290,7 +291,7 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         },
     );
 
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     switch(
         ui,
         &mut profile.firmware.variable_layer_height,

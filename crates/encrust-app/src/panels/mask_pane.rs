@@ -8,15 +8,12 @@ use crate::preview::{PixelRect, Preview};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::ui::theme;
+use crate::ui::theme::layout::mask_pane::{INSET, RISK_RING_R};
 
 mod over;
 
-/// Points between the mask and the edge of the pane it is centred in.
-const INSET: f32 = 18.0;
 /// How much a point of scrolling zooms by: a notch of a wheel is about a fifth.
 const ZOOM_PER_POINT: f32 = 0.004;
-/// The ring around an issue on the shown layer, points: wide enough to find a pixel by.
-const RISK_RING_R: f32 = 12.0;
 
 /// The exposure mask beside the model: a 300 point column cannot show an 8520 pixel panel,
 /// so Preview gives it a pane of the stage (`docs/decisions/0103`); the caption keeps to `clear`.

@@ -9,23 +9,14 @@ use crate::scene::Scene;
 use crate::state::{Machine, Tools};
 use crate::status::Status;
 use crate::tool_settings::ToolSettings;
+use crate::ui::theme::layout::report::{
+    ANSWER_H, BODY_MAX_H, BODY_MIN_H, CHROME_H, REPORT_MARGIN, REPORT_MIN_H, SCREEN_MARGIN,
+    SHEET_MIN_W, SHEET_W,
+};
 use crate::ui::{Inline, dialog, dialog_head, hairline, hint, icon, inline_button, switch, theme};
 
-/// The sheet's width where there is room for it, and the narrowest it is still drawn at.
-const SHEET_W: f32 = 520.0;
-const SHEET_MIN_W: f32 = 300.0;
-/// Left around the sheet so it never reaches the window's own edges.
-const SCREEN_MARGIN: f32 = 96.0;
-/// How tall a typed answer is drawn before it scrolls.
-const ANSWER_H: f32 = 56.0;
-/// The scrolling body between the header and the buttons: its bounds, and the height those
-/// two take out of the window before it is measured.
-const BODY_MAX_H: f32 = 420.0;
-const BODY_MIN_H: f32 = 160.0;
-const CHROME_H: f32 = 110.0;
 /// The report pane's share of the body, and the least it is left with on a short window.
 const REPORT_SHARE: f32 = 0.45;
-const REPORT_MIN_H: f32 = 120.0;
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machine) {
@@ -67,7 +58,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     let sheet = dialog(ctx, egui::Id::new("report"), 18).show(ctx, |ui| {
         ui.set_width(sheet_w);
         header(ui, report);
-        ui.add_space(10.0);
+        ui.add_space(theme::LINE_GAP);
 
         let text = egui::ScrollArea::vertical()
             .max_height(body_h)
@@ -102,7 +93,7 @@ fn header(ui: &mut egui::Ui, report: &mut Report) {
     if dialog_head(ui, icon::BUG, &tr!("report-title")) {
         report.open = false;
     }
-    ui.add_space(8.0);
+    ui.add_space(theme::ITEM_GAP);
     hairline(ui);
 }
 
@@ -114,14 +105,14 @@ fn asked(ui: &mut egui::Ui, question: &str, answer: &mut String) {
             .font(theme::small())
             .color(theme::colors().text_mid),
     );
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     ui.add_sized(
         egui::vec2(ui.available_width(), ANSWER_H),
         egui::TextEdit::multiline(answer)
             .font(theme::label())
             .background_color(theme::colors().raised),
     );
-    ui.add_space(10.0);
+    ui.add_space(theme::LINE_GAP);
 }
 
 /// The three switches over what the window adds of its own.
@@ -136,12 +127,12 @@ fn carried(ui: &mut egui::Ui, report: &mut Report) {
 /// over does not have to trust this window about it.
 fn shown(ui: &mut egui::Ui, text: &str, height: f32) {
     crate::ui::heading(ui, &tr!("report-the-report"), None);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     egui::Frame::new()
         .fill(theme::colors().base)
         .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
         .corner_radius(theme::R_CONTROL)
-        .inner_margin(egui::Margin::same(8))
+        .inner_margin(REPORT_MARGIN)
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .max_height(height)
@@ -180,7 +171,7 @@ fn handed_over(
                 .open_url(egui::OpenUrl::new_tab(report.issue_url(facts)));
             *status = Status::Info(tr!("report-copied-for-issue"));
         }
-        ui.add_space(6.0);
+        ui.add_space(theme::ROW_GAP);
         if inline_button(ui, Inline::new(&tr!("report-copy")).glyph(icon::CLIPBOARD)).clicked() {
             ui.ctx().copy_text(text.to_owned());
             *status = Status::Info(tr!("report-copied"));

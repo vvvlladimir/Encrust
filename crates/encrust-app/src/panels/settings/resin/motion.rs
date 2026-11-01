@@ -4,6 +4,7 @@ use printer_profiles::{
 
 use super::COARSE_STEP;
 use crate::i18n::tr;
+use crate::ui::theme;
 use crate::ui::{Held, limited_row, subheading};
 
 /// A setting no machine states a limit for.
@@ -57,7 +58,7 @@ pub(super) fn rows(
         ),
     ];
     travel_rows(ui, rows);
-    ui.add_space(8.0);
+    ui.add_space(theme::ITEM_GAP);
     let bottom = [
         (
             tr!("resin-bottom-lift"),
@@ -83,7 +84,7 @@ pub(super) fn rows(
     ];
     travel_rows(ui, bottom);
     if locked.second_stage.is_none() {
-        ui.add_space(8.0);
+        ui.add_space(theme::ITEM_GAP);
         second_stage(ui, &mut values.second_stage, &limits.second_stage);
     }
 }

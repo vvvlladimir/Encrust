@@ -40,7 +40,7 @@ pub(super) fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bo
             machine.updates.sheet = true;
         }
     }
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
 }
 
 /// What this build is, where it can be acted on: a click opens the sheet that writes a
@@ -58,5 +58,5 @@ pub(super) fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: boo
     if response.on_hover_text(tr!("bar-alpha-tooltip")).clicked() {
         machine.report.open = true;
     }
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
 }

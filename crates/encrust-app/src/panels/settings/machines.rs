@@ -14,6 +14,8 @@ use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
 };
+use crate::ui::theme::layout::settings_machines::TAB_GAP;
+pub(super) use crate::ui::theme::layout::settings_machines::ZONE_GAP;
 use crate::ui::window_frame::{
     LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
 };
@@ -21,9 +23,6 @@ use crate::ui::{
     EntryRow, Inline, SquareLook, bin_button, entry_row, icon, icon_button, inline_button,
     page_heading, quiet_button, theme, zone_button,
 };
-
-/// Room between two zones offered in an empty list.
-pub(super) const ZONE_GAP: f32 = 12.0;
 
 /// What a click in the window asked for, carried out once the window has been drawn.
 enum Action {
@@ -99,16 +98,16 @@ fn body(ui: &mut Ui, list: Rect, side: Rect, window: &mut Window, action: &mut O
 /// library under them. The shipped catalogue is that library; see `docs/decisions/0158`.
 fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
     let settings = &mut window.machine.settings;
-    ui.add_space(12.0);
+    ui.add_space(theme::PANEL_PAD);
     ui.horizontal(|ui| {
-        ui.add_space(12.0);
+        ui.add_space(theme::PANEL_PAD);
         ui.add(
             crate::ui::text_box(egui::TextEdit::singleline(&mut settings.search))
                 .hint_text(format!("{}  {}", icon::FIND, tr!("machines-search")))
                 .desired_width(ui.available_width() - 12.0),
         );
     });
-    ui.add_space(8.0);
+    ui.add_space(theme::ITEM_GAP);
     if mine(&window.machine.slicing.catalogue, "").is_empty() {
         let room = Rect::from_min_max(ui.cursor().min, ui.max_rect().max).shrink(12.0);
         return first_machine(ui, room, action);
@@ -157,7 +156,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
 
 fn no_match(ui: &mut Ui) {
     ui.horizontal_wrapped(|ui| {
-        ui.add_space(14.0);
+        ui.add_space(theme::SECTION_GAP);
         crate::ui::describe(ui, &tr!("machines-no-match"));
     });
 }
@@ -260,7 +259,7 @@ fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
     ui.horizontal_centered(|ui| {
         page_heading(ui, name, maker);
         ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
-            ui.spacing_mut().item_spacing.x = 18.0;
+            ui.spacing_mut().item_spacing.x = TAB_GAP;
             for each in Tab::ALL.into_iter().rev() {
                 if tab_button(ui, &each.label(), *tab == each).clicked() {
                     *tab = each;

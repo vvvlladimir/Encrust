@@ -3,6 +3,8 @@ use crate::panels::{Window, printer_card};
 use crate::profiles;
 use crate::shortcuts::{self};
 use crate::state::Machine;
+pub(super) use crate::ui::theme::layout::title_bar_chip::NAME_LEAST_W;
+use crate::ui::theme::layout::title_bar_chip::SHORT_NAMES_W;
 use crate::ui::{ChipPart, chip_text_w, chooser_frame, icon, paint_chip, theme};
 use crate::workspace::Tool;
 use egui::{Align, Layout, Rect, Sense, UiBuilder, vec2};
@@ -40,9 +42,6 @@ pub(super) fn centred_chip(
         ui.ctx().request_discard("the print chip changed width");
     }
 }
-
-/// A bar narrower than this names the machine without its maker.
-const SHORT_NAMES_W: f32 = 1100.0;
 
 /// The plate's machine, resin, layers and exposure within `max_w`, the maker dropped while
 /// `short`; left out below `NAME_LEAST_W` a name.
@@ -181,9 +180,6 @@ pub fn layers_and_exposure(machine: &Machine) -> String {
         exposure = format!("{:.2}", machine.slicing.material.exposure_s)
     )
 }
-
-/// The least of a name the chip shows: enough for a letter and the ellipsis.
-pub(super) const NAME_LEAST_W: f32 = 24.0;
 
 /// Two names' widths cut down to share `room`: the shorter keeps all it needs when it fits
 /// in half, the longer takes the rest.

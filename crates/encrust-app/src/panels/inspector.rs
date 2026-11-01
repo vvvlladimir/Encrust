@@ -51,7 +51,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
             if has_action(tool) {
                 card_foot().show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.spacing_mut().item_spacing.y = 6.0;
+                    ui.spacing_mut().item_spacing.y = theme::ROW_GAP;
                     action(ui, window, tool);
                 });
             }

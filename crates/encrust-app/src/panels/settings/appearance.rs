@@ -6,6 +6,7 @@ use crate::i18n::{self, Language, tr};
 use crate::panels::settings::form_card;
 use crate::prefs::Appearance;
 use crate::state::Machine;
+use crate::ui::theme::layout::settings_appearance::CARD_GAP;
 use crate::ui::{
     CardLook, DropdownFace, DropdownRow, describe, dropdown, dropdown_menu, dropdown_row, hint,
     switch, theme_card,
@@ -100,6 +101,3 @@ fn language(ui: &mut Ui, choice: &mut Option<Language>) {
         hint(ui, &tr!("general-language-untranslated", tag = tag));
     }
 }
-
-/// Between two theme cards, points.
-const CARD_GAP: f32 = 10.0;

@@ -2,14 +2,12 @@ use printer_link::{Ending, Task};
 
 use crate::i18n::tr;
 use crate::network::{Errand, Extras};
+use crate::ui::theme::layout::printer_card_history::{PICTURE, TILE_GAP, TILE_H};
 use crate::ui::{ago, hint, icon, quiet_button, theme};
 use crate::ui::{print_picture, state_word, title_line};
 
 /// Tiles to a row, the gap between two, and a tile's height and picture, points.
 const COLUMNS: usize = 3;
-const TILE_GAP: f32 = 10.0;
-const TILE_H: f32 = 60.0;
-const PICTURE: f32 = 44.0;
 const TILE_PAD: i8 = 8;
 
 /// How wide each of a row's tiles is drawn in a row of `width`.
@@ -94,7 +92,7 @@ fn tile(
 fn file_and_ending(ui: &mut egui::Ui, task: &Task, now_s: u64) {
     let colors = theme::colors();
     ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
         let name = title_line(ui, task.file_name());
         name.on_hover_text(task.file_name());
         let tint = match task.ending() {

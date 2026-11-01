@@ -4,6 +4,7 @@ use crate::panels::{
     Window, hint_bar, mask_pane, stage_notice, view_column, view_cube, viewport_panel,
 };
 use crate::ui::theme;
+use crate::ui::theme::layout::stage::{GRAB_W, SIDE_MIN};
 use crate::workspace::Mode;
 
 /// The stage: the viewport, the mask beside or instead of the model, and the cards over
@@ -76,11 +77,6 @@ fn mask(ui: &mut egui::Ui, window: &mut Window, rect: Rect, clear: Rect) {
         mask_pane::ui(ui, window.machine, clear);
     });
 }
-
-/// Points of grab either side of the divide, and the least of the model or the mask left
-/// between it and the side cards.
-const GRAB_W: f32 = 4.0;
-const SIDE_MIN: f32 = 120.0;
 
 /// Where the model gives way to the mask: `split` of the stage, kept between the side
 /// cards so that the divide can always be taken hold of again.

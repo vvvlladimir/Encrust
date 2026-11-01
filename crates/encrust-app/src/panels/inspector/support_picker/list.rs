@@ -1,6 +1,7 @@
 use super::SHAPE_INDENT;
 use super::rows::{Act, InHand, Pick, Presets, Row};
 use crate::i18n::tr;
+use crate::ui::theme::layout::inspector_support_picker_list::FOOT_GAP;
 use crate::ui::{
     PICKER_ICON_SQUARE, PickerLine, SquareLook, chooser_group, confirm_bin, eye_square, hairline,
     icon, picker_foot, picker_line, theme,
@@ -225,9 +226,6 @@ impl<'a> Line<'a> {
         clicked
     }
 }
-
-/// The room above the foot's rule.
-const FOOT_GAP: f32 = 4.0;
 
 /// The eye of a group, shown under the pointer or while it is hidden, and its bin, shown
 /// under the pointer, in `icons`. Answers whether either took the click.

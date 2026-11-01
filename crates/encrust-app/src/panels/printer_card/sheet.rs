@@ -8,16 +8,10 @@ use crate::i18n::tr;
 use crate::network::{Errand, Extras, Network, Reading, Target};
 use crate::panels::Window;
 use crate::ui::print_picture;
+use crate::ui::theme::layout::printer_card_sheet::{
+    CHROME_H, COLUMN_GAP, HISTORY_MIN_H, PICTURE, SHEET_W,
+};
 use crate::ui::{dialog, dialog_head, hairline, icon, subheading, theme, tone};
-
-/// How wide the sheet is, and the picture of the plate at its left.
-const SHEET_W: f32 = 620.0;
-const PICTURE: egui::Vec2 = egui::vec2(240.0, 180.0);
-const COLUMN_GAP: f32 = 18.0;
-/// What the sheet leaves of the window's height for its margin, and the least of the
-/// history it shows before that scrolls.
-const CHROME_H: f32 = 120.0;
-const HISTORY_MIN_H: f32 = 96.0;
 
 /// Shows the printer the ring opened, while one is open, and carries out what it is
 /// pressed for.
@@ -87,9 +81,9 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
                 job_lines(ui, job);
             }
             if let Some(state) = state {
-                ui.add_space(4.0);
+                ui.add_space(theme::NOTE_GAP);
                 errand = errand.take().or(controls::buttons(ui, &key, state, extras));
-                ui.add_space(4.0);
+                ui.add_space(theme::NOTE_GAP);
                 if let Some(warmth) = &face.warmth {
                     tone(ui, warmth, theme::colors().text_mid);
                 }

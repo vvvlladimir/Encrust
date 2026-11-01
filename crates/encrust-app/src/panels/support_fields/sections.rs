@@ -1,5 +1,6 @@
 use super::{COARSE_STEP, FINE_STEP, MAX_BRANCH_DEG, MIN_BRANCH_DEG, degrees, mm, number, was};
 use crate::i18n::tr;
+use crate::ui::theme;
 use crate::ui::{Segment, Segmented, describe, nested, switch};
 use printer_profiles::{
     Branching, ContactShape, Grid, PlatformShape, Raft, RaftShape, RaftStyle, SupportProfile,
@@ -16,7 +17,7 @@ pub(super) fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option
     Segmented::new(&segments)
         .width(width)
         .show(ui, &mut profile.tip.shape);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     let tip = &mut profile.tip;
     mm(
         ui,
@@ -97,7 +98,7 @@ pub(super) fn bottom(
     Segmented::new(&segments)
         .width(width)
         .show(ui, &mut profile.bottom.shape);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     let bottom = &mut profile.bottom;
     mm(
         ui,
@@ -307,7 +308,7 @@ pub(super) fn raft_fields(ui: &mut egui::Ui, raft: &mut Raft, saved: Option<&Sup
         .width(width)
         .show(ui, &mut raft.style);
     if raft.style.has_outline() {
-        ui.add_space(2.0);
+        ui.add_space(theme::ICON_GAP);
         let shapes = [
             Segment::new(RaftShape::Hull, tr!("support-raft-hull")),
             Segment::new(RaftShape::Rectangle, tr!("support-raft-rectangle")),
@@ -316,7 +317,7 @@ pub(super) fn raft_fields(ui: &mut egui::Ui, raft: &mut Raft, saved: Option<&Sup
             .width(width)
             .show(ui, &mut raft.shape);
     }
-    ui.add_space(2.0);
+    ui.add_space(theme::ICON_GAP);
     mm(
         ui,
         &tr!("support-margin"),

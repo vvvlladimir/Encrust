@@ -2,14 +2,9 @@ use egui::Color32;
 
 use crate::panels::Window;
 use crate::shortcuts::{self, Action};
+use crate::ui::theme::layout::tool_rail::{NAMED_MAX_W, NAMED_MIN_W};
 use crate::ui::{RailButton, rail_button, theme, vertical_hairline};
 use crate::workspace::Tool;
-
-/// The least a named button is wide: narrower, the names go (`ui-screens.md`, Tool row).
-const NAMED_MIN_W: f32 = 56.0;
-
-/// The most a named button is wide: its height, or the least a name needs if that is more.
-const NAMED_MAX_W: f32 = theme::RAIL_BUTTON_H.max(NAMED_MIN_W);
 
 /// What the row takes besides its buttons: its padding, the gaps and the rules.
 fn chrome() -> f32 {

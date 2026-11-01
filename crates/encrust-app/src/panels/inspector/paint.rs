@@ -4,6 +4,7 @@ use core_supports::InfillPattern;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::supports::Placing;
+use crate::ui::theme;
 use crate::ui::{
     DropdownRow, Segment, Segmented, describe, dropdown_menu, dropdown_row, hint, icon, nested,
     number_row, picker_row, secondary_button, section, switch,
@@ -42,7 +43,7 @@ fn paint_hint(placing: Placing) -> String {
 /// The place mode: a click puts one support down, a shift-click a line of them.
 pub(super) fn place_fields(ui: &mut egui::Ui, window: &mut Window) {
     hint(ui, &paint_hint(Placing::Point));
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     number_row(
         ui,
         &tr!("paint-line-spacing"),
@@ -66,9 +67,9 @@ pub(super) fn area_fields(ui: &mut egui::Ui, window: &mut Window) {
     Segmented::new(&segments)
         .width(ui.available_width())
         .show(ui, &mut tool.placing);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     hint(ui, &paint_hint(tool.placing));
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     number_row(
         ui,
         &tr!("paint-brush"),

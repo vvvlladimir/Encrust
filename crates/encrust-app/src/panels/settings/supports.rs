@@ -13,6 +13,8 @@ use crate::panels::settings::confirm::cost;
 use crate::panels::settings::{export_profile, forget_profile, jump, report};
 use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
+use crate::ui::theme;
+use crate::ui::theme::layout::settings_supports::{TAB_ROW_H, TABS_H};
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, stroke, with_footer};
 use crate::ui::{Confirm, Inline, confirm_button, icon, inline_button, quiet_button, subheading};
 
@@ -106,10 +108,6 @@ pub(super) fn reset(settings: &mut Settings) {
         (None, None) => {}
     }
 }
-
-/// The band the tabs over the form stand in, and the tabs themselves.
-const TABS_H: f32 = 52.0;
-const TAB_ROW_H: f32 = 28.0;
 
 /// The page, laid out in `content`: the form of the profile being edited under its tabs, or
 /// the table.
@@ -239,9 +237,9 @@ fn auto_rank(catalogue: &Catalogue, id: &str) -> usize {
 
 /// The heading over one part of the table.
 fn part_heading(ui: &mut Ui, title: &str) {
-    ui.add_space(12.0);
+    ui.add_space(theme::PANEL_PAD);
     subheading(ui, title);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
 }
 
 /// An automatic profile's row: no shape of its own, and the spacing it places by.

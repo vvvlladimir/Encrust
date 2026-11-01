@@ -10,6 +10,7 @@ use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle,
 use crate::ui::fonts;
 
 pub mod glyph;
+pub mod layout;
 pub mod motion;
 mod palette;
 mod scene;
@@ -148,6 +149,8 @@ pub const ROW_GAP: f32 = 6.0;
 /// Between buttons sharing one row, and between a tool heading's mode icons.
 pub const BUTTON_GAP: f32 = 6.0;
 pub const ICON_GAP: f32 = 2.0;
+/// Between the lines of a sheet or a form block's body.
+pub const LINE_GAP: f32 = 10.0;
 /// Between a reading and the row of buttons under it.
 pub const NOTE_GAP: f32 = 4.0;
 /// Between the groups of a sheet or a page.
