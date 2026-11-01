@@ -3,7 +3,8 @@
 
 use egui::{Align2, Color32, Rect, Response, Sense, StrokeKind, Ui, pos2, vec2};
 
-use super::focus_ring;
+use super::button::pressed_rect;
+use super::{focus_ring, hover_mix};
 use crate::ui::{icon, theme};
 
 /// What a device row says: its name, its state word in its colour, whether that state is
@@ -29,14 +30,11 @@ pub fn device_row(ui: &mut Ui, row: &DeviceRow<'_>) -> (Response, Rect) {
     let colors = theme::colors();
     let size = vec2(ui.available_width(), theme::PRINTER_ROW_H);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        colors.raised
-    };
+    let fill = hover_mix(ui, &response, colors.raised, colors.hover);
     let painter = ui.painter();
     let stroke = egui::Stroke::new(1.0, colors.hairline);
-    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
+    let shrunk = pressed_rect(ui, &response);
+    painter.rect(shrunk, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
     let y = rect.center().y;
     let low = colors.text_low;
     painter.text(

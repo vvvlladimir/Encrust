@@ -169,8 +169,14 @@ pub fn section_tab(ui: &mut Ui, label: &str, off: Option<&str>, lit: bool) -> eg
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, lit, label));
     let (fill, text) = match lit {
         true => (colors.accent_wash, colors.accent_soft),
-        false if response.hovered() => (colors.hover, colors.text_high),
-        false => (Color32::TRANSPARENT, colors.text_mid),
+        false if response.hovered() => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+            colors.text_high,
+        ),
+        false => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+            colors.text_mid,
+        ),
     };
     let round = theme::R_PILL;
     ui.painter().rect_filled(rect, round, fill);

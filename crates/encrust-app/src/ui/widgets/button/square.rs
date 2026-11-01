@@ -133,7 +133,7 @@ fn draw_square(
 pub fn numbered_square(ui: &mut Ui, number: usize, active: bool, name: &str) -> Response {
     let colors = theme::colors();
     let side = theme::SMALL_ICON_SIZE;
-    let (rect, response) = ui.allocate_exact_size(vec2(side + 2.0, side), Sense::click());
+    let (_, response) = ui.allocate_exact_size(vec2(side + 2.0, side), Sense::click());
     response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
     let (fill, ring, ink) = match (active, response.hovered()) {
         (true, _) => (
@@ -141,9 +141,17 @@ pub fn numbered_square(ui: &mut Ui, number: usize, active: bool, name: &str) -> 
             colors.accent.gamma_multiply(NUMBERED_RING),
             colors.accent_soft,
         ),
-        (false, true) => (colors.hover, colors.hairline, colors.text_high),
-        (false, false) => (Color32::TRANSPARENT, colors.hairline, colors.text_mid),
+        (false, hovered) => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+            colors.hairline,
+            if hovered {
+                colors.text_high
+            } else {
+                colors.text_mid
+            },
+        ),
     };
+    let rect = pressed_rect(ui, &response);
     let painter = ui.painter();
     let stroke = egui::Stroke::new(1.0, ring);
     painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);

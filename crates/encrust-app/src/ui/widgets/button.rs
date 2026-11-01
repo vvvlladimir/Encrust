@@ -37,7 +37,7 @@ pub fn hover_mix(ui: &Ui, response: &Response, rest: Color32, hovered: Color32) 
 }
 
 /// Where a control is painted: its own rect, shrunk towards its centre while it is pressed.
-pub(super) fn pressed_rect(ui: &Ui, response: &Response) -> Rect {
+pub(in crate::ui::widgets) fn pressed_rect(ui: &Ui, response: &Response) -> Rect {
     let id = response.id.with("pressed");
     let down = response.is_pointer_button_down_on();
     let pressed = motion::toggle(ui.ctx(), id, down, motion::FAST);

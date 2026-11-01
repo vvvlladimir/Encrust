@@ -380,11 +380,7 @@ pub fn tag(
     let rect = egui::Rect::from_min_size(right_center - vec2(size.x, size.y / 2.0), size);
     let response = ui.interact(rect, id, Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, text));
-    let fill = if response.hovered() {
-        ink.gamma_multiply(TAG_HOVER_WASH)
-    } else {
-        wash
-    };
+    let fill = hover_mix(ui, &response, wash, ink.gamma_multiply(TAG_HOVER_WASH));
     let painter = ui.painter();
     painter.rect_filled(rect, TAG_R, fill);
     painter.galley(rect.min + TAG_PAD, word, ink);

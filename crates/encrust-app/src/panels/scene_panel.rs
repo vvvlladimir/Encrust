@@ -14,7 +14,7 @@ use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::name_line;
 use crate::ui::{
-    Inline, body_and_foot, count_row, empty_state, focus_ring, hairline, heading, icon,
+    Inline, body_and_foot, count_row, empty_state, focus_ring, hairline, heading, hover_mix, icon,
     inline_button, number_row, secondary_button, small_icon_button, theme, tone,
 };
 
@@ -309,7 +309,7 @@ fn row(
             &object.name,
         )
     });
-    row_background(ui.painter(), rect, selected, response.hovered());
+    row_background(ui, &response, selected);
     focus_ring(ui, &response, 0.0);
     let asked = row_menu(&response, object, plates, active);
 
@@ -408,13 +408,14 @@ fn row_menu(
     clicked
 }
 
-fn row_background(painter: &egui::Painter, rect: Rect, selected: bool, hovered: bool) {
+fn row_background(ui: &egui::Ui, response: &egui::Response, selected: bool) {
     let colors = theme::colors();
-    if selected {
-        painter.rect_filled(rect, 0.0, colors.picked_wash);
-    } else if hovered {
-        painter.rect_filled(rect, 0.0, colors.raised);
-    }
+    let fill = if selected {
+        colors.picked_wash
+    } else {
+        hover_mix(ui, response, egui::Color32::TRANSPARENT, colors.raised)
+    };
+    ui.painter().rect_filled(response.rect, 0.0, fill);
 }
 
 /// The eye at the head of the row that shows and hides the model.

@@ -152,11 +152,7 @@ pub fn bar_pill(
     let size = vec2(label.size().x + PILL_PAD * 2.0, PILL_H);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
-    let fill = if response.hovered() {
-        wash
-    } else {
-        egui::Color32::TRANSPARENT
-    };
+    let fill = hover_mix(ui, &response, egui::Color32::TRANSPARENT, wash);
     let painter = ui.painter();
     painter.rect(
         rect,
