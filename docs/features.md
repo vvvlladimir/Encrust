@@ -750,6 +750,7 @@ address in a video player).
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
+- **Reduce motion** in Settings → General stops every animation in the window.
 - **Language:** the window follows the system's or the browser's first language, or the one
   you pick in Settings → General. A system language with no translation shows the window in
   English, and Settings says so. English and Russian are complete; a message a translation

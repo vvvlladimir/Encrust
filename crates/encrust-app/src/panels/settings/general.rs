@@ -19,6 +19,13 @@ pub fn form(ui: &mut Ui, machine: &mut Machine) {
     form_card(ui, &tr!("general-viewport"), |ui| {
         switch(ui, &mut general.invert_zoom, &tr!("general-invert-zoom"));
     });
+    form_card(ui, &tr!("general-motion"), |ui| {
+        switch(
+            ui,
+            &mut general.reduce_motion,
+            &tr!("general-reduce-motion"),
+        );
+    });
     #[cfg(not(target_arch = "wasm32"))]
     desk(ui, machine);
 }

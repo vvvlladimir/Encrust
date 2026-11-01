@@ -5,9 +5,6 @@ use egui::{Align2, Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, 
 use super::focus_ring;
 use crate::ui::theme;
 
-/// How long the knob takes to cross the track, seconds.
-const SLIDE_S: f32 = 0.12;
-
 /// Track and knob of a switch, points.
 const TRACK: egui::Vec2 = vec2(28.0, 16.0);
 const KNOB: f32 = 12.0;
@@ -60,7 +57,7 @@ fn flip(ui: &mut Ui, size: egui::Vec2, on: &mut bool, name: &str) -> (Rect, Resp
 fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
     let colors = theme::colors();
     let enabled = ui.is_enabled();
-    let how_on = ui.ctx().animate_bool_with_time(response.id, on, SLIDE_S);
+    let how_on = theme::motion::toggle(ui.ctx(), response.id, on, theme::motion::FAST);
     let reached = if enabled { colors.accent } else { colors.line };
     let fill = colors.active.lerp_to_gamma(reached, how_on);
     let painter = ui.painter();

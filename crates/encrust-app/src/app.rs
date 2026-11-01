@@ -495,6 +495,7 @@ impl eframe::App for SlicerApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let started = web_time::Instant::now();
         crate::i18n::choose(self.machine.general.language);
+        crate::ui::theme::motion::reduce(ui.ctx(), self.machine.general.reduce_motion);
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);

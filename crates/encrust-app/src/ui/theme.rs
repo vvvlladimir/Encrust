@@ -3,9 +3,12 @@
 
 use std::ops::RangeInclusive;
 
+use egui::epaint::Shadow;
 use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle};
 
 use crate::ui::fonts;
+
+pub mod motion;
 
 /// Named font families the bundled faces are registered under.
 pub const MEDIUM: &str = "plex-sans-medium";
@@ -56,7 +59,9 @@ pub struct Palette {
     pub warn: Color32,
     /// Non-orientable mesh, write failure.
     pub danger: Color32,
-    /// The washes behind a verdict a print fails on, or only might, 14 % of each.
+    // TODO(step-6): `ok_wash`, 14 % of `ok`, arrives with the inspector's good verdict.
+    /// The washes behind a verdict a print fails on, or only might, and an armed control:
+    /// 14 % of each, 12 % of the danger so its own text still reads at AA.
     pub danger_wash: Color32,
     pub warn_wash: Color32,
     /// Transform field letters, in the CAD convention X red, Y green, Z blue.
@@ -89,7 +94,7 @@ const ENCRUST: Palette = Palette {
     ok: Color32::from_rgb(0x4f, 0xcf, 0x8a),
     warn: Color32::from_rgb(0xe8, 0xb0, 0x43),
     danger: Color32::from_rgb(0xef, 0x5b, 0x4b),
-    danger_wash: Color32::from_rgba_unmultiplied_const(0xef, 0x5b, 0x4b, 36),
+    danger_wash: Color32::from_rgba_unmultiplied_const(0xef, 0x5b, 0x4b, 31),
     warn_wash: Color32::from_rgba_unmultiplied_const(0xe8, 0xb0, 0x43, 36),
     axis: [
         Color32::from_rgb(0xe0, 0x57, 0x4f),
@@ -507,6 +512,7 @@ fn style(style: &mut egui::Style) {
 
     style.visuals = visuals(colors);
     style.interaction.tooltip_delay = 0.35;
+    style.animation_time = motion::FAST.unreduced_s();
     style.interaction.selectable_labels = false;
 }
 
@@ -532,8 +538,8 @@ fn visuals(colors: &Palette) -> egui::Visuals {
     };
     visuals.slider_trailing_fill = true;
     visuals.handle_shape = egui::style::HandleShape::Circle;
-    visuals.window_shadow = shadow();
-    visuals.popup_shadow = shadow();
+    visuals.window_shadow = WINDOW_SHADOW;
+    visuals.popup_shadow = WINDOW_SHADOW;
 
     let widgets = &mut visuals.widgets;
     widgets.noninteractive = widget(colors.panel, colors.hairline, colors.text_mid);
@@ -565,15 +571,21 @@ fn widget(fill: Color32, stroke: Color32, text: Color32) -> egui::style::WidgetV
     }
 }
 
-/// The one shadow: a floating card, a menu and a tooltip all cast it.
-pub fn shadow() -> egui::epaint::Shadow {
-    egui::epaint::Shadow {
-        offset: [0, 10],
-        blur: 30,
-        spread: 0,
-        color: Color32::from_black_alpha(115),
-    }
-}
+/// The one shadow every card over the stage stands on.
+pub const CARD_SHADOW: Shadow = Shadow {
+    offset: [0, 8],
+    blur: 24,
+    spread: 0,
+    color: Color32::from_black_alpha(115),
+};
+
+/// What a window over the plate, a menu and a tooltip cast.
+pub const WINDOW_SHADOW: Shadow = Shadow {
+    offset: [0, 10],
+    blur: 30,
+    spread: 0,
+    color: Color32::from_black_alpha(115),
+};
 
 #[cfg(test)]
 mod tests {
@@ -615,6 +627,24 @@ mod tests {
         let colors = colors();
         assert!(contrast(colors.accent, colors.panel) >= 4.5);
         assert!(contrast(colors.on_accent, colors.accent) >= 4.5);
+    }
+
+    #[test]
+    fn every_wash_keeps_its_colour_readable_on_the_panel() {
+        let colors = colors();
+        for (name, ink, wash) in [
+            ("warn", colors.warn, colors.warn_wash),
+            ("danger", colors.danger, colors.danger_wash),
+            ("accent", colors.accent_soft, colors.accent_wash),
+            ("picked", colors.text_high, colors.picked_wash),
+        ] {
+            let ground = colors.panel.blend(wash);
+            let ratio = contrast(ink, ground);
+            assert!(
+                ratio >= 4.5,
+                "{name} on its wash is {ratio:.2}:1, AA is 4.5:1"
+            );
+        }
     }
 
     /// The cardinal mistake this helper exists to prevent: a decode to linear would make
