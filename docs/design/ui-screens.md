@@ -41,6 +41,17 @@ buttons; in the centre the printer ring (while a printer prints; idle ones are r
 the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
+A menu of the bar is a `menu_row` list 264 wide on `raised` ringed in `line`, the open title
+on `active`. Rows 28, glyph column 18, keys right in `text_low`; a hairline between groups; a
+row that cannot run is `text_low`, the first of its group with why under it. File: New plate,
+New project · Open project, Add model, Open recent ▸ (files with their age, Clear the list),
+Test prints ▸ · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
+(Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
+Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
+(the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
+Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,
+See through models, ticked when on · Keyboard shortcuts.
+
 The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
 flask glyph in the resin's colour and resin with a caret, sliders glyph and `layer height ·
 exposure`, all three in `text_high` (the resin in `warn` while untuned). Each part is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
@@ -221,15 +232,23 @@ left, beside it a page header (title 17, a muted second name, and tabs or action
 right), the page, and a bar 56 tall on `base` along its foot with the row's actions left
 and the one that applies right.
 
-- *Settings* lists Tool profiles (Supports, Hollow, Drain) and Window (General, Updates,
-  Shortcuts) under 10.5 capital group names, and Machine and resin at the list's foot.
+- *Settings* lists, under *Find a setting* (`⌘F`, narrowing the pages by name and by the
+  settings they hold), Tool profiles (Supports, Hollow, Drain, each with its count),
+  Application (Appearance, General, Updates, an accent `1` while a release waits) and Help
+  (Keyboard shortcuts ↗) under 10.5 capital group names, and Machine and resin ↗ at the foot.
+- *Appearance*: Theme as three `theme_card`s, System (both halves, *Now light* or *Now
+  dark*), Light, Dark, the hint under them; Language; Motion. *General*: Start, Viewport,
+  Sliced files and Profiles, each folder a read-only path box (`~` for home) with its button
+  beside it and a hint under. *Updates*, its title followed by *This is 0.6.0* in `text_low`:
+  Release found, a `boxed` box with the New pill, the version, three changes, *And N more*,
+  then Download and install (accent), Every change (opens the sheet), Skip this version;
+  Looking, the daily switch, *Last looked …* with Check now at its right.
 - A set of profiles is a `table`: words left, figures right, group rows in `text_low`, the
   picked row washed. The bar: Edit, Duplicate, Export, Delete (`confirm_button`).
 - A profile's form is blocks one under another, its header the way back, the profile's
   name and its kind: a 180 title column beside at most 460 of fields, a hairline under each; Reset to defaults in the header. A text row's name stands in a 150 column so
   every box starts on one line; every box ends on the block's right edge, and a figure
-  worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. General holds Language, Appearance (*System · Light · Dark* segmented), Opening, Motion
-  (*Reduce motion*), Sliced files, the Prusa login and the bug report.
+  worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. See Appearance and General above.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and
   a tick on the one in use, Add a machine with import and a delete `bin_button` at the
   foot) and gives the picked one tabs: Resins (filter chips, Import, Add a resin, a table,
@@ -252,6 +271,17 @@ a 60 tall tile on `panel` of a 44 picture beside the file and its outcome in `ok
 hairline, results grouped under capital names as Tools, Actions, Models with their keys,
 the lit row on `picked_wash`, Esc as a keycap at the field's right, and a strip over a
 hairline at its foot with the keys to move and open (`key_row`).
+
+**Update**, 640 wide, carries a release through: its head, then a `release_hero` (the
+sparkle on the accent wash, *Encrust 0.15.0*, *0.14.2 → 0.15.0*) with Release page ↗ at the
+right; the changes scrolling, a `tag_label` over each group (New in `ok`, Better in the
+accent, Fixed plain) and a `bullet` per change; the foot Skip this version left, Later and
+Download and install right. Downloading, the foot turns to *Downloading · 12.4 of 38 MB*
+and *about 6 s left* over the bar, the three `steps` (Download, Check the signature,
+Install) and Cancel while it downloads; closing the sheet keeps it going, the pill in the
+top bar showing the percent. A release found is said once a version by a notice at the
+stage's foot (*Encrust 0.15.0 is out*, its first change and how many more, What is new,
+the cross leaving the pill).
 
 **Keyboard shortcuts**, 800 wide, *Find a key* in its title row narrowing the rows by name:
 the keys in two columns of groups under 10.5 capital

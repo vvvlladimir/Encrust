@@ -3,11 +3,13 @@
 
 mod feed;
 mod install;
+mod progress;
 #[cfg(windows)]
 mod store;
 mod verify;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use web_time::{SystemTime, UNIX_EPOCH};
 
@@ -18,6 +20,7 @@ use crate::status::Status;
 
 pub use feed::{Note, Offer, Version};
 pub use install::{from_store, sweep};
+pub use progress::{Progress, Step};
 
 /// How long one look at the feed holds before the next is due, seconds: a day.
 const CHECK_EVERY_S: u64 = 24 * 60 * 60;
@@ -64,6 +67,9 @@ pub enum UpdateError {
         #[source]
         source: std::io::Error,
     },
+    /// The user stopped the download.
+    #[error("{}", tr!("update-error-cancelled"))]
+    Cancelled,
     #[cfg(windows)]
     #[error("{}", tr!("update-error-store"))]
     Store(#[source] windows::core::Error),
@@ -81,6 +87,9 @@ pub struct UpdatePrefs {
     /// A version the user asked not to be shown in the top bar again.
     #[serde(default)]
     pub skipped: Option<String>,
+    /// The version whose notice at the stage's foot was put by: it says so once a version.
+    #[serde(default)]
+    pub noticed: Option<String>,
 }
 
 impl Default for UpdatePrefs {
@@ -89,6 +98,7 @@ impl Default for UpdatePrefs {
             check: looking(),
             checked_at_s: None,
             skipped: None,
+            noticed: None,
         }
     }
 }
@@ -113,6 +123,8 @@ pub enum Stage {
     Installing {
         offer: Offer,
         reply: Receiver<Result<(), UpdateError>>,
+        progress: Arc<Progress>,
+        started: web_time::Instant,
     },
     /// The new binary is in place and runs from the next start.
     Installed(Offer),
@@ -133,6 +145,8 @@ pub struct Updates {
     restart: Option<PathBuf>,
     /// Whether the window has been asked to close for a restart and not yet told to.
     close: bool,
+    /// Whether the sheet that carries the update through is over the plate.
+    pub sheet: bool,
 }
 
 impl Updates {
@@ -193,10 +207,53 @@ impl Updates {
         self.exe = Some(exe.clone());
         let version = offer.version;
         let (sender, reply) = mpsc::channel();
+        let progress = Arc::new(Progress::default());
+        let counted = Arc::clone(&progress);
         crate::job::spawn(move || {
-            let _ = sender.send(install::install(&download, version, &exe));
+            let _ = sender.send(install::install(&download, version, &exe, &counted));
         });
-        self.stage = Stage::Installing { offer, reply };
+        let started = web_time::Instant::now();
+        self.stage = Stage::Installing {
+            offer,
+            reply,
+            progress,
+            started,
+        };
+    }
+
+    /// Stops the download under way; the offer stands again.
+    pub fn cancel(&self) {
+        if let Stage::Installing { progress, .. } = &self.stage {
+            progress.cancel();
+        }
+    }
+
+    /// How far the install under way has got, and seconds since it started.
+    pub fn progress(&self) -> Option<(&Progress, f64)> {
+        match &self.stage {
+            Stage::Installing {
+                progress, started, ..
+            } => Some((progress, started.elapsed().as_secs_f64())),
+            _ => None,
+        }
+    }
+
+    /// The release the stage's foot announces: offered, not skipped, its notice not put by.
+    pub fn notice(&self) -> Option<&Offer> {
+        match &self.stage {
+            Stage::Offered(offer) => {
+                let version = Some(offer.version.to_string());
+                (self.prefs.skipped != version && self.prefs.noticed != version).then_some(offer)
+            }
+            _ => None,
+        }
+    }
+
+    /// Puts the notice by for this version; the pill in the top bar stays.
+    pub fn put_notice_by(&mut self) {
+        if let Stage::Offered(offer) = &self.stage {
+            self.prefs.noticed = Some(offer.version.to_string());
+        }
     }
 
     /// Stops the top bar offering this version; the Updates page still shows it.
@@ -270,9 +327,21 @@ impl Updates {
                 Err(TryRecvError::Empty) => self.stage = Stage::Checking { asked, reply },
                 Err(TryRecvError::Disconnected) => self.stage = Stage::Idle,
             },
-            Stage::Installing { offer, reply } => match reply.try_recv() {
+            Stage::Installing {
+                offer,
+                reply,
+                progress,
+                started,
+            } => match reply.try_recv() {
                 Ok(outcome) => self.installed(offer, outcome, status),
-                Err(TryRecvError::Empty) => self.stage = Stage::Installing { offer, reply },
+                Err(TryRecvError::Empty) => {
+                    self.stage = Stage::Installing {
+                        offer,
+                        reply,
+                        progress,
+                        started,
+                    };
+                }
                 Err(TryRecvError::Disconnected) => self.stage = Stage::Offered(offer),
             },
             stage => self.stage = stage,
@@ -311,6 +380,7 @@ impl Updates {
                 self.stage = Stage::Installed(offer);
                 self.restart();
             }
+            Err(UpdateError::Cancelled) => self.stage = Stage::Offered(offer),
             Err(error) => {
                 let error = anyhow::Error::new(error).context(tr!(
                     "update-cannot-install",

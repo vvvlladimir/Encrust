@@ -16,8 +16,11 @@ mod keycap;
 mod layout;
 mod limited;
 mod list;
+mod menu;
 mod over_stage;
+mod release;
 mod section;
+mod theme_card;
 mod toggle;
 
 pub use bin::{BinLook, bin_button, confirm_bin};
@@ -43,15 +46,21 @@ pub use figures::{Figure, details_fold, figure_grid, split_readings};
 pub use hint_bar::{hint_bar, hint_bar_names};
 pub use keycap::{key_row, keycap, keycap_width};
 pub use layout::{
-    body_and_foot, busy, card, card_foot, card_title, describe, described, describing, dialog,
-    dialog_head, dialog_head_searching, empty_state, field_note, hairline, heading, help_mark,
-    hint, inset, meta, mode_column, mode_group, nested, notice, palette_dialog, progress_bar,
-    progress_bar_of, readings, stats, subheading, subheading_with_switch, vertical_hairline,
+    body_and_foot, boxed, busy, card, card_foot, card_title, describe, described, describing,
+    dialog, dialog_head, dialog_head_searching, empty_state, field_note, hairline, heading,
+    help_mark, hint, inset, meta, mode_column, mode_group, nested, notice, palette_dialog,
+    progress_bar, progress_bar_of, readings, stats, subheading, subheading_with_switch,
+    vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
-pub use list::{found_row, issue_list, issue_row, list, list_row, tag, two_lines};
+pub use list::{
+    bullet, found_row, issue_list, issue_row, list, list_row, tag, tag_label, two_lines,
+};
+pub use menu::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
 pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, zoom_bar};
+pub use release::{StepState, release_hero, steps};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
+pub use theme_card::{CardLook, theme_card};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};
 
 /// `6h36m39s`, as a printer's own screen states it.

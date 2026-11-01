@@ -72,7 +72,7 @@ fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
         egui::Vec2::splat(KNOB),
     );
     let knob_color = if enabled {
-        colors.text_high
+        colors.knob
     } else {
         colors.text_low
     };

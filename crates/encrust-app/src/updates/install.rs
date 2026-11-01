@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use super::feed::{self, Download, FEED_URL, Offer, Version};
+use super::progress::{Progress, Step};
 use super::{UpdateError, verify};
 use crate::i18n::tr;
 
@@ -47,8 +48,16 @@ pub fn check(running: Version) -> Result<Option<Offer>, UpdateError> {
 
 /// Downloads `download`, refuses it unless the release key signed it for `version`, and
 /// replaces `exe` with what it holds, and the `encrust` beside `exe` when there is one.
-pub fn install(download: &Download, version: Version, exe: &Path) -> Result<(), UpdateError> {
-    let archive = fetch(&download.url, ARCHIVE_LIMIT, ARCHIVE_TIMEOUT)?;
+/// `progress` follows it, and stops the download when cancelled.
+pub fn install(
+    download: &Download,
+    version: Version,
+    exe: &Path,
+    progress: &Progress,
+) -> Result<(), UpdateError> {
+    progress.enter(Step::Download);
+    let archive = fetch_counted(&download.url, progress)?;
+    progress.enter(Step::Verify);
     let expected = verify::trusted_comment(version, &download.archive);
     verify::verify(
         verify::RELEASE_KEY,
@@ -56,6 +65,7 @@ pub fn install(download: &Download, version: Version, exe: &Path) -> Result<(), 
         &download.signature,
         &expected,
     )?;
+    progress.enter(Step::Install);
     let binaries = unpack(&archive, &download.archive)?;
     swap(exe, &binaries)
 }
@@ -104,16 +114,8 @@ pub fn sweep() {
 }
 
 fn fetch(url: &str, limit: u64, timeout: Duration) -> Result<Vec<u8>, UpdateError> {
-    let failed = |source| UpdateError::Fetch {
-        url: url.to_owned(),
-        source: Box::new(source),
-    };
-    let agent: ureq::Agent = ureq::config::Config::builder()
-        .timeout_global(Some(timeout))
-        .user_agent(concat!("Encrust/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .into();
-    let mut response = agent.get(url).call().map_err(failed)?;
+    let failed = |source| fetch_failed(url, source);
+    let mut response = agent(timeout).get(url).call().map_err(failed)?;
     response
         .body_mut()
         .with_config()
@@ -121,6 +123,55 @@ fn fetch(url: &str, limit: u64, timeout: Duration) -> Result<Vec<u8>, UpdateErro
         .read_to_vec()
         .map_err(failed)
 }
+
+/// The archive at `url`, a chunk at a time so `progress` counts it and can stop it.
+fn fetch_counted(url: &str, progress: &Progress) -> Result<Vec<u8>, UpdateError> {
+    let failed = |source| fetch_failed(url, source);
+    if progress.is_cancelled() {
+        return Err(UpdateError::Cancelled);
+    }
+    let mut response = agent(ARCHIVE_TIMEOUT).get(url).call().map_err(failed)?;
+    if let Some(total) = response.body().content_length() {
+        progress.expect(total);
+    }
+    let mut reader = response
+        .body_mut()
+        .with_config()
+        .limit(ARCHIVE_LIMIT)
+        .reader();
+    let (mut archive, mut chunk) = (Vec::new(), vec![0; CHUNK]);
+    loop {
+        if progress.is_cancelled() {
+            return Err(UpdateError::Cancelled);
+        }
+        let read = reader
+            .read(&mut chunk)
+            .map_err(|error| failed(ureq::Error::Io(error)))?;
+        if read == 0 {
+            return Ok(archive);
+        }
+        archive.extend_from_slice(&chunk[..read]);
+        progress.add(read as u64);
+    }
+}
+
+fn agent(timeout: Duration) -> ureq::Agent {
+    ureq::config::Config::builder()
+        .timeout_global(Some(timeout))
+        .user_agent(concat!("Encrust/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .into()
+}
+
+fn fetch_failed(url: &str, source: ureq::Error) -> UpdateError {
+    UpdateError::Fetch {
+        url: url.to_owned(),
+        source: Box::new(source),
+    }
+}
+
+/// How much of the archive is read between two looks at whether it was cancelled, bytes.
+const CHUNK: usize = 64 << 10;
 
 fn unpack(archive: &[u8], name: &str) -> Result<Binaries, UpdateError> {
     let mut entries = if name.ends_with(".zip") {

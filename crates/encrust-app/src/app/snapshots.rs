@@ -447,3 +447,109 @@ fn the_chip_opening_its_machines_and_its_resins() {
         results.extend(harness.take_snapshot_results());
     }
 }
+
+#[test]
+fn the_menus_of_the_bar() {
+    let mut results = SnapshotResults::new();
+    for (name, title) in [
+        ("menu_file", "File"),
+        ("menu_edit", "Edit"),
+        ("menu_view", "View"),
+    ] {
+        let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), pictured());
+        harness.get_by_label(title).click();
+        harness.run_steps(SETTLE_FRAMES);
+        harness.snapshot(name);
+        results.extend(harness.take_snapshot_results());
+    }
+}
+
+#[test]
+fn a_picked_model_in_the_light() {
+    let mut app = pictured();
+    app.machine.general.appearance = crate::prefs::Appearance::Light;
+    picture("picked_model_light", app);
+}
+
+#[test]
+fn the_settings_pages_of_the_window_itself() {
+    let mut results = SnapshotResults::new();
+    for (name, section, light) in [
+        (
+            "settings_appearance",
+            crate::settings::Section::Appearance,
+            false,
+        ),
+        ("settings_updates", crate::settings::Section::Updates, false),
+        (
+            "settings_appearance_light",
+            crate::settings::Section::Appearance,
+            true,
+        ),
+    ] {
+        let mut app = with_settings();
+        app.machine.settings.turn_to(section);
+        if light {
+            app.machine.general.appearance = crate::prefs::Appearance::Light;
+        }
+        results.extend(picture(name, app));
+    }
+}
+
+/// A release newer than any build, with notes grouped as the release writes them.
+fn offered() -> crate::updates::Offer {
+    use crate::updates::Note;
+    let item = |text: &str| Note::Item(text.to_owned());
+    crate::updates::Offer {
+        version: crate::updates::Version::parse("9.0.0").expect("a version"),
+        notes: vec![
+            Note::Heading("Features".to_owned()),
+            item("Light theme, and System to follow the desktop."),
+            item("Find a setting at the top of the Settings list."),
+            Note::Heading("Performance Improvements".to_owned()),
+            item("Island check about 3 × faster on a full plate."),
+            Note::Heading("Bug Fixes".to_owned()),
+            item("Drain holes keep their taper after undo."),
+            item("A .goo file over 2 GB is written whole."),
+        ],
+        download: None,
+    }
+}
+
+#[test]
+fn an_update_found_told_and_installed() {
+    use crate::updates::{Progress, Stage, Step};
+    let mut results = SnapshotResults::new();
+
+    let mut found = with_settings();
+    found
+        .machine
+        .settings
+        .turn_to(crate::settings::Section::Updates);
+    found.machine.updates.stage = Stage::Offered(offered());
+    results.extend(picture("settings_updates_found", found));
+
+    let mut told = pictured();
+    told.machine.updates.stage = Stage::Offered(offered());
+    results.extend(picture("update_notice", told));
+
+    let mut sheet = pictured();
+    sheet.machine.updates.stage = Stage::Offered(offered());
+    sheet.machine.updates.sheet = true;
+    results.extend(picture("update_sheet", sheet));
+
+    let mut downloading = pictured();
+    let progress = std::sync::Arc::new(Progress::default());
+    progress.expect(38 << 20);
+    progress.add(12 << 20);
+    progress.enter(Step::Download);
+    let (_sender, reply) = std::sync::mpsc::channel();
+    downloading.machine.updates.stage = Stage::Installing {
+        offer: offered(),
+        reply,
+        progress,
+        started: web_time::Instant::now(),
+    };
+    downloading.machine.updates.sheet = true;
+    results.extend(picture("update_download", downloading));
+}

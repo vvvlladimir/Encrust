@@ -1,8 +1,8 @@
 // The one file a colour may be spelled in; `clippy.toml` keeps the rest of the crate out.
 #![expect(clippy::disallowed_methods, reason = "the palette is defined here")]
 
+use std::cell::Cell;
 use std::ops::RangeInclusive;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use egui::epaint::Shadow;
 use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle, Theme};
@@ -73,18 +73,24 @@ pub fn mask_pixel(grey: u8, island: bool) -> Color32 {
     }
 }
 
-/// Whether this frame paints light: set by `follow`, read by `colors` and `scene`.
-static LIGHT: AtomicBool = AtomicBool::new(false);
+thread_local! {
+    /// Whether this frame paints light: set by `follow`, read by `colors` and `scene`. Per
+    /// thread, so two windows drawn on two threads, as tests do, keep their own.
+    static LIGHT: Cell<bool> = const { Cell::new(false) };
+}
 
-/// Points the window at the palette egui resolved for this frame, the system's when the
-/// user left it to the system. Called once a frame, before anything is drawn.
-pub fn follow(ctx: &egui::Context) {
-    LIGHT.store(ctx.theme() == Theme::Light, Ordering::Relaxed);
+/// Hands egui the user's `preference` and points the window at the palette it resolves,
+/// the system's when the user left it to the system. Called once a frame, before drawing.
+pub fn follow(ctx: &egui::Context, preference: egui::ThemePreference) {
+    if ctx.options(|options| options.theme_preference) != preference {
+        ctx.set_theme(preference);
+    }
+    LIGHT.set(ctx.theme() == Theme::Light);
 }
 
 /// The set of colours the viewport paints with this frame.
 pub fn scene() -> &'static Scene {
-    if LIGHT.load(Ordering::Relaxed) {
+    if LIGHT.get() {
         &scene::LIGHT
     } else {
         &scene::DARK
@@ -108,9 +114,17 @@ pub fn gamma(color: Color32) -> [f32; 4] {
     color.to_normalized_gamma_f32()
 }
 
+/// The palette egui's `theme` paints with, whichever is in force: for a preview of it.
+pub fn palette_of(theme: Theme) -> &'static Palette {
+    match theme {
+        Theme::Light => &palette::LIGHT,
+        Theme::Dark => &palette::DARK,
+    }
+}
+
 /// The palette the window paints with this frame.
 pub fn colors() -> &'static Palette {
-    if LIGHT.load(Ordering::Relaxed) {
+    if LIGHT.get() {
         &palette::LIGHT
     } else {
         &palette::DARK

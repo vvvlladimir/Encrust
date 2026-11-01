@@ -37,7 +37,9 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   to open (a minute for a full 16K stack). A file
   with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
-  file and can be cleared from the start page.
+  file and can be cleared from the start page or File → Open recent.
+- The **File, Edit and View menus** list every action with its keys; one that cannot run says
+  why under itself (Slice to a file with no model, Duplicate with nothing picked).
 - Start from one of **four built-in test prints**: detail test, exposure check, surface
   finish and fit gauge.
 
@@ -760,7 +762,10 @@ address in a video player).
   sections are folded, which tab is open, what a click places, and what Measure snaps to.
   A panel left unopened for twenty runs opens as it ships.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
-  installs only when you press it. You can skip a version. A copy from the Microsoft Store
+  installs only when you press it. A release found is announced once by a notice and kept
+  as a pill in the top bar; its sheet lists every change, and shows the download's amount,
+  time left and steps, with Cancel while it downloads. You can skip a version.
+- **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`). A copy from the Microsoft Store
   is updated by the Store instead: it says when the Store has a new version, and its button
   opens Encrust in the Store app to update.
 - **Bug report:** builds a Markdown report (what happened, how to reproduce it, settings,

@@ -21,6 +21,7 @@ mod support_fields;
 mod title_bar;
 mod tool_rail;
 mod unreadable_profiles;
+mod update_sheet;
 mod view_column;
 mod view_cube;
 mod viewport_panel;
@@ -28,7 +29,7 @@ mod viewport_panel;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use settings::{import_dropped, import_profile};
-pub use slice::{can_slice, slice_every_plate, slice_this_plate};
+pub use slice::{slice_every_plate, slice_this_plate};
 pub use start::{open_recent, still_starting};
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
 pub use viewport_panel::{frame_view, set_orthographic};
@@ -66,6 +67,7 @@ impl Window<'_> {
     /// Lays the window out: the top bar, then the stage under it with the cards floating
     /// over it, each as tall as what it holds. See `docs/decisions/0221`.
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        theme::follow(ui.ctx(), self.machine.general.appearance.preference());
         egui::Panel::top("title")
             .exact_size(theme::TOP_BAR_H)
             .frame(strip_frame())
@@ -79,6 +81,7 @@ impl Window<'_> {
             find::ui(ui.ctx(), self);
         }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
+        update_sheet::ui(ui.ctx(), self.machine);
         settings::machines::window(ui.ctx(), self);
         self.machine.network.show_pictures(ui.ctx());
         printer_card::sheet::ui(ui.ctx(), self);

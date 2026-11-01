@@ -316,6 +316,42 @@ pub fn tag(
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// The same pill standing in the flow and taking no press: a heading of release notes.
+pub fn tag_label(ui: &mut Ui, text: &str, (ink, wash): (Color32, Color32)) -> Response {
+    let word = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), ink);
+    let (rect, response) = ui.allocate_exact_size(word.size() + 2.0 * TAG_PAD, Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, TAG_R, wash);
+    painter.galley(rect.min + TAG_PAD, word, ink);
+    response
+}
+
+/// One line of a list in prose, after a bullet, wrapping under its own first word.
+pub fn bullet(ui: &mut Ui, text: &str) {
+    let colors = theme::colors();
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = BULLET_GAP;
+        ui.label(
+            egui::RichText::new("\u{2022}")
+                .font(theme::label())
+                .color(colors.text_mid),
+        );
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(text)
+                    .font(theme::label())
+                    .color(colors.text_high),
+            )
+            .wrap(),
+        );
+    });
+}
+
+/// Between a bullet and its words, points.
+const BULLET_GAP: f32 = 10.0;
+
 /// Room around a tag's word, and how much of its ink washes it under the pointer.
 const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
 const TAG_HOVER_WASH: f32 = 0.24;

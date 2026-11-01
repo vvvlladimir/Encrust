@@ -36,6 +36,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     let width = (stage.width() - theme::CARD_MARGIN.sum().x).clamp(0.0, MESSAGE_W);
     message(&mut stack, &mut window.machine.status, running, width);
     unready(&mut stack, window);
+    release(&mut stack, window);
     broken(&mut stack, window);
     unreadable(&mut stack, window);
     jobs(&mut stack, window);
@@ -210,6 +211,53 @@ fn broken(stack: &mut Stack, window: &mut Window) {
         } else if keep {
             window.doc.repairs.keep_as_it_is(*id);
         }
+    }
+}
+
+/// A release found by the daily look, said once a version: What is new opens the sheet,
+/// the cross leaves only the pill in the top bar.
+fn release(stack: &mut Stack, window: &mut Window) {
+    let updates = &mut window.machine.updates;
+    let Some(offer) = updates.notice() else {
+        return;
+    };
+    let label = tr!("notice-release-out", version = offer.version.to_string());
+    let items = offer
+        .notes
+        .iter()
+        .filter_map(|note| match note {
+            crate::updates::Note::Item(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let detail = match items.as_slice() {
+        [] => None,
+        [first] => Some((*first).to_owned()),
+        [first, rest @ ..] => Some(tr!(
+            "notice-release-and-more",
+            first = (*first).to_owned(),
+            count = rest.len()
+        )),
+    };
+    let colors = theme::colors();
+    let reply = stack
+        .card("release", |ui| {
+            notice_card(
+                ui,
+                icon::UPDATE,
+                colors.accent_soft,
+                &label,
+                detail.as_deref(),
+                Some(&tr!("notice-what-is-new")),
+                Some(&tr!("notice-release-later")),
+            )
+        })
+        .inner;
+    if reply.acted {
+        updates.sheet = true;
+        updates.put_notice_by();
+    } else if reply.closed {
+        updates.put_notice_by();
     }
 }
 
