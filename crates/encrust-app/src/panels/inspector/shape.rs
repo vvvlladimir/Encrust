@@ -8,6 +8,7 @@ use crate::panels::Window;
 use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::{Group, saved_as};
 use crate::supports::own_raft_shown;
+use crate::ui::theme;
 use crate::ui::{
     Segment, Segmented, hint, icon, kept, secondary_button, section, subheading,
     subheading_with_switch,
@@ -60,14 +61,14 @@ fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
             ],
         ) {
             support_diagram::small_pillar(ui, profile);
-            ui.add_space(6.0);
+            ui.add_space(theme::ROW_GAP);
             Group::SmallPillar.show(ui, profile, saved);
             return;
         }
         let parts = Part::ALL.map(|part| (part, part.label()));
         let part = kept_switch(ui, "support-part", &parts);
         support_diagram::regular(ui, profile, part);
-        ui.add_space(6.0);
+        ui.add_space(theme::ROW_GAP);
         for group in groups(part) {
             if groups(part).len() > 1 {
                 match group.switch(profile) {
@@ -93,7 +94,7 @@ fn raft_owner(
     profiles_raft: Raft,
     plate: Option<Raft>,
 ) {
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     hint(
         ui,
         &if plate.is_some() {

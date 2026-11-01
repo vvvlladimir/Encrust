@@ -4,6 +4,7 @@ use printer_profiles::{
 
 use super::COARSE_STEP;
 use crate::i18n::tr;
+use crate::ui::theme;
 use crate::ui::{Held, limited_row, subheading};
 
 /// A setting no machine states a limit for.
@@ -26,7 +27,22 @@ pub(super) fn rows(
     locked: &PrinterTuning,
     limits: &PrinterLimits,
 ) {
-    let rows = [
+    travel_rows(ui, peel(values, locked, limits));
+    ui.add_space(theme::ITEM_GAP);
+    travel_rows(ui, bottom_peel(values, locked, limits));
+    if locked.second_stage.is_none() {
+        ui.add_space(theme::ITEM_GAP);
+        second_stage(ui, &mut values.second_stage, &limits.second_stage);
+    }
+}
+
+/// The peel of every layer past the bottom ones.
+fn peel<'a>(
+    values: &'a mut MaterialProfile,
+    locked: &PrinterTuning,
+    limits: &'a PrinterLimits,
+) -> [TravelRow<'a>; 4] {
+    [
         (
             tr!("print-lift"),
             locked.lift_distance_mm,
@@ -55,10 +71,16 @@ pub(super) fn rows(
             Travel::Speed,
             &limits.retract_speed_mm_min,
         ),
-    ];
-    travel_rows(ui, rows);
-    ui.add_space(8.0);
-    let bottom = [
+    ]
+}
+
+/// The peel of the bottom layers.
+fn bottom_peel<'a>(
+    values: &'a mut MaterialProfile,
+    locked: &PrinterTuning,
+    limits: &'a PrinterLimits,
+) -> [TravelRow<'a>; 3] {
+    [
         (
             tr!("resin-bottom-lift"),
             locked.bottom_lift_distance_mm,
@@ -80,19 +102,23 @@ pub(super) fn rows(
             Travel::Speed,
             &limits.bottom_retract_speed_mm_min,
         ),
-    ];
-    travel_rows(ui, bottom);
-    if locked.second_stage.is_none() {
-        ui.add_space(8.0);
-        second_stage(ui, &mut values.second_stage, &limits.second_stage);
-    }
+    ]
 }
 
 /// The second stage of each peel: on up past the first lift, and slower for the last
 /// stretch back down. Zero distances leave one stage.
 fn second_stage(ui: &mut egui::Ui, stage: &mut SecondStage, limits: &SecondStageLimits) {
     subheading(ui, &tr!("resin-second-stage"));
-    let rows = [
+    travel_rows(ui, second_stage_peel(stage, limits));
+    travel_rows(ui, second_stage_bottom(stage, limits));
+}
+
+/// A second stage's rows for every layer past the bottom ones.
+fn second_stage_peel<'a>(
+    stage: &'a mut SecondStage,
+    limits: &'a SecondStageLimits,
+) -> [TravelRow<'a>; 4] {
+    [
         (
             tr!("print-lift"),
             None,
@@ -121,6 +147,15 @@ fn second_stage(ui: &mut egui::Ui, stage: &mut SecondStage, limits: &SecondStage
             Travel::Speed,
             &limits.retract_speed_mm_min,
         ),
+    ]
+}
+
+/// A second stage's rows for the bottom layers.
+fn second_stage_bottom<'a>(
+    stage: &'a mut SecondStage,
+    limits: &'a SecondStageLimits,
+) -> [TravelRow<'a>; 4] {
+    [
         (
             tr!("resin-bottom-lift"),
             None,
@@ -149,8 +184,7 @@ fn second_stage(ui: &mut egui::Ui, stage: &mut SecondStage, limits: &SecondStage
             Travel::Speed,
             &limits.bottom_retract_speed_mm_min,
         ),
-    ];
-    travel_rows(ui, rows);
+    ]
 }
 
 /// Whether a lift or retract is a distance or a speed, which sets its unit and its range.

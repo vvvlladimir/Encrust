@@ -4,9 +4,10 @@ use core_supports::InfillPattern;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::supports::Placing;
+use crate::ui::theme;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, nested, number_row, picker_row, secondary_button,
-    section, switch,
+    DropdownRow, Segment, Segmented, describe, dropdown_menu, dropdown_row, hint, icon, nested,
+    number_row, picker_row, secondary_button, section, switch,
 };
 
 /// Millimetres per point of drag on the brush and the fill.
@@ -42,7 +43,7 @@ fn paint_hint(placing: Placing) -> String {
 /// The place mode: a click puts one support down, a shift-click a line of them.
 pub(super) fn place_fields(ui: &mut egui::Ui, window: &mut Window) {
     hint(ui, &paint_hint(Placing::Point));
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     number_row(
         ui,
         &tr!("paint-line-spacing"),
@@ -66,9 +67,9 @@ pub(super) fn area_fields(ui: &mut egui::Ui, window: &mut Window) {
     Segmented::new(&segments)
         .width(ui.available_width())
         .show(ui, &mut tool.placing);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     hint(ui, &paint_hint(tool.placing));
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     number_row(
         ui,
         &tr!("paint-brush"),
@@ -223,8 +224,8 @@ pub(super) fn profile_row(
         .and_then(|id| catalogue.supports().find(|entry| entry.id == id))
         .map_or(in_hand.clone(), |entry| entry.profile.name.clone());
     let response = picker_row(ui, &tr!("paint-profile"), icon::SUPPORTS, &shown);
-    egui::Popup::menu(&response).show(|ui| {
-        if ui.selectable_label(chosen.is_none(), &in_hand).clicked() {
+    dropdown_menu(&response, |ui| {
+        if dropdown_row(ui, &DropdownRow::named(&in_hand, chosen.is_none())).clicked() {
             *chosen = None;
             ui.close();
         }
@@ -233,7 +234,7 @@ pub(super) fn profile_row(
             .filter(|entry| !catalogue.is_auto_shape(&entry.id));
         for entry in offered {
             let picked = chosen.as_deref() == Some(entry.id.as_str());
-            if ui.selectable_label(picked, &entry.profile.name).clicked() {
+            if dropdown_row(ui, &DropdownRow::named(&entry.profile.name, picked)).clicked() {
                 *chosen = Some(entry.id.clone());
                 ui.close();
             }

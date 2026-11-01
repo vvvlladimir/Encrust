@@ -2,16 +2,14 @@ use super::rows::InHand;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::settings::keep_support;
-use crate::ui::{icon, icon_button};
+use crate::ui::{icon, quiet_square, theme};
 use anyhow::Context as _;
 
 /// Save: over the automatic preset shown, at once, since none is ever added; for any
 /// other, over the one it came from or as a new one.
 pub(super) fn save_button(ui: &mut egui::Ui, window: &mut Window, hand: &InHand) {
     let tip = tr!("shape-save-tooltip");
-    let button = ui
-        .add_enabled_ui(hand.edited, |ui| icon_button(ui, icon::SAVE, &tip))
-        .inner;
+    let button = quiet_square(ui, icon::SAVE, &tip, theme::BUTTON_H, hand.edited);
     if let Some(id) = &hand.auto_source {
         if button.clicked() {
             save_auto(window, id);
@@ -19,7 +17,7 @@ pub(super) fn save_button(ui: &mut egui::Ui, window: &mut Window, hand: &InHand)
         return;
     }
     let (mut over, mut as_new) = (false, false);
-    egui::Popup::menu(&button).show(|ui| {
+    crate::ui::popup_menu(&button).show(|ui| {
         let save = egui::Button::new(tr!("shape-save"));
         over = ui.add_enabled(hand.source.is_some(), save).clicked();
         as_new = ui.button(tr!("shape-save-as-new")).clicked();

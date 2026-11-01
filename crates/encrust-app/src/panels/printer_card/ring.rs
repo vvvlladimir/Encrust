@@ -7,22 +7,12 @@ use super::{Light, colour_of, face, left};
 use crate::i18n::tr;
 use crate::network::{Network, Reading, Target};
 use crate::panels::Window;
+pub use crate::ui::theme::layout::printer_card_ring::GAP;
+use crate::ui::theme::layout::printer_card_ring::{ROW_H, ROW_W, SIZE, SMALL, TRACK_W};
 use crate::ui::{focus_ring, icon, theme};
 
-/// The ring's box, as tall as the chip beside it, and how thick its track is drawn.
-const SIZE: f32 = theme::CHIP_H;
-const TRACK_W: f32 = 3.0;
-/// The ring in a row of the list.
-const SMALL: f32 = 22.0;
-/// Points between the ring and the chip.
-pub const GAP: f32 = 6.0;
-/// How wide a row of the list is drawn.
-const ROW_W: f32 = 300.0;
-const ROW_H: f32 = 46.0;
 /// Share of a turn the arc spans while a print runs without a count yet.
 const SPINNER_SHARE: f32 = 0.25;
-/// Turns a second the spinner makes.
-const SPINNER_TURNS_S: f32 = 0.8;
 
 /// Draws the ring when the window knows any printer, and answers the width it took.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
@@ -31,7 +21,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     }
     let network = &mut window.machine.network;
     network.keep_fresh(ui.input(|input| input.time));
-    let Some(current) = network.current() else {
+    let printing = network
+        .in_view()
+        .iter()
+        .any(|target| matches!(network.reading(target), Some(Reading::State(state)) if state.busy));
+    let Some(current) = network.current().filter(|_| printing) else {
         return 0.0;
     };
     let key = current.key();
@@ -56,7 +50,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
         }
     } else {
         let mut opened = None;
-        egui::Popup::menu(&response).show(|ui| opened = list(ui, network));
+        crate::ui::popup_menu(&response).show(|ui| opened = list(ui, network));
         if opened.is_some() {
             network.open = opened;
         }
@@ -104,8 +98,7 @@ fn paint(ui: &egui::Ui, center: Pos2, radius: f32, look: &Look, hovered: bool) {
     };
     painter.circle_stroke(center, radius - TRACK_W / 2.0, Stroke::new(TRACK_W, track));
     let arc = if look.spinning {
-        let turn = (ui.input(|input| input.time) as f32 * SPINNER_TURNS_S).fract();
-        ui.ctx().request_repaint();
+        let turn = crate::ui::theme::motion::spin(ui.ctx()).unwrap_or(0.0);
         Some((turn, SPINNER_SHARE))
     } else {
         look.progress.map(|share| (0.0, share))
@@ -175,7 +168,7 @@ fn arc_points(center: Pos2, radius: f32, from: f32, share: f32) -> Vec<Pos2> {
 
 /// The line the ring says on hover: the printer and what it is doing.
 fn hover_line(network: &Network, target: &Target<'_>) -> String {
-    let state = super::summary(network.reach(target), network.reading(target));
+    let (state, _) = super::summary(network.reach(target), network.reading(target));
     format!("{}: {state}", network.label(target))
 }
 
@@ -183,7 +176,7 @@ fn hover_line(network: &Network, target: &Target<'_>) -> String {
 fn list(ui: &mut egui::Ui, network: &Network) -> Option<String> {
     let mut opened = None;
     ui.set_min_width(ROW_W);
-    ui.spacing_mut().item_spacing.y = 2.0;
+    ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
     for target in network.in_view() {
         if row(ui, network, &target).clicked() {
             opened = Some(target.key());

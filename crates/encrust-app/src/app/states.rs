@@ -84,6 +84,23 @@ pub(super) fn app(cube: bool) -> SlicerApp {
     app
 }
 
+/// `app` with its plate cut and the cut measured, as Preview and Check find it once the
+/// runs behind them finish; `app` stands in Preview or on Check, which ask for the cut.
+#[cfg_attr(
+    not(feature = "snapshots"),
+    expect(dead_code, reason = "only pictured")
+)]
+pub(super) fn cut(mut app: SlicerApp) -> SlicerApp {
+    // One pass starts the cut, the next its measurement.
+    for _ in 0..2 {
+        app.refresh_preview();
+        while app.machine.preview.poll(&mut app.machine.status) {
+            std::thread::yield_now();
+        }
+    }
+    app
+}
+
 /// `app` drawn as the window would, by `builder`, until it comes to rest.
 pub(super) fn drawn(
     builder: HarnessBuilder<SlicerApp>,

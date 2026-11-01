@@ -7,8 +7,7 @@ use egui::Ui;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::settings::Deleting;
-use crate::ui::{help_mark, icon, icon_button, inline_button, theme, tone};
+use crate::ui::{Inline, help_mark, icon, icon_button, inline_button, theme, tone};
 
 /// Whether any of the user's profile files was left out because it would not read, and the
 /// note about them was not put away this run; a file that breaks after is noted again.
@@ -53,8 +52,8 @@ pub fn row(ui: &mut Ui, window: &mut Window) {
     ui.horizontal(|ui| {
         tone(ui, &label, theme::colors().warn);
         help_mark(ui, &reasons);
-        if inline_button(ui, action.0, &action.1, true, true).clicked() {
-            window.machine.settings.confirm = Some(Deleting::Unreadable);
+        if inline_button(ui, Inline::new(&action.1).glyph(action.0).primary()).clicked() {
+            window.machine.settings.reset_unreadable = true;
         }
         if icon_button(ui, icon::CANCEL, &tr!("notice-put-away")).clicked() {
             let files = paths(window);

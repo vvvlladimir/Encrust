@@ -52,6 +52,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
 | [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
+| [0389](0389-a-support-profile-is-saved-by-a-press.md) | Save a support profile's form by a press, and ask before leaving it unsaved | Accepted |
+| [0388](0388-the-update-feed-dates-its-release-and-sizes-each-archive.md) | Date the release and size each archive in the update feed | Accepted |
 | [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292 |
 | [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
@@ -294,6 +296,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
 | [0316](0316-many-solids-are-unioned-by-groups-and-set-apart-ones-side-by-side.md) | Union many solids by groups, and set apart ones side by side | Accepted |
 | [0317](0317-a-run-tells-how-far-it-has-got-through-its-cancel.md) | A run tells how far it has got through its `Cancel` | Accepted |
+| [0384](0384-repair-the-drainage-check-and-auto-orient-tell-how-far-they-have-got.md) | Repair, the drainage check and Auto-orient tell how far they have got | Accepted |
 | [0304](0304-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted; amended by 0321, which patches a torn model first |
 | [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
 | [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
@@ -398,7 +401,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted; an installed printer as a whole copy is superseded by 0372 |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted; generating is superseded by 0359, the `.ctb` revision by 0365 |
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted; 515 left unwritten is superseded by 0373 |
-| [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
+| [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) and 0382 (the question before a deletion) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
 | [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |
 | [0267](0267-a-compensation-group-is-switched-off-without-losing-its-numbers.md) | Switch a compensation group off without losing its numbers | Accepted |
@@ -447,7 +450,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0103](0103-preview-splits-the-stage.md) | Preview splits the stage between the model and the mask | Accepted; hiding the columns is superseded by 0217 |
 | [0104](0104-the-title-strip-is-the-title-bar.md) | The title strip is the window's title bar | Accepted; its height is superseded by 0217 |
 | [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only), 0217 (the footer only) and 0218 (the Layers tool and the Mirror action) |
-| [0106](0106-a-shortcut-lives-in-the-table.md) | Every key the window answers lives in one table | Accepted |
+| [0106](0106-a-shortcut-lives-in-the-table.md) | Every key the window answers lives in one table | Accepted; keys that cannot be rebound are superseded by 0386 |
+| [0386](0386-the-user-chooses-the-keys-in-the-sheet.md) | Let the user choose the keys, in the sheet that lists them | Accepted |
+| [0387](0387-a-sliced-file-is-named-by-the-users-template.md) | Name a sliced file by a template the user writes, dated with `jiff` | Accepted |
 | [0107](0107-take-a-colour-token-not-floats.md) | A colour crosses into the renderer as a token, not as floats | Accepted |
 | [0108](0108-the-machine-is-drawn-from-the-build-volume.md) | The build platform is drawn from the build volume, not loaded from a model | Superseded by 0219 |
 | [0109](0109-the-preview-is-read-against-the-plate.md) | The preview is read against the plate, not against the panel | Accepted |
@@ -466,7 +471,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
 | [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
-| [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted |
+| [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382 |
+| [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Accepted |
+| [0383](0383-a-light-palette-chosen-each-frame.md) | Add a light palette, chosen each frame from egui's resolved theme | Accepted |
+| [0385](0385-a-picture-is-kept-as-shade-and-coverage.md) | Keep a plate's picture as shade and coverage, tinted when shown | Accepted |
 | [0312](0312-the-command-line-shapes-models-before-it-slices-them.md) | Combine, label, cut and split models on the command line before slicing them | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |

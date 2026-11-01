@@ -16,7 +16,8 @@ or `rustfmt` enforce is not reported. Check these first:
 6. **Scope:** later work, a cleanup inside a feature, a visible change without
    `docs/features.md`, a decision without its ADR.
 7. **Parity:** a window feature `encrust-cli` cannot reach.
-8. **Window:** a break of `docs/design/ui-standards.md`.
+8. **Window:** a break of `docs/design/ui-standards.md`, its screen in `ui-screens.md`, or
+   `i18n.md`: a string sized to English, a changed meaning under its old key.
 9. **Tests:** a fix without a failing test first, an untriggered error variant, geometry
    without a closed form and tolerance.
 

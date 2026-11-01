@@ -84,6 +84,34 @@ fn pressed_again_with_nothing_changed_it_steps_rather_than_searches() {
 }
 
 #[test]
+fn a_cancelled_run_leaves_the_model_standing_and_the_next_press_searches_afresh() {
+    let mut scene = scene_with(cuboid(Vec3::new(40.0, 20.0, 4.0)));
+    let before = scene.objects()[0].transform;
+    let mut tool = OrientTool::default();
+    let mut status = Status::default();
+    tool.start(
+        &mut scene,
+        &BuildPlate::default(),
+        None,
+        |_| medium(),
+        None,
+        &mut status,
+    )
+    .expect("a visible slab can be oriented");
+
+    tool.cancel(&mut status);
+
+    assert_eq!(status, Status::Info(tr!("orient-cancelled")));
+    assert!(!tool.is_running());
+    assert!(!tool.poll(&mut scene, &BuildPlate::default(), &mut status));
+    assert_eq!(scene.objects()[0].transform, before, "nothing was turned");
+    assert!(
+        tool.offers.is_empty() && tool.asked.is_none(),
+        "a cancelled run leaves nothing to step through, so the next press searches again"
+    );
+}
+
+#[test]
 fn a_turned_model_lands_back_on_the_plate() {
     let mut scene = scene_with(cuboid(Vec3::new(40.0, 40.0, 4.0)));
     let mut tool = OrientTool::default();

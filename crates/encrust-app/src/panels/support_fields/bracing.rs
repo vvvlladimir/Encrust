@@ -17,9 +17,8 @@ pub(super) fn bracing(
     saved: Option<&SupportProfile>,
 ) {
     describe(ui, &tr!("support-bracing-help"));
-    let id = ui.id().with(("bracing-fine-tune", &profile.name));
+    let (id, mut fine) = fine_tune(ui, profile);
     let bracing = &mut profile.bracing;
-    let mut fine = kept::get(ui.ctx(), id).unwrap_or_else(|| BracingPreset::of(bracing).is_none());
     bracing_switch(ui, &mut bracing.enabled, &mut fine);
     kept::set(ui.ctx(), id, &fine);
     if !bracing.enabled {
@@ -32,6 +31,36 @@ pub(super) fn bracing(
             bracing_presets(ui, bracing);
         }
     });
+}
+
+/// A bracing that is on, under a switch its heading carries: the presets, the switch to
+/// every number, then the buttress or every number.
+pub(super) fn bracing_fields(
+    ui: &mut egui::Ui,
+    profile: &mut SupportProfile,
+    saved: Option<&SupportProfile>,
+) {
+    let (id, mut fine) = fine_tune(ui, profile);
+    let bracing = &mut profile.bracing;
+    if !fine {
+        bracing_presets(ui, bracing);
+    }
+    switch(ui, &mut fine, &tr!("support-bracing-fine-tune"));
+    kept::set(ui.ctx(), id, &fine);
+    if fine {
+        bracing_numbers(ui, bracing, saved);
+    } else {
+        buttress(ui, bracing, saved);
+    }
+}
+
+/// Where the choice of every number over the presets is kept, and that choice: on for a
+/// profile whose numbers are no preset's.
+fn fine_tune(ui: &egui::Ui, profile: &SupportProfile) -> (egui::Id, bool) {
+    let id = ui.id().with(("bracing-fine-tune", &profile.name));
+    let fine =
+        kept::get(ui.ctx(), id).unwrap_or_else(|| BracingPreset::of(&profile.bracing).is_none());
+    (id, fine)
 }
 
 /// The row that turns bracing on, and before its switch the one that trades the presets
@@ -101,6 +130,15 @@ pub(super) fn bracing_numbers(
         FINE_STEP,
         0.1..=3.0,
     );
+    spacing(ui, bracing, saved);
+    ui.add_space(theme::ICON_GAP);
+    zones(ui, bracing);
+    ui.add_space(theme::ICON_GAP);
+    buttress(ui, bracing, saved);
+}
+
+/// How far apart braces may stand, from where they start, and how often they repeat up.
+fn spacing(ui: &mut egui::Ui, bracing: &mut Bracing, saved: Option<&SupportProfile>) {
     let mm_unit = tr!("unit-mm");
     number(
         ui,
@@ -132,7 +170,10 @@ pub(super) fn bracing_numbers(
         1.0..=40.0,
         1,
     );
-    ui.add_space(2.0);
+}
+
+/// How each zone up a pair is tied: its pattern, and how many levels the top and bottom take.
+fn zones(ui: &mut egui::Ui, bracing: &mut Bracing) {
     pattern_row(ui, &tr!("support-brace-top"), &mut bracing.top.pattern);
     levels_row(
         ui,
@@ -150,8 +191,6 @@ pub(super) fn bracing_numbers(
         &tr!("support-brace-bottom-levels"),
         &mut bracing.bottom.levels,
     );
-    ui.add_space(2.0);
-    buttress(ui, bracing, saved);
 }
 
 /// The legs propping a tall trunk the bracing leaves free at the top.

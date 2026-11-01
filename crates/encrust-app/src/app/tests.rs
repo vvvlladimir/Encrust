@@ -64,7 +64,9 @@ fn the_layer_strip_takes_a_press_while_a_model_is_picked() {
             app,
         );
     harness.run_steps(3);
-    harness.get_by_label("Model and layer side by side").click();
+    harness
+        .get_by_label("Model and layer side by side  M")
+        .click();
     harness.run_steps(3);
 
     assert_eq!(harness.state().mode, Mode::Preview);
@@ -101,6 +103,63 @@ fn every_tool_on_the_rail_is_named_and_picked_from_the_keyboard() {
         harness.run_steps(2);
         assert_eq!(harness.state().tool, tool, "Enter on {}", tool.label());
     }
+}
+
+/// BUG: the lit row scrolled itself into view every frame, so the wheel could not take the
+/// Find list past its first rows.
+#[test]
+fn the_wheel_scrolls_the_find_list_to_its_last_row() {
+    use crate::shortcuts::{Action, BINDINGS};
+    use egui_kittest::kittest::Queryable as _;
+
+    let mut app = SlicerApp::default();
+    app.view.options.started = true;
+    app.view.options.find = true;
+    let mut dressed = false;
+    let mut harness = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1280.0, 900.0))
+        .build_ui_state(
+            move |ui, app: &mut SlicerApp| {
+                if dressed {
+                    app.window().show(ui);
+                } else {
+                    crate::ui::theme::apply(ui.ctx());
+                    dressed = true;
+                }
+            },
+            app,
+        );
+    harness.run_steps(3);
+    let field = harness.get_by_role(egui::accesskit::Role::TextInput).rect();
+    harness.hover_at(field.center() + egui::vec2(0.0, 150.0));
+    for _ in 0..40 {
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -3.0),
+            modifiers: egui::Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
+        harness.run_steps(2);
+    }
+    harness.run_steps(10);
+    let last = BINDINGS
+        .iter()
+        .rev()
+        .find(|binding| !matches!(binding.action, Action::Pick(_) | Action::Find))
+        .expect("the table lists actions besides the tools")
+        .action
+        .label();
+    let row = harness
+        .query_all_by_label(&last)
+        .last()
+        .expect("the last action is listed")
+        .rect();
+    let list_bottom = field.bottom() + 10.0 * 32.0;
+    assert!(
+        row.bottom() <= list_bottom + 1.0,
+        "{last} stands at {}, under the list's foot at {list_bottom}",
+        row.bottom()
+    );
 }
 
 #[test]
@@ -649,10 +708,9 @@ fn escape_closes_the_question_and_then_the_settings_window() {
     shortcuts::act(&mut app.window(), shortcuts::Action::Settings);
     assert!(app.machine.settings.open);
 
-    let deleting = crate::settings::Deleting::Profile(printer_profiles::Kind::Support, "x".into());
-    app.machine.settings.confirm = Some(deleting);
+    app.machine.settings.reset_unreadable = true;
     shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
-    assert!(app.machine.settings.confirm.is_none());
+    assert!(!app.machine.settings.reset_unreadable);
     assert!(app.machine.settings.open, "the window is still there");
 
     shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
@@ -667,9 +725,9 @@ fn escape_closes_the_question_and_then_the_machine_and_resin_window() {
     crate::panels::open_machines(&mut app.machine);
     assert!(app.machine.settings.machines);
 
-    app.machine.settings.confirm = Some(crate::settings::Deleting::Resin("grey".to_owned()));
+    app.machine.settings.reset_unreadable = true;
     shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
-    assert!(app.machine.settings.confirm.is_none());
+    assert!(!app.machine.settings.reset_unreadable);
     assert!(app.machine.settings.machines, "the window is still there");
 
     shortcuts::act(&mut app.window(), shortcuts::Action::SelectAll);
@@ -1023,4 +1081,18 @@ fn a_click_on_the_rim_of_a_hole_in_a_turned_model_of_a_million_faces_picks_its_e
         ..Transform::default()
     };
     assert_eq!(click_a_rim(mesh, transform, false), 1);
+}
+
+/// Once nothing moves the window stops asking for frames, so an idle window costs nothing:
+/// every loop and every fold settles, on the start page and over a plate alike.
+#[test]
+fn a_window_at_rest_asks_for_no_more_frames() {
+    for started in [false, true] {
+        let mut app = super::states::app(true);
+        app.view.options.started = started;
+        let builder = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 800.0));
+        let mut harness = super::states::drawn(builder, app);
+        let settled = harness.try_run();
+        assert!(settled.is_ok(), "started {started}: {settled:?}");
+    }
 }

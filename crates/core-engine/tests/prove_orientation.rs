@@ -6,12 +6,15 @@
 )]
 
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 use core_engine::{
     Choice, EngineError, Printout, SupportPlan, Trial, orient_for_print, print_out, prove,
 };
 use core_geometry::{Mesh, Quat, Vec3};
-use core_plate::{OrientGoal, OrientPreset, OrientSettings, Printed, Ruling, finalists};
+use core_plate::{
+    OrientGoal, OrientPreset, OrientSettings, Phase, PlateError, Printed, Ruling, Watch, finalists,
+};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
 /// Panel of 600 x 400 pixels at a 0.1 mm pitch: 60 x 40 mm of build area.
@@ -117,7 +120,7 @@ fn mushroom() -> Mesh {
 
 /// The pose `mesh` prints best in, chosen by printing, and what it printed.
 fn best(mesh: &Mesh, settings: &OrientSettings, trial: &Trial) -> (Choice, Printout) {
-    let chosen = orient_for_print(&Printed::solid(mesh), settings, Some(trial))
+    let chosen = orient_for_print(&Printed::solid(mesh), settings, Some(trial), Watch::never())
         .expect("the model can be oriented")[0];
     let printout = chosen
         .printout
@@ -131,10 +134,15 @@ fn with_no_machine_the_answer_is_the_searchs_own() {
     let mesh = mushroom();
     let settings = bench.settings(OrientGoal::FewestSupports);
 
-    let chosen = orient_for_print(&Printed::solid(&mesh), &settings, None)
+    let chosen = orient_for_print(&Printed::solid(&mesh), &settings, None, Watch::never())
         .expect("a mushroom can be oriented");
-    let found = finalists(&Printed::solid(&mesh), &settings, usize::MAX)
-        .expect("a mushroom can be oriented");
+    let found = finalists(
+        &Printed::solid(&mesh),
+        &settings,
+        usize::MAX,
+        Watch::never(),
+    )
+    .expect("a mushroom can be oriented");
     let turns: Vec<Quat> = chosen
         .iter()
         .map(|choice| choice.oriented.rotation)
@@ -210,9 +218,11 @@ fn auto_rests_a_mushroom_on_its_cap_and_offers_only_trades_no_other_pose_beats()
     let mesh = mushroom();
     let settings = bench.settings(OrientPreset::Auto);
     let printed = Printed::solid(&mesh);
-    let found = finalists(&printed, &settings, usize::MAX).expect("a mushroom has finalists");
+    let found = finalists(&printed, &settings, usize::MAX, Watch::never())
+        .expect("a mushroom has finalists");
 
-    let tried = prove(&printed, &settings, &found, &bench.trial()).expect("a mushroom prints");
+    let tried = prove(&printed, &settings, &found, &bench.trial(), Watch::never())
+        .expect("a mushroom prints");
     let chosen = tried.first().expect("something is chosen").proven;
     assert!(
         chosen.oriented.on_plate,
@@ -259,8 +269,10 @@ fn a_table_stays_on_the_plate_held_only_under_its_top() {
         lifted.supports_ml
     );
 
-    let found = finalists(&printed, &settings, usize::MAX).expect("it has finalists");
-    let tried = prove(&printed, &settings, &found, &bench.trial()).expect("its finalists print");
+    let found =
+        finalists(&printed, &settings, usize::MAX, Watch::never()).expect("it has finalists");
+    let tried = prove(&printed, &settings, &found, &bench.trial(), Watch::never())
+        .expect("its finalists print");
     assert!(
         matches!(tried[0].ruling, Ruling::Chosen | Ruling::Stayed),
         "the first tried is the choice, got {:?}",
@@ -318,8 +330,10 @@ fn a_trial_stands_the_contacts_and_supports_the_print_does() {
     let settings = bench.settings(OrientGoal::FewestSupports);
     let printed = Printed::solid(&mesh);
 
-    let found = finalists(&printed, &settings, usize::MAX).expect("a ball has finalists");
-    let tried = prove(&printed, &settings, &found, &bench.trial()).expect("a ball prints");
+    let found =
+        finalists(&printed, &settings, usize::MAX, Watch::never()).expect("a ball has finalists");
+    let tried =
+        prove(&printed, &settings, &found, &bench.trial(), Watch::never()).expect("a ball prints");
     for pose in tried
         .iter()
         .map(|tried| tried.proven)
@@ -406,7 +420,62 @@ fn a_mesh_with_no_faces_has_no_orientation_to_prove() {
     let bench = Bench::new();
     let settings = bench.settings(OrientGoal::FewestSupports);
     let trial = bench.trial();
-    let error = orient_for_print(&Printed::solid(&Mesh::default()), &settings, Some(&trial))
-        .expect_err("an empty mesh has no orientation");
+    let error = orient_for_print(
+        &Printed::solid(&Mesh::default()),
+        &settings,
+        Some(&trial),
+        Watch::never(),
+    )
+    .expect_err("an empty mesh has no orientation");
     assert!(matches!(error, EngineError::Orient(_)));
+}
+
+#[test]
+fn a_proof_tells_every_step_of_every_pose_and_ends_on_the_last() {
+    let bench = Bench::new();
+    let mesh = mushroom();
+    let settings = bench.settings(OrientPreset::Auto);
+    let (done, total) = (AtomicUsize::new(0), AtomicUsize::new(0));
+    let counting = |phase: Phase, told: usize, of: usize| {
+        if phase == Phase::Proving {
+            done.fetch_max(told, Relaxed);
+            total.store(of, Relaxed);
+        }
+        true
+    };
+
+    orient_for_print(
+        &Printed::solid(&mesh),
+        &settings,
+        Some(&bench.trial()),
+        Watch::by(&counting),
+    )
+    .expect("a mushroom prints");
+
+    let total = total.load(Relaxed);
+    assert!(
+        total > 0 && total % 3 == 0,
+        "three steps a pose, got {total}"
+    );
+    assert_eq!(
+        done.load(Relaxed),
+        total,
+        "the proof ends with every step told"
+    );
+}
+
+#[test]
+fn a_proof_stopped_part_way_ends_without_a_choice() {
+    let bench = Bench::new();
+    let settings = bench.settings(OrientPreset::Auto);
+    let stop_proving = |phase: Phase, _: usize, _: usize| phase != Phase::Proving;
+
+    let error = orient_for_print(
+        &Printed::solid(&mushroom()),
+        &settings,
+        Some(&bench.trial()),
+        Watch::by(&stop_proving),
+    )
+    .expect_err("the watcher gave up on the proof");
+    assert!(matches!(error, EngineError::Orient(PlateError::Cancelled)));
 }

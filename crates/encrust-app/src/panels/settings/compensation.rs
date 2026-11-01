@@ -8,6 +8,7 @@ use crate::settings::{Calculator, Calculators};
 use egui::collapsing_header::CollapsingState;
 use egui::vec2;
 
+use crate::ui::theme::layout::settings_compensation::{CLOCK_W, SIZE_W};
 use crate::ui::{
     axis_label, card, hint, icon, icon_button, number_row, primary_button, secondary_button,
     subheading, subheading_with_switch, theme, unit_field,
@@ -127,7 +128,8 @@ pub(super) fn calculator(
         .show(ctx, |ui| {
             ui.set_width(420.0);
             ui.horizontal(|ui| {
-                ui.label(
+                crate::ui::paragraph(
+                    ui,
                     egui::RichText::new(title)
                         .font(theme::dialog_title())
                         .color(theme::colors().text_high),
@@ -136,7 +138,7 @@ pub(super) fn calculator(
                     closed = icon_button(ui, icon::CANCEL, &tr!("dialog-close")).clicked();
                 });
             });
-            ui.add_space(6.0);
+            ui.add_space(theme::ROW_GAP);
             taken = match which {
                 Calculator::Shrinkage => shrinkage(ui, calculators, compensation),
                 Calculator::LayerTime => layer_time(ui, calculators, compensation),
@@ -155,12 +157,12 @@ fn shrinkage(
     compensation: &mut Compensation,
 ) -> bool {
     hint(ui, &tr!("comp-shrinkage-note"));
-    ui.add_space(10.0);
+    ui.add_space(theme::LINE_GAP);
     egui::Grid::new("shrinkage-calculator")
         .num_columns(4)
-        .spacing(vec2(10.0, 6.0))
+        .spacing(vec2(theme::LINE_GAP, theme::ROW_GAP))
         .show(ui, |ui| {
-            ui.label("");
+            crate::ui::paragraph(ui, "");
             for head in [tr!("comp-drawn"), tr!("comp-measured"), tr!("comp-scale")] {
                 column_head(ui, &head);
             }
@@ -201,12 +203,9 @@ fn shrinkage(
     false
 }
 
-/// Width of a box in the calculators, points.
-const SIZE_W: f32 = 112.0;
-const CLOCK_W: f32 = 84.0;
-
 fn column_head(ui: &mut egui::Ui, text: &str) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         egui::RichText::new(text)
             .font(theme::small())
             .color(theme::colors().text_low),
@@ -214,7 +213,8 @@ fn column_head(ui: &mut egui::Ui, text: &str) {
 }
 
 fn figure(ui: &mut egui::Ui, text: &str) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         egui::RichText::new(text)
             .font(theme::figures(13.0))
             .color(theme::colors().text_high),
@@ -223,12 +223,12 @@ fn figure(ui: &mut egui::Ui, text: &str) {
 
 /// The note on what the field will hold, if any, over the button that takes the result.
 fn take_button(ui: &mut egui::Ui, text: &str, enabled: bool, note: Option<&str>) -> bool {
-    ui.add_space(10.0);
+    ui.add_space(theme::LINE_GAP);
     if let Some(note) = note {
         hint(ui, note);
-        ui.add_space(4.0);
+        ui.add_space(theme::NOTE_GAP);
     }
-    primary_button(ui, "", text, enabled).clicked()
+    primary_button(ui, text, enabled).clicked()
 }
 
 /// `value` as the field will hold it. A correction past the field's range is held at its
@@ -267,10 +267,10 @@ fn layer_time(
     compensation: &mut Compensation,
 ) -> bool {
     hint(ui, &tr!("comp-same-print"));
-    ui.add_space(10.0);
+    ui.add_space(theme::LINE_GAP);
     egui::Grid::new("layer-time-calculator")
         .num_columns(4)
-        .spacing(vec2(10.0, 6.0))
+        .spacing(vec2(theme::LINE_GAP, theme::ROW_GAP))
         .show(ui, |ui| {
             clock_row(ui, &tr!("comp-predicted"), &mut calculators.predicted);
             clock_row(ui, &tr!("comp-actual"), &mut calculators.actual);
@@ -293,7 +293,7 @@ fn layer_time(
         Calculators::seconds(calculators.actual),
         calculators.layers as u32,
     );
-    ui.add_space(10.0);
+    ui.add_space(theme::LINE_GAP);
     egui::Frame::new()
         .fill(theme::colors().sunken)
         .corner_radius(theme::R_SURFACE)
@@ -325,7 +325,8 @@ fn layer_time(
 }
 
 fn row_label(ui: &mut egui::Ui, text: &str) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         egui::RichText::new(text)
             .font(theme::label())
             .color(theme::colors().text_mid),

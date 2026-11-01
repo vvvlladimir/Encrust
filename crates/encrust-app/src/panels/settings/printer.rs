@@ -10,9 +10,10 @@ use crate::i18n::tr;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
+use crate::ui::theme;
 use crate::ui::{
-    count_row, describe, hint, icon, number_row, picker, picker_row, secondary_button, switch,
-    text_row,
+    DropdownFace, DropdownRow, count_row, describe, dropdown, dropdown_menu, dropdown_row,
+    field_note, hint, icon, number_row, picker_row, secondary_button, switch, text_row,
 };
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
@@ -59,12 +60,12 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
     };
     let profile = &mut draft.values;
     // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
-    form_card(ui, &tr!("settings-tab-network"), |ui| {
-        match cfg!(target_arch = "wasm32") {
-            true => hint(ui, &tr!("printer-browser-sends-nothing")),
-            false => connection::card(ui, profile, &mut machine.network),
-        }
-    });
+    match cfg!(target_arch = "wasm32") {
+        true => form_card(ui, &tr!("settings-tab-network"), |ui| {
+            hint(ui, &tr!("printer-browser-sends-nothing"));
+        }),
+        false => connection::cards(ui, profile, &mut machine.network),
+    }
     if settled(ui) {
         autosave(window);
     }
@@ -73,9 +74,9 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
 /// Says this machine is the user's copy of a shipped one and no longer matches it (P-11).
 /// Answers whether the shipped profile was asked for back.
 fn own_copy_note(ui: &mut egui::Ui) -> bool {
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     hint(ui, &tr!("printer-own-copy"));
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     secondary_button(ui, icon::UPDATE, &tr!("printer-use-shipped")).clicked()
 }
 
@@ -148,7 +149,7 @@ fn grey_range_rows(ui: &mut egui::Ui, display: &mut Display) {
     if count_row(ui, &tr!("printer-grey-max"), &mut max, "", 1.0, min..=255) {
         display.grey_max = max as u8;
     }
-    hint(
+    describe(
         ui,
         &match (display.grey_min, display.grey_max) {
             (0, 255) => tr!("printer-grey-range-full"),
@@ -195,12 +196,12 @@ fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     );
 
     let (pitch_x, pitch_y) = profile.display.pixel_pitch_mm();
-    hint(
+    field_note(
         ui,
         &tr!(
             "printer-pitch",
-            x = format!("{:.1}", pitch_x * 1000.0),
-            y = format!("{:.1}", pitch_y * 1000.0)
+            x = format!("{:.2}", pitch_x * 1000.0),
+            y = format!("{:.2}", pitch_y * 1000.0)
         ),
     );
 
@@ -237,10 +238,10 @@ fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         2,
     );
 
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     mirror(ui, &mut profile.mirror);
 
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     let plate_mm = (profile.build_volume.x, profile.build_volume.y);
     inset(ui, &mut profile.plate_inset, plate_mm);
 }
@@ -282,7 +283,7 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         &mut profile.firmware.per_layer_settings,
         &tr!("printer-per-layer"),
     );
-    hint(
+    describe(
         ui,
         &match profile.firmware.per_layer_settings {
             true => tr!("printer-per-layer-on"),
@@ -290,13 +291,13 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
         },
     );
 
-    ui.add_space(6.0);
+    ui.add_space(theme::ROW_GAP);
     switch(
         ui,
         &mut profile.firmware.variable_layer_height,
         &tr!("printer-variable-height"),
     );
-    hint(ui, &tr!("printer-variable-height-note"));
+    describe(ui, &tr!("printer-variable-height-note"));
 }
 
 /// How the panel takes the plate, as the maker's settings state it.
@@ -307,18 +308,16 @@ fn mirror(ui: &mut egui::Ui, mirror: &mut Mirror) {
         icon::FLIP,
         &mirror_label(*mirror),
     );
-    egui::Popup::menu(&response).show(|ui| {
+    dropdown_menu(&response, |ui| {
         for choice in Mirror::ALL {
-            if ui
-                .selectable_label(choice == *mirror, mirror_label(choice))
-                .clicked()
-            {
+            let name = mirror_label(choice);
+            if dropdown_row(ui, &DropdownRow::named(&name, choice == *mirror)).clicked() {
                 *mirror = choice;
                 ui.close();
             }
         }
     });
-    hint(ui, &tr!("printer-mirror-note"));
+    describe(ui, &tr!("printer-mirror-note"));
 }
 
 fn mirror_label(mirror: Mirror) -> String {
@@ -334,17 +333,16 @@ fn mirror_label(mirror: Mirror) -> String {
 fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     let chosen = SlicedFormat::from(profile.output);
     let offered: Vec<SlicedFormat> = SlicedFormat::choices_for(profile).collect();
-    let response = picker(ui, icon::SLICE, label_of(chosen));
-    egui::Popup::menu(&response).show(|ui| {
+    let face = DropdownFace::plain(icon::SLICE, label_of(chosen)).empty(offered.is_empty());
+    let response = dropdown(ui, &face, ui.available_width());
+    dropdown_menu(&response, |ui| {
         for choice in offered {
-            if ui
-                .selectable_label(choice == chosen, label_of(choice))
-                .clicked()
-            {
+            let row = DropdownRow::named(label_of(choice), choice == chosen);
+            if dropdown_row(ui, &row).clicked() {
                 profile.output = choice.into();
                 ui.close();
             }
         }
     });
-    hint(ui, &tr!("printer-output-note"));
+    describe(ui, &tr!("printer-output-note"));
 }

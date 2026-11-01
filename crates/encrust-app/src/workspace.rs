@@ -167,7 +167,7 @@ pub struct ViewOptions {
     /// Width of the plate panel and of the inspector, points, kept between runs: a column
     /// that sized itself to its contents would jump whenever a tool changed.
     pub plate_w: f32,
-    /// `None` until dragged: as wide as the rail with its tools' names (ADR 0348).
+    /// `None` until dragged: `theme::INSPECTOR_W` (ADR 0382).
     pub inspector_w: Option<f32>,
     /// Where Preview divides the model from the mask, as a fraction of the stage's width
     /// from its left. Remembered between runs.

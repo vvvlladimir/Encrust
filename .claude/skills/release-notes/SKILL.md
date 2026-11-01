@@ -23,7 +23,9 @@ Write the notes of Encrust release `$ARGUMENTS` for people who print with it, in
 - Plain words for someone who never saw the code: what they can now do, what no longer goes
   wrong. No crate, type, ADR, hash or algorithm names.
 - One or two opening sentences, then `### <Area>` per large area, then `## ⚡ Faster` and
-  `## 🐛 Fixed`. Short `-` bullets, a **bold lead** where one opens a topic, `(#n)` may stay.
+  `## 🐛 Fixed`, and `## Before you update` only when a user must know something first.
+  Short `-` bullets, a **bold lead** where one opens a topic, `(#n)` may stay. The window
+  tints a group by its heading: an area green, Faster orange, Fixed and Before you update grey.
 - Skip tests, refactors, CI and dependency bumps a user would not notice.
 - The window parses it line by line (`crates/encrust-app/src/updates/feed.rs`): no tables, `---`,
   nested lists, images, bare URLs or "Full changelog" line.
@@ -31,13 +33,15 @@ Write the notes of Encrust release `$ARGUMENTS` for people who print with it, in
 ## Hand back
 
 The path, the notes, what you left out and why, and this one command with the tag filled in. It
-also puts the notes into the release's `latest.json`, which the window shows, so it runs only
-once the build has attached that file; each `&&` keeps a failed step from uploading a stale one.
+also puts the notes into the release's `latest.json`, which the window shows, and stamps it with
+the time it runs as the release's date, so it runs only once the build has attached that file
+and just before the draft is published; each `&&` keeps a failed step from uploading a stale one.
 
 ```sh
 d=local-docs/release-notes; t=<tag>; rm -f $d/latest.json &&
 gh release edit $t --notes-file $d/$t.md &&
 gh release download $t --pattern latest.json --dir $d &&
-jq --rawfile notes $d/$t.md '.notes = $notes' $d/latest.json > $d/feed.json &&
+jq --rawfile notes $d/$t.md '.notes = $notes | .published = (now | todate)' \
+  $d/latest.json > $d/feed.json &&
 mv $d/feed.json $d/latest.json && gh release upload $t $d/latest.json --clobber
 ```

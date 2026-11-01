@@ -1,12 +1,8 @@
-use egui::{Align2, Sense, Stroke, vec2};
-
 use crate::i18n::tr;
 use crate::scene::{ObjectId, Scene};
 use crate::shortcuts::{self, Action};
-use crate::ui::{focus_ring, icon, icon_button, theme};
-
-/// How big a plate's square is.
-const PLATE_SIZE: f32 = 32.0;
+use crate::ui::theme;
+use crate::ui::{icon, numbered_square, small_icon_button};
 
 /// The row at the head of the plate panel: one numbered square per plate and the way to add
 /// another, scrolling past `max_w` points. A one-plate project still shows it.
@@ -23,7 +19,7 @@ pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) -> bool {
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.spacing_mut().item_spacing.x = theme::NOTE_GAP;
                 for (index, name) in names.iter().enumerate() {
                     let plate = index as u32;
                     let place = Place {
@@ -37,7 +33,8 @@ pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) -> bool {
                         asked = Some((plate, tab));
                     }
                 }
-                if icon_button(ui, icon::ADD, &shortcuts::tooltip(Action::NewPlate)).clicked() {
+                if small_icon_button(ui, icon::ADD, &shortcuts::tooltip(Action::NewPlate)).clicked()
+                {
                     asked = Some((active, Asked::Add));
                 }
             });
@@ -94,37 +91,14 @@ enum Asked {
 /// One plate: its number, lit while it is the plate in front, with its name and what
 /// stands on it on hover, and the rest on a right click.
 fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<Asked> {
-    let colors = theme::colors();
-    let (rect, response) = ui.allocate_exact_size(vec2(PLATE_SIZE, PLATE_SIZE), Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Button, true, place.active, name)
-    });
-    let (fill, ink) = match (place.active, response.hovered()) {
-        (true, _) => (colors.raised, colors.accent_soft),
-        (false, true) => (colors.hover, colors.text_high),
-        (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
-    };
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    if place.active {
-        painter.rect_stroke(
-            rect,
-            theme::R_CONTROL,
-            Stroke::new(1.0, colors.line),
-            egui::StrokeKind::Inside,
-        );
-    }
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        (place.plate + 1).to_string(),
-        theme::figures(12.5),
-        ink,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
+    let response = numbered_square(ui, place.plate as usize + 1, place.active, name);
 
     let models = tr!("start-models", count = count);
-    let response = response.on_hover_text(format!("{name}, {models}"));
+    let response = response.on_hover_text(tr!(
+        "name-and-detail",
+        name = name.to_owned(),
+        detail = models
+    ));
     let asked = menu(&response, place);
     asked.or_else(|| response.clicked().then_some(Asked::Show))
 }
@@ -132,7 +106,7 @@ fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<A
 /// What a right click on a plate offers.
 fn menu(response: &egui::Response, place: Place) -> Option<Asked> {
     let mut asked = None;
-    response.context_menu(|ui| {
+    crate::ui::context_menu(response, |ui| {
         if ui.button(tr!("action-duplicate")).clicked() {
             asked = Some(Asked::Duplicate);
             ui.close();

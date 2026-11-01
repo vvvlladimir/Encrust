@@ -13,8 +13,8 @@ use crate::state::Doc;
 use crate::status::Status;
 use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
-    BinLook, bin_button, compact_button, companion_button, describe, hint, icon, icon_toggle,
-    number_row, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
+    SquareLook, bin_button, compact_button, companion_button, describe, icon, icon_toggle,
+    number_row, primary_button, progress_bar, readings, secondary_button, section, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -211,14 +211,14 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
         let width = ui.available_width() - theme::PRIMARY_H - theme::BUTTON_GAP;
         let grow = ui
             .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
-                primary_button(ui, icon::SUPPORTS, &label, blocker.is_none()).on_hover_text(what)
+                primary_button(ui, &label, blocker.is_none()).on_hover_text(what)
             })
             .inner;
         if grow.clicked() {
             start(window, Side::Outside);
         }
         let tip = tr!("supports-remove-all-tooltip");
-        all = bin_button(ui, theme::PRIMARY_H, BinLook::Framed, &tip, points > 0);
+        all = bin_button(ui, theme::PRIMARY_H, SquareLook::Framed, &tip, points > 0);
     });
     if all {
         for object in window.doc.scene.targets_mut() {
@@ -284,7 +284,6 @@ fn standing(doc: &Doc) -> (usize, usize) {
 /// three things that can be done to it without the mouse.
 fn editing(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.supports.picked.is_empty() {
-        hint(ui, &tr!("supports-pick-hint"));
         return;
     }
     describe(ui, &tr!("supports-picked-help"));
@@ -294,7 +293,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         .iter()
         .map(|picked| (picked.id, picked.frozen))
         .collect::<std::collections::BTreeSet<_>>();
-    stats(
+    readings(
         ui,
         &[
             (tr!("supports-stat-parts"), held.len().to_string()),
@@ -310,7 +309,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         regroup = compact_button(ui, &tr!("supports-move-to-group"), width).clicked();
         regrow = compact_button(ui, &tr!("supports-grow-these-again"), width).clicked();
         let tip = tr!("supports-remove-these");
-        remove = bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, true);
+        remove = bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, true);
     });
     if regroup {
         let active = window.tools.supports.active;

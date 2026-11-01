@@ -154,7 +154,7 @@ impl PrintJob {
 
     /// Resin consumed, grams.
     pub fn weight_g(&self) -> f32 {
-        self.volume_mm3 / 1000.0 * self.material.density_g_cm3
+        self.material.weight_g(self.volume_mm3)
     }
 
     /// What the resin this job consumes costs, or `None` for a resin with no price.
@@ -167,7 +167,13 @@ impl PrintJob {
     /// Acceleration and the printer's own overheads are not modelled, so this runs a few
     /// per cent short of the machine's own estimate.
     pub fn print_time_s(&self) -> u32 {
-        let layer_count = self.layer_count();
+        self.time_through_s(self.layer_count())
+    }
+
+    /// Estimated seconds until the first `layer_count` layers are printed, on the terms of
+    /// [`Self::print_time_s`]; past the stack, the whole print.
+    pub fn time_through_s(&self, layer_count: u32) -> u32 {
+        let layer_count = layer_count.min(self.layer_count());
         let exposure: f32 = (0..layer_count)
             .map(|index| self.exposure_of_layer_s(index))
             .sum();

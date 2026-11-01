@@ -218,3 +218,32 @@ fn a_shell_crossing_itself_is_told_from_shells_crossing_each_other() {
         "two cubes cross each other, and neither itself"
     );
 }
+
+#[test]
+fn a_wrap_that_unions_its_shells_reports_up_to_the_finished_mesh() {
+    let (one, other) = crossing_cubes();
+    let progress = crate::Progress::default();
+    let wrapped = wrap(
+        &joined(one, &other),
+        RepairSettings::default(),
+        Cancel::never().reporting(&progress),
+    )
+    .expect("two closed cubes union exactly");
+
+    assert!(wrapped.wrapped);
+    assert_eq!(progress.read(), Some((Step::Finishing, 0, 0)));
+}
+
+#[test]
+fn a_repair_on_the_mesh_alone_reports_mending() {
+    let progress = crate::Progress::default();
+    repair(
+        &cuboid(Vec3::ZERO, Vec3::splat(10.0)),
+        RepairMethod::default(),
+        RepairSettings::default(),
+        Cancel::never().reporting(&progress),
+    )
+    .expect("a closed cube repairs");
+
+    assert_eq!(progress.read(), Some((Step::Mending, 0, 0)));
+}

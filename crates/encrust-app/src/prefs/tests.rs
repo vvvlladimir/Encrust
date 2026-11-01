@@ -179,8 +179,17 @@ fn the_preview_divide_and_the_card_widths_survive_the_round_trip() {
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");
     let read: Preferences = serde_json::from_str(&text).expect("and read back");
     assert_eq!(read.mask_split, Some(0.62));
-    assert_eq!(read.left_w, Some(400.0));
+    assert_eq!(read.inspector_w, Some(400.0));
     assert_eq!(read.plate_w, Some(200.0));
+}
+
+/// The inspector no longer shares its width with the tool row, so a width dragged before
+/// ADR 0382 would leave it oddly wide: it is forgotten.
+#[test]
+fn a_column_dragged_before_the_tool_row_moved_is_forgotten() {
+    let read: Preferences =
+        serde_json::from_str(r#"{"left_w": 420.0}"#).expect("an old key is not an error");
+    assert_eq!(read.inspector_w, None);
 }
 
 /// A wall thickness typed in once is the user's from then on, so it travels through
@@ -245,6 +254,12 @@ fn a_file_written_before_the_general_page_opens_on_the_start_page() {
         serde_json::from_str("{}").expect("every field of the file is optional");
     assert!(read.general.start_page);
     assert!(!read.general.invert_zoom);
+    assert!(!read.general.reduce_motion);
+    assert_eq!(
+        read.general.appearance,
+        Appearance::System,
+        "an old file follows the system"
+    );
 }
 
 #[test]
@@ -253,7 +268,10 @@ fn how_the_window_behaves_survives_the_round_trip() {
         start_page: false,
         invert_zoom: true,
         sliced_dir: Some(std::path::PathBuf::from("/prints")),
+        file_name: "{model}_{layer}um".to_owned(),
         language: Some(crate::i18n::Language::Russian),
+        reduce_motion: true,
+        appearance: Appearance::Light,
     };
     let prefs = Preferences::default().with_general(&general);
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");
@@ -267,6 +285,7 @@ fn the_update_check_survives_the_round_trip() {
         check: true,
         checked_at_s: Some(1_700_000_000),
         skipped: Some("0.3.0".to_owned()),
+        noticed: Some("0.3.0".to_owned()),
     };
     let prefs = Preferences::of(
         &Slicing::default(),
@@ -277,4 +296,27 @@ fn the_update_check_survives_the_round_trip() {
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");
     let read: Preferences = serde_json::from_str(&text).expect("and read back");
     assert_eq!(read.updates, updates);
+}
+
+/// The same text goes to a file on the desktop and to the page's storage in a browser.
+#[test]
+fn the_keys_the_user_chose_survive_the_round_trip() {
+    use crate::shortcuts::Action;
+    let mut keys = Keymap::default();
+    let chord = egui::KeyboardShortcut::new(
+        egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+        egui::Key::K,
+    );
+    keys.assign(Action::Find, 0, chord);
+    let prefs = Preferences::default().with_keys(keys.clone());
+    let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+    assert!(text.contains(r#""find":["Shift+Cmd+K"]"#), "{text}");
+    let read: Preferences = serde_json::from_str(&text).expect("and read back");
+    assert_eq!(read.keys, keys);
+}
+
+#[test]
+fn a_file_written_before_keys_could_be_chosen_keeps_the_tables() {
+    let read: Preferences = serde_json::from_str("{}").expect("an empty file reads");
+    assert_eq!(read.keys, Keymap::default());
 }

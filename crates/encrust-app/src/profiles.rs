@@ -5,34 +5,53 @@ use printer_profiles::{Kind, MaterialProfile, PrinterProfile};
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::import::recenter;
+use crate::job::SlicedFormat;
+use crate::network::{Network, Reach};
 use crate::panels::Window;
 use crate::plate::BuildPlate;
-use crate::settings::{installed, installed_printers};
+use crate::settings::{Library, installed, installed_printers};
 use crate::state::Machine;
+use crate::ui::{
+    Aside, ChooserRow, Lead, chooser_foot, chooser_group, chooser_row, hairline, hint, icon, theme,
+};
 
-/// The catalogue's printers, then the way into the settings of the one in hand.
+/// The user's machines, each with its maker, the file it is sliced into and whether it
+/// answers on the network; then the ways to add one and into Machine and resin.
 pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
     let chosen = window.machine.slicing.printer_id.clone();
     let mut picked: Option<(String, PrinterProfile)> = None;
+    chooser_group(ui, &tr!("picker-your-machines"));
     let mut listed = false;
     for entry in installed_printers(&window.machine.slicing.catalogue) {
         listed = true;
-        let label = format!("{} {}", entry.profile.manufacturer, entry.profile.name);
-        if ui
-            .selectable_label(chosen.as_deref() == Some(entry.id.as_str()), label)
-            .clicked()
-        {
-            picked = Some((entry.id.clone(), entry.profile.clone()));
+        let profile = &entry.profile;
+        let detail = match SlicedFormat::choices_for(profile).next() {
+            Some(format) => tr!(
+                "picker-machine-detail",
+                maker = profile.manufacturer.clone(),
+                extension = format.extension()
+            ),
+            None => profile.manufacturer.clone(),
+        };
+        let row = ChooserRow {
+            lead: Lead::Glyph(icon::PRINTER),
+            name: &profile.name,
+            detail: &detail,
+            aside: answers(&window.machine.network, profile).map(Aside::Dot),
+            chosen: chosen.as_deref() == Some(entry.id.as_str()),
+        };
+        if chooser_row(ui, &row).clicked() {
+            picked = Some((entry.id.clone(), profile.clone()));
         }
     }
     if !listed {
-        ui.label(tr!("picker-no-machine"));
+        hint(ui, &tr!("picker-no-machine"));
     }
-
-    ui.separator();
-    if ui.button(tr!("menu-machine-and-resin")).clicked() {
+    hairline(ui);
+    if chooser_foot(ui, icon::ADD, &tr!("picker-add-machine")).clicked() {
         ui.close();
         crate::panels::open_machines(window.machine);
+        window.machine.settings.library = Some(Library::default());
         return;
     }
     if let Some((id, profile)) = picked {
@@ -41,12 +60,30 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The resins set up on the printer in hand, a printer's resins being its own presets,
-/// then the way into the settings of the one in hand.
+/// The colour of the dot a machine's row carries: `ok` while a printer it lists answers,
+/// `text_low` while none does; no dot for a machine that lists none.
+fn answers(network: &Network, profile: &PrinterProfile) -> Option<egui::Color32> {
+    let colors = theme::colors();
+    if profile.machines.is_empty() {
+        return None;
+    }
+    let answered = profile
+        .machines
+        .iter()
+        .any(|machine| network.reach_of(machine) == Reach::Answered);
+    Some(if answered { colors.ok } else { colors.text_low })
+}
+
+/// The printer in hand's resins with their colour, kind, layer height and exposure, then
+/// the way to its resins in Machine and resin.
 pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
     let slicing = &mut machine.slicing;
     let chosen = slicing.resin_id.clone();
     let printer_id = slicing.printer_id.clone();
+    let printer_name = slicing.printer.as_ref().map(|printer| printer.name.clone());
+    if let Some(name) = &printer_name {
+        chooser_group(ui, &tr!("picker-on-machine", name = name.clone()));
+    }
     let mut picked: Option<(String, MaterialProfile)> = None;
     let mut listed = false;
     for entry in slicing.catalogue.resins() {
@@ -58,25 +95,37 @@ pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
             continue;
         }
         listed = true;
-        let label = entry.profile.name.clone();
-        if ui
-            .selectable_label(chosen.as_deref() == Some(entry.id.as_str()), label)
-            .clicked()
-        {
+        let tuned = match printer_id.as_deref() {
+            Some(id) => entry.profile.for_printer(id),
+            None => entry.profile.clone(),
+        };
+        let detail = tr!(
+            "picker-resin-detail",
+            kind = tuned.details.kind.clone(),
+            layer = format!("{:.0}", tuned.layer_height_mm * 1000.0)
+        );
+        let exposure = tr!("value-s", value = format!("{:.2}", tuned.exposure_s));
+        let row = ChooserRow {
+            lead: Lead::Dot(theme::resin_swatch(tuned.details.color)),
+            name: &entry.profile.name,
+            detail: &detail,
+            aside: Some(Aside::Text(&exposure)),
+            chosen: chosen.as_deref() == Some(entry.id.as_str()),
+        };
+        if chooser_row(ui, &row).clicked() {
             picked = Some((entry.id.clone(), entry.profile.clone()));
         }
     }
     if !listed {
-        ui.label(tr!("picker-no-resin"));
+        hint(ui, &tr!("picker-no-resin"));
     }
-
-    ui.separator();
-    if ui.button(tr!("picker-edit-resin")).clicked() {
+    hairline(ui);
+    let printer = slicing.printer_id.clone();
+    if printer.is_some() && chooser_foot(ui, icon::ADD, &tr!("picker-add-resin")).clicked() {
         ui.close();
-        let (printer, resin) = (slicing.printer_id.clone(), slicing.resin_id.clone());
         machine
             .settings
-            .open_machines(&slicing.catalogue, printer.as_deref(), resin.as_deref());
+            .open_machines(&slicing.catalogue, printer.as_deref(), None);
         return;
     }
     if let Some((id, resin)) = picked {

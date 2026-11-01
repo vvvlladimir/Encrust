@@ -344,7 +344,7 @@ fn imported(
             &shaping.import,
             shaping.supports.as_ref(),
             chosen,
-            watch.talk,
+            watch,
         )?;
         if let Some(position) = shaping.position {
             mesh = stood_at(&mesh, position)?;

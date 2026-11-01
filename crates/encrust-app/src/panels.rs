@@ -1,6 +1,7 @@
 mod destination;
 mod edge_fields;
 mod find;
+mod hint_bar;
 mod inspector;
 mod mask_pane;
 mod plate_strip;
@@ -20,6 +21,7 @@ mod support_fields;
 mod title_bar;
 mod tool_rail;
 mod unreadable_profiles;
+mod update_sheet;
 mod view_column;
 mod view_cube;
 mod viewport_panel;
@@ -27,17 +29,17 @@ mod viewport_panel;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use settings::{import_dropped, import_profile};
-pub use slice::{can_slice, slice_every_plate, slice_this_plate};
+pub use slice::{slice_every_plate, slice_this_plate};
 pub use start::{open_recent, still_starting};
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
 pub use viewport_panel::{frame_view, set_orthographic};
 
+use egui::emath::TSTransform;
 use egui::{Align2, Id, Pos2, Rect, Sense, pos2, vec2};
 
 use crate::state::{Doc, Machine, Tools, View};
 use crate::ui::{card, theme};
 use crate::workspace::{Mode, Tool, ViewOptions};
-use tool_rail::RailWidths;
 
 /// Everything the chrome draws against, borrowed for one frame.
 ///
@@ -65,6 +67,7 @@ impl Window<'_> {
     /// Lays the window out: the top bar, then the stage under it with the cards floating
     /// over it, each as tall as what it holds. See `docs/decisions/0221`.
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        theme::follow(ui.ctx(), self.machine.general.appearance.preference());
         egui::Panel::top("title")
             .exact_size(theme::TOP_BAR_H)
             .frame(strip_frame())
@@ -78,6 +81,7 @@ impl Window<'_> {
             find::ui(ui.ctx(), self);
         }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
+        update_sheet::ui(ui.ctx(), self.machine);
         settings::machines::window(ui.ctx(), self);
         self.machine.network.show_pictures(ui.ctx());
         printer_card::sheet::ui(ui.ctx(), self);
@@ -91,16 +95,15 @@ impl Window<'_> {
         }
 
         let stage = ui.available_rect_before_wrap();
-        let room = self.columns(ui.ctx(), stage);
+        let (clear, row) = self.columns(ui.ctx(), stage);
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
-            .show(ui, |ui| stage::ui(ui, self, room));
+            .show(ui, |ui| stage::ui(ui, self, clear, row));
     }
 
-    /// The cards over the stage: the rail over the inspector at its left, the layer strip
-    /// and the plate down its right. Answers the room they leave between them, which the
-    /// stage's own cards are placed in.
-    fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> Rect {
+    /// The inspector, the layer strip and plate card, and the tool row between (ADR 0382).
+    /// Answers the room left under the row for the stage's own cards, and the row.
+    fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> (Rect, Option<Rect>) {
         let gap = theme::FLOAT_GAP;
         let options = self.view.options;
         let top = stage.top() + gap;
@@ -119,17 +122,38 @@ impl Window<'_> {
         });
 
         let between = strip.left() - stage.left();
-        let wanted = left_column_w(&options, *self.mode, tool_rail::widths(ctx));
+        let wanted = inspector_w(&options, *self.mode);
         let (left_w, plate_w) = fit_side_cards(between, wanted.unwrap_or(0.0), options.plate_w);
         let left = match wanted {
             Some(_) => {
                 let corner = pos2(stage.left() + gap, top);
-                self.left_column(ctx, corner, max_h, left_w).right()
+                self.inspector_card(ctx, corner, max_h, left_w).right()
             }
             None => stage.left(),
         };
         let corner = pos2(strip.left() - gap, top);
         let (models, plate) = self.plate_cards(ctx, corner, stage, plate_w);
+        self.drag_plate_edges(ctx, models, plate);
+
+        let left = left + gap;
+        let right = (models.left() - gap).max(left);
+        // The row stands where it would beside the inspector, put away or not.
+        let row_left = match (wanted, inspector_room_w(&options, *self.mode)) {
+            (None, Some(width)) => {
+                let (width, _) = fit_side_cards(between, width, options.plate_w);
+                (stage.left() + 2.0 * gap + width + 2.0 * CARD_STROKE).clamp(left, right)
+            }
+            _ => left,
+        };
+        let row = row_shown(&options, *self.mode)
+            .then(|| self.tool_row(ctx, row_left..=right, top, max_h));
+        let under_row = row.map_or(top, |row| row.bottom() + gap);
+        let bottom = (stage.bottom() - gap).max(under_row);
+        (Rect::from_x_y_ranges(left..=right, under_row..=bottom), row)
+    }
+
+    /// The models' and plate's cards widened or put back by their left edge.
+    fn drag_plate_edges(&mut self, ctx: &egui::Context, models: Rect, plate: Rect) {
         for (id, card) in [("models-edge", models), ("plate-edge", plate)] {
             match drag_edge(ctx, id, card, false) {
                 Some(Edge::To(raw)) => {
@@ -140,43 +164,52 @@ impl Window<'_> {
                 None => {}
             }
         }
+    }
 
-        let left = left + gap;
-        let right = (models.left() - gap).max(left);
-        Rect::from_x_y_ranges(left..=right, top..=(stage.bottom() - gap).max(top))
+    /// The tool row centred in `span` at `top`, as wide as its tools and no wider than that.
+    fn tool_row(
+        &mut self,
+        ctx: &egui::Context,
+        span: std::ops::RangeInclusive<f32>,
+        top: f32,
+        max_h: f32,
+    ) -> Rect {
+        let (row_left, right) = (*span.start(), *span.end());
+        let room = (right - row_left - 2.0 * CARD_STROKE).max(0.0);
+        let centre = pos2((row_left + right) / 2.0, top);
+        card_at(ctx, "tool-row", centre, Align2::CENTER_TOP, max_h, |ui| {
+            tool_rail::ui(ui, self, room);
+        })
     }
 }
 
 impl Window<'_> {
-    /// The rail from `corner`, the open tool's card under it, both `width` wide, and the
-    /// edge that sizes them, a double click giving it back to the rail's names (ADR 0348).
-    fn left_column(&mut self, ctx: &egui::Context, corner: Pos2, max_h: f32, width: f32) -> Rect {
-        let gap = theme::FLOAT_GAP;
-        let rail = card_at(ctx, "rail", corner, Align2::LEFT_TOP, max_h, |ui| {
-            tool_rail::ui(ui, self, width);
-        });
-        if !self.view.options.inspector {
-            return rail;
-        }
-        let below = pos2(corner.x, rail.bottom() + gap);
-        let max_h = (max_h - rail.height() - gap).max(0.0);
-        let inspector = card_at(ctx, "inspector", below, Align2::LEFT_TOP, max_h, |ui| {
+    /// The open tool's card from `corner`, `width` wide, and the edge that sizes it, a
+    /// double click giving it back its default width.
+    fn inspector_card(
+        &mut self,
+        ctx: &egui::Context,
+        corner: Pos2,
+        max_h: f32,
+        width: f32,
+    ) -> Rect {
+        let inspector = card_at(ctx, "inspector", corner, Align2::LEFT_TOP, max_h, |ui| {
             exactly_wide(ui, width, |ui| inspector::ui(ui, self, max_h));
         });
-        let column = rail.union(inspector);
         let range = theme::INSPECTOR_W_RANGE;
-        match drag_edge(ctx, "inspector-edge", column, true) {
+        match drag_edge(ctx, "inspector-edge", inspector, true) {
             Some(Edge::To(raw)) => {
                 self.view.options.inspector_w = Some(raw.clamp(*range.start(), *range.end()));
             }
             Some(Edge::Reset) => self.view.options.inspector_w = None,
             None => {}
         }
-        column
+        inspector
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
-    /// stage's foot under them, both `width` wide. Answers the two cards.
+    /// stage's foot under them, both `width` wide; in Preview the plate's alone.
+    /// Answers the two cards.
     fn plate_cards(
         &mut self,
         ctx: &egui::Context,
@@ -185,18 +218,21 @@ impl Window<'_> {
         width: f32,
     ) -> (Rect, Rect) {
         let gap = theme::FLOAT_GAP;
-        let foot = pos2(corner.x, stage.bottom() - gap);
+        let at = pos2(corner.x, stage.bottom() - gap);
         let plate = card_at(
             ctx,
             "this-plate",
-            foot,
+            at,
             Align2::RIGHT_BOTTOM,
             f32::INFINITY,
             |ui| {
                 ui.set_width(width);
-                scene_panel::this_plate(ui, self);
+                plate_summary::ui(ui, self);
             },
         );
+        if *self.mode == Mode::Preview {
+            return (plate, plate);
+        }
         let max_h = (plate.top() - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);
         let models = card_at(ctx, "models", corner, Align2::RIGHT_TOP, max_h, |ui| {
             ui.set_width(width);
@@ -206,24 +242,31 @@ impl Window<'_> {
     }
 }
 
-/// The left column's width before the window has its say, or `None` while Preview gives
-/// the whole stage to the mask: the rail's glyphs alone with the inspector put away, else
-/// the width it was dragged to, else as wide as the rail with its names.
-fn left_column_w(options: &ViewOptions, mode: Mode, rail: RailWidths) -> Option<f32> {
-    if mode == Mode::Preview && options.mask_only {
+/// The inspector's width before the window has its say: the width it was dragged to, else
+/// the default; `None` while it is put away or Preview gives the whole stage to the mask.
+fn inspector_w(options: &ViewOptions, mode: Mode) -> Option<f32> {
+    inspector_room_w(options, mode).filter(|_| options.inspector)
+}
+
+/// The inspector's width shown or put away; `None` where Preview gives the whole stage to
+/// the mask.
+fn inspector_room_w(options: &ViewOptions, mode: Mode) -> Option<f32> {
+    if !row_shown(options, mode) {
         return None;
     }
-    if !options.inspector {
-        return Some(rail.glyphs);
-    }
     let range = theme::INSPECTOR_W_RANGE;
-    let wanted = options.inspector_w.unwrap_or(rail.named);
+    let wanted = options.inspector_w.unwrap_or(theme::INSPECTOR_W);
     Some(wanted.clamp(*range.start(), *range.end()))
 }
 
-/// The least of the stage the side cards leave clear, in points: room for the view cube
-/// and the view buttons beside it.
-const STAGE_MIN_W: f32 = 240.0;
+/// Whether the tool row stands over the stage: everywhere but the mask alone.
+fn row_shown(options: &ViewOptions, mode: Mode) -> bool {
+    !(mode == Mode::Preview && options.mask_only)
+}
+
+/// The least of the stage the side cards leave clear, in points: the tool row's glyphs, and
+/// the view cube and the view buttons under it.
+const STAGE_MIN_W: f32 = 300.0;
 
 /// The left column's width and the plate cards' width that fit `between` the stage's left
 /// edge and the layer strip with `STAGE_MIN_W` of stage left between them. Each gives way
@@ -260,20 +303,37 @@ fn card_at(
     max_h: f32,
     add: impl FnOnce(&mut egui::Ui),
 ) -> Rect {
-    egui::Area::new(Id::new(id))
+    let mut drawn_at = corner;
+    let shown = egui::Area::new(Id::new(id))
         .order(egui::Order::Middle)
         .fixed_pos(corner)
         .pivot(pivot)
         .show(ctx, |ui| {
+            drawn_at = ui.max_rect().min;
+            // Clipped to the window before the shift below, what it grew past the edge would
+            // be cut off until it stopped growing.
+            ui.set_clip_rect(Rect::EVERYTHING);
             card().inner_margin(0).show(ui, |ui| {
                 ui.set_max_height(max_h);
                 ui.spacing_mut().item_spacing.y = 0.0;
                 add(ui);
             });
         })
-        .response
-        .rect
+        .response;
+    // egui places an area from last frame's size, so a card held by any corner but its top
+    // left is drawn off it by what it grew; its layer is moved there for the frame instead.
+    let meant = shown.rect;
+    let shift = meant.min - drawn_at;
+    let transform = match shift.length() > SHIFT_SLACK {
+        true => TSTransform::from_translation(shift),
+        false => TSTransform::IDENTITY,
+    };
+    ctx.set_transform_layer(shown.layer_id, transform);
+    meant
 }
+
+/// Points a card may stand off where it is meant to and be left there.
+const SHIFT_SLACK: f32 = 0.01;
 
 /// Lays `add` out in `width` points and takes exactly that much: what a long word pushes
 /// past it is cut at the edge rather than widening the card, in every language.
@@ -385,48 +445,50 @@ mod tests {
         assert_eq!(fitted, (260.0, 232.0));
     }
 
-    const RAIL: RailWidths = RailWidths {
-        named: 380.0,
-        glyphs: 316.0,
-    };
-
     #[test]
-    fn an_undragged_column_stands_as_wide_as_the_rail_with_its_names() {
+    fn an_undragged_inspector_stands_at_its_default_width() {
         let options = ViewOptions::default();
-        assert_eq!(left_column_w(&options, Mode::Prepare, RAIL), Some(380.0));
+        assert_eq!(
+            inspector_w(&options, Mode::Prepare),
+            Some(theme::INSPECTOR_W)
+        );
     }
 
     #[test]
-    fn a_dragged_column_keeps_the_width_it_was_dragged_to() {
+    fn a_dragged_inspector_keeps_the_width_it_was_dragged_to() {
         let options = ViewOptions {
             inspector_w: Some(300.0),
             ..ViewOptions::default()
         };
-        assert_eq!(left_column_w(&options, Mode::Prepare, RAIL), Some(300.0));
+        assert_eq!(inspector_w(&options, Mode::Prepare), Some(300.0));
     }
 
     #[test]
-    fn a_closed_inspector_leaves_its_room_to_the_plate_cards() {
+    fn a_closed_inspector_leaves_its_room_and_the_row_stays() {
         let options = ViewOptions {
             inspector: false,
             inspector_w: Some(440.0),
             ..ViewOptions::default()
         };
+        assert_eq!(inspector_w(&options, Mode::Prepare), None);
+        assert!(row_shown(&options, Mode::Prepare));
+        let (min, max) = theme::INSPECTOR_W_RANGE.into_inner();
         assert_eq!(
-            left_column_w(&options, Mode::Prepare, RAIL),
-            Some(316.0),
-            "the rail alone, in its squares"
+            inspector_room_w(&options, Mode::Prepare),
+            Some(440.0_f32.clamp(min, max)),
+            "the row keeps standing beside the room it leaves"
         );
     }
 
     #[test]
-    fn the_mask_alone_takes_the_left_column_too() {
+    fn the_mask_alone_takes_the_inspector_and_the_row() {
         let options = ViewOptions {
             mask_only: true,
             ..ViewOptions::default()
         };
-        assert_eq!(left_column_w(&options, Mode::Preview, RAIL), None);
-        assert!(left_column_w(&options, Mode::Prepare, RAIL).is_some());
+        assert_eq!(inspector_w(&options, Mode::Preview), None);
+        assert!(!row_shown(&options, Mode::Preview));
+        assert!(inspector_w(&options, Mode::Prepare).is_some());
     }
 
     #[test]

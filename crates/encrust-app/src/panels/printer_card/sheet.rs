@@ -3,20 +3,15 @@
 
 use egui::RichText;
 
-use super::{colour_of, controls, face, history, job_lines, picture_of, trouble_lines};
+use super::{colour_of, controls, face, history, job_lines, trouble_lines};
 use crate::i18n::tr;
-use crate::network::{Errand, Network, Reading, Target};
+use crate::network::{Errand, Extras, Network, Reading, Target};
 use crate::panels::Window;
-use crate::ui::{dialog_frame, dialog_head, hairline, icon, subheading, theme, tone};
-
-/// How wide the sheet is, and the picture of the plate at its left.
-const SHEET_W: f32 = 620.0;
-const PICTURE: egui::Vec2 = egui::vec2(240.0, 180.0);
-const COLUMN_GAP: f32 = 18.0;
-/// What the sheet leaves of the window's height for its margin, and the least of the
-/// history it shows before that scrolls.
-const CHROME_H: f32 = 120.0;
-const HISTORY_MIN_H: f32 = 96.0;
+use crate::ui::print_picture;
+use crate::ui::theme::layout::printer_card_sheet::{
+    CHROME_H, COLUMN_GAP, HISTORY_MIN_H, PICTURE, SHEET_W,
+};
+use crate::ui::{dialog, dialog_head, hairline, icon, subheading, theme, tone};
 
 /// Shows the printer the ring opened, while one is open, and carries out what it is
 /// pressed for.
@@ -31,17 +26,15 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     };
     let mut close = false;
     let mut errand = None;
-    let modal = egui::Modal::new(egui::Id::new("printer-sheet"))
-        .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
-        .show(ctx, |ui| {
-            ui.set_width(SHEET_W);
-            close = dialog_head(ui, icon::PRINTER, &network.label(&target));
-            tone(ui, &about(&target), theme::colors().text_low);
-            ui.add_space(8.0);
-            hairline(ui);
-            ui.add_space(12.0);
-            errand = body(ui, network, &target);
-        });
+    let modal = dialog(ctx, egui::Id::new("printer-sheet"), 18).show(ctx, |ui| {
+        ui.set_width(SHEET_W);
+        close = dialog_head(ui, icon::PRINTER, &network.label(&target));
+        tone(ui, &about(&target), theme::colors().text_low);
+        ui.add_space(theme::ITEM_GAP);
+        hairline(ui);
+        ui.add_space(theme::PANEL_PAD);
+        errand = body(ui, network, &target);
+    });
     if close || modal.should_close() {
         network.open = None;
     }
@@ -69,7 +62,7 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
                 .and_then(|state| state.job_id.as_ref())
                 .and_then(|id| extras?.pictures.get(id)?.texture());
             match texture {
-                Some(texture) => picture_of(ui, texture, PICTURE),
+                Some(texture) => print_picture(ui, Some(texture), PICTURE),
                 None => empty_picture(ui),
             }
             if let Some(state) = state {
@@ -78,7 +71,8 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
         });
         ui.add_space(COLUMN_GAP);
         ui.vertical(|ui| {
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 RichText::new(&face.word)
                     .font(theme::dialog_title())
                     .color(colour_of(face.light)),
@@ -87,9 +81,9 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
                 job_lines(ui, job);
             }
             if let Some(state) = state {
-                ui.add_space(4.0);
+                ui.add_space(theme::NOTE_GAP);
                 errand = errand.take().or(controls::buttons(ui, &key, state, extras));
-                ui.add_space(4.0);
+                ui.add_space(theme::NOTE_GAP);
                 if let Some(warmth) = &face.warmth {
                     tone(ui, warmth, theme::colors().text_mid);
                 }
@@ -104,27 +98,31 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
         });
     });
     if state.is_some() && matches!(target, Target::Sdcp(_)) {
-        ui.add_space(14.0);
-        hairline(ui);
-        ui.add_space(6.0);
-        subheading(ui, &tr!("sheet-recent-prints"));
-        // As tall as the tiles, up to what the window has left under them: a short window
-        // scrolls the history rather than pushing the sheet off the screen.
-        let prints = extras
-            .and_then(|extras| extras.history.as_ref())
-            .map_or(1, Vec::len);
-        let wanted = history::height(ui.available_width(), prints) + HISTORY_MIN_H / 2.0;
-        let left = ui.ctx().content_rect().bottom() - CHROME_H / 2.0 - ui.cursor().top();
-        let height = wanted.min(left.max(HISTORY_MIN_H));
-        let listed = egui::ScrollArea::vertical()
-            .max_height(height)
-            .min_scrolled_height(height)
-            .auto_shrink([false, false])
-            .show(ui, |ui| history::list(ui, extras))
-            .inner;
-        errand = errand.take().or(listed);
+        errand = errand.take().or(recent_prints(ui, extras));
     }
     errand
+}
+
+/// The prints the printer remembers, under a rule, as tall as its tiles allow.
+fn recent_prints(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand> {
+    ui.add_space(theme::SECTION_GAP);
+    hairline(ui);
+    ui.add_space(theme::ROW_GAP);
+    subheading(ui, &tr!("sheet-recent-prints"));
+    // As tall as the tiles, up to what the window has left under them: a short window
+    // scrolls the history rather than pushing the sheet off the screen.
+    let prints = extras
+        .and_then(|extras| extras.history.as_ref())
+        .map_or(1, Vec::len);
+    let wanted = history::height(prints) + HISTORY_MIN_H / 2.0;
+    let left = ui.ctx().content_rect().bottom() - CHROME_H / 2.0 - ui.cursor().top();
+    let height = wanted.min(left.max(HISTORY_MIN_H));
+    egui::ScrollArea::vertical()
+        .max_height(height)
+        .min_scrolled_height(height)
+        .auto_shrink([false, false])
+        .show(ui, |ui| history::list(ui, extras))
+        .inner
 }
 
 /// Where the picture of the plate goes before the printer has sent one.
@@ -137,7 +135,7 @@ fn empty_picture(ui: &mut egui::Ui) {
         rect.center(),
         egui::Align2::CENTER_CENTER,
         icon::PRINTER,
-        theme::icon(36.0),
+        theme::icon(theme::glyph::PICTURE),
         colors.text_low,
     );
 }

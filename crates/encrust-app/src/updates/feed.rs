@@ -64,6 +64,9 @@ struct Feed {
     /// One archive per platform, keyed by [`platform`].
     #[serde(default)]
     platforms: BTreeMap<String, Build>,
+    /// When the release went out, `YYYY-MM-DDTHH:MM:SSZ`; absent from a feed written before.
+    #[serde(default)]
+    published: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +74,9 @@ struct Build {
     url: String,
     /// The archive's detached minisign signature, the whole `.minisig` file.
     signature: String,
+    /// The archive's size, bytes; absent from a feed written before.
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 /// A newer release than this build.
@@ -80,6 +86,8 @@ pub struct Offer {
     pub notes: Vec<Note>,
     /// The archive for this platform, when the release has one.
     pub download: Option<Download>,
+    /// When the release went out, seconds since the Unix epoch, when the feed says.
+    pub published_s: Option<u64>,
 }
 
 /// One archive of a release and the signature it has to carry.
@@ -89,6 +97,8 @@ pub struct Download {
     /// The archive's file name, which its signature names too.
     pub archive: String,
     pub signature: String,
+    /// Bytes, when the feed says.
+    pub size: Option<u64>,
 }
 
 /// One line of the release notes, as the Updates page sets it.
@@ -97,6 +107,29 @@ pub enum Note {
     Heading(String),
     Item(String),
     Text(String),
+}
+
+/// How a heading of the notes groups what follows, by the headings the release-notes skill
+/// writes (`docs/design/updates.md`): a user-facing area, Faster, or Fixed and Before you update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteGroup {
+    Area,
+    Faster,
+    Plain,
+}
+
+impl NoteGroup {
+    /// The group a heading of the notes opens.
+    pub fn of(heading: &str) -> Self {
+        let lower = heading.to_lowercase();
+        if lower.starts_with("faster") {
+            Self::Faster
+        } else if lower.starts_with("fixed") || lower.starts_with("before") {
+            Self::Plain
+        } else {
+            Self::Area
+        }
+    }
 }
 
 /// What a feed offers a build at `running` on `platform`: nothing when it is no newer.
@@ -118,6 +151,7 @@ pub fn read(
         version,
         notes: notes_of(&feed.notes, version),
         download,
+        published_s: feed.published.as_deref().and_then(unix_seconds),
     }))
 }
 
@@ -135,7 +169,15 @@ fn download(build: &Build, version: Version) -> Result<Download, UpdateError> {
         url: build.url.clone(),
         archive: archive.to_owned(),
         signature: build.signature.clone(),
+        size: build.size,
     })
+}
+
+/// Seconds since the Unix epoch of an RFC 3339 time, or `None` for anything else: a date
+/// the window cannot read is left out, not a reason to refuse the offer.
+fn unix_seconds(text: &str) -> Option<u64> {
+    let at: jiff::Timestamp = text.parse().ok()?;
+    u64::try_from(at.as_second()).ok()
 }
 
 /// The key this build's archive has in the feed, the name `release.yml` gives it.
@@ -231,6 +273,19 @@ fn without_commits(text: &str) -> String {
 pub mod tests {
     use super::*;
 
+    #[test]
+    fn a_heading_names_its_group_as_the_skill_writes_it() {
+        let groups = notes("### Supports\n## ⚡ Faster\n## 🐛 Fixed\n## Before you update")
+            .into_iter()
+            .filter_map(|note| match note {
+                Note::Heading(text) => Some(NoteGroup::of(&text)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        use NoteGroup::{Area, Faster, Plain};
+        assert_eq!(groups, [Area, Faster, Plain, Plain]);
+    }
+
     const REPO: &str = env!("CARGO_PKG_REPOSITORY");
 
     /// An offer of `version` with an archive for this platform, as a feed would make it.
@@ -251,6 +306,53 @@ pub mod tests {
             "platforms": { "macos-aarch64": { "url": url, "signature": "sig" } },
         })
         .to_string()
+    }
+
+    #[test]
+    fn a_feed_dates_its_release_and_sizes_each_archive() {
+        let url = format!("{REPO}/releases/download/v0.3.0/a.tar.gz");
+        let text = serde_json::json!({
+            "version": "0.3.0",
+            "published": "2026-10-28T12:00:00Z",
+            "platforms": { "macos-aarch64": { "url": url, "signature": "sig", "size": 39_845_888 } },
+        })
+        .to_string();
+        let offer = read(text.as_bytes(), version("0.1.0"), Some("macos-aarch64"))
+            .expect("the feed reads")
+            .expect("and offers 0.3.0");
+        assert_eq!(
+            offer.published_s,
+            Some(1_793_188_800),
+            "2026-10-28 12:00 UTC"
+        );
+        let size = offer.download.and_then(|download| download.size);
+        assert_eq!(size, Some(39_845_888));
+    }
+
+    #[test]
+    fn a_feed_written_before_dates_and_sizes_still_offers() {
+        let offer = an_offer("0.3.0");
+        assert_eq!(offer.published_s, None);
+        assert_eq!(offer.download.and_then(|download| download.size), None);
+    }
+
+    #[test]
+    fn a_time_the_window_cannot_read_is_left_out() {
+        assert_eq!(unix_seconds("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(unix_seconds("2000-03-01T00:00:00Z"), Some(951_868_800));
+        assert_eq!(
+            unix_seconds("2026-10-28T14:00:00+02:00"),
+            Some(1_793_188_800),
+            "an offset is read as the same instant"
+        );
+        for text in [
+            "",
+            "2026-10-28",
+            "2026-13-01T00:00:00Z",
+            "1969-12-31T00:00:00Z",
+        ] {
+            assert_eq!(unix_seconds(text), None, "{text:?}");
+        }
     }
 
     fn version(text: &str) -> Version {

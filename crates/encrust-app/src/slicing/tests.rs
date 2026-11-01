@@ -332,7 +332,7 @@ fn a_run_over_the_project_queues_only_the_plates_with_something_on_them() {
 
     // No printer, so nothing actually starts; what is under test is what was queued.
     assert_eq!(
-        slicing.start_all(&scene, &PathBuf::from("/tmp/out.goo"), &mut status),
+        slicing.start_all(&scene, &PathBuf::from("/tmp/out.goo"), None, &mut status),
         0,
         "an empty project has no plate worth cutting"
     );

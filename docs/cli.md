@@ -20,7 +20,9 @@ model as it came if that would leave more wrong (ADR 0349). `--repair=close-hole
 `=close-small-holes` or `=turn` runs part of it (ADR 0351), `=wrap` wraps every shell in one
 outer surface by the exact union of its shells and `=deep` repairs, wraps and repairs
 again, leaving the repair alone where the shells do not union exactly (ADR 0352, 0357); a
-cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358).
+cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358). A repair
+draws a bar on a terminal, spanned by its steps as the window's is, and Ctrl-C stops it
+(exit 130); the drainage check rides the layers' bar of the slice it is made in (ADR 0384).
 `inspect --intersections` counts the pairs of faces that cross (ADR 0353).
 `--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
@@ -271,7 +273,7 @@ into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), a
 as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
-(ADR 0290). A turned model is stood on the plate over the middle it stood over in x and y.
+(ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
 A model the search sets on the plate gets supports only under what would hang there, and none
 if nothing does; with supports and a raft it stands on the raft's top. A `--rotate` that tips
 it off that face stands it on supports. For example:
@@ -501,12 +503,22 @@ Under `--json`, `status` prints `printer`, `protocol` (`sdcp-3`, `sdcp-1` or `pr
 ## Batch
 
 A folder of parts: every flag of `slice` applies to each model, one file and one
-`<model>.json` each, plus `batch.json` over the lot. `--jobs` cuts several at once. A model
-that fails does not stop the others; it is exit code 4 at the end:
+`<name>.json` report each, named by `--name`, plus `batch.json` over the lot. `--jobs` cuts
+several at once. A model that fails does not stop the others; it is exit code 4 at the end:
 
 ```sh
 encrust batch models/ \
   --printer elegoo-mars-4-ultra --center --orient --supports light -o out/
+```
+
+`--name` names each file by a template, as the window's File name setting does: `{model}`,
+`{ext}` (the model's own extension), `{printer}`, `{resin}`, `{layer}` in µm, `{plate}`,
+`{date}` and `{time}` (local, `09-05`); the printer's extension follows, and what a file
+system refuses becomes `_`. A template giving two models one file is refused:
+
+```sh
+encrust batch models/ --printer elegoo-mars-4-ultra --resin my-grey \
+  --name "{model}_{resin}_{layer}um_{date}" -o out/
 ```
 
 ## The window

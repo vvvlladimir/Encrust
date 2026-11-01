@@ -95,7 +95,15 @@ impl SliceCommand {
         }
         let mut reports = Vec::with_capacity(plates.len());
         let mut clean = true;
-        for (plate, output) in core_engine::plate_outputs(&self.output, &plates) {
+        let files: Vec<_> = plates
+            .iter()
+            .map(|&(plate, name)| core_engine::PlateFile {
+                plate,
+                name,
+                stem: None,
+            })
+            .collect();
+        for (plate, output) in core_engine::plate_outputs(&self.output, &files) {
             stop.check()?;
             if global.talks() {
                 println!("Plate {} into {}", plate + 1, output.display());

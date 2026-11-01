@@ -97,6 +97,8 @@ impl RepairState {
 pub struct Repairs {
     /// Each with the model it took, so that a mesh replaced since is not mended over.
     jobs: Vec<(RepairJob, Taken)>,
+    /// The repairs started since none was going, finished ones included.
+    started: usize,
     kept: Vec<ObjectId>,
     /// Where the Repair tool's findings lie on the models.
     pub found: Found,
@@ -143,6 +145,10 @@ impl Repairs {
             settings: state.settings,
         });
         *status = Status::Info(job.label());
+        if self.jobs.is_empty() {
+            self.started = 0;
+        }
+        self.started += 1;
         self.jobs.push((job, Taken::of(object)));
     }
 
@@ -150,9 +156,22 @@ impl Repairs {
         !self.jobs.is_empty()
     }
 
-    /// How far the first repair that counts its work has got.
+    /// How far the repairs started together have got as one run, named by the step of the
+    /// first still going.
     pub fn counted(&self) -> Option<Counted> {
-        self.jobs.iter().find_map(|(job, _)| job.counted())
+        let step = self.jobs.iter().find_map(|(job, _)| job.counted())?.step;
+        let going: f32 = self
+            .jobs
+            .iter()
+            .filter_map(|(job, _)| job.counted())
+            .map(|counted| counted.share)
+            .sum();
+        let finished = self.started.saturating_sub(self.jobs.len());
+        let share = (finished as f32 + going) / self.started.max(1) as f32;
+        Some(Counted {
+            share: share.min(1.0),
+            step,
+        })
     }
 
     /// Gives up on every repair going, which leaves the models as they are.

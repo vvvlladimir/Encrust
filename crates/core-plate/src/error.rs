@@ -8,4 +8,6 @@ pub enum PlateError {
     NothingToOrient,
     #[error("cannot cut the model to measure its cross-section")]
     Slice(#[from] SliceError),
+    #[error("the search was stopped before it finished")]
+    Cancelled,
 }

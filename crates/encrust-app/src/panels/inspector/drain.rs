@@ -10,8 +10,9 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, busy, count_row, describe, hint, icon, inline_button, notice, number_row,
-    primary_button, secondary_button, section, theme, tone,
+    Inline, Segment, Segmented, count_row, describe, figure_line, hint, icon, inline_button, inset,
+    notice, number_row, primary_button, secondary_button, section, status_dot, step_bar, theme,
+    tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -46,7 +47,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         own: |object| &mut object.own.drain,
         read: |object| &object.own.drain,
     };
-    let own = section(ui, &tr!("common-settings"), None, |ui| {
+    let own = inset(ui, |ui| {
         let own = scope::owner(ui, window, &scoped);
         scope::editing(window, own, &scoped, |window| {
             presets::bar(
@@ -58,8 +59,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             );
         });
         own
-    })
-    .flatten();
+    });
     section(ui, &tr!("drain-trapped-resin"), None, |ui| {
         drainage(ui, window)
     });
@@ -83,9 +83,13 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// How many pockets hold resin, for the inspector's heading.
-pub fn fact(window: &Window) -> Option<String> {
+pub fn fact(window: &Window) -> Option<(String, egui::Color32)> {
+    let colors = theme::colors();
     let trapped = pockets(window).len();
-    (trapped > 0).then(|| tr!("drain-fact", count = trapped))
+    if trapped > 0 {
+        return Some((tr!("drain-fact", count = trapped), colors.danger));
+    }
+    (!window.tools.drain.checked).then(|| (tr!("drain-fact-unchecked"), colors.text_mid))
 }
 
 /// Digging the channel laid out, while there is one; otherwise the check for resin with
@@ -95,7 +99,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.placing == Placing::Channel && points > 0 {
         let label = tr!("drain-dig", count = points);
         let what = tr!("drain-dig-tooltip");
-        if primary_button(ui, icon::DRAIN, &label, true)
+        if primary_button(ui, &label, true)
             .on_hover_text(what)
             .clicked()
         {
@@ -105,8 +109,10 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         }
         return;
     }
-    if window.tools.drain.job.is_some() {
-        busy(ui, &tr!("hollow-looking"), None, false);
+    if let Some(job) = &window.tools.drain.job {
+        if step_bar(ui, &tr!("hollow-looking"), job.fraction(), true) {
+            window.tools.drain.cancel(&mut window.machine.status);
+        }
         return;
     }
     let layer_height_mm = window.machine.slicing.layer_height_mm();
@@ -116,7 +122,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         tr!("drain-check")
     };
     let what = tr!("drain-check-tooltip");
-    if primary_button(ui, icon::DRAIN, &label, !window.doc.scene.is_empty())
+    if primary_button(ui, &label, !window.doc.scene.is_empty())
         .on_hover_text(what)
         .clicked()
     {
@@ -192,7 +198,7 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
         ui,
         &tr!("presets-taper"),
         &mut tools.drain.state.taper,
-        "",
+        &tr!("unit-times"),
         FINE_STEP,
         0.1..=1.0,
         2,
@@ -232,7 +238,7 @@ fn outline(ui: &mut egui::Ui, tools: &mut Tools) {
         ui,
         &tr!("drain-turn"),
         &mut state.turn_deg,
-        &tr!("unit-degrees"),
+        &tr!("unit-deg"),
         0.5,
         0.0..=MAX_TURN_DEG,
         0,
@@ -299,12 +305,19 @@ pub(in crate::panels) fn rebuild_around_cuts(window: &mut Window) {
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     let pockets = pockets(window);
     if pockets.is_empty() {
-        let text = if window.tools.drain.checked {
-            tr!("drain-nothing-trapped")
+        let colors = theme::colors();
+        if window.tools.drain.checked {
+            tone(ui, &tr!("drain-nothing-trapped"), colors.ok);
         } else {
-            tr!("drain-not-checked")
-        };
-        hint(ui, &text);
+            let why = tr!("drain-not-checked-why");
+            notice(
+                ui,
+                icon::DRAIN,
+                colors.warn,
+                &tr!("drain-not-checked"),
+                &why,
+            );
+        }
         return;
     }
 
@@ -345,19 +358,12 @@ fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) -> bool {
     let colors = theme::colors();
     let mut drill = false;
     ui.horizontal(|ui| {
-        let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-        ui.painter().circle_filled(dot.center(), 3.5, colors.danger);
-        ui.label(
-            egui::RichText::new(tr!(
-                "value-ml",
-                value = format!("{:.2}", volume_mm3 / 1000.0)
-            ))
-            .font(theme::figures(12.0))
-            .color(colors.text_high),
-        );
+        status_dot(ui, colors.danger);
+        let volume = tr!("value-ml", value = format!("{:.2}", volume_mm3 / 1000.0));
+        figure_line(ui, &volume, colors.text_high);
         tone(ui, &tr!("drain-pocket", index = index + 1), colors.text_mid);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            drill = inline_button(ui, icon::DRAIN, &tr!("drain-drill"), false, true)
+            drill = inline_button(ui, Inline::new(&tr!("drain-drill")).glyph(icon::DRAIN))
                 .on_hover_text(tr!("drain-drill-tooltip"))
                 .clicked();
         });

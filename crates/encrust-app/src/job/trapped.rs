@@ -1,13 +1,14 @@
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 
 use core_geometry::{Aabb, Mat4, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_slicer::{SliceError, Windows};
 use core_supports::{TrapScan, Trapped};
 
 use core_engine::{Baked, Cutting, cut};
 
 use crate::i18n::tr;
-use crate::job::pipeline::{thread_pool, worker_threads};
+use crate::job::{Highest, Worker, pooled};
 use crate::scene::{ObjectId, Scene};
 
 /// One model to look through, owned so that it can cross to the worker thread.
@@ -44,33 +45,58 @@ pub enum TrapOutcome {
     Failed(String),
 }
 
-/// A drainage check on its own thread.
+/// A drainage check on its own thread. Dropping the job asks the check to stop.
 ///
 /// It cuts each model window by window and keeps none of it, so a plate the window could
 /// not hold as a stack can still be checked; see ADR 0072.
 #[derive(Debug)]
 pub struct TrapJob {
-    result: Receiver<TrapOutcome>,
+    worker: Worker<TrapOutcome>,
+    looked: Arc<Looked>,
+    models: usize,
+    shown: Highest,
+}
+
+/// How far a check has got: the models done, and the layers cut of the one in hand.
+#[derive(Debug, Default)]
+struct Looked {
+    models: AtomicUsize,
+    layers: AtomicUsize,
+    layers_total: AtomicUsize,
 }
 
 impl TrapJob {
     pub fn spawn(request: TrapRequest) -> Self {
-        let (sender, result) = mpsc::channel();
-        crate::job::spawn(move || {
-            let _ = sender.send(check(&request));
-        });
-        Self { result }
+        let looked = Arc::new(Looked::default());
+        let models = request.tasks.len();
+        let told = Arc::clone(&looked);
+        let worker = Worker::spawn(
+            move |stop, _| pooled(|| check(&request, (stop, &told)), TrapOutcome::Failed),
+            || TrapOutcome::Failed(tr!("job-thread-stopped-drainage")),
+        );
+        Self {
+            worker,
+            looked,
+            models,
+            shown: Highest::default(),
+        }
     }
 
     /// The outcome on the frame the check ends, and `None` while it is still running.
     pub fn poll(&mut self) -> Option<TrapOutcome> {
-        match self.result.try_recv() {
-            Ok(outcome) => Some(outcome),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                Some(TrapOutcome::Failed(tr!("job-thread-stopped-drainage")))
-            }
-        }
+        self.worker.poll()
+    }
+
+    /// The share of the plate looked through, or `None` before the first model's layers
+    /// are counted.
+    pub fn fraction(&self) -> Option<f32> {
+        let layers_total = self.looked.layers_total.load(Relaxed);
+        (layers_total > 0).then(|| {
+            let layer = self.looked.layers.load(Relaxed).min(layers_total);
+            let done = self.looked.models.load(Relaxed);
+            let share = (done as f32 + layer as f32 / layers_total as f32) / self.models as f32;
+            self.shown.keep(share.min(1.0))
+        })
     }
 }
 
@@ -88,29 +114,36 @@ pub fn trap_tasks(scene: &Scene) -> Vec<TrapTask> {
         .collect()
 }
 
-fn check(request: &TrapRequest) -> TrapOutcome {
-    let pool = match thread_pool(worker_threads()) {
-        Ok(pool) => pool,
-        Err(error) => return TrapOutcome::Failed(error.to_string()),
-    };
+fn check(request: &TrapRequest, (stop, looked): (&AtomicBool, &Looked)) -> TrapOutcome {
+    let mut checked: Vec<Pockets> = Vec::with_capacity(request.tasks.len());
+    for (index, task) in request.tasks.iter().enumerate() {
+        let trapped = match twin_of(&request.tasks[..index], task) {
+            Some(twin) => checked[twin].trapped.clone(),
+            None => match look_through(task, request.layer_height_mm, (stop, looked)) {
+                Ok(trapped) => trapped,
+                Err(message) => return TrapOutcome::Failed(message),
+            },
+        };
+        checked.push(Pockets {
+            id: task.id,
+            trapped,
+        });
+        looked.layers.store(0, Relaxed);
+        looked.models.fetch_add(1, Relaxed);
+    }
+    TrapOutcome::Checked(checked)
+}
 
-    pool.install(|| {
-        let mut checked: Vec<Pockets> = Vec::with_capacity(request.tasks.len());
-        for (index, task) in request.tasks.iter().enumerate() {
-            let trapped = match twin_of(&request.tasks[..index], task) {
-                Some(twin) => checked[twin].trapped.clone(),
-                None => match look_through(task, request.layer_height_mm) {
-                    Ok(trapped) => trapped,
-                    Err(message) => return TrapOutcome::Failed(message),
-                },
-            };
-            checked.push(Pockets {
-                id: task.id,
-                trapped,
-            });
-        }
-        TrapOutcome::Checked(checked)
-    })
+/// Why a model's layers stopped coming before its last.
+enum Halt {
+    Slice(SliceError),
+    Asked,
+}
+
+impl From<SliceError> for Halt {
+    fn from(error: SliceError) -> Self {
+        Self::Slice(error)
+    }
 }
 
 /// An earlier task `task` is a copy of: one mesh and one set of cuts, standing the same
@@ -147,7 +180,11 @@ fn append(whole: &mut Mesh, part: &Mesh) {
 
 /// Cuts one model where it stands and answers with the pockets in it, brought back into
 /// the model's own space.
-fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>, String> {
+fn look_through(
+    task: &TrapTask,
+    layer_height_mm: Scalar,
+    (stop, looked): (&AtomicBool, &Looked),
+) -> Result<Vec<Trapped>, String> {
     let mut placed = transform_mesh(&task.mesh, task.transform);
     let Some(material) = placed.aabb() else {
         return Ok(Vec::new());
@@ -174,14 +211,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
         bounds.maxs.truncate(),
         layer_height_mm,
     );
-    windows
-        .stream(&baked.solid, |sliced| {
-            for layer in &sliced.layers {
-                scan.push(layer);
-            }
-            Ok::<(), core_slicer::SliceError>(())
-        })
-        .map_err(|error| error.to_string())?;
+    scan_layers(&windows, &baked, &mut scan, (stop, looked))?;
 
     let matrix = task.transform.to_matrix();
     if matrix.determinant().abs() < f32::EPSILON {
@@ -204,6 +234,32 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
             bounds: carried(&found.bounds, inverse),
         })
         .collect())
+}
+
+/// Hands every layer of `baked` to `scan`, counting them into `looked` and stopping
+/// between windows once `stop` is set.
+fn scan_layers(
+    windows: &Windows,
+    baked: &Baked,
+    scan: &mut TrapScan,
+    (stop, looked): (&AtomicBool, &Looked),
+) -> Result<(), String> {
+    looked.layers_total.store(windows.layer_count(), Relaxed);
+    windows
+        .stream(&baked.solid, |sliced| {
+            if stop.load(Relaxed) {
+                return Err(Halt::Asked);
+            }
+            for layer in &sliced.layers {
+                scan.push(layer);
+            }
+            looked.layers.fetch_add(sliced.layers.len(), Relaxed);
+            Ok(())
+        })
+        .map_err(|halt| match halt {
+            Halt::Slice(error) => error.to_string(),
+            Halt::Asked => tr!("drain-cancelled"),
+        })
 }
 
 /// `bounds` taken through `matrix` as the box of its own eight corners, so a pocket of a

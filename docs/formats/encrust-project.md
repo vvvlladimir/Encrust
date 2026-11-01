@@ -12,7 +12,7 @@ A zip. Deflate, no encryption, no comment.
 
 ```
 project.json            the manifest, UTF-8
-preview.png             the plate as a picture, 480 x 320, stored rather than deflated
+preview.png             the plate as a grey and alpha picture, 480 x 320, stored
 models/0/source.mesh    the first object as it was imported and repaired
 models/0/shell.mesh     the shell hollowing built from it, if it was hollowed
 models/1/source.mesh    the second object
@@ -22,8 +22,9 @@ models/1/source.mesh    the second object
 `models/<n>/` matches `objects[n]` of the manifest, by position. A `shell.mesh` is written
 when and only when that object's `hollow.built` is there, and a file whose manifest names
 a mesh the archive does not have is refused. `preview.png` is the start page's picture of
-the plate, there for whatever lists the file before opening it (ADR 0261); a file without
-one reads, and a plate with nothing on it has none.
+the plate, there for whatever lists the file before opening it (ADR 0261): grey the shade,
+alpha the coverage, tinted when shown (ADR 0385). A file without one reads, and a plate with
+nothing on it has none.
 
 ## `project.json`
 

@@ -1,13 +1,17 @@
 use crate::args::ImportArgs;
+use crate::exit::Cancelled;
+use crate::pipeline::Watch;
 use crate::profiles::Chosen;
+use crate::progress::bar;
 use anyhow::{Context, Result};
-use core_engine::{SupportPlan, Trial, orient_for_print};
+use core_engine::{EngineError, SupportPlan, Trial, orient_for_print};
 use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     transform_mesh,
 };
-use core_plate::{OrientSettings, Printed};
+use core_plate::{OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
 use printer_profiles::{PrinterProfile, SupportProfile};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 /// The turn auto-orientation applied, and why it chose it.
 pub struct OrientSummary {
@@ -64,6 +68,7 @@ pub(super) fn place(
     args: &ImportArgs,
     supports: Option<&SupportPlan>,
     chosen: &Chosen,
+    watch: &Watch,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
     let mesh = match transform.scale {
@@ -77,7 +82,7 @@ pub(super) fn place(
         None => mesh,
     };
     let (mesh, mut oriented) = if transform.orient {
-        let summary = orientation(&mesh, args, supports, chosen)?;
+        let summary = orientation(&mesh, args, supports, chosen, watch)?;
         (turned_in_place(&mesh, summary.rotation)?, Some(summary))
     } else {
         (mesh, None)
@@ -118,6 +123,7 @@ pub(super) fn orientation(
     args: &ImportArgs,
     supports: Option<&SupportPlan>,
     chosen: &Chosen,
+    watch: &Watch,
 ) -> Result<OrientSummary> {
     let transform = &args.transform;
     let profile = chosen.printer.as_ref();
@@ -134,11 +140,36 @@ pub(super) fn orientation(
         support,
         raster_window: rayon::current_num_threads(),
     });
-    let found = orient_for_print(&Printed::solid(mesh), &settings, trial.as_ref())
-        .context("cannot find an orientation for this model")?
-        .into_iter()
-        .next()
-        .context("the search found no orientation for this model")?;
+    let progress = watch.progress.then(|| bar("% of the orientation search"));
+    if let Some(progress) = &progress {
+        progress.set_length(100);
+    }
+    // Threads report out of order: the bar is only ever moved on, by what the highest gained.
+    let shown = AtomicU64::new(0);
+    let told = |phase: Phase, done, total| {
+        if let Some(progress) = &progress {
+            let at = (phase.share(done, total) * 100.0) as u64;
+            let before = shown.fetch_max(at, Relaxed);
+            progress.inc(at.saturating_sub(before));
+        }
+        !watch.stop.requested()
+    };
+    let searched = orient_for_print(
+        &Printed::solid(mesh),
+        &settings,
+        trial.as_ref(),
+        OrientWatch::by(&told),
+    );
+    if let Some(progress) = &progress {
+        progress.finish_and_clear();
+    }
+    let found = match searched {
+        Err(EngineError::Orient(PlateError::Cancelled)) => return Err(Cancelled.into()),
+        other => other.context("cannot find an orientation for this model")?,
+    }
+    .into_iter()
+    .next()
+    .context("the search found no orientation for this model")?;
     Ok(OrientSummary {
         rotation: found.oriented.rotation,
         peak_mm2: found.oriented.score.peak_mm2.unwrap_or_default(),

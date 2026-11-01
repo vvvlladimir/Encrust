@@ -3,7 +3,7 @@ use core_volume::Boolean;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{
-    Segment, Segmented, blocked_hover, busy, describe, icon, primary_button, section, stats, theme,
+    Segment, Segmented, blocked_hover, busy, describe, primary_button, readings, section, theme,
     tone,
 };
 
@@ -40,7 +40,7 @@ pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
             .enumerate()
             .map(|(index, name)| (name, role(op, index)))
             .collect();
-        stats(ui, &rows);
+        readings(ui, &rows);
         describe(ui, &tr!("boolean-models-note"));
     });
 }
@@ -74,7 +74,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         0 | 1 => tr!("boolean-combine-none"),
         count => tr!("boolean-combine", count = count),
     };
-    let button = primary_button(ui, icon::COMBINE, &label, blocked.is_none());
+    let button = primary_button(ui, &label, blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
         let started = tool.start(&window.doc.scene);
         window

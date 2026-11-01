@@ -184,6 +184,11 @@ fn default_density_g_cm3() -> f32 {
 }
 
 impl MaterialProfile {
+    /// What `volume_mm3` of this resin weighs, grams.
+    pub fn weight_g(&self, volume_mm3: f32) -> f32 {
+        volume_mm3 / 1000.0 * self.density_g_cm3
+    }
+
     pub fn from_toml_str(source: &str, path: &Path) -> Result<Self, ProfileError> {
         let profile: Self = toml::from_str(source).map_err(|source| ProfileError::Parse {
             path: path.to_owned(),

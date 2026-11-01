@@ -57,7 +57,7 @@ pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&S
         &tr!("support-density"),
         was(saved, |p| p.density),
         &mut profile.density,
-        "x",
+        &tr!("unit-times"),
         COARSE_STEP,
         MIN_DENSITY..=MAX_DENSITY,
         2,

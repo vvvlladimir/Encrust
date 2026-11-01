@@ -7,7 +7,7 @@ use printer_profiles::EdgeSmoothing;
 
 use crate::i18n::tr;
 use crate::ui::{
-    Segment, Segmented, count_row, describe, hint, kept, list, list_row, nested, switch,
+    ListRow, Segment, Segmented, count_row, describe, hint, kept, list, list_row, nested, switch,
 };
 
 /// Eight greys is anti-aliasing level 8, and the most a panel
@@ -125,7 +125,16 @@ fn looks(ui: &mut egui::Ui, current: Option<Look>) -> Option<Look> {
         Look::ALL.into_iter().fold(None, |picked, look| {
             let on = current == Some(look);
             let line = look.line();
-            let row = list_row(ui, &look.name(), None, on, None, None, Some(&line), None);
+            let name = look.name();
+            let row = list_row(
+                ui,
+                &ListRow {
+                    label: &name,
+                    selected: on,
+                    aside: Some(&line),
+                    ..ListRow::default()
+                },
+            );
             if row.picked { Some(look) } else { picked }
         })
     });

@@ -3,6 +3,7 @@ use egui::{Align2, Id, Rect, vec2};
 use crate::i18n::tr;
 use crate::panels::{Window, frame_view, set_orthographic};
 use crate::shortcuts::{self, Action};
+use crate::ui::theme;
 use crate::ui::{card, icon, icon_button, icon_toggle};
 
 /// The margin inside the card.
@@ -27,7 +28,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) -> Rect {
 
 /// What the viewport draws besides the models, and how to point the camera at them.
 fn view_tools(ui: &mut egui::Ui, window: &mut Window) {
-    ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
+    ui.spacing_mut().item_spacing = vec2(theme::ICON_GAP, theme::ICON_GAP);
     ui.vertical(|ui| {
         if icon_button(ui, icon::FRAME, &shortcuts::tooltip(Action::FrameView)).clicked() {
             frame_view(
