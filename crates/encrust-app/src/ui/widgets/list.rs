@@ -138,16 +138,24 @@ fn rename_field(ui: &mut Ui, id: Id) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
-/// Findings one under another, each its own rounded row, `ISSUE_GAP` apart.
+/// Findings one under another, each its own rounded row, `ISSUE_GAP` apart; past
+/// `ISSUE_ROWS_SHOWN` they scroll inside the list, so the sections under it stay put.
 pub fn issue_list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = ISSUE_GAP;
-        add(ui)
-    })
-    .inner
+    let shown = ISSUE_ROWS_SHOWN as f32;
+    egui::ScrollArea::vertical()
+        .id_salt("issue-list")
+        .max_height(shown * theme::BUTTON_H + (shown - 1.0) * ISSUE_GAP)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = ISSUE_GAP;
+            add(ui)
+        })
+        .inner
 }
 
 const ISSUE_GAP: f32 = 8.0;
+/// Rows a list of findings shows before the rest scroll inside it.
+const ISSUE_ROWS_SHOWN: usize = 7;
 
 /// How strongly the accent rings the finding in hand.
 const ISSUE_RING: f32 = 0.35;

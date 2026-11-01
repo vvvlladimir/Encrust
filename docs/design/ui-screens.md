@@ -26,7 +26,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
 | Layer strip | the stage's right edge, its full height | 64 |
-| Hint bar | centred under the tool row, 8 below it, kept 8 clear of the view cube on both sides | as wide as what it says, at most that room; one line, 28 tall |
+| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred while it names what each key does, the keys alone flush with the row's left | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card: level with the tool row while 8 clear of it, else 8 under it | 80 square |
 | View tools | 8 left of the models card, 16 above the stage's foot | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
@@ -38,7 +38,7 @@ stripe or a border of its own.
 
 Left to right: on macOS 72 for the system's buttons, File, Edit, View as quiet text
 buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card) and the chip; at the right
-the Alpha pill, Find (200 wide, `⌘K` at its right), the key sheet and the gear as 30
+the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
 The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
@@ -82,7 +82,7 @@ One tool's card, in this order; any part a tool lacks is not drawn.
 | Part | Content | Size |
 |---|---|---|
 | Heading | glyph in `accent_soft`, name, `help_mark`; at the right either the modes as `icon_toggle`s in one sunken group, or one fact in `text_mid` cut with an ellipsis | 48 |
-| Preset | `picker` showing the preset (and `· edited` in `warn` once a value differs), Save and Delete as 32 squares | 32, padded 10 × 12 |
+| Preset | `dropdown` showing the preset (and `· edited` in `warn` once a value differs), Save and Delete as 32 squares | 32, padded 10 × 12 |
 | Sections | `section`s, ordered what it acts on → how → rarely changed | heading 36, body padded 0 12 12, rows 6 apart |
 | Foot | on `base`: one `primary_button`, at most one companion; the reason it cannot run under it | primary 40, padded 10 × 12 |
 
@@ -98,14 +98,14 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues | — | Found (`issue_row`s: kind, layer, count, the numbers on hover; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Islands (Support them · Remove them side by side) and Cups (Drill them); Peel; Estimate (Time, Resin in ml · g, Price) | — (the check runs by itself) |
+| Check | the number of issues | — | Islands (Support them · Remove them side by side); Found (`issue_row`s: kind, layer, count, the numbers on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Cups (Drill them); Peel | — (the check runs by itself) |
 | Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
 
 ### The support group picker
 
-The preset `picker` shows the group in hand: its colour dot, its name, `· edited`, its
+The preset `dropdown` shows the group in hand: its colour dot, its name, `· edited`, its
 support count, caret. Open, it is a list over the sections, as wide as the card less 12
 each side, on `raised` with a window's shadow:
 
@@ -131,15 +131,21 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 
 | Part | Content | Size |
 |---|---|---|
-| Heading | *Plate n*, the resin's name at the right in `text_low` | 36 |
-| Figures | `figure_grid`: Time (`≈ 17 m 26 s`), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none) | two rows of 46 |
-| Details | `details_fold`: a table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings` | 26 closed |
-| Verdict | a `warn` verdict when a model on the plate is broken | as tall as its text |
+| Heading | `card_title`: *Plate n* in `text_high`, the resin's name at the right in `text_low` | 36 |
+| Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
+| Figures | `figure_grid`: Time (`≈ 17 m 26 s`), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
+| Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; open, its row stays washed in `raised` | 26 closed |
 | Foot | the printer row, then the action row | on `base` |
 
 The printer row is 34 tall on `raised`: printer glyph, name, a status dot and word (`ok`
 Ready, `accent` breathing Printing n %, `text_low` Not answering), caret, and the open-sheet
-square beside it. A profile listing no printer has no row.
+square inside it at its right. A profile listing no printer has no row. The send primary
+reads *Slice and send*: the printer is named in the row over it.
+
+While Details opens the card keeps its foot still: egui places an area from last frame's
+size, so a card held by its foot asks for the frame to be laid out again whenever it changes
+size, a fold does the same once it has measured what it holds, a motion holds one value for
+the whole frame, and a frame may take three passes (`panels::card_at`, `theme::motion`).
 
 | State | Action row |
 |---|---|
@@ -158,8 +164,9 @@ transition, body), Cured area and Volume of the layer shown, and there is no Det
 ## Layer strip
 
 Top to bottom, centred in its 64: the three views — model, model beside layer, layer — as
-`icon_toggle`s in one sunken group, stacked; the layer number in a sunken box 20 tall in
-`accent_soft` that a click opens for typing; `of n` and the layer's height in mm under it; layer up; the track;
+`icon_toggle`s in one `mode_column`, centred; the layer number in semibold 16 in a
+sunken box 26 tall in `accent_soft` that a click opens for typing; `of n` in `text_low` and
+the layer's height in mm in medium `text_mid` under it; layer up; the track;
 layer down; play. The track is a 3 point rule, filled in `accent` between its two thumbs —
 26 × 12, ringed in `accent`, the upper one the cut, the lower the first layer shown. Behind
 the rule, every 4 points up it, the widest cured area there is a dashed `text_low` line
@@ -173,9 +180,10 @@ track. With no stack it reads *No layers*.
 ## Over the stage
 
 - **Hint bar:** a pill on `base` at 88 % with a hairline, 12 point text: the key in
-  `text_high`, what it does in `text_mid`, pairs split by a 12 point rule. Drawn only while
-  the tool in hand has something the pointer does in the viewport (Measure, Drain, Relief,
-  Supports' Pick and Place, Cut's plane). Short of room, only the keys show, as glyphs where
+  `text_high`, what it does in `text_mid`, pairs split by a 12 point rule. Every key is
+  Click or Drag, any modifier named before it (Shift click, Option drag), or Esc. Drawn only
+  while the tool in hand has something the pointer does in the viewport (Measure, Hollow,
+  Drain, Relief, Supports' Pick, Place and Area, Repair's faces and edges, Cut's part). Short of room, only the keys show, as glyphs where
   there is one (mouse click, hand grabbing, on a Mac ⇧ ⌥ ⌘), each naming what it does on hover.
 - **View tools:** Frame the view, Plate grid, See through, Perspective, as 26 squares in one
   card; the on ones washed.
@@ -184,9 +192,9 @@ track. With no stack it reads *No layers*.
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
-- **Empty plate:** nothing over the stage; the inspector says *Nothing on the plate* and
-  *Drop a model into the window* under a 30 point cube-focus glyph, with Open a model as an
-  inline button.
+- **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
+  models card says *Nothing on the plate* and *Drop a model into the window* under a 30
+  point cube-focus glyph, with Open a model as an inline button. Slice's reason is its tooltip.
 
 ## Preview
 

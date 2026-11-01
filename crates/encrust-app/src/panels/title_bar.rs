@@ -20,8 +20,11 @@ const PAD: f32 = 10.0;
 const ENDS_GAP: f32 = 12.0;
 /// A bar narrower than this shows the right end's controls as their glyphs alone.
 const COMPACT_BAR_W: f32 = 720.0;
-/// Find's box: as wide as `ui-screens.md` sets it, a 30 square when compact.
-const FIND_W: f32 = 200.0;
+/// Find's box: where its word starts, the room between it and the keys and after them,
+/// points; a 30 square when compact.
+const FIND_TEXT_X: f32 = 28.0;
+const FIND_KEYS_GAP: f32 = 12.0;
+const FIND_KEYS_PAD: f32 = 8.0;
 const FIND_H: f32 = 30.0;
 const FIND_COMPACT_W: f32 = 30.0;
 
@@ -95,7 +98,16 @@ fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
 fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
     let colors = theme::colors();
     let tint = colors.text_low;
-    let width = if compact { FIND_COMPACT_W } else { FIND_W };
+    let keys = shortcuts::text(Action::Find);
+    let width = match compact {
+        true => FIND_COMPACT_W,
+        false => {
+            let painter = ui.painter();
+            let word = painter.layout_no_wrap(tr!("find-button"), theme::label(), tint);
+            let keys_w = crate::ui::keycap_width(painter, &keys);
+            FIND_TEXT_X + word.size().x + FIND_KEYS_GAP + keys_w + FIND_KEYS_PAD
+        }
+    };
     let (rect, response) = ui.allocate_exact_size(vec2(width, FIND_H), Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("find-button"))
@@ -123,14 +135,18 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
     );
     if !compact {
         painter.text(
-            pos2(rect.left() + 28.0, rect.center().y),
+            pos2(rect.left() + FIND_TEXT_X, rect.center().y),
             Align2::LEFT_CENTER,
             tr!("find-button"),
             theme::label(),
             tint,
         );
-        let keys = shortcuts::text(Action::Find);
-        crate::ui::keycap(painter, &keys, rect.right() - 8.0, rect.center().y);
+        crate::ui::keycap(
+            painter,
+            &keys,
+            rect.right() - FIND_KEYS_PAD,
+            rect.center().y,
+        );
     }
     focus_ring(ui, &response, theme::R_SURFACE);
     if response.on_hover_text(tr!("find-tooltip")).clicked() {

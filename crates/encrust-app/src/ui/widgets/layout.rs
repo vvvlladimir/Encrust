@@ -182,6 +182,30 @@ pub fn mode_group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// Room inside a mode group around its toggles.
 const MODE_GROUP_PAD: f32 = 2.0;
 
+/// A [`mode_group`] standing as a column, as narrow as its toggles, placed by its parent's
+/// layout: the toggles `add` puts in stacked, `MODE_COLUMN_GAP` apart.
+pub fn mode_column<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let colors = theme::colors();
+    Frame::new()
+        .fill(colors.sunken)
+        .stroke(egui::Stroke::new(1.0, colors.hairline))
+        .corner_radius(theme::R_CONTROL)
+        .inner_margin(MODE_COLUMN_PAD)
+        .show(ui, |ui| {
+            ui.set_width(theme::ICON_SIZE);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = MODE_COLUMN_GAP;
+                add(ui)
+            })
+            .inner
+        })
+        .inner
+}
+
+/// Room inside a mode column around its toggles, and between them.
+const MODE_COLUMN_PAD: f32 = 4.0;
+const MODE_COLUMN_GAP: f32 = 4.0;
+
 /// What a card says when it has nothing to work on: a large glyph over what is missing and
 /// how to put it there, centred.
 pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str, how: &str) {
@@ -329,6 +353,23 @@ pub fn heading(ui: &mut Ui, title: &str, hint_text: Option<&str>) {
         if let Some(hint_text) = hint_text {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 hint(ui, hint_text);
+            });
+        }
+    });
+}
+
+/// The title of a card that states figures rather than a tool, in `text_high`, with
+/// `aside` quieter at its right: the plate card's name and resin.
+pub fn card_title(ui: &mut Ui, title: &str, aside: Option<&str>) {
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(title)
+                .font(theme::section())
+                .color(theme::colors().text_high),
+        );
+        if let Some(aside) = aside {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                hint(ui, aside);
             });
         }
     });

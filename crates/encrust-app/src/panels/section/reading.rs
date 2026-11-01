@@ -129,7 +129,7 @@ impl Reading {
             rect.center_bottom(),
             Align2::CENTER_BOTTOM,
             mm(self.height_mm),
-            theme::figures(10.5),
+            theme::strip_height(),
             colors.text_mid,
         );
         response.on_hover_text(tr!(
@@ -217,12 +217,12 @@ fn paint_box(ui: &egui::Ui, rect: Rect, lit: bool) {
 }
 
 fn figure_font() -> egui::FontId {
-    theme::figures(14.0)
+    theme::strip_layer()
 }
 
 /// Room either side of the layer in its box, and the least the box is wide, points.
-const LAYER_BOX_PAD: f32 = 6.0;
-const LAYER_BOX_MIN_W: f32 = 32.0;
+const LAYER_BOX_PAD: f32 = 8.0;
+const LAYER_BOX_MIN_W: f32 = 40.0;
 
 /// A height in the strip's narrow column: two decimals, one from a hundred millimetres up.
 pub(super) fn mm(height_mm: Scalar) -> String {

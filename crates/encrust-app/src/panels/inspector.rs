@@ -23,13 +23,9 @@ pub(super) use position::auto_orient;
 
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 
-use crate::files::{self, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::ui::{
-    body_and_foot, card_foot, empty_state, hairline, help_mark, icon, inline_button, mode_group,
-    theme,
-};
+use crate::ui::{body_and_foot, card_foot, hairline, help_mark, mode_group, theme};
 use crate::workspace::Tool;
 
 /// The card beside the rail: the open tool, no taller than `max_h` points; its sections
@@ -37,8 +33,8 @@ use crate::workspace::Tool;
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     let tool = window.tool.card();
     header(ui, window, tool);
+    // With nothing on the plate the models card offers the way to put something there.
     if window.doc.scene.is_empty() && tool != Tool::PrintSettings {
-        empty_plate(ui, window);
         return;
     }
     if tool == Tool::Supports {
@@ -59,30 +55,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
             }
         },
     );
-}
-
-/// Every tool with no model to work on: what is missing, and the way to put one there.
-fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
-    hairline(ui);
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            empty_state(
-                ui,
-                icon::EMPTY_PLATE,
-                &tr!("stage-empty"),
-                &tr!("stage-empty-how"),
-            );
-            let open = ui.vertical_centered(|ui| {
-                inline_button(ui, icon::OPEN, &tr!("stage-open"), false, true).clicked()
-            });
-            if open.inner
-                && let Some(file) = files::pick(Wanted::ModelOrProject)
-            {
-                crate::app::open_by_what_it_is(window, file);
-            }
-            ui.add_space(theme::ITEM_GAP);
-        });
 }
 
 fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {

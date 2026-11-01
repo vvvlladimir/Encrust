@@ -19,7 +19,7 @@ mod issues;
 
 use issues::{Filter, filter, listing, neighbour};
 
-/// What the stack will fail on: the verdict, a way to take the islands out, every issue a
+/// What the stack will fail on: a way to take the islands out, the verdict, every issue a
 /// click away from its layer, and what pulls hardest on the film.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let Some((risks, removed)) = window
@@ -30,11 +30,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         return;
     };
 
-    if risks.is_empty() {
-        section(ui, &tr!("check-issues"), None, verdict);
-    } else {
-        found(ui, window, &risks);
-    }
     let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
     if islands || removed > 0 {
         section(ui, &tr!("check-filter-islands"), None, |ui| {
@@ -42,6 +37,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 support_islands(window, &risks);
             }
         });
+    }
+    if risks.is_empty() {
+        section(ui, &tr!("check-issues"), None, verdict);
+    } else {
+        found(ui, window, &risks);
     }
     if risks.iter().any(|risk| Filter::Cups.admits(&risk.kind)) {
         section(ui, &tr!("check-filter-cups"), None, |ui| {
@@ -51,9 +51,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         });
     }
     pull(ui, window);
-    section(ui, &tr!("check-estimate"), None, |ui| {
-        readings(ui, &crate::panels::plate_estimate(ui.ctx(), window));
-    });
 }
 
 /// Every issue a click away from its layer, narrowed to one kind, and the heading's

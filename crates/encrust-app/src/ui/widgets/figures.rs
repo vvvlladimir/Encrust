@@ -75,7 +75,7 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     let value_top = inner.top() + name.size().y + 1.0;
     painter.galley(inner.left_top(), name, colors.text_low);
     let value = painter.layout_job(figure_job(figure.value));
-    let unit_left = inner.left() + value.size().x + UNIT_GAP;
+    let unit_left = inner.left() + value.size().x + VALUE_UNIT_GAP;
     let baseline = value_top + value.size().y;
     painter.galley(pos2(inner.left(), value_top), value, colors.text_high);
     if !figure.unit.is_empty() {
@@ -112,8 +112,9 @@ fn figure_job(figure: &str) -> egui::text::LayoutJob {
     job
 }
 
-/// Room between a figure and the unit beside it, points.
-const UNIT_GAP: f32 = 2.0;
+/// Room between a figure and a unit inside it (`17 m 26 s`), and the unit after it, points.
+const UNIT_GAP: f32 = 3.0;
+const VALUE_UNIT_GAP: f32 = 6.0;
 
 /// A row of the grid, the rule between cells, and the room inside a cell, points.
 const FIGURE_H: f32 = 46.0;
@@ -132,6 +133,7 @@ pub fn details_fold<R>(
     let id = ui.id().with(("details", label));
     let open = kept::get::<bool>(ui.ctx(), id.with("open")).unwrap_or(false);
     let how_open = motion::fold(ui.ctx(), id, open);
+
     let inner = (how_open > 0.0).then(|| unfold(ui, id, how_open, Grows::Up, add));
     let row = details_row(ui, label, summary, open, how_open);
     if row.clicked() {
@@ -166,9 +168,11 @@ pub(super) fn unfold<R>(
     let full_h = ui
         .data(|data| data.get_temp::<f32>(height_id))
         .unwrap_or(0.0);
+    // Whole points: a card standing on its foot is placed from its height, and a fraction
+    // there sets the whole card shivering by a pixel as the fold opens.
     let shown = Rect::from_min_size(
         ui.cursor().min,
-        vec2(ui.available_width(), full_h * how_open),
+        vec2(ui.available_width(), (full_h * how_open).round()),
     );
     let slide = match grows {
         Grows::Up => (1.0 - how_open) * (full_h + UNFOLD_SLIDE),
@@ -185,7 +189,7 @@ pub(super) fn unfold<R>(
     let measured = child.min_rect().height();
     if (measured - full_h).abs() > 0.5 {
         ui.data_mut(|data| data.insert_temp(height_id, measured));
-        ui.ctx().request_repaint();
+        ui.ctx().request_discard("a fold measured what it holds");
     }
     ui.advance_cursor_after_rect(shown);
     inner
@@ -207,7 +211,9 @@ fn details_row(
         ui.allocate_exact_size(vec2(ui.available_width(), DETAILS_ROW_H), Sense::click());
     response.widget_info(|| WidgetInfo::selected(WidgetType::CollapsingHeader, true, open, label));
     let colors = theme::colors();
-    let fill = super::hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.raised);
+    // Open, the row stays washed, as the end of what it opened.
+    let rest = egui::Color32::TRANSPARENT.lerp_to_gamma(colors.raised, how_open);
+    let fill = super::hover_mix(ui, &response, rest, colors.raised);
     let ink = if response.hovered() {
         colors.text_mid
     } else {
@@ -245,24 +251,32 @@ const DETAILS_ROW_H: f32 = 26.0;
 const DETAILS_PAD: f32 = 4.0;
 
 /// Figures split two ways, as Details splits the plate's into the models' and the
-/// supports': a row of `heads` over the columns, then each row's name and its two figures.
+/// supports': a row of `heads` over the columns, then each row's name and its two figures,
+/// a hairline under every row.
 pub fn split_readings(ui: &mut Ui, heads: [&str; 2], rows: &[(String, String, String)]) {
     let colors = theme::colors();
     let width = ui.available_width();
     let column_w = width * SPLIT_COLUMN_SHARE;
     let rights = |rect: Rect| [rect.right() - column_w - SPLIT_GAP, rect.right()];
+    let rule = |ui: &Ui, rect: Rect| {
+        let stroke = egui::Stroke::new(HAIRLINE, colors.hairline);
+        ui.painter()
+            .hline(rect.x_range(), rect.bottom() - 0.5, stroke);
+    };
     let (rect, _) = ui.allocate_exact_size(vec2(width, SPLIT_ROW_H), Sense::hover());
     for (head, right) in heads.iter().zip(rights(rect)) {
         ui.painter().text(
             pos2(right, rect.center().y),
             Align2::RIGHT_CENTER,
             head,
-            theme::small(),
-            colors.text_low,
+            theme::split_head(),
+            colors.text_mid,
         );
     }
+    rule(ui, rect);
     for (name, first, second) in rows {
         let (rect, response) = ui.allocate_exact_size(vec2(width, SPLIT_ROW_H), Sense::hover());
+        rule(ui, rect);
         let read = format!("{name}: {} {first}, {} {second}", heads[0], heads[1]);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &read));
         let painter = ui.painter();
@@ -284,7 +298,7 @@ pub fn split_readings(ui: &mut Ui, heads: [&str; 2], rows: &[(String, String, St
                 pos2(right, rect.center().y),
                 Align2::RIGHT_CENTER,
                 figure,
-                theme::figures(12.0),
+                theme::figures(12.5),
                 colors.text_high,
             );
         }
@@ -293,7 +307,7 @@ pub fn split_readings(ui: &mut Ui, heads: [&str; 2], rows: &[(String, String, St
 
 /// A row of a split, the share of its width each figure's column takes, and the room
 /// between the two columns, points.
-const SPLIT_ROW_H: f32 = 24.0;
+const SPLIT_ROW_H: f32 = 26.0;
 const SPLIT_COLUMN_SHARE: f32 = 0.3;
 const SPLIT_GAP: f32 = 8.0;
 

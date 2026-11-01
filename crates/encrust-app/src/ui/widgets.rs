@@ -6,6 +6,7 @@ mod bin;
 mod button;
 mod chooser;
 mod confirm;
+mod dropdown;
 mod field;
 mod figures;
 #[cfg(test)]
@@ -22,26 +23,27 @@ mod toggle;
 pub use bin::{BinLook, bin_button, confirm_bin};
 pub use button::{
     RailButton, blocked_hover, compact_button, companion_button, companion_square, filter_chip,
-    focus_ring, hover_mix, icon_button, icon_toggle, inline_button, picker, preset_picker,
-    primary_button, primary_with_companion, quiet_button, quiet_square, rail_button,
-    secondary_button, small_icon_button, summary_button, swatch, toggle_button, zone_button,
+    focus_ring, hover_mix, icon_button, icon_toggle, inline_button, primary_button,
+    primary_with_companion, quiet_button, quiet_square, rail_button, secondary_button,
+    small_icon_button, summary_button, swatch, toggle_button, zone_button,
 };
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
 };
 pub use confirm::{Confirm, any_armed, confirm_button};
+pub use dropdown::{DropdownFace, DropdownRow, dropdown, dropdown_menu, dropdown_row};
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
     number_row, picker_row, row_name, stepped_row, text_box, text_row, unit_field,
 };
 pub use figures::{Figure, details_fold, figure_grid, split_readings};
-pub use hint_bar::hint_bar;
-pub use keycap::{key_row, keycap};
+pub use hint_bar::{hint_bar, hint_bar_names};
+pub use keycap::{key_row, keycap, keycap_width};
 pub use layout::{
-    body_and_foot, busy, card, card_foot, describe, described, describing, dialog, dialog_head,
-    dialog_head_searching, empty_state, field_note, hairline, heading, help_mark, hint, inset,
-    meta, mode_group, nested, notice, palette_dialog, progress_bar, progress_bar_of, readings,
-    stats, subheading, subheading_with_switch, vertical_hairline,
+    body_and_foot, busy, card, card_foot, card_title, describe, described, describing, dialog,
+    dialog_head, dialog_head_searching, empty_state, field_note, hairline, heading, help_mark,
+    hint, inset, meta, mode_column, mode_group, nested, notice, palette_dialog, progress_bar,
+    progress_bar_of, readings, stats, subheading, subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{found_row, issue_list, issue_row, list, list_row, tag, tag_w, two_lines};

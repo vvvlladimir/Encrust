@@ -7,7 +7,10 @@ use serde::de::DeserializeOwned;
 use crate::i18n::tr;
 use crate::settings::unique_id;
 use crate::status::Status;
-use crate::ui::{BinLook, bin_button, icon, preset_picker, quiet_square, theme};
+use crate::ui::{
+    BinLook, DropdownFace, DropdownRow, Lead, bin_button, dropdown, dropdown_menu, dropdown_row,
+    icon, quiet_square, theme,
+};
 
 /// The named settings of one tool, as the Supports card has them: a picker showing the
 /// preset the panel matches, or the one it came from and `· edited`; Save, over that one or
@@ -119,11 +122,18 @@ fn row<T>(
                 pressed.over = ui.add_enabled(named.edited, over).clicked();
                 pressed.as_new = ui.button(tr!("shape-save-as-new")).clicked();
             });
-            let response = preset_picker(ui, icon::PRESET, named.shown, named.edited);
-            egui::Popup::menu(&response).show(|ui| {
+            let face = DropdownFace {
+                lead: Some(Lead::Glyph(icon::PRESET)),
+                label: named.shown,
+                edited: named.edited,
+                count: None,
+            };
+            let response = dropdown(ui, &face, ui.available_width());
+            dropdown_menu(&response, |ui| {
                 for entry in catalogue.presets(kind) {
                     let on = named.source.is_some_and(|(id, _)| *id == entry.id);
-                    if ui.selectable_label(on, &entry.profile.name).clicked() {
+                    let row = DropdownRow::named(&entry.profile.name, on);
+                    if dropdown_row(ui, &row).clicked() {
                         pressed.picked = read(entry).map(|settings| (entry.id.clone(), settings));
                         ui.close();
                     }

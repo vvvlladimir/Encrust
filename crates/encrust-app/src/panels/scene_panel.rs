@@ -2,14 +2,15 @@ use egui::{Align2, Rect, Sense, vec2};
 
 use core_geometry::{Vec2, Vec3};
 
+use crate::files::{self, Wanted};
 use crate::i18n::tr;
 use crate::panels::{Window, plate_strip};
 use crate::project;
 use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::{
-    body_and_foot, count_row, focus_ring, hairline, heading, hint, icon, number_row,
-    secondary_button, small_icon_button, tag, theme, tone,
+    body_and_foot, count_row, empty_state, focus_ring, hairline, heading, hint, icon,
+    inline_button, number_row, secondary_button, small_icon_button, tag, theme, tone,
 };
 
 /// The heading over the list, as tall as a section's.
@@ -191,6 +192,29 @@ fn beside(scene: &Scene, id: ObjectId, gap_mm: f32) -> Vec3 {
     Vec3::new(width + gap_mm, 0.0, 0.0)
 }
 
+/// No model on this plate: what is missing, and the way to put one there.
+fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
+    egui::Frame::new()
+        .inner_margin(theme::PANEL_MARGIN)
+        .show(ui, |ui| {
+            empty_state(
+                ui,
+                icon::EMPTY_PLATE,
+                &tr!("stage-empty"),
+                &tr!("stage-empty-how"),
+            );
+            let open = ui.vertical_centered(|ui| {
+                inline_button(ui, icon::OPEN, &tr!("stage-open"), false, true).clicked()
+            });
+            if open.inner
+                && let Some(file) = files::pick(Wanted::ModelOrProject)
+            {
+                crate::app::open_by_what_it_is(window, file);
+            }
+            ui.add_space(theme::ITEM_GAP);
+        });
+}
+
 fn rows(ui: &mut egui::Ui, window: &mut Window) {
     // What a click means, as every list on the desktop reads it: plain picks one, cmd
     // adds or drops one, shift takes everything between the last pick and this.
@@ -202,9 +226,7 @@ fn rows(ui: &mut egui::Ui, window: &mut Window) {
 
     let scene = &mut window.doc.scene;
     if scene.here().next().is_none() {
-        egui::Frame::new()
-            .inner_margin(egui::Margin::symmetric(12, 8))
-            .show(ui, |ui| hint(ui, &tr!("models-nothing-here")));
+        empty_plate(ui, window);
         return;
     }
     for object in scene.here() {

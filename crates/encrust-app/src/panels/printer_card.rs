@@ -6,12 +6,15 @@ mod history;
 pub mod ring;
 pub mod sheet;
 
-use egui::{Align2, Color32, RichText, Sense, StrokeKind, pos2, vec2};
+use egui::{Align2, Color32, Rect, RichText, Sense, StrokeKind, pos2, vec2};
 use printer_link::State;
 
 use crate::i18n::tr;
 use crate::network::{Network, Reach, Reading, Trouble};
-use crate::ui::{focus_ring, hint, icon, icon_button, progress_bar_of, theme, tone};
+use crate::ui::{
+    DropdownRow, Lead, chooser_foot, dropdown_menu, dropdown_row, focus_ring, hairline, hint, icon,
+    icon_button, progress_bar_of, theme, tone,
+};
 
 /// What the card says about one printer, worked out before anything is drawn.
 #[derive(Debug, Clone, PartialEq)]
@@ -70,29 +73,41 @@ pub fn destination(
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if let Some(target) = &target
-                && icon_button(ui, icon::OPEN_SHEET, &tr!("card-open-printer")).clicked()
-            {
-                chosen = Some(Chosen::Open(target.key()));
-            }
             let face = machine_face(network, chosen_machine);
-            let row = destination_row(ui, chosen_machine.label(), &face, &notes);
-            egui::Popup::menu(&row).show(|ui| {
+            let opens = target.is_some();
+            let row = destination_row(ui, chosen_machine.label(), &face, &notes, opens);
+            // The sheet's square stands inside the row, over it, so it takes its own press.
+            let square = Rect::from_center_size(
+                pos2(row.rect.right() - OPEN_INSET, row.rect.center().y),
+                vec2(theme::ICON_SIZE, theme::ICON_SIZE),
+            );
+            if let Some(target) = &target {
+                let open = ui.scope_builder(egui::UiBuilder::new().max_rect(square), |ui| {
+                    icon_button(ui, icon::OPEN_SHEET, &tr!("card-open-printer")).clicked()
+                });
+                if open.inner {
+                    chosen = Some(Chosen::Open(target.key()));
+                }
+            }
+            dropdown_menu(&row, |ui| {
                 for machine in network.listed() {
                     let face = machine_face(network, machine);
-                    let line = format!("{}  ·  {}", machine.label(), face.word);
-                    let on = machine.address == chosen_machine.address;
-                    if ui.selectable_label(on, line).clicked() {
+                    let row = DropdownRow {
+                        lead: Some(Lead::Dot(colour_of(face.light))),
+                        name: machine.label(),
+                        aside: Some(&face.word),
+                        chosen: machine.address == chosen_machine.address,
+                    };
+                    if dropdown_row(ui, &row).clicked() {
                         chosen = Some(Chosen::Pick(machine.address.clone()));
                     }
                 }
-                ui.separator();
-                let scan = egui::Button::new(format!(
-                    "{}  {}",
-                    icon::RESCAN,
-                    tr!("connection-scan-again")
-                ));
-                if ui.add_enabled(!network.is_scanning(), scan).clicked() {
+                hairline(ui);
+                let scanning = network.is_scanning();
+                let scan = ui.add_enabled_ui(!scanning, |ui| {
+                    chooser_foot(ui, icon::RESCAN, &tr!("connection-scan-again")).clicked()
+                });
+                if scan.inner {
                     chosen = Some(Chosen::Scan);
                 }
             });
@@ -156,9 +171,19 @@ fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -
     }
 }
 
-/// The row itself, on `raised`: the printer glyph, its name, what it is doing in its colour
-/// and the caret of the list it opens. Hovering the status word shows `notes`.
-fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, notes: &[Note]) -> egui::Response {
+/// Points from the row's right edge to the middle of the sheet's square inside it.
+const OPEN_INSET: f32 = 20.0;
+
+/// The row itself, on `raised`: the printer glyph, its name, what it is doing in its colour,
+/// the caret of the list it opens, and room at its right for the sheet's square when it
+/// `opens` one. Hovering the status word shows `notes`.
+fn destination_row(
+    ui: &mut egui::Ui,
+    name: &str,
+    face: &Face,
+    notes: &[Note],
+    opens: bool,
+) -> egui::Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(
         vec2(ui.available_width(), theme::PRINTER_ROW_H),
@@ -184,14 +209,18 @@ fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, notes: &[Note]) -
         theme::icon(14.0),
         colors.text_low,
     );
+    let right = match opens {
+        true => rect.right() - 2.0 * OPEN_INSET,
+        false => rect.right(),
+    };
     painter.text(
-        pos2(rect.right() - 16.0, rect.center().y),
+        pos2(right - 16.0, rect.center().y),
         Align2::CENTER_CENTER,
         icon::CARET_DOWN,
         theme::icon(14.0),
         colors.text_low,
     );
-    let status = paint_status(painter, face, rect, rect.right() - 30.0);
+    let status = paint_status(painter, face, rect, right - 30.0);
     let ink = colors.text_high;
     let room = (status.left() - 8.0 - rect.left() - 30.0).max(0.0);
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), ink);

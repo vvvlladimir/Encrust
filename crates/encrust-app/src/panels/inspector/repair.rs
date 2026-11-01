@@ -6,8 +6,9 @@ use crate::panels::Window;
 use crate::repair::{Finding, Found, RepairMode, RepairState};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    blocked_hover, busy, describe, icon, icon_toggle, issue_list, issue_row, list, list_row,
-    number_row, picker, primary_button, readings, section, section_with_action, theme, tone,
+    DropdownFace, DropdownRow, blocked_hover, busy, describe, dropdown, dropdown_menu,
+    dropdown_row, icon, icon_toggle, issue_list, issue_row, number_row, primary_button, readings,
+    section, section_with_action, theme, tone,
 };
 
 /// Every repair the Method picker offers, in the order it lists them.
@@ -201,21 +202,19 @@ fn crossings(found: &Found, objects: &[&SceneObject]) -> Crossings {
 fn method(ui: &mut egui::Ui, state: &mut RepairState) {
     section(ui, &tr!("repair-method"), None, |ui| {
         describe(ui, &note(state.method));
-        let response = picker(ui, icon::REPAIR, &name(state.method));
-        egui::Popup::menu(&response)
-            .width(response.rect.width())
-            .show(|ui| {
-                list(ui, |ui| {
-                    for method in METHODS {
-                        let chosen = method == state.method;
-                        let row = list_row(ui, &name(method), None, chosen, None, None, None, None);
-                        if row.picked {
-                            state.method = method;
-                            ui.close();
-                        }
-                    }
-                });
-            });
+        let shown = name(state.method);
+        let face = DropdownFace::plain(icon::REPAIR, &shown);
+        let response = dropdown(ui, &face, ui.available_width());
+        dropdown_menu(&response, |ui| {
+            for method in METHODS {
+                let named = name(method);
+                let row = DropdownRow::named(&named, method == state.method);
+                if dropdown_row(ui, &row).clicked() {
+                    state.method = method;
+                    ui.close();
+                }
+            }
+        });
     });
 }
 

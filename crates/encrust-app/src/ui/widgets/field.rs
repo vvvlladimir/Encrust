@@ -98,6 +98,34 @@ fn name_for_reader(ui: &Ui, id: egui::Id, name: &str) {
 /// Points kept clear either side of the unit inside a box.
 const UNIT_PAD: f32 = 8.0;
 
+/// The units whose slot every box shares, so the figures of a column stand on one line
+/// whichever unit follows them; a longer unit widens its own box's slot.
+const SLOT_UNITS: [&str; 7] = [
+    "unit-mm",
+    "unit-mm2",
+    "unit-mm3",
+    "unit-um",
+    "unit-deg",
+    "unit-times",
+    "unit-px",
+];
+
+/// How wide the unit's slot is in a box: the widest of `SLOT_UNITS`, or `unit` if wider.
+fn unit_slot_w(ui: &Ui, unit: &egui::Galley) -> f32 {
+    let low = theme::colors().text_low;
+    let widest = SLOT_UNITS
+        .iter()
+        .map(|key| {
+            let text = crate::i18n::text(key, None);
+            ui.painter()
+                .layout_no_wrap(text, theme::unit(), low)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max);
+    widest.max(unit.size().x)
+}
+
 /// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
 /// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
 /// The decimals the standard gives a quantity in `unit` (`docs/design/ui-standards.md`,
@@ -135,7 +163,9 @@ pub(super) fn boxed_field<N: Numeric>(
         ui.painter()
             .layout_no_wrap(unit.to_owned(), theme::unit(), colors.text_low)
     });
-    let unit_w = unit.as_ref().map_or(0.0, |unit| unit.size().x + UNIT_PAD);
+    let unit_w = unit
+        .as_ref()
+        .map_or(0.0, |unit| unit_slot_w(ui, unit) + UNIT_PAD);
     let value_rect = Rect::from_min_max(rect.min, pos2(rect.right() - unit_w, rect.bottom()));
 
     let layout = Layout::top_down(Align::Max).with_main_align(Align::Center);
@@ -343,11 +373,12 @@ pub fn count_row(
     })
 }
 
-/// A `picker` under a `field_label` of its own, for a choice too long for a `FIELD_W` box.
+/// A `dropdown` under a `field_label` of its own, for a choice too long for a `FIELD_W` box.
 pub fn picker_row(ui: &mut Ui, label: &str, glyph: &str, chosen: &str) -> egui::Response {
     field_label(ui, label, theme::colors().text_mid, "");
     ui.add_space(4.0);
-    super::picker(ui, glyph, chosen)
+    let face = super::DropdownFace::plain(glyph, chosen);
+    super::dropdown(ui, &face, ui.available_width())
 }
 
 pub(super) fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {

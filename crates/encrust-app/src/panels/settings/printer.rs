@@ -11,8 +11,8 @@ use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
 use crate::ui::{
-    count_row, describe, field_note, hint, icon, number_row, picker, picker_row, secondary_button,
-    switch, text_row,
+    DropdownFace, DropdownRow, count_row, describe, dropdown, dropdown_menu, dropdown_row,
+    field_note, hint, icon, number_row, picker_row, secondary_button, switch, text_row,
 };
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
@@ -307,12 +307,10 @@ fn mirror(ui: &mut egui::Ui, mirror: &mut Mirror) {
         icon::FLIP,
         &mirror_label(*mirror),
     );
-    egui::Popup::menu(&response).show(|ui| {
+    dropdown_menu(&response, |ui| {
         for choice in Mirror::ALL {
-            if ui
-                .selectable_label(choice == *mirror, mirror_label(choice))
-                .clicked()
-            {
+            let name = mirror_label(choice);
+            if dropdown_row(ui, &DropdownRow::named(&name, choice == *mirror)).clicked() {
                 *mirror = choice;
                 ui.close();
             }
@@ -334,13 +332,12 @@ fn mirror_label(mirror: Mirror) -> String {
 fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     let chosen = SlicedFormat::from(profile.output);
     let offered: Vec<SlicedFormat> = SlicedFormat::choices_for(profile).collect();
-    let response = picker(ui, icon::SLICE, label_of(chosen));
-    egui::Popup::menu(&response).show(|ui| {
+    let face = DropdownFace::plain(icon::SLICE, label_of(chosen));
+    let response = dropdown(ui, &face, ui.available_width());
+    dropdown_menu(&response, |ui| {
         for choice in offered {
-            if ui
-                .selectable_label(choice == chosen, label_of(choice))
-                .clicked()
-            {
+            let row = DropdownRow::named(label_of(choice), choice == chosen);
+            if dropdown_row(ui, &row).clicked() {
                 profile.output = choice.into();
                 ui.close();
             }

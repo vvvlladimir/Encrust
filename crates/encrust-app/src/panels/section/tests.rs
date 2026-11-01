@@ -18,6 +18,7 @@ fn typing_a_layer_moves_nothing_under_the_readout() {
     };
     let below = |typing: bool| {
         let ctx = egui::Context::default();
+        crate::ui::theme::apply(&ctx);
         if typing {
             ctx.data_mut(|data| data.insert_temp(egui::Id::new("layer-readout"), "7".to_owned()));
         }
