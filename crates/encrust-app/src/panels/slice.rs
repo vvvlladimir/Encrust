@@ -67,7 +67,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let tooltip = tr!("slice-tooltip");
     let file = match slot {
         Some(_) => companion_button(ui, icon::SLICE, &label, free),
-        None => primary_button(ui, icon::SLICE, &label, free),
+        None => primary_button(ui, &label, free),
     };
     if file
         .on_hover_text(blocker.as_deref().unwrap_or(&tooltip))
@@ -107,16 +107,14 @@ fn send_button(
         progress_bar(ui, fraction);
         ui.add_space(theme::BUTTON_GAP);
     }
-    let (glyph, label, tooltip, enabled, press) = match slot.step {
+    let (label, tooltip, enabled, press) = match slot.step {
         SendStep::Start => (
-            icon::PLAY,
             tr!("slice-start-print"),
             tr!("slice-start-tooltip", name = slot.name.clone()),
             true,
             Press::StartPrint,
         ),
         SendStep::Offer | SendStep::Running(_) => (
-            icon::SEND,
             tr!("slice-send", name = slot.name.clone()),
             tr!("slice-send-tooltip"),
             free && slot.step == SendStep::Offer,
@@ -127,7 +125,7 @@ fn send_button(
         SendStep::Offer => blocker.unwrap_or(&tooltip),
         _ => &tooltip,
     };
-    primary_button(ui, glyph, &label, enabled)
+    primary_button(ui, &label, enabled)
         .on_hover_text(hover)
         .clicked()
         .then_some(press)

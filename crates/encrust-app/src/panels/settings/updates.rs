@@ -75,13 +75,13 @@ fn actions(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
         Stage::Installing { .. } => busy(ui, &tr!("updates-installing")),
         Stage::Installed(_) => {
             hint(ui, &tr!("updates-installed"));
-            if primary_button(ui, icon::UPDATE, &tr!("updates-restart-now"), true).clicked() {
+            if primary_button(ui, &tr!("updates-restart-now"), true).clicked() {
                 updates.restart();
             }
         }
         _ if from_store() => {
             hint(ui, &tr!("updates-store-has-it"));
-            if primary_button(ui, icon::UPDATE, &tr!("updates-in-store"), true).clicked() {
+            if primary_button(ui, &tr!("updates-in-store"), true).clicked() {
                 open_store();
             }
         }
@@ -93,9 +93,7 @@ fn actions(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
             if let Some(reason) = &blocked {
                 hint(ui, reason);
             }
-            if primary_button(ui, icon::UPDATE, &tr!("updates-install"), blocked.is_none())
-                .clicked()
-            {
+            if primary_button(ui, &tr!("updates-install"), blocked.is_none()).clicked() {
                 updates.install();
             }
         }

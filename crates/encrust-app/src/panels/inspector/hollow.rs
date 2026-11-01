@@ -322,7 +322,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
 
 fn start(ui: &mut egui::Ui, window: &mut Window) {
     let blocked = window.tools.hollow.blocker(&window.doc.scene);
-    let button = primary_button(ui, icon::HOLLOW, &tr!("hollow-hollow"), blocked.is_none());
+    let button = primary_button(ui, &tr!("hollow-hollow"), blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
         let started = window.tools.hollow.start(&window.doc.scene);
         window

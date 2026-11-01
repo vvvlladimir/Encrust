@@ -185,8 +185,7 @@ impl<'a> Line<'a> {
         let ink = match (self.heading, hidden, self.selected) {
             (true, ..) => colors.text_mid,
             (false, true, _) => colors.text_low,
-            (false, false, true) => colors.accent_soft,
-            (false, false, false) => colors.text_high,
+            (false, false, _) => colors.text_high,
         };
         let icons_left = rect.right() - ICONS_W;
         let mut right = icons_left - 40.0;

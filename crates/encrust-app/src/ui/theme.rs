@@ -352,7 +352,8 @@ pub const WINDOW_MIN_W: f32 = 900.0;
 pub const WINDOW_MIN_H: f32 = 560.0;
 pub const LAYER_STRIP_W: f32 = 56.0;
 /// A rail button holds a glyph over its name, or stands a square of the glyph alone.
-pub const RAIL_BUTTON_H: f32 = 46.0;
+pub const RAIL_BUTTON_H: f32 = 50.0;
+// TODO(step-4): 36 once the row stands over the stage rather than in the inspector's width.
 pub const RAIL_ICON_H: f32 = 34.0;
 /// Between a card of buttons, the rail or the layer strip, and its buttons.
 pub const TOOLBAR_PAD: f32 = 4.0;
@@ -360,8 +361,10 @@ pub const TOOLBAR_PAD: f32 = 4.0;
 pub const CHIP_H: f32 = 32.0;
 pub const ICON_SIZE: f32 = 28.0;
 pub const PRIMARY_H: f32 = 40.0;
-/// The ring a control wears while it holds the keyboard's focus, points.
-pub const FOCUS_W: f32 = 1.5;
+/// The ring a control wears while it holds the keyboard's focus, and the halo of the
+/// accent's wash around it, points.
+pub const FOCUS_W: f32 = 1.0;
+pub const FOCUS_HALO_W: f32 = 3.0;
 pub const BUTTON_H: f32 = 32.0;
 /// Height of a running job's progress bar.
 pub const BAR_H: f32 = 6.0;
@@ -445,6 +448,25 @@ pub fn lede() -> FontId {
     FontId::proportional(14.0)
 }
 
+/// A figure of the plate card's grid.
+pub fn figure() -> FontId {
+    FontId::new(15.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// What a tool does with the pointer, and the key that does it, in the hint bar.
+pub fn hint() -> FontId {
+    FontId::proportional(12.0)
+}
+
+pub fn hint_key() -> FontId {
+    FontId::new(12.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The words of the primary button.
+pub fn primary() -> FontId {
+    FontId::new(13.0, FontFamily::Name(MEDIUM.into()))
+}
+
 /// The open tool's name, at the head of the inspector.
 pub fn tool_title() -> FontId {
     FontId::new(14.0, FontFamily::Name(SEMIBOLD.into()))
@@ -456,8 +478,14 @@ pub fn axis_letter() -> FontId {
 }
 
 /// A tool's name under its glyph on the rail.
+// TODO(step-4): 10.5 once the row stands over the stage rather than in the inspector's width.
 pub fn rail_name() -> FontId {
     FontId::proportional(10.0)
+}
+
+/// The digit that picks a tool, in the corner of its rail button.
+pub fn rail_key() -> FontId {
+    FontId::proportional(9.0)
 }
 
 /// Every millimetre, second, layer index, triangle count and byte size: the text face,

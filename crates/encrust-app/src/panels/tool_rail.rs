@@ -2,7 +2,7 @@ use egui::Color32;
 
 use crate::panels::Window;
 use crate::shortcuts::{self, Action};
-use crate::ui::{rail_button, theme, vertical_hairline};
+use crate::ui::{RailButton, rail_button, theme, vertical_hairline};
 use crate::workspace::Tool;
 
 /// Points a tool's name keeps clear of either side of its button.
@@ -101,12 +101,19 @@ impl Fit {
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, width: f32) {
     let fit = Fit::into(width, &name_widths(ui.ctx()));
     ui.set_width(width);
-    egui::Frame::new()
+    // The row's rect is last frame's: the digits show while the pointer is anywhere on it.
+    let row_id = ui.id().with("tool-row");
+    let last_row = ui.data(|data| data.get_temp::<egui::Rect>(row_id));
+    let keys = last_row.is_some_and(|row| ui.rect_contains_pointer(row));
+    let row = egui::Frame::new()
         .inner_margin(theme::TOOLBAR_PAD)
-        .show(ui, |ui| tools(ui, window, &fit, fit.margin(width)));
+        .show(ui, |ui| tools(ui, window, &fit, fit.margin(width), keys))
+        .response
+        .rect;
+    ui.data_mut(|data| data.insert_temp(row_id, row));
 }
 
-fn tools(ui: &mut egui::Ui, window: &mut Window, fit: &Fit, margin: f32) {
+fn tools(ui: &mut egui::Ui, window: &mut Window, fit: &Fit, margin: f32, keys: bool) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.add_space(margin);
@@ -122,18 +129,25 @@ fn tools(ui: &mut egui::Ui, window: &mut Window, fit: &Fit, margin: f32) {
                     ui.add_space(theme::ICON_GAP);
                 }
                 let size = egui::vec2(w, fit.button_h);
-                ui.allocate_ui(size, |ui| button(ui, window, *tool, fit.labelled));
+                ui.allocate_ui(size, |ui| button(ui, window, *tool, fit.labelled, keys));
             }
         }
     });
 }
 
-fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
-    let active = window.tool.card() == tool;
-    let tooltip = shortcuts::tooltip(Action::Pick(tool));
-    let badge = badge(window, tool);
-    let glyph = tool.glyph();
-    if rail_button(ui, glyph, &tool.label(), labelled, &tooltip, active, badge).clicked() {
+fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool, keys: bool) {
+    let (name, tooltip) = (tool.label(), shortcuts::tooltip(Action::Pick(tool)));
+    let key = keys.then(|| shortcuts::text(Action::Pick(tool)));
+    let button = RailButton {
+        glyph: tool.glyph(),
+        name: &name,
+        tooltip: &tooltip,
+        labelled,
+        active: window.tool.card() == tool,
+        badge: badge(window, tool),
+        key: key.as_deref(),
+    };
+    if rail_button(ui, &button).clicked() {
         shortcuts::pick(window, tool);
     }
 }

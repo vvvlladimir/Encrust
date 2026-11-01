@@ -280,7 +280,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let picked = window.doc.scene.selected();
     let what = tr!("cut-replaces");
-    if primary_button(ui, icon::SECTION, &tr!("cut-cut"), picked.is_some())
+    if primary_button(ui, &tr!("cut-cut"), picked.is_some())
         .on_hover_text(&what)
         .clicked()
         && let Some(id) = picked
