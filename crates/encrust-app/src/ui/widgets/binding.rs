@@ -3,8 +3,8 @@
 
 use egui::{Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 
-use super::button::{focus_ring, hover_mix};
-use super::keycap::{keycap, keycap_width};
+use super::button::{SquareLook, focus_ring, hover_mix, paint_square};
+use super::keycap::{chord_caps, chord_width};
 use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
@@ -13,7 +13,6 @@ const ROW_H: f32 = 38.0;
 const CHIP_H: f32 = theme::SMALL_ICON_SIZE;
 /// Room around a key's caps inside its button, between two caps, and between two buttons.
 const CHIP_PAD: f32 = 4.0;
-const CAP_GAP: f32 = 3.0;
 const CHIP_GAP: f32 = 6.0;
 
 /// How a row of the key sheet stands.
@@ -75,13 +74,35 @@ pub enum BindingPress {
 /// new key while there is room, and the keys; a key recording is washed in the accent and
 /// shows what is pressed, Done and the way to take the key off beside it.
 pub fn binding_row(ui: &mut Ui, row: &BindingRow<'_>) -> Option<BindingPress> {
-    let colors = theme::colors();
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
+    name_and_rule(ui, rect, row.name);
+    // The way back and the place for a new key keep their columns on every row, so the
+    // keys of every row end on one line.
+    let mut right = rect.right();
+    if row.fixed {
+        right -= (CHIP_H + CHIP_GAP) * 2.0 + CHIP_GAP;
+        for chord in row.chords.iter().rev() {
+            right = chord_caps(ui.painter(), chord, right - CHIP_PAD, rect.center().y)
+                - CHIP_PAD
+                - CHIP_GAP;
+        }
+        return None;
+    }
+    let name = Owner {
+        id: row.id,
+        name: row.name,
+    };
+    let pressed = reset_and_add(ui, rect, &mut right, row, name);
+    key_buttons(ui, rect, &mut right, row, name).or(pressed)
+}
+
+fn name_and_rule(ui: &Ui, rect: Rect, name: &str) {
+    let colors = theme::colors();
     let painter = ui.painter();
     painter.text(
         pos2(rect.left(), rect.center().y),
         egui::Align2::LEFT_CENTER,
-        row.name,
+        name,
         theme::label(),
         colors.text_high,
     );
@@ -90,54 +111,62 @@ pub fn binding_row(ui: &mut Ui, row: &BindingRow<'_>) -> Option<BindingPress> {
         rect.bottom() - 0.5,
         Stroke::new(1.0, colors.hairline),
     );
-    // The way back and the place for a new key keep their columns on every row, so the
-    // keys of every row end on one line.
-    let mut right = rect.right();
-    if row.fixed {
-        right -= (CHIP_H + CHIP_GAP) * 2.0 + CHIP_GAP;
-        for chord in row.chords.iter().rev() {
-            right = caps(ui, chord, right - CHIP_PAD, rect.center().y) - CHIP_PAD - CHIP_GAP;
-        }
-        return None;
-    }
-    let name = Owner {
-        id: row.id,
-        name: row.name,
-    };
+}
+
+/// The way back while the keys are changed, then the place for a new key, or the key
+/// recording into it.
+fn reset_and_add(
+    ui: &mut Ui,
+    rect: Rect,
+    right: &mut f32,
+    row: &BindingRow<'_>,
+    name: Owner<'_>,
+) -> Option<BindingPress> {
     let mut pressed = None;
-    let reset = (icon::RESET, tr!("binding-reset"));
-    let reset = (reset.0, reset.1.as_str());
+    let reset = tr!("binding-reset");
     if !row.changed {
-        right -= CHIP_H + CHIP_GAP;
-    } else if glyph_button(ui, rect, &mut right, reset, (name, Place::Reset)) {
+        *right -= CHIP_H + CHIP_GAP;
+    } else if glyph_button(ui, rect, right, (icon::RESET, &reset), (name, Place::Reset)) {
         pressed = Some(BindingPress::Reset);
     }
-    right -= CHIP_GAP;
-    let recording = row.recording.as_ref();
-    let adding = recording.filter(|recording| recording.index == row.chords.len());
-    let add = (icon::ADD, tr!("binding-add"));
+    *right -= CHIP_GAP;
+    let adding = row
+        .recording
+        .as_ref()
+        .filter(|recording| recording.index == row.chords.len());
+    let add = tr!("binding-add");
     if let Some(recording) = adding {
-        pressed = pressed.or(recording_key(
-            ui,
-            rect,
-            &mut right,
-            (recording, false),
-            name,
-        ));
+        pressed = pressed.or(recording_key(ui, rect, right, (recording, false), name));
     } else if !row.room {
-        right -= CHIP_H + CHIP_GAP;
-    } else if glyph_button(ui, rect, &mut right, (add.0, &add.1), (name, Place::Add)) {
+        *right -= CHIP_H + CHIP_GAP;
+    } else if glyph_button(ui, rect, right, (icon::ADD, &add), (name, Place::Add)) {
         pressed = Some(BindingPress::Add);
     }
+    pressed
+}
+
+/// Each key the action has, from the last, or the one recording in its place.
+fn key_buttons(
+    ui: &mut Ui,
+    rect: Rect,
+    right: &mut f32,
+    row: &BindingRow<'_>,
+    name: Owner<'_>,
+) -> Option<BindingPress> {
+    let mut pressed = None;
     for (index, chord) in row.chords.iter().enumerate().rev() {
-        match recording.filter(|recording| recording.index == index) {
+        match row
+            .recording
+            .as_ref()
+            .filter(|recording| recording.index == index)
+        {
             Some(recording) => {
                 let at = (recording, true);
-                pressed = pressed.or(recording_key(ui, rect, &mut right, at, name));
+                pressed = pressed.or(recording_key(ui, rect, right, at, name));
             }
             None => {
                 let place = (name, Place::Key(index));
-                if key_button(ui, rect, &mut right, chord, place).clicked() {
+                if key_button(ui, rect, right, chord, place).clicked() {
                     pressed = Some(BindingPress::Key(index));
                 }
             }
@@ -147,22 +176,6 @@ pub fn binding_row(ui: &mut Ui, row: &BindingRow<'_>) -> Option<BindingPress> {
 }
 
 /// The caps of one chord drawn leftwards from `right`; answers their left edge.
-fn caps(ui: &Ui, chord: &[&str], right: f32, center_y: f32) -> f32 {
-    let mut left = right;
-    for cap in chord.iter().rev() {
-        left = keycap(ui.painter(), cap, left, center_y) - CAP_GAP;
-    }
-    left + CAP_GAP
-}
-
-fn caps_width(ui: &Ui, chord: &[&str]) -> f32 {
-    let caps: f32 = chord
-        .iter()
-        .map(|cap| keycap_width(ui.painter(), cap) + CAP_GAP)
-        .sum();
-    caps - CAP_GAP
-}
-
 /// Where a control of the row stands, for its id: steady while the row scrolls.
 #[derive(Clone, Copy, Debug, Hash)]
 enum Place {
@@ -200,7 +213,7 @@ fn key_button(
 ) -> Response {
     let name = place.0;
     let colors = theme::colors();
-    let width = caps_width(ui, chord) + CHIP_PAD * 2.0;
+    let width = chord_width(ui.painter(), chord) + CHIP_PAD * 2.0;
     let (rect, response) = chip(ui, row, right, width, place);
     let keys = chord.join(" ");
     response.widget_info(|| {
@@ -215,7 +228,12 @@ fn key_button(
         Stroke::new(1.0, ring),
         StrokeKind::Inside,
     );
-    caps(ui, chord, rect.right() - CHIP_PAD, rect.center().y);
+    chord_caps(
+        ui.painter(),
+        chord,
+        rect.right() - CHIP_PAD,
+        rect.center().y,
+    );
     focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_text(tr!("binding-change"))
 }
@@ -262,7 +280,7 @@ fn listening(
         .layout_no_wrap(ask.clone(), theme::small(), colors.accent_soft);
     let width = match recording.caps.is_empty() {
         true => galley.size().x + CHIP_PAD * 4.0,
-        false => caps_width(ui, &recording.caps) + CHIP_PAD * 2.0,
+        false => chord_width(ui.painter(), &recording.caps) + CHIP_PAD * 2.0,
     };
     let (rect, response) = chip(ui, row, right, width, place);
     response.widget_info(|| {
@@ -279,8 +297,8 @@ fn listening(
         let at = rect.center() - galley.size() / 2.0;
         ui.painter().galley(at, galley, colors.accent_soft);
     } else {
-        caps(
-            ui,
+        chord_caps(
+            ui.painter(),
             &recording.caps,
             rect.right() - CHIP_PAD,
             rect.center().y,
@@ -322,19 +340,9 @@ fn glyph_button(
     (glyph, tooltip): (&str, &str),
     place: (Owner<'_>, Place),
 ) -> bool {
-    let colors = theme::colors();
-    let (rect, response) = chip(ui, row, right, CHIP_H, place);
+    let (_, response) = chip(ui, row, right, CHIP_H, place);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tooltip));
-    let fill = hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover);
-    let ink = hover_mix(ui, &response, colors.text_low, colors.text_high);
-    ui.painter().rect_filled(rect, theme::R_CONTROL, fill);
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(14.0),
-        ink,
-    );
+    paint_square(ui, &response, (SquareLook::Quiet, glyph), None, true);
     focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_text(tooltip).clicked()
 }

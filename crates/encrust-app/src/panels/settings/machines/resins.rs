@@ -12,7 +12,7 @@ use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_foot
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
 use crate::ui::{
-    BinLook, Confirm, confirm_bin, confirm_button, describe, filter_chip, icon, inline_button,
+    Confirm, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon, inline_button,
     quiet_button, theme, zone_button,
 };
 
@@ -193,7 +193,7 @@ fn add_choices(
                 let side = theme::BUTTON_H;
                 let (_, bin) = ui.allocate_exact_size(vec2(side, side), egui::Sense::click());
                 let bin = bin.on_hover_text(cost(catalogue, &deleting));
-                if confirm_bin(ui, bin, BinLook::Quiet, &tr!("resins-delete"), true) {
+                if confirm_bin(ui, bin, SquareLook::Quiet, &tr!("resins-delete"), true) {
                     *action = Some(Action::Delete(deleting));
                 }
             });

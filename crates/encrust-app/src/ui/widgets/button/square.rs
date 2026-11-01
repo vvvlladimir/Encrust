@@ -1,6 +1,6 @@
 use egui::{Align2, Color32, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType, vec2};
 
-use super::{DISABLED_GLYPH, focus_ring, hover_mix, pressed_rect};
+use super::{DISABLED_GLYPH, focus_ring, hover_mix, pressed_rect, sense_for};
 use crate::ui::theme;
 
 /// A borderless square with one glyph in it: the top bar and the overlay cards.
@@ -35,75 +35,87 @@ pub fn companion_square(
     side: f32,
     enabled: bool,
 ) -> Response {
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (_, response) = ui.allocate_exact_size(vec2(side, side), sense);
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, tooltip));
-    let colors = theme::colors();
-    let fill = match enabled {
-        true => hover_mix(ui, &response, colors.raised, colors.hover),
-        false => colors.raised,
-    };
-    let ink = if enabled {
-        colors.text_high
-    } else {
-        colors.text_high.gamma_multiply(DISABLED_GLYPH)
-    };
-    let rect = pressed_rect(ui, &response);
-    let painter = ui.painter();
-    let stroke = egui::Stroke::new(1.0, colors.hairline);
-    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
-    let glyph_pt = if rect.height() >= theme::PRIMARY_H - 1.0 {
-        18.0
-    } else {
-        16.0
-    };
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(glyph_pt),
-        ink,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_text(tooltip)
+    glyph_square(ui, (glyph, tooltip), side, SquareLook::Framed, enabled)
 }
 
 /// A borderless square `side` points across beside a picker, its glyph in the mid tone:
 /// the preset row's Save, lighter than the picker it serves.
 pub fn quiet_square(ui: &mut Ui, glyph: &str, tooltip: &str, side: f32, enabled: bool) -> Response {
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (_, response) = ui.allocate_exact_size(vec2(side, side), sense);
+    glyph_square(ui, (glyph, tooltip), side, SquareLook::Quiet, enabled)
+}
+
+fn glyph_square(
+    ui: &mut Ui,
+    (glyph, tooltip): (&str, &str),
+    side: f32,
+    look: SquareLook,
+    enabled: bool,
+) -> Response {
+    let (_, response) = ui.allocate_exact_size(vec2(side, side), sense_for(enabled));
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, tooltip));
+    paint_square(ui, &response, (look, glyph), None, enabled);
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_text(tooltip)
+}
+
+/// How an icon square stands: raised and ringed beside a bigger control, or a bare glyph
+/// in a row or beside a field.
+#[derive(Clone, Copy)]
+pub enum SquareLook {
+    Framed,
+    Quiet,
+}
+
+/// Paints an icon square over `response`: its fill, ring and glyph by `look` and its height,
+/// or on the danger's wash in `armed`, the ring of an armed control.
+pub(in crate::ui::widgets) fn paint_square(
+    ui: &Ui,
+    response: &Response,
+    (look, glyph): (SquareLook, &str),
+    armed: Option<Color32>,
+    enabled: bool,
+) {
     let colors = theme::colors();
-    let fill = match enabled {
-        true => hover_mix(ui, &response, Color32::TRANSPARENT, colors.raised),
-        false => Color32::TRANSPARENT,
+    let rect = pressed_rect(ui, response);
+    let eased = |rest: Color32, hovered: Color32| match enabled {
+        true => hover_mix(ui, response, rest, hovered),
+        false => rest,
     };
-    let ink = match (enabled, response.hovered()) {
-        (false, _) => colors.text_mid.gamma_multiply(DISABLED_GLYPH),
-        (true, true) => colors.text_high,
-        (true, false) => colors.text_mid,
+    let (fill, ring) = match (armed, look) {
+        (Some(ring), _) => (colors.danger_wash, Some(ring)),
+        (None, SquareLook::Framed) => (eased(colors.raised, colors.hover), Some(colors.hairline)),
+        (None, SquareLook::Quiet) => (eased(Color32::TRANSPARENT, colors.raised), None),
     };
-    let rect = pressed_rect(ui, &response);
+    let stroke = ring.map_or(egui::Stroke::NONE, |ring| egui::Stroke::new(1.0, ring));
     let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
+    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
+    let tall = match look {
+        SquareLook::Framed => rect.height() >= theme::PRIMARY_H - 2.0,
+        SquareLook::Quiet => rect.height() >= theme::BUTTON_H - 2.0,
+    };
+    let rest = match (look, tall) {
+        (SquareLook::Framed, _) => colors.text_high,
+        (SquareLook::Quiet, true) => colors.text_mid,
+        (SquareLook::Quiet, false) => colors.text_low,
+    };
+    let ink = match (enabled, armed.is_some(), response.hovered()) {
+        (false, ..) => rest.gamma_multiply(DISABLED_GLYPH),
+        (true, true, _) => colors.danger,
+        (true, false, true) => colors.text_high,
+        (true, false, false) => rest,
+    };
+    let size_pt = match (look, tall) {
+        (SquareLook::Framed, true) => 18.0,
+        (SquareLook::Framed, false) | (SquareLook::Quiet, true) => 16.0,
+        (SquareLook::Quiet, false) => 13.0,
+    };
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(16.0),
+        theme::icon(size_pt),
         ink,
     );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_text(tooltip)
 }
 
 /// One tool of the tool row, filling the room it is given: a glyph over the tool's name,
@@ -154,19 +166,28 @@ pub fn rail_button(ui: &mut Ui, button: &RailButton<'_>) -> Response {
         foreground,
     );
     if button.labelled {
-        let mut job = egui::text::LayoutJob::simple_singleline(
-            name.to_owned(),
-            theme::rail_name(),
-            foreground,
-        );
-        job.wrap =
-            egui::text::TextWrapping::truncate_at_width(shrunk.width() - 2.0 * RAIL_NAME_PAD);
-        let galley = painter.layout_job(job);
-        let at = shrunk.center() + vec2(0.0, RAIL_NAME_DROP) - galley.size() / 2.0;
-        painter.galley(at, galley, foreground);
+        rail_name(painter, shrunk, name, foreground);
     }
+    rail_corners(painter, rect, button);
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_text(button.tooltip)
+}
+
+/// The name under a rail button's glyph, cut to the button's width.
+fn rail_name(painter: &egui::Painter, shrunk: egui::Rect, name: &str, ink: Color32) {
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::rail_name(), ink);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(shrunk.width() - 2.0 * RAIL_NAME_PAD);
+    let galley = painter.layout_job(job);
+    let at = shrunk.center() + vec2(0.0, RAIL_NAME_DROP) - galley.size() / 2.0;
+    painter.galley(at, galley, ink);
+}
+
+/// The digit of its key at the top left while named, and its badge at the top right.
+fn rail_corners(painter: &egui::Painter, rect: egui::Rect, button: &RailButton<'_>) {
+    let colors = theme::colors();
     if let Some(key) = button.key.filter(|_| button.labelled) {
-        let ink = if active {
+        let ink = if button.active {
             colors.accent_soft
         } else {
             colors.text_low
@@ -179,8 +200,6 @@ pub fn rail_button(ui: &mut Ui, button: &RailButton<'_>) -> Response {
         painter.circle_filled(at, RAIL_BADGE_R + 2.0, colors.panel);
         painter.circle_filled(at, RAIL_BADGE_R, badge);
     }
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_text(button.tooltip)
 }
 
 /// A rail button's glyph, and how far it rises above the button's middle and its name

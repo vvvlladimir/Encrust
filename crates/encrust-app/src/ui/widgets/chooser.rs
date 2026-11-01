@@ -40,12 +40,14 @@ fn capitals(ui: &mut Ui, name: &str, pad: f32) {
 }
 
 /// What stands at the head of a chooser's row: a glyph, or a colour as a dot.
+#[derive(Clone, Copy)]
 pub enum Lead<'a> {
     Glyph(&'a str),
     Dot(Color32),
 }
 
 /// What stands at a chooser row's right, before its tick: a dot, or a figure.
+#[derive(Clone, Copy)]
 pub enum Aside<'a> {
     Dot(Color32),
     Text(&'a str),
@@ -76,20 +78,7 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
     let lead_at = pos2(rect.left() + ROW_PAD + 8.0, rect.center().y);
-    match row.lead {
-        Lead::Glyph(glyph) => {
-            painter.text(
-                lead_at,
-                Align2::CENTER_CENTER,
-                glyph,
-                theme::icon(16.0),
-                colors.text_low,
-            );
-        }
-        Lead::Dot(tint) => {
-            painter.circle_filled(lead_at, DOT_R, tint);
-        }
-    }
+    paint_lead(painter, lead_at, row.lead);
     two_lines(
         painter,
         pos2(lead_at.x + 16.0, rect.center().y),
@@ -106,24 +95,41 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
             colors.accent_soft,
         );
     }
-    let aside_right = tick_at.x - 14.0;
-    match row.aside {
+    paint_aside(painter, pos2(tick_at.x - 14.0, rect.center().y), row.aside);
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+fn paint_lead(painter: &egui::Painter, at: egui::Pos2, lead: Lead<'_>) {
+    match lead {
+        Lead::Glyph(glyph) => {
+            let low = theme::colors().text_low;
+            painter.text(at, Align2::CENTER_CENTER, glyph, theme::icon(16.0), low);
+        }
+        Lead::Dot(tint) => {
+            painter.circle_filled(at, DOT_R, tint);
+        }
+    }
+}
+
+/// What stands left of the tick, its right edge at `right_at`.
+fn paint_aside(painter: &egui::Painter, right_at: egui::Pos2, aside: Option<Aside<'_>>) {
+    match aside {
         Some(Aside::Dot(tint)) => {
-            painter.circle_filled(pos2(aside_right - 4.0, rect.center().y), 3.5, tint);
+            painter.circle_filled(right_at - vec2(4.0, 0.0), 3.5, tint);
         }
         Some(Aside::Text(text)) => {
+            let mid = theme::colors().text_mid;
             painter.text(
-                pos2(aside_right, rect.center().y),
+                right_at,
                 Align2::RIGHT_CENTER,
                 text,
                 theme::figures(12.0),
-                colors.text_mid,
+                mid,
             );
         }
         None => {}
     }
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// A row under a chooser's rule that leads elsewhere: a glyph and what it does.

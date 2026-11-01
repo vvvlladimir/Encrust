@@ -7,6 +7,7 @@ use egui::{
 };
 use egui::{pos2, vec2};
 
+use super::button::sense_for;
 use super::chooser::{Lead, chooser_frame};
 use super::{focus_ring, hover_mix};
 use crate::i18n::tr;
@@ -46,12 +47,7 @@ impl<'a> DropdownFace<'a> {
 pub fn dropdown(ui: &mut Ui, face: &DropdownFace<'_>, width: f32) -> Response {
     let colors = theme::colors();
     let size = vec2(width, theme::FIELD_H);
-    let sense = if face.empty {
-        Sense::hover()
-    } else {
-        Sense::click()
-    };
-    let (rect, response) = ui.allocate_exact_size(size, sense);
+    let (rect, response) = ui.allocate_exact_size(size, sense_for(!face.empty));
     let enabled = ui.is_enabled();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, enabled, face.label));
     let border = hover_mix(ui, &response, colors.hairline, colors.line);
@@ -63,28 +59,7 @@ pub fn dropdown(ui: &mut Ui, face: &DropdownFace<'_>, width: f32) -> Response {
         egui::Stroke::new(1.0, border),
         StrokeKind::Inside,
     );
-    let mut right = rect.right() - PAD;
-    if !face.empty {
-        let caret = painter.text(
-            pos2(rect.right() - PAD - GLYPH_W / 2.0, rect.center().y),
-            Align2::CENTER_CENTER,
-            icon::CARET_DOWN,
-            theme::icon(14.0),
-            colors.text_low,
-        );
-        right = caret.left() - GAP;
-    }
-    if let Some(count) = face.count {
-        let at = pos2(right, rect.center().y);
-        let figure = painter.text(
-            at,
-            Align2::RIGHT_CENTER,
-            count.to_string(),
-            theme::figures(12.0),
-            colors.text_low,
-        );
-        right = figure.left() - GAP;
-    }
+    let right = caret_and_count(painter, rect, face);
     let left = match &face.lead {
         Some(lead) => {
             lead_at(
@@ -103,6 +78,36 @@ pub fn dropdown(ui: &mut Ui, face: &DropdownFace<'_>, width: f32) -> Response {
     );
     focus_ring(ui, &response, theme::R_CONTROL);
     response
+}
+
+/// The caret, unless there is nothing to choose, and the count before it; answers where
+/// the label must stop.
+fn caret_and_count(painter: &egui::Painter, rect: Rect, face: &DropdownFace<'_>) -> f32 {
+    let low = theme::colors().text_low;
+    let mut right = rect.right() - PAD;
+    if !face.empty {
+        let at = pos2(rect.right() - PAD - GLYPH_W / 2.0, rect.center().y);
+        let caret = painter.text(
+            at,
+            Align2::CENTER_CENTER,
+            icon::CARET_DOWN,
+            theme::icon(14.0),
+            low,
+        );
+        right = caret.left() - GAP;
+    }
+    if let Some(count) = face.count {
+        let at = pos2(right, rect.center().y);
+        let figure = painter.text(
+            at,
+            Align2::RIGHT_CENTER,
+            count.to_string(),
+            theme::figures(12.0),
+            low,
+        );
+        right = figure.left() - GAP;
+    }
+    right
 }
 
 /// What is chosen, and `· edited` after it, cut to `room`.

@@ -18,7 +18,7 @@ use crate::settings::{
     new_resin, take_resin_off,
 };
 use crate::ui::{
-    BinLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
+    SquareLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
     two_lines, zone_button,
 };
 
@@ -239,7 +239,7 @@ fn add_machine(ui: &mut Ui, picked: Option<&str>, cost: &str, action: &mut Optio
         } else {
             tr!("machines-remove")
         };
-        if bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, enabled) {
+        if bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, enabled) {
             *action = picked.map(|id| Action::Delete(Deleting::Printer(id.to_owned())));
         }
         if icon_button(ui, icon::IMPORT, &tr!("machines-import-file")).clicked() {

@@ -8,7 +8,7 @@ use crate::i18n::tr;
 use crate::settings::unique_id;
 use crate::status::Status;
 use crate::ui::{
-    BinLook, DropdownFace, DropdownRow, Lead, MenuRow, bin_button, dropdown, dropdown_menu,
+    DropdownFace, DropdownRow, Lead, MenuRow, SquareLook, bin_button, dropdown, dropdown_menu,
     dropdown_row, icon, menu_row, quiet_square, theme,
 };
 
@@ -134,7 +134,7 @@ fn row<T>(
                 tr!("presets-delete-named", name = name.clone())
             });
             let held = named.matching.is_some();
-            pressed.forget = bin_button(ui, theme::BUTTON_H, BinLook::Quiet, &tip, held);
+            pressed.forget = bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, held);
             let save_tip = tr!("shape-save-tooltip");
             let save = quiet_square(ui, icon::SAVE, &save_tip, theme::BUTTON_H, !held);
             egui::Popup::menu(&save).show(|ui| {

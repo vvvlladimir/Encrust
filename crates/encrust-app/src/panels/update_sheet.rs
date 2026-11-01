@@ -9,7 +9,9 @@ use crate::ui::{
     StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button, progress_bar,
     quiet_button, release_hero, steps, tag_label, theme,
 };
-use crate::updates::{Note, Offer, RELEASES, Stage, Step, Updates, from_store, now_s, open_store};
+use crate::updates::{
+    Note, NoteGroup, Offer, Progress, RELEASES, Stage, Step, Updates, from_store, now_s, open_store,
+};
 
 /// The sheet's width, the room left round it, and the height of what is not the changes.
 const SHEET_W: f32 = 640.0;
@@ -104,8 +106,7 @@ fn changes(ui: &mut Ui, notes: &[Note]) {
                 if index > 0 {
                     ui.add_space(GROUP_GAP);
                 }
-                let (name, tone) = group_of(text);
-                tag_label(ui, &name, tone(colors));
+                tag_label(ui, text, tone(NoteGroup::of(text), colors));
             }
             Note::Item(text) => bullet(ui, text),
             Note::Text(text) => hint(ui, text),
@@ -113,29 +114,20 @@ fn changes(ui: &mut Ui, notes: &[Note]) {
     }
 }
 
-type Tone = fn(&theme::Palette) -> (egui::Color32, egui::Color32);
-
-/// How a group of the notes is tinted, by the headings the release-notes skill writes: a
-/// user-facing area in `ok`, Faster in the accent, Fixed and Before you update plain.
-fn group_of(heading: &str) -> (String, Tone) {
-    let lower = heading.to_lowercase();
-    let tone: Tone = if lower.starts_with("faster") {
-        |c| (c.accent_soft, c.accent_wash)
-    } else if lower.starts_with("fixed") || lower.starts_with("before") {
-        |c| (c.text_mid, c.active)
-    } else {
-        |c| (c.ok, c.ok_wash)
-    };
-    (heading.to_owned(), tone)
+/// A group's tag: an area in `ok`, Faster in the accent, the rest plain.
+fn tone(group: NoteGroup, colors: &theme::Palette) -> (egui::Color32, egui::Color32) {
+    match group {
+        NoteGroup::Area => (colors.ok, colors.ok_wash),
+        NoteGroup::Faster => (colors.accent_soft, colors.accent_wash),
+        NoteGroup::Plain => (colors.text_mid, colors.active),
+    }
 }
 
 /// Skip, Later and the install, or how far the install has got. Whether the sheet is put
 /// away by it.
 fn foot(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
     if let Some((progress, elapsed_s)) = updates.progress() {
-        let (received, total) = progress.bytes();
-        let step = progress.step();
-        let cancel = installing(ui, (received, total), step, elapsed_s);
+        let cancel = installing(ui, progress, elapsed_s);
         if cancel {
             updates.cancel();
         }
@@ -190,13 +182,13 @@ fn act(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
 
 /// The download's amount and time left over its bar, the three steps, and Cancel while the
 /// download can still stop. Whether Cancel was pressed.
-fn installing(
-    ui: &mut Ui,
-    (received, total): (u64, Option<u64>),
-    step: Step,
-    elapsed_s: f64,
-) -> bool {
-    let (amount, left) = progress_words(received, total, elapsed_s);
+fn installing(ui: &mut Ui, progress: &Progress, elapsed_s: f64) -> bool {
+    let (received, total) = progress.bytes();
+    let step = progress.step();
+    let amount = amount_words(received, total);
+    let left = progress
+        .seconds_left(elapsed_s)
+        .map(|seconds| tr!("update-time-left", seconds = seconds));
     ui.horizontal(|ui| {
         hint(ui, &amount);
         if let Some(left) = &left {
@@ -215,25 +207,17 @@ fn installing(
     step_row(ui, step)
 }
 
-/// The download's size so far and the time it has left, in words.
-fn progress_words(received: u64, total: Option<u64>, elapsed_s: f64) -> (String, Option<String>) {
+/// The download's size so far, of how much when known.
+fn amount_words(received: u64, total: Option<u64>) -> String {
     let mb = megabytes;
-    let amount = match total {
+    match total {
         Some(total) => tr!(
             "update-downloading-of",
             got = mb(received),
             total = mb(total)
         ),
         None => tr!("update-downloading", got = mb(received)),
-    };
-    let left = total
-        .filter(|_| received > 0 && elapsed_s > 0.0)
-        .map(|total| {
-            let rate = received as f64 / elapsed_s;
-            let seconds = (total.saturating_sub(received) as f64 / rate).ceil() as u64;
-            tr!("update-time-left", seconds = seconds)
-        });
-    (amount, left)
+    }
 }
 
 /// The three steps of an update, with Cancel while the download runs. Answers whether it was

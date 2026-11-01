@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use core_geometry::{Mesh, MeshDiagnostics, Orientation, Transform, Vec3};
 
+use super::marks::Mark;
 use super::*;
-use crate::scene::Imported;
+use crate::scene::{ImportSummary, Imported};
 
 fn summary(unbalanced_edges: usize, boundary_edges: usize) -> ImportSummary {
     let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);

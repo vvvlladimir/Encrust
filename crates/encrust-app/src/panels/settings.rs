@@ -9,6 +9,7 @@ mod general;
 pub(super) mod machines;
 mod presets;
 mod printer;
+mod profile_files;
 mod resin;
 mod supports;
 mod updates;
@@ -16,17 +17,17 @@ mod updates;
 use egui::{Align, Layout, RichText, Ui, vec2};
 use printer_profiles::Kind;
 
-use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::settings::{Node, Section, Tab};
-use crate::state::Machine;
+use crate::settings::Section;
 use crate::status::Status;
 use crate::ui::{
     NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
     nav_row, theme,
 };
 use frame::{child, scrolled, with_header};
+pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
+pub use profile_files::{import_dropped, import_profile};
 
 /// The window, while it is open, and the question over it, which may be asked without it.
 pub fn window(ctx: &egui::Context, window: &mut Window) {
@@ -240,87 +241,6 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
 /// Room over a group name of the list but the first, and under the find line.
 pub(super) const GROUP_GAP: f32 = 10.0;
 pub(super) const FIND_GAP: f32 = 12.0;
-/// Asks for a profile's file and takes it in. A browser answers on a later frame, through
-/// [`import_profile`].
-pub(super) fn ask_for_profile(window: &mut Window, kind: Kind) {
-    if let Some(file) = files::pick(Wanted::Profile(kind)) {
-        import_profile(window, kind, &file);
-    }
-}
-
-/// Takes `file` in as a profile of `kind` and opens it where it was asked for from: a
-/// resin goes on the machine the Machine and resin window has open.
-pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
-    let machine = &mut *window.machine;
-    let printer = match kind {
-        Kind::Resin => machine
-            .settings
-            .node
-            .as_ref()
-            .map(|node| node.printer().to_owned()),
-        _ => None,
-    };
-    let Some(id) = crate::exchange::import_file(machine, kind, file, printer.as_deref()) else {
-        return;
-    };
-    let settings = &mut machine.settings;
-    let catalogue = &machine.slicing.catalogue;
-    match (kind, printer) {
-        (Kind::Printer, _) => {
-            settings.library = None;
-            settings.pick(catalogue, Node::Printer(id.clone()));
-            machines::fill_empty_plate(window, &id);
-        }
-        (Kind::Resin, Some(printer)) => {
-            settings.editing_resin = false;
-            settings.pick(catalogue, Node::Resin { printer, resin: id });
-        }
-        (Kind::Support, _) => {
-            settings.editing_support = false;
-            settings.pick_support(catalogue, &id);
-        }
-        (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
-        (Kind::Resin, None) | (Kind::Auto, _) => {}
-    }
-    // A plate with no resin takes the first one its machine now has.
-    if matches!(kind, Kind::Printer | Kind::Resin) {
-        window.machine.slicing.reload_resin();
-    }
-}
-
-/// Takes a file dropped on the Machine and resin window in as a profile: a resin when the
-/// window shows a machine's resins or the file can be nothing else, a machine otherwise.
-pub fn import_dropped(window: &mut Window, file: &Handed) {
-    let settings = &window.machine.settings;
-    let resins_in_view =
-        settings.library.is_none() && settings.node.is_some() && settings.tab == Tab::Resins;
-    let path = file.path();
-    let only_a_resin =
-        printer_profiles::ForeignResin::reads(path) || core_pipeline::reads_sliced_file(path);
-    let kind = match resins_in_view || only_a_resin {
-        true => Kind::Resin,
-        false => Kind::Printer,
-    };
-    import_profile(window, kind, file);
-}
-
-/// Writes the profile of `kind` under `id` out to a file the user names.
-pub(super) fn export_profile(machine: &mut Machine, kind: Kind, id: &str) {
-    let text = machine.slicing.catalogue.export(kind, id);
-    let Some(text) = report(&mut machine.status, &tr!("settings-cannot-export"), text) else {
-        return;
-    };
-    let name = crate::exchange::file_name(id);
-    match files::save_text(&name, Wanted::Profile(kind), &text) {
-        Ok(Some(path)) => {
-            machine.status =
-                Status::Info(tr!("status-exported", path = path.display().to_string()));
-        }
-        Ok(None) => {}
-        Err(error) => machine.status = Status::failed(&error),
-    }
-}
-
 /// The question over the window, while the profiles that would not read wait to be given up.
 fn ask(ctx: &egui::Context, window: &mut Window) {
     if !window.machine.settings.reset_unreadable {
@@ -334,23 +254,6 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
         let machine = &mut *window.machine;
         let outcome = machine.slicing.catalogue.discard_unreadable();
         report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
-    }
-}
-
-/// Throws away a support profile or a tool's preset, and leaves nothing of it open.
-pub(super) fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
-    let catalogue = &mut machine.slicing.catalogue;
-    let outcome = catalogue.forget_user_copy(kind, id);
-    report(&mut machine.status, &tr!("settings-cannot-delete"), outcome);
-    let settings = &mut machine.settings;
-    settings.editing_support = false;
-    settings.preset = None;
-    if kind == Kind::Support {
-        let first = catalogue.supports().next().map(|entry| entry.id.clone());
-        settings.support = None;
-        if let Some(first) = first {
-            settings.pick_support(catalogue, &first);
-        }
     }
 }
 

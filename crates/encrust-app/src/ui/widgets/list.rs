@@ -212,33 +212,48 @@ pub fn issue_row(
     let painter = ui.painter();
     painter.rect(rect, theme::R_CONTROL, fill, ring, egui::StrokeKind::Inside);
 
+    issue_words(painter, rect, tint, (place, aside), detail);
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// An issue row's dot in `tint`, its place and aside, and its detail at the right end.
+fn issue_words(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    tint: Color32,
+    (place, aside): (&str, Option<&str>),
+    detail: &str,
+) {
+    let colors = theme::colors();
     let dot = rect.left_center() + vec2(12.0, 0.0);
     painter.circle_filled(dot, 4.0, tint);
+    let at = dot + vec2(11.0, 0.0);
     let named = painter.text(
-        dot + vec2(11.0, 0.0),
+        at,
         Align2::LEFT_CENTER,
         place,
         theme::label(),
         colors.text_high,
     );
     if let Some(aside) = aside {
+        let at = named.right_center() + vec2(ASIDE_GAP, 0.0);
         painter.text(
-            named.right_center() + vec2(ASIDE_GAP, 0.0),
+            at,
             Align2::LEFT_CENTER,
             aside,
             theme::small(),
             colors.text_low,
         );
     }
+    let at = rect.right_center() - vec2(12.0, 0.0);
     painter.text(
-        rect.right_center() - vec2(12.0, 0.0),
+        at,
         Align2::RIGHT_CENTER,
         detail,
         theme::figures(12.0),
         colors.text_mid,
     );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Something found that is not yet the user's: a dashed row of a glyph, its name (`text_low`
@@ -250,7 +265,37 @@ pub fn found_row(ui: &mut Ui, glyph: &str, name: &str, figure: &str, matches: bo
         vec2(ui.available_width(), theme::BUTTON_H + 8.0),
         Sense::hover(),
     );
-    let painter = ui.painter();
+    found_words(ui.painter(), rect, (glyph, name), matches);
+    let mut end = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect.shrink(4.0))
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    let add = super::inline_button(
+        &mut end,
+        crate::ui::icon::ADD,
+        &tr!("found-add"),
+        false,
+        true,
+    );
+    ui.painter().text(
+        add.rect.left_center() - vec2(10.0, 0.0),
+        Align2::RIGHT_CENTER,
+        figure,
+        theme::figures(12.0),
+        colors.text_mid,
+    );
+    add
+}
+
+/// A found row's dashed outline, its glyph and its name, `text_low` unless it `matches`.
+fn found_words(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    (glyph, name): (&str, &str),
+    matches: bool,
+) {
+    let colors = theme::colors();
     let corners = [
         rect.left_top(),
         rect.right_top(),
@@ -282,26 +327,6 @@ pub fn found_row(ui: &mut Ui, glyph: &str, name: &str, figure: &str, matches: bo
         theme::label(),
         ink,
     );
-    let mut end = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect.shrink(4.0))
-            .layout(Layout::right_to_left(Align::Center)),
-    );
-    let add = super::inline_button(
-        &mut end,
-        crate::ui::icon::ADD,
-        &tr!("found-add"),
-        false,
-        true,
-    );
-    ui.painter().text(
-        add.rect.left_center() - vec2(10.0, 0.0),
-        Align2::RIGHT_CENTER,
-        figure,
-        theme::figures(12.0),
-        colors.text_mid,
-    );
-    add
 }
 
 /// The dashes round a found row, points.

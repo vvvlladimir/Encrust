@@ -32,7 +32,7 @@ release, so a draft is never offered. A platform key is the archive name between
 and the extension; a platform the feed has no key for still hears about the release and is
 sent to the release page.
 
-`published` (UTC) and each `size` (bytes) are what the update sheet shows; a feed without
+`published` (UTC) and each `size` (bytes) are what the update sheet shows (ADR 0388); a feed without
 them still offers, and a time the window cannot read is left out. The job writes the time it
 runs, since the draft has none yet; the release-notes skill's publish command restamps it.
 Notes headed `### <Area>`, `## ⚡ Faster`, `## 🐛 Fixed` and `## Before you update` are

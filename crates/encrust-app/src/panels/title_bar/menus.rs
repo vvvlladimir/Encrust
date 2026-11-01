@@ -82,37 +82,92 @@ fn clicked(ui: &mut egui::Ui, row: &MenuRow<'_>) -> bool {
 
 /// Create, open, save, slice, set up, leave: one group each. See `docs/design/ui-screens.md`.
 pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
-    if clicked(
+    run_rows(
         ui,
-        &action_row(Some(icon::ADD), &tr!("menu-new-plate"), Action::NewPlate),
-    ) {
-        project::new_plate(window);
-    }
-    let new_project = tr!("menu-new-project");
-    if clicked(
-        ui,
-        &action_row(Some(icon::NEW_PROJECT), &new_project, Action::NewProject),
-    ) {
-        project::new_project(window);
-    }
+        window,
+        [
+            (
+                Some(icon::ADD),
+                tr!("menu-new-plate"),
+                Action::NewPlate,
+                project::new_plate,
+            ),
+            (
+                Some(icon::NEW_PROJECT),
+                tr!("menu-new-project"),
+                Action::NewProject,
+                project::new_project,
+            ),
+        ],
+    );
     menu_rule(ui);
-    let open = tr!("menu-open-project");
-    if clicked(
+    run_rows(
         ui,
-        &action_row(Some(icon::OPEN), &open, Action::OpenProject),
-    ) {
-        project::open_dialog(window);
-    }
-    if clicked(
+        window,
+        [
+            (
+                Some(icon::OPEN),
+                tr!("menu-open-project"),
+                Action::OpenProject,
+                project::open_dialog,
+            ),
+            (
+                Some(icon::MODEL),
+                tr!("menu-open-model"),
+                Action::OpenModel,
+                crate::import::open_dialog,
+            ),
+        ],
+    );
+    open_subs(ui, window);
+    menu_rule(ui);
+    run_rows(
         ui,
-        &action_row(
-            Some(icon::MODEL),
-            &tr!("menu-open-model"),
-            Action::OpenModel,
-        ),
-    ) {
-        crate::import::open_dialog(window);
+        window,
+        [
+            (
+                Some(icon::SAVE),
+                tr!("menu-save-project"),
+                Action::SaveProject,
+                |window| {
+                    project::save_open(window);
+                },
+            ),
+            (
+                None,
+                tr!("menu-save-project-as"),
+                Action::SaveProjectAs,
+                |window| {
+                    project::save_dialog(window);
+                },
+            ),
+        ],
+    );
+    menu_rule(ui);
+    slice_items(ui, window);
+    menu_rule(ui);
+    setup_items(ui, window);
+    // A page is left by closing its tab.
+    if cfg!(not(target_arch = "wasm32")) {
+        menu_rule(ui);
+        quit_row(ui);
     }
+}
+
+/// A menu row's glyph, name and action, and what it runs.
+type RunRow<'a> = (Option<&'a str>, String, Action, fn(&mut Window));
+
+/// Rows that each run an action with its keys beside it.
+fn run_rows<const N: usize>(ui: &mut egui::Ui, window: &mut Window, rows: [RunRow<'_>; N]) {
+    for (glyph, label, action, run) in rows {
+        if clicked(ui, &action_row(glyph, &label, action)) {
+            run(window);
+        }
+    }
+}
+
+/// The recent files and the test prints, each a submenu.
+fn open_subs(ui: &mut egui::Ui, window: &mut Window) {
     // A browser hands over bytes and keeps no paths to reopen.
     if cfg!(not(target_arch = "wasm32")) {
         let recent = tr!("menu-open-recent");
@@ -124,34 +179,17 @@ pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
     menu_sub(ui, &MenuRow::new(Some(icon::TEST_PRINT), &tests), |ui| {
         test_print_menu(ui, window);
     });
-    menu_rule(ui);
-    let save = tr!("menu-save-project");
-    if clicked(
-        ui,
-        &action_row(Some(icon::SAVE), &save, Action::SaveProject),
-    ) {
-        project::save_open(window);
-    }
-    let save_as = tr!("menu-save-project-as");
-    if clicked(ui, &action_row(None, &save_as, Action::SaveProjectAs)) {
-        project::save_dialog(window);
-    }
-    menu_rule(ui);
-    slice_items(ui, window);
-    menu_rule(ui);
-    setup_items(ui, window);
-    // A page is left by closing its tab.
-    if cfg!(not(target_arch = "wasm32")) {
-        menu_rule(ui);
-        // macOS binds Quit to Command-Q itself; elsewhere the menu is the way out.
-        let keys = if cfg!(target_os = "macos") {
-            format!("{}Q", icon::KEY_COMMAND)
-        } else {
-            String::new()
-        };
-        if clicked(ui, &MenuRow::new(None, &tr!("menu-quit")).keys(keys)) {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-        }
+}
+
+fn quit_row(ui: &mut egui::Ui) {
+    // macOS binds Quit to Command-Q itself; elsewhere the menu is the way out.
+    let keys = if cfg!(target_os = "macos") {
+        format!("{}Q", icon::KEY_COMMAND)
+    } else {
+        String::new()
+    };
+    if clicked(ui, &MenuRow::new(None, &tr!("menu-quit")).keys(keys)) {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
     }
 }
 

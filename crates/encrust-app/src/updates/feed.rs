@@ -109,6 +109,29 @@ pub enum Note {
     Text(String),
 }
 
+/// How a heading of the notes groups what follows, by the headings the release-notes skill
+/// writes (`docs/design/updates.md`): a user-facing area, Faster, or Fixed and Before you update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteGroup {
+    Area,
+    Faster,
+    Plain,
+}
+
+impl NoteGroup {
+    /// The group a heading of the notes opens.
+    pub fn of(heading: &str) -> Self {
+        let lower = heading.to_lowercase();
+        if lower.starts_with("faster") {
+            Self::Faster
+        } else if lower.starts_with("fixed") || lower.starts_with("before") {
+            Self::Plain
+        } else {
+            Self::Area
+        }
+    }
+}
+
 /// What a feed offers a build at `running` on `platform`: nothing when it is no newer.
 pub fn read(
     text: &[u8],
@@ -150,35 +173,11 @@ fn download(build: &Build, version: Version) -> Result<Download, UpdateError> {
     })
 }
 
-/// Seconds since the Unix epoch of a UTC time written `YYYY-MM-DDTHH:MM:SSZ`, or `None` for
-/// anything else: a date the window cannot read is left out, not a reason to refuse the offer.
+/// Seconds since the Unix epoch of an RFC 3339 time, or `None` for anything else: a date
+/// the window cannot read is left out, not a reason to refuse the offer.
 fn unix_seconds(text: &str) -> Option<u64> {
-    let (date, time) = text.strip_suffix('Z')?.split_once('T')?;
-    let mut date = date.splitn(3, '-').map(str::parse::<i64>);
-    let (year, month, day) = (date.next()?.ok()?, date.next()?.ok()?, date.next()?.ok()?);
-    let mut time = time.splitn(3, ':').map(str::parse::<i64>);
-    let (hour, minute, second) = (time.next()?.ok()?, time.next()?.ok()?, time.next()?.ok()?);
-    let in_range = (1..=12).contains(&month)
-        && (1..=31).contains(&day)
-        && (0..24).contains(&hour)
-        && (0..60).contains(&minute)
-        && (0..61).contains(&second);
-    if !in_range {
-        return None;
-    }
-    let seconds = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second;
-    u64::try_from(seconds).ok()
-}
-
-/// Days from 1970-01-01 to a date of the proleptic Gregorian calendar, Hinnant's closed form:
-/// see `https://howardhinnant.github.io/date_algorithms.html#days_from_civil`.
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = year.div_euclid(400);
-    let of_era = year - era * 400;
-    let of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
-    let of_cycle = of_era * 365 + of_era / 4 - of_era / 100 + of_year;
-    era * 146_097 + of_cycle - 719_468
+    let at: jiff::Timestamp = text.parse().ok()?;
+    u64::try_from(at.as_second()).ok()
 }
 
 /// The key this build's archive has in the feed, the name `release.yml` gives it.
@@ -274,6 +273,19 @@ fn without_commits(text: &str) -> String {
 pub mod tests {
     use super::*;
 
+    #[test]
+    fn a_heading_names_its_group_as_the_skill_writes_it() {
+        let groups = notes("### Supports\n## ⚡ Faster\n## 🐛 Fixed\n## Before you update")
+            .into_iter()
+            .filter_map(|note| match note {
+                Note::Heading(text) => Some(NoteGroup::of(&text)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        use NoteGroup::{Area, Faster, Plain};
+        assert_eq!(groups, [Area, Faster, Plain, Plain]);
+    }
+
     const REPO: &str = env!("CARGO_PKG_REPOSITORY");
 
     /// An offer of `version` with an archive for this platform, as a feed would make it.
@@ -328,11 +340,16 @@ pub mod tests {
     fn a_time_the_window_cannot_read_is_left_out() {
         assert_eq!(unix_seconds("1970-01-01T00:00:00Z"), Some(0));
         assert_eq!(unix_seconds("2000-03-01T00:00:00Z"), Some(951_868_800));
+        assert_eq!(
+            unix_seconds("2026-10-28T14:00:00+02:00"),
+            Some(1_793_188_800),
+            "an offset is read as the same instant"
+        );
         for text in [
             "",
             "2026-10-28",
             "2026-13-01T00:00:00Z",
-            "2026-10-28T12:00:00+02:00",
+            "1969-12-31T00:00:00Z",
         ] {
             assert_eq!(unix_seconds(text), None, "{text:?}");
         }

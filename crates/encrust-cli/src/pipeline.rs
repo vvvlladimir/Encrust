@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, SupportPlan, bake, cut};
-use core_geometry::{Bvh, Mesh, Scalar, self_intersections, weld};
+use core_geometry::{Mesh, Scalar, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_slicer::{AdaptiveSettings, Solid, Windows};
@@ -25,9 +25,13 @@ use crate::sliced_file::{asked_revision, format_of, write_plate};
 use crate::stage::{self, Part, Staged};
 
 mod checked;
+mod inspect;
 mod place;
 mod relief;
+
 use checked::checked;
+use inspect::talk_mapping;
+pub use inspect::{Inspect, inspect};
 pub use place::{OrientSummary, orient_settings};
 use place::{centred, place};
 use relief::press_relief;
@@ -366,59 +370,6 @@ pub fn fold_of(remove_islands: bool, hanging_passes: u32, material: &MaterialPro
 pub fn raster_window(args: &RasterArgs) -> usize {
     args.raster_window
         .unwrap_or_else(rayon::current_num_threads)
-}
-
-/// Says what a file carried beyond its triangles, when it carried anything.
-fn talk_mapping(loaded: &Loaded) {
-    let Some(uvs) = &loaded.uvs else { return };
-    let over = match uvs.mapped() {
-        all if all == uvs.len() => format!("{all} faces"),
-        some => format!("{some} of {} faces", uvs.len()),
-    };
-    let images: Vec<String> = loaded
-        .textures
-        .iter()
-        .map(|texture| format!("{} ({} bytes)", texture.name, texture.bytes.len()))
-        .collect();
-    println!(
-        "Textured: {} coordinates over {over}, from {}\n",
-        uvs.mapped() * 3,
-        images.join(", ")
-    );
-}
-
-/// What `inspect` counts beyond what import always reports.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Inspect {
-    /// The pairs of faces that cross.
-    pub intersections: bool,
-    /// The shells, as import leaves the model, which is how `--drop-shells` numbers them.
-    pub shells: bool,
-}
-
-/// Loads and repairs a model without slicing it, for `inspect`, counting what `asked` names.
-pub fn inspect(
-    input: &Path,
-    args: &ImportArgs,
-    chosen: &Chosen,
-    asked: Inspect,
-) -> Result<ImportReport> {
-    let profile = chosen.printer.as_ref();
-    let loaded = load(input)?;
-    let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let never = Stop::default();
-    let quiet = Watch::quiet(&never);
-    let (mesh, _) = place(welded.mesh.clone(), args, None, chosen, &quiet)?;
-    // Pressed here too, so that what `inspect` measures is what would be printed.
-    let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
-    if args.transform.center {
-        mesh = centred(mesh, profile)?;
-    }
-    let mut report = checked(&mut mesh, input, welded, args, profile, asked.shells)?;
-    if asked.intersections {
-        report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
-    }
-    Ok(report)
 }
 
 /// What an adaptive run is allowed to do: the layer height becomes its ceiling.

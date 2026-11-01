@@ -33,6 +33,13 @@ impl Progress {
         self.step.store(step as u8, Ordering::Relaxed);
     }
 
+    /// The download's seconds left at the rate it has gone at for `elapsed_s`, once that
+    /// rate and the size are known.
+    pub fn seconds_left(&self, elapsed_s: f64) -> Option<u64> {
+        let (received, total) = self.bytes();
+        seconds_left(received, total, elapsed_s)
+    }
+
     /// Bytes downloaded, and of how many when the server said.
     pub fn bytes(&self) -> (u64, Option<u64>) {
         let total = self.total.load(Ordering::Relaxed);
@@ -57,5 +64,32 @@ impl Progress {
 
     pub(crate) fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Relaxed)
+    }
+}
+
+fn seconds_left(received: u64, total: Option<u64>, elapsed_s: f64) -> Option<u64> {
+    let total = total.filter(|_| received > 0 && elapsed_s > 0.0)?;
+    let rate = received as f64 / elapsed_s;
+    Some((total.saturating_sub(received) as f64 / rate).ceil() as u64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::seconds_left;
+
+    #[test]
+    fn the_time_left_goes_at_the_rate_so_far() {
+        assert_eq!(
+            seconds_left(10, Some(40), 2.0),
+            Some(6),
+            "30 bytes at 5 a second"
+        );
+    }
+
+    #[test]
+    fn the_time_left_is_unknown_before_a_rate_or_a_size() {
+        assert_eq!(seconds_left(0, Some(40), 2.0), None);
+        assert_eq!(seconds_left(10, None, 2.0), None);
+        assert_eq!(seconds_left(10, Some(40), 0.0), None);
     }
 }

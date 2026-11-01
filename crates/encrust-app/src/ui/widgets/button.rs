@@ -9,8 +9,9 @@ use crate::ui::theme::motion;
 mod square;
 mod tile;
 
+pub(in crate::ui::widgets) use square::paint_square;
 pub use square::{
-    RailButton, companion_square, icon_button, icon_toggle, quiet_square, rail_button,
+    RailButton, SquareLook, companion_square, icon_button, icon_toggle, quiet_square, rail_button,
     small_icon_button,
 };
 pub use tile::{summary_button, swatch, zone_button};
@@ -302,6 +303,16 @@ pub fn blocked_hover(response: Response, blocker: Option<String>) -> Response {
     }
 }
 
+/// What a control listens for: a click while it can be used, the hover for its reason
+/// while it cannot.
+pub(in crate::ui::widgets) fn sense_for(enabled: bool) -> Sense {
+    if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    }
+}
+
 /// Space kept clear either side of a button's label.
 const LABEL_PAD: f32 = 10.0;
 
@@ -346,11 +357,7 @@ fn painted_button(
     skin: &Skin,
     enabled: bool,
 ) -> Response {
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
+    let sense = sense_for(enabled);
     let (_, response) = ui.allocate_exact_size(size, sense);
     let text = face.text;
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, text));
