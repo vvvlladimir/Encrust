@@ -63,7 +63,7 @@ impl RepairJob {
         self.worker.poll()
     }
 
-    /// How far a wrap has got; a repair on the mesh alone counts nothing.
+    /// The step the repair is on; none of them counts its pieces.
     pub fn counted(&self) -> Option<Counted> {
         self.worker.counted()
     }

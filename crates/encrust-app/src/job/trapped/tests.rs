@@ -136,3 +136,38 @@ fn a_solid_model_has_nothing_trapped_in_it() {
     };
     assert!(models[0].trapped.is_empty());
 }
+
+#[test]
+fn a_finished_check_has_counted_every_layer_of_every_model() {
+    let mesh = Arc::new(sealed_box());
+    let moved = Transform::from_translation(Vec3::new(30.0, 0.0, 0.0));
+    let mut job = TrapJob::spawn(TrapRequest {
+        tasks: vec![task(1, &mesh, Transform::default()), task(2, &mesh, moved)],
+        layer_height_mm: 0.5,
+    });
+
+    wait(&mut job);
+    let (_, share) = job
+        .counted()
+        .expect("a model was cut, so its layers were counted");
+    assert!(
+        (share - 1.0).abs() < 1e-6,
+        "both models are done, the copy without being cut, got {share}"
+    );
+    assert_eq!(job.looked.layers_total.load(Relaxed), 40, "20 mm at 0.5 mm");
+}
+
+#[test]
+fn a_check_asked_to_stop_ends_without_a_finding() {
+    let request = TrapRequest {
+        tasks: vec![task(1, &Arc::new(sealed_box()), Transform::default())],
+        layer_height_mm: 0.5,
+    };
+    let stop = AtomicBool::new(true);
+
+    let outcome = check(&request, (&stop, &Looked::default()));
+    assert!(
+        matches!(outcome, TrapOutcome::Failed(_)),
+        "a stopped check has nothing to hand over, got {outcome:?}"
+    );
+}

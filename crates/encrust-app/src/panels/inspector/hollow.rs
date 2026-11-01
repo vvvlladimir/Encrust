@@ -91,9 +91,13 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
 /// What the last drainage check found, where the cavity it was found in is. The check
 /// itself and the holes are the Drain tool's; see ADR 0190, 0198.
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
-    if window.tools.drain.job.is_some() {
+    if let Some(job) = &window.tools.drain.job {
         subheading(ui, &tr!("hollow-drainage"));
-        busy(ui, &tr!("hollow-looking"), None, false);
+        let counted = job.counted();
+        let step = counted
+            .as_ref()
+            .map(|(label, share)| (label.as_str(), *share));
+        busy(ui, &tr!("hollow-looking"), step, false);
         return;
     }
 

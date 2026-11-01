@@ -6,7 +6,7 @@ use core_geometry::{
 use serde::{Deserialize, Serialize};
 
 use crate::boolean::solid_of;
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::error::VolumeError;
 
 /// Which repair to run, on the mesh alone or wrapping it in one surface.
@@ -70,7 +70,10 @@ pub fn repair(
         }
     };
     match method {
-        RepairMethod::Mend(method) => Ok(mended_alone(mesh.clone(), method)),
+        RepairMethod::Mend(method) => {
+            cancel.begin(Step::Mending, 0);
+            Ok(mended_alone(mesh.clone(), method))
+        }
         RepairMethod::Wrap => wrap(mesh, settings, cancel),
         RepairMethod::Deep => {
             let wrapped = wrap(mesh, settings, cancel)?;
@@ -78,6 +81,7 @@ pub fn repair(
             if !wrapped.wrapped {
                 return Ok(wrapped);
             }
+            cancel.begin(Step::Finishing, 0);
             let again = mended_alone(wrapped.mesh, MendMethod::Repair);
             Ok(Repaired {
                 mended: wrapped.mended.then(again.mended),
@@ -98,17 +102,19 @@ pub fn wrap(
     if mesh.faces.is_empty() {
         return Err(VolumeError::EmptyMesh);
     }
+    cancel.begin(Step::Mending, 0);
     let mut repaired = mesh.clone();
     let mended = mend(&mut repaired, MendMethod::Repair, settings.mend);
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
+    cancel.begin(Step::Crossing, 0);
     let crossings = self_intersections(&repaired, &Bvh::build(&repaired));
     let shells = list_shells(&repaired);
     // One sound shell crossing nothing is its own outer surface.
     let alone = shells.len() == 1 && crossings.is_empty() && diagnose(&repaired).is_sound();
     let united = (!alone && !crosses_itself(&shells, &crossings))
-        .then(|| exact(&repaired))
+        .then(|| exact(&repaired, cancel))
         .flatten();
     let wrapped = alone || united.is_some();
     Ok(Repaired {
@@ -136,11 +142,13 @@ fn crosses_itself(shells: &[Shell], crossings: &[[u32; 2]]) -> bool {
 
 /// The shells unioned by the exact engine, or `None` where it refuses them or leaves a
 /// surface that is open or still crosses itself.
-fn exact(mesh: &Mesh) -> Option<Mesh> {
+fn exact(mesh: &Mesh, cancel: Cancel<'_>) -> Option<Mesh> {
+    cancel.begin(Step::Combining, 0);
     let solid = solid_of(mesh).ok()?;
     if solid.is_empty() {
         return None;
     }
+    cancel.begin(Step::Finishing, 0);
     let united = solid.mesh();
     let crosses = !self_intersections(&united, &Bvh::build(&united)).is_empty();
     (diagnose(&united).is_sound() && !crosses).then_some(united)

@@ -1585,6 +1585,9 @@ drain-check-again = Проверить снова
 drain-check = Проверить дренаж
 drain-check-tooltip = Сечёт платформу и прослеживает путь воздуха, ища смолу без выхода.
 drain-checking = Проверка дренажа
+drain-cancelled = Проверка дренажа отменена
+drain-progress-layers = Слой { $layer } из { $layers }
+drain-progress-models = Модель { $index } из { $total }, слой { $layer } из { $layers }
 drain-hole = Отверстие
 drain-channel = Канал
 drain-channel-note = Каждый щелчок добавляет точку; канал повторяет ширину и контур отверстия и проходит под всеми ними и открытая только на двух концах.
@@ -2084,6 +2087,7 @@ repair-seam-tolerance = Допуск стыка
 repair-smallest-shell = Наименьшая соринка
 repair-repair = Починить
 repair-repairing = Починка
+repair-repairing-models = Починено { $done } из { $total }
 
 ## panels/view_cube.rs
 
@@ -2133,6 +2137,8 @@ job-step-shaping = Завершение
 job-step-reading = Чтение моделей
 job-step-combining = Объединение
 job-step-finishing = Сборка результата
+job-step-mending = Починка сетки
+job-step-crossing = Поиск самопересечений
 job-hollow-preparing = Проверка модели
 job-hollow-seeding = Замер поверхности
 job-hollow-carrying = Проход через стенку
