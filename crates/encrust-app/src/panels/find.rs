@@ -119,14 +119,17 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
     let modal = palette_dialog(ctx, id, top).show(ctx, |ui| {
         ui.set_width(PALETTE_W);
         ui.spacing_mut().item_spacing.y = 0.0;
-        lit = steer(ui, lit, list.len());
+        let steered = steer(ui, lit, list.len());
+        let mut moved = steered != lit;
+        lit = steered;
         if field(ui, id, &mut query) {
             lit = 0;
+            moved = true;
         }
         if ui.input(|input| input.key_pressed(Key::Enter)) {
             chosen = list.get(lit).map(|entry| entry.found);
         }
-        chosen = chosen.or(rows(ui, &list, lit));
+        chosen = chosen.or(rows(ui, &list, lit, moved));
         foot(ui);
     });
     let closing = modal.should_close() || chosen.is_some();
@@ -201,8 +204,9 @@ fn foot(ui: &mut egui::Ui) {
 /// The foot's row, points.
 const FOOT_H: f32 = 22.0;
 
-/// The entries found, the lit one washed. Answers the one clicked.
-fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
+/// The entries found, the lit one washed and scrolled to on the frame it `moved`, so the wheel
+/// can leave it. Answers the one clicked.
+fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize, moved: bool) -> Option<Found> {
     if list.is_empty() {
         ui.add_space(PAD);
         ui.horizontal(|ui| {
@@ -228,7 +232,7 @@ fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
                     });
                 }
                 let response = row(ui, entry, index == lit);
-                if index == lit {
+                if moved && index == lit {
                     response.scroll_to_me(None);
                 }
                 if response.clicked() {

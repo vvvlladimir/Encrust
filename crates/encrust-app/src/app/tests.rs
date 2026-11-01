@@ -105,6 +105,63 @@ fn every_tool_on_the_rail_is_named_and_picked_from_the_keyboard() {
     }
 }
 
+/// BUG: the lit row scrolled itself into view every frame, so the wheel could not take the
+/// Find list past its first rows.
+#[test]
+fn the_wheel_scrolls_the_find_list_to_its_last_row() {
+    use crate::shortcuts::{Action, BINDINGS};
+    use egui_kittest::kittest::Queryable as _;
+
+    let mut app = SlicerApp::default();
+    app.view.options.started = true;
+    app.view.options.find = true;
+    let mut dressed = false;
+    let mut harness = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1280.0, 900.0))
+        .build_ui_state(
+            move |ui, app: &mut SlicerApp| {
+                if dressed {
+                    app.window().show(ui);
+                } else {
+                    crate::ui::theme::apply(ui.ctx());
+                    dressed = true;
+                }
+            },
+            app,
+        );
+    harness.run_steps(3);
+    let field = harness.get_by_role(egui::accesskit::Role::TextInput).rect();
+    harness.hover_at(field.center() + egui::vec2(0.0, 150.0));
+    for _ in 0..40 {
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -3.0),
+            modifiers: egui::Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
+        harness.run_steps(2);
+    }
+    harness.run_steps(10);
+    let last = BINDINGS
+        .iter()
+        .rev()
+        .find(|binding| !matches!(binding.action, Action::Pick(_) | Action::Find))
+        .expect("the table lists actions besides the tools")
+        .action
+        .label();
+    let row = harness
+        .query_all_by_label(&last)
+        .last()
+        .expect("the last action is listed")
+        .rect();
+    let list_bottom = field.bottom() + 10.0 * 32.0;
+    assert!(
+        row.bottom() <= list_bottom + 1.0,
+        "{last} stands at {}, under the list's foot at {list_bottom}",
+        row.bottom()
+    );
+}
+
 #[test]
 fn taking_every_support_off_a_rafted_model_is_undone_in_one_step() {
     let mut app = super::states::app(true);
