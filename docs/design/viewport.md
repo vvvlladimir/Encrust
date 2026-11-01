@@ -467,9 +467,15 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   shuts out light by its angle, fading out past the reach. It only ever darkens.
 - **The room.** The printer is put away: no plate, grid, outline or Front word. The scene
   pass starts with `backdrop_fragment` in `props.wgsl`, which turns each pixel back into a
-  line of sight through the inverse view-projection and paints a light studio sky over a
-  pale table 3.05 mm under the plate's level, fading into the horizon with distance and
-  shaded round the mat. It is worked out per pixel, so the room has no geometry.
+  line of sight through the inverse view-projection and finds where it meets a
+  photographer's infinity cove round the mat's middle: the table 3.05 mm under the plate's
+  level out to 1.4 m, curving up over 0.7 m into an upright wall, so there is no horizon. A
+  ray to the floor inside the curve is met in one step; any other is marched along the
+  cove's profile distance. The cove is lit by the studio's ambient and key in linear light,
+  falls off a quarter towards the wall as a lit set's background does, takes the key's
+  shadow and the mat's own on the table, and goes out through the same curve. It has no
+  geometry. In the copy pass the frame's corners darken by up to 22 % from 45 % of the way
+  out, as a lens vignettes.
 - **The set.** A self-healing cutting mat lies under the models, its top 0.05 mm under the
   plate's level so the models' contact shadow never fights it, and things everyone knows
   the size of lie round them as Lychee's *At scale* lays them: in front, a ballpoint as long

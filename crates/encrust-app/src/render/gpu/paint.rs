@@ -18,12 +18,7 @@ impl ViewportResources {
         self.bake_shadow(encoder);
         self.bake_key_shadow(encoder);
         self.measure_thickness(device, encoder, size_px, &viewport);
-        let occlusion = self
-            .frame
-            .occlusion
-            .map_or_else(Occlusion::off, |projection| {
-                Occlusion::of(projection, &viewport)
-            });
+        let occlusion = Occlusion::of(&viewport, self.frame.staged, self.frame.occlusion);
         self.target.occlude(queue, &occlusion);
         self.place(queue, &viewport);
         let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());

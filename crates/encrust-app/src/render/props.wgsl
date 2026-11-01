@@ -141,14 +141,18 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
     return vec4<f32>(finish(surface.rgb, surface.a, shine, normal, in.world), 1.0);
 }
 
-// The render view's room: a light studio sky over a pale table the mat lies on, the table
-// fading into the sky at the horizon and shaded softly round the mat.
-const ROOM_SKY = vec3<f32>(0.80, 0.83, 0.87);
-const ROOM_HORIZON = vec3<f32>(0.92, 0.93, 0.94);
-const ROOM_TABLE = vec3<f32>(0.78, 0.78, 0.79);
-// Millimetres over which the table fades into the horizon, and how dark the mat's own
-// shadow lies on it and how far it reaches.
-const ROOM_FADE_MM = 2500.0;
+// The render view's room: a photographer's infinity cove, the table sweeping up into a wall
+// round the set with no horizon, lit by the studio. See docs/design/viewport.md.
+const COVE_COLOUR = vec3<f32>(0.82, 0.82, 0.83);
+// Millimetres from the mat's middle to where the floor starts curving up, and the radius
+// of the curve, which ends in an upright wall.
+const COVE_FLOOR_MM = 1400.0;
+const COVE_CURVE_MM = 700.0;
+// How the cove is lit, in linear light: what the room fills it with, the key's share, and
+// how much the far wall falls off as a lit set's background does.
+const COVE_AMBIENT = 0.62;
+const COVE_KEY = 0.42;
+const COVE_FALLOFF = 0.25;
 const MAT_SHADOW = 0.35;
 const MAT_SHADOW_MM = 25.0;
 // How dark what stands on the table shades it from the key.
@@ -156,10 +160,37 @@ const TABLE_SHADOW = 0.45;
 // The table's height, plate millimetres: under the mat, whose top lies just under the plate's
 // level. Must match SINK_MM and MAT_THICK_MM in references.rs.
 const TABLE_Z = -3.05;
+const COVE_STEPS = 24;
 
 fn rect_distance(at: vec2<f32>, low: vec2<f32>, high: vec2<f32>) -> f32 {
     let outside = max(max(low - at, at - high), vec2<f32>(0.0));
     return length(outside);
+}
+
+// How far a point stands from the cove's surface, in its own profile: out from the middle
+// and up from the table. Unsigned, which is enough to march to it from inside.
+fn cove_distance(out_mm: f32, up_mm: f32) -> f32 {
+    let bend = vec2<f32>(COVE_FLOOR_MM, COVE_CURVE_MM);
+    let at = vec2<f32>(out_mm, up_mm);
+    if (out_mm <= COVE_FLOOR_MM) {
+        return min(abs(up_mm), abs(distance(at, bend) - COVE_CURVE_MM));
+    }
+    if (up_mm <= COVE_CURVE_MM) {
+        return abs(COVE_CURVE_MM - distance(at, bend));
+    }
+    return abs(COVE_FLOOR_MM + COVE_CURVE_MM - out_mm);
+}
+
+// The cove's normal, facing in, at a point of its profile.
+fn cove_normal(out_mm: f32, up_mm: f32, outward: vec2<f32>) -> vec3<f32> {
+    if (out_mm <= COVE_FLOOR_MM) {
+        return vec3<f32>(0.0, 0.0, 1.0);
+    }
+    let towards_bend = normalize(vec2<f32>(COVE_FLOOR_MM, COVE_CURVE_MM) - vec2<f32>(out_mm, up_mm));
+    if (up_mm > COVE_CURVE_MM) {
+        return vec3<f32>(-outward, 0.0);
+    }
+    return vec3<f32>(outward * towards_bend.x, towards_bend.y);
 }
 
 @fragment
@@ -170,15 +201,33 @@ fn backdrop_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec
     let far = globals.inverse_view_projection * vec4<f32>(ndc, 1.0, 1.0);
     let origin = near.xyz / near.w;
     let ray = normalize(far.xyz / far.w - origin);
-    let sky = mix(ROOM_HORIZON, ROOM_SKY, smoothstep(0.0, 0.5, ray.z));
-    if (ray.z >= -1e-4) {
-        return vec4<f32>(filmic(linear_of(sky)), 1.0);
+    let middle = (globals.desk.xy + globals.desk.zw) * 0.5;
+    // Straight to the floor where the ray meets it inside the cove; marched otherwise.
+    var travelled = 0.0;
+    if (ray.z < -1e-4) {
+        travelled = (TABLE_Z - origin.z) / ray.z;
     }
-    let hit = origin + ray * ((TABLE_Z - origin.z) / ray.z);
-    let away = rect_distance(hit.xy, globals.desk.xy, globals.desk.zw);
-    let under_mat = 1.0 - MAT_SHADOW * (1.0 - smoothstep(0.0, MAT_SHADOW_MM, away));
-    let shaded = under_mat * mix(1.0 - TABLE_SHADOW, 1.0, key_reaches(hit, vec3<f32>(0.0, 0.0, 1.0)));
-    let fade = 1.0 - exp(-distance(hit, globals.eye.xyz) / ROOM_FADE_MM);
-    let table = mix(linear_of(ROOM_TABLE) * shaded, linear_of(ROOM_HORIZON), fade);
-    return vec4<f32>(filmic(table), 1.0);
+    var hit = origin + ray * travelled;
+    if (ray.z >= -1e-4 || length(hit.xy - middle) > COVE_FLOOR_MM) {
+        travelled = 0.0;
+        for (var step = 0; step < COVE_STEPS; step = step + 1) {
+            let at = origin + ray * travelled;
+            let gap = cove_distance(length(at.xy - middle), at.z - TABLE_Z);
+            travelled = travelled + max(gap, 1.0);
+        }
+        hit = origin + ray * travelled;
+    }
+    let outward_xy = hit.xy - middle;
+    let out_mm = length(outward_xy);
+    let outward = select(vec2<f32>(1.0, 0.0), outward_xy / max(out_mm, 1e-3), out_mm > 1e-3);
+    let normal = cove_normal(out_mm, hit.z - TABLE_Z, outward);
+    let key = normalize(-globals.key_towards.xyz);
+    var light = COVE_AMBIENT + COVE_KEY * max(dot(normal, key), 0.0);
+    if (out_mm <= COVE_FLOOR_MM) {
+        let away = rect_distance(hit.xy, globals.desk.xy, globals.desk.zw);
+        let under_mat = 1.0 - MAT_SHADOW * (1.0 - smoothstep(0.0, MAT_SHADOW_MM, away));
+        light = light * under_mat * mix(1.0 - TABLE_SHADOW, 1.0, key_reaches(hit, normal));
+    }
+    light = light * (1.0 - COVE_FALLOFF * smoothstep(0.0, COVE_FLOOR_MM + COVE_CURVE_MM, out_mm));
+    return vec4<f32>(filmic(linear_of(COVE_COLOUR) * light), 1.0);
 }

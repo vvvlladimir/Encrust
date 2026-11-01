@@ -91,17 +91,31 @@ fn enclosed(pixel: vec2<f32>, depth: f32) -> f32 {
     return shut / f32(SAMPLES);
 }
 
+// How much a lens darkens the frame's corners in the render view, and from how far out of
+// its middle, as a share of the half diagonal.
+const VIGNETTE = 0.22;
+const VIGNETTE_FROM = 0.45;
+
+fn vignette(pixel: vec2<f32>) -> f32 {
+    if (occlusion.shading.w < 0.5) {
+        return 1.0;
+    }
+    let share = (pixel - occlusion.viewport.xy) / max(occlusion.viewport.zw, vec2<f32>(1.0));
+    let out = length((share - 0.5) * vec2<f32>(occlusion.viewport.z / max(occlusion.viewport.w, 1.0), 1.0));
+    let corner = length(vec2<f32>(0.5 * occlusion.viewport.z / max(occlusion.viewport.w, 1.0), 0.5));
+    return 1.0 - VIGNETTE * smoothstep(VIGNETTE_FROM, 1.0, out / corner);
+}
+
 @fragment
 fn present_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let colour = textureLoad(frame, vec2<i32>(position.xy), 0);
-    if (occlusion.shading.x < 0.5) {
-        return colour;
+    var kept = vignette(position.xy);
+    if (occlusion.shading.x > 0.5) {
+        let depth = textureLoad(depth_plane, vec2<i32>(position.xy), 0);
+        if (depth < 1.0) {
+            kept = kept * clamp(1.0 - occlusion.shading.z * enclosed(position.xy, depth), 0.0, 1.0);
+        }
     }
-    let depth = textureLoad(depth_plane, vec2<i32>(position.xy), 0);
-    if (depth >= 1.0) {
-        return colour;
-    }
-    let kept = clamp(1.0 - occlusion.shading.z * enclosed(position.xy, depth), 0.0, 1.0);
     // Light taken away in linear light, not off the gamma the plane holds.
     return vec4<f32>(colour.rgb * pow(kept, 1.0 / 2.2), colour.a);
 }

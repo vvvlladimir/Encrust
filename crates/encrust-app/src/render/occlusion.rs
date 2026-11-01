@@ -19,7 +19,8 @@ pub struct Occlusion {
     projection: [[f32; 4]; 4],
     /// Left, top, width and height of the viewport, framebuffer pixels.
     viewport: [f32; 4],
-    /// `x` 1.0 while creases are shaded, `y` the reach in mm, `z` the strength.
+    /// `x` 1.0 while creases are shaded, `y` the reach in mm, `z` the strength, `w` 1.0 in
+    /// the render view, whose frame is vignetted as a lens darkens its corners.
     shading: [f32; 4],
 }
 
@@ -29,18 +30,28 @@ impl Occlusion {
         Self::zeroed()
     }
 
-    /// Creases shaded for a camera seeing through `projection` into `viewport`.
-    pub fn of(projection: Mat4, viewport: &ViewportInPixels) -> Self {
+    /// The copy of a frame drawn into `viewport`: vignetted in the render view, `staged`, and
+    /// its creases shaded through `projection` where there is one.
+    pub fn of(viewport: &ViewportInPixels, staged: bool, projection: Option<Mat4>) -> Self {
+        let vignette = if staged { 1.0 } else { 0.0 };
+        let viewport = [
+            viewport.left_px as f32,
+            viewport.top_px as f32,
+            viewport.width_px as f32,
+            viewport.height_px as f32,
+        ];
+        let Some(projection) = projection else {
+            return Self {
+                viewport,
+                shading: [0.0, 0.0, 0.0, vignette],
+                ..Self::zeroed()
+            };
+        };
         Self {
             inverse_projection: projection.inverse().to_cols_array_2d(),
             projection: projection.to_cols_array_2d(),
-            viewport: [
-                viewport.left_px as f32,
-                viewport.top_px as f32,
-                viewport.width_px as f32,
-                viewport.height_px as f32,
-            ],
-            shading: [1.0, REACH_MM, STRENGTH, 0.0],
+            viewport,
+            shading: [1.0, REACH_MM, STRENGTH, vignette],
         }
     }
 
