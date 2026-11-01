@@ -63,7 +63,7 @@ pub fn describe(ui: &mut Ui, text: &str) {
 /// most its text runs across before wrapping, points.
 const HELP_RING_D: f32 = 16.0;
 const HELP_GLYPH: f32 = theme::glyph::HELP;
-const HELP_D: f32 = 20.0;
+pub const HELP_D: f32 = 20.0;
 const HELP_W: f32 = 280.0;
 
 /// The question mark beside a title that reads out `texts`: on hover, and in a popup a

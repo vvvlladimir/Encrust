@@ -6,7 +6,9 @@ use super::focus_ring;
 use crate::ui::theme;
 
 /// Track and knob of a switch, points.
-pub const TRACK: egui::Vec2 = vec2(28.0, 16.0);
+const TRACK: egui::Vec2 = vec2(SWITCH_W, 16.0);
+/// How wide a switch's track stands, points.
+pub const SWITCH_W: f32 = 28.0;
 const KNOB: f32 = 12.0;
 
 /// A labelled switch filling one row: what it turns on, and the state it is in. A

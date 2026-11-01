@@ -67,12 +67,12 @@ pub use layer_track::{
     paint_layer_track, span_fraction, up,
 };
 pub use layout::{
-    address_label, block_title, body_and_foot, boxed, busy, card, card_foot, card_title, describe,
-    described, describing, dialog, dialog_head, empty_state, field_note, figure_line, file_line,
-    hairline, heading, help_mark, hint, inset, meta, mode_column, mode_group, name_line, nested,
-    notice, page_heading, page_title, page_trail, palette_dialog, progress_bar, progress_bar_of,
-    readings, share_figure, state_word, status_dot, status_glyph, step_bar, subheading,
-    subheading_with_switch, title_line, tool_title, verdict_card, vertical_hairline,
+    HELP_D, address_label, block_title_in, body_and_foot, boxed, busy, card, card_foot, card_title,
+    describe, described, describing, dialog, dialog_head, empty_state, field_note, figure_line,
+    file_line, hairline, heading, help_mark, hint, inset, meta, mode_column, mode_group, name_line,
+    nested, notice, page_heading, page_title, page_trail, palette_dialog, progress_bar,
+    progress_bar_of, readings, share_figure, state_word, status_dot, status_glyph, step_bar,
+    subheading, subheading_with_switch, title_line, tool_title, verdict_card, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
@@ -95,7 +95,7 @@ pub use start_page::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
 pub use theme_card::{CardLook, theme_card};
-pub use toggle::{Segment, Segmented, TRACK as SWITCH_TRACK, bare_switch, switch, tone};
+pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, switch, tone};
 
 /// `6h36m39s`, as a printer's own screen states it.
 ///

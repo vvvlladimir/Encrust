@@ -30,6 +30,7 @@ use crate::ui::{
     Inline, NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button,
     inline_button, nav_row, quiet_button, theme,
 };
+use crate::ui::{page_title, page_trail};
 use frame::{child, scrolled, with_header};
 pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
 pub use profile_files::{import_dropped, import_profile};
@@ -380,7 +381,12 @@ fn close_cards(ui: &mut egui::Ui) {
 fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String], on: Option<&mut bool>) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = theme::NOTE_GAP;
-        block_title(ui, title);
+        let help = (!texts.is_empty()).then_some(crate::ui::HELP_D + theme::NOTE_GAP);
+        let switch = on
+            .is_some()
+            .then_some(crate::ui::SWITCH_W + theme::NOTE_GAP);
+        let beside = help.unwrap_or(0.0) + switch.unwrap_or(0.0);
+        crate::ui::block_title_in(ui, title, beside);
         if !texts.is_empty() {
             crate::ui::help_mark(ui, texts);
         }

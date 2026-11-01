@@ -44,6 +44,7 @@ pub use widgets::{EntryRow, ModelRow, entry_row, model_row};
 pub use widgets::{
     Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, zoom_bar,
 };
+pub use widgets::{HELP_D, SWITCH_W};
 pub use widgets::{
     HELP_D, SWITCH_TRACK, address_label, block_title, figure_line, page_title, paragraph,
     state_word, status_glyph, tool_title, verdict_card,
@@ -64,6 +65,6 @@ pub use widgets::{
 pub use widgets::{ReadoutWords, layer_readout};
 pub use widgets::{ZONE_INSET, inline_button_w};
 pub use widgets::{
-    address_label, block_title, figure_line, file_line, page_heading, page_title, state_word,
+    address_label, block_title_in, figure_line, file_line, page_heading, page_title, state_word,
     status_dot, status_glyph, tool_title, verdict_card,
 };
