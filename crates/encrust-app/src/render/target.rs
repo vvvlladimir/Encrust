@@ -129,21 +129,27 @@ impl SceneTarget {
     }
 
     /// Averages the frame just drawn into the accumulated plane as its `sample`-th, or with
-    /// `None` shows the frame as drawn.
+    /// `None` shows the frame as drawn; out of the render view, `staged` false, the plane goes.
     pub fn accumulate(
         &mut self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         at: ([u32; 2], &ViewportInPixels),
-        sample: Option<u32>,
+        (sample, staged): (Option<u32>, bool),
     ) {
         match (sample, &self.planes) {
             (Some(sample), Some(planes)) => {
                 self.accumulation
                     .add(device, encoder, &planes.bind_group, at, sample);
             }
-            _ => self.accumulation.stop(),
+            _ if staged => self.accumulation.stop(),
+            _ => self.accumulation.release(),
         }
+    }
+
+    #[cfg(test)]
+    pub fn holds_accumulated(&self) -> bool {
+        self.accumulation.holds_plane()
     }
 
     /// The colour plane, which the clear resin copies what stands behind it out of.

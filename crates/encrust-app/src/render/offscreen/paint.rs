@@ -40,61 +40,16 @@ pub(super) fn paint_after<'a>(
     solids: &'a [ModelDraw],
     marks: Marks<'a>,
 ) -> Option<Vec<u8>> {
-    let Marks {
-        markers,
-        cuts,
-        cut_surfaces,
-        pockets,
-        bands,
-        band_floor_mm,
-        volume_mm,
-        cut_line,
-        look,
-        xray,
-        floor,
-        lines,
-        wide_lines,
-        presented,
-        moving,
-        rested,
-    } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let mut resources = ViewportResources::new(device, format);
     let cap = cap_quad(section_mm.unwrap_or_default());
-    let input = |models: &'a [ModelDraw]| FrameInput {
-        reliefs: &[],
-        view_projection: camera.view_projection(1.0),
-        eye: camera.eye(),
-        section_mm,
-        lines,
-        wide_lines,
-        models,
-        markers,
-        solids,
-        cap: &cap,
-        bottom_cut_mm: None,
-        bottom_cap: &[],
-        label: &[],
-        atlas: None,
-        cuts,
-        cut_surfaces,
-        pockets,
-        bands,
-        band_floor_mm,
-        volume_mm,
-        cut_line,
-        look,
-        xray,
-        floor,
-        grid: false,
-        light: moving,
-    };
+    let input = |models| frame_input(&camera, (section_mm, &cap), (models, solids), marks);
     for earlier in before {
         resources.prepare(device, queue, input(earlier));
     }
     // Frames of the same picture drawn first, as the window draws them while it rests.
-    for _ in 0..rested {
+    for _ in 0..marks.rested {
         resources.prepare(device, queue, input(models));
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
@@ -102,10 +57,48 @@ pub(super) fn paint_after<'a>(
     }
     resources.prepare(device, queue, input(models));
 
-    Some(match presented {
+    Some(match marks.presented {
         true => read_presented(device, queue, format, &mut resources),
         false => read_back(device, queue, format, &mut resources),
     })
+}
+
+/// The frame the window hands over for `models` and `solids` seen from `camera`, cut at
+/// `section_mm` and capped with `cap`.
+pub(super) fn frame_input<'a>(
+    camera: &OrbitCamera,
+    (section_mm, cap): (Option<Scalar>, &'a [LineVertex]),
+    (models, solids): (&'a [ModelDraw], &'a [ModelDraw]),
+    marks: Marks<'a>,
+) -> FrameInput<'a> {
+    FrameInput {
+        reliefs: &[],
+        view_projection: camera.view_projection(1.0),
+        eye: camera.eye(),
+        section_mm,
+        lines: marks.lines,
+        wide_lines: marks.wide_lines,
+        models,
+        markers: marks.markers,
+        solids,
+        cap,
+        bottom_cut_mm: None,
+        bottom_cap: &[],
+        label: &[],
+        atlas: None,
+        cuts: marks.cuts,
+        cut_surfaces: marks.cut_surfaces,
+        pockets: marks.pockets,
+        bands: marks.bands,
+        band_floor_mm: marks.band_floor_mm,
+        volume_mm: marks.volume_mm,
+        cut_line: marks.cut_line,
+        look: marks.look,
+        xray: marks.xray,
+        floor: marks.floor,
+        grid: false,
+        light: marks.moving,
+    }
 }
 
 /// Paints what `resources` recorded into an offscreen target and reads the pixels back.

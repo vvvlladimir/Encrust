@@ -33,6 +33,9 @@ pub(super) struct Clear {
 
 struct Plane {
     size_px: [u32; 2],
+    /// Whether the exit and the copy behind are the window's size; for an opaque resin, which
+    /// never reads them, they are a texel each.
+    clear: bool,
     view: wgpu::TextureView,
     exit: wgpu::TextureView,
     exit_depth: wgpu::TextureView,
@@ -62,25 +65,26 @@ impl Clear {
     }
 
     /// Begins a pass over the plane cleared to nothing crossed, drawing into `viewport` of a
-    /// window `size_px` pixels large. The plane is remade whenever the window changes size.
+    /// window `size_px` pixels large, for a `clear` resin or an opaque one. The plane is remade
+    /// whenever either changes.
     pub(super) fn begin(
         &mut self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        size_px: [u32; 2],
+        (size_px, clear): ([u32; 2], bool),
         viewport: &ViewportInPixels,
     ) -> wgpu::RenderPass<'static> {
         if self
             .plane
             .as_ref()
-            .is_some_and(|plane| plane.size_px != size_px)
+            .is_some_and(|plane| plane.size_px != size_px || plane.clear != clear)
         {
             self.plane = None;
         }
         let (layout, sampler, format) = (&self.layout, &self.sampler, self.format);
         let plane = self
             .plane
-            .get_or_insert_with(|| plane(device, layout, sampler, format, size_px));
+            .get_or_insert_with(|| plane(device, (layout, sampler), format, (size_px, clear)));
         let mut pass = encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("viewport_thickness"),
@@ -161,12 +165,12 @@ impl Clear {
 
 fn plane(
     device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
+    (layout, sampler): (&wgpu::BindGroupLayout, &wgpu::Sampler),
     format: wgpu::TextureFormat,
-    size_px: [u32; 2],
+    (size_px, clear): ([u32; 2], bool),
 ) -> Plane {
-    let texture = |label, format, usage| {
+    let seen_through_px = if clear { size_px } else { [1, 1] };
+    let texture = |label, format, usage, size_px: [u32; 2]| {
         device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d {
@@ -186,33 +190,59 @@ fn plane(
         "viewport_thickness",
         THICKNESS_FORMAT,
         wgpu::TextureUsages::RENDER_ATTACHMENT,
+        size_px,
     )
     .create_view(&wgpu::TextureViewDescriptor::default());
     let exit = texture(
         "viewport_exit",
         EXIT_FORMAT,
         wgpu::TextureUsages::RENDER_ATTACHMENT,
+        seen_through_px,
     )
     .create_view(&wgpu::TextureViewDescriptor::default());
     let exit_depth = texture(
         "viewport_exit_depth",
         DEPTH_FORMAT,
         wgpu::TextureUsages::RENDER_ATTACHMENT,
+        seen_through_px,
     )
     .create_view(&wgpu::TextureViewDescriptor::default());
-    let behind = texture("viewport_behind", format, wgpu::TextureUsages::COPY_DST);
+    let behind = texture(
+        "viewport_behind",
+        format,
+        wgpu::TextureUsages::COPY_DST,
+        seen_through_px,
+    );
     let behind_view = behind.create_view(&wgpu::TextureViewDescriptor::default());
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let bind_group = reading(device, (layout, sampler), [&view, &behind_view, &exit]);
+    Plane {
+        size_px,
+        clear,
+        view,
+        exit,
+        exit_depth,
+        behind,
+        bind_group,
+    }
+}
+
+/// What the models read the thickness, the copy behind and the exit through.
+fn reading(
+    device: &wgpu::Device,
+    (layout, sampler): (&wgpu::BindGroupLayout, &wgpu::Sampler),
+    [thickness, behind, exit]: [&wgpu::TextureView; 3],
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("viewport_clear"),
         layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
+                resource: wgpu::BindingResource::TextureView(thickness),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::TextureView(&behind_view),
+                resource: wgpu::BindingResource::TextureView(behind),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
@@ -220,18 +250,10 @@ fn plane(
             },
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: wgpu::BindingResource::TextureView(&exit),
+                resource: wgpu::BindingResource::TextureView(exit),
             },
         ],
-    });
-    Plane {
-        size_px,
-        view,
-        exit,
-        exit_depth,
-        behind,
-        bind_group,
-    }
+    })
 }
 
 impl ViewportResources {
@@ -245,9 +267,15 @@ impl ViewportResources {
         viewport: &ViewportInPixels,
     ) {
         if !self.frame.thick {
+            // At 4K the planes are some 150 MB, which only the render view reads.
+            if !self.frame.staged {
+                self.clear.plane = None;
+            }
             return;
         }
-        let mut pass = self.clear.begin(device, encoder, size_px, viewport);
+        let mut pass = self
+            .clear
+            .begin(device, encoder, (size_px, self.frame.clear), viewport);
         pass.set_bind_group(0, &self.globals_bind_group, &[]);
         pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
         let drawn = &self.frame.models[..self.frame.markers_from];
@@ -287,5 +315,13 @@ impl ViewportResources {
         pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
         let drawn = &self.frame.models[..self.frame.markers_from];
         self.draw_meshes(&mut pass, &self.clear.models, drawn, 0);
+    }
+}
+
+#[cfg(test)]
+impl ViewportResources {
+    /// Whether it holds a plane only the render view draws: the resin's or the averaged one.
+    pub fn holds_render_planes(&self) -> bool {
+        self.clear.plane.is_some() || self.target.holds_accumulated()
     }
 }

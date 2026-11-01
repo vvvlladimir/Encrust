@@ -142,6 +142,17 @@ impl Accumulation {
         self.shown = true;
     }
 
+    /// Lets the plane go, which only the render view averages into.
+    pub fn release(&mut self) {
+        self.plane = None;
+        self.shown = false;
+    }
+
+    #[cfg(test)]
+    pub fn holds_plane(&self) -> bool {
+        self.plane.is_some()
+    }
+
     /// Shows the scene as drawn from now on, until a frame is added again.
     pub fn stop(&mut self) {
         self.shown = false;

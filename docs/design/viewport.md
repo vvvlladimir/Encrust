@@ -568,6 +568,11 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.
 
+The planes only the render view reads go when it is turned off and come back the first
+frame it is on again: at 4K the thickness, exit, its depth and the copy behind are some
+150 MB, and the averaged plane 66 MB. An opaque resin reads only the thickness, so its exit
+and copy are a texel each.
+
 ## The Cut tool's plane
 
 The plane is traced on the model rather than drawn in the air. The globals carry it as

@@ -12,6 +12,7 @@ mod marks;
 mod opaque;
 mod paint;
 mod plate;
+mod release;
 mod texture;
 
 const SIZE: u32 = 768;

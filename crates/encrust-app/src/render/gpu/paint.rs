@@ -46,8 +46,8 @@ impl ViewportResources {
             self.paint_clear(encoder, &viewport);
         }
         let at = (size_px, &viewport);
-        self.target
-            .accumulate(device, encoder, at, self.frame.sample);
+        let averaging = (self.frame.sample, self.frame.staged);
+        self.target.accumulate(device, encoder, at, averaging);
         if let Some(timer) = &mut self.timer {
             timer.end(encoder, self.planned_faces);
         }
