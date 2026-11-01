@@ -48,6 +48,8 @@ struct PropShadow {
 
 struct Globals {
     view_projection: mat4x4<f32>,
+    // Its inverse, which the render view's backdrop turns a pixel into a line of sight by.
+    inverse_view_projection: mat4x4<f32>,
     // The two lights: xyz the direction each travels towards, and their colours. The sky
     // and the ground are what the ambient is mixed from. All of it comes from
     // ui::theme, see docs/design/viewport.md; every w is unused padding.
@@ -102,6 +104,10 @@ struct Globals {
     screen: vec4<f32>,
     // What shows wherever the scene drew nothing: the viewport's own backdrop.
     backdrop: vec4<f32>,
+    // The render view's mat: desk its corners in plate millimetres, xy low and zw high,
+    // and mat.xy its own size across and along.
+    desk: vec4<f32>,
+    mat: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
@@ -611,8 +617,39 @@ fn refracted_from(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed
     return (in.clip_position.xy + shift) / vec2<f32>(textureDimensions(behind_plane));
 }
 
-// A clear resin after KHR_materials_volume: what stands behind, refracted and tinted by the
-// resin over the thickness crossed, clouding into its lit colour, under a Fresnel reflection.
+// A printed clear part is frosted where it has not been polished and hazes as it cures: the
+// light through it spreads over a disc this many pixels across a mm crossed, and at least
+// this much, and clouds over within this many mm even in the clearest resin.
+const FROST_PX_PER_MM = 0.6;
+const FROST_LEAST_PX = 2.5;
+const FROST_MOST_PX = 28.0;
+const CURED_HAZE_MM = 90.0;
+// Taps the frosted light is gathered from: a disc on a golden-angle spiral.
+const FROST_TAPS = 8;
+
+// What stands behind, seen through `crossed_mm` of resin: refracted per channel, spread by
+// the frost, and over the backdrop wherever the copy holds nothing.
+fn through_resin(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_mm: f32) -> vec3<f32> {
+    let spread_px = clamp(FROST_LEAST_PX + FROST_PX_PER_MM * crossed_mm, FROST_LEAST_PX, FROST_MOST_PX);
+    let texel = 1.0 / vec2<f32>(textureDimensions(behind_plane));
+    var seen = vec3<f32>(0.0);
+    for (var channel = 0; channel < 3; channel = channel + 1) {
+        let at = refracted_from(in, normal, view, crossed_mm, RESIN_IOR[channel]);
+        var gathered = 0.0;
+        for (var tap = 0; tap < FROST_TAPS; tap = tap + 1) {
+            let angle = f32(tap) * 2.39996323;
+            let out = sqrt((f32(tap) + 0.5) / f32(FROST_TAPS)) * spread_px;
+            let shifted = at + vec2<f32>(cos(angle), sin(angle)) * out * texel;
+            let behind = textureSampleLevel(behind_plane, behind_sampler, shifted, 0.0);
+            gathered = gathered + behind[channel] + globals.backdrop[channel] * (1.0 - behind.a);
+        }
+        seen[channel] = gathered / f32(FROST_TAPS);
+    }
+    return seen;
+}
+
+// A clear resin after KHR_materials_volume: what stands behind, refracted, frosted and tinted
+// by the resin over the thickness crossed, clouding into its lit colour, under a reflection.
 @fragment
 fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
     let colour = model_colour(in, front_facing);
@@ -620,20 +657,33 @@ fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     var normal = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
     let view = normalize(globals.eye.xyz - in.world);
     normal = select(normal, -normal, dot(normal, view) < 0.0);
-    var seen = vec3<f32>(0.0);
-    for (var channel = 0; channel < 3; channel = channel + 1) {
-        let at = refracted_from(in, normal, view, crossed_mm, RESIN_IOR[channel]);
-        let behind = textureSampleLevel(behind_plane, behind_sampler, at, 0.0);
-        seen[channel] = behind[channel] + globals.backdrop[channel] * (1.0 - behind.a);
-    }
+    let seen = through_resin(in, normal, view, crossed_mm);
     let depth = crossed_mm / max(globals.look.z, 1e-3);
     let tint = pow(max(in.color.rgb, vec3<f32>(0.02)), vec3<f32>(depth));
-    let clouded = 1.0 - exp(-depth);
+    let clouded = 1.0 - exp(-depth - crossed_mm / CURED_HAZE_MM);
     let body = seen * tint * (1.0 - clouded) + colour.rgb * clouded;
     let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
     let reflected = 0.04 + 0.96 * grazing;
     let shine = studio(vec3<f32>(0.0), 1.0, normal, in.world);
     return vec4<f32>(body * (1.0 - reflected) + shine, 1.0);
+}
+
+// What a face of a clear model lays into the scene before the models refract it, so walls
+// inside, a cavity's or a lattice's, read through the part: the studio's reflection off it,
+// brightest at a grazing angle, over a trace of the resin's own colour.
+const INNER_SHINE = 0.55;
+const INNER_BODY = 0.06;
+
+@fragment
+fn inner_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let body = model_colour(in, front_facing);
+    let view = normalize(globals.eye.xyz - in.world);
+    var normal = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
+    normal = select(normal, -normal, dot(normal, view) < 0.0);
+    let grazing = pow(1.0 - dot(normal, view), 3.0);
+    let shine = studio(vec3<f32>(0.0), 1.0, normal, in.world) * INNER_SHINE;
+    let cover = INNER_BODY + 0.25 * grazing;
+    return vec4<f32>(shine * cover + body.rgb * INNER_BODY, cover);
 }
 
 // A marker a tool put down, cut like the model. Its far half is lit as the flat face the cut

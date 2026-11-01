@@ -73,7 +73,33 @@ impl Builder<'_> {
             upright: self.thickness(wgpu::FrontFace::Ccw),
             mirrored: self.thickness(wgpu::FrontFace::Cw),
         };
-        Clear::new(thickness, models, layout, sampler, self.target_format)
+        // Every face, none hiding another, faintly: what the clear models then refract.
+        let inner = self.facing(PipelineKind {
+            label: "viewport_clear_inside",
+            vertex_entry: "model_vertex",
+            fragment_entry: "inner_fragment",
+            buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+            depth_write: false,
+            ..PipelineKind::default()
+        });
+        Clear::new(
+            [thickness, inner, models],
+            layout,
+            sampler,
+            self.target_format,
+        )
+    }
+
+    /// The render view's room behind everything: a floor and a sky worked out per pixel.
+    pub(in super::super) fn backdrop(&self) -> wgpu::RenderPipeline {
+        self.plain(PipelineKind {
+            label: "viewport_backdrop",
+            vertex_entry: "screen_vertex",
+            fragment_entry: "backdrop_fragment",
+            depth_write: false,
+            depth_compare: wgpu::CompareFunction::Always,
+            ..PipelineKind::default()
+        })
     }
 
     fn thickness(&self, front_face: wgpu::FrontFace) -> wgpu::RenderPipeline {

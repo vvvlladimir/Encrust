@@ -25,8 +25,8 @@ mod textures;
 mod timer;
 
 pub use draws::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_PROP_SHADOWS, ModelDraw,
-    PropShadow, ReliefDraw, TrapBox,
+    CutDraw, CutLine, Desk, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_PROP_SHADOWS,
+    ModelDraw, PropShadow, ReliefDraw, TrapBox,
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
@@ -69,6 +69,8 @@ pub const MAX_POCKETS: usize = 32;
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Globals {
     view_projection: [[f32; 4]; 4],
+    /// Its inverse: the render view's backdrop turns a pixel back into a line of sight.
+    inverse_view_projection: [[f32; 4]; 4],
     /// The lights and the ambient, from `theme::Lighting`; every `w` is unused padding.
     key_towards: [f32; 4],
     fill_towards: [f32; 4],
@@ -123,6 +125,10 @@ struct Globals {
     screen: [f32; 4],
     /// What egui paints under the viewport, which shows wherever the scene drew nothing.
     backdrop: [f32; 4],
+    /// The render view's mat: `desk` its corners in plate millimetres, `xy` low and `zw`
+    /// high, and `mat.xy` its own size across and along.
+    desk: [f32; 4],
+    mat: [f32; 4],
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
     pockets: [TrapBox; MAX_POCKETS],
@@ -180,6 +186,8 @@ pub struct ViewportResources {
     /// is drawn opaque and its creases unshaded.
     clear: Clear,
     reads_planes: bool,
+    /// The render view's room, drawn in place of the plate.
+    backdrop: wgpu::RenderPipeline,
     marker_pipelines: Markers,
     line_pipeline: wgpu::RenderPipeline,
     wide_line_pipeline: wgpu::RenderPipeline,
@@ -250,6 +258,8 @@ struct Frame {
     xray: bool,
     /// Whether the models are drawn as a clear resin against the thickness pass.
     clear: bool,
+    /// Whether the render view puts the printer away and stands the models in its room.
+    staged: bool,
     /// The projection the copy shades creases through, or `None` while it does not.
     occlusion: Option<core_geometry::Mat4>,
 }
@@ -270,8 +280,10 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
     let (pockets, held) = clamped::<_, MAX_POCKETS>(frame.pockets);
     let light = &theme::scene().light;
     let towards = |[x, y, z]: [f32; 3]| [x, y, z, 0.0];
+    let desk = frame.look.map(|look| look.desk).unwrap_or_default();
     Globals {
         view_projection: frame.view_projection.to_cols_array_2d(),
+        inverse_view_projection: frame.view_projection.inverse().to_cols_array_2d(),
         key_towards: towards(light.key_towards),
         fill_towards: towards(light.fill_towards),
         key_color: theme::gamma(light.key),
@@ -324,10 +336,12 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
         }),
         screen: [0.0; 4],
         backdrop: theme::gamma(theme::colors().sunken),
+        desk: desk.rect,
+        mat: [desk.mat_mm[0], desk.mat_mm[1], 0.0, 0.0],
         cuts,
         bands,
         pockets,
-        prop_shadows: crate::render::references::shadows(),
+        prop_shadows: desk.shadows,
     }
 }
 
@@ -369,6 +383,7 @@ impl ViewportResources {
             model_pipeline: solid.model,
             xray_pipeline: solid.xray,
             clear: build.clear(),
+            backdrop: build.backdrop(),
             reads_planes: device.adapter_info().backend != wgpu::Backend::Gl,
             marker_pipelines: solid.markers,
             line_pipeline: solid.line,
@@ -455,6 +470,7 @@ impl ViewportResources {
         self.frame.bottom_cap_vertices = frame.bottom_cap.len() as u32;
         self.frame.cutting_bottom = frame.bottom_cut_mm.is_some_and(|mm| frame.eye.z < mm);
         self.frame.xray = frame.xray;
+        self.frame.staged = frame.look.is_some();
         self.frame.clear = self.reads_planes
             && !frame.xray
             && frame.look.is_some_and(|look| look.attenuation_mm > 0.0);

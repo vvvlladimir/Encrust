@@ -133,7 +133,7 @@ pub const MAX_PROP_SHADOWS: usize = 8;
 /// One soft shadow on the mat, in the mat's own millimetres: a segment, a point where its
 /// ends meet, and how far out from it the prop standing on it reaches.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Pod, Zeroable)]
 pub struct PropShadow {
     pub ends: [f32; 4],
     pub reach: [f32; 4],
@@ -146,6 +146,15 @@ impl PropShadow {
             reach: [reach_mm, 0.0, 0.0, 0.0],
         }
     }
+}
+
+/// The render view's set as the shader paints it: the mat's corners in plate millimetres,
+/// its own size, and the props' shadows on it.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Desk {
+    pub rect: [f32; 4],
+    pub mat_mm: [f32; 2],
+    pub shadows: [PropShadow; MAX_PROP_SHADOWS],
 }
 
 /// How the render view shades the models: as printed, under studio light.
@@ -161,6 +170,8 @@ pub struct Look {
     pub pivot_mm: f32,
     /// The camera's projection, which the creases are shaded through at rest.
     pub projection: Mat4,
+    /// The mat and the props laid round the models.
+    pub desk: Desk,
 }
 
 /// The rectangle the contact shadow is laid on, plate millimetres, at the plate's height.

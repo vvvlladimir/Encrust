@@ -591,14 +591,15 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
 - **See through models** (x-ray) to find cavities and trapped resin.
-- **Show as printed:** the models and supports in the resin's own colour under soft studio
-  light, the layers of the chosen layer height stepped into their surface where they will
-  show, a clear resin bending and tinting what stands behind it as deep as the part is
-  thick (the hollow of a hollowed model shows), creases softly shaded once the camera rests,
-  and beside the plate a desk at real size for scale: a cutting mat with a ruler, a pen, a
-  one-euro coin, a 32 mm miniature figure, a 330 ml can and a banana on it. A view only: the
-  command line has nothing to show it in, and the file is written the same. In a browser on
-  WebGL the resin is drawn opaque and unshaded.
+- **Show as printed:** the printer put away and the models in a light studio, standing on a
+  cutting mat with real things round them at their real size, as Lychee lays them: a pen,
+  a ruler, a one-euro coin, a 32 mm miniature figure, a 330 ml can and a banana. The models
+  and supports are in the resin's own colour under soft studio light, the layers of the
+  chosen layer height stepped into their surface where they will show. A clear resin bends,
+  frosts and tints what stands behind it as deep as the part is thick, hazes as cured resin
+  does, and shows the walls inside a hollowed model. Creases are softly shaded once the
+  camera rests. A view only: the command line has nothing to show it in, and the file is
+  written the same. In a browser on WebGL the resin is drawn opaque and unshaded.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
   inside the model through the cap.

@@ -23,10 +23,7 @@ const NICKEL = vec3<f32>(0.78, 0.79, 0.80);
 const STEEL = vec3<f32>(0.72, 0.74, 0.77);
 const PRIMER = vec3<f32>(0.55, 0.56, 0.58);
 
-// The mat, millimetres: its size and thickness, and the unprinted band round its grid.
-// Must match MAT_MM in references.rs.
-const MAT_SIZE = vec2<f32>(220.0, 300.0);
-const MAT_TOP = 3.0;
+// Millimetres of the unprinted band round the mat's grid.
 const MAT_BORDER = 10.0;
 // How dark a prop's shadow lies on the mat at its darkest.
 const PROP_SHADOW = 0.5;
@@ -54,7 +51,7 @@ fn segment_distance(at: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
     return distance(at, start + along * share);
 }
 
-// How much of the light a point of the mat keeps under the props' soft shadows.
+// How much of the light a point of the mat keeps under the props' soft shadows, plate mm.
 fn under_props(at: vec2<f32>) -> f32 {
     var dark = 0.0;
     for (var index = 0u; index < MAX_PROP_SHADOWS; index = index + 1u) {
@@ -67,23 +64,24 @@ fn under_props(at: vec2<f32>) -> f32 {
 }
 
 // A green self-healing mat: a 10 mm grid inside a plain band, every fifth line heavier,
-// and a 45 degree line from each near corner.
-fn mat_colour(local: vec3<f32>, px: vec3<f32>) -> vec3<f32> {
-    if (local.z < MAT_TOP - 0.01) {
+// and a 45 degree line from each near corner. Its mesh is a unit box sized by `globals.mat`.
+fn mat_colour(local: vec3<f32>, world: vec3<f32>, px: vec3<f32>) -> vec3<f32> {
+    if (local.z < 0.999) {
         return MAT_EDGE;
     }
-    let at = local.xy;
-    let inside = all(at > vec2<f32>(MAT_BORDER)) && all(at < MAT_SIZE - vec2<f32>(MAT_BORDER));
-    let pixel = max(px.x, px.y);
+    let size = globals.mat.xy;
+    let at = local.xy * size;
+    let inside = all(at > vec2<f32>(MAT_BORDER)) && all(at < size - vec2<f32>(MAT_BORDER));
+    let pixel = max(px.x * size.x, px.y * size.y);
     let minor = max(ruled(at.x, 10.0, 0.3, pixel), ruled(at.y, 10.0, 0.3, pixel));
     let major = max(ruled(at.x, 50.0, 0.6, pixel), ruled(at.y, 50.0, 0.6, pixel));
     let diagonal = max(
         ruled((at.x - at.y) * 0.70710678, 1000.0, 0.4, pixel),
-        ruled((MAT_SIZE.x - at.x - at.y) * 0.70710678, 1000.0, 0.4, pixel),
+        ruled((size.x - at.x - at.y) * 0.70710678, 1000.0, 0.4, pixel),
     );
     let ink = max(max(minor * 0.3, major * 0.65), diagonal * 0.45) * select(0.0, 1.0, inside);
     let base = select(MAT_EDGE, MAT_GREEN, inside);
-    return mix(base, MAT_INK, ink) * under_props(at);
+    return mix(base, MAT_INK, ink) * under_props(world.xy);
 }
 
 // A can: bare aluminium at its foot and lid, a red lacquered wrap between with a white wave.
@@ -137,7 +135,7 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
     var shine = 0.2;
     switch material {
         case 0: {
-            surface = vec4<f32>(mat_colour(in.local, px), 0.0);
+            surface = vec4<f32>(mat_colour(in.local, in.world, px), 0.0);
             shine = 0.2;
         }
         case 1: {
@@ -163,4 +161,42 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
         default: {}
     }
     return vec4<f32>(finish(surface.rgb, surface.a, shine, normal, in.world), 1.0);
+}
+
+// The render view's room: a light studio sky over a pale table the mat lies on, the table
+// fading into the sky at the horizon and shaded softly round the mat.
+const ROOM_SKY = vec3<f32>(0.80, 0.83, 0.87);
+const ROOM_HORIZON = vec3<f32>(0.92, 0.93, 0.94);
+const ROOM_TABLE = vec3<f32>(0.78, 0.78, 0.79);
+// Millimetres over which the table fades into the horizon, and how dark the mat's own
+// shadow lies on it and how far it reaches.
+const ROOM_FADE_MM = 2500.0;
+const MAT_SHADOW = 0.35;
+const MAT_SHADOW_MM = 25.0;
+// The table's height, plate millimetres: under the mat, whose top lies just under the plate's
+// level. Must match SINK_MM and MAT_THICK_MM in references.rs.
+const TABLE_Z = -3.05;
+
+fn rect_distance(at: vec2<f32>, low: vec2<f32>, high: vec2<f32>) -> f32 {
+    let outside = max(max(low - at, at - high), vec2<f32>(0.0));
+    return length(outside);
+}
+
+@fragment
+fn backdrop_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let share = (position.xy - globals.screen.xy) / max(globals.screen.zw, vec2<f32>(1.0));
+    let ndc = vec2<f32>(share.x * 2.0 - 1.0, 1.0 - share.y * 2.0);
+    let near = globals.inverse_view_projection * vec4<f32>(ndc, 0.0, 1.0);
+    let far = globals.inverse_view_projection * vec4<f32>(ndc, 1.0, 1.0);
+    let origin = near.xyz / near.w;
+    let ray = normalize(far.xyz / far.w - origin);
+    let sky = mix(ROOM_HORIZON, ROOM_SKY, smoothstep(0.0, 0.5, ray.z));
+    if (ray.z >= -1e-4) {
+        return vec4<f32>(sky, 1.0);
+    }
+    let hit = origin + ray * ((TABLE_Z - origin.z) / ray.z);
+    let away = rect_distance(hit.xy, globals.desk.xy, globals.desk.zw);
+    let shaded = 1.0 - MAT_SHADOW * (1.0 - smoothstep(0.0, MAT_SHADOW_MM, away));
+    let fade = 1.0 - exp(-distance(hit, globals.eye.xyz) / ROOM_FADE_MM);
+    return vec4<f32>(mix(ROOM_TABLE * shaded, ROOM_HORIZON, fade), 1.0);
 }

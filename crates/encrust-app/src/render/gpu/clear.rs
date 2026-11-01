@@ -13,6 +13,8 @@ pub(super) const THICKNESS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R1
 pub(super) struct Clear {
     /// Adds each surface's signed distance into the plane; no depth, nothing culled.
     pub(super) thickness: Facing,
+    /// Lays every face of the models into the scene faintly, inside walls included.
+    pub(super) inner: Facing,
     /// Draws the models over the copy, their front faces only.
     pub(super) models: Facing,
     pub(super) layout: wgpu::BindGroupLayout,
@@ -31,14 +33,14 @@ struct Plane {
 
 impl Clear {
     pub(super) fn new(
-        thickness: Facing,
-        models: Facing,
+        [thickness, inner, models]: [Facing; 3],
         layout: wgpu::BindGroupLayout,
         sampler: wgpu::Sampler,
         format: wgpu::TextureFormat,
     ) -> Self {
         Self {
             thickness,
+            inner,
             models,
             layout,
             sampler,

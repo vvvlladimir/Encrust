@@ -428,7 +428,13 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   Over the thickness *d* that light takes the resin's colour as `colour^(d/D)` and clouds
   over by `1 − e^(−d/D)` into the resin lit as an opaque one; Schlick's Fresnel shares it
   with the studio's reflection. Where the copy holds nothing, the backdrop egui paints under
-  the viewport shows. Off under the x-ray.
+  the viewport shows. A printed part is not polished: the light through it spreads over a
+  disc of 2.5 px plus 0.6 px a mm crossed, at most 28, gathered from eight taps, and even the
+  clearest resin clouds over within 90 mm as cured resin hazes. So that walls inside — a
+  hollow's, a lattice's, the far side — read through the part, the scene pass ends by
+  laying every face of the clear models into it, none hiding another and no depth written,
+  as the studio's reflection off it, brightest at a grazing angle, over a trace of the
+  resin's colour; the front faces then refract that. Off under the x-ray.
 - **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
   shades creases from the depth plane, which is kept past the scene pass for it.
   `present.wgsl` rebuilds each pixel's point through the inverse projection, takes its
@@ -436,24 +442,30 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   sixteen points on a golden-angle spiral turned by interleaved-gradient noise, up to
   `REACH_MM` (2.5 mm) away and at most 40 px. A sample above the surface's tangent plane
   shuts out light by its angle, fading out past the reach. It only ever darkens.
-- **The desk.** Off the plate's right edge as the viewer faces its front, its middle level
-  with the plate's, lies an A4 cutting mat (220 × 300 × 3 mm) with things everyone knows
-  the size of on it, as Lychee's *At scale* lays a banana, a pen and a can: a 100 mm steel
-  ruler ticked every 5 mm, a ballpoint as long as a BIC Cristal (149.5 mm) with a hexagonal
-  barrel and a blue cap, a one-euro coin (23.25 × 2.33 mm, nickel in brass), a figure on a
-  one-inch (25 mm) base with its eyes 32 mm over it as the "32 mm heroic" scale measures, a
-  330 ml can (⌀ 66.2 × 115.2 mm) and a banana swept along a 110 mm arc, about 180 mm long.
-  Every mesh is built once from `core_geometry` primitives, a revolve or a sweep, with
-  normals smoothed within 40°, and drawn as a marker: never picked, sliced or capped. Its
-  instance names its material in the overhang slot, `−2 − material`, and `prop_colour` in
-  `props.wgsl` paints it in its own millimetres under `finish`, the studio light with a
-  metal term: the mat's 10 mm grid with every fifth line heavier and a 45° line from each
-  near corner, ruled over a pixel like the plate's grid; the can's red lacquered wrap with a
-  white wave between bare aluminium; the banana yellowing into a brown stem, dark at its
-  blossom end and freckled; the coin's two metals. The props cast soft shadows on the mat:
-  `references::shadows` gives eight segments with the reach of what stands on each, in the
-  mat's millimetres, and the mat darkens by its distance to the nearest. No texture, model
-  file or dependency is shipped for any of it.
+- **The room.** The printer is put away: no plate, grid, outline or Front word. The scene
+  pass starts with `backdrop_fragment` in `props.wgsl`, which turns each pixel back into a
+  line of sight through the inverse view-projection and paints a light studio sky over a
+  pale table 3.05 mm under the plate's level, fading into the horizon with distance and
+  shaded round the mat. It is worked out per pixel, so the room has no geometry.
+- **The set.** A self-healing cutting mat lies under the models, its top 0.05 mm under the
+  plate's level so the models' contact shadow never fights it, and things everyone knows
+  the size of lie round them as Lychee's *At scale* lays them: in front, a ballpoint as long
+  as a BIC Cristal (149.5 mm) and a 100 mm steel ruler; on the left, a figure on a one-inch
+  (25 mm) base with its eyes 32 mm over it as the "32 mm heroic" scale measures, a one-euro
+  coin (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the right, a banana swept
+  along a 110 mm arc, about 180 mm long. `references::lay_out` places them 20 mm clear of
+  the models' box seen from the front, each row on its own side so none can meet another,
+  and picks the smallest mat sold, A3 to A0 either way round, that takes the whole set with
+  a 30 mm margin, centred on it. Every mesh is built once from `core_geometry` primitives, a
+  revolve or a sweep, with normals smoothed within 40°; the mat is a unit box its placement
+  sizes, and the shader reads its size from `globals.mat`. Each is drawn as a marker, never
+  picked, sliced or capped, its instance naming its material in the overhang slot as
+  `−2 − material`; `prop_colour` paints it in its own millimetres under `finish`, the
+  studio's light with a metal term: the mat's 10 mm grid, every fifth line heavier, with a
+  45° line from each near corner; the can's red lacquered wrap with a white wave between
+  bare aluminium; the banana yellowing into a brown stem, dark at its blossom end, freckled;
+  the coin's two metals. Each prop casts a soft shadow on the mat, a segment along its long
+  side reaching half its short side, in plate millimetres. Nothing is shipped for any of it.
 
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.

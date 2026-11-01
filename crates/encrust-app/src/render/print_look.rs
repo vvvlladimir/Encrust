@@ -5,7 +5,7 @@ use core_geometry::Scalar;
 use egui::Color32;
 
 use crate::camera::OrbitCamera;
-use crate::render::gpu::Look;
+use crate::render::gpu::{Desk, Look};
 
 /// How the render view draws the plate as it will come off the printer: in the resin's own
 /// colour, its layers stepped in, with references of known size beside it.
@@ -37,6 +37,7 @@ impl PrintLook {
             attenuation_mm,
             pivot_mm: camera.distance_mm,
             projection: camera.projection(aspect),
+            desk: Desk::default(),
         }
     }
 }

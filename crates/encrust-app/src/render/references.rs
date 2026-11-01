@@ -1,27 +1,39 @@
-//! A desk beside the plate in the render view: a cutting mat with things everyone knows the
-//! size of lying on it, at their real size. See docs/design/viewport.md.
+//! The render view's set: a cutting mat under the models with things everyone knows the size
+//! of lying around them, at their real size. See docs/design/viewport.md.
 
 use std::f32::consts::FRAC_PI_2;
 use std::sync::{Arc, OnceLock};
 
-use core_geometry::{Mesh, Quat, Scalar, Transform, Vec2, Vec3, smooth_normals};
+use core_geometry::{Aabb, Mesh, Quat, Scalar, Transform, Vec2, Vec3, cuboid, smooth_normals};
 use core_supports::Shaded;
 
 use crate::plate::BuildPlate;
-use crate::render::gpu::{MAX_PROP_SHADOWS, ModelDraw, PropShadow};
+use crate::render::gpu::{Desk, MAX_PROP_SHADOWS, ModelDraw, PropShadow};
 use crate::render::vertex::ModelInstance;
 use crate::ui::theme;
 
 mod shapes;
 
-/// An A4 self-healing cutting mat, millimetres: across, along and thick.
-pub const MAT_MM: [Scalar; 3] = [220.0, 300.0, 3.0];
-/// Millimetres between the plate's edge and the mat.
-const GAP_MM: Scalar = 15.0;
+/// Self-healing cutting mats as sold, millimetres across and along: A3, A2, A1 and A0. A set
+/// past the largest takes a mat cut to it.
+const MAT_SIZES_MM: [[Scalar; 2]; 4] = [
+    [450.0, 300.0],
+    [600.0, 450.0],
+    [900.0, 600.0],
+    [1200.0, 900.0],
+];
+pub const MAT_THICK_MM: Scalar = 3.0;
+/// Millimetres the mat's top lies under the plate's level, so the models' contact shadow,
+/// laid at that level, never fights it for depth.
+pub const SINK_MM: Scalar = 0.05;
+/// Millimetres kept clear round the models, between props, and round the set on the mat.
+const MODEL_GAP_MM: Scalar = 20.0;
+const PROP_GAP_MM: Scalar = 12.0;
+const MAT_MARGIN_MM: Scalar = 30.0;
 /// Degrees two faces may turn apart and still be shaded as one curved surface.
 const CREASE_DEG: Scalar = 40.0;
 
-/// What a reference is made of, which the shader paints it as: `prop_fragment`.
+/// What a reference is made of, which the shader paints it as: `prop_colour`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Material {
     Mat = 0,
@@ -37,137 +49,248 @@ pub enum Material {
 /// `PROP_BASE - material`, below anything a model or marker carries.
 const PROP_BASE: f32 = -2.0;
 
-/// One reference: its mesh in its own frame, what it is made of, and where it lies on the
-/// mat, millimetres from the mat's front corner nearest the plate, turned by `turn`.
-pub struct Reference {
+/// One prop: its mesh in its own frame, what it is made of, how it is turned to lie as it
+/// does, and the box it fills turned so.
+pub struct Prop {
     pub shaded: Shaded,
     pub material: Material,
-    pub at: Vec3,
     pub turn: Quat,
+    pub bounds: Aabb,
 }
 
-fn reference(mesh: Mesh, material: Material, at: Vec3, turn: Quat) -> Reference {
+fn shaded(mesh: Mesh) -> Shaded {
     let normals = Arc::new(smooth_normals(&mesh, CREASE_DEG));
-    Reference {
-        shaded: Shaded {
-            mesh: Arc::new(mesh),
-            normals,
-        },
-        material,
-        at,
-        turn,
+    Shaded {
+        mesh: Arc::new(mesh),
+        normals,
     }
 }
 
-/// Where the banana's arc is centred on the mat, millimetres, and how it is turned.
-const BANANA_AT: Vec2 = Vec2::new(247.5, 150.0);
+fn prop(mesh: Mesh, material: Material, turn: Quat) -> Prop {
+    let turned = core_geometry::transform_mesh(
+        &mesh,
+        Transform::from_scale_rotation_translation(Vec3::ONE, turn, Vec3::ZERO),
+    );
+    let bounds = turned.aabb().unwrap_or(Aabb::new(Vec3::ZERO, Vec3::ZERO));
+    Prop {
+        shaded: shaded(mesh),
+        material,
+        turn,
+        bounds,
+    }
+}
 
 /// Built once: the GPU cache keys a mesh by its address, so the same `Arc` every frame.
-pub fn desk() -> &'static [Reference] {
-    static BUILT: OnceLock<Vec<Reference>> = OnceLock::new();
+/// In the order `lay_out` places them: the front row, the left column, the right one.
+pub fn props() -> &'static [Prop] {
+    static BUILT: OnceLock<Vec<Prop>> = OnceLock::new();
     BUILT.get_or_init(|| {
-        let top = MAT_MM[2];
+        let along_u = Quat::from_rotation_z(-FRAC_PI_2);
         let flat = Quat::IDENTITY;
         vec![
-            reference(shapes::mat(), Material::Mat, Vec3::ZERO, flat),
-            reference(
-                shapes::ruler(),
-                Material::Steel,
-                Vec3::new(18.0, 65.0, top),
-                flat,
-            ),
-            reference(
+            prop(
                 shapes::pen(),
                 Material::Pen,
-                Vec3::new(38.0, 15.0, top + shapes::PEN_REST_MM),
-                Quat::from_rotation_x(-FRAC_PI_2),
+                along_u * Quat::from_rotation_x(-FRAC_PI_2),
             ),
-            reference(
-                shapes::coin(),
-                Material::Coin,
-                Vec3::new(75.0, 28.0, top),
-                flat,
-            ),
-            reference(
-                shapes::figure(),
-                Material::Primer,
-                Vec3::new(75.0, 72.0, top),
-                flat,
-            ),
-            reference(
-                shapes::can(),
-                Material::Can,
-                Vec3::new(85.0, 140.0, top),
-                flat,
-            ),
-            reference(
+            prop(shapes::ruler(), Material::Steel, along_u),
+            prop(shapes::figure(), Material::Primer, flat),
+            prop(shapes::coin(), Material::Coin, flat),
+            prop(shapes::can(), Material::Can, flat),
+            prop(
                 shapes::banana(),
                 Material::Banana,
-                BANANA_AT.extend(top),
                 Quat::from_rotation_z(FRAC_PI_2),
             ),
         ]
     })
 }
 
-/// Where the mat's front corner nearest the plate stands, and how it is turned: off the
-/// plate's side to the viewer's right, its middle level with the plate's.
-fn mat_frame(plate: &BuildPlate) -> (Vec3, Quat) {
-    let turn = plate.front_turn();
-    let (rightward, away) = (turn * Vec3::X, turn * Vec3::Y);
-    let extent = |axis: Vec3| axis.x.abs() * plate.x_mm + axis.y.abs() * plate.y_mm;
-    let corner =
-        plate.center() + rightward * (extent(rightward) / 2.0 + GAP_MM) - away * MAT_MM[1] / 2.0;
-    (corner, turn)
+/// The mat as a unit box, sized by its placement's scale.
+fn mat_box() -> &'static Shaded {
+    static BUILT: OnceLock<Shaded> = OnceLock::new();
+    BUILT.get_or_init(|| shaded(cuboid(Vec3::ZERO, Vec3::ONE)))
 }
 
-/// Each reference with where it stands on the plate.
-pub fn placed(plate: &BuildPlate) -> Vec<(&'static Reference, Transform)> {
-    let (corner, turn) = mat_frame(plate);
-    desk()
-        .iter()
-        .map(|reference| {
-            let at = corner + turn * reference.at;
-            let transform =
-                Transform::from_scale_rotation_translation(Vec3::ONE, turn * reference.turn, at);
-            (reference, transform)
-        })
-        .collect()
+/// A rectangle in the viewer's frame: millimetres right of the plate's middle and away from
+/// it, as the viewer faces the plate's front.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    pub low: Vec2,
+    pub high: Vec2,
 }
 
-/// The references as markers, smooth-shaded, each naming its material to the shader:
-/// drawn, never picked, sliced or capped.
-pub fn drawn(plate: &BuildPlate) -> impl Iterator<Item = ModelDraw> {
-    placed(plate).into_iter().map(|(reference, at)| {
-        let material = PROP_BASE - f32::from(reference.material as u8);
-        let instance = ModelInstance::new(at, theme::scene().reference, material);
-        ModelDraw::smooth(&reference.shaded, instance)
-    })
+impl Rect {
+    fn size(self) -> Vec2 {
+        self.high - self.low
+    }
+
+    fn grown(self, by: Scalar) -> Self {
+        Self {
+            low: self.low - Vec2::splat(by),
+            high: self.high + Vec2::splat(by),
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            low: self.low.min(other.low),
+            high: self.high.max(other.high),
+        }
+    }
 }
 
-/// The soft shadows the props cast on the mat, in the mat's own millimetres: each a
-/// segment and the reach of what stands on it. The banana's curve takes three.
-pub fn shadows() -> [PropShadow; MAX_PROP_SHADOWS] {
-    let line = PropShadow::new;
-    let dot = |at: Vec2, reach_mm: f32| PropShadow::new(at, at, reach_mm);
-    let banana = |share: f32| {
-        let spine = shapes::banana_spine(share);
-        BANANA_AT + Vec2::new(-spine.y, spine.x)
+/// The viewer's frame over the plate: its middle, and the plate's right and away.
+struct Frame {
+    middle: Vec3,
+    turn: Quat,
+}
+
+impl Frame {
+    fn of(plate: &BuildPlate) -> Self {
+        Self {
+            middle: plate.center(),
+            turn: plate.front_turn(),
+        }
+    }
+
+    fn to_world(&self, at: Vec3) -> Vec3 {
+        self.middle + self.turn * at
+    }
+
+    /// The rectangle `bounds` covers, seen in this frame.
+    fn rect_of(&self, bounds: &Aabb) -> Rect {
+        let back = self.turn.inverse();
+        let corners = [bounds.mins, bounds.maxs].map(|at| (back * (at - self.middle)).truncate());
+        Rect {
+            low: corners[0].min(corners[1]),
+            high: corners[0].max(corners[1]),
+        }
+    }
+}
+
+/// Where each prop and the mat lie: the props round `models`, the plate's middle if there
+/// are none, and the smallest mat sold that takes them all with a margin.
+pub struct Layout {
+    pub placed: Vec<(&'static Prop, Rect)>,
+    pub mat: Rect,
+}
+
+/// The front row under the models (the pen, then the ruler before it), the figure, the coin
+/// and the can left of them, the banana right: each row clear of the others by its side.
+pub fn lay_out(models: Rect) -> Layout {
+    let clear = models.grown(MODEL_GAP_MM);
+    let [pen, ruler, figure, coin, can, banana] = [0, 1, 2, 3, 4, 5].map(|at| &props()[at]);
+    let size = |prop: &Prop| (prop.bounds.maxs - prop.bounds.mins).truncate();
+    let at = |prop: &'static Prop, low: Vec2| {
+        let rect = Rect {
+            low,
+            high: low + size(prop),
+        };
+        (prop, rect)
     };
-    [
-        line(Vec2::new(18.0, 15.0), Vec2::new(18.0, 115.0), 6.0),
-        line(
-            Vec2::new(38.0, 15.0),
-            Vec2::new(38.0, 15.0 + shapes::PEN_MM),
-            4.0,
-        ),
-        dot(Vec2::new(75.0, 28.0), shapes::COIN_MM[0] / 2.0),
-        dot(Vec2::new(75.0, 72.0), shapes::BASE_MM[0] / 2.0),
-        dot(Vec2::new(85.0, 140.0), shapes::CAN_RADIUS_MM),
-        line(banana(0.05), banana(0.35), 12.0),
-        line(banana(0.35), banana(0.65), 16.0),
-        line(banana(0.65), banana(0.95), 12.0),
-    ]
+    let pen_low = Vec2::new(clear.low.x, clear.low.y - size(pen).y);
+    let ruler_low = pen_low - Vec2::new(0.0, PROP_GAP_MM + size(ruler).y);
+    let figure_low = Vec2::new(clear.low.x - size(figure).x, clear.low.y);
+    let coin_low = figure_low - Vec2::new(PROP_GAP_MM + size(coin).x, 0.0);
+    let can_y = (clear.high.y - size(can).y).max(figure_low.y + size(figure).y + PROP_GAP_MM);
+    let can_low = Vec2::new(clear.low.x - size(can).x, can_y);
+    let banana_y = (clear.low.y + clear.high.y - size(banana).y) / 2.0;
+    let banana_low = Vec2::new(clear.high.x, banana_y.max(clear.low.y));
+    let placed = vec![
+        at(pen, pen_low),
+        at(ruler, ruler_low),
+        at(figure, figure_low),
+        at(coin, coin_low),
+        at(can, can_low),
+        at(banana, banana_low),
+    ];
+    let set = placed
+        .iter()
+        .fold(models, |set, (_, rect)| set.union(*rect))
+        .grown(MAT_MARGIN_MM);
+    Layout {
+        placed,
+        mat: mat_round(set),
+    }
+}
+
+/// The smallest mat sold that covers `set`, either way round, centred on it.
+fn mat_round(set: Rect) -> Rect {
+    let need = set.size();
+    let size = MAT_SIZES_MM
+        .iter()
+        .flat_map(|&[long, short]| [Vec2::new(long, short), Vec2::new(short, long)])
+        .find(|size| size.x >= need.x && size.y >= need.y)
+        .unwrap_or(need);
+    let middle = (set.low + set.high) / 2.0;
+    Rect {
+        low: middle - size / 2.0,
+        high: middle + size / 2.0,
+    }
+}
+
+/// The set laid round the models standing in `models`, or round the plate's middle, as
+/// draws and as what the shader needs to paint the mat and its shadows.
+pub fn set(plate: &BuildPlate, models: Option<Aabb>) -> (Vec<ModelDraw>, Desk) {
+    let frame = Frame::of(plate);
+    let around = models.map_or(
+        Rect {
+            low: Vec2::ZERO,
+            high: Vec2::ZERO,
+        },
+        |bounds| frame.rect_of(&bounds),
+    );
+    let layout = lay_out(around);
+    let floor = -SINK_MM;
+    let mut draws = Vec::with_capacity(layout.placed.len() + 1);
+    let mut shadows = [PropShadow::default(); MAX_PROP_SHADOWS];
+    for (index, (prop, rect)) in layout.placed.iter().enumerate() {
+        let at = rect.low.extend(floor) - prop.bounds.mins;
+        let world = frame.to_world(at);
+        let transform =
+            Transform::from_scale_rotation_translation(Vec3::ONE, frame.turn * prop.turn, world);
+        draws.push(draw(&prop.shaded, prop.material, transform));
+        shadows[index] = shadow_of(&frame, *rect);
+    }
+    let mat = layout.mat;
+    let mat_low = frame.to_world(mat.low.extend(floor - MAT_THICK_MM));
+    let mat_high = frame.to_world(mat.high.extend(floor));
+    let scale = mat.size().extend(MAT_THICK_MM);
+    let placement = Transform::from_scale_rotation_translation(scale, frame.turn, mat_low);
+    draws.push(draw(mat_box(), Material::Mat, placement));
+    let desk = Desk {
+        rect: [
+            mat_low.x.min(mat_high.x),
+            mat_low.y.min(mat_high.y),
+            mat_low.x.max(mat_high.x),
+            mat_low.y.max(mat_high.y),
+        ],
+        mat_mm: mat.size().to_array(),
+        shadows,
+    };
+    (draws, desk)
+}
+
+fn draw(shaded: &Shaded, material: Material, at: Transform) -> ModelDraw {
+    let slot = PROP_BASE - f32::from(material as u8);
+    ModelDraw::smooth(
+        shaded,
+        ModelInstance::new(at, theme::scene().reference, slot),
+    )
+}
+
+/// The soft shadow a prop filling `rect` casts, in world millimetres: a segment along its
+/// long side, half its short side out.
+fn shadow_of(frame: &Frame, rect: Rect) -> PropShadow {
+    let size = rect.size();
+    let middle = (rect.low + rect.high) / 2.0;
+    let (half_long, reach) = match size.x >= size.y {
+        true => (Vec2::new((size.x - size.y) / 2.0, 0.0), size.y / 2.0),
+        false => (Vec2::new(0.0, (size.y - size.x) / 2.0), size.x / 2.0),
+    };
+    let world = |at: Vec2| frame.to_world(at.extend(0.0)).truncate();
+    PropShadow::new(world(middle - half_long), world(middle + half_long), reach)
 }
 
 #[cfg(test)]

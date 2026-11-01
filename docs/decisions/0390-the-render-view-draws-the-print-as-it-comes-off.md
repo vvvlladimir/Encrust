@@ -16,10 +16,10 @@ its own and copied out (ADR 0184), with no multisampling.
 
 **A view toggle, *Show as printed*, beside the x-ray in the view tools and the View menu.**
 It draws every model and support in the resin's colour under a procedural studio light,
-steps the layer height into the surface in the shader, and lays a desk off the plate's right
-edge: a cutting mat with a ruler, a pen, a one-euro coin, a 32 mm figure on a 25 mm base, a
-330 ml can and a banana on it at their real size, built from primitives and painted by
-material in the shader. Picking,
+steps the layer height into the surface in the shader, puts the printer away for a studio
+room worked out per pixel, and stands the models on a cutting mat among a ruler, a pen, a
+one-euro coin, a 32 mm figure on a 25 mm base, a 330 ml can and a banana, laid round them at
+their real size, built from primitives and painted by material in the shader. Picking,
 slicing and the written file do not change.
 
 **A resin carries `details.clarity`, 0.0 opaque to 1.0 water-clear**, default 0.0, so a
@@ -30,7 +30,9 @@ colour, in one picker with a `#RRGGBBAA` field; the view turns it into an attenu
 before the frame, every model surface adds its signed distance from the eye, measured from
 the pivot, into an R16Float plane; everything else is drawn and copied out; the models' front
 faces then read that copy along the view ray refracted by the resin and carried as far as the
-part is thick, per channel, tinted by the resin's colour and clouded over that thickness.
+part is thick, per channel, frosted as an unpolished print is, tinted by the resin's colour
+and clouded over that thickness and by the haze of curing. The scene pass ends by laying
+every face of the clear models into it faintly, so walls inside a hollow read through.
 
 **Creases are shaded in the copy pass, from the depth plane, only while the camera rests.**
 The depth plane is kept past the scene pass for it; a moving camera keeps the plain copy.

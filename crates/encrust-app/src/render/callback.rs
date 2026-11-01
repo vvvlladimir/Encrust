@@ -13,7 +13,7 @@ use crate::plate::BuildPlate;
 use crate::relief::Textures;
 use crate::render::frame_time::CardTime;
 use crate::render::gpu::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_BANDS, ModelDraw,
+    CutDraw, CutLine, Desk, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_BANDS, ModelDraw,
     ReliefDraw, TrapBox,
 };
 use crate::render::grid::{plate_lines, section_frame};
@@ -98,6 +98,7 @@ pub struct ViewportCallback {
 
 /// Lines in plate millimetres: the plate's own, one pixel across, and the edges
 /// `highlighting` marks over the models, wider.
+#[derive(Default)]
 struct Lines {
     thin: Vec<LineVertex>,
     wide: Vec<WideLine>,
@@ -163,7 +164,7 @@ impl ViewportCallback {
         shading: Shading<'_>,
         rect: egui::Rect,
     ) -> Self {
-        let draws = drawn(scene, plate, &shading);
+        let draws = drawn(scene, &shading);
         let Shading {
             section_mm,
             bottom_cut_mm,
@@ -185,14 +186,17 @@ impl ViewportCallback {
             reliefs,
         } = draws;
 
-        let (label, atlas) = label::front(plate);
+        let cuts_mm = section_mm.into_iter().chain(bottom_cut_mm);
+        let stage = Stage::of(scene, plate, print_look.is_some(), cuts_mm);
+        let mut markers = markers;
+        markers.extend(stage.props);
         Self {
             rect,
             view_projection: camera.view_projection(rect.width() / rect.height()),
             eye: camera.eye(),
             section_mm,
             bottom_cut_mm,
-            lines: Lines::of_plate(plate, section_mm.into_iter().chain(bottom_cut_mm)),
+            lines: stage.lines,
             models,
             markers,
             solids,
@@ -202,8 +206,8 @@ impl ViewportCallback {
             bottom_cap: bottom_cut_mm
                 .map(|height| cap_quad(scene, plate, height))
                 .unwrap_or_default(),
-            label,
-            atlas,
+            label: stage.label,
+            atlas: stage.atlas,
             cuts,
             cut_surfaces,
             pockets,
@@ -215,9 +219,12 @@ impl ViewportCallback {
                 [low.extend(0.0), high.extend(plate.z_mm)]
             },
             cut_line,
-            look: print_look.map(|look| look.shading(camera, rect.width() / rect.height())),
+            look: print_look.map(|look| Look {
+                desk: stage.desk,
+                ..look.shading(camera, rect.width() / rect.height())
+            }),
             xray: view.xray,
-            grid: view.grid,
+            grid: view.grid && print_look.is_none(),
             light: light.is_some_and(|light| light.settling),
             floor: Floor {
                 near_corner_mm: Vec2::ZERO,
@@ -240,8 +247,46 @@ impl ViewportCallback {
     }
 }
 
+/// What stands round the models: the printer's plate, its lines and its Front word, or in
+/// the render view, the printer put away, a mat among props.
+struct Stage {
+    lines: Lines,
+    label: Vec<LabelVertex>,
+    atlas: Option<Arc<egui::ColorImage>>,
+    props: Vec<ModelDraw>,
+    desk: Desk,
+}
+
+impl Stage {
+    fn of(
+        scene: &Scene,
+        plate: &BuildPlate,
+        render_view: bool,
+        cuts_mm: impl Iterator<Item = Scalar>,
+    ) -> Self {
+        if render_view {
+            let (props, desk) = references::set(plate, scene.world_bounds());
+            return Self {
+                lines: Lines::default(),
+                label: Vec::new(),
+                atlas: None,
+                props,
+                desk,
+            };
+        }
+        let (label, atlas) = label::front(plate);
+        Self {
+            lines: Lines::of_plate(plate, cuts_mm),
+            label,
+            atlas,
+            props: Vec::new(),
+            desk: Desk::default(),
+        }
+    }
+}
+
 /// What the objects on the plate come to this frame, the ghost of a click included.
-fn drawn(scene: &Scene, plate: &BuildPlate, shading: &Shading<'_>) -> Draws {
+fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
     let mut draws = Draws::of(
         scene,
         shading.overhang_deg.map_or(NOT_MARKED, marking),
@@ -253,9 +298,6 @@ fn drawn(scene: &Scene, plate: &BuildPlate, shading: &Shading<'_>) -> Draws {
     );
     if let Some(ghost) = shading.ghost {
         draws.ghost(scene, shading.light, ghost);
-    }
-    if shading.print_look.is_some() {
-        draws.markers.extend(references::drawn(plate));
     }
     draws
 }

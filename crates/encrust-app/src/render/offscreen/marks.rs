@@ -166,4 +166,6 @@ pub(super) struct Marks<'a> {
     pub(super) wide_lines: &'a [WideLine],
     /// Whether the frame is read through the window's own copy pass, which shades creases.
     pub(super) presented: bool,
+    /// Whether the camera moves, which holds back what is only drawn at rest.
+    pub(super) moving: bool,
 }

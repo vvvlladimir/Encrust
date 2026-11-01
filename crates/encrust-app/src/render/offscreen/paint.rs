@@ -55,6 +55,7 @@ pub(super) fn paint_after<'a>(
         lines,
         wide_lines,
         presented,
+        moving,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -86,7 +87,7 @@ pub(super) fn paint_after<'a>(
         xray,
         floor,
         grid: false,
-        light: false,
+        light: moving,
     };
     for earlier in before {
         resources.prepare(device, queue, input(earlier));
@@ -115,6 +116,7 @@ pub(super) fn read_back(
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     resources.bake_shadow(&mut encoder);
+    resources.place(queue, &whole());
     resources.measure_thickness(device, &mut encoder, [SIZE, SIZE], &whole());
     {
         let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -24,14 +24,7 @@ impl ViewportResources {
                 Occlusion::of(projection, &viewport)
             });
         self.target.occlude(queue, &occlusion);
-        let screen = [
-            viewport.left_px as f32,
-            viewport.top_px as f32,
-            viewport.width_px as f32,
-            viewport.height_px as f32,
-        ];
-        let at = std::mem::offset_of!(Globals, screen) as wgpu::BufferAddress;
-        queue.write_buffer(&self.globals, at, bytemuck::bytes_of(&screen));
+        self.place(queue, &viewport);
         let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());
         let mut pass = self.target.begin(
             device,
@@ -51,6 +44,18 @@ impl ViewportResources {
         }
     }
 
+    /// Tells the shader where the viewport stands in the framebuffer, which only `draw` knows.
+    pub fn place(&self, queue: &wgpu::Queue, viewport: &egui::epaint::ViewportInPixels) {
+        let screen = [
+            viewport.left_px as f32,
+            viewport.top_px as f32,
+            viewport.width_px as f32,
+            viewport.height_px as f32,
+        ];
+        let at = std::mem::offset_of!(Globals, screen) as wgpu::BufferAddress;
+        queue.write_buffer(&self.globals, at, bytemuck::bytes_of(&screen));
+    }
+
     /// Lays what `draw` drew over egui's pass.
     pub fn present(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         self.target.present(render_pass);
@@ -59,7 +64,12 @@ impl ViewportResources {
     /// Records the scene into a pass whose depth plane is [`DEPTH_FORMAT`].
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
-        self.paint_plate(render_pass);
+        if self.frame.staged {
+            render_pass.set_pipeline(&self.backdrop);
+            render_pass.draw(0..3, 0..1);
+        } else {
+            self.paint_plate(render_pass);
+        }
 
         if self.frame.line_vertices > 0 {
             render_pass.set_pipeline(&self.line_pipeline);
@@ -146,6 +156,10 @@ impl ViewportResources {
         let from = self.frame.markers_from as u32;
         self.draw_meshes(render_pass, &self.marker_pipelines.far, markers, from);
         self.draw_meshes(render_pass, &self.marker_pipelines.near, markers, from);
+        // Last, over everything they stand in front of, and drawing no depth of their own.
+        if self.frame.clear {
+            self.draw_meshes(render_pass, &self.clear.inner, drawn, 0);
+        }
     }
 
     /// Draws the inside of every cut: the far wall of each body, kept where the object it

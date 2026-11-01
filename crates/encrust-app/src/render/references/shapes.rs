@@ -6,8 +6,6 @@ use core_geometry::{
     Mesh, Scalar, Vec2, Vec3, ball, cuboid, cylinder, prism, revolve, signed_volume, turns,
 };
 
-use super::MAT_MM;
-
 /// A one-euro coin, millimetres: diameter and thickness.
 pub const COIN_MM: [Scalar; 2] = [23.25, 2.33];
 /// The one-inch round base a tabletop miniature of a person stands on, millimetres.
@@ -44,10 +42,6 @@ const RIDGES: Scalar = 5.0;
 const RIDGE_DEPTH: Scalar = 0.06;
 /// Flats round anything turned: round to the eye at any zoom the plate is framed at.
 const ROUND: usize = 96;
-
-pub fn mat() -> Mesh {
-    cuboid(Vec3::ZERO, Vec3::from(MAT_MM))
-}
 
 pub fn coin() -> Mesh {
     disc(COIN_MM)
