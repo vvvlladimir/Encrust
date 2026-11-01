@@ -44,7 +44,6 @@ fn references_stand_beside_the_plate_only_in_the_render_view() {
         layer_height_mm: 0.05,
         clarity: 0.0,
         depth_of_field: false,
-        supports_removed: false,
     };
     assert_eq!(
         markers(None),
@@ -55,36 +54,5 @@ fn references_stand_beside_the_plate_only_in_the_render_view() {
         markers(Some(look)),
         6,
         "a mat, a ruler, a pen, a coin, a can and a banana"
-    );
-}
-
-#[test]
-fn supports_taken_off_leave_a_nub_where_each_touched_the_model() {
-    let mut scene = a_closed_box();
-    let contacts = [Vec3::new(0.2, 0.2, 0.0), Vec3::new(0.8, 0.8, 0.0)];
-    scene.objects_mut()[0].supports = core_supports::ModelSupports::restore(
-        contacts.map(core_supports::SupportPoint::new).to_vec(),
-        core_geometry::Region::default(),
-        core_geometry::Region::default(),
-        Vec::new(),
-    );
-    let look = PrintLook {
-        resin: resin(),
-        layer_height_mm: 0.05,
-        clarity: 0.0,
-        depth_of_field: false,
-        supports_removed: true,
-    };
-    let draws = drawn(
-        &scene,
-        &Shading {
-            print_look: Some(look),
-            ..Shading::default()
-        },
-    );
-    assert_eq!(
-        draws.models.len(),
-        1 + contacts.len(),
-        "the box and a nub for each support, no columns"
     );
 }

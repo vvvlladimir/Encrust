@@ -913,7 +913,6 @@ menu-plate-grid = Plate grid
 menu-xray = See through models
 menu-render = Show as printed
 menu-depth-of-field = Depth of field when shown as printed
-menu-supports-removed = Supports taken off when shown as printed
 menu-orthographic = Orthographic view
 menu-import = Import
 menu-clear-recent = Clear the list

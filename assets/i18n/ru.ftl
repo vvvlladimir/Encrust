@@ -965,7 +965,6 @@ menu-plate-grid = Сетка платформы
 menu-xray = Просвечивать модели
 menu-render = Показать как напечатается
 menu-depth-of-field = Глубина резкости в виде «как напечатается»
-menu-supports-removed = Поддержки сняты в виде «как напечатается»
 menu-orthographic = Ортогональный вид
 menu-import = Импорт
 menu-clear-recent = Очистить список

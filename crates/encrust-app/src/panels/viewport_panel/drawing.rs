@@ -133,7 +133,6 @@ pub(super) fn paint_plate(
                 layer_height_mm: window.machine.slicing.layer_height_mm(),
                 clarity: window.machine.slicing.material.details.clarity,
                 depth_of_field: window.view.options.depth_of_field,
-                supports_removed: window.view.options.supports_removed,
             }),
         },
         rect,

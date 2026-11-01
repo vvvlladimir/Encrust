@@ -1,15 +1,11 @@
 //! How the render view draws the plate as it will come off the printer, as the window asks
 //! for it and as the shader reads it.
 
-use std::sync::{Arc, OnceLock};
-
-use core_geometry::{Mesh, Scalar, Transform, Vec3, ball};
+use core_geometry::Scalar;
 use egui::Color32;
 
 use crate::camera::OrbitCamera;
-use crate::render::gpu::{Desk, Look, ModelDraw};
-use crate::render::vertex::{ModelInstance, NOT_MARKED};
-use crate::scene::Scene;
+use crate::render::gpu::{Desk, Look};
 
 /// How the render view draws the plate as it will come off the printer: in the resin's own
 /// colour, its layers stepped in, with references of known size beside it.
@@ -21,29 +17,6 @@ pub struct PrintLook {
     pub clarity: f32,
     /// Whether what stands off the point the camera turns about is blurred, as by a lens.
     pub depth_of_field: bool,
-    /// Whether the supports are shown taken off, a nub left where each touched the model.
-    pub supports_removed: bool,
-}
-
-/// Every support group hidden, as many as a plate could hold.
-pub(super) static EVERY_GROUP: [bool; 1024] = [true; 1024];
-
-/// Millimetres across the nub a support leaves once it is snapped off: a little over the
-/// tip it was, the break standing proud of the surface.
-const NUB_MM: Scalar = 0.6;
-
-/// The nubs left on the plate's models where their supports touched them, in `resin`.
-pub(super) fn nubs(scene: &Scene, resin: Color32) -> Vec<ModelDraw> {
-    static NUB: OnceLock<Arc<Mesh>> = OnceLock::new();
-    let nub = NUB.get_or_init(|| Arc::new(ball(Vec3::ZERO, NUB_MM / 2.0, 6, 10)));
-    scene
-        .printable(scene.active_plate())
-        .flat_map(|object| object.supports.contacts(object.transform))
-        .map(|contact| {
-            let at = Transform::from_translation(contact);
-            ModelDraw::whole(Arc::clone(nub), ModelInstance::new(at, resin, NOT_MARKED))
-        })
-        .collect()
 }
 
 /// The lens's aperture radius as a share of its distance to what it is focused on: a macro
@@ -90,7 +63,6 @@ mod tests {
             layer_height_mm: 0.05,
             clarity,
             depth_of_field: false,
-            supports_removed: false,
         }
         .shading(&OrbitCamera::default(), 1.0)
     }
