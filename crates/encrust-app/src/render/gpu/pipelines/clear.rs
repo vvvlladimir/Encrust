@@ -1,6 +1,7 @@
 //! The clear-resin view's pipelines: the thickness pass and the models drawn against it.
 
 use super::super::clear::{Clear, EXIT_FORMAT, THICKNESS_FORMAT};
+use super::models::STUDIO_LIGHT;
 use super::*;
 
 /// A plane the clear models read, filtered where it is sampled between texels.
@@ -70,7 +71,7 @@ impl Builder<'_> {
                 ..PipelineKind::default()
             },
         );
-        let glowing = self.facing_on(
+        let glowing = self.shaded(
             &reading,
             PipelineKind {
                 label: "viewport_glowing_models",
@@ -79,6 +80,7 @@ impl Builder<'_> {
                 buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
                 ..PipelineKind::default()
             },
+            STUDIO_LIGHT,
         );
         let thickness = Facing {
             upright: self.thickness(wgpu::FrontFace::Ccw),
@@ -98,7 +100,8 @@ impl Builder<'_> {
             ..PipelineKind::default()
         });
         Clear::new(
-            [thickness, exit, inner, models, glowing],
+            [thickness, exit, inner, models],
+            glowing,
             layout,
             sampler,
             self.target_format,

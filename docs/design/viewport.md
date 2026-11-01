@@ -120,6 +120,16 @@ any mesh not already on the GPU keyed by its `Arc` address, and the draw list. `
 borrows immutably and replays it: the line pipeline once, then the model pipeline per
 object, the word, then the shadow, before the caps and the markers.
 
+Each model pipeline is built twice from the shader's overridable constants. The opaque
+form writes without blending and has no `discard`: a tiling card hides a fragment only
+behind such a draw, and a desktop card tests depth before it shades only when nothing
+discards. The clipped form blends and discards what the section, a drain cut or a pocket
+takes away. A model is drawn opaque when its colour has full coverage, it is a surface
+rather than a volume, and the frame has no section or drain cut (`Globals::clips_models`).
+The opaque models go first, then the clipped ones. `LOOK` also fixes which light a
+pipeline is under, so the working view's pipeline carries no studio code and its
+registers. The x-ray and the clear resin keep one form each.
+
 ## Vertex layouts
 
 Models are drawn indexed and flat-shaded. Averaged normals would round off exactly the

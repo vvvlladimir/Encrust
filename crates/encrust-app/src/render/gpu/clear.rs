@@ -23,7 +23,7 @@ pub(super) struct Clear {
     /// Draws the models over the copy, their front faces only.
     pub(super) models: Facing,
     /// Draws an opaque resin's models against the thickness, which a thin part glows by.
-    pub(super) glowing: Facing,
+    pub(super) glowing: Shaded,
     pub(super) layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     /// The scene's colour format, which the copy is made in.
@@ -42,7 +42,8 @@ struct Plane {
 
 impl Clear {
     pub(super) fn new(
-        [thickness, exit, inner, models, glowing]: [Facing; 5],
+        [thickness, exit, inner, models]: [Facing; 4],
+        glowing: Shaded,
         layout: wgpu::BindGroupLayout,
         sampler: wgpu::Sampler,
         format: wgpu::TextureFormat,

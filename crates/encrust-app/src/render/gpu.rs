@@ -39,7 +39,7 @@ use draws::{Splits, cut_draws, splits_of};
 use environment::Environment;
 use globals::{Globals, globals_of};
 use light::KeyShadow;
-use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
+use pipelines::{Builder, Capping, Cutting, Facing, Markers, Models, Shaded, globals_layout};
 pub use settle::SETTLED_SAMPLES;
 use settle::Settling;
 use shadow::ContactShadow;
@@ -97,12 +97,13 @@ struct CachedMesh {
 /// How long a mesh no frame draws stays on the card.
 const KEEP_UNDRAWN: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// One mesh to draw this frame: its cache key, whether its placement mirrors it, and
-/// which of its faces to draw.
+/// One mesh to draw this frame: its cache key, whether its placement mirrors it, which of
+/// its faces to draw, and whether it is a surface nothing shows through.
 struct Drawn {
     key: usize,
     mirrored: bool,
     faces: Range<usize>,
+    opaque: bool,
 }
 
 /// One textured model on the card: its triangles with their coordinates, and its images
@@ -125,7 +126,7 @@ pub struct ViewportResources {
     /// The studio as reflections see it, baked for the render view.
     environment: Environment,
     settling: Settling,
-    model_pipeline: Facing,
+    models: Models,
     xray_pipeline: Facing,
     /// The clear-resin view. `reads_planes` is false on a WebGL canvas, where the render view
     /// is drawn opaque and its creases unshaded.
@@ -200,6 +201,8 @@ struct Frame {
     bottom_cap_vertices: u32,
     cutting: bool,
     cutting_bottom: bool,
+    /// Whether a section or a drain cut may take a fragment of any model away.
+    clipped: bool,
     xray: bool,
     /// Whether the models are drawn as a clear resin against the thickness pass.
     clear: bool,
@@ -245,7 +248,7 @@ impl ViewportResources {
             key,
             environment,
             settling: Settling::default(),
-            model_pipeline: solid.model,
+            models: solid.models,
             xray_pipeline: solid.xray,
             clear: build.clear(),
             backdrop: build.backdrop(),
@@ -300,6 +303,7 @@ impl ViewportResources {
                 projection: look.projection,
             });
         self.frame.sample = self.settle(&frame, &globals);
+        self.frame.clipped = globals.clips_models();
         self.write_geometry(device, queue, &frame);
         self.count_frame(&frame);
         self.record(device, queue, &frame);
@@ -419,6 +423,7 @@ impl ViewportResources {
             key,
             mirrored: draw.instance.is_mirrored(),
             faces: draw.faces.clone(),
+            opaque: draw.instance.is_opaque(),
         }
     }
 

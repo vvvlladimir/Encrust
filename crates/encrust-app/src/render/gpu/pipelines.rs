@@ -8,10 +8,12 @@ use super::*;
 mod clear;
 mod environment;
 mod light;
+mod models;
 mod section;
 mod shadow;
 mod wide;
 
+pub(super) use models::{Models, Shaded};
 pub(super) use section::{Capping, Cutting, MATERIAL_ABOVE};
 pub(super) use shadow::{SHADOW_FORMAT, Shadowing};
 
@@ -94,8 +96,8 @@ impl Facing {
 /// The pipelines that draw the plate and the models in their own flat colours.
 pub(super) struct Solid {
     pub(super) cutting: Cutting,
-    pub(super) model: Facing,
-    /// The same models seen through: no depth at all, so every surface behind one still
+    pub(super) models: Models,
+    /// The models seen through: no depth at all, so every surface behind one still
     /// paints and the cavity inside shows.
     pub(super) xray: Facing,
     pub(super) line: wgpu::RenderPipeline,
@@ -176,13 +178,7 @@ impl<'a> Builder<'a> {
 
     pub(super) fn solid(&self) -> Solid {
         Solid {
-            model: self.facing(PipelineKind {
-                label: "viewport_models",
-                vertex_entry: "model_vertex",
-                fragment_entry: "model_fragment",
-                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
-                ..PipelineKind::default()
-            }),
+            models: self.models(),
             xray: self.facing(PipelineKind {
                 label: "viewport_models_seen_through",
                 vertex_entry: "model_vertex",
@@ -338,6 +334,10 @@ struct PipelineKind<'a> {
     /// Which side of a face is dropped, or `None` to keep both. Only the passes that
     /// resolve a cut ask for it: there the near wall of a tube is never what is looked at.
     cull: Option<wgpu::Face>,
+    /// Written over what is there rather than blended into it.
+    opaque: bool,
+    /// The shader's overridable constants, by name.
+    constants: &'a [(&'a str, f64)],
 }
 
 impl Default for PipelineKind<'_> {
@@ -354,6 +354,8 @@ impl Default for PipelineKind<'_> {
             depth_compare: wgpu::CompareFunction::Less,
             stencil: wgpu::StencilState::default(),
             cull: None,
+            opaque: false,
+            constants: &[],
         }
     }
 }
@@ -367,22 +369,26 @@ fn pipeline(
     target_format: wgpu::TextureFormat,
     kind: PipelineKind<'_>,
 ) -> wgpu::RenderPipeline {
+    let compilation_options = wgpu::PipelineCompilationOptions {
+        constants: kind.constants,
+        ..Default::default()
+    };
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(kind.label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some(kind.vertex_entry),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: compilation_options.clone(),
             buffers: kind.buffers,
         },
         fragment: Some(wgpu::FragmentState {
             module: shader,
             entry_point: Some(kind.fragment_entry),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options,
             targets: &[Some(wgpu::ColorTargetState {
                 format: target_format,
-                blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                blend: (!kind.opaque).then_some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                 write_mask: if kind.writes_color {
                     wgpu::ColorWrites::ALL
                 } else {

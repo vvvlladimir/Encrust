@@ -126,11 +126,10 @@ impl ViewportResources {
             );
         }
 
-        let models = self.models_pipeline(render_pass);
         let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
         // A clear resin is drawn after this pass, over a copy of what it leaves.
         if !self.frame.clear {
-            self.draw_meshes(render_pass, models, drawn, 0);
+            self.paint_models(render_pass, drawn);
         }
 
         if !self.frame.reliefs.is_empty() {
@@ -183,17 +182,33 @@ impl ViewportResources {
         }
     }
 
-    /// The pipeline the models are drawn by this frame, with the planes it reads bound: seen
-    /// through, glowing where they are thin, or plain.
-    fn models_pipeline(&self, render_pass: &mut wgpu::RenderPass<'static>) -> &Facing {
-        let planes = self.clear.planes().filter(|_| self.frame.thick);
-        match (self.frame.xray, planes) {
-            (true, _) => &self.xray_pipeline,
-            (false, Some(planes)) => {
+    /// Draws the models seen through, or else the opaque ones first and the clipped after
+    /// them, which the card can hide only behind what is already drawn.
+    fn paint_models(&self, render_pass: &mut wgpu::RenderPass<'static>, drawn: &[Drawn]) {
+        if self.frame.xray {
+            self.draw_meshes(render_pass, &self.xray_pipeline, drawn, 0);
+            return;
+        }
+        let shaded = self.models_pipelines(render_pass);
+        for opaque in [true, false] {
+            let pipelines = shaded.of(opaque);
+            for (index, draw) in drawn.iter().enumerate() {
+                if (draw.opaque && !self.frame.clipped) == opaque {
+                    self.draw_mesh(render_pass, pipelines, draw, index as u32);
+                }
+            }
+        }
+    }
+
+    /// The pipelines the models are drawn by this frame, with the planes they read bound:
+    /// glowing where they are thin, or plain under the frame's light.
+    fn models_pipelines(&self, render_pass: &mut wgpu::RenderPass<'static>) -> &Shaded {
+        match self.clear.planes().filter(|_| self.frame.thick) {
+            Some(planes) => {
                 render_pass.set_bind_group(1, planes, &[]);
                 &self.clear.glowing
             }
-            (false, None) => &self.model_pipeline,
+            None => self.models.under(self.frame.staged),
         }
     }
 

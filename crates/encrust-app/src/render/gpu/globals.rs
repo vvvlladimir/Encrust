@@ -76,6 +76,14 @@ pub(super) struct Globals {
     pockets: [TrapBox; MAX_POCKETS],
 }
 
+impl Globals {
+    /// Whether the shader's section or a drain cut may take a surface's fragment away: the
+    /// test `model_colour` makes before it discards. A pocket clips only a volume.
+    pub(super) fn clips_models(&self) -> bool {
+        self.section[1] > 0.5 || self.section[3] > 0.5 || self.counts[0] > 0.0
+    }
+}
+
 /// What a fixed-size array the shader reads takes of `from`, and how much it took.
 fn clamped<T: Copy + Default, const N: usize>(from: &[T]) -> ([T; N], f32) {
     let mut into = [T::default(); N];

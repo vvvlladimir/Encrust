@@ -9,6 +9,7 @@ mod faults;
 mod holes;
 mod look;
 mod marks;
+mod opaque;
 mod paint;
 mod plate;
 mod texture;

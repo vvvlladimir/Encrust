@@ -12,6 +12,17 @@ const MAX_BANDS = 8u;
 // in gpu.rs.
 const MAX_POCKETS = 32u;
 
+// Whether a model's fragment may be cut away, and whose light it is under: 0 the frame's, 1
+// the working view's, 2 the studio's. A model pipeline sets both; see docs/design/viewport.md.
+override CLIPPED: bool = true;
+override LOOK: u32 = 0u;
+
+fn under_studio() -> bool {
+    if (LOOK == 0u) {
+        return globals.look.y > 0.5;
+    }
+    return LOOK == 2u;
+}
 
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
 // corner.xyz points at a polygon's first corner and corner.w counts its sides, 0 if round.
@@ -237,7 +248,7 @@ fn spiral(tap: i32) -> vec2<f32> {
 // How much of the key light reaches `world` on a surface facing `normal`: all of it outside
 // the render view or off the map.
 fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
-    if (globals.look.y < 0.5) {
+    if (!under_studio()) {
         return 1.0;
     }
     let turned = 1.0 - clamp(dot(normal, normalize(-globals.key_towards.xyz)), 0.0, 1.0);
@@ -558,7 +569,7 @@ fn radiance(base: vec3<f32>, metal: f32, roughness: f32, strength: f32, normal: 
 
 // Whichever light the frame is under: the working view's or the render view's studio.
 fn shade(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>, grooves: f32) -> vec3<f32> {
-    if (globals.look.y > 0.5) {
+    if (under_studio()) {
         return studio_grooved(base, alpha, normal, world, grooves);
     }
     return lit(base, alpha, normal, world);
@@ -832,15 +843,10 @@ fn model_colour(in: ModelFragment, front_facing: bool) -> vec4<f32> {
     let stripe = hatch(in.world);
     let along = in.world.z / max(globals.look.x, 1e-6);
     let per_px = fwidth(along);
-    if (sectioned_away(in.world)) {
-        discard;
-    }
-    if (cut_away(in.world)) {
-        discard;
-    }
     // A volume is the space a pocket of resin fills, drawn out of the whole cavity's
     // faces: only the part of them standing in a pocket is that space.
-    if (in.surface < 0.5 && !in_a_pocket(in.world)) {
+    if (CLIPPED && (sectioned_away(in.world) || cut_away(in.world)
+        || (in.surface < 0.5 && !in_a_pocket(in.world)))) {
         discard;
     }
 
