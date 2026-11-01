@@ -13,8 +13,11 @@ token rather than floats so a raw colour does not type-check. See `docs/decision
 
 ## Tokens
 
-`ui::theme` holds one `Palette` and a set of density constants: graphite surfaces, one ember
-accent, and colours kept for state. Why these values and this face: ADR 0216.
+`ui::theme` holds two `Palette`s and two `Scene`s, dark and light, and a set of density
+constants: graphite or slate surfaces, one ember accent, and colours kept for state. Why these
+values and this face: ADR 0216; how the light one is chosen each frame: ADR 0383. The tables
+below are the dark palette; the light one is `ui/theme/palette.rs`, its raised surfaces
+darkening from a white panel rather than lightening.
 
 ### Surfaces, lightest last
 

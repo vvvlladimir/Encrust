@@ -27,7 +27,7 @@ fn visuals(size: f32) -> GizmoVisuals {
         x_color,
         y_color,
         z_color,
-        s_color: theme::colors().text_high,
+        s_color: theme::colors().knob,
         inactive_alpha: 1.0,
         highlight_color: Some(theme::scene().gizmo_hot),
         stroke_width: 3.5,

@@ -145,6 +145,30 @@ pub struct General {
     pub language: Option<Language>,
     /// Whether nothing in the window animates.
     pub reduce_motion: bool,
+    /// Whether the window is light, dark, or follows the system.
+    pub appearance: Appearance,
+}
+
+/// The palette the user asked for. `System` follows the platform's own setting as it
+/// changes; see `docs/decisions/0383-a-light-palette-chosen-each-frame.md`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl Appearance {
+    /// What egui is told, so it resolves the theme each frame.
+    pub fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
 }
 
 impl Default for General {
@@ -155,6 +179,7 @@ impl Default for General {
             sliced_dir: None,
             language: None,
             reduce_motion: false,
+            appearance: Appearance::System,
         }
     }
 }

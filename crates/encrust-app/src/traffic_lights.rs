@@ -41,15 +41,19 @@ pub fn centre(frame: &eframe::Frame, bar_h: f32) {
     let button = close.frame();
     let bar_h = f64::from(bar_h);
     let top = (bar_h - button.size.height) / 2.0;
-    if (button.origin.y - top).abs() < 0.5 && (button.origin.x - f64::from(LEFT)).abs() < 0.5 {
-        return;
-    }
     // The buttons stand in a title bar view inside a container pinned to the window's top.
     // SAFETY: both are AppKit's own views, retained for as long as the window is.
     let Some(container) = (unsafe { close.superview().and_then(|bar| bar.superview()) }) else {
         return;
     };
+    // A change of appearance lays the container out again without moving the buttons in it.
     let mut bounds = container.frame();
+    let placed = (button.origin.y - top).abs() < 0.5
+        && (button.origin.x - f64::from(LEFT)).abs() < 0.5
+        && (bounds.size.height - bar_h).abs() < 0.5;
+    if placed {
+        return;
+    }
     bounds.size.height = bar_h;
     bounds.origin.y = window.frame().size.height - bar_h;
     container.setFrame(bounds);

@@ -228,7 +228,7 @@ and the one that applies right.
 - A profile's form is blocks one under another, its header the way back, the profile's
   name and its kind: a 180 title column beside at most 460 of fields, a hairline under each; Reset to defaults in the header. A text row's name stands in a 150 column so
   every box starts on one line; every box ends on the block's right edge, and a figure
-  worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. General holds Language, Opening, Motion
+  worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. General holds Language, Appearance (*System · Light · Dark* segmented), Opening, Motion
   (*Reduce motion*), Sliced files, the Prusa login and the bug report.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and
   a tick on the one in use, Add a machine with import and a delete `bin_button` at the

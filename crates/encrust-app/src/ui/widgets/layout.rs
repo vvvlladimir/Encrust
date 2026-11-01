@@ -324,7 +324,7 @@ pub fn card() -> Frame {
         .fill(theme::colors().panel)
         .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
         .corner_radius(theme::R_SURFACE)
-        .shadow(theme::CARD_SHADOW)
+        .shadow(theme::card_shadow())
 }
 
 /// The foot of a card down a side of the stage, set apart on the window's colour and
@@ -674,5 +674,5 @@ fn dialog_frame() -> Frame {
         .fill(theme::colors().panel)
         .stroke(egui::Stroke::new(1.0, theme::colors().line))
         .corner_radius(theme::R_PANEL)
-        .shadow(theme::WINDOW_SHADOW)
+        .shadow(theme::window_shadow())
 }

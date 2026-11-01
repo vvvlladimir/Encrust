@@ -4,13 +4,20 @@ use egui::Ui;
 
 use crate::i18n::{self, Language, tr};
 use crate::panels::settings::form_card;
+use crate::prefs::Appearance;
 use crate::state::Machine;
-use crate::ui::{DropdownFace, DropdownRow, dropdown, dropdown_menu, dropdown_row, hint, switch};
+use crate::ui::{
+    DropdownFace, DropdownRow, Segment, Segmented, dropdown, dropdown_menu, dropdown_row, hint,
+    switch,
+};
 
 pub fn form(ui: &mut Ui, machine: &mut Machine) {
     let general = &mut machine.general;
     form_card(ui, &tr!("general-language"), |ui| {
         language(ui, &mut general.language)
+    });
+    form_card(ui, &tr!("general-appearance"), |ui| {
+        appearance(ui, &mut general.appearance);
     });
     form_card(ui, &tr!("general-start"), |ui| {
         switch(ui, &mut general.start_page, &tr!("general-start-page"));
@@ -28,6 +35,17 @@ pub fn form(ui: &mut Ui, machine: &mut Machine) {
     });
     #[cfg(not(target_arch = "wasm32"))]
     desk(ui, machine);
+}
+
+fn appearance(ui: &mut Ui, choice: &mut Appearance) {
+    let segments = [
+        Segment::new(Appearance::System, tr!("general-appearance-system")),
+        Segment::new(Appearance::Light, tr!("general-appearance-light")),
+        Segment::new(Appearance::Dark, tr!("general-appearance-dark")),
+    ];
+    Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, choice);
 }
 
 /// The language the window is written in. Each is named in itself, so a user who cannot
