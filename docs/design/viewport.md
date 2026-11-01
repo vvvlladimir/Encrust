@@ -506,7 +506,7 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   Any other ray meets the curve, marched eight steps from where it enters the curve's ring
   by its distance to the curve's circle, never past the wall's. Drawn unblended, the cove
   is hidden wherever an opaque model is drawn over it. The cove is lit by the studio's ambient and key in linear light,
-  falls off a quarter towards the wall as a lit set's background does, takes the key's
+  falls off 15 % towards the wall as a lit set's background does, takes the key's
   shadow and the mat's own on the table, and goes out through the same curve. It has no
   geometry. In the copy pass the frame's corners darken by up to 22 % from 45 % of the way
   out, as a lens vignettes.

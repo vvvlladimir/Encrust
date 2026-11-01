@@ -11,13 +11,15 @@ use crate::render::gpu::{Desk, Look, ModelDraw, ViewportResources};
 use crate::render::vertex::{ModelInstance, NOT_MARKED};
 use crate::ui::theme;
 
-/// Neighbouring pixels across a row that differ by more than `by` in summed channels.
+/// Neighbouring pixels across a row, right of the post where only its shadow falls, that
+/// differ by more than `by` in summed channels.
 fn steps_over(pixels: &[u8], by: u32) -> usize {
+    let past_post = (super::SIZE * 3 / 5) as usize;
     let sum = |pixel: &[u8; 4]| pixel[..3].iter().map(|c| u32::from(*c)).sum::<u32>();
     let (pixels, _) = pixels.as_chunks::<4>();
     pixels
         .chunks(super::SIZE as usize)
-        .flat_map(|row| row.windows(2))
+        .flat_map(|row| row[past_post..].windows(2))
         .filter(|pair| sum(&pair[0]).abs_diff(sum(&pair[1])) > by)
         .count()
 }

@@ -232,16 +232,16 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
 
 // The render view's room: a photographer's infinity cove, the table sweeping up into a wall
 // round the set with no horizon, lit by the studio. See docs/design/viewport.md.
-const COVE_COLOUR = vec3<f32>(0.82, 0.82, 0.83);
+const COVE_COLOUR = vec3<f32>(0.94, 0.94, 0.95);
 // Millimetres from the mat's middle to where the floor starts curving up, and the radius
 // of the curve, which ends in an upright wall.
 const COVE_FLOOR_MM = 1400.0;
 const COVE_CURVE_MM = 700.0;
 // How the cove is lit, in linear light: what the room fills it with, the key's share, and
 // how much the far wall falls off as a lit set's background does.
-const COVE_AMBIENT = 0.62;
-const COVE_KEY = 0.42;
-const COVE_FALLOFF = 0.25;
+const COVE_AMBIENT = 1.25;
+const COVE_KEY = 0.45;
+const COVE_FALLOFF = 0.15;
 const MAT_SHADOW = 0.35;
 const MAT_SHADOW_MM = 25.0;
 // How dark what stands on the table shades it from the key.

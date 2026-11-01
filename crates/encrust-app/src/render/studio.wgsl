@@ -93,7 +93,7 @@ fn key_cast_vertex(in: ModelVertex) -> @builtin(position) vec4<f32> {
 
 // The render view lights in linear light and hands the sum to a film's curve, AgX, before it
 // goes out in the gamma the target is written in. See docs/design/viewport.md.
-const EXPOSURE = 0.78;
+const EXPOSURE = 1.4;
 // A milder punchy look over AgX, its power alone: a resin's colour holds its
 // strength instead of AgX's own muted base, its hue untouched.
 const LOOK_POWER = 1.15;
