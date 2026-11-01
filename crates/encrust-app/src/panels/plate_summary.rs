@@ -181,7 +181,7 @@ fn broken_verdict(ui: &mut egui::Ui, scene: &Scene) {
 }
 
 /// What the machine takes over the plate: as planned once a stack cut from the plate as it
-/// stands is held, estimated from the plate's height until then.
+/// stands is held, estimated from the plate's height until then, written alike.
 fn plate_time(window: &Window) -> Option<String> {
     let fingerprint = stack_fingerprint(&window.doc.scene, window.machine.slicing.cutting());
     if !window.machine.preview.is_stale(fingerprint)
@@ -189,16 +189,15 @@ fn plate_time(window: &Window) -> Option<String> {
     {
         return Some(duration(seconds));
     }
-    Some(
-        match estimated_time_s(&window.doc.scene, &window.machine.slicing)? {
-            (longest, Some(shortest)) => tr!(
-                "summary-layer-range",
-                fewest = duration(shortest),
-                most = duration(longest)
-            ),
-            (seconds, None) => duration(seconds),
-        },
-    )
+    let value = match estimated_time_s(&window.doc.scene, &window.machine.slicing)? {
+        (longest, Some(shortest)) => tr!(
+            "summary-layer-range",
+            fewest = duration(shortest),
+            most = duration(longest)
+        ),
+        (seconds, None) => duration(seconds),
+    };
+    Some(value)
 }
 
 /// The time the stack `stack` counts would take, before anything is cut: one figure, or

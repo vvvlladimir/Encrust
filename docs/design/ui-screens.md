@@ -148,7 +148,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 |---|---|---|
 | Heading | `card_title`: *Plate n* in `text_high`, the resin's name at the right in `text_low` | 36 |
 | Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
-| Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
+| Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell in a long language), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
 | Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
 | Foot | the printer row, then the action row | on `base` |
 

@@ -616,8 +616,8 @@ summary-broken-why =
 
 ## ui/widgets.rs
 
-duration-hours = { $hours } ч { $minutes } мин { $seconds } с
-duration-minutes = { $minutes } мин { $seconds } с
+duration-hours = { $hours }ч{ $minutes }мин{ $seconds }с
+duration-minutes = { $minutes }мин{ $seconds }с
 ago-never = никогда
 ago-just-now = только что
 ago-minutes = { $count } мин назад

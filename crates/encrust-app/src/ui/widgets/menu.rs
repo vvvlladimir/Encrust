@@ -269,6 +269,10 @@ mod tests {
                 .open(true)
                 .show(|ui| justified = Some(ui.layout().horizontal_justify()));
         });
-        assert_eq!(justified, Some(false), "a line keeps its letters' own spacing");
+        assert_eq!(
+            justified,
+            Some(false),
+            "a line keeps its letters' own spacing"
+        );
     }
 }
