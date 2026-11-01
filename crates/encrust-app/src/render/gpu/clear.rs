@@ -11,6 +11,12 @@ pub(super) const THICKNESS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R1
 /// back face, and its distance from the eye less the pivot's.
 pub(super) const EXIT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
+/// Whether `device` draws the render view's planes: not on GL, a WebGL canvas's backend, where
+/// the view draws opaque and unshaded (ADR 0390).
+pub(in crate::render) fn reads_planes(device: &wgpu::Device) -> bool {
+    device.adapter_info().backend != wgpu::Backend::Gl
+}
+
 /// The pipelines of the clear view, and the planes it reads: the thickness, and a copy of
 /// what stands behind the models.
 pub(super) struct Clear {

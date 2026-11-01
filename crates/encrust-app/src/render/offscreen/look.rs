@@ -5,7 +5,7 @@ use std::sync::Arc;
 use core_geometry::{Transform, Vec2, Vec3, cuboid};
 
 use super::marks::{Marks, paint_marked_ball};
-use super::paint::paint;
+use super::paint::{gpu_reading_planes, paint};
 use crate::camera::OrbitCamera;
 use crate::render::gpu::{Floor, Look, ModelDraw};
 use crate::render::vertex::{ModelInstance, NOT_MARKED};
@@ -64,6 +64,9 @@ fn layers_step_into_the_model_only_while_asked_for() {
 
 #[test]
 fn a_clear_resin_shows_the_plate_through_a_hollow_model() {
+    if gpu_reading_planes().is_none() {
+        return;
+    }
     let floor = Some(Floor {
         near_corner_mm: Vec2::ZERO,
         size_mm: Vec2::new(150.0, 80.0),
@@ -193,6 +196,9 @@ fn a_clear_resin_is_drawn_opaque_while_the_camera_moves() {
 
 #[test]
 fn a_thin_wall_glows_with_the_key_behind_it_once_the_camera_rests() {
+    if gpu_reading_planes().is_none() {
+        return;
+    }
     let mut camera = OrbitCamera {
         target: Vec3::new(75.0, 40.0, 45.0),
         distance_mm: 170.0,
@@ -232,6 +238,9 @@ fn a_thin_wall_glows_with_the_key_behind_it_once_the_camera_rests() {
 
 #[test]
 fn a_picture_at_rest_averages_its_edges_then_holds() {
+    if gpu_reading_planes().is_none() {
+        return;
+    }
     let camera = OrbitCamera {
         target: Vec3::new(20.0, 20.0, 6.0),
         distance_mm: 60.0,

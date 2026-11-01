@@ -39,6 +39,7 @@ pub use draws::{
 use buffers::{DynamicBuffer, Piece, pieces};
 use can_print::CanPrintTexture;
 use clear::Clear;
+pub(in crate::render) use clear::reads_planes;
 use draws::{Splits, cut_draws, splits_of};
 use environment::Environment;
 use globals::{Globals, globals_of};
@@ -265,7 +266,7 @@ impl ViewportResources {
             xray_pipeline: solid.xray,
             clear: build.clear(),
             backdrop: build.backdrop(),
-            reads_planes: device.adapter_info().backend != wgpu::Backend::Gl,
+            reads_planes: reads_planes(device),
             marker_pipelines: solid.markers,
             line_pipeline: solid.line,
             wide_line_pipeline: build.wide_line(),

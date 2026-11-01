@@ -5,7 +5,7 @@ use std::sync::Arc;
 use core_geometry::{Transform, Vec3};
 
 use super::marks::Marks;
-use super::paint::{ball, draw_frame, gpu};
+use super::paint::{ball, draw_frame, gpu_reading_planes};
 use crate::camera::OrbitCamera;
 use crate::render::gpu::{Look, ModelDraw, ViewportResources};
 use crate::render::vertex::{ModelInstance, NOT_MARKED};
@@ -26,7 +26,7 @@ fn draw(resources: &mut ViewportResources, models: &[ModelDraw], look: Option<Lo
 
 #[test]
 fn leaving_the_render_view_lets_its_planes_go() {
-    let Some((device, _)) = gpu() else {
+    let Some((device, _)) = gpu_reading_planes() else {
         return;
     };
     let mut resources = ViewportResources::new(device, wgpu::TextureFormat::Rgba8UnormSrgb);

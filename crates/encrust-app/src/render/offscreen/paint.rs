@@ -1,7 +1,7 @@
 use super::SIZE;
 use super::marks::Marks;
 use crate::camera::OrbitCamera;
-use crate::render::gpu::{DEPTH_FORMAT, FrameInput, ModelDraw, ViewportResources};
+use crate::render::gpu::{DEPTH_FORMAT, FrameInput, ModelDraw, ViewportResources, reads_planes};
 use crate::render::vertex::LineVertex;
 use crate::ui::theme;
 use core_geometry::{Mesh, Scalar, Vec3};
@@ -264,6 +264,12 @@ pub(super) fn gpu() -> Option<&'static (wgpu::Device, wgpu::Queue)> {
         )
     })
     .as_ref()
+}
+
+/// The device, where it draws the render view's planes; a test of what they show has nothing
+/// to see on a GL adapter, as on a machine with none.
+pub(super) fn gpu_reading_planes() -> Option<&'static (wgpu::Device, wgpu::Queue)> {
+    gpu().filter(|(device, _)| reads_planes(device))
 }
 
 pub(super) fn target(

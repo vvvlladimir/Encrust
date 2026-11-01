@@ -5,7 +5,7 @@ use std::sync::Arc;
 use core_geometry::{Transform, Vec3, cuboid};
 
 use super::marks::Marks;
-use super::paint::{draw_frame, frame_input, gpu, read_back};
+use super::paint::{draw_frame, frame_input, gpu_reading_planes, read_back};
 use crate::camera::OrbitCamera;
 use crate::render::gpu::{Desk, Look, ModelDraw, ViewportResources};
 use crate::render::vertex::{ModelInstance, NOT_MARKED};
@@ -26,7 +26,7 @@ fn steps_over(pixels: &[u8], by: u32) -> usize {
 
 #[test]
 fn the_key_shadow_is_hard_while_the_camera_moves_and_soft_at_rest() {
-    let Some((device, queue)) = gpu() else {
+    let Some((device, queue)) = gpu_reading_planes() else {
         return;
     };
     let post = cuboid(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(10.0, 10.0, 80.0));
