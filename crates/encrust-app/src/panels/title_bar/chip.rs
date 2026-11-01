@@ -45,9 +45,8 @@ pub(super) fn centred_chip(
 /// A bar narrower than this names the machine without its maker.
 const SHORT_NAMES_W: f32 = 1100.0;
 
-/// The machine, resin, layers and exposure of the plate, no wider than `max_w`: names are cut
-/// short, the maker dropped while `short`, and the chip is left out below `NAME_LEAST_W` of
-/// each.
+/// The plate's machine, resin, layers and exposure within `max_w`, the maker dropped while
+/// `short`; left out below `NAME_LEAST_W` a name.
 pub(super) fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32, short: bool) {
     let slicing = &window.machine.slicing;
     let untuned = slicing.printer_id.is_some() && slicing.has_resin() && !slicing.resin_is_tuned();

@@ -775,10 +775,10 @@ address in a video player).
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. A release found is announced once by a notice and kept
   as a pill in the top bar; its sheet lists every change, and shows the download's amount,
-  time left and steps, with Cancel while it downloads. You can skip a version.
-- **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`). A copy from the Microsoft Store
-  is updated by the Store instead: it says when the Store has a new version, and its button
-  opens Encrust in the Store app to update.
+  time left and steps, with Cancel while it downloads. You can skip a version. A copy from
+  the Microsoft Store is updated by the Store instead: it says when the Store has a new
+  version, and its button opens Encrust in the Store app to update.
+- **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`).
 - **Bug report:** builds a Markdown report (what happened, how to reproduce it, settings,
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.

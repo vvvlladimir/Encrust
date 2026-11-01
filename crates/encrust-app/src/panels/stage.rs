@@ -6,9 +6,8 @@ use crate::panels::{
 use crate::ui::theme;
 use crate::workspace::Mode;
 
-/// The stage: the viewport under the whole of it, the mask beside the model or in its
-/// place, and the cards over them, which keep to `clear`, the room the side cards leave
-/// under the tool `row`.
+/// The stage: the viewport, the mask beside or instead of the model, and the cards over
+/// them within `clear`, the room the side cards leave under the tool `row`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>) {
     let stage = ui.available_rect_before_wrap();
 

@@ -1,6 +1,5 @@
-//! The Hollow and Drain pages: each tool's named settings (ADR 0226) as a table. Numbers are
-//! edited in the tool's Profile row; here they are renamed by a double click, written, taken in
-//! and removed.
+//! The Hollow and Drain pages: each tool's named settings (ADR 0226) as a table, renamed,
+//! written, taken in and removed here; their numbers are edited in the tool's Profile row.
 
 use std::path::Path;
 

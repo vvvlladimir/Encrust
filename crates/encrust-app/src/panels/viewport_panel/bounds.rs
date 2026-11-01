@@ -3,6 +3,7 @@
 use core_geometry::Vec3;
 
 use crate::gizmo::{self, HANDLES_REACH};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::pick::occluded;
 use crate::ui::theme;
@@ -16,8 +17,7 @@ const BRACKET_ARM: f32 = 0.15;
 /// How many pieces each arm is tested for being hidden in.
 const BRACKET_PIECES: u32 = 6;
 
-/// Brackets on the corners of each picked model's bounds, and the size of each side, the
-/// way a slicer shows what a model measures without hiding it inside a box.
+/// Brackets on the corners of each picked model's bounds, and the size of each side.
 pub(super) fn draw_bounds(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
     let on_screen = projector(&window.view.camera, viewport);
     let camera = &window.view.camera;
@@ -33,34 +33,46 @@ pub(super) fn draw_bounds(ui: &egui::Ui, window: &Window, viewport: egui::Rect) 
     let boxes = picked.filter_map(|id| window.doc.scene.get(*id)?.world_bounds());
     for bounds in boxes {
         let (lo, hi) = (bounds.mins, bounds.maxs);
-        let arm = (hi - lo) * BRACKET_ARM;
         for corner in 0..8 {
-            let pick = |bit: usize, axis: usize| {
-                if corner >> bit & 1 == 0 {
-                    lo[axis]
-                } else {
-                    hi[axis]
-                }
-            };
-            let at = Vec3::new(pick(0, 0), pick(1, 1), pick(2, 2));
-            let inward = (lo + hi) * 0.5 - at;
-            for axis in 0..3 {
-                let mut end = at;
-                end[axis] += arm[axis].copysign(inward[axis]);
-                // Cut into pieces, so an arm half behind the model shows its other half.
-                for piece in 0..BRACKET_PIECES {
-                    let along = |t: f32| at.lerp(end, t / BRACKET_PIECES as f32);
-                    let (from, to) = (along(piece as f32), along(piece as f32 + 1.0));
-                    let middle = seen(from.lerp(to, 0.5));
-                    if let (Some(_), Some(from), Some(to)) =
-                        (middle, on_screen(from), on_screen(to))
-                    {
-                        painter.line_segment([from, to], stroke);
-                    }
-                }
-            }
+            bracket(&painter, stroke, corner, (lo, hi), &seen, &on_screen);
         }
         size_labels(&painter, &seen, handles, lo, hi);
+    }
+}
+
+/// The three arms of the bracket on corner `corner` of the box `lo`..`hi`, each bit of
+/// `corner` picking the high side of one axis.
+fn bracket(
+    painter: &egui::Painter,
+    stroke: egui::Stroke,
+    corner: usize,
+    (lo, hi): (Vec3, Vec3),
+    seen: &impl Fn(Vec3) -> Option<egui::Pos2>,
+    on_screen: &impl Fn(Vec3) -> Option<egui::Pos2>,
+) {
+    let pick = |axis: usize| {
+        if corner >> axis & 1 == 0 {
+            lo[axis]
+        } else {
+            hi[axis]
+        }
+    };
+    let at = Vec3::new(pick(0), pick(1), pick(2));
+    let inward = (lo + hi) * 0.5 - at;
+    let arm = (hi - lo) * BRACKET_ARM;
+    for axis in 0..3 {
+        let mut end = at;
+        end[axis] += arm[axis].copysign(inward[axis]);
+        // Cut into pieces, so an arm half behind the model shows its other half.
+        for piece in 0..BRACKET_PIECES {
+            let along = |t: f32| at.lerp(end, t / BRACKET_PIECES as f32);
+            let (from, to) = (along(piece as f32), along(piece as f32 + 1.0));
+            if let (Some(_), Some(from), Some(to)) =
+                (seen(from.lerp(to, 0.5)), on_screen(from), on_screen(to))
+            {
+                painter.line_segment([from, to], stroke);
+            }
+        }
     }
 }
 
@@ -83,10 +95,10 @@ fn size_labels(
         let Some(at) = on_screen(middle) else {
             continue;
         };
-        let text = format!("{:.2}", size[axis]);
+        let text = tr!("value-mm", value = format!("{:.2}", size[axis]));
         let colour = theme::colors().axis[axis];
         let galley = painter.layout_no_wrap(text, theme::figures(11.0), colour);
-        let plate = egui::Rect::from_center_size(at, galley.size() + egui::vec2(8.0, 4.0));
+        let plate = plate_around(at, &galley);
         let plate = handles.map_or(plate, |centre| clear_of(plate, centre, HANDLES_REACH));
         figure_on(painter, plate, galley, colour);
     }
@@ -100,8 +112,11 @@ pub(super) fn figure_plate(
     colour: egui::Color32,
 ) {
     let galley = painter.layout_no_wrap(text, theme::figures(11.0), colour);
-    let plate = egui::Rect::from_center_size(at, galley.size() + egui::vec2(8.0, 4.0));
-    figure_on(painter, plate, galley, colour);
+    figure_on(painter, plate_around(at, &galley), galley, colour);
+}
+
+fn plate_around(at: egui::Pos2, galley: &egui::Galley) -> egui::Rect {
+    egui::Rect::from_center_size(at, galley.size() + egui::vec2(8.0, 4.0))
 }
 
 fn figure_on(

@@ -57,9 +57,8 @@ pub enum Chosen {
     Open(String),
 }
 
-/// Where the printer in hand sends its files, as one row: its name and state, and its
-/// sheet beside it; a press opens the printers the profile lists and a new scan.
-/// Failures wait behind the status word.
+/// Where the printer in hand sends its files, as one row with its sheet beside it; a press
+/// lists the profile's printers and scans, failures wait behind the status word.
 pub fn destination(
     ui: &mut egui::Ui,
     network: &Network,
@@ -174,9 +173,8 @@ fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -
 /// Points from the row's right edge to the middle of the sheet's square inside it.
 const OPEN_INSET: f32 = 20.0;
 
-/// The row itself, on `raised`: the printer glyph, its name, what it is doing in its colour,
-/// the caret of the list it opens, and room at its right for the sheet's square when it
-/// `opens` one. Hovering the status word shows `notes`.
+/// The row on `raised`: glyph, name, state in its colour, caret, and room for the sheet's
+/// square when it `opens` one; the status word's hover shows `notes`.
 fn destination_row(
     ui: &mut egui::Ui,
     name: &str,
@@ -355,7 +353,12 @@ pub fn summary(reach: Reach, reading: Option<&Reading>) -> (String, Color32) {
             progress: Some(progress),
             ..
         }) => (
-            format!("{}, {file}, {:.0}%", face.word, progress * 100.0),
+            tr!(
+                "printer-printing-file",
+                state = face.word,
+                file = file,
+                percent = format!("{:.0}", progress * 100.0)
+            ),
             tint,
         ),
         _ => (face.word, tint),

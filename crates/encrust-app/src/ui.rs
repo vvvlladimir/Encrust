@@ -30,7 +30,7 @@ pub use widgets::{
 };
 pub use widgets::{BindingPress, BindingRow, Recording, binding_row};
 pub use widgets::{CardLook, StepState, boxed, bullet, release_hero, steps, tag_label, theme_card};
-pub use widgets::{Confirm, any_armed, confirm_button, key_row, keycap, keycap_width};
+pub use widgets::{Confirm, any_armed, confirm_button, is_armed, key_row, keycap, keycap_width};
 pub use widgets::{
     DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
     dropdown_search_menu,

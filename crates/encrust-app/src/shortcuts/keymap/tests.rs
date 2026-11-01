@@ -43,6 +43,27 @@ fn a_key_put_back_as_the_table_has_it_is_not_kept() {
 }
 
 #[test]
+fn a_reset_action_takes_its_table_key_back_from_the_one_given_it() {
+    let mut keymap = Keymap::default();
+    keymap.assign(Action::Undo, 0, cmd(Key::D));
+    keymap.reset(Action::Duplicate);
+    assert_eq!(keymap.chords(Action::Duplicate), vec![cmd(Key::D)]);
+    assert_eq!(
+        keymap.holder(cmd(Key::D), Action::Duplicate),
+        None,
+        "Cmd+D is Duplicate's alone again"
+    );
+}
+
+#[test]
+fn an_actions_own_second_key_put_first_swaps_the_two() {
+    let mut keymap = Keymap::default();
+    keymap.assign(Action::Undo, 1, cmd(Key::U));
+    keymap.assign(Action::Undo, 0, cmd(Key::U));
+    assert_eq!(keymap.chords(Action::Undo), vec![cmd(Key::U), cmd(Key::Z)]);
+}
+
+#[test]
 fn an_action_holds_two_keys_at_most() {
     let mut keymap = Keymap::default();
     keymap.assign(Action::Undo, 1, cmd(Key::U));

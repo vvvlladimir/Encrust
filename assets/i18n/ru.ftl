@@ -932,10 +932,12 @@ update-step-verify = Проверка подписи
 update-step-install = Установка
 update-cancel = Отмена
 notice-release-out = Вышел Encrust { $version }
+app-version = Encrust { $version }
+name-numbered = { $name } { $number }
 notice-release-and-more = { $first } и ещё { $count }
 notice-what-is-new = Что нового
 notice-release-later = Позже: значок останется в верхней панели
-updates-release-found = Найден выпуск
+updates-release-found = Найден релиз
 updates-looking-block = Проверка
 updates-every-change = Все изменения
 updates-and-more = И ещё { $count }.
@@ -1317,7 +1319,7 @@ printer-build-volume = Область построения
 printer-output = Вывод
 printer-firmware = Прошивка
 printer-browser-sends-nothing = Браузер не может достучаться до принтера в вашей сети. Нарезанный файл скачивается, и его нужно переносить на флешке или через приложение самого принтера.
-printer-own-copy = Это ваша копия принтера, который поставляется и в этой сборке, и они различаются. Приоритет у вашей, даже если в новом выпуске исправлены поставляемые значения.
+printer-own-copy = Это ваша копия принтера, который поставляется и в этой сборке, и они различаются. Приоритет у вашей, даже если в новом релизе исправлены поставляемые значения.
 printer-use-shipped = Использовать поставляемый профиль
 printer-cannot-put-back = не удалось вернуть поставляемый профиль
 printer-cannot-save = не удалось сохранить принтер
@@ -1682,16 +1684,16 @@ drain-drill-tooltip = Отверстие в самой нижней точке �
 
 update-error-fetch = не удалось получить { $url }
 update-error-feed = источник обновлений нечитаем
-update-error-version = `{ $version }` не является версией выпуска
+update-error-version = `{ $version }` не является версией релиза
 update-error-foreign = источник указывает за пределы выпусков этого проекта: { $url }
-update-error-signature = загрузка не подписана ключом выпусков Encrust
+update-error-signature = загрузка не подписана ключом релиза Encrust
 update-error-signed = подпись относится к `{ $found }`, а не к `{ $expected }`
 update-error-archive = не удалось распаковать загруженный архив
 update-error-missing = в загруженном архиве нет `{ $name }`
 update-error-replace = не удалось заменить { $path }
 update-error-cancelled = загрузка отменена
 update-error-store = Microsoft Store не ответил
-update-no-build = В этом выпуске нет сборки для этой платформы.
+update-no-build = В этом релизе нет сборки для этой платформы.
 update-cannot-check = не удалось проверить обновления
 update-installed = Encrust { $version } установлен
 update-cannot-install = не удалось установить Encrust { $version }
@@ -1708,17 +1710,17 @@ update-by-package = Эта копия обновляется загрузкой 
 
 updates-by-store = Microsoft Store поддерживает эту копию в актуальном состоянии.
 updates-store-link = Encrust в Microsoft Store
-updates-daily = Искать новый выпуск раз в сутки
-updates-privacy = Один запрос в сутки к GitHub за самым новым выпуском. В нём только версия этой сборки, ничего больше, но GitHub видит ваш адрес. Ничего не скачивается и не устанавливается, пока вы не попросите.
+updates-daily = Искать новый релиз раз в сутки
+updates-privacy = Один запрос в сутки к GitHub за самым новым релизом. В нём только версия этой сборки, ничего больше, но GitHub видит ваш адрес. Ничего не скачивается и не устанавливается, пока вы не попросите.
 updates-check-now = Проверить сейчас
-updates-looking = Поиск нового выпуска
-updates-newest = Это самый новый выпуск.
+updates-looking = Поиск нового релиза
+updates-newest = Это самый новый релиз.
 updates-installing = Загрузка и проверка подписи
 updates-restart-now = Перезапустить сейчас
 updates-in-store = Обновить в Microsoft Store
 updates-install = Загрузить и установить
 updates-skip = Пропустить эту версию
-updates-release-page = Страница выпуска
+updates-release-page = Страница релиза
 
 ## panels/start.rs
 
@@ -2200,6 +2202,7 @@ job-orient-none = поиск не нашёл ни одной ориентаци�
 
 job-thread-stopped-support = поток поддержек остановился, не закончив
 job-placing = Расстановка поддержек, { $percent } %
+printer-printing-file = { $state }, { $file }, { $percent }%
 job-cutting-plate = Нарезка платформы...
 
 ## job/preview.rs

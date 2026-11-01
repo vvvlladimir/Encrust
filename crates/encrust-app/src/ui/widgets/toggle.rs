@@ -101,8 +101,8 @@ impl<'a, T> Segment<'a, T> {
     }
 }
 
-/// A row of mutually exclusive choices sunk in one bordered track, the chosen one a pill
-/// raised in the accent's wash.
+/// A row of mutually exclusive choices sunk in one bordered track, the chosen one a raised
+/// pill ringed by a line, its words in the soft accent.
 pub struct Segmented<'a, T> {
     segments: &'a [Segment<'a, T>],
     width: Option<f32>,

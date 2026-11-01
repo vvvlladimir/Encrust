@@ -9,7 +9,7 @@ use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     transform_mesh,
 };
-use core_plate::{OrientSettings, PlateError, Printed, Watch as Search};
+use core_plate::{OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
 use printer_profiles::{PrinterProfile, SupportProfile};
 
 /// The turn auto-orientation applied, and why it chose it.
@@ -139,11 +139,11 @@ pub(super) fn orientation(
         support,
         raster_window: rayon::current_num_threads(),
     });
-    let progress = watch.progress.then(|| bar("orientations"));
-    let told = |_, done, total| {
+    let progress = watch.progress.then(|| bar("% of the orientation search"));
+    let told = |phase: Phase, done, total| {
         if let Some(progress) = &progress {
-            progress.set_length(total as u64);
-            progress.set_position(done as u64);
+            progress.set_length(100);
+            progress.set_position((phase.share(done, total) * 100.0) as u64);
         }
         !watch.stop.requested()
     };
@@ -151,7 +151,7 @@ pub(super) fn orientation(
         &Printed::solid(mesh),
         &settings,
         trial.as_ref(),
-        Search::by(&told),
+        OrientWatch::by(&told),
     );
     if let Some(progress) = &progress {
         progress.finish_and_clear();

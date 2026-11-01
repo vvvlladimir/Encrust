@@ -20,9 +20,8 @@ fn chrome() -> f32 {
         + rules as f32 * (2.0 * theme::BUTTON_GAP + 1.0)
 }
 
-/// How the row fits `width`: each button's width, their height, and whether the names
-/// show. Named, the buttons share the width equally up to `NAMED_MAX_W`, a name wider than
-/// its share cut short; under `NAMED_MIN_W` each, the glyphs stand alone in squares.
+/// How the row fits `width`: named buttons share it up to `NAMED_MAX_W` each; under
+/// `NAMED_MIN_W` each, the glyphs stand alone in squares.
 #[derive(Debug, Clone, PartialEq)]
 struct Fit {
     buttons_w: Vec<f32>,

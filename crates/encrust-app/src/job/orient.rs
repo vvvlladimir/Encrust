@@ -150,7 +150,7 @@ pub struct OrientJob {
 }
 
 impl OrientJob {
-    /// Starts the run. The thread is detached: it ends on its own.
+    /// Starts the run on its own thread.
     pub fn spawn(request: OrientRequest) -> Self {
         let seen = Arc::new(Seen::new(request.tasks.len()));
         let told = Arc::clone(&seen);

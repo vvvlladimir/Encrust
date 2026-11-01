@@ -108,11 +108,7 @@ fn one(
         return None;
     }
     let started = std::time::Instant::now();
-    let quiet = Watch {
-        talk: false,
-        progress: false,
-        stop,
-    };
+    let quiet = Watch::quiet(stop);
     let report = match pipeline::slice_one(model, output, batch.job, chosen, &quiet) {
         Ok(outcome) => ModelReport::sliced(&outcome, started.elapsed()),
         Err(error) if is_cancelled(&error) => return None,

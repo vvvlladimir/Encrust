@@ -33,7 +33,8 @@ told the `Phase` (Looking, Proving), the pieces done and the pieces it has, from
 that answers false to stop the search with `PlateError::Cancelled`. Looking counts the cuts
 of the shortlist; Proving counts three steps a pose — supports stood, stack measured, islands
 counted. The window averages its models and spans Looking 0–0.12, Proving the rest; the
-Auto-orient section has a Cancel. The CLI passes `Watch::never()`.
+Auto-orient section has a Cancel. The CLI spans the phases the same way in its bar, and
+Ctrl-C stops the search (exit 130).
 
 ## Consequences
 

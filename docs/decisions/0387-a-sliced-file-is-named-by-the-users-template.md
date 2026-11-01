@@ -38,7 +38,8 @@ already names its file in full and takes no template.
 
 A name a user would type is made once. A template without `{model}` can still name two
 saves alike; the dialog shows the name before it is taken, and a batch refuses. A new
-placeholder is one arm in `value` and one word in the help string.
+placeholder is one variant of `Tag`, which the compiler then asks a name and a value of,
+and one word in the help string.
 
 ## Alternatives considered
 

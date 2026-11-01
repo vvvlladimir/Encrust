@@ -4,10 +4,6 @@ use core_plate::Phase;
 
 use crate::job::Highest;
 
-/// Where the bar stands when the shortlist is cut: weighed on three models, whose search took
-/// 3 to 19 % of a run and whose proof took the rest; see ADR 0384.
-const LOOKING_END: f32 = 0.12;
-
 /// How far each model of an orientation run has got, written by the threads searching them
 /// and read by the window each frame.
 #[derive(Debug)]
@@ -70,12 +66,8 @@ impl Model {
     }
 
     fn share(&self) -> Option<f32> {
-        let total = self.total.load(Relaxed).max(1);
-        let within = self.done.load(Relaxed).min(total) as f32 / total as f32;
-        self.phase().map(|phase| match phase {
-            Phase::Looking => LOOKING_END * within,
-            Phase::Proving => LOOKING_END + (1.0 - LOOKING_END) * within,
-        })
+        let (done, total) = (self.done.load(Relaxed), self.total.load(Relaxed));
+        self.phase().map(|phase| phase.share(done, total))
     }
 }
 

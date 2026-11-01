@@ -24,7 +24,7 @@ pub(super) fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bo
     let text = match (installed, downloading) {
         (true, _) => tr!("bar-restart-to-update"),
         (false, Some(percent)) => tr!("bar-update-percent", percent = percent),
-        (false, None) => format!("Encrust {}", offer.version),
+        (false, None) => tr!("app-version", version = offer.version.to_string()),
     };
     let colors = theme::colors();
     let response = pill(

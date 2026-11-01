@@ -101,9 +101,8 @@ impl Window<'_> {
             .show(ui, |ui| stage::ui(ui, self, clear, row));
     }
 
-    /// The cards over the stage: the inspector at its left, the layer strip and the plate
-    /// down its right, the tool row across the top between them (ADR 0382). Answers the
-    /// room they leave under the row, which the stage's own cards are placed in, and the row.
+    /// The inspector, the layer strip and plate card, and the tool row between (ADR 0382).
+    /// Answers the room left under the row for the stage's own cards, and the row.
     fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> (Rect, Option<Rect>) {
         let gap = theme::FLOAT_GAP;
         let options = self.view.options;
@@ -134,16 +133,7 @@ impl Window<'_> {
         };
         let corner = pos2(strip.left() - gap, top);
         let (models, plate) = self.plate_cards(ctx, corner, stage, plate_w);
-        for (id, card) in [("models-edge", models), ("plate-edge", plate)] {
-            match drag_edge(ctx, id, card, false) {
-                Some(Edge::To(raw)) => {
-                    self.view.options.plate_w =
-                        raw.clamp(*theme::SCENE_W_RANGE.start(), *theme::SCENE_W_RANGE.end());
-                }
-                Some(Edge::Reset) => self.view.options.plate_w = theme::SCENE_W,
-                None => {}
-            }
-        }
+        self.drag_plate_edges(ctx, models, plate);
 
         let left = left + gap;
         let right = (models.left() - gap).max(left);
@@ -155,26 +145,41 @@ impl Window<'_> {
             }
             _ => left,
         };
-        let row = match row_shown(&options, *self.mode) {
-            true => {
-                let room = (right - row_left - 2.0 * CARD_STROKE).max(0.0);
-                let row = card_at(
-                    ctx,
-                    "tool-row",
-                    pos2((row_left + right) / 2.0, top),
-                    Align2::CENTER_TOP,
-                    max_h,
-                    |ui| {
-                        tool_rail::ui(ui, self, room);
-                    },
-                );
-                Some(row)
-            }
-            false => None,
-        };
+        let row = row_shown(&options, *self.mode)
+            .then(|| self.tool_row(ctx, row_left..=right, top, max_h));
         let under_row = row.map_or(top, |row| row.bottom() + gap);
         let bottom = (stage.bottom() - gap).max(under_row);
         (Rect::from_x_y_ranges(left..=right, under_row..=bottom), row)
+    }
+
+    /// The models' and plate's cards widened or put back by their left edge.
+    fn drag_plate_edges(&mut self, ctx: &egui::Context, models: Rect, plate: Rect) {
+        for (id, card) in [("models-edge", models), ("plate-edge", plate)] {
+            match drag_edge(ctx, id, card, false) {
+                Some(Edge::To(raw)) => {
+                    self.view.options.plate_w =
+                        raw.clamp(*theme::SCENE_W_RANGE.start(), *theme::SCENE_W_RANGE.end());
+                }
+                Some(Edge::Reset) => self.view.options.plate_w = theme::SCENE_W,
+                None => {}
+            }
+        }
+    }
+
+    /// The tool row centred in `span` at `top`, as wide as its tools and no wider than that.
+    fn tool_row(
+        &mut self,
+        ctx: &egui::Context,
+        span: std::ops::RangeInclusive<f32>,
+        top: f32,
+        max_h: f32,
+    ) -> Rect {
+        let (row_left, right) = (*span.start(), *span.end());
+        let room = (right - row_left - 2.0 * CARD_STROKE).max(0.0);
+        let centre = pos2((row_left + right) / 2.0, top);
+        card_at(ctx, "tool-row", centre, Align2::CENTER_TOP, max_h, |ui| {
+            tool_rail::ui(ui, self, room);
+        })
     }
 }
 

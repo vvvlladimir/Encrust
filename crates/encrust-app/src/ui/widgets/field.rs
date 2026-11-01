@@ -126,8 +126,6 @@ fn unit_slot_w(ui: &Ui, unit: &egui::Galley) -> f32 {
     widest.max(unit.size().x)
 }
 
-/// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
-/// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
 /// The decimals the standard gives a quantity in `unit` (`docs/design/ui-standards.md`,
 /// Numbers), so a field cannot show its own; `None` for a unit the table lacks.
 fn standard_decimals(unit: &str) -> Option<usize> {
@@ -145,6 +143,8 @@ fn standard_decimals(unit: &str) -> Option<usize> {
     .find_map(|(key, decimals)| (crate::i18n::text(key, None) == unit).then_some(decimals))
 }
 
+/// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
+/// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
 pub(super) fn boxed_field<N: Numeric>(
     ui: &mut Ui,
     field: &Field<'_>,

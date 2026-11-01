@@ -7,8 +7,8 @@ use crate::panels::settings::form_card;
 use crate::prefs::Appearance;
 use crate::state::Machine;
 use crate::ui::{
-    CardLook, DropdownFace, DropdownRow, dropdown, dropdown_menu, dropdown_row, hint, switch,
-    theme_card,
+    CardLook, DropdownFace, DropdownRow, describe, dropdown, dropdown_menu, dropdown_row, hint,
+    switch, theme_card,
 };
 
 pub fn form(ui: &mut Ui, machine: &mut Machine) {
@@ -62,7 +62,7 @@ fn themes(ui: &mut Ui, choice: &mut Appearance) {
             }
         }
     });
-    hint(ui, &tr!("general-appearance-hint"));
+    describe(ui, &tr!("general-appearance-hint"));
 }
 
 /// The language the window is written in. Each is named in itself, so a user who cannot
