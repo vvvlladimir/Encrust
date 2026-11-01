@@ -296,10 +296,31 @@ fn actions(
         *action = picked.clone().map(|(kind, id)| Action::Edit(kind, id));
     }
     let support = picked
-        .clone()
         .filter(|(kind, _)| *kind == Kind::Support)
         .map(|(_, id)| id);
-    // Both take the profile as last saved, so unsaved edits would not go with it.
+    copy_actions(ui, machine, support.as_ref(), action);
+    delete_action(ui, machine, support, action);
+    if editing {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let label = tr!("settings-save");
+            let save = Inline::new(&label)
+                .primary()
+                .enabled(machine.settings.unsaved());
+            if inline_button(ui, save).clicked() {
+                *action = Some(Action::Save);
+            }
+        });
+    }
+}
+
+/// Duplicate and Export of the support profile picked, both from the profile as last
+/// saved, so neither is offered over unsaved edits.
+fn copy_actions(
+    ui: &mut Ui,
+    machine: &Machine,
+    support: Option<&String>,
+    action: &mut Option<Action>,
+) {
     let unsaved = machine.settings.unsaved();
     let copyable = support.is_some() && !unsaved;
     let why = |response: egui::Response| match unsaved {
@@ -314,19 +335,21 @@ fn actions(
         copyable,
     );
     if why(duplicate).clicked() {
-        *action = support.clone().map(Action::Duplicate);
+        *action = support.cloned().map(Action::Duplicate);
     }
-    if why(quiet_button(
-        ui,
-        icon::EXPORT,
-        &tr!("common-export"),
-        false,
-        copyable,
-    ))
-    .clicked()
-    {
-        *action = support.clone().map(Action::Export);
+    let export = quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, copyable);
+    if why(export).clicked() {
+        *action = support.cloned().map(Action::Export);
     }
+}
+
+/// Delete of the support profile picked, by a second press; a shipped one says why not.
+fn delete_action(
+    ui: &mut Ui,
+    machine: &Machine,
+    support: Option<String>,
+    action: &mut Option<Action>,
+) {
     let catalogue = &machine.slicing.catalogue;
     let deletable = support
         .as_deref()
@@ -345,20 +368,6 @@ fn actions(
     };
     if confirm_button(ui, &delete) {
         *action = support.map(Action::Delete);
-    }
-    if editing {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if inline_button(
-                ui,
-                Inline::new(&tr!("settings-save"))
-                    .primary()
-                    .enabled(unsaved),
-            )
-            .clicked()
-            {
-                *action = Some(Action::Save);
-            }
-        });
     }
 }
 

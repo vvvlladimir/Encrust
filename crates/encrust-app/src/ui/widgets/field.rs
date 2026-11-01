@@ -172,34 +172,62 @@ pub(in crate::ui::widgets) fn boxed_field<N: Numeric>(
         .map_or(0.0, |unit| unit_slot_w(ui, unit) + UNIT_PAD);
     let value_rect = Rect::from_min_max(rect.min, pos2(rect.right() - unit_w, rect.bottom()));
 
-    let layout = Layout::top_down(Align::Max).with_main_align(Align::Center);
-    let builder = UiBuilder::new().max_rect(value_rect).layout(layout);
-    let response = ui
-        .scope_builder(builder, |ui| {
-            borderless(ui.style_mut(), value_rect.size());
-            // egui would otherwise pull a value outside `range` into it every frame, and
-            // report that as an edit: a model sunk under the plate would be lifted back.
-            // A typed figure is taken when the box is left, not at each key: the first
-            // digit of 10 is under a least of 2 and would be pulled up to it at once.
-            let mut drag = DragValue::new(value)
-                .speed(speed)
-                .range(range)
-                .clamp_existing_to_range(false)
-                .update_while_editing(false);
-            if let Some(decimals) = decimals {
-                drag = drag.fixed_decimals(decimals);
-            }
-            ui.add(drag)
-        })
-        .inner;
+    let response = drag_figure(ui, value_rect, value, (speed, range), decimals);
     // The scope above leaves the cursor after the figure, short of the unit: put it back
     // after the whole box, or the next control in a row would sit over the unit.
     ui.advance_cursor_after_rect(rect);
     name_for_reader(ui, response.id, field.name);
+    paint_box(ui, frame, rect, &response, field.flagged);
+    if let Some(unit) = unit {
+        let at = pos2(rect.right() - unit_w + UNIT_PAD / 2.0, rect.center().y);
+        ui.painter()
+            .galley(at - vec2(0.0, unit.size().y / 2.0), unit, colors.text_low);
+    }
+    response.changed()
+}
 
+/// The figure of a box, dragged or typed in `value_rect` at `speed` within `range`.
+fn drag_figure<N: Numeric>(
+    ui: &mut Ui,
+    value_rect: Rect,
+    value: &mut N,
+    (speed, range): (f64, RangeInclusive<N>),
+    decimals: Option<usize>,
+) -> egui::Response {
+    let layout = Layout::top_down(Align::Max).with_main_align(Align::Center);
+    let builder = UiBuilder::new().max_rect(value_rect).layout(layout);
+    ui.scope_builder(builder, |ui| {
+        borderless(ui.style_mut(), value_rect.size());
+        // egui would otherwise pull a value outside `range` into it every frame, and
+        // report that as an edit: a model sunk under the plate would be lifted back.
+        // A typed figure is taken when the box is left, not at each key: the first
+        // digit of 10 is under a least of 2 and would be pulled up to it at once.
+        let mut drag = DragValue::new(value)
+            .speed(speed)
+            .range(range)
+            .clamp_existing_to_range(false)
+            .update_while_editing(false);
+        if let Some(decimals) = decimals {
+            drag = drag.fixed_decimals(decimals);
+        }
+        ui.add(drag)
+    })
+    .inner
+}
+
+/// The sunken box behind a figure, into the `frame` kept for it under the figure: ringed in
+/// the accent while typed in, the danger while `flagged`, `line` under the pointer.
+fn paint_box(
+    ui: &Ui,
+    frame: egui::layers::ShapeIdx,
+    rect: Rect,
+    response: &egui::Response,
+    flagged: bool,
+) {
+    let colors = theme::colors();
     let border = if response.has_focus() {
         colors.accent
-    } else if field.flagged {
+    } else if flagged {
         colors.danger
     } else if ui.rect_contains_pointer(rect) && ui.is_enabled() {
         colors.line
@@ -214,12 +242,6 @@ pub(in crate::ui::widgets) fn boxed_field<N: Numeric>(
         egui::StrokeKind::Inside,
     );
     ui.painter().set(frame, shape);
-    if let Some(unit) = unit {
-        let at = pos2(rect.right() - unit_w + UNIT_PAD / 2.0, rect.center().y);
-        ui.painter()
-            .galley(at - vec2(0.0, unit.size().y / 2.0), unit, colors.text_low);
-    }
-    response.changed()
 }
 
 /// A `DragValue` that draws only its figure, filling `size`: the box around it is ours.

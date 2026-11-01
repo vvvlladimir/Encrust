@@ -5,7 +5,7 @@ use core_volume::PartSettings;
 use crate::cut::{CutTool, Keep};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::scene::{Axis, SceneObject};
+use crate::scene::{Axis, ObjectId, SceneObject};
 use crate::status::Status;
 use crate::ui::{
     Segment, Segmented, busy, count_row, describe, hint, icon, nested, number_row,
@@ -50,61 +50,67 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         window.tools.cut.centre_on(id, object);
     }
 
-    section(ui, &tr!("cut-plane"), None, |ui| {
-        let axes: Vec<Segment<'_, Axis>> = Axis::ALL
-            .iter()
-            .map(|axis| Segment::new(*axis, axis.label()))
-            .collect();
-        let width = ui.available_width();
-        let mut axis = window.tools.cut.state.axis;
-        Segmented::new(&axes).width(width).show(ui, &mut axis);
-        if axis != window.tools.cut.state.axis
-            && let Some(object) = window.doc.scene.get(id)
-        {
-            window.tools.cut.set_axis(axis, object);
-        }
-
-        let plate = &window.doc.plate;
-        let across = plate.x_mm.max(plate.y_mm);
-        let (label, range) = match window.tools.cut.state.axis {
-            Axis::Z => (tr!("cut-height"), 0.0..=plate.z_mm),
-            Axis::X | Axis::Y => (tr!("cut-offset"), -across..=across),
-        };
-        number_row(
-            ui,
-            &label,
-            &mut window.tools.cut.state.height_mm,
-            &tr!("unit-mm"),
-            OFFSET_STEP,
-            range,
-            2,
-        );
-        let from = match window.tools.cut.state.axis {
-            Axis::Z => tr!("cut-measured-from-plate"),
-            Axis::X | Axis::Y => tr!("cut-measured-from-centre"),
-        };
-        describe(ui, &from);
-    });
-
+    section(ui, &tr!("cut-plane"), None, |ui| plane(ui, window, id));
     section(ui, &tr!("cut-afterwards"), None, |ui| {
-        let keeps: Vec<Segment<'_, Keep>> = Keep::ALL
-            .iter()
-            .map(|keep| Segment::new(*keep, keep_label(*keep)))
-            .collect();
-        let width = ui.available_width();
-        Segmented::new(&keeps)
-            .width(width)
-            .show(ui, &mut window.tools.cut.state.keep);
-        switch(ui, &mut window.tools.cut.lay_flat, &tr!("cut-lay-flat"));
-        describe(ui, &tr!("cut-lay-flat-note"));
-        let both = window.tools.cut.state.keep == Keep::Both;
-        joints(ui, &mut window.tools.cut.state.joints, both);
+        afterwards(ui, window)
     });
-
     section(ui, &tr!("cut-parts"), None, |ui| {
         mark(ui, &mut window.tools.cut, window.doc.scene.get(id));
         smallest(ui, &mut window.tools.cut.state.parts);
     });
+}
+
+/// The axis the plane cuts across and where along it, measured from the plate or the centre.
+fn plane(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
+    let axes: Vec<Segment<'_, Axis>> = Axis::ALL
+        .iter()
+        .map(|axis| Segment::new(*axis, axis.label()))
+        .collect();
+    let width = ui.available_width();
+    let mut axis = window.tools.cut.state.axis;
+    Segmented::new(&axes).width(width).show(ui, &mut axis);
+    if axis != window.tools.cut.state.axis
+        && let Some(object) = window.doc.scene.get(id)
+    {
+        window.tools.cut.set_axis(axis, object);
+    }
+
+    let plate = &window.doc.plate;
+    let across = plate.x_mm.max(plate.y_mm);
+    let (label, range) = match window.tools.cut.state.axis {
+        Axis::Z => (tr!("cut-height"), 0.0..=plate.z_mm),
+        Axis::X | Axis::Y => (tr!("cut-offset"), -across..=across),
+    };
+    number_row(
+        ui,
+        &label,
+        &mut window.tools.cut.state.height_mm,
+        &tr!("unit-mm"),
+        OFFSET_STEP,
+        range,
+        2,
+    );
+    let from = match window.tools.cut.state.axis {
+        Axis::Z => tr!("cut-measured-from-plate"),
+        Axis::X | Axis::Y => tr!("cut-measured-from-centre"),
+    };
+    describe(ui, &from);
+}
+
+/// What is kept of the halves, whether they lie flat, and the joints between them.
+fn afterwards(ui: &mut egui::Ui, window: &mut Window) {
+    let keeps: Vec<Segment<'_, Keep>> = Keep::ALL
+        .iter()
+        .map(|keep| Segment::new(*keep, keep_label(*keep)))
+        .collect();
+    let width = ui.available_width();
+    Segmented::new(&keeps)
+        .width(width)
+        .show(ui, &mut window.tools.cut.state.keep);
+    switch(ui, &mut window.tools.cut.lay_flat, &tr!("cut-lay-flat"));
+    describe(ui, &tr!("cut-lay-flat-note"));
+    let both = window.tools.cut.state.keep == Keep::Both;
+    joints(ui, &mut window.tools.cut.state.joints, both);
 }
 
 /// Where marking a part stands on the selected model.

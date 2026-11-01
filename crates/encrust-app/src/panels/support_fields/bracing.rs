@@ -130,6 +130,15 @@ pub(super) fn bracing_numbers(
         FINE_STEP,
         0.1..=3.0,
     );
+    spacing(ui, bracing, saved);
+    ui.add_space(theme::ICON_GAP);
+    zones(ui, bracing);
+    ui.add_space(theme::ICON_GAP);
+    buttress(ui, bracing, saved);
+}
+
+/// How far apart braces may stand, from where they start, and how often they repeat up.
+fn spacing(ui: &mut egui::Ui, bracing: &mut Bracing, saved: Option<&SupportProfile>) {
     let mm_unit = tr!("unit-mm");
     number(
         ui,
@@ -161,7 +170,10 @@ pub(super) fn bracing_numbers(
         1.0..=40.0,
         1,
     );
-    ui.add_space(theme::ICON_GAP);
+}
+
+/// How each zone up a pair is tied: its pattern, and how many levels the top and bottom take.
+fn zones(ui: &mut egui::Ui, bracing: &mut Bracing) {
     pattern_row(ui, &tr!("support-brace-top"), &mut bracing.top.pattern);
     levels_row(
         ui,
@@ -179,8 +191,6 @@ pub(super) fn bracing_numbers(
         &tr!("support-brace-bottom-levels"),
         &mut bracing.bottom.levels,
     );
-    ui.add_space(theme::ICON_GAP);
-    buttress(ui, bracing, saved);
 }
 
 /// The legs propping a tall trunk the bracing leaves free at the top.

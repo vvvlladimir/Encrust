@@ -7,7 +7,9 @@ use printer_profiles::{Catalogue, Entry, PrinterProfile};
 use crate::i18n::tr;
 use crate::settings::Library;
 use crate::ui::heading;
-use crate::ui::{Inline, hint, icon, inline_button, list, list_row, summary_button, theme};
+use crate::ui::{
+    Inline, ListRow, hint, icon, inline_button, list, list_row, summary_button, theme,
+};
 
 /// How many brand cards stand side by side.
 const COLUMNS: usize = 4;
@@ -140,7 +142,15 @@ fn models(ui: &mut Ui, entries: &[&Entry<PrinterProfile>], with_brand: bool) -> 
             } else {
                 entry.profile.name.clone()
             };
-            if list_row(ui, &label, None, false, None, None, None, None).picked {
+            if list_row(
+                ui,
+                &ListRow {
+                    label: &label,
+                    ..ListRow::default()
+                },
+            )
+            .picked
+            {
                 picked = Some(Picked::Printer(entry.id.clone()));
             }
         }

@@ -6,8 +6,8 @@ use crate::panels::Window;
 use crate::repair::ShellRow;
 use crate::scene::ObjectId;
 use crate::ui::{
-    busy, companion_button, describe, icon, list, list_row, section, section_with_actions, theme,
-    tone,
+    ListRow, busy, companion_button, describe, icon, list, list_row, section, section_with_actions,
+    theme, tone,
 };
 
 /// What a press in the list asked for, done once the list has let the scene go.
@@ -77,16 +77,15 @@ fn rows_listed(
                 false => tr!("repair-shell-faces-open", count = row.faces.len()),
             };
             let bin = (icon::REMOVE, tr!("repair-drop-shell"));
-            let pressed = list_row(
-                ui,
-                &name,
-                None,
-                picked.contains(&at),
-                Some((bin.0, &bin.1)),
-                None,
-                Some(&aside),
-                Some(!hidden.contains(&at)),
-            );
+            let row = ListRow {
+                label: &name,
+                selected: picked.contains(&at),
+                remove: Some((bin.0, &bin.1)),
+                aside: Some(&aside),
+                shown: Some(!hidden.contains(&at)),
+                ..ListRow::default()
+            };
+            let pressed = list_row(ui, &row);
             if pressed.removed {
                 asked = Some(Asked::Drop(at));
             } else if pressed.toggled {

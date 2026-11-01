@@ -87,67 +87,12 @@ fn clicked(ui: &mut egui::Ui, row: &MenuRow<'_>) -> bool {
 
 /// Create, open, save, slice, set up, leave: one group each. See `docs/design/ui-screens.md`.
 pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
-    run_rows(
-        ui,
-        window,
-        [
-            (
-                Some(icon::ADD),
-                tr!("menu-new-plate"),
-                Action::NewPlate,
-                project::new_plate,
-            ),
-            (
-                Some(icon::NEW_PROJECT),
-                tr!("menu-new-project"),
-                Action::NewProject,
-                project::new_project,
-            ),
-        ],
-    );
+    create_items(ui, window);
     menu_rule(ui);
-    run_rows(
-        ui,
-        window,
-        [
-            (
-                Some(icon::OPEN),
-                tr!("menu-open-project"),
-                Action::OpenProject,
-                project::open_dialog,
-            ),
-            (
-                Some(icon::MODEL),
-                tr!("menu-open-model"),
-                Action::OpenModel,
-                crate::import::open_dialog,
-            ),
-        ],
-    );
+    open_items(ui, window);
     open_subs(ui, window);
     menu_rule(ui);
-    run_rows(
-        ui,
-        window,
-        [
-            (
-                Some(icon::SAVE),
-                tr!("menu-save-project"),
-                Action::SaveProject,
-                |window| {
-                    project::save_open(window);
-                },
-            ),
-            (
-                None,
-                tr!("menu-save-project-as"),
-                Action::SaveProjectAs,
-                |window| {
-                    project::save_dialog(window);
-                },
-            ),
-        ],
-    );
+    save_items(ui, window);
     menu_rule(ui);
     slice_items(ui, window);
     menu_rule(ui);
@@ -157,6 +102,67 @@ pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         menu_rule(ui);
         quit_row(ui);
     }
+}
+
+fn create_items(ui: &mut egui::Ui, window: &mut Window) {
+    let (new_plate, new_project) = (tr!("menu-new-plate"), tr!("menu-new-project"));
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::ADD),
+                new_plate,
+                Action::NewPlate,
+                project::new_plate,
+            ),
+            (
+                Some(icon::NEW_PROJECT),
+                new_project,
+                Action::NewProject,
+                project::new_project,
+            ),
+        ],
+    );
+}
+
+fn open_items(ui: &mut egui::Ui, window: &mut Window) {
+    let (open_project, open_model) = (tr!("menu-open-project"), tr!("menu-open-model"));
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::OPEN),
+                open_project,
+                Action::OpenProject,
+                project::open_dialog,
+            ),
+            (
+                Some(icon::MODEL),
+                open_model,
+                Action::OpenModel,
+                crate::import::open_dialog,
+            ),
+        ],
+    );
+}
+
+fn save_items(ui: &mut egui::Ui, window: &mut Window) {
+    let save = tr!("menu-save-project");
+    let save_as = tr!("menu-save-project-as");
+    run_rows(
+        ui,
+        window,
+        [
+            (Some(icon::SAVE), save, Action::SaveProject, |window| {
+                project::save_open(window);
+            }),
+            (None, save_as, Action::SaveProjectAs, |window| {
+                project::save_dialog(window);
+            }),
+        ],
+    );
 }
 
 /// A menu row's glyph, name and action, and what it runs.

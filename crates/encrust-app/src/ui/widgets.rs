@@ -76,8 +76,8 @@ pub use layout::{
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
-    bullet, found_row, is_renaming, issue_list, issue_row, list, list_row, rename_box, row_mark,
-    start_rename, tag, tag_label, two_lines,
+    ListRow, bullet, found_row, is_renaming, issue_list, issue_row, list, list_row, rename_box,
+    row_mark, start_rename, tag, tag_label, two_lines,
 };
 pub use menu::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
 pub use nav::{NAV_ROW_H, NavAside, nav_row};

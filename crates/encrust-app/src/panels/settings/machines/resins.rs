@@ -298,6 +298,18 @@ fn actions(
     if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(|resin| Action::Export(Kind::Resin, resin.to_owned()));
     }
+    take_off(ui, window, printer, picked, action);
+    use_resin(ui, window, printer, picked, action);
+}
+
+/// Taking the resin picked off the machine, by a second press.
+fn take_off(
+    ui: &mut Ui,
+    window: &Window,
+    printer: &str,
+    picked: Option<&str>,
+    action: &mut Option<Action>,
+) {
     let take_off = picked.map(|resin| Deleting::ResinOff {
         printer: printer.to_owned(),
         resin: resin.to_owned(),
@@ -310,31 +322,38 @@ fn actions(
         text: &tr!("resins-take-off"),
         asked: &tr!("confirm-asked-take-off"),
         tooltip: &tooltip,
-        enabled: some,
+        enabled: picked.is_some(),
     };
     if confirm_button(ui, &button) {
         *action = take_off.map(Action::Delete);
     }
+}
+
+/// Putting the resin picked under the plate, at the bar's right; the one in hand says so.
+fn use_resin(
+    ui: &mut Ui,
+    window: &Window,
+    printer: &str,
+    picked: Option<&str>,
+    action: &mut Option<Action>,
+) {
     let slicing = &window.machine.slicing;
-    let in_hand =
-        slicing.printer_id.as_deref() == Some(printer) && slicing.resin_id.as_deref() == picked;
+    let in_hand = picked.is_some()
+        && slicing.printer_id.as_deref() == Some(printer)
+        && slicing.resin_id.as_deref() == picked;
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        let label = if some && in_hand {
+        let label = if in_hand {
             tr!("machines-in-hand")
         } else {
             tr!("resins-use")
         };
-        let enabled = some && !in_hand;
-        let glyph = if some && in_hand { icon::IN_HAND } else { "" };
-        if inline_button(
-            ui,
-            Inline::new(&label)
-                .glyph(glyph)
-                .primary_if(enabled)
-                .enabled(enabled),
-        )
-        .clicked()
-        {
+        let enabled = picked.is_some() && !in_hand;
+        let glyph = if in_hand { icon::IN_HAND } else { "" };
+        let button = Inline::new(&label)
+            .glyph(glyph)
+            .primary_if(enabled)
+            .enabled(enabled);
+        if inline_button(ui, button).clicked() {
             *action = picked.map(|resin| Action::UseResin {
                 printer: printer.to_owned(),
                 resin: resin.to_owned(),
