@@ -112,6 +112,8 @@ pub struct FrameInput<'a> {
     pub volume_mm: Option<[Vec3; 2]>,
     /// Where the Cut tool's plane meets the model it is set on, traced over its surface.
     pub cut_line: Option<CutLine>,
+    /// How the render view shades the models, or `None` for the working view.
+    pub look: Option<Look>,
     /// Whether the models are drawn seen through, which is what shows a cavity that holds
     /// resin; see `docs/design/viewport.md`.
     pub xray: bool,
@@ -123,6 +125,35 @@ pub struct FrameInput<'a> {
     /// coming back. The shadow is
     /// not cast again from one: what the camera does never moves it.
     pub light: bool,
+}
+
+/// The render view's set as the shader paints it: the mat's corners in plate millimetres,
+/// and its own size.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Desk {
+    pub rect: [f32; 4],
+    pub mat_mm: [f32; 2],
+}
+
+/// How the render view shades the models: as printed, under studio light.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Look {
+    /// Millimetres between the layers stepped into the models, 0.0 for none.
+    pub layer_height_mm: f32,
+    /// Millimetres of resin light crosses before it takes on the resin's colour and clouds
+    /// over by a share of 1 − 1/e, or 0.0 for an opaque resin.
+    pub attenuation_mm: f32,
+    /// Millimetres from the eye to what the camera turns about, which thickness is measured
+    /// from so a half-float holds it to a hundredth of a millimetre.
+    pub pivot_mm: f32,
+    /// The camera's projection, which the creases are shaded through at rest.
+    pub projection: Mat4,
+    /// The mat and the props laid round the models.
+    pub desk: Desk,
+    /// Millimetres from the eye to the plane the lens of a picture at rest is focused on.
+    pub focus_mm: f32,
+    /// The radius of that lens, mm; 0.0 for a pinhole, everything sharp.
+    pub aperture_mm: f32,
 }
 
 /// The rectangle the contact shadow is laid on, plate millimetres, at the plate's height.

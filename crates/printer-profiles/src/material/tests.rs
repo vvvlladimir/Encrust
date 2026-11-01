@@ -182,6 +182,33 @@ fn resting_replaces_the_light_off_delay() {
 }
 
 #[test]
+fn a_resin_saved_before_it_had_a_clarity_reads_as_opaque() {
+    let profile = MaterialProfile::from_toml_str(
+        r#"
+name = "Old profile"
+layer_height_mm = 0.05
+exposure_s = 2.5
+bottom_exposure_s = 30.0
+bottom_layers = 6
+light_off_delay_s = 0.5
+lift_distance_mm = 6.0
+lift_speed_mm_min = 65.0
+retract_speed_mm_min = 150.0
+
+[details]
+kind = "Standard"
+color = [128, 128, 128]
+"#,
+        path(),
+    )
+    .expect("valid profile");
+    assert!(
+        profile.details.clarity.abs() < f32::EPSILON,
+        "expected 0.0, an opaque resin"
+    );
+}
+
+#[test]
 fn a_resin_is_priced_by_weight_or_by_volume() {
     let mut resin = MaterialProfile::default();
     assert_eq!(resin.cost(500.0, 450_000.0), None, "no price, no cost");

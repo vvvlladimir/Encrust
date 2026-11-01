@@ -12,6 +12,18 @@ const MAX_BANDS = 8u;
 // in gpu.rs.
 const MAX_POCKETS = 32u;
 
+// Whether a model's fragment may be cut away, and whose light it is under: 0 the frame's, 1
+// the working view's, 2 the studio's, 3 the studio's while the camera moves. See viewport.md.
+override CLIPPED: bool = true;
+override LOOK: u32 = 0u;
+
+fn under_studio() -> bool {
+    if (LOOK == 0u) {
+        return globals.look.y > 0.5;
+    }
+    return LOOK >= 2u;
+}
+
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
 // corner.xyz points at a polygon's first corner and corner.w counts its sides, 0 if round.
 // start and end are the planes a channel's leg is mitred off at, w 1.0 where it is.
@@ -39,6 +51,10 @@ struct TrapBox {
 
 struct Globals {
     view_projection: mat4x4<f32>,
+    // Its inverse, which the render view's backdrop turns a pixel into a line of sight by.
+    inverse_view_projection: mat4x4<f32>,
+    // The key light's view over the render view's set, which its shadow map is drawn in.
+    key_view_projection: mat4x4<f32>,
     // The two lights: xyz the direction each travels towards, and their colours. The sky
     // and the ground are what the ambient is mixed from. All of it comes from
     // ui::theme, see docs/design/viewport.md; every w is unused padding.
@@ -86,12 +102,31 @@ struct Globals {
     cut_low: vec4<f32>,
     cut_high: vec4<f32>,
     cut_color: vec4<f32>,
+    // The render view, all 0.0 while it is off: x the layer height stepped into the models,
+    // y 1.0 under studio light, z the resin's attenuation distance, w the eye's pivot distance.
+    look: vec4<f32>,
+    // The viewport in framebuffer pixels: xy its corner, zw its size.
+    screen: vec4<f32>,
+    // What shows wherever the scene drew nothing: the viewport's own backdrop.
+    backdrop: vec4<f32>,
+    // The render view's mat: desk its corners in plate millimetres, xy low and zw high,
+    // and mat.xy its own size across and along.
+    desk: vec4<f32>,
+    mat: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
+@group(0) @binding(1) var key_shadow_map: texture_depth_2d;
+@group(0) @binding(2) var key_shadow_sampler: sampler_comparison;
+@group(0) @binding(3) var environment_map: texture_2d<f32>;
+@group(0) @binding(4) var environment_sampler: sampler;
+@group(0) @binding(5) var can_print_texture: texture_2d<f32>;
+@group(0) @binding(6) var can_print_sampler: sampler;
+// The key's map again as plain floats, for its depths: GLSL cannot load a texel of a depth texture.
+@group(0) @binding(7) var key_shadow_depths: texture_2d<f32>;
 
 struct ModelVertex {
     @location(0) position: vec3<f32>,
@@ -131,6 +166,8 @@ struct ModelFragment {
     // The corners' normals blended across the face, read where `smoothed` is set.
     @location(5) smooth_normal: vec3<f32>,
     @location(6) @interpolate(flat) smoothed: f32,
+    // Where the fragment stands in its own mesh's millimetres, which a prop is painted by.
+    @location(7) local: vec3<f32>,
 };
 
 // How much lean it takes to go from unmarked to fully marked. A band rather than a step,
@@ -184,6 +221,14 @@ fn lit(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3
     return base * (ambient + diffuse) + globals.key_color.rgb * SPECULAR_SHARE * shine * alpha;
 }
 
+// Whichever light the frame is under: the working view's or the render view's studio.
+fn shade(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>, grooves: f32) -> vec3<f32> {
+    if (under_studio()) {
+        return studio_grooved(base, alpha, normal, world, grooves);
+    }
+    return lit(base, alpha, normal, world);
+}
+
 // Millimetres between one stripe of a hatch and the next, along x + y - z, so the stripes
 // run diagonally whichever way the surface faces.
 const HATCH_PITCH_MM = 3.4;
@@ -227,6 +272,7 @@ fn model_vertex(in: ModelVertex) -> ModelFragment {
     out.overhang = in.overhang;
     out.world = world.xyz;
     out.surface = in.surface;
+    out.local = in.position;
     return out;
 }
 
@@ -409,26 +455,60 @@ fn cut_wipe_fragment(in: ModelFragment) -> WipedFragment {
     return out;
 }
 
+// How dark the lip of a printed layer reads, and over how many pixels its line is drawn.
+const LAYER_LIP = 0.22;
+const LAYER_LIP_PX = 1.0;
+// Layers a pixel where the stair starts fading to the smooth surface, and where it is gone:
+// a stair under about four pixels a layer only beats against the pixel grid.
+const LAYER_FADE_FROM = 0.12;
+const LAYER_FADE_TO = 0.3;
+
+// The surface as printed, each layer a riser and a tread shared by its steepness: xyz the normal
+// to shade by, w the light its lip keeps. See docs/design/viewport.md.
+fn stepped(outward: vec3<f32>, along: f32, per_px: f32) -> vec4<f32> {
+    let across = length(outward.xy);
+    if (globals.look.x <= 0.0 || across < 1e-4) {
+        return vec4<f32>(outward, 1.0);
+    }
+    let riser = vec3<f32>(outward.xy / across, 0.0);
+    let tread = vec3<f32>(0.0, 0.0, sign(outward.z));
+    let tread_share = abs(outward.z) / (across + abs(outward.z));
+    let soft = max(per_px, 1e-4) * 0.5;
+    let in_layer = fract(along);
+    var on_tread = smoothstep(1.0 - tread_share - soft, 1.0 - tread_share + soft, in_layer);
+    if (outward.z < 0.0) {
+        on_tread = 1.0 - smoothstep(tread_share - soft, tread_share + soft, in_layer);
+    }
+    let fine = smoothstep(LAYER_FADE_FROM, LAYER_FADE_TO, per_px);
+    let normal = normalize(mix(normalize(mix(riser, tread, on_tread)), outward, fine));
+    let lip_px = min(in_layer, 1.0 - in_layer) / max(per_px, 1e-4);
+    let lip = 1.0 - smoothstep(LAYER_LIP_PX - 0.5, LAYER_LIP_PX + 0.5, lip_px);
+    return vec4<f32>(normal, 1.0 - LAYER_LIP * lip * (1.0 - fine));
+}
+
 @fragment
 fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    return model_colour(in, front_facing);
+}
+
+// What a model's fragment paints, premultiplied, in the flat pass and the clear one alike.
+fn model_colour(in: ModelFragment, front_facing: bool) -> vec4<f32> {
     let traced = cut_line(in.world);
     let stripe = hatch(in.world);
-    if (sectioned_away(in.world)) {
-        discard;
-    }
-    if (cut_away(in.world)) {
-        discard;
-    }
+    let along = in.world.z / max(globals.look.x, 1e-6);
+    let per_px = fwidth(along);
     // A volume is the space a pocket of resin fills, drawn out of the whole cavity's
     // faces: only the part of them standing in a pocket is that space.
-    if (in.surface < 0.5 && !in_a_pocket(in.world)) {
+    if (CLIPPED && (sectioned_away(in.world) || cut_away(in.world)
+        || (in.surface < 0.5 && !in_a_pocket(in.world)))) {
         discard;
     }
 
     // Back faces are shaded as if they faced the camera. An imported mesh may still have
     // inverted faces, and a black hole reads as a rendering bug rather than as a defect.
     let outward = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
-    var normal = outward;
+    let layered = stepped(outward, along, per_px);
+    var normal = layered.xyz;
     if (!front_facing) {
         normal = -normal;
     }
@@ -458,7 +538,8 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
         if (!front_facing) {
             shaded = mix(base, globals.inside_color.rgb, SECTION_WASH);
         }
-        shaded = lit(shaded, in.color.a, normal, in.world);
+        let grooves = layer_roughness(outward) * smoothstep(LAYER_FADE_FROM, LAYER_FADE_TO, per_px);
+        shaded = shade(shaded, in.color.a, normal, in.world, grooves) * layered.w;
     }
     // The token arrives premultiplied, so the wash scales colour and alpha alike and the
     // result stays premultiplied for the blend.
@@ -470,6 +551,11 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
 // leaves, so a cut ball reads as a disc, not a bowl: see docs/design/viewport.md.
 @fragment
 fn marker_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    // A prop of the render view's desk names its material below every marker's threshold.
+    let local_px = fwidth(in.local);
+    if (in.overhang < PROP_BELOW) {
+        return prop_colour(in, front_facing, local_px);
+    }
     if (sectioned_away(in.world)) {
         discard;
     }
@@ -484,7 +570,7 @@ fn marker_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool)
         }
         base = mix(base, globals.inside_color.rgb * in.color.a, SECTION_WASH);
     }
-    return vec4<f32>(lit(base, in.color.a, normal, in.world), in.color.a);
+    return vec4<f32>(shade(base, in.color.a, normal, in.world, 0.0), in.color.a);
 }
 
 // How much of itself a surface keeps when the models are drawn seen through: least where
@@ -580,99 +666,6 @@ fn relief_fragment(in: ReliefFragment, @builtin(front_facing) front_facing: bool
         base = mix(base, globals.inside_color.rgb, SECTION_WASH);
     }
     return vec4<f32>(lit(base, in.color.a, normal, in.world), in.color.a);
-}
-
-@group(1) @binding(0) var label_atlas: texture_2d<f32>;
-@group(1) @binding(1) var label_sampler: sampler;
-
-struct LabelVertexIn {
-    @location(0) position: vec3<f32>,
-    @location(1) uv: vec2<f32>,
-    @location(2) color: vec4<f32>,
-};
-
-struct LabelFragment {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-    @location(1) color: vec4<f32>,
-};
-
-@vertex
-fn label_vertex(in: LabelVertexIn) -> LabelFragment {
-    var out: LabelFragment;
-    out.clip_position = globals.view_projection * vec4<f32>(in.position, 1.0);
-    out.uv = in.uv;
-    out.color = in.color;
-    return out;
-}
-
-// The word lying in front of the plate, sampled out of egui's own font atlas so it is the same
-// face the rest of the window is set in. Both the atlas and the colour are premultiplied,
-// so coverage scales the whole thing.
-@fragment
-fn label_fragment(in: LabelFragment) -> @location(0) vec4<f32> {
-    return in.color * textureSample(label_atlas, label_sampler, in.uv).a;
-}
-
-struct LineVertex {
-    @location(0) position: vec3<f32>,
-    @location(1) color: vec4<f32>,
-};
-
-struct LineFragment {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) color: vec4<f32>,
-};
-
-@vertex
-fn line_vertex(in: LineVertex) -> LineFragment {
-    var out: LineFragment;
-    out.clip_position = globals.view_projection * vec4<f32>(in.position, 1.0);
-    out.color = in.color;
-    return out;
-}
-
-@fragment
-fn line_fragment(in: LineFragment) -> @location(0) vec4<f32> {
-    return in.color;
-}
-
-struct WideLine {
-    @location(0) start: vec3<f32>,
-    @location(1) end: vec3<f32>,
-    @location(2) color: vec4<f32>,
-    @location(3) half_width: vec2<f32>,
-};
-
-// Share of the way to the eye a wide line's depth is taken from, so the faces beside the
-// edge it marks never cover its width; the pull runs along the view ray, so it stays put.
-const WIDE_LINE_PULL = 0.003;
-
-// Six corners, two triangles, laid across the screen round the line and past each end by
-// half its width. A line with an end behind the eye is dropped.
-@vertex
-fn wide_line_vertex(@builtin(vertex_index) corner: u32, in: WideLine) -> LineFragment {
-    let along = array<f32, 6>(0.0, 0.0, 1.0, 1.0, 0.0, 1.0);
-    let side = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
-    let start = globals.view_projection * vec4<f32>(mix(in.start, globals.eye.xyz, WIDE_LINE_PULL), 1.0);
-    let finish = globals.view_projection * vec4<f32>(mix(in.end, globals.eye.xyz, WIDE_LINE_PULL), 1.0);
-    var screen = (finish.xy / finish.w - start.xy / start.w) / in.half_width;
-    if dot(screen, screen) < 1e-8 {
-        screen = vec2<f32>(1.0, 0.0);
-    }
-    let forward = normalize(screen);
-    let across = vec2<f32>(-forward.y, forward.x);
-    let at = along[corner];
-    let corner_at = mix(start, finish, at);
-    let offset = (across * side[corner] + forward * (at * 2.0 - 1.0)) * in.half_width;
-
-    var out: LineFragment;
-    out.clip_position = vec4<f32>(corner_at.xy + offset * corner_at.w, corner_at.zw);
-    if start.w <= 0.0 || finish.w <= 0.0 {
-        out.clip_position = vec4<f32>(0.0);
-    }
-    out.color = in.color;
-    return out;
 }
 
 // Three vertices covering the screen: what the stencil is put back to zero with between

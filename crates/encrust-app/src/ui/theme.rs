@@ -16,7 +16,7 @@ mod palette;
 mod scene;
 
 pub use palette::Palette;
-pub use scene::Scene;
+pub use scene::{Lighting, Scene};
 
 /// Named font families the bundled faces are registered under.
 pub const MEDIUM: &str = "plex-sans-medium";
@@ -63,6 +63,11 @@ pub fn support_tint(group: usize) -> Color32 {
 /// colour of the window.
 pub fn resin_swatch([r, g, b]: [u8; 3]) -> Color32 {
     Color32::from_rgb(r, g, b)
+}
+
+/// A colour the user chose with its opacity, sRGB and unmultiplied, for a swatch.
+pub fn user_colour([r, g, b, a]: [u8; 4]) -> Color32 {
+    Color32::from_rgba_unmultiplied(r, g, b, a)
 }
 
 /// A pixel of a layer mask: its exposure as grey, or the danger colour where it cures over

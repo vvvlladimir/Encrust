@@ -28,7 +28,8 @@ if printf '%s' "$command" | grep -qE 'gh +api\b' &&
   deny "$reason"
 fi
 
-if printf '%s' "$command" | grep -qE 'git +push\b'; then
+# A cloud session has no shell of the maintainer's to push from, so it pushes its own branch.
+if [ -z "${CLAUDE_CODE_REMOTE:-}" ] && printf '%s' "$command" | grep -qE 'git +push\b'; then
   deny "$reason"
 fi
 

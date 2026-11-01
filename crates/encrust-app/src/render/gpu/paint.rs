@@ -1,7 +1,9 @@
 //! Replaying what `prepare` decided: the passes, in the order the stencil needs them.
 
 use super::pipelines::MATERIAL_ABOVE;
+use super::settle;
 use super::*;
+use crate::render::occlusion::Occlusion;
 
 impl ViewportResources {
     /// Draws the frame `prepare` recorded into the viewport's own target, into `viewport`
@@ -9,19 +11,83 @@ impl ViewportResources {
     pub fn draw(
         &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         size_px: [u32; 2],
         viewport: egui::epaint::ViewportInPixels,
     ) {
+        // A picture at rest that has averaged enough is held as it is.
+        if self
+            .frame
+            .sample
+            .is_some_and(|sample| sample >= SETTLED_SAMPLES)
+        {
+            return;
+        }
         self.bake_shadow(encoder);
+        self.bake_key_shadow(encoder);
+        self.bake_environment(encoder);
+        self.measure_thickness(device, encoder, size_px, &viewport);
+        let occlusion = Occlusion::of(
+            &viewport,
+            self.frame.staged,
+            self.frame.occlusion,
+            self.frame.sample,
+        );
+        self.target.occlude(queue, &occlusion);
+        self.place(queue, &viewport);
         let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());
-        let mut pass = self
-            .target
-            .begin(device, encoder, size_px, viewport, timestamps);
+        let mut pass = self.target.begin(
+            device,
+            encoder,
+            size_px,
+            &viewport,
+            timestamps,
+            self.frame.clear,
+        );
         self.paint(&mut pass);
         drop(pass);
+        if self.frame.clear {
+            self.paint_clear(encoder, &viewport);
+        }
+        let at = (size_px, &viewport);
+        let averaging = (self.frame.sample, self.frame.staged);
+        self.target.accumulate(device, encoder, at, averaging);
         if let Some(timer) = &mut self.timer {
             timer.end(encoder, self.planned_faces);
+        }
+    }
+
+    /// Tells the shader where the viewport stands in the framebuffer, which only `draw` knows.
+    pub fn place(&self, queue: &wgpu::Queue, viewport: &egui::epaint::ViewportInPixels) {
+        let screen = [
+            viewport.left_px as f32,
+            viewport.top_px as f32,
+            viewport.width_px as f32,
+            viewport.height_px as f32,
+        ];
+        let at = std::mem::offset_of!(Globals, screen) as wgpu::BufferAddress;
+        queue.write_buffer(&self.globals, at, bytemuck::bytes_of(&screen));
+        // Each frame of a picture at rest is drawn a fraction of a pixel aside.
+        if let Some(sample) = self.frame.sample {
+            let size_px = [screen[2], screen[3]];
+            let seen = match &self.frame.lens {
+                Some(lens) => settle::through_lens(self.frame.view_projection, lens, sample),
+                None => self.frame.view_projection,
+            };
+            let moved = settle::jittered(seen, settle::jitter_px(sample), size_px);
+            let at = std::mem::offset_of!(Globals, view_projection) as wgpu::BufferAddress;
+            queue.write_buffer(
+                &self.globals,
+                at,
+                bytemuck::bytes_of(&moved.to_cols_array_2d()),
+            );
+            let at = std::mem::offset_of!(Globals, inverse_view_projection) as wgpu::BufferAddress;
+            queue.write_buffer(
+                &self.globals,
+                at,
+                bytemuck::bytes_of(&moved.inverse().to_cols_array_2d()),
+            );
         }
     }
 
@@ -33,7 +99,12 @@ impl ViewportResources {
     /// Records the scene into a pass whose depth plane is [`DEPTH_FORMAT`].
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
-        self.paint_plate(render_pass);
+        if self.frame.staged {
+            render_pass.set_pipeline(self.backdrop.of(self.frame.moving));
+            render_pass.draw(0..3, 0..1);
+        } else {
+            self.paint_plate(render_pass);
+        }
 
         if self.frame.line_vertices > 0 {
             render_pass.set_pipeline(&self.line_pipeline);
@@ -66,12 +137,11 @@ impl ViewportResources {
             );
         }
 
-        let models = match self.frame.xray {
-            true => &self.xray_pipeline,
-            false => &self.model_pipeline,
-        };
         let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
-        self.draw_meshes(render_pass, models, drawn, 0);
+        // A clear resin is drawn after this pass, over a copy of what it leaves.
+        if !self.frame.clear {
+            self.paint_models(render_pass, drawn);
+        }
 
         if !self.frame.reliefs.is_empty() {
             for (index, (key, mirrored)) in self.frame.reliefs.iter().enumerate() {
@@ -117,6 +187,40 @@ impl ViewportResources {
         let from = self.frame.markers_from as u32;
         self.draw_meshes(render_pass, &self.marker_pipelines.far, markers, from);
         self.draw_meshes(render_pass, &self.marker_pipelines.near, markers, from);
+        // Last, over everything they stand in front of, and drawing no depth of their own.
+        if self.frame.clear {
+            self.draw_meshes(render_pass, &self.clear.inner, drawn, 0);
+        }
+    }
+
+    /// Draws the models seen through, or else the opaque ones first and the clipped after
+    /// them, which the card can hide only behind what is already drawn.
+    fn paint_models(&self, render_pass: &mut wgpu::RenderPass<'static>, drawn: &[Drawn]) {
+        if self.frame.xray {
+            self.draw_meshes(render_pass, &self.xray_pipeline, drawn, 0);
+            return;
+        }
+        let shaded = self.models_pipelines(render_pass);
+        for opaque in [true, false] {
+            let pipelines = shaded.of(opaque);
+            for (index, draw) in drawn.iter().enumerate() {
+                if (draw.opaque && !self.frame.clipped) == opaque {
+                    self.draw_mesh(render_pass, pipelines, draw, index as u32);
+                }
+            }
+        }
+    }
+
+    /// The pipelines the models are drawn by this frame, with the planes they read bound:
+    /// glowing where they are thin, or plain under the frame's light.
+    fn models_pipelines(&self, render_pass: &mut wgpu::RenderPass<'static>) -> &Shaded {
+        match self.clear.planes().filter(|_| self.frame.thick) {
+            Some(planes) => {
+                render_pass.set_bind_group(1, planes, &[]);
+                &self.clear.glowing
+            }
+            None => self.models.under(self.frame.staged, self.frame.moving),
+        }
     }
 
     /// Draws the inside of every cut: the far wall of each body, kept where the object it
@@ -159,7 +263,7 @@ impl ViewportResources {
     }
 
     /// Draws one mesh per entry, each with the instance that many slots past `base`.
-    fn draw_meshes(
+    pub(super) fn draw_meshes(
         &self,
         render_pass: &mut wgpu::RenderPass<'static>,
         pipelines: &Facing,
@@ -172,7 +276,7 @@ impl ViewportResources {
     }
 
     /// Draws the pieces of one mesh that lie inside the range the draw covers.
-    fn draw_mesh(
+    pub(super) fn draw_mesh(
         &self,
         render_pass: &mut wgpu::RenderPass<'static>,
         pipelines: &Facing,

@@ -60,16 +60,33 @@ pub struct View {
     /// clock: heavy meshes are drawn light while it moves.
     pub drawn_camera: OrbitCamera,
     pub moved_s: f64,
+    /// Where the last frame drew each model, and when one last moved: drawn light the same.
+    pub drawn_placements: Vec<(crate::scene::ObjectId, core_geometry::Transform)>,
+    pub placed_s: f64,
     pub lods: crate::render::Lods,
     /// What this machine draws and keeps up while the camera moves, and what the last
     /// frame drew, faces: the next frame's time is what that cost.
     pub budget: crate::render::Budget,
+    /// Whether `budget` was learnt in the render view, which costs more a face and a frame.
+    pub budget_rendered: bool,
+    /// How many frames the render view's picture at rest has averaged, as the card last
+    /// said: the window draws again until it has enough.
+    pub settled: std::sync::Arc<std::sync::atomic::AtomicU32>,
     pub drawn_faces: Option<usize>,
     /// The level each model was last drawn at, 0 for its own mesh.
     pub levels: core_geometry::FastMap<crate::scene::ObjectId, usize>,
 }
 
 impl View {
+    /// Learns the budget afresh when the render view is turned on or off: what one view
+    /// keeps up says little of the other.
+    pub fn budget_for(&mut self, rendered: bool) {
+        if self.budget_rendered != rendered {
+            self.budget = crate::render::Budget::default();
+            self.budget_rendered = rendered;
+        }
+    }
+
     /// A view framing `plate` from the default angle.
     pub fn framing(plate: &BuildPlate) -> Self {
         Self {
@@ -82,8 +99,12 @@ impl View {
             ui_ms: 0.0,
             drawn_camera: OrbitCamera::framing_plate(plate),
             moved_s: f64::NEG_INFINITY,
+            drawn_placements: Vec::new(),
+            placed_s: f64::NEG_INFINITY,
             lods: crate::render::Lods::default(),
             budget: crate::render::Budget::default(),
+            budget_rendered: false,
+            settled: std::sync::Arc::default(),
             drawn_faces: None,
             levels: core_geometry::FastMap::default(),
         }

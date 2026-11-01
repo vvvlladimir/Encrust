@@ -5,27 +5,104 @@ use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, ModelVertex,
 
 use super::*;
 
+mod clear;
+mod environment;
+mod light;
+mod models;
 mod section;
 mod shadow;
 mod wide;
 
+pub(super) use models::{Models, Shaded, Studio};
 pub(super) use section::{Capping, Cutting, MATERIAL_ABOVE};
 pub(super) use shadow::{SHADOW_FORMAT, Shadowing};
 
+/// The viewport's shader, the render view's light, resin and props, and the flat lines, each
+/// in a file of its own.
+const SHADER: &str = concat!(
+    include_str!("../shader.wgsl"),
+    include_str!("../studio.wgsl"),
+    include_str!("../resin.wgsl"),
+    include_str!("../lines.wgsl"),
+    include_str!("../props.wgsl")
+);
+
 /// The one uniform every pipeline reads: the camera, the light and the section.
+/// With the key light's shadow map, the studio and the can's print beside it, which the
+/// render view reads.
 pub(super) fn globals_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("viewport_globals_layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Depth,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 7,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+        ],
     })
 }
 
@@ -50,8 +127,8 @@ impl Facing {
 /// The pipelines that draw the plate and the models in their own flat colours.
 pub(super) struct Solid {
     pub(super) cutting: Cutting,
-    pub(super) model: Facing,
-    /// The same models seen through: no depth at all, so every surface behind one still
+    pub(super) models: Models,
+    /// The models seen through: no depth at all, so every surface behind one still
     /// paints and the cavity inside shows.
     pub(super) xray: Facing,
     pub(super) line: wgpu::RenderPipeline,
@@ -91,7 +168,10 @@ impl<'a> Builder<'a> {
     ) -> Self {
         Self {
             device,
-            shader: device.create_shader_module(wgpu::include_wgsl!("../shader.wgsl")),
+            shader: device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("viewport"),
+                source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            }),
             target_format,
             globals_layout,
             layout: device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -129,13 +209,7 @@ impl<'a> Builder<'a> {
 
     pub(super) fn solid(&self) -> Solid {
         Solid {
-            model: self.facing(PipelineKind {
-                label: "viewport_models",
-                vertex_entry: "model_vertex",
-                fragment_entry: "model_fragment",
-                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
-                ..PipelineKind::default()
-            }),
+            models: self.models(),
             xray: self.facing(PipelineKind {
                 label: "viewport_models_seen_through",
                 vertex_entry: "model_vertex",
@@ -291,6 +365,10 @@ struct PipelineKind<'a> {
     /// Which side of a face is dropped, or `None` to keep both. Only the passes that
     /// resolve a cut ask for it: there the near wall of a tube is never what is looked at.
     cull: Option<wgpu::Face>,
+    /// Written over what is there rather than blended into it.
+    opaque: bool,
+    /// The shader's overridable constants, by name.
+    constants: &'a [(&'a str, f64)],
 }
 
 impl Default for PipelineKind<'_> {
@@ -307,6 +385,8 @@ impl Default for PipelineKind<'_> {
             depth_compare: wgpu::CompareFunction::Less,
             stencil: wgpu::StencilState::default(),
             cull: None,
+            opaque: false,
+            constants: &[],
         }
     }
 }
@@ -320,22 +400,26 @@ fn pipeline(
     target_format: wgpu::TextureFormat,
     kind: PipelineKind<'_>,
 ) -> wgpu::RenderPipeline {
+    let compilation_options = wgpu::PipelineCompilationOptions {
+        constants: kind.constants,
+        ..Default::default()
+    };
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(kind.label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some(kind.vertex_entry),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: compilation_options.clone(),
             buffers: kind.buffers,
         },
         fragment: Some(wgpu::FragmentState {
             module: shader,
             entry_point: Some(kind.fragment_entry),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options,
             targets: &[Some(wgpu::ColorTargetState {
                 format: target_format,
-                blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                blend: (!kind.opaque).then_some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                 write_mask: if kind.writes_color {
                     wgpu::ColorWrites::ALL
                 } else {

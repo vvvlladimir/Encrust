@@ -612,6 +612,12 @@ dialog-close = Close  Esc
 list-hide = Hide in the view
 list-show = Show in the view
 
+## ui/widgets/colour.rs
+
+# Hover text of a colour swatch: what it colours, then its hex code.
+colour-swatch = { $name } { $hex }
+colour-opacity = Opacity { $percent }%
+
 ## panels/inspector/measure.rs
 
 measure-reading = Reading
@@ -916,6 +922,8 @@ menu-move-to-plate = Move to plate
 menu-frame-view = Frame view
 menu-plate-grid = Plate grid
 menu-xray = See through models
+menu-render = Show as printed
+menu-depth-of-field = Depth of field when shown as printed
 menu-orthographic = Orthographic view
 menu-import = Import
 menu-clear-recent = Clear the list

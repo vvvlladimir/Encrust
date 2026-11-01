@@ -605,6 +605,19 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
 - **See through models** (x-ray) to find cavities and trapped resin.
+- **Show as printed:** the printer put away and the models in a light studio, standing on a
+  cutting mat with real things round them at their real size: a pen, a ruler, a one-euro
+  coin, a 330 ml can and a banana, each casting a soft shadow. The models
+  and supports are in the resin's own colour under soft studio light, the layers of the
+  chosen layer height stepped into their surface where they will show. A clear resin bends
+  what stands behind it at both faces, frosts it across the layers as an unpolished print
+  does, a flat top staying glossy, tints it as deep as the part is thick, hazes as cured
+  resin does, and shows the walls inside a hollowed model. Creases are softly shaded once the
+  camera rests, and the picture sharpens over a few frames; the View menu can focus it on
+  the model as a lens does, the model kept sharp and the set round it blurred, more so the
+  further out the camera stands. A view only: the command line has nothing to show it in,
+  and the file is written the same. In a browser on WebGL the resin is drawn opaque and
+  unshaded, the key light casts no shadows, and the picture neither sharpens nor focuses.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
   inside the model through the cap.
@@ -677,7 +690,7 @@ span, and why where the maker says. `encrust slice` warns of both and writes the
 
 **Resins:** **none are bundled**, on purpose. A correct exposure depends on your machine and
 your bottle, so you create the first resin yourself. A resin holds exposure, bottom layers,
-transition, light power, lifts, retracts, waits, density, price, colour and compensation.
+transition, light power, lifts, retracts, waits, density, price, colour with its opacity (picked, or typed as `#RRGGBBAA`) and compensation.
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 
