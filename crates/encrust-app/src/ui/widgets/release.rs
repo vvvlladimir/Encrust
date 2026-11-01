@@ -1,26 +1,16 @@
 //! What the update sheet is drawn from: the release it offers, and the steps its install
 //! walks. See `docs/design/ui-design-system.md`, Release.
 
-use egui::{Align2, Rect, Sense, Ui, pos2, vec2};
+use egui::{Align2, Sense, Ui, pos2, vec2};
 
 use crate::ui::{icon, theme};
 
-/// The release a sheet offers: its glyph in a washed square, its name, and a line under it.
-pub fn release_hero(ui: &mut Ui, glyph: &str, title: &str, line: &str) {
+/// The release a sheet offers: its name, and a line under it.
+pub fn release_hero(ui: &mut Ui, title: &str, line: &str) {
     let colors = theme::colors();
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), TILE), Sense::hover());
-    let tile = Rect::from_min_size(rect.min, vec2(TILE, TILE));
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HERO_H), Sense::hover());
     let painter = ui.painter();
-    painter.rect_filled(tile, theme::R_SURFACE, colors.accent_wash);
-    let at = Align2::CENTER_CENTER;
-    painter.text(
-        tile.center(),
-        at,
-        glyph,
-        theme::icon(GLYPH_PT),
-        colors.accent_soft,
-    );
-    let x = tile.right() + GAP;
+    let x = rect.left();
     let title_at = pos2(x, rect.center().y - 1.0);
     painter.text(
         title_at,
@@ -86,10 +76,7 @@ pub fn steps(ui: &mut Ui, steps: &[(&str, StepState)]) {
     });
 }
 
-/// Points: the hero's square and the glyph in it, the gap after it; a step's glyph column
-/// and the gap between steps.
-const TILE: f32 = 40.0;
-const GLYPH_PT: f32 = 20.0;
-const GAP: f32 = 12.0;
+/// Points: the hero's height; a step's glyph column and the gap between steps.
+const HERO_H: f32 = 40.0;
 const GLYPH_W: f32 = 18.0;
 const STEP_GAP: f32 = 18.0;

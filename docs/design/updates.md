@@ -76,6 +76,20 @@ Windows keeps read-only. It never reads the feed and never replaces itself: it a
 for a newer package of itself, offers that, and its button opens the app's page in the Store
 app, whose Update button installs it ([ADR 0292](../decisions/0292-the-store-copy-asks-the-store-for-its-update.md)).
 
+## Seeing an update in a development build
+
+Two switches, read only with `debug_assertions`; either makes the window look once on start,
+whatever the day and the daily-check setting (`crates/encrust-app/src/updates/dev.rs`).
+
+- `ENCRUST_FAKE_UPDATE=<notes.md>` offers a 9.9.9 carrying those notes, released three days
+  ago, 38 MB. "Download and install" touches neither network nor disk: the progress runs ten
+  seconds through its steps, Cancel stops it, and "Restart" then does nothing.
+- `ENCRUST_UPDATE_FEED=<url>` reads the feed from there, e.g. a `latest.json` served by
+  `python3 -m http.server` as `http://localhost:8000/latest.json`. Its `version` must be newer
+  than the build; install is refused as in any development build.
+
+A version skipped or a notice put by this way is remembered in the preferences like any other.
+
 ## The signing key
 
 The public half is `assets/update-key.pub`. The private half is the repository secret

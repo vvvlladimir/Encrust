@@ -76,7 +76,7 @@ fn hero(ui: &mut Ui, offer: &Offer) {
         let line = hero_line(offer, &from, &to);
         let button_w = 140.0;
         ui.allocate_ui(egui::vec2(ui.available_width() - button_w, 40.0), |ui| {
-            release_hero(ui, icon::RELEASE, &format!("Encrust {to}"), &line);
+            release_hero(ui, &format!("Encrust {to}"), &line);
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let label = tr!("updates-release-page");

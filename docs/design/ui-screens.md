@@ -272,8 +272,8 @@ hairline, results grouped under capital names as Tools, Actions, Models with the
 the lit row on `picked_wash`, Esc as a keycap at the field's right, and a strip over a
 hairline at its foot with the keys to move and open (`key_row`).
 
-**Update**, 640 wide, carries a release through: its head, then a `release_hero` (the
-sparkle on the accent wash, *Encrust 0.15.0*, *0.14.2 → 0.15.0*) with Release page ↗ at the
+**Update**, 640 wide, carries a release through: its head, then a `release_hero` (*Encrust
+0.15.0* over *0.14.2 → 0.15.0*) with Release page ↗ at the
 right; the changes scrolling, a `tag_label` over each group (New in `ok`, Better in the
 accent, Fixed plain) and a `bullet` per change; the foot Skip this version left, Later and
 Download and install right. Downloading, the foot turns to *Downloading · 12.4 of 38 MB*

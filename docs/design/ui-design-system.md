@@ -154,7 +154,7 @@ paints from tokens only.
 | `theme_card` | A choice of how the window looks, 140 × 124: a picture of the window in that palette (both halved for System), then a radio, the name and a line under it; chosen, ringed in the accent |
 | `tag_label`, `bullet` | A pill standing in the flow that takes no press, over a group of release notes; one line of prose after a bullet, wrapping under its first word |
 | `boxed` | A box set into a page on `raised` ringed in a hairline, 14 inside: a release found |
-| `release_hero`, `steps` | The release a sheet offers: its glyph on the accent wash in a 40 square, its name, the line under it; the install's steps in a row, done ticked in `ok`, the one under way in the accent |
+| `release_hero`, `steps` | The release a sheet offers: its name, the line under it; the install's steps in a row, done ticked in `ok`, the one under way in the accent |
 | `dropdown_search_menu` | A `dropdown_menu` a click inside keeps open, headed by a field that filters its rows: the text tool's font families |
 | `picker_row` | A `dropdown` under a `field_label` of its own, for a choice too long for a field box |
 | `primary_button` | The one action a screen is for: its words alone, in Medium, `on_accent` on `accent`, no glyph — the tool's glyph already heads the card. There is never a second in view |
@@ -248,7 +248,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Zoom | `MAGNIFYING_GLASS_MINUS`, `MAGNIFYING_GLASS_PLUS`, `ARROWS_OUT` |
 | New project, recent, test prints | `FILE_PLUS`, `CLOCK_COUNTER_CLOCKWISE`, `TEST_TUBE` |
 | Undo, redo, select all, move to plate | `ARROW_U_UP_LEFT`, `ARROW_U_UP_RIGHT`, `SELECTION_ALL`, `ARROW_SQUARE_RIGHT` |
-| Appearance, a release, its changes, a step not reached | `PALETTE`, `SPARKLE`, `LIST_BULLETS`, `CIRCLE` |
+| Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
 A glyph in a button other than the primary is 16, in the tool row 19, in a 26 square 15, in an empty state 30.
