@@ -148,6 +148,8 @@ pub struct Updates {
     close: bool,
     /// Whether the sheet that carries the update through is over the plate.
     pub sheet: bool,
+    /// Whether a development switch has had its one look this run.
+    switch_looked: bool,
 }
 
 impl Updates {
@@ -159,15 +161,22 @@ impl Updates {
     /// Looks once a day, if the user turned that on or the Store updates this copy. A failure
     /// here is quiet: the user did not ask, and it is tried again tomorrow.
     pub fn tick(&mut self) {
+        if self.due(dev::active(), now_s()) {
+            self.start_check(false);
+        }
+    }
+
+    /// Whether a look starts now; a development switch looks once a run, not after each
+    /// look that came back with nothing.
+    fn due(&mut self, switch: bool, now_s: u64) -> bool {
         let idle = matches!(
             self.stage,
             Stage::Idle | Stage::Current | Stage::Failed { .. }
         );
-        let due = is_due(self.prefs.checked_at_s, now_s());
-        let first_with_switch = matches!(self.stage, Stage::Idle) && dev::active();
-        if first_with_switch || ((self.prefs.check || from_store()) && idle && due) {
-            self.start_check(false);
-        }
+        let first_with_switch = switch && !self.switch_looked && matches!(self.stage, Stage::Idle);
+        self.switch_looked |= first_with_switch;
+        let daily = (self.prefs.check || from_store()) && is_due(self.prefs.checked_at_s, now_s);
+        first_with_switch || (idle && daily)
     }
 
     /// Looks now, because the user asked.
@@ -497,6 +506,22 @@ mod tests {
         updates.tick();
         assert!(matches!(updates.stage, Stage::Idle));
         assert_eq!(updates.prefs.checked_at_s, None);
+    }
+
+    #[test]
+    fn a_development_switch_looks_once_a_run() {
+        let mut updates = Updates {
+            prefs: UpdatePrefs {
+                check: false,
+                ..UpdatePrefs::default()
+            },
+            ..Updates::default()
+        };
+        assert!(updates.due(true, 1_000));
+        assert!(
+            !updates.due(true, 1_000),
+            "a look whose worker went away leaves the stage idle and must not start another"
+        );
     }
 
     #[test]
