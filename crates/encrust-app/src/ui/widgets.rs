@@ -42,8 +42,10 @@ pub use layout::{
     subheading_with_switch, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
-pub use list::{issue_list, issue_row, list, list_row, tag, two_lines};
-pub use over_stage::{NoticeReply, hint_bar, job_notice, notice_card, spinner};
+pub use list::{issue_list, issue_row, list, list_row, tag, tag_w, two_lines};
+pub use over_stage::{
+    NoticeReply, ZoomPress, hint_bar, job_notice, notice_card, spinner, zoom_bar,
+};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};
 
@@ -81,9 +83,12 @@ pub fn ago(at_s: Option<u64>, now_s: u64) -> String {
         0..60 => tr!("ago-just-now"),
         seconds @ 60..3_600 => tr!("ago-minutes", count = seconds / 60),
         seconds @ 3_600..86_400 => tr!("ago-hours", count = seconds / 3_600),
-        seconds => tr!("ago-days", count = seconds / 86_400),
+        seconds @ 86_400..WEEK_S => tr!("ago-days", count = seconds / 86_400),
+        seconds => tr!("ago-weeks", count = seconds / WEEK_S),
     }
 }
+
+const WEEK_S: u64 = 7 * 86_400;
 
 #[cfg(test)]
 mod tests {
@@ -98,5 +103,7 @@ mod tests {
         assert_eq!(ago(Some(now - 7_200), now), "2 h ago");
         assert_eq!(ago(Some(now - 90_000), now), "yesterday");
         assert_eq!(ago(Some(now - 3 * 86_400), now), "3 days ago");
+        assert_eq!(ago(Some(now - 8 * 86_400), now), "last week");
+        assert_eq!(ago(Some(now - 15 * 86_400), now), "2 weeks ago");
     }
 }

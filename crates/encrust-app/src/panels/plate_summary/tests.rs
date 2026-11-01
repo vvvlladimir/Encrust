@@ -32,7 +32,7 @@ fn scene_with_a_model(height_mm: Scalar) -> Scene {
 }
 
 #[test]
-fn the_summary_states_both_volumes_and_prices_them_only_when_the_resin_has_a_price() {
+fn the_estimate_states_the_resin_and_prices_it_only_when_the_resin_has_a_price() {
     let tally = Tally {
         vertices: 22_579,
         triangles: 43_834,
@@ -40,18 +40,13 @@ fn the_summary_states_both_volumes_and_prices_them_only_when_the_resin_has_a_pri
         supports_mm3: 1_520.0,
     };
     let mut resin = MaterialProfile::default();
-    let keys = |readings: Vec<(String, String)>| {
-        readings.into_iter().map(|(key, _)| key).collect::<Vec<_>>()
-    };
-    assert_eq!(
-        keys(tally_readings(&tally, &resin)),
-        ["Vertices", "Triangles", "Model/supports", "Weight"]
-    );
+    let unpriced = tally_readings(&tally, &resin);
+    assert_eq!(unpriced.len(), 1, "no price without one on the resin");
+    assert_eq!(unpriced[0].1, "8.18 ml · 9.00 g");
 
     resin.details.price = 30.0;
     let priced = tally_readings(&tally, &resin);
-    assert_eq!(priced[2].1, "6.66/1.52 ml");
-    assert_eq!(priced[4].0, "Price");
+    assert_eq!(priced[1].0, "Price");
 }
 
 fn slicing_on_a_printer() -> Slicing {

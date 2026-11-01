@@ -5,7 +5,6 @@ use anyhow::{Result, bail};
 use core_analysis::{Measured, erase, island_runs};
 use core_raster::{
     LayerMask, LayerRuns, RasterSettings, Rasterizer, ScanlineRasterizer, crop, downsample,
-    shrink_factor,
 };
 
 use crate::i18n::tr;
@@ -307,17 +306,6 @@ impl Preview {
         let stack = self.source.as_ref()?;
         let (window, sliced) = stack.cut.as_ref()?;
         sliced.layers.get(self.layer.checked_sub(window.start)?)
-    }
-
-    /// How many panel pixels one preview pixel stands for, which is what the mask panel
-    /// puts in its heading. See `docs/decisions/0023-preview-masks-are-downsampled.md`.
-    pub fn downsample_factor(&self, settings: &RasterSettings) -> u32 {
-        shrink_factor(
-            settings.width_px,
-            settings.height_px,
-            MAX_PREVIEW_PX,
-            MAX_PREVIEW_PX,
-        )
     }
 }
 

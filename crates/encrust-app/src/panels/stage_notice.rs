@@ -193,6 +193,7 @@ fn broken(stack: &mut Stack, window: &mut Window) {
             icon::WARNING,
             colors.warn,
             &label,
+            None,
             Some(&wording),
             Some(&tr!("notice-keep-as-is")),
         )
@@ -216,20 +217,21 @@ fn broken(stack: &mut Stack, window: &mut Window) {
 /// window both are set up in, for as long as either is missing (ADR 0299).
 fn unready(stack: &mut Stack, window: &mut Window) {
     let slicing = &window.machine.slicing;
-    let label = match (slicing.printer_id.is_some(), slicing.resin_id.is_some()) {
+    let (label, why) = match (slicing.printer_id.is_some(), slicing.resin_id.is_some()) {
         (true, true) => return,
-        (false, false) => tr!("notice-no-printer-resin"),
-        (false, true) => tr!("notice-no-printer"),
-        (true, false) => tr!("notice-no-resin"),
+        (false, false) => (tr!("notice-no-printer-resin"), tr!("notice-no-printer-why")),
+        (false, true) => (tr!("notice-no-printer"), tr!("notice-no-printer-why")),
+        (true, false) => (tr!("notice-no-resin"), tr!("notice-no-resin-why")),
     };
     let colors = theme::colors();
     let open = stack
         .card("unready", |ui| {
             notice_card(
                 ui,
-                icon::INFO,
-                colors.warn,
+                icon::ERROR,
+                colors.danger,
                 &label,
+                Some(&why),
                 Some(&tr!("notice-set-up")),
                 None,
             )

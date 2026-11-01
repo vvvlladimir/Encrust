@@ -237,21 +237,19 @@ fn estimated_time_s(scene: &Scene, slicing: &Slicing) -> Option<(u32, Option<u32
     Some((time_s(most, thinnest_mm(slicing))?, shortest))
 }
 
+/// The plate's resin in ml and g, and what it costs once the resin has a price.
 fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(String, String)> {
     let split = Split::of(tally, material);
-    let both = |[model, supports]: [f32; 2]| format!("{model:.2}/{supports:.2}");
-    let mut readings = vec![
-        (tr!("summary-vertices"), tally.vertices.to_string()),
-        (tr!("summary-triangles"), tally.triangles.to_string()),
-        (
-            tr!("summary-model-supports"),
-            tr!("value-ml", value = both(split.ml)),
-        ),
-        (tr!("summary-weight"), tr!("value-g", value = both(split.g))),
-    ];
+    let resin = tr!(
+        "summary-ml-g",
+        ml = two_places(total(split.ml)),
+        g = two_places(total(split.g))
+    );
+    let mut readings = vec![(tr!("summary-resin"), resin)];
     if let Some(price) = split.price {
         let currency = &material.details.currency;
-        readings.push((tr!("summary-price"), format!("{} {currency}", both(price))));
+        let price = format!("{} {currency}", two_places(total(price)));
+        readings.push((tr!("summary-price"), price));
     }
     readings
 }

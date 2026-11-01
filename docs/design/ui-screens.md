@@ -37,7 +37,7 @@ stripe or a border of its own.
 ## Top bar
 
 Left to right: on macOS 72 for the system's buttons, File, Edit, View as quiet text
-buttons; in the centre the printer ring (once a printer answers) and the chip; at the right
+buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card) and the chip; at the right
 the Alpha pill, Find (200 wide, `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
@@ -98,7 +98,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues | — | Issues (the verdict, `issue_row`s with layer, previous / next); Islands and Cups with their actions; Peel; Estimate | — (the check runs by itself) |
+| Check | the number of issues | — | Found (`issue_row`s: kind, layer, count, the numbers on hover; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Islands (Support them · Remove them side by side) and Cups (Drill them); Peel; Estimate (Time, Resin in ml · g, Price) | — (the check runs by itself) |
 | Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
@@ -182,8 +182,10 @@ track. With no stack it reads *No layers*.
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close.
-- **Empty plate:** nothing over the stage; the inspector says *Nothing on the plate* under a
-  30 point cube-focus glyph, with Open a model.
+  No printer or no resin is a `danger` notice with the reason on a small line under it.
+- **Empty plate:** nothing over the stage; the inspector says *Nothing on the plate* and
+  *Drop a model into the window* under a 30 point cube-focus glyph, with Open a model as an
+  inline button.
 
 ## Preview
 
@@ -241,9 +243,9 @@ names — Tools, The plate, then The window, The layers, Files — each a row of
 ## Start page
 
 Under the top bar, padded 48 × 140 (the sides give way down to one tile's width): *Start a
-plate* at 26 and the machine, resin and layer height under it; the drop zone, a 1.5 point dashed `line` box rounded 12 with a 52 square of
+plate* at 26 and the machine without its maker, resin and layer height under it; the drop zone, a 1.5 point dashed `line` box rounded 12 with a 52 square of
 the drop glyph on `accent_wash`, its words, and Open a model (primary) and Open a project at
-its right; then a shelf heading with Recent / Test prints as a `Segmented` 220 wide and, on Recent with
+its right; then a shelf heading, *Recent*, with Recent / Test prints as a `Segmented` 220 wide and, on Recent with
 anything in it, Clear the list at its right; then tiles of at least 180 on `panel` ringed in
 `hairline` (`line` under the pointer), a 120 picture over the name, when and kind.
 

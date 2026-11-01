@@ -191,7 +191,8 @@ impl Window<'_> {
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
-    /// stage's foot under them, both `width` wide. Answers the two cards.
+    /// stage's foot under them, both `width` wide; in Preview the plate's alone, at `corner`.
+    /// Answers the two cards.
     fn plate_cards(
         &mut self,
         ctx: &egui::Context,
@@ -200,18 +201,18 @@ impl Window<'_> {
         width: f32,
     ) -> (Rect, Rect) {
         let gap = theme::FLOAT_GAP;
-        let foot = pos2(corner.x, stage.bottom() - gap);
-        let plate = card_at(
-            ctx,
-            "this-plate",
-            foot,
-            Align2::RIGHT_BOTTOM,
-            f32::INFINITY,
-            |ui| {
-                ui.set_width(width);
-                plate_summary::ui(ui, self);
-            },
-        );
+        let preview = *self.mode == Mode::Preview;
+        let (at, pivot) = match preview {
+            true => (corner, Align2::RIGHT_TOP),
+            false => (pos2(corner.x, stage.bottom() - gap), Align2::RIGHT_BOTTOM),
+        };
+        let plate = card_at(ctx, "this-plate", at, pivot, f32::INFINITY, |ui| {
+            ui.set_width(width);
+            plate_summary::ui(ui, self);
+        });
+        if preview {
+            return (plate, plate);
+        }
         let max_h = (plate.top() - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);
         let models = card_at(ctx, "models", corner, Align2::RIGHT_TOP, max_h, |ui| {
             ui.set_width(width);

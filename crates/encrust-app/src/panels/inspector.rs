@@ -27,7 +27,7 @@ use crate::files::{self, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{
-    body_and_foot, card_foot, empty_state, hairline, help_mark, icon, mode_group, primary_button,
+    body_and_foot, card_foot, empty_state, hairline, help_mark, icon, inline_button, mode_group,
     theme,
 };
 use crate::workspace::Tool;
@@ -67,12 +67,21 @@ fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
     egui::Frame::new()
         .inner_margin(theme::PANEL_MARGIN)
         .show(ui, |ui| {
-            empty_state(ui, icon::EMPTY_PLATE, &tr!("stage-empty"));
-            if primary_button(ui, &tr!("stage-open"), true).clicked()
+            empty_state(
+                ui,
+                icon::EMPTY_PLATE,
+                &tr!("stage-empty"),
+                &tr!("stage-empty-how"),
+            );
+            let open = ui.vertical_centered(|ui| {
+                inline_button(ui, icon::OPEN, &tr!("stage-open"), false, true).clicked()
+            });
+            if open.inner
                 && let Some(file) = files::pick(Wanted::ModelOrProject)
             {
                 crate::app::open_by_what_it_is(window, file);
             }
+            ui.add_space(theme::ITEM_GAP);
         });
 }
 

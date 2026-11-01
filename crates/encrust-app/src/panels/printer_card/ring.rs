@@ -29,7 +29,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     }
     let network = &mut window.machine.network;
     network.keep_fresh(ui.input(|input| input.time));
-    let Some(current) = network.current() else {
+    let printing = network
+        .in_view()
+        .iter()
+        .any(|target| matches!(network.reading(target), Some(Reading::State(state)) if state.busy));
+    let Some(current) = network.current().filter(|_| printing) else {
         return 0.0;
     };
     let key = current.key();
