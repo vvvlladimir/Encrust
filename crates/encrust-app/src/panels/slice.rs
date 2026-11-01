@@ -306,7 +306,17 @@ fn start(
     };
 
     if run == Run::EveryPlate {
-        let queued = slicing.start_all(scene, &path, status);
+        // A name typed over the proposal is the stem every plate's file starts from; the
+        // proposal kept is the template, filled for each plate in turn.
+        let kept = path.file_stem().and_then(|stem| stem.to_str())
+            == name.strip_suffix(&format!(".{}", format.extension()));
+        let template = general.file_name.as_str();
+        let stems: Option<Vec<String>> = kept.then(|| {
+            (0..scene.plates().len() as u32)
+                .map(|plate| plate_stem(scene, slicing, template, plate))
+                .collect()
+        });
+        let queued = slicing.start_all(scene, &path, stems.as_deref(), status);
         if queued > 0 && !status.is_error() {
             *status = Status::Info(tr!(
                 "slice-all-started",
@@ -368,6 +378,22 @@ pub fn file_name(scene: &Scene, slicing: &Slicing, template: &str) -> String {
         .and_then(|id| scene.get(id))
         .or_else(|| scene.objects().first())
         .map_or("model", |object| object.name.as_str());
+    let stem = stem(slicing, template, name, scene.active_plate());
+    format!("{stem}.{}", slicing.format.extension())
+}
+
+/// The stem of `plate`'s file in a run over every plate: `template` over the plate's first
+/// model and its own number.
+fn plate_stem(scene: &Scene, slicing: &Slicing, template: &str, plate: u32) -> String {
+    let name = scene
+        .on_plate(plate)
+        .next()
+        .map_or("model", |object| object.name.as_str());
+    stem(slicing, template, name, plate)
+}
+
+/// `template` filled for the model `name` on `plate`, with the machine and resin in hand.
+fn stem(slicing: &Slicing, template: &str, name: &str, plate: u32) -> String {
     let (model, model_ext) = split_mesh_extension(name);
     let fields = NameFields {
         model,
@@ -375,11 +401,10 @@ pub fn file_name(scene: &Scene, slicing: &Slicing, template: &str) -> String {
         printer: slicing.printer.as_ref().map_or("", |printer| &printer.name),
         resin: &slicing.material.name,
         layer_height_mm: slicing.layer_height_mm(),
-        plate: scene.active_plate() + 1,
+        plate: plate + 1,
         when: jiff::Zoned::now().datetime(),
     };
-    let stem = file_stem(template, &fields);
-    format!("{stem}.{}", slicing.format.extension())
+    file_stem(template, &fields)
 }
 
 /// A model's name, which keeps the extension of the file it came from, and that extension

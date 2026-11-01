@@ -27,7 +27,11 @@ at 200 bytes between characters; an empty one is `model`. A `{tag}` nothing answ
 as written and the setting names it, rather than failing.
 
 The window fills the template for the save dialog and for the file sent to a printer, and
-shows the name it makes now under the box. `encrust batch --name` takes the same template,
+shows the name it makes now under the box. Slicing every plate at once fills the template for
+each plate, with its own number and its first model, so `{model}_p{plate}` writes
+`bracket_p1.goo` and `bracket_p2.goo`; a stem two plates would share takes the plate's name
+after it, and a name typed over the proposal is kept for every plate, each plate's name after
+it, as `slice --all-plates -o` does (`core_engine::plate_outputs`). `encrust batch --name` takes the same template,
 one time for the whole run, and refuses one that gives two models one file. `slice -o`
 already names its file in full and takes no template.
 

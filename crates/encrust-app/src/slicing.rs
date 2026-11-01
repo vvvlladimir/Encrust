@@ -513,12 +513,23 @@ impl Slicing {
         self.to_send = true;
     }
 
-    /// Cuts every plate that has anything on it, each into its own file beside `output`.
-    /// Returns how many were queued, which is zero when the project is empty.
-    pub fn start_all(&mut self, scene: &Scene, output: &Path, status: &mut Status) -> usize {
-        let printable: Vec<(u32, &str)> = (0..scene.plates().len() as u32)
+    /// Cuts every plate that has anything on it, each into its own file beside `output`,
+    /// named by its own of `stems`, one a plate, when given. Returns how many were queued, which is zero
+    /// when the project is empty.
+    pub fn start_all(
+        &mut self,
+        scene: &Scene,
+        output: &Path,
+        stems: Option<&[String]>,
+        status: &mut Status,
+    ) -> usize {
+        let printable: Vec<core_engine::PlateFile<'_>> = (0..scene.plates().len() as u32)
             .filter(|&plate| scene.has_printable(plate))
-            .map(|plate| (plate, scene.plates()[plate as usize].as_str()))
+            .map(|plate| core_engine::PlateFile {
+                plate,
+                name: scene.plates()[plate as usize].as_str(),
+                stem: stems.and_then(|stems| stems.get(plate as usize).cloned()),
+            })
             .collect();
         let mut queued = core_engine::plate_outputs(output, &printable);
         // Popped from the end, so the first plate has to be the last in.
