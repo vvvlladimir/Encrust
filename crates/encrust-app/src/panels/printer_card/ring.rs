@@ -50,7 +50,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
         }
     } else {
         let mut opened = None;
-        egui::Popup::menu(&response).show(|ui| opened = list(ui, network));
+        crate::ui::popup_menu(&response).show(|ui| opened = list(ui, network));
         if opened.is_some() {
             network.open = opened;
         }

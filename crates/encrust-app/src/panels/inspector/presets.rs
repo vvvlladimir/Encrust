@@ -137,7 +137,7 @@ fn row<T>(
             pressed.forget = bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, held);
             let save_tip = tr!("shape-save-tooltip");
             let save = quiet_square(ui, icon::SAVE, &save_tip, theme::BUTTON_H, !held);
-            egui::Popup::menu(&save).show(|ui| {
+            crate::ui::popup_menu(&save).show(|ui| {
                 let over = tr!("shape-save");
                 let over = MenuRow::new(Some(icon::SAVE), &over).enabled(named.edited);
                 pressed.over = menu_row(ui, &over).clicked();

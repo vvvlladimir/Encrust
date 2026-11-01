@@ -196,6 +196,40 @@ const KEYS_PT: f32 = theme::glyph::MARK;
 /// What a glyph and keys keep of their ink on a row that is off.
 const DIM: f32 = 0.6;
 
+/// The popup a press on `response` opens, laid out top down but not justified: egui's own
+/// menu justifies its labels, which spreads a wrapped line's letters across the row.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the one place a menu popup is opened"
+)]
+pub fn popup_menu(response: &egui::Response) -> egui::Popup<'_> {
+    egui::Popup::menu(response).layout(egui::Layout::top_down(egui::Align::Min))
+}
+
+/// The menu a right click on `response` opens, its contents laid out as [`popup_menu`]'s.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the one place a context menu is opened"
+)]
+pub fn context_menu(response: &egui::Response, add: impl FnOnce(&mut Ui)) {
+    response.context_menu(|ui| unjustified(ui, add));
+}
+
+/// A button opening the submenu `add` draws, laid out as [`popup_menu`]'s.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the one place a submenu is opened"
+)]
+pub fn menu_button(ui: &mut Ui, label: impl Into<egui::WidgetText>, add: impl FnOnce(&mut Ui)) {
+    ui.menu_button(label, |ui| unjustified(ui, add));
+}
+
+/// `add` laid out top down and not justified, inside a menu egui laid out itself.
+fn unjustified<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.with_layout(egui::Layout::top_down(egui::Align::Min), add)
+        .inner
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,5 +256,19 @@ mod tests {
             !off.sense.senses_click(),
             "a row that is off takes no press"
         );
+    }
+
+    /// BUG: egui's menu justified a wrapped line, spreading its letters across the row.
+    #[test]
+    fn a_popup_never_justifies_its_lines() {
+        let ctx = fixtures::context();
+        let mut justified = None;
+        fixtures::frame(&ctx, egui::RawInput::default(), |ui| {
+            let button = ui.button("?");
+            popup_menu(&button)
+                .open(true)
+                .show(|ui| justified = Some(ui.layout().horizontal_justify()));
+        });
+        assert_eq!(justified, Some(false), "a line keeps its letters' own spacing");
     }
 }

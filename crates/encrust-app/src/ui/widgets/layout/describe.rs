@@ -76,7 +76,7 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, joined.join(" "))
     });
-    let open = egui::Popup::menu(&response).is_open();
+    let open = crate::ui::popup_menu(&response).is_open();
     let ink = if open {
         colors.accent_soft
     } else if response.hovered() {
@@ -117,5 +117,5 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
     } else {
         response.on_hover_ui(show)
     };
-    egui::Popup::menu(&response).show(show);
+    crate::ui::popup_menu(&response).show(show);
 }

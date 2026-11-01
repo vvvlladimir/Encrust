@@ -104,7 +104,7 @@ fn first_resin(
             *action = Some(Action::NewResin(printer.to_owned()));
         }
     } else {
-        egui::Popup::menu(&add).show(|ui| add_choices(ui, catalogue, printer, action));
+        crate::ui::popup_menu(&add).show(|ui| add_choices(ui, catalogue, printer, action));
     }
     let from_file = tr!("resins-from-file");
     if zone_button(ui, right, icon::IMPORT, &tr!("resins-import"), &from_file).clicked() {
@@ -151,7 +151,7 @@ fn add_menu(
 ) {
     let button = inline_button(ui, Inline::new(&tr!("resins-add")).glyph(icon::ADD));
     // A pool resin's bin asks by a second press, so a click inside leaves the menu open.
-    egui::Popup::menu(&button)
+    crate::ui::popup_menu(&button)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| add_choices(ui, catalogue, printer, action));
 }

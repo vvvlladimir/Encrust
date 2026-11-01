@@ -151,7 +151,7 @@ pub fn duplicate_selection(window: &mut Window) {
 /// The popup stays open on a click inside, which a field needs to open for typing.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let response = small_icon_button(ui, icon::ARRAY, &tr!("models-array"));
-    egui::Popup::menu(&response)
+    crate::ui::popup_menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.set_width(POPUP_W);
@@ -331,13 +331,13 @@ fn row_menu(
     active: u32,
 ) -> Option<Clicked> {
     let mut clicked = None;
-    response.context_menu(|ui| {
+    crate::ui::context_menu(response, |ui| {
         if !object.summary.is_sound() && ui.button(tr!("notice-repair")).clicked() {
             clicked = Some(Clicked::Repair);
             ui.close();
         }
         ui.add_enabled_ui(plates.len() > 1, |ui| {
-            ui.menu_button(tr!("menu-move-to-plate"), |ui| {
+            crate::ui::menu_button(ui, tr!("menu-move-to-plate"), |ui| {
                 for (index, name) in plates.iter().enumerate() {
                     let plate = index as u32;
                     if ui

@@ -33,7 +33,7 @@ pub(super) fn picker(ui: &mut egui::Ui, window: &mut Window) {
             preview(ui, window.tools.relief.picture.as_ref())
         })
         .inner;
-    egui::Popup::menu(&square).width(width).show(|ui| {
+    crate::ui::popup_menu(&square).width(width).show(|ui| {
         subheading(ui, &tr!("relief-builtins"));
         gallery(ui, window);
         picture_buttons(ui, window);

@@ -155,7 +155,7 @@ fn menu<R>(
     close: PopupCloseBehavior,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    egui::Popup::menu(response)
+    crate::ui::popup_menu(response)
         .gap(MENU_GAP)
         .close_behavior(close)
         .width(response.rect.width())

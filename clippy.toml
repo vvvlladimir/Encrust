@@ -21,6 +21,10 @@ disallowed-methods = [
   { path = "egui::Context::animate_bool_with_time", reason = "move by ui::theme::motion" },
   { path = "egui::Context::animate_bool_with_time_and_easing", reason = "move by ui::theme::motion" },
   { path = "egui::Context::animate_value_with_time", reason = "move by ui::theme::motion" },
+  # egui's menus justify their labels, spreading a wrapped line's letters apart.
+  { path = "egui::Popup::menu", reason = "open it with ui::popup_menu" },
+  { path = "egui::Response::context_menu", reason = "open it with ui::context_menu" },
+  { path = "egui::Ui::menu_button", reason = "lay its contents out with ui::unjustified" },
 ]
 
 allow-unwrap-in-tests = true

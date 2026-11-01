@@ -17,7 +17,7 @@ pub(super) fn save_button(ui: &mut egui::Ui, window: &mut Window, hand: &InHand)
         return;
     }
     let (mut over, mut as_new) = (false, false);
-    egui::Popup::menu(&button).show(|ui| {
+    crate::ui::popup_menu(&button).show(|ui| {
         let save = egui::Button::new(tr!("shape-save"));
         over = ui.add_enabled(hand.source.is_some(), save).clicked();
         as_new = ui.button(tr!("shape-save-as-new")).clicked();

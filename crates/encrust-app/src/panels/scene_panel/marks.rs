@@ -38,7 +38,7 @@ pub(super) fn import_mark(
         ),
     };
     let mut repair = false;
-    egui::Popup::menu(&response).show(|ui| {
+    crate::ui::popup_menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
         for line in lines {
             hint(ui, line);

@@ -106,7 +106,7 @@ fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<A
 /// What a right click on a plate offers.
 fn menu(response: &egui::Response, place: Place) -> Option<Asked> {
     let mut asked = None;
-    response.context_menu(|ui| {
+    crate::ui::context_menu(response, |ui| {
         if ui.button(tr!("action-duplicate")).clicked() {
             asked = Some(Asked::Duplicate);
             ui.close();

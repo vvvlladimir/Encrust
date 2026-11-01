@@ -61,7 +61,7 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
         shaping: *window.tool == Tool::Shape,
     };
     let mut pick = None;
-    egui::Popup::menu(&response)
+    crate::ui::popup_menu(&response)
         .gap(MENU_GAP)
         .width(width + beside)
         .frame(chooser_frame())

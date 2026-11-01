@@ -58,9 +58,9 @@ pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
             let config = MenuConfig::new().style(menu_style);
             egui::MenuBar::new().config(config).ui(ui, |ui| {
                 let [file, edit, view] = menus;
-                ui.menu_button(file, |ui| wide(ui, |ui| file_menu(ui, window)));
-                ui.menu_button(edit, |ui| wide(ui, |ui| edit_menu(ui, window)));
-                ui.menu_button(view, |ui| wide(ui, |ui| view_menu(ui, window)));
+                crate::ui::menu_button(ui, file, |ui| wide(ui, |ui| file_menu(ui, window)));
+                crate::ui::menu_button(ui, edit, |ui| wide(ui, |ui| edit_menu(ui, window)));
+                crate::ui::menu_button(ui, view, |ui| wide(ui, |ui| view_menu(ui, window)));
             });
         });
     });

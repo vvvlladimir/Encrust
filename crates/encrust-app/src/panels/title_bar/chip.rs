@@ -165,7 +165,7 @@ fn answer_chip(window: &mut Window, responses: [egui::Response; 3], untuned: boo
 
 /// The list a part of the chip opens, hanging under it from its left edge.
 fn chooser(part: &egui::Response) -> egui::Popup<'_> {
-    egui::Popup::menu(part)
+    crate::ui::popup_menu(part)
         .frame(chooser_frame())
         .width(theme::CHOOSER_W)
         .gap(theme::CHOOSER_GAP)

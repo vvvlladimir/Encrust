@@ -79,7 +79,10 @@ pub use list::{
     ListRow, bullet, found_row, is_renaming, issue_list, issue_row, list, list_row, rename_box,
     row_mark, start_rename, tag, tag_label, two_lines,
 };
-pub use menu::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
+pub use menu::{
+    MENU_W, MenuRow, context_menu, menu_button, menu_row, menu_rule, menu_style, menu_sub,
+    popup_menu,
+};
 pub use nav::{NAV_ROW_H, NavAside, nav_row};
 pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, zoom_bar};
 pub use picker_line::{PICKER_ICON_SQUARE, PickerLine, eye_square, picker_foot, picker_line};

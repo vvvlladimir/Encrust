@@ -52,7 +52,10 @@ pub use widgets::{
     LAYER_HANDLE, LAYER_RISK_HOT, LAYER_RISK_REACH, LayerMark, LayerMarks, PROFILE_PITCH,
     paint_layer_track, span_fraction, up,
 };
-pub use widgets::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
+pub use widgets::{
+    MENU_W, MenuRow, context_menu, menu_button, menu_row, menu_rule, menu_style, menu_sub,
+    popup_menu,
+};
 pub use widgets::{NAV_ROW_H, NavAside, find_line, nav_row, palette_field, palette_row};
 pub use widgets::{PICKER_ICON_SQUARE, PickerLine, eye_square, picker_foot, picker_line};
 pub use widgets::{
