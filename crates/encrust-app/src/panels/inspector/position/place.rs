@@ -9,13 +9,11 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::{Axis, ObjectId, Scene};
 use crate::ui::{
-    Segment, Segmented, describe, icon, kept, secondary_button, section, step_bar, stepped_row,
+    Segment, Segmented, describe, icon, kept, number_row, secondary_button, section, step_bar,
     switch,
 };
 
-/// How far a press of either button beside the lift moves the model, and the gap between
-/// a model and the mirrored copy stood beside it, millimetres.
-const LIFT_STEP_MM: f32 = 1.0;
+/// The gap between a model and the mirrored copy stood beside it, millimetres.
 const COPY_GAP_MM: f32 = 5.0;
 
 /// Laying a face down, centring over the plate, mirroring, and the lift off it.
@@ -115,14 +113,14 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     let Some(now_mm) = object.lift() else {
         return;
     };
-    let mut lift_mm = now_mm;
-    if stepped_row(
+    // A model resting on the plate can sit a rounding error under it; that shows as -0.00.
+    let mut lift_mm = if now_mm > 0.0 { now_mm } else { 0.0 };
+    if number_row(
         ui,
         &tr!("position-lift"),
         &mut lift_mm,
         &tr!("unit-mm"),
         POSITION_DRAG,
-        LIFT_STEP_MM,
         0.0..=MAX_LIFT_MM,
         2,
     ) {

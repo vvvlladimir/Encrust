@@ -193,12 +193,10 @@ pub(super) fn listing(
     let picked = issue_list(ui, |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
-            let layer = tr!("check-layer-lower", layer = row.layer + 1);
+            let place = tr!("check-layer", layer = row.layer + 1);
             let selected = row.layer == shown;
-            let place = (row.name.as_str(), Some(layer.as_str()));
-            let count = row.count.to_string();
-            let response = issue_row(ui, row.tint, place, &count, selected);
-            if response.on_hover_text(detail(row)).clicked() {
+            let response = issue_row(ui, row.tint, (&place, None), &detail(row), selected);
+            if response.on_hover_text(&row.name).clicked() {
                 picked = Some(
                     risks
                         .iter()

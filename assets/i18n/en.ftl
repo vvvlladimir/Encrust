@@ -461,6 +461,7 @@ check-hardest-pull = Hardest pull
 check-disc = Pulls like a disc of
 check-widest-step = Widest step
 check-grows-by = Grows by
+check-layer = Layer { $layer }
 check-layer-lower = layer { $layer }
 check-peel = Peel
 check-nothing-found = Nothing found to fail on
@@ -566,8 +567,6 @@ ago-weeks =
 
 ## ui/widgets/field.rs
 
-field-step-more = { $step } { $unit } more
-field-step-less = { $step } { $unit } less
 field-back-to = Back to { $value } { $unit }
 field-printer-address = Printer address
 
