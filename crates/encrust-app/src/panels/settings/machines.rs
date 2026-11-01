@@ -195,7 +195,11 @@ fn machine_row(
     painter.rect_filled(rect, 0.0, fill);
     let profile = &entry.profile;
     let format = core_pipeline::SlicedFormat::from(profile.output).extension();
-    let detail = format!("{}, .{format}", profile.manufacturer);
+    let detail = tr!(
+        "machines-maker-format",
+        maker = profile.manufacturer.clone(),
+        format = format
+    );
     two_lines(
         &painter,
         rect.left_center() + vec2(14.0, 0.0),
@@ -312,7 +316,8 @@ fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<A
         } else {
             tr!("machines-use")
         };
-        if inline_button(ui, "", &label, !in_hand, !in_hand).clicked() {
+        let glyph = if in_hand { icon::IN_HAND } else { "" };
+        if inline_button(ui, glyph, &label, !in_hand, !in_hand).clicked() {
             *action = Some(Action::UsePrinter(id.to_owned()));
         }
     });

@@ -59,12 +59,12 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
     };
     let profile = &mut draft.values;
     // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
-    form_card(ui, &tr!("settings-tab-network"), |ui| {
-        match cfg!(target_arch = "wasm32") {
-            true => hint(ui, &tr!("printer-browser-sends-nothing")),
-            false => connection::card(ui, profile, &mut machine.network),
-        }
-    });
+    match cfg!(target_arch = "wasm32") {
+        true => form_card(ui, &tr!("settings-tab-network"), |ui| {
+            hint(ui, &tr!("printer-browser-sends-nothing"));
+        }),
+        false => connection::cards(ui, profile, &mut machine.network),
+    }
     if settled(ui) {
         autosave(window);
     }

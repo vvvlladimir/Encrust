@@ -4,7 +4,7 @@ use egui::{Align, Align2, Layout, RichText, Sense, vec2};
 
 use crate::i18n::tr;
 use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_keys};
-use crate::ui::{dialog, dialog_head, group_name, hairline, icon, keycap, theme};
+use crate::ui::{dialog, dialog_head_searching, group_name, hairline, icon, keycap, theme};
 
 /// The groups down each column, split so the two columns come out about even.
 const LEFT: [Group; 2] = [Group::Tools, Group::Plate];
@@ -22,9 +22,11 @@ const CHROME_H: f32 = 200.0;
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, open: &mut bool) {
-    let sheet = dialog(ctx, egui::Id::new("shortcuts"), 18).show(ctx, |ui| {
+    let id = egui::Id::new("shortcuts");
+    let mut query: String = ctx.data(|data| data.get_temp(id)).unwrap_or_default();
+    let sheet = dialog(ctx, id, 18).show(ctx, |ui| {
         ui.set_width(COLUMN_W * 2.0 + COLUMN_GAP);
-        header(ui, open);
+        header(ui, open, &mut query);
         ui.add_space(10.0);
         let room = (ui.ctx().content_rect().height() - CHROME_H).max(ROW_H * 4.0);
         egui::ScrollArea::vertical()
@@ -32,9 +34,9 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 ui.horizontal_top(|ui| {
-                    column(ui, &LEFT);
+                    column(ui, &LEFT, &query);
                     ui.add_space(COLUMN_GAP);
-                    column(ui, &RIGHT);
+                    column(ui, &RIGHT, &query);
                 });
             });
         ui.add_space(14.0);
@@ -49,32 +51,58 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
     if sheet.should_close() {
         *open = false;
     }
+    ctx.data_mut(|data| {
+        if *open {
+            data.insert_temp(id, query);
+        } else {
+            data.remove::<String>(id);
+        }
+    });
 }
 
-fn header(ui: &mut egui::Ui, open: &mut bool) {
-    if dialog_head(ui, icon::KEYBOARD, &tr!("shortcuts-title")) {
+fn header(ui: &mut egui::Ui, open: &mut bool, query: &mut String) {
+    let head = (icon::KEYBOARD, tr!("shortcuts-title"));
+    if dialog_head_searching(ui, (head.0, &head.1), query, &tr!("shortcuts-find")) {
         *open = false;
     }
     ui.add_space(8.0);
     hairline(ui);
 }
 
-fn column(ui: &mut egui::Ui, groups: &[Group]) {
+/// The groups down one column, each with the keys whose name holds `query`; a group with
+/// none of them is left out.
+fn column(ui: &mut egui::Ui, groups: &[Group], query: &str) {
+    let wanted = query.trim().to_lowercase();
+    let holds = |label: &str| label.to_lowercase().contains(&wanted);
     ui.allocate_ui_with_layout(vec2(COLUMN_W, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(COLUMN_W);
         ui.spacing_mut().item_spacing.y = 0.0;
-        for (index, group) in groups.iter().enumerate() {
-            if index > 0 {
-                ui.add_space(12.0);
-            }
-            group_name(ui, &group.label());
+        let mut first = true;
+        for group in groups {
+            let mut rows: Vec<(String, Vec<Vec<String>>)> = Vec::new();
             for binding in BINDINGS.iter().filter(|binding| binding.group == *group) {
-                let chords: Vec<Vec<&str>> = binding.keys.iter().map(chord_keys).collect();
-                row(ui, &binding.action.label(), &chords);
+                let chords = binding.keys.iter().map(chord_keys);
+                let chords = chords.map(|keys| keys.into_iter().map(str::to_owned).collect());
+                rows.push((binding.action.label(), chords.collect()));
             }
             for gesture in GESTURES.iter().filter(|gesture| gesture.group == *group) {
-                let keys = (gesture.keys)();
-                row(ui, &(gesture.label)(), &[vec![keys.as_str()]]);
+                rows.push(((gesture.label)(), vec![vec![(gesture.keys)()]]));
+            }
+            rows.retain(|(label, _)| holds(label));
+            if rows.is_empty() {
+                continue;
+            }
+            if !first {
+                ui.add_space(12.0);
+            }
+            first = false;
+            group_name(ui, &group.label());
+            for (label, chords) in &rows {
+                let chords: Vec<Vec<&str>> = chords
+                    .iter()
+                    .map(|keys| keys.iter().map(String::as_str).collect())
+                    .collect();
+                row(ui, label, &chords);
             }
         }
     });

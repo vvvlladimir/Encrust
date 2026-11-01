@@ -4,15 +4,15 @@
 use egui::Ui;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, SupportProfile};
 
-use super::{TWO_COLUMNS_W, reset_row};
+use super::reset_row;
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::{card_cell, card_row, form_card, report, settled};
+use crate::panels::settings::{form_card, report, settled};
 use crate::panels::support_fields::{held_up, sizes, steadying, steps};
 use crate::state::Machine;
 use crate::ui::{field_label, theme};
 
-/// The cards of the form, row by row; narrow, one under another.
+/// The cards of the form, one under another.
 #[derive(Clone, Copy)]
 enum Card {
     Placing,
@@ -71,20 +71,8 @@ pub(super) fn form(ui: &mut Ui, window: &mut Window) {
     });
 
     let saved = shipped.as_ref();
-    if ui.available_width() < TWO_COLUMNS_W {
-        for card in ROWS.into_iter().flatten() {
-            form_card(ui, &card.title(), |ui| card.show(ui, auto, saved, &shapes));
-        }
-    } else {
-        ui.spacing_mut().item_spacing.x = 12.0;
-        for row in ROWS {
-            card_row(ui, 2, |ui, column| {
-                let card = row[column];
-                card_cell(ui, &card.title(), None, |ui| {
-                    card.show(ui, auto, saved, &shapes)
-                });
-            });
-        }
+    for card in ROWS.into_iter().flatten() {
+        form_card(ui, &card.title(), |ui| card.show(ui, auto, saved, &shapes));
     }
 
     if settled(ui) {

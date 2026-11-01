@@ -21,7 +21,9 @@ use crate::panels::Window;
 use crate::settings::{Node, Section, Tab};
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{chooser_group, focus_ring, hairline, hover_mix, icon, inline_button, theme};
+use crate::ui::{
+    chooser_group, focus_ring, hairline, hover_mix, icon, icon_button, inline_button, theme,
+};
 use frame::{child, scrolled, with_header};
 
 /// The window, while it is open, and the question over it, which may be asked without it.
@@ -93,7 +95,10 @@ fn section_icon(section: Section) -> &'static str {
 fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     let section = window.machine.settings.section;
     let (mut head, content) = with_header(ui, side);
-    let pressed = heading(&mut head, section);
+    let pressed = match supports::editing(&window.machine.settings) {
+        Some(name) if section == Section::Supports => form_heading(&mut head, &name),
+        _ => heading(&mut head, section),
+    };
     match section {
         Section::Supports => supports::page(ui, content, window),
         Section::Hollow | Section::Drain => presets::page(ui, content, window),
@@ -107,6 +112,7 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     match pressed {
         Some(Heading::Import(kind)) => ask_for_profile(window, kind),
         Some(Heading::New) => supports::add(window.machine, None),
+        Some(Heading::Back) => window.machine.settings.editing_support = false,
         None => {}
     }
 }
@@ -115,6 +121,27 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
 enum Heading {
     Import(Kind),
     New,
+    Back,
+}
+
+/// The way back to every profile, then the name of the one open in the form and what kind
+/// of profile it is.
+fn form_heading(ui: &mut Ui, name: &str) -> Option<Heading> {
+    ui.horizontal_centered(|ui| {
+        let back = icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked();
+        ui.label(
+            RichText::new(name)
+                .font(theme::page_title(theme::PAGE_TITLE_PT))
+                .color(theme::colors().text_high),
+        );
+        ui.label(
+            RichText::new(tr!("settings-support-profile"))
+                .font(theme::body())
+                .color(theme::colors().text_low),
+        );
+        back.then_some(Heading::Back)
+    })
+    .inner
 }
 
 /// The page's name on the left, and on a page of profiles the ways to add one.
@@ -324,23 +351,8 @@ pub(super) fn switched_card<R>(
     inner
 }
 
-/// Cards side by side in `columns`, each title level with its neighbours' and one hairline
-/// under the tallest, so a title never lines up with another card's field.
-pub(super) fn card_row(
-    ui: &mut egui::Ui,
-    columns: usize,
-    mut add: impl FnMut(&mut egui::Ui, usize),
-) {
-    ui.columns(columns, |cells| {
-        for (column, ui) in cells.iter_mut().enumerate() {
-            add(ui, column);
-        }
-    });
-    close_cards(ui);
-}
-
 /// A card's title and fields, open below for [`close_cards`].
-pub(super) fn card_cell<R>(
+fn card_cell<R>(
     ui: &mut egui::Ui,
     title: &str,
     on: Option<&mut bool>,

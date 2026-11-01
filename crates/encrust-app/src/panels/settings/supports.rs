@@ -18,9 +18,6 @@ use crate::ui::{
     Confirm, confirm_button, describe, icon, quiet_button, secondary_button, subheading,
 };
 
-/// Below this a form has no room for two columns of cards.
-pub(super) const TWO_COLUMNS_W: f32 = 720.0;
-
 const TABLE: Table = Table {
     heads: || {
         vec![
@@ -54,6 +51,18 @@ fn picked(settings: &Settings) -> Option<(Kind, String)> {
     }
 }
 
+/// The name of the profile open in the form, while one is.
+pub(super) fn editing(settings: &Settings) -> Option<String> {
+    if !settings.editing_support {
+        return None;
+    }
+    match (&settings.auto, &settings.support) {
+        (Some(auto), _) => Some(auto.values.name.clone()),
+        (None, Some(support)) => Some(support.values.name.clone()),
+        (None, None) => None,
+    }
+}
+
 /// The page, laid out in `content`: the form of the profile being edited, or the table.
 pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     let settings = &window.machine.settings;
@@ -62,14 +71,9 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     let (mut body, mut bar) = with_footer(ui, content);
     let mut action = None;
     if editing {
-        scrolled(&mut body, |ui| {
-            if quiet_button(ui, icon::BACK, &tr!("profiles-every"), false, true).clicked() {
-                window.machine.settings.editing_support = false;
-            }
-            match picked {
-                Some((Kind::Auto, _)) => auto::form(ui, window),
-                _ => form::form(ui, window),
-            }
+        scrolled(&mut body, |ui| match picked {
+            Some((Kind::Auto, _)) => auto::form(ui, window),
+            _ => form::form(ui, window),
         });
     } else {
         let top = body.max_rect();

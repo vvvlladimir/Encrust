@@ -1,4 +1,4 @@
-//! The Network card of the printer form: what the machine speaks and the printers of this
+//! The Network blocks of the printer form: what the machine speaks and the printers of this
 //! model its files go to, each named. See `docs/decisions/0265`.
 
 use net_prusalink::Link;
@@ -6,10 +6,12 @@ use net_sdcp::Printer;
 use printer_profiles::{Connection, NetworkMachine, PrinterProfile};
 
 use crate::i18n::tr;
-use crate::network::{Network, PrusaDraft, Reach, Target, connection_label};
+use crate::network::{Network, PrusaDraft, Target, connection_label};
 use crate::panels::printer_card;
+use crate::panels::settings::form_card;
 use crate::ui::{
-    Segment, Segmented, hint, icon, icon_button, inline_button, list, subheading, theme, tone,
+    Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list, subheading, theme,
+    tone,
 };
 
 /// How wide a field here is: enough for a host name, not enough to stretch the card.
@@ -17,59 +19,71 @@ const FIELD_W: f32 = 230.0;
 /// How wide a listed printer's name is edited.
 const NAME_W: f32 = 170.0;
 
-/// What this machine takes a file over, and under it the printers it is sent to.
-pub fn card(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
-    let segments: Vec<Segment<'_, Connection>> = Connection::ALL
-        .iter()
-        .map(|kind| Segment::new(*kind, connection_label(*kind)))
-        .collect();
-    let width = ui.available_width();
-    Segmented::new(&segments)
-        .width(width)
-        .show(ui, &mut profile.connection);
-    ui.add_space(8.0);
+/// What this machine takes a file over, the printers it is sent to, and those found that
+/// it could be, each a block of the form.
+pub fn cards(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
+    form_card(ui, &tr!("connection-protocol"), |ui| {
+        let segments: Vec<Segment<'_, Connection>> = Connection::ALL
+            .iter()
+            .map(|kind| Segment::new(*kind, connection_label(*kind)))
+            .collect();
+        let width = ui.available_width();
+        Segmented::new(&segments)
+            .width(width)
+            .show(ui, &mut profile.connection);
+        if profile.connection == Connection::None {
+            hint(ui, &tr!("connection-usb-note"));
+        }
+    });
     match profile.connection {
-        Connection::None => hint(ui, &tr!("connection-usb-note")),
+        Connection::None => {}
         Connection::Sdcp => sdcp(ui, profile, network),
-        Connection::PrusaLink => prusa(ui, profile, network),
+        Connection::PrusaLink => {
+            form_card(ui, &tr!("connection-printers"), |ui| {
+                prusa(ui, profile, network)
+            });
+        }
     }
 }
 
-/// Boards answer a broadcast, so the ones found are offered to tick; one on another
-/// subnet is typed in by its address.
+/// Boards answer a broadcast, so the ones found are offered to add; one on another subnet
+/// is typed in by its address.
 fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
     network.keep_fresh(ui.input(|input| input.time));
-    listed(ui, profile, network);
-
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        subheading(ui, &tr!("connection-found"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+    form_card(ui, &tr!("connection-printers"), |ui| {
+        listed(ui, profile, network);
+        by_address(ui, profile, network);
+    });
+    form_card(ui, &tr!("connection-found"), |ui| {
+        ui.horizontal(|ui| {
             let scanning = network.is_scanning();
             let label = if scanning {
                 tr!("connection-scanning")
             } else {
                 tr!("connection-scan-again")
             };
-            if inline_button(ui, icon::NETWORK, &label, false, !scanning).clicked() {
+            if inline_button(ui, icon::RESCAN, &label, false, !scanning).clicked() {
                 network.scan();
             }
         });
+        found(ui, profile, network);
+        printer_card::scan_notes(ui, network);
     });
-    found(ui, profile, network);
+}
 
-    ui.add_space(6.0);
+/// A printer typed in by its address, for one a broadcast does not reach.
+fn by_address(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
     let address: Option<std::net::IpAddr> = network.draft.trim().parse().ok();
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if inline_button(
+            let add = inline_button(
                 ui,
                 icon::ADD,
                 &tr!("connection-add"),
                 false,
                 address.is_some(),
-            )
-            .clicked()
+            );
+            if add.clicked()
                 && let Some(address) = address
             {
                 profile.machines.push(NetworkMachine {
@@ -81,21 +95,15 @@ fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) 
                 network.draft.clear();
             }
             let width = ui.available_width();
-            crate::ui::address_field(
-                ui,
-                &mut network.draft,
-                &tr!("connection-address-hint"),
-                width,
-            );
+            let hint = tr!("connection-address-hint");
+            crate::ui::address_field(ui, &mut network.draft, &hint, width);
         });
     });
-    printer_card::scan_notes(ui, network);
 }
 
 /// The printers this profile sends to, each named, with its state and a way to remove it. A
 /// board listed by address learns its id once it answers, so a new address still finds it.
 fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
-    subheading(ui, &tr!("connection-listed"));
     if profile.machines.is_empty() {
         tone(ui, &tr!("connection-none-listed"), theme::colors().text_mid);
         return;
@@ -108,22 +116,20 @@ fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network
             if let (None, Some(Target::Sdcp(board))) = (&machine.board, &target) {
                 machine.board = Some(board.mainboard_id.clone());
             }
+            let low = theme::colors().text_low;
             let state = match &target {
                 Some(target) if !target.speaks(speaks) => {
-                    tr!(
-                        "connection-speaks",
-                        theirs = target.protocol().label(),
-                        ours = connection_label(speaks)
-                    )
+                    let ours = connection_label(speaks);
+                    let theirs = target.protocol().label();
+                    (tr!("connection-speaks", theirs = theirs, ours = ours), low)
                 }
                 Some(target) => {
                     printer_card::summary(network.reach(target), network.reading(target))
                 }
-                None if network.has_asked() => tr!("connection-not-found"),
-                None => tr!("connection-not-looked"),
+                None if network.has_asked() => (tr!("connection-not-found"), low),
+                None => (tr!("connection-not-looked"), low),
             };
-            let answers = target.is_some_and(|target| network.reach(&target) == Reach::Answered);
-            if listed_row(ui, machine, &state, answers) {
+            if listed_row(ui, machine, state) {
                 removed = Some(index);
             }
         }
@@ -133,9 +139,14 @@ fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network
     }
 }
 
-/// One listed printer: a dot for whether it answers, its name to edit, where it is, what
-/// it is doing, and the button that takes it off the list. Answers whether it was pressed.
-fn listed_row(ui: &mut egui::Ui, machine: &mut NetworkMachine, state: &str, answers: bool) -> bool {
+/// One listed printer: a dot in the colour of what it is doing, its name to edit, where it
+/// is, what it is doing, and the button that takes it off the list. Answers whether it was
+/// pressed.
+fn listed_row(
+    ui: &mut egui::Ui,
+    machine: &mut NetworkMachine,
+    (state, tint): (String, egui::Color32),
+) -> bool {
     let colors = theme::colors();
     let mut removed = false;
     egui::Frame::new()
@@ -144,9 +155,8 @@ fn listed_row(ui: &mut egui::Ui, machine: &mut NetworkMachine, state: &str, answ
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                let dot = if answers { colors.ok } else { colors.text_low };
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 3.5, dot);
+                ui.painter().circle_filled(rect.center(), 3.5, tint);
                 ui.add(
                     crate::ui::text_box(egui::TextEdit::singleline(&mut machine.name))
                         .hint_text(machine.address.clone())
@@ -161,9 +171,7 @@ fn listed_row(ui: &mut egui::Ui, machine: &mut NetworkMachine, state: &str, answ
                     removed = icon_button(ui, icon::REMOVE, &tr!("connection-take-off")).clicked();
                     ui.add(
                         egui::Label::new(
-                            egui::RichText::new(state)
-                                .font(theme::small())
-                                .color(colors.text_low),
+                            egui::RichText::new(state).font(theme::small()).color(tint),
                         )
                         .truncate(),
                     );
@@ -200,21 +208,14 @@ fn found(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
     }
     let mut picked: Vec<Printer> = Vec::new();
     for board in &unlisted {
-        let mut ticked = false;
         let mine = same_model(&board.model, profile);
-        let label = format!("{} · {} · {}", board.name, board.model, board.address);
-        let text = egui::RichText::new(label).color(if mine {
-            theme::colors().text_high
-        } else {
-            theme::colors().text_low
-        });
-        let response = ui.checkbox(&mut ticked, text);
-        let response = if mine {
-            response
-        } else {
-            response.on_hover_text(tr!("connection-other-model"))
+        let address = board.address.to_string();
+        let response = found_row(ui, icon::PRINTER, &board.model, &address, mine);
+        let response = match mine {
+            true => response,
+            false => response.on_hover_text(tr!("connection-other-model")),
         };
-        if response.changed() && ticked {
+        if response.clicked() {
             picked.push((*board).clone());
         }
     }

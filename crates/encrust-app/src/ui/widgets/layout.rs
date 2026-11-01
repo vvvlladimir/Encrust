@@ -543,6 +543,31 @@ pub fn vertical_hairline(ui: &mut Ui, height: f32) {
 /// The title row of a window over the plate: its glyph, its name, and the way out.
 /// Answers whether the way out was taken.
 pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
+    dialog_head_with(ui, glyph, title, |_| {})
+}
+
+/// A [`dialog_head`] with a search line after the title, `query` typed in it.
+pub fn dialog_head_searching(
+    ui: &mut Ui,
+    (glyph, title): (&str, &str),
+    query: &mut String,
+    hint: &str,
+) -> bool {
+    dialog_head_with(ui, glyph, title, |ui| {
+        ui.add_space(SEARCH_GAP);
+        ui.add(
+            super::text_box(egui::TextEdit::singleline(query))
+                .hint_text(format!("{}  {hint}", crate::ui::icon::FIND))
+                .desired_width(SEARCH_W),
+        );
+    })
+}
+
+/// Room before a dialog's search line, and its width, points.
+const SEARCH_GAP: f32 = 24.0;
+const SEARCH_W: f32 = 220.0;
+
+fn dialog_head_with(ui: &mut Ui, glyph: &str, title: &str, after: impl FnOnce(&mut Ui)) -> bool {
     let colors = theme::colors();
     ui.horizontal(|ui| {
         ui.label(
@@ -556,6 +581,7 @@ pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
                 .font(theme::dialog_title())
                 .color(colors.text_high),
         );
+        after(ui);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             super::icon_button(ui, crate::ui::icon::CANCEL, &tr!("dialog-close")).clicked()
         })

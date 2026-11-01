@@ -219,7 +219,7 @@ action-save-project = Save the project
 action-save-project-as = Save the project as
 action-import-model = Import a model
 action-slice = Slice
-shortcut-group-tools = Tools, by their place on the rail
+shortcut-group-tools = Tools
 shortcut-group-plate = The plate
 shortcut-group-window = The window
 shortcut-group-layers = The layers
@@ -255,6 +255,7 @@ status-removed-models =
 ## panels/shortcuts_sheet.rs
 
 shortcuts-title = Keyboard shortcuts
+shortcuts-find = Find a key
 shortcuts-note = A tool takes the digit of its place on the rail. Keys are off while a field has the cursor.
 shortcuts-or = or
 
@@ -271,6 +272,7 @@ settings-tab-network = Network
 settings-new-resin = New resin
 settings-new-printer = New printer
 settings-new-profile = New profile
+settings-support-profile = Supports profile
 settings-copy-name = { $name } copy
 
 ## supports.rs
@@ -398,6 +400,7 @@ machines-remove = Remove this machine
 machines-import-file = Import a machine from a file
 machines-pick = Pick a machine, or add one from the library.
 machines-in-hand = The plate prints on this
+machines-maker-format = { $maker } · .{ $format }
 machines-use = Use this machine
 machines-cannot-add-printer = cannot add a printer
 machines-cannot-add-machine = cannot add the machine
@@ -1210,12 +1213,14 @@ network-usb-only = USB only
 ## panels/settings/printer/connection.rs
 
 connection-usb-note = What is sliced is saved to a file and carried over on a stick.
-connection-found = Found on the network
+connection-protocol = Protocol
+connection-printers = Printers
+connection-found = Found nearby
+found-add = Add
 connection-scanning = Scanning...
 connection-scan-again = Scan again
 connection-add = Add
 connection-address-hint = Add by address, 192.168.1.42
-connection-listed = Printers this machine sends to
 connection-none-listed = None yet: tick them below, or add one by its address.
 connection-speaks = Speaks { $theirs }, not { $ours }
 connection-not-found = Not found on the network
@@ -1699,6 +1704,7 @@ scope-plate = all { $count } models on the plate
 
 models-broken = Broken
 models-title = Models
+models-nothing-here = Nothing on this plate
 models-selected = { $count } selected
 models-picked = { $count } picked
 models-project = · { $name }
@@ -2070,11 +2076,8 @@ exchange-choose-printer-resin = choose the printer this resin was set up for fir
 find-group-tools = Tools
 find-group-actions = Actions
 find-group-models = Models
-find-keys-move = ↑ ↓
 find-move = move
-find-keys-open = Enter
 find-open = open
-find-close = close
 find-nothing = Nothing goes by that name
 
 ## panels/inspector/scope.rs

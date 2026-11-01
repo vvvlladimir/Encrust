@@ -339,7 +339,8 @@ fn actions(
             tr!("resins-use")
         };
         let enabled = some && !in_hand;
-        if inline_button(ui, "", &label, enabled, enabled).clicked() {
+        let glyph = if some && in_hand { icon::IN_HAND } else { "" };
+        if inline_button(ui, glyph, &label, enabled, enabled).clicked() {
             *action = picked.map(|resin| Action::UseResin {
                 printer: printer.to_owned(),
                 resin: resin.to_owned(),

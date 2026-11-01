@@ -214,6 +214,72 @@ pub fn issue_row(
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Something found that is not yet the user's: a dashed row of a glyph, its name (`text_low`
+/// unless `matches`), a figure such as an address, and an Add button. Answers whether Add
+/// was pressed.
+pub fn found_row(ui: &mut Ui, glyph: &str, name: &str, figure: &str, matches: bool) -> Response {
+    let colors = theme::colors();
+    let (rect, _) = ui.allocate_exact_size(
+        vec2(ui.available_width(), theme::BUTTON_H + 8.0),
+        Sense::hover(),
+    );
+    let painter = ui.painter();
+    let corners = [
+        rect.left_top(),
+        rect.right_top(),
+        rect.right_bottom(),
+        rect.left_bottom(),
+        rect.left_top(),
+    ];
+    let stroke = egui::Stroke::new(1.0, colors.line);
+    painter.extend(egui::Shape::dashed_line(
+        &corners, stroke, FOUND_DASH, FOUND_DASH,
+    ));
+    let ink = if matches {
+        colors.text_high
+    } else {
+        colors.text_low
+    };
+    let left = rect.left_center() + vec2(12.0, 0.0);
+    painter.text(
+        left,
+        Align2::LEFT_CENTER,
+        glyph,
+        theme::icon(14.0),
+        colors.text_mid,
+    );
+    painter.text(
+        left + vec2(20.0, 0.0),
+        Align2::LEFT_CENTER,
+        name,
+        theme::label(),
+        ink,
+    );
+    let mut end = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect.shrink(4.0))
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    let add = super::inline_button(
+        &mut end,
+        crate::ui::icon::ADD,
+        &tr!("found-add"),
+        false,
+        true,
+    );
+    ui.painter().text(
+        add.rect.left_center() - vec2(10.0, 0.0),
+        Align2::RIGHT_CENTER,
+        figure,
+        theme::figures(12.0),
+        colors.text_mid,
+    );
+    add
+}
+
+/// The dashes round a found row, points.
+const FOUND_DASH: f32 = 4.0;
+
 /// A state named at the end of a row, `right_center` its right end: the word in `ink` on
 /// `wash`, a pill. A click on it says more, so it is a button of its own.
 pub fn tag(
