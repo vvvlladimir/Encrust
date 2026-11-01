@@ -98,15 +98,7 @@ impl ViewportResources {
             );
         }
 
-        let planes = self.clear.planes().filter(|_| self.frame.thick);
-        let models = match (self.frame.xray, planes) {
-            (true, _) => &self.xray_pipeline,
-            (false, Some(planes)) => {
-                render_pass.set_bind_group(1, planes, &[]);
-                &self.clear.glowing
-            }
-            (false, None) => &self.model_pipeline,
-        };
+        let models = self.models_pipeline(render_pass);
         let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
         // A clear resin is drawn after this pass, over a copy of what it leaves.
         if !self.frame.clear {
@@ -160,6 +152,20 @@ impl ViewportResources {
         // Last, over everything they stand in front of, and drawing no depth of their own.
         if self.frame.clear {
             self.draw_meshes(render_pass, &self.clear.inner, drawn, 0);
+        }
+    }
+
+    /// The pipeline the models are drawn by this frame, with the planes it reads bound: seen
+    /// through, glowing where they are thin, or plain.
+    fn models_pipeline(&self, render_pass: &mut wgpu::RenderPass<'static>) -> &Facing {
+        let planes = self.clear.planes().filter(|_| self.frame.thick);
+        match (self.frame.xray, planes) {
+            (true, _) => &self.xray_pipeline,
+            (false, Some(planes)) => {
+                render_pass.set_bind_group(1, planes, &[]);
+                &self.clear.glowing
+            }
+            (false, None) => &self.model_pipeline,
         }
     }
 
