@@ -16,21 +16,29 @@ pub(super) fn menus() -> [String; 3] {
 }
 
 /// Points inside a menu title either side of its name, and between two titles.
-pub(super) const MENU_PAD: f32 = 8.0;
+pub(super) const MENU_PAD: f32 = 12.0;
 
 pub(super) const MENU_GAP: f32 = 4.0;
 
 /// egui draws its own menu bar: there is no native one on the platforms this runs on.
 pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
     ui.scope(|ui| {
+        let colors = theme::colors();
         let visuals = ui.visuals_mut();
+        // The titles take the bar's icon squares' inks, which the theme's override would hide.
+        visuals.override_text_color = None;
         visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
         visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.inactive.fg_stroke.color = theme::colors().text_mid;
-        visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.open.weak_bg_fill = theme::colors().active;
+        visuals.widgets.inactive.fg_stroke.color = colors.text_mid;
+        for state in [
+            &mut visuals.widgets.hovered,
+            &mut visuals.widgets.active,
+            &mut visuals.widgets.open,
+        ] {
+            state.weak_bg_fill = colors.hover;
+            state.bg_stroke = egui::Stroke::NONE;
+            state.fg_stroke.color = colors.text_high;
+        }
         // Room inside and between the titles, so each reads as a button of its own.
         ui.spacing_mut().button_padding.x = MENU_PAD;
         ui.spacing_mut().item_spacing.x = MENU_GAP;
