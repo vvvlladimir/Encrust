@@ -2,13 +2,14 @@ use core_geometry::{MendMethod, MeshDiagnostics};
 use core_volume::RepairMethod;
 
 use crate::i18n::tr;
+use crate::job::Counted;
 use crate::panels::Window;
 use crate::repair::{Finding, Found, RepairMode, RepairState};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::ui::{
-    DropdownFace, DropdownRow, blocked_hover, busy, describe, dropdown, dropdown_menu,
-    dropdown_row, icon, icon_toggle, issue_list, issue_row, number_row, primary_button, readings,
-    section, section_with_action, theme, tone,
+    DropdownFace, DropdownRow, blocked_hover, describe, dropdown, dropdown_menu, dropdown_row,
+    icon, icon_toggle, issue_list, issue_row, number_row, primary_button, readings, section,
+    section_with_action, step_bar, theme, tone,
 };
 
 /// Every repair the Method picker offers, in the order it lists them.
@@ -261,12 +262,11 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     shells::drop_picked(ui, window);
     let repairs = &mut window.doc.repairs;
     if repairs.is_busy() {
-        let step = repairs
-            .counted()
-            .map(|counted| (counted.label(), counted.share));
-        let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
-        let label = repairs.models().unwrap_or_else(|| tr!("repair-repairing"));
-        if busy(ui, &label, step, true) {
+        let counted = repairs.counted();
+        let what = counted
+            .as_ref()
+            .map_or_else(|| tr!("repair-repairing"), Counted::label);
+        if step_bar(ui, &what, counted.map(|counted| counted.share), true) {
             repairs.cancel(&mut window.machine.status);
         }
         return;

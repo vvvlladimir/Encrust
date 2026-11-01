@@ -216,6 +216,14 @@ impl OrientTool {
             && asked.tasks.iter().all(standing)
     }
 
+    /// Gives up on the run going, which leaves the models as they stand.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.job.take().is_some() {
+            self.asked = None;
+            *status = Status::Info(tr!("orient-cancelled"));
+        }
+    }
+
     /// Drains a running run into the scene. Returns whether one is still going, which is
     /// what tells the window to keep repainting.
     ///

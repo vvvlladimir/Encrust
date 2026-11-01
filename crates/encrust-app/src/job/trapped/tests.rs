@@ -147,8 +147,8 @@ fn a_finished_check_has_counted_every_layer_of_every_model() {
     });
 
     wait(&mut job);
-    let (_, share) = job
-        .counted()
+    let share = job
+        .fraction()
         .expect("a model was cut, so its layers were counted");
     assert!(
         (share - 1.0).abs() < 1e-6,

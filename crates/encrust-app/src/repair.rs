@@ -174,17 +174,6 @@ impl Repairs {
         })
     }
 
-    /// How many of the repairs started together are done, when there is more than one.
-    pub fn models(&self) -> Option<String> {
-        (self.started > 1).then(|| {
-            tr!(
-                "repair-repairing-models",
-                done = self.started.saturating_sub(self.jobs.len()),
-                total = self.started
-            )
-        })
-    }
-
     /// Gives up on every repair going, which leaves the models as they are.
     pub fn cancel(&mut self, status: &mut Status) {
         if !self.jobs.is_empty() {

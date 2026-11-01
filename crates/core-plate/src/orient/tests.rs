@@ -152,7 +152,8 @@ fn finalists_start_with_the_answer_and_stand_apart() {
         ..OrientSettings::default()
     };
     let answer = orient(&mesh, &settings).expect("a box can be oriented");
-    let found = finalists(&Printed::solid(&mesh), &settings, 5).expect("a box has finalists");
+    let found = finalists(&Printed::solid(&mesh), &settings, 5, Watch::never())
+        .expect("a box has finalists");
 
     assert_eq!(found.len(), 5);
     assert_eq!(found[0], answer);
@@ -163,6 +164,32 @@ fn finalists_start_with_the_answer_and_stand_apart() {
             assert!(apart.to_degrees() > 9.9, "two finalists {apart} rad apart");
         }
     }
+}
+
+#[test]
+fn a_search_tells_each_cut_of_its_shortlist_and_stops_when_asked() {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+    let mesh = cuboid(Vec3::new(30.0, 20.0, 10.0));
+    let settings = OrientSettings::default();
+    let told = AtomicUsize::new(0);
+    let counting = |phase: Phase, done: usize, total: usize| {
+        assert_eq!(phase, Phase::Looking);
+        assert!(done <= total);
+        told.fetch_add(1, Relaxed);
+        true
+    };
+    finalists(&Printed::solid(&mesh), &settings, 1, Watch::by(&counting))
+        .expect("a box has finalists");
+    assert!(
+        told.load(Relaxed) >= 2,
+        "the start and at least one cut are told, got {}",
+        told.load(Relaxed)
+    );
+
+    let stop = |_: Phase, _: usize, _: usize| false;
+    let stopped = finalists(&Printed::solid(&mesh), &settings, 1, Watch::by(&stop));
+    assert!(matches!(stopped, Err(PlateError::Cancelled)));
 }
 
 #[test]

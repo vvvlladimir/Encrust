@@ -9,7 +9,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::{Axis, ObjectId, Scene};
 use crate::ui::{
-    Segment, Segmented, describe, icon, kept, progress_bar, secondary_button, section, stepped_row,
+    Segment, Segmented, describe, icon, kept, secondary_button, section, step_bar, stepped_row,
     switch,
 };
 
@@ -146,10 +146,14 @@ pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: Ob
             Segmented::new(&segments).width(width).show(ui, preset);
         });
         describe(ui, &hint(*preset));
-        if running {
-            // The search measures every candidate over the whole mesh, which is no share
-            // to count: the bar runs rather than standing at nought.
-            progress_bar(ui, None);
+        if let Some(job) = &window.tools.orient.job {
+            let (what, share) = match job.counted() {
+                Some((what, share)) => (what, Some(share)),
+                None => (tr!("orient-looking"), None),
+            };
+            if step_bar(ui, &what, share, true) {
+                window.tools.orient.cancel(&mut window.machine.status);
+            }
         }
         let oriented = ui
             .add_enabled_ui(!running, |ui| {

@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use core_engine::{Printout, Trial, Tried, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{
-    OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Ruling, finalists, flat_faces,
-    rotation_for,
+    OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Ruling, Watch, finalists,
+    flat_faces, rotation_for,
 };
 use encrust_cli::pipeline;
 use printer_profiles::{BuildVolume, SupportProfile};
@@ -189,9 +189,9 @@ impl Bench<'_> {
             ..pipeline::orient_settings(Some(self.support))
         };
         let started = Instant::now();
-        let found = finalists(printed, &settings, usize::MAX)?;
+        let found = finalists(printed, &settings, usize::MAX, Watch::never())?;
         let search_s = started.elapsed().as_secs_f64();
-        let tried = prove(printed, &settings, &found, &self.trial)?;
+        let tried = prove(printed, &settings, &found, &self.trial, Watch::never())?;
         let seconds = started.elapsed().as_secs_f64();
         let chosen = tried
             .first()

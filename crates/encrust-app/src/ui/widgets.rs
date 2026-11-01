@@ -49,7 +49,7 @@ pub use layout::{
     body_and_foot, boxed, busy, card, card_foot, card_title, describe, described, describing,
     dialog, dialog_head, dialog_head_searching, empty_state, field_note, hairline, heading,
     help_mark, hint, inset, meta, mode_column, mode_group, nested, notice, palette_dialog,
-    progress_bar, progress_bar_of, readings, stats, subheading, subheading_with_switch,
+    progress_bar, progress_bar_of, readings, stats, step_bar, subheading, subheading_with_switch,
     vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
