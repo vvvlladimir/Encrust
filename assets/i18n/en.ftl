@@ -559,7 +559,7 @@ summary-volume = Volume
 summary-weight = Weight
 summary-time = Time
 summary-resin = Resin
-summary-block = Block
+summary-time-to-layer = Time to here
 summary-details = Details
 summary-model = Model
 summary-supports = Supports
@@ -574,9 +574,6 @@ summary-broken-why =
        *[other] What is sliced from them may not print.
     }
 summary-estimate = ≈ { $value }
-summary-block-bottom = Bottom
-summary-block-transition = Transition
-summary-block-body = Body
 
 ## ui/widgets.rs
 

@@ -276,6 +276,38 @@ fn print_time_counts_the_bottom_layers_at_their_own_exposure() {
 }
 
 #[test]
+fn time_through_a_layer_counts_only_the_layers_up_to_it() {
+    let job = PrintJob {
+        material: MaterialProfile {
+            bottom_layers: 2,
+            bottom_exposure_s: 30.0,
+            exposure_s: 2.0,
+            light_off_delay_s: 0.0,
+            lift_speed_mm_min: 0.0,
+            retract_speed_mm_min: 0.0,
+            bottom_lift_speed_mm_min: 0.0,
+            bottom_retract_speed_mm_min: 0.0,
+            transition_layers: 0,
+            ..MaterialProfile::default()
+        },
+        ..sample_job(4)
+    };
+
+    assert_eq!(job.time_through_s(0), 0, "nothing printed takes no time");
+    assert_eq!(job.time_through_s(1), 30, "one bottom layer at 30 s");
+    assert_eq!(
+        job.time_through_s(3),
+        62,
+        "two bottom layers and one at 2 s"
+    );
+    assert_eq!(
+        job.time_through_s(99),
+        job.print_time_s(),
+        "past the stack, the print"
+    );
+}
+
+#[test]
 fn a_placeholder_speed_adds_no_travel_to_the_print_time() {
     let job = |distance_mm, speed_mm_min| PrintJob {
         material: MaterialProfile {

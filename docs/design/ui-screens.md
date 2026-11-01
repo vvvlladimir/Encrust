@@ -173,8 +173,8 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 | Nothing to slice | Slice to .goo disabled, and why under it |
 
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
-not print.* In Preview the heading is *Layer*, the figures are Exposure, Block (bottom,
-transition, body), Cured area and Volume of the layer shown, and there is no Details.
+not print.* In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
+print until that layer is done), Cured area and Volume of the layer shown, and there is no Details.
 
 ## Layer strip
 
@@ -219,8 +219,8 @@ track. With no stack it reads *No layers*.
 ## Preview
 
 The stage splits at its middle (ADR 0103): the model cut at the layer on the left, the mask
-on black on the right, a pixel grid under it. At the mask's top right, beside the layer
-strip and level with its top, zoom out, the zoom in percent, zoom in and *show the whole
+on black on the right, a pixel grid under it. At the mask's top right, 8 left of the layer
+strip and level with its top, over the side cards too, zoom out, the zoom in percent, zoom in and *show the whole
 mask* in one card, and under it, flush with its right, a tag for the panel's pixels. The models card gives way, the plate card staying
 on the stage's foot. Beside the mask the hint bar shows the keys alone.
 

@@ -324,7 +324,7 @@ fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
     object.printed()
 }
 
-/// The layer shown in Preview: its exposure, the block of the ramp it is in, the area it
+/// The layer shown in Preview: its exposure, the print time until it is done, the area it
 /// cures and the resin that comes to.
 fn layer(ui: &mut egui::Ui, window: &Window) {
     title_row(ui, &tr!("summary-layer"), None);
@@ -349,7 +349,14 @@ fn layer_figures(machine: &Machine) -> [(String, String, String); 4] {
             two_places(layer_exposure_s(machine, layer)),
             tr!("unit-s"),
         ),
-        (tr!("summary-block"), block(machine, layer), String::new()),
+        (
+            tr!("summary-time-to-layer"),
+            job(machine).map_or_else(
+                || NO_FIGURE.to_owned(),
+                |job| duration(job.time_through_s(layer as u32 + 1)),
+            ),
+            String::new(),
+        ),
         (
             tr!("summary-cured-area"),
             one_place(area_mm2),
@@ -387,19 +394,6 @@ fn job_over(slicing: &Slicing, plan: LayerPlan) -> Option<PrintJob> {
 /// What the machine takes over the stack: every layer's exposure, waits and travel.
 fn print_time_s(machine: &Machine) -> Option<u32> {
     Some(job(machine)?.print_time_s())
-}
-
-/// Where `layer` sits in the resin's exposure ramp, which the heading names.
-fn block(machine: &Machine, layer: usize) -> String {
-    let material = &machine.slicing.material;
-    let bottom = material.bottom_layers as usize;
-    match layer {
-        layer if layer < bottom => tr!("summary-block-bottom"),
-        layer if layer < bottom + material.transition_layers as usize => {
-            tr!("summary-block-transition")
-        }
-        _ => tr!("summary-block-body"),
-    }
 }
 
 /// Exposure of `layer`, seconds: the value the writer would give it, and the resin's own
