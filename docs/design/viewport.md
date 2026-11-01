@@ -436,12 +436,24 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   sixteen points on a golden-angle spiral turned by interleaved-gradient noise, up to
   `REACH_MM` (2.5 mm) away and at most 40 px. A sample above the surface's tangent plane
   shuts out light by its angle, fading out past the reach. It only ever darkens.
-- **References.** In two lanes off the plate's right edge as the viewer faces its front, from
-  the front back: a 100 mm ruler ticked every 5 mm; then a bank card (ISO/IEC 7810 ID-1), a
-  one-euro coin, and a figure on a one-inch (25 mm) base with its eyes 32 mm over it, as the
-  "32 mm heroic" scale measures. Built once from `core_geometry` primitives so the card's
-  cache keeps them, drawn as markers in the `reference` token: never picked, sliced or
-  capped.
+- **The desk.** Off the plate's right edge as the viewer faces its front, its middle level
+  with the plate's, lies an A4 cutting mat (220 × 300 × 3 mm) with things everyone knows
+  the size of on it, as Lychee's *At scale* lays a banana, a pen and a can: a 100 mm steel
+  ruler ticked every 5 mm, a ballpoint as long as a BIC Cristal (149.5 mm) with a hexagonal
+  barrel and a blue cap, a one-euro coin (23.25 × 2.33 mm, nickel in brass), a figure on a
+  one-inch (25 mm) base with its eyes 32 mm over it as the "32 mm heroic" scale measures, a
+  330 ml can (⌀ 66.2 × 115.2 mm) and a banana swept along a 110 mm arc, about 180 mm long.
+  Every mesh is built once from `core_geometry` primitives, a revolve or a sweep, with
+  normals smoothed within 40°, and drawn as a marker: never picked, sliced or capped. Its
+  instance names its material in the overhang slot, `−2 − material`, and `prop_colour` in
+  `props.wgsl` paints it in its own millimetres under `finish`, the studio light with a
+  metal term: the mat's 10 mm grid with every fifth line heavier and a 45° line from each
+  near corner, ruled over a pixel like the plate's grid; the can's red lacquered wrap with a
+  white wave between bare aluminium; the banana yellowing into a brown stem, dark at its
+  blossom end and freckled; the coin's two metals. The props cast soft shadows on the mat:
+  `references::shadows` gives eight segments with the reach of what stands on each, in the
+  mat's millimetres, and the mat darkens by its distance to the nearest. No texture, model
+  file or dependency is shipped for any of it.
 
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.

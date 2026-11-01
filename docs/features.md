@@ -593,11 +593,12 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Show as printed:** the models and supports in the resin's own colour under soft studio
   light, the layers of the chosen layer height stepped into their surface where they will
-  show, a clear resin seen through as deep as it is thick (the hollow of a hollowed model
-  shows), creases softly shaded once the camera rests, and a ruler, a bank card, a one-euro
-  coin and a 32 mm miniature figure beside the plate for scale. A view only: the command
-  line has nothing to show it in, and the file is written the same. In a browser on WebGL
-  the resin is drawn opaque and unshaded.
+  show, a clear resin bending and tinting what stands behind it as deep as the part is
+  thick (the hollow of a hollowed model shows), creases softly shaded once the camera rests,
+  and beside the plate a desk at real size for scale: a cutting mat with a ruler, a pen, a
+  one-euro coin, a 32 mm miniature figure, a 330 ml can and a banana on it. A view only: the
+  command line has nothing to show it in, and the file is written the same. In a browser on
+  WebGL the resin is drawn opaque and unshaded.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
   inside the model through the cap.

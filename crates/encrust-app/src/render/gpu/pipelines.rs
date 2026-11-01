@@ -13,6 +13,12 @@ mod wide;
 pub(super) use section::{Capping, Cutting, MATERIAL_ABOVE};
 pub(super) use shadow::{SHADOW_FORMAT, Shadowing};
 
+/// The viewport's shader, and the render view's props painted in a file of their own.
+const SHADER: &str = concat!(
+    include_str!("../shader.wgsl"),
+    include_str!("../props.wgsl")
+);
+
 /// The one uniform every pipeline reads: the camera, the light and the section.
 pub(super) fn globals_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -92,7 +98,10 @@ impl<'a> Builder<'a> {
     ) -> Self {
         Self {
             device,
-            shader: device.create_shader_module(wgpu::include_wgsl!("../shader.wgsl")),
+            shader: device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("viewport"),
+                source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            }),
             target_format,
             globals_layout,
             layout: device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

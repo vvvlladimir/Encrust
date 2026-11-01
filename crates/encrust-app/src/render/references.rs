@@ -1,155 +1,173 @@
-//! Things everyone knows the size of, laid beside the plate in the render view so a model's
-//! printed size reads at a glance. See docs/design/viewport.md.
+//! A desk beside the plate in the render view: a cutting mat with things everyone knows the
+//! size of lying on it, at their real size. See docs/design/viewport.md.
 
+use std::f32::consts::FRAC_PI_2;
 use std::sync::{Arc, OnceLock};
 
-use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, ball, cuboid, cylinder};
+use core_geometry::{Mesh, Quat, Scalar, Transform, Vec2, Vec3, smooth_normals};
+use core_supports::Shaded;
 
 use crate::plate::BuildPlate;
-use crate::render::gpu::ModelDraw;
-use crate::render::vertex::{ModelInstance, NOT_MARKED};
+use crate::render::gpu::{MAX_PROP_SHADOWS, ModelDraw, PropShadow};
+use crate::render::vertex::ModelInstance;
 use crate::ui::theme;
 
-/// An ID-1 card (ISO/IEC 7810), millimetres: across, along and thick.
-const CARD_MM: [Scalar; 3] = [53.98, 85.6, 0.76];
-/// A one-euro coin, millimetres: diameter and thickness.
-const COIN_MM: [Scalar; 2] = [23.25, 2.33];
-/// The one-inch round base a tabletop miniature of a person stands on, millimetres.
-const BASE_MM: [Scalar; 2] = [25.0, 3.0];
-/// A "32 mm heroic" figure: millimetres from its soles to its eyes, which is what the scale
-/// names, not to the top of its head.
-const EYE_LEVEL_MM: Scalar = 32.0;
-/// A ruler, millimetres: long, wide and thick, ticked every 5 mm and long at every 10.
-const RULER_MM: [Scalar; 3] = [100.0, 12.0, 1.2];
-const TICK_MM: Scalar = 5.0;
-/// Half a tick's width, and how far it stands proud of the ruler, millimetres.
-const TICK_HALF_MM: Scalar = 0.25;
-const TICK_PROUD_MM: Scalar = 0.4;
-/// Millimetres between the plate's edge and the first lane, and between references.
-const GAP_MM: Scalar = 8.0;
-/// Flats round a coin or a base: round to the eye at any zoom the plate is framed at.
-const ROUND_SEGMENTS: usize = 64;
+mod shapes;
 
-/// One reference: its mesh, footprint centred on its own origin and standing on z = 0, and
-/// its footprint, millimetres across and along.
-struct Reference {
-    mesh: Arc<Mesh>,
-    footprint: Vec2,
+/// An A4 self-healing cutting mat, millimetres: across, along and thick.
+pub const MAT_MM: [Scalar; 3] = [220.0, 300.0, 3.0];
+/// Millimetres between the plate's edge and the mat.
+const GAP_MM: Scalar = 15.0;
+/// Degrees two faces may turn apart and still be shaded as one curved surface.
+const CREASE_DEG: Scalar = 40.0;
+
+/// What a reference is made of, which the shader paints it as: `prop_fragment`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Material {
+    Mat = 0,
+    Can = 1,
+    Banana = 2,
+    Pen = 3,
+    Coin = 4,
+    Steel = 5,
+    Primer = 6,
 }
 
-fn disc([diameter, height]: [Scalar; 2]) -> Mesh {
-    cylinder(Vec3::ZERO, Vec3::Z * height, diameter / 2.0, ROUND_SEGMENTS)
+/// A prop's instance names its material in the slot a model's overhang threshold takes:
+/// `PROP_BASE - material`, below anything a model or marker carries.
+const PROP_BASE: f32 = -2.0;
+
+/// One reference: its mesh in its own frame, what it is made of, and where it lies on the
+/// mat, millimetres from the mat's front corner nearest the plate, turned by `turn`.
+pub struct Reference {
+    pub shaded: Shaded,
+    pub material: Material,
+    pub at: Vec3,
+    pub turn: Quat,
 }
 
-fn card() -> Reference {
-    let [across, along, thick] = CARD_MM;
-    let half = Vec3::new(across, along, 0.0) / 2.0;
+fn reference(mesh: Mesh, material: Material, at: Vec3, turn: Quat) -> Reference {
+    let normals = Arc::new(smooth_normals(&mesh, CREASE_DEG));
     Reference {
-        mesh: Arc::new(cuboid(-half, half + Vec3::Z * thick)),
-        footprint: Vec2::new(across, along),
+        shaded: Shaded {
+            mesh: Arc::new(mesh),
+            normals,
+        },
+        material,
+        at,
+        turn,
     }
 }
 
-fn coin() -> Reference {
-    Reference {
-        mesh: Arc::new(disc(COIN_MM)),
-        footprint: Vec2::splat(COIN_MM[0]),
-    }
+/// Where the banana's arc is centred on the mat, millimetres, and how it is turned.
+const BANANA_AT: Vec2 = Vec2::new(247.5, 150.0);
+
+/// Built once: the GPU cache keys a mesh by its address, so the same `Arc` every frame.
+pub fn desk() -> &'static [Reference] {
+    static BUILT: OnceLock<Vec<Reference>> = OnceLock::new();
+    BUILT.get_or_init(|| {
+        let top = MAT_MM[2];
+        let flat = Quat::IDENTITY;
+        vec![
+            reference(shapes::mat(), Material::Mat, Vec3::ZERO, flat),
+            reference(
+                shapes::ruler(),
+                Material::Steel,
+                Vec3::new(18.0, 65.0, top),
+                flat,
+            ),
+            reference(
+                shapes::pen(),
+                Material::Pen,
+                Vec3::new(38.0, 15.0, top + shapes::PEN_REST_MM),
+                Quat::from_rotation_x(-FRAC_PI_2),
+            ),
+            reference(
+                shapes::coin(),
+                Material::Coin,
+                Vec3::new(75.0, 28.0, top),
+                flat,
+            ),
+            reference(
+                shapes::figure(),
+                Material::Primer,
+                Vec3::new(75.0, 72.0, top),
+                flat,
+            ),
+            reference(
+                shapes::can(),
+                Material::Can,
+                Vec3::new(85.0, 140.0, top),
+                flat,
+            ),
+            reference(
+                shapes::banana(),
+                Material::Banana,
+                BANANA_AT.extend(top),
+                Quat::from_rotation_z(FRAC_PI_2),
+            ),
+        ]
+    })
 }
 
-/// A person at miniature scale on its base, in heroic proportions: a head a sixth of its
-/// eye height, limbs as bars. Recognisable, not a sculpt.
-fn figure() -> Reference {
-    let mut mesh = disc(BASE_MM);
-    let at = |x: Scalar, z: Scalar| Vec3::new(x, 0.0, BASE_MM[1] + z);
-    let head_mm = EYE_LEVEL_MM / 6.0;
-    let shoulder = EYE_LEVEL_MM - head_mm;
-    let hip = EYE_LEVEL_MM * 0.47;
-    let parts = [
-        cylinder(at(-1.8, 0.0), at(-1.6, hip), 1.6, 12),
-        cylinder(at(1.8, 0.0), at(1.6, hip), 1.6, 12),
-        cylinder(at(0.0, hip - 1.0), at(0.0, shoulder), 3.6, 16),
-        cylinder(at(-4.6, shoulder - 0.6), at(-5.6, hip - 0.5), 1.2, 10),
-        cylinder(at(4.6, shoulder - 0.6), at(5.6, hip - 0.5), 1.2, 10),
-        ball(at(0.0, EYE_LEVEL_MM), head_mm / 2.0, 12, 16),
-    ];
-    for part in &parts {
-        mesh.append(part);
-    }
-    Reference {
-        mesh: Arc::new(mesh),
-        footprint: Vec2::splat(BASE_MM[0]),
-    }
-}
-
-/// A ruler lying along the plate's depth, its ticks standing proud of it.
-fn ruler() -> Reference {
-    let [long, wide, thick] = RULER_MM;
-    let edge = -wide / 2.0;
-    let mut mesh = cuboid(
-        Vec3::new(edge, -long / 2.0, 0.0),
-        Vec3::new(-edge, long / 2.0, thick),
-    );
-    let ticks = (long / TICK_MM).round() as usize;
-    for tick in 0..=ticks {
-        // The end ticks stand inside the ruler, so it stays exactly its length.
-        let y = (-long / 2.0 + tick as Scalar * TICK_MM - TICK_HALF_MM)
-            .clamp(-long / 2.0, long / 2.0 - 2.0 * TICK_HALF_MM);
-        let reach = if tick % 2 == 0 {
-            wide / 2.0
-        } else {
-            wide / 4.0
-        };
-        mesh.append(&cuboid(
-            Vec3::new(edge, y, thick),
-            Vec3::new(edge + reach, y + 2.0 * TICK_HALF_MM, thick + TICK_PROUD_MM),
-        ));
-    }
-    Reference {
-        mesh: Arc::new(mesh),
-        footprint: Vec2::new(wide, long),
-    }
-}
-
-/// Built once: the GPU cache keys a mesh by its address, so the same `Arc` every frame. Each
-/// lane runs from the plate's front back, the first nearest the plate.
-fn lanes() -> &'static [Vec<Reference>] {
-    static BUILT: OnceLock<Vec<Vec<Reference>>> = OnceLock::new();
-    BUILT.get_or_init(|| vec![vec![ruler()], vec![card(), coin(), figure()]])
-}
-
-/// The references with where each stands: lanes along the plate's side to the viewer's
-/// right, from its front edge back, turned with the plate's front.
-pub fn placed(plate: &BuildPlate) -> Vec<(Arc<Mesh>, Transform)> {
+/// Where the mat's front corner nearest the plate stands, and how it is turned: off the
+/// plate's side to the viewer's right, its middle level with the plate's.
+fn mat_frame(plate: &BuildPlate) -> (Vec3, Quat) {
     let turn = plate.front_turn();
     let (rightward, away) = (turn * Vec3::X, turn * Vec3::Y);
     let extent = |axis: Vec3| axis.x.abs() * plate.x_mm + axis.y.abs() * plate.y_mm;
-    let mut side = extent(rightward) / 2.0 + GAP_MM;
-    let mut placed = Vec::new();
-    for lane in lanes() {
-        let mut along = -extent(away) / 2.0;
-        for reference in lane {
-            let centre = plate.center()
-                + rightward * (side + reference.footprint.x / 2.0)
-                + away * (along + reference.footprint.y / 2.0);
-            along += reference.footprint.y + GAP_MM;
-            let transform = Transform::from_scale_rotation_translation(Vec3::ONE, turn, centre);
-            placed.push((Arc::clone(&reference.mesh), transform));
-        }
-        let widest = lane.iter().map(|reference| reference.footprint.x);
-        side += widest.fold(0.0, Scalar::max) + GAP_MM;
-    }
-    placed
+    let corner =
+        plate.center() + rightward * (extent(rightward) / 2.0 + GAP_MM) - away * MAT_MM[1] / 2.0;
+    (corner, turn)
 }
 
-/// The references as markers in their own token: drawn, never picked, sliced or capped.
+/// Each reference with where it stands on the plate.
+pub fn placed(plate: &BuildPlate) -> Vec<(&'static Reference, Transform)> {
+    let (corner, turn) = mat_frame(plate);
+    desk()
+        .iter()
+        .map(|reference| {
+            let at = corner + turn * reference.at;
+            let transform =
+                Transform::from_scale_rotation_translation(Vec3::ONE, turn * reference.turn, at);
+            (reference, transform)
+        })
+        .collect()
+}
+
+/// The references as markers, smooth-shaded, each naming its material to the shader:
+/// drawn, never picked, sliced or capped.
 pub fn drawn(plate: &BuildPlate) -> impl Iterator<Item = ModelDraw> {
-    placed(plate).into_iter().map(|(mesh, at)| {
-        ModelDraw::whole(
-            mesh,
-            ModelInstance::new(at, theme::scene().reference, NOT_MARKED),
-        )
+    placed(plate).into_iter().map(|(reference, at)| {
+        let material = PROP_BASE - f32::from(reference.material as u8);
+        let instance = ModelInstance::new(at, theme::scene().reference, material);
+        ModelDraw::smooth(&reference.shaded, instance)
     })
+}
+
+/// The soft shadows the props cast on the mat, in the mat's own millimetres: each a
+/// segment and the reach of what stands on it. The banana's curve takes three.
+pub fn shadows() -> [PropShadow; MAX_PROP_SHADOWS] {
+    let line = PropShadow::new;
+    let dot = |at: Vec2, reach_mm: f32| PropShadow::new(at, at, reach_mm);
+    let banana = |share: f32| {
+        let spine = shapes::banana_spine(share);
+        BANANA_AT + Vec2::new(-spine.y, spine.x)
+    };
+    [
+        line(Vec2::new(18.0, 15.0), Vec2::new(18.0, 115.0), 6.0),
+        line(
+            Vec2::new(38.0, 15.0),
+            Vec2::new(38.0, 15.0 + shapes::PEN_MM),
+            4.0,
+        ),
+        dot(Vec2::new(75.0, 28.0), shapes::COIN_MM[0] / 2.0),
+        dot(Vec2::new(75.0, 72.0), shapes::BASE_MM[0] / 2.0),
+        dot(Vec2::new(85.0, 140.0), shapes::CAN_RADIUS_MM),
+        line(banana(0.05), banana(0.35), 12.0),
+        line(banana(0.35), banana(0.65), 16.0),
+        line(banana(0.65), banana(0.95), 12.0),
+    ]
 }
 
 #[cfg(test)]

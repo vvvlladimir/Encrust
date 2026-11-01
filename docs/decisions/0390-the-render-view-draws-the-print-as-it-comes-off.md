@@ -16,8 +16,10 @@ its own and copied out (ADR 0184), with no multisampling.
 
 **A view toggle, *Show as printed*, beside the x-ray in the view tools and the View menu.**
 It draws every model and support in the resin's colour under a procedural studio light,
-steps the layer height into the surface in the shader, and lays a ruler, a bank card, a
-one-euro coin and a 32 mm figure on a 25 mm base off the plate's right edge. Picking,
+steps the layer height into the surface in the shader, and lays a desk off the plate's right
+edge: a cutting mat with a ruler, a pen, a one-euro coin, a 32 mm figure on a 25 mm base, a
+330 ml can and a banana on it at their real size, built from primitives and painted by
+material in the shader. Picking,
 slicing and the written file do not change.
 
 **A resin carries `details.clarity`, 0.0 opaque to 1.0 water-clear**, default 0.0, so a
@@ -50,6 +52,12 @@ Reopen if a GPU without blendable R16Float or depth sampling turns up outside We
 
 Shows size at true scale on a phone, but only there, and needs a mesh writer and its format
 decisions first. References of known size answer the same question on every screen.
+
+### Photographed models of the desk's things
+
+Lychee's look, for a model format reader, compressed textures and megabytes in the
+repository and the web build; procedural shapes and materials ship nothing. Kept open: a
+loader can come later behind its own decision, once the files are chosen.
 
 ### Image-based lighting from HDR environments
 

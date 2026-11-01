@@ -12,6 +12,9 @@ const MAX_BANDS = 8u;
 // in gpu.rs.
 const MAX_POCKETS = 32u;
 
+// How many soft shadows the props cast on their mat. Must match MAX_PROP_SHADOWS in gpu.
+const MAX_PROP_SHADOWS = 8u;
+
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
 // corner.xyz points at a polygon's first corner and corner.w counts its sides, 0 if round.
 // start and end are the planes a channel's leg is mitred off at, w 1.0 where it is.
@@ -35,6 +38,12 @@ struct ExposureBand {
 struct TrapBox {
     low: vec4<f32>,
     high: vec4<f32>,
+};
+
+// One soft shadow on the props' mat, in its millimetres: a segment, and the reach in x.
+struct PropShadow {
+    ends: vec4<f32>,
+    reach: vec4<f32>,
 };
 
 struct Globals {
@@ -96,6 +105,7 @@ struct Globals {
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
+    prop_shadows: array<PropShadow, MAX_PROP_SHADOWS>,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -138,6 +148,8 @@ struct ModelFragment {
     // The corners' normals blended across the face, read where `smoothed` is set.
     @location(5) smooth_normal: vec3<f32>,
     @location(6) @interpolate(flat) smoothed: f32,
+    // Where the fragment stands in its own mesh's millimetres, which a prop is painted by.
+    @location(7) local: vec3<f32>,
 };
 
 // How much lean it takes to go from unmarked to fully marked. A band rather than a step,
@@ -215,6 +227,12 @@ fn softbox(mirror: vec3<f32>, towards: vec3<f32>) -> f32 {
 
 // `lit` under the studio, for the same premultiplied `base` and `alpha`.
 fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    return finish(base, 0.0, alpha, normal, world);
+}
+
+// A surface under the studio: `metal` 0.0 for a dielectric, whose reflection is white, to
+// 1.0 for a metal, which has no diffuse and reflects in its own colour; `shine` scales both.
+fn finish(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     let view = normalize(globals.eye.xyz - world);
     let key = normalize(-globals.key_towards.xyz);
     let fill = normalize(-globals.fill_towards.xyz);
@@ -227,9 +245,11 @@ fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> v
     let mirror = reflect(-view, normal);
     let boxes = globals.key_color.rgb * softbox(mirror, key) + globals.sky.rgb * 0.6 * softbox(mirror, top);
     let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
-    let fresnel = 0.04 + 0.96 * grazing;
+    let tint = mix(vec3<f32>(1.0), base, metal);
+    let fresnel = mix(vec3<f32>(0.04), base, metal) + (1.0 - mix(vec3<f32>(0.04), base, metal)) * grazing;
     let seen = mix(globals.ground.rgb, globals.sky.rgb, mirror.z * 0.5 + 0.5);
-    return base * diffuse + (boxes * SOFTBOX_SHARE + seen * fresnel * FRESNEL_SHARE) * alpha;
+    let reflected = boxes * SOFTBOX_SHARE * tint + seen * fresnel * mix(FRESNEL_SHARE, 1.0, metal);
+    return base * (1.0 - metal) * diffuse + reflected * shine;
 }
 
 // Whichever light the frame is under: the working view's or the render view's studio.
@@ -283,6 +303,7 @@ fn model_vertex(in: ModelVertex) -> ModelFragment {
     out.overhang = in.overhang;
     out.world = world.xyz;
     out.surface = in.surface;
+    out.local = in.position;
     return out;
 }
 
@@ -619,6 +640,11 @@ fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
 // leaves, so a cut ball reads as a disc, not a bowl: see docs/design/viewport.md.
 @fragment
 fn marker_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    // A prop of the render view's desk names its material below every marker's threshold.
+    let local_px = fwidth(in.local);
+    if (in.overhang < PROP_BELOW) {
+        return prop_colour(in, front_facing, local_px);
+    }
     if (sectioned_away(in.world)) {
         discard;
     }

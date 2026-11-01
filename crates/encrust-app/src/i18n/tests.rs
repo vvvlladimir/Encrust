@@ -82,10 +82,13 @@ fn keys_in_code() -> BTreeSet<String> {
 }
 
 fn keys_in(code: &str) -> Vec<String> {
-    code.split("tr!(")
-        .skip(1)
-        .filter_map(|after| {
-            let quoted = after.trim_start().strip_prefix('"')?;
+    code.match_indices("tr!(")
+        // `include_str!(` ends in the same letters, and names a file, not a message.
+        .filter(|(at, _)| {
+            !code[..*at].ends_with(|before: char| before.is_alphanumeric() || before == '_')
+        })
+        .filter_map(|(at, call)| {
+            let quoted = code[at + call.len()..].trim_start().strip_prefix('"')?;
             Some(quoted[..quoted.find('"')?].to_owned())
         })
         .collect()

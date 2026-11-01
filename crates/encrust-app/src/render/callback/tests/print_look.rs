@@ -51,7 +51,7 @@ fn references_stand_beside_the_plate_only_in_the_render_view() {
     );
     assert_eq!(
         markers(Some(look)),
-        4,
-        "a ruler, a card, a coin and a figure"
+        7,
+        "a mat, a ruler, a pen, a coin, a figure, a can and a banana"
     );
 }

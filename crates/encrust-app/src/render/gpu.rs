@@ -25,8 +25,8 @@ mod textures;
 mod timer;
 
 pub use draws::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, Look, ModelDraw, ReliefDraw,
-    TrapBox,
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_PROP_SHADOWS, ModelDraw,
+    PropShadow, ReliefDraw, TrapBox,
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
@@ -126,6 +126,8 @@ struct Globals {
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
     pockets: [TrapBox; MAX_POCKETS],
+    /// The shadows the render view's props cast on their mat.
+    prop_shadows: [PropShadow; MAX_PROP_SHADOWS],
 }
 
 /// A mesh already on the GPU, flat or smooth-shaded and ready to draw.
@@ -325,6 +327,7 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
         cuts,
         bands,
         pockets,
+        prop_shadows: crate::render::references::shadows(),
     }
 }
 
