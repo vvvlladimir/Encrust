@@ -670,7 +670,7 @@ span, and why where the maker says. `encrust slice` warns of both and writes the
 
 **Resins:** **none are bundled**, on purpose. A correct exposure depends on your machine and
 your bottle, so you create the first resin yourself. A resin holds exposure, bottom layers,
-transition, light power, lifts, retracts, waits, density, price, colour, clarity and compensation.
+transition, light power, lifts, retracts, waits, density, price, colour with its opacity (picked, or typed as `#RRGGBBAA`) and compensation.
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 

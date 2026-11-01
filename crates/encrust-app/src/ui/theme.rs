@@ -63,6 +63,11 @@ pub fn resin_swatch([r, g, b]: [u8; 3]) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 
+/// A colour the user chose with its opacity, sRGB and unmultiplied, for a swatch.
+pub fn user_colour([r, g, b, a]: [u8; 4]) -> Color32 {
+    Color32::from_rgba_unmultiplied(r, g, b, a)
+}
+
 /// A pixel of a layer mask: its exposure as grey, or the danger colour where it cures over
 /// nothing.
 pub fn mask_pixel(grey: u8, island: bool) -> Color32 {

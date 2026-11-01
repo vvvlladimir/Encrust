@@ -270,7 +270,8 @@ and the one that applies right.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and
   a tick on the one in use, Add a machine with import and a delete `bin_button` at the
   foot) and gives the picked one tabs: Resins (filter chips, Import, Add a resin, a table,
-  *Take off this machine* as a `confirm_button`, *Use this resin*), Machine (blocks:
+  *Take off this machine* as a `confirm_button`, *Use this resin*; a resin's form names its
+  colour and opacity in one `colour_field`), Machine (blocks:
   Machine, Display with the pixel size right-aligned under its fields, Build volume) and
   Network (protocol, printers as rows with their live state, add by address, the ones found
   nearby as dashed rows with Add).

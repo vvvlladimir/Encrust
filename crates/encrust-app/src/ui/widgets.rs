@@ -6,6 +6,7 @@ mod bin;
 mod binding;
 mod button;
 mod chooser;
+mod colour;
 mod confirm;
 mod device_row;
 mod dropdown;
@@ -46,6 +47,7 @@ pub use button::{
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
 };
+pub use colour::colour_field;
 pub use confirm::{Confirm, any_armed, confirm_button, is_armed};
 pub use device_row::{DEVICE_OPEN_INSET, DeviceRow, device_row, print_picture};
 pub use dropdown::{

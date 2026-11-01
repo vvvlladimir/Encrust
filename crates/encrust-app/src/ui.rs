@@ -9,6 +9,7 @@ pub mod kept;
 pub mod theme;
 mod widgets;
 
+pub use widgets::colour_field;
 pub use widgets::window_frame;
 pub use widgets::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
