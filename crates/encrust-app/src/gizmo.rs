@@ -13,12 +13,16 @@ use crate::ui::theme;
 const ARROW_SIZE: f32 = 100.0;
 const RING_SIZE: f32 = 52.0;
 
+/// Steps a drag keeps to while Shift is held: whole millimetres and 15° turns.
+const SNAP_MM: f32 = 1.0;
+const SNAP_ANGLE: f32 = std::f32::consts::PI / 12.0;
+
 fn arrows() -> EnumSet<GizmoMode> {
-    GizmoMode::TranslateX | GizmoMode::TranslateY | GizmoMode::TranslateZ | GizmoMode::TranslateView
+    GizmoMode::TranslateX | GizmoMode::TranslateY | GizmoMode::TranslateZ | GizmoMode::TranslateXY
 }
 
 fn rings() -> EnumSet<GizmoMode> {
-    GizmoMode::RotateX | GizmoMode::RotateY | GizmoMode::RotateZ | GizmoMode::RotateView
+    GizmoMode::RotateX | GizmoMode::RotateY | GizmoMode::RotateZ
 }
 
 fn visuals(size: f32) -> GizmoVisuals {
@@ -27,8 +31,7 @@ fn visuals(size: f32) -> GizmoVisuals {
         x_color,
         y_color,
         z_color,
-        s_color: theme::colors().knob,
-        inactive_alpha: 1.0,
+        inactive_alpha: 0.65,
         highlight_color: Some(theme::scene().gizmo_hot),
         stroke_width: 3.5,
         gizmo_size: size,
@@ -45,7 +48,15 @@ fn visuals(size: f32) -> GizmoVisuals {
 pub struct TransformGizmo {
     arrows: Gizmo,
     rings: Gizmo,
+    dragged: Option<Handles>,
     pub axes: Axes,
+}
+
+/// Which of the two gizmos a drag is on; the other is hidden until it ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Handles {
+    Arrows,
+    Rings,
 }
 
 /// Which axes the handles, the turn buttons and the size fields follow.
@@ -81,6 +92,7 @@ impl TransformGizmo {
         }
 
         let aspect = viewport.width() / viewport.height();
+        let snapping = ui.input(|input| input.modifiers.shift);
         let config = |modes, size| GizmoConfig {
             view_matrix: row_matrix(camera.view()),
             projection_matrix: row_matrix(camera.projection(aspect)),
@@ -90,6 +102,9 @@ impl TransformGizmo {
                 Axes::Global => GizmoOrientation::Global,
                 Axes::Local => GizmoOrientation::Local,
             },
+            snapping,
+            snap_angle: SNAP_ANGLE,
+            snap_distance: SNAP_MM,
             visuals: visuals(size),
             ..GizmoConfig::default()
         };
@@ -98,8 +113,21 @@ impl TransformGizmo {
 
         let targets: Vec<GizmoTransform> = placements.iter().copied().map(into_gizmo).collect();
         // Where an arrow crosses a ring both can take the press; the arrow wins.
-        let turned = self.rings.interact(ui, &targets);
-        let moved = self.arrows.interact(ui, &targets);
+        let turned = (self.dragged != Some(Handles::Arrows))
+            .then(|| self.rings.interact(ui, &targets))
+            .flatten();
+        let moved = (self.dragged != Some(Handles::Rings))
+            .then(|| self.arrows.interact(ui, &targets))
+            .flatten();
+        // The crate skips a frame's result when the cursor leaves its plane, mid-drag; the
+        // held button, not the result, says when the drag ends.
+        self.dragged = match (&moved, &turned) {
+            (Some(_), _) => Some(Handles::Arrows),
+            (None, Some(_)) => Some(Handles::Rings),
+            (None, None) => self
+                .dragged
+                .filter(|_| ui.input(|input| input.pointer.primary_down())),
+        };
         let (_, placed) = moved.or(turned)?;
         let placed = placed.into_iter().map(from_gizmo);
         Some(

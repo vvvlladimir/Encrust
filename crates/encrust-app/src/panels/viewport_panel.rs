@@ -426,7 +426,7 @@ fn over_the_model(
 
 /// Whether the picked models carry the handles: in Position, and while Relief combines
 /// them. While a face is being picked the click is for the model, not for a handle over it.
-fn moves_by_hand(window: &Window) -> bool {
+pub(crate) fn moves_by_hand(window: &Window) -> bool {
     match *window.tool {
         Tool::Position => !window.tools.orient.picking_face,
         Tool::Relief => window.tools.relief.mode == ReliefMode::Combine,

@@ -7,6 +7,7 @@ use crate::drain::Placing as Drain;
 use crate::i18n::tr;
 use crate::measure::{Snap, Target};
 use crate::panels::Window;
+use crate::panels::viewport_panel::moves_by_hand;
 use crate::relief::ReliefMode;
 use crate::repair::{Picking, RepairMode};
 use crate::supports::Placing as Supports;
@@ -123,6 +124,9 @@ fn pairs(window: &Window, keys: &Keys) -> Option<Vec<(String, String)>> {
                 Drain::Channel => tr!("hint-drain-channel"),
             };
             vec![click(first), remove()]
+        }
+        _ if moves_by_hand(window) && !window.doc.scene.selection().is_empty() => {
+            vec![(keys.drag_with(&keys.shift), tr!("hint-gizmo-steps"))]
         }
         Tool::Relief => match tools.relief.mode {
             ReliefMode::Text => vec![
