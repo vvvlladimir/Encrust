@@ -70,6 +70,16 @@ impl Builder<'_> {
                 ..PipelineKind::default()
             },
         );
+        let glowing = self.facing_on(
+            &reading,
+            PipelineKind {
+                label: "viewport_glowing_models",
+                vertex_entry: "model_vertex",
+                fragment_entry: "glow_fragment",
+                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                ..PipelineKind::default()
+            },
+        );
         let thickness = Facing {
             upright: self.thickness(wgpu::FrontFace::Ccw),
             mirrored: self.thickness(wgpu::FrontFace::Cw),
@@ -88,7 +98,7 @@ impl Builder<'_> {
             ..PipelineKind::default()
         });
         Clear::new(
-            [thickness, exit, inner, models],
+            [thickness, exit, inner, models, glowing],
             layout,
             sampler,
             self.target_format,

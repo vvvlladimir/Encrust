@@ -98,9 +98,14 @@ impl ViewportResources {
             );
         }
 
-        let models = match self.frame.xray {
-            true => &self.xray_pipeline,
-            false => &self.model_pipeline,
+        let planes = self.clear.planes().filter(|_| self.frame.thick);
+        let models = match (self.frame.xray, planes) {
+            (true, _) => &self.xray_pipeline,
+            (false, Some(planes)) => {
+                render_pass.set_bind_group(1, planes, &[]);
+                &self.clear.glowing
+            }
+            (false, None) => &self.model_pipeline,
         };
         let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
         // A clear resin is drawn after this pass, over a copy of what it leaves.

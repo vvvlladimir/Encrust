@@ -106,7 +106,7 @@ fn wall_on_a_slab() -> Vec<ModelDraw> {
 }
 
 #[test]
-fn creases_are_shaded_at_rest_and_nothing_else_is_lightened() {
+fn creases_are_shaded_in_the_copy_and_nothing_else_is_lightened() {
     let camera = OrbitCamera {
         target: Vec3::new(20.0, 20.0, 6.0),
         distance_mm: 60.0,
@@ -117,7 +117,7 @@ fn creases_are_shaded_at_rest_and_nothing_else_is_lightened() {
         projection: camera.projection(1.0),
         ..studio()
     });
-    let frame = |moving| {
+    let frame = |presented| {
         paint(
             camera,
             None,
@@ -125,16 +125,15 @@ fn creases_are_shaded_at_rest_and_nothing_else_is_lightened() {
             &[],
             Marks {
                 look,
-                presented: true,
-                moving,
+                presented,
                 ..Marks::default()
             },
         )
     };
-    let Some(drawn) = frame(true) else {
+    let Some(drawn) = frame(false) else {
         return;
     };
-    let copied = frame(false).expect("the adapter drew once");
+    let copied = frame(true).expect("the adapter drew once");
     let (changed, darkened) = darker(&drawn, &copied, 6);
     assert!(
         darkened > 300,
@@ -190,4 +189,43 @@ fn a_clear_resin_is_drawn_opaque_while_the_camera_moves() {
     };
     let clear = frame(40.0).expect("the adapter drew once");
     assert!(opaque == clear, "a moving frame draws no clear pass");
+}
+
+#[test]
+fn a_thin_wall_glows_with_the_key_behind_it_once_the_camera_rests() {
+    let mut camera = OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 45.0),
+        distance_mm: 170.0,
+        ..OrbitCamera::default()
+    };
+    camera.orbit(3.4, 0.1);
+    let (shell, _, _) = super::holes::drilled_ball(false);
+    let models = vec![ModelDraw::whole(
+        shell,
+        ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED),
+    )];
+    let frame = |moving| {
+        paint(
+            camera,
+            None,
+            &models,
+            &[],
+            Marks {
+                look: Some(studio()),
+                moving,
+                ..Marks::default()
+            },
+        )
+    };
+    let Some(moving) = frame(true) else {
+        return;
+    };
+    let resting = frame(false).expect("the adapter drew once");
+    // At rest the key's shadow is baked too, which only darkens.
+    let (changed, darkened) = darker(&moving, &resting, 3);
+    let lightened = changed - darkened;
+    assert!(
+        lightened > 1_000,
+        "a shell glows lighter at rest, got {lightened} pixels lighter"
+    );
 }

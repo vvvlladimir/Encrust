@@ -425,6 +425,13 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   taken about a normal bent towards the one facing the eye in the plane across the layers,
   by the layers' roughness (below) times `SHEEN_BEND`; and the key adds Ward's anisotropic
   lobe, 0.12 wide along the layers and up to 0.67 across them.
+- **Thin parts glow.** At rest the thickness pass below runs for any resin, and the models
+  are drawn by `glow_fragment` against it: light through a thin part, after Barré-Brisebois
+  and Bouchard (GDC 2011, Frostbite) — the key seen through the part, bent towards its
+  normal by 0.2, narrowed to the power of 4, over a little from all round — carried through
+  `exp(−d / 2.5 mm)` of a part `d` thick, so an ear, a finger or an edge lights up in the
+  resin's colour with the key behind it. The thickness stands in for the paper's baked
+  local thickness. An open mesh, which measures none, does not glow.
 - **Clear resin.** Modelled after glTF's `KHR_materials_volume`, as three.js draws it, with
   the surface the layers leave. A resin's opacity, picked with its colour, sets an
   attenuation distance *D* from 1 mm, barely clear, to 300 mm, water-clear

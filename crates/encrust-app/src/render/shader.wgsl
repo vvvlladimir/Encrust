@@ -417,6 +417,20 @@ fn finish(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec
     return filmic(radiance(linear_of(base), metal, shine, normal, normal, world));
 }
 
+// How much of the key a thin part of a resin lets through to the eye, 1.0 for none of its
+// thickness: set by `glow_fragment` for the fragment in hand, 0.0 everywhere else.
+var<private> glow_through: f32 = 0.0;
+
+// Light through a thin part, after Barré-Brisebois and Bouchard (GDC 2011, Frostbite): the
+// key seen through the part, bent towards its normal by `GLOW_DISTORTION`, narrowed by
+// `GLOW_POWER`, over a little that comes through from all round, carried through
+// `exp(-d / GLOW_MM)` of a part `d` thick. See docs/design/viewport.md.
+const GLOW_MM = 2.5;
+const GLOW_DISTORTION = 0.2;
+const GLOW_POWER = 4.0;
+const GLOW_SCALE = 1.2;
+const GLOW_AMBIENT = 0.08;
+
 // The light leaving a surface of linear colour `base` under the studio, before the curve:
 // lit about `normal`, reflecting about `reflecting`, which grooves may bend away from it.
 fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, reflecting: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
@@ -440,7 +454,9 @@ fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, reflecti
     let fresnel = mix(vec3<f32>(0.04), base, metal) + (1.0 - mix(vec3<f32>(0.04), base, metal)) * grazing;
     let seen = mix(ground, sky, mirror.z * 0.5 + 0.5);
     let reflected = boxes * SOFTBOX_SHARE * tint + seen * fresnel * mix(FRESNEL_SHARE, 1.0, metal);
-    return base * (1.0 - metal) * diffuse + reflected * shine;
+    let behind = pow(clamp(dot(view, -(key + normal * GLOW_DISTORTION)), 0.0, 1.0), GLOW_POWER);
+    let glow = key_colour * (behind * GLOW_SCALE + GLOW_AMBIENT) * glow_through;
+    return base * (1.0 - metal) * (diffuse + glow) + reflected * shine;
 }
 
 // Whichever light the frame is under: the working view's or the render view's studio.
@@ -918,6 +934,15 @@ fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     let reflected = 0.04 + 0.96 * grazing;
     let shine = studio_grooved(vec3<f32>(0.0), 1.0, normal, in.world, rough);
     return vec4<f32>(body * (1.0 - reflected) + shine, 1.0);
+}
+
+// An opaque resin's model at rest, lit through where it is thin.
+@fragment
+fn glow_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let crossed_mm = max(textureLoad(thickness_plane, vec2<i32>(in.clip_position.xy), 0).r, 0.0);
+    // No thickness is no closed part to be thin, as an open mesh measures.
+    glow_through = select(0.0, exp(-crossed_mm / GLOW_MM), crossed_mm > 0.01);
+    return model_colour(in, front_facing);
 }
 
 // What a face of a clear model lays into the scene before the models refract it, so walls

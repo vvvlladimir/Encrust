@@ -22,6 +22,8 @@ pub(super) struct Clear {
     pub(super) inner: Facing,
     /// Draws the models over the copy, their front faces only.
     pub(super) models: Facing,
+    /// Draws an opaque resin's models against the thickness, which a thin part glows by.
+    pub(super) glowing: Facing,
     pub(super) layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     /// The scene's colour format, which the copy is made in.
@@ -40,7 +42,7 @@ struct Plane {
 
 impl Clear {
     pub(super) fn new(
-        [thickness, exit, inner, models]: [Facing; 4],
+        [thickness, exit, inner, models, glowing]: [Facing; 5],
         layout: wgpu::BindGroupLayout,
         sampler: wgpu::Sampler,
         format: wgpu::TextureFormat,
@@ -50,6 +52,7 @@ impl Clear {
             exit,
             inner,
             models,
+            glowing,
             layout,
             sampler,
             format,
@@ -104,6 +107,11 @@ impl Clear {
             1.0,
         );
         pass
+    }
+
+    /// What the models read the planes through, once a pass has made them.
+    pub(super) fn planes(&self) -> Option<&wgpu::BindGroup> {
+        self.plane.as_ref().map(|plane| &plane.bind_group)
     }
 
     /// Begins a pass over the exit plane, cleared to no exit, the plane `begin` made.
@@ -235,7 +243,7 @@ impl ViewportResources {
         size_px: [u32; 2],
         viewport: &ViewportInPixels,
     ) {
-        if !self.frame.clear {
+        if !self.frame.thick {
             return;
         }
         let mut pass = self.clear.begin(device, encoder, size_px, viewport);
@@ -244,6 +252,9 @@ impl ViewportResources {
         let drawn = &self.frame.models[..self.frame.markers_from];
         self.draw_meshes(&mut pass, &self.clear.thickness, drawn, 0);
         drop(pass);
+        if !self.frame.clear {
+            return;
+        }
         let Some(mut pass) = self.clear.begin_exit(encoder, viewport) else {
             return;
         };

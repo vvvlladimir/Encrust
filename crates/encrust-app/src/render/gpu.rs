@@ -195,6 +195,9 @@ struct Frame {
     xray: bool,
     /// Whether the models are drawn as a clear resin against the thickness pass.
     clear: bool,
+    /// Whether the thickness is measured: the render view at rest, where a thin part of any
+    /// resin glows with the key behind it, and a clear one is seen through.
+    thick: bool,
     /// Whether the render view puts the printer away and stands the models in its room.
     staged: bool,
     /// The projection the copy shades creases through, or `None` while it does not.
@@ -320,10 +323,9 @@ impl ViewportResources {
         self.frame.staged = frame.look.is_some();
         // While the camera moves a clear resin is drawn opaque: its four passes over every
         // model would leave the levels a quarter of the faces.
-        self.frame.clear = self.reads_planes
-            && !frame.xray
-            && !frame.light
-            && frame.look.is_some_and(|look| look.attenuation_mm > 0.0);
+        self.frame.thick = self.reads_planes && !frame.xray && !frame.light && frame.look.is_some();
+        self.frame.clear =
+            self.frame.thick && frame.look.is_some_and(|look| look.attenuation_mm > 0.0);
         self.frame.occlusion = frame
             .look
             .filter(|_| self.reads_planes && !frame.light)
