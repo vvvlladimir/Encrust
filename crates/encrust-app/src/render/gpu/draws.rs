@@ -112,8 +112,8 @@ pub struct FrameInput<'a> {
     pub volume_mm: Option<[Vec3; 2]>,
     /// Where the Cut tool's plane meets the model it is set on, traced over its surface.
     pub cut_line: Option<CutLine>,
-    /// Millimetres between the layers the render view steps into the models, 0.0 for none.
-    pub layer_height_mm: f32,
+    /// How the render view shades the models, or `None` for the working view.
+    pub look: Option<Look>,
     /// Whether the models are drawn seen through, which is what shows a cavity that holds
     /// resin; see `docs/design/viewport.md`.
     pub xray: bool,
@@ -125,6 +125,20 @@ pub struct FrameInput<'a> {
     /// coming back. The shadow is
     /// not cast again from one: what the camera does never moves it.
     pub light: bool,
+}
+
+/// How the render view shades the models: as printed, under studio light.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Look {
+    /// Millimetres between the layers stepped into the models, 0.0 for none.
+    pub layer_height_mm: f32,
+    /// Share of the light the resin takes per millimetre it crosses, 0.0 for an opaque one.
+    pub absorption_per_mm: f32,
+    /// Millimetres from the eye to what the camera turns about, which thickness is measured
+    /// from so a half-float holds it to a hundredth of a millimetre.
+    pub pivot_mm: f32,
+    /// The camera's projection, which the creases are shaded through at rest.
+    pub projection: Mat4,
 }
 
 /// The rectangle the contact shadow is laid on, plate millimetres, at the plate's height.

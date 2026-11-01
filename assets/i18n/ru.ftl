@@ -1204,6 +1204,7 @@ resin-compensation = Компенсация
 resin-cannot-save = не удалось сохранить смолу
 resin-cannot-rename = не удалось переименовать смолу
 resin-colour = Цвет
+resin-clarity = Прозрачность
 resin-per = за
 resin-per-kg = кг
 resin-per-litre = л

@@ -199,6 +199,11 @@ fn details(ui: &mut egui::Ui, values: &mut MaterialProfile) {
             ui.color_edit_button_srgb(&mut values.details.color);
         });
     });
+    let mut percent = values.details.clarity * 100.0;
+    let clarity = tr!("resin-clarity");
+    if number_row(ui, &clarity, &mut percent, "%", 1.0, 0.0..=100.0, 0) {
+        values.details.clarity = percent / 100.0;
+    }
     number_row(
         ui,
         &tr!("resin-density"),

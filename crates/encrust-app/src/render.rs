@@ -7,19 +7,22 @@ mod gpu;
 mod grid;
 mod label;
 mod lod;
+mod occlusion;
 #[cfg(test)]
 mod offscreen;
+mod print_look;
 mod references;
 mod target;
 mod vertex;
 
-pub use callback::{Banding, Ghost, GhostShape, PrintLook, Shading, ViewportCallback};
+pub use callback::{Banding, Ghost, GhostShape, Shading, ViewportCallback};
 pub use gpu::CutLine;
 #[cfg(not(target_arch = "wasm32"))]
 pub use gpu::MULTISAMPLING;
 pub use grid::AXIS_LENGTH_MM;
 pub use label::prime as prime_label;
 pub use lod::{Budget, Candidate, Light, Lods, Step, allot, px_per_mm, refine};
+pub use print_look::PrintLook;
 
 use gpu::ViewportResources;
 

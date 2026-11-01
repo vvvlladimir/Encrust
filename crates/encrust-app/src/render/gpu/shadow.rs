@@ -269,7 +269,7 @@ mod tests {
             band_floor_mm: 0.0,
             volume_mm: None,
             cut_line: None,
-            layer_height_mm: 0.0,
+            look: None,
             xray: false,
             floor: Some(floor()),
             grid: true,

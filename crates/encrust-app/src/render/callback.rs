@@ -13,12 +13,13 @@ use crate::plate::BuildPlate;
 use crate::relief::Textures;
 use crate::render::frame_time::CardTime;
 use crate::render::gpu::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, MAX_BANDS, ModelDraw, ReliefDraw,
-    TrapBox,
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_BANDS, ModelDraw,
+    ReliefDraw, TrapBox,
 };
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::lod::Light;
+use crate::render::print_look::PrintLook;
 use crate::render::references;
 use crate::render::vertex::{LabelVertex, LineVertex, NOT_MARKED, WideLine};
 use crate::scene::{ObjectId, Scene};
@@ -77,8 +78,8 @@ pub struct ViewportCallback {
     band_floor_mm: f32,
     volume_mm: [Vec3; 2],
     cut_line: Option<CutLine>,
-    /// Millimetres between the layers stepped into the models, or 0.0 for none.
-    layer_height_mm: Scalar,
+    /// How the render view shades the models, or `None` for the working view.
+    look: Option<Look>,
     /// Whether the models are drawn seen through, so a cavity that holds resin can be
     /// looked into; see `docs/design/viewport.md`.
     xray: bool,
@@ -152,14 +153,6 @@ pub struct Shading<'a> {
     pub print_look: Option<PrintLook>,
 }
 
-/// How the render view draws the plate as it will come off the printer: in the resin's own
-/// colour, its layers stepped in, with references of known size beside it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PrintLook {
-    pub resin: Color32,
-    pub layer_height_mm: Scalar,
-}
-
 impl ViewportCallback {
     /// `rect` is the panel the viewport fills, in points.
     pub fn new(
@@ -222,7 +215,7 @@ impl ViewportCallback {
                 [low.extend(0.0), high.extend(plate.z_mm)]
             },
             cut_line,
-            layer_height_mm: print_look.map_or(0.0, |look| look.layer_height_mm),
+            look: print_look.map(|look| look.shading(camera, rect.width() / rect.height())),
             xray: view.xray,
             grid: view.grid,
             light: light.is_some_and(|light| light.settling),
@@ -379,7 +372,7 @@ impl CallbackTrait for ViewportCallback {
                     band_floor_mm: self.band_floor_mm,
                     volume_mm: Some(self.volume_mm),
                     cut_line: self.cut_line,
-                    layer_height_mm: self.layer_height_mm,
+                    look: self.look,
                     xray: self.xray,
                     floor: Some(self.floor),
                     grid: self.grid,
@@ -393,7 +386,7 @@ impl CallbackTrait for ViewportCallback {
                 screen.pixels_per_point,
                 screen.size_in_pixels,
             );
-            resources.draw(device, egui_encoder, screen.size_in_pixels, viewport);
+            resources.draw(device, queue, egui_encoder, screen.size_in_pixels, viewport);
             resources.log_frame(started, self.ui_ms);
         });
         Vec::new()

@@ -106,7 +106,7 @@ pub(super) fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<V
             band_floor_mm: 0.0,
             volume_mm: None,
             cut_line: None,
-            layer_height_mm: 0.0,
+            look: None,
             xray: false,
             floor: None,
             grid: false,

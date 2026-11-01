@@ -4,7 +4,10 @@
 
 use egui::epaint::ViewportInPixels;
 
+use wgpu::util::DeviceExt as _;
+
 use crate::render::gpu::{DEPTH_FORMAT, SAMPLE_COUNT};
+use crate::render::occlusion::Occlusion;
 
 /// The planes the scene is drawn into, sized to the window, and the pipeline that copies
 /// them out.
@@ -13,6 +16,9 @@ pub struct SceneTarget {
     layout: wgpu::BindGroupLayout,
     present: wgpu::RenderPipeline,
     planes: Option<Planes>,
+    /// What the copy shades the creases with, and whether this frame's depth is kept for it.
+    occlusion: wgpu::Buffer,
+    occluding: bool,
 }
 
 struct Planes {
@@ -25,25 +31,52 @@ struct Planes {
 impl SceneTarget {
     /// `format` is egui's own target format, which the scene's pipelines are built for.
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+        let plane = |binding, sample_type| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("viewport_frame_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
+            entries: &[
+                plane(0, wgpu::TextureSampleType::Float { filterable: false }),
+                plane(1, wgpu::TextureSampleType::Depth),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+            ],
+        });
+        let occlusion = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("viewport_occlusion"),
+            contents: bytemuck::bytes_of(&Occlusion::off()),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         Self {
             format,
             present: present_pipeline(device, format, &layout),
             layout,
             planes: None,
+            occlusion,
+            occluding: false,
         }
+    }
+
+    /// What the next copy shades the creases with; off keeps no depth past the scene pass.
+    pub fn occlude(&mut self, queue: &wgpu::Queue, occlusion: &Occlusion) {
+        self.occluding = occlusion.shades();
+        queue.write_buffer(&self.occlusion, 0, bytemuck::bytes_of(occlusion));
     }
 
     /// Begins a cleared pass over the planes, drawing into `viewport` of a window
@@ -63,9 +96,14 @@ impl SceneTarget {
         {
             self.planes = None;
         }
+        let (format, layout, occlusion) = (self.format, &self.layout, &self.occlusion);
         let planes = self
             .planes
-            .get_or_insert_with(|| planes(device, self.format, &self.layout, size_px));
+            .get_or_insert_with(|| planes(device, format, layout, occlusion, size_px));
+        let depth_store = match self.occluding {
+            true => wgpu::StoreOp::Store,
+            false => wgpu::StoreOp::Discard,
+        };
         let mut pass = encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("viewport_scene"),
@@ -84,7 +122,7 @@ impl SceneTarget {
                     view: &planes.depth,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
+                        store: depth_store,
                     }),
                     stencil_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(0),
@@ -123,39 +161,58 @@ fn planes(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
     frame_layout: &wgpu::BindGroupLayout,
+    occlusion: &wgpu::Buffer,
     size_px: [u32; 2],
 ) -> Planes {
     let plane = |label, format, usage| {
-        device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some(label),
-                size: wgpu::Extent3d {
-                    width: size_px[0].max(1),
-                    height: size_px[1].max(1),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: SAMPLE_COUNT,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | usage,
-                view_formats: &[],
-            })
-            .create_view(&wgpu::TextureViewDescriptor::default())
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width: size_px[0].max(1),
+                height: size_px[1].max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: SAMPLE_COUNT,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | usage,
+            view_formats: &[],
+        })
     };
     let colour = plane(
         "viewport_colour",
         format,
         wgpu::TextureUsages::TEXTURE_BINDING,
+    )
+    .create_view(&wgpu::TextureViewDescriptor::default());
+    let depth = plane(
+        "viewport_depth",
+        DEPTH_FORMAT,
+        wgpu::TextureUsages::TEXTURE_BINDING,
     );
-    let depth = plane("viewport_depth", DEPTH_FORMAT, wgpu::TextureUsages::empty());
+    let depth_read = depth.create_view(&wgpu::TextureViewDescriptor {
+        aspect: wgpu::TextureAspect::DepthOnly,
+        ..Default::default()
+    });
+    let depth = depth.create_view(&wgpu::TextureViewDescriptor::default());
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("viewport_frame"),
         layout: frame_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::TextureView(&colour),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&colour),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&depth_read),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: occlusion.as_entire_binding(),
+            },
+        ],
     });
     Planes {
         size_px,

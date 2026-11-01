@@ -591,10 +591,13 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
 - **See through models** (x-ray) to find cavities and trapped resin.
-- **Show as printed:** the models and supports in the resin's own colour, the layers of the
-  chosen layer height stepped into their surface where they will show, and a bank card, a
-  one-euro coin and a 32 mm miniature base beside the plate for scale. A view only: the
-  command line has nothing to show it in, and the file is written the same.
+- **Show as printed:** the models and supports in the resin's own colour under soft studio
+  light, the layers of the chosen layer height stepped into their surface where they will
+  show, a clear resin seen through as deep as it is thick (the hollow of a hollowed model
+  shows), creases softly shaded once the camera rests, and a ruler, a bank card, a one-euro
+  coin and a 32 mm miniature figure beside the plate for scale. A view only: the command
+  line has nothing to show it in, and the file is written the same. In a browser on WebGL
+  the resin is drawn opaque and unshaded.
 - **Section slider:** cut through the model at any height, capped so you can see what is
   solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
   inside the model through the cap.
@@ -667,7 +670,7 @@ span, and why where the maker says. `encrust slice` warns of both and writes the
 
 **Resins:** **none are bundled**, on purpose. A correct exposure depends on your machine and
 your bottle, so you create the first resin yourself. A resin holds exposure, bottom layers,
-transition, light power, lifts, retracts, waits, density, price, colour and compensation.
+transition, light power, lifts, retracts, waits, density, price, colour, clarity and compensation.
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 

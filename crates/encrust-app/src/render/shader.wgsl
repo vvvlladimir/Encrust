@@ -86,9 +86,9 @@ struct Globals {
     cut_low: vec4<f32>,
     cut_high: vec4<f32>,
     cut_color: vec4<f32>,
-    // x is the millimetres between the layers the render view steps into the models, 0.0
-    // while it is off. See docs/design/viewport.md.
-    layers: vec4<f32>,
+    // The render view, all 0.0 while it is off: x the layer height stepped into the models,
+    // y 1.0 under studio light, z the resin's absorption per mm, w the eye's pivot distance.
+    look: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
@@ -185,6 +185,55 @@ fn lit(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3
     let half_way = normalize(key + normalize(globals.eye.xyz - world));
     let shine = pow(max(dot(normal, half_way), 0.0), SHININESS) * step(1e-4, facing_key);
     return base * (ambient + diffuse) + globals.key_color.rgb * SPECULAR_SHARE * shine * alpha;
+}
+
+// The render view's studio: a sky-to-floor gradient, a large key softbox and one overhead,
+// both with soft edges, and the room seen at a grazing angle. See docs/design/viewport.md.
+const STUDIO_AMBIENT = 0.30;
+const STUDIO_KEY = 0.55;
+const STUDIO_TOP = 0.22;
+const STUDIO_WRAP = 0.35;
+const SOFTBOX_SHARE = 0.22;
+const FRESNEL_SHARE = 0.28;
+// Cosines of the angle off a softbox's centre where its reflection starts and is full:
+// wide enough that a flat-shaded face shades into its neighbour rather than stepping.
+const SOFTBOX_EDGE = 0.35;
+const SOFTBOX_CORE = 0.98;
+
+fn wrapped(facing: f32) -> f32 {
+    return max((facing + STUDIO_WRAP) / (1.0 + STUDIO_WRAP), 0.0);
+}
+
+fn softbox(mirror: vec3<f32>, towards: vec3<f32>) -> f32 {
+    let lobe = smoothstep(SOFTBOX_EDGE, SOFTBOX_CORE, dot(mirror, towards));
+    return lobe * lobe;
+}
+
+// `lit` under the studio, for the same premultiplied `base` and `alpha`.
+fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    let view = normalize(globals.eye.xyz - world);
+    let key = normalize(-globals.key_towards.xyz);
+    let fill = normalize(-globals.fill_towards.xyz);
+    let top = vec3<f32>(0.0, 0.0, 1.0);
+    let room = mix(globals.ground.rgb, globals.sky.rgb, smoothstep(-0.6, 1.0, normal.z));
+    let diffuse = room * STUDIO_AMBIENT
+        + globals.key_color.rgb * STUDIO_KEY * wrapped(dot(normal, key))
+        + globals.sky.rgb * STUDIO_TOP * wrapped(normal.z)
+        + globals.fill_color.rgb * FILL_SHARE * max(dot(normal, fill), 0.0);
+    let mirror = reflect(-view, normal);
+    let boxes = globals.key_color.rgb * softbox(mirror, key) + globals.sky.rgb * 0.6 * softbox(mirror, top);
+    let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
+    let fresnel = 0.04 + 0.96 * grazing;
+    let seen = mix(globals.ground.rgb, globals.sky.rgb, mirror.z * 0.5 + 0.5);
+    return base * diffuse + (boxes * SOFTBOX_SHARE + seen * fresnel * FRESNEL_SHARE) * alpha;
+}
+
+// Whichever light the frame is under: the working view's or the render view's studio.
+fn shade(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    if (globals.look.y > 0.5) {
+        return studio(base, alpha, normal, world);
+    }
+    return lit(base, alpha, normal, world);
 }
 
 // Millimetres between one stripe of a hatch and the next, along x + y - z, so the stripes
@@ -415,12 +464,16 @@ fn cut_wipe_fragment(in: ModelFragment) -> WipedFragment {
 // How dark the lip of a printed layer reads, and over how many pixels its line is drawn.
 const LAYER_LIP = 0.22;
 const LAYER_LIP_PX = 1.0;
+// Layers a pixel where the stair starts fading to the smooth surface, and where it is gone:
+// a stair under about four pixels a layer only beats against the pixel grid.
+const LAYER_FADE_FROM = 0.12;
+const LAYER_FADE_TO = 0.3;
 
 // The surface as printed, each layer a riser and a tread shared by its steepness: xyz the normal
 // to shade by, w the light its lip keeps. See docs/design/viewport.md.
 fn stepped(outward: vec3<f32>, along: f32, per_px: f32) -> vec4<f32> {
     let across = length(outward.xy);
-    if (globals.layers.x <= 0.0 || across < 1e-4) {
+    if (globals.look.x <= 0.0 || across < 1e-4) {
         return vec4<f32>(outward, 1.0);
     }
     let riser = vec3<f32>(outward.xy / across, 0.0);
@@ -432,7 +485,7 @@ fn stepped(outward: vec3<f32>, along: f32, per_px: f32) -> vec4<f32> {
     if (outward.z < 0.0) {
         on_tread = 1.0 - smoothstep(tread_share - soft, tread_share + soft, in_layer);
     }
-    let fine = smoothstep(0.25, 0.5, per_px);
+    let fine = smoothstep(LAYER_FADE_FROM, LAYER_FADE_TO, per_px);
     let normal = normalize(mix(normalize(mix(riser, tread, on_tread)), outward, fine));
     let lip_px = min(in_layer, 1.0 - in_layer) / max(per_px, 1e-4);
     let lip = 1.0 - smoothstep(LAYER_LIP_PX - 0.5, LAYER_LIP_PX + 0.5, lip_px);
@@ -441,9 +494,14 @@ fn stepped(outward: vec3<f32>, along: f32, per_px: f32) -> vec4<f32> {
 
 @fragment
 fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    return model_colour(in, front_facing);
+}
+
+// What a model's fragment paints, premultiplied, in the flat pass and the clear one alike.
+fn model_colour(in: ModelFragment, front_facing: bool) -> vec4<f32> {
     let traced = cut_line(in.world);
     let stripe = hatch(in.world);
-    let along = in.world.z / max(globals.layers.x, 1e-6);
+    let along = in.world.z / max(globals.look.x, 1e-6);
     let per_px = fwidth(along);
     if (sectioned_away(in.world)) {
         discard;
@@ -491,12 +549,38 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
         if (!front_facing) {
             shaded = mix(base, globals.inside_color.rgb, SECTION_WASH);
         }
-        shaded = lit(shaded, in.color.a, normal, in.world) * layered.w;
+        shaded = shade(shaded, in.color.a, normal, in.world) * layered.w;
     }
     // The token arrives premultiplied, so the wash scales colour and alpha alike and the
     // result stays premultiplied for the blend.
     let wash = seen_through(normal, in.world, in.surface);
     return vec4<f32>(mix(shaded, globals.cut_color.rgb, traced) * wash, in.color.a * wash);
+}
+
+// The pass before the frame adding up the resin each ray crosses: a back face adds its
+// distance from the eye, a front face takes it away. See docs/design/viewport.md.
+@fragment
+fn thickness_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    if (in.surface < 0.5 || sectioned_away(in.world) || cut_away(in.world)) {
+        discard;
+    }
+    let depth = distance(globals.eye.xyz, in.world) - globals.look.w;
+    return vec4<f32>(select(depth, -depth, front_facing), 0.0, 0.0, 0.0);
+}
+
+@group(1) @binding(0) var thickness_plane: texture_2d<f32>;
+
+// A clear resin: what the surface paints, kept by how much of the light behind it the resin
+// crossed takes out (Beer-Lambert), and by its reflection at a grazing angle.
+@fragment
+fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let colour = model_colour(in, front_facing);
+    let crossed_mm = max(textureLoad(thickness_plane, vec2<i32>(in.clip_position.xy), 0).r, 0.0);
+    let through = exp(-globals.look.z * crossed_mm);
+    let view = normalize(globals.eye.xyz - in.world);
+    let grazing = pow(1.0 - abs(dot(normalize(in.normal), view)), 5.0);
+    let reflected = 0.04 + 0.96 * grazing;
+    return colour * (1.0 - through * (1.0 - reflected));
 }
 
 // A marker a tool put down, cut like the model. Its far half is lit as the flat face the cut
@@ -517,7 +601,7 @@ fn marker_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool)
         }
         base = mix(base, globals.inside_color.rgb * in.color.a, SECTION_WASH);
     }
-    return vec4<f32>(lit(base, in.color.a, normal, in.world), in.color.a);
+    return vec4<f32>(shade(base, in.color.a, normal, in.world), in.color.a);
 }
 
 // How much of itself a surface keeps when the models are drawn seen through: least where

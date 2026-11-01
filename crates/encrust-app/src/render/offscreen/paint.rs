@@ -49,11 +49,12 @@ pub(super) fn paint_after<'a>(
         band_floor_mm,
         volume_mm,
         cut_line,
-        layer_height_mm,
+        look,
         xray,
         floor,
         lines,
         wide_lines,
+        presented,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -81,7 +82,7 @@ pub(super) fn paint_after<'a>(
         band_floor_mm,
         volume_mm,
         cut_line,
-        layer_height_mm,
+        look,
         xray,
         floor,
         grid: false,
@@ -92,7 +93,10 @@ pub(super) fn paint_after<'a>(
     }
     resources.prepare(device, queue, input(models));
 
-    Some(read_back(device, queue, format, &mut resources))
+    Some(match presented {
+        true => read_presented(device, queue, format, &mut resources),
+        false => read_back(device, queue, format, &mut resources),
+    })
 }
 
 /// Paints what `resources` recorded into an offscreen target and reads the pixels back.
@@ -111,6 +115,7 @@ pub(super) fn read_back(
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     resources.bake_shadow(&mut encoder);
+    resources.measure_thickness(device, &mut encoder, [SIZE, SIZE], &whole());
     {
         let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -141,6 +146,61 @@ pub(super) fn read_back(
         resources.paint(&mut pass.forget_lifetime());
     }
 
+    copied_out(device, queue, encoder, &colour)
+}
+
+/// The whole offscreen target as the viewport a frame is drawn into.
+pub(super) fn whole() -> egui::epaint::ViewportInPixels {
+    egui::epaint::ViewportInPixels {
+        left_px: 0,
+        top_px: 0,
+        from_bottom_px: 0,
+        width_px: SIZE as i32,
+        height_px: SIZE as i32,
+    }
+}
+
+/// Draws what `resources` recorded the way the window does, into the viewport's own planes,
+/// and reads back what its copy pass lays into an offscreen target.
+pub(super) fn read_presented(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    format: wgpu::TextureFormat,
+    resources: &mut ViewportResources,
+) -> Vec<u8> {
+    let colour = target(device, format, wgpu::TextureUsages::COPY_SRC);
+    let view = colour.create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
+    {
+        let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            multiview_mask: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        resources.present(&mut pass.forget_lifetime());
+    }
+    copied_out(device, queue, encoder, &colour)
+}
+
+/// Copies `colour` out after what `encoder` recorded and reads its pixels back.
+pub(super) fn copied_out(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    mut encoder: wgpu::CommandEncoder,
+    colour: &wgpu::Texture,
+) -> Vec<u8> {
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: u64::from(SIZE * SIZE * 4),

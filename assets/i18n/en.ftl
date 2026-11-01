@@ -1152,6 +1152,7 @@ resin-compensation = Compensation
 resin-cannot-save = cannot save the resin
 resin-cannot-rename = cannot rename the resin
 resin-colour = Colour
+resin-clarity = Clarity
 resin-per = per
 resin-per-kg = kg
 resin-per-litre = l

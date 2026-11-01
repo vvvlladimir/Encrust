@@ -5,6 +5,7 @@ use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, ModelVertex,
 
 use super::*;
 
+mod clear;
 mod section;
 mod shadow;
 mod wide;

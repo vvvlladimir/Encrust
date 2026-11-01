@@ -131,6 +131,7 @@ pub(super) fn paint_plate(
             print_look: window.view.options.render.then(|| PrintLook {
                 resin: theme::resin_swatch(window.machine.slicing.material.details.color),
                 layer_height_mm: window.machine.slicing.layer_height_mm(),
+                clarity: window.machine.slicing.material.details.clarity,
             }),
         },
         rect,

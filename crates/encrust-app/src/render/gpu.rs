@@ -15,6 +15,7 @@ use crate::scene::Mapped;
 use crate::ui::theme;
 
 mod buffers;
+mod clear;
 mod cost;
 mod draws;
 mod paint;
@@ -24,10 +25,12 @@ mod textures;
 mod timer;
 
 pub use draws::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, ModelDraw, ReliefDraw, TrapBox,
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, Look, ModelDraw, ReliefDraw,
+    TrapBox,
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
+use clear::Clear;
 use draws::{Splits, cut_draws, splits_of};
 use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
 use shadow::ContactShadow;
@@ -112,9 +115,9 @@ struct Globals {
     cut_high: [f32; 4],
     /// `xyz` is the colour the plane is traced in; `w` is unused padding.
     cut_color: [f32; 4],
-    /// `x` is the millimetres between the layers stepped into the models, 0.0 for none;
-    /// `yzw` are unused padding.
-    layers: [f32; 4],
+    /// The render view: `x` the millimetres between layers stepped into the models, `y` 1.0
+    /// under studio light, `z` [`Look::absorption_per_mm`], `w` [`Look::pivot_mm`].
+    look: [f32; 4],
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
     pockets: [TrapBox; MAX_POCKETS],
@@ -166,6 +169,10 @@ pub struct ViewportResources {
     globals_bind_group: wgpu::BindGroup,
     model_pipeline: Facing,
     xray_pipeline: Facing,
+    /// The clear-resin view. `reads_planes` is false on a WebGL canvas, where the render view
+    /// is drawn opaque and its creases unshaded.
+    clear: Clear,
+    reads_planes: bool,
     marker_pipelines: Markers,
     line_pipeline: wgpu::RenderPipeline,
     wide_line_pipeline: wgpu::RenderPipeline,
@@ -234,6 +241,10 @@ struct Frame {
     cutting: bool,
     cutting_bottom: bool,
     xray: bool,
+    /// Whether the models are drawn as a clear resin against the thickness pass.
+    clear: bool,
+    /// The projection the copy shades creases through, or `None` while it does not.
+    occlusion: Option<core_geometry::Mat4>,
 }
 
 /// What a fixed-size array the shader reads takes of `from`, and how much it took.
@@ -296,7 +307,14 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
             .cut_line
             .map_or([0.0; 4], |line| line.bounds.maxs.extend(0.0).to_array()),
         cut_color: theme::gamma(theme::scene().cut_line),
-        layers: [frame.layer_height_mm, 0.0, 0.0, 0.0],
+        look: frame.look.map_or([0.0; 4], |look| {
+            [
+                look.layer_height_mm,
+                1.0,
+                look.absorption_per_mm,
+                look.pivot_mm,
+            ]
+        }),
         cuts,
         bands,
         pockets,
@@ -340,6 +358,8 @@ impl ViewportResources {
             globals_bind_group,
             model_pipeline: solid.model,
             xray_pipeline: solid.xray,
+            clear: build.clear(),
+            reads_planes: device.adapter_info().backend != wgpu::Backend::Gl,
             marker_pipelines: solid.markers,
             line_pipeline: solid.line,
             wide_line_pipeline: build.wide_line(),
@@ -425,6 +445,13 @@ impl ViewportResources {
         self.frame.bottom_cap_vertices = frame.bottom_cap.len() as u32;
         self.frame.cutting_bottom = frame.bottom_cut_mm.is_some_and(|mm| frame.eye.z < mm);
         self.frame.xray = frame.xray;
+        self.frame.clear = self.reads_planes
+            && !frame.xray
+            && frame.look.is_some_and(|look| look.absorption_per_mm > 0.0);
+        self.frame.occlusion = frame
+            .look
+            .filter(|_| self.reads_planes && !frame.light)
+            .map(|look| look.projection);
         self.frame.markers_from = frame.models.len();
         let drawn = frame.models.len() + frame.markers.len();
         self.frame.solid_base = drawn as u32;

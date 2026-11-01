@@ -2,6 +2,7 @@
 
 use super::pipelines::MATERIAL_ABOVE;
 use super::*;
+use crate::render::occlusion::Occlusion;
 
 impl ViewportResources {
     /// Draws the frame `prepare` recorded into the viewport's own target, into `viewport`
@@ -9,11 +10,20 @@ impl ViewportResources {
     pub fn draw(
         &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         size_px: [u32; 2],
         viewport: egui::epaint::ViewportInPixels,
     ) {
         self.bake_shadow(encoder);
+        self.measure_thickness(device, encoder, size_px, &viewport);
+        let occlusion = self
+            .frame
+            .occlusion
+            .map_or_else(Occlusion::off, |projection| {
+                Occlusion::of(projection, &viewport)
+            });
+        self.target.occlude(queue, &occlusion);
         let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());
         let mut pass = self
             .target
@@ -66,9 +76,14 @@ impl ViewportResources {
             );
         }
 
-        let models = match self.frame.xray {
-            true => &self.xray_pipeline,
-            false => &self.model_pipeline,
+        let clear = self.clear.bind_group().filter(|_| self.frame.clear);
+        let models = match (self.frame.xray, clear) {
+            (true, _) => &self.xray_pipeline,
+            (false, Some(plane)) => {
+                render_pass.set_bind_group(1, plane, &[]);
+                &self.clear.models
+            }
+            (false, None) => &self.model_pipeline,
         };
         let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
         self.draw_meshes(render_pass, models, drawn, 0);
@@ -159,7 +174,7 @@ impl ViewportResources {
     }
 
     /// Draws one mesh per entry, each with the instance that many slots past `base`.
-    fn draw_meshes(
+    pub(super) fn draw_meshes(
         &self,
         render_pass: &mut wgpu::RenderPass<'static>,
         pipelines: &Facing,
@@ -172,7 +187,7 @@ impl ViewportResources {
     }
 
     /// Draws the pieces of one mesh that lie inside the range the draw covers.
-    fn draw_mesh(
+    pub(super) fn draw_mesh(
         &self,
         render_pass: &mut wgpu::RenderPass<'static>,
         pipelines: &Facing,

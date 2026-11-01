@@ -95,6 +95,9 @@ pub struct ResinDetails {
     pub kind: String,
     /// sRGB, for telling resins apart at a glance.
     pub color: [u8; 3],
+    /// How clear a cured part is, 0.0 opaque to 1.0 water-clear: what the render view shows
+    /// through it.
+    pub clarity: f32,
     /// Price of one `price_per` of resin, in `currency`. Zero is not priced.
     pub price: f32,
     pub currency: String,
@@ -106,6 +109,7 @@ impl Default for ResinDetails {
         Self {
             kind: String::new(),
             color: [0x80, 0x80, 0x80],
+            clarity: 0.0,
             price: 0.0,
             currency: "€".to_owned(),
             price_per: PriceUnit::Kilogram,

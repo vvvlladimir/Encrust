@@ -397,22 +397,47 @@ nothing at all.
 ## As printed
 
 The render view is a view of its own, like the x-ray: the view tools and the View menu
-toggle it. It changes three things and nothing else; overhangs, cuts and bands still wash
-over it, and picking, the shadow and the levels are those of the working view.
+toggle it (ADR 0390). Overhangs, cuts and bands still wash over it; picking, the contact
+shadow and the levels are those of the working view. `globals.look` carries it: the layer
+height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot distance.
 
 - **Resin.** Every model and support instance takes the resin's `details.color` in place of
   the theme's model, selection and support tints: the selection tint is not drawn.
-- **Layers.** `globals.layers.x` is the layer height. `stepped` in the shader turns a
-  surface's normal towards the stair a printer cuts it into: within each layer the share
-  `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a vertical riser, so a wall shows
-  only the lip line each layer leaves, a gentle slope shows the steps, and a flat top none.
-  The lip darkens by `LAYER_LIP` over a pixel. Both fade to the smooth surface as layers
-  close to under half a pixel apart, the way the grid fades, so a zoomed-out model shows no
-  moiré and a zoomed-in one the real steps. The overhang test still reads the smooth normal.
-- **References.** A bank card (ISO/IEC 7810 ID-1), a one-euro coin and a 32 mm round base
-  stand in a column off the plate's right edge as the viewer faces its front, built once
-  from `core_geometry` primitives so the card's cache keeps them, and drawn as markers in
-  the `reference` token: never picked, sliced or counted into the cap.
+- **Studio.** `studio` replaces `lit`: the room is the sky-to-ground gradient, the key and an
+  overhead light are softboxes wrapped round the form and reflected as wide soft lobes, so a
+  flat-shaded face shades into its neighbour, and the room is reflected by Schlick's Fresnel
+  at a grazing angle. Markers, the references among them, take the same light.
+- **Layers.** `stepped` turns a surface's normal towards the stair a printer cuts it into:
+  within each layer the share `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a
+  vertical riser, so a wall shows only the lip line each layer leaves, a gentle slope the
+  steps, a flat top none. The lip darkens by `LAYER_LIP` over a pixel. Both fade to the
+  smooth surface between `LAYER_FADE_FROM` and `LAYER_FADE_TO` layers a pixel, under about
+  four pixels a layer, where a stair would only beat against the pixel grid. The overhang
+  test still reads the smooth normal.
+- **Clear resin.** A resin's `clarity` *c* lets `0.9·c²` of the light through 10 mm. Before
+  the frame, `measure_thickness` draws every model surface, nothing culled and no depth,
+  adding its distance from the eye less the pivot distance into an R16Float plane: a front
+  face subtracts, a back face adds, so the plane holds the resin each ray crosses, a hollow
+  model's cavity taken out. The models are then drawn front faces only by `clear_fragment`,
+  which keeps `1 − T·(1 − F)` of the surface over what stands behind, with `T` the
+  Beer-Lambert share through that thickness and `F` the Fresnel reflection. Thin walls show
+  the plate, a cavity shows as the lighter core of the part. Off under the x-ray.
+- **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
+  shades creases from the depth plane, which is kept past the scene pass for it.
+  `present.wgsl` rebuilds each pixel's point through the inverse projection, takes its
+  normal from the shorter step to a neighbour so a silhouette does not tear it, and samples
+  sixteen points on a golden-angle spiral turned by interleaved-gradient noise, up to
+  `REACH_MM` (2.5 mm) away and at most 40 px. A sample above the surface's tangent plane
+  shuts out light by its angle, fading out past the reach. It only ever darkens.
+- **References.** In two lanes off the plate's right edge as the viewer faces its front, from
+  the front back: a 100 mm ruler ticked every 5 mm; then a bank card (ISO/IEC 7810 ID-1), a
+  one-euro coin, and a figure on a one-inch (25 mm) base with its eyes 32 mm over it, as the
+  "32 mm heroic" scale measures. Built once from `core_geometry` primitives so the card's
+  cache keeps them, drawn as markers in the `reference` token: never picked, sliced or
+  capped.
+
+On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
+opaque and unshaded.
 
 ## The Cut tool's plane
 

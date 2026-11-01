@@ -42,6 +42,7 @@ fn references_stand_beside_the_plate_only_in_the_render_view() {
     let look = PrintLook {
         resin: resin(),
         layer_height_mm: 0.05,
+        clarity: 0.0,
     };
     assert_eq!(
         markers(None),
@@ -50,7 +51,7 @@ fn references_stand_beside_the_plate_only_in_the_render_view() {
     );
     assert_eq!(
         markers(Some(look)),
-        3,
-        "a card, a coin and a miniature's base"
+        4,
+        "a ruler, a card, a coin and a figure"
     );
 }
