@@ -128,7 +128,8 @@ takes away. A model is drawn opaque when its colour has full coverage, it is a s
 rather than a volume, and the frame has no section or drain cut (`Globals::clips_models`).
 The opaque models go first, then the clipped ones. `LOOK` also fixes which light a
 pipeline is under, so the working view's pipeline carries no studio code and its
-registers. The x-ray and the clear resin keep one form each.
+registers, and the studio's is built again for a moving camera (see the key's shadow). The
+x-ray and the clear resin keep one form each.
 
 ## Vertex layouts
 
@@ -498,9 +499,12 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   pass starts with `backdrop_fragment` in `props.wgsl`, which turns each pixel back into a
   line of sight through the inverse view-projection and finds where it meets a
   photographer's infinity cove round the mat's middle: the table 3.05 mm under the plate's
-  level out to 1.4 m, curving up over 0.7 m into an upright wall, so there is no horizon. A
-  ray to the floor inside the curve is met in one step; any other is marched along the
-  cove's profile distance. The cove is lit by the studio's ambient and key in linear light,
+  level out to 1.4 m, curving up over 0.7 m into an upright wall, so there is no horizon. The
+  room inside is convex, so a ray leaves it once: a floor point inside the curve or a wall
+  point above it, each met in closed form — a plane, an upright cylinder — is that exit.
+  Any other ray meets the curve, marched eight steps from where it enters the curve's ring
+  by its distance to the curve's circle, never past the wall's. Drawn unblended, the cove
+  is hidden wherever an opaque model is drawn over it. The cove is lit by the studio's ambient and key in linear light,
   falls off a quarter towards the wall as a lit set's background does, takes the key's
   shadow and the mat's own on the table, and goes out through the same curve. It has no
   geometry. In the copy pass the frame's corners darken by up to 22 % from 45 % of the way
@@ -534,7 +538,9 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   surface would have there, so a slope the key falls across is not taken for something over
   it (receiver plane depth bias); the penumbra is the depth under the nearest blockers
   times the softbox's angle, at least 0.4 mm, and twelve compared taps over it give the
-  light. A shadow is sharp where an object meets the mat and widens away from it. The map
+  light. A shadow is sharp where an object meets the mat and widens away from it. While the
+  camera moves, when a penumbra is not looked at, the models and the backdrop are drawn by
+  pipelines whose `LOOK` reads the map in one filtered tap, a hard edge. The map
   is orthographic, so its depth and its texels are millimetres by factors read off its
   matrix. Every surface under the studio's `finish`, and the table under the backdrop,
   reads it, and loses the key's diffuse and its reflection where it is shaded. Faces are

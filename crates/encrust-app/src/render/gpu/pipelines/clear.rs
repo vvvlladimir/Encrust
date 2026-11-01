@@ -1,7 +1,7 @@
 //! The clear-resin view's pipelines: the thickness pass and the models drawn against it.
 
 use super::super::clear::{Clear, EXIT_FORMAT, THICKNESS_FORMAT};
-use super::models::STUDIO_LIGHT;
+use super::models::{STUDIO_LIGHT, STUDIO_MOVING, Studio};
 use super::*;
 
 /// A plane the clear models read, filtered where it is sampled between texels.
@@ -109,15 +109,24 @@ impl Builder<'_> {
     }
 
     /// The render view's room behind everything: a floor and a sky worked out per pixel.
-    pub(in super::super) fn backdrop(&self) -> wgpu::RenderPipeline {
-        self.plain(PipelineKind {
-            label: "viewport_backdrop",
-            vertex_entry: "screen_vertex",
-            fragment_entry: "backdrop_fragment",
-            depth_write: false,
-            depth_compare: wgpu::CompareFunction::Always,
-            ..PipelineKind::default()
-        })
+    pub(in super::super) fn backdrop(&self) -> Studio<wgpu::RenderPipeline> {
+        let lit = |label, look| {
+            self.plain(PipelineKind {
+                label,
+                vertex_entry: "screen_vertex",
+                fragment_entry: "backdrop_fragment",
+                depth_write: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                // Unblended, so the card hides it behind the opaque models drawn over it.
+                opaque: true,
+                constants: &[("LOOK", look)],
+                ..PipelineKind::default()
+            })
+        };
+        Studio {
+            resting: lit("viewport_backdrop", STUDIO_LIGHT),
+            moving: lit("viewport_moving_backdrop", STUDIO_MOVING),
+        }
     }
 
     /// The nearest back face of each pixel, its normal and distance kept, no blending.

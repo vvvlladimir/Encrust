@@ -39,7 +39,9 @@ use draws::{Splits, cut_draws, splits_of};
 use environment::Environment;
 use globals::{Globals, globals_of};
 use light::KeyShadow;
-use pipelines::{Builder, Capping, Cutting, Facing, Markers, Models, Shaded, globals_layout};
+use pipelines::{
+    Builder, Capping, Cutting, Facing, Markers, Models, Shaded, Studio, globals_layout,
+};
 pub use settle::SETTLED_SAMPLES;
 use settle::Settling;
 use shadow::ContactShadow;
@@ -133,7 +135,7 @@ pub struct ViewportResources {
     clear: Clear,
     reads_planes: bool,
     /// The render view's room, drawn in place of the plate.
-    backdrop: wgpu::RenderPipeline,
+    backdrop: Studio<wgpu::RenderPipeline>,
     marker_pipelines: Markers,
     line_pipeline: wgpu::RenderPipeline,
     wide_line_pipeline: wgpu::RenderPipeline,
@@ -211,6 +213,8 @@ struct Frame {
     thick: bool,
     /// Whether the render view puts the printer away and stands the models in its room.
     staged: bool,
+    /// Whether the camera moves, which draws the key's shadow hard.
+    moving: bool,
     /// The projection the copy shades creases through, or `None` while it does not.
     occlusion: Option<core_geometry::Mat4>,
     /// The frame's view before any jitter, and which frame of the picture at rest it is.
@@ -353,6 +357,7 @@ impl ViewportResources {
         self.frame.cutting_bottom = frame.bottom_cut_mm.is_some_and(|mm| frame.eye.z < mm);
         self.frame.xray = frame.xray;
         self.frame.staged = frame.look.is_some();
+        self.frame.moving = frame.light;
         // While the camera moves a clear resin is drawn opaque: its four passes over every
         // model would leave the levels a quarter of the faces.
         self.frame.thick = self.reads_planes && !frame.xray && !frame.light && frame.look.is_some();

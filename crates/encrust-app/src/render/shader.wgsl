@@ -13,7 +13,7 @@ const MAX_BANDS = 8u;
 const MAX_POCKETS = 32u;
 
 // Whether a model's fragment may be cut away, and whose light it is under: 0 the frame's, 1
-// the working view's, 2 the studio's. A model pipeline sets both; see docs/design/viewport.md.
+// the working view's, 2 the studio's, 3 the studio's while the camera moves. See viewport.md.
 override CLIPPED: bool = true;
 override LOOK: u32 = 0u;
 
@@ -21,7 +21,7 @@ fn under_studio() -> bool {
     if (LOOK == 0u) {
         return globals.look.y > 0.5;
     }
-    return LOOK == 2u;
+    return LOOK >= 2u;
 }
 
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
@@ -258,6 +258,10 @@ fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
     let uv = at.xy * vec2<f32>(0.5, -0.5) + 0.5;
     if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) || at.z > 1.0) {
         return 1.0;
+    }
+    // A penumbra is not seen in motion: one filtered tap.
+    if (LOOK == 3u) {
+        return textureSampleCompareLevel(key_shadow_map, key_shadow_sampler, uv, at.z);
     }
     // The map is orthographic: its depth and its texels are mm by fixed factors.
     let size = vec2<f32>(textureDimensions(key_shadow_map));

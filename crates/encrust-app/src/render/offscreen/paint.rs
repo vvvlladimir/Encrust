@@ -101,6 +101,22 @@ pub(super) fn frame_input<'a>(
     }
 }
 
+/// Prepares and draws one frame of `models` seen from `camera` the way the window does, into
+/// the viewport's own planes.
+pub(super) fn draw_frame(
+    resources: &mut ViewportResources,
+    camera: &OrbitCamera,
+    models: &[ModelDraw],
+    marks: Marks<'_>,
+) {
+    let (device, queue) = gpu().expect("the caller found an adapter");
+    let input = frame_input(camera, (None, &[]), (models, &[]), marks);
+    resources.prepare(device, queue, input);
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
+    queue.submit([encoder.finish()]);
+}
+
 /// Paints what `resources` recorded into an offscreen target and reads the pixels back.
 pub(super) fn read_back(
     device: &wgpu::Device,

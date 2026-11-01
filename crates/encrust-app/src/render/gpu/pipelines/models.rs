@@ -19,16 +19,33 @@ impl Shaded {
     }
 }
 
+/// A pipeline under the studio's light, built with its soft shadows for a camera at rest and
+/// with a single tap of the key's map for one moving.
+pub(in super::super) struct Studio<T> {
+    pub(in super::super) resting: T,
+    pub(in super::super) moving: T,
+}
+
+impl<T> Studio<T> {
+    pub(in super::super) fn of(&self, moving: bool) -> &T {
+        match moving {
+            true => &self.moving,
+            false => &self.resting,
+        }
+    }
+}
+
 /// The models' plain pipelines: under the working view's light, and under the studio's.
 pub(in super::super) struct Models {
     pub(in super::super) working: Shaded,
-    pub(in super::super) studio: Shaded,
+    pub(in super::super) studio: Studio<Shaded>,
 }
 
 impl Models {
-    pub(in super::super) fn under(&self, studio: bool) -> &Shaded {
-        match studio {
-            true => &self.studio,
+    /// Under the studio when `staged`, its shadows hard while the camera is `moving`.
+    pub(in super::super) fn under(&self, staged: bool, moving: bool) -> &Shaded {
+        match staged {
+            true => self.studio.of(moving),
             false => &self.working,
         }
     }
@@ -37,6 +54,7 @@ impl Models {
 /// The values of the shader's `LOOK`.
 const WORKING_LIGHT: f64 = 1.0;
 pub(super) const STUDIO_LIGHT: f64 = 2.0;
+pub(super) const STUDIO_MOVING: f64 = 3.0;
 
 impl Builder<'_> {
     pub(super) fn models(&self) -> Models {
@@ -50,7 +68,10 @@ impl Builder<'_> {
         };
         Models {
             working: self.shaded(&self.layout, kind("viewport_models"), WORKING_LIGHT),
-            studio: self.shaded(&self.layout, kind("viewport_studio_models"), STUDIO_LIGHT),
+            studio: Studio {
+                resting: self.shaded(&self.layout, kind("viewport_studio_models"), STUDIO_LIGHT),
+                moving: self.shaded(&self.layout, kind("viewport_moving_models"), STUDIO_MOVING),
+            },
         }
     }
 

@@ -89,7 +89,7 @@ impl ViewportResources {
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
         if self.frame.staged {
-            render_pass.set_pipeline(&self.backdrop);
+            render_pass.set_pipeline(self.backdrop.of(self.frame.moving));
             render_pass.draw(0..3, 0..1);
         } else {
             self.paint_plate(render_pass);
@@ -208,7 +208,7 @@ impl ViewportResources {
                 render_pass.set_bind_group(1, planes, &[]);
                 &self.clear.glowing
             }
-            None => self.models.under(self.frame.staged),
+            None => self.models.under(self.frame.staged, self.frame.moving),
         }
     }
 

@@ -13,7 +13,7 @@ mod section;
 mod shadow;
 mod wide;
 
-pub(super) use models::{Models, Shaded};
+pub(super) use models::{Models, Shaded, Studio};
 pub(super) use section::{Capping, Cutting, MATERIAL_ABOVE};
 pub(super) use shadow::{SHADOW_FORMAT, Shadowing};
 

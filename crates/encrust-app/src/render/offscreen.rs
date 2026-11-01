@@ -5,6 +5,7 @@
 use core_geometry::Scalar;
 
 mod cavity;
+mod cove;
 mod faults;
 mod holes;
 mod look;
@@ -13,6 +14,7 @@ mod opaque;
 mod paint;
 mod plate;
 mod release;
+mod shadow;
 mod texture;
 
 const SIZE: u32 = 768;

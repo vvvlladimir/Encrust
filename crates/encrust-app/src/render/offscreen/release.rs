@@ -4,17 +4,15 @@ use std::sync::Arc;
 
 use core_geometry::{Transform, Vec3};
 
-use super::SIZE;
 use super::marks::Marks;
-use super::paint::{ball, frame_input, gpu, whole};
+use super::paint::{ball, draw_frame, gpu};
 use crate::camera::OrbitCamera;
 use crate::render::gpu::{Look, ModelDraw, ViewportResources};
 use crate::render::vertex::{ModelInstance, NOT_MARKED};
 use crate::ui::theme;
 
-/// Draws one frame of `models` the way the window does, in the render view under `look`.
+/// Draws one frame of `models`, in the render view under `look`.
 fn draw(resources: &mut ViewportResources, models: &[ModelDraw], look: Option<Look>) {
-    let (device, queue) = gpu().expect("the caller found an adapter");
     let camera = OrbitCamera {
         distance_mm: 170.0,
         ..OrbitCamera::default()
@@ -23,14 +21,7 @@ fn draw(resources: &mut ViewportResources, models: &[ModelDraw], look: Option<Lo
         look,
         ..Marks::default()
     };
-    resources.prepare(
-        device,
-        queue,
-        frame_input(&camera, (None, &[]), (models, &[]), marks),
-    );
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
-    queue.submit([encoder.finish()]);
+    draw_frame(resources, &camera, models, marks);
 }
 
 #[test]

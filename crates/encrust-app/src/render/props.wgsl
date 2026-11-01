@@ -239,25 +239,49 @@ const TABLE_SHADOW = 0.45;
 // The table's height, plate millimetres: under the mat, whose top lies just under the plate's
 // level. Must match SINK_MM and MAT_THICK_MM in references.rs.
 const TABLE_Z = -3.05;
-const COVE_STEPS = 24;
+// Steps the curve is marched in from where the ray enters its ring, never past the wall.
+const COVE_STEPS = 8;
 
 fn rect_distance(at: vec2<f32>, low: vec2<f32>, high: vec2<f32>) -> f32 {
     let outside = max(max(low - at, at - high), vec2<f32>(0.0));
     return length(outside);
 }
 
-// How far a point stands from the cove's surface, in its own profile: out from the middle
-// and up from the table. Unsigned, which is enough to march to it from inside.
-fn cove_distance(out_mm: f32, up_mm: f32) -> f32 {
+// How far along `ray`, start `start` across the table, it leaves an upright cylinder `radius_mm`
+// about the middle; a ray straight up never does.
+fn leaves_cylinder(start: vec2<f32>, ray: vec3<f32>, radius_mm: f32) -> f32 {
+    let a = dot(ray.xy, ray.xy);
+    let b = dot(start, ray.xy);
+    let c = dot(start, start) - radius_mm * radius_mm;
+    if (a < 1e-8) {
+        return 1e9;
+    }
+    return (-b + sqrt(max(b * b - a * c, 0.0))) / a;
+}
+
+// How far along `ray` start `origin`, inside the cove, it meets it. The room is convex, so
+// a floor or wall point is the one exit; else the curve is marched start its ring's edge.
+fn cove_travel(origin: vec3<f32>, ray: vec3<f32>, middle: vec2<f32>) -> f32 {
+    let start = origin.xy - middle;
+    if (ray.z < -1e-4) {
+        let floor = (TABLE_Z - origin.z) / ray.z;
+        if (length(start + ray.xy * floor) <= COVE_FLOOR_MM) {
+            return floor;
+        }
+    }
+    let wall = leaves_cylinder(start, ray, COVE_FLOOR_MM + COVE_CURVE_MM);
+    if (origin.z + ray.z * wall - TABLE_Z >= COVE_CURVE_MM) {
+        return wall;
+    }
     let bend = vec2<f32>(COVE_FLOOR_MM, COVE_CURVE_MM);
-    let at = vec2<f32>(out_mm, up_mm);
-    if (out_mm <= COVE_FLOOR_MM) {
-        return min(abs(up_mm), abs(distance(at, bend) - COVE_CURVE_MM));
+    var travelled = select(0.0, leaves_cylinder(start, ray, COVE_FLOOR_MM), length(start) < COVE_FLOOR_MM);
+    for (var step = 0; step < COVE_STEPS; step = step + 1) {
+        let at = origin + ray * travelled;
+        let profile = vec2<f32>(length(at.xy - middle), at.z - TABLE_Z);
+        let to_curve = abs(COVE_CURVE_MM - distance(profile, bend));
+        travelled = travelled + min(to_curve, COVE_FLOOR_MM + COVE_CURVE_MM - profile.x);
     }
-    if (up_mm <= COVE_CURVE_MM) {
-        return abs(COVE_CURVE_MM - distance(at, bend));
-    }
-    return abs(COVE_FLOOR_MM + COVE_CURVE_MM - out_mm);
+    return travelled;
 }
 
 // The cove's normal, facing in, at a point of its profile.
@@ -281,21 +305,7 @@ fn backdrop_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec
     let origin = near.xyz / near.w;
     let ray = normalize(far.xyz / far.w - origin);
     let middle = (globals.desk.xy + globals.desk.zw) * 0.5;
-    // Straight to the floor where the ray meets it inside the cove; marched otherwise.
-    var travelled = 0.0;
-    if (ray.z < -1e-4) {
-        travelled = (TABLE_Z - origin.z) / ray.z;
-    }
-    var hit = origin + ray * travelled;
-    if (ray.z >= -1e-4 || length(hit.xy - middle) > COVE_FLOOR_MM) {
-        travelled = 0.0;
-        for (var step = 0; step < COVE_STEPS; step = step + 1) {
-            let at = origin + ray * travelled;
-            let gap = cove_distance(length(at.xy - middle), at.z - TABLE_Z);
-            travelled = travelled + max(gap, 1.0);
-        }
-        hit = origin + ray * travelled;
-    }
+    let hit = origin + ray * cove_travel(origin, ray, middle);
     let outward_xy = hit.xy - middle;
     let out_mm = length(outward_xy);
     let outward = select(vec2<f32>(1.0, 0.0), outward_xy / max(out_mm, 1e-3), out_mm > 1e-3);
