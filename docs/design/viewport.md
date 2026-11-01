@@ -414,14 +414,21 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   smooth surface between `LAYER_FADE_FROM` and `LAYER_FADE_TO` layers a pixel, under about
   four pixels a layer, where a stair would only beat against the pixel grid. The overhang
   test still reads the smooth normal.
-- **Clear resin.** A resin's `clarity` *c* lets `0.9·c²` of the light through 10 mm. Before
-  the frame, `measure_thickness` draws every model surface, nothing culled and no depth,
-  adding its distance from the eye less the pivot distance into an R16Float plane: a front
-  face subtracts, a back face adds, so the plane holds the resin each ray crosses, a hollow
-  model's cavity taken out. The models are then drawn front faces only by `clear_fragment`,
-  which keeps `1 − T·(1 − F)` of the surface over what stands behind, with `T` the
-  Beer-Lambert share through that thickness and `F` the Fresnel reflection. Thin walls show
-  the plate, a cavity shows as the lighter core of the part. Off under the x-ray.
+- **Clear resin.** Modelled after glTF's `KHR_materials_volume`, as three.js draws it. A
+  resin's opacity, picked with its colour, sets an attenuation distance *D* from 1 mm, barely
+  clear, to 300 mm, water-clear (`1 · 300^clarity`). Before the frame, `measure_thickness`
+  draws every model surface, nothing culled and no depth, adding its distance from the eye
+  less the pivot distance into an R16Float plane: a front face subtracts, a back face adds,
+  so the plane holds the resin each ray crosses, a hollow model's cavity taken out. The
+  scene pass then draws everything but the models, keeping its depth; its colour plane is
+  copied out, and a second pass draws the models' front faces by `clear_fragment` over that
+  copy. Each fragment bends the view ray at its surface by the resin's index, 1.49, 1.50 and
+  1.52 for red, green and blue, carries it as far as the part is thick, and reads the copy
+  where it comes out, so what stands behind is displaced, magnified and fringed at edges.
+  Over the thickness *d* that light takes the resin's colour as `colour^(d/D)` and clouds
+  over by `1 − e^(−d/D)` into the resin lit as an opaque one; Schlick's Fresnel shares it
+  with the studio's reflection. Where the copy holds nothing, the backdrop egui paints under
+  the viewport shows. Off under the x-ray.
 - **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
   shades creases from the depth plane, which is kept past the scene pass for it.
   `present.wgsl` rebuilds each pixel's point through the inverse projection, takes its

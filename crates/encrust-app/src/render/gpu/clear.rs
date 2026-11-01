@@ -1,5 +1,5 @@
-//! The clear-resin view's pass ahead of the frame: how much resin each pixel's ray crosses,
-//! added up into a plane the models are then drawn against. See docs/design/viewport.md.
+//! The clear-resin view: a pass ahead of the frame adds up the resin each ray crosses, and
+//! after the rest is drawn the models refract a copy of it. See docs/design/viewport.md.
 
 use egui::epaint::ViewportInPixels;
 
@@ -8,28 +8,41 @@ use super::*;
 /// Half-floats blend everywhere, and thickness measured from the pivot stays small in them.
 pub(super) const THICKNESS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
-/// The pipelines of the clear view, and the plane its first pass adds the thickness into.
+/// The pipelines of the clear view, and the planes it reads: the thickness, and a copy of
+/// what stands behind the models.
 pub(super) struct Clear {
     /// Adds each surface's signed distance into the plane; no depth, nothing culled.
     pub(super) thickness: Facing,
-    /// Draws the models against the plane, their front faces only.
+    /// Draws the models over the copy, their front faces only.
     pub(super) models: Facing,
     pub(super) layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+    /// The scene's colour format, which the copy is made in.
+    format: wgpu::TextureFormat,
     plane: Option<Plane>,
 }
 
 struct Plane {
     size_px: [u32; 2],
     view: wgpu::TextureView,
+    behind: wgpu::Texture,
     bind_group: wgpu::BindGroup,
 }
 
 impl Clear {
-    pub(super) fn new(thickness: Facing, models: Facing, layout: wgpu::BindGroupLayout) -> Self {
+    pub(super) fn new(
+        thickness: Facing,
+        models: Facing,
+        layout: wgpu::BindGroupLayout,
+        sampler: wgpu::Sampler,
+        format: wgpu::TextureFormat,
+    ) -> Self {
         Self {
             thickness,
             models,
             layout,
+            sampler,
+            format,
             plane: None,
         }
     }
@@ -50,10 +63,10 @@ impl Clear {
         {
             self.plane = None;
         }
-        let layout = &self.layout;
+        let (layout, sampler, format) = (&self.layout, &self.sampler, self.format);
         let plane = self
             .plane
-            .get_or_insert_with(|| plane(device, layout, size_px));
+            .get_or_insert_with(|| plane(device, layout, sampler, format, size_px));
         let mut pass = encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("viewport_thickness"),
@@ -82,17 +95,18 @@ impl Clear {
         );
         pass
     }
-
-    /// What the clear models read the plane through, once a pass has made it.
-    pub(super) fn bind_group(&self) -> Option<&wgpu::BindGroup> {
-        self.plane.as_ref().map(|plane| &plane.bind_group)
-    }
 }
 
-fn plane(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, size_px: [u32; 2]) -> Plane {
-    let view = device
-        .create_texture(&wgpu::TextureDescriptor {
-            label: Some("viewport_thickness"),
+fn plane(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    format: wgpu::TextureFormat,
+    size_px: [u32; 2],
+) -> Plane {
+    let texture = |label, format, usage| {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
             size: wgpu::Extent3d {
                 width: size_px[0].max(1),
                 height: size_px[1].max(1),
@@ -101,22 +115,41 @@ fn plane(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, size_px: [u32; 2
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: THICKNESS_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | usage,
             view_formats: &[],
         })
-        .create_view(&wgpu::TextureViewDescriptor::default());
+    };
+    let view = texture(
+        "viewport_thickness",
+        THICKNESS_FORMAT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    )
+    .create_view(&wgpu::TextureViewDescriptor::default());
+    let behind = texture("viewport_behind", format, wgpu::TextureUsages::COPY_DST);
+    let behind_view = behind.create_view(&wgpu::TextureViewDescriptor::default());
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("viewport_thickness"),
+        label: Some("viewport_clear"),
         layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::TextureView(&view),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&behind_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+        ],
     });
     Plane {
         size_px,
         view,
+        behind,
         bind_group,
     }
 }
@@ -139,5 +172,30 @@ impl ViewportResources {
         pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
         let drawn = &self.frame.models[..self.frame.markers_from];
         self.draw_meshes(&mut pass, &self.clear.thickness, drawn, 0);
+    }
+
+    /// Copies what the scene pass drew out of the colour plane, and draws the models over
+    /// it, each refracting what stands behind it.
+    pub(super) fn paint_clear(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        viewport: &ViewportInPixels,
+    ) {
+        let (Some(colour), Some(plane)) = (self.target.colour(), self.clear.plane.as_ref()) else {
+            return;
+        };
+        encoder.copy_texture_to_texture(
+            colour.as_image_copy(),
+            plane.behind.as_image_copy(),
+            colour.size(),
+        );
+        let Some(mut pass) = self.target.resume(encoder, viewport) else {
+            return;
+        };
+        pass.set_bind_group(0, &self.globals_bind_group, &[]);
+        pass.set_bind_group(1, &plane.bind_group, &[]);
+        pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
+        let drawn = &self.frame.models[..self.frame.markers_from];
+        self.draw_meshes(&mut pass, &self.clear.models, drawn, 0);
     }
 }

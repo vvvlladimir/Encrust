@@ -17,24 +17,24 @@ pub struct PrintLook {
     pub clarity: f32,
 }
 
-/// What 10 mm of the clearest resin lets through: even a clear resin tints a thick part.
-const CLEAREST_THROUGH_10_MM: f32 = 0.9;
-/// The least a resin lets through 10 mm and still counts as clear, so absorption is finite.
-const DARKEST_THROUGH_10_MM: f32 = 1e-3;
+/// Millimetres of the clearest resin light crosses before it clouds over: a water-clear
+/// part reads through at any size a printer makes.
+const CLEAREST_MM: f32 = 300.0;
+/// The same for a resin barely clear at all: a millimetre, so its edges only glow.
+const CLOUDIEST_MM: f32 = 1.0;
 
 impl PrintLook {
     /// The shader's look through `camera` at a view `aspect` wide to its height. An opaque
-    /// resin absorbs nothing, which is what turns the clear pass off.
+    /// resin carries no light, which is what turns the clear pass off.
     pub(super) fn shading(self, camera: &OrbitCamera, aspect: f32) -> Look {
         let clarity = self.clarity.clamp(0.0, 1.0);
-        let through_10_mm = CLEAREST_THROUGH_10_MM * clarity * clarity;
-        let absorption_per_mm = match clarity > 0.0 {
-            true => -through_10_mm.max(DARKEST_THROUGH_10_MM).ln() / 10.0,
+        let attenuation_mm = match clarity > 0.0 {
+            true => CLOUDIEST_MM * (CLEAREST_MM / CLOUDIEST_MM).powf(clarity),
             false => 0.0,
         };
         Look {
             layer_height_mm: self.layer_height_mm,
-            absorption_per_mm,
+            attenuation_mm,
             pivot_mm: camera.distance_mm,
             projection: camera.projection(aspect),
         }
@@ -56,29 +56,29 @@ mod tests {
     }
 
     #[test]
-    fn an_opaque_resin_absorbs_nothing_so_no_clear_pass_runs() {
+    fn an_opaque_resin_carries_no_light_so_no_clear_pass_runs() {
         assert!(
-            clear(0.0).absorption_per_mm.abs() < f32::EPSILON,
+            clear(0.0).attenuation_mm.abs() < f32::EPSILON,
             "expected 0.0"
         );
     }
 
     #[test]
-    fn the_clearest_resin_lets_its_share_through_10_mm() {
-        let through = (-clear(1.0).absorption_per_mm * 10.0).exp();
+    fn the_clearest_resin_carries_light_its_full_distance() {
+        let carried = clear(1.0).attenuation_mm;
         assert!(
-            (through - CLEAREST_THROUGH_10_MM).abs() < 1e-4,
-            "expected {CLEAREST_THROUGH_10_MM} through 10 mm, got {through}"
+            (carried - CLEAREST_MM).abs() < 1e-2,
+            "expected {CLEAREST_MM} mm, got {carried} mm"
         );
     }
 
     #[test]
-    fn a_clearer_resin_absorbs_less() {
+    fn a_clearer_resin_carries_light_further() {
         let ladder: Vec<f32> = [0.1, 0.4, 0.7, 1.0]
-            .map(|clarity| clear(clarity).absorption_per_mm)
+            .map(|clarity| clear(clarity).attenuation_mm)
             .to_vec();
         assert!(
-            ladder.windows(2).all(|pair| pair[0] > pair[1]),
+            ladder.windows(2).all(|pair| pair[0] < pair[1]),
             "got {ladder:?}"
         );
     }

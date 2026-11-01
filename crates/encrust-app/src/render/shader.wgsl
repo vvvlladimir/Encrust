@@ -87,8 +87,12 @@ struct Globals {
     cut_high: vec4<f32>,
     cut_color: vec4<f32>,
     // The render view, all 0.0 while it is off: x the layer height stepped into the models,
-    // y 1.0 under studio light, z the resin's absorption per mm, w the eye's pivot distance.
+    // y 1.0 under studio light, z the resin's attenuation distance, w the eye's pivot distance.
     look: vec4<f32>,
+    // The viewport in framebuffer pixels: xy its corner, zw its size.
+    screen: vec4<f32>,
+    // What shows wherever the scene drew nothing: the viewport's own backdrop.
+    backdrop: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
@@ -569,18 +573,46 @@ fn thickness_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bo
 }
 
 @group(1) @binding(0) var thickness_plane: texture_2d<f32>;
+@group(1) @binding(1) var behind_plane: texture_2d<f32>;
+@group(1) @binding(2) var behind_sampler: sampler;
 
-// A clear resin: what the surface paints, kept by how much of the light behind it the resin
-// crossed takes out (Beer-Lambert), and by its reflection at a grazing angle.
+// A cured acrylate's index of refraction for red, green and blue: the spread is what
+// fringes an edge seen through the part. See docs/design/viewport.md.
+const RESIN_IOR = vec3<f32>(1.49, 1.50, 1.52);
+
+// Where on the copy of the scene the light reaching this fragment through the resin comes
+// from: the view ray bent at the surface and carried as far as the part is thick.
+fn refracted_from(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_mm: f32, ior: f32) -> vec2<f32> {
+    let ray = refract(-view, normal, 1.0 / ior);
+    let here = globals.view_projection * vec4<f32>(in.world, 1.0);
+    let exit = globals.view_projection * vec4<f32>(in.world + ray * crossed_mm, 1.0);
+    let shift = (exit.xy / exit.w - here.xy / here.w) * vec2<f32>(0.5, -0.5) * globals.screen.zw;
+    return (in.clip_position.xy + shift) / vec2<f32>(textureDimensions(behind_plane));
+}
+
+// A clear resin after KHR_materials_volume: what stands behind, refracted and tinted by the
+// resin over the thickness crossed, clouding into its lit colour, under a Fresnel reflection.
 @fragment
 fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
     let colour = model_colour(in, front_facing);
     let crossed_mm = max(textureLoad(thickness_plane, vec2<i32>(in.clip_position.xy), 0).r, 0.0);
-    let through = exp(-globals.look.z * crossed_mm);
+    var normal = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
     let view = normalize(globals.eye.xyz - in.world);
-    let grazing = pow(1.0 - abs(dot(normalize(in.normal), view)), 5.0);
+    normal = select(normal, -normal, dot(normal, view) < 0.0);
+    var seen = vec3<f32>(0.0);
+    for (var channel = 0; channel < 3; channel = channel + 1) {
+        let at = refracted_from(in, normal, view, crossed_mm, RESIN_IOR[channel]);
+        let behind = textureSampleLevel(behind_plane, behind_sampler, at, 0.0);
+        seen[channel] = behind[channel] + globals.backdrop[channel] * (1.0 - behind.a);
+    }
+    let depth = crossed_mm / max(globals.look.z, 1e-3);
+    let tint = pow(max(in.color.rgb, vec3<f32>(0.02)), vec3<f32>(depth));
+    let clouded = 1.0 - exp(-depth);
+    let body = seen * tint * (1.0 - clouded) + colour.rgb * clouded;
+    let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
     let reflected = 0.04 + 0.96 * grazing;
-    return colour * (1.0 - through * (1.0 - reflected));
+    let shine = studio(vec3<f32>(0.0), 1.0, normal, in.world);
+    return vec4<f32>(body * (1.0 - reflected) + shine, 1.0);
 }
 
 // A marker a tool put down, cut like the model. Its far half is lit as the flat face the cut

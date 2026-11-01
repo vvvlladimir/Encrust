@@ -68,20 +68,21 @@ fn a_clear_resin_shows_the_plate_through_a_hollow_model() {
         near_corner_mm: Vec2::ZERO,
         size_mm: Vec2::new(150.0, 80.0),
     });
-    let frame = |absorption_per_mm| {
+    let frame = |attenuation_mm| {
         paint_marked_ball(Marks {
             look: Some(Look {
-                absorption_per_mm,
+                attenuation_mm,
                 ..studio()
             }),
             floor,
+            presented: true,
             ..Marks::default()
         })
     };
     let Some(opaque) = frame(0.0) else {
         return;
     };
-    let clear = frame(0.06).expect("the adapter drew once");
+    let clear = frame(40.0).expect("the adapter drew once");
     let (changed, darkened) = darker(&opaque, &clear, 30);
     assert!(
         changed > 20_000,

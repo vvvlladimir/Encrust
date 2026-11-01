@@ -116,8 +116,13 @@ struct Globals {
     /// `xyz` is the colour the plane is traced in; `w` is unused padding.
     cut_color: [f32; 4],
     /// The render view: `x` the millimetres between layers stepped into the models, `y` 1.0
-    /// under studio light, `z` [`Look::absorption_per_mm`], `w` [`Look::pivot_mm`].
+    /// under studio light, `z` [`Look::attenuation_mm`], `w` [`Look::pivot_mm`].
     look: [f32; 4],
+    /// The viewport in framebuffer pixels: `xy` its corner, `zw` its size. Written by
+    /// `draw`, the first to know it.
+    screen: [f32; 4],
+    /// What egui paints under the viewport, which shows wherever the scene drew nothing.
+    backdrop: [f32; 4],
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
     pockets: [TrapBox; MAX_POCKETS],
@@ -311,10 +316,12 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
             [
                 look.layer_height_mm,
                 1.0,
-                look.absorption_per_mm,
+                look.attenuation_mm,
                 look.pivot_mm,
             ]
         }),
+        screen: [0.0; 4],
+        backdrop: theme::gamma(theme::colors().sunken),
         cuts,
         bands,
         pockets,
@@ -447,7 +454,7 @@ impl ViewportResources {
         self.frame.xray = frame.xray;
         self.frame.clear = self.reads_planes
             && !frame.xray
-            && frame.look.is_some_and(|look| look.absorption_per_mm > 0.0);
+            && frame.look.is_some_and(|look| look.attenuation_mm > 0.0);
         self.frame.occlusion = frame
             .look
             .filter(|_| self.reads_planes && !frame.light)

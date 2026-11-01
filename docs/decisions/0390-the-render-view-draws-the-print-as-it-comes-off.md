@@ -21,11 +21,14 @@ one-euro coin and a 32 mm figure on a 25 mm base off the plate's right edge. Pic
 slicing and the written file do not change.
 
 **A resin carries `details.clarity`, 0.0 opaque to 1.0 water-clear**, default 0.0, so a
-profile written before it reads as opaque. The view turns it into an absorption per mm.
+profile written before it reads as opaque. The form edits it as the opacity of the resin's
+colour, in one picker with a `#RRGGBBAA` field; the view turns it into an attenuation distance.
 
-**A clear resin is drawn against a thickness pass**: before the frame, every model surface
-adds its signed distance from the eye, measured from the pivot, into an R16Float plane; the
-front faces are then drawn with the light behind kept by Beer-Lambert over that thickness.
+**A clear resin refracts what stands behind it**, after glTF's `KHR_materials_volume`:
+before the frame, every model surface adds its signed distance from the eye, measured from
+the pivot, into an R16Float plane; everything else is drawn and copied out; the models' front
+faces then read that copy along the view ray refracted by the resin and carried as far as the
+part is thick, per channel, tinted by the resin's colour and clouded over that thickness.
 
 **Creases are shaded in the copy pass, from the depth plane, only while the camera rests.**
 The depth plane is kept past the scene pass for it; a moving camera keeps the plain copy.
@@ -35,7 +38,8 @@ On a WebGL canvas the view draws opaque and unshaded: neither pass reads a plane
 ## Consequences
 
 The resin format gains a field; a reader that predates it ignores it. The clear view costs a
-second draw of every model and a window-sized half-float plane, made on first use; the
+second draw of every model, a second scene pass, a copy of the colour plane, and a
+window-sized half-float plane and colour copy, made on first use; the
 shading costs sixteen depth reads a pixel on a resting frame. The command line has nothing
 to show the view in, so it has no flag; it would need one if the view ever writes a picture.
 Reopen if a GPU without blendable R16Float or depth sampling turns up outside WebGL.
@@ -55,10 +59,17 @@ and two softboxes in the shader cost nothing to ship.
 ### Order-independent transparency per surface
 
 Would show every wall as its own pane, but reads the cavity of a hollowed model no better
-than a thickness does, and costs a sort or several layers of planes.
+than a thickness does, bends nothing, and costs a sort or several layers of planes.
+
+### Ray tracing the part
+
+The true picture, two bends and caustics included, for a BVH on the card and a frame cost
+no WebGL canvas and few laptops afford.
 
 ### The option that won, and what it costs
 
 Thickness from one plane is exact for closed meshes only: an open or inverted mesh adds up
-to nonsense, clamped at zero. Shading creases from depth alone misses what the camera cannot
+to nonsense, clamped at zero. Refraction is read off one copy of the scene, so it bends
+only what is on screen and never one clear part seen through another, and it bends once,
+at the near face, not again where the ray leaves. Shading creases from depth alone misses what the camera cannot
 see and grains at sixteen samples, accepted for no blur pass.

@@ -24,12 +24,28 @@ impl ViewportResources {
                 Occlusion::of(projection, &viewport)
             });
         self.target.occlude(queue, &occlusion);
+        let screen = [
+            viewport.left_px as f32,
+            viewport.top_px as f32,
+            viewport.width_px as f32,
+            viewport.height_px as f32,
+        ];
+        let at = std::mem::offset_of!(Globals, screen) as wgpu::BufferAddress;
+        queue.write_buffer(&self.globals, at, bytemuck::bytes_of(&screen));
         let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());
-        let mut pass = self
-            .target
-            .begin(device, encoder, size_px, viewport, timestamps);
+        let mut pass = self.target.begin(
+            device,
+            encoder,
+            size_px,
+            &viewport,
+            timestamps,
+            self.frame.clear,
+        );
         self.paint(&mut pass);
         drop(pass);
+        if self.frame.clear {
+            self.paint_clear(encoder, &viewport);
+        }
         if let Some(timer) = &mut self.timer {
             timer.end(encoder, self.planned_faces);
         }
@@ -76,17 +92,15 @@ impl ViewportResources {
             );
         }
 
-        let clear = self.clear.bind_group().filter(|_| self.frame.clear);
-        let models = match (self.frame.xray, clear) {
-            (true, _) => &self.xray_pipeline,
-            (false, Some(plane)) => {
-                render_pass.set_bind_group(1, plane, &[]);
-                &self.clear.models
-            }
-            (false, None) => &self.model_pipeline,
+        let models = match self.frame.xray {
+            true => &self.xray_pipeline,
+            false => &self.model_pipeline,
         };
         let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
-        self.draw_meshes(render_pass, models, drawn, 0);
+        // A clear resin is drawn after this pass, over a copy of what it leaves.
+        if !self.frame.clear {
+            self.draw_meshes(render_pass, models, drawn, 0);
+        }
 
         if !self.frame.reliefs.is_empty() {
             for (index, (key, mirrored)) in self.frame.reliefs.iter().enumerate() {

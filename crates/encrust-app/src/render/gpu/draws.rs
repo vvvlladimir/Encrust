@@ -132,8 +132,9 @@ pub struct FrameInput<'a> {
 pub struct Look {
     /// Millimetres between the layers stepped into the models, 0.0 for none.
     pub layer_height_mm: f32,
-    /// Share of the light the resin takes per millimetre it crosses, 0.0 for an opaque one.
-    pub absorption_per_mm: f32,
+    /// Millimetres of resin light crosses before it takes on the resin's colour and clouds
+    /// over by a share of 1 − 1/e, or 0.0 for an opaque resin.
+    pub attenuation_mm: f32,
     /// Millimetres from the eye to what the camera turns about, which thickness is measured
     /// from so a half-float holds it to a hundredth of a millimetre.
     pub pivot_mm: f32,

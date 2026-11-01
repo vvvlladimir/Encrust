@@ -3,6 +3,20 @@
 use super::super::clear::{Clear, THICKNESS_FORMAT};
 use super::*;
 
+/// A plane the clear models read, filtered where it is sampled between texels.
+fn plane(binding: u32, filterable: bool) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
+    }
+}
+
 /// Every surface's signed distance added up, whatever stands in front of it.
 const ADDING: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
@@ -19,17 +33,23 @@ impl Builder<'_> {
             .device
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("viewport_thickness_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                entries: &[
+                    plane(0, false),
+                    plane(1, true),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
                     },
-                    count: None,
-                }],
+                ],
             });
+        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("viewport_behind"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
         let reading = self
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -53,7 +73,7 @@ impl Builder<'_> {
             upright: self.thickness(wgpu::FrontFace::Ccw),
             mirrored: self.thickness(wgpu::FrontFace::Cw),
         };
-        Clear::new(thickness, models, layout)
+        Clear::new(thickness, models, layout, sampler, self.target_format)
     }
 
     fn thickness(&self, front_face: wgpu::FrontFace) -> wgpu::RenderPipeline {

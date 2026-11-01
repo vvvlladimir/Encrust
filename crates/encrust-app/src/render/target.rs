@@ -23,6 +23,7 @@ pub struct SceneTarget {
 
 struct Planes {
     size_px: [u32; 2],
+    colour_texture: wgpu::Texture,
     colour: wgpu::TextureView,
     depth: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
@@ -81,13 +82,15 @@ impl SceneTarget {
 
     /// Begins a cleared pass over the planes, drawing into `viewport` of a window
     /// `size_px` pixels large. The planes are remade whenever the window changes size.
+    /// `keep_depth` keeps the depth for a pass that resumes this one.
     pub fn begin(
         &mut self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         size_px: [u32; 2],
-        viewport: ViewportInPixels,
+        viewport: &ViewportInPixels,
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        keep_depth: bool,
     ) -> wgpu::RenderPass<'static> {
         if self
             .planes
@@ -100,49 +103,30 @@ impl SceneTarget {
         let planes = self
             .planes
             .get_or_insert_with(|| planes(device, format, layout, occlusion, size_px));
-        let depth_store = match self.occluding {
-            true => wgpu::StoreOp::Store,
-            false => wgpu::StoreOp::Discard,
+        let opening = Opening {
+            resumed: false,
+            keep_depth: keep_depth || self.occluding,
         };
-        let mut pass = encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("viewport_scene"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &planes.colour,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        // Transparent, so the copy lays the scene over whatever egui
-                        // painted behind the viewport, as drawing straight into it did.
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &planes.depth,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: depth_store,
-                    }),
-                    stencil_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
-                }),
-                multiview_mask: None,
-                timestamp_writes: timestamps,
-                occlusion_query_set: None,
-            })
-            .forget_lifetime();
-        pass.set_viewport(
-            viewport.left_px as f32,
-            viewport.top_px as f32,
-            viewport.width_px as f32,
-            viewport.height_px as f32,
-            0.0,
-            1.0,
-        );
-        pass
+        pass(planes, encoder, viewport, opening, timestamps)
+    }
+
+    /// Goes on drawing over what the last pass drew, its depth kept: `begin` was asked to.
+    pub fn resume(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        viewport: &ViewportInPixels,
+    ) -> Option<wgpu::RenderPass<'static>> {
+        let opening = Opening {
+            resumed: true,
+            keep_depth: self.occluding,
+        };
+        let planes = self.planes.as_ref()?;
+        Some(pass(planes, encoder, viewport, opening, None))
+    }
+
+    /// The colour plane, which the clear resin copies what stands behind it out of.
+    pub fn colour(&self) -> Option<&wgpu::Texture> {
+        self.planes.as_ref().map(|planes| &planes.colour_texture)
     }
 
     /// Copies the drawn scene into egui's pass, pixel for pixel, inside the viewport egui
@@ -155,6 +139,71 @@ impl SceneTarget {
         render_pass.set_bind_group(0, &planes.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }
+}
+
+/// How a pass over the planes starts: cleared or on top of the last, and whether the depth
+/// outlives it.
+struct Opening {
+    resumed: bool,
+    keep_depth: bool,
+}
+
+fn pass(
+    planes: &Planes,
+    encoder: &mut wgpu::CommandEncoder,
+    viewport: &ViewportInPixels,
+    opening: Opening,
+    timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+) -> wgpu::RenderPass<'static> {
+    // Transparent, so the copy lays the scene over whatever egui painted behind the viewport.
+    let (colour, depth) = match opening.resumed {
+        true => (wgpu::LoadOp::Load, wgpu::LoadOp::Load),
+        false => (
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+            wgpu::LoadOp::Clear(1.0),
+        ),
+    };
+    let depth_store = match opening.keep_depth {
+        true => wgpu::StoreOp::Store,
+        false => wgpu::StoreOp::Discard,
+    };
+    let mut pass = encoder
+        .begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("viewport_scene"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &planes.colour,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: colour,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &planes.depth,
+                depth_ops: Some(wgpu::Operations {
+                    load: depth,
+                    store: depth_store,
+                }),
+                stencil_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0),
+                    store: wgpu::StoreOp::Discard,
+                }),
+            }),
+            multiview_mask: None,
+            timestamp_writes: timestamps,
+            occlusion_query_set: None,
+        })
+        .forget_lifetime();
+    pass.set_viewport(
+        viewport.left_px as f32,
+        viewport.top_px as f32,
+        viewport.width_px as f32,
+        viewport.height_px as f32,
+        0.0,
+        1.0,
+    );
+    pass
 }
 
 fn planes(
@@ -180,12 +229,12 @@ fn planes(
             view_formats: &[],
         })
     };
-    let colour = plane(
+    let colour_texture = plane(
         "viewport_colour",
         format,
-        wgpu::TextureUsages::TEXTURE_BINDING,
-    )
-    .create_view(&wgpu::TextureViewDescriptor::default());
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
+    );
+    let colour = colour_texture.create_view(&wgpu::TextureViewDescriptor::default());
     let depth = plane(
         "viewport_depth",
         DEPTH_FORMAT,
@@ -216,6 +265,7 @@ fn planes(
     });
     Planes {
         size_px,
+        colour_texture,
         colour,
         depth,
         bind_group,
