@@ -9,9 +9,8 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{icon, icon_button, theme};
 
-/// Points between the cube and the corner of the viewport, and the square it is drawn in.
-const INSET: f32 = 12.0;
-const SIZE: f32 = 76.0;
+/// The square the cube is drawn in, points.
+const SIZE: f32 = 64.0;
 
 /// How much of a face's half-width its middle takes; the band past it belongs to an edge,
 /// and where two bands cross, to a corner.
@@ -108,7 +107,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
         .is_some_and(|(area, at)| area.contains(at));
     egui::Area::new(id)
         .order(egui::Order::Middle)
-        .fixed_pos(viewport.right_top() + vec2(-INSET, INSET))
+        .fixed_pos(viewport.right_top())
         .pivot(Align2::RIGHT_TOP)
         .constrain_to(viewport)
         .show(ui.ctx(), |ui| {

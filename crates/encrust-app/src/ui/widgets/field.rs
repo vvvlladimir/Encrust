@@ -100,6 +100,23 @@ const UNIT_PAD: f32 = 8.0;
 
 /// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
 /// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
+/// The decimals the standard gives a quantity in `unit` (`docs/design/ui-standards.md`,
+/// Numbers), so a field cannot show its own; `None` for a unit the table lacks.
+fn standard_decimals(unit: &str) -> Option<usize> {
+    [
+        ("unit-mm", 2),
+        ("unit-um", 0),
+        ("unit-deg", 1),
+        ("unit-s", 2),
+        ("unit-mm-min", 1),
+        ("unit-mm3", 1),
+        ("unit-times", 2),
+        ("unit-px", 0),
+    ]
+    .into_iter()
+    .find_map(|(key, decimals)| (crate::i18n::text(key, None) == unit).then_some(decimals))
+}
+
 pub(super) fn boxed_field<N: Numeric>(
     ui: &mut Ui,
     field: &Field<'_>,
@@ -110,6 +127,7 @@ pub(super) fn boxed_field<N: Numeric>(
 ) -> bool {
     let colors = theme::colors();
     let unit = field.unit;
+    let decimals = standard_decimals(unit).or(decimals);
     let size = vec2(field.width.max(40.0), theme::FIELD_H);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let frame = ui.painter().add(egui::Shape::Noop);
@@ -395,6 +413,18 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_unit_of_the_standard_brings_its_own_decimals() {
+        assert_eq!(standard_decimals("mm"), Some(2));
+        assert_eq!(standard_decimals("°"), Some(1));
+        assert_eq!(standard_decimals("µm"), Some(0));
+        assert_eq!(
+            standard_decimals("g/ml"),
+            None,
+            "a unit the table lacks keeps the caller's"
+        );
+    }
 
     #[test]
     fn a_value_outside_the_range_is_left_alone_until_it_is_edited() {

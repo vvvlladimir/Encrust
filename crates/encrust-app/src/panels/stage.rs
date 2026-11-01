@@ -1,9 +1,9 @@
-use egui::{Align2, Id, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
+use egui::{Id, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
-use crate::files::{self, Wanted};
-use crate::i18n::tr;
-use crate::panels::{Window, mask_pane, stage_notice, view_column, view_cube, viewport_panel};
-use crate::ui::{card, icon, primary_button, theme};
+use crate::panels::{
+    Window, hint_bar, mask_pane, stage_notice, view_column, view_cube, viewport_panel,
+};
+use crate::ui::theme;
 use crate::workspace::Mode;
 
 /// The stage: the viewport under the whole of it, the mask beside the model or in its
@@ -37,9 +37,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
         })
         .inner;
     let clear = clear.intersect(viewport);
-    if window.doc.scene.is_empty() {
-        empty_state(ui, clear.center(), viewport, window);
-    }
+    hint_bar::ui(ui, window, clear.center_top());
     view_cube::ui(ui, window, clear);
     let column = view_column::ui(ui, window, clear);
     let beside = clear.with_max_x((column.left() - theme::FLOAT_GAP).max(clear.left()));
@@ -108,47 +106,6 @@ fn split_at(stage: Rect, clear: Rect, x: f32) -> f32 {
     let range = theme::MASK_SPLIT_RANGE;
     let raw = ((x - stage.left()) / stage.width()).clamp(*range.start(), *range.end());
     (divide(stage, clear, raw) - stage.left()) / stage.width()
-}
-
-/// The whole viewport when there is nothing on the plate: one card, one thing to do,
-/// centred on `at` and kept inside the viewport.
-fn empty_state(ui: &egui::Ui, at: egui::Pos2, viewport: Rect, window: &mut Window) {
-    egui::Area::new(Id::new("empty-plate"))
-        .order(egui::Order::Middle)
-        .fixed_pos(at)
-        .pivot(Align2::CENTER_CENTER)
-        .constrain_to(viewport)
-        .show(ui.ctx(), |ui| {
-            card()
-                .inner_margin(egui::Margin::symmetric(26, 22))
-                .show(ui, |ui| {
-                    ui.set_width(250.0);
-                    ui.vertical_centered(|ui| {
-                        ui.label(
-                            egui::RichText::new(icon::EMPTY_PLATE)
-                                .font(theme::icon(32.0))
-                                .color(theme::colors().text_low),
-                        );
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(tr!("stage-empty"))
-                                .font(theme::body())
-                                .color(theme::colors().text_high),
-                        );
-                        ui.label(
-                            egui::RichText::new(tr!("stage-empty-hint"))
-                                .font(theme::label())
-                                .color(theme::colors().text_mid),
-                        );
-                        ui.add_space(14.0);
-                        if primary_button(ui, &tr!("stage-open"), true).clicked()
-                            && let Some(file) = files::pick(Wanted::ModelOrProject)
-                        {
-                            crate::app::open_by_what_it_is(window, file);
-                        }
-                    });
-                });
-        });
 }
 
 #[cfg(test)]

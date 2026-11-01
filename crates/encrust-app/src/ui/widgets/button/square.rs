@@ -23,10 +23,6 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
 
 /// An icon square standing beside a bigger control: raised, bordered and `side` points
 /// square, as tall as its neighbour — 40 beside a primary button, 32 beside a picker.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "TODO(step-7): Slice to a file beside the primary")
-)]
 pub fn companion_square(
     ui: &mut Ui,
     glyph: &str,

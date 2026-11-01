@@ -31,6 +31,12 @@ pub fn swatch(
 
 /// A row that opens a chooser: a leading glyph, what is chosen, and a caret.
 pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
+    preset_picker(ui, glyph, label, false)
+}
+
+/// A `picker` of named settings: what is chosen, and `· edited` in `warn` after it once the
+/// values differ from the ones it holds.
+pub fn preset_picker(ui: &mut Ui, glyph: &str, label: &str, edited: bool) -> Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label));
@@ -66,12 +72,18 @@ pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
         egui::pos2(rect.left() + 26.0, rect.top()),
         egui::pos2(rect.right() - 26.0, rect.bottom()),
     );
-    let galley = painter.layout(
-        label.to_owned(),
-        theme::label(),
-        colors.text_high,
-        text_rect.width(),
-    );
+    let mut job = egui::text::LayoutJob::default();
+    let format = |color| egui::TextFormat::simple(theme::label(), color);
+    job.append(label, 0.0, format(colors.text_high));
+    if edited {
+        job.append(
+            &crate::i18n::tr!("presets-edited"),
+            4.0,
+            format(colors.warn),
+        );
+    }
+    job.wrap = egui::text::TextWrapping::truncate_at_width(text_rect.width());
+    let galley = painter.layout_job(job);
     painter.galley(
         egui::pos2(
             text_rect.left(),

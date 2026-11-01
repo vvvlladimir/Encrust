@@ -6,7 +6,6 @@
 common-already-done = Already done
 common-cancel = Cancel
 common-export = Export
-common-settings = Settings
 error-cannot-hand-over = cannot hand over { $name }
 error-cannot-open = cannot open { $path }
 error-cannot-read = cannot read { $path }
@@ -19,8 +18,7 @@ status-exported = Exported { $path }
 status-opened = Opened { $path }
 status-saved = Saved { $name }
 table-profile = Profile
-unit-deg = deg
-unit-degrees = °
+unit-deg = °
 unit-g-ml = g/ml
 unit-h = h
 unit-m = m
@@ -31,6 +29,7 @@ unit-mm-min = mm/min
 unit-um = µm
 unit-px = px
 unit-s = s
+unit-times = ×
 value-g = { $value } g
 value-ml = { $value } ml
 value-mm = { $value } mm
@@ -63,6 +62,7 @@ general-open-folder = Open the folder
 ## panels/inspector/cut.rs
 
 cut-plane = Plane
+cut-fact = { $axis } at { $height } mm
 cut-select-model = Select a model to cut.
 cut-height = Height
 cut-offset = Offset
@@ -322,7 +322,6 @@ supports-removed-inside =
     }
 supports-where = Where
 supports-picked = Picked
-supports-pick-hint = Click a tip, a strut, a joint, the trunk or the foot to pick it. Drag to carry it, shift adds, alt removes.
 supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
 supports-stat-parts = Parts
 supports-stat-supports = Supports
@@ -349,6 +348,9 @@ support-steady-spacing = Spacing
 support-steady-area = Least slope
 supports-remove-all-tooltip = Take every support away
 supports-preset = Support preset
+supports-on-plate = On the plate
+supports-profiles = Profiles
+supports-edit-profiles = Edit the profiles…
 supports-mode-pick = Pick supports
 supports-mode-place = Place supports
 supports-mode-area = Paint or block an area
@@ -411,10 +413,12 @@ check-filter-levers = Levers
 check-filter-peel = Peel
 check-filter-cups = Cups
 check-filter-thin = Thin
-check-verdict = Verdict
 check-support-islands = Support every island
 check-drill-cups = Drill the suction cups
 check-issues = Issues
+check-estimate = Estimate
+check-previous = Previous
+check-next = Next
 check-found =
     { $issues ->
         [one] { $issues } issue
@@ -563,9 +567,8 @@ list-show = Show in the view
 
 ## panels/inspector/measure.rs
 
-measure-settings = Settings
-measure-measure = Measure
-measure-esc-clears = Esc clears.
+measure-reading = Reading
+measure-caught = Caught
 measure-clear = Clear
 measure-points = Points
 measure-planes = Planes
@@ -576,8 +579,6 @@ measure-snap-free = Free
 measure-snap-corner-note = The nearest corner where the surface turns catches a click.
 measure-snap-edge-note = The nearest edge where the surface turns catches a click.
 measure-snap-free-note = Exactly where the click lands.
-measure-free-while-alt = Free while Alt is held.
-measure-hold-alt = Hold Alt to measure freely.
 measure-show-axes = Show dX, dY, dZ in the view
 measure-second-point = Click the second point.
 measure-two-points = Click two points on a model.
@@ -658,7 +659,7 @@ print-use-profiles = Use the profiles' settings
 print-exposure-help = How long the screen lights each layer. Too short and thin parts fail or layers come apart; too long and detail swells and holes close up. The bottom layers are lit longer so the print sticks to the plate, and transition layers step down between the two.
 print-waiting-help = Pauses that let the resin settle. Light off is one wait before each layer is lit; rest times wait after the exposure, at the top of the lift and once the plate is back. Longer waits help thick resin and large layers, at the cost of print time.
 print-motion-help = After each layer the plate lifts to peel it off the film, then comes back down. A slower lift peels gentler, which large or fragile layers need, and the lift has to be high enough for the film to let go.
-print-waiting = Waiting
+print-motion-waits = Motion and waits
 print-motion = Motion
 print-carried = Carried from { $exposure } s at { $from } µm to the { $to } µm layer.
 print-transition = Transition
@@ -696,7 +697,6 @@ relief-hold-top = Faces up
 relief-hold-note = Faces within this many degrees of facing the plate, or of facing straight up, keep their shape, and the relief stops at their edge. Zero leaves none.
 relief-paint = Where
 relief-paint-brush = Paint where to press
-relief-paint-hint = Drag over the model to paint, alt to erase.
 relief-paint-note = Once any face of a model is painted, the texture is pressed into the painted faces only, the rest of the model keeps its own mesh, and the view shows the texture only there.
 relief-paint-clear = Clear painted areas
 relief-nothing-painted = Nothing painted to press into: paint where the texture goes, or put the brush down to press the whole model.
@@ -743,7 +743,6 @@ text-missing-glyph = this font has no letter for { $character }
 text-blank = there is nothing to write
 text-bad-size = the letters need a height and a depth
 text-off-the-model = the text does not stand on the model there
-relief-mode = Mode
 relief-mode-texture = Texture
 relief-mode-text = Text
 relief-mode-combine = Combine
@@ -991,6 +990,8 @@ presets-cannot-rename = cannot rename the profile
 ## panels/inspector/presets.rs
 
 presets-unsaved = Unsaved
+presets-edited = · edited
+presets-new-name = My settings
 presets-none-saved = None saved yet
 presets-delete-named = Delete { $name }
 presets-deleted =
@@ -998,7 +999,6 @@ presets-deleted =
         [hollow] Deleted the hollow profile
        *[drain] Deleted the drain profile
     }
-presets-name-hint = Name these settings
 
 ## panels/settings/machines/resins.rs
 
@@ -1385,19 +1385,17 @@ position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
 position-auto-orient = Auto-orient
-orient-preset-supports = Fewest supports
-orient-preset-peel = Least peel force
-orient-preset-shortest = Shortest print
+orient-preset-supports = Supports
+orient-preset-peel = Peel
+orient-preset-shortest = Time
 orient-preset-auto = Auto
 orient-preset-supports-hint = The least resin in supports, whichever way up.
 orient-preset-peel-hint = The lightest pull on the film, no cups; under 10 N, the fewest supports.
 orient-preset-shortest-hint = The fewest layers that still print.
 orient-preset-auto-hint = Supports, pull and print time balanced: none gives up much for the others.
-position-mirror = Mirror
-position-across = Across { $axis }
-position-keep-original = Keep the original
-position-keep-original-note = Mirror a copy beside it instead.
-position-place-help = On the plate stands the model on it, Centre moves it to the middle, and Scale to fit makes it as large as the build volume allows. Auto-orient turns it the way it prints best; Lay on face turns the face you click down onto the plate.
+position-mirror-across = Mirror across { $axis }
+position-mirror-copy = Mirror a copy
+position-place-help = Lay on face turns the face you click down onto the plate; Centre moves the model over the middle of the plate; Mirror flips the picked models, or copies of them stood beside them.
 
 ## panels/inspector/paint.rs
 
@@ -1745,7 +1743,6 @@ job-cannot-measure = cannot measure the stack
 
 ## panels/inspector.rs
 
-inspector-parallel = parallel
 inspector-about-select = Pick a model, then move, turn, size, lay down and mirror it.
 inspector-about-measure = Click two points or two flat faces on a model.
 inspector-about-hollow = Cut a cavity to save resin and lighten the peel.
@@ -2124,9 +2121,8 @@ library-machines =
 
 ## panels/stage.rs
 
-stage-empty = No model on the plate
-stage-empty-hint = Open a model or a project, or drop one into the window.
-stage-open = Open...
+stage-empty = Nothing on the plate
+stage-open = Open a model
 
 ## plate.rs
 
@@ -2150,3 +2146,29 @@ web-no-storage = this browser has no private file storage
 picker-no-machine = No machine yet. Add one in Machine and resin.
 picker-no-resin = No resins on this printer yet. Add them in Machine and resin.
 picker-edit-resin = Edit this resin...
+
+hint-click = Click
+hint-drag = Drag
+hint-shift = Shift
+hint-esc = Esc
+hint-modifier-click = { $key } click
+hint-shift-click = Shift click
+hint-clear = clear
+hint-remove = remove
+hint-add = add
+hint-paint = paint
+hint-erase = erase
+hint-measure-two-points = two points
+hint-measure-second-point = the second point
+hint-measure-two-faces = two flat faces
+hint-measure-second-face = the second flat face
+hint-measure-freely = measure freely
+hint-drain-hole = the model to cut a hole
+hint-drain-channel = the model to add a point to the channel
+hint-relief-write = a model to write there
+hint-pick-without-writing = pick without writing
+hint-supports-pick = a part of a support to pick it
+hint-supports-carry = carry what is picked
+hint-supports-place = the model to place a support
+hint-supports-line = a line of them
+hint-cut-part = the part to mark

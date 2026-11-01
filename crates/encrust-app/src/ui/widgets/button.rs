@@ -10,7 +10,7 @@ mod square;
 mod tile;
 
 pub use square::{RailButton, companion_square, icon_button, icon_toggle, rail_button};
-pub use tile::{picker, summary_button, swatch, zone_button};
+pub use tile::{picker, preset_picker, summary_button, swatch, zone_button};
 
 /// The ring a control wears while it holds the keyboard's focus: the accent inside its own
 /// edge, and a halo of the accent's wash outside it.

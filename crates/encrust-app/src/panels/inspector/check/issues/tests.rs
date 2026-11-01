@@ -75,3 +75,17 @@ fn a_cup_and_a_thin_section_read_as_what_they_measure() {
     let described: Vec<String> = rows(&[cup, thin]).iter().map(detail).collect();
     assert_eq!(described, ["suction cup · 25 mm2", "thin · 0.08 mm"]);
 }
+
+#[test]
+fn previous_and_next_step_to_the_rows_either_side_of_the_layer_in_view() {
+    let risks = [island(10, 1.0), island(20, 1.0), island(30, 1.0)];
+    let layer =
+        |found: Option<Vec<Risk>>| found.and_then(|risks| risks.first().map(|risk| risk.layer));
+    assert_eq!(layer(neighbour(&risks, Filter::All, 20, true)), Some(30));
+    assert_eq!(layer(neighbour(&risks, Filter::All, 20, false)), Some(10));
+    assert_eq!(
+        layer(neighbour(&risks, Filter::All, 30, true)),
+        None,
+        "nothing past the last"
+    );
+}

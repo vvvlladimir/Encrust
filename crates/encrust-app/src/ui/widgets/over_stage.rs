@@ -6,14 +6,10 @@ use egui::{Align, Layout, Margin, Response, RichText, Sense, Ui, WidgetInfo, Wid
 use super::button::{Skin, filled_button};
 use super::{card, icon_button, progress_bar, quiet_button};
 use crate::i18n::tr;
-use crate::ui::{icon, theme};
+use crate::ui::{icon, theme, theme::motion};
 
 /// How to work the viewport with the tool in hand: a pill of pairs, each a key in
 /// `text_high` then what it does in `text_mid`, the pairs split by a short rule.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "TODO(step-5): the hint bar under the tool row")
-)]
 pub fn hint_bar(ui: &mut Ui, pairs: &[(&str, &str)]) -> Response {
     let colors = theme::colors();
     let painter = ui.painter();
@@ -82,23 +78,22 @@ pub struct NoticeReply {
 
 /// A notice over the stage's foot, in a card of its own: the glyph in `tint` and nothing
 /// else coloured, the words, at most one `action` as a small button washed in the accent,
-/// and a close square.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "TODO(step-5): the notices over the stage")
-)]
+/// and, given `close` saying what closing it does, a close square.
 pub fn notice_card(
     ui: &mut Ui,
     glyph: &str,
     tint: egui::Color32,
     text: &str,
     action: Option<&str>,
+    close: Option<&str>,
 ) -> NoticeReply {
     let mut reply = NoticeReply::default();
     notice_frame(ui, NOTICE_MIN_W, |ui| {
         ui.label(RichText::new(glyph).font(theme::icon(16.0)).color(tint));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            reply.closed = icon_button(ui, icon::CANCEL, &tr!("dialog-close")).clicked();
+            if let Some(close) = close {
+                reply.closed = icon_button(ui, icon::CANCEL, close).clicked();
+            }
             if let Some(action) = action {
                 reply.acted = washed_button(ui, action).clicked();
             }
@@ -110,7 +105,6 @@ pub fn notice_card(
 
 /// A running job over the stage's foot: its glyph, what it is doing, the share done and a
 /// quiet Cancel, its bar under them. Answers whether to stop.
-#[expect(dead_code, reason = "TODO(step-5): the job notices over the stage")]
 pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
     let colors = theme::colors();
     let mut cancel = false;
@@ -118,8 +112,7 @@ pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: b
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = theme::NOTE_GAP;
             ui.horizontal(|ui| {
-                let job = RichText::new(icon::JOB).font(theme::icon(16.0));
-                ui.label(job.color(colors.accent_soft));
+                spinner(ui);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let cancel_text = tr!("common-cancel");
                     cancel = quiet_button(ui, "", &cancel_text, false, !cancelling).clicked();
@@ -137,6 +130,24 @@ pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: b
     });
     cancel
 }
+
+/// A running job's glyph, turning once every `SPIN_S` unless motion is reduced.
+fn spinner(ui: &mut Ui) {
+    let ink = theme::colors().accent_soft;
+    let (rect, _) = ui.allocate_exact_size(vec2(SPINNER_PT, SPINNER_PT), Sense::hover());
+    let galley = ui
+        .painter()
+        .layout_no_wrap(icon::JOB.to_owned(), theme::icon(SPINNER_PT), ink);
+    let turn = motion::looping(ui.ctx(), SPIN_S).unwrap_or(0.0) * std::f32::consts::TAU;
+    let corner = rect.center() - galley.size() / 2.0;
+    let shape = egui::epaint::TextShape::new(corner, galley, ink)
+        .with_angle_and_anchor(turn, egui::Align2::CENTER_CENTER);
+    ui.painter().add(shape);
+}
+
+/// A spinner's glyph, points, and how long it takes to turn once, s.
+const SPINNER_PT: f32 = 16.0;
+const SPIN_S: f64 = 0.8;
 
 fn notice_frame(ui: &mut Ui, min_w: f32, add: impl FnOnce(&mut Ui)) {
     card().inner_margin(NOTICE_MARGIN).show(ui, |ui| {
@@ -221,8 +232,16 @@ mod tests {
         let mut width = 0.0;
         run(|ui| {
             let long = "A model on the plate will not print as it stands ".repeat(8);
-            let shown =
-                ui.scope(|ui| notice_card(ui, icon::WARNING, theme::colors().warn, &long, None));
+            let shown = ui.scope(|ui| {
+                notice_card(
+                    ui,
+                    icon::WARNING,
+                    theme::colors().warn,
+                    &long,
+                    None,
+                    Some("Put away"),
+                )
+            });
             let _ = shown.inner;
             width = shown.response.rect.width();
         });

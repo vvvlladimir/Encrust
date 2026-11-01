@@ -51,7 +51,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 2,
             );
             let angle = &mut state.flood_angle_deg;
-            let degrees = tr!("unit-degrees");
+            let degrees = tr!("unit-deg");
             number_row(
                 ui,
                 &tr!("repair-flood-angle"),

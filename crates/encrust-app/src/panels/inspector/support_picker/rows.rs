@@ -28,6 +28,8 @@ pub(super) enum Pick {
     Auto(String),
     Preset(String),
     Shape(String),
+    /// The list's foot: Settings, at the support profiles.
+    EditProfiles,
 }
 
 pub(super) fn rows(window: &Window) -> Vec<Row> {
