@@ -6,10 +6,10 @@ use egui::{Align, Layout, ScrollArea, Ui};
 use crate::i18n::tr;
 use crate::state::Machine;
 use crate::ui::{
-    StepState, bullet, dialog, dialog_head, hairline, hint, icon, inline_button, progress_bar,
+    StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button, progress_bar,
     quiet_button, release_hero, steps, tag_label, theme,
 };
-use crate::updates::{Note, Offer, RELEASES, Stage, Step, Updates, from_store, open_store};
+use crate::updates::{Note, Offer, RELEASES, Stage, Step, Updates, from_store, now_s, open_store};
 
 /// The sheet's width, the room left round it, and the height of what is not the changes.
 const SHEET_W: f32 = 640.0;
@@ -73,7 +73,7 @@ fn hero(ui: &mut Ui, offer: &Offer) {
         let from = Updates::running().to_string();
         let to = offer.version.to_string();
         let page = format!("{RELEASES}/tag/v{to}");
-        let line = tr!("update-sheet-from-to", from = from, to = to.clone());
+        let line = hero_line(offer, &from, &to);
         let button_w = 140.0;
         ui.allocate_ui(egui::vec2(ui.available_width() - button_w, 40.0), |ui| {
             release_hero(ui, icon::RELEASE, &format!("Encrust {to}"), &line);
@@ -85,6 +85,27 @@ fn hero(ui: &mut Ui, offer: &Offer) {
             }
         });
     });
+}
+
+/// What it replaces and with what, when it went out and how big it is, as the feed says.
+fn hero_line(offer: &Offer, from: &str, to: &str) -> String {
+    let mut parts = vec![tr!(
+        "update-sheet-from-to",
+        from = from.to_owned(),
+        to = to.to_owned()
+    )];
+    if let Some(at) = offer.published_s {
+        parts.push(tr!("update-released", when = ago(Some(at), now_s())));
+    }
+    if let Some(size) = offer.download.as_ref().and_then(|download| download.size) {
+        parts.push(tr!("update-size", mb = megabytes(size)));
+    }
+    parts.join("  ·  ")
+}
+
+/// Bytes as the sheet writes them, in MB to one place.
+fn megabytes(bytes: u64) -> String {
+    format!("{:.1}", bytes as f64 / 1_048_576.0)
 }
 
 /// The release notes, a pill over each group and a bullet before each change.
@@ -107,21 +128,18 @@ fn changes(ui: &mut Ui, notes: &[Note]) {
 
 type Tone = fn(&theme::Palette) -> (egui::Color32, egui::Color32);
 
-/// What a group of the notes is called on the sheet, and its tint: what is new in `ok`, what
-/// is better in the accent, what was fixed plain.
+/// How a group of the notes is tinted, by the headings the release-notes skill writes: a
+/// user-facing area in `ok`, Faster in the accent, Fixed and Before you update plain.
 fn group_of(heading: &str) -> (String, Tone) {
     let lower = heading.to_lowercase();
-    if lower.contains("feature") {
-        (tr!("update-group-new"), |c| (c.ok, c.ok_wash))
-    } else if lower.contains("perf") {
-        (tr!("update-group-better"), |c| {
-            (c.accent_soft, c.accent_wash)
-        })
-    } else if lower.contains("fix") {
-        (tr!("update-group-fixed"), |c| (c.text_mid, c.active))
+    let tone: Tone = if lower.starts_with("faster") {
+        |c| (c.accent_soft, c.accent_wash)
+    } else if lower.starts_with("fixed") || lower.starts_with("before") {
+        |c| (c.text_mid, c.active)
     } else {
-        (heading.to_owned(), |c| (c.text_mid, c.active))
-    }
+        |c| (c.ok, c.ok_wash)
+    };
+    (heading.to_owned(), tone)
 }
 
 /// Skip, Later and the install, or how far the install has got. Whether the sheet is put
@@ -191,7 +209,7 @@ fn installing(
     step: Step,
     elapsed_s: f64,
 ) -> bool {
-    let mb = |bytes: u64| format!("{:.1}", bytes as f64 / 1_048_576.0);
+    let mb = megabytes;
     let amount = match total {
         Some(total) => tr!(
             "update-downloading-of",

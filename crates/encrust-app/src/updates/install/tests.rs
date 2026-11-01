@@ -184,6 +184,7 @@ fn an_install_walks_its_steps_from_the_download() {
         url: "http://127.0.0.1:9/encrust.tar.gz".to_owned(),
         archive: "encrust.tar.gz".to_owned(),
         signature: String::new(),
+        size: None,
     };
     let exe = scratch("steps").join("encrust-app");
     let installed = install(&download, Version::default(), &exe, &progress);

@@ -503,16 +503,17 @@ fn offered() -> crate::updates::Offer {
     crate::updates::Offer {
         version: crate::updates::Version::parse("9.0.0").expect("a version"),
         notes: vec![
-            Note::Heading("Features".to_owned()),
+            Note::Heading("Supports".to_owned()),
             item("Light theme, and System to follow the desktop."),
             item("Find a setting at the top of the Settings list."),
-            Note::Heading("Performance Improvements".to_owned()),
+            Note::Heading("Faster".to_owned()),
             item("Island check about 3 × faster on a full plate."),
-            Note::Heading("Bug Fixes".to_owned()),
+            Note::Heading("Fixed".to_owned()),
             item("Drain holes keep their taper after undo."),
             item("A .goo file over 2 GB is written whole."),
         ],
         download: None,
+        published_s: Some(crate::updates::now_s() - 3 * 86_400),
     }
 }
 
