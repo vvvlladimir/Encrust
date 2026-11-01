@@ -4,19 +4,17 @@
 mod auto;
 mod form;
 
-use egui::{Rect, Ui, pos2};
+use egui::{Rect, Ui, pos2, vec2};
 use printer_profiles::{AutoProfile, Catalogue, ContactShape, Kind, SupportProfile};
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::confirm::cost;
-use crate::panels::settings::{export_profile, forget_profile, report};
+use crate::panels::settings::{export_profile, forget_profile, jump, report};
 use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
-use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
-use crate::ui::{
-    Confirm, confirm_button, describe, icon, quiet_button, secondary_button, subheading,
-};
+use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, stroke, with_footer};
+use crate::ui::{Confirm, confirm_button, icon, inline_button, quiet_button, subheading};
 
 const TABLE: Table = Table {
     heads: || {
@@ -40,6 +38,7 @@ enum Action {
     Duplicate(String),
     Export(String),
     Delete(String),
+    Save,
 }
 
 /// The profile picked on the page: an automatic one, or a support profile.
@@ -51,19 +50,69 @@ fn picked(settings: &Settings) -> Option<(Kind, String)> {
     }
 }
 
-/// The name of the profile open in the form, while one is.
-pub(super) fn editing(settings: &Settings) -> Option<String> {
+/// What the header says of the profile open in the form: its name, its kind where it is
+/// automatic, and what Reset to defaults would do.
+pub(super) struct Open {
+    pub name: String,
+    pub kind: Option<String>,
+    pub reset: Option<Reset>,
+}
+
+/// Whether Reset to defaults has anything to put back, and what it puts back.
+pub(super) struct Reset {
+    pub changed: bool,
+    pub help: String,
+}
+
+/// The profile open in the form, while one is.
+pub(super) fn editing(settings: &Settings) -> Option<Open> {
     if !settings.editing_support {
         return None;
     }
     match (&settings.auto, &settings.support) {
-        (Some(auto), _) => Some(auto.values.name.clone()),
-        (None, Some(support)) => Some(support.values.name.clone()),
+        (Some(auto), _) => Some(Open {
+            name: auto.values.name.clone(),
+            kind: Some(tr!("support-table-auto")),
+            reset: auto::stock(auto).map(|stock| Reset {
+                changed: stock != auto.values,
+                help: tr!("support-reset-auto-help"),
+            }),
+        }),
+        (None, Some(support)) => {
+            let (stock, help) = form::stock(support);
+            Some(Open {
+                name: support.values.name.clone(),
+                kind: None,
+                reset: Some(Reset {
+                    changed: stock != support.values,
+                    help,
+                }),
+            })
+        }
         (None, None) => None,
     }
 }
 
-/// The page, laid out in `content`: the form of the profile being edited, or the table.
+/// Puts every number of the profile open back as Reset to defaults has them; undo takes it
+/// back.
+pub(super) fn reset(settings: &mut Settings) {
+    match (&mut settings.auto, &mut settings.support) {
+        (Some(auto), _) => {
+            if let Some(stock) = auto::stock(auto) {
+                auto.values = stock;
+            }
+        }
+        (None, Some(support)) => support.values = form::stock(support).0,
+        (None, None) => {}
+    }
+}
+
+/// The band the tabs over the form stand in, and the tabs themselves.
+const TABS_H: f32 = 52.0;
+const TAB_ROW_H: f32 = 28.0;
+
+/// The page, laid out in `content`: the form of the profile being edited under its tabs, or
+/// the table.
 pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     let settings = &window.machine.settings;
     let picked = picked(settings);
@@ -71,10 +120,7 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     let (mut body, mut bar) = with_footer(ui, content);
     let mut action = None;
     if editing {
-        scrolled(&mut body, |ui| match picked {
-            Some((Kind::Auto, _)) => auto::form(ui, window),
-            _ => form::form(ui, window),
-        });
+        form_under_tabs(&mut body, window, picked.as_ref());
     } else {
         let top = body.max_rect();
         let rows = Rect::from_min_max(
@@ -98,6 +144,29 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     if let Some(action) = action {
         apply(window.machine, action);
     }
+}
+
+/// The open profile's form under a row of tabs naming its sections.
+fn form_under_tabs(body: &mut Ui, window: &mut Window, picked: Option<&(Kind, String)>) {
+    let auto = matches!(picked, Some((Kind::Auto, _)));
+    let id = egui::Id::new(("support-tabs", picked.map(|(_, id)| id)));
+    let tabs = match (auto, window.machine.settings.support.as_mut()) {
+        (false, Some(draft)) => form::tabs(&mut draft.values),
+        (false, None) => Vec::new(),
+        (true, _) => auto::tabs(),
+    };
+    let whole = body.max_rect();
+    let strip = whole.with_max_y(whole.top() + TABS_H);
+    body.painter()
+        .hline(strip.x_range(), strip.bottom(), stroke());
+    let mut row = child(body, strip.shrink2(vec2(SIDE_PAD, 0.0)));
+    row.add_space((TABS_H - TAB_ROW_H) / 2.0);
+    jump::tabs(&mut row, id, &tabs, &tr!("support-tab-off"));
+    let rest = whole.with_min_y(strip.bottom() + 1.0);
+    scrolled(&mut child(body, rest), |ui| match auto {
+        true => auto::form(ui, window, id),
+        false => form::form(ui, window, id),
+    });
 }
 
 /// Every support profile, by name, with the measurements that tell them apart: the
@@ -232,19 +301,32 @@ fn actions(
         .clone()
         .filter(|(kind, _)| *kind == Kind::Support)
         .map(|(_, id)| id);
-    let copyable = support.is_some();
-    if quiet_button(
+    // Both take the profile as last saved, so unsaved edits would not go with it.
+    let unsaved = machine.settings.unsaved();
+    let copyable = support.is_some() && !unsaved;
+    let why = |response: egui::Response| match unsaved {
+        true => response.on_disabled_hover_text(tr!("support-save-first")),
+        false => response,
+    };
+    let duplicate = quiet_button(
         ui,
         icon::DUPLICATE,
         &tr!("action-duplicate"),
         false,
         copyable,
-    )
-    .clicked()
-    {
+    );
+    if why(duplicate).clicked() {
         *action = support.clone().map(Action::Duplicate);
     }
-    if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, copyable).clicked() {
+    if why(quiet_button(
+        ui,
+        icon::EXPORT,
+        &tr!("common-export"),
+        false,
+        copyable,
+    ))
+    .clicked()
+    {
         *action = support.clone().map(Action::Export);
     }
     let catalogue = &machine.slicing.catalogue;
@@ -266,6 +348,13 @@ fn actions(
     if confirm_button(ui, &delete) {
         *action = support.map(Action::Delete);
     }
+    if editing {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if inline_button(ui, "", &tr!("settings-save"), true, unsaved).clicked() {
+                *action = Some(Action::Save);
+            }
+        });
+    }
 }
 
 fn apply(machine: &mut Machine, action: Action) {
@@ -280,6 +369,17 @@ fn apply(machine: &mut Machine, action: Action) {
         Action::Duplicate(id) => add(machine, Some(&id)),
         Action::Export(id) => export_profile(machine, Kind::Support, &id),
         Action::Delete(id) => forget_profile(machine, Kind::Support, &id),
+        Action::Save => {
+            save(machine);
+        }
+    }
+}
+
+/// Writes the profile open in the form, automatic or not. Answers whether it is written.
+pub(super) fn save(machine: &mut Machine) -> bool {
+    match machine.settings.auto {
+        Some(_) => auto::save(machine),
+        None => form::save(machine),
     }
 }
 
@@ -299,17 +399,4 @@ pub(super) fn add(machine: &mut Machine, from: Option<&str>) {
             .pick_support(&machine.slicing.catalogue, &id);
         machine.settings.editing_support = true;
     }
-}
-
-/// Puts every number of `profile` back as `stock` has them, explained by `help`; undo in
-/// the form takes it back.
-fn reset_row<T: PartialEq>(ui: &mut Ui, profile: &mut T, stock: T, help: &str) {
-    describe(ui, help);
-    ui.add_space(4.0);
-    let changed = stock != *profile;
-    ui.add_enabled_ui(changed, |ui| {
-        if secondary_button(ui, icon::RESET, &tr!("support-reset")).clicked() {
-            *profile = stock;
-        }
-    });
 }

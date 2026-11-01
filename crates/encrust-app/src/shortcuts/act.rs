@@ -20,9 +20,11 @@ fn leave_machines(machine: &mut crate::state::Machine) {
     settings.close_machines();
 }
 
+/// Esc answers a question over the window with no, and closes the window when none is asked.
 fn leave_settings(machine: &mut crate::state::Machine) {
-    if !std::mem::take(&mut machine.settings.reset_unreadable) {
-        machine.settings.close();
+    let settings = &mut machine.settings;
+    if !std::mem::take(&mut settings.reset_unreadable) && settings.leaving.take().is_none() {
+        settings.close();
     }
 }
 

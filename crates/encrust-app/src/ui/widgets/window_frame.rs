@@ -151,6 +151,41 @@ pub fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
     response
 }
 
+/// A section tab's height, and the room either side of its words.
+const SECTION_TAB_H: f32 = 28.0;
+const SECTION_TAB_PAD: f32 = 12.0;
+
+/// One of the tabs over a form that scroll it to a section: its name, a quiet `off` after
+/// it while the section is switched off, washed in the accent while it is the one in view.
+pub fn section_tab(ui: &mut Ui, label: &str, off: Option<&str>, lit: bool) -> egui::Response {
+    let colors = theme::colors();
+    let painter = ui.painter();
+    let name = painter.layout_no_wrap(label.to_owned(), theme::label(), colors.text_high);
+    let off =
+        off.map(|off| painter.layout_no_wrap(off.to_owned(), theme::small(), colors.text_low));
+    let off_w = off.as_ref().map_or(0.0, |off| off.size().x + 5.0);
+    let size = vec2(name.size().x + off_w + 2.0 * SECTION_TAB_PAD, SECTION_TAB_H);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, lit, label));
+    let (fill, text) = match lit {
+        true => (colors.accent_wash, colors.accent_soft),
+        false if response.hovered() => (colors.hover, colors.text_high),
+        false => (Color32::TRANSPARENT, colors.text_mid),
+    };
+    let round = egui::CornerRadius::same((SECTION_TAB_H / 2.0) as u8);
+    ui.painter().rect_filled(rect, round, fill);
+    let at = |galley: &egui::Galley, x: f32| pos2(x, rect.center().y - galley.size().y / 2.0);
+    let name_at = at(&name, rect.left() + SECTION_TAB_PAD);
+    let name_right = name_at.x + name.size().x;
+    ui.painter().galley(name_at, name, text);
+    if let Some(off) = off {
+        ui.painter()
+            .galley(at(&off, name_right + 5.0), off, colors.text_low);
+    }
+    focus_ring(ui, &response, round);
+    response
+}
+
 /// The mark down the left edge of the picked row, points.
 const PICKED_MARK_W: f32 = 2.0;
 /// How much of the name column the box a name is typed in takes.

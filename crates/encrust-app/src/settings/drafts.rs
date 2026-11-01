@@ -94,6 +94,19 @@ impl<T: Clone + PartialEq> Draft<T> {
         self.saved = self.values.clone();
     }
 
+    /// Puts the values back as last written; undo then walks from there.
+    pub fn discard(&mut self) {
+        self.values = self.saved.clone();
+        self.checkpoint = self.saved.clone();
+        self.past.clear();
+        self.future.clear();
+    }
+
+    /// The values as last written, which the form marks its edits against.
+    pub fn as_saved(&self) -> &T {
+        &self.saved
+    }
+
     /// The profile the build ships under this id, whether the user's copy differs or not.
     pub fn as_shipped(&self) -> Option<&T> {
         self.shipped.as_ref()

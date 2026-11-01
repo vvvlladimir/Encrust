@@ -294,6 +294,11 @@ pub fn page_title(size_pt: f32) -> FontId {
     FontId::new(size_pt, FontFamily::Name(SEMIBOLD.into()))
 }
 
+/// The page a title was opened from, and its kind after it, beside that title.
+pub fn page_trail() -> FontId {
+    FontId::proportional(15.0)
+}
+
 /// A path or a template as it is typed, in the code face.
 pub fn typed_path() -> FontId {
     code(12.0)

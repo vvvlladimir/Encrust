@@ -24,12 +24,12 @@ pub use widgets::{
     help_mark, hint, hint_bar, hint_bar_names, hover_mix, icon_button, icon_toggle, inline_button,
     inset, is_renaming, issue_list, issue_row, job_notice, limit_verdict, limited_row, list,
     list_row, meta, mode_column, mode_group, nested, notice, notice_card, number_field, number_row,
-    numbered_square, palette_dialog, picker_row, primary_button, primary_with_companion,
-    progress_bar, progress_bar_of, quiet_button, quiet_square, rail_button, readings, rename_box,
-    row_name, search_button, secondary_button, section, section_with_action, section_with_actions,
-    section_with_switch, spinner, start_rename, step_bar, subheading, subheading_with_switch,
-    summary_button, swatch, switch, text_box, text_row, toggle_button, tone, two_lines, unit_field,
-    vertical_hairline, zone_button,
+    numbered_square, page_trail, palette_dialog, picker_row, primary_button,
+    primary_with_companion, progress_bar, progress_bar_of, quiet_button, quiet_square, rail_button,
+    readings, rename_box, row_name, search_button, secondary_button, section, section_with_action,
+    section_with_actions, section_with_switch, spinner, start_rename, step_bar, subheading,
+    subheading_with_switch, summary_button, swatch, switch, text_box, text_row, toggle_button,
+    tone, two_lines, unit_field, vertical_hairline, zone_button,
 };
 pub use widgets::{ChipPart, chip_text_w, name_line, paint_chip, row_mark};
 pub use widgets::{Confirm, any_armed, confirm_button, is_armed, key_foot, key_row};

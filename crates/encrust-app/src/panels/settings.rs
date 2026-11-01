@@ -1,16 +1,18 @@
 //! The Settings window: support profiles, Hollow and Drain presets, behaviour and updates,
-//! a page each. Edits are written as made; see `docs/decisions/0233`, `docs/design/profiles.md`.
+//! a page each. See `docs/decisions/0233`, `docs/design/profiles.md`.
 
 mod appearance;
 mod compensation;
 mod confirm;
 mod general;
+mod jump;
 pub(super) mod machines;
 mod presets;
 mod printer;
 mod profile_files;
 mod resin;
 mod supports;
+mod unsaved;
 mod updates;
 
 use egui::{Align, Layout, Ui, vec2};
@@ -18,14 +20,14 @@ use printer_profiles::Kind;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::settings::Section;
+use crate::settings::{Leaving, Section};
 use crate::status::Status;
 use crate::ui::window_frame as frame;
 use crate::ui::{
     NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
-    nav_row, theme,
+    nav_row, quiet_button, theme,
 };
-use crate::ui::{block_title, page_title};
+use crate::ui::{block_title, page_title, page_trail};
 use frame::{child, scrolled, with_header};
 pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
 pub use profile_files::{import_dropped, import_profile};
@@ -44,8 +46,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
             },
         );
         if close {
-            window.machine.settings.close();
-            return;
+            leave(window, Leaving::Close);
         }
     }
     ask(ctx, window);
@@ -79,7 +80,7 @@ fn pages(ui: &mut Ui, window: &mut Window) {
             let active = window.machine.settings.section == section;
             let aside = aside_of(window, section);
             if nav_row(ui, section_icon(section), &section.label(), active, aside).clicked() {
-                window.machine.settings.turn_to(section);
+                leave(window, Leaving::Turn(section));
             }
         }
     }
@@ -89,15 +90,29 @@ fn pages(ui: &mut Ui, window: &mut Window) {
         ui.add_space(GROUP_GAP);
         chooser_group(ui, &tr!("settings-group-help"));
         if nav_row(ui, icon::KEYBOARD, &keys, false, NavAside::Elsewhere).clicked() {
-            window.machine.settings.close();
-            window.view.options.sheet = true;
+            leave(window, Leaving::Keys);
         }
     }
     ui.add_space((ui.available_height() - NAV_ROW_H).max(0.0));
     let machines = tr!("machines-title");
     if nav_row(ui, icon::PRINTER, &machines, false, NavAside::Elsewhere).clicked() {
-        window.machine.settings.close();
-        crate::panels::open_machines(window.machine);
+        leave(window, Leaving::Machines);
+    }
+}
+
+/// Goes where `to` leads, once the question over unsaved edits, if any, is answered.
+fn leave(window: &mut Window, to: Leaving) {
+    if window.machine.settings.leave(to) {
+        arrive(window, to);
+    }
+}
+
+/// What leaving for `to` opens beyond the window it closes.
+fn arrive(window: &mut Window, to: Leaving) {
+    match to {
+        Leaving::Keys => window.view.options.sheet = true,
+        Leaving::Machines => crate::panels::open_machines(window.machine),
+        Leaving::Back | Leaving::Close | Leaving::Turn(_) => {}
     }
 }
 
@@ -152,7 +167,7 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     let section = window.machine.settings.section;
     let (mut head, content) = with_header(ui, side);
     let pressed = match supports::editing(&window.machine.settings) {
-        Some(name) if section == Section::Supports => form_heading(&mut head, &name),
+        Some(open) if section == Section::Supports => form_heading(&mut head, &open),
         _ => heading(&mut head, section),
     };
     match section {
@@ -171,7 +186,8 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     match pressed {
         Some(Heading::Import(kind)) => ask_for_profile(window, kind),
         Some(Heading::New) => supports::add(window.machine, None),
-        Some(Heading::Back) => window.machine.settings.editing_support = false,
+        Some(Heading::Back) => leave(window, Leaving::Back),
+        Some(Heading::Reset) => supports::reset(&mut window.machine.settings),
         None => {}
     }
 }
@@ -181,15 +197,32 @@ enum Heading {
     Import(Kind),
     New,
     Back,
+    Reset,
 }
 
-/// The way back to every profile, then the name of the one open in the form and what kind
-/// of profile it is.
-fn form_heading(ui: &mut Ui, name: &str) -> Option<Heading> {
+/// The way back to every profile, the trail to the profile open in the form, and at the
+/// right Reset to defaults.
+fn form_heading(ui: &mut Ui, open: &supports::Open) -> Option<Heading> {
     ui.horizontal_centered(|ui| {
-        let back = icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked();
-        page_title(ui, name, Some(&tr!("settings-support-profile")));
-        back.then_some(Heading::Back)
+        let mut pressed = None;
+        if icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked() {
+            pressed = Some(Heading::Back);
+        }
+        ui.add_space(4.0);
+        let parent = Section::Supports.label();
+        if page_trail(ui, &parent, &open.name, open.kind.as_deref()).clicked() {
+            pressed = Some(Heading::Back);
+        }
+        if let Some(reset) = &open.reset {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let text = tr!("support-reset");
+                let button = quiet_button(ui, icon::RESET, &text, false, reset.changed);
+                if button.on_hover_text(&reset.help).clicked() {
+                    pressed = Some(Heading::Reset);
+                }
+            });
+        }
+        pressed
     })
     .inner
 }
@@ -225,8 +258,10 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
 /// Room over a group name of the list but the first, and under the find line.
 pub(super) const GROUP_GAP: f32 = 10.0;
 pub(super) const FIND_GAP: f32 = 12.0;
-/// The question over the window, while the profiles that would not read wait to be given up.
+/// The questions over the window: the profiles that would not read, which may be asked
+/// without it, and the unsaved edits of the form being left.
 fn ask(ctx: &egui::Context, window: &mut Window) {
+    ask_unsaved(ctx, window);
     if !window.machine.settings.reset_unreadable {
         return;
     }
@@ -239,6 +274,33 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
         let outcome = machine.slicing.catalogue.discard_unreadable();
         report(&mut machine.status, &tr!("settings-cannot-reset"), outcome);
     }
+}
+
+/// Saves or drops the form's edits as answered, then goes where it was being left for.
+fn ask_unsaved(ctx: &egui::Context, window: &mut Window) {
+    let settings = &window.machine.settings;
+    let (Some(to), Some(open)) = (settings.leaving, supports::editing(settings)) else {
+        return;
+    };
+    let Some(answer) = unsaved::ask(ctx, &open.name) else {
+        return;
+    };
+    let settings = &mut window.machine.settings;
+    match answer {
+        unsaved::Answer::Cancel => {
+            settings.leaving = None;
+            return;
+        }
+        unsaved::Answer::Discard => settings.discard(),
+        unsaved::Answer::Save => {
+            if !supports::save(window.machine) {
+                window.machine.settings.leaving = None;
+                return;
+            }
+        }
+    }
+    window.machine.settings.go(to);
+    arrive(window, to);
 }
 
 /// Room above and below the fields of a block.

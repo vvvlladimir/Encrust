@@ -254,8 +254,17 @@ and the one that applies right.
 - *Hollow* and *Drain*: the table alone, a double click turning a name into a `sunken` box
   over 60 % of its column (Enter or a click elsewhere renames), and under it at the right
   *Open the Hollow tool* ↗ (or Drain). The bar: Export, Delete.
-- A profile's form is blocks one under another, its header the way back, the profile's
-  name and its kind: a 180 title column beside at most 460 of fields, a hairline under each; Reset to defaults in the header. A text row's name stands in a 150 column so
+- A profile's form is blocks one under another. Its header: the way back, the trail
+  *Supports › Heavy* (an automatic profile's kind, *Automatic sizing*, after the name),
+  Reset to defaults at the right; Save at the bar's right, in the accent while anything is
+  unsaved, Duplicate and Export greyed until then. Leaving with unsaved edits asks *Save the
+  changes to Heavy?* over Save (accent), Discard and Cancel. Under it a 52 band of
+  `section_tab`s, one a block, *OFF* after a block switched off; a press scrolls to the block
+  and the one at the top of the view is lit. A support profile's blocks run Profile, Top,
+  Pillar, Bottom, Small pillar, Branching, Grid, Raft, Cross bracing, Automatic; a switched
+  block carries its switch beside its title and, while off, one line of what stands instead.
+  Cross bracing: its presets, *Fine-tune* trading them for every number, then the buttress.
+  An automatic profile's name is shown, not typed. A 180 title column beside at most 460 of fields, a hairline under each. A text row's name stands in a 150 column so
   every box starts on one line; every box ends on the block's right edge, and a figure
   worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. See Appearance and General above.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and

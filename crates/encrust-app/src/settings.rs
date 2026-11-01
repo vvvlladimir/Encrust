@@ -1,5 +1,5 @@
 //! The Settings window's state: which page is open, what is picked on it, and the profile
-//! being edited, which is written back as it changes. See `docs/design/profiles.md`.
+//! being edited. See `docs/design/profiles.md`.
 
 pub use printer_profiles::unique_id;
 use printer_profiles::{AutoProfile, Catalogue, Kind, PrinterProfile, SupportProfile};
@@ -8,8 +8,10 @@ use crate::i18n::tr;
 use crate::undo::Frame;
 
 mod drafts;
+mod leaving;
 mod library;
 pub use drafts::{Draft, ResinDraft};
+pub use leaving::Leaving;
 pub use library::{
     add_resin, can_delete, delete_resin, duplicate_resin, installed, installed_printers,
     is_thrown_away_with_the_printer, keep_support, new_printer, new_resin, new_support,
@@ -213,6 +215,9 @@ pub struct Settings {
     pub calculators: Calculators,
     /// Whether the question over the profiles that would not read is waiting for an answer.
     pub reset_unreadable: bool,
+    /// Where the support profile's form was being left for, while the question over its
+    /// unsaved edits waits for an answer.
+    pub leaving: Option<Leaving>,
 }
 
 impl Settings {
@@ -337,8 +342,13 @@ impl Settings {
         }
     }
 
-    /// Closes the Settings window, and the question over it.
+    /// Closes the Settings window, once the question over unsaved edits, if any, is answered.
     pub fn close(&mut self) {
+        self.leave(Leaving::Close);
+    }
+
+    /// Closes the Settings window, and the question over it.
+    fn shut(&mut self) {
         self.open = false;
         self.editing_support = false;
         self.reset_unreadable = false;
