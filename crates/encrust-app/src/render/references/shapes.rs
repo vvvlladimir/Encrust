@@ -11,6 +11,8 @@ pub const COIN_MM: [Scalar; 2] = [23.25, 2.33];
 /// A 330 ml drinks can, millimetres: its radius and height.
 pub const CAN_RADIUS_MM: Scalar = 33.1;
 pub const CAN_HEIGHT_MM: Scalar = 115.2;
+/// Millimetres the lid sits under the rim.
+const LID_SUNK_MM: Scalar = 2.0;
 /// A ballpoint pen as long as a BIC Cristal, capped, and the radius of its cap, which it
 /// lies on: millimetres.
 pub const PEN_MM: Scalar = 149.5;
@@ -38,27 +40,53 @@ const RIDGE_DEPTH: Scalar = 0.06;
 /// Flats round anything turned: round to the eye at any zoom the plate is framed at.
 const ROUND: usize = 96;
 
+/// A coin with its raised rim: a thinner field inside a ring as thick as the coin.
 pub fn coin() -> Mesh {
-    disc(COIN_MM)
+    let [diameter, thick] = COIN_MM;
+    let edge = diameter / 2.0;
+    let rings = [
+        (0.0, edge),
+        (thick, edge),
+        (thick, edge - 0.9),
+        (thick - 0.3, edge - 1.2),
+    ];
+    let round: Vec<Vec2> = turns(ROUND).collect();
+    revolve(Vec3::ZERO, Vec3::Z, &rings, &round)
 }
 
 fn disc([diameter, height]: [Scalar; 2]) -> Mesh {
     cylinder(Vec3::ZERO, Vec3::Z * height, diameter / 2.0, ROUND)
 }
 
-/// A drinks can: a narrower foot and a necked-in lid round a straight wall.
+/// A drinks can: a narrower foot and a necked-in neck round a straight wall, its lid sunk
+/// inside a rolled rim, and the tab that opens it lying on the lid.
 pub fn can() -> Mesh {
     let (wall, height) = (CAN_RADIUS_MM, CAN_HEIGHT_MM);
+    let lid = height - LID_SUNK_MM;
     let rings = [
         (0.0, 26.0),
         (1.5, 30.5),
         (5.0, wall),
         (height - 11.0, wall),
         (height - 5.5, 29.5),
-        (height, 27.0),
+        (height - 0.6, 27.3),
+        (height, 26.6),
+        (height - 0.4, 25.6),
+        (lid, 25.0),
     ];
     let round: Vec<Vec2> = turns(ROUND).collect();
-    revolve(Vec3::ZERO, Vec3::Z, &rings, &round)
+    let mut mesh = revolve(Vec3::ZERO, Vec3::Z, &rings, &round);
+    mesh.append(&cuboid(
+        Vec3::new(-6.0, -2.0, lid),
+        Vec3::new(6.0, 17.0, lid + 0.6),
+    ));
+    mesh.append(&cylinder(
+        Vec3::Z * lid,
+        Vec3::Z * (lid + 1.0),
+        1.6,
+        ROUND / 6,
+    ));
+    mesh
 }
 
 /// A ballpoint pen along +z from its tip: a cone, a hexagonal barrel, a round cap and its

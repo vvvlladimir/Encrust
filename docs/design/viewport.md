@@ -490,9 +490,11 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   picked, sliced or capped, its instance naming its material in the overhang slot as
   `−2 − material`; `prop_colour` paints it in its own millimetres under `finish`, the
   studio's light with a metal term: the mat's 10 mm grid, every fifth line heavier, with a
-  45° line from each near corner; the can's red lacquered wrap with a white wave between
-  bare aluminium; the banana yellowing into a brown stem, dark at its blossom end, freckled;
-  the coin's two metals. Nothing is shipped for any of it.
+  45° line from each near corner and the centimetres printed along two edges in
+  seven-segment figures; the can's red lacquered wrap with a white wave between bare
+  aluminium, its lid sunk in a rolled rim under its tab; the banana yellowing into a brown
+  stem, dark at its blossom end, streaked and freckled by smooth value noise; the coin's two
+  metals inside its raised rim. Nothing is shipped for any of it.
 - **The key's shadow.** Everything in the set, the models and the props and the mat, casts
   a shadow from the key light. `light.rs` draws their depth from the key, orthographic over
   the mat and 60 mm past it, into a 2048² map: an A2 mat is 0.3 mm a texel. It is drawn

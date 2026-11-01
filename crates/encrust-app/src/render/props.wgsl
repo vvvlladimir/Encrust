@@ -60,7 +60,68 @@ fn mat_colour(local: vec3<f32>, px: vec3<f32>) -> vec3<f32> {
     );
     let ink = max(max(minor * 0.3, major * 0.65), diagonal * 0.45) * select(0.0, 1.0, inside);
     let base = select(MAT_EDGE, MAT_GREEN, inside);
-    return mix(base, MAT_INK, ink);
+    let numbers = max(edge_numbers(at.yx, size.yx, pixel), edge_numbers(at, size, pixel));
+    return mix(base, MAT_INK, max(ink, numbers * 0.8));
+}
+
+// Which segments of a seven-segment figure light for each digit: a top, b and c the right
+// from the top, d the bottom, e and f the left from the bottom, g the middle.
+const DIGIT_SEGMENTS = array<u32, 10>(0x3Fu, 0x06u, 0x5Bu, 0x4Fu, 0x66u, 0x6Du, 0x7Du, 0x07u, 0x7Fu, 0x6Fu);
+// A figure's height and width, and the stroke, mm: as printed on a mat's edge.
+const DIGIT_TALL_MM = 3.6;
+const DIGIT_WIDE_MM = 2.0;
+const DIGIT_STROKE_MM = 0.35;
+
+fn segment_cover(at: vec2<f32>, start: vec2<f32>, end: vec2<f32>, pixel: f32) -> f32 {
+    let along = end - start;
+    let share = clamp(dot(at - start, along) / dot(along, along), 0.0, 1.0);
+    let apart = distance(at, start + along * share);
+    return 1.0 - smoothstep(DIGIT_STROKE_MM * 0.5 - pixel * 0.5, DIGIT_STROKE_MM * 0.5 + pixel * 0.5, apart);
+}
+
+// How much of `digit`, its bottom left corner at the origin, covers `at`, mm.
+fn digit_cover(at: vec2<f32>, digit: u32, pixel: f32) -> f32 {
+    let w = DIGIT_WIDE_MM;
+    let h = DIGIT_TALL_MM;
+    let ends = array<vec4<f32>, 7>(
+        vec4<f32>(0.0, h, w, h),
+        vec4<f32>(w, h, w, h * 0.5),
+        vec4<f32>(w, h * 0.5, w, 0.0),
+        vec4<f32>(0.0, 0.0, w, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, h * 0.5),
+        vec4<f32>(0.0, h * 0.5, 0.0, h),
+        vec4<f32>(0.0, h * 0.5, w, h * 0.5),
+    );
+    var cover = 0.0;
+    let lit = DIGIT_SEGMENTS[min(digit, 9u)];
+    for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+        if ((lit >> segment & 1u) == 1u) {
+            let end = ends[segment];
+            cover = max(cover, segment_cover(at, end.xy, end.zw, pixel));
+        }
+    }
+    return cover;
+}
+
+// The centimetres along the mat's near edge, printed in its band under each 10 mm line:
+// `at.x` runs along the edge, `at.y` into the mat.
+fn edge_numbers(at: vec2<f32>, size: vec2<f32>, pixel: f32) -> f32 {
+    let line = round(at.x / 10.0);
+    let centimetres = u32(line);
+    if (line < 1.0 || line * 10.0 > size.x - MAT_BORDER || at.y > MAT_BORDER) {
+        return 0.0;
+    }
+    let tens = centimetres / 10u;
+    let figures = select(1.0, 2.0, tens > 0u);
+    let gap = DIGIT_WIDE_MM * 0.6;
+    let width = figures * DIGIT_WIDE_MM + (figures - 1.0) * gap;
+    let corner = vec2<f32>(line * 10.0 - width * 0.5, (MAT_BORDER - DIGIT_TALL_MM) * 0.5);
+    let ones_at = at - corner - vec2<f32>((figures - 1.0) * (DIGIT_WIDE_MM + gap), 0.0);
+    var cover = digit_cover(ones_at, centimetres % 10u, pixel);
+    if (tens > 0u) {
+        cover = max(cover, digit_cover(at - corner, tens % 10u, pixel));
+    }
+    return cover * (1.0 - smoothstep(0.3, 0.6, pixel));
 }
 
 // A can: bare aluminium at its foot and lid, a red lacquered wrap between with a white wave.
@@ -79,13 +140,28 @@ fn hash(cell: vec3<f32>) -> f32 {
     return fract(sin(dot(cell, vec3<f32>(12.9898, 78.233, 37.719))) * 43758.5453);
 }
 
-// A ripe banana: yellow, greening into a brown stem, a dark blossom end, a few freckles.
+// Smooth value noise, 0.0 to 1.0, a feature a unit across.
+fn value_noise(at: vec3<f32>) -> f32 {
+    let cell = floor(at);
+    let f = at - cell;
+    let w = f * f * (3.0 - 2.0 * f);
+    let a = mix(hash(cell), hash(cell + vec3<f32>(1.0, 0.0, 0.0)), w.x);
+    let b = mix(hash(cell + vec3<f32>(0.0, 1.0, 0.0)), hash(cell + vec3<f32>(1.0, 1.0, 0.0)), w.x);
+    let c = mix(hash(cell + vec3<f32>(0.0, 0.0, 1.0)), hash(cell + vec3<f32>(1.0, 0.0, 1.0)), w.x);
+    let d = mix(hash(cell + vec3<f32>(0.0, 1.0, 1.0)), hash(cell + vec3<f32>(1.0, 1.0, 1.0)), w.x);
+    return mix(mix(a, b, w.y), mix(c, d, w.y), w.z);
+}
+
+// A ripe banana: yellow, greening into a brown stem, a dark blossom end, streaked along its
+// length and freckled with round brown spots.
 fn banana_colour(local: vec3<f32>) -> vec3<f32> {
     let share = clamp((atan2(local.y, local.x) - BANANA_FROM) / (BANANA_TO - BANANA_FROM), 0.0, 1.0);
     var colour = mix(BANANA_YELLOW, BANANA_STEM, smoothstep(0.82, 0.93, share));
     colour = mix(colour, BANANA_TIP, 1.0 - smoothstep(0.015, 0.04, share));
-    let freckle = step(0.985, hash(floor(local * 0.9)));
-    return mix(colour, BANANA_TIP, freckle * 0.45);
+    let streak = value_noise(vec3<f32>(share * 6.0, local.z * 0.35, length(local.xy) * 0.35));
+    colour = colour * (0.9 + 0.12 * streak);
+    let freckle = smoothstep(0.8, 0.88, value_noise(local * 0.7));
+    return mix(colour, BANANA_TIP, freckle * 0.55);
 }
 
 // A capped ballpoint along its own z: a tip with a brass ball, a pale barrel, a blue cap.
@@ -115,7 +191,7 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
     switch material {
         case 0: {
             surface = vec4<f32>(mat_colour(in.local, px), 0.0);
-            shine = 0.2;
+            shine = 0.07;
         }
         case 1: {
             surface = can_finish(in.local, px);
@@ -130,7 +206,10 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
             shine = 0.9;
         }
         case 4: {
-            surface = vec4<f32>(select(BRASS, NICKEL, length(in.local.xy) < COIN_MIDDLE), 1.0);
+            let out = length(in.local.xy);
+            let rim = smoothstep(10.6, 10.9, out);
+            let metal = select(BRASS, NICKEL, out < COIN_MIDDLE);
+            surface = vec4<f32>(metal * (1.0 - 0.12 * rim), 1.0);
             shine = 0.85;
         }
         default: {
