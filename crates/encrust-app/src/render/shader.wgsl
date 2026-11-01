@@ -226,13 +226,26 @@ fn softbox(mirror: vec3<f32>, towards: vec3<f32>) -> f32 {
     return lobe * lobe;
 }
 
-// The render view's key light shadow. A point is lifted off its surface this far before it
-// is looked up, and the map is read over a disc this many texels across, which softens the
-// edge as a softbox does.
+// The render view's key light shadow, softened as a softbox softens it: percentage-closer
+// soft shadows (Fernando, NVIDIA 2005). What stands nearer the light over a point is found,
+// and the shadow edge widens with how far the point lies under it, sharp where an object
+// meets the mat. A point is lifted off its surface before it is looked up, further the
+// more it turns from the key. See docs/design/viewport.md.
 const KEY_LIFT_MM = 0.4;
 const KEY_TURNED_LIFT_MM = 2.0;
-const KEY_SOFT_TEXELS = 2.5;
 const KEY_TAPS = 12;
+// Half the angle the key's softbox spans, radians, and the least penumbra, mm.
+const KEY_HALF_ANGLE = 0.035;
+const KEY_LEAST_SOFT_MM = 0.4;
+// How far round a point blockers are looked for, mm: the penumbra of the tallest prop.
+const KEY_SEARCH_MM = 12.0;
+// How much nearer the key than the surface's own plane a depth must be to stand over it, mm.
+const KEY_BLOCKER_GAP_MM = 1.0;
+
+fn spiral(tap: i32) -> vec2<f32> {
+    let angle = f32(tap) * 2.39996323;
+    return vec2<f32>(cos(angle), sin(angle)) * sqrt((f32(tap) + 0.5) / f32(KEY_TAPS));
+}
 
 // How much of the key light reaches `world` on a surface facing `normal`: all of it outside
 // the render view or off the map.
@@ -240,7 +253,6 @@ fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
     if (globals.look.y < 0.5) {
         return 1.0;
     }
-    // Lifted further the more it turns from the key, where a curve's own map is coarsest.
     let turned = 1.0 - clamp(dot(normal, normalize(-globals.key_towards.xyz)), 0.0, 1.0);
     let lift = KEY_LIFT_MM + KEY_TURNED_LIFT_MM * turned;
     let clip = globals.key_view_projection * vec4<f32>(world + normal * lift, 1.0);
@@ -249,12 +261,41 @@ fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
     if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) || at.z > 1.0) {
         return 1.0;
     }
-    let texel = KEY_SOFT_TEXELS / vec2<f32>(textureDimensions(key_shadow_map));
+    // The map is orthographic: its depth and its texels are mm by fixed factors.
+    let size = vec2<f32>(textureDimensions(key_shadow_map));
+    let depth_mm = 1.0 / abs(globals.key_view_projection[2][2]);
+    let texels_per_mm = abs(globals.key_view_projection[0][0]) * 0.5 * size.x;
+    // The surface's own plane under each probe, so a slope the key falls across is not
+    // taken for something standing over it (receiver plane depth bias).
+    let m = globals.key_view_projection;
+    let right = normalize(vec3<f32>(m[0][0], m[1][0], m[2][0]));
+    let up = normalize(vec3<f32>(m[0][1], m[1][1], m[2][1]));
+    let towards = normalize(vec3<f32>(m[0][2], m[1][2], m[2][2]));
+    let facing = dot(normal, towards);
+    var blockers = 0.0;
+    var nearest = 0.0;
+    for (var tap = 0; tap < KEY_TAPS; tap = tap + 1) {
+        let offset_mm = spiral(tap) * KEY_SEARCH_MM;
+        let probe = uv + offset_mm * texels_per_mm / size;
+        let texel = vec2<i32>(clamp(probe, vec2<f32>(0.0), vec2<f32>(1.0)) * (size - 1.0));
+        let stood = textureLoad(key_shadow_map, texel, 0);
+        let across = right * offset_mm.x - up * offset_mm.y;
+        let along_mm = clamp(-dot(normal, across) / select(facing, -1e-3, abs(facing) < 1e-3), -KEY_SEARCH_MM * 4.0, KEY_SEARCH_MM * 4.0);
+        let surface = at.z + along_mm / depth_mm;
+        if (stood < surface - KEY_BLOCKER_GAP_MM / depth_mm) {
+            blockers = blockers + 1.0;
+            nearest = nearest + stood;
+        }
+    }
+    if (blockers < 0.5) {
+        return 1.0;
+    }
+    let under_mm = (at.z - nearest / blockers) * depth_mm;
+    let soft_mm = max(KEY_LEAST_SOFT_MM, under_mm * KEY_HALF_ANGLE * 2.0);
+    let reach = soft_mm * texels_per_mm / size;
     var lit = 0.0;
     for (var tap = 0; tap < KEY_TAPS; tap = tap + 1) {
-        let angle = f32(tap) * 2.39996323;
-        let out = sqrt((f32(tap) + 0.5) / f32(KEY_TAPS));
-        let shifted = uv + vec2<f32>(cos(angle), sin(angle)) * out * texel;
+        let shifted = uv + spiral(tap) * reach;
         lit = lit + textureSampleCompareLevel(key_shadow_map, key_shadow_sampler, shifted, at.z);
     }
     return lit / f32(KEY_TAPS);

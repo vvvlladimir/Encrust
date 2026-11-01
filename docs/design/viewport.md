@@ -491,13 +491,20 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   a shadow from the key light. `light.rs` draws their depth from the key, orthographic over
   the mat and 60 mm past it, into a 2048² map: an A2 mat is 0.3 mm a texel. It is drawn
   only when what casts it changes and the camera rests, as the contact shadow is, so an
-  orbit costs nothing; a map just made is cleared to all lit. Every surface under the
-  studio's `finish`, and the table under the backdrop, reads it over twelve taps on a disc
-  2.5 texels across, which softens the edge as a softbox does, and loses the key's diffuse
-  and its reflection where it is shaded. Faces are pushed back by their slope as they are
-  drawn and points lifted 0.4 mm off their surface as they are read, so a lit surface
-  never shades itself. A clear resin casts none: it lets the key through, and what grounds
-  it is the contact shadow.
+  orbit costs nothing; a map just made is cleared to all lit. It is read as percentage-closer
+  soft shadows (Fernando, NVIDIA 2005), the key a softbox 4° across: twelve probes 12 mm
+  round a point find what stands nearer the key, each against the depth the point's own
+  surface would have there, so a slope the key falls across is not taken for something over
+  it (receiver plane depth bias); the penumbra is the depth under the nearest blockers
+  times the softbox's angle, at least 0.4 mm, and twelve compared taps over it give the
+  light. A shadow is sharp where an object meets the mat and widens away from it. The map
+  is orthographic, so its depth and its texels are millimetres by factors read off its
+  matrix. Every surface under the studio's `finish`, and the table under the backdrop,
+  reads it, and loses the key's diffuse and its reflection where it is shaded. Faces are
+  pushed back by their slope as they are drawn and points lifted 0.4 mm off their surface
+  as they are read, up to 2.4 mm as they turn from the key, so a lit surface never shades
+  itself. A clear resin casts none: it lets the key through, and what grounds it is the
+  contact shadow.
 
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.
