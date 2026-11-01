@@ -75,7 +75,7 @@ pub fn list_row(
         .scope(|ui| {
             if let Some(tint) = tint {
                 let (chip, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-                ui.painter().rect_filled(chip, 2.0, tint);
+                ui.painter().rect_filled(chip, theme::R_MARK, tint);
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if let Some((glyph, tooltip)) = remove {
@@ -314,7 +314,7 @@ fn found_words(
         left,
         Align2::LEFT_CENTER,
         glyph,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         colors.text_mid,
     );
     painter.text(
@@ -351,7 +351,7 @@ pub fn row_mark(
         spot.center(),
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         ink,
     );
     focus_ring(ui, &response, theme::R_CONTROL);
@@ -431,7 +431,7 @@ const BULLET_GAP: f32 = 10.0;
 /// Room around a tag's word, and how much of its ink washes it under the pointer.
 const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
 const TAG_HOVER_WASH: f32 = 0.24;
-const TAG_R: egui::CornerRadius = egui::CornerRadius::same(4);
+const TAG_R: egui::CornerRadius = theme::R_KEY;
 
 /// A name over the line that says more about it, drawn from `left_center`: a machine over
 /// its maker and the file it is sliced into.

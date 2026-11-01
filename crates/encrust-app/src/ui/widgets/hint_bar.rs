@@ -89,7 +89,7 @@ fn run_w(run: &[Arc<Galley>]) -> f32 {
 fn paint(ui: &Ui, rect: Rect, items: &[Vec<Arc<Galley>>]) -> Vec<Rect> {
     let colors = theme::colors();
     let painter = ui.painter();
-    let pill = egui::CornerRadius::same((HINT_H / 2.0) as u8);
+    let pill = theme::R_PILL;
     let stroke = egui::Stroke::new(1.0, colors.hairline);
     let fill = colors.base.gamma_multiply(HINT_OPACITY);
     painter.rect(rect, pill, fill, stroke, egui::StrokeKind::Inside);

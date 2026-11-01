@@ -43,7 +43,7 @@ pub fn device_row(ui: &mut Ui, row: &DeviceRow<'_>) -> (Response, Rect) {
         pos2(rect.left() + 16.0, y),
         Align2::CENTER_CENTER,
         icon::PRINTER,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         low,
     );
     let right = match row.opens {
@@ -54,7 +54,7 @@ pub fn device_row(ui: &mut Ui, row: &DeviceRow<'_>) -> (Response, Rect) {
         pos2(right - 16.0, y),
         Align2::CENTER_CENTER,
         icon::CARET_DOWN,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         low,
     );
     let status = paint_status(painter, row, rect, right - 30.0);
@@ -115,7 +115,7 @@ pub fn print_picture(ui: &mut Ui, picture: Option<&egui::TextureHandle>, size: e
                 at,
                 Align2::CENTER_CENTER,
                 icon::MODEL,
-                theme::icon(18.0),
+                theme::icon(theme::glyph::FRAMED),
                 colors.text_low,
             );
         }

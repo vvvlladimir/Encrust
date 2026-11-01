@@ -57,7 +57,7 @@ pub fn summary_button(
         glyph_at,
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(20.0),
+        theme::icon(theme::glyph::LEAD),
         tint,
     );
     let text_x = rect.left() + 42.0;
@@ -79,7 +79,7 @@ pub fn summary_button(
         rect.right_center() - vec2(14.0, 0.0),
         Align2::CENTER_CENTER,
         crate::ui::icon::CARET_RIGHT,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         colors.text_low,
     );
     focus_ring(ui, &response, theme::R_SURFACE);
@@ -111,7 +111,7 @@ pub fn zone_button(ui: &mut Ui, rect: Rect, glyph: &str, title: &str, detail: &s
         middle - vec2(0.0, 22.0),
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(30.0),
+        theme::icon(theme::glyph::EMPTY),
         colors.text_mid,
     );
     painter.text(
@@ -144,7 +144,7 @@ pub fn bar_pill(
     wash: egui::Color32,
 ) -> egui::Response {
     let (shown, font) = if compact {
-        (glyph, theme::icon(13.0))
+        (glyph, theme::icon(theme::glyph::ASIDE))
     } else {
         (text, theme::small())
     };
@@ -160,13 +160,13 @@ pub fn bar_pill(
     let painter = ui.painter();
     painter.rect(
         rect,
-        egui::CornerRadius::same(255),
+        theme::R_PILL,
         fill,
         egui::Stroke::new(1.0, tint.gamma_multiply(PILL_RING)),
         egui::StrokeKind::Inside,
     );
     painter.galley(rect.center() - label.size() / 2.0, label, tint);
-    focus_ring(ui, &response, egui::CornerRadius::same(255));
+    focus_ring(ui, &response, theme::R_PILL);
     response
 }
 

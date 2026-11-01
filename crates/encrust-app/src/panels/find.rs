@@ -236,7 +236,7 @@ fn row(ui: &mut egui::Ui, entry: &Entry, lit: bool) -> egui::Response {
         left,
         Align2::CENTER_CENTER,
         entry.glyph,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         ink,
     );
     painter.text(

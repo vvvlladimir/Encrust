@@ -270,10 +270,14 @@ fn resin_row(
     let rect = response.rect;
     let painter = ui.painter_at(rect);
     let chip = Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(9.0, 9.0));
-    painter.rect_filled(chip, 3.0, theme::resin_swatch(resin.details.color));
+    painter.rect_filled(
+        chip,
+        theme::R_MARK,
+        theme::resin_swatch(resin.details.color),
+    );
     if in_hand {
         let at = pos2(rect.right() - 10.0, rect.center().y);
-        let glyph = theme::icon(13.0);
+        let glyph = theme::icon(theme::glyph::ASIDE);
         painter.text(
             at,
             egui::Align2::RIGHT_CENTER,

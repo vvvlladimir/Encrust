@@ -11,7 +11,7 @@ pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
     ui.horizontal(|ui| {
         ui.label(
             RichText::new(glyph)
-                .font(theme::icon(15.0))
+                .font(theme::icon(theme::glyph::SQUARE))
                 .color(colors.text_low),
         );
         ui.add_space(2.0);

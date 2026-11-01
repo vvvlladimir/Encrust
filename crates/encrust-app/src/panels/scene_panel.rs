@@ -442,7 +442,7 @@ fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect,
         } else {
             icon::HIDDEN
         },
-        theme::icon(15.0),
+        theme::icon(theme::glyph::SQUARE),
         if response.hovered() {
             colors.text_high
         } else {

@@ -208,7 +208,11 @@ pub(super) fn plate_floor(painter: &Painter, view: &View, x_mm: f32) {
     let (font, colour) = (theme::figures(10.0), theme::colors().text_low);
     let galley = painter.layout_no_wrap(tr!("diagram-plate"), font, colour);
     let rect = Align2::RIGHT_CENTER.anchor_size(at, galley.size());
-    painter.rect_filled(rect.expand2(vec2(3.0, 0.0)), 2.0, theme::colors().sunken);
+    painter.rect_filled(
+        rect.expand2(vec2(3.0, 0.0)),
+        theme::R_MARK,
+        theme::colors().sunken,
+    );
     painter.galley(rect.min, galley, colour);
 }
 
@@ -354,6 +358,6 @@ pub(super) fn text(painter: &Painter, at: Pos2, align: Align2, label: &str) {
     let galley = painter.layout_no_wrap(label.to_owned(), theme::figures(10.5), colors.accent_soft);
     let wanted = align.anchor_size(at, galley.size());
     let rect = free_spot(wanted, painter.clip_rect().shrink(2.0));
-    painter.rect_filled(rect.expand2(vec2(2.0, 0.0)), 2.0, colors.sunken);
+    painter.rect_filled(rect.expand2(vec2(2.0, 0.0)), theme::R_MARK, colors.sunken);
     painter.galley(rect.min, galley, colors.accent_soft);
 }

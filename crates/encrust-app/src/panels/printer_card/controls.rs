@@ -94,7 +94,7 @@ pub(super) fn camera(ui: &mut egui::Ui, state: &State, extras: Option<&Extras>) 
                 crate::ui::paragraph(
                     ui,
                     RichText::new(icon::CAMERA)
-                        .font(theme::icon(14.0))
+                        .font(theme::icon(theme::glyph::ROW))
                         .color(theme::colors().ok),
                 );
                 ui.add(

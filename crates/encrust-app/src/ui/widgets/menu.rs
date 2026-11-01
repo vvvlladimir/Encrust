@@ -191,8 +191,8 @@ const NAME_X: f32 = PAD + GLYPH_W + 8.0;
 const RULE_H: f32 = 9.0;
 const WHY_GAP: f32 = 4.0;
 const MARGIN: i8 = 4;
-const GLYPH_PT: f32 = 15.0;
-const KEYS_PT: f32 = 12.0;
+const GLYPH_PT: f32 = theme::glyph::SQUARE;
+const KEYS_PT: f32 = theme::glyph::MARK;
 /// What a glyph and keys keep of their ink on a row that is off.
 const DIM: f32 = 0.6;
 

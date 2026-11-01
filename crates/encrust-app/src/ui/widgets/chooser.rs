@@ -106,13 +106,31 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
             tick_at,
             Align2::CENTER_CENTER,
             icon::IN_HAND,
-            theme::icon(14.0),
+            theme::icon(theme::glyph::ROW),
             colors.accent_soft,
         );
     }
     paint_aside(painter, pos2(tick_at.x - 14.0, rect.center().y), row.aside);
     focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+fn paint_lead(painter: &egui::Painter, at: egui::Pos2, lead: Lead<'_>) {
+    match lead {
+        Lead::Glyph(glyph) => {
+            let low = theme::colors().text_low;
+            painter.text(
+                at,
+                Align2::CENTER_CENTER,
+                glyph,
+                theme::icon(theme::glyph::BUTTON),
+                low,
+            );
+        }
+        Lead::Dot(tint) => {
+            painter.circle_filled(at, DOT_R, tint);
+        }
+    }
 }
 
 /// What stands left of the tick, its right edge at `right_at`.
@@ -154,7 +172,7 @@ pub fn chooser_foot(ui: &mut Ui, glyph: &str, text: &str) -> Response {
         glyph_at,
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         ink,
     );
     painter.text(

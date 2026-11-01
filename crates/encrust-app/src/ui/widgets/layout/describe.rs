@@ -62,8 +62,8 @@ pub fn describe(ui: &mut Ui, text: &str) {
 /// The ring the question mark stands in, the mark, the round target around it a pointer hits, and the
 /// most its text runs across before wrapping, points.
 const HELP_RING_D: f32 = 16.0;
-const HELP_GLYPH: f32 = 10.0;
-pub const HELP_D: f32 = 20.0;
+const HELP_GLYPH: f32 = theme::glyph::HELP;
+const HELP_D: f32 = 20.0;
 const HELP_W: f32 = 280.0;
 
 /// The question mark beside a title that reads out `texts`: on hover, and in a popup a
@@ -100,7 +100,7 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
         theme::icon(HELP_GLYPH),
         ink,
     );
-    crate::ui::widgets::focus_ring(ui, &response, egui::CornerRadius::same(255));
+    crate::ui::widgets::focus_ring(ui, &response, theme::R_PILL);
     let show = |ui: &mut Ui| {
         ui.set_max_width(HELP_W);
         for text in &joined {

@@ -225,7 +225,7 @@ fn machine_row(
             right,
             egui::Align2::RIGHT_CENTER,
             glyph,
-            theme::icon(13.0),
+            theme::icon(theme::glyph::ASIDE),
             tint,
         );
         right.x -= 22.0;

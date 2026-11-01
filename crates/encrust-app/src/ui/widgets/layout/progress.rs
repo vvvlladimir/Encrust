@@ -22,7 +22,7 @@ pub fn progress_bar_of(ui: &mut Ui, fraction: Option<f32>, height: f32) {
         info
     });
     let painter = ui.painter_at(track);
-    let round = egui::CornerRadius::same((height / 2.0) as u8);
+    let round = theme::R_PILL;
     painter.rect_filled(track, round, colors.active);
     let phase = motion::sheen(ui.ctx());
     let fill = match fraction {

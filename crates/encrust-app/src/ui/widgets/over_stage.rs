@@ -29,7 +29,11 @@ pub fn notice_card(
 ) -> NoticeReply {
     let mut reply = NoticeReply::default();
     notice_frame(ui, NOTICE_MIN_W, |ui| {
-        ui.label(RichText::new(glyph).font(theme::icon(16.0)).color(tint));
+        ui.label(
+            RichText::new(glyph)
+                .font(theme::icon(theme::glyph::BUTTON))
+                .color(tint),
+        );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if let Some(close) = close {
                 reply.closed = icon_button(ui, icon::CANCEL, close).clicked();
@@ -107,7 +111,7 @@ pub fn spinner(ui: &mut Ui) {
 }
 
 /// A spinner's glyph, points.
-const SPINNER_PT: f32 = 16.0;
+const SPINNER_PT: f32 = theme::glyph::BUTTON;
 
 fn notice_frame(ui: &mut Ui, min_w: f32, add: impl FnOnce(&mut Ui)) {
     card().inner_margin(NOTICE_MARGIN).show(ui, |ui| {

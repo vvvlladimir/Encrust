@@ -248,7 +248,11 @@ fn details_row(
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let caret = painter.layout_no_wrap(icon::CARET_DOWN.to_owned(), theme::icon(12.0), ink);
+    let caret = painter.layout_no_wrap(
+        icon::CARET_DOWN.to_owned(),
+        theme::icon(theme::glyph::MARK),
+        ink,
+    );
     let caret_at = rect.left_center() + vec2(DETAILS_PAD + 6.0, 0.0);
     let corner = caret_at - caret.size() / 2.0;
     let turned = egui::epaint::TextShape::new(corner, caret, ink).with_angle_and_anchor(

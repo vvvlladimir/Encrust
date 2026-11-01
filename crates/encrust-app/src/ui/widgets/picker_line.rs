@@ -45,7 +45,7 @@ const GAP: f32 = 8.0;
 const COUNT_W: f32 = 20.0;
 const GLYPH_W: f32 = 14.0;
 const ICONS_W: f32 = 2.0 * PICKER_ICON_SQUARE;
-const ICON_GLYPH: f32 = 15.0;
+const ICON_GLYPH: f32 = theme::glyph::SQUARE;
 /// The foot's height.
 const FOOT_H: f32 = 34.0;
 

@@ -172,7 +172,7 @@ pub fn section_tab(ui: &mut Ui, label: &str, off: Option<&str>, lit: bool) -> eg
         false if response.hovered() => (colors.hover, colors.text_high),
         false => (Color32::TRANSPARENT, colors.text_mid),
     };
-    let round = egui::CornerRadius::same((SECTION_TAB_H / 2.0) as u8);
+    let round = theme::R_PILL;
     ui.painter().rect_filled(rect, round, fill);
     let at = |galley: &egui::Galley, x: f32| pos2(x, rect.center().y - galley.size().y / 2.0);
     let name_at = at(&name, rect.left() + SECTION_TAB_PAD);

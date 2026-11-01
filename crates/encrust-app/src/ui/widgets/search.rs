@@ -96,7 +96,7 @@ pub fn search_button(ui: &mut Ui, label: &str, keys: &str, compact: bool) -> Res
         pos2(glyph_x, y),
         Align2::CENTER_CENTER,
         icon::FIND,
-        theme::icon(13.0),
+        theme::icon(theme::glyph::ASIDE),
         tint,
     );
     if !compact {

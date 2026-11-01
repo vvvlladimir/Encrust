@@ -96,9 +96,11 @@ panel 272, inspector 316 until dragged, top bar 44, layer strip 64, a chip 32. A
 The two side columns are the widths a drag on their edge leaves them at; everything else is
 fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
 the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
-two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
-10, and pills are fully round; a bordered group of controls is rounded by theirs plus the
-room and stroke around them, so the corners nest. Nothing else is rounded.
+two-line row 48. Controls are rounded by 6 points (`R_CONTROL`), cards by 8 (`R_SURFACE`),
+windows by 10 (`R_PANEL`), a keycap, a tag or a thumb inside a control by 4 (`R_KEY`), a
+mark or swatch by 2 (`R_MARK`), and pills are fully round (`R_PILL`); a bordered group of
+controls is rounded by theirs plus the room and stroke around them, so the corners nest.
+Nothing else is rounded.
 
 ### Motion
 
@@ -277,7 +279,10 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
-A glyph in a button other than the primary is 16, in the tool row 19, in a 26 square 15, in an empty state 30.
+A glyph stands at one size of `theme::glyph`, named for where it stands: `HELP` 10, `CARET`
+11, `MARK` 12, `ASIDE` 13, a row's lead `ROW` 14, in a 26 square `SQUARE` 15, in a button
+other than the primary `BUTTON` 16, `FRAMED` 18, in the tool row `RAIL` 19, `LEAD` 20, `TILE`
+24, `ZONE` 28, an empty state `EMPTY` 30, `PICTURE` 36. No other size is drawn.
 
 ### Accessibility
 

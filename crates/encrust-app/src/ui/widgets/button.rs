@@ -418,7 +418,7 @@ pub(in crate::ui::widgets) fn paint_button(
             egui::pos2(content_left + 8.0, rect.center().y),
             Align2::CENTER_CENTER,
             glyph,
-            theme::icon(16.0),
+            theme::icon(theme::glyph::BUTTON),
             if enabled {
                 foreground
             } else {

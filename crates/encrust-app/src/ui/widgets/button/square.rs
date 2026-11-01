@@ -102,9 +102,9 @@ pub(in crate::ui::widgets) fn paint_square(
         (true, false, false) => rest,
     };
     let size_pt = match (look, tall) {
-        (SquareLook::Framed, true) => 18.0,
-        (SquareLook::Framed, false) | (SquareLook::Quiet, true) => 16.0,
-        (SquareLook::Quiet, false) => 13.0,
+        (SquareLook::Framed, true) => theme::glyph::FRAMED,
+        (SquareLook::Framed, false) | (SquareLook::Quiet, true) => theme::glyph::BUTTON,
+        (SquareLook::Quiet, false) => theme::glyph::ASIDE,
     };
     draw_square(ui, rect, (fill, ring), (glyph, size_pt, ink));
 }
@@ -248,7 +248,7 @@ fn rail_corners(painter: &egui::Painter, rect: egui::Rect, button: &RailButton<'
 
 /// A rail button's glyph, and how far it rises above the button's middle and its name
 /// falls below it, points.
-const RAIL_GLYPH_PT: f32 = 19.0;
+const RAIL_GLYPH_PT: f32 = theme::glyph::RAIL;
 const RAIL_NAME_RISE: f32 = 7.0;
 const RAIL_NAME_DROP: f32 = 13.0;
 const RAIL_NAME_PAD: f32 = 2.0;
@@ -268,7 +268,7 @@ impl Square {
     fn icon() -> Self {
         Self {
             size: theme::ICON_SIZE,
-            glyph_size: 16.0,
+            glyph_size: theme::glyph::BUTTON,
             active: false,
         }
     }
@@ -276,7 +276,7 @@ impl Square {
     fn small() -> Self {
         Self {
             size: theme::SMALL_ICON_SIZE,
-            glyph_size: 15.0,
+            glyph_size: theme::glyph::SQUARE,
             active: false,
         }
     }

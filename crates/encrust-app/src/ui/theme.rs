@@ -9,6 +9,7 @@ use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle,
 
 use crate::ui::fonts;
 
+pub mod glyph;
 pub mod motion;
 mod palette;
 mod scene;
@@ -236,6 +237,11 @@ pub const STRIP_MARGIN: Margin = Margin::symmetric(8, 0);
 pub const R_CONTROL: CornerRadius = CornerRadius::same(6);
 pub const R_SURFACE: CornerRadius = CornerRadius::same(8);
 pub const R_PANEL: CornerRadius = CornerRadius::same(10);
+/// A keycap, a tag and a track's thumb, inside a control; a mark or swatch smaller still;
+/// a pill, fully round.
+pub const R_KEY: CornerRadius = CornerRadius::same(4);
+pub const R_MARK: CornerRadius = CornerRadius::same(2);
+pub const R_PILL: CornerRadius = CornerRadius::same(u8::MAX);
 
 /// Body text.
 pub fn body() -> FontId {

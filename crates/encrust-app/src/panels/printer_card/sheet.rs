@@ -141,7 +141,7 @@ fn empty_picture(ui: &mut egui::Ui) {
         rect.center(),
         egui::Align2::CENTER_CENTER,
         icon::PRINTER,
-        theme::icon(36.0),
+        theme::icon(theme::glyph::PICTURE),
         colors.text_low,
     );
 }

@@ -147,7 +147,11 @@ fn block_heading(
     };
     let mut text = egui::text::LayoutJob::default();
     let format = |font, color| egui::TextFormat::simple(font, color);
-    text.append(caret, 0.0, format(theme::icon(11.0), colors.text_low));
+    text.append(
+        caret,
+        0.0,
+        format(theme::icon(theme::glyph::CARET), colors.text_low),
+    );
     text.append(title, 6.0, format(theme::section(), colors.text_high));
     let fold = child.add(
         egui::Label::new(text)

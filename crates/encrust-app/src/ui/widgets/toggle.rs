@@ -61,7 +61,7 @@ fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
     let reached = if enabled { colors.accent } else { colors.line };
     let fill = colors.active.lerp_to_gamma(reached, how_on);
     let painter = ui.painter();
-    painter.rect_filled(track, egui::CornerRadius::same(255), fill);
+    painter.rect_filled(track, theme::R_PILL, fill);
 
     let travel = TRACK.x - KNOB - 4.0;
     let knob = Rect::from_min_size(
@@ -76,7 +76,7 @@ fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
     } else {
         colors.text_low
     };
-    painter.rect_filled(knob, egui::CornerRadius::same(255), knob_color);
+    painter.rect_filled(knob, theme::R_PILL, knob_color);
     focus_ring(ui, response, theme::R_CONTROL);
 }
 

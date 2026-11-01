@@ -11,7 +11,7 @@ pub fn empty_state(ui: &mut Ui, glyph: &str, text: &str, how: &str) {
         paragraph(
             ui,
             RichText::new(glyph)
-                .font(theme::icon(30.0))
+                .font(theme::icon(theme::glyph::EMPTY))
                 .color(colors.text_low),
         );
         ui.add_space(theme::ITEM_GAP);
@@ -47,7 +47,11 @@ pub fn notice(ui: &mut Ui, glyph: &str, tint: egui::Color32, title: &str, why: &
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
-                paragraph(ui, RichText::new(glyph).font(theme::icon(16.0)).color(tint));
+                ui.label(
+                    RichText::new(glyph)
+                        .font(theme::icon(theme::glyph::BUTTON))
+                        .color(tint),
+                );
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     paragraph(
@@ -215,7 +219,7 @@ pub fn page_trail(ui: &mut Ui, parent: &str, title: &str, aside: Option<&str>) -
     paragraph(
         ui,
         RichText::new(icon::CARET_RIGHT)
-            .font(theme::icon(12.0))
+            .font(theme::icon(theme::glyph::MARK))
             .color(colors.text_low),
     );
     paragraph(ui, RichText::new(title).font(font).color(colors.text_high));
@@ -247,7 +251,15 @@ pub fn verdict_card(
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {
+<<<<<<< HEAD
                 paragraph(ui, RichText::new(glyph).font(theme::icon(20.0)).color(tint));
+=======
+                ui.label(
+                    RichText::new(glyph)
+                        .font(theme::icon(theme::glyph::LEAD))
+                        .color(tint),
+                );
+>>>>>>> 3fa75409 (refactor(ui): draw every glyph and corner from named theme tokens)
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
                     paragraph(
@@ -274,7 +286,7 @@ pub fn tool_title(ui: &mut Ui, glyph: &str, name: &str) {
     paragraph(
         ui,
         RichText::new(glyph)
-            .font(theme::icon(16.0))
+            .font(theme::icon(theme::glyph::BUTTON))
             .color(colors.accent_soft),
     );
     paragraph(
@@ -354,6 +366,7 @@ pub fn paragraph(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> Response {
 
 /// A glyph saying how a message stands, in `tint`, before its words.
 pub fn status_glyph(ui: &mut Ui, glyph: &str, tint: egui::Color32) {
+<<<<<<< HEAD
     paragraph(ui, RichText::new(glyph).font(theme::icon(16.0)).color(tint));
 }
 
@@ -405,4 +418,11 @@ mod tests {
             theme::BLOCK_TITLE_W - 24.0
         );
     }
+=======
+    ui.label(
+        RichText::new(glyph)
+            .font(theme::icon(theme::glyph::BUTTON))
+            .color(tint),
+    );
+>>>>>>> 3fa75409 (refactor(ui): draw every glyph and corner from named theme tokens)
 }

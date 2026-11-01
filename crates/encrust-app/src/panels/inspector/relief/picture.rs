@@ -76,7 +76,7 @@ pub(super) fn preview(ui: &mut egui::Ui, picture: Option<&Picture>) -> egui::Res
         rect.center(),
         egui::Align2::CENTER_CENTER,
         icon::CARET_DOWN,
-        theme::icon(13.0),
+        theme::icon(theme::glyph::ASIDE),
         colors.text_high,
     );
     response

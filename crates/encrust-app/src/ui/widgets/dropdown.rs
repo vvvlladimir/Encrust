@@ -88,7 +88,7 @@ fn caret_and_count(painter: &egui::Painter, rect: Rect, face: &DropdownFace<'_>)
             at,
             Align2::CENTER_CENTER,
             icon::CARET_DOWN,
-            theme::icon(14.0),
+            theme::icon(theme::glyph::ROW),
             low,
         );
         right = caret.left() - GAP;
@@ -120,6 +120,23 @@ fn label(painter: &egui::Painter, room: Rect, face: &DropdownFace<'_>) {
     let galley = painter.layout_job(job);
     let top = room.center().y - galley.size().y / 2.0;
     painter.galley(pos2(room.left(), top), galley, colors.text_high);
+}
+
+fn lead_at(painter: &egui::Painter, at: egui::Pos2, lead: &Lead<'_>) {
+    match lead {
+        Lead::Glyph(glyph) => {
+            painter.text(
+                at,
+                Align2::CENTER_CENTER,
+                *glyph,
+                theme::icon(theme::glyph::ROW),
+                theme::colors().text_low,
+            );
+        }
+        Lead::Dot(tint) => {
+            painter.circle_filled(at, DOT_R, *tint);
+        }
+    }
 }
 
 /// The list under `response`, as wide as the box, in the card every dropdown hangs in.
@@ -204,7 +221,7 @@ pub fn dropdown_row(ui: &mut Ui, row: &DropdownRow<'_>) -> Response {
             pos2(tick_x, rect.center().y),
             Align2::CENTER_CENTER,
             icon::IN_HAND,
-            theme::icon(14.0),
+            theme::icon(theme::glyph::ROW),
             colors.accent_soft,
         );
     }
