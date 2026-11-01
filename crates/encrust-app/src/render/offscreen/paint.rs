@@ -125,6 +125,7 @@ pub(super) fn read_back(
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     resources.bake_shadow(&mut encoder);
     resources.bake_key_shadow(&mut encoder);
+    resources.bake_environment(&mut encoder);
     resources.place(queue, &whole());
     resources.measure_thickness(device, &mut encoder, [SIZE, SIZE], &whole());
     {

@@ -26,6 +26,7 @@ impl ViewportResources {
         }
         self.bake_shadow(encoder);
         self.bake_key_shadow(encoder);
+        self.bake_environment(encoder);
         self.measure_thickness(device, encoder, size_px, &viewport);
         let occlusion = Occlusion::of(&viewport, self.frame.staged, self.frame.occlusion);
         self.target.occlude(queue, &occlusion);

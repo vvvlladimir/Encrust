@@ -7,6 +7,7 @@ use core_geometry::glam::camera::rh::proj::directx::orthographic;
 use core_geometry::glam::camera::rh::view::look_to_mat4;
 use core_geometry::{Mat4, Vec3};
 
+use super::environment::Environment;
 use super::shadow::{Bake, hash_casters};
 use super::*;
 
@@ -50,18 +51,22 @@ impl KeyShadow {
         }
     }
 
-    /// The globals, with the map where the shader reads it: the stand-in for a pass that
-    /// draws into the map, or before there is one.
+    /// The globals, with the key's map and the studio's where the shader reads them: their
+    /// stand-ins for a pass that draws into either, `casting`, or before there is a map.
     pub(super) fn globals_group(
         &self,
         device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        globals: &wgpu::Buffer,
+        (layout, globals): (&wgpu::BindGroupLayout, &wgpu::Buffer),
+        environment: &Environment,
         casting: bool,
     ) -> wgpu::BindGroup {
         let map = match (&self.map, casting) {
             (Some(map), false) => map,
             _ => &self.stand_in,
+        };
+        let studio = match casting {
+            true => &environment.stand_in,
+            false => &environment.view,
         };
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("viewport_globals"),
@@ -78,6 +83,14 @@ impl KeyShadow {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(studio),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&environment.sampler),
                 },
             ],
         })
@@ -153,9 +166,10 @@ impl ViewportResources {
         if self.key.map.is_none() {
             self.key.map = Some(map(device, KEY_TEXELS));
             self.key.fresh = true;
+            let globals = (&self.globals_layout, &self.globals);
             self.globals_bind_group =
                 self.key
-                    .globals_group(device, &self.globals_layout, &self.globals, false);
+                    .globals_group(device, globals, &self.environment, false);
         }
         self.key.bake.want(Some(cast_by(frame, &look)), frame.light);
     }

@@ -14,7 +14,7 @@ mod palette;
 mod scene;
 
 pub use palette::Palette;
-pub use scene::Scene;
+pub use scene::{Lighting, Scene};
 
 /// Named font families the bundled faces are registered under.
 pub const MEDIUM: &str = "plex-sans-medium";

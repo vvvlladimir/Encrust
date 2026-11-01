@@ -110,6 +110,8 @@ struct Globals {
 @group(0) @binding(0) var<uniform> globals: Globals;
 @group(0) @binding(1) var key_shadow_map: texture_depth_2d;
 @group(0) @binding(2) var key_shadow_sampler: sampler_comparison;
+@group(0) @binding(3) var environment_map: texture_2d<f32>;
+@group(0) @binding(4) var environment_sampler: sampler;
 
 struct ModelVertex {
     @location(0) position: vec3<f32>,
@@ -204,26 +206,11 @@ fn lit(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3
     return base * (ambient + diffuse) + globals.key_color.rgb * SPECULAR_SHARE * shine * alpha;
 }
 
-// The render view's studio: a sky-to-floor gradient, a large key softbox and one overhead,
-// both with soft edges, and the room seen at a grazing angle. See docs/design/viewport.md.
-const STUDIO_AMBIENT = 0.30;
-const STUDIO_KEY = 0.55;
-const STUDIO_TOP = 0.22;
+// How far round its edge the key wraps its light onto a curve, as a softbox that large does.
 const STUDIO_WRAP = 0.35;
-const SOFTBOX_SHARE = 0.22;
-const FRESNEL_SHARE = 0.28;
-// Cosines of the angle off a softbox's centre where its reflection starts and is full:
-// wide enough that a flat-shaded face shades into its neighbour rather than stepping.
-const SOFTBOX_EDGE = 0.35;
-const SOFTBOX_CORE = 0.98;
 
 fn wrapped(facing: f32) -> f32 {
     return max((facing + STUDIO_WRAP) / (1.0 + STUDIO_WRAP), 0.0);
-}
-
-fn softbox(mirror: vec3<f32>, towards: vec3<f32>) -> f32 {
-    let lobe = smoothstep(SOFTBOX_EDGE, SOFTBOX_CORE, dot(mirror, towards));
-    return lobe * lobe;
 }
 
 // The render view's key light shadow, softened as a softbox softens it: percentage-closer
@@ -311,7 +298,7 @@ fn key_cast_vertex(in: ModelVertex) -> @builtin(position) vec4<f32> {
 // The render view lights in linear light and hands the sum to a film's curve, AgX as
 // Blender and three.js draw it, before it goes out in the gamma the target is written in.
 // See docs/design/viewport.md.
-const EXPOSURE = 1.0;
+const EXPOSURE = 0.78;
 // A milder Punchy look than Blender's over AgX, its power alone: a resin's colour holds its
 // strength instead of AgX's own muted base, its hue untouched.
 const LOOK_POWER = 1.15;
@@ -360,7 +347,7 @@ fn filmic(linear: vec3<f32>) -> vec3<f32> {
 
 // `lit` under the studio, for the same premultiplied `base` and `alpha`.
 fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    return finish(base, 0.0, alpha, normal, world);
+    return filmic(radiance(linear_of(base), 0.0, RESIN_ROUGHNESS, alpha, normal, normal, world));
 }
 
 // The same over a printed surface whose layers, too fine to see, groove it by `grooves`:
@@ -370,7 +357,8 @@ fn studio_grooved(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f3
     let view = normalize(globals.eye.xyz - world);
     let bent = bent_by_layers(normal, view, grooves);
     let sheen = layer_sheen(normal, view, world, grooves) * alpha;
-    return filmic(radiance(linear_of(base), 0.0, alpha, normal, bent, world) + sheen);
+    let roughness = mix(RESIN_ROUGHNESS, GROOVED_ROUGHNESS, grooves);
+    return filmic(radiance(linear_of(base), 0.0, roughness, alpha, normal, bent, world) + sheen);
 }
 
 // The key's highlight off the grooves, Ward's anisotropic lobe: narrow along the layers,
@@ -412,9 +400,10 @@ fn bent_by_layers(normal: vec3<f32>, view: vec3<f32>, grooves: f32) -> vec3<f32>
 }
 
 // A surface under the studio: `metal` 0.0 for a dielectric, whose reflection is white, to
-// 1.0 for a metal, which has no diffuse and reflects in its own colour; `shine` scales both.
-fn finish(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    return filmic(radiance(linear_of(base), metal, shine, normal, normal, world));
+// 1.0 for a metal, which has no diffuse and reflects in its own colour, `roughness` 0.0 a
+// mirror to 1.0 chalk.
+fn finish(base: vec3<f32>, metal: f32, roughness: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    return filmic(radiance(linear_of(base), metal, roughness, 1.0, normal, normal, world));
 }
 
 // How much of the key a thin part of a resin lets through to the eye, 1.0 for none of its
@@ -431,32 +420,140 @@ const GLOW_POWER = 4.0;
 const GLOW_SCALE = 1.2;
 const GLOW_AMBIENT = 0.08;
 
-// The light leaving a surface of linear colour `base` under the studio, before the curve:
-// lit about `normal`, reflecting about `reflecting`, which grooves may bend away from it.
-fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, reflecting: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    let view = normalize(globals.eye.xyz - world);
+// The studio as every surface sees it round itself, linear light: the cove fading up into a
+// pale sky, and three softboxes — the key, one overhead, a warm fill opposite the key — each
+// a bright disc with a soft rim. Baked into `environment_map`; see docs/design/viewport.md.
+const KEY_BOX = 3.0;
+const TOP_BOX = 1.1;
+const FILL_BOX = 0.5;
+// Half the angles the softboxes span, radians.
+const KEY_BOX_RAD = 0.24;
+const TOP_BOX_RAD = 0.42;
+const FILL_BOX_RAD = 0.3;
+
+fn softbox_disc(towards: vec3<f32>, centre: vec3<f32>, half_angle: f32) -> f32 {
+    let off = acos(clamp(dot(towards, centre), -1.0, 1.0));
+    return 1.0 - smoothstep(half_angle * 0.85, half_angle * 1.1, off);
+}
+
+fn studio_sky(towards: vec3<f32>) -> vec3<f32> {
+    let cove = linear_of(COVE_COLOUR);
+    var seen = cove * 0.3;
+    if (towards.z >= 0.0) {
+        seen = mix(cove * 0.55, linear_of(globals.sky.rgb) * 0.7, smoothstep(0.0, 0.7, towards.z));
+    }
     let key = normalize(-globals.key_towards.xyz);
     let fill = normalize(-globals.fill_towards.xyz);
-    let top = vec3<f32>(0.0, 0.0, 1.0);
-    let sky = linear_of(globals.sky.rgb);
-    let ground = linear_of(globals.ground.rgb);
+    seen = seen + linear_of(globals.key_color.rgb) * KEY_BOX * softbox_disc(towards, key, KEY_BOX_RAD);
+    seen = seen + linear_of(globals.sky.rgb) * TOP_BOX * softbox_disc(towards, vec3<f32>(0.0, 0.0, 1.0), TOP_BOX_RAD);
+    return seen + linear_of(globals.fill_color.rgb) * FILL_BOX * softbox_disc(towards, fill, FILL_BOX_RAD);
+}
+
+// The map's mips, roughness 0.0 to 1.0 evenly between. Must match MIPS in environment.rs.
+const ENVIRONMENT_MIPS = 6.0;
+const PREFILTER_SAMPLES = 128u;
+
+struct EnvironmentMip {
+    roughness_and_size: vec4<f32>,
+};
+
+@group(1) @binding(0) var<uniform> environment_mip: EnvironmentMip;
+
+fn equirect_of(towards: vec3<f32>) -> vec2<f32> {
+    let around = atan2(towards.y, towards.x);
+    let down = acos(clamp(towards.z, -1.0, 1.0));
+    return vec2<f32>(around / 6.2831853 + 0.5, down / 3.14159265);
+}
+
+fn towards_of(equirect: vec2<f32>) -> vec3<f32> {
+    let around = (equirect.x - 0.5) * 6.2831853;
+    let down = equirect.y * 3.14159265;
+    return vec3<f32>(sin(down) * cos(around), sin(down) * sin(around), cos(down));
+}
+
+fn hammersley(index: u32, count: u32) -> vec2<f32> {
+    return vec2<f32>(f32(index) / f32(count), f32(reverseBits(index)) * 2.3283064365386963e-10);
+}
+
+// A half-way vector about `normal` drawn from GGX's distribution at `roughness` (Karis 2013).
+fn ggx_half_way(at: vec2<f32>, normal: vec3<f32>, roughness: f32) -> vec3<f32> {
+    let a = roughness * roughness;
+    let around = 6.2831853 * at.x;
+    let cos_up = sqrt((1.0 - at.y) / (1.0 + (a * a - 1.0) * at.y));
+    let sin_up = sqrt(1.0 - cos_up * cos_up);
+    let up = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.z) < 0.999);
+    let side = normalize(cross(up, normal));
+    let other = cross(normal, side);
+    return normalize(side * sin_up * cos(around) + other * sin_up * sin(around) + normal * cos_up);
+}
+
+// One texel of one mip: the studio seen by a surface of that mip's roughness facing it,
+// the normal, the eye and the reflection taken as one, as the split sum does.
+@fragment
+fn prefilter_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let roughness = environment_mip.roughness_and_size.x;
+    let normal = towards_of(position.xy / environment_mip.roughness_and_size.yz);
+    if (roughness < 1e-3) {
+        return vec4<f32>(studio_sky(normal), 1.0);
+    }
+    var gathered = vec3<f32>(0.0);
+    var weight = 0.0;
+    for (var index = 0u; index < PREFILTER_SAMPLES; index = index + 1u) {
+        let half_way = ggx_half_way(hammersley(index, PREFILTER_SAMPLES), normal, roughness);
+        let light = normalize(2.0 * dot(normal, half_way) * half_way - normal);
+        let facing = dot(normal, light);
+        if (facing > 0.0) {
+            gathered = gathered + studio_sky(light) * facing;
+            weight = weight + facing;
+        }
+    }
+    return vec4<f32>(gathered / max(weight, 1e-4), 1.0);
+}
+
+// The studio seen along `towards` by a surface of `roughness`.
+fn environment(towards: vec3<f32>, roughness: f32) -> vec3<f32> {
+    let lod = clamp(roughness, 0.0, 1.0) * (ENVIRONMENT_MIPS - 1.0);
+    return textureSampleLevel(environment_map, environment_sampler, equirect_of(towards), lod).rgb;
+}
+
+// The split sum's second half without its table: Karis's analytic fit (2014) of the share of
+// the prefiltered light a surface of reflectance `f0` returns.
+fn reflected_share(f0: vec3<f32>, roughness: f32, facing: f32) -> vec3<f32> {
+    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    let r = roughness * c0 + c1;
+    let a004 = min(r.x * r.x, exp2(-9.28 * facing)) * r.x + r.y;
+    let ab = vec2<f32>(-1.04, 1.04) * a004 + r.zw;
+    return f0 * ab.x + ab.y;
+}
+
+// How rough a resin print is, and a groove of its layers at its deepest.
+const RESIN_ROUGHNESS = 0.32;
+const GROOVED_ROUGHNESS = 0.55;
+// How much of the room's light a surface takes in, and of the key's straight on.
+const ROOM_SHARE = 0.42;
+const KEY_SHARE_STUDIO = 1.05;
+// How much of its reflection a surface keeps where the key's shadow falls on it.
+const SHADED_REFLECTION = 0.55;
+
+// The light leaving a surface of linear colour `base` under the studio, before the curve:
+// lit about `normal`, reflecting about `reflecting`, which grooves may bend away from it;
+// `strength` scales the reflection of a premultiplied surface with its coverage.
+fn radiance(base: vec3<f32>, metal: f32, roughness: f32, strength: f32, normal: vec3<f32>, reflecting: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    let view = normalize(globals.eye.xyz - world);
+    let key = normalize(-globals.key_towards.xyz);
     let key_colour = linear_of(globals.key_color.rgb);
-    let room = mix(ground, sky, smoothstep(-0.6, 1.0, normal.z));
     let reaches = key_reaches(world, normal);
-    let diffuse = room * STUDIO_AMBIENT
-        + key_colour * STUDIO_KEY * wrapped(dot(normal, key)) * reaches
-        + sky * STUDIO_TOP * wrapped(normal.z)
-        + linear_of(globals.fill_color.rgb) * FILL_SHARE * max(dot(normal, fill), 0.0);
+    let diffuse = environment(normal, 1.0) * ROOM_SHARE
+        + key_colour * KEY_SHARE_STUDIO * wrapped(dot(normal, key)) * reaches;
     let mirror = reflect(-view, reflecting);
-    let boxes = key_colour * softbox(mirror, key) * reaches + sky * 0.6 * softbox(mirror, top);
-    let grazing = pow(1.0 - max(dot(reflecting, view), 0.0), 5.0);
-    let tint = mix(vec3<f32>(1.0), base, metal);
-    let fresnel = mix(vec3<f32>(0.04), base, metal) + (1.0 - mix(vec3<f32>(0.04), base, metal)) * grazing;
-    let seen = mix(ground, sky, mirror.z * 0.5 + 0.5);
-    let reflected = boxes * SOFTBOX_SHARE * tint + seen * fresnel * mix(FRESNEL_SHARE, 1.0, metal);
+    let facing = max(dot(reflecting, view), 1e-3);
+    let f0 = mix(vec3<f32>(0.04), base, metal);
+    let reflected = environment(mirror, roughness) * reflected_share(f0, roughness, facing)
+        * mix(SHADED_REFLECTION, 1.0, reaches);
     let behind = pow(clamp(dot(view, -(key + normal * GLOW_DISTORTION)), 0.0, 1.0), GLOW_POWER);
     let glow = key_colour * (behind * GLOW_SCALE + GLOW_AMBIENT) * glow_through;
-    return base * (1.0 - metal) * (diffuse + glow) + reflected * shine;
+    return base * (1.0 - metal) * (diffuse + glow) + reflected * strength;
 }
 
 // Whichever light the frame is under: the working view's or the render view's studio.

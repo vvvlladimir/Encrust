@@ -18,6 +18,7 @@ mod buffers;
 mod clear;
 mod cost;
 mod draws;
+mod environment;
 mod globals;
 mod light;
 mod paint;
@@ -35,6 +36,7 @@ pub use draws::{
 use buffers::{DynamicBuffer, Piece, pieces};
 use clear::Clear;
 use draws::{Splits, cut_draws, splits_of};
+use environment::Environment;
 use globals::{Globals, globals_of};
 use light::KeyShadow;
 use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
@@ -120,6 +122,8 @@ pub struct ViewportResources {
     /// The globals with the key's map stood in for, bound while the map is drawn.
     casting_bind_group: wgpu::BindGroup,
     key: KeyShadow,
+    /// The studio as reflections see it, baked for the render view.
+    environment: Environment,
     settling: Settling,
     model_pipeline: Facing,
     xray_pipeline: Facing,
@@ -222,8 +226,10 @@ impl ViewportResources {
         });
         let build = Builder::new(device, target_format, &globals_layout);
         let key = KeyShadow::new(device, build.key_cast());
-        let globals_bind_group = key.globals_group(device, &globals_layout, &globals, false);
-        let casting_bind_group = key.globals_group(device, &globals_layout, &globals, true);
+        let environment = build.environment();
+        let both = (&globals_layout, &globals);
+        let globals_bind_group = key.globals_group(device, both, &environment, false);
+        let casting_bind_group = key.globals_group(device, both, &environment, true);
 
         let solid = build.solid();
         let label = build.label();
@@ -235,6 +241,7 @@ impl ViewportResources {
             globals_bind_group,
             casting_bind_group,
             key,
+            environment,
             settling: Settling::default(),
             model_pipeline: solid.model,
             xray_pipeline: solid.xray,

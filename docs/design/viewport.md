@@ -403,16 +403,24 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
 
 - **Resin.** Every model and support instance takes the resin's `details.color` in place of
   the theme's model, selection and support tints: the selection tint is not drawn.
-- **Studio.** `studio` replaces `lit`: the room is the sky-to-ground gradient, the key and an
-  overhead light are softboxes wrapped round the form and reflected as wide soft lobes, so a
-  flat-shaded face shades into its neighbour, and the room is reflected by Schlick's Fresnel
-  at a grazing angle. Markers, the references among them, take the same light. It is summed
-  in linear light (`radiance`: every colour token and resin decoded from gamma first) and
-  handed to `filmic`, AgX as Blender, three.js and Godot draw it — Rec. 2020 inset, log2
-  exposure from −12.47 to +4.03 EV, the fitted sigmoid polynomial, outset — with a milder
-  Punchy look, the curve raised to 1.15, before it goes out in the target's gamma. AgX was
-  chosen over ACES for leaving a saturated resin's hue alone as it brightens. The backdrop
-  goes through the same curve; the working view does not.
+- **Studio.** `studio` replaces `lit`. The room every surface sees round itself is
+  `studio_sky`: the cove fading up into a pale sky, and three softboxes — the key, one
+  overhead, a warm fill opposite the key — each a bright disc with a soft rim. It is baked
+  once, and again only when the theme's lights change, into a 256 × 128 equirectangular
+  RGBA16Float map of six mips, mip *i* prefiltered for roughness *i*/5 by 128 GGX
+  importance samples on Hammersley's sequence, the normal, the eye and the reflection taken
+  as one: Karis's split sum (UE4, 2013). A surface reads its reflection from the mip its
+  roughness picks, scaled by Karis's analytic fit of the environment BRDF (2014) in place
+  of the split sum's table, and dimmed where the key's shadow falls; it reads the roughest
+  mip about its normal as the light the room gives it, and adds the key's own light,
+  wrapped round its edge, where the shadow lets it. A resin is 0.32 rough, 0.55 where its
+  layers groove it; the props carry their own. All of it is summed in linear light
+  (`radiance`: every colour token and resin decoded from gamma first) and handed to
+  `filmic`, AgX as Blender, three.js and Godot draw it — Rec. 2020 inset, log2 exposure
+  from −12.47 to +4.03 EV, the fitted sigmoid polynomial, outset — with a milder Punchy
+  look, the curve raised to 1.15, before it goes out in the target's gamma. AgX was chosen
+  over ACES for leaving a saturated resin's hue alone as it brightens. The backdrop goes
+  through the same curve; the working view does not.
 - **Layers.** `stepped` turns a surface's normal towards the stair a printer cuts it into:
   within each layer the share `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a
   vertical riser, so a wall shows only the lip line each layer leaves, a gentle slope the

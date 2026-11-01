@@ -185,39 +185,39 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
         normal = -normal;
     }
     let material = i32(round(-2.0 - in.overhang));
-    // xyz the colour, w how metallic; then how strongly it reflects.
+    // xyz the colour, w how metallic; then how rough it is.
     var surface = vec4<f32>(STEEL, 1.0);
-    var shine = 0.6;
+    var roughness = 0.4;
     switch material {
         case 0: {
             surface = vec4<f32>(mat_colour(in.local, px), 0.0);
-            shine = 0.07;
+            roughness = 0.85;
         }
         case 1: {
             surface = can_finish(in.local, px);
-            shine = 1.0;
+            roughness = 0.18;
         }
         case 2: {
             surface = vec4<f32>(banana_colour(in.local), 0.0);
-            shine = 0.6;
+            roughness = 0.45;
         }
         case 3: {
             surface = pen_finish(in.local.z);
-            shine = 0.9;
+            roughness = 0.25;
         }
         case 4: {
             let out = length(in.local.xy);
             let rim = smoothstep(10.6, 10.9, out);
             let metal = select(BRASS, NICKEL, out < COIN_MIDDLE);
             surface = vec4<f32>(metal * (1.0 - 0.12 * rim), 1.0);
-            shine = 0.85;
+            roughness = 0.3;
         }
         default: {
             surface = vec4<f32>(STEEL, 1.0);
-            shine = 0.6;
+            roughness = 0.45;
         }
     }
-    return vec4<f32>(finish(surface.rgb, surface.a, shine, normal, in.world), 1.0);
+    return vec4<f32>(finish(surface.rgb, surface.a, roughness, normal, in.world), 1.0);
 }
 
 // The render view's room: a photographer's infinity cove, the table sweeping up into a wall
