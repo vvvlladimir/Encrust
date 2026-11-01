@@ -154,6 +154,11 @@ pub const NOTE_GAP: f32 = 4.0;
 pub const SECTION_GAP: f32 = 14.0;
 /// Between the start page's title and the zone under it.
 pub const PAGE_GAP: f32 = 34.0;
+/// Find's palette: its width, how far under the bar it hangs, its field and a row.
+pub const PALETTE_W: f32 = 500.0;
+pub const PALETTE_TOP: f32 = 70.0;
+pub const PALETTE_FIELD_H: f32 = 48.0;
+pub const PALETTE_ROW_H: f32 = 32.0;
 /// How far a palette's rows and foot stand in from its sides.
 pub const PALETTE_INSET: f32 = 16.0;
 /// Height of a section's heading row, which folds it.

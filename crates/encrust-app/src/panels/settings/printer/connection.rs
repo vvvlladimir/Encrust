@@ -13,7 +13,7 @@ use crate::ui::{
     Inline, Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list,
     subheading, theme, tone,
 };
-use crate::ui::{address_label, state_word};
+use crate::ui::{address_label, state_word, status_dot};
 
 /// How wide a field here is: enough for a host name, not enough to stretch the card.
 const FIELD_W: f32 = 230.0;
@@ -159,8 +159,7 @@ fn listed_row(
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 3.5, tint);
+                status_dot(ui, tint);
                 ui.add(
                     crate::ui::text_box(egui::TextEdit::singleline(&mut machine.name))
                         .hint_text(machine.address.clone())

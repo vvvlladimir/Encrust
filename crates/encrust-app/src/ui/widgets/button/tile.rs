@@ -29,6 +29,58 @@ pub fn swatch(
     response.on_hover_text(name)
 }
 
+/// A square `side` points across showing `texture`, or an empty raised one, with a caret on a
+/// dark disc saying a click opens more to choose from: the relief's picture.
+pub fn picture_square(
+    ui: &mut Ui,
+    texture: Option<&egui::TextureHandle>,
+    side: f32,
+    tooltip: &str,
+) -> Response {
+    let colors = theme::colors();
+    let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, tooltip));
+    match texture {
+        Some(texture) => {
+            egui::Image::new(texture)
+                .corner_radius(theme::R_CONTROL)
+                .paint_at(ui, rect);
+        }
+        None => {
+            ui.painter()
+                .rect_filled(rect, theme::R_CONTROL, colors.raised);
+        }
+    }
+    let ring = hover_mix(ui, &response, colors.line, colors.text_low);
+    let painter = ui.painter();
+    painter.rect_stroke(
+        rect,
+        theme::R_CONTROL,
+        egui::Stroke::new(1.0, ring),
+        StrokeKind::Inside,
+    );
+    // A dark disc behind the caret, so it reads over a white picture as over a black one.
+    let disc = colors.sunken.gamma_multiply(CARET_DISC);
+    painter.circle_filled(rect.center(), CARET_DISC_D / 2.0, disc);
+    let font = theme::icon(theme::glyph::ASIDE);
+    let caret = crate::ui::icon::CARET_DOWN;
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        caret,
+        font,
+        colors.text_high,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tooltip)
+}
+
+/// The disc behind a picture square's caret, points across, and how much of `sunken` it keeps.
+const CARET_DISC_D: f32 = 22.0;
+const CARET_DISC: f32 = 0.85;
+
 /// A card that opens a view of its own: a glyph in the colour of what it found, a title,
 /// a line under it, and a chevron saying it leads somewhere.
 pub fn summary_button(

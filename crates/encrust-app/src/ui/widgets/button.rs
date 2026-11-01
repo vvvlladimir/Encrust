@@ -14,7 +14,7 @@ pub use square::{
     RailButton, SquareLook, companion_square, icon_button, icon_toggle, numbered_square,
     quiet_square, rail_button, small_icon_button,
 };
-pub use tile::{bar_pill, summary_button, swatch, zone_button};
+pub use tile::{bar_pill, picture_square, summary_button, swatch, zone_button};
 
 /// The ring a control wears while it holds the keyboard's focus: the accent inside its own
 /// edge, and a halo of the accent's wash outside it.

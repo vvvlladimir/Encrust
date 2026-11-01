@@ -188,6 +188,23 @@ pub fn meta(ui: &mut Ui, lines: &[String]) {
     }
 }
 
+/// A page's title and, quieter and smaller after it, the name it belongs under: a machine
+/// and its maker.
+pub fn page_heading(ui: &mut Ui, title: &str, subtitle: &str) {
+    let colors = theme::colors();
+    let font = |size_pt| theme::page_title(size_pt);
+    ui.label(
+        RichText::new(title)
+            .font(font(theme::PAGE_TITLE_PT))
+            .color(colors.text_high),
+    );
+    ui.label(
+        RichText::new(subtitle)
+            .font(font(theme::PAGE_SUBTITLE_PT))
+            .color(colors.text_low),
+    );
+}
+
 /// A page's title, with `aside` after it in the same face, quieter: Settings' pages and the
 /// key sheet's.
 pub fn page_title(ui: &mut Ui, title: &str, aside: Option<&str>) {
@@ -307,6 +324,26 @@ pub fn figure_line(ui: &mut Ui, text: &str, tint: egui::Color32) {
 pub fn state_word(ui: &mut Ui, text: &str, tint: egui::Color32) -> egui::Response {
     let text = RichText::new(text).font(theme::small()).color(tint);
     ui.add(egui::Label::new(text).truncate())
+}
+
+/// A dot in `tint` standing for a state, in a square as tall as a small glyph: a listed
+/// printer's.
+pub fn status_dot(ui: &mut Ui, tint: egui::Color32) {
+    let side = egui::vec2(STATUS_DOT_BOX, STATUS_DOT_BOX);
+    let (rect, _) = ui.allocate_exact_size(side, egui::Sense::hover());
+    ui.painter()
+        .circle_filled(rect.center(), STATUS_DOT_R, tint);
+}
+
+/// The room a status dot stands in, and its radius, points.
+const STATUS_DOT_BOX: f32 = 8.0;
+const STATUS_DOT_R: f32 = 3.5;
+
+/// A file's name in the code face, cut short when the room runs out: a picture in hand.
+pub fn file_line(ui: &mut Ui, text: &str) {
+    let high = theme::colors().text_high;
+    let text = RichText::new(text).font(theme::code(12.0)).color(high);
+    ui.add(egui::Label::new(text).truncate());
 }
 
 /// A network address as it is typed, in the code face.

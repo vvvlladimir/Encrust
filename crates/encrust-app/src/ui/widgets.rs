@@ -9,6 +9,7 @@ mod chooser;
 mod confirm;
 mod device_row;
 mod dropdown;
+mod entry_row;
 mod field;
 mod figures;
 #[cfg(test)]
@@ -39,9 +40,9 @@ pub use button::inline_button_w;
 pub use button::{
     Inline, RailButton, SquareLook, bar_pill, blocked_hover, compact_button, companion_button,
     companion_square, filter_chip, focus_ring, hover_mix, icon_button, icon_toggle, inline_button,
-    numbered_square, primary_button, primary_with_companion, quiet_button, quiet_square,
-    rail_button, secondary_button, small_icon_button, summary_button, swatch, toggle_button,
-    zone_button,
+    numbered_square, picture_square, primary_button, primary_with_companion, quiet_button,
+    quiet_square, rail_button, secondary_button, small_icon_button, summary_button, swatch,
+    toggle_button, zone_button,
 };
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
@@ -52,6 +53,7 @@ pub use dropdown::{
     DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
     dropdown_search_menu,
 };
+pub use entry_row::{EntryRow, entry_row};
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
     number_row, picker_row, row_name, text_box, text_row, unit_field,
@@ -65,12 +67,12 @@ pub use layer_track::{
     paint_layer_track, span_fraction, up,
 };
 pub use layout::{
-    HELP_D, address_label, block_title, body_and_foot, boxed, busy, card, card_foot, card_title,
-    describe, described, describing, dialog, dialog_head, empty_state, field_note, figure_line,
+    address_label, block_title, body_and_foot, boxed, busy, card, card_foot, card_title, describe,
+    described, describing, dialog, dialog_head, empty_state, field_note, figure_line, file_line,
     hairline, heading, help_mark, hint, inset, meta, mode_column, mode_group, name_line, nested,
-    notice, page_title, page_trail, palette_dialog, paragraph, progress_bar, progress_bar_of,
-    readings, share_figure, state_word, status_glyph, step_bar, subheading, subheading_with_switch,
-    title_line, tool_title, verdict_card, vertical_hairline,
+    notice, page_heading, page_title, page_trail, palette_dialog, progress_bar, progress_bar_of,
+    readings, share_figure, state_word, status_dot, status_glyph, step_bar, subheading,
+    subheading_with_switch, title_line, tool_title, verdict_card, vertical_hairline,
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
@@ -83,7 +85,7 @@ pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, z
 pub use picker_line::{PICKER_ICON_SQUARE, PickerLine, eye_square, picker_foot, picker_line};
 pub use print_chip::{ChipPart, chip_text_w, paint_chip};
 pub use release::{StepState, release_hero, steps};
-pub use search::{find_line, palette_field, search_button};
+pub use search::{find_line, palette_field, palette_row, search_button};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use start_page::ZONE_INSET;
 pub use start_page::{
