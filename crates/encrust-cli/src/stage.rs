@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use core_engine::{Cutting, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
-use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
+use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec2, Vec3, placed_aabb, transform_mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{ArrangeSettings, Footprint, arrange};
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -20,7 +20,7 @@ use crate::pipeline::{
     OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of, warn_if_grey_ignored,
 };
 use crate::profiles::{self, Chosen};
-use crate::report::ImportReport;
+use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
 use crate::supports::{SupportReport, stand_under};
 use crate::{plate_file, project};
@@ -57,6 +57,8 @@ pub struct Part {
     pub oriented: Option<OrientSummary>,
     pub hollow: Option<HollowReport>,
     pub supports: Option<SupportReport>,
+    /// How the model with its supports and raft sits on the plate where it was put down.
+    pub standing: Option<FitCheck>,
 }
 
 impl Part {
@@ -64,6 +66,13 @@ impl Part {
     pub fn is_clean(&self) -> bool {
         self.import.as_ref().is_none_or(ImportReport::is_clean)
             && self.hollow.as_ref().is_none_or(HollowReport::is_clean)
+            && self.standing.as_ref().is_none_or(FitCheck::fits)
+    }
+
+    /// How the model sits on the plate: where it was put down, or else as imported.
+    pub fn fit(&self) -> Option<&FitCheck> {
+        let imported = self.import.as_ref().and_then(|import| import.fit.as_ref());
+        self.standing.as_ref().or(imported)
     }
 }
 
@@ -176,8 +185,27 @@ pub fn stage(
             let plate = plate
                 .map(|number| project::chosen_plate(&project.manifest, number))
                 .transpose()?;
-            project::stage(path, &project, plate, job)
+            let staged = project::stage(path, &project, plate, job)?;
+            if watch.talk {
+                print_off_the_plate(&staged.parts);
+            }
+            Ok(staged)
         }
+    }
+}
+
+/// Names each model of a saved plate that does not stand inside the build volume.
+fn print_off_the_plate(parts: &[Part]) {
+    let off = parts.iter().filter_map(|part| {
+        let check = part.standing.as_ref().filter(|check| !check.fits())?;
+        Some((part, check))
+    });
+    for (part, check) in off {
+        println!(
+            "{}\n  fits           {}\n",
+            part.input.display(),
+            describe_fit(check)
+        );
     }
 }
 
@@ -262,14 +290,7 @@ pub fn plate_of(
     check_pieces(&pieces, entries, &job.model, arrange)?;
     watch.stop.check()?;
     if arrange {
-        let mut spread_out: Vec<(&mut Mesh, &Path)> = pieces
-            .iter_mut()
-            .zip(entries)
-            .flat_map(|(meshes, (path, _))| {
-                meshes.iter_mut().map(move |mesh| (mesh, path.as_path()))
-            })
-            .collect();
-        spread(&mut spread_out, printer)?;
+        spread_pieces(&mut pieces, entries, printer)?;
     }
 
     let mut parts = Vec::with_capacity(entries.len());
@@ -286,8 +307,13 @@ pub fn plate_of(
         }
         let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
         let (mut hollow, mut supports) = (None, None);
+        let mut stands_in = None;
         for mesh in meshes {
             let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
+            stands_in = [stands_in, bounds(&down.model)]
+                .into_iter()
+                .flatten()
+                .reduce(merged);
             models.push(down.model);
             let first = models.len();
             models.extend(down.plugs);
@@ -295,12 +321,14 @@ pub fn plate_of(
             hollow = hollow.or(down.hollow);
             supports = supports.or(down.supports);
         }
+        let standing = standing_of(stands_in, printer, supports.is_some(), watch.talk);
         parts.push(Part {
             input: path.clone(),
             import: Some(import),
             oriented,
             hollow,
             supports,
+            standing,
         });
     }
 
@@ -471,11 +499,50 @@ fn check_plugs_clear(
 
 /// What `model` and its supports cover of the plate, its least and greatest corners.
 fn footprint(model: &Model) -> Option<(Vec2, Vec2)> {
-    std::iter::once(&model.mesh)
-        .chain(&model.supports)
-        .filter_map(|mesh| mesh.aabb())
-        .map(|bounds| (bounds.mins.truncate(), bounds.maxs.truncate()))
-        .reduce(|(low, high), (mins, maxs)| (low.min(mins), high.max(maxs)))
+    bounds(model).map(|bounds| (bounds.mins.truncate(), bounds.maxs.truncate()))
+}
+
+/// The box `model` and its supports stand in, plate millimetres.
+pub(crate) fn bounds(model: &Model) -> Option<Aabb> {
+    let supports = model.supports.iter().filter_map(|mesh| mesh.aabb());
+    placed_aabb(&model.mesh, model.transform)
+        .into_iter()
+        .chain(supports)
+        .reduce(merged)
+}
+
+/// Spreads every piece of every entry over `printer`'s plate.
+fn spread_pieces(
+    pieces: &mut [Vec<Mesh>],
+    entries: &[(PathBuf, Shaping)],
+    printer: Option<&PrinterProfile>,
+) -> Result<()> {
+    let mut spread_out: Vec<(&mut Mesh, &Path)> = pieces
+        .iter_mut()
+        .zip(entries)
+        .flat_map(|(meshes, (path, _))| meshes.iter_mut().map(move |mesh| (mesh, path.as_path())))
+        .collect();
+    spread(&mut spread_out, printer)
+}
+
+/// How a model put down in `stands_in` sits on `printer`'s plate, said when supports changed
+/// what stands there or it does not fit.
+fn standing_of(
+    stands_in: Option<Aabb>,
+    printer: Option<&PrinterProfile>,
+    supported: bool,
+    talk: bool,
+) -> Option<FitCheck> {
+    let check = FitCheck::of(&stands_in?, printer?);
+    if talk && (supported || !check.fits()) {
+        println!("On the plate\n  fits           {}\n", describe_fit(&check));
+    }
+    Some(check)
+}
+
+/// The box covering both `a` and `b`.
+fn merged(a: Aabb, b: Aabb) -> Aabb {
+    Aabb::new(a.mins.min(b.mins), a.maxs.max(b.maxs))
 }
 
 /// One piece ready to slice, the plugs for its holes, and what hollowing and supporting

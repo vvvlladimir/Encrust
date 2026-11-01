@@ -88,6 +88,35 @@ fn a_model_small_enough_but_standing_off_the_plate_is_reported_by_estimate() {
 }
 
 #[test]
+fn supports_reaching_off_the_plate_are_reported_though_the_model_fits() {
+    // In the plate's corner the block fits, but its raft reaches past it on every side.
+    let path = write_boxes_stl("raft-off-the-edge", &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--strict",
+    ]);
+    let text = stdout(&output);
+    let (imported, standing) = text
+        .split_once("On the plate")
+        .expect("an On the plate block");
+
+    assert_eq!(field(imported, "fits"), "Mars 4 Ultra: yes");
+    assert!(
+        field(standing, "fits").starts_with("Mars 4 Ultra: no, off the plate in X by"),
+        "{text}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "--strict has to notice the raft the panel would clip: {text}"
+    );
+}
+
+#[test]
 fn a_model_larger_than_the_machine_is_reported() {
     let path = write_box_stl("oversized", 200.0, 12, 0);
     let output = estimate(&[

@@ -572,6 +572,19 @@ summary-broken-why =
         [one] What is sliced from it may not print.
        *[other] What is sliced from them may not print.
     }
+summary-off-plate =
+    { $count ->
+        [one] { $count } model stands past the build volume
+       *[other] { $count } models stand past the build volume
+    }
+# The supports and raft count with the model they stand under.
+summary-off-plate-why = Whatever stands past it, supports and raft included, is cut off the layers.
+summary-in-inset =
+    { $count ->
+        [one] { $count } model reaches into the plate inset
+       *[other] { $count } models reach into the plate inset
+    }
+summary-in-inset-why = The printer's maker keeps that band clear. It still slices whole.
 
 ## ui/widgets.rs
 

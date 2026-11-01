@@ -3,7 +3,7 @@
 use core_geometry::Scalar;
 use serde::Serialize;
 
-use crate::report::ImportReport;
+use crate::report::{FitCheck, ImportReport};
 
 #[derive(Debug, Serialize)]
 pub struct Model {
@@ -133,13 +133,13 @@ pub(super) fn repair_of(import: &ImportReport) -> Repair {
     }
 }
 
-pub(super) fn fit_of(import: &ImportReport) -> Option<Fit> {
-    let fit = import.fit.as_ref()?;
-    Some(Fit {
-        printer: fit.printer.clone(),
+pub(super) fn fit_of(check: &FitCheck) -> Fit {
+    let fit = &check.fit;
+    Fit {
+        printer: check.printer.clone(),
         fits: fit.fits(),
-        overflow_mm: [fit.overflow.x, fit.overflow.y, fit.overflow.z],
-        outside_mm: [fit.outside.x, fit.outside.y, fit.outside.z],
-        inset_mm: [fit.inset.x, fit.inset.y],
-    })
+        overflow_mm: fit.overflow_mm.to_array(),
+        outside_mm: fit.outside_mm.to_array(),
+        inset_mm: fit.inset_mm.to_array(),
+    }
 }

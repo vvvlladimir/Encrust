@@ -232,7 +232,7 @@ impl PartReport {
             input: part.input.display().to_string(),
             model: import.map(model_of),
             repair: import.map(repair_of),
-            fit: import.and_then(fit_of),
+            fit: part.fit().map(fit_of),
             oriented: part.oriented.as_ref().map(|found| Oriented {
                 degrees: found.degrees(),
                 rotate_deg: found.rotate_degrees().to_array(),
@@ -333,7 +333,7 @@ impl ModelReport {
             part: PartReport {
                 model: Some(model_of(import)),
                 repair: Some(repair_of(import)),
-                fit: fit_of(import),
+                fit: import.fit.as_ref().map(fit_of),
                 ..PartReport::named(&import.path)
             },
             output: None,

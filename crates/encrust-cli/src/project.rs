@@ -13,8 +13,9 @@ use printer_profiles::{MaterialProfile, PrinterProfile};
 use crate::args::JobArgs;
 use crate::pipeline::{cutting_of, overrides_of, raster_window, warn_if_grey_ignored};
 use crate::profiles::catalogue;
+use crate::report::FitCheck;
 use crate::sliced_file::now_unix_s;
-use crate::stage::{Part, Staged};
+use crate::stage::{Part, Staged, bounds};
 
 /// Opens a project to stage its plates from.
 pub fn open(path: &Path) -> Result<Project> {
@@ -108,12 +109,14 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
     Ok(Staged {
         parts: on_plate
             .iter()
-            .map(|object| Part {
+            .zip(&built.models)
+            .map(|(object, model)| Part {
                 input: PathBuf::from(&object.name),
                 import: None,
                 oriented: None,
                 hollow: None,
                 supports: None,
+                standing: bounds(model).map(|bounds| FitCheck::of(&bounds, &built.printer)),
             })
             .collect(),
         models: built.models,

@@ -169,6 +169,13 @@ whole-surface fill is Cmd-Shift-click.
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.
 
+**Past the plate:**
+- Whatever stands past the build volume, model, supports or raft, is striped red in the
+  view, and so is what reaches into the plate inset a printer keeps clear along its edges.
+- With a printer chosen, the plate card says how many models stand past the build volume,
+  whose overhang is cut off the layers, and how many only reach into the inset, which still
+  slices whole. Neither stops the slice.
+
 **Many models:**
 - **Arrange the plate** automatically, largest model first.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use core_geometry::{
-    MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
+    Aabb, MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
     remove_duplicate_faces,
 };
 use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
@@ -47,7 +47,8 @@ pub(super) fn checked(
     let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
     let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
-    let fit = profile.map(|p| FitCheck::of(&stats, p));
+    let bounds = Aabb::new(stats.min, stats.max);
+    let fit = profile.map(|p| FitCheck::of(&bounds, p));
 
     Ok(ImportReport {
         path: input.to_path_buf(),

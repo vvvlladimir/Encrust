@@ -10,6 +10,7 @@ use egui::{Align, Layout, vec2};
 
 use crate::i18n::tr;
 use crate::panels::{Window, destination, slice};
+use crate::plate::{Standing, standing};
 use crate::preview::stack_fingerprint;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
@@ -63,7 +64,7 @@ fn plate(ui: &mut egui::Ui, window: &Window) {
     let material = &window.machine.slicing.material;
     let name = scene.plates().get(scene.active_plate() as usize);
     title_row(ui, name.map_or("", String::as_str), Some(&material.name));
-    broken_verdict(ui, scene);
+    verdicts(ui, window);
     let tally = tally(ui.ctx(), scene);
     let split = (tally.triangles > 0).then(|| Split::of(&tally, material));
     let time = split.as_ref().and_then(|_| plate_time(window));
@@ -163,21 +164,39 @@ fn details(ui: &mut egui::Ui, tally: &Tally, split: &Split, currency: &str) {
     ui.add_space(theme::NOTE_GAP);
 }
 
-/// A model left broken is a verdict here rather than a blocker: what is sliced from it may
-/// be nothing like the model, and this is the last place to turn back.
-fn broken_verdict(ui: &mut egui::Ui, scene: &Scene) {
+/// A model left broken, past the build volume or in the inset is a verdict here rather than a
+/// blocker: this is the last place to turn back before what is sliced is nothing like it.
+fn verdicts(ui: &mut egui::Ui, window: &Window) {
+    let scene = &window.doc.scene;
     let broken = crate::repair::broken_on_the_plate(scene);
-    if broken == 0 {
-        return;
+    let plate = &window.doc.plate;
+    let standing = match plate.name {
+        Some(_) => standing(ui.ctx(), scene, plate),
+        None => Standing::default(),
+    };
+    let off = standing.off;
+    let in_inset = standing.in_inset;
+    let said = [
+        (
+            broken,
+            tr!("summary-broken", count = broken),
+            tr!("summary-broken-why", count = broken),
+        ),
+        (
+            off,
+            tr!("summary-off-plate", count = off),
+            tr!("summary-off-plate-why"),
+        ),
+        (
+            in_inset,
+            tr!("summary-in-inset", count = in_inset),
+            tr!("summary-in-inset-why"),
+        ),
+    ];
+    for (_, text, why) in said.iter().filter(|(count, _, _)| *count > 0) {
+        notice(ui, icon::WARNING, theme::colors().warn, text, why);
+        ui.add_space(FIGURES_GAP);
     }
-    notice(
-        ui,
-        icon::WARNING,
-        theme::colors().warn,
-        &tr!("summary-broken", count = broken),
-        &tr!("summary-broken-why", count = broken),
-    );
-    ui.add_space(FIGURES_GAP);
 }
 
 /// What the machine takes over the plate: as planned once a stack cut from the plate as it

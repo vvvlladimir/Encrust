@@ -361,7 +361,10 @@ resin has one, and the layers likely to fail. `--strict` fails it on the same de
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
-reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371).
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371). Once
+`--supports` has stood them, or for each model of a project, an *On the plate* block answers
+again for the model with its supports and raft where it was put down; `--strict` fails on
+it, and a `batch` model's `fit` is that answer.
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).

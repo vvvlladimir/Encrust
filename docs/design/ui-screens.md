@@ -147,7 +147,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 | Part | Content | Size |
 |---|---|---|
 | Heading | `card_title`: *Plate n* in `text_high`, the resin's name at the right in `text_low` | 36 |
-| Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
+| Verdicts | a `warn` `notice` each when a model on the plate is broken, stands past the build volume or reaches into the inset, 8 apart and over the figures | as tall as its text |
 | Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell in a long language), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
 | Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
 | Foot | the printer row, then the action row | on `base` |
@@ -173,7 +173,9 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 | Nothing to slice | Slice to .goo disabled, and why under it |
 
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
-not print.* In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
+not print.* With a printer chosen, a model whose box, its supports and raft with it, runs past
+the build volume reads *1 model stands past the build volume*; one only in the inset reads
+*1 model reaches into the plate inset*. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
 print until that layer is done), Cured area and Volume of the layer shown, and there is no Details.
 
 ## Layer strip
