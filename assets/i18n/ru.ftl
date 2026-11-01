@@ -1084,6 +1084,11 @@ presets-empty =
         [hollow] Профилей полости пока нет. Сохраните один из строки «Профиль» инструмента или импортируйте.
        *[drain] Профилей дренажа пока нет. Сохраните один из строки «Профиль» инструмента или импортируйте.
     }
+presets-open-tool =
+    { $kind ->
+        [hollow] Открыть инструмент «Полость»
+       *[drain] Открыть инструмент «Дренаж»
+    }
 presets-none = Нет
 presets-cannot-rename = не удалось переименовать профиль
 
@@ -1506,7 +1511,6 @@ position-place = Размещение
 position-on-plate = На платформе
 position-centre = По центру
 position-scale-to-fit = Вписать в объём
-position-imported-size = Исходный размер
 position-lift = Поднять
 position-click-face = Щёлкните по грани
 position-lay-on-face = Положить на грань

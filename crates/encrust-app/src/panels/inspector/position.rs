@@ -201,16 +201,9 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId,
                 scale_rows(ui, object, &mut linked, axes);
             }
             switch(ui, &mut linked, &tr!("position-keep-proportions"));
-            ui.columns(2, |columns| {
-                let fit = tr!("position-scale-to-fit");
-                if secondary_button(&mut columns[0], icon::FIT, &fit).clicked() {
-                    asked = Some(Resize::Fit);
-                }
-                let imported = tr!("position-imported-size");
-                if secondary_button(&mut columns[1], icon::RESET, &imported).clicked() {
-                    asked = Some(Resize::Imported);
-                }
-            });
+            if secondary_button(ui, icon::FIT, &tr!("position-scale-to-fit")).clicked() {
+                asked = Some(Resize::Fit);
+            }
         });
     kept::set(ui.ctx(), linked_id, &linked);
     let Some(object) = scene.get_mut(id) else {

@@ -97,7 +97,8 @@ The two side columns are the widths a drag on their edge leaves them at; everyth
 fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
 the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
 two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
-10, and pills are fully round. Nothing else is rounded.
+10, and pills are fully round; a bordered group of controls is rounded by theirs plus the
+room and stroke around them, so the corners nest. Nothing else is rounded.
 
 ### Motion
 
@@ -135,6 +136,7 @@ paints from tokens only.
 | `describe` | What a block or a setting is for, kept out of the panel and read from a question mark beside the block's title |
 | `nested` | What a switch reveals, set in under it with a rule down its left edge |
 | `list`, `list_row` | Rows a panel adds to — support groups, bands, holes — on one hairline |
+| `rename_box` | A table row's name being typed, on `sunken`, after `start_rename` on a double click |
 | `card` | The frame of anything floating over the viewport |
 | `card_foot` | The foot of a side card, on `base` and rounded to fit inside the card |
 | `progress_bar`, `progress_bar_of` | A running job: filled to its fraction, or running on its own when the job cannot count its work; the second as tall as asked, the printer sheet's 6 |
@@ -172,7 +174,7 @@ paints from tokens only.
 | `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
-| `mode_column` | Toggles stacked in one sunken group as narrow as they are, 4 inside and 4 apart, centred by its parent |
+| `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |

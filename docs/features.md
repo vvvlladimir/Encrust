@@ -789,7 +789,8 @@ address in a video player).
 - The support group picker lists what stands on the plate, then the profiles holding
   nothing, then *Edit the profiles*.
 - Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
-  Save over the one in use or as a new one, and a bin that asks before it deletes.
+  Save over the one in use or as a new one, and a bin that asks before it deletes. In
+  Settings a preset is renamed by a double click on its name, and a link opens its tool.
 - A bin asks before it removes: the first press arms it for 3 s, the second removes; Esc or a
   click elsewhere puts it back. Deleting a profile, a preset or a machine, taking a resin off
   a machine and stopping a print ask the same way, the cost read on hover; none opens a

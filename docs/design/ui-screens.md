@@ -101,7 +101,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume, Imported size); Place (Lay on face, Centre, Mirror, Mirror a copy, Lift off the plate); Auto-orient (Auto / Supports / Peel / Time, Auto-orient) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (Lay on face, Centre, Mirror, Mirror a copy, Lift off the plate); Auto-orient (Auto / Supports / Peel / Time, Auto-orient) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size; a click on the model places one); Already done | Hollow |
@@ -246,8 +246,12 @@ and the one that applies right.
   Release found, a `boxed` box with the New pill, the version, three changes, *And N more*,
   then Download and install (accent), Every change (opens the sheet), Skip this version;
   Looking, the daily switch, *Last looked …* with Check now at its right.
-- A set of profiles is a `table`: words left, figures right, group rows in `text_low`, the
-  picked row washed. The bar: Edit, Duplicate, Export, Delete (`confirm_button`).
+- A set of profiles is a `table`: words left, figures right (`text_mid`), group rows in
+  `text_low`, the picked row washed with a 2-point accent mark at its left edge and its
+  figures in `text_high`. The bar: Edit, Duplicate, Export, Delete (`confirm_button`).
+- *Hollow* and *Drain*: the table alone, a double click turning a name into a `sunken` box
+  over 60 % of its column (Enter or a click elsewhere renames), and under it at the right
+  *Open the Hollow tool* ↗ (or Drain). The bar: Export, Delete.
 - A profile's form is blocks one under another, its header the way back, the profile's
   name and its kind: a 180 title column beside at most 460 of fields, a hairline under each; Reset to defaults in the header. A text row's name stands in a 150 column so
   every box starts on one line; every box ends on the block's right edge, and a figure

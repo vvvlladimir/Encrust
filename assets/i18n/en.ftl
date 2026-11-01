@@ -1033,6 +1033,11 @@ presets-empty =
         [hollow] No hollow profile yet. Keep one from the tool's Profile row, or import one.
        *[drain] No drain profile yet. Keep one from the tool's Profile row, or import one.
     }
+presets-open-tool =
+    { $kind ->
+        [hollow] Open the Hollow tool
+       *[drain] Open the Drain tool
+    }
 presets-none = None
 presets-cannot-rename = cannot rename the profile
 
@@ -1427,7 +1432,6 @@ position-place = Place
 position-on-plate = On the plate
 position-centre = Centre
 position-scale-to-fit = Fit the volume
-position-imported-size = Imported size
 position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face

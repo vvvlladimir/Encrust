@@ -54,7 +54,8 @@ pub use layout::{
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
-    bullet, found_row, issue_list, issue_row, list, list_row, tag, tag_label, two_lines,
+    bullet, found_row, is_renaming, issue_list, issue_row, list, list_row, rename_box,
+    start_rename, tag, tag_label, two_lines,
 };
 pub use menu::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
 pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, zoom_bar};

@@ -225,7 +225,8 @@ pub const CARD_MARGIN: Margin = Margin::symmetric(10, 8);
 /// Side padding of the top bar and the layer strip.
 pub const STRIP_MARGIN: Margin = Margin::symmetric(8, 0);
 
-/// Controls are rounded by 6 points, cards by 8 and windows by 10; nothing else is rounded.
+/// Controls are rounded by 6 points, cards by 8 and windows by 10; a group of controls
+/// nests around theirs.
 pub const R_CONTROL: CornerRadius = CornerRadius::same(6);
 pub const R_SURFACE: CornerRadius = CornerRadius::same(8);
 pub const R_PANEL: CornerRadius = CornerRadius::same(10);
