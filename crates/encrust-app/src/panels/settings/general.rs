@@ -5,10 +5,11 @@ use egui::Ui;
 
 use crate::i18n::tr;
 use crate::panels::settings::form_card;
+use crate::scene::Scene;
 use crate::state::Machine;
-use crate::ui::{hint, switch};
+use crate::ui::{describe, hint, icon, icon_button, switch};
 
-pub fn form(ui: &mut Ui, machine: &mut Machine) {
+pub fn form(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
     let general = &mut machine.general;
     form_card(ui, &tr!("general-start"), |ui| {
         switch(ui, &mut general.start_page, &tr!("general-start-page"));
@@ -18,15 +19,49 @@ pub fn form(ui: &mut Ui, machine: &mut Machine) {
         switch(ui, &mut general.invert_zoom, &tr!("general-invert-zoom"));
     });
     #[cfg(not(target_arch = "wasm32"))]
-    desk(ui, machine);
+    sliced_folder(ui, machine);
+    file_name(ui, machine, scene);
+    #[cfg(not(target_arch = "wasm32"))]
+    profiles_folder(ui, machine);
 }
 
-/// What only a desk has: folders.
-#[cfg(not(target_arch = "wasm32"))]
-fn desk(ui: &mut Ui, machine: &mut Machine) {
-    use anyhow::Context as _;
+/// The template a sliced file is named by, and the name it makes of what is in hand now.
+fn file_name(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
+    let template = &mut machine.general.file_name;
+    form_card(ui, &tr!("general-file-name"), |ui| {
+        ui.horizontal(|ui| {
+            let reset = template != core_engine::DEFAULT_TEMPLATE;
+            let buttons = if reset { RESET_W } else { 0.0 };
+            ui.add(
+                crate::ui::text_box(egui::TextEdit::singleline(template))
+                    .font(crate::ui::theme::code(12.0))
+                    .desired_width((ui.available_width() - buttons).max(0.0)),
+            );
+            if reset && icon_button(ui, icon::RESET, &tr!("general-file-name-reset")).clicked() {
+                *template = core_engine::DEFAULT_TEMPLATE.to_owned();
+            }
+        });
+        let name = crate::panels::slice::file_name(scene, &machine.slicing, template);
+        hint(ui, &tr!("general-file-name-example", name = name));
+        let unknown = core_engine::unknown_tags(template);
+        if !unknown.is_empty() {
+            let tags = unknown
+                .iter()
+                .map(|tag| format!("{{{tag}}}"))
+                .collect::<Vec<_>>();
+            hint(
+                ui,
+                &tr!("general-file-name-unknown", tags = tags.join(", ")),
+            );
+        }
+        describe(ui, &tr!("general-file-name-help"));
+    });
+}
 
-    use crate::ui::{icon, icon_button, inline_button};
+/// Where the save dialog opens.
+#[cfg(not(target_arch = "wasm32"))]
+fn sliced_folder(ui: &mut Ui, machine: &mut Machine) {
+    use crate::ui::inline_button;
 
     let general = &mut machine.general;
     form_card(ui, &tr!("general-sliced-files"), |ui| {
@@ -48,6 +83,15 @@ fn desk(ui: &mut Ui, machine: &mut Machine) {
         });
         hint(ui, &tr!("general-sliced-dir-system"));
     });
+}
+
+/// Where the profiles are kept, opened in the file manager.
+#[cfg(not(target_arch = "wasm32"))]
+fn profiles_folder(ui: &mut Ui, machine: &mut Machine) {
+    use anyhow::Context as _;
+
+    use crate::ui::inline_button;
+
     form_card(ui, &tr!("general-profiles"), |ui| {
         let Some(dir) = printer_profiles::user_dir() else {
             hint(ui, &tr!("general-profiles-nowhere"));
@@ -96,6 +140,9 @@ fn tilde(path: &std::path::Path) -> String {
 /// What a path box leaves for the buttons beside it, points.
 #[cfg(not(target_arch = "wasm32"))]
 const PATH_BUTTONS_W: f32 = 170.0;
+
+/// What the template's box leaves for Reset beside it, points.
+const RESET_W: f32 = 40.0;
 
 /// Shows `dir` in the system's file manager, making it first: most users have never
 /// saved a profile, so it may not be there yet.

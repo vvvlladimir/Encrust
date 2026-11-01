@@ -241,8 +241,10 @@ and the one that applies right.
   (Keyboard shortcuts ↗) under 10.5 capital group names, and Machine and resin ↗ at the foot.
 - *Appearance*: Theme as three `theme_card`s, System (both halves, *Now light* or *Now
   dark*), Light, Dark, the hint under them; Language; Motion. *General*: Start, Viewport,
-  Sliced files and Profiles, each folder a read-only path box (`~` for home) with its button
-  beside it and a hint under. *Updates*, its title followed by *This is 0.6.0* in `text_low`:
+  Sliced files, File name and Profiles, each folder a read-only path box (`~` for home) with its button
+  beside it and a hint under; File name an editable box in code type, the reset arrow beside
+  it once it differs from `{model}`, *Now saved as …* under it, an unknown `{tag}` named
+  under that, the placeholders behind the question mark. Browser: Start, Viewport, File name. *Updates*, its title followed by *This is 0.6.0* in `text_low`:
   Release found, a `boxed` box with the New pill, the version, three changes, *And N more*,
   then Download and install (accent), Every change (opens the sheet), Skip this version;
   Looking, the daily switch, *Last looked …* with Check now at its right.

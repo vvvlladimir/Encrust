@@ -36,6 +36,7 @@ core-geometry.workspace = true
 core-joint.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true
+jiff.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-slicer.workspace = true

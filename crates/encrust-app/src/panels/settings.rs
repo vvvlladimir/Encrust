@@ -176,7 +176,7 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
             appearance::form(ui, window.machine);
         }),
         Section::General => scrolled(&mut child(ui, content), |ui| {
-            general::form(ui, window.machine);
+            general::form(ui, window.machine, &window.doc.scene);
         }),
         Section::Updates => scrolled(&mut child(ui, content), |ui| {
             updates::form(ui, &mut window.machine.updates);

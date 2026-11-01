@@ -4,6 +4,7 @@
 mod bake;
 mod cut;
 mod error;
+mod file_name;
 mod open;
 mod outputs;
 mod plate;
@@ -15,6 +16,7 @@ mod trial;
 pub use bake::{Baked, bake, parts};
 pub use cut::{Cutting, cut};
 pub use error::EngineError;
+pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::plate_outputs;
 pub use plate::{Model, Plate};

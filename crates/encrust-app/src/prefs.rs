@@ -146,6 +146,8 @@ pub struct General {
     pub invert_zoom: bool,
     /// Where the dialog a sliced file is saved from opens, or `None` for the system's choice.
     pub sliced_dir: Option<std::path::PathBuf>,
+    /// What a sliced file is named after, `{model}` and the like; see `core_engine::file_stem`.
+    pub file_name: String,
     /// The language the window is written in, or `None` for the system's.
     pub language: Option<Language>,
     /// Whether nothing in the window animates.
@@ -182,6 +184,7 @@ impl Default for General {
             start_page: true,
             invert_zoom: false,
             sliced_dir: None,
+            file_name: core_engine::DEFAULT_TEMPLATE.to_owned(),
             language: None,
             reduce_motion: false,
             appearance: Appearance::System,

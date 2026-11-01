@@ -450,6 +450,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only), 0217 (the footer only) and 0218 (the Layers tool and the Mirror action) |
 | [0106](0106-a-shortcut-lives-in-the-table.md) | Every key the window answers lives in one table | Accepted; keys that cannot be rebound are superseded by 0386 |
 | [0386](0386-the-user-chooses-the-keys-in-the-sheet.md) | Let the user choose the keys, in the sheet that lists them | Accepted |
+| [0387](0387-a-sliced-file-is-named-by-the-users-template.md) | Name a sliced file by a template the user writes, dated with `jiff` | Accepted |
 | [0107](0107-take-a-colour-token-not-floats.md) | A colour crosses into the renderer as a token, not as floats | Accepted |
 | [0108](0108-the-machine-is-drawn-from-the-build-volume.md) | The build platform is drawn from the build volume, not loaded from a model | Superseded by 0219 |
 | [0109](0109-the-preview-is-read-against-the-plate.md) | The preview is read against the plate, not against the panel | Accepted |

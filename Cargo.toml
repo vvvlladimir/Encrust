@@ -85,6 +85,8 @@ clap_mangen = "0.3"
 indicatif = { version = "0.18", default-features = false }
 ctrlc = "3.5"
 directories = "6.0"
+# The date and time a sliced file's name may carry; see docs/decisions/0387.
+jiff = "0.2"
 
 # Plain HTTP and WebSocket on the local network only, so no TLS stack is pulled in.
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }

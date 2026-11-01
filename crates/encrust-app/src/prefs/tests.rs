@@ -268,6 +268,7 @@ fn how_the_window_behaves_survives_the_round_trip() {
         start_page: false,
         invert_zoom: true,
         sliced_dir: Some(std::path::PathBuf::from("/prints")),
+        file_name: "{model}_{layer}um".to_owned(),
         language: Some(crate::i18n::Language::Russian),
         reduce_motion: true,
         appearance: Appearance::Light,
