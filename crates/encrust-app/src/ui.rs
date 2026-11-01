@@ -9,6 +9,7 @@ pub mod kept;
 pub mod theme;
 mod widgets;
 
+pub use widgets::colour_field;
 pub use widgets::paragraph;
 pub use widgets::window_frame;
 pub use widgets::{

@@ -18,8 +18,9 @@ use crate::settings::{Node, ResinDraft, rename_resin};
 use crate::state::Machine;
 use crate::ui::theme::layout::settings_resin::SMALL_DROPDOWN_W;
 use crate::ui::{
-    DropdownFace, DropdownRow, Held, Segment, Segmented, describe, dropdown, dropdown_menu,
-    dropdown_row, field_label, hint, limited_row, number_field, number_row, text_row, theme,
+    DropdownFace, DropdownRow, Held, Segment, Segmented, colour_field, describe, dropdown,
+    dropdown_menu, dropdown_row, field_label, hint, limited_row, number_field, number_row,
+    text_row, theme,
 };
 
 const FINE_STEP: f64 = 0.01;
@@ -194,7 +195,13 @@ fn details(ui: &mut egui::Ui, values: &mut MaterialProfile) {
     ui.horizontal(|ui| {
         field_label(ui, &tr!("resin-colour"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.color_edit_button_srgb(&mut values.details.color);
+            let [r, g, b] = values.details.color;
+            let opacity = (1.0 - values.details.clarity.clamp(0.0, 1.0)) * 255.0;
+            let mut rgba = [r, g, b, opacity.round() as u8];
+            if colour_field(ui, &mut rgba, &tr!("resin-colour")) {
+                values.details.color = [rgba[0], rgba[1], rgba[2]];
+                values.details.clarity = 1.0 - f32::from(rgba[3]) / 255.0;
+            }
         });
     });
     number_row(

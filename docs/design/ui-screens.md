@@ -50,7 +50,8 @@ Test prints ▸ · Save, Save as · Slice to .ext (why when off), Slice all N pl
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
 Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,
-See through models, ticked when on · Keyboard shortcuts.
+See through models, Show as printed, Depth of field when shown as printed, ticked when on ·
+Keyboard shortcuts.
 
 The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
 flask glyph in the resin's colour and resin with a caret, sliders glyph and `layer height ·
@@ -205,8 +206,8 @@ track. With no stack it reads *No layers*.
 - **Gizmo drag:** the amount by the cursor on a size label's plate, signed, in the axis
   colour (text colour for the circle); for a move, a 3 point dot at the start, a dashed line
   to the pivot, and the arrow's line through the start at 45 %. Size labels clear the rings.
-- **View tools:** Frame the view, Plate grid, See through, Perspective, as 26 squares in one
-  card; the on ones washed.
+- **View tools:** Frame the view, Plate grid, See through, As printed, Perspective, as 26
+  squares in one card; the on ones washed.
 - **Notices:** each a card 40 tall: glyph in its colour (`warn` warning, `danger`
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
@@ -270,7 +271,8 @@ and the one that applies right.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and
   a tick on the one in use, Add a machine with import and a delete `bin_button` at the
   foot) and gives the picked one tabs: Resins (filter chips, Import, Add a resin, a table,
-  *Take off this machine* as a `confirm_button`, *Use this resin*), Machine (blocks:
+  *Take off this machine* as a `confirm_button`, *Use this resin*; a resin's form names its
+  colour and opacity in one `colour_field`), Machine (blocks:
   Machine, Display with the pixel size right-aligned under its fields, Build volume) and
   Network (protocol, printers as rows with their live state, add by address, the ones found
   nearby as dashed rows with Add).

@@ -254,6 +254,11 @@ impl ModelInstance {
         self
     }
 
+    /// Whether it paints a surface of full coverage, which nothing behind shows through.
+    pub fn is_opaque(&self) -> bool {
+        self.color[3] >= 1.0 && self.surface > 0.5
+    }
+
     /// Whether the placement mirrors the model, which turns its winding on screen.
     pub fn is_mirrored(&self) -> bool {
         Mat3::from_mat4(Mat4::from_cols_array_2d(&self.model)).determinant() < 0.0

@@ -143,7 +143,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted; the floor is answered the same way by 0203 |
 | [0203](0203-a-bake-says-how-low-the-material-stands.md) | A bake says how low the material stands, and the plate is warned about that | Accepted |
 | [0258](0258-copies-of-a-model-are-cut-once.md) | Cut a model once however many copies of it stand on the plate | Accepted |
-| [0259](0259-the-viewport-draws-heavy-models-at-levels-the-card-can-afford.md) | Draw heavy models at levels the card can afford, chosen by what they show on screen | Accepted |
+| [0259](0259-the-viewport-draws-heavy-models-at-levels-the-card-can-afford.md) | Draw heavy models at levels the card can afford, chosen by what they show on screen | Accepted; any step while moving is superseded by 0391 |
+| [0391](0391-a-moving-frame-gives-up-only-so-much.md) | Let a moving frame give up only so much, and give up effects before faces | Accepted |
 | [0260](0260-the-window-keeps-cavity-fields-to-a-budget.md) | Keep cavity fields in the window, to a fixed budget, so cuts re-carve without a build | Accepted |
 
 ### Rasterisation
@@ -466,6 +467,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336, Export and the column of tools by 0348 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |
+| [0390](0390-the-render-view-draws-the-print-as-it-comes-off.md) | Draw the print as it comes off the printer in a view of its own | Accepted |
 | [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |
 | [0221](0221-the-columns-float-over-a-stage-the-width-of-the-window.md) | Float the side columns over a stage the width of the window | Accepted; the plate column's fold is superseded by 0230 |
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |

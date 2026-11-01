@@ -120,6 +120,17 @@ any mesh not already on the GPU keyed by its `Arc` address, and the draw list. `
 borrows immutably and replays it: the line pipeline once, then the model pipeline per
 object, the word, then the shadow, before the caps and the markers.
 
+Each model pipeline is built twice from the shader's overridable constants. The opaque
+form writes without blending and has no `discard`: a tiling card hides a fragment only
+behind such a draw, and a desktop card tests depth before it shades only when nothing
+discards. The clipped form blends and discards what the section, a drain cut or a pocket
+takes away. A model is drawn opaque when its colour has full coverage, it is a surface
+rather than a volume, and the frame has no section or drain cut (`Globals::clips_models`).
+The opaque models go first, then the clipped ones. `LOOK` also fixes which light a
+pipeline is under, so the working view's pipeline carries no studio code and its
+registers, and the studio's is built again for a moving camera (see the key's shadow). The
+x-ray and the clear resin keep one form each.
+
 ## Vertex layouts
 
 Models are drawn indexed and flat-shaded. Averaged normals would round off exactly the
@@ -394,6 +405,192 @@ holds against the ones asked for and uploads again when they differ, which is th
 that: without it the later frame asks for a range no piece lines up with and paints
 nothing at all.
 
+## As printed
+
+The render view is a view of its own, like the x-ray: the view tools and the View menu
+toggle it (ADR 0390). Overhangs, cuts and bands still wash over it; picking, the contact
+shadow and the levels are those of the working view. `globals.look` carries it: the layer
+height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot distance.
+
+- **Resin.** Every model and support instance takes the resin's `details.color` in place of
+  the theme's model, selection and support tints: the selection tint is not drawn.
+- **Studio.** `studio` replaces `lit`. The room every surface sees round itself is
+  `studio_sky`: the cove fading up into a pale sky, and three softboxes — the key, one
+  overhead, a warm fill opposite the key — each a bright disc with a soft rim. It is baked
+  once, and again only when the theme's lights change, into a 256 × 128 equirectangular
+  RGBA16Float map of six mips, mip *i* prefiltered for roughness *i*/5 by 128 GGX
+  importance samples on Hammersley's sequence, the normal, the eye and the reflection taken
+  as one: Karis's split sum (2013). A surface reads its reflection from the mip its
+  roughness picks, scaled by Karis's analytic fit of the environment BRDF (2014) in place
+  of the split sum's table, and dimmed where the key's shadow falls; it reads the roughest
+  mip about its normal as the light the room gives it, and adds the key's own light,
+  wrapped round its edge, where the shadow lets it. A resin is 0.32 rough, 0.55 where its
+  layers groove it; the props carry their own. All of it is summed in linear light
+  (`radiance`: every colour token and resin decoded from gamma first) and handed to
+  `filmic`, AgX — Rec. 2020 inset, log2 exposure from −12.47 to +4.03 EV, the fitted
+  sigmoid polynomial, outset — with a milder punchy look, the curve raised to 1.15, before
+  it goes out in the target's gamma. AgX was chosen over ACES for leaving a saturated
+  resin's hue alone as it brightens. The backdrop goes through the same curve; the working
+  view does not.
+- **Layers.** `stepped` turns a surface's normal towards the stair a printer cuts it into:
+  within each layer the share `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a
+  vertical riser, so a wall shows only the lip line each layer leaves, a gentle slope the
+  steps, a flat top none. The lip darkens by `LAYER_LIP` over a pixel. Both fade to the
+  smooth surface between `LAYER_FADE_FROM` and `LAYER_FADE_TO` layers a pixel, under about
+  four pixels a layer, where a stair would only beat against the pixel grid. The overhang
+  test still reads the smooth normal.
+  Layers too fine to see still groove the surface, and the grooves stretch its highlight
+  across them, a satin sheen. As glTF's `KHR_materials_anisotropy` does it, reflections are
+  taken about a normal bent towards the one facing the eye in the plane across the layers,
+  by the layers' roughness (below) times `SHEEN_BEND`; and the key adds Ward's anisotropic
+  lobe, 0.12 wide along the layers and up to 0.67 across them.
+- **Thin parts glow.** At rest the thickness pass below runs for any resin, and the models
+  are drawn by `glow_fragment` against it: light through a thin part, after Barré-Brisebois
+  and Bouchard (GDC 2011) — the key seen through the part, bent towards its
+  normal by 0.2, narrowed to the power of 4, over a little from all round — carried through
+  `exp(−d / 2.5 mm)` of a part `d` thick, so an ear, a finger or an edge lights up in the
+  resin's colour with the key behind it. The thickness stands in for the paper's baked
+  local thickness. An open mesh, which measures none, does not glow.
+- **Clear resin.** Modelled after glTF's `KHR_materials_volume`, with
+  the surface the layers leave. A resin's opacity, picked with its colour, sets an
+  attenuation distance *D* from 1 mm, barely clear, to 300 mm, water-clear
+  (`1 · 300^clarity`). Two passes come before the frame. `measure_thickness` draws every
+  surface of the clear models, nothing culled and no depth, adding its distance from the
+  eye less the pivot's into an R16Float plane: a front face subtracts and a back face adds,
+  so the plane holds the resin each ray crosses, a hollow's cavity taken out. The exit pass
+  keeps each pixel's nearest back face, its outward normal and distance, in an RGBA16Float
+  plane: where the light inside first leaves the part. The scene pass then draws all else,
+  keeping its depth, and ends by laying every face of the clear models into it faintly —
+  the studio's reflection off it, brightest at a grazing angle, over a trace of the resin's
+  colour — so walls inside, a hollow's, a lattice's, the far side, read through the part.
+  Its colour plane is copied out, and a second pass draws the models' front faces by
+  `clear_fragment` over that copy.
+
+  Each fragment traces the light per channel, the resin's index 1.49, 1.50 and 1.52 for
+  red, green and blue: bent into the part at the surface, carried to the exit face, bent
+  out of it, or turned back inside past the critical angle, and carried as far again; it
+  reads the copy where that lands. What stands behind is displaced, magnified and fringed.
+  The layers decide the surface. Where they are a few pixels apart or more, the entry is
+  the stair `stepped` cuts, so what is behind is broken into bands. Finer than that no
+  picture resolves them and they become roughness, as a normal map is filtered into it: the
+  risers and treads turn the light as far apart as they share the surface evenly,
+  `2·√(t·(1−t))` for a tread share `t`, at least 0.3 on a wall for its lips, nothing on a
+  flat top. The two faces' roughness add, and spread the light 0.35 rad a unit over the
+  thickness crossed, across the layers only: the eight taps the copy is read through lie on
+  an ellipse long up the surface's slope as it lands on screen, 1.5 px across it. Over the
+  thickness *d* the light takes the resin's colour as `colour^(d/D)` and clouds over by
+  `1 − e^(−d/D)`, within 400 mm even in the clearest resin as curing hazes it, and a rough
+  surface scatters 0.28 of its roughness back as a white haze, all into the resin lit as an
+  opaque one; Schlick's Fresnel shares it with the studio's reflection off the stepped
+  surface. Where the copy holds nothing, the backdrop shows. Off under the x-ray, and
+  while the camera moves, when the part is drawn opaque (ADR 0391).
+- **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
+  shades creases from the depth plane, which is kept past the scene pass for it, by
+  ground-truth ambient occlusion (Jimenez et al. 2016).
+  `present.wgsl` rebuilds each pixel's point through the inverse projection and its normal
+  from the shorter step to a neighbour, so a silhouette does not tear it; along three
+  slices turned by interleaved-gradient noise, and a golden-ratio share of a turn more each
+  frame of a picture at rest, it finds the horizon both ways in four steps each, spaced
+  quadratically out to `REACH_MM` (4 mm) and at most 48 px, each sample's say fading over
+  the outer 61.5 % of the reach; and integrates the light the horizons let in
+  over the arc the normal projected into the slice sees, cosine-weighted. It only ever
+  darkens, in linear light. The paper's spatio-temporal denoise is the picture at rest:
+  sixteen jittered frames average its noise away, so it has no blur pass of its own.
+- **The room.** The printer is put away: no plate, grid, outline or Front word. The scene
+  pass starts with `backdrop_fragment` in `props.wgsl`, which turns each pixel back into a
+  line of sight through the inverse view-projection and finds where it meets a
+  photographer's infinity cove round the mat's middle: the table 3.05 mm under the plate's
+  level out to 1.4 m, curving up over 0.7 m into an upright wall, so there is no horizon. The
+  room inside is convex, so a ray leaves it once: a floor point inside the curve or a wall
+  point above it, each met in closed form — a plane, an upright cylinder — is that exit.
+  Any other ray meets the curve, marched eight steps from where it enters the curve's ring
+  by its distance to the curve's circle, never past the wall's. Drawn unblended, the cove
+  is hidden wherever an opaque model is drawn over it. The cove is lit by the studio's ambient and key in linear light,
+  falls off 15 % towards the wall as a lit set's background does, takes the key's
+  shadow and the mat's own on the table, and goes out through the same curve. It has no
+  geometry. In the copy pass the frame's corners darken by up to 22 % from 45 % of the way
+  out, as a lens vignettes.
+- **The set.** A self-healing cutting mat lies under the models, its top 0.05 mm under the
+  plate's level so the models' contact shadow never fights it, and things everyone knows
+  the size of lie round them: in front, a 149.5 mm ballpoint and a 150 mm steel ruler; on
+  the left, a one-euro coin (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the
+  right, a banana swept along a 110 mm arc, about 180 mm long. `references::lay_out` places them 20 mm clear of
+  the models' box seen from the front, each row on its own side so none can meet another,
+  and picks the smallest mat sold, A3 to A0 either way round, that takes the whole set with
+  a 30 mm margin, centred on it. Every mesh is built once from `core_geometry` primitives, a
+  revolve or a sweep, with normals smoothed within 40°; the mat is a unit box its placement
+  sizes, and the shader reads its size from `globals.mat`. Each is drawn as a marker, never
+  picked, sliced or capped, its instance naming its material in the overhang slot as
+  `−2 − material`; `prop_colour` paints it in its own millimetres under `finish`, the
+  studio's light with a metal term: the mat's 10 mm grid, every fifth line heavier, with a
+  45° line from each near corner and the centimetres printed along two edges in
+  seven-segment figures; the can's lacquered wrap between bare metal of #151618, its lid
+  sunk in a rolled rim under its tab, the whole can turned 30° so its print faces the models
+  on its right; the banana yellowing into a brown stem, dark at its blossom end, streaked and
+  freckled by smooth value noise; the coin's two metals inside its raised rim. Only the can's
+  label is a picture.
+- **The can's print.** The wrap carries `assets/props/can-label.jpg`, the one picture the set
+  ships; any picture `image` decodes replaces it by swapping the file. `references/can_print.rs`
+  sets it as high as the can's whole straight wall, 5 to 104.2 mm (`CAN_WALL_MM`), and as wide
+  as it is in proportion, never past the girth, in the middle of a 2048 texel girth; each row
+  of the gap behind fades from the picture's right edge round to its left, each edge the mean
+  of its outer 1 %, so the wrap closes with no seam. A mip chain is averaged in linear light,
+  the texels kept encoded, since `finish` linearises every colour it takes. It is drawn off
+  the drawing thread when the window opens and bound beside the globals the first frame the
+  render view stands the props, a dark texel standing in until then. A prop is shaded under
+  its material's switch, where no derivative may be taken, so `can_print` picks its level
+  from the pixel's footprint in millimetres.
+- **The key's shadow.** Everything in the set, the models and the props and the mat, casts
+  a shadow from the key light. `light.rs` draws their depth from the key, orthographic over
+  the mat and 60 mm past it, into a 2048² map: an A2 mat is 0.3 mm a texel. It is drawn
+  only when what casts it changes and the camera rests, as the contact shadow is, so an
+  orbit costs nothing; a map just made is cleared to all lit. It is read as percentage-closer
+  soft shadows (Fernando 2005), the key a softbox 4° across: twelve probes 12 mm
+  round a point find what stands nearer the key, each against the depth the point's own
+  surface would have there, so a slope the key falls across is not taken for something over
+  it (receiver plane depth bias); the penumbra is the depth under the nearest blockers
+  times the softbox's angle, at least 0.4 mm, and twelve compared taps over it give the
+  light. A shadow is sharp where an object meets the mat and widens away from it. While the
+  camera moves, when a penumbra is not looked at, the models and the backdrop are drawn by
+  pipelines whose `LOOK` reads the map in one filtered tap, a hard edge. The map
+  is orthographic, so its depth and its texels are millimetres by factors read off its
+  matrix. Every surface under the studio's `finish`, and the table under the backdrop,
+  reads it, and loses the key's diffuse and its reflection where it is shaded. Faces are
+  pushed back by their slope as they are drawn and points lifted 0.4 mm off their surface
+  as they are read, up to 2.4 mm as they turn from the key, so a lit surface never shades
+  itself. A clear resin casts none: it lets the key through, and what grounds it is the
+  contact shadow.
+
+- **A picture at rest.** Once the camera stops, the render view sharpens over frames, by
+  temporal accumulation with no reprojection: each frame is drawn a fraction of a pixel
+  aside, by Halton (2, 3) as TAA jitters — the backdrop's line of sight with it — and
+  averaged into an RGBA16Float plane by a constant blend of `1/(n+1)` for the n-th, a
+  running mean the copy then shows. After sixteen frames the picture is held and nothing is
+  drawn until it changes; the window asks for a frame at a time until then. What it is a
+  picture of is hashed — the whole uniform, the lens, every mesh, face range and placement
+  drawn, and every line, mark and label — so any change, not only the camera's, starts it
+  again. Edges lose their steps, and the grain of the crease shading, the frosting and the
+  soft shadows averages away.
+
+- **Depth of field.** With the View menu's *Depth of field*, a picture at rest is seen
+  through a lens: each of its frames is drawn from another point of the aperture, by
+  Halton (5, 7) on the disc, and the view sheared back so the plane in focus stands still.
+  Averaged over the frames, what stands off it blurs with true occlusion and no
+  post-process. The models stay sharp: the plane lies at the harmonic mean of their nearest
+  and farthest depth, where both blur alike, and the aperture opens to 1.6 % of the focus
+  distance in radius but no wider than keeps that blur within half a point. Close to a
+  model, its own depth leaves the lens nearly a pinhole and the set behind barely blurs;
+  further out the set blurs more. Without a model the lens focuses on the point the camera
+  turns about. It needs perspective; without, the lens is a pinhole.
+
+On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
+opaque and unshaded.
+
+The planes only the render view reads go when it is turned off and come back the first
+frame it is on again: at 4K the thickness, exit, its depth and the copy behind are some
+150 MB, and the averaged plane 66 MB. An opaque resin reads only the thickness, so its exit
+and copy are a texel each.
+
 ## The Cut tool's plane
 
 The plane is traced on the model rather than drawn in the air. The globals carry it as
@@ -440,9 +637,12 @@ nothing raises it, and a resting frame draws everything whole.
 **Which level.** A level's error times the pixels a millimetre spans at the model's
 nearest to the eye is what it shows on screen. `allot` starts every model whole and, while
 the frame is over its budget, takes the step that shows least next. While the camera
-moves any step may be taken; at rest only those under half a pixel, which cannot be seen,
-so a card with room to spare draws everything whole and one without gives up only what
-is not seen. Once the camera stops, every model comes back a level a frame towards what
+moves no step past 4 px may be taken (ADR 0391), so a model in motion still reads as
+itself and a frame past that is slower instead; at rest only those under half a pixel,
+which cannot be seen, so a card with room to spare draws everything whole and one without
+gives up only what is not seen. A picked model keeps a fifth of its faces at least. The
+budget is learnt afresh when the render view is turned on or off, which costs more a face
+and a frame, and while the camera moves that view draws a clear resin opaque. Once the camera stops, every model comes back a level a frame towards what
 the rest allows, never coarser than it is, so detail sharpens over a few frames instead
 of all at once.
 
@@ -450,6 +650,13 @@ A level may not be a cap's count or a cavity's faces: while a cut is capped ever
 drawn whole, and at rest a hollowed model is too, since the trapped resin it shows is drawn
 from its own mesh's face ranges. A hole's inside is drawn against the level drawn, so it
 still meets the surface around it. The shadow is not baked while levels still change.
+
+A model moved — dragged by the gizmo or the pointer, or typed into the inspector — counts
+as motion for the same 0.3 s as the camera: every model is drawn at the moving levels, the
+one in hand keeping its fifth. Unlike a turn of the camera, its shadow and the key light's
+map are baked again each frame, from the light levels, or they would stay where it was. A
+model added or taken away, or another plate shown, moves nothing. The budget learns only
+from the camera's motion, whose frames bake no shadow.
 
 ## Measuring a frame
 

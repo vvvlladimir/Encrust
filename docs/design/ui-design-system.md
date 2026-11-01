@@ -209,6 +209,7 @@ paints from tokens only.
 | `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure, in a slot as wide as the widest short unit, so a column's figures stand on one line |
 | `carried_row` | A `number_row` the window changed for the user: its name in `warn` and a button that puts the old value back |
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
+| `colour_field` | A `FIELD_H` swatch of a colour over a checkerboard; a click opens a picker: a saturation and value square, a hue strip, an opacity strip over the checkerboard, and the colour as `#RRGGBBAA` beside its opacity |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
 | `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
 | `page_heading` | A page's title and, smaller and quieter after it, the name it belongs under: a machine and its maker |
@@ -263,7 +264,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Print settings, General and the profiles | `SLIDERS_HORIZONTAL`, `SLIDERS` |
 | Machine, resin, network | `PRINTER`, `FLASK`, `WIFI_HIGH` |
 | Model view, model beside layer, layer | `CUBE`, `COLUMNS`, `SQUARE_HALF` |
-| Frame, grid, see through, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `PERSPECTIVE` |
+| Frame, grid, see through, as printed, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `SPARKLE`, `PERSPECTIVE` |
 | Empty plate | `CUBE_FOCUS` |
 | Duplicate, array, arrange, remove | `COPY`, `GRID_NINE`, `LAYOUT`, `TRASH` |
 | Visible, hidden | `EYE`, `EYE_SLASH` |

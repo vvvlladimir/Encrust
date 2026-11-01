@@ -1,6 +1,6 @@
 # 0259. Draw heavy models at levels the card can afford, chosen by what they show on screen
 
-- **Status:** Accepted
+- **Status:** Accepted; any step while the camera moves is superseded by 0391
 - **Date:** 2026-10-13
 
 ## Context

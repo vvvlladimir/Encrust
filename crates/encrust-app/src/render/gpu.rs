@@ -15,21 +15,40 @@ use crate::scene::Mapped;
 use crate::ui::theme;
 
 mod buffers;
+mod can_print;
+mod clear;
 mod cost;
 mod draws;
+mod environment;
+#[cfg(test)]
+mod fixtures;
+mod globals;
+mod light;
 mod paint;
 mod pipelines;
+mod settle;
 mod shadow;
 mod textures;
 mod timer;
 
 pub use draws::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, ModelDraw, ReliefDraw, TrapBox,
+    CutDraw, CutLine, Desk, DrainCut, ExposureBand, Floor, FrameInput, Look, ModelDraw, ReliefDraw,
+    TrapBox,
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
+use can_print::CanPrintTexture;
+use clear::Clear;
+pub(in crate::render) use clear::reads_planes;
 use draws::{Splits, cut_draws, splits_of};
-use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
+use environment::Environment;
+use globals::{Globals, globals_of};
+use light::KeyShadow;
+use pipelines::{
+    Builder, Capping, Cutting, Facing, Markers, Models, Shaded, Studio, globals_layout,
+};
+pub use settle::SETTLED_SAMPLES;
+use settle::Settling;
 use shadow::ContactShadow;
 
 /// Depth and stencil format of the viewport's own target, `render::target`. The stencil
@@ -62,61 +81,6 @@ pub const MAX_BANDS: usize = 8;
 /// unreported. See `docs/decisions/0200`.
 pub const MAX_POCKETS: usize = 32;
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-struct Globals {
-    view_projection: [[f32; 4]; 4],
-    /// The lights and the ambient, from `theme::Lighting`; every `w` is unused padding.
-    key_towards: [f32; 4],
-    fill_towards: [f32; 4],
-    key_color: [f32; 4],
-    fill_color: [f32; 4],
-    sky: [f32; 4],
-    ground: [f32; 4],
-    /// The plate the contact shadow lies on, plate millimetres: `xy` its near corner and
-    /// `zw` its size. `shadow_color.a` is how dark the shadow goes.
-    shadow_area: [f32; 4],
-    shadow_color: [f32; 4],
-    /// The colour the plate's own surface is filled with, over the same area, and the
-    /// grid drawn into it: `grid` is the minor and the major spacing, millimetres, and
-    /// 1.0 in `z` while the grid is shown.
-    plate_color: [f32; 4],
-    grid_minor: [f32; 4],
-    grid_major: [f32; 4],
-    grid: [f32; 4],
-    /// `xyz` is where the camera stands, plate millimetres; `w` is how much of itself a
-    /// surface keeps at most while the models are drawn seen through, and 0.0 while they
-    /// are not. See `docs/design/viewport.md`.
-    eye: [f32; 4],
-    /// `x` is the height the models are cut at, plate millimetres, and `y` is 1.0 while
-    /// there is a cut at all; `z` and `w` are the same for the cut from below.
-    section: [f32; 4],
-    /// `x` is how many of `cuts` carry a drain this frame, `y` how many of `bands` carry
-    /// an exposure, and `z` the height below which a band has no effect.
-    counts: [f32; 4],
-    /// `xyz` washes a surface that needs holding up; `w` is unused padding.
-    overhang_color: [f32; 4],
-    /// `xyz` washes whatever shows of a model's inside; `w` is unused padding.
-    inside_color: [f32; 4],
-    /// `xyz` is the high corner of where a model stands unmarked, plate millimetres; `w` is
-    /// 1.0 while what stands past it is marked.
-    volume: [f32; 4],
-    /// `xyz` is the low corner of the same box; `w` is unused padding.
-    volume_low: [f32; 4],
-    /// `xyz` marks whatever stands past the build volume; `w` is unused padding.
-    outside_color: [f32; 4],
-    /// The Cut tool's plane as `xyz` its normal and `w` its offset along it, millimetres.
-    cut_plane: [f32; 4],
-    /// The box the plane is traced on, plate millimetres; `cut_low.w` is 1.0 while it is.
-    cut_low: [f32; 4],
-    cut_high: [f32; 4],
-    /// `xyz` is the colour the plane is traced in; `w` is unused padding.
-    cut_color: [f32; 4],
-    cuts: [DrainCut; MAX_CUTS],
-    bands: [ExposureBand; MAX_BANDS],
-    pockets: [TrapBox; MAX_POCKETS],
-}
-
 /// A mesh already on the GPU, flat or smooth-shaded and ready to draw.
 ///
 /// The `Arc` is held so the address it was cached under cannot be reused by a different
@@ -140,12 +104,13 @@ struct CachedMesh {
 /// How long a mesh no frame draws stays on the card.
 const KEEP_UNDRAWN: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// One mesh to draw this frame: its cache key, whether its placement mirrors it, and
-/// which of its faces to draw.
+/// One mesh to draw this frame: its cache key, whether its placement mirrors it, which of
+/// its faces to draw, and whether it is a surface nothing shows through.
 struct Drawn {
     key: usize,
     mirrored: bool,
     faces: Range<usize>,
+    opaque: bool,
 }
 
 /// One textured model on the card: its triangles with their coordinates, and its images
@@ -161,8 +126,23 @@ struct CachedRelief {
 pub struct ViewportResources {
     globals: wgpu::Buffer,
     globals_bind_group: wgpu::BindGroup,
-    model_pipeline: Facing,
+    globals_layout: wgpu::BindGroupLayout,
+    /// The globals with the key's map stood in for, bound while the map is drawn.
+    casting_bind_group: wgpu::BindGroup,
+    key: KeyShadow,
+    /// The studio as reflections see it, baked for the render view.
+    environment: Environment,
+    /// The print round the render view's can.
+    can_print: CanPrintTexture,
+    settling: Settling,
+    models: Models,
     xray_pipeline: Facing,
+    /// The clear-resin view. `reads_planes` is false on a WebGL canvas, where the render view
+    /// is drawn opaque and its creases unshaded.
+    clear: Clear,
+    reads_planes: bool,
+    /// The render view's room, drawn in place of the plate.
+    backdrop: Studio<wgpu::RenderPipeline>,
     marker_pipelines: Markers,
     line_pipeline: wgpu::RenderPipeline,
     wide_line_pipeline: wgpu::RenderPipeline,
@@ -230,81 +210,25 @@ struct Frame {
     bottom_cap_vertices: u32,
     cutting: bool,
     cutting_bottom: bool,
+    /// Whether a section or a drain cut may take a fragment of any model away.
+    clipped: bool,
     xray: bool,
-}
-
-/// What a fixed-size array the shader reads takes of `from`, and how much it took.
-fn clamped<T: Copy + Default, const N: usize>(from: &[T]) -> ([T; N], f32) {
-    let mut into = [T::default(); N];
-    let taken = from.len().min(N);
-    into[..taken].copy_from_slice(&from[..taken]);
-    (into, taken as f32)
-}
-
-/// One frame's uniform: the camera, the light, and everything subtracted or washed over a
-/// model per fragment.
-fn globals_of(frame: &FrameInput<'_>) -> Globals {
-    let (cuts, taken) = clamped::<_, MAX_CUTS>(frame.cuts);
-    let (bands, banded) = clamped::<_, MAX_BANDS>(frame.bands);
-    let (pockets, held) = clamped::<_, MAX_POCKETS>(frame.pockets);
-    let light = &theme::scene().light;
-    let towards = |[x, y, z]: [f32; 3]| [x, y, z, 0.0];
-    Globals {
-        view_projection: frame.view_projection.to_cols_array_2d(),
-        key_towards: towards(light.key_towards),
-        fill_towards: towards(light.fill_towards),
-        key_color: theme::gamma(light.key),
-        fill_color: theme::gamma(light.fill),
-        sky: theme::gamma(light.sky),
-        ground: theme::gamma(light.ground),
-        shadow_area: frame.floor.map_or([0.0; 4], |floor| floor.area()),
-        shadow_color: theme::gamma(theme::scene().shadow),
-        plate_color: theme::gamma(theme::scene().plate),
-        grid_minor: theme::gamma(theme::scene().grid_minor),
-        grid_major: theme::gamma(theme::scene().grid_major),
-        grid: [
-            GRID_SPACING_MM,
-            GRID_MAJOR_MM,
-            if frame.grid { 1.0 } else { 0.0 },
-            0.0,
-        ],
-        eye: frame
-            .eye
-            .extend(if frame.xray { theme::SEEN_THROUGH } else { 0.0 })
-            .to_array(),
-        section: section(frame.section_mm, frame.bottom_cut_mm),
-        counts: [taken, banded, frame.band_floor_mm, held],
-        overhang_color: theme::gamma(theme::scene().overhang),
-        inside_color: theme::gamma(theme::scene().section_wash),
-        volume: frame
-            .volume_mm
-            .map_or([0.0; 4], |[_, high]| high.extend(1.0).to_array()),
-        volume_low: frame
-            .volume_mm
-            .map_or([0.0; 4], |[low, _]| low.extend(0.0).to_array()),
-        outside_color: theme::gamma(theme::scene().outside),
-        cut_plane: frame.cut_line.map_or([0.0; 4], |line| {
-            line.normal.extend(line.offset_mm).to_array()
-        }),
-        cut_low: frame
-            .cut_line
-            .map_or([0.0; 4], |line| line.bounds.mins.extend(1.0).to_array()),
-        cut_high: frame
-            .cut_line
-            .map_or([0.0; 4], |line| line.bounds.maxs.extend(0.0).to_array()),
-        cut_color: theme::gamma(theme::scene().cut_line),
-        cuts,
-        bands,
-        pockets,
-    }
-}
-
-/// The two cuts as the shader reads them. A height on its own could not say "no cut": a
-/// model standing below the plate is legal, so no value of it is free to mean nothing.
-fn section(top_mm: Option<Scalar>, bottom_mm: Option<Scalar>) -> [f32; 4] {
-    let [top, top_on] = top_mm.map_or([0.0; 2], |height| [height, 1.0]);
-    let [bottom, bottom_on] = bottom_mm.map_or([0.0; 2], |height| [height, 1.0]);
-    [top, top_on, bottom, bottom_on]
+    /// Whether the models are drawn as a clear resin against the thickness pass.
+    clear: bool,
+    /// Whether the thickness is measured: the render view at rest, where a thin part of any
+    /// resin glows with the key behind it, and a clear one is seen through.
+    thick: bool,
+    /// Whether the render view puts the printer away and stands the models in its room.
+    staged: bool,
+    /// Whether the camera moves, which draws the key's shadow hard.
+    moving: bool,
+    /// The projection the copy shades creases through, or `None` while it does not.
+    occlusion: Option<core_geometry::Mat4>,
+    /// The frame's view before any jitter, and which frame of the picture at rest it is.
+    view_projection: core_geometry::Mat4,
+    /// The lens a picture at rest is seen through, where the render view asks for one.
+    lens: Option<settle::Lens>,
+    sample: Option<u32>,
 }
 
 impl ViewportResources {
@@ -316,16 +240,15 @@ impl ViewportResources {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("viewport_globals"),
-            layout: &globals_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: globals.as_entire_binding(),
-            }],
-        });
-
         let build = Builder::new(device, target_format, &globals_layout);
+        let key = KeyShadow::new(device, build.key_cast());
+        let environment = build.environment();
+        let can_print = CanPrintTexture::new(device);
+        let both = (&globals_layout, &globals);
+        let textures = (&environment, &can_print);
+        let globals_bind_group = key.globals_group(device, both, textures, false);
+        let casting_bind_group = key.globals_group(device, both, textures, true);
+
         let solid = build.solid();
         let label = build.label();
         let relief = build.relief();
@@ -334,8 +257,16 @@ impl ViewportResources {
         Self {
             globals,
             globals_bind_group,
-            model_pipeline: solid.model,
+            casting_bind_group,
+            key,
+            environment,
+            can_print,
+            settling: Settling::default(),
+            models: solid.models,
             xray_pipeline: solid.xray,
+            clear: build.clear(),
+            backdrop: build.backdrop(),
+            reads_planes: reads_planes(device),
             marker_pipelines: solid.markers,
             line_pipeline: solid.line,
             wide_line_pipeline: build.wide_line(),
@@ -365,6 +296,7 @@ impl ViewportResources {
             report: None,
             planned_faces: None,
             card_ms: None,
+            globals_layout,
         }
     }
 
@@ -373,11 +305,25 @@ impl ViewportResources {
         self.uploaded_faces = 0;
         self.shadow_baked = false;
         self.read_card_times(device, queue);
-        queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals_of(&frame)));
+        let globals = globals_of(&frame);
+        queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
+        self.frame.view_projection = frame.view_projection;
+        self.frame.lens = frame
+            .look
+            .filter(|look| look.aperture_mm > 0.0)
+            .map(|look| settle::Lens {
+                aperture_mm: look.aperture_mm,
+                focus_mm: look.focus_mm,
+                projection: look.projection,
+            });
+        self.frame.sample = self.settle(&frame, &globals);
+        self.frame.clipped = globals.clips_models();
         self.write_geometry(device, queue, &frame);
         self.count_frame(&frame);
         self.record(device, queue, &frame);
         self.shadow.want(&frame);
+        self.want_key_shadow(device, &frame);
+        self.want_can_print(device, queue, &frame);
         self.drop_what_nobody_drew();
     }
 
@@ -421,6 +367,17 @@ impl ViewportResources {
         self.frame.bottom_cap_vertices = frame.bottom_cap.len() as u32;
         self.frame.cutting_bottom = frame.bottom_cut_mm.is_some_and(|mm| frame.eye.z < mm);
         self.frame.xray = frame.xray;
+        self.frame.staged = frame.look.is_some();
+        self.frame.moving = frame.light;
+        // While the camera moves a clear resin is drawn opaque: its four passes over every
+        // model would leave the levels a quarter of the faces.
+        self.frame.thick = self.reads_planes && !frame.xray && !frame.light && frame.look.is_some();
+        self.frame.clear =
+            self.frame.thick && frame.look.is_some_and(|look| look.attenuation_mm > 0.0);
+        self.frame.occlusion = frame
+            .look
+            .filter(|_| self.reads_planes && !frame.light)
+            .map(|look| look.projection);
         self.frame.markers_from = frame.models.len();
         let drawn = frame.models.len() + frame.markers.len();
         self.frame.solid_base = drawn as u32;
@@ -482,6 +439,7 @@ impl ViewportResources {
             key,
             mirrored: draw.instance.is_mirrored(),
             faces: draw.faces.clone(),
+            opaque: draw.instance.is_opaque(),
         }
     }
 

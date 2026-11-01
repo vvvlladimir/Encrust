@@ -40,9 +40,8 @@ pub(super) struct Draws {
 }
 
 impl Draws {
-    /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    /// `light` holds the lighter levels drawn in place of heavy meshes, `stand_in` a mesh
-    /// one model is drawn as in place of its own.
+    /// `mark` is the overhang wash or `NOT_MARKED`; `light` the lighter levels, `stand_in` a
+    /// mesh one model is drawn as, `resin` the render view's colour for models and supports.
     pub(super) fn of(
         scene: &Scene,
         mark: f32,
@@ -50,13 +49,16 @@ impl Draws {
         hidden: &[bool],
         light: Option<&Light>,
         stand_in: Option<(ObjectId, &Arc<Mesh>)>,
+        resin: Option<Color32>,
     ) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
-            let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
+            let colour = resin.unwrap_or_else(|| {
+                color_for(scene.is_selected(object.id), object.summary.is_sound())
+            });
             if let Some((_, mesh)) = stand_in.filter(|(id, _)| *id == object.id) {
                 draws.stand_in(object, mesh, colour, mark);
-                draws.supports(object, hidden);
+                draws.supports(object, hidden, resin);
                 continue;
             }
             let texture = textures.and_then(|textures| textures.get(&object.id));
@@ -67,7 +69,7 @@ impl Draws {
             };
             draws.model(object, &shown, colour, mark, texture, drilled);
             draws.hollowing(object, &shown, colour, drilled);
-            draws.supports(object, hidden);
+            draws.supports(object, hidden, resin);
         }
         // Last, so that the resin inside one model is still seen when another stands in
         // front of it: nothing hides anything under the x-ray, but what is drawn later
@@ -244,8 +246,8 @@ impl Draws {
     }
 
     /// Patches and columns are already in plate coordinates: they were built against the
-    /// placed model, not alongside it.
-    fn supports(&mut self, object: &SceneObject, hidden: &[bool]) {
+    /// placed model, not alongside it. `resin` draws every group in it rather than its tint.
+    fn supports(&mut self, object: &SceneObject, hidden: &[bool], resin: Option<Color32>) {
         let (painted, blocked) = object.supports.patches();
         for (patch, colour) in [
             (painted, theme::scene().painted),
@@ -264,9 +266,9 @@ impl Draws {
         {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
-            let instance =
-                ModelInstance::new(Transform::default(), theme::support_tint(group), NOT_MARKED)
-                    .pulled(GROUP_PULL * (groups.len() - group) as f32);
+            let tint = resin.unwrap_or_else(|| theme::support_tint(group));
+            let instance = ModelInstance::new(Transform::default(), tint, NOT_MARKED)
+                .pulled(GROUP_PULL * (groups.len() - group) as f32);
             self.models.push(ModelDraw::smooth(shaded, instance));
             self.solid(Arc::clone(&shaded.mesh), Transform::default());
         }

@@ -1,7 +1,7 @@
 use super::SIZE;
 use super::marks::Marks;
 use crate::camera::OrbitCamera;
-use crate::render::gpu::{DEPTH_FORMAT, FrameInput, ModelDraw, ViewportResources};
+use crate::render::gpu::{DEPTH_FORMAT, FrameInput, ModelDraw, ViewportResources, reads_planes};
 use crate::render::vertex::LineVertex;
 use crate::ui::theme;
 use core_geometry::{Mesh, Scalar, Vec3};
@@ -40,57 +40,81 @@ pub(super) fn paint_after<'a>(
     solids: &'a [ModelDraw],
     marks: Marks<'a>,
 ) -> Option<Vec<u8>> {
-    let Marks {
-        markers,
-        cuts,
-        cut_surfaces,
-        pockets,
-        bands,
-        band_floor_mm,
-        volume_mm,
-        cut_line,
-        xray,
-        floor,
-        lines,
-        wide_lines,
-    } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let mut resources = ViewportResources::new(device, format);
     let cap = cap_quad(section_mm.unwrap_or_default());
-    let input = |models: &'a [ModelDraw]| FrameInput {
+    let input = |models| frame_input(&camera, (section_mm, &cap), (models, solids), marks);
+    for earlier in before {
+        resources.prepare(device, queue, input(earlier));
+    }
+    // Frames of the same picture drawn first, as the window draws them while it rests.
+    for _ in 0..marks.rested {
+        resources.prepare(device, queue, input(models));
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
+        queue.submit([encoder.finish()]);
+    }
+    resources.prepare(device, queue, input(models));
+
+    Some(match marks.presented {
+        true => read_presented(device, queue, format, &mut resources),
+        false => read_back(device, queue, format, &mut resources),
+    })
+}
+
+/// The frame the window hands over for `models` and `solids` seen from `camera`, cut at
+/// `section_mm` and capped with `cap`.
+pub(super) fn frame_input<'a>(
+    camera: &OrbitCamera,
+    (section_mm, cap): (Option<Scalar>, &'a [LineVertex]),
+    (models, solids): (&'a [ModelDraw], &'a [ModelDraw]),
+    marks: Marks<'a>,
+) -> FrameInput<'a> {
+    FrameInput {
         reliefs: &[],
         view_projection: camera.view_projection(1.0),
         eye: camera.eye(),
         section_mm,
-        lines,
-        wide_lines,
+        lines: marks.lines,
+        wide_lines: marks.wide_lines,
         models,
-        markers,
+        markers: marks.markers,
         solids,
-        cap: &cap,
+        cap,
         bottom_cut_mm: None,
         bottom_cap: &[],
         label: &[],
         atlas: None,
-        cuts,
-        cut_surfaces,
-        pockets,
-        bands,
-        band_floor_mm,
-        volume_mm,
-        cut_line,
-        xray,
-        floor,
+        cuts: marks.cuts,
+        cut_surfaces: marks.cut_surfaces,
+        pockets: marks.pockets,
+        bands: marks.bands,
+        band_floor_mm: marks.band_floor_mm,
+        volume_mm: marks.volume_mm,
+        cut_line: marks.cut_line,
+        look: marks.look,
+        xray: marks.xray,
+        floor: marks.floor,
         grid: false,
-        light: false,
-    };
-    for earlier in before {
-        resources.prepare(device, queue, input(earlier));
+        light: marks.moving,
     }
-    resources.prepare(device, queue, input(models));
+}
 
-    Some(read_back(device, queue, format, &mut resources))
+/// Prepares and draws one frame of `models` seen from `camera` the way the window does, into
+/// the viewport's own planes.
+pub(super) fn draw_frame(
+    resources: &mut ViewportResources,
+    camera: &OrbitCamera,
+    models: &[ModelDraw],
+    marks: Marks<'_>,
+) {
+    let (device, queue) = gpu().expect("the caller found an adapter");
+    let input = frame_input(camera, (None, &[]), (models, &[]), marks);
+    resources.prepare(device, queue, input);
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
+    queue.submit([encoder.finish()]);
 }
 
 /// Paints what `resources` recorded into an offscreen target and reads the pixels back.
@@ -109,6 +133,10 @@ pub(super) fn read_back(
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     resources.bake_shadow(&mut encoder);
+    resources.bake_key_shadow(&mut encoder);
+    resources.bake_environment(&mut encoder);
+    resources.place(queue, &whole());
+    resources.measure_thickness(device, &mut encoder, [SIZE, SIZE], &whole());
     {
         let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -139,6 +167,61 @@ pub(super) fn read_back(
         resources.paint(&mut pass.forget_lifetime());
     }
 
+    copied_out(device, queue, encoder, &colour)
+}
+
+/// The whole offscreen target as the viewport a frame is drawn into.
+pub(super) fn whole() -> egui::epaint::ViewportInPixels {
+    egui::epaint::ViewportInPixels {
+        left_px: 0,
+        top_px: 0,
+        from_bottom_px: 0,
+        width_px: SIZE as i32,
+        height_px: SIZE as i32,
+    }
+}
+
+/// Draws what `resources` recorded the way the window does, into the viewport's own planes,
+/// and reads back what its copy pass lays into an offscreen target.
+pub(super) fn read_presented(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    format: wgpu::TextureFormat,
+    resources: &mut ViewportResources,
+) -> Vec<u8> {
+    let colour = target(device, format, wgpu::TextureUsages::COPY_SRC);
+    let view = colour.create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
+    {
+        let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            multiview_mask: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        resources.present(&mut pass.forget_lifetime());
+    }
+    copied_out(device, queue, encoder, &colour)
+}
+
+/// Copies `colour` out after what `encoder` recorded and reads its pixels back.
+pub(super) fn copied_out(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    mut encoder: wgpu::CommandEncoder,
+    colour: &wgpu::Texture,
+) -> Vec<u8> {
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: u64::from(SIZE * SIZE * 4),
@@ -181,6 +264,12 @@ pub(super) fn gpu() -> Option<&'static (wgpu::Device, wgpu::Queue)> {
         )
     })
     .as_ref()
+}
+
+/// The device, where it draws the render view's planes; a test of what they show has nothing
+/// to see on a GL adapter, as on a machine with none.
+pub(super) fn gpu_reading_planes() -> Option<&'static (wgpu::Device, wgpu::Queue)> {
+    gpu().filter(|(device, _)| reads_planes(device))
 }
 
 pub(super) fn target(

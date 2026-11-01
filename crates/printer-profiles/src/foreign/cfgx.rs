@@ -212,6 +212,7 @@ fn details(slice: &Slice) -> ResinDetails {
             .map_or(0.0, |price| price / per),
         currency: currency.map_or(neutral.currency, |sign| (*sign).to_owned()),
         price_per,
+        clarity: neutral.clarity,
     }
 }
 

@@ -2,7 +2,9 @@ use super::SECTION_MM;
 use super::holes::{drilled_ball, hollowed_ball};
 use super::paint::{paint, paint_after};
 use crate::camera::OrbitCamera;
-use crate::render::gpu::{CutDraw, CutLine, DrainCut, ExposureBand, Floor, ModelDraw, TrapBox};
+use crate::render::gpu::{
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, Look, ModelDraw, TrapBox,
+};
 use crate::render::vertex::{LineVertex, ModelInstance, NOT_MARKED, WideLine};
 use crate::ui::theme;
 use core_geometry::{Mesh, Transform, Vec3};
@@ -153,6 +155,8 @@ pub(super) struct Marks<'a> {
     pub(super) band_floor_mm: f32,
     pub(super) volume_mm: Option<[Vec3; 2]>,
     pub(super) cut_line: Option<CutLine>,
+    /// The render view's look, or `None` for the working view.
+    pub(super) look: Option<Look>,
     /// Whether the models are drawn seen through; see `docs/design/viewport.md`.
     pub(super) xray: bool,
     pub(super) floor: Option<Floor>,
@@ -160,4 +164,10 @@ pub(super) struct Marks<'a> {
     pub(super) lines: &'a [LineVertex],
     /// Lines drawn wider than those, as a tool marks an edge.
     pub(super) wide_lines: &'a [WideLine],
+    /// Whether the frame is read through the window's own copy pass, which shades creases.
+    pub(super) presented: bool,
+    /// Whether the camera moves, which holds back what is only drawn at rest.
+    pub(super) moving: bool,
+    /// Frames of the same picture drawn before the one read, as a window at rest draws them.
+    pub(super) rested: u32,
 }

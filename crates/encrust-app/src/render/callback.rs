@@ -13,12 +13,14 @@ use crate::plate::BuildPlate;
 use crate::relief::Textures;
 use crate::render::frame_time::CardTime;
 use crate::render::gpu::{
-    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, MAX_BANDS, ModelDraw, ReliefDraw,
-    TrapBox,
+    CutDraw, CutLine, Desk, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_BANDS, ModelDraw,
+    ReliefDraw, TrapBox,
 };
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::lod::Light;
+use crate::render::print_look::PrintLook;
+use crate::render::references;
 use crate::render::vertex::{LabelVertex, LineVertex, NOT_MARKED, WideLine};
 use crate::scene::{ObjectId, Scene};
 use crate::ui::theme;
@@ -76,6 +78,8 @@ pub struct ViewportCallback {
     band_floor_mm: f32,
     volume_mm: [Vec3; 2],
     cut_line: Option<CutLine>,
+    /// How the render view shades the models, or `None` for the working view.
+    look: Option<Look>,
     /// Whether the models are drawn seen through, so a cavity that holds resin can be
     /// looked into; see `docs/design/viewport.md`.
     xray: bool,
@@ -89,11 +93,14 @@ pub struct ViewportCallback {
     ui_ms: f32,
     /// Where the card's time over each frame goes, with the models' faces it drew.
     report: Option<Sender<CardTime>>,
+    /// Where the card says how many frames the picture at rest has averaged.
+    settled: Option<Arc<std::sync::atomic::AtomicU32>>,
     faces: Option<usize>,
 }
 
 /// Lines in plate millimetres: the plate's own, one pixel across, and the edges
 /// `highlighting` marks over the models, wider.
+#[derive(Default)]
 struct Lines {
     thin: Vec<LineVertex>,
     wide: Vec<WideLine>,
@@ -145,6 +152,8 @@ pub struct Shading<'a> {
     pub light: Option<&'a Light>,
     /// One model drawn as another mesh: the Repair tool's, with some shells hidden.
     pub stand_in: Option<(ObjectId, &'a Arc<Mesh>)>,
+    /// The render view's look of the print, or `None` for the working view.
+    pub print_look: Option<PrintLook>,
 }
 
 impl ViewportCallback {
@@ -164,6 +173,7 @@ impl ViewportCallback {
             banding,
             cut_line,
             light,
+            print_look,
             ..
         } = shading;
         let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
@@ -178,14 +188,17 @@ impl ViewportCallback {
             reliefs,
         } = draws;
 
-        let (label, atlas) = label::front(plate);
+        let cuts_mm = section_mm.into_iter().chain(bottom_cut_mm);
+        let stage = Stage::of(scene, plate, print_look.is_some(), cuts_mm);
+        let mut markers = markers;
+        markers.extend(stage.props);
         Self {
             rect,
             view_projection: camera.view_projection(rect.width() / rect.height()),
             eye: camera.eye(),
             section_mm,
             bottom_cut_mm,
-            lines: Lines::of_plate(plate, section_mm.into_iter().chain(bottom_cut_mm)),
+            lines: stage.lines,
             models,
             markers,
             solids,
@@ -195,8 +208,8 @@ impl ViewportCallback {
             bottom_cap: bottom_cut_mm
                 .map(|height| cap_quad(scene, plate, height))
                 .unwrap_or_default(),
-            label,
-            atlas,
+            label: stage.label,
+            atlas: stage.atlas,
             cuts,
             cut_surfaces,
             pockets,
@@ -208,8 +221,12 @@ impl ViewportCallback {
                 [low.extend(0.0), high.extend(plate.z_mm)]
             },
             cut_line,
+            look: print_look.map(|look| Look {
+                desk: stage.desk,
+                ..look.shading(camera, rect.size(), scene.world_bounds().as_ref())
+            }),
             xray: view.xray,
-            grid: view.grid,
+            grid: view.grid && print_look.is_none(),
             light: light.is_some_and(|light| light.settling),
             floor: Floor {
                 near_corner_mm: Vec2::ZERO,
@@ -217,8 +234,15 @@ impl ViewportCallback {
             },
             ui_ms: 0.0,
             report: None,
+            settled: None,
             faces: None,
         }
+    }
+
+    /// The same frame, telling `settled` how many frames its picture at rest has averaged.
+    pub fn settling(mut self, settled: Arc<std::sync::atomic::AtomicU32>) -> Self {
+        self.settled = Some(settled);
+        self
     }
 
     /// The same frame, logged with what the window's last pass over its panels took, and
@@ -232,6 +256,44 @@ impl ViewportCallback {
     }
 }
 
+/// What stands round the models: the printer's plate, its lines and its Front word, or in
+/// the render view, the printer put away, a mat among props.
+struct Stage {
+    lines: Lines,
+    label: Vec<LabelVertex>,
+    atlas: Option<Arc<egui::ColorImage>>,
+    props: Vec<ModelDraw>,
+    desk: Desk,
+}
+
+impl Stage {
+    fn of(
+        scene: &Scene,
+        plate: &BuildPlate,
+        render_view: bool,
+        cuts_mm: impl Iterator<Item = Scalar>,
+    ) -> Self {
+        if render_view {
+            let (props, desk) = references::set(plate, scene.world_bounds());
+            return Self {
+                lines: Lines::default(),
+                label: Vec::new(),
+                atlas: None,
+                props,
+                desk,
+            };
+        }
+        let (label, atlas) = label::front(plate);
+        Self {
+            lines: Lines::of_plate(plate, cuts_mm),
+            label,
+            atlas,
+            props: Vec::new(),
+            desk: Desk::default(),
+        }
+    }
+}
+
 /// What the objects on the plate come to this frame, the ghost of a click included.
 fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
     let mut draws = Draws::of(
@@ -241,6 +303,7 @@ fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
         shading.hidden_groups,
         shading.light,
         shading.stand_in,
+        shading.print_look.map(|look| look.resin),
     );
     if let Some(ghost) = shading.ghost {
         draws.ghost(scene, shading.light, ghost);
@@ -335,6 +398,9 @@ impl CallbackTrait for ViewportCallback {
         let started = web_time::Instant::now();
         super::with_resources(callback_resources, |resources| {
             resources.report_to(self.report.clone(), self.faces);
+            if let Some(settled) = &self.settled {
+                resources.report_samples_to(Arc::clone(settled));
+            }
             resources.prepare(
                 device,
                 queue,
@@ -360,6 +426,7 @@ impl CallbackTrait for ViewportCallback {
                     band_floor_mm: self.band_floor_mm,
                     volume_mm: Some(self.volume_mm),
                     cut_line: self.cut_line,
+                    look: self.look,
                     xray: self.xray,
                     floor: Some(self.floor),
                     grid: self.grid,
@@ -373,7 +440,7 @@ impl CallbackTrait for ViewportCallback {
                 screen.pixels_per_point,
                 screen.size_in_pixels,
             );
-            resources.draw(device, egui_encoder, screen.size_in_pixels, viewport);
+            resources.draw(device, queue, egui_encoder, screen.size_in_pixels, viewport);
             resources.log_frame(started, self.ui_ms);
         });
         Vec::new()

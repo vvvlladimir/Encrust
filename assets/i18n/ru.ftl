@@ -651,6 +651,11 @@ dialog-close = Закрыть  Esc
 list-hide = Скрыть в области просмотра
 list-show = Показать в области просмотра
 
+## ui/widgets/colour.rs
+
+colour-swatch = { $name } { $hex }
+colour-opacity = Непрозрачность { $percent }%
+
 ## panels/inspector/measure.rs
 
 measure-reading = Результат
@@ -962,6 +967,8 @@ menu-move-to-plate = Переместить на платформу
 menu-frame-view = Показать всё
 menu-plate-grid = Сетка платформы
 menu-xray = Просвечивать модели
+menu-render = Показать как напечатается
+menu-depth-of-field = Глубина резкости в виде «как напечатается»
 menu-orthographic = Ортогональный вид
 menu-import = Импорт
 menu-clear-recent = Очистить список
