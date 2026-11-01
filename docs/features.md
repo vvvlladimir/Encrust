@@ -595,9 +595,10 @@ shown: its exposure, the print time until it is done, the area it cures and the 
   cutting mat with real things round them at their real size, as Lychee lays them: a pen,
   a ruler, a one-euro coin, a 330 ml can and a banana, each casting a soft shadow. The models
   and supports are in the resin's own colour under soft studio light, the layers of the
-  chosen layer height stepped into their surface where they will show. A clear resin bends,
-  frosts and tints what stands behind it as deep as the part is thick, hazes as cured resin
-  does, and shows the walls inside a hollowed model. Creases are softly shaded once the
+  chosen layer height stepped into their surface where they will show. A clear resin bends
+  what stands behind it at both faces, frosts it across the layers as an unpolished print
+  does, a flat top staying glossy, tints it as deep as the part is thick, hazes as cured
+  resin does, and shows the walls inside a hollowed model. Creases are softly shaded once the
   camera rests. A view only: the command line has nothing to show it in, and the file is
   written the same. In a browser on WebGL the resin is drawn opaque and unshaded.
 - **Section slider:** cut through the model at any height, capped so you can see what is

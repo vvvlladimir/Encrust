@@ -142,3 +142,32 @@ fn creases_are_shaded_at_rest_and_nothing_else_is_lightened() {
     );
     assert_eq!(changed, darkened, "the shading only ever takes light away");
 }
+
+#[test]
+fn layers_too_fine_to_see_still_frost_a_clear_part() {
+    let floor = Some(Floor {
+        near_corner_mm: Vec2::ZERO,
+        size_mm: Vec2::new(150.0, 80.0),
+    });
+    let frame = |layer_height_mm| {
+        paint_marked_ball(Marks {
+            look: Some(Look {
+                layer_height_mm,
+                attenuation_mm: 300.0,
+                ..studio()
+            }),
+            floor,
+            presented: true,
+            ..Marks::default()
+        })
+    };
+    let Some(smooth) = frame(0.0) else {
+        return;
+    };
+    let printed = frame(0.05).expect("the adapter drew once");
+    let (changed, _) = darker(&smooth, &printed, 12);
+    assert!(
+        changed > 10_000,
+        "0.05 mm layers frost a ball 80 mm across, got {changed} pixels changed"
+    );
+}

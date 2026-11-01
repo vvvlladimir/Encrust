@@ -31,9 +31,12 @@ colour, in one picker with a `#RRGGBBAA` field; the view turns it into an attenu
 before the frame, every model surface adds its signed distance from the eye, measured from
 the pivot, into an R16Float plane; everything else is drawn and copied out; the models' front
 faces then read that copy along the view ray refracted by the resin and carried as far as the
-part is thick, per channel, frosted as an unpolished print is, tinted by the resin's colour
-and clouded over that thickness and by the haze of curing. The scene pass ends by laying
-every face of the clear models into it faintly, so walls inside a hollow read through.
+part is thick, per channel, bent again where it leaves by the nearest back face a pass ahead
+keeps, tinted by the resin's colour and clouded over that thickness and by the haze of
+curing. The layers make the surface: a stair that bends the light in bands where they are a
+few pixels apart, and finer than that a roughness that spreads it across the layers only.
+The scene pass ends by laying every face of the clear models into it faintly, so walls
+inside a hollow read through.
 
 **Creases are shaded in the copy pass, from the depth plane, only while the camera rests.**
 The depth plane is kept past the scene pass for it; a moving camera keeps the plain copy.
@@ -81,6 +84,6 @@ no WebGL canvas and few laptops afford.
 
 Thickness from one plane is exact for closed meshes only: an open or inverted mesh adds up
 to nonsense, clamped at zero. Refraction is read off one copy of the scene, so it bends
-only what is on screen and never one clear part seen through another, and it bends once,
-at the near face, not again where the ray leaves. Shading creases from depth alone misses what the camera cannot
+only what is on screen and never one clear part seen through another, and it bends at the
+near face and at the first back face, not at every wall after. Shading creases from depth alone misses what the camera cannot
 see and grains at sixteen samples, accepted for no blur pass.

@@ -414,27 +414,38 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   smooth surface between `LAYER_FADE_FROM` and `LAYER_FADE_TO` layers a pixel, under about
   four pixels a layer, where a stair would only beat against the pixel grid. The overhang
   test still reads the smooth normal.
-- **Clear resin.** Modelled after glTF's `KHR_materials_volume`, as three.js draws it. A
-  resin's opacity, picked with its colour, sets an attenuation distance *D* from 1 mm, barely
-  clear, to 300 mm, water-clear (`1 · 300^clarity`). Before the frame, `measure_thickness`
-  draws every model surface, nothing culled and no depth, adding its distance from the eye
-  less the pivot distance into an R16Float plane: a front face subtracts, a back face adds,
-  so the plane holds the resin each ray crosses, a hollow model's cavity taken out. The
-  scene pass then draws everything but the models, keeping its depth; its colour plane is
-  copied out, and a second pass draws the models' front faces by `clear_fragment` over that
-  copy. Each fragment bends the view ray at its surface by the resin's index, 1.49, 1.50 and
-  1.52 for red, green and blue, carries it as far as the part is thick, and reads the copy
-  where it comes out, so what stands behind is displaced, magnified and fringed at edges.
-  Over the thickness *d* that light takes the resin's colour as `colour^(d/D)` and clouds
-  over by `1 − e^(−d/D)` into the resin lit as an opaque one; Schlick's Fresnel shares it
-  with the studio's reflection. Where the copy holds nothing, the backdrop egui paints under
-  the viewport shows. A printed part is not polished: the light through it spreads over a
-  disc of 2.5 px plus 0.6 px a mm crossed, at most 28, gathered from eight taps, and even the
-  clearest resin clouds over within 90 mm as cured resin hazes. So that walls inside — a
-  hollow's, a lattice's, the far side — read through the part, the scene pass ends by
-  laying every face of the clear models into it, none hiding another and no depth written,
-  as the studio's reflection off it, brightest at a grazing angle, over a trace of the
-  resin's colour; the front faces then refract that. Off under the x-ray.
+- **Clear resin.** Modelled after glTF's `KHR_materials_volume`, as three.js draws it, with
+  the surface the layers leave. A resin's opacity, picked with its colour, sets an
+  attenuation distance *D* from 1 mm, barely clear, to 300 mm, water-clear
+  (`1 · 300^clarity`). Two passes come before the frame. `measure_thickness` draws every
+  surface of the clear models, nothing culled and no depth, adding its distance from the
+  eye less the pivot's into an R16Float plane: a front face subtracts and a back face adds,
+  so the plane holds the resin each ray crosses, a hollow's cavity taken out. The exit pass
+  keeps each pixel's nearest back face, its outward normal and distance, in an RGBA16Float
+  plane: where the light inside first leaves the part. The scene pass then draws all else,
+  keeping its depth, and ends by laying every face of the clear models into it faintly —
+  the studio's reflection off it, brightest at a grazing angle, over a trace of the resin's
+  colour — so walls inside, a hollow's, a lattice's, the far side, read through the part.
+  Its colour plane is copied out, and a second pass draws the models' front faces by
+  `clear_fragment` over that copy.
+
+  Each fragment traces the light per channel, the resin's index 1.49, 1.50 and 1.52 for
+  red, green and blue: bent into the part at the surface, carried to the exit face, bent
+  out of it, or turned back inside past the critical angle, and carried as far again; it
+  reads the copy where that lands. What stands behind is displaced, magnified and fringed.
+  The layers decide the surface. Where they are a few pixels apart or more, the entry is
+  the stair `stepped` cuts, so what is behind is broken into bands. Finer than that no
+  picture resolves them and they become roughness, as a normal map is filtered into it: the
+  risers and treads turn the light as far apart as they share the surface evenly,
+  `2·√(t·(1−t))` for a tread share `t`, at least 0.3 on a wall for its lips, nothing on a
+  flat top. The two faces' roughness add, and spread the light 0.35 rad a unit over the
+  thickness crossed, across the layers only: the eight taps the copy is read through lie on
+  an ellipse long up the surface's slope as it lands on screen, 1.5 px across it. Over the
+  thickness *d* the light takes the resin's colour as `colour^(d/D)` and clouds over by
+  `1 − e^(−d/D)`, within 400 mm even in the clearest resin as curing hazes it, and a rough
+  surface scatters 0.28 of its roughness back as a white haze, all into the resin lit as an
+  opaque one; Schlick's Fresnel shares it with the studio's reflection off the stepped
+  surface. Where the copy holds nothing, the backdrop shows. Off under the x-ray.
 - **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
   shades creases from the depth plane, which is kept past the scene pass for it.
   `present.wgsl` rebuilds each pixel's point through the inverse projection, takes its

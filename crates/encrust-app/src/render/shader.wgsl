@@ -636,45 +636,104 @@ fn thickness_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bo
 @group(1) @binding(0) var thickness_plane: texture_2d<f32>;
 @group(1) @binding(1) var behind_plane: texture_2d<f32>;
 @group(1) @binding(2) var behind_sampler: sampler;
+@group(1) @binding(3) var exit_plane: texture_2d<f32>;
+
+// The pass ahead of the frame that keeps, for each pixel, the nearest back face of a clear
+// model: where the light inside first leaves it. Its outward normal, and its distance from
+// the eye less the pivot's, so a half-float holds it.
+@fragment
+fn exit_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
+    if (in.surface < 0.5 || sectioned_away(in.world) || cut_away(in.world)) {
+        discard;
+    }
+    let outward = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
+    return vec4<f32>(outward, distance(globals.eye.xyz, in.world) - globals.look.w);
+}
 
 // A cured acrylate's index of refraction for red, green and blue: the spread is what
 // fringes an edge seen through the part. See docs/design/viewport.md.
 const RESIN_IOR = vec3<f32>(1.49, 1.50, 1.52);
 
-// Where on the copy of the scene the light reaching this fragment through the resin comes
-// from: the view ray bent at the surface and carried as far as the part is thick.
-fn refracted_from(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_mm: f32, ior: f32) -> vec2<f32> {
-    let ray = refract(-view, normal, 1.0 / ior);
-    let here = globals.view_projection * vec4<f32>(in.world, 1.0);
-    let exit = globals.view_projection * vec4<f32>(in.world + ray * crossed_mm, 1.0);
-    let shift = (exit.xy / exit.w - here.xy / here.w) * vec2<f32>(0.5, -0.5) * globals.screen.zw;
-    return (in.clip_position.xy + shift) / vec2<f32>(textureDimensions(behind_plane));
-}
-
-// A printed clear part is frosted where it has not been polished and hazes as it cures: the
-// light through it spreads over a disc this many pixels across a mm crossed, and at least
-// this much, and clouds over within this many mm even in the clearest resin.
-const FROST_PX_PER_MM = 0.6;
-const FROST_LEAST_PX = 2.5;
-const FROST_MOST_PX = 28.0;
-const CURED_HAZE_MM = 90.0;
-// Taps the frosted light is gathered from: a disc on a golden-angle spiral.
+// How a printed surface spreads the light through it, as a roughness. The layers cut every
+// surface into a stair of risers and treads, which past a pixel no picture resolves: what
+// is left is how far apart their normals turn, most where the two share the surface evenly.
+// A wall's lips frost it a little, a flat top is glossy. See docs/design/viewport.md.
+const WALL_LIPS = 0.3;
+// Radians of spread a roughness of 1.0 turns the light by, and the least frosting any
+// unpolished print has.
+const SPREAD_RAD = 0.35;
+const LEAST_FROST_PX = 1.5;
+const MOST_FROST_PX = 40.0;
+// Even the clearest resin clouds over within this many mm as it cures, and how much of
+// what a rough surface scatters comes back as a white haze.
+const CURED_HAZE_MM = 400.0;
+const SURFACE_HAZE = 0.28;
 const FROST_TAPS = 8;
 
-// What stands behind, seen through `crossed_mm` of resin: refracted per channel, spread by
-// the frost, and over the backdrop wherever the copy holds nothing.
-fn through_resin(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_mm: f32) -> vec3<f32> {
-    let spread_px = clamp(FROST_LEAST_PX + FROST_PX_PER_MM * crossed_mm, FROST_LEAST_PX, FROST_MOST_PX);
+fn layer_roughness(outward: vec3<f32>) -> f32 {
+    let across = length(outward.xy);
+    let up = abs(outward.z);
+    if (globals.look.x <= 0.0 || across < 1e-3) {
+        return 0.0;
+    }
+    let tread = up / (across + up);
+    return max(WALL_LIPS * smoothstep(0.0, 0.05, across), 2.0 * sqrt(tread * (1.0 - tread)));
+}
+
+// The pixel `world` lands on.
+fn pixel_of(world: vec3<f32>) -> vec2<f32> {
+    let clip = globals.view_projection * vec4<f32>(world, 1.0);
+    let ndc = clip.xy / clip.w;
+    return globals.screen.xy + (ndc * vec2<f32>(0.5, -0.5) + 0.5) * globals.screen.zw;
+}
+
+// The way the light through a surface facing `outward` is spread: up the surface, across
+// its layers, the way the steps between them turn.
+fn across_layers(outward: vec3<f32>) -> vec3<f32> {
+    let up = vec3<f32>(0.0, 0.0, 1.0) - outward * outward.z;
+    return select(normalize(up), vec3<f32>(0.0), dot(up, up) < 1e-6);
+}
+
+// One channel's light through the part: bent into it at `normal`, carried to where it
+// first leaves, bent out at that face (or turned back inside past the critical angle), and
+// carried as far again; the pixel it comes from.
+fn traced(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_mm: f32, exit: vec4<f32>, ior: f32) -> vec3<f32> {
+    let inside = refract(-view, normal, 1.0 / ior);
+    let wall_mm = clamp(exit.w + globals.look.w - distance(globals.eye.xyz, in.world), 0.0, crossed_mm);
+    if (dot(exit.xyz, exit.xyz) < 0.5) {
+        return in.world + inside * crossed_mm;
+    }
+    let leaves = in.world + inside * wall_mm;
+    let facing = -normalize(exit.xyz);
+    var out = refract(inside, facing, ior);
+    if (dot(out, out) < 1e-6) {
+        out = reflect(inside, facing);
+    }
+    return leaves + out * max(crossed_mm - wall_mm, wall_mm);
+}
+
+// What stands behind, seen through the part: traced per channel, then spread over an
+// ellipse long across the layers by how rough both faces are, over the backdrop wherever
+// the copy holds nothing.
+fn through_resin(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_mm: f32, rough: f32) -> vec3<f32> {
+    let exit = textureLoad(exit_plane, vec2<i32>(in.clip_position.xy), 0);
+    let spread = sqrt(rough * rough + layer_roughness(normalize(exit.xyz)) * layer_roughness(normalize(exit.xyz)));
+    let here = in.clip_position.xy;
+    let up_px = pixel_of(in.world + across_layers(normal)) - here;
+    let side_px = vec2<f32>(-up_px.y, up_px.x);
+    let long_px = clamp(LEAST_FROST_PX + spread * SPREAD_RAD * crossed_mm * length(up_px), LEAST_FROST_PX, MOST_FROST_PX);
+    let long = select(vec2<f32>(1.0, 0.0), normalize(up_px), dot(up_px, up_px) > 1e-8);
+    let short = select(vec2<f32>(0.0, 1.0), normalize(side_px), dot(side_px, side_px) > 1e-8);
     let texel = 1.0 / vec2<f32>(textureDimensions(behind_plane));
     var seen = vec3<f32>(0.0);
     for (var channel = 0; channel < 3; channel = channel + 1) {
-        let at = refracted_from(in, normal, view, crossed_mm, RESIN_IOR[channel]);
+        let at = pixel_of(traced(in, normal, view, crossed_mm, exit, RESIN_IOR[channel]));
         var gathered = 0.0;
         for (var tap = 0; tap < FROST_TAPS; tap = tap + 1) {
             let angle = f32(tap) * 2.39996323;
-            let out = sqrt((f32(tap) + 0.5) / f32(FROST_TAPS)) * spread_px;
-            let shifted = at + vec2<f32>(cos(angle), sin(angle)) * out * texel;
-            let behind = textureSampleLevel(behind_plane, behind_sampler, shifted, 0.0);
+            let out = sqrt((f32(tap) + 0.5) / f32(FROST_TAPS));
+            let offset = (long * cos(angle) * long_px + short * sin(angle) * LEAST_FROST_PX) * out;
+            let behind = textureSampleLevel(behind_plane, behind_sampler, (at + offset) * texel, 0.0);
             gathered = gathered + behind[channel] + globals.backdrop[channel] * (1.0 - behind.a);
         }
         seen[channel] = gathered / f32(FROST_TAPS);
@@ -682,19 +741,26 @@ fn through_resin(in: ModelFragment, normal: vec3<f32>, view: vec3<f32>, crossed_
     return seen;
 }
 
-// A clear resin after KHR_materials_volume: what stands behind, refracted, frosted and tinted
-// by the resin over the thickness crossed, clouding into its lit colour, under a reflection.
+// A clear resin after KHR_materials_volume, its surface the layers left: what stands behind,
+// refracted at both faces, spread by their layers, tinted over the thickness crossed and
+// clouding into the resin's lit colour, under a reflection off the stepped surface.
 @fragment
 fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let along = in.world.z / max(globals.look.x, 1e-6);
+    let per_px = fwidth(along);
     let colour = model_colour(in, front_facing);
     let crossed_mm = max(textureLoad(thickness_plane, vec2<i32>(in.clip_position.xy), 0).r, 0.0);
-    var normal = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
     let view = normalize(globals.eye.xyz - in.world);
-    normal = select(normal, -normal, dot(normal, view) < 0.0);
-    let seen = through_resin(in, normal, view, crossed_mm);
+    var outward = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
+    outward = select(outward, -outward, dot(outward, view) < 0.0);
+    // Layers a few pixels apart bend the light as the stair they are; finer, they frost it.
+    let normal = stepped(outward, along, per_px).xyz;
+    let unresolved = smoothstep(LAYER_FADE_FROM, LAYER_FADE_TO, per_px);
+    let rough = layer_roughness(outward) * unresolved;
+    let seen = through_resin(in, normal, view, crossed_mm, rough);
     let depth = crossed_mm / max(globals.look.z, 1e-3);
     let tint = pow(max(in.color.rgb, vec3<f32>(0.02)), vec3<f32>(depth));
-    let clouded = 1.0 - exp(-depth - crossed_mm / CURED_HAZE_MM);
+    let clouded = clamp(1.0 - exp(-depth - crossed_mm / CURED_HAZE_MM) + SURFACE_HAZE * rough, 0.0, 1.0);
     let body = seen * tint * (1.0 - clouded) + colour.rgb * clouded;
     let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
     let reflected = 0.04 + 0.96 * grazing;

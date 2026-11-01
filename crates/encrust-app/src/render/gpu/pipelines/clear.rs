@@ -1,6 +1,6 @@
 //! The clear-resin view's pipelines: the thickness pass and the models drawn against it.
 
-use super::super::clear::{Clear, THICKNESS_FORMAT};
+use super::super::clear::{Clear, EXIT_FORMAT, THICKNESS_FORMAT};
 use super::*;
 
 /// A plane the clear models read, filtered where it is sampled between texels.
@@ -42,6 +42,7 @@ impl Builder<'_> {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    plane(3, false),
                 ],
             });
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
@@ -73,6 +74,10 @@ impl Builder<'_> {
             upright: self.thickness(wgpu::FrontFace::Ccw),
             mirrored: self.thickness(wgpu::FrontFace::Cw),
         };
+        let exit = Facing {
+            upright: self.exit(wgpu::FrontFace::Ccw),
+            mirrored: self.exit(wgpu::FrontFace::Cw),
+        };
         // Every face, none hiding another, faintly: what the clear models then refract.
         let inner = self.facing(PipelineKind {
             label: "viewport_clear_inside",
@@ -83,7 +88,7 @@ impl Builder<'_> {
             ..PipelineKind::default()
         });
         Clear::new(
-            [thickness, inner, models],
+            [thickness, exit, inner, models],
             layout,
             sampler,
             self.target_format,
@@ -100,6 +105,46 @@ impl Builder<'_> {
             depth_compare: wgpu::CompareFunction::Always,
             ..PipelineKind::default()
         })
+    }
+
+    /// The nearest back face of each pixel, its normal and distance kept, no blending.
+    fn exit(&self, front_face: wgpu::FrontFace) -> wgpu::RenderPipeline {
+        self.device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("viewport_exit"),
+                layout: Some(&self.layout),
+                vertex: wgpu::VertexState {
+                    module: &self.shader,
+                    entry_point: Some("model_vertex"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &self.shader,
+                    entry_point: Some("exit_fragment"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: EXIT_FORMAT,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    front_face,
+                    cull_mode: Some(wgpu::Face::Front),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: DEPTH_FORMAT,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                cache: None,
+                multiview_mask: None,
+            })
     }
 
     fn thickness(&self, front_face: wgpu::FrontFace) -> wgpu::RenderPipeline {

@@ -7,12 +7,17 @@ use super::*;
 
 /// Half-floats blend everywhere, and thickness measured from the pivot stays small in them.
 pub(super) const THICKNESS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
+/// Where the light inside a clear model first leaves it: the outward normal of the nearest
+/// back face, and its distance from the eye less the pivot's.
+pub(super) const EXIT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 /// The pipelines of the clear view, and the planes it reads: the thickness, and a copy of
 /// what stands behind the models.
 pub(super) struct Clear {
     /// Adds each surface's signed distance into the plane; no depth, nothing culled.
     pub(super) thickness: Facing,
+    /// Keeps the nearest back face of the models in the exit plane.
+    pub(super) exit: Facing,
     /// Lays every face of the models into the scene faintly, inside walls included.
     pub(super) inner: Facing,
     /// Draws the models over the copy, their front faces only.
@@ -27,19 +32,22 @@ pub(super) struct Clear {
 struct Plane {
     size_px: [u32; 2],
     view: wgpu::TextureView,
+    exit: wgpu::TextureView,
+    exit_depth: wgpu::TextureView,
     behind: wgpu::Texture,
     bind_group: wgpu::BindGroup,
 }
 
 impl Clear {
     pub(super) fn new(
-        [thickness, inner, models]: [Facing; 3],
+        [thickness, exit, inner, models]: [Facing; 4],
         layout: wgpu::BindGroupLayout,
         sampler: wgpu::Sampler,
         format: wgpu::TextureFormat,
     ) -> Self {
         Self {
             thickness,
+            exit,
             inner,
             models,
             layout,
@@ -97,6 +105,49 @@ impl Clear {
         );
         pass
     }
+
+    /// Begins a pass over the exit plane, cleared to no exit, the plane `begin` made.
+    pub(super) fn begin_exit(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        viewport: &ViewportInPixels,
+    ) -> Option<wgpu::RenderPass<'static>> {
+        let plane = self.plane.as_ref()?;
+        let mut pass = encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("viewport_exit"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &plane.exit,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &plane.exit_depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                multiview_mask: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            })
+            .forget_lifetime();
+        pass.set_viewport(
+            viewport.left_px as f32,
+            viewport.top_px as f32,
+            viewport.width_px as f32,
+            viewport.height_px as f32,
+            0.0,
+            1.0,
+        );
+        Some(pass)
+    }
 }
 
 fn plane(
@@ -128,6 +179,18 @@ fn plane(
         wgpu::TextureUsages::RENDER_ATTACHMENT,
     )
     .create_view(&wgpu::TextureViewDescriptor::default());
+    let exit = texture(
+        "viewport_exit",
+        EXIT_FORMAT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    )
+    .create_view(&wgpu::TextureViewDescriptor::default());
+    let exit_depth = texture(
+        "viewport_exit_depth",
+        DEPTH_FORMAT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    )
+    .create_view(&wgpu::TextureViewDescriptor::default());
     let behind = texture("viewport_behind", format, wgpu::TextureUsages::COPY_DST);
     let behind_view = behind.create_view(&wgpu::TextureViewDescriptor::default());
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -146,11 +209,17 @@ fn plane(
                 binding: 2,
                 resource: wgpu::BindingResource::Sampler(sampler),
             },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(&exit),
+            },
         ],
     });
     Plane {
         size_px,
         view,
+        exit,
+        exit_depth,
         behind,
         bind_group,
     }
@@ -174,6 +243,13 @@ impl ViewportResources {
         pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
         let drawn = &self.frame.models[..self.frame.markers_from];
         self.draw_meshes(&mut pass, &self.clear.thickness, drawn, 0);
+        drop(pass);
+        let Some(mut pass) = self.clear.begin_exit(encoder, viewport) else {
+            return;
+        };
+        pass.set_bind_group(0, &self.globals_bind_group, &[]);
+        pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
+        self.draw_meshes(&mut pass, &self.clear.exit, drawn, 0);
     }
 
     /// Copies what the scene pass drew out of the colour plane, and draws the models over
