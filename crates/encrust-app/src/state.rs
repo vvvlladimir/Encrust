@@ -58,6 +58,9 @@ pub struct View {
     /// clock: heavy meshes are drawn light while it moves.
     pub drawn_camera: OrbitCamera,
     pub moved_s: f64,
+    /// Where the last frame drew each model, and when one last moved: drawn light the same.
+    pub drawn_placements: Vec<(crate::scene::ObjectId, core_geometry::Transform)>,
+    pub placed_s: f64,
     pub lods: crate::render::Lods,
     /// What this machine draws and keeps up while the camera moves, and what the last
     /// frame drew, faces: the next frame's time is what that cost.
@@ -94,6 +97,8 @@ impl View {
             ui_ms: 0.0,
             drawn_camera: OrbitCamera::framing_plate(plate),
             moved_s: f64::NEG_INFINITY,
+            drawn_placements: Vec::new(),
+            placed_s: f64::NEG_INFINITY,
             lods: crate::render::Lods::default(),
             budget: crate::render::Budget::default(),
             budget_rendered: false,

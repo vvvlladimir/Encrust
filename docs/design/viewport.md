@@ -628,6 +628,13 @@ drawn whole, and at rest a hollowed model is too, since the trapped resin it sho
 from its own mesh's face ranges. A hole's inside is drawn against the level drawn, so it
 still meets the surface around it. The shadow is not baked while levels still change.
 
+A model moved — dragged by the gizmo or the pointer, or typed into the inspector — counts
+as motion for the same 0.3 s as the camera: every model is drawn at the moving levels, the
+one in hand keeping its fifth. Unlike a turn of the camera, its shadow and the key light's
+map are baked again each frame, from the light levels, or they would stay where it was. A
+model added or taken away, or another plate shown, moves nothing. The budget learns only
+from the camera's motion, whose frames bake no shadow.
+
 ## Measuring a frame
 
 `render/frame_time.rs` writes what the viewport's frames cost under the `frame_time` log

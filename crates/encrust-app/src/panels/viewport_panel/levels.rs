@@ -1,14 +1,14 @@
-//! Which level each model is drawn at this frame, from what the card can draw, camera
-//! motion and apparent size; see `docs/design/viewport.md`.
+//! Which level each model is drawn at this frame, from what the card can draw, camera and
+//! model motion and apparent size; see `docs/design/viewport.md`.
 
 use std::sync::Arc;
 
-use core_geometry::{FastMap, Mesh};
+use core_geometry::{FastMap, Mesh, Transform};
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
 use crate::render::{Budget, Candidate, Level, Light, Lods, Step, allot, px_per_mm, refine};
-use crate::scene::{ObjectId, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::View;
 
 /// How long after the camera last moved it still counts as moving, seconds: long enough
@@ -43,7 +43,10 @@ struct Model {
 pub(super) fn levels(ui: &egui::Ui, window: &mut Window, capped: bool, height_px: f32) -> Levels {
     let view = &mut *window.view;
     view.budget_for(view.options.render);
-    let moving = camera_moving(ui, view, capped);
+    let turning = camera_moving(ui, view, capped);
+    let scene = &window.doc.scene;
+    let placing = placing(ui, view, scene);
+    let moving = turning || placing;
     if capped {
         view.levels.clear();
         return Levels {
@@ -51,7 +54,6 @@ pub(super) fn levels(ui: &egui::Ui, window: &mut Window, capped: bool, height_px
             faces: None,
         };
     }
-    let scene = &window.doc.scene;
     let models: Vec<Model> = scene
         .printable(scene.active_plate())
         .map(|object| {
@@ -67,8 +69,9 @@ pub(super) fn levels(ui: &egui::Ui, window: &mut Window, capped: bool, height_px
         })
         .collect();
     let wanted = wanted(&view.budget, &models, moving);
+    // A model in hand casts its shadow from its light level, or the shadow would stay behind.
     let (chosen, settling) = if moving {
-        (wanted, true)
+        (wanted, !placing)
     } else {
         let drawn = drawn(&view.levels, &models, &wanted);
         let chosen = refine(&drawn, &wanted);
@@ -129,6 +132,32 @@ fn camera_moving(ui: &egui::Ui, view: &mut View, capped: bool) -> bool {
             .request_repaint_after(std::time::Duration::from_secs_f64(SETTLE_S - still_s));
     }
     moving
+}
+
+/// Whether a model on the plate moved within `SETTLE_S`, as `camera_moving` asks of the
+/// camera: one dragged is drawn light while it moves.
+fn placing(ui: &egui::Ui, view: &mut View, scene: &Scene) -> bool {
+    let now = ui.input(|input| input.time);
+    let placements: Vec<(ObjectId, Transform)> = scene
+        .printable(scene.active_plate())
+        .map(|object| (object.id, object.transform))
+        .collect();
+    if moved(&view.drawn_placements, &placements) {
+        view.placed_s = now;
+    }
+    view.drawn_placements = placements;
+    let still_s = now - view.placed_s;
+    if still_s < SETTLE_S {
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(SETTLE_S - still_s));
+    }
+    still_s < SETTLE_S
+}
+
+/// Whether the same models stand somewhere else: one added, taken away or another plate
+/// shown is no move.
+fn moved(before: &[(ObjectId, Transform)], now: &[(ObjectId, Transform)]) -> bool {
+    before.len() == now.len() && before.iter().zip(now).all(|(a, b)| a.0 == b.0) && before != now
 }
 
 /// The levels the frame would draw going straight to them: what fits 60 Hz while the camera
@@ -251,6 +280,29 @@ mod tests {
         let levels = levels_of(100_000, 0.5, 5);
         // 50 000 and 25 000 hold a fifth; 12 500 and finer do not.
         assert_eq!(kept_levels(100_000, &levels, true), 2);
+    }
+
+    #[test]
+    fn a_model_standing_elsewhere_has_moved_and_one_added_has_not() {
+        let at = |x| Transform::from_translation(core_geometry::Vec3::new(x, 0.0, 0.0));
+        let [one, two] = [ObjectId::for_test(1), ObjectId::for_test(2)];
+        let before = [(one, at(0.0))];
+        assert!(
+            moved(&before, &[(one, at(1.0))]),
+            "a model dragged has moved"
+        );
+        assert!(
+            !moved(&before, &before),
+            "a model left where it was has not"
+        );
+        assert!(
+            !moved(&before, &[(one, at(0.0)), (two, at(5.0))]),
+            "a model added moves none"
+        );
+        assert!(
+            !moved(&before, &[(two, at(1.0))]),
+            "another plate moves none"
+        );
     }
 
     #[test]
