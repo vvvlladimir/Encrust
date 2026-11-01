@@ -44,6 +44,10 @@ fn view_tools(ui: &mut egui::Ui, window: &mut Window) {
         if icon_toggle(ui, icon::XRAY, &tr!("menu-xray"), *xray).clicked() {
             *xray = !*xray;
         }
+        let render = &mut window.view.options.render;
+        if icon_toggle(ui, icon::RENDER, &tr!("menu-render"), *render).clicked() {
+            *render = !*render;
+        }
         let flat = window.view.camera.orthographic;
         if icon_toggle(ui, icon::PERSPECTIVE, &tr!("menu-orthographic"), flat).clicked() {
             set_orthographic(window.view, !flat);

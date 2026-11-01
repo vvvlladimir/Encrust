@@ -911,6 +911,7 @@ menu-move-to-plate = Move to plate
 menu-frame-view = Frame view
 menu-plate-grid = Plate grid
 menu-xray = See through models
+menu-render = Show as printed
 menu-orthographic = Orthographic view
 menu-import = Import
 menu-clear-recent = Clear the list

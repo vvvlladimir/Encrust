@@ -9,10 +9,11 @@ mod label;
 mod lod;
 #[cfg(test)]
 mod offscreen;
+mod references;
 mod target;
 mod vertex;
 
-pub use callback::{Banding, Ghost, GhostShape, Shading, ViewportCallback};
+pub use callback::{Banding, Ghost, GhostShape, PrintLook, Shading, ViewportCallback};
 pub use gpu::CutLine;
 #[cfg(not(target_arch = "wasm32"))]
 pub use gpu::MULTISAMPLING;

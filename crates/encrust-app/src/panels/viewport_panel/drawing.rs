@@ -9,7 +9,7 @@ use super::{GHOST_OPACITY, levels, picks_instead, text};
 use crate::drain::Placing;
 use crate::panels::{Window, section};
 use crate::relief::ReliefMode;
-use crate::render::{Banding, Ghost, Shading, ViewportCallback};
+use crate::render::{Banding, Ghost, PrintLook, Shading, ViewportCallback};
 use crate::scene::{ObjectId, Scene};
 use crate::ui::theme;
 use crate::viewport_input::Pointer;
@@ -128,6 +128,10 @@ pub(super) fn paint_plate(
             ghost,
             light: Some(&levels.light),
             stand_in: stand_in.as_ref().map(|(id, mesh)| (*id, mesh)),
+            print_look: window.view.options.render.then(|| PrintLook {
+                resin: theme::resin_swatch(window.machine.slicing.material.details.color),
+                layer_height_mm: window.machine.slicing.layer_height_mm(),
+            }),
         },
         rect,
     )

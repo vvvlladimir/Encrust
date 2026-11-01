@@ -7,6 +7,7 @@ use core_geometry::Scalar;
 mod cavity;
 mod faults;
 mod holes;
+mod layers;
 mod marks;
 mod paint;
 mod plate;

@@ -394,6 +394,26 @@ holds against the ones asked for and uploads again when they differ, which is th
 that: without it the later frame asks for a range no piece lines up with and paints
 nothing at all.
 
+## As printed
+
+The render view is a view of its own, like the x-ray: the view tools and the View menu
+toggle it. It changes three things and nothing else; overhangs, cuts and bands still wash
+over it, and picking, the shadow and the levels are those of the working view.
+
+- **Resin.** Every model and support instance takes the resin's `details.color` in place of
+  the theme's model, selection and support tints: the selection tint is not drawn.
+- **Layers.** `globals.layers.x` is the layer height. `stepped` in the shader turns a
+  surface's normal towards the stair a printer cuts it into: within each layer the share
+  `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a vertical riser, so a wall shows
+  only the lip line each layer leaves, a gentle slope shows the steps, and a flat top none.
+  The lip darkens by `LAYER_LIP` over a pixel. Both fade to the smooth surface as layers
+  close to under half a pixel apart, the way the grid fades, so a zoomed-out model shows no
+  moiré and a zoomed-in one the real steps. The overhang test still reads the smooth normal.
+- **References.** A bank card (ISO/IEC 7810 ID-1), a one-euro coin and a 32 mm round base
+  stand in a column off the plate's right edge as the viewer faces its front, built once
+  from `core_geometry` primitives so the card's cache keeps them, and drawn as markers in
+  the `reference` token: never picked, sliced or counted into the cap.
+
 ## The Cut tool's plane
 
 The plane is traced on the model rather than drawn in the air. The globals carry it as

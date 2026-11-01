@@ -28,6 +28,9 @@ pub struct Scene {
     /// parts from the amber a picked model is drawn in as well as from the grey of one
     /// that is not.
     pub trapped: Color32,
+    /// The references of known size the render view lays beside the plate: a neutral grey
+    /// apart from any resin, so they never read as part of the print.
+    pub reference: Color32,
     /// The patch painted to be filled with supports.
     pub painted: Color32,
     /// The patch painted to keep supports off. Violet, not red: an overhang is already
@@ -102,6 +105,7 @@ pub(super) const DARK: Scene = Scene {
     unsound: Color32::from_rgb(0xe0, 0x44, 0x62),
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
     trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
+    reference: Color32::from_rgb(0x9a, 0x9d, 0xa3),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
     blocked: Color32::from_rgb(0xa7, 0x64, 0xd6),
     fault: Color32::from_rgb(0xc8, 0xf0, 0x3c),

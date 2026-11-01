@@ -457,6 +457,12 @@ pub(super) fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
     ) {
         options.xray = !options.xray;
     }
+    if clicked(
+        ui,
+        &MenuRow::new(None, &tr!("menu-render")).ticked(options.render),
+    ) {
+        options.render = !options.render;
+    }
     menu_rule(ui);
     let sheet = tr!("shortcuts-title");
     if clicked(ui, &action_row(Some(icon::KEYBOARD), &sheet, Action::Sheet)) {

@@ -19,6 +19,7 @@ use crate::render::gpu::{
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::lod::Light;
+use crate::render::references;
 use crate::render::vertex::{LabelVertex, LineVertex, NOT_MARKED, WideLine};
 use crate::scene::{ObjectId, Scene};
 use crate::ui::theme;
@@ -76,6 +77,8 @@ pub struct ViewportCallback {
     band_floor_mm: f32,
     volume_mm: [Vec3; 2],
     cut_line: Option<CutLine>,
+    /// Millimetres between the layers stepped into the models, or 0.0 for none.
+    layer_height_mm: Scalar,
     /// Whether the models are drawn seen through, so a cavity that holds resin can be
     /// looked into; see `docs/design/viewport.md`.
     xray: bool,
@@ -145,6 +148,16 @@ pub struct Shading<'a> {
     pub light: Option<&'a Light>,
     /// One model drawn as another mesh: the Repair tool's, with some shells hidden.
     pub stand_in: Option<(ObjectId, &'a Arc<Mesh>)>,
+    /// The render view's look of the print, or `None` for the working view.
+    pub print_look: Option<PrintLook>,
+}
+
+/// How the render view draws the plate as it will come off the printer: in the resin's own
+/// colour, its layers stepped in, with references of known size beside it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PrintLook {
+    pub resin: Color32,
+    pub layer_height_mm: Scalar,
 }
 
 impl ViewportCallback {
@@ -157,13 +170,14 @@ impl ViewportCallback {
         shading: Shading<'_>,
         rect: egui::Rect,
     ) -> Self {
-        let draws = drawn(scene, &shading);
+        let draws = drawn(scene, plate, &shading);
         let Shading {
             section_mm,
             bottom_cut_mm,
             banding,
             cut_line,
             light,
+            print_look,
             ..
         } = shading;
         let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
@@ -208,6 +222,7 @@ impl ViewportCallback {
                 [low.extend(0.0), high.extend(plate.z_mm)]
             },
             cut_line,
+            layer_height_mm: print_look.map_or(0.0, |look| look.layer_height_mm),
             xray: view.xray,
             grid: view.grid,
             light: light.is_some_and(|light| light.settling),
@@ -233,7 +248,7 @@ impl ViewportCallback {
 }
 
 /// What the objects on the plate come to this frame, the ghost of a click included.
-fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
+fn drawn(scene: &Scene, plate: &BuildPlate, shading: &Shading<'_>) -> Draws {
     let mut draws = Draws::of(
         scene,
         shading.overhang_deg.map_or(NOT_MARKED, marking),
@@ -241,9 +256,13 @@ fn drawn(scene: &Scene, shading: &Shading<'_>) -> Draws {
         shading.hidden_groups,
         shading.light,
         shading.stand_in,
+        shading.print_look.map(|look| look.resin),
     );
     if let Some(ghost) = shading.ghost {
         draws.ghost(scene, shading.light, ghost);
+    }
+    if shading.print_look.is_some() {
+        draws.markers.extend(references::drawn(plate));
     }
     draws
 }
@@ -360,6 +379,7 @@ impl CallbackTrait for ViewportCallback {
                     band_floor_mm: self.band_floor_mm,
                     volume_mm: Some(self.volume_mm),
                     cut_line: self.cut_line,
+                    layer_height_mm: self.layer_height_mm,
                     xray: self.xray,
                     floor: Some(self.floor),
                     grid: self.grid,

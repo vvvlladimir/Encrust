@@ -153,6 +153,8 @@ pub(super) struct Marks<'a> {
     pub(super) band_floor_mm: f32,
     pub(super) volume_mm: Option<[Vec3; 2]>,
     pub(super) cut_line: Option<CutLine>,
+    /// Millimetres between the layers stepped into the models, 0.0 for none.
+    pub(super) layer_height_mm: f32,
     /// Whether the models are drawn seen through; see `docs/design/viewport.md`.
     pub(super) xray: bool,
     pub(super) floor: Option<Floor>,

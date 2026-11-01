@@ -255,7 +255,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Print settings, General and the profiles | `SLIDERS_HORIZONTAL`, `SLIDERS` |
 | Machine, resin, network | `PRINTER`, `FLASK`, `WIFI_HIGH` |
 | Model view, model beside layer, layer | `CUBE`, `COLUMNS`, `SQUARE_HALF` |
-| Frame, grid, see through, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `PERSPECTIVE` |
+| Frame, grid, see through, as printed, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `SPARKLE`, `PERSPECTIVE` |
 | Empty plate | `CUBE_FOCUS` |
 | Duplicate, array, arrange, remove | `COPY`, `GRID_NINE`, `LAYOUT`, `TRASH` |
 | Visible, hidden | `EYE`, `EYE_SLASH` |

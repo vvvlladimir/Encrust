@@ -86,6 +86,9 @@ struct Globals {
     cut_low: vec4<f32>,
     cut_high: vec4<f32>,
     cut_color: vec4<f32>,
+    // x is the millimetres between the layers the render view steps into the models, 0.0
+    // while it is off. See docs/design/viewport.md.
+    layers: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
@@ -409,10 +412,39 @@ fn cut_wipe_fragment(in: ModelFragment) -> WipedFragment {
     return out;
 }
 
+// How dark the lip of a printed layer reads, and over how many pixels its line is drawn.
+const LAYER_LIP = 0.22;
+const LAYER_LIP_PX = 1.0;
+
+// The surface as printed, each layer a riser and a tread shared by its steepness: xyz the normal
+// to shade by, w the light its lip keeps. See docs/design/viewport.md.
+fn stepped(outward: vec3<f32>, along: f32, per_px: f32) -> vec4<f32> {
+    let across = length(outward.xy);
+    if (globals.layers.x <= 0.0 || across < 1e-4) {
+        return vec4<f32>(outward, 1.0);
+    }
+    let riser = vec3<f32>(outward.xy / across, 0.0);
+    let tread = vec3<f32>(0.0, 0.0, sign(outward.z));
+    let tread_share = abs(outward.z) / (across + abs(outward.z));
+    let soft = max(per_px, 1e-4) * 0.5;
+    let in_layer = fract(along);
+    var on_tread = smoothstep(1.0 - tread_share - soft, 1.0 - tread_share + soft, in_layer);
+    if (outward.z < 0.0) {
+        on_tread = 1.0 - smoothstep(tread_share - soft, tread_share + soft, in_layer);
+    }
+    let fine = smoothstep(0.25, 0.5, per_px);
+    let normal = normalize(mix(normalize(mix(riser, tread, on_tread)), outward, fine));
+    let lip_px = min(in_layer, 1.0 - in_layer) / max(per_px, 1e-4);
+    let lip = 1.0 - smoothstep(LAYER_LIP_PX - 0.5, LAYER_LIP_PX + 0.5, lip_px);
+    return vec4<f32>(normal, 1.0 - LAYER_LIP * lip * (1.0 - fine));
+}
+
 @fragment
 fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
     let traced = cut_line(in.world);
     let stripe = hatch(in.world);
+    let along = in.world.z / max(globals.layers.x, 1e-6);
+    let per_px = fwidth(along);
     if (sectioned_away(in.world)) {
         discard;
     }
@@ -428,7 +460,8 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     // Back faces are shaded as if they faced the camera. An imported mesh may still have
     // inverted faces, and a black hole reads as a rendering bug rather than as a defect.
     let outward = normalize(select(in.normal, in.smooth_normal, in.smoothed > 0.5));
-    var normal = outward;
+    let layered = stepped(outward, along, per_px);
+    var normal = layered.xyz;
     if (!front_facing) {
         normal = -normal;
     }
@@ -458,7 +491,7 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
         if (!front_facing) {
             shaded = mix(base, globals.inside_color.rgb, SECTION_WASH);
         }
-        shaded = lit(shaded, in.color.a, normal, in.world);
+        shaded = lit(shaded, in.color.a, normal, in.world) * layered.w;
     }
     // The token arrives premultiplied, so the wash scales colour and alpha alike and the
     // result stays premultiplied for the blend.

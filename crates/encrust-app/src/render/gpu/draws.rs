@@ -112,6 +112,8 @@ pub struct FrameInput<'a> {
     pub volume_mm: Option<[Vec3; 2]>,
     /// Where the Cut tool's plane meets the model it is set on, traced over its surface.
     pub cut_line: Option<CutLine>,
+    /// Millimetres between the layers the render view steps into the models, 0.0 for none.
+    pub layer_height_mm: f32,
     /// Whether the models are drawn seen through, which is what shows a cavity that holds
     /// resin; see `docs/design/viewport.md`.
     pub xray: bool,

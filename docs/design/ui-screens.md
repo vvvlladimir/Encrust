@@ -205,8 +205,8 @@ track. With no stack it reads *No layers*.
 - **Gizmo drag:** the amount by the cursor on a size label's plate, signed, in the axis
   colour (text colour for the circle); for a move, a 3 point dot at the start, a dashed line
   to the pivot, and the arrow's line through the start at 45 %. Size labels clear the rings.
-- **View tools:** Frame the view, Plate grid, See through, Perspective, as 26 squares in one
-  card; the on ones washed.
+- **View tools:** Frame the view, Plate grid, See through, As printed, Perspective, as 26
+  squares in one card; the on ones washed.
 - **Notices:** each a card 40 tall: glyph in its colour (`warn` warning, `danger`
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`

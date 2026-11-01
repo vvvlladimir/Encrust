@@ -112,6 +112,9 @@ struct Globals {
     cut_high: [f32; 4],
     /// `xyz` is the colour the plane is traced in; `w` is unused padding.
     cut_color: [f32; 4],
+    /// `x` is the millimetres between the layers stepped into the models, 0.0 for none;
+    /// `yzw` are unused padding.
+    layers: [f32; 4],
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
     pockets: [TrapBox; MAX_POCKETS],
@@ -293,6 +296,7 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
             .cut_line
             .map_or([0.0; 4], |line| line.bounds.maxs.extend(0.0).to_array()),
         cut_color: theme::gamma(theme::scene().cut_line),
+        layers: [frame.layer_height_mm, 0.0, 0.0, 0.0],
         cuts,
         bands,
         pockets,
