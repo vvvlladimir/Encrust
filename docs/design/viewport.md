@@ -406,7 +406,13 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
 - **Studio.** `studio` replaces `lit`: the room is the sky-to-ground gradient, the key and an
   overhead light are softboxes wrapped round the form and reflected as wide soft lobes, so a
   flat-shaded face shades into its neighbour, and the room is reflected by Schlick's Fresnel
-  at a grazing angle. Markers, the references among them, take the same light.
+  at a grazing angle. Markers, the references among them, take the same light. It is summed
+  in linear light (`radiance`: every colour token and resin decoded from gamma first) and
+  handed to `filmic`, AgX as Blender, three.js and Godot draw it — Rec. 2020 inset, log2
+  exposure from −12.47 to +4.03 EV, the fitted sigmoid polynomial, outset — with a milder
+  Punchy look, the curve raised to 1.15, before it goes out in the target's gamma. AgX was
+  chosen over ACES for leaving a saturated resin's hue alone as it brightens. The backdrop
+  goes through the same curve; the working view does not.
 - **Layers.** `stepped` turns a surface's normal towards the stair a printer cuts it into:
   within each layer the share `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a
   vertical riser, so a wall shows only the lip line each layer leaves, a gentle slope the

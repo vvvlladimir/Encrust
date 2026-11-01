@@ -9,7 +9,7 @@ const PROP_BELOW = -1.5;
 const MAT_GREEN = vec3<f32>(0.07, 0.29, 0.22);
 const MAT_EDGE = vec3<f32>(0.05, 0.21, 0.16);
 const MAT_INK = vec3<f32>(0.78, 0.88, 0.80);
-const CAN_RED = vec3<f32>(0.74, 0.07, 0.10);
+const CAN_RED = vec3<f32>(0.78, 0.10, 0.06);
 const CAN_WHITE = vec3<f32>(0.95, 0.95, 0.93);
 const ALUMINIUM = vec3<f32>(0.82, 0.84, 0.87);
 const BANANA_YELLOW = vec3<f32>(0.95, 0.79, 0.22);
@@ -172,12 +172,13 @@ fn backdrop_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec
     let ray = normalize(far.xyz / far.w - origin);
     let sky = mix(ROOM_HORIZON, ROOM_SKY, smoothstep(0.0, 0.5, ray.z));
     if (ray.z >= -1e-4) {
-        return vec4<f32>(sky, 1.0);
+        return vec4<f32>(filmic(linear_of(sky)), 1.0);
     }
     let hit = origin + ray * ((TABLE_Z - origin.z) / ray.z);
     let away = rect_distance(hit.xy, globals.desk.xy, globals.desk.zw);
     let under_mat = 1.0 - MAT_SHADOW * (1.0 - smoothstep(0.0, MAT_SHADOW_MM, away));
     let shaded = under_mat * mix(1.0 - TABLE_SHADOW, 1.0, key_reaches(hit, vec3<f32>(0.0, 0.0, 1.0)));
     let fade = 1.0 - exp(-distance(hit, globals.eye.xyz) / ROOM_FADE_MM);
-    return vec4<f32>(mix(ROOM_TABLE * shaded, ROOM_HORIZON, fade), 1.0);
+    let table = mix(linear_of(ROOM_TABLE) * shaded, linear_of(ROOM_HORIZON), fade);
+    return vec4<f32>(filmic(table), 1.0);
 }

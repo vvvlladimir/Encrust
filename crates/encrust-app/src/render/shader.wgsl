@@ -230,6 +230,7 @@ fn softbox(mirror: vec3<f32>, towards: vec3<f32>) -> f32 {
 // is looked up, and the map is read over a disc this many texels across, which softens the
 // edge as a softbox does.
 const KEY_LIFT_MM = 0.4;
+const KEY_TURNED_LIFT_MM = 2.0;
 const KEY_SOFT_TEXELS = 2.5;
 const KEY_TAPS = 12;
 
@@ -239,7 +240,10 @@ fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
     if (globals.look.y < 0.5) {
         return 1.0;
     }
-    let clip = globals.key_view_projection * vec4<f32>(world + normal * KEY_LIFT_MM, 1.0);
+    // Lifted further the more it turns from the key, where a curve's own map is coarsest.
+    let turned = 1.0 - clamp(dot(normal, normalize(-globals.key_towards.xyz)), 0.0, 1.0);
+    let lift = KEY_LIFT_MM + KEY_TURNED_LIFT_MM * turned;
+    let clip = globals.key_view_projection * vec4<f32>(world + normal * lift, 1.0);
     let at = clip.xyz / clip.w;
     let uv = at.xy * vec2<f32>(0.5, -0.5) + 0.5;
     if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) || at.z > 1.0) {
@@ -263,6 +267,56 @@ fn key_cast_vertex(in: ModelVertex) -> @builtin(position) vec4<f32> {
     return globals.key_view_projection * model * vec4<f32>(in.position, 1.0);
 }
 
+// The render view lights in linear light and hands the sum to a film's curve, AgX as
+// Blender and three.js draw it, before it goes out in the gamma the target is written in.
+// See docs/design/viewport.md.
+const EXPOSURE = 1.0;
+// A milder Punchy look than Blender's over AgX, its power alone: a resin's colour holds its
+// strength instead of AgX's own muted base, its hue untouched.
+const LOOK_POWER = 1.15;
+
+fn linear_of(gamma: vec3<f32>) -> vec3<f32> {
+    return pow(max(gamma, vec3<f32>(0.0)), vec3<f32>(2.2));
+}
+
+// AgX's sigmoid as the polynomial three.js and Godot fit to it, over log2 exposure.
+fn agx_contrast(x: vec3<f32>) -> vec3<f32> {
+    let x2 = x * x;
+    let x4 = x2 * x2;
+    return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+}
+
+// Linear sRGB light to the gamma the target takes, through AgX.
+fn filmic(linear: vec3<f32>) -> vec3<f32> {
+    let srgb_to_rec2020 = mat3x3<f32>(
+        vec3<f32>(0.6274, 0.0691, 0.0164),
+        vec3<f32>(0.3293, 0.9195, 0.0880),
+        vec3<f32>(0.0433, 0.0113, 0.8956),
+    );
+    let rec2020_to_srgb = mat3x3<f32>(
+        vec3<f32>(1.6605, -0.1246, -0.0182),
+        vec3<f32>(-0.5876, 1.1329, -0.1006),
+        vec3<f32>(-0.0728, -0.0083, 1.1187),
+    );
+    let inset = mat3x3<f32>(
+        vec3<f32>(0.856627153315983, 0.137318972929847, 0.11189821299995),
+        vec3<f32>(0.0951212405381588, 0.761241990602591, 0.0767994186031903),
+        vec3<f32>(0.0482516061458583, 0.101439036467562, 0.811302368396859),
+    );
+    let outset = mat3x3<f32>(
+        vec3<f32>(1.1271005818144368, -0.1413297634984383, -0.14132976349843826),
+        vec3<f32>(-0.11060664309660323, 1.157823702216272, -0.11060664309660294),
+        vec3<f32>(-0.016493938717834573, -0.016493938717834257, 1.2519364065950405),
+    );
+    let low_ev = -12.47393;
+    let high_ev = 4.026069;
+    var colour = inset * (srgb_to_rec2020 * (linear * EXPOSURE));
+    colour = clamp((log2(max(colour, vec3<f32>(1e-10))) - low_ev) / (high_ev - low_ev), vec3<f32>(0.0), vec3<f32>(1.0));
+    colour = outset * pow(max(agx_contrast(colour), vec3<f32>(0.0)), vec3<f32>(LOOK_POWER));
+    colour = rec2020_to_srgb * pow(max(colour, vec3<f32>(0.0)), vec3<f32>(2.2));
+    return pow(clamp(colour, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+}
+
 // `lit` under the studio, for the same premultiplied `base` and `alpha`.
 fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     return finish(base, 0.0, alpha, normal, world);
@@ -271,23 +325,30 @@ fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> v
 // A surface under the studio: `metal` 0.0 for a dielectric, whose reflection is white, to
 // 1.0 for a metal, which has no diffuse and reflects in its own colour; `shine` scales both.
 fn finish(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    return filmic(radiance(linear_of(base), metal, shine, normal, world));
+}
+
+// The light leaving a surface of linear colour `base` under the studio, before the curve.
+fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     let view = normalize(globals.eye.xyz - world);
     let key = normalize(-globals.key_towards.xyz);
     let fill = normalize(-globals.fill_towards.xyz);
     let top = vec3<f32>(0.0, 0.0, 1.0);
-    let room = mix(globals.ground.rgb, globals.sky.rgb, smoothstep(-0.6, 1.0, normal.z));
+    let sky = linear_of(globals.sky.rgb);
+    let ground = linear_of(globals.ground.rgb);
+    let key_colour = linear_of(globals.key_color.rgb);
+    let room = mix(ground, sky, smoothstep(-0.6, 1.0, normal.z));
     let reaches = key_reaches(world, normal);
     let diffuse = room * STUDIO_AMBIENT
-        + globals.key_color.rgb * STUDIO_KEY * wrapped(dot(normal, key)) * reaches
-        + globals.sky.rgb * STUDIO_TOP * wrapped(normal.z)
-        + globals.fill_color.rgb * FILL_SHARE * max(dot(normal, fill), 0.0);
+        + key_colour * STUDIO_KEY * wrapped(dot(normal, key)) * reaches
+        + sky * STUDIO_TOP * wrapped(normal.z)
+        + linear_of(globals.fill_color.rgb) * FILL_SHARE * max(dot(normal, fill), 0.0);
     let mirror = reflect(-view, normal);
-    let boxes = globals.key_color.rgb * softbox(mirror, key) * reaches
-        + globals.sky.rgb * 0.6 * softbox(mirror, top);
+    let boxes = key_colour * softbox(mirror, key) * reaches + sky * 0.6 * softbox(mirror, top);
     let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
     let tint = mix(vec3<f32>(1.0), base, metal);
     let fresnel = mix(vec3<f32>(0.04), base, metal) + (1.0 - mix(vec3<f32>(0.04), base, metal)) * grazing;
-    let seen = mix(globals.ground.rgb, globals.sky.rgb, mirror.z * 0.5 + 0.5);
+    let seen = mix(ground, sky, mirror.z * 0.5 + 0.5);
     let reflected = boxes * SOFTBOX_SHARE * tint + seen * fresnel * mix(FRESNEL_SHARE, 1.0, metal);
     return base * (1.0 - metal) * diffuse + reflected * shine;
 }

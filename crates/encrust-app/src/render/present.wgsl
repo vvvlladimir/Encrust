@@ -102,5 +102,6 @@ fn present_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4
         return colour;
     }
     let kept = clamp(1.0 - occlusion.shading.z * enclosed(position.xy, depth), 0.0, 1.0);
-    return vec4<f32>(colour.rgb * kept, colour.a);
+    // Light taken away in linear light, not off the gamma the plane holds.
+    return vec4<f32>(colour.rgb * pow(kept, 1.0 / 2.2), colour.a);
 }
