@@ -521,6 +521,16 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   itself. A clear resin casts none: it lets the key through, and what grounds it is the
   contact shadow.
 
+- **A picture at rest.** Once the camera stops, the render view sharpens over frames, as
+  three.js's `TAARenderPass` accumulates, with no reprojection: each frame is drawn a
+  fraction of a pixel aside, by Halton (2, 3) as TAA jitters, and averaged into an
+  RGBA16Float plane by a constant blend of `1/(n+1)` for the n-th, a running mean the copy
+  then shows. After sixteen frames the picture is held and nothing is drawn until it
+  changes; the window asks for a frame at a time until then. What it is a picture of is
+  hashed on the card — the whole uniform and every mesh, face range and placement drawn — so
+  any change, not only the camera's, starts it again. Edges lose their steps, and the grain
+  of the crease shading, the frosting and the soft shadows averages away.
+
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.
 

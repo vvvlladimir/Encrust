@@ -1,6 +1,7 @@
 //! Replaying what `prepare` decided: the passes, in the order the stencil needs them.
 
 use super::pipelines::MATERIAL_ABOVE;
+use super::settle;
 use super::*;
 use crate::render::occlusion::Occlusion;
 
@@ -15,6 +16,14 @@ impl ViewportResources {
         size_px: [u32; 2],
         viewport: egui::epaint::ViewportInPixels,
     ) {
+        // A picture at rest that has averaged enough is held as it is.
+        if self
+            .frame
+            .sample
+            .is_some_and(|sample| sample >= SETTLED_SAMPLES)
+        {
+            return;
+        }
         self.bake_shadow(encoder);
         self.bake_key_shadow(encoder);
         self.measure_thickness(device, encoder, size_px, &viewport);
@@ -35,6 +44,9 @@ impl ViewportResources {
         if self.frame.clear {
             self.paint_clear(encoder, &viewport);
         }
+        let at = (size_px, &viewport);
+        self.target
+            .accumulate(device, encoder, at, self.frame.sample);
         if let Some(timer) = &mut self.timer {
             timer.end(encoder, self.planned_faces);
         }
@@ -50,6 +62,21 @@ impl ViewportResources {
         ];
         let at = std::mem::offset_of!(Globals, screen) as wgpu::BufferAddress;
         queue.write_buffer(&self.globals, at, bytemuck::bytes_of(&screen));
+        // Each frame of a picture at rest is drawn a fraction of a pixel aside.
+        if let Some(sample) = self.frame.sample {
+            let size_px = [screen[2], screen[3]];
+            let moved = settle::jittered(
+                self.frame.view_projection,
+                settle::jitter_px(sample),
+                size_px,
+            );
+            let at = std::mem::offset_of!(Globals, view_projection) as wgpu::BufferAddress;
+            queue.write_buffer(
+                &self.globals,
+                at,
+                bytemuck::bytes_of(&moved.to_cols_array_2d()),
+            );
+        }
     }
 
     /// Lays what `draw` drew over egui's pass.

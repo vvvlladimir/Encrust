@@ -9,7 +9,7 @@ use super::{GHOST_OPACITY, levels, picks_instead, text};
 use crate::drain::Placing;
 use crate::panels::{Window, section};
 use crate::relief::ReliefMode;
-use crate::render::{Banding, Ghost, PrintLook, Shading, ViewportCallback};
+use crate::render::{Banding, Ghost, PrintLook, SETTLED_SAMPLES, Shading, ViewportCallback};
 use crate::scene::{ObjectId, Scene};
 use crate::ui::theme;
 use crate::viewport_input::Pointer;
@@ -141,7 +141,16 @@ pub(super) fn paint_plate(
         section_mm,
         (rect, ui.input(|i| i.pointer.hover_pos())),
     ))
-    .timed(window.view.ui_ms, window.view.budget.report(), levels.faces);
+    .timed(window.view.ui_ms, window.view.budget.report(), levels.faces)
+    .settling(std::sync::Arc::clone(&window.view.settled));
+    // The picture at rest sharpens a frame at a time until it has averaged enough.
+    let settled = window
+        .view
+        .settled
+        .load(std::sync::atomic::Ordering::Relaxed);
+    if window.view.options.render && !levels.light.settling && settled <= SETTLED_SAMPLES {
+        ui.ctx().request_repaint();
+    }
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
     draw_axis_letters(ui, window, rect);

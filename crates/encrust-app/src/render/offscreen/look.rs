@@ -229,3 +229,45 @@ fn a_thin_wall_glows_with_the_key_behind_it_once_the_camera_rests() {
         "a shell glows lighter at rest, got {lightened} pixels lighter"
     );
 }
+
+#[test]
+fn a_picture_at_rest_averages_its_edges_then_holds() {
+    let camera = OrbitCamera {
+        target: Vec3::new(20.0, 20.0, 6.0),
+        distance_mm: 60.0,
+        ..OrbitCamera::default()
+    };
+    let models = wall_on_a_slab();
+    let look = Some(Look {
+        projection: camera.projection(1.0),
+        ..studio()
+    });
+    let frame = |rested| {
+        paint(
+            camera,
+            None,
+            &models,
+            &[],
+            Marks {
+                look,
+                presented: true,
+                rested,
+                ..Marks::default()
+            },
+        )
+    };
+    let Some(first) = frame(0) else {
+        return;
+    };
+    let settled = frame(crate::render::SETTLED_SAMPLES).expect("the adapter drew");
+    let held = frame(crate::render::SETTLED_SAMPLES + 3).expect("the adapter drew");
+    let (changed, _) = darker(&first, &settled, 6);
+    assert!(
+        changed > 300,
+        "the edges average out over frames, got {changed} pixels"
+    );
+    assert!(
+        settled == held,
+        "a picture that has averaged enough is held"
+    );
+}

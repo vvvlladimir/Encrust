@@ -22,6 +22,7 @@ mod globals;
 mod light;
 mod paint;
 mod pipelines;
+mod settle;
 mod shadow;
 mod textures;
 mod timer;
@@ -37,6 +38,8 @@ use draws::{Splits, cut_draws, splits_of};
 use globals::{Globals, globals_of};
 use light::KeyShadow;
 use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
+pub use settle::SETTLED_SAMPLES;
+use settle::Settling;
 use shadow::ContactShadow;
 
 /// Depth and stencil format of the viewport's own target, `render::target`. The stencil
@@ -117,6 +120,7 @@ pub struct ViewportResources {
     /// The globals with the key's map stood in for, bound while the map is drawn.
     casting_bind_group: wgpu::BindGroup,
     key: KeyShadow,
+    settling: Settling,
     model_pipeline: Facing,
     xray_pipeline: Facing,
     /// The clear-resin view. `reads_planes` is false on a WebGL canvas, where the render view
@@ -202,6 +206,9 @@ struct Frame {
     staged: bool,
     /// The projection the copy shades creases through, or `None` while it does not.
     occlusion: Option<core_geometry::Mat4>,
+    /// The frame's view before any jitter, and which frame of the picture at rest it is.
+    view_projection: core_geometry::Mat4,
+    sample: Option<u32>,
 }
 
 impl ViewportResources {
@@ -228,6 +235,7 @@ impl ViewportResources {
             globals_bind_group,
             casting_bind_group,
             key,
+            settling: Settling::default(),
             model_pipeline: solid.model,
             xray_pipeline: solid.xray,
             clear: build.clear(),
@@ -271,7 +279,10 @@ impl ViewportResources {
         self.uploaded_faces = 0;
         self.shadow_baked = false;
         self.read_card_times(device, queue);
-        queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals_of(&frame)));
+        let globals = globals_of(&frame);
+        queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
+        self.frame.view_projection = frame.view_projection;
+        self.frame.sample = self.settle(&frame, &globals);
         self.write_geometry(device, queue, &frame);
         self.count_frame(&frame);
         self.record(device, queue, &frame);

@@ -64,6 +64,9 @@ pub struct View {
     pub budget: crate::render::Budget,
     /// Whether `budget` was learnt in the render view, which costs more a face and a frame.
     pub budget_rendered: bool,
+    /// How many frames the render view's picture at rest has averaged, as the card last
+    /// said: the window draws again until it has enough.
+    pub settled: std::sync::Arc<std::sync::atomic::AtomicU32>,
     pub drawn_faces: Option<usize>,
     /// The level each model was last drawn at, 0 for its own mesh.
     pub levels: core_geometry::FastMap<crate::scene::ObjectId, usize>,
@@ -94,6 +97,7 @@ impl View {
             lods: crate::render::Lods::default(),
             budget: crate::render::Budget::default(),
             budget_rendered: false,
+            settled: std::sync::Arc::default(),
             drawn_faces: None,
             levels: core_geometry::FastMap::default(),
         }

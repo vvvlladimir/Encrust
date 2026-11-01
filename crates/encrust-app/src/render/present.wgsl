@@ -119,3 +119,11 @@ fn present_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4
     // Light taken away in linear light, not off the gamma the plane holds.
     return vec4<f32>(colour.rgb * pow(kept, 1.0 / 2.2), colour.a);
 }
+
+// The render view at rest: the frames averaged into the accumulated plane, shown as they are.
+@group(1) @binding(0) var accumulated: texture_2d<f32>;
+
+@fragment
+fn accumulated_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    return textureLoad(accumulated, vec2<i32>(position.xy), 0);
+}

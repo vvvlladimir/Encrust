@@ -6,6 +6,7 @@ use egui::epaint::ViewportInPixels;
 
 use wgpu::util::DeviceExt as _;
 
+use crate::render::accumulate::Accumulation;
 use crate::render::gpu::{DEPTH_FORMAT, SAMPLE_COUNT};
 use crate::render::occlusion::Occlusion;
 
@@ -19,6 +20,8 @@ pub struct SceneTarget {
     /// What the copy shades the creases with, and whether this frame's depth is kept for it.
     occlusion: wgpu::Buffer,
     occluding: bool,
+    /// The render view at rest, averaged over frames drawn a fraction of a pixel apart.
+    accumulation: Accumulation,
 }
 
 struct Planes {
@@ -67,6 +70,7 @@ impl SceneTarget {
         Self {
             format,
             present: present_pipeline(device, format, &layout),
+            accumulation: Accumulation::new(device, format, &layout),
             layout,
             planes: None,
             occlusion,
@@ -124,6 +128,24 @@ impl SceneTarget {
         Some(pass(planes, encoder, viewport, opening, None))
     }
 
+    /// Averages the frame just drawn into the accumulated plane as its `sample`-th, or with
+    /// `None` shows the frame as drawn.
+    pub fn accumulate(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        at: ([u32; 2], &ViewportInPixels),
+        sample: Option<u32>,
+    ) {
+        match (sample, &self.planes) {
+            (Some(sample), Some(planes)) => {
+                self.accumulation
+                    .add(device, encoder, &planes.bind_group, at, sample);
+            }
+            _ => self.accumulation.stop(),
+        }
+    }
+
     /// The colour plane, which the clear resin copies what stands behind it out of.
     pub fn colour(&self) -> Option<&wgpu::Texture> {
         self.planes.as_ref().map(|planes| &planes.colour_texture)
@@ -135,6 +157,10 @@ impl SceneTarget {
         let Some(planes) = &self.planes else {
             return;
         };
+        if self.accumulation.shown() {
+            self.accumulation.show(render_pass, &planes.bind_group);
+            return;
+        }
         render_pass.set_pipeline(&self.present);
         render_pass.set_bind_group(0, &planes.bind_group, &[]);
         render_pass.draw(0..3, 0..1);

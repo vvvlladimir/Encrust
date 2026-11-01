@@ -168,4 +168,6 @@ pub(super) struct Marks<'a> {
     pub(super) presented: bool,
     /// Whether the camera moves, which holds back what is only drawn at rest.
     pub(super) moving: bool,
+    /// Frames of the same picture drawn before the one read, as a window at rest draws them.
+    pub(super) rested: u32,
 }

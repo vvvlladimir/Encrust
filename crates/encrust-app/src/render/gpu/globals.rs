@@ -8,7 +8,7 @@ use super::*;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub(super) struct Globals {
-    view_projection: [[f32; 4]; 4],
+    pub(super) view_projection: [[f32; 4]; 4],
     /// Its inverse: the render view's backdrop turns a pixel back into a line of sight.
     inverse_view_projection: [[f32; 4]; 4],
     /// The key light's view over the render view's set, which its shadow map is drawn in.

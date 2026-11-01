@@ -93,6 +93,8 @@ pub struct ViewportCallback {
     ui_ms: f32,
     /// Where the card's time over each frame goes, with the models' faces it drew.
     report: Option<Sender<CardTime>>,
+    /// Where the card says how many frames the picture at rest has averaged.
+    settled: Option<Arc<std::sync::atomic::AtomicU32>>,
     faces: Option<usize>,
 }
 
@@ -232,8 +234,15 @@ impl ViewportCallback {
             },
             ui_ms: 0.0,
             report: None,
+            settled: None,
             faces: None,
         }
+    }
+
+    /// The same frame, telling `settled` how many frames its picture at rest has averaged.
+    pub fn settling(mut self, settled: Arc<std::sync::atomic::AtomicU32>) -> Self {
+        self.settled = Some(settled);
+        self
     }
 
     /// The same frame, logged with what the window's last pass over its panels took, and
@@ -389,6 +398,9 @@ impl CallbackTrait for ViewportCallback {
         let started = web_time::Instant::now();
         super::with_resources(callback_resources, |resources| {
             resources.report_to(self.report.clone(), self.faces);
+            if let Some(settled) = &self.settled {
+                resources.report_samples_to(Arc::clone(settled));
+            }
             resources.prepare(
                 device,
                 queue,

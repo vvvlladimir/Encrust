@@ -56,6 +56,7 @@ pub(super) fn paint_after<'a>(
         wide_lines,
         presented,
         moving,
+        rested,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -91,6 +92,13 @@ pub(super) fn paint_after<'a>(
     };
     for earlier in before {
         resources.prepare(device, queue, input(earlier));
+    }
+    // Frames of the same picture drawn first, as the window draws them while it rests.
+    for _ in 0..rested {
+        resources.prepare(device, queue, input(models));
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        resources.draw(device, queue, &mut encoder, [SIZE, SIZE], whole());
+        queue.submit([encoder.finish()]);
     }
     resources.prepare(device, queue, input(models));
 
