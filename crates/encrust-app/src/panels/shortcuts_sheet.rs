@@ -9,12 +9,12 @@ use crate::shortcuts::keymap::{self, MOST_CHORDS, Slot};
 use crate::shortcuts::{
     Action, BINDINGS, GESTURES, Group, chord_keys, chord_text, chords, modifier_keys,
 };
-use crate::ui::page_title;
 use crate::ui::window_frame::{child, scrolled, show, with_footer, with_header};
 use crate::ui::{
     BindingPress, BindingRow, Confirm, Inline, NavAside, Recording, binding_row, chooser_group,
     confirm_button, find_line, group_name, icon, inline_button, key_row, nav_row, notice, theme,
 };
+use crate::ui::{kept, page_title};
 
 /// What the window holds between frames while it is open.
 #[derive(Clone, Default)]
@@ -51,7 +51,9 @@ impl Entry {
 /// Shows the window over the plate, and closes it on Escape, the cross or a click outside.
 pub fn ui(ctx: &egui::Context, open: &mut bool) {
     let id = egui::Id::new("shortcuts");
+    let page_id = id.with("page");
     let mut sheet: Sheet = ctx.data(|data| data.get_temp(id)).unwrap_or_default();
+    sheet.page = kept::get(ctx, page_id).flatten();
     let title = tr!("shortcuts-title");
     let close = show(
         ctx,
@@ -69,6 +71,7 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
     if close {
         *open = false;
     }
+    kept::set(ctx, page_id, &sheet.page);
     if *open {
         ctx.data_mut(|data| data.insert_temp(id, sheet));
     } else {

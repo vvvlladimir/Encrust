@@ -116,7 +116,7 @@ fn tool_id(tool: Tool) -> &'static str {
 }
 
 /// Which block of the sheet a binding is listed in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Group {
     Tools,
     Plate,
