@@ -594,6 +594,32 @@ mod tests {
         }
     }
 
+    /// The amber of a picked model once faded into the pale plate. 3:1 is WCAG's floor for
+    /// a graphic; the same order of lightness keeps each role recognisable across palettes.
+    #[test]
+    fn a_model_stands_off_the_plate_in_one_order_under_both_palettes() {
+        for (theme, scene) in [("dark", &scene::DARK), ("light", &scene::LIGHT)] {
+            let surfaces = [
+                ("selected", scene.selected),
+                ("object", scene.object),
+                ("unsound", scene.unsound),
+            ];
+            for (name, surface) in surfaces {
+                let ratio = contrast(surface, scene.plate);
+                assert!(
+                    ratio >= 3.0,
+                    "{theme} {name} on the plate is {ratio:.2}:1, want 3:1"
+                );
+            }
+            assert!(
+                surfaces
+                    .windows(2)
+                    .all(|pair| luminance(pair[0].1) > luminance(pair[1].1)),
+                "{theme}: a picked model is the lightest, an unsound one the darkest"
+            );
+        }
+    }
+
     /// Dark surfaces climb towards the pointer; light ones fall from a white panel.
     #[test]
     fn the_surfaces_are_ordered_from_sunken_to_hover() {
