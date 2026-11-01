@@ -15,6 +15,7 @@ use crate::scene::Mapped;
 use crate::ui::theme;
 
 mod buffers;
+mod can_print;
 mod clear;
 mod cost;
 mod draws;
@@ -36,6 +37,7 @@ pub use draws::{
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
+use can_print::CanPrintTexture;
 use clear::Clear;
 use draws::{Splits, cut_draws, splits_of};
 use environment::Environment;
@@ -129,6 +131,8 @@ pub struct ViewportResources {
     key: KeyShadow,
     /// The studio as reflections see it, baked for the render view.
     environment: Environment,
+    /// The print round the render view's can.
+    can_print: CanPrintTexture,
     settling: Settling,
     models: Models,
     xray_pipeline: Facing,
@@ -238,9 +242,11 @@ impl ViewportResources {
         let build = Builder::new(device, target_format, &globals_layout);
         let key = KeyShadow::new(device, build.key_cast());
         let environment = build.environment();
+        let can_print = CanPrintTexture::new(device);
         let both = (&globals_layout, &globals);
-        let globals_bind_group = key.globals_group(device, both, &environment, false);
-        let casting_bind_group = key.globals_group(device, both, &environment, true);
+        let textures = (&environment, &can_print);
+        let globals_bind_group = key.globals_group(device, both, textures, false);
+        let casting_bind_group = key.globals_group(device, both, textures, true);
 
         let solid = build.solid();
         let label = build.label();
@@ -253,6 +259,7 @@ impl ViewportResources {
             casting_bind_group,
             key,
             environment,
+            can_print,
             settling: Settling::default(),
             models: solid.models,
             xray_pipeline: solid.xray,
@@ -315,6 +322,7 @@ impl ViewportResources {
         self.record(device, queue, &frame);
         self.shadow.want(&frame);
         self.want_key_shadow(device, &frame);
+        self.want_can_print(device, queue, &frame);
         self.drop_what_nobody_drew();
     }
 

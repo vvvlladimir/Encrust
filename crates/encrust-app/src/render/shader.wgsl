@@ -123,6 +123,8 @@ struct Globals {
 @group(0) @binding(2) var key_shadow_sampler: sampler_comparison;
 @group(0) @binding(3) var environment_map: texture_2d<f32>;
 @group(0) @binding(4) var environment_sampler: sampler;
+@group(0) @binding(5) var can_print_texture: texture_2d<f32>;
+@group(0) @binding(6) var can_print_sampler: sampler;
 
 struct ModelVertex {
     @location(0) position: vec3<f32>,

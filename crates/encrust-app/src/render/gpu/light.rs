@@ -7,6 +7,7 @@ use core_geometry::glam::camera::rh::proj::directx::orthographic;
 use core_geometry::glam::camera::rh::view::look_to_mat4;
 use core_geometry::{Mat4, Vec3};
 
+use super::can_print::CanPrintTexture;
 use super::environment::Environment;
 use super::shadow::{Bake, hash_casters};
 use super::*;
@@ -51,13 +52,13 @@ impl KeyShadow {
         }
     }
 
-    /// The globals, with the key's map and the studio's where the shader reads them: their
-    /// stand-ins for a pass that draws into either, `casting`, or before there is a map.
+    /// The globals, with the key's map, the studio's and the can's print where the shader reads
+    /// them: stand-ins for a pass that draws into either map, `casting`, or before there is one.
     pub(super) fn globals_group(
         &self,
         device: &wgpu::Device,
         (layout, globals): (&wgpu::BindGroupLayout, &wgpu::Buffer),
-        environment: &Environment,
+        (environment, can_print): (&Environment, &CanPrintTexture),
         casting: bool,
     ) -> wgpu::BindGroup {
         let map = match (&self.map, casting) {
@@ -91,6 +92,14 @@ impl KeyShadow {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: wgpu::BindingResource::Sampler(&environment.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(&can_print.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::Sampler(&can_print.sampler),
                 },
             ],
         })
@@ -166,12 +175,16 @@ impl ViewportResources {
         if self.key.map.is_none() {
             self.key.map = Some(map(device, KEY_TEXELS));
             self.key.fresh = true;
-            let globals = (&self.globals_layout, &self.globals);
-            self.globals_bind_group =
-                self.key
-                    .globals_group(device, globals, &self.environment, false);
+            self.rebind_globals(device);
         }
         self.key.bake.want(Some(cast_by(frame, &look)), frame.light);
+    }
+
+    /// Binds the globals again after a texture they read was made.
+    pub(super) fn rebind_globals(&mut self, device: &wgpu::Device) {
+        let globals = (&self.globals_layout, &self.globals);
+        let textures = (&self.environment, &self.can_print);
+        self.globals_bind_group = self.key.globals_group(device, globals, textures, false);
     }
 
     /// Draws every model and marker into the map from the key, if what casts it changed; a

@@ -1,7 +1,7 @@
 //! The render view's set: a cutting mat under the models with things everyone knows the size
 //! of lying around them, at their real size. See docs/design/viewport.md.
 
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_6};
 use std::sync::{Arc, OnceLock};
 
 use core_geometry::{Aabb, Mesh, Quat, Scalar, Transform, Vec2, Vec3, cuboid, smooth_normals};
@@ -12,7 +12,10 @@ use crate::render::gpu::{Desk, ModelDraw};
 use crate::render::vertex::ModelInstance;
 use crate::ui::theme;
 
+mod can_print;
 mod shapes;
+
+pub use can_print::CanPrint;
 
 /// Self-healing cutting mats as sold, millimetres across and along: A3, A2, A1 and A0. A set
 /// past the largest takes a mat cut to it.
@@ -94,7 +97,12 @@ pub fn props() -> &'static [Prop] {
             ),
             prop(shapes::ruler(), Material::Steel, along_u),
             prop(shapes::coin(), Material::Coin, flat),
-            prop(shapes::can(), Material::Can, flat),
+            // Its print turned 30° from the front, towards the models on its right.
+            prop(
+                shapes::can(),
+                Material::Can,
+                Quat::from_rotation_z(FRAC_PI_6),
+            ),
             prop(
                 shapes::banana(),
                 Material::Banana,

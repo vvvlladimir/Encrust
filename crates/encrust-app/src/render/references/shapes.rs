@@ -11,6 +11,8 @@ pub const COIN_MM: [Scalar; 2] = [23.25, 2.33];
 /// A 330 ml drinks can, millimetres: its radius and height.
 pub const CAN_RADIUS_MM: Scalar = 33.1;
 pub const CAN_HEIGHT_MM: Scalar = 115.2;
+/// Where its straight wall, which the print wraps, starts and ends, millimetres up it.
+pub const CAN_WALL_MM: [Scalar; 2] = [5.0, CAN_HEIGHT_MM - 11.0];
 /// Millimetres the lid sits under the rim.
 const LID_SUNK_MM: Scalar = 2.0;
 /// A capped ballpoint pen's length and the radius of the cap it lies on: millimetres.
@@ -61,8 +63,8 @@ pub fn can() -> Mesh {
     let rings = [
         (0.0, 26.0),
         (1.5, 30.5),
-        (5.0, wall),
-        (height - 11.0, wall),
+        (CAN_WALL_MM[0], wall),
+        (CAN_WALL_MM[1], wall),
         (height - 5.5, 29.5),
         (height - 0.6, 27.3),
         (height, 26.6),

@@ -524,10 +524,22 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   `−2 − material`; `prop_colour` paints it in its own millimetres under `finish`, the
   studio's light with a metal term: the mat's 10 mm grid, every fifth line heavier, with a
   45° line from each near corner and the centimetres printed along two edges in
-  seven-segment figures; the can's red lacquered wrap with a white wave between bare
-  aluminium, its lid sunk in a rolled rim under its tab; the banana yellowing into a brown
-  stem, dark at its blossom end, streaked and freckled by smooth value noise; the coin's two
-  metals inside its raised rim. Nothing is shipped for any of it.
+  seven-segment figures; the can's lacquered wrap between bare metal of #151618, its lid
+  sunk in a rolled rim under its tab, the whole can turned 30° so its print faces the models
+  on its right; the banana yellowing into a brown stem, dark at its blossom end, streaked and
+  freckled by smooth value noise; the coin's two metals inside its raised rim. Only the can's
+  label is a picture.
+- **The can's print.** The wrap carries `assets/props/can-label.jpg`, the one picture the set
+  ships; any picture `image` decodes replaces it by swapping the file. `references/can_print.rs`
+  sets it as high as the can's whole straight wall, 5 to 104.2 mm (`CAN_WALL_MM`), and as wide
+  as it is in proportion, never past the girth, in the middle of a 2048 texel girth; each row
+  of the gap behind fades from the picture's right edge round to its left, each edge the mean
+  of its outer 1 %, so the wrap closes with no seam. A mip chain is averaged in linear light,
+  the texels kept encoded, since `finish` linearises every colour it takes. It is drawn off
+  the drawing thread when the window opens and bound beside the globals the first frame the
+  render view stands the props, a dark texel standing in until then. A prop is shaded under
+  its material's switch, where no derivative may be taken, so `can_print` picks its level
+  from the pixel's footprint in millimetres.
 - **The key's shadow.** Everything in the set, the models and the props and the mat, casts
   a shadow from the key light. `light.rs` draws their depth from the key, orthographic over
   the mat and 60 mm past it, into a 2048² map: an A2 mat is 0.3 mm a texel. It is drawn

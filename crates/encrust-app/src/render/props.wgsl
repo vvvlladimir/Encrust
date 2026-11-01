@@ -9,9 +9,8 @@ const PROP_BELOW = -1.5;
 const MAT_GREEN = vec3<f32>(0.07, 0.29, 0.22);
 const MAT_EDGE = vec3<f32>(0.05, 0.21, 0.16);
 const MAT_INK = vec3<f32>(0.78, 0.88, 0.80);
-const CAN_RED = vec3<f32>(0.78, 0.10, 0.06);
-const CAN_WHITE = vec3<f32>(0.95, 0.95, 0.93);
-const ALUMINIUM = vec3<f32>(0.82, 0.84, 0.87);
+// #151618, a dark metal.
+const CAN_METAL = vec3<f32>(0.082, 0.086, 0.094);
 const BANANA_YELLOW = vec3<f32>(0.95, 0.79, 0.22);
 const BANANA_STEM = vec3<f32>(0.44, 0.42, 0.17);
 const BANANA_TIP = vec3<f32>(0.24, 0.16, 0.08);
@@ -27,9 +26,13 @@ const MAT_BORDER = 10.0;
 // Where the banana's arc starts and ends, radians. Must match references/shapes.rs.
 const BANANA_FROM = 0.75;
 const BANANA_TO = 2.39;
-// Where on a can its printed wrap starts and ends, millimetres up its wall.
-const CAN_LABEL_FROM = 14.0;
-const CAN_LABEL_TO = 100.0;
+// Where on a can its print starts and ends, millimetres up it: its whole straight wall. Must
+// match CAN_WALL_MM in references/shapes.rs.
+const CAN_LABEL_FROM = 5.0;
+const CAN_LABEL_TO = 104.2;
+// The angle round a can in its own frame, radians from its x axis, its print's middle faces;
+// the prop's turn in references.rs sets where that is in the set.
+const CAN_FRONT = -1.5707963;
 // Radius of the coin's nickel middle inside its brass ring, millimetres.
 const COIN_MIDDLE = 8.13;
 
@@ -124,16 +127,23 @@ fn edge_numbers(at: vec2<f32>, size: vec2<f32>, pixel: f32) -> f32 {
     return cover * (1.0 - smoothstep(0.3, 0.6, pixel));
 }
 
-// A can: bare aluminium at its foot and lid, a red lacquered wrap between with a white wave.
+// A can: bare dark metal at its foot and lid, a lacquered wrap between printed with its brand.
 fn can_finish(local: vec3<f32>, px: vec3<f32>) -> vec4<f32> {
     let pixel = max(max(px.x, px.y), px.z);
-    let around = atan2(local.y, local.x);
-    let wave = 57.0 + 11.0 * sin(2.0 * around + 0.6);
-    let ribbon = 1.0 - smoothstep(6.0 - pixel, 6.0 + pixel, abs(local.z - wave));
     let wrap = smoothstep(CAN_LABEL_FROM - pixel, CAN_LABEL_FROM + pixel, local.z)
         * (1.0 - smoothstep(CAN_LABEL_TO - pixel, CAN_LABEL_TO + pixel, local.z));
-    let painted = mix(CAN_RED, CAN_WHITE, ribbon);
-    return vec4<f32>(mix(ALUMINIUM, painted, wrap), mix(1.0, 0.2, wrap));
+    return vec4<f32>(mix(CAN_METAL, can_print(local, pixel), wrap), mix(1.0, 0.2, wrap));
+}
+
+// The print, which spans the wall's whole girth, its first row at the top. Its level is chosen
+// by hand: a prop is shaded under its material's switch, where no derivative may be taken.
+fn can_print(local: vec3<f32>, pixel_mm: f32) -> vec3<f32> {
+    let around = (atan2(local.y, local.x) - CAN_FRONT) / 6.2831853 + 0.5;
+    let tall = CAN_LABEL_TO - CAN_LABEL_FROM;
+    let up = (local.z - CAN_LABEL_FROM) / tall;
+    let texel_mm = tall / f32(textureDimensions(can_print_texture).y);
+    let level = log2(max(pixel_mm / texel_mm, 1.0));
+    return textureSampleLevel(can_print_texture, can_print_sampler, vec2<f32>(around, 1.0 - up), level).rgb;
 }
 
 fn hash(cell: vec3<f32>) -> f32 {
