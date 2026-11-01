@@ -23,7 +23,8 @@ pub fn start_title(ui: &mut Ui, title: &str, lede: &str) {
         .color(colors.text_high);
     ui.label(title);
     ui.add_space(4.0);
-    ui.label(
+    super::paragraph(
+        ui,
         egui::RichText::new(lede)
             .font(theme::lede())
             .color(colors.text_mid),

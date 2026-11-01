@@ -16,11 +16,11 @@ pub fn plate_outputs(output: &Path, plates: &[(u32, &str)]) -> Vec<(u32, PathBuf
 
 fn beside(output: &Path, suffix: &str) -> PathBuf {
     let stem = output.file_stem().unwrap_or_default().to_string_lossy();
-    let mut path = output.with_file_name(format!("{stem}-{suffix}"));
-    if let Some(extension) = output.extension() {
-        path.set_extension(extension);
-    }
-    path
+    // Not `set_extension`, which would cut a stem holding a dot at it.
+    output.with_file_name(match output.extension() {
+        Some(extension) => format!("{stem}-{suffix}.{}", extension.to_string_lossy()),
+        None => format!("{stem}-{suffix}"),
+    })
 }
 
 #[cfg(test)]
@@ -48,6 +48,13 @@ mod tests {
         let outputs = plate_outputs(Path::new("/tmp/batch.goo"), &[(0, "Body"), (1, "Body")]);
         assert_eq!(outputs[0].1, PathBuf::from("/tmp/batch-body.goo"));
         assert_eq!(outputs[1].1, PathBuf::from("/tmp/batch-plate-2.goo"));
+    }
+
+    #[test]
+    fn a_dot_in_the_typed_name_keeps_the_plates_apart() {
+        let outputs = plate_outputs(Path::new("/tmp/my.part.goo"), &[(0, "A"), (1, "B")]);
+        assert_eq!(outputs[0].1, PathBuf::from("/tmp/my.part-a.goo"));
+        assert_eq!(outputs[1].1, PathBuf::from("/tmp/my.part-b.goo"));
     }
 
     #[test]

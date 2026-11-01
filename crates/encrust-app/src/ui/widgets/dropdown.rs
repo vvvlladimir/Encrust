@@ -62,11 +62,8 @@ pub fn dropdown(ui: &mut Ui, face: &DropdownFace<'_>, width: f32) -> Response {
     let right = caret_and_count(painter, rect, face);
     let left = match &face.lead {
         Some(lead) => {
-            lead_at(
-                painter,
-                pos2(rect.left() + PAD + GLYPH_W / 2.0, rect.center().y),
-                lead,
-            );
+            let at = pos2(rect.left() + PAD + GLYPH_W / 2.0, rect.center().y);
+            lead.paint(painter, at, GLYPH_W, DOT_R);
             rect.left() + PAD + GLYPH_W + GAP
         }
         None => rect.left() + PAD,
@@ -123,23 +120,6 @@ fn label(painter: &egui::Painter, room: Rect, face: &DropdownFace<'_>) {
     let galley = painter.layout_job(job);
     let top = room.center().y - galley.size().y / 2.0;
     painter.galley(pos2(room.left(), top), galley, colors.text_high);
-}
-
-fn lead_at(painter: &egui::Painter, at: egui::Pos2, lead: &Lead<'_>) {
-    match lead {
-        Lead::Glyph(glyph) => {
-            painter.text(
-                at,
-                Align2::CENTER_CENTER,
-                *glyph,
-                theme::icon(14.0),
-                theme::colors().text_low,
-            );
-        }
-        Lead::Dot(tint) => {
-            painter.circle_filled(at, DOT_R, *tint);
-        }
-    }
 }
 
 /// The list under `response`, as wide as the box, in the card every dropdown hangs in.
@@ -208,7 +188,7 @@ pub fn dropdown_row(ui: &mut Ui, row: &DropdownRow<'_>) -> Response {
     painter.rect_filled(rect, theme::R_CONTROL, fill);
     let lead_x = rect.left() + PAD + GLYPH_W / 2.0;
     if let Some(lead) = &row.lead {
-        lead_at(painter, pos2(lead_x, rect.center().y), lead);
+        lead.paint(painter, pos2(lead_x, rect.center().y), GLYPH_W, DOT_R);
     }
     let name_x = lead_x + GLYPH_W / 2.0 + GAP;
     painter.text(

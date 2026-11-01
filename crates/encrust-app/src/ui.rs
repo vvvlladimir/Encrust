@@ -44,6 +44,10 @@ pub use widgets::{
     Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, zoom_bar,
 };
 pub use widgets::{
+    HELP_D, SWITCH_TRACK, address_label, block_title, figure_line, page_title, paragraph,
+    state_word, status_glyph, tool_title, verdict_card,
+};
+pub use widgets::{
     LAYER_HANDLE, LAYER_RISK_HOT, LAYER_RISK_REACH, LayerMark, LayerMarks, PROFILE_PITCH,
     paint_layer_track, span_fraction, up,
 };
@@ -55,7 +59,3 @@ pub use widgets::{
 };
 pub use widgets::{ReadoutWords, layer_readout};
 pub use widgets::{ZONE_INSET, inline_button_w};
-pub use widgets::{
-    address_label, block_title, figure_line, page_title, state_word, status_glyph, tool_title,
-    verdict_card,
-};

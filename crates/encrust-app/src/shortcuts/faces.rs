@@ -15,10 +15,8 @@ pub fn chord_keys(chord: &KeyboardShortcut) -> Vec<&'static str> {
     keys
 }
 
-/// The face of each modifier held, in the order the platform writes them.
-///
-/// The Mac's key symbols are Phosphor glyphs: the text fonts have no ⇧, ⌥ or ⏎, and a
-/// missing glyph draws as an empty box.
+/// The face of each modifier held, in the platform's order; the Mac's are Phosphor glyphs, as
+/// the text fonts have no ⇧, ⌥ or ⏎.
 pub fn modifier_keys(modifiers: Modifiers) -> Vec<&'static str> {
     let held = if cfg!(target_os = "macos") {
         // Control, Option, Shift, Command: the order the platform writes them in.
@@ -63,9 +61,8 @@ fn key_text(key: Key) -> &'static str {
     }
 }
 
-/// The line a chord is kept as in the preferences: the modifiers in a fixed order, then the
-/// key's English name, `Cmd+Shift+Z`. Cmd is Ctrl off the Mac, so a file keeps its keys
-/// when moved between machines.
+/// The line a chord is kept as in the preferences, `Cmd+Shift+Z`; Cmd is Ctrl off the Mac, so a
+/// file keeps its keys when moved between machines.
 pub fn spec(chord: &KeyboardShortcut) -> String {
     let modifiers = chord.modifiers;
     let ctrl_alone = cfg!(target_os = "macos") || !modifiers.command;

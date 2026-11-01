@@ -2,7 +2,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use core_format::{ExposurePlan, PrintJob};
-use core_geometry::{Mesh, Scalar, signed_volume};
+use core_geometry::{Scalar, signed_volume};
 use core_slicer::LayerPlan;
 use printer_profiles::MaterialProfile;
 
@@ -200,15 +200,16 @@ fn plate_time(window: &Window) -> Option<String> {
     {
         return Some(duration(seconds));
     }
-    let value = match estimated_time_s(&window.doc.scene, &window.machine.slicing)? {
-        (longest, Some(shortest)) => tr!(
-            "summary-layer-range",
-            fewest = duration(shortest),
-            most = duration(longest)
-        ),
-        (seconds, None) => duration(seconds),
-    };
-    Some(tr!("summary-estimate", value = value))
+    Some(
+        match estimated_time_s(&window.doc.scene, &window.machine.slicing)? {
+            (longest, Some(shortest)) => tr!(
+                "summary-layer-range",
+                fewest = duration(shortest),
+                most = duration(longest)
+            ),
+            (seconds, None) => duration(seconds),
+        },
+    )
 }
 
 /// The time the stack `stack` counts would take, before anything is cut: one figure, or
@@ -239,7 +240,7 @@ struct Split {
 impl Split {
     fn of(tally: &Tally, material: &MaterialProfile) -> Self {
         let volumes_mm3 = [tally.model_mm3, tally.supports_mm3];
-        let g = volumes_mm3.map(|volume_mm3| volume_mm3 / 1000.0 * material.density_g_cm3);
+        let g = volumes_mm3.map(|volume_mm3| material.weight_g(volume_mm3));
         let [model, supports] = [0, 1].map(|at| material.cost(g[at], volumes_mm3[at]));
         Self {
             ml: volumes_mm3.map(|volume_mm3| volume_mm3 / 1000.0),
@@ -285,7 +286,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
     let plate = scene.active_plate();
     let mut hasher = DefaultHasher::new();
     for object in scene.printable(plate) {
-        Arc::as_ptr(model(object)).hash(&mut hasher);
+        Arc::as_ptr(object.printed()).hash(&mut hasher);
         object
             .transform
             .linear()
@@ -306,7 +307,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
 
     let mut tally = Tally::default();
     for object in scene.printable(plate) {
-        let mesh = model(object);
+        let mesh = object.printed();
         let grows = object.transform.linear().determinant().abs();
         tally.vertices += mesh.vertices.len();
         tally.triangles += mesh.faces.len();
@@ -320,10 +321,6 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
 }
 
 /// The mesh an object prints as: its shell once hollowed, its holes taken out.
-fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
-    object.printed()
-}
-
 /// The layer shown in Preview: its exposure, the print time until it is done, the area it
 /// cures and the resin that comes to.
 fn layer(ui: &mut egui::Ui, window: &Window) {

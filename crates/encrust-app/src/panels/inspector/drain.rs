@@ -359,7 +359,8 @@ fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) -> bool {
     ui.horizontal(|ui| {
         let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
         ui.painter().circle_filled(dot.center(), 3.5, colors.danger);
-        ui.label(
+        crate::ui::paragraph(
+            ui,
             egui::RichText::new(tr!(
                 "value-ml",
                 value = format!("{:.2}", volume_mm3 / 1000.0)

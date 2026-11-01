@@ -77,7 +77,8 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
         });
         ui.add_space(COLUMN_GAP);
         ui.vertical(|ui| {
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 RichText::new(&face.word)
                     .font(theme::dialog_title())
                     .color(colour_of(face.light)),

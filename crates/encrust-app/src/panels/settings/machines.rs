@@ -282,12 +282,14 @@ fn machine(ui: &mut Ui, side: Rect, window: &mut Window, action: &mut Option<Act
 fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
     let colors = theme::colors();
     ui.horizontal_centered(|ui| {
-        ui.label(
+        crate::ui::paragraph(
+            ui,
             RichText::new(name)
                 .font(theme::page_title(theme::PAGE_TITLE_PT))
                 .color(colors.text_high),
         );
-        ui.label(
+        crate::ui::paragraph(
+            ui,
             RichText::new(maker)
                 .font(theme::page_title(theme::PAGE_SUBTITLE_PT))
                 .color(colors.text_low),

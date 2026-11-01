@@ -501,8 +501,8 @@ Under `--json`, `status` prints `printer`, `protocol` (`sdcp-3`, `sdcp-1` or `pr
 ## Batch
 
 A folder of parts: every flag of `slice` applies to each model, one file and one
-`<model>.json` each, plus `batch.json` over the lot. `--jobs` cuts several at once. A model
-that fails does not stop the others; it is exit code 4 at the end:
+`<name>.json` report each, named by `--name`, plus `batch.json` over the lot. `--jobs` cuts
+several at once. A model that fails does not stop the others; it is exit code 4 at the end:
 
 ```sh
 encrust batch models/ \

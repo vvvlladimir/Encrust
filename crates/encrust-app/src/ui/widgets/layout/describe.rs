@@ -63,7 +63,7 @@ pub fn describe(ui: &mut Ui, text: &str) {
 /// most its text runs across before wrapping, points.
 const HELP_RING_D: f32 = 16.0;
 const HELP_GLYPH: f32 = 10.0;
-const HELP_D: f32 = 20.0;
+pub const HELP_D: f32 = 20.0;
 const HELP_W: f32 = 280.0;
 
 /// The question mark beside a title that reads out `texts`: on hover, and in a popup a
@@ -104,7 +104,8 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
     let show = |ui: &mut Ui| {
         ui.set_max_width(HELP_W);
         for text in &joined {
-            ui.label(
+            super::text::paragraph(
+                ui,
                 RichText::new(*text)
                     .font(theme::small())
                     .color(colors.text_mid),

@@ -23,11 +23,11 @@ use crate::panels::Window;
 use crate::settings::{Leaving, Section};
 use crate::status::Status;
 use crate::ui::window_frame as frame;
+use crate::ui::{HELP_D, SWITCH_TRACK, block_title, page_title, page_trail};
 use crate::ui::{
     NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
     nav_row, quiet_button, theme,
 };
-use crate::ui::{block_title, page_title, page_trail};
 use frame::{child, scrolled, with_header};
 pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
 pub use profile_files::{import_dropped, import_profile};
@@ -376,7 +376,14 @@ fn close_cards(ui: &mut egui::Ui) {
 fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String], on: Option<&mut bool>) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        block_title(ui, title);
+        let gap = ui.spacing().item_spacing.x;
+        let mark = if texts.is_empty() { 0.0 } else { HELP_D + gap };
+        let switch = if on.is_some() {
+            SWITCH_TRACK.x + gap
+        } else {
+            0.0
+        };
+        block_title(ui, title, mark + switch);
         if !texts.is_empty() {
             crate::ui::help_mark(ui, texts);
         }

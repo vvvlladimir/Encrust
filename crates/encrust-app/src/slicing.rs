@@ -562,7 +562,7 @@ fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
             } else {
                 tr!("slicing-clipped", count = clipped_layers)
             };
-            let weight_g = volume_mm3 / 1000.0 * material.density_g_cm3;
+            let weight_g = material.weight_g(volume_mm3);
             let cost = material
                 .cost(weight_g, volume_mm3)
                 .map(|cost| format!(", {cost:.2} {}", material.details.currency))

@@ -46,6 +46,21 @@ pub enum Lead<'a> {
     Dot(Color32),
 }
 
+impl Lead<'_> {
+    /// Paints the lead centred on `at`, a glyph of `glyph_px` or a dot of `dot_r`.
+    pub(super) fn paint(self, painter: &egui::Painter, at: egui::Pos2, glyph_px: f32, dot_r: f32) {
+        match self {
+            Self::Glyph(glyph) => {
+                let low = theme::colors().text_low;
+                painter.text(at, Align2::CENTER_CENTER, glyph, theme::icon(glyph_px), low);
+            }
+            Self::Dot(tint) => {
+                painter.circle_filled(at, dot_r, tint);
+            }
+        }
+    }
+}
+
 /// What stands at a chooser row's right, before its tick: a dot, or a figure.
 #[derive(Clone, Copy)]
 pub enum Aside<'a> {
@@ -78,7 +93,7 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
     let lead_at = pos2(rect.left() + ROW_PAD + 8.0, rect.center().y);
-    paint_lead(painter, lead_at, row.lead);
+    row.lead.paint(painter, lead_at, 16.0, DOT_R);
     two_lines(
         painter,
         pos2(lead_at.x + 16.0, rect.center().y),
@@ -98,18 +113,6 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
     paint_aside(painter, pos2(tick_at.x - 14.0, rect.center().y), row.aside);
     focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
-fn paint_lead(painter: &egui::Painter, at: egui::Pos2, lead: Lead<'_>) {
-    match lead {
-        Lead::Glyph(glyph) => {
-            let low = theme::colors().text_low;
-            painter.text(at, Align2::CENTER_CENTER, glyph, theme::icon(16.0), low);
-        }
-        Lead::Dot(tint) => {
-            painter.circle_filled(at, DOT_R, tint);
-        }
-    }
 }
 
 /// What stands left of the tick, its right edge at `right_at`.

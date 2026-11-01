@@ -159,7 +159,7 @@ pub fn inline_button_w(ui: &Ui, glyph: &str, text: &str) -> f32 {
         .layout_no_wrap(text.to_owned(), theme::label(), high)
         .size()
         .x;
-    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
+    let glyph_w = if glyph.is_empty() { 0.0 } else { GLYPH_W };
     text_w + glyph_w + 32.0
 }
 
@@ -209,7 +209,7 @@ pub fn quiet_button(ui: &mut Ui, glyph: &str, text: &str, danger: bool, enabled:
         .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
         .size()
         .x;
-    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
+    let glyph_w = if glyph.is_empty() { 0.0 } else { GLYPH_W };
     let size = vec2(text_w + glyph_w + 24.0, theme::BUTTON_H);
     let (foreground, hovered) = match (danger, enabled) {
         (_, false) => (colors.text_low, Color32::TRANSPARENT),

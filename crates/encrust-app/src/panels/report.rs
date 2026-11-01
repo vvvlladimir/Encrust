@@ -108,7 +108,8 @@ fn header(ui: &mut egui::Ui, report: &mut Report) {
 
 /// One of the two questions the issue form asks, and the room to answer it in.
 fn asked(ui: &mut egui::Ui, question: &str, answer: &mut String) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         RichText::new(question)
             .font(theme::small())
             .color(theme::colors().text_mid),
@@ -146,7 +147,8 @@ fn shown(ui: &mut egui::Ui, text: &str, height: f32) {
                 .max_height(height)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    ui.label(
+                    crate::ui::paragraph(
+                        ui,
                         RichText::new(text)
                             .font(theme::code(11.0))
                             .color(theme::colors().text_mid),

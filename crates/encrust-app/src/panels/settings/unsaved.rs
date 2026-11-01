@@ -19,7 +19,8 @@ pub(super) fn ask(ctx: &egui::Context, name: &str) -> Option<Answer> {
         .frame(card().inner_margin(theme::PANEL_MARGIN))
         .show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 egui::RichText::new(tr!("unsaved-title", name = name))
                     .font(theme::dialog_title())
                     .color(theme::colors().text_high),

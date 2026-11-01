@@ -154,7 +154,7 @@ impl PrintJob {
 
     /// Resin consumed, grams.
     pub fn weight_g(&self) -> f32 {
-        self.volume_mm3 / 1000.0 * self.material.density_g_cm3
+        self.material.weight_g(self.volume_mm3)
     }
 
     /// What the resin this job consumes costs, or `None` for a resin with no price.

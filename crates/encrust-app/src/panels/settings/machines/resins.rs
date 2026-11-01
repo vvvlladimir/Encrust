@@ -172,7 +172,8 @@ fn add_choices(
         ui.close();
     }
     ui.separator();
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         RichText::new(tr!("resins-from-pool"))
             .font(theme::small())
             .color(theme::colors().text_low),

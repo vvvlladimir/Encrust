@@ -74,10 +74,28 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     let name = painter.layout_job(name);
     let value_top = inner.top() + name.size().y + 1.0;
     painter.galley(inner.left_top(), name, colors.text_low);
-    let value = painter.layout_job(figure_job(figure.value));
+    let unit_w = if figure.unit.is_empty() {
+        0.0
+    } else {
+        let unit = egui::text::LayoutJob::simple_singleline(
+            figure.unit.to_owned(),
+            theme::small(),
+            colors.text_low,
+        );
+        painter.layout_job(unit).size().x + VALUE_UNIT_GAP
+    };
+    let full = painter.layout_job(figure_job(figure.value, 1.0));
+    let baseline = value_top + full.size().y;
+    let room = (inner.width() - unit_w).max(0.0);
+    let value = if full.size().x > room {
+        let scale = (room / full.size().x).max(LEAST_FIGURE_SCALE);
+        painter.layout_job(figure_job(figure.value, scale))
+    } else {
+        full
+    };
     let unit_left = inner.left() + value.size().x + VALUE_UNIT_GAP;
-    let baseline = value_top + value.size().y;
-    painter.galley(pos2(inner.left(), value_top), value, colors.text_high);
+    let value_at = pos2(inner.left(), baseline - value.size().y);
+    painter.galley(value_at, value, colors.text_high);
     if !figure.unit.is_empty() {
         painter.text(
             pos2(unit_left, baseline - 1.0),
@@ -89,28 +107,37 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     }
 }
 
-/// `figure` with each run of letters in it — `m`, `s` of `17m26s` — set as a unit beside
-/// the numbers.
-fn figure_job(figure: &str) -> egui::text::LayoutJob {
+/// `figure` at `scale`, each run of letters in it — `m`, `s` of `17m26s`, `ч` of `12 ч` — set
+/// as a unit beside the numbers; the catalogue's spaces give way to one `UNIT_GAP`.
+fn figure_job(figure: &str, scale: f32) -> egui::text::LayoutJob {
     let colors = theme::colors();
+    let scaled = |font: egui::FontId| egui::FontId::new(font.size * scale, font.family);
     let mut job = egui::text::LayoutJob::default();
-    let mut rest = figure;
+    let mut rest = figure.trim();
     while let Some(first) = rest.chars().next() {
         let letters = first.is_alphabetic();
         let end = rest
-            .find(|c: char| c.is_alphabetic() != letters)
+            .find(|c: char| c.is_whitespace() || c.is_alphabetic() != letters)
             .unwrap_or(rest.len());
         let (font, color) = if letters {
             (theme::small(), colors.text_low)
         } else {
             (theme::figure(), colors.text_high)
         };
-        let leading = if job.is_empty() { 0.0 } else { UNIT_GAP };
-        job.append(&rest[..end], leading, egui::TextFormat::simple(font, color));
-        rest = &rest[end..];
+        let leading = if job.is_empty() {
+            0.0
+        } else {
+            UNIT_GAP * scale
+        };
+        let format = egui::TextFormat::simple(scaled(font), color);
+        job.append(&rest[..end], leading, format);
+        rest = rest[end..].trim_start();
     }
     job
 }
+
+/// The least a figure is shrunk to fit its cell before the cell clips it.
+const LEAST_FIGURE_SCALE: f32 = 0.6;
 
 /// Room between a figure and a unit inside it (`17 m 26 s`), and the unit after it, points.
 const UNIT_GAP: f32 = 3.0;
@@ -355,6 +382,32 @@ mod tests {
         assert!(
             (height - expected).abs() < 0.5,
             "expected {expected}, got {height}"
+        );
+    }
+
+    #[test]
+    fn a_figures_spaces_give_way_to_the_gap_between_number_and_unit() {
+        let job = figure_job(" 12 ч 16 мин 05 с ", 1.0);
+        assert_eq!(job.text, "12ч16мин05с");
+    }
+
+    #[test]
+    fn a_figure_shrunk_by_the_share_it_overruns_fits_its_room() {
+        let ctx = fixtures::context();
+        let value = "12 ч 16 мин 05 с – 14 ч 02 мин 40 с";
+        let room = 120.0;
+        let mut widths = None;
+        fixtures::frame(&ctx, egui::RawInput::default(), |ui| {
+            let full = ui.fonts_mut(|fonts| fonts.layout_job(figure_job(value, 1.0)));
+            let scale = room / full.size().x;
+            let fitted = ui.fonts_mut(|fonts| fonts.layout_job(figure_job(value, scale)));
+            widths = Some((full.size().x, fitted.size().x));
+        });
+        let (full, fitted) = widths.expect("the figure is laid out");
+        assert!(full > room, "the figure overruns {room}: {full}");
+        assert!(
+            fitted <= room + 1.0,
+            "expected at most {room}, got {fitted}"
         );
     }
 

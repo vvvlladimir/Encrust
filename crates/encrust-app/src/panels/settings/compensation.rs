@@ -127,7 +127,8 @@ pub(super) fn calculator(
         .show(ctx, |ui| {
             ui.set_width(420.0);
             ui.horizontal(|ui| {
-                ui.label(
+                crate::ui::paragraph(
+                    ui,
                     egui::RichText::new(title)
                         .font(theme::dialog_title())
                         .color(theme::colors().text_high),
@@ -160,7 +161,7 @@ fn shrinkage(
         .num_columns(4)
         .spacing(vec2(10.0, 6.0))
         .show(ui, |ui| {
-            ui.label("");
+            crate::ui::paragraph(ui, "");
             for head in [tr!("comp-drawn"), tr!("comp-measured"), tr!("comp-scale")] {
                 column_head(ui, &head);
             }
@@ -206,7 +207,8 @@ const SIZE_W: f32 = 112.0;
 const CLOCK_W: f32 = 84.0;
 
 fn column_head(ui: &mut egui::Ui, text: &str) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         egui::RichText::new(text)
             .font(theme::small())
             .color(theme::colors().text_low),
@@ -214,7 +216,8 @@ fn column_head(ui: &mut egui::Ui, text: &str) {
 }
 
 fn figure(ui: &mut egui::Ui, text: &str) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         egui::RichText::new(text)
             .font(theme::figures(13.0))
             .color(theme::colors().text_high),
@@ -325,7 +328,8 @@ fn layer_time(
 }
 
 fn row_label(ui: &mut egui::Ui, text: &str) {
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         egui::RichText::new(text)
             .font(theme::label())
             .color(theme::colors().text_mid),

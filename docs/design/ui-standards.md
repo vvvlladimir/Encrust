@@ -45,12 +45,16 @@ disabled with one sentence why; the way to change that is offered once per panel
   empty state (`Nothing picked`). How to work the viewport is the `hint_bar` over the stage —
   `Click` place, `⇧ click` a line — never a paragraph in a panel.
 - **Figures in a grid** stand under their name, the name cut with an ellipsis in a long
-  language and the figure never wrapped (`figure_grid`).
+  language and the figure never wrapped but shrunk to its cell, its unit set close against
+  it whatever spaces the catalogue puts between (`figure_grid`).
 - **Tooltips:** every icon-only control has its name and key; an action's says what it does.
 - **Voice:** a resin printer user's words, actions as verbs, no internals, no "please" or "!".
 - **Typography:** `×`, `µm`, `°`, `–` for ranges; figures through `theme::figures`.
 - **Length:** a card is its column's width in every language; a name longer than its room
-  is cut with an ellipsis and read whole on hover, never widening the card.
+  is cut with an ellipsis and read whole on hover, never widening the card; a block's title
+  wraps inside its column.
+- **Wrapped text** goes through `paragraph`, never `ui.label`: in a justified layout — a
+  popup, a menu — egui spreads the letters of each wrapped line across its width.
 
 ## Numbers
 

@@ -217,13 +217,13 @@ cut-keep-upper = Верхняя
 ## workspace.rs
 
 tool-select = Выбор
-tool-measure = Измерение
+tool-measure = Замер
 tool-repair = Починка
 tool-hollow = Полость
 tool-drain = Дренаж
 tool-cut = Разрез
 tool-relief = Рельеф
-tool-supports = Поддержки
+tool-supports = Опоры
 tool-paint = Разметка
 tool-shape = Форма
 tool-check = Проверка
@@ -613,7 +613,6 @@ summary-broken-why =
         [one] То, что из неё нарезано, может не напечататься.
        *[other] То, что из них нарезано, может не напечататься.
     }
-summary-estimate = ≈ { $value }
 
 ## ui/widgets.rs
 

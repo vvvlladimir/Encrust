@@ -119,7 +119,7 @@ in and rises `LIFT_PT` as it comes; a menu fades in by egui's own `animation_tim
 running job's glyph turns, a busy printer's dot breathes, an armed control's ring pulses:
 the only motions that loop, each a function of `motion` (`spin`, `sheen`, `breathe`,
 `pulse`), so nothing outside it names a period. The camera's swing to a view is
-`motion::turn_s`. *Reduce motion* in Settings → General sets every duration to nought and
+`motion::turn_s`. *Reduce motion* in Settings → Appearance sets every duration to nought and
 holds every loop still; `ARMED` is a wait, not a motion, and stays. Nothing asks for a frame
 once nothing moves.
 
@@ -172,9 +172,6 @@ paints from tokens only.
 | `find_line` | A window's box that narrows its list: a `text_box` with the find glyph in its hint and a faint `⌘F` keycap while empty, `⌘F` focusing it |
 | `palette_field` | Find's typed field, 48 tall over a hairline, inset 16, holding the focus while the palette is up, an `Esc` keycap at its right |
 | `nav_row`, `NavAside` | One page of a window's list, `BUTTON_H + 4` tall: glyph and name, washed in `accent_wash` while open, and at its right a count, a badge for a waiting release or the elsewhere arrow |
-| `find_line` | A window's box that narrows its list: a `text_box` with the find glyph in its hint and a faint `⌘F` keycap while empty, `⌘F` focusing it |
-| `palette_field` | Find's typed field, 48 tall over a hairline, inset 16, holding the focus while the palette is up, an `Esc` keycap at its right |
-| `nav_row`, `NavAside` | One page of a window's list, `BUTTON_H + 4` tall: glyph and name, washed in `accent_wash` while open, and at its right a count, a badge for a waiting release or the elsewhere arrow |
 | `key_row` | The keys that work a window at its foot: each set of keycaps then what they do |
 | `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
 | `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |
@@ -205,7 +202,8 @@ paints from tokens only.
 | `carried_row` | A `number_row` the window changed for the user: its name in `warn` and a button that puts the old value back |
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
-| `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
+| `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`, wrapped short of what stands after it; a tool card's glyph in the accent and its name |
+| `paragraph` | A label wrapped with even spacing in any layout; every text widget draws through it |
 | `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
 | `verdict_card` | A verdict on a card of its own in a wash: a glyph in its tint, the verdict, a line on what it means |
 | `figure_line`, `name_line`, `title_line`, `state_word`, `address_label`, `status_glyph`, `share_figure` | One line that may be cut short: a figure in its tint, a name low or plain, a state in its colour, an address in the code face; a message's glyph; a job's share, large |

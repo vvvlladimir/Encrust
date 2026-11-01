@@ -235,7 +235,10 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                     }
                 }
             });
-            ui.label(egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low));
+            crate::ui::paragraph(
+                ui,
+                egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low),
+            );
             let face = DropdownFace {
                 lead: None,
                 label: &details.currency,

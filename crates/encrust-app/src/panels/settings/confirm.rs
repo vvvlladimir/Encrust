@@ -27,13 +27,14 @@ pub(super) fn ask(ctx: &egui::Context, catalogue: &Catalogue) -> Option<Answer> 
         .frame(card().inner_margin(theme::PANEL_MARGIN))
         .show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 egui::RichText::new(&question.title)
                     .font(theme::dialog_title())
                     .color(theme::colors().text_high),
             );
             ui.add_space(6.0);
-            ui.label(egui::RichText::new(&question.what).font(theme::label()));
+            crate::ui::paragraph(ui, egui::RichText::new(&question.what).font(theme::label()));
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
             }

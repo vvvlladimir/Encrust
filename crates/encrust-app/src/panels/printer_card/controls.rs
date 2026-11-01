@@ -91,7 +91,8 @@ pub(super) fn camera(ui: &mut egui::Ui, state: &State, extras: Option<&Extras>) 
     match extras.and_then(|extras| extras.camera.as_deref()) {
         Some(url) => {
             ui.horizontal(|ui| {
-                ui.label(
+                crate::ui::paragraph(
+                    ui,
                     RichText::new(icon::CAMERA)
                         .font(theme::icon(14.0))
                         .color(theme::colors().ok),

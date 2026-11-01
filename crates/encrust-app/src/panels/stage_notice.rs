@@ -354,14 +354,16 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
 /// whether they got better.
 fn words(ui: &mut egui::Ui, status: &Status) {
     let colors = theme::colors();
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         RichText::new(status.text())
             .font(theme::label())
             .color(colors.text_high),
     );
     if let Status::Noted(_, notes) = status {
         for note in notes {
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 RichText::new(note)
                     .font(theme::label())
                     .color(colors.text_mid),
@@ -378,7 +380,8 @@ fn words(ui: &mut egui::Ui, status: &Status) {
                 Change::Better => colors.ok,
                 Change::Worse => colors.danger,
             };
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 RichText::new(&reading.text)
                     .font(theme::label())
                     .color(tint),
