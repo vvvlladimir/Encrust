@@ -318,30 +318,8 @@ fn row(
         None => (end, false),
     };
 
-    let colors = theme::colors();
-    let painter = ui.painter();
-    let name_color = if object.visible {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    // A row is one line tall, so a name longer than it is cut rather than wrapped over
-    // the row below it; the whole of it is on the tooltip.
-    let mut job =
-        egui::text::LayoutJob::simple_singleline(object.name.clone(), theme::label(), name_color);
-    job.wrap = egui::text::TextWrapping::truncate_at_width(
-        (name_right - 8.0 - eye.right() - 4.0).max(0.0),
-    );
-    let name = painter.layout_job(job);
-    let elided = name.elided;
-    painter.galley(
-        egui::pos2(eye.right() + 4.0, rect.center().y - name.size().y / 2.0),
-        name,
-        name_color,
-    );
-    if elided {
-        response.clone().on_hover_text(&object.name);
-    }
+    let name_left = eye.right() + 4.0;
+    name_text(ui, object, rect, (name_left, name_right - 8.0), &response);
 
     if let Some(asked) = asked {
         return Some(asked);
@@ -356,6 +334,38 @@ fn row(
         return Some(Clicked::Select);
     }
     None
+}
+
+/// The model's name between `left` and `right`, cut short with its whole on the tooltip.
+fn name_text(
+    ui: &egui::Ui,
+    object: &SceneObject,
+    rect: egui::Rect,
+    (left, right): (f32, f32),
+    response: &egui::Response,
+) {
+    let colors = theme::colors();
+    let painter = ui.painter();
+    let name_color = if object.visible {
+        colors.text_high
+    } else {
+        colors.text_low
+    };
+    // A row is one line tall, so a name longer than it is cut rather than wrapped over
+    // the row below it; the whole of it is on the tooltip.
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(object.name.clone(), theme::label(), name_color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width((right - left).max(0.0));
+    let name = painter.layout_job(job);
+    let elided = name.elided;
+    painter.galley(
+        egui::pos2(left, rect.center().y - name.size().y / 2.0),
+        name,
+        name_color,
+    );
+    if elided {
+        response.clone().on_hover_text(&object.name);
+    }
 }
 
 /// The row's own menu, where a model is where the hand already is: sending it to another

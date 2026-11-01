@@ -196,6 +196,27 @@ fn installing(
     step: Step,
     elapsed_s: f64,
 ) -> bool {
+    let (amount, left) = progress_words(received, total, elapsed_s);
+    ui.horizontal(|ui| {
+        hint(ui, &amount);
+        if let Some(left) = &left {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| hint(ui, left));
+        }
+    });
+    let fraction = total.map(|total| (received as f64 / total as f64) as f32);
+    progress_bar(
+        ui,
+        if step == Step::Download {
+            fraction
+        } else {
+            Some(1.0)
+        },
+    );
+    step_row(ui, step)
+}
+
+/// The download's size so far and the time it has left, in words.
+fn progress_words(received: u64, total: Option<u64>, elapsed_s: f64) -> (String, Option<String>) {
     let mb = megabytes;
     let amount = match total {
         Some(total) => tr!(
@@ -212,22 +233,13 @@ fn installing(
             let seconds = (total.saturating_sub(received) as f64 / rate).ceil() as u64;
             tr!("update-time-left", seconds = seconds)
         });
+    (amount, left)
+}
+
+/// The three steps of an update, with Cancel while the download runs. Answers whether it was
+/// pressed.
+fn step_row(ui: &mut Ui, step: Step) -> bool {
     let mut cancel = false;
-    ui.horizontal(|ui| {
-        hint(ui, &amount);
-        if let Some(left) = &left {
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| hint(ui, left));
-        }
-    });
-    let fraction = total.map(|total| (received as f64 / total as f64) as f32);
-    progress_bar(
-        ui,
-        if step == Step::Download {
-            fraction
-        } else {
-            Some(1.0)
-        },
-    );
     ui.horizontal(|ui| {
         let state = |at: Step| match (at as u8).cmp(&(step as u8)) {
             std::cmp::Ordering::Less => StepState::Done,

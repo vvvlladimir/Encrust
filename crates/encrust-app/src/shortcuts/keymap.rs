@@ -115,7 +115,24 @@ impl From<BTreeMap<String, Vec<String>>> for Keymap {
                 Some((binding.action.id(), keys.take(MOST_CHORDS).collect()))
             })
             .collect();
-        Self { chosen }
+        let mut keymap = Self { chosen };
+        keymap.free_taken_defaults();
+        keymap
+    }
+}
+
+impl Keymap {
+    /// A table key the user gave another action, as a later build may add one, is theirs:
+    /// the action the table gave it to answers it no more.
+    fn free_taken_defaults(&mut self) {
+        let taken: Vec<KeyboardShortcut> = self.chosen.values().flatten().copied().collect();
+        let is_taken = |key: &KeyboardShortcut| taken.iter().any(|held| same(*held, *key));
+        for binding in BINDINGS {
+            if !self.chosen.contains_key(binding.action.id()) && binding.keys.iter().any(is_taken) {
+                let kept = binding.keys.iter().filter(|key| !is_taken(key)).copied();
+                self.chosen.insert(binding.action.id(), kept.collect());
+            }
+        }
     }
 }
 

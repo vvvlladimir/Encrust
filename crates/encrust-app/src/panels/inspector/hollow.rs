@@ -10,8 +10,8 @@ use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
     Segment, Segmented, blocked_hover, describe, hint, icon, inset, nested, notice, number_row,
-    primary_button, progress_bar, secondary_button, section, section_with_switch, stats, step_bar,
-    subheading, theme, tone,
+    primary_button, progress_bar, readings, secondary_button, section, section_with_switch,
+    step_bar, subheading, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -370,7 +370,7 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
         .targets()
         .map(|object| object.hollow.cavity_mm3())
         .sum();
-    stats(
+    readings(
         ui,
         &[
             (tr!("hollow-hollowed"), hollowed.to_string()),

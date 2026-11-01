@@ -24,9 +24,9 @@ pub use widgets::{
     palette_dialog, picker_row, primary_button, primary_with_companion, progress_bar,
     progress_bar_of, quiet_button, quiet_square, rail_button, readings, rename_box, row_name,
     secondary_button, section, section_with_action, section_with_actions, section_with_switch,
-    spinner, start_rename, stats, step_bar, subheading, subheading_with_switch, summary_button,
-    swatch, switch, text_box, text_row, toggle_button, tone, two_lines, unit_field,
-    vertical_hairline, zone_button,
+    spinner, start_rename, step_bar, subheading, subheading_with_switch, summary_button, swatch,
+    switch, text_box, text_row, toggle_button, tone, two_lines, unit_field, vertical_hairline,
+    zone_button,
 };
 pub use widgets::{BindingPress, BindingRow, Recording, binding_row};
 pub use widgets::{CardLook, StepState, boxed, bullet, release_hero, steps, tag_label, theme_card};
@@ -39,3 +39,4 @@ pub use widgets::{
     Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, zoom_bar,
 };
 pub use widgets::{MENU_W, MenuRow, menu_row, menu_rule, menu_style, menu_sub};
+pub use widgets::{NAV_ROW_H, NavAside, find_line, nav_row, palette_field};

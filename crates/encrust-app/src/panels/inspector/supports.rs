@@ -14,7 +14,7 @@ use crate::status::Status;
 use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
     BinLook, bin_button, compact_button, companion_button, describe, icon, icon_toggle, number_row,
-    primary_button, progress_bar, secondary_button, section, stats, theme, tone,
+    primary_button, progress_bar, readings, secondary_button, section, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -293,7 +293,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         .iter()
         .map(|picked| (picked.id, picked.frozen))
         .collect::<std::collections::BTreeSet<_>>();
-    stats(
+    readings(
         ui,
         &[
             (tr!("supports-stat-parts"), held.len().to_string()),

@@ -8,8 +8,8 @@ use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
-    blocked_hover, busy, describe, icon, icon_toggle, meta, number_row, primary_button,
-    secondary_button, section, stats, subheading, swatch, switch, theme, toggle_button, tone,
+    blocked_hover, busy, describe, icon, icon_toggle, meta, number_row, primary_button, readings,
+    secondary_button, section, subheading, swatch, switch, theme, toggle_button, tone,
 };
 
 use super::paint::{COARSE_STEP, MAX_BRUSH_MM, MIN_BRUSH_MM};
@@ -443,7 +443,7 @@ fn carried(ui: &mut egui::Ui, doc: &Doc) {
     };
 
     let label = tr!("relief-textures", count = rest.len() + 1);
-    stats(ui, &[(label, truncated(first))]);
+    readings(ui, &[(label, truncated(first))]);
     // The rest are a list rather than a second cell: a file name is long enough that two
     // to a row would be two ellipses.
     meta(

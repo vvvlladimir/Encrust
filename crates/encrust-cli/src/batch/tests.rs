@@ -78,6 +78,17 @@ fn a_template_giving_two_models_one_file_is_refused() {
 }
 
 #[test]
+fn names_differing_only_in_case_are_one_file() {
+    let command = named("{model}");
+    let models = [
+        PathBuf::from("models/Part.stl"),
+        PathBuf::from("models/part.obj"),
+    ];
+    let error = outputs_for(&models, &command.batch(), &grey()).expect_err("Part and part");
+    assert!(error.to_string().contains("two models"), "got {error:#}");
+}
+
+#[test]
 fn a_directory_with_nothing_in_it_is_an_error_rather_than_an_empty_run() {
     let dir = std::env::temp_dir().join("encrust-batch-empty");
     std::fs::create_dir_all(&dir).expect("the temporary directory is writable");

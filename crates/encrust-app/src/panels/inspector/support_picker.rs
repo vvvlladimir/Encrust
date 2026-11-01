@@ -10,6 +10,8 @@ use crate::workspace::Tool;
 mod list;
 mod rows;
 mod save;
+#[cfg(test)]
+mod tests;
 use list::{List, removal};
 use rows::{Act, Pick, Row, in_hand, presets, rows};
 use save::save_button;

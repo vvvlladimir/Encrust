@@ -23,7 +23,8 @@ use crate::settings::{Node, Section, Tab};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::ui::{
-    chooser_group, focus_ring, hairline, hover_mix, icon, icon_button, inline_button, theme,
+    NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
+    nav_row, theme,
 };
 use frame::{child, scrolled, with_header};
 
@@ -95,23 +96,6 @@ fn pages(ui: &mut Ui, window: &mut Window) {
     if nav_row(ui, icon::PRINTER, &machines, false, NavAside::Elsewhere).clicked() {
         window.machine.settings.close();
         crate::panels::open_machines(window.machine);
-    }
-}
-
-/// The line that narrows a window's list, `⌘F` reaching it from anywhere in the window.
-pub(super) fn find_line(ui: &mut Ui, find: &mut String, hint: &str) {
-    let keys = format!("{}F", icon::KEY_COMMAND);
-    let field = ui.add(
-        crate::ui::text_box(egui::TextEdit::singleline(find))
-            .hint_text(format!("{}  {hint}", icon::FIND))
-            .desired_width(ui.available_width()),
-    );
-    if ui.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
-        field.request_focus();
-    }
-    if find.is_empty() {
-        let right = field.rect.right() - FIND_CAP_INSET;
-        crate::ui::keycap(ui.painter(), &keys, right, field.rect.center().y);
     }
 }
 
@@ -253,100 +237,9 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     pressed
 }
 
-const NAV_ROW_H: f32 = theme::BUTTON_H + 4.0;
 /// Room over a group name of the list but the first, and under the find line.
 pub(super) const GROUP_GAP: f32 = 10.0;
 pub(super) const FIND_GAP: f32 = 12.0;
-/// From the find line's right edge to its keycap's, points.
-const FIND_CAP_INSET: f32 = 6.0;
-/// The badge on a page a release waits on, points across.
-const BADGE_D: f32 = 16.0;
-
-/// What stands at the right of a page's row.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum NavAside {
-    None,
-    /// How many profiles the page lists.
-    Count(usize),
-    /// A release waits to be installed.
-    Waiting,
-    /// The row opens something other than a page of this window.
-    Elsewhere,
-}
-
-/// One entry of the list of pages: a glyph and a name, washed while it is the page open,
-/// and at its right what [`NavAside`] says.
-pub(super) fn nav_row(
-    ui: &mut egui::Ui,
-    glyph: &str,
-    label: &str,
-    active: bool,
-    aside: NavAside,
-) -> egui::Response {
-    let colors = theme::colors();
-    let size = vec2(ui.available_width(), NAV_ROW_H);
-    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, label)
-    });
-    let (fill, text) = match active {
-        true => (colors.accent_wash, colors.accent_soft),
-        false => (
-            hover_mix(ui, &response, egui::Color32::TRANSPARENT, colors.hover),
-            hover_mix(ui, &response, colors.text_mid, colors.text_high),
-        ),
-    };
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let glyph_at = rect.left_center() + vec2(12.0, 0.0);
-    painter.text(
-        glyph_at,
-        egui::Align2::LEFT_CENTER,
-        glyph,
-        theme::icon(15.0),
-        text,
-    );
-    let label_at = rect.left_center() + vec2(36.0, 0.0);
-    painter.text(
-        label_at,
-        egui::Align2::LEFT_CENTER,
-        label,
-        theme::body(),
-        text,
-    );
-    let right = rect.right_center() - vec2(12.0, 0.0);
-    match aside {
-        NavAside::None => {}
-        NavAside::Count(count) => {
-            let ink = if active {
-                colors.accent_soft
-            } else {
-                colors.text_low
-            };
-            let at = egui::Align2::RIGHT_CENTER;
-            painter.text(right, at, count.to_string(), theme::figures(12.0), ink);
-        }
-        NavAside::Waiting => {
-            let centre = right - vec2(BADGE_D / 2.0, 0.0);
-            painter.circle_filled(centre, BADGE_D / 2.0, colors.accent);
-            let at = egui::Align2::CENTER_CENTER;
-            painter.text(centre, at, "1", theme::figures(11.0), colors.on_accent);
-        }
-        NavAside::Elsewhere => {
-            let at = egui::Align2::RIGHT_CENTER;
-            painter.text(
-                right,
-                at,
-                icon::ELSEWHERE,
-                theme::icon(13.0),
-                colors.text_low,
-            );
-        }
-    }
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response
-}
-
 /// Asks for a profile's file and takes it in. A browser answers on a later frame, through
 /// [`import_profile`].
 pub(super) fn ask_for_profile(window: &mut Window, kind: Kind) {

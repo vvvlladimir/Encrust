@@ -905,6 +905,7 @@ chip-machine-tooltip = Принтер, на котором печатается 
 chip-resin-untuned = Смола, не откалибрована на этом принтере
 chip-resin-tooltip = Смола
 chip-layers = { $layer } мкм · { $exposure } с
+chip-settings = { $tool }, { $summary }
 find-button = Найти
 find-tooltip = Найти инструмент, действие или модель
 bar-source = Исходный код

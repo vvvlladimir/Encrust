@@ -140,8 +140,10 @@ fn outputs_for(models: &[PathBuf], batch: &Batch, chosen: &Chosen) -> Result<Vec
         .iter()
         .map(|model| output_for(model, batch, chosen, when))
         .collect();
+    // Case folded: on macOS and Windows `Part` and `part` are one file.
     let mut seen = std::collections::HashSet::with_capacity(outputs.len());
-    if let Some(twice) = outputs.iter().find(|output| !seen.insert(*output)) {
+    let folded = |output: &PathBuf| output.to_string_lossy().to_lowercase();
+    if let Some(twice) = outputs.iter().find(|output| !seen.insert(folded(output))) {
         bail!(
             "--name {} gives two models the one file {}; put {{model}} in it",
             batch.name,
