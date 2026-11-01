@@ -130,7 +130,7 @@ pub fn import(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    let import = checked(&mut mesh, input, welded, args, profile, false)?;
+    let import = checked(&mut mesh, (input, welded), args, profile, false, watch)?;
     if talk {
         print!("{import}");
     }

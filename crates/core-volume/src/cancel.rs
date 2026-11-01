@@ -105,6 +105,26 @@ impl Step {
     ];
 }
 
+impl Step {
+    /// Where the step starts and ends in the share of one run, a field's, an exact
+    /// boolean's or a repair's, as weighed in ADR 0317 and 0384.
+    pub fn span(self) -> (f32, f32) {
+        match self {
+            Self::Preparing => (0.0, 0.1),
+            Self::Seeding => (0.1, 0.2),
+            Self::Carrying => (0.2, 0.62),
+            Self::Refining => (0.62, 0.9),
+            Self::Surfacing => (0.9, 0.98),
+            Self::Shaping => (0.98, 1.0),
+            Self::Reading => (0.0, 0.45),
+            Self::Combining => (0.45, 0.9),
+            Self::Finishing => (0.9, 1.0),
+            Self::Mending => (0.0, 0.2),
+            Self::Crossing => (0.2, 0.45),
+        }
+    }
+}
+
 /// How far a run has got: which step, and how many of its pieces are done. Written by the
 /// run from any of its threads and read by whoever watches, at whatever pace.
 #[derive(Debug, Default)]
@@ -131,6 +151,19 @@ impl Progress {
         let total = self.total.load(Relaxed);
         Some((step, self.done.load(Relaxed).min(total), total))
     }
+
+    /// The share of one run done, from its step and the pieces of the step done, with the
+    /// step; `None` before the run has begun one.
+    pub fn share(&self) -> Option<(Step, f32)> {
+        let (step, done, total) = self.read()?;
+        let within = if total == 0 {
+            0.0
+        } else {
+            done as f32 / total as f32
+        };
+        let (from, to) = step.span();
+        Some((step, from + (to - from) * within))
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +184,25 @@ mod tests {
 
         progress.restart();
         assert_eq!(progress.read(), None, "a run not yet begun has no step");
+    }
+
+    #[test]
+    fn half_the_refine_is_three_quarters_of_a_run() {
+        let progress = Progress::default();
+        let run = Cancel::never().reporting(&progress);
+        run.begin(Step::Refining, 100);
+        run.advance(50);
+        let (_, share) = progress.share().expect("a step has begun");
+        assert!(
+            (share - 0.76).abs() < 1e-6,
+            "0.62 + 0.28 x 0.5 is 0.76, got {share}"
+        );
+        run.begin(Step::Shaping, 0);
+        let (_, share) = progress.share().expect("a step has begun");
+        assert!(
+            (share - 0.98).abs() < 1e-6,
+            "an uncounted step stands at its start"
+        );
     }
 
     #[test]

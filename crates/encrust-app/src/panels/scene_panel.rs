@@ -2,7 +2,7 @@ mod marks;
 
 use marks::{import_mark, trouble};
 
-use egui::{Align2, Rect, Sense, vec2};
+use egui::{Sense, vec2};
 
 use core_geometry::{Vec2, Vec3};
 
@@ -12,20 +12,15 @@ use crate::panels::{Window, plate_strip};
 use crate::project;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
-use crate::ui::name_line;
+use crate::ui::theme::layout::scene_panel::{HEADER_H, PLATES_MARGIN, POPUP_W};
 use crate::ui::{
-    body_and_foot, count_row, empty_state, focus_ring, hairline, heading, icon, inline_button,
+    Inline, body_and_foot, count_row, empty_state, hairline, heading, icon, inline_button,
     number_row, secondary_button, small_icon_button, theme, tone,
 };
-
-/// The heading over the list, as tall as a section's.
-const HEADER_H: f32 = theme::SECTION_H;
+use crate::ui::{ModelRow, model_row, name_line};
 
 /// More copies than this in one go is a slip of the mouse, not an intention.
 const ARRAY_MAX: u32 = 20;
-
-/// How wide the import report is allowed to get before it wraps.
-const POPUP_W: f32 = 230.0;
 
 /// The models card at the right of the stage: which plate, what stands on it, what can be
 /// done to it. Scrolls past `max_h` points; see `docs/decisions/0221`.
@@ -44,9 +39,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     body_and_foot(ui, max_h, window, rows, actions);
 }
 
-/// Points around the row of plates at the card's head, which stands 42 tall.
-const PLATES_MARGIN: egui::Margin = egui::Margin::symmetric(12, 8);
-
 /// The card's heading: *Models*, the open project, how many models the tools are aimed
 /// at, and the way to add another model.
 fn header(ui: &mut egui::Ui, window: &mut Window) {
@@ -60,7 +52,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
             .max_rect(inner)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
         |ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
             heading(ui, &tr!("models-title"), None);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let tooltip = shortcuts::tooltip(Action::OpenModel);
@@ -159,7 +151,7 @@ pub fn duplicate_selection(window: &mut Window) {
 /// The popup stays open on a click inside, which a field needs to open for typing.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let response = small_icon_button(ui, icon::ARRAY, &tr!("models-array"));
-    egui::Popup::menu(&response)
+    crate::ui::popup_menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.set_width(POPUP_W);
@@ -169,7 +161,7 @@ fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
             count_row(ui, &rows, &mut array.rows, "", 0.05, 1..=ARRAY_MAX);
             let (gap, mm) = (tr!("measure-gap"), tr!("unit-mm"));
             number_row(ui, &gap, &mut array.gap_mm, &mm, 0.1, 0.0..=50.0, 1);
-            ui.add_space(4.0);
+            ui.add_space(theme::NOTE_GAP);
             if secondary_button(ui, icon::ARRAY, &tr!("models-lay-out")).clicked()
                 && let Some(id) = picked.first()
             {
@@ -206,7 +198,7 @@ fn empty_plate(ui: &mut egui::Ui, window: &mut Window) {
                 &tr!("stage-empty-how"),
             );
             let open = ui.vertical_centered(|ui| {
-                inline_button(ui, icon::OPEN, &tr!("stage-open"), false, true).clicked()
+                inline_button(ui, Inline::new(&tr!("stage-open")).glyph(icon::OPEN)).clicked()
             });
             if open.inner
                 && let Some(file) = files::pick(Wanted::ModelOrProject)
@@ -297,83 +289,37 @@ fn row(
     plates: &[String],
     active: u32,
 ) -> Option<Clicked> {
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(ui.available_width(), theme::MODEL_ROW_H),
-        Sense::click(),
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(
-            egui::WidgetType::SelectableLabel,
-            true,
-            selected,
-            &object.name,
-        )
-    });
-    row_background(ui.painter(), rect, selected, response.hovered());
-    focus_ring(ui, &response, 0.0);
-    let asked = row_menu(&response, object, plates, active);
-
-    let (eye, eye_response) = visibility_eye(ui, rect, object);
-    let end = rect.right() - theme::ITEM_GAP;
-    let (name_right, repair) = match trouble(&object.summary) {
-        Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
-        None => (end, false),
+    let eye_name = tr!("models-show", name = object.name.clone());
+    let model = ModelRow {
+        name: &object.name,
+        visible: object.visible,
+        selected,
+        eye_name: &eye_name,
+        eye_id: ui.id().with(object.id),
     };
-
-    let name_left = eye.right() + theme::NOTE_GAP;
-    name_text(
-        ui,
-        object,
-        rect,
-        (name_left, name_right - theme::ITEM_GAP),
-        &response,
-    );
-
+    let mut repair = false;
+    let pressed = model_row(ui, &model, |ui, rect, end| match trouble(&object.summary) {
+        Some((mark, lines)) => {
+            let (left, asked) = import_mark(ui, rect, object, end, mark, &lines);
+            repair = asked;
+            left
+        }
+        None => end,
+    });
+    let asked = row_menu(&pressed.row, object, plates, active);
     if let Some(asked) = asked {
         return Some(asked);
     }
     if repair {
         return Some(Clicked::Repair);
     }
-    if eye_response.clicked() {
+    if pressed.eye.clicked() {
         return Some(Clicked::Visibility);
     }
-    if response.clicked() {
+    if pressed.row.clicked() {
         return Some(Clicked::Select);
     }
     None
-}
-
-/// The model's name between `left` and `right`, cut short with its whole on the tooltip.
-fn name_text(
-    ui: &egui::Ui,
-    object: &SceneObject,
-    rect: egui::Rect,
-    (left, right): (f32, f32),
-    response: &egui::Response,
-) {
-    let colors = theme::colors();
-    let painter = ui.painter();
-    let name_color = if object.visible {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    // A row is one line tall, so a name longer than it is cut rather than wrapped over
-    // the row below it; the whole of it is on the tooltip.
-    let mut job =
-        egui::text::LayoutJob::simple_singleline(object.name.clone(), theme::label(), name_color);
-    job.wrap = egui::text::TextWrapping::truncate_at_width((right - left).max(0.0));
-    let name = painter.layout_job(job);
-    let elided = name.elided;
-    painter.galley(
-        egui::pos2(left, rect.center().y - name.size().y / 2.0),
-        name,
-        name_color,
-    );
-    if elided {
-        response.clone().on_hover_text(&object.name);
-    }
 }
 
 /// The row's own menu, where a model is where the hand already is: sending it to another
@@ -385,13 +331,13 @@ fn row_menu(
     active: u32,
 ) -> Option<Clicked> {
     let mut clicked = None;
-    response.context_menu(|ui| {
+    crate::ui::context_menu(response, |ui| {
         if !object.summary.is_sound() && ui.button(tr!("notice-repair")).clicked() {
             clicked = Some(Clicked::Repair);
             ui.close();
         }
         ui.add_enabled_ui(plates.len() > 1, |ui| {
-            ui.menu_button(tr!("menu-move-to-plate"), |ui| {
+            crate::ui::menu_button(ui, tr!("menu-move-to-plate"), |ui| {
                 for (index, name) in plates.iter().enumerate() {
                     let plate = index as u32;
                     if ui
@@ -406,50 +352,6 @@ fn row_menu(
         });
     });
     clicked
-}
-
-fn row_background(painter: &egui::Painter, rect: Rect, selected: bool, hovered: bool) {
-    let colors = theme::colors();
-    if selected {
-        painter.rect_filled(rect, 0.0, colors.picked_wash);
-    } else if hovered {
-        painter.rect_filled(rect, 0.0, colors.raised);
-    }
-}
-
-/// The eye at the head of the row that shows and hides the model.
-fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect, egui::Response) {
-    let colors = theme::colors();
-    let eye = Rect::from_center_size(
-        egui::pos2(rect.left() + 19.0, rect.center().y),
-        vec2(18.0, rect.height()),
-    );
-    let response = ui.interact(
-        eye.shrink2(vec2(0.0, 4.0)),
-        ui.id().with(object.id),
-        Sense::click(),
-    );
-    response.widget_info(|| {
-        let shown = tr!("models-show", name = object.name.clone());
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, object.visible, shown)
-    });
-    focus_ring(ui, &response, theme::R_CONTROL);
-    ui.painter().text(
-        eye.center(),
-        Align2::CENTER_CENTER,
-        if object.visible {
-            icon::VISIBLE
-        } else {
-            icon::HIDDEN
-        },
-        theme::icon(15.0),
-        if response.hovered() {
-            colors.text_high
-        } else {
-            colors.text_low
-        },
-    );
-    (eye, response)
 }
 
 #[cfg(test)]

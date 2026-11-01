@@ -120,6 +120,30 @@ fn an_unknown_action_or_key_in_the_file_is_dropped() {
 }
 
 #[test]
+fn a_stored_key_the_table_now_gives_is_not_counted_as_changed() {
+    let table = spec(&cmd(Key::Z));
+    let read = Keymap::from(BTreeMap::from([(
+        Action::Undo.id().to_owned(),
+        vec![table],
+    )]));
+    assert_eq!(read, Keymap::default());
+}
+
+#[test]
+fn an_action_whose_keys_all_fail_to_read_keeps_the_tables() {
+    let text = r#"{"undo":["Hyper+Q"]}"#;
+    let read: Keymap = serde_json::from_str(text).expect("unknown keys do not fail it");
+    assert_eq!(read.chords(Action::Undo), vec![cmd(Key::Z)]);
+    assert!(!read.is_changed(Action::Undo));
+}
+
+#[test]
+fn an_action_stored_with_no_keys_stays_cleared() {
+    let read: Keymap = serde_json::from_str(r#"{"undo":[]}"#).expect("an empty list reads");
+    assert!(read.chords(Action::Undo).is_empty());
+}
+
+#[test]
 fn every_key_of_the_table_reads_back_from_its_line() {
     for binding in BINDINGS {
         for chord in binding.keys {

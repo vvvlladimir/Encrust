@@ -9,6 +9,7 @@ use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::ui::theme::layout::inspector_position::{AXIS_W, CAPTION_H, TURN_W};
 use crate::ui::{
     Segment, Segmented, axis_label, compact_button, field_label, hairline, icon, kept,
     secondary_button, section_with_action, section_with_actions, switch, theme, unit_field,
@@ -18,12 +19,6 @@ use crate::ui::{
 pub(super) const POSITION_DRAG: f64 = 0.1;
 const ANGLE_DRAG: f64 = 0.5;
 const PERCENT_DRAG: f64 = 0.5;
-/// The column the axis letters stand in, in every block, so the fields of all three line up.
-const AXIS_W: f32 = 14.0;
-/// Height of the Size and Ratio titles over their columns.
-const CAPTION_H: f32 = 16.0;
-/// Width of a ±45° button.
-const TURN_W: f32 = 48.0;
 /// What a turn button adds about its axis, degrees.
 const TURN_DEG: f32 = 45.0;
 

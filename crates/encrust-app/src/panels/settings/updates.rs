@@ -6,7 +6,8 @@ use egui::{Align, Layout, Ui};
 use crate::i18n::tr;
 use crate::panels::settings::form_card;
 use crate::ui::{
-    ago, boxed, bullet, describe, hint, icon, inline_button, quiet_button, switch, tag_label, theme,
+    Inline, ago, boxed, bullet, describe, hint, icon, inline_button, quiet_button, switch,
+    tag_label, theme,
 };
 use crate::updates::{Note, Offer, STORE_PAGE, Stage, Updates, from_store, now_s, open_store};
 
@@ -84,19 +85,24 @@ fn act(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
             hint(ui, &text);
         }
         Stage::Installed(_) => {
-            if inline_button(ui, "", &tr!("updates-restart-now"), true, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("updates-restart-now")).primary()).clicked() {
                 updates.restart();
             }
         }
         _ if from_store() => {
-            if inline_button(ui, "", &tr!("updates-in-store"), true, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("updates-in-store")).primary()).clicked() {
                 open_store();
             }
         }
         _ => {
             let blocked = Updates::blocked(offer);
             let install = tr!("updates-install");
-            if inline_button(ui, "", &install, true, blocked.is_none()).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&install).primary().enabled(blocked.is_none()),
+            )
+            .clicked()
+            {
                 updates.install();
             }
             if let Some(why) = blocked {
@@ -121,7 +127,14 @@ fn looking(ui: &mut Ui, updates: &mut Updates) {
         hint(ui, &tr!("updates-last-looked", when = when));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let busy = updates.is_busy();
-            if inline_button(ui, icon::RESCAN, &tr!("updates-check-now"), false, !busy).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&tr!("updates-check-now"))
+                    .glyph(icon::RESCAN)
+                    .enabled(!busy),
+            )
+            .clicked()
+            {
                 updates.check_now();
             }
         });

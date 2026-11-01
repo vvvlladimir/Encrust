@@ -9,16 +9,12 @@ use crate::i18n::tr;
 use crate::network::{Network, PrusaDraft, Target, connection_label};
 use crate::panels::printer_card;
 use crate::panels::settings::form_card;
+use crate::ui::theme::layout::settings_printer_connection::{FIELD_W, LISTED_MARGIN, NAME_W};
 use crate::ui::{
-    Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list, subheading, theme,
-    tone,
+    Inline, Segment, Segmented, found_row, hint, icon, icon_button, inline_button, list,
+    subheading, theme, tone,
 };
-use crate::ui::{address_label, state_word};
-
-/// How wide a field here is: enough for a host name, not enough to stretch the card.
-const FIELD_W: f32 = 230.0;
-/// How wide a listed printer's name is edited.
-const NAME_W: f32 = 170.0;
+use crate::ui::{address_label, state_word, status_dot};
 
 /// What this machine takes a file over, the printers it is sent to, and those found that
 /// it could be, each a block of the form.
@@ -63,7 +59,12 @@ fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) 
             } else {
                 tr!("connection-scan-again")
             };
-            if inline_button(ui, icon::RESCAN, &label, false, !scanning).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&label).glyph(icon::RESCAN).enabled(!scanning),
+            )
+            .clicked()
+            {
                 network.scan();
             }
         });
@@ -79,10 +80,9 @@ fn by_address(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Net
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let add = inline_button(
                 ui,
-                icon::ADD,
-                &tr!("connection-add"),
-                false,
-                address.is_some(),
+                Inline::new(&tr!("connection-add"))
+                    .glyph(icon::ADD)
+                    .enabled(address.is_some()),
             );
             if add.clicked()
                 && let Some(address) = address
@@ -151,12 +151,11 @@ fn listed_row(
     let mut removed = false;
     egui::Frame::new()
         .fill(colors.raised)
-        .inner_margin(egui::Margin::symmetric(8, 4))
+        .inner_margin(LISTED_MARGIN)
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 3.5, tint);
+                status_dot(ui, tint);
                 ui.add(
                     crate::ui::text_box(egui::TextEdit::singleline(&mut machine.name))
                         .hint_text(machine.address.clone())
@@ -217,10 +216,7 @@ fn found(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
     if same.len() > 1
         && inline_button(
             ui,
-            icon::ADD,
-            &tr!("connection-add-all", count = same.len()),
-            false,
-            true,
+            Inline::new(&tr!("connection-add-all", count = same.len())).glyph(icon::ADD),
         )
         .clicked()
     {

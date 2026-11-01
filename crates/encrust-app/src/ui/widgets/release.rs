@@ -60,7 +60,8 @@ pub fn steps(ui: &mut Ui, steps: &[(&str, StepState)]) {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             let painter = ui.painter();
             let glyph_at = pos2(rect.left() + GLYPH_W / 2.0 - 2.0, rect.center().y);
-            let glyph = painter.layout_no_wrap(glyph.to_owned(), theme::icon(12.0), ink);
+            let glyph =
+                painter.layout_no_wrap(glyph.to_owned(), theme::icon(theme::glyph::MARK), ink);
             let turn = match state {
                 StepState::Now => motion::spin(ui.ctx()).unwrap_or(0.0) * std::f32::consts::TAU,
                 StepState::Done | StepState::Later => 0.0,

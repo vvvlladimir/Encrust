@@ -11,6 +11,7 @@ use core_geometry::{
 };
 use core_plate::{OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
 use printer_profiles::{PrinterProfile, SupportProfile};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 /// The turn auto-orientation applied, and why it chose it.
 pub struct OrientSummary {
@@ -140,10 +141,16 @@ pub(super) fn orientation(
         raster_window: rayon::current_num_threads(),
     });
     let progress = watch.progress.then(|| bar("% of the orientation search"));
+    if let Some(progress) = &progress {
+        progress.set_length(100);
+    }
+    // Threads report out of order: the bar is only ever moved on, by what the highest gained.
+    let shown = AtomicU64::new(0);
     let told = |phase: Phase, done, total| {
         if let Some(progress) = &progress {
-            progress.set_length(100);
-            progress.set_position((phase.share(done, total) * 100.0) as u64);
+            let at = (phase.share(done, total) * 100.0) as u64;
+            let before = shown.fetch_max(at, Relaxed);
+            progress.inc(at.saturating_sub(before));
         }
         !watch.stop.requested()
     };

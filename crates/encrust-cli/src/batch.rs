@@ -64,8 +64,8 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
         models
             .par_iter()
             .zip(&outputs)
-            .map(|(model, output)| {
-                let report = one(model, output, batch, chosen, watch.stop);
+            .map(|(model, named)| {
+                let report = one(model, named, batch, chosen, watch.stop);
                 if let Some(progress) = &progress {
                     progress.inc(1);
                 }
@@ -99,7 +99,7 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
 /// `None` once Ctrl-C is pressed: a model not started is skipped, one stopped is not a failure.
 fn one(
     model: &Path,
-    output: &Path,
+    named: &Named,
     batch: &Batch,
     chosen: &Chosen,
     stop: &Stop,
@@ -109,53 +109,51 @@ fn one(
     }
     let started = std::time::Instant::now();
     let quiet = Watch::quiet(stop);
-    let report = match pipeline::slice_one(model, output, batch.job, chosen, &quiet) {
+    let report = match pipeline::slice_one(model, &named.file, batch.job, chosen, &quiet) {
         Ok(outcome) => ModelReport::sliced(&outcome, started.elapsed()),
         Err(error) if is_cancelled(&error) => return None,
-        Err(error) => ModelReport::failed(model, output, &error, started.elapsed()),
+        Err(error) => ModelReport::failed(model, &named.file, &error, started.elapsed()),
     };
 
-    let beside = batch.output.join(format!(
-        "{}.json",
-        model.file_stem().unwrap_or_default().to_string_lossy()
-    ));
-    if let Err(error) = report::write(&beside, &report) {
-        tracing::warn!("cannot write {}: {error:#}", beside.display());
+    if let Err(error) = report::write(&named.report, &report) {
+        tracing::warn!("cannot write {}: {error:#}", named.report.display());
     }
     Some(report)
 }
 
+/// One model's output file and the JSON report beside it, both named by `batch.name`.
+#[derive(Debug, PartialEq)]
+struct Named {
+    file: PathBuf,
+    report: PathBuf,
+}
+
 /// Where each model's output goes: `batch.name` made of it in the output directory, with the
 /// printer's extension, refused when two models would land on one file.
-fn outputs_for(models: &[PathBuf], batch: &Batch, chosen: &Chosen) -> Result<Vec<PathBuf>> {
+fn outputs_for(models: &[PathBuf], batch: &Batch, chosen: &Chosen) -> Result<Vec<Named>> {
     for tag in core_engine::unknown_tags(batch.name) {
         tracing::warn!("--name: {{{tag}}} stands for nothing and is kept as written");
     }
     let when = jiff::Zoned::now().datetime();
-    let outputs: Vec<PathBuf> = models
+    let outputs: Vec<Named> = models
         .iter()
         .map(|model| output_for(model, batch, chosen, when))
         .collect();
     // Case folded: on macOS and Windows `Part` and `part` are one file.
     let mut seen = std::collections::HashSet::with_capacity(outputs.len());
-    let folded = |output: &PathBuf| output.to_string_lossy().to_lowercase();
-    if let Some(twice) = outputs.iter().find(|output| !seen.insert(folded(output))) {
+    let folded = |named: &Named| named.file.to_string_lossy().to_lowercase();
+    if let Some(twice) = outputs.iter().find(|named| !seen.insert(folded(named))) {
         bail!(
             "--name {} gives two models the one file {}; put {{model}} in it",
             batch.name,
-            twice.display()
+            twice.file.display()
         );
     }
     Ok(outputs)
 }
 
 /// A run with no printer writes a PNG stack, which is a directory, so it gets no extension.
-fn output_for(
-    model: &Path,
-    batch: &Batch,
-    chosen: &Chosen,
-    when: jiff::civil::DateTime,
-) -> PathBuf {
+fn output_for(model: &Path, batch: &Batch, chosen: &Chosen, when: jiff::civil::DateTime) -> Named {
     let printer = chosen.printer.as_ref();
     let fields = core_engine::NameFields {
         model: &model.file_stem().unwrap_or_default().to_string_lossy(),
@@ -172,12 +170,14 @@ fn output_for(
     };
     let stem = core_engine::file_stem(batch.name, &fields);
     // Not `with_extension`, which would cut a stem holding a dot at it.
-    batch
-        .output
-        .join(match printer.map(|printer| printer.output) {
-            Some(format) => format!("{stem}.{}", SlicedFormat::from(format).extension()),
-            None => stem,
-        })
+    let file = match printer.map(|printer| printer.output) {
+        Some(format) => format!("{stem}.{}", SlicedFormat::from(format).extension()),
+        None => stem.clone(),
+    };
+    Named {
+        file: batch.output.join(file),
+        report: batch.output.join(format!("{stem}.json")),
+    }
 }
 
 /// Every model in `input`, sorted by name so two runs over one directory report in the

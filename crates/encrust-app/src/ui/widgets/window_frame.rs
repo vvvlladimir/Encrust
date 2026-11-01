@@ -169,10 +169,16 @@ pub fn section_tab(ui: &mut Ui, label: &str, off: Option<&str>, lit: bool) -> eg
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, lit, label));
     let (fill, text) = match lit {
         true => (colors.accent_wash, colors.accent_soft),
-        false if response.hovered() => (colors.hover, colors.text_high),
-        false => (Color32::TRANSPARENT, colors.text_mid),
+        false if response.hovered() => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+            colors.text_high,
+        ),
+        false => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+            colors.text_mid,
+        ),
     };
-    let round = egui::CornerRadius::same((SECTION_TAB_H / 2.0) as u8);
+    let round = theme::R_PILL;
     ui.painter().rect_filled(rect, round, fill);
     let at = |galley: &egui::Galley, x: f32| pos2(x, rect.center().y - galley.size().y / 2.0);
     let name_at = at(&name, rect.left() + SECTION_TAB_PAD);
@@ -280,4 +286,31 @@ impl Table {
         focus_ring(ui, &response, theme::R_CONTROL);
         response
     }
+
+    /// Marks a row already drawn: a swatch of `swatch` before its name, and `end`, a glyph
+    /// in its tint, at its right edge.
+    pub fn mark_row(
+        &self,
+        ui: &Ui,
+        row: &egui::Response,
+        swatch: Color32,
+        end: Option<(&str, Color32)>,
+    ) {
+        let rect = row.rect;
+        let painter = ui.painter_at(rect);
+        let at = pos2(rect.left() + ROW_SWATCH_X, rect.center().y);
+        let chip = Rect::from_center_size(at, vec2(ROW_SWATCH, ROW_SWATCH));
+        painter.rect_filled(chip, theme::R_MARK, swatch);
+        if let Some((glyph, tint)) = end {
+            let at = pos2(rect.right() - ROW_END_INSET, rect.center().y);
+            let font = theme::icon(theme::glyph::ASIDE);
+            painter.text(at, egui::Align2::RIGHT_CENTER, glyph, font, tint);
+        }
+    }
 }
+
+/// Where a table row's swatch is centred from its left and how big it is, and how far its
+/// end mark stands from its right, points.
+const ROW_SWATCH_X: f32 = 12.0;
+const ROW_SWATCH: f32 = 9.0;
+const ROW_END_INSET: f32 = 10.0;

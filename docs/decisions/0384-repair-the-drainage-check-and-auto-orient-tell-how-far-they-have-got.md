@@ -36,6 +36,11 @@ counted. The window averages its models and spans Looking 0–0.12, Proving the 
 Auto-orient section has a Cancel. The CLI spans the phases the same way in its bar, and
 Ctrl-C stops the search (exit 130).
 
+The spans are `Step::span` and `Progress::share` in `core-volume`, so the CLI's `--repair`
+draws its bar from the same numbers and stops on Ctrl-C between steps (exit 130), as the
+window's Cancel does. The CLI's drainage check is made while the stack is sliced, so the
+layers' bar of that slice is its bar; it needs no second one (architecture rule 9).
+
 ## Consequences
 
 Repair names what it is doing and moves at three points; within a step it does not move,

@@ -1,5 +1,7 @@
 //! The plate's figures at a glance, and what stands behind them on demand.
 
+use std::sync::Arc;
+
 use egui::{
     Align2, CornerRadius, Rect, Response, Sense, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
 };
@@ -74,10 +76,12 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     let name = painter.layout_job(name);
     let value_top = inner.top() + name.size().y + 1.0;
     painter.galley(inner.left_top(), name, colors.text_low);
-    let value = painter.layout_job(figure_job(figure.value));
+    let room = inner.width() - unit_w(&painter, figure.unit);
+    let (value, full_h) = fitted(&painter, figure.value, room);
     let unit_left = inner.left() + value.size().x + VALUE_UNIT_GAP;
-    let baseline = value_top + value.size().y;
-    painter.galley(pos2(inner.left(), value_top), value, colors.text_high);
+    let baseline = value_top + full_h;
+    let value_at = pos2(inner.left(), baseline - value.size().y);
+    painter.galley(value_at, value, colors.text_high);
     if !figure.unit.is_empty() {
         painter.text(
             pos2(unit_left, baseline - 1.0),
@@ -89,25 +93,57 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     }
 }
 
-/// `figure` with each run of letters in it — `m`, `s` of `17m26s` — set as a unit beside
-/// the numbers.
-fn figure_job(figure: &str) -> egui::text::LayoutJob {
+/// `figure` laid out to fit `room`: at its own size, or shrunk as a whole until it does, so a
+/// long time in a long language is smaller rather than cut; with its height at its own size,
+/// which the shrunk one stands on the bottom of.
+fn fitted(painter: &egui::Painter, figure: &str, room: f32) -> (Arc<egui::Galley>, f32) {
+    let full = painter.layout_job(figure_job(figure, 1.0));
+    let (width, height) = (full.size().x, full.size().y);
+    if width <= room || width <= 0.0 {
+        return (full, height);
+    }
+    let scale = (room / width).max(SMALLEST_FIGURE);
+    (painter.layout_job(figure_job(figure, scale)), height)
+}
+
+/// How far a figure may shrink to fit its cell, of its own size.
+const SMALLEST_FIGURE: f32 = 0.6;
+
+/// The room a figure's unit takes after it, or none.
+fn unit_w(painter: &egui::Painter, unit: &str) -> f32 {
+    if unit.is_empty() {
+        return 0.0;
+    }
+    let low = theme::colors().text_low;
+    let unit = painter.layout_no_wrap(unit.to_owned(), theme::small(), low);
+    unit.size().x + VALUE_UNIT_GAP
+}
+
+/// `figure` at `scale`, each run of letters in it — `m`, `s` of `17m26s`, `ч` of `12 ч` — set
+/// as a unit beside the numbers; the catalogue's spaces give way to one `UNIT_GAP`.
+fn figure_job(figure: &str, scale: f32) -> egui::text::LayoutJob {
     let colors = theme::colors();
+    let scaled = |font: egui::FontId| egui::FontId::new(font.size * scale, font.family);
     let mut job = egui::text::LayoutJob::default();
-    let mut rest = figure;
+    let mut rest = figure.trim();
     while let Some(first) = rest.chars().next() {
         let letters = first.is_alphabetic();
         let end = rest
-            .find(|c: char| c.is_alphabetic() != letters)
+            .find(|c: char| c.is_whitespace() || c.is_alphabetic() != letters)
             .unwrap_or(rest.len());
         let (font, color) = if letters {
             (theme::small(), colors.text_low)
         } else {
             (theme::figure(), colors.text_high)
         };
-        let leading = if job.is_empty() { 0.0 } else { UNIT_GAP };
-        job.append(&rest[..end], leading, egui::TextFormat::simple(font, color));
-        rest = &rest[end..];
+        let leading = if job.is_empty() {
+            0.0
+        } else {
+            UNIT_GAP * scale
+        };
+        let format = egui::TextFormat::simple(scaled(font), color);
+        job.append(&rest[..end], leading, format);
+        rest = rest[end..].trim_start();
     }
     job
 }
@@ -221,7 +257,11 @@ fn details_row(
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let caret = painter.layout_no_wrap(icon::CARET_DOWN.to_owned(), theme::icon(12.0), ink);
+    let caret = painter.layout_no_wrap(
+        icon::CARET_DOWN.to_owned(),
+        theme::icon(theme::glyph::MARK),
+        ink,
+    );
     let caret_at = rect.left_center() + vec2(DETAILS_PAD + 6.0, 0.0);
     let corner = caret_at - caret.size() / 2.0;
     let turned = egui::epaint::TextShape::new(corner, caret, ink).with_angle_and_anchor(
@@ -319,6 +359,25 @@ mod tests {
     use crate::ui::widgets::fixtures;
 
     #[test]
+    fn a_figure_too_long_for_its_cell_shrinks_to_fit_it() {
+        let ctx = fixtures::context();
+        let mut widths = None;
+        fixtures::frame(&ctx, egui::RawInput::default(), |ui| {
+            let painter = ui.painter();
+            let (short, _) = fitted(painter, "17мин26с", 400.0);
+            let (long, _) = fitted(painter, "112ч16мин05с", 80.0);
+            let whole = painter.layout_job(figure_job("112ч16мин05с", 1.0)).size().x;
+            widths = Some((short.size().x, long.size().x, whole));
+        });
+        let (short, long, whole) = widths.expect("drawn");
+        assert!(short < 400.0, "a figure with room keeps its size");
+        assert!(
+            long <= 80.0_f32.max(whole * SMALLEST_FIGURE) + 0.5,
+            "shrunk to the 80 points it has, or its floor: {long} of {whole}"
+        );
+    }
+
+    #[test]
     fn a_grid_stands_two_rows_of_figures_tall_however_long_its_names() {
         let ctx = fixtures::context();
         let long = "Resin left over when everything on the plate is printed".repeat(4);
@@ -355,6 +414,32 @@ mod tests {
         assert!(
             (height - expected).abs() < 0.5,
             "expected {expected}, got {height}"
+        );
+    }
+
+    #[test]
+    fn a_figures_spaces_give_way_to_the_gap_between_number_and_unit() {
+        let job = figure_job(" 12 ч 16 мин 05 с ", 1.0);
+        assert_eq!(job.text, "12ч16мин05с");
+    }
+
+    #[test]
+    fn a_figure_shrunk_by_the_share_it_overruns_fits_its_room() {
+        let ctx = fixtures::context();
+        let value = "12 ч 16 мин 05 с – 14 ч 02 мин 40 с";
+        let room = 120.0;
+        let mut widths = None;
+        fixtures::frame(&ctx, egui::RawInput::default(), |ui| {
+            let full = ui.fonts_mut(|fonts| fonts.layout_job(figure_job(value, 1.0)));
+            let scale = room / full.size().x;
+            let fitted = ui.fonts_mut(|fonts| fonts.layout_job(figure_job(value, scale)));
+            widths = Some((full.size().x, fitted.size().x));
+        });
+        let (full, fitted) = widths.expect("the figure is laid out");
+        assert!(full > room, "the figure overruns {room}: {full}");
+        assert!(
+            fitted <= room + 1.0,
+            "expected at most {room}, got {fitted}"
         );
     }
 

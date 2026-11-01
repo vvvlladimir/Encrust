@@ -16,6 +16,7 @@ use crate::panels::edge_fields;
 use crate::panels::settings::{compensation, form_card, name_row, report, settled};
 use crate::settings::{Node, ResinDraft, rename_resin};
 use crate::state::Machine;
+use crate::ui::theme::layout::settings_resin::SMALL_DROPDOWN_W;
 use crate::ui::{
     DropdownFace, DropdownRow, Held, Segment, Segmented, colour_field, describe, dropdown,
     dropdown_menu, dropdown_row, field_label, hint, limited_row, number_field, number_row,
@@ -27,9 +28,6 @@ const COARSE_STEP: f64 = 0.5;
 
 /// The currencies a price can be quoted in.
 const CURRENCIES: [&str; 6] = ["€", "$", "£", "₽", "¥", "₴"];
-
-/// A dropdown holding a currency or `kg`, points: room for the symbol and its caret.
-const SMALL_DROPDOWN_W: f32 = 64.0;
 
 /// The resin open in the list, as the printer it sits under has it, written back as it
 /// is edited.
@@ -242,7 +240,10 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                     }
                 }
             });
-            ui.label(egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low));
+            crate::ui::paragraph(
+                ui,
+                egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low),
+            );
             let face = DropdownFace {
                 lead: None,
                 label: &details.currency,
@@ -297,7 +298,7 @@ fn waits(
         Segmented::new(&segments)
             .width(width)
             .show(ui, &mut values.waits.mode);
-        ui.add_space(4.0);
+        ui.add_space(theme::NOTE_GAP);
     }
     match locked.held_wait_mode().unwrap_or(values.waits.mode) {
         WaitMode::LightOff => {

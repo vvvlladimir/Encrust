@@ -6,6 +6,8 @@ use crate::project;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action};
 use crate::state::Doc;
+use crate::ui::theme::layout::title_bar_menus::RECENT_W;
+pub(super) use crate::ui::theme::layout::title_bar_menus::{MENU_GAP, MENU_PAD};
 use crate::ui::{MENU_W, MenuRow, icon, menu_row, menu_rule, menu_style, menu_sub, theme};
 use egui::containers::menu::MenuConfig;
 use egui::{Align, Layout, vec2};
@@ -14,11 +16,6 @@ use egui::{Align, Layout, vec2};
 pub(super) fn menus() -> [String; 3] {
     [tr!("menu-file"), tr!("menu-edit"), tr!("menu-view")]
 }
-
-/// Points inside a menu title either side of its name, and between two titles.
-pub(super) const MENU_PAD: f32 = 12.0;
-
-pub(super) const MENU_GAP: f32 = 4.0;
 
 /// egui draws its own menu bar: there is no native one on the platforms this runs on.
 pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
@@ -61,9 +58,9 @@ pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
             let config = MenuConfig::new().style(menu_style);
             egui::MenuBar::new().config(config).ui(ui, |ui| {
                 let [file, edit, view] = menus;
-                ui.menu_button(file, |ui| wide(ui, |ui| file_menu(ui, window)));
-                ui.menu_button(edit, |ui| wide(ui, |ui| edit_menu(ui, window)));
-                ui.menu_button(view, |ui| wide(ui, |ui| view_menu(ui, window)));
+                crate::ui::menu_button(ui, file, |ui| wide(ui, |ui| file_menu(ui, window)));
+                crate::ui::menu_button(ui, edit, |ui| wide(ui, |ui| edit_menu(ui, window)));
+                crate::ui::menu_button(ui, view, |ui| wide(ui, |ui| view_menu(ui, window)));
             });
         });
     });
@@ -90,67 +87,12 @@ fn clicked(ui: &mut egui::Ui, row: &MenuRow<'_>) -> bool {
 
 /// Create, open, save, slice, set up, leave: one group each. See `docs/design/ui-screens.md`.
 pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
-    run_rows(
-        ui,
-        window,
-        [
-            (
-                Some(icon::ADD),
-                tr!("menu-new-plate"),
-                Action::NewPlate,
-                project::new_plate,
-            ),
-            (
-                Some(icon::NEW_PROJECT),
-                tr!("menu-new-project"),
-                Action::NewProject,
-                project::new_project,
-            ),
-        ],
-    );
+    create_items(ui, window);
     menu_rule(ui);
-    run_rows(
-        ui,
-        window,
-        [
-            (
-                Some(icon::OPEN),
-                tr!("menu-open-project"),
-                Action::OpenProject,
-                project::open_dialog,
-            ),
-            (
-                Some(icon::MODEL),
-                tr!("menu-open-model"),
-                Action::OpenModel,
-                crate::import::open_dialog,
-            ),
-        ],
-    );
+    open_items(ui, window);
     open_subs(ui, window);
     menu_rule(ui);
-    run_rows(
-        ui,
-        window,
-        [
-            (
-                Some(icon::SAVE),
-                tr!("menu-save-project"),
-                Action::SaveProject,
-                |window| {
-                    project::save_open(window);
-                },
-            ),
-            (
-                None,
-                tr!("menu-save-project-as"),
-                Action::SaveProjectAs,
-                |window| {
-                    project::save_dialog(window);
-                },
-            ),
-        ],
-    );
+    save_items(ui, window);
     menu_rule(ui);
     slice_items(ui, window);
     menu_rule(ui);
@@ -160,6 +102,67 @@ pub(super) fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         menu_rule(ui);
         quit_row(ui);
     }
+}
+
+fn create_items(ui: &mut egui::Ui, window: &mut Window) {
+    let (new_plate, new_project) = (tr!("menu-new-plate"), tr!("menu-new-project"));
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::ADD),
+                new_plate,
+                Action::NewPlate,
+                project::new_plate,
+            ),
+            (
+                Some(icon::NEW_PROJECT),
+                new_project,
+                Action::NewProject,
+                project::new_project,
+            ),
+        ],
+    );
+}
+
+fn open_items(ui: &mut egui::Ui, window: &mut Window) {
+    let (open_project, open_model) = (tr!("menu-open-project"), tr!("menu-open-model"));
+    run_rows(
+        ui,
+        window,
+        [
+            (
+                Some(icon::OPEN),
+                open_project,
+                Action::OpenProject,
+                project::open_dialog,
+            ),
+            (
+                Some(icon::MODEL),
+                open_model,
+                Action::OpenModel,
+                crate::import::open_dialog,
+            ),
+        ],
+    );
+}
+
+fn save_items(ui: &mut egui::Ui, window: &mut Window) {
+    let save = tr!("menu-save-project");
+    let save_as = tr!("menu-save-project-as");
+    run_rows(
+        ui,
+        window,
+        [
+            (Some(icon::SAVE), save, Action::SaveProject, |window| {
+                project::save_open(window);
+            }),
+            (None, save_as, Action::SaveProjectAs, |window| {
+                project::save_dialog(window);
+            }),
+        ],
+    );
 }
 
 /// A menu row's glyph, name and action, and what it runs.
@@ -475,6 +478,3 @@ pub(super) fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
         window.view.options.sheet = true;
     }
 }
-
-/// How wide the list of recent files stands at least, points: room for a name and its age.
-const RECENT_W: f32 = 250.0;

@@ -90,7 +90,7 @@ impl ChipPart {
             pos2(zone.left() + PAD + 7.0, zone.center().y),
             Align2::CENTER_CENTER,
             self.glyph,
-            theme::icon(14.0),
+            theme::icon(theme::glyph::ROW),
             glyph_tint,
         );
         let at = pos2(
@@ -109,7 +109,7 @@ impl ChipPart {
                 pos2(at.x + text_w + 9.0, zone.center().y),
                 Align2::CENTER_CENTER,
                 self.caret,
-                theme::icon(11.0),
+                theme::icon(theme::glyph::CARET),
                 colors.text_low,
             );
         }

@@ -5,7 +5,7 @@ use printer_profiles::{Catalogue, Kind, Unreadable};
 
 use crate::i18n::tr;
 use crate::settings::{Deleting, is_thrown_away_with_the_printer, other_printers};
-use crate::ui::{card, describe, inline_button, secondary_button, theme};
+use crate::ui::{Inline, card, describe, inline_button, secondary_button, theme};
 
 /// What the dialog is asking, in the words the user needs to answer it.
 struct Question {
@@ -27,20 +27,21 @@ pub(super) fn ask(ctx: &egui::Context, catalogue: &Catalogue) -> Option<Answer> 
         .frame(card().inner_margin(theme::PANEL_MARGIN))
         .show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 egui::RichText::new(&question.title)
                     .font(theme::dialog_title())
                     .color(theme::colors().text_high),
             );
-            ui.add_space(6.0);
+            ui.add_space(theme::ROW_GAP);
             ui.label(egui::RichText::new(&question.what).font(theme::label()));
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
             }
             describe(ui, &tr!("confirm-cannot-undo"));
-            ui.add_space(8.0);
+            ui.add_space(theme::ITEM_GAP);
             ui.horizontal(|ui| {
-                if inline_button(ui, "", &question.verb, true, true).clicked() {
+                if inline_button(ui, Inline::new(&question.verb).primary()).clicked() {
                     answer = Some(Answer::Confirmed);
                 }
                 if secondary_button(ui, "", &tr!("common-cancel")).clicked() {

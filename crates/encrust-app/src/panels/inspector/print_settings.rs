@@ -1,4 +1,4 @@
-use printer_profiles::{Limit, MaterialProfile, PrinterLimits, PrinterTuning, WaitMode};
+use printer_profiles::{Limit, MaterialProfile, PrinterLimits, PrinterTuning, WaitMode, Waits};
 
 use super::layers;
 use crate::i18n::tr;
@@ -210,17 +210,7 @@ fn waiting(
     // A held mode is shown, not written: the run puts the machine's locks over the resin.
     let held = locked.held_wait_mode();
     if held.is_none() {
-        let mut mode = material.waits.mode;
-        let modes = [
-            Segment::new(WaitMode::LightOff, tr!("print-light-off")),
-            Segment::new(WaitMode::Rest, tr!("print-resting")),
-        ];
-        if Segmented::new(&modes)
-            .width(ui.available_width())
-            .show(ui, &mut mode)
-        {
-            material.waits.mode = mode;
-        }
+        wait_mode(ui, material);
     }
     match held.unwrap_or(material.waits.mode) {
         WaitMode::LightOff if locked.light_off_delay_s.is_none() => {
@@ -235,37 +225,35 @@ fn waiting(
                 Held::unexplained(&limits.light_off_delay_s),
             );
         }
-        WaitMode::Rest if locked.waits.is_none() => {
-            let waits = &mut material.waits;
-            number_row(
-                ui,
-                &tr!("print-before-lift"),
-                &mut waits.before_lift_s,
-                &tr!("unit-s"),
-                0.05,
-                0.0..=60.0,
-                2,
-            );
-            number_row(
-                ui,
-                &tr!("print-after-lift"),
-                &mut waits.after_lift_s,
-                &tr!("unit-s"),
-                0.05,
-                0.0..=60.0,
-                2,
-            );
-            number_row(
-                ui,
-                &tr!("print-after-retract"),
-                &mut waits.after_retract_s,
-                &tr!("unit-s"),
-                0.05,
-                0.0..=60.0,
-                2,
-            );
-        }
+        WaitMode::Rest if locked.waits.is_none() => rests(ui, &mut material.waits),
         _ => {}
+    }
+}
+
+/// The choice between one light-off delay and a rest at each stop.
+fn wait_mode(ui: &mut egui::Ui, material: &mut MaterialProfile) {
+    let mut mode = material.waits.mode;
+    let modes = [
+        Segment::new(WaitMode::LightOff, tr!("print-light-off")),
+        Segment::new(WaitMode::Rest, tr!("print-resting")),
+    ];
+    if Segmented::new(&modes)
+        .width(ui.available_width())
+        .show(ui, &mut mode)
+    {
+        material.waits.mode = mode;
+    }
+}
+
+/// The rest at each stop of the peel, s.
+fn rests(ui: &mut egui::Ui, waits: &mut Waits) {
+    let rows = [
+        (tr!("print-before-lift"), &mut waits.before_lift_s),
+        (tr!("print-after-lift"), &mut waits.after_lift_s),
+        (tr!("print-after-retract"), &mut waits.after_retract_s),
+    ];
+    for (label, value) in rows {
+        number_row(ui, &label, value, &tr!("unit-s"), 0.05, 0.0..=60.0, 2);
     }
 }
 

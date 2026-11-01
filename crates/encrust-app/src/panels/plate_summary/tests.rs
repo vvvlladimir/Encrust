@@ -1,6 +1,6 @@
 use super::*;
 use crate::scene::ImportSummary;
-use core_geometry::{Orientation, Transform, Vec3, diagnose};
+use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
 
 fn scene_with_a_model(height_mm: Scalar) -> Scene {
     let mesh = Mesh::new(

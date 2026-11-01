@@ -9,6 +9,8 @@ use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle,
 
 use crate::ui::fonts;
 
+pub mod glyph;
+pub mod layout;
 pub mod motion;
 mod palette;
 mod scene;
@@ -152,12 +154,19 @@ pub const ROW_GAP: f32 = 6.0;
 /// Between buttons sharing one row, and between a tool heading's mode icons.
 pub const BUTTON_GAP: f32 = 6.0;
 pub const ICON_GAP: f32 = 2.0;
+/// Between the lines of a sheet or a form block's body.
+pub const LINE_GAP: f32 = 10.0;
 /// Between a reading and the row of buttons under it.
 pub const NOTE_GAP: f32 = 4.0;
 /// Between the groups of a sheet or a page.
 pub const SECTION_GAP: f32 = 14.0;
 /// Between the start page's title and the zone under it.
 pub const PAGE_GAP: f32 = 34.0;
+/// Find's palette: its width, how far under the bar it hangs, its field and a row.
+pub const PALETTE_W: f32 = 500.0;
+pub const PALETTE_TOP: f32 = 70.0;
+pub const PALETTE_FIELD_H: f32 = 48.0;
+pub const PALETTE_ROW_H: f32 = 32.0;
 /// How far a palette's rows and foot stand in from its sides.
 pub const PALETTE_INSET: f32 = 16.0;
 /// Height of a section's heading row, which folds it.
@@ -241,6 +250,11 @@ pub const STRIP_MARGIN: Margin = Margin::symmetric(8, 0);
 pub const R_CONTROL: CornerRadius = CornerRadius::same(6);
 pub const R_SURFACE: CornerRadius = CornerRadius::same(8);
 pub const R_PANEL: CornerRadius = CornerRadius::same(10);
+/// A keycap, a tag and a track's thumb, inside a control; a mark or swatch smaller still;
+/// a pill, fully round.
+pub const R_KEY: CornerRadius = CornerRadius::same(4);
+pub const R_MARK: CornerRadius = CornerRadius::same(2);
+pub const R_PILL: CornerRadius = CornerRadius::same(u8::MAX);
 
 /// Body text.
 pub fn body() -> FontId {

@@ -10,10 +10,11 @@ use crate::panels::Window;
 use crate::panels::settings::confirm::cost;
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
+use crate::ui::theme::layout::settings_machines_resins::{FILTERS_H, MENU_W};
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::ui::{
-    Confirm, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon, inline_button,
-    quiet_button, theme, zone_button,
+    Confirm, Inline, SquareLook, confirm_bin, confirm_button, describe, filter_chip, icon,
+    inline_button, quiet_button, theme, zone_button,
 };
 
 /// The resins' columns, each starting at a share of the width; the figures are set flush
@@ -32,11 +33,6 @@ const TABLE: Table = Table {
     words: 2,
     lead: 26.0,
 };
-/// The row of filters over the table.
-const FILTERS_H: f32 = 52.0;
-/// The Add a resin menu: wide enough for a resin's name beside its delete button, and no
-/// wider, because a row with its button at the right end takes whatever it is offered.
-const MENU_W: f32 = 240.0;
 
 /// The tab, laid out in `content`: the form of the resin being edited, the table, or the
 /// ways to a first resin when there is nothing to put in it.
@@ -108,7 +104,7 @@ fn first_resin(
             *action = Some(Action::NewResin(printer.to_owned()));
         }
     } else {
-        egui::Popup::menu(&add).show(|ui| add_choices(ui, catalogue, printer, action));
+        crate::ui::popup_menu(&add).show(|ui| add_choices(ui, catalogue, printer, action));
     }
     let from_file = tr!("resins-from-file");
     if zone_button(ui, right, icon::IMPORT, &tr!("resins-import"), &from_file).clicked() {
@@ -127,7 +123,7 @@ fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Opti
     kinds.dedup();
     let chosen = &mut window.machine.settings.kind;
     ui.horizontal_centered(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
         if filter_chip(ui, &tr!("resins-all-types"), chosen.is_none()).clicked() {
             *chosen = None;
         }
@@ -138,7 +134,8 @@ fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Opti
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             add_menu(ui, catalogue, printer, action);
-            if inline_button(ui, icon::IMPORT, &tr!("settings-import"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("settings-import")).glyph(icon::IMPORT)).clicked()
+            {
                 *action = Some(Action::Import(Kind::Resin));
             }
         });
@@ -152,9 +149,9 @@ fn add_menu(
     printer: &str,
     action: &mut Option<Action>,
 ) {
-    let button = inline_button(ui, icon::ADD, &tr!("resins-add"), false, true);
+    let button = inline_button(ui, Inline::new(&tr!("resins-add")).glyph(icon::ADD));
     // A pool resin's bin asks by a second press, so a click inside leaves the menu open.
-    egui::Popup::menu(&button)
+    crate::ui::popup_menu(&button)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| add_choices(ui, catalogue, printer, action));
 }
@@ -172,7 +169,8 @@ fn add_choices(
         ui.close();
     }
     ui.separator();
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         RichText::new(tr!("resins-from-pool"))
             .font(theme::small())
             .color(theme::colors().text_low),
@@ -226,7 +224,7 @@ fn table(
     scroll.auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if shown.is_empty() {
-            ui.add_space(12.0);
+            ui.add_space(theme::PANEL_PAD);
             describe(ui, &tr!("resins-none-here"));
         }
         for (id, resin) in shown {
@@ -265,21 +263,9 @@ fn resin_row(
         tr!("value-s", value = format!("{:.0}", here.bottom_exposure_s)),
     ];
     let response = TABLE.row(ui, &resin.name, picked, &cells);
-    let rect = response.rect;
-    let painter = ui.painter_at(rect);
-    let chip = Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(9.0, 9.0));
-    painter.rect_filled(chip, 3.0, theme::resin_swatch(resin.details.color));
-    if in_hand {
-        let at = pos2(rect.right() - 10.0, rect.center().y);
-        let glyph = theme::icon(13.0);
-        painter.text(
-            at,
-            egui::Align2::RIGHT_CENTER,
-            icon::IN_HAND,
-            glyph,
-            colors.accent_soft,
-        );
-    }
+    let swatch = theme::resin_swatch(resin.details.color);
+    let end = in_hand.then_some((icon::IN_HAND, colors.accent_soft));
+    TABLE.mark_row(ui, &response, swatch, end);
     response.on_hover_text_at_pointer(match in_hand {
         true => tr!("resins-row-in-hand"),
         false => tr!("resins-row"),
@@ -312,6 +298,18 @@ fn actions(
     if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(|resin| Action::Export(Kind::Resin, resin.to_owned()));
     }
+    take_off(ui, window, printer, picked, action);
+    use_resin(ui, window, printer, picked, action);
+}
+
+/// Taking the resin picked off the machine, by a second press.
+fn take_off(
+    ui: &mut Ui,
+    window: &Window,
+    printer: &str,
+    picked: Option<&str>,
+    action: &mut Option<Action>,
+) {
     let take_off = picked.map(|resin| Deleting::ResinOff {
         printer: printer.to_owned(),
         resin: resin.to_owned(),
@@ -324,23 +322,38 @@ fn actions(
         text: &tr!("resins-take-off"),
         asked: &tr!("confirm-asked-take-off"),
         tooltip: &tooltip,
-        enabled: some,
+        enabled: picked.is_some(),
     };
     if confirm_button(ui, &button) {
         *action = take_off.map(Action::Delete);
     }
+}
+
+/// Putting the resin picked under the plate, at the bar's right; the one in hand says so.
+fn use_resin(
+    ui: &mut Ui,
+    window: &Window,
+    printer: &str,
+    picked: Option<&str>,
+    action: &mut Option<Action>,
+) {
     let slicing = &window.machine.slicing;
-    let in_hand =
-        slicing.printer_id.as_deref() == Some(printer) && slicing.resin_id.as_deref() == picked;
+    let in_hand = picked.is_some()
+        && slicing.printer_id.as_deref() == Some(printer)
+        && slicing.resin_id.as_deref() == picked;
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        let label = if some && in_hand {
+        let label = if in_hand {
             tr!("machines-in-hand")
         } else {
             tr!("resins-use")
         };
-        let enabled = some && !in_hand;
-        let glyph = if some && in_hand { icon::IN_HAND } else { "" };
-        if inline_button(ui, glyph, &label, enabled, enabled).clicked() {
+        let enabled = picked.is_some() && !in_hand;
+        let glyph = if in_hand { icon::IN_HAND } else { "" };
+        let button = Inline::new(&label)
+            .glyph(glyph)
+            .primary_if(enabled)
+            .enabled(enabled);
+        if inline_button(ui, button).clicked() {
             *action = picked.map(|resin| Action::UseResin {
                 printer: printer.to_owned(),
                 resin: resin.to_owned(),

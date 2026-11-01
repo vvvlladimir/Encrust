@@ -9,17 +9,12 @@ use crate::ui::{icon, icon_button, search_button};
 mod badges;
 mod chip;
 mod menus;
+use crate::ui::theme;
+use crate::ui::theme::layout::title_bar::{COMPACT_BAR_W, ENDS_GAP, PAD};
 use badges::{alpha_badge, update_badge};
 use chip::centred_chip;
 pub use chip::layers_and_exposure;
 use menus::menu;
-
-/// The room either side of what a bar control says, and the room kept between the two
-/// ends of the bar.
-const PAD: f32 = 10.0;
-const ENDS_GAP: f32 = 12.0;
-/// A bar narrower than this shows the right end's controls as their glyphs alone.
-const COMPACT_BAR_W: f32 = 720.0;
 
 /// The bar is the window's own title bar rather than a band under one; see
 /// `docs/decisions/0104` and `0217`.
@@ -45,7 +40,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 .max_rect(bar)
                 .layout(Layout::right_to_left(Align::Center)),
             |ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
+                ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
                 window_buttons(ui);
                 window_controls(ui, window);
                 find_button(ui, window, compact);
@@ -113,7 +108,7 @@ fn window_buttons(ui: &mut egui::Ui) {
         "/tree/v",
         env!("CARGO_PKG_VERSION")
     );
-    ui.add_space(8.0);
+    ui.add_space(theme::ITEM_GAP);
     let label = egui::RichText::new(tr!("bar-source"))
         .font(theme::small())
         .color(theme::colors().text_low);

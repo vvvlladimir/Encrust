@@ -5,24 +5,16 @@ use egui::{Align, Layout, ScrollArea, Ui};
 
 use crate::i18n::tr;
 use crate::state::Machine;
+use crate::ui::theme::layout::update_sheet::{
+    CHANGES_MAX_H, CHANGES_MIN_H, CHROME_H, GROUP_GAP, HERO_BUTTON_W, SCREEN_MARGIN, SHEET_W,
+};
 use crate::ui::{
-    StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button, progress_bar,
-    quiet_button, release_hero, steps, tag_label, theme,
+    Inline, StepState, ago, bullet, dialog, dialog_head, hairline, hint, icon, inline_button,
+    progress_bar, quiet_button, release_hero, steps, tag_label, theme,
 };
 use crate::updates::{
     Note, NoteGroup, Offer, Progress, RELEASES, Stage, Step, Updates, from_store, now_s, open_store,
 };
-
-/// The sheet's width, the room left round it, and the height of what is not the changes.
-const SHEET_W: f32 = 640.0;
-const SCREEN_MARGIN: f32 = 96.0;
-const CHROME_H: f32 = 230.0;
-const CHANGES_MAX_H: f32 = 380.0;
-const CHANGES_MIN_H: f32 = 120.0;
-/// Room kept at the hero's right for its button.
-const HERO_BUTTON_W: f32 = 140.0;
-/// Room above a group of the changes but the first.
-const GROUP_GAP: f32 = 12.0;
 
 /// Shows the sheet while it is open and a release is in hand; Escape or the cross puts it
 /// away, and a download goes on behind it.
@@ -146,7 +138,7 @@ fn foot(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             put_by |= act(ui, updates, offer);
-            if inline_button(ui, "", &tr!("update-later"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("update-later"))).clicked() {
                 put_by = true;
             }
         });
@@ -161,19 +153,26 @@ fn foot(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
 fn act(ui: &mut Ui, updates: &mut Updates, offer: &Offer) -> bool {
     match &updates.stage {
         Stage::Installed(_) => {
-            if inline_button(ui, "", &tr!("updates-restart-now"), true, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("updates-restart-now")).primary()).clicked() {
                 updates.restart();
             }
         }
         _ if from_store() => {
-            if inline_button(ui, "", &tr!("updates-in-store"), true, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("updates-in-store")).primary()).clicked() {
                 open_store();
                 return true;
             }
         }
         _ => {
             let blocked = Updates::blocked(offer);
-            if inline_button(ui, "", &tr!("updates-install"), true, blocked.is_none()).clicked() {
+            if inline_button(
+                ui,
+                Inline::new(&tr!("updates-install"))
+                    .primary()
+                    .enabled(blocked.is_none()),
+            )
+            .clicked()
+            {
                 updates.install();
             }
             if let Some(why) = blocked {

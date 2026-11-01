@@ -29,7 +29,11 @@ pub fn notice_card(
 ) -> NoticeReply {
     let mut reply = NoticeReply::default();
     notice_frame(ui, NOTICE_MIN_W, |ui| {
-        ui.label(RichText::new(glyph).font(theme::icon(16.0)).color(tint));
+        ui.label(
+            RichText::new(glyph)
+                .font(theme::icon(theme::glyph::BUTTON))
+                .color(tint),
+        );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if let Some(close) = close {
                 reply.closed = icon_button(ui, icon::CANCEL, close).clicked();
@@ -77,7 +81,8 @@ pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: b
                     let cancel_text = tr!("common-cancel");
                     cancel = quiet_button(ui, "", &cancel_text, false, !cancelling).clicked();
                     if let Some(fraction) = fraction {
-                        let share = format!("{:.0} %", fraction * 100.0);
+                        let share =
+                            tr!("value-percent", value = format!("{:.0}", fraction * 100.0));
                         let share = RichText::new(share).font(theme::figures(11.5));
                         ui.label(share.color(colors.text_mid));
                     }
@@ -106,7 +111,7 @@ pub fn spinner(ui: &mut Ui) {
 }
 
 /// A spinner's glyph, points.
-const SPINNER_PT: f32 = 16.0;
+const SPINNER_PT: f32 = theme::glyph::BUTTON;
 
 fn notice_frame(ui: &mut Ui, min_w: f32, add: impl FnOnce(&mut Ui)) {
     card().inner_margin(NOTICE_MARGIN).show(ui, |ui| {
@@ -177,7 +182,7 @@ pub fn zoom_bar(ui: &mut Ui, zoom: f32) -> Option<ZoomPress> {
     if small_icon_button(ui, icon::ZOOM_OUT, &tr!("zoom-out")).clicked() {
         pressed = Some(ZoomPress::Out);
     }
-    let percent = format!("{:.0}%", zoom * 100.0);
+    let percent = tr!("value-percent", value = format!("{:.0}", zoom * 100.0));
     ui.add_space(ZOOM_TEXT_PAD);
     ui.label(
         RichText::new(percent)

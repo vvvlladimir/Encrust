@@ -5,17 +5,11 @@ use crate::panels::{Window, unreadable_profiles};
 use crate::scene::ObjectId;
 use crate::status::{Change, Status};
 use crate::ui::status_glyph;
+use crate::ui::theme::layout::stage_notice::{COME_IN, FOOT_RISE, GAP, MESSAGE_W};
 use crate::ui::{
     NoticeReply, card, icon, icon_button, job_notice, notice_card, theme, theme::motion,
 };
 
-/// Points between the cards, and how far above the stage's foot the lowest stands.
-const GAP: f32 = 6.0;
-const FOOT_RISE: f32 = 8.0;
-/// The widest a message may grow before it wraps.
-const MESSAGE_W: f32 = 440.0;
-/// Points a notice slides up as it comes in.
-const COME_IN: f32 = 6.0;
 /// How long a message that is not a failure stays up after it changed, or after the
 /// pointer left it, seconds.
 const INFO_LINGER_S: f64 = 4.0;
@@ -323,9 +317,9 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
             ui.set_max_width(max_w);
             // Rows as tall as their text: a notice is a line or two, not a form.
             ui.spacing_mut().interact_size.y = 0.0;
-            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
             ui.horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = theme::ITEM_GAP;
                 if error {
                     status_glyph(ui, icon::ERROR, colors.danger);
                 }
@@ -354,14 +348,16 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
 /// whether they got better.
 fn words(ui: &mut egui::Ui, status: &Status) {
     let colors = theme::colors();
-    ui.label(
+    crate::ui::paragraph(
+        ui,
         RichText::new(status.text())
             .font(theme::label())
             .color(colors.text_high),
     );
     if let Status::Noted(_, notes) = status {
         for note in notes {
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 RichText::new(note)
                     .font(theme::label())
                     .color(colors.text_mid),
@@ -378,7 +374,8 @@ fn words(ui: &mut egui::Ui, status: &Status) {
                 Change::Better => colors.ok,
                 Change::Worse => colors.danger,
             };
-            ui.label(
+            crate::ui::paragraph(
+                ui,
                 RichText::new(&reading.text)
                     .font(theme::label())
                     .color(tint),

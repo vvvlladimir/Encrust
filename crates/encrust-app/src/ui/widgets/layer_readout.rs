@@ -50,7 +50,7 @@ pub fn layer_readout(
     };
     let figure_w = ui
         .painter()
-        .layout_no_wrap(layer.to_string(), figure_font(), colors.accent_soft)
+        .layout_no_wrap(layer.to_string(), theme::strip_layer(), colors.accent_soft)
         .size()
         .x;
     let box_w = (figure_w + 2.0 * LAYER_BOX_PAD).clamp(LAYER_BOX_MIN_W, width);
@@ -95,7 +95,7 @@ fn layer_field(ui: &mut egui::Ui, layer: usize, rect: Rect, words: &ReadoutWords
             rect.center(),
             Align2::CENTER_CENTER,
             layer.to_string(),
-            figure_font(),
+            theme::strip_layer(),
             colors.accent_soft,
         );
         focus_ring(ui, &response, theme::R_CONTROL);
@@ -110,7 +110,7 @@ fn layer_field(ui: &mut egui::Ui, layer: usize, rect: Rect, words: &ReadoutWords
     // and centred where it stood, so opening it moves nothing on the strip.
     let typed = ui
         .painter()
-        .layout_no_wrap(text.clone(), figure_font(), colors.accent_soft)
+        .layout_no_wrap(text.clone(), theme::strip_layer(), colors.accent_soft)
         .size();
     let field =
         Rect::from_center_size(rect.center(), vec2(typed.x.max(LAYER_FIELD_MIN_W), typed.y));
@@ -122,7 +122,7 @@ fn layer_field(ui: &mut egui::Ui, layer: usize, rect: Rect, words: &ReadoutWords
         .add(
             egui::TextEdit::singleline(&mut text)
                 .id(id.with("field"))
-                .font(figure_font())
+                .font(theme::strip_layer())
                 .text_color(colors.accent_soft)
                 .horizontal_align(Align::Center)
                 .frame(egui::Frame::NONE)
@@ -149,10 +149,6 @@ fn paint_box(ui: &egui::Ui, rect: Rect, lit: bool) {
         egui::Stroke::new(1.0, ring),
         egui::StrokeKind::Inside,
     );
-}
-
-fn figure_font() -> egui::FontId {
-    theme::strip_layer()
 }
 
 /// Room either side of the layer in its box, and the least the box is wide, points.

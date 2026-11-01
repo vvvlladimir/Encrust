@@ -2,7 +2,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use core_format::{ExposurePlan, PrintJob};
-use core_geometry::{Mesh, Scalar, signed_volume};
+use core_geometry::{Scalar, signed_volume};
 use core_slicer::LayerPlan;
 use printer_profiles::MaterialProfile;
 
@@ -14,6 +14,7 @@ use crate::preview::stack_fingerprint;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
+use crate::ui::theme::layout::plate_summary::{BODY_MARGIN, FIGURES_GAP};
 use crate::ui::{
     Figure, card_foot, card_title, details_fold, duration, figure_grid, icon, notice, readings,
     split_readings, theme,
@@ -48,14 +49,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 }
 
-/// Room around the card's heading and figures, over its foot.
-const BODY_MARGIN: egui::Margin = egui::Margin {
-    left: 12,
-    right: 12,
-    top: 0,
-    bottom: 8,
-};
-
 /// The card's heading, `aside` at its right.
 fn title_row(ui: &mut egui::Ui, title: &str, aside: Option<&str>) {
     let size = vec2(ui.available_width(), theme::SECTION_H);
@@ -83,10 +76,6 @@ fn plate(ui: &mut egui::Ui, window: &Window) {
         });
     }
 }
-
-/// Room between the figures and the Details row, and under the word on a broken model,
-/// points.
-const FIGURES_GAP: f32 = 8.0;
 
 /// The four cells of the plate's grid, `—` in each it cannot state yet.
 fn plate_figures(
@@ -192,7 +181,7 @@ fn broken_verdict(ui: &mut egui::Ui, scene: &Scene) {
 }
 
 /// What the machine takes over the plate: as planned once a stack cut from the plate as it
-/// stands is held, estimated from the plate's height until then.
+/// stands is held, estimated from the plate's height until then, written alike.
 fn plate_time(window: &Window) -> Option<String> {
     let fingerprint = stack_fingerprint(&window.doc.scene, window.machine.slicing.cutting());
     if !window.machine.preview.is_stale(fingerprint)
@@ -208,7 +197,7 @@ fn plate_time(window: &Window) -> Option<String> {
         ),
         (seconds, None) => duration(seconds),
     };
-    Some(tr!("summary-estimate", value = value))
+    Some(value)
 }
 
 /// The time the stack `stack` counts would take, before anything is cut: one figure, or
@@ -239,7 +228,7 @@ struct Split {
 impl Split {
     fn of(tally: &Tally, material: &MaterialProfile) -> Self {
         let volumes_mm3 = [tally.model_mm3, tally.supports_mm3];
-        let g = volumes_mm3.map(|volume_mm3| volume_mm3 / 1000.0 * material.density_g_cm3);
+        let g = volumes_mm3.map(|volume_mm3| material.weight_g(volume_mm3));
         let [model, supports] = [0, 1].map(|at| material.cost(g[at], volumes_mm3[at]));
         Self {
             ml: volumes_mm3.map(|volume_mm3| volume_mm3 / 1000.0),
@@ -285,7 +274,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
     let plate = scene.active_plate();
     let mut hasher = DefaultHasher::new();
     for object in scene.printable(plate) {
-        Arc::as_ptr(model(object)).hash(&mut hasher);
+        Arc::as_ptr(object.printed()).hash(&mut hasher);
         object
             .transform
             .linear()
@@ -306,7 +295,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
 
     let mut tally = Tally::default();
     for object in scene.printable(plate) {
-        let mesh = model(object);
+        let mesh = object.printed();
         let grows = object.transform.linear().determinant().abs();
         tally.vertices += mesh.vertices.len();
         tally.triangles += mesh.faces.len();
@@ -320,10 +309,6 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
 }
 
 /// The mesh an object prints as: its shell once hollowed, its holes taken out.
-fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
-    object.printed()
-}
-
 /// The layer shown in Preview: its exposure, the print time until it is done, the area it
 /// cures and the resin that comes to.
 fn layer(ui: &mut egui::Ui, window: &Window) {

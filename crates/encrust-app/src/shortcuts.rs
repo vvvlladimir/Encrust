@@ -14,12 +14,8 @@ pub use act::{act, pick};
 pub use faces::{chord_keys, chord_text, modifier_keys};
 pub use table::{Action, BINDINGS, GESTURES, Group};
 
-/// The actions whose keys were pressed, taken out of the raw input before egui reads it.
-///
-/// Tab is egui's, and walks its ring of controls. While a control holds the focus the keys
-/// that drive it are egui's too, and every other key is still the table's; a field being
-/// typed into owns the keyboard whole, and a key the sheet is recording owns it before
-/// that. See `docs/decisions/0229`.
+/// The actions whose keys were pressed, taken out of the raw input before egui reads it; who
+/// owns a key while a control is focused or recording: `docs/decisions/0229`, `0386`.
 pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> {
     if keymap::catch(raw_input) || ctx.text_edit_focused() {
         return Vec::new();
@@ -70,11 +66,8 @@ fn drives_the_focus(key: Key, modifiers: Modifiers) -> bool {
         )
 }
 
-/// What this chord asks for, or `None` when the table does not bind it.
-///
-/// An extra Shift or Alt does not stop a chord matching, because a layout may need one to
-/// reach the key at all — '?' is Shift and a slash on most of them. The busiest match
-/// therefore wins: Cmd Shift S is Save as, not Save.
+/// What this chord asks for, or `None` when unbound. An extra Shift or Alt still matches, as a
+/// layout may need one to reach the key ('?'), so the busiest match wins: Cmd Shift S is Save as.
 fn action_of(key: Key, modifiers: Modifiers) -> Option<Action> {
     keymap::read(|keymap| {
         BINDINGS

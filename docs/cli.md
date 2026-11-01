@@ -20,7 +20,9 @@ model as it came if that would leave more wrong (ADR 0349). `--repair=close-hole
 `=close-small-holes` or `=turn` runs part of it (ADR 0351), `=wrap` wraps every shell in one
 outer surface by the exact union of its shells and `=deep` repairs, wraps and repairs
 again, leaving the repair alone where the shells do not union exactly (ADR 0352, 0357); a
-cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358).
+cavity wound inward is kept, a part wholly inside another is lost in it (ADR 0358). A repair
+draws a bar on a terminal, spanned by its steps as the window's is, and Ctrl-C stops it
+(exit 130); the drainage check rides the layers' bar of the slice it is made in (ADR 0384).
 `inspect --intersections` counts the pairs of faces that cross (ADR 0353).
 `--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
@@ -501,8 +503,8 @@ Under `--json`, `status` prints `printer`, `protocol` (`sdcp-3`, `sdcp-1` or `pr
 ## Batch
 
 A folder of parts: every flag of `slice` applies to each model, one file and one
-`<model>.json` each, plus `batch.json` over the lot. `--jobs` cuts several at once. A model
-that fails does not stop the others; it is exit code 4 at the end:
+`<name>.json` report each, named by `--name`, plus `batch.json` over the lot. `--jobs` cuts
+several at once. A model that fails does not stop the others; it is exit code 4 at the end:
 
 ```sh
 encrust batch models/ \

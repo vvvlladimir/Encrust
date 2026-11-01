@@ -29,8 +29,8 @@ judged alone.
 - **The plate card** states time, resin, weight and price in a two-by-two grid, each name
   over its figure. The split between model and supports, vertices and triangles open under
   them from a *Details* fold remembered in `ui::kept`; height and layers are the layer
-  strip's and are not repeated. In Preview the same grid states the layer's exposure, its
-  block, cured area and volume. The card stands on the stage's foot, so it grows upward.
+  strip's and are not repeated. In Preview the same grid states the layer's exposure, the
+  print time up to it, cured area and volume. The card stands on the stage's foot, so it grows upward.
   Slice and send, or Start print, is the primary; Slice to a file is a square icon button
   beside it, as tall as it. This supersedes ADR 0348's Slice to a file under the primary.
 - **An icon beside a bigger control** is a square as tall as that control, centred on it.
@@ -43,7 +43,7 @@ judged alone.
 - **Viewport instructions** are a hint bar over the stage under the tool row — key, then
   what it does — never a paragraph in a panel.
 - **Motion** shows a change of state and nothing else, from `theme::motion` only, and is
-  off when *Reduce motion* in Settings → General is on.
+  off when *Reduce motion* in Settings → Appearance is on.
 
 ## Consequences
 

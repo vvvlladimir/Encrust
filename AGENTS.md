@@ -23,8 +23,8 @@ cargo xtask licenses  # THIRD-PARTY-LICENSES.md from the lockfile (needs cargo-a
 CI runs the first three over the workspace; locally the per-crate forms in
 `.claude/rules/workflow.md` apply.
 
-**Every edit follows [`.claude/rules/`](.claude/rules/)** — architecture, code-style,
-testing, documentation, workflow, review, and ui for the window — and [`CLAUDE.md`](CLAUDE.md)
+**Every edit follows [`.claude/rules/`](.claude/rules/)** — architecture, code-style, testing,
+documentation, workflow, review, ui and i18n for the window — and [`CLAUDE.md`](CLAUDE.md)
 above them. "Rule N of `AGENTS.md`" in an ADR is rule N of `architecture.md`. Which crate owns
 what and may depend on what: `docs/architecture.md`. Format sources: the Elegoo `.goo`
 specification and open-source readers of the other containers.

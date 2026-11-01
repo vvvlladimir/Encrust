@@ -86,9 +86,6 @@ pub(in crate::ui::widgets) fn paint_square(
         (None, SquareLook::Framed) => (eased(colors.raised, colors.hover), Some(colors.hairline)),
         (None, SquareLook::Quiet) => (eased(Color32::TRANSPARENT, colors.raised), None),
     };
-    let stroke = ring.map_or(egui::Stroke::NONE, |ring| egui::Stroke::new(1.0, ring));
-    let painter = ui.painter();
-    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
     let tall = match look {
         SquareLook::Framed => rect.height() >= theme::PRIMARY_H - 2.0,
         SquareLook::Quiet => rect.height() >= theme::BUTTON_H - 2.0,
@@ -105,10 +102,23 @@ pub(in crate::ui::widgets) fn paint_square(
         (true, false, false) => rest,
     };
     let size_pt = match (look, tall) {
-        (SquareLook::Framed, true) => 18.0,
-        (SquareLook::Framed, false) | (SquareLook::Quiet, true) => 16.0,
-        (SquareLook::Quiet, false) => 13.0,
+        (SquareLook::Framed, true) => theme::glyph::FRAMED,
+        (SquareLook::Framed, false) | (SquareLook::Quiet, true) => theme::glyph::BUTTON,
+        (SquareLook::Quiet, false) => theme::glyph::ASIDE,
     };
+    draw_square(ui, rect, (fill, ring), (glyph, size_pt, ink));
+}
+
+/// The one drawing of every icon square: a rounded fill, its ring if any, the glyph centred.
+fn draw_square(
+    ui: &Ui,
+    rect: egui::Rect,
+    (fill, ring): (Color32, Option<Color32>),
+    (glyph, size_pt, ink): (&str, f32, Color32),
+) {
+    let stroke = ring.map_or(egui::Stroke::NONE, |ring| egui::Stroke::new(1.0, ring));
+    let painter = ui.painter();
+    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -123,7 +133,7 @@ pub(in crate::ui::widgets) fn paint_square(
 pub fn numbered_square(ui: &mut Ui, number: usize, active: bool, name: &str) -> Response {
     let colors = theme::colors();
     let side = theme::SMALL_ICON_SIZE;
-    let (rect, response) = ui.allocate_exact_size(vec2(side + 2.0, side), Sense::click());
+    let (_, response) = ui.allocate_exact_size(vec2(side + 2.0, side), Sense::click());
     response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
     let (fill, ring, ink) = match (active, response.hovered()) {
         (true, _) => (
@@ -131,9 +141,17 @@ pub fn numbered_square(ui: &mut Ui, number: usize, active: bool, name: &str) -> 
             colors.accent.gamma_multiply(NUMBERED_RING),
             colors.accent_soft,
         ),
-        (false, true) => (colors.hover, colors.hairline, colors.text_high),
-        (false, false) => (Color32::TRANSPARENT, colors.hairline, colors.text_mid),
+        (false, hovered) => (
+            hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
+            colors.hairline,
+            if hovered {
+                colors.text_high
+            } else {
+                colors.text_mid
+            },
+        ),
     };
+    let rect = pressed_rect(ui, &response);
     let painter = ui.painter();
     let stroke = egui::Stroke::new(1.0, ring);
     painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
@@ -238,7 +256,7 @@ fn rail_corners(painter: &egui::Painter, rect: egui::Rect, button: &RailButton<'
 
 /// A rail button's glyph, and how far it rises above the button's middle and its name
 /// falls below it, points.
-const RAIL_GLYPH_PT: f32 = 19.0;
+const RAIL_GLYPH_PT: f32 = theme::glyph::RAIL;
 const RAIL_NAME_RISE: f32 = 7.0;
 const RAIL_NAME_DROP: f32 = 13.0;
 const RAIL_NAME_PAD: f32 = 2.0;
@@ -258,7 +276,7 @@ impl Square {
     fn icon() -> Self {
         Self {
             size: theme::ICON_SIZE,
-            glyph_size: 16.0,
+            glyph_size: theme::glyph::BUTTON,
             active: false,
         }
     }
@@ -266,7 +284,7 @@ impl Square {
     fn small() -> Self {
         Self {
             size: theme::SMALL_ICON_SIZE,
-            glyph_size: 15.0,
+            glyph_size: theme::glyph::SQUARE,
             active: false,
         }
     }
@@ -300,14 +318,11 @@ fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
     };
 
     let rect = pressed_rect(ui, &response);
-    let painter = ui.painter();
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(config.glyph_size),
-        foreground,
+    draw_square(
+        ui,
+        rect,
+        (fill, None),
+        (glyph, config.glyph_size, foreground),
     );
     focus_ring(ui, &response, theme::R_CONTROL);
 

@@ -91,14 +91,17 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
-section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool row centred between the side cards and at most that room, padded 4, its tools sharing it at 50 tall and at most 56 wide, 2 apart and 4 either side of a rule, 36 tall without their names; plate
+section heading 36, panel padding 12, item gap 8, the lines of a sheet 10 apart, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool row centred between the side cards and at most that room, padded 4, its tools sharing it at 50 tall and at most 56 wide, 2 apart and 4 either side of a rule, 36 tall without their names; plate
 panel 272, inspector 316 until dragged, top bar 44, layer strip 64, a chip 32. An icon button beside a bigger control is a square of its height: 40 beside a primary, 32 beside a picker or a box.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
-fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
+fixed. A size one screen alone uses is a constant of `theme::layout`, a module per panel, so
+no panel writes a number of points. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
 the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
-two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
-10, and pills are fully round; a bordered group of controls is rounded by theirs plus the
-room and stroke around them, so the corners nest. Nothing else is rounded.
+two-line row 48. Controls are rounded by 6 points (`R_CONTROL`), cards by 8 (`R_SURFACE`),
+windows by 10 (`R_PANEL`), a keycap, a tag or a thumb inside a control by 4 (`R_KEY`), a
+mark or swatch by 2 (`R_MARK`), and pills are fully round (`R_PILL`); a bordered group of
+controls is rounded by theirs plus the room and stroke around them, so the corners nest.
+Nothing else is rounded.
 
 ### Motion
 
@@ -119,7 +122,7 @@ in and rises `LIFT_PT` as it comes; a menu fades in by egui's own `animation_tim
 running job's glyph turns, a busy printer's dot breathes, an armed control's ring pulses:
 the only motions that loop, each a function of `motion` (`spin`, `sheen`, `breathe`,
 `pulse`), so nothing outside it names a period. The camera's swing to a view is
-`motion::turn_s`. *Reduce motion* in Settings → General sets every duration to nought and
+`motion::turn_s`. *Reduce motion* in Settings → Appearance sets every duration to nought and
 holds every loop still; `ARMED` is a wait, not a motion, and stays. Nothing asks for a frame
 once nothing moves.
 
@@ -147,13 +150,15 @@ paints from tokens only.
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
 | `issue_row`, `issue_list` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there. The list shows seven and scrolls the rest inside itself |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
+| `picture_square` | A square of a picture, or an empty raised one, a caret on a dark disc saying a click opens more: the relief's picture |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
 | `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule; short of room, the keys alone as glyphs, what each does on hover |
-| `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped, the letters in it (`m`, `s`) set small as its units |
+| `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped but shrunk, down to 60 %, to fit its cell, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
 | `dropdown`, `dropdown_menu`, `dropdown_row` | Every list that drops from a box, one look: the box on `raised` with a hairline, `FIELD_H` tall — a glyph or a colour's dot, what is chosen, `· edited` in `warn`, a count, the caret — none, and no press, over a list holding nothing; the list in the chooser card 6 under the box, each row as tall with its lead, name, a figure at its right and, when chosen, a wash and a tick. The supports' list is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
 | `MenuRow`, `menu_row`, `menu_sub`, `menu_rule`, `menu_style` | A row of the File, Edit and View menus, 28 tall: glyph, or a tick in `accent_soft` for what is on; name; keys or a figure at the right, or a caret that opens a submenu on hover; off, in `text_low` with why under it. A hairline between groups; the menu on `raised` ringed in `line` |
+| `popup_menu`, `context_menu`, `menu_button` | Every menu egui opens, laid out top down and never justified, so a wrapped line keeps its letters' own spacing; `clippy.toml` bans egui's own |
 | `theme_card` | A choice of how the window looks, 140 × 124: a picture of the window in that palette (both halved for System), then a radio, the name and a line under it; chosen, ringed in the accent |
 | `tag_label`, `bullet` | A pill standing in the flow that takes no press, over a group of release notes; one line of prose after a bullet, wrapping under its first word |
 | `boxed` | A box set into a page on `raised` ringed in a hairline, 14 inside: a release found |
@@ -171,15 +176,15 @@ paints from tokens only.
 | `binding_row` | An action of the key sheet, 38 tall: its name, then at the right its keys, each a 26 tall button of keycaps with no surface until hovered that records a new chord, a faint `+` while it has room for a second, and the reset arrow while its keys are the user's; a key recording is `accent_wash` ringed in `accent`, asking for the keys until it shows the modifiers held or the chord pressed last, then Done (`accent`, quiet until a chord is pressed) and, on a key the action has, a `×` taking it off. A gesture's keys stand in the same column, no button |
 | `find_line` | A window's box that narrows its list: a `text_box` with the find glyph in its hint and a faint `⌘F` keycap while empty, `⌘F` focusing it |
 | `palette_field` | Find's typed field, 48 tall over a hairline, inset 16, holding the focus while the palette is up, an `Esc` keycap at its right |
-| `nav_row`, `NavAside` | One page of a window's list, `BUTTON_H + 4` tall: glyph and name, washed in `accent_wash` while open, and at its right a count, a badge for a waiting release or the elsewhere arrow |
-| `find_line` | A window's box that narrows its list: a `text_box` with the find glyph in its hint and a faint `⌘F` keycap while empty, `⌘F` focusing it |
-| `palette_field` | Find's typed field, 48 tall over a hairline, inset 16, holding the focus while the palette is up, an `Esc` keycap at its right |
+| `palette_row` | One of Find's rows, `PALETTE_ROW_H` tall and inset 8: glyph, name, its keys quiet at the right; picked while lit |
 | `nav_row`, `NavAside` | One page of a window's list, `BUTTON_H + 4` tall: glyph and name, washed in `accent_wash` while open, and at its right a count, a badge for a waiting release or the elsewhere arrow |
 | `key_row` | The keys that work a window at its foot: each set of keycaps then what they do |
 | `group_name` | The capital name of a group of rows standing flush with them: a window's list, the sheet of keys |
 | `row_name` | A text row's name in a 150 column, so the boxes of a form start on one line |
 | `field_note` | A figure worked out from the fields over it, flush with their right edge |
 | `two_lines` | A name over the line that says more about it, in a list row |
+| `entry_row`, `EntryRow` | An entry of a window's list, `TWO_LINE_ROW_H` tall: its `two_lines`, quiet glyphs in their tints at its right; picked in `picked_wash`: a machine |
+| `model_row`, `ModelRow` | A model of the models card, `MODEL_ROW_H` tall: an eye that shows and hides it, its name cut short with the whole on hover, and the marks its panel draws at its right |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
@@ -207,9 +212,12 @@ paints from tokens only.
 | `colour_field` | A `FIELD_H` swatch of a colour over a checkerboard; a click opens a picker: a saturation and value square, a hue strip, an opacity strip over the checkerboard, and the colour as `#RRGGBBAA` beside its opacity |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
 | `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
+| `page_heading` | A page's title and, smaller and quieter after it, the name it belongs under: a machine and its maker |
 | `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
 | `verdict_card` | A verdict on a card of its own in a wash: a glyph in its tint, the verdict, a line on what it means |
 | `figure_line`, `name_line`, `title_line`, `state_word`, `address_label`, `status_glyph`, `share_figure` | One line that may be cut short: a figure in its tint, a name low or plain, a state in its colour, an address in the code face; a message's glyph; a job's share, large |
+| `TABLE.mark_row` | A table row's swatch before its name and a glyph at its end: a resin and the one in hand |
+| `status_dot`, `file_line` | A dot in a state's tint, a listed printer's; a file's name in the code face, cut short |
 | `picker_line`, `eye_square`, `picker_foot` | A line of a picker's open list (a group's dot, its name, its count, room for an eye and a bin); the eye on it; the list's foot that leads elsewhere |
 | `numbered_square` | A plate of the strip by its number, lit in the accent while in front |
 | `row_mark` | A quiet glyph at a row's end that says more on a click |
@@ -280,7 +288,10 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
-A glyph in a button other than the primary is 16, in the tool row 19, in a 26 square 15, in an empty state 30.
+A glyph stands at one size of `theme::glyph`, named for where it stands: `HELP` 10, `CARET`
+11, `MARK` 12, `ASIDE` 13, a row's lead `ROW` 14, in a 26 square `SQUARE` 15, in a button
+other than the primary `BUTTON` 16, `FRAMED` 18, in the tool row `RAIL` 19, `LEAD` 20, `TILE`
+24, `ZONE` 28, an empty state `EMPTY` 30, `PICTURE` 36. No other size is drawn.
 
 ### Accessibility
 

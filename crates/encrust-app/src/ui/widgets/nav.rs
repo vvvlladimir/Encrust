@@ -40,7 +40,13 @@ pub fn nav_row(ui: &mut Ui, glyph: &str, label: &str, active: bool, aside: NavAs
     painter.rect_filled(rect, theme::R_CONTROL, fill);
     let left = Align2::LEFT_CENTER;
     let glyph_at = rect.left_center() + vec2(12.0, 0.0);
-    painter.text(glyph_at, left, glyph, theme::icon(15.0), text);
+    painter.text(
+        glyph_at,
+        left,
+        glyph,
+        theme::icon(theme::glyph::SQUARE),
+        text,
+    );
     let label_at = rect.left_center() + vec2(36.0, 0.0);
     painter.text(label_at, left, label, theme::body(), text);
     aside_of(ui, rect.right_center() - vec2(12.0, 0.0), aside, active);
@@ -70,7 +76,13 @@ fn aside_of(ui: &Ui, right: egui::Pos2, aside: NavAside, active: bool) {
         }
         NavAside::Elsewhere => {
             let glyph = icon::ELSEWHERE;
-            painter.text(right, at, glyph, theme::icon(13.0), colors.text_low);
+            painter.text(
+                right,
+                at,
+                glyph,
+                theme::icon(theme::glyph::ASIDE),
+                colors.text_low,
+            );
         }
     }
 }

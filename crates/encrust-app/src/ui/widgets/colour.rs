@@ -27,7 +27,7 @@ pub fn colour_field(ui: &mut Ui, rgba: &mut [u8; 4], name: &str) -> bool {
     super::focus_ring(ui, &response, theme::R_CONTROL);
     let hex = hex_of(*rgba);
     let response = response.on_hover_text(format!("{name} {hex}"));
-    egui::Popup::menu(&response)
+    super::popup_menu(&response)
         .gap(MENU_GAP)
         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
         .frame(chooser_frame().inner_margin(theme::PANEL_PAD))

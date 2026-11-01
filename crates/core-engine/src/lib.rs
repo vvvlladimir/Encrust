@@ -18,7 +18,7 @@ pub use cut::{Cutting, cut};
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
 pub use open::{Machine, Opening, open_plate};
-pub use outputs::plate_outputs;
+pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use run::Run;
 pub use stand::{Stood, SupportPlan, SupportShapes, ToStand, stand_seated, stand_under};

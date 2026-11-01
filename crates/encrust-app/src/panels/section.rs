@@ -12,6 +12,7 @@ use crate::workspace::{Mode, Section};
 mod playback;
 mod reading;
 mod track;
+use crate::ui::theme::layout::section::GAP;
 pub use playback::{animate, animate_section};
 pub(crate) use playback::{height_range, play, step};
 use reading::Reading;
@@ -20,9 +21,6 @@ use track::track;
 /// How many layers a second the play button steps through. Fast enough to read the shape
 /// of a print, slow enough to see a layer.
 const PLAY_LAYERS_PER_S: f32 = 30.0;
-
-/// The room between the strip's groups.
-const GAP: f32 = 10.0;
 
 /// Where the viewport cuts the plate's contents, plate millimetres, or `None` for the whole
 /// model. Preview always cuts at its layer; Prepare only once the strip leaves the top.
@@ -57,7 +55,7 @@ pub fn shown(window: &Window) -> Shown {
 /// and play. See `docs/decisions/0217`, `0221`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     ui.with_layout(Layout::top_down(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
         ui.add_space(theme::TOOLBAR_PAD);
         views(ui, window);
         ui.add_space(GAP);

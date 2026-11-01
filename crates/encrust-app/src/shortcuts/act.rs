@@ -152,9 +152,8 @@ pub fn act(window: &mut Window, action: Action) {
     }
 }
 
-/// Opens a tool in the inspector, or folds the inspector away when the tool is open
-/// already. The view stays as it is: the layer strip alone switches it; see
-/// `docs/decisions/0218`.
+/// Opens a tool in the inspector, or folds it away when the tool is open already; the view
+/// stays, as the layer strip alone switches it (`docs/decisions/0218`).
 pub fn pick(window: &mut Window, tool: Tool) {
     let options = &mut window.view.options;
     options.inspector = *window.tool != tool || !options.inspector;

@@ -22,12 +22,14 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::settings::{Leaving, Section};
 use crate::status::Status;
+use crate::ui::theme::layout::settings::BLOCK_PAD;
+pub(super) use crate::ui::theme::layout::settings::{FIND_GAP, GROUP_GAP};
 use crate::ui::window_frame as frame;
 use crate::ui::{
-    NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button, inline_button,
-    nav_row, quiet_button, theme,
+    Inline, NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button,
+    inline_button, nav_row, quiet_button, theme,
 };
-use crate::ui::{block_title, page_title, page_trail};
+use crate::ui::{page_title, page_trail};
 use frame::{child, scrolled, with_header};
 pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
 pub use profile_files::{import_dropped, import_profile};
@@ -41,7 +43,10 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
             icon::SETTINGS,
             &tr!("settings-title"),
             |ui, list, side| {
-                pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
+                pages(
+                    &mut child(ui, list.shrink2(vec2(theme::PANEL_PAD, theme::SECTION_GAP))),
+                    window,
+                );
                 page(ui, side, window);
             },
         );
@@ -55,7 +60,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
 /// The pages down the left under their group names, narrowed by the line over them: the
 /// profiles, the window's own, then help; at the list's foot the window the rest lives in.
 fn pages(ui: &mut Ui, window: &mut Window) {
-    ui.spacing_mut().item_spacing.y = 2.0;
+    ui.spacing_mut().item_spacing.y = theme::ICON_GAP;
     find_line(ui, &mut window.machine.settings.find, &tr!("settings-find"));
     ui.add_space(FIND_GAP);
     let find = window.machine.settings.find.to_lowercase();
@@ -208,7 +213,7 @@ fn form_heading(ui: &mut Ui, open: &supports::Open) -> Option<Heading> {
         if icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked() {
             pressed = Some(Heading::Back);
         }
-        ui.add_space(4.0);
+        ui.add_space(theme::NOTE_GAP);
         let parent = Section::Supports.label();
         if page_trail(ui, &parent, &open.name, open.kind.as_deref()).clicked() {
             pressed = Some(Heading::Back);
@@ -241,13 +246,18 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
             return;
         };
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = theme::ITEM_GAP;
             if kind == Kind::Support
-                && inline_button(ui, icon::ADD, &tr!("settings-new-profile"), false, true).clicked()
+                && inline_button(
+                    ui,
+                    Inline::new(&tr!("settings-new-profile")).glyph(icon::ADD),
+                )
+                .clicked()
             {
                 pressed = Some(Heading::New);
             }
-            if inline_button(ui, icon::IMPORT, &tr!("settings-import"), false, true).clicked() {
+            if inline_button(ui, Inline::new(&tr!("settings-import")).glyph(icon::IMPORT)).clicked()
+            {
                 pressed = Some(Heading::Import(kind));
             }
         });
@@ -255,9 +265,6 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
     pressed
 }
 
-/// Room over a group name of the list but the first, and under the find line.
-pub(super) const GROUP_GAP: f32 = 10.0;
-pub(super) const FIND_GAP: f32 = 12.0;
 /// The questions over the window: the profiles that would not read, which may be asked
 /// without it, and the unsaved edits of the form being left.
 fn ask(ctx: &egui::Context, window: &mut Window) {
@@ -303,9 +310,6 @@ fn ask_unsaved(ctx: &egui::Context, window: &mut Window) {
     arrive(window, to);
 }
 
-/// Room above and below the fields of a block.
-const BLOCK_PAD: f32 = 18.0;
-
 /// One category of a form: its title in a column beside its fields over a hairline, or above
 /// them when narrow. What the fields `describe` is a question mark beside the title.
 pub(super) fn form_card<R>(
@@ -341,7 +345,7 @@ fn card_cell<R>(
     ui.add_space(BLOCK_PAD);
     if ui.available_width() < beside {
         card_title(ui, title, &texts, on);
-        ui.add_space(4.0);
+        ui.add_space(theme::NOTE_GAP);
         crate::ui::describing(ui, id, add)
     } else {
         ui.horizontal_top(|ui| {
@@ -350,7 +354,7 @@ fn card_cell<R>(
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.set_width(theme::BLOCK_TITLE_W);
-                    ui.add_space(4.0);
+                    ui.add_space(theme::NOTE_GAP);
                     card_title(ui, title, &texts, on);
                 },
             );
@@ -375,8 +379,13 @@ fn close_cards(ui: &mut egui::Ui) {
 /// the right the card's switch when it has one.
 fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String], on: Option<&mut bool>) {
     ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        block_title(ui, title);
+        ui.spacing_mut().item_spacing.x = theme::NOTE_GAP;
+        let help = (!texts.is_empty()).then_some(crate::ui::HELP_D + theme::NOTE_GAP);
+        let switch = on
+            .is_some()
+            .then_some(crate::ui::SWITCH_W + theme::NOTE_GAP);
+        let beside = help.unwrap_or(0.0) + switch.unwrap_or(0.0);
+        crate::ui::block_title_in(ui, title, beside);
         if !texts.is_empty() {
             crate::ui::help_mark(ui, texts);
         }

@@ -1,12 +1,16 @@
 use std::ops::RangeInclusive;
 
-use core_geometry::Scalar;
 use egui::emath::Numeric;
 use egui::{Align, Color32, DragValue, Layout, Rect, Sense, TextStyle, Ui, UiBuilder, pos2, vec2};
 
-use super::icon_button;
-use crate::i18n::tr;
-use crate::ui::{icon, theme};
+use crate::ui::theme;
+
+mod rows;
+mod text;
+
+pub(in crate::ui::widgets) use rows::row;
+pub use rows::{Carried, carried_row, count_row, number_row, picker_row};
+pub use text::{address_field, row_name, text_box, text_row};
 
 /// What a field is called, in `color`, with its unit in brackets after it: the one way
 /// a number is labelled anywhere in the window. Cut short with an ellipsis, never wider
@@ -82,7 +86,7 @@ pub fn unit_field<N: Numeric>(
 
 /// What a box is called, the unit drawn inside it, its width in points, and whether its
 /// value strays from what it should be, which borders it in `danger`.
-pub(super) struct Field<'a> {
+pub(in crate::ui::widgets) struct Field<'a> {
     pub(super) name: &'a str,
     pub(super) unit: &'a str,
     pub(super) width: f32,
@@ -90,7 +94,7 @@ pub(super) struct Field<'a> {
 }
 
 /// Names a control for a screen reader, which cannot see the label painted beside it.
-fn name_for_reader(ui: &Ui, id: egui::Id, name: &str) {
+pub(super) fn name_for_reader(ui: &Ui, id: egui::Id, name: &str) {
     ui.ctx()
         .accesskit_node_builder(id, |node| node.set_label(name));
 }
@@ -145,7 +149,7 @@ fn standard_decimals(unit: &str) -> Option<usize> {
 
 /// The box itself: sunk below the panel, the figure at its right, and the unit, if any,
 /// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
-pub(super) fn boxed_field<N: Numeric>(
+pub(in crate::ui::widgets) fn boxed_field<N: Numeric>(
     ui: &mut Ui,
     field: &Field<'_>,
     value: &mut N,
@@ -168,34 +172,62 @@ pub(super) fn boxed_field<N: Numeric>(
         .map_or(0.0, |unit| unit_slot_w(ui, unit) + UNIT_PAD);
     let value_rect = Rect::from_min_max(rect.min, pos2(rect.right() - unit_w, rect.bottom()));
 
-    let layout = Layout::top_down(Align::Max).with_main_align(Align::Center);
-    let builder = UiBuilder::new().max_rect(value_rect).layout(layout);
-    let response = ui
-        .scope_builder(builder, |ui| {
-            borderless(ui.style_mut(), value_rect.size());
-            // egui would otherwise pull a value outside `range` into it every frame, and
-            // report that as an edit: a model sunk under the plate would be lifted back.
-            // A typed figure is taken when the box is left, not at each key: the first
-            // digit of 10 is under a least of 2 and would be pulled up to it at once.
-            let mut drag = DragValue::new(value)
-                .speed(speed)
-                .range(range)
-                .clamp_existing_to_range(false)
-                .update_while_editing(false);
-            if let Some(decimals) = decimals {
-                drag = drag.fixed_decimals(decimals);
-            }
-            ui.add(drag)
-        })
-        .inner;
+    let response = drag_figure(ui, value_rect, value, (speed, range), decimals);
     // The scope above leaves the cursor after the figure, short of the unit: put it back
     // after the whole box, or the next control in a row would sit over the unit.
     ui.advance_cursor_after_rect(rect);
     name_for_reader(ui, response.id, field.name);
+    paint_box(ui, frame, rect, &response, field.flagged);
+    if let Some(unit) = unit {
+        let at = pos2(rect.right() - unit_w + UNIT_PAD / 2.0, rect.center().y);
+        ui.painter()
+            .galley(at - vec2(0.0, unit.size().y / 2.0), unit, colors.text_low);
+    }
+    response.changed()
+}
 
+/// The figure of a box, dragged or typed in `value_rect` at `speed` within `range`.
+fn drag_figure<N: Numeric>(
+    ui: &mut Ui,
+    value_rect: Rect,
+    value: &mut N,
+    (speed, range): (f64, RangeInclusive<N>),
+    decimals: Option<usize>,
+) -> egui::Response {
+    let layout = Layout::top_down(Align::Max).with_main_align(Align::Center);
+    let builder = UiBuilder::new().max_rect(value_rect).layout(layout);
+    ui.scope_builder(builder, |ui| {
+        borderless(ui.style_mut(), value_rect.size());
+        // egui would otherwise pull a value outside `range` into it every frame, and
+        // report that as an edit: a model sunk under the plate would be lifted back.
+        // A typed figure is taken when the box is left, not at each key: the first
+        // digit of 10 is under a least of 2 and would be pulled up to it at once.
+        let mut drag = DragValue::new(value)
+            .speed(speed)
+            .range(range)
+            .clamp_existing_to_range(false)
+            .update_while_editing(false);
+        if let Some(decimals) = decimals {
+            drag = drag.fixed_decimals(decimals);
+        }
+        ui.add(drag)
+    })
+    .inner
+}
+
+/// The sunken box behind a figure, into the `frame` kept for it under the figure: ringed in
+/// the accent while typed in, the danger while `flagged`, `line` under the pointer.
+fn paint_box(
+    ui: &Ui,
+    frame: egui::layers::ShapeIdx,
+    rect: Rect,
+    response: &egui::Response,
+    flagged: bool,
+) {
+    let colors = theme::colors();
     let border = if response.has_focus() {
         colors.accent
-    } else if field.flagged {
+    } else if flagged {
         colors.danger
     } else if ui.rect_contains_pointer(rect) && ui.is_enabled() {
         colors.line
@@ -210,12 +242,6 @@ pub(super) fn boxed_field<N: Numeric>(
         egui::StrokeKind::Inside,
     );
     ui.painter().set(frame, shape);
-    if let Some(unit) = unit {
-        let at = pos2(rect.right() - unit_w + UNIT_PAD / 2.0, rect.center().y);
-        ui.painter()
-            .galley(at - vec2(0.0, unit.size().y / 2.0), unit, colors.text_low);
-    }
-    response.changed()
 }
 
 /// A `DragValue` that draws only its figure, filling `size`: the box around it is ours.
@@ -239,182 +265,6 @@ fn borderless(style: &mut egui::Style, size: egui::Vec2) {
         widget.weak_bg_fill = Color32::TRANSPARENT;
         widget.bg_stroke = egui::Stroke::NONE;
     }
-}
-
-/// A named number: the label and its unit on the left, a box of one width on the right.
-pub fn number_row(
-    ui: &mut Ui,
-    label: &str,
-    value: &mut Scalar,
-    unit: &str,
-    speed: f64,
-    range: RangeInclusive<Scalar>,
-    decimals: usize,
-) -> bool {
-    let field = Field {
-        name: label,
-        unit,
-        width: theme::FIELD_W,
-        flagged: false,
-    };
-    row(ui, label, |ui| {
-        boxed_field(ui, &field, value, speed, range, Some(decimals))
-    })
-}
-
-/// What was done to a number the window had changed on the user's behalf.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Carried {
-    Untouched,
-    Edited,
-    /// The button that puts back what it was before the change.
-    Reverted,
-}
-
-/// A named number the window changed on the user's behalf: while `was` is `Some`, its label
-/// is in the warning colour and a button beside it puts that value back.
-#[allow(clippy::too_many_arguments)]
-pub fn carried_row(
-    ui: &mut Ui,
-    label: &str,
-    value: &mut Scalar,
-    unit: &str,
-    speed: f64,
-    range: RangeInclusive<Scalar>,
-    decimals: usize,
-    was: Option<Scalar>,
-) -> Carried {
-    let colors = theme::colors();
-    let Some(was) = was else {
-        return if number_row(ui, label, value, unit, speed, range, decimals) {
-            Carried::Edited
-        } else {
-            Carried::Untouched
-        };
-    };
-    let mut carried = Carried::Untouched;
-    labelled(ui, label, colors.warn, "", |ui| {
-        let field = Field {
-            name: label,
-            unit,
-            width: theme::FIELD_W,
-            flagged: false,
-        };
-        if boxed_field(ui, &field, value, speed, range, Some(decimals)) {
-            carried = Carried::Edited;
-        }
-        let back = tr!(
-            "field-back-to",
-            value = format!("{was:.decimals$}"),
-            unit = unit
-        );
-        if icon_button(ui, icon::RESET, &back).clicked() {
-            carried = Carried::Reverted;
-        }
-    });
-    carried
-}
-
-/// A named whole number, laid out like `number_row`: pixel counts and layer counts.
-pub fn count_row(
-    ui: &mut Ui,
-    label: &str,
-    value: &mut u32,
-    unit: &str,
-    speed: f64,
-    range: RangeInclusive<u32>,
-) -> bool {
-    let field = Field {
-        name: label,
-        unit,
-        width: theme::FIELD_W,
-        flagged: false,
-    };
-    row(ui, label, |ui| {
-        boxed_field(ui, &field, value, speed, range, None)
-    })
-}
-
-/// A `dropdown` under a `field_label` of its own, for a choice too long for a `FIELD_W` box.
-pub fn picker_row(ui: &mut Ui, label: &str, glyph: &str, chosen: &str) -> egui::Response {
-    field_label(ui, label, theme::colors().text_mid, "");
-    ui.add_space(4.0);
-    let face = super::DropdownFace::plain(glyph, chosen);
-    super::dropdown(ui, &face, ui.available_width())
-}
-
-pub(super) fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
-    labelled(ui, label, theme::colors().text_mid, "", field)
-}
-
-/// A `field_label` and what `right` lays out from the row's right edge; `right` goes first so
-/// a long label is cut to the room it leaves rather than pushing it past the card.
-pub(super) fn labelled<R>(
-    ui: &mut Ui,
-    label: &str,
-    color: Color32,
-    unit: &str,
-    right: impl FnOnce(&mut Ui) -> R,
-) -> R {
-    ui.horizontal(|ui| {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let inner = right(ui);
-            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                field_label(ui, label, color, unit);
-            });
-            inner
-        })
-        .inner
-    })
-    .inner
-}
-
-/// The box an IP address is typed into, as tall as the buttons beside it and `width`
-/// points wide.
-pub fn address_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> egui::Response {
-    let field = text_box(egui::TextEdit::singleline(text))
-        .hint_text(hint)
-        .font(theme::figures(13.0))
-        .background_color(theme::colors().sunken);
-    let response = ui.add_sized(vec2(width, theme::FIELD_H), field);
-    name_for_reader(ui, response.id, &tr!("field-printer-address"));
-    response
-}
-
-/// A line of text in the one shape every typed box has: as tall as a button, its text
-/// centred in it.
-pub fn text_box(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
-    edit.min_size(vec2(0.0, theme::FIELD_H))
-        .vertical_align(Align::Center)
-        .margin(egui::Margin::symmetric(10, 0))
-}
-
-/// The name of a row whose box takes what is left, in a column of `ROW_NAME_W` so every
-/// such box of a form starts on one line; a longer name is cut.
-pub fn row_name(ui: &mut Ui, text: &str) {
-    let cell = vec2(theme::ROW_NAME_W, theme::FIELD_H);
-    let layout = egui::Layout::left_to_right(Align::Center);
-    ui.allocate_ui_with_layout(cell, layout, |ui| {
-        ui.set_width(theme::ROW_NAME_W);
-        field_label(ui, text, theme::colors().text_mid, "");
-    });
-}
-
-/// A named line of text: the name in its column, the field taking what is left.
-pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
-    let mut changed = false;
-    ui.horizontal(|ui| {
-        row_name(ui, label);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let field = text_box(egui::TextEdit::singleline(value))
-                .font(theme::label())
-                .background_color(theme::colors().sunken);
-            let response = ui.add_sized(vec2(ui.available_width(), theme::FIELD_H), field);
-            name_for_reader(ui, response.id, label);
-            changed = response.changed();
-        });
-    });
-    changed
 }
 
 #[cfg(test)]

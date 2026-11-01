@@ -1,11 +1,19 @@
 use egui::{
-    Align, Align2, Color32, Frame, Id, Layout, Rect, Response, RichText, Sense, Ui, UiBuilder,
-    WidgetInfo, WidgetType, vec2,
+    Align, Align2, Color32, Frame, Id, Layout, Rect, RichText, Sense, Ui, UiBuilder, WidgetInfo,
+    WidgetType, vec2,
 };
 
 use super::{focus_ring, hover_mix};
 use crate::i18n::tr;
 use crate::ui::theme;
+
+mod found;
+mod issue;
+mod tag;
+
+pub use found::{found_row, row_mark};
+pub use issue::{issue_list, issue_row};
+pub use tag::{bullet, tag, tag_label};
 
 /// What a click on a row of a list asked for.
 #[derive(Default)]
@@ -41,78 +49,90 @@ pub fn list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// the button that drops it. Given a `rename` id, a double click turns the label into a
 /// field, as a plate tab does. Given `shown`, an eye beside the figure says whether what
 /// the row stands for is drawn, and asks for the other.
-///
-/// The row takes its click before its contents are laid out, so the button over it is the
-/// later widget and wins the press it sits under.
-#[allow(clippy::too_many_arguments)]
-pub fn list_row(
-    ui: &mut Ui,
-    label: &str,
-    tint: Option<Color32>,
-    selected: bool,
-    remove: Option<(&str, &str)>,
-    rename: Option<Id>,
-    aside: Option<&str>,
-    shown: Option<bool>,
-) -> RowAction {
+#[derive(Default)]
+pub struct ListRow<'a> {
+    pub label: &'a str,
+    pub tint: Option<Color32>,
+    pub selected: bool,
+    /// The glyph and tooltip of the button that drops the row.
+    pub remove: Option<(&'a str, &'a str)>,
+    pub rename: Option<Id>,
+    pub aside: Option<&'a str>,
+    pub shown: Option<bool>,
+}
+
+/// Draws a [`ListRow`]. The row takes its click before its contents are laid out, so the
+/// button over it is the later widget and wins the press it sits under.
+pub fn list_row(ui: &mut Ui, row: &ListRow<'_>) -> RowAction {
     let colors = theme::colors();
-    let (rect, row) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    let text = colors.text_high;
+    let size = vec2(ui.available_width(), theme::ROW_H);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let (label, selected) = (row.label, row.selected);
     let fill = match selected {
         true => colors.picked_wash,
-        false => hover_mix(ui, &row, colors.raised, colors.hover),
+        false => hover_mix(ui, &response, colors.raised, colors.hover),
     };
     ui.painter().rect_filled(rect, 0.0, fill);
-    row.widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, label));
-    focus_ring(ui, &row, 0.0);
+    response
+        .widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, label));
+    focus_ring(ui, &response, 0.0);
 
     let mut action = RowAction::default();
-    let inner = rect.shrink2(vec2(9.0, 0.0));
+    let inner = rect.shrink2(vec2(LIST_ROW_INSET, 0.0));
     let layout = Layout::left_to_right(Align::Center);
     // A child rather than a scope, so the row alone takes its place in the list.
     ui.new_child(UiBuilder::new().max_rect(inner).layout(layout))
-        .scope(|ui| {
-            if let Some(tint) = tint {
-                let (chip, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-                ui.painter().rect_filled(chip, 2.0, tint);
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if let Some((glyph, tooltip)) = remove {
-                    action.removed = super::icon_button(ui, glyph, tooltip).clicked();
-                }
-                if let Some(shown) = shown {
-                    let (glyph, tooltip) = if shown {
-                        (crate::ui::icon::VISIBLE, tr!("list-hide"))
-                    } else {
-                        (crate::ui::icon::HIDDEN, tr!("list-show"))
-                    };
-                    action.toggled = super::icon_button(ui, glyph, &tooltip).clicked();
-                }
-                if let Some(aside) = aside {
-                    let figure = RichText::new(aside).font(theme::figures(11.5));
-                    ui.label(figure.color(colors.text_low));
-                }
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    match rename.filter(|id| is_renaming(ui, *id)) {
-                        Some(id) => action.renamed = rename_field(ui, id, |edit| edit),
-                        None => {
-                            ui.label(RichText::new(label).font(theme::label()).color(text));
-                        }
-                    }
-                });
-            });
-        });
+        .scope(|ui| row_contents(ui, row, &mut action));
 
-    if let Some(id) = rename
-        && row.double_clicked()
+    if let Some(id) = row.rename
+        && response.double_clicked()
     {
         start_rename(ui, id, label);
     }
-    action.picked = !action.removed && !action.toggled && row.clicked();
-    action.row = Some(row);
+    action.picked = !action.removed && !action.toggled && response.clicked();
+    action.row = Some(response);
     action
 }
+
+/// A list row's chip, then from the right its drop button, eye and figure, and its name or
+/// the field it is renamed in.
+fn row_contents(ui: &mut Ui, row: &ListRow<'_>, action: &mut RowAction) {
+    let colors = theme::colors();
+    if let Some(tint) = row.tint {
+        let (chip, _) = ui.allocate_exact_size(vec2(LIST_CHIP, LIST_CHIP), Sense::hover());
+        ui.painter().rect_filled(chip, theme::R_MARK, tint);
+    }
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        if let Some((glyph, tooltip)) = row.remove {
+            action.removed = super::icon_button(ui, glyph, tooltip).clicked();
+        }
+        if let Some(shown) = row.shown {
+            let (glyph, tooltip) = if shown {
+                (crate::ui::icon::VISIBLE, tr!("list-hide"))
+            } else {
+                (crate::ui::icon::HIDDEN, tr!("list-show"))
+            };
+            action.toggled = super::icon_button(ui, glyph, &tooltip).clicked();
+        }
+        if let Some(aside) = row.aside {
+            let figure = RichText::new(aside).font(theme::figures(11.5));
+            ui.label(figure.color(colors.text_low));
+        }
+        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            match row.rename.filter(|id| is_renaming(ui, *id)) {
+                Some(id) => action.renamed = rename_field(ui, id, |edit| edit),
+                None => {
+                    let name = RichText::new(row.label).font(theme::label());
+                    ui.label(name.color(colors.text_high));
+                }
+            }
+        });
+    });
+}
+
+/// How far a list row's contents stand in from its sides, and the side of its colour chip.
+const LIST_ROW_INSET: f32 = 9.0;
+const LIST_CHIP: f32 = 10.0;
 
 /// Turns the name under `id` into a field holding `name`, focused, for [`rename_box`].
 pub fn start_rename(ui: &Ui, id: Id, name: &str) {
@@ -156,285 +176,6 @@ fn rename_field(
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
-
-/// Findings one under another, each its own rounded row, `ISSUE_GAP` apart; past
-/// `ISSUE_ROWS_SHOWN` they scroll inside the list, so the sections under it stay put.
-pub fn issue_list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let shown = ISSUE_ROWS_SHOWN as f32;
-    egui::ScrollArea::vertical()
-        .id_salt("issue-list")
-        .max_height(shown * theme::BUTTON_H + (shown - 1.0) * ISSUE_GAP)
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = ISSUE_GAP;
-            add(ui)
-        })
-        .inner
-}
-
-const ISSUE_GAP: f32 = 8.0;
-/// Rows a list of findings shows before the rest scroll inside it.
-const ISSUE_ROWS_SHOWN: usize = 7;
-
-/// How strongly the accent rings the finding in hand.
-const ISSUE_RING: f32 = 0.35;
-/// Room between a finding's name and the aside after it, points.
-const ASIDE_GAP: f32 = 8.0;
-
-/// One finding in a list of them: a dot in its colour, what it is, any `aside` quieter
-/// beside it, and `detail` at the right. The whole row is the button that goes there.
-pub fn issue_row(
-    ui: &mut Ui,
-    tint: Color32,
-    (place, aside): (&str, Option<&str>),
-    detail: &str,
-    selected: bool,
-) -> Response {
-    let colors = theme::colors();
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), Sense::click());
-    let fill = match selected {
-        true => colors.picked_wash,
-        false => hover_mix(ui, &response, colors.raised, colors.hover),
-    };
-    let ring = match selected {
-        true => egui::Stroke::new(1.0, colors.accent.gamma_multiply(ISSUE_RING)),
-        false => egui::Stroke::NONE,
-    };
-    response.widget_info(|| {
-        WidgetInfo::selected(
-            WidgetType::SelectableLabel,
-            true,
-            selected,
-            format!("{place}, {detail}"),
-        )
-    });
-    let painter = ui.painter();
-    painter.rect(rect, theme::R_CONTROL, fill, ring, egui::StrokeKind::Inside);
-
-    issue_words(painter, rect, tint, (place, aside), detail);
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
-/// An issue row's dot in `tint`, its place and aside, and its detail at the right end.
-fn issue_words(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    tint: Color32,
-    (place, aside): (&str, Option<&str>),
-    detail: &str,
-) {
-    let colors = theme::colors();
-    let dot = rect.left_center() + vec2(12.0, 0.0);
-    painter.circle_filled(dot, 4.0, tint);
-    let at = dot + vec2(11.0, 0.0);
-    let named = painter.text(
-        at,
-        Align2::LEFT_CENTER,
-        place,
-        theme::label(),
-        colors.text_high,
-    );
-    if let Some(aside) = aside {
-        let at = named.right_center() + vec2(ASIDE_GAP, 0.0);
-        painter.text(
-            at,
-            Align2::LEFT_CENTER,
-            aside,
-            theme::small(),
-            colors.text_low,
-        );
-    }
-    let at = rect.right_center() - vec2(12.0, 0.0);
-    painter.text(
-        at,
-        Align2::RIGHT_CENTER,
-        detail,
-        theme::figures(12.0),
-        colors.text_mid,
-    );
-}
-
-/// Something found that is not yet the user's: a dashed row of a glyph, its name (`text_low`
-/// unless `matches`), a figure such as an address, and an Add button. Answers whether Add
-/// was pressed.
-pub fn found_row(ui: &mut Ui, glyph: &str, name: &str, figure: &str, matches: bool) -> Response {
-    let colors = theme::colors();
-    let (rect, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), theme::BUTTON_H + 8.0),
-        Sense::hover(),
-    );
-    found_words(ui.painter(), rect, (glyph, name), matches);
-    let mut end = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect.shrink(4.0))
-            .layout(Layout::right_to_left(Align::Center)),
-    );
-    let add = super::inline_button(
-        &mut end,
-        crate::ui::icon::ADD,
-        &tr!("found-add"),
-        false,
-        true,
-    );
-    ui.painter().text(
-        add.rect.left_center() - vec2(10.0, 0.0),
-        Align2::RIGHT_CENTER,
-        figure,
-        theme::figures(12.0),
-        colors.text_mid,
-    );
-    add
-}
-
-/// A found row's dashed outline, its glyph and its name, `text_low` unless it `matches`.
-fn found_words(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    (glyph, name): (&str, &str),
-    matches: bool,
-) {
-    let colors = theme::colors();
-    let corners = [
-        rect.left_top(),
-        rect.right_top(),
-        rect.right_bottom(),
-        rect.left_bottom(),
-        rect.left_top(),
-    ];
-    let stroke = egui::Stroke::new(1.0, colors.line);
-    painter.extend(egui::Shape::dashed_line(
-        &corners, stroke, FOUND_DASH, FOUND_DASH,
-    ));
-    let ink = if matches {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    let left = rect.left_center() + vec2(12.0, 0.0);
-    painter.text(
-        left,
-        Align2::LEFT_CENTER,
-        glyph,
-        theme::icon(14.0),
-        colors.text_mid,
-    );
-    painter.text(
-        left + vec2(20.0, 0.0),
-        Align2::LEFT_CENTER,
-        name,
-        theme::label(),
-        ink,
-    );
-}
-
-/// A quiet glyph at the end of a row, `right_center` its right end, that says more on a
-/// click: a model repair only had to tidy.
-pub fn row_mark(
-    ui: &mut Ui,
-    right_center: egui::Pos2,
-    id: Id,
-    glyph: &str,
-    label: &str,
-) -> Response {
-    let colors = theme::colors();
-    let spot = egui::Rect::from_center_size(
-        right_center - vec2(MARK_SIDE / 2.0, 0.0),
-        vec2(MARK_SIDE, MARK_SIDE),
-    );
-    let response = ui.interact(spot, id, Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, label));
-    let ink = if response.hovered() {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    ui.painter().text(
-        spot.center(),
-        Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(14.0),
-        ink,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response
-}
-
-/// A row mark's square, points.
-const MARK_SIDE: f32 = 18.0;
-
-/// The dashes round a found row, points.
-const FOUND_DASH: f32 = 4.0;
-
-/// A state named at the end of a row, `right_center` its right end: the word in `ink` on
-/// `wash`, a pill. A click on it says more, so it is a button of its own.
-pub fn tag(
-    ui: &mut Ui,
-    right_center: egui::Pos2,
-    id: Id,
-    text: &str,
-    (ink, wash): (Color32, Color32),
-) -> Response {
-    let word = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::small(), ink);
-    let size = word.size() + 2.0 * TAG_PAD;
-    let rect = egui::Rect::from_min_size(right_center - vec2(size.x, size.y / 2.0), size);
-    let response = ui.interact(rect, id, Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, text));
-    let fill = if response.hovered() {
-        ink.gamma_multiply(TAG_HOVER_WASH)
-    } else {
-        wash
-    };
-    let painter = ui.painter();
-    painter.rect_filled(rect, TAG_R, fill);
-    painter.galley(rect.min + TAG_PAD, word, ink);
-    focus_ring(ui, &response, TAG_R);
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
-/// The same pill standing in the flow and taking no press: a heading of release notes.
-pub fn tag_label(ui: &mut Ui, text: &str, (ink, wash): (Color32, Color32)) -> Response {
-    let word = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::small(), ink);
-    let (rect, response) = ui.allocate_exact_size(word.size() + 2.0 * TAG_PAD, Sense::hover());
-    let painter = ui.painter();
-    painter.rect_filled(rect, TAG_R, wash);
-    painter.galley(rect.min + TAG_PAD, word, ink);
-    response
-}
-
-/// One line of a list in prose, after a bullet, wrapping under its own first word.
-pub fn bullet(ui: &mut Ui, text: &str) {
-    let colors = theme::colors();
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = BULLET_GAP;
-        ui.label(
-            egui::RichText::new("\u{2022}")
-                .font(theme::label())
-                .color(colors.text_mid),
-        );
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(text)
-                    .font(theme::label())
-                    .color(colors.text_high),
-            )
-            .wrap(),
-        );
-    });
-}
-
-/// Between a bullet and its words, points.
-const BULLET_GAP: f32 = 10.0;
-
-/// Room around a tag's word, and how much of its ink washes it under the pointer.
-const TAG_PAD: egui::Vec2 = vec2(6.0, 1.0);
-const TAG_HOVER_WASH: f32 = 0.24;
-const TAG_R: egui::CornerRadius = egui::CornerRadius::same(4);
 
 /// A name over the line that says more about it, drawn from `left_center`: a machine over
 /// its maker and the file it is sliced into.

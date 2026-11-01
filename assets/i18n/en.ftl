@@ -572,7 +572,6 @@ summary-broken-why =
         [one] What is sliced from it may not print.
        *[other] What is sliced from them may not print.
     }
-summary-estimate = ≈ { $value }
 
 ## ui/widgets.rs
 

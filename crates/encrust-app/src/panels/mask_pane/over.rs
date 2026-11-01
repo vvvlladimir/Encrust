@@ -5,10 +5,9 @@ use egui::{Align2, Id, Rect, Vec2, pos2};
 
 use crate::i18n::tr;
 use crate::preview::Preview;
+use crate::ui::theme::layout::mask_pane_over::TAG_GAP;
 use crate::ui::{ZoomPress, card, tag, theme, zoom_bar};
 
-/// Points between the zoom and the tag under it.
-const TAG_GAP: f32 = 6.0;
 /// How much one press of a zoom button zooms by.
 const ZOOM_STEP: f32 = 1.25;
 

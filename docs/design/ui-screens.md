@@ -149,7 +149,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 |---|---|---|
 | Heading | `card_title`: *Plate n* in `text_high`, the resin's name at the right in `text_low` | 36 |
 | Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
-| Figures | `figure_grid`: Time (`≈ 17 m 26 s`), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
+| Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell in a long language), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
 | Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
 | Foot | the printer row, then the action row | on `base` |
 
@@ -265,7 +265,7 @@ and the one that applies right.
   Pillar, Bottom, Small pillar, Branching, Grid, Raft, Cross bracing, Automatic; a switched
   block carries its switch beside its title and, while off, one line of what stands instead.
   Cross bracing: its presets, *Fine-tune* trading them for every number, then the buttress.
-  An automatic profile's name is shown, not typed. A 180 title column beside at most 460 of fields, a hairline under each. A text row's name stands in a 150 column so
+  An automatic profile's name is shown, not typed. A 180 title column, the title wrapping in it, beside at most 460 of fields, a hairline under each. A text row's name stands in a 150 column so
   every box starts on one line; every box ends on the block's right edge, and a figure
   worked out from them (*19.00 × 24.00 µm a pixel*) is a `field_note` flush with it. See Appearance and General above.
 - *Machine and resin* lists the machines (search, then two-line rows with a network glyph and

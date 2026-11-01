@@ -55,7 +55,7 @@ pub fn paint_layer_track(
         ),
         span.expand(LAYER_HANDLE.y / 2.0),
     );
-    let round = egui::CornerRadius::same(u8::MAX);
+    let round = theme::R_PILL;
 
     if let Some((marks, along)) = marks {
         marks.paint_profile(painter, *along, rule);
@@ -87,7 +87,7 @@ pub fn paint_layer_track(
         let handle = Rect::from_center_size(pos2(rect.center().x, y), LAYER_HANDLE);
         painter.rect(
             handle,
-            egui::CornerRadius::same(4),
+            theme::R_KEY,
             colors.knob,
             Stroke::new(2.0, colors.accent),
             egui::StrokeKind::Outside,
@@ -154,7 +154,7 @@ impl LayerMarks {
                 RISK
             };
             let bar = Rect::from_center_size(pos2(rule.center().x, up(span, mark.at)), size);
-            painter.rect_filled(bar, egui::CornerRadius::same(1), mark.tint);
+            painter.rect_filled(bar, theme::R_MARK, mark.tint);
         }
     }
 

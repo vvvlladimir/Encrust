@@ -59,13 +59,30 @@ fn each_file_is_named_by_the_template() {
         PathBuf::from("models/b.stl"),
     ];
     let outputs = outputs_for(&models, &command.batch(), &grey()).expect("names differ");
+    let files: Vec<&PathBuf> = outputs.iter().map(|named| &named.file).collect();
     assert_eq!(
-        outputs,
+        files,
         [
-            PathBuf::from("out/part.v2_Grey_50um"),
-            PathBuf::from("out/b_Grey_50um")
+            &PathBuf::from("out/part.v2_Grey_50um"),
+            &PathBuf::from("out/b_Grey_50um")
         ],
         "a dot in the model's name is kept"
+    );
+}
+
+#[test]
+fn each_report_is_named_like_its_file() {
+    let command = named("{model}_{ext}");
+    let models = [PathBuf::from("models/a.stl"), PathBuf::from("models/a.obj")];
+    let outputs = outputs_for(&models, &command.batch(), &grey()).expect("names differ");
+    let reports: Vec<&PathBuf> = outputs.iter().map(|named| &named.report).collect();
+    assert_eq!(
+        reports,
+        [
+            &PathBuf::from("out/a_stl.json"),
+            &PathBuf::from("out/a_obj.json")
+        ],
+        "two models of one stem keep a report each"
     );
 }
 

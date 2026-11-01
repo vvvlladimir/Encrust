@@ -22,7 +22,7 @@ pub fn keycap(painter: &Painter, text: &str, right: f32, center_y: f32) -> f32 {
         pos2(right - width, center_y - CAP_H / 2.0),
         vec2(width, CAP_H),
     );
-    let radius = egui::CornerRadius::same(4);
+    let radius = theme::R_KEY;
     painter.rect(cap, radius, colors.line, Stroke::NONE, StrokeKind::Inside);
     let face = Rect::from_min_max(cap.min + vec2(1.0, 1.0), cap.max - vec2(1.0, 2.0));
     painter.rect(

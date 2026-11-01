@@ -29,6 +29,58 @@ pub fn swatch(
     response.on_hover_text(name)
 }
 
+/// A square `side` points across showing `texture`, or an empty raised one, with a caret on a
+/// dark disc saying a click opens more to choose from: the relief's picture.
+pub fn picture_square(
+    ui: &mut Ui,
+    texture: Option<&egui::TextureHandle>,
+    side: f32,
+    tooltip: &str,
+) -> Response {
+    let colors = theme::colors();
+    let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, tooltip));
+    match texture {
+        Some(texture) => {
+            egui::Image::new(texture)
+                .corner_radius(theme::R_CONTROL)
+                .paint_at(ui, rect);
+        }
+        None => {
+            ui.painter()
+                .rect_filled(rect, theme::R_CONTROL, colors.raised);
+        }
+    }
+    let ring = hover_mix(ui, &response, colors.line, colors.text_low);
+    let painter = ui.painter();
+    painter.rect_stroke(
+        rect,
+        theme::R_CONTROL,
+        egui::Stroke::new(1.0, ring),
+        StrokeKind::Inside,
+    );
+    // A dark disc behind the caret, so it reads over a white picture as over a black one.
+    let disc = colors.sunken.gamma_multiply(CARET_DISC);
+    painter.circle_filled(rect.center(), CARET_DISC_D / 2.0, disc);
+    let font = theme::icon(theme::glyph::ASIDE);
+    let caret = crate::ui::icon::CARET_DOWN;
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        caret,
+        font,
+        colors.text_high,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tooltip)
+}
+
+/// The disc behind a picture square's caret, points across, and how much of `sunken` it keeps.
+const CARET_DISC_D: f32 = 22.0;
+const CARET_DISC: f32 = 0.85;
+
 /// A card that opens a view of its own: a glyph in the colour of what it found, a title,
 /// a line under it, and a chevron saying it leads somewhere.
 pub fn summary_button(
@@ -57,7 +109,7 @@ pub fn summary_button(
         glyph_at,
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(20.0),
+        theme::icon(theme::glyph::LEAD),
         tint,
     );
     let text_x = rect.left() + 42.0;
@@ -79,7 +131,7 @@ pub fn summary_button(
         rect.right_center() - vec2(14.0, 0.0),
         Align2::CENTER_CENTER,
         crate::ui::icon::CARET_RIGHT,
-        theme::icon(14.0),
+        theme::icon(theme::glyph::ROW),
         colors.text_low,
     );
     focus_ring(ui, &response, theme::R_SURFACE);
@@ -111,7 +163,7 @@ pub fn zone_button(ui: &mut Ui, rect: Rect, glyph: &str, title: &str, detail: &s
         middle - vec2(0.0, 22.0),
         Align2::CENTER_CENTER,
         glyph,
-        theme::icon(30.0),
+        theme::icon(theme::glyph::EMPTY),
         colors.text_mid,
     );
     painter.text(
@@ -144,7 +196,7 @@ pub fn bar_pill(
     wash: egui::Color32,
 ) -> egui::Response {
     let (shown, font) = if compact {
-        (glyph, theme::icon(13.0))
+        (glyph, theme::icon(theme::glyph::ASIDE))
     } else {
         (text, theme::small())
     };
@@ -152,21 +204,17 @@ pub fn bar_pill(
     let size = vec2(label.size().x + PILL_PAD * 2.0, PILL_H);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
-    let fill = if response.hovered() {
-        wash
-    } else {
-        egui::Color32::TRANSPARENT
-    };
+    let fill = hover_mix(ui, &response, egui::Color32::TRANSPARENT, wash);
     let painter = ui.painter();
     painter.rect(
         rect,
-        egui::CornerRadius::same(255),
+        theme::R_PILL,
         fill,
         egui::Stroke::new(1.0, tint.gamma_multiply(PILL_RING)),
         egui::StrokeKind::Inside,
     );
     painter.galley(rect.center() - label.size() / 2.0, label, tint);
-    focus_ring(ui, &response, egui::CornerRadius::same(255));
+    focus_ring(ui, &response, theme::R_PILL);
     response
 }
 

@@ -125,18 +125,25 @@ impl Keymap {
 }
 
 /// What a file keeps; an action this build does not know, or a chord it cannot read, is
-/// dropped.
+/// dropped, and keys a later build made the table's are the table's again.
 impl From<BTreeMap<String, Vec<String>>> for Keymap {
     fn from(stored: BTreeMap<String, Vec<String>>) -> Self {
-        let chosen = BINDINGS
-            .iter()
-            .filter_map(|binding| {
-                let lines = stored.get(binding.action.id())?;
-                let keys = lines.iter().filter_map(|line| parse(line));
-                Some((binding.action.id(), keys.take(MOST_CHORDS).collect()))
-            })
-            .collect();
-        let mut keymap = Self { chosen };
+        let mut keymap = Self::default();
+        for binding in BINDINGS {
+            let Some(lines) = stored.get(binding.action.id()) else {
+                continue;
+            };
+            let keys: Vec<KeyboardShortcut> = lines
+                .iter()
+                .filter_map(|line| parse(line))
+                .take(MOST_CHORDS)
+                .collect();
+            // Only an empty list clears an action; unreadable keys leave the table's.
+            if keys.is_empty() && !lines.is_empty() {
+                continue;
+            }
+            keymap.set(binding.action, keys);
+        }
         keymap.free_taken_defaults();
         keymap
     }
@@ -234,9 +241,8 @@ pub fn finish() -> Option<(Slot, KeyboardShortcut)> {
     PRESSED.take().map(|chord| (slot, chord))
 }
 
-/// While a slot records, takes every key out of the input and keeps the chord pressed
-/// last, so a slip is put right by pressing again; Esc stops recording and keeps nothing.
-/// Answers whether a slot was recording.
+/// While a slot records, takes every key out of the input and keeps the last chord pressed,
+/// Esc keeping none; answers whether a slot was recording.
 pub(super) fn catch(raw_input: &mut egui::RawInput) -> bool {
     if recording().is_none() {
         return false;

@@ -574,7 +574,7 @@ smoothing, not the original model.
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
 Resin is counted from what is actually cured. Before slicing, the plate's card states
-them from the meshes, and the time, marked ≈, from the plate's height: time, resin, weight
+them from the meshes, and the time from the plate's height: time, resin, weight
 and price in view, the models' and the supports' share, vertices and triangles under
 *Details*, which stays open or shut between runs. In Preview the card states the layer
 shown: its exposure, the print time until it is done, the area it cures and the resin that comes to.
@@ -787,7 +787,8 @@ address in a video player).
   A panel left unopened for twenty runs opens as it ships.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. A release found is announced once by a notice and kept
-  as a pill in the top bar; its sheet lists every change, and shows the download's amount,
+  as a pill in the top bar; its sheet and the Updates page say when the release went out
+  and how big its download is; the sheet lists every change, and shows the download's amount,
   time left and steps, with Cancel while it downloads. You can skip a version. A copy from
   the Microsoft Store is updated by the Store instead: it says when the Store has a new
   version, and its button opens Encrust in the Store app to update.
@@ -799,6 +800,8 @@ address in a video player).
 - **File name** in Settings → General: a template a sliced file is named by, saved or sent
   to the printer — `{model}`, `{ext}` (the model's file type), `{printer}`, `{resin}`, `{layer}` (µm), `{plate}`, `{date}`,
   `{time}` — with the name it makes now shown under it; `encrust batch --name` takes the same.
+  Slicing every plate at once fills it for each plate, its own number and first model; a name
+  typed over the proposal is kept for all, each plate's name after it.
 - **Reduce motion** in Settings → General stops every animation in the window.
 - **Appearance** in Settings → General: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
@@ -821,7 +824,7 @@ address in a video player).
   a machine and stopping a print ask the same way, the cost read on hover; none opens a
   dialog.
 - **Language:** the window follows the system's or the browser's first language, or the one
-  you pick in Settings → General. A system language with no translation shows the window in
+  you pick in Settings → Appearance. A system language with no translation shows the window in
   English, and Settings says so. English and Russian are complete; a message a translation
   lacks shows in English. The test prints keep English file names in every
   language. The command line stays English.

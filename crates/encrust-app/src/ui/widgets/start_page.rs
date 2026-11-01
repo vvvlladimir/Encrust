@@ -23,7 +23,8 @@ pub fn start_title(ui: &mut Ui, title: &str, lede: &str) {
         .color(colors.text_high);
     ui.label(title);
     ui.add_space(4.0);
-    ui.label(
+    super::paragraph(
+        ui,
         egui::RichText::new(lede)
             .font(theme::lede())
             .color(colors.text_mid),
@@ -70,7 +71,7 @@ fn paint_zone(painter: &egui::Painter, rect: Rect, edge: egui::Color32, words: &
         square.center(),
         Align2::CENTER_CENTER,
         icon::DROP_HERE,
-        theme::icon(24.0),
+        theme::icon(theme::glyph::TILE),
         colors.accent_soft,
     );
     let words_at = pos2(square.right() + 18.0, rect.center().y);
@@ -161,7 +162,7 @@ pub fn picture_tile(ui: &mut Ui, shown: &PictureTile<'_>, size: egui::Vec2) -> e
                 stage.center(),
                 Align2::CENTER_CENTER,
                 icon::MODEL,
-                theme::icon(28.0),
+                theme::icon(theme::glyph::ZONE),
                 colors.text_low,
             );
         }

@@ -9,8 +9,8 @@ use crate::panels::edge_fields;
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Held, carried_row, count_row, describe, hint, icon, limited_row, list, list_row,
-    nested, number_row, secondary_button, section, subheading_with_switch, theme,
+    Carried, Held, ListRow, carried_row, count_row, describe, hint, icon, limited_row, list,
+    list_row, nested, number_row, secondary_button, section, subheading_with_switch, theme,
 };
 
 /// Layer heights are typed in microns; one is dragged a point.
@@ -251,7 +251,16 @@ fn band_rows(
     let tint = Some(theme::band_tint(index));
     let remove = list(ui, |ui| {
         let drop = Some((icon::REMOVE, remove_tip.as_str()));
-        list_row(ui, &name, tint, false, drop, None, None, None).removed
+        list_row(
+            ui,
+            &ListRow {
+                label: &name,
+                tint,
+                remove: drop,
+                ..ListRow::default()
+            },
+        )
+        .removed
     });
     number_row(
         ui,

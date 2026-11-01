@@ -1,7 +1,7 @@
 //! The Machine and resin window: machines at the left, and the resins, profile and network of
 //! the picked one in tabs. See `docs/decisions/0220`.
 
-use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
+use egui::{Align, Layout, Rect, Ui, pos2, vec2};
 use printer_profiles::{Catalogue, Connection, Entry, Kind, PrinterProfile, ProfileError};
 
 mod library;
@@ -14,16 +14,15 @@ use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
 };
+use crate::ui::theme::layout::settings_machines::TAB_GAP;
+pub(super) use crate::ui::theme::layout::settings_machines::ZONE_GAP;
 use crate::ui::window_frame::{
     LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
 };
 use crate::ui::{
-    SquareLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
-    two_lines, zone_button,
+    EntryRow, Inline, SquareLook, bin_button, entry_row, icon, icon_button, inline_button,
+    page_heading, quiet_button, theme, zone_button,
 };
-
-/// Room between two zones offered in an empty list.
-pub(super) const ZONE_GAP: f32 = 12.0;
 
 /// What a click in the window asked for, carried out once the window has been drawn.
 enum Action {
@@ -99,16 +98,16 @@ fn body(ui: &mut Ui, list: Rect, side: Rect, window: &mut Window, action: &mut O
 /// library under them. The shipped catalogue is that library; see `docs/decisions/0158`.
 fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
     let settings = &mut window.machine.settings;
-    ui.add_space(12.0);
+    ui.add_space(theme::PANEL_PAD);
     ui.horizontal(|ui| {
-        ui.add_space(12.0);
+        ui.add_space(theme::PANEL_PAD);
         ui.add(
             crate::ui::text_box(egui::TextEdit::singleline(&mut settings.search))
                 .hint_text(format!("{}  {}", icon::FIND, tr!("machines-search")))
                 .desired_width(ui.available_width() - 12.0),
         );
     });
-    ui.add_space(8.0);
+    ui.add_space(theme::ITEM_GAP);
     if mine(&window.machine.slicing.catalogue, "").is_empty() {
         let room = Rect::from_min_max(ui.cursor().min, ui.max_rect().max).shrink(12.0);
         return first_machine(ui, room, action);
@@ -157,7 +156,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
 
 fn no_match(ui: &mut Ui) {
     ui.horizontal_wrapped(|ui| {
-        ui.add_space(14.0);
+        ui.add_space(theme::SECTION_GAP);
         crate::ui::describe(ui, &tr!("machines-no-match"));
     });
 }
@@ -186,18 +185,6 @@ fn machine_row(
     in_hand: bool,
 ) -> egui::Response {
     let colors = theme::colors();
-    let size = vec2(ui.available_width(), theme::TWO_LINE_ROW_H);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    response.widget_info(|| {
-        let name = &entry.profile.name;
-        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
-    });
-    let fill = match picked {
-        true => colors.picked_wash,
-        false => crate::ui::hover_mix(ui, &response, Color32::TRANSPARENT, colors.hover),
-    };
-    let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, fill);
     let profile = &entry.profile;
     let format = core_pipeline::SlicedFormat::from(profile.output).extension();
     let detail = tr!(
@@ -205,33 +192,22 @@ fn machine_row(
         maker = profile.manufacturer.clone(),
         format = format
     );
-    two_lines(
-        &painter,
-        rect.left_center() + vec2(14.0, 0.0),
-        &profile.name,
-        &detail,
-    );
-    let marks = [
+    let networked = profile.connection != Connection::None;
+    let marks: Vec<_> = [
         (in_hand, icon::IN_HAND, colors.accent_soft),
-        (
-            profile.connection != Connection::None,
-            icon::NETWORK,
-            colors.ok,
-        ),
-    ];
-    let mut right = rect.right_center() - vec2(16.0, 0.0);
-    for (_, glyph, tint) in marks.into_iter().filter(|(shown, ..)| *shown) {
-        painter.text(
-            right,
-            egui::Align2::RIGHT_CENTER,
-            glyph,
-            theme::icon(13.0),
-            tint,
-        );
-        right.x -= 22.0;
-    }
-    focus_ring(ui, &response, 0.0);
-    response
+        (networked, icon::NETWORK, colors.ok),
+    ]
+    .into_iter()
+    .filter(|(shown, ..)| *shown)
+    .map(|(_, glyph, tint)| (glyph, tint))
+    .collect();
+    let row = EntryRow {
+        name: &profile.name,
+        detail: &detail,
+        marks: &marks,
+        picked,
+    };
+    entry_row(ui, &row)
 }
 
 /// The way into the library, a machine taken in from a file beside it, and the machine
@@ -280,20 +256,10 @@ fn machine(ui: &mut Ui, side: Rect, window: &mut Window, action: &mut Option<Act
 
 /// The machine's name and maker on the left, the tabs on the right, underlined while open.
 fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
-    let colors = theme::colors();
     ui.horizontal_centered(|ui| {
-        ui.label(
-            RichText::new(name)
-                .font(theme::page_title(theme::PAGE_TITLE_PT))
-                .color(colors.text_high),
-        );
-        ui.label(
-            RichText::new(maker)
-                .font(theme::page_title(theme::PAGE_SUBTITLE_PT))
-                .color(colors.text_low),
-        );
+        page_heading(ui, name, maker);
         ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
-            ui.spacing_mut().item_spacing.x = 18.0;
+            ui.spacing_mut().item_spacing.x = TAB_GAP;
             for each in Tab::ALL.into_iter().rev() {
                 if tab_button(ui, &each.label(), *tab == each).clicked() {
                     *tab = each;
@@ -316,7 +282,15 @@ fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<A
             tr!("machines-use")
         };
         let glyph = if in_hand { icon::IN_HAND } else { "" };
-        if inline_button(ui, glyph, &label, !in_hand, !in_hand).clicked() {
+        if inline_button(
+            ui,
+            Inline::new(&label)
+                .glyph(glyph)
+                .primary_if(!in_hand)
+                .enabled(!in_hand),
+        )
+        .clicked()
+        {
             *action = Some(Action::UsePrinter(id.to_owned()));
         }
     });

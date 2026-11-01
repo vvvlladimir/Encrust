@@ -5,15 +5,13 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture};
 use crate::state::Doc;
-use crate::ui::{icon, secondary_button, subheading, swatch, theme, tone};
+pub(super) use crate::ui::theme::layout::inspector_relief_picture::{GALLERY_GAP, THUMB_PT};
+use crate::ui::{
+    file_line, icon, picture_square, secondary_button, subheading, swatch, theme, tone,
+};
 use core_geometry::Vec2;
 use std::sync::Arc;
 
-/// The disc behind the caret over the picture's square, points across.
-pub(super) const CARET_PT: f32 = 22.0;
-
-/// The edge of the thumbnail a chosen picture is shown at, points.
-pub(super) const THUMB_PT: f32 = 56.0;
 /// Pixels a side of that thumbnail.
 pub(super) const THUMB_PX: usize = 64;
 
@@ -35,7 +33,7 @@ pub(super) fn picker(ui: &mut egui::Ui, window: &mut Window) {
             preview(ui, window.tools.relief.picture.as_ref())
         })
         .inner;
-    egui::Popup::menu(&square).width(width).show(|ui| {
+    crate::ui::popup_menu(&square).width(width).show(|ui| {
         subheading(ui, &tr!("relief-builtins"));
         gallery(ui, window);
         picture_buttons(ui, window);
@@ -45,43 +43,8 @@ pub(super) fn picker(ui: &mut egui::Ui, window: &mut Window) {
 /// The square the texture in hand is shown in, with the caret that says a click on it
 /// opens the others: the picture, or an empty square for the models' own.
 pub(super) fn preview(ui: &mut egui::Ui, picture: Option<&Picture>) -> egui::Response {
-    let colors = theme::colors();
-    let side = egui::vec2(THUMB_PT, THUMB_PT);
-    let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
-    match picture {
-        Some(picture) => {
-            let texture = thumbnail(ui.ctx(), picture);
-            egui::Image::new(&texture)
-                .corner_radius(theme::R_CONTROL)
-                .paint_at(ui, rect);
-        }
-        None => {
-            ui.painter()
-                .rect_filled(rect, theme::R_CONTROL, colors.raised);
-        }
-    }
-    let stroke = match response.hovered() {
-        true => egui::Stroke::new(1.0, colors.text_low),
-        false => egui::Stroke::new(1.0, colors.line),
-    };
-    let painter = ui.painter();
-    painter.rect_stroke(rect, theme::R_CONTROL, stroke, egui::StrokeKind::Inside);
-    // A dark disc behind the caret, so it reads over a white picture as over a black one.
-    painter.circle_filled(
-        rect.center(),
-        CARET_PT / 2.0,
-        colors.sunken.gamma_multiply(0.85),
-    );
-    painter.text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        icon::CARET_DOWN,
-        theme::icon(13.0),
-        colors.text_high,
-    );
-    response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tr!("relief-builtins"))
+    let texture = picture.map(|picture| thumbnail(ui.ctx(), picture));
+    picture_square(ui, texture.as_ref(), THUMB_PT, &tr!("relief-builtins"))
 }
 
 /// The models' own textures as the panel names them, or that there are none.
@@ -98,14 +61,7 @@ pub(super) fn own(ui: &mut egui::Ui, doc: &Doc) {
 /// The picture in hand by its name and its size.
 pub(super) fn named(ui: &mut egui::Ui, picture: &Picture) {
     let colors = theme::colors();
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(truncated(&picture.name))
-                .font(theme::code(12.0))
-                .color(colors.text_high),
-        )
-        .truncate(),
-    );
+    file_line(ui, &truncated(&picture.name));
     let [width, height] = picture.size_px;
     tone(
         ui,
@@ -139,7 +95,6 @@ pub(super) fn thumbnail(ctx: &egui::Context, picture: &Picture) -> egui::Texture
 
 /// Textures in a row of the gallery, and the gap between two, points.
 pub(super) const GALLERY_COLUMNS: usize = 4;
-pub(super) const GALLERY_GAP: f32 = 6.0;
 
 /// The textures that come with the window, a click on one taking it as the picture.
 pub(super) fn gallery(ui: &mut egui::Ui, window: &mut Window) {

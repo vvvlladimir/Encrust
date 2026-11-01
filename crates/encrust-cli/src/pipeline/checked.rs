@@ -8,11 +8,14 @@ use core_geometry::{
     MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
     remove_duplicate_faces,
 };
-use core_volume::{Cancel, RepairSettings, repair};
+use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
 use printer_profiles::PrinterProfile;
 
 use crate::args::{ImportArgs, RepairMethod};
 use crate::edits;
+use crate::exit::Cancelled;
+use crate::pipeline::Watch;
+use crate::progress::bar;
 use crate::report::{FitCheck, ImportReport, Wrapped};
 use crate::stats::MeshStats;
 
@@ -20,11 +23,11 @@ use crate::stats::MeshStats;
 /// for, and says what import found; `with_shells` lists the shells as they came.
 pub(super) fn checked(
     mesh: &mut Mesh,
-    input: &Path,
-    welded: Welded,
+    (input, welded): (&Path, Welded),
     args: &ImportArgs,
     profile: Option<&PrinterProfile>,
     with_shells: bool,
+    watch: &Watch,
 ) -> Result<ImportReport> {
     // Before the orientation fix: a face laid over another reads as a branch to it.
     let doubled = if args.no_validate {
@@ -37,7 +40,7 @@ pub(super) fn checked(
     let edited = edits::apply(mesh, args)?;
     let repaired = args
         .repair
-        .map(|method| repaired(mesh, method, args))
+        .map(|method| repaired(mesh, method, args, watch))
         .transpose()?;
     let (mended, wrapped) =
         repaired.map_or((None, None), |(mended, wrapped)| (Some(mended), wrapped));
@@ -67,6 +70,7 @@ fn repaired(
     mesh: &mut Mesh,
     method: RepairMethod,
     args: &ImportArgs,
+    watch: &Watch,
 ) -> Result<(Mended, Option<Wrapped>)> {
     let settings = RepairSettings {
         mend: MendSettings {
@@ -75,8 +79,7 @@ fn repaired(
         },
     };
     let method = core_volume::RepairMethod::from(method);
-    let done =
-        repair(mesh, method, settings, Cancel::never()).context("could not repair the model")?;
+    let done = watched_repair(mesh, method, settings, watch)?;
     *mesh = done.mesh;
     let wrapped = method.wraps().then_some(if done.wrapped {
         Wrapped::Exactly
@@ -84,4 +87,62 @@ fn repaired(
         Wrapped::LeftOut
     });
     Ok((done.mended, wrapped))
+}
+
+/// The repair, with its share on a bar spanned as the window spans it (ADR 0384), and
+/// Ctrl-C stopping it between steps; the bar is drawn where the repair asks whether to stop.
+fn watched_repair(
+    mesh: &Mesh,
+    method: core_volume::RepairMethod,
+    settings: RepairSettings,
+    watch: &Watch,
+) -> Result<core_volume::Repaired> {
+    let progress = Progress::default();
+    let shown = watch.progress.then(|| bar("% of the repair"));
+    let asked = || {
+        if let (Some(shown), Some((_, share))) = (&shown, progress.share()) {
+            shown.set_length(100);
+            shown.set_position((share * 100.0) as u64);
+        }
+        watch.stop.requested()
+    };
+    let done = repair(
+        mesh,
+        method,
+        settings,
+        Cancel::when(&asked).reporting(&progress),
+    );
+    if let Some(shown) = &shown {
+        shown.finish_and_clear();
+    }
+    match done {
+        Err(VolumeError::Cancelled) => Err(Cancelled.into()),
+        done => done.context("could not repair the model"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core_geometry::{Vec3, cuboid};
+
+    use super::*;
+    use crate::exit::{Stop, is_cancelled};
+
+    #[test]
+    fn a_repair_stopped_by_ctrl_c_ends_as_cancelled() {
+        let cube = cuboid(Vec3::new(0.0, 0.0, 0.0), Vec3::new(10.0, 10.0, 10.0));
+        let stop = Stop::default();
+        stop.request();
+        let wrapped = watched_repair(
+            &cube,
+            core_volume::RepairMethod::Wrap,
+            RepairSettings::default(),
+            &Watch::quiet(&stop),
+        );
+        let error = wrapped.expect_err("a stop asked for before the wrap stops it");
+        assert!(
+            is_cancelled(&error),
+            "exit 130, not a failed repair: {error:#}"
+        );
+    }
 }

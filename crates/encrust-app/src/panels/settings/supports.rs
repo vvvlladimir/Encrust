@@ -13,8 +13,10 @@ use crate::panels::settings::confirm::cost;
 use crate::panels::settings::{export_profile, forget_profile, jump, report};
 use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
+use crate::ui::theme;
+use crate::ui::theme::layout::settings_supports::{TAB_ROW_H, TABS_H};
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, stroke, with_footer};
-use crate::ui::{Confirm, confirm_button, icon, inline_button, quiet_button, subheading};
+use crate::ui::{Confirm, Inline, confirm_button, icon, inline_button, quiet_button, subheading};
 
 const TABLE: Table = Table {
     heads: || {
@@ -106,10 +108,6 @@ pub(super) fn reset(settings: &mut Settings) {
         (None, None) => {}
     }
 }
-
-/// The band the tabs over the form stand in, and the tabs themselves.
-const TABS_H: f32 = 52.0;
-const TAB_ROW_H: f32 = 28.0;
 
 /// The page, laid out in `content`: the form of the profile being edited under its tabs, or
 /// the table.
@@ -239,9 +237,9 @@ fn auto_rank(catalogue: &Catalogue, id: &str) -> usize {
 
 /// The heading over one part of the table.
 fn part_heading(ui: &mut Ui, title: &str) {
-    ui.add_space(12.0);
+    ui.add_space(theme::PANEL_PAD);
     subheading(ui, title);
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
 }
 
 /// An automatic profile's row: no shape of its own, and the spacing it places by.
@@ -298,10 +296,31 @@ fn actions(
         *action = picked.clone().map(|(kind, id)| Action::Edit(kind, id));
     }
     let support = picked
-        .clone()
         .filter(|(kind, _)| *kind == Kind::Support)
         .map(|(_, id)| id);
-    // Both take the profile as last saved, so unsaved edits would not go with it.
+    copy_actions(ui, machine, support.as_ref(), action);
+    delete_action(ui, machine, support, action);
+    if editing {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let label = tr!("settings-save");
+            let save = Inline::new(&label)
+                .primary()
+                .enabled(machine.settings.unsaved());
+            if inline_button(ui, save).clicked() {
+                *action = Some(Action::Save);
+            }
+        });
+    }
+}
+
+/// Duplicate and Export of the support profile picked, both from the profile as last
+/// saved, so neither is offered over unsaved edits.
+fn copy_actions(
+    ui: &mut Ui,
+    machine: &Machine,
+    support: Option<&String>,
+    action: &mut Option<Action>,
+) {
     let unsaved = machine.settings.unsaved();
     let copyable = support.is_some() && !unsaved;
     let why = |response: egui::Response| match unsaved {
@@ -316,19 +335,21 @@ fn actions(
         copyable,
     );
     if why(duplicate).clicked() {
-        *action = support.clone().map(Action::Duplicate);
+        *action = support.cloned().map(Action::Duplicate);
     }
-    if why(quiet_button(
-        ui,
-        icon::EXPORT,
-        &tr!("common-export"),
-        false,
-        copyable,
-    ))
-    .clicked()
-    {
-        *action = support.clone().map(Action::Export);
+    let export = quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, copyable);
+    if why(export).clicked() {
+        *action = support.cloned().map(Action::Export);
     }
+}
+
+/// Delete of the support profile picked, by a second press; a shipped one says why not.
+fn delete_action(
+    ui: &mut Ui,
+    machine: &Machine,
+    support: Option<String>,
+    action: &mut Option<Action>,
+) {
     let catalogue = &machine.slicing.catalogue;
     let deletable = support
         .as_deref()
@@ -347,13 +368,6 @@ fn actions(
     };
     if confirm_button(ui, &delete) {
         *action = support.map(Action::Delete);
-    }
-    if editing {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if inline_button(ui, "", &tr!("settings-save"), true, unsaved).clicked() {
-                *action = Some(Action::Save);
-            }
-        });
     }
 }
 
