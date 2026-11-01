@@ -1,7 +1,10 @@
+use super::SHAPE_INDENT;
 use super::rows::{Act, InHand, Pick, Presets, Row};
-use super::{LINE_H, SHAPE_INDENT, count_at, swatch};
 use crate::i18n::tr;
-use crate::ui::{SquareLook, chooser_group, confirm_bin, focus_ring, hairline, icon, theme};
+use crate::ui::{
+    PICKER_ICON_SQUARE, PickerLine, SquareLook, chooser_group, confirm_bin, eye_square, hairline,
+    icon, picker_foot, picker_line, theme,
+};
 use egui::{Sense, vec2};
 
 /// The open picker: the automatic preset and its shapes, each group by hand, the empty
@@ -161,13 +164,6 @@ pub(super) struct Line<'a> {
     pub(super) heading: bool,
 }
 
-/// Where a line's parts stand: the name's room, the count's right edge, the eye and the bin.
-struct Places {
-    name: egui::Rect,
-    count_right: f32,
-    icons: egui::Rect,
-}
-
 impl<'a> Line<'a> {
     pub(super) fn preset(name: &'a str, group: Option<&'a Row>) -> Self {
         Self {
@@ -200,92 +196,37 @@ impl<'a> Line<'a> {
         self.group.map(|row| row.holds).or(self.count)
     }
 
-    /// Right to left: the eye and the bin, the count; the name takes what is left.
-    fn places(&self, rect: egui::Rect) -> Places {
-        let mut right = rect.right() - RIGHT_PAD;
-        let icons = egui::Rect::from_x_y_ranges(right - ICONS_W..=right, rect.y_range());
-        let count_right = icons.left() - GAP;
-        if self.holds().is_some() {
-            right = count_right - COUNT_W - GAP;
-        }
-        let left = rect.left() + LEFT_PAD + self.indent + DOT_W + GAP;
-        Places {
-            name: egui::Rect::from_x_y_ranges(left..=right, rect.y_range()),
-            count_right,
-            icons,
-        }
-    }
-
     /// Draws the line; a group's eye and bin show under the pointer. Answers whether the
     /// line itself was clicked, which closes the list.
     pub(super) fn show(&self, ui: &mut egui::Ui, groups: usize, acts: &mut Vec<Act>) -> bool {
-        let sense = if self.heading {
-            Sense::hover()
-        } else {
-            Sense::click()
+        let line = PickerLine {
+            name: self.name,
+            dot: self
+                .group
+                .map(|row| theme::support_tint(row.group as usize)),
+            count: self.holds(),
+            selected: self.selected,
+            indent: self.indent,
+            heading: self.heading,
+            quiet: self.group.is_some_and(|row| row.hidden),
         };
-        let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), LINE_H), sense);
-        let hovered = ui.rect_contains_pointer(rect);
-        let places = self.places(rect);
-        self.paint(ui, rect, &places, hovered);
+        let drawn = picker_line(ui, &line);
         let on_icon = match self.group {
-            Some(row) => group_icons(ui, places.icons, response.id, row, groups, hovered, acts),
+            Some(row) => {
+                let id = drawn.response.id;
+                group_icons(ui, drawn.icons, id, row, groups, drawn.hovered, acts)
+            }
             None => false,
         };
-        let clicked = response.clicked() && !on_icon;
+        let clicked = drawn.response.clicked() && !on_icon;
         if clicked {
             ui.close();
         }
         clicked
     }
-
-    fn paint(&self, ui: &egui::Ui, rect: egui::Rect, places: &Places, hovered: bool) {
-        let colors = theme::colors();
-        let fill = match (self.selected, hovered && !self.heading) {
-            (true, _) => colors.picked_wash,
-            (false, true) => colors.hover,
-            (false, false) => egui::Color32::TRANSPARENT,
-        };
-        let painter = ui.painter();
-        painter.rect_filled(rect, theme::R_CONTROL, fill);
-        let y = rect.center().y;
-        if let Some(row) = self.group {
-            let dot = rect.left() + LEFT_PAD + self.indent + DOT_W / 2.0;
-            swatch(painter, egui::pos2(dot, y), row);
-        }
-        let hidden = self.group.is_some_and(|row| row.hidden);
-        let ink = match (self.heading || hidden, self.holds()) {
-            (true, _) => colors.text_low,
-            (false, None) => colors.text_mid,
-            (false, Some(_)) => colors.text_high,
-        };
-        if let Some(count) = self.holds() {
-            count_at(painter, places.count_right, y, count);
-        }
-        painter.with_clip_rect(places.name).text(
-            places.name.left_center(),
-            egui::Align2::LEFT_CENTER,
-            self.name,
-            theme::label(),
-            ink,
-        );
-    }
 }
 
-/// A line's room at its ends, the square its dot stands in, the room between its parts,
-/// the least a count takes, and a glyph of the foot, points.
-const LEFT_PAD: f32 = 10.0;
-const RIGHT_PAD: f32 = 4.0;
-const DOT_W: f32 = 8.0;
-const GAP: f32 = 8.0;
-const COUNT_W: f32 = 20.0;
-const GLYPH_W: f32 = 14.0;
-/// The eye and the bin, each a 26 square, and the glyph in one.
-const ICON_SQUARE: f32 = 26.0;
-const ICONS_W: f32 = 2.0 * ICON_SQUARE;
-const ICON_GLYPH: f32 = 15.0;
-/// The foot's height and the room above its rule.
-const FOOT_H: f32 = 34.0;
+/// The room above the foot's rule.
 const FOOT_GAP: f32 = 4.0;
 
 /// The eye of a group, shown under the pointer or while it is hidden, and its bin, shown
@@ -302,7 +243,7 @@ fn group_icons(
     let at = |x: f32| {
         egui::Rect::from_center_size(
             egui::pos2(x, icons.center().y),
-            vec2(ICON_SQUARE, ICON_SQUARE),
+            vec2(PICKER_ICON_SQUARE, PICKER_ICON_SQUARE),
         )
     };
     let mut took = false;
@@ -312,16 +253,16 @@ fn group_icons(
         } else {
             (icon::VISIBLE, tr!("list-hide"))
         };
-        let eye_at = at(icons.left() + ICON_SQUARE / 2.0);
+        let eye_at = at(icons.left() + PICKER_ICON_SQUARE / 2.0);
         let eye = ui.interact(eye_at, id.with("eye"), Sense::click());
-        eye_glyph(ui, eye.rect, glyph, eye.hovered());
+        eye_square(ui, eye.rect, glyph, eye.hovered());
         if eye.on_hover_text(tip).clicked() {
             acts.push(Act::Toggle(row.group));
             took = true;
         }
     }
     if hovered || crate::ui::is_armed(ui.ctx(), id.with("bin")) {
-        let bin_at = at(icons.right() - ICON_SQUARE / 2.0);
+        let bin_at = at(icons.right() - PICKER_ICON_SQUARE / 2.0);
         let bin = ui.interact(bin_at, id.with("bin"), Sense::click());
         took |= bin.clicked();
         let (act, tip) = removal(groups, row);
@@ -348,70 +289,14 @@ pub(super) fn removal(groups: usize, row: &Row) -> (Act, String) {
     }
 }
 
-fn eye_glyph(ui: &egui::Ui, rect: egui::Rect, glyph: &str, hot: bool) {
-    let colors = theme::colors();
-    if hot {
-        ui.painter()
-            .rect_filled(rect, theme::R_CONTROL, colors.raised);
-    }
-    let ink = if hot {
-        colors.text_high
-    } else {
-        colors.text_mid
-    };
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        glyph,
-        theme::icon(ICON_GLYPH),
-        ink,
-    );
-}
-
 /// The list's foot under a rule: Settings, at the support profiles. Answers whether it was
 /// pressed, which closes the list.
 fn edit_profiles(ui: &mut egui::Ui) -> bool {
-    let colors = theme::colors();
-    let text = tr!("supports-edit-profiles");
     ui.add_space(FOOT_GAP);
     hairline(ui);
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), FOOT_H), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &text));
-    let ink = if response.hovered() {
-        colors.text_high
-    } else {
-        colors.text_mid
-    };
-    let painter = ui.painter();
-    let y = rect.center().y;
-    let glyph_x = rect.left() + LEFT_PAD + GLYPH_W / 2.0;
-    painter.text(
-        egui::pos2(glyph_x, y),
-        egui::Align2::CENTER_CENTER,
-        icon::PROFILES,
-        theme::icon(GLYPH_W),
-        ink,
-    );
-    painter.text(
-        egui::pos2(glyph_x + GLYPH_W / 2.0 + GAP, y),
-        egui::Align2::LEFT_CENTER,
-        &text,
-        theme::label(),
-        ink,
-    );
-    painter.text(
-        egui::pos2(rect.right() - LEFT_PAD - GLYPH_W / 2.0, y),
-        egui::Align2::CENTER_CENTER,
-        icon::ELSEWHERE,
-        theme::icon(GLYPH_W),
-        ink,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    if response.clicked() {
+    let pressed = picker_foot(ui, icon::PROFILES, &tr!("supports-edit-profiles")).clicked();
+    if pressed {
         ui.close();
     }
-    response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .clicked()
+    pressed
 }

@@ -149,6 +149,12 @@ pub const BUTTON_GAP: f32 = 6.0;
 pub const ICON_GAP: f32 = 2.0;
 /// Between a reading and the row of buttons under it.
 pub const NOTE_GAP: f32 = 4.0;
+/// Between the groups of a sheet or a page.
+pub const SECTION_GAP: f32 = 14.0;
+/// Between the start page's title and the zone under it.
+pub const PAGE_GAP: f32 = 34.0;
+/// How far a palette's rows and foot stand in from its sides.
+pub const PALETTE_INSET: f32 = 16.0;
 /// Height of a section's heading row, which folds it.
 pub const SECTION_H: f32 = 36.0;
 pub const SCENE_W: f32 = 272.0;
@@ -286,6 +292,11 @@ pub fn dialog_title() -> FontId {
 /// What a page or a window is about, set over everything on it.
 pub fn page_title(size_pt: f32) -> FontId {
     FontId::new(size_pt, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// A path or a template as it is typed, in the code face.
+pub fn typed_path() -> FontId {
+    code(12.0)
 }
 
 /// The line under a page's title that says what the page is for.

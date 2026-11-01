@@ -10,10 +10,10 @@ use printer_profiles::{AutoProfile, Catalogue, ContactShape, Kind, SupportProfil
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::confirm::cost;
-use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::panels::settings::{export_profile, forget_profile, report};
 use crate::settings::{Deleting, Settings, can_delete, new_support};
 use crate::state::Machine;
+use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::ui::{
     Confirm, confirm_button, describe, icon, quiet_button, secondary_button, subheading,
 };

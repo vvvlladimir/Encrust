@@ -7,15 +7,16 @@ mod history;
 pub mod ring;
 pub mod sheet;
 
-use egui::{Align2, Rect, RichText, Sense, StrokeKind, pos2, vec2};
+use egui::{Rect, pos2, vec2};
 
 pub use face::summary;
 use face::{Face, Job, Light, colour_of, face, left, paused};
 
 use crate::i18n::tr;
 use crate::network::{Network, Reading, Trouble};
+use crate::ui::{DEVICE_OPEN_INSET, DeviceRow, device_row, share_figure, title_line};
 use crate::ui::{
-    DropdownRow, Lead, chooser_foot, dropdown_menu, dropdown_row, focus_ring, hairline, hint, icon,
+    DropdownRow, Lead, chooser_foot, dropdown_menu, dropdown_row, hairline, hint, icon,
     icon_button, progress_bar_of, theme, tone,
 };
 
@@ -50,7 +51,7 @@ pub fn destination(
             let row = destination_row(ui, chosen_machine.label(), &face, &notes, opens);
             // The sheet's square stands inside the row, over it, so it takes its own press.
             let square = Rect::from_center_size(
-                pos2(row.rect.right() - OPEN_INSET, row.rect.center().y),
+                pos2(row.rect.right() - DEVICE_OPEN_INSET, row.rect.center().y),
                 vec2(theme::ICON_SIZE, theme::ICON_SIZE),
             );
             if let Some(target) = &target {
@@ -143,11 +144,7 @@ fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -
     }
 }
 
-/// Points from the row's right edge to the middle of the sheet's square inside it.
-const OPEN_INSET: f32 = 20.0;
-
-/// The row on `raised`: glyph, name, state in its colour, caret, and room for the sheet's
-/// square when it `opens` one; the status word's hover shows `notes`.
+/// The row on `raised`, its state from `face`; the status word's hover shows `notes`.
 fn destination_row(
     ui: &mut egui::Ui,
     name: &str,
@@ -155,88 +152,19 @@ fn destination_row(
     notes: &[Note],
     opens: bool,
 ) -> egui::Response {
-    let colors = theme::colors();
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(ui.available_width(), theme::PRINTER_ROW_H),
-        Sense::click(),
-    );
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        colors.raised
+    let row = DeviceRow {
+        name,
+        state: &face.word,
+        tint: colour_of(face.light),
+        busy: face.light == Light::Working,
+        opens,
     };
-    let painter = ui.painter();
-    painter.rect(
-        rect,
-        theme::R_CONTROL,
-        fill,
-        egui::Stroke::new(1.0, colors.hairline),
-        StrokeKind::Inside,
-    );
-    painter.text(
-        pos2(rect.left() + 16.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        icon::PRINTER,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    let right = match opens {
-        true => rect.right() - 2.0 * OPEN_INSET,
-        false => rect.right(),
-    };
-    painter.text(
-        pos2(right - 16.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        icon::CARET_DOWN,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    let status = paint_status(painter, face, rect, right - 30.0);
-    paint_name(painter, name, rect, status.left());
-    focus_ring(ui, &response, theme::R_CONTROL);
-    let response = if !notes.is_empty() && ui.rect_contains_pointer(status) {
+    let (response, status) = device_row(ui, &row);
+    if !notes.is_empty() && ui.rect_contains_pointer(status) {
         response.on_hover_ui(|ui| note_lines(ui, notes))
     } else {
         response.on_hover_text(tr!("card-destination-several"))
-    };
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, name));
-    response
-}
-
-/// The printer's name at the row's left, cut short where the status word begins.
-fn paint_name(painter: &egui::Painter, name: &str, rect: egui::Rect, status_left: f32) {
-    let ink = theme::colors().text_high;
-    let room = (status_left - 8.0 - rect.left() - 30.0).max(0.0);
-    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), ink);
-    job.wrap = egui::text::TextWrapping::truncate_at_width(room);
-    let galley = painter.layout_job(job);
-    painter.galley(
-        pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
-        galley,
-        ink,
-    );
-}
-
-/// How dim a busy printer's dot breathes down to.
-const BREATH_LOW: f32 = 0.35;
-
-/// The status word and its dot, right-aligned on `right` in the row; answers where they
-/// stand, the full height of the row.
-fn paint_status(painter: &egui::Painter, face: &Face, rect: egui::Rect, right: f32) -> egui::Rect {
-    let colour = colour_of(face.light);
-    let word = painter.layout_no_wrap(face.word.clone(), theme::small(), colour);
-    let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
-    painter.galley(at, word, colour);
-    let dot = pos2(at.x - 8.0, rect.center().y);
-    let dot_colour = match face.light {
-        Light::Working => {
-            let breath = crate::ui::theme::motion::breathe(painter.ctx());
-            colour.gamma_multiply(BREATH_LOW + (1.0 - BREATH_LOW) * breath)
-        }
-        _ => colour,
-    };
-    painter.circle_filled(dot, 3.5, dot_colour);
-    egui::Rect::from_x_y_ranges(dot.x - 4.0..=right, rect.y_range())
+    }
 }
 
 fn note_lines(ui: &mut egui::Ui, notes: &[Note]) {
@@ -249,45 +177,26 @@ fn note_lines(ui: &mut egui::Ui, notes: &[Note]) {
     }
 }
 
-/// The share done of a print in the sheet, pt.
-const SHARE_PT: f32 = 22.0;
-
 /// The file, the share done and its bar, and the line under them while it prints; one line for the last
 /// print once it is over.
 fn job_lines(ui: &mut egui::Ui, job: &Job) {
     let colors = theme::colors();
     let Some(progress) = job.progress else {
-        tone(
-            ui,
-            &format!("{}: {}", job.detail, job.file),
-            colors.text_mid,
+        let line = tr!(
+            "printer-last-print",
+            how = job.detail.clone(),
+            file = job.file.clone()
         );
+        tone(ui, &line, colors.text_mid);
         return;
     };
-    ui.add(
-        egui::Label::new(
-            RichText::new(&job.file)
-                .font(theme::label())
-                .color(colors.text_high),
-        )
-        .truncate(),
-    );
-    ui.label(
-        RichText::new(format!("{:.0}%", progress * 100.0))
-            .font(theme::figures(SHARE_PT))
-            .color(colors.text_high),
+    title_line(ui, &job.file);
+    share_figure(
+        ui,
+        &tr!("value-percent", value = format!("{:.0}", progress * 100.0)),
     );
     progress_bar_of(ui, Some(progress), theme::SHEET_BAR_H);
     tone(ui, &job.detail, colors.text_mid);
-}
-
-/// A printer's picture of a print, fitted into `size` and rounded like the card.
-fn picture_of(ui: &mut egui::Ui, texture: &egui::TextureHandle, size: egui::Vec2) {
-    ui.add(
-        egui::Image::new(texture)
-            .fit_to_exact_size(size)
-            .corner_radius(theme::R_CONTROL),
-    );
 }
 
 fn trouble_lines(ui: &mut egui::Ui, trouble: &Trouble) {

@@ -16,8 +16,6 @@ use list::{List, removal};
 use rows::{Act, Pick, Row, in_hand, presets, rows};
 use save::save_button;
 
-/// Height of one line of the list, points.
-const LINE_H: f32 = 32.0;
 /// How far the shapes of the automatic preset stand in under it, points.
 const SHAPE_INDENT: f32 = 20.0;
 
@@ -47,8 +45,8 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     };
     let hand = in_hand(window, active);
     let presets = presets(&window.machine.slicing.catalogue);
-    ui.spacing_mut().item_spacing.x = 4.0;
-    let beside = 2.0 * (theme::BUTTON_H + 4.0);
+    ui.spacing_mut().item_spacing.x = theme::NOTE_GAP;
+    let beside = 2.0 * (theme::BUTTON_H + theme::NOTE_GAP);
     let width = (ui.available_width() - beside).max(80.0);
     let face = DropdownFace {
         lead: (active.holds > 0).then(|| Lead::Dot(tint(active))),
@@ -88,21 +86,6 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     }
     take(window, pick);
     acts
-}
-
-/// The count ending at `right`; answers where it begins.
-fn count_at(painter: &egui::Painter, right: f32, y: f32, count: usize) -> f32 {
-    let low = theme::colors().text_low;
-    let galley = painter.layout_no_wrap(count.to_string(), theme::figures(12.0), low);
-    let left = right - galley.size().x;
-    painter.galley(egui::pos2(left, y - galley.size().y / 2.0), galley, low);
-    left
-}
-
-/// The group's colour as a dot, unfaded in the list, where a hidden group's eye says so.
-fn swatch(painter: &egui::Painter, center: egui::Pos2, row: &Row) {
-    let tint = theme::support_tint(row.group as usize);
-    painter.circle_filled(center, 4.0, tint);
 }
 
 /// The group's colour, faded while it is hidden.

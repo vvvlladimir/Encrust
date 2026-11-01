@@ -10,9 +10,9 @@ use printer_profiles::{Entry, Kind, Preset};
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::frame::{SIDE_PAD, Table, child, with_footer};
 use crate::panels::settings::{export_profile, forget_profile, report};
 use crate::state::Machine;
+use crate::ui::window_frame::{SIDE_PAD, Table, child, with_footer};
 use crate::ui::{
     Confirm, confirm_button, describe, icon, is_renaming, quiet_button, rename_box, start_rename,
 };
@@ -121,10 +121,10 @@ fn table(
             }
         }
         if empty {
-            ui.add_space(12.0);
+            ui.add_space(crate::ui::theme::PANEL_PAD);
             describe(ui, &tr!("presets-empty", kind = kind.dir()));
         }
-        ui.add_space(12.0);
+        ui.add_space(crate::ui::theme::PANEL_PAD);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             let open = tr!("presets-open-tool", kind = kind.dir());
             if quiet_button(ui, icon::ELSEWHERE, &open, false, true).clicked() {

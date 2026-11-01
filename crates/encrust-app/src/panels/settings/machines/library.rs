@@ -1,11 +1,12 @@
 //! The machine library: every profile as brand cards opening onto a model list. It takes the
 //! form's place, not a menu, because a catalogue of 150 machines is a page.
 
-use egui::{RichText, Ui};
+use egui::Ui;
 use printer_profiles::{Catalogue, Entry, PrinterProfile};
 
 use crate::i18n::tr;
 use crate::settings::Library;
+use crate::ui::heading;
 use crate::ui::{hint, icon, inline_button, list, list_row, summary_button, theme};
 
 /// How many brand cards stand side by side.
@@ -77,12 +78,8 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
             if inline_button(ui, icon::BACK, &tr!("library-all-brands"), false, true).clicked() {
                 library.brand = None;
             }
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new(brand)
-                    .font(theme::section())
-                    .color(theme::colors().text_mid),
-            );
+            ui.add_space(theme::ITEM_GAP);
+            heading(ui, &brand, None);
         });
     }
     picked

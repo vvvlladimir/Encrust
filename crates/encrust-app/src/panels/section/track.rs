@@ -1,16 +1,16 @@
 use super::playback::{fraction, height_range, step};
 use super::reading::Reading;
-use super::{
-    HANDLE, PROFILE_HALF_W, PROFILE_PITCH, RISK, RISK_HOT, RISK_REACH, RULE_W, TICK_INSET, TICK_W,
-    TICKS,
-};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::inspector::{go_to_risks, issue_name, risk_tint};
 use crate::preview::stack_fingerprint;
+use crate::ui::{
+    LAYER_HANDLE, LAYER_RISK_HOT, LAYER_RISK_REACH, LayerMark, LayerMarks, PROFILE_PITCH,
+    paint_layer_track, span_fraction, up,
+};
 use crate::ui::{focus_ring, theme};
 use crate::workspace::Mode;
-use egui::{Rect, Sense, Stroke, pos2, vec2};
+use egui::{Rect, Sense, pos2, vec2};
 
 /// The track itself, its top the top of the print: a press or a drag moves whichever
 /// handle is nearer the pointer, the top cut or the floor, to stand under it.
@@ -24,7 +24,7 @@ pub(super) fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading
         Sense::hover()
     };
     let response = ui.interact(rect, egui::Id::new("layer-track"), sense);
-    let span = rect.y_range().shrink(HANDLE.y / 2.0);
+    let span = rect.y_range().shrink(LAYER_HANDLE.y / 2.0);
     if let Some(at) = reading.at {
         drag_handle(ui, window, &response, span, (at, reading.floor));
     }
@@ -34,13 +34,13 @@ pub(super) fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading
     let after = Reading::of(window);
     let marks = marked(window, span).map(|(measured, along)| {
         let rows = (span.span() / PROFILE_PITCH).max(1.0) as usize;
-        (Marks::of(measured, rows), along)
+        (marks_of(measured, rows), along)
     });
     let hot = marks.as_ref().and_then(|(marks, along)| {
         let pointer = ui.ctx().pointer_hover_pos()?;
         marks.under(*along, rect.center().x, pointer)
     });
-    paint_track(ui, rect, span, (after.at, after.floor), marks.as_ref(), hot);
+    paint_layer_track(ui, rect, span, (after.at, after.floor), marks.as_ref(), hot);
     let (layer, layers) = (after.layer, reading.layers);
     response.widget_info(|| {
         let name = tr!("section-slider", count = layers);
@@ -155,78 +155,6 @@ pub(super) fn scrub_floor(window: &mut Window, at: f32) {
     }
 }
 
-/// Where along `span` the pointer at `y` stands, from zero at its bottom to one at its top.
-pub(super) fn span_fraction(span: egui::Rangef, y: f32) -> f32 {
-    if span.span() <= 0.0 {
-        return 1.0;
-    }
-    ((span.max - y) / span.span()).clamp(0.0, 1.0)
-}
-
-/// How far down `span` a share `at` of the way up stands.
-pub(super) fn up(span: egui::Rangef, at: f32) -> f32 {
-    egui::lerp(span.max..=span.min, at)
-}
-
-/// The rule, the cured-area profile behind it, the scale at the right, the fill between
-/// the two thumbs, the risks across it and the thumbs themselves, in that order.
-pub(super) fn paint_track(
-    ui: &egui::Ui,
-    rect: Rect,
-    span: egui::Rangef,
-    (at, floor): (Option<f32>, Option<(f32, usize)>),
-    marks: Option<&(Marks, egui::Rangef)>,
-    hot: Option<usize>,
-) {
-    let colors = theme::colors();
-    let painter = ui.painter();
-    let rule = Rect::from_x_y_ranges(
-        egui::Rangef::new(
-            rect.center().x - RULE_W / 2.0,
-            rect.center().x + RULE_W / 2.0,
-        ),
-        span.expand(HANDLE.y / 2.0),
-    );
-    let round = egui::CornerRadius::same(u8::MAX);
-
-    if let Some((marks, along)) = marks {
-        marks.paint_profile(painter, *along, rule);
-    }
-    painter.rect_filled(rule, round, colors.active);
-    // With nothing to cut through the rule stands alone: a scale would measure nothing.
-    let Some(at) = at else {
-        if let Some((marks, along)) = marks {
-            marks.paint_risks(painter, *along, rule, hot);
-        }
-        return;
-    };
-    let ticks_x = egui::Rangef::new(
-        rect.right() - TICK_INSET - TICK_W,
-        rect.right() - TICK_INSET,
-    );
-    for tick in 0..TICKS {
-        let y = egui::lerp(span, tick as f32 / (TICKS - 1) as f32);
-        painter.hline(ticks_x, y, Stroke::new(1.0, colors.line));
-    }
-    let y = up(span, at);
-    let floor_y = floor.map_or(up(span, 0.0), |(floor_at, _)| up(span, floor_at));
-    let filled = rule.with_min_y(y).with_max_y(floor_y.max(y));
-    painter.rect_filled(filled, round, colors.accent);
-    if let Some((marks, along)) = marks {
-        marks.paint_risks(painter, *along, rule, hot);
-    }
-    for y in [floor_y, y] {
-        let handle = Rect::from_center_size(pos2(rect.center().x, y), HANDLE);
-        painter.rect(
-            handle,
-            egui::CornerRadius::same(4),
-            colors.knob,
-            Stroke::new(2.0, colors.accent),
-            egui::StrokeKind::Outside,
-        );
-    }
-}
-
 /// The stack the marks are read from and the stretch of track it covers: all of it in
 /// Preview, the stack's own height within the model's in Prepare.
 pub(super) fn marked<'a>(
@@ -249,121 +177,20 @@ pub(super) fn marked<'a>(
     Some((measured, egui::Rangef::new(to, from)))
 }
 
-/// What the strip shows of the stack along its track: the cured area up the print, as a
-/// silhouette either side of the rule, and a bar at every layer named as a risk.
-pub(super) struct Marks {
-    /// The widest layer in each row of the track, from the plate up, over the widest of
-    /// all.
-    pub(super) widths: Vec<f32>,
-    /// The risks, lowest first.
-    pub(super) risks: Vec<Mark>,
-}
-
-/// One risk's bar: where it sits up the stack from zero to one, its colour, and its layer.
-pub(super) struct Mark {
-    pub(super) at: f32,
-    pub(super) tint: egui::Color32,
-    pub(super) layer: usize,
-}
-
-impl Marks {
-    pub(super) fn of(measured: &core_analysis::Measured, rows: usize) -> Self {
-        let layers = measured.layers();
-        let rows = rows.max(1);
-        let mut widths = vec![0.0f32; rows];
-        for (index, layer) in layers.iter().enumerate() {
-            let row = index * rows / layers.len().max(1);
-            widths[row] = widths[row].max(layer.area_mm2);
-        }
-        let widest = widths.iter().copied().fold(0.0, f32::max);
-        if widest > 0.0 {
-            widths.iter_mut().for_each(|width| *width /= widest);
-        }
-        let last = layers.len().saturating_sub(1).max(1) as f32;
-        let mut risks: Vec<_> = measured
-            .risks()
-            .iter()
-            .map(|risk| Mark {
-                at: risk.layer as f32 / last,
-                tint: risk_tint(risk),
-                layer: risk.layer,
-            })
-            .collect();
-        risks.sort_by(|a, b| a.at.total_cmp(&b.at));
-        Self { widths, risks }
-    }
-
-    /// One filled outline, centred on the rule, running smoothly over the rows' peaks.
-    pub(super) fn paint_profile(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
-        let fill = theme::colors().text_low.gamma_multiply(PROFILE_ALPHA);
-        let rows = self.widths.len() as f32;
-        let x = rule.center().x;
-        let mut mesh = egui::Mesh::default();
-        let reach = (PROFILE_SMOOTH / PROFILE_PITCH).round() as usize;
-        for (row, width) in outline(&self.widths, reach).iter().enumerate() {
-            let y = up(span, (row as f32 + 0.5) / rows);
-            let half = if *width > 0.0 {
-                RULE_W / 2.0 + width * (PROFILE_HALF_W - RULE_W / 2.0)
-            } else {
-                0.0
-            };
-            let next = mesh.vertices.len() as u32;
-            mesh.colored_vertex(pos2(x - half, y), fill);
-            mesh.colored_vertex(pos2(x + half, y), fill);
-            if row > 0 {
-                mesh.add_triangle(next - 2, next - 1, next);
-                mesh.add_triangle(next - 1, next + 1, next);
-            }
-        }
-        painter.add(mesh);
-    }
-
-    /// Over the rule and its fill, so a risk under the cut reads as well as one above it;
-    /// the bar under the pointer stands larger.
-    pub(super) fn paint_risks(
-        &self,
-        painter: &egui::Painter,
-        span: egui::Rangef,
-        rule: Rect,
-        hot: Option<usize>,
-    ) {
-        for (index, mark) in self.risks.iter().enumerate() {
-            let size = if hot == Some(index) { RISK_HOT } else { RISK };
-            let bar = Rect::from_center_size(pos2(rule.center().x, up(span, mark.at)), size);
-            painter.rect_filled(bar, egui::CornerRadius::same(1), mark.tint);
-        }
-    }
-
-    /// The risk whose bar `pointer` is on, the nearest where two touch: bisected, since a
-    /// stack may hold thousands.
-    pub(super) fn under(&self, span: egui::Rangef, x: f32, pointer: egui::Pos2) -> Option<usize> {
-        if (pointer.x - x).abs() > RISK_HOT.x / 2.0 || span.span() <= 0.0 {
-            return None;
-        }
-        let at = span_fraction(span, pointer.y);
-        let split = self.risks.partition_point(|mark| mark.at < at);
-        let near = split.saturating_sub(1)..(split + 1).min(self.risks.len());
-        near.map(|index| (index, (up(span, self.risks[index].at) - pointer.y).abs()))
-            .filter(|(_, off)| *off <= RISK.y / 2.0 + RISK_REACH)
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(index, _)| index)
-    }
-}
-
 /// The risk bar under the pointer: what it is on which layer, and a press going to it.
 fn risk_bar(
     ui: &egui::Ui,
     window: &mut Window,
-    marks: &Marks,
+    marks: &LayerMarks,
     span: egui::Rangef,
     x: f32,
     index: usize,
 ) {
     let mark = &marks.risks[index];
-    let bar = Rect::from_center_size(pos2(x, up(span, mark.at)), RISK_HOT);
+    let bar = Rect::from_center_size(pos2(x, up(span, mark.at)), LAYER_RISK_HOT);
     let id = egui::Id::new(("layer-risk", mark.layer));
     let response = ui
-        .interact(bar.expand2(vec2(0.0, RISK_REACH)), id, Sense::click())
+        .interact(bar.expand2(vec2(0.0, LAYER_RISK_REACH)), id, Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     let Some(risks) = window.measured().map(|measured| {
         let mut here = measured.risks();
@@ -385,22 +212,29 @@ fn risk_bar(
     }
 }
 
-/// `widths` drawn through their peaks: each the widest within `reach` rows, then averaged
-/// over as many, so the outline never dips under a row's own width.
-pub(super) fn outline(widths: &[f32], reach: usize) -> Vec<f32> {
-    let around = |row: usize| row.saturating_sub(reach)..(row + reach + 1).min(widths.len());
-    let peaks: Vec<f32> = (0..widths.len())
-        .map(|row| widths[around(row)].iter().copied().fold(0.0, f32::max))
-        .collect();
-    (0..peaks.len())
-        .map(|row| {
-            let near = &peaks[around(row)];
-            near.iter().sum::<f32>() / near.len() as f32
+/// The marks of `measured` over `rows` rows of the track.
+pub(super) fn marks_of(measured: &core_analysis::Measured, rows: usize) -> LayerMarks {
+    let layers = measured.layers();
+    let rows = rows.max(1);
+    let mut widths = vec![0.0f32; rows];
+    for (index, layer) in layers.iter().enumerate() {
+        let row = index * rows / layers.len().max(1);
+        widths[row] = widths[row].max(layer.area_mm2);
+    }
+    let widest = widths.iter().copied().fold(0.0, f32::max);
+    if widest > 0.0 {
+        widths.iter_mut().for_each(|width| *width /= widest);
+    }
+    let last = layers.len().saturating_sub(1).max(1) as f32;
+    let mut risks: Vec<_> = measured
+        .risks()
+        .iter()
+        .map(|risk| LayerMark {
+            at: risk.layer as f32 / last,
+            tint: risk_tint(risk),
+            layer: risk.layer,
         })
-        .collect()
+        .collect();
+    risks.sort_by(|a, b| a.at.total_cmp(&b.at));
+    LayerMarks { widths, risks }
 }
-
-/// How far the outline reaches either side to join peaks, points.
-const PROFILE_SMOOTH: f32 = 8.0;
-/// How much of `text_low` the cured-area profile keeps.
-const PROFILE_ALPHA: f32 = 0.35;

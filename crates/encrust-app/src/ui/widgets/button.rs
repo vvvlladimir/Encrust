@@ -11,10 +11,10 @@ mod tile;
 
 pub(in crate::ui::widgets) use square::paint_square;
 pub use square::{
-    RailButton, SquareLook, companion_square, icon_button, icon_toggle, quiet_square, rail_button,
-    small_icon_button,
+    RailButton, SquareLook, companion_square, icon_button, icon_toggle, numbered_square,
+    quiet_square, rail_button, small_icon_button,
 };
-pub use tile::{summary_button, swatch, zone_button};
+pub use tile::{bar_pill, summary_button, swatch, zone_button};
 
 /// The ring a control wears while it holds the keyboard's focus: the accent inside its own
 /// edge, and a halo of the accent's wash outside it.
@@ -151,6 +151,18 @@ pub fn primary_with_companion(
     .inner
 }
 
+/// How wide an [`inline_button`] saying `text`, with `glyph` if any, stands.
+pub fn inline_button_w(ui: &Ui, glyph: &str, text: &str) -> f32 {
+    let high = theme::colors().text_high;
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), high)
+        .size()
+        .x;
+    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
+    text_w + glyph_w + 32.0
+}
+
 /// A button as wide as what it says, to stand in a row of several. `primary` paints it
 /// as the one action of the screen.
 pub fn inline_button(
@@ -161,13 +173,7 @@ pub fn inline_button(
     enabled: bool,
 ) -> Response {
     let colors = theme::colors();
-    let text_w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
-        .size()
-        .x;
-    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
-    let size = vec2(text_w + glyph_w + 32.0, theme::BUTTON_H);
+    let size = vec2(inline_button_w(ui, glyph, text), theme::BUTTON_H);
     let skin = match (primary, enabled) {
         (true, true) => Skin {
             fill: colors.accent,

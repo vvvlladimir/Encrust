@@ -118,6 +118,40 @@ pub(in crate::ui::widgets) fn paint_square(
     );
 }
 
+/// A plate of the strip by its number, 26 points tall: lit in the accent while it is the
+/// one in front, ringed in the hairline otherwise.
+pub fn numbered_square(ui: &mut Ui, number: usize, active: bool, name: &str) -> Response {
+    let colors = theme::colors();
+    let side = theme::SMALL_ICON_SIZE;
+    let (rect, response) = ui.allocate_exact_size(vec2(side + 2.0, side), Sense::click());
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
+    let (fill, ring, ink) = match (active, response.hovered()) {
+        (true, _) => (
+            colors.accent_wash,
+            colors.accent.gamma_multiply(NUMBERED_RING),
+            colors.accent_soft,
+        ),
+        (false, true) => (colors.hover, colors.hairline, colors.text_high),
+        (false, false) => (Color32::TRANSPARENT, colors.hairline, colors.text_mid),
+    };
+    let painter = ui.painter();
+    let stroke = egui::Stroke::new(1.0, ring);
+    painter.rect(rect, theme::R_CONTROL, fill, stroke, StrokeKind::Inside);
+    let text = number.to_string();
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        text,
+        theme::figures(12.0),
+        ink,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response
+}
+
+/// How much of the accent a lit numbered square's ring keeps.
+const NUMBERED_RING: f32 = 0.4;
+
 /// One tool of the tool row, filling the room it is given: a glyph over the tool's name,
 /// or the glyph alone. Washed in the accent while it is the tool in use; a dot in `badge`
 /// at its top right while the tool needs attention; `key`, the digit that picks it, at its

@@ -9,13 +9,13 @@ mod resins;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::panels::settings::frame::{
-    self, LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
-};
 use crate::panels::settings::{compensation, confirm, export_profile, printer, report};
 use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
+};
+use crate::ui::window_frame::{
+    LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
 };
 use crate::ui::{
     SquareLook, bin_button, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
@@ -65,7 +65,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
         return;
     }
     let mut action = None;
-    let close = frame::show(
+    let close = crate::ui::window_frame::show(
         ctx,
         "machine-and-resin",
         icon::PRINTER,
@@ -147,7 +147,12 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
     let tooltip = picked.map_or_else(String::new, |id| {
         confirm::cost(catalogue, &Deleting::Printer(id.to_owned()))
     });
-    add_machine(&mut child(ui, foot.shrink(12.0)), picked, &tooltip, action);
+    add_machine(
+        &mut child(ui, foot.shrink(theme::PANEL_PAD)),
+        picked,
+        &tooltip,
+        action,
+    );
 }
 
 fn no_match(ui: &mut Ui) {

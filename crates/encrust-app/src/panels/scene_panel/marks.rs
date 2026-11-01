@@ -3,8 +3,9 @@
 use super::POPUP_W;
 use crate::i18n::tr;
 use crate::scene::{ImportSummary, SceneObject};
-use crate::ui::{focus_ring, hint, icon, tag, theme};
-use egui::{Align2, Rect, Sense, vec2};
+use crate::ui::{hint, icon, tag, theme};
+use crate::ui::{inline_button, row_mark};
+use egui::Rect;
 
 /// What the end of a row says about a model: a model that will not slice as it stands is
 /// named broken in words, a model repair only had to tidy gets the quiet sign.
@@ -43,8 +44,8 @@ pub(super) fn import_mark(
             hint(ui, line);
         }
         if mark == Mark::Broken {
-            ui.add_space(4.0);
-            repair = ui.button(tr!("notice-repair")).clicked();
+            ui.add_space(theme::NOTE_GAP);
+            repair = inline_button(ui, icon::REPAIR, &tr!("notice-repair"), false, true).clicked();
         }
     });
     (response.rect.left(), repair)
@@ -57,26 +58,8 @@ pub(super) fn quiet_mark(
     id: egui::Id,
     right: f32,
 ) -> egui::Response {
-    let colors = theme::colors();
-    let spot = Rect::from_center_size(egui::pos2(right - 9.0, rect.center().y), vec2(18.0, 18.0));
-    let response = ui.interact(spot, id, Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("models-import-found"))
-    });
-    let ink = if response.hovered() {
-        colors.text_high
-    } else {
-        colors.text_low
-    };
-    ui.painter().text(
-        spot.center(),
-        Align2::CENTER_CENTER,
-        icon::WARNING,
-        theme::icon(14.0),
-        ink,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response
+    let at = egui::pos2(right, rect.center().y);
+    row_mark(ui, at, id, icon::WARNING, &tr!("models-import-found"))
 }
 
 /// What is wrong with a model, what is odd about it and what repair did, and how loudly.
