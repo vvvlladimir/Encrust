@@ -21,12 +21,9 @@ const PEN_TIP = vec3<f32>(0.92, 0.92, 0.93);
 const BRASS = vec3<f32>(0.80, 0.66, 0.36);
 const NICKEL = vec3<f32>(0.78, 0.79, 0.80);
 const STEEL = vec3<f32>(0.72, 0.74, 0.77);
-const PRIMER = vec3<f32>(0.55, 0.56, 0.58);
 
 // Millimetres of the unprinted band round the mat's grid.
 const MAT_BORDER = 10.0;
-// How dark a prop's shadow lies on the mat at its darkest.
-const PROP_SHADOW = 0.5;
 // Where the banana's arc starts and ends, radians. Must match references/shapes.rs.
 const BANANA_FROM = 0.75;
 const BANANA_TO = 2.39;
@@ -45,27 +42,9 @@ fn ruled(at_mm: f32, spacing_mm: f32, width_mm: f32, mm_per_px: f32) -> f32 {
     return line * (1.0 - smoothstep(0.12, 0.3, pixel / spacing_mm));
 }
 
-fn segment_distance(at: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
-    let along = end - start;
-    let share = clamp(dot(at - start, along) / max(dot(along, along), 1e-6), 0.0, 1.0);
-    return distance(at, start + along * share);
-}
-
-// How much of the light a point of the mat keeps under the props' soft shadows, plate mm.
-fn under_props(at: vec2<f32>) -> f32 {
-    var dark = 0.0;
-    for (var index = 0u; index < MAX_PROP_SHADOWS; index = index + 1u) {
-        let shadow = globals.prop_shadows[index];
-        let reach = shadow.reach.x;
-        let apart = segment_distance(at, shadow.ends.xy, shadow.ends.zw);
-        dark = max(dark, 1.0 - smoothstep(reach * 0.7, reach + 0.4 * reach + 3.0, apart));
-    }
-    return 1.0 - PROP_SHADOW * dark;
-}
-
 // A green self-healing mat: a 10 mm grid inside a plain band, every fifth line heavier,
 // and a 45 degree line from each near corner. Its mesh is a unit box sized by `globals.mat`.
-fn mat_colour(local: vec3<f32>, world: vec3<f32>, px: vec3<f32>) -> vec3<f32> {
+fn mat_colour(local: vec3<f32>, px: vec3<f32>) -> vec3<f32> {
     if (local.z < 0.999) {
         return MAT_EDGE;
     }
@@ -81,7 +60,7 @@ fn mat_colour(local: vec3<f32>, world: vec3<f32>, px: vec3<f32>) -> vec3<f32> {
     );
     let ink = max(max(minor * 0.3, major * 0.65), diagonal * 0.45) * select(0.0, 1.0, inside);
     let base = select(MAT_EDGE, MAT_GREEN, inside);
-    return mix(base, MAT_INK, ink) * under_props(world.xy);
+    return mix(base, MAT_INK, ink);
 }
 
 // A can: bare aluminium at its foot and lid, a red lacquered wrap between with a white wave.
@@ -131,11 +110,11 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
     }
     let material = i32(round(-2.0 - in.overhang));
     // xyz the colour, w how metallic; then how strongly it reflects.
-    var surface = vec4<f32>(PRIMER, 0.0);
-    var shine = 0.2;
+    var surface = vec4<f32>(STEEL, 1.0);
+    var shine = 0.6;
     switch material {
         case 0: {
-            surface = vec4<f32>(mat_colour(in.local, in.world, px), 0.0);
+            surface = vec4<f32>(mat_colour(in.local, px), 0.0);
             shine = 0.2;
         }
         case 1: {
@@ -154,11 +133,10 @@ fn prop_colour(in: ModelFragment, front_facing: bool, px: vec3<f32>) -> vec4<f32
             surface = vec4<f32>(select(BRASS, NICKEL, length(in.local.xy) < COIN_MIDDLE), 1.0);
             shine = 0.85;
         }
-        case 5: {
+        default: {
             surface = vec4<f32>(STEEL, 1.0);
             shine = 0.6;
         }
-        default: {}
     }
     return vec4<f32>(finish(surface.rgb, surface.a, shine, normal, in.world), 1.0);
 }
@@ -173,6 +151,8 @@ const ROOM_TABLE = vec3<f32>(0.78, 0.78, 0.79);
 const ROOM_FADE_MM = 2500.0;
 const MAT_SHADOW = 0.35;
 const MAT_SHADOW_MM = 25.0;
+// How dark what stands on the table shades it from the key.
+const TABLE_SHADOW = 0.45;
 // The table's height, plate millimetres: under the mat, whose top lies just under the plate's
 // level. Must match SINK_MM and MAT_THICK_MM in references.rs.
 const TABLE_Z = -3.05;
@@ -196,7 +176,8 @@ fn backdrop_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec
     }
     let hit = origin + ray * ((TABLE_Z - origin.z) / ray.z);
     let away = rect_distance(hit.xy, globals.desk.xy, globals.desk.zw);
-    let shaded = 1.0 - MAT_SHADOW * (1.0 - smoothstep(0.0, MAT_SHADOW_MM, away));
+    let under_mat = 1.0 - MAT_SHADOW * (1.0 - smoothstep(0.0, MAT_SHADOW_MM, away));
+    let shaded = under_mat * mix(1.0 - TABLE_SHADOW, 1.0, key_reaches(hit, vec3<f32>(0.0, 0.0, 1.0)));
     let fade = 1.0 - exp(-distance(hit, globals.eye.xyz) / ROOM_FADE_MM);
     return vec4<f32>(mix(ROOM_TABLE * shaded, ROOM_HORIZON, fade), 1.0);
 }

@@ -8,7 +8,7 @@ use core_geometry::{Aabb, Mesh, Quat, Scalar, Transform, Vec2, Vec3, cuboid, smo
 use core_supports::Shaded;
 
 use crate::plate::BuildPlate;
-use crate::render::gpu::{Desk, MAX_PROP_SHADOWS, ModelDraw, PropShadow};
+use crate::render::gpu::{Desk, ModelDraw};
 use crate::render::vertex::ModelInstance;
 use crate::ui::theme;
 
@@ -42,7 +42,6 @@ pub enum Material {
     Pen = 3,
     Coin = 4,
     Steel = 5,
-    Primer = 6,
 }
 
 /// A prop's instance names its material in the slot a model's overhang threshold takes:
@@ -94,7 +93,6 @@ pub fn props() -> &'static [Prop] {
                 along_u * Quat::from_rotation_x(-FRAC_PI_2),
             ),
             prop(shapes::ruler(), Material::Steel, along_u),
-            prop(shapes::figure(), Material::Primer, flat),
             prop(shapes::coin(), Material::Coin, flat),
             prop(shapes::can(), Material::Can, flat),
             prop(
@@ -176,11 +174,11 @@ pub struct Layout {
     pub mat: Rect,
 }
 
-/// The front row under the models (the pen, then the ruler before it), the figure, the coin
-/// and the can left of them, the banana right: each row clear of the others by its side.
+/// The front row under the models (the pen, then the ruler before it), the coin and the can
+/// left of them, the banana right: each row clear of the others by its side.
 pub fn lay_out(models: Rect) -> Layout {
     let clear = models.grown(MODEL_GAP_MM);
-    let [pen, ruler, figure, coin, can, banana] = [0, 1, 2, 3, 4, 5].map(|at| &props()[at]);
+    let [pen, ruler, coin, can, banana] = [0, 1, 2, 3, 4].map(|at| &props()[at]);
     let size = |prop: &Prop| (prop.bounds.maxs - prop.bounds.mins).truncate();
     let at = |prop: &'static Prop, low: Vec2| {
         let rect = Rect {
@@ -191,16 +189,14 @@ pub fn lay_out(models: Rect) -> Layout {
     };
     let pen_low = Vec2::new(clear.low.x, clear.low.y - size(pen).y);
     let ruler_low = pen_low - Vec2::new(0.0, PROP_GAP_MM + size(ruler).y);
-    let figure_low = Vec2::new(clear.low.x - size(figure).x, clear.low.y);
-    let coin_low = figure_low - Vec2::new(PROP_GAP_MM + size(coin).x, 0.0);
-    let can_y = (clear.high.y - size(can).y).max(figure_low.y + size(figure).y + PROP_GAP_MM);
+    let coin_low = Vec2::new(clear.low.x - size(coin).x, clear.low.y);
+    let can_y = (clear.high.y - size(can).y).max(coin_low.y + size(coin).y + PROP_GAP_MM);
     let can_low = Vec2::new(clear.low.x - size(can).x, can_y);
     let banana_y = (clear.low.y + clear.high.y - size(banana).y) / 2.0;
     let banana_low = Vec2::new(clear.high.x, banana_y.max(clear.low.y));
     let placed = vec![
         at(pen, pen_low),
         at(ruler, ruler_low),
-        at(figure, figure_low),
         at(coin, coin_low),
         at(can, can_low),
         at(banana, banana_low),
@@ -231,7 +227,7 @@ fn mat_round(set: Rect) -> Rect {
 }
 
 /// The set laid round the models standing in `models`, or round the plate's middle, as
-/// draws and as what the shader needs to paint the mat and its shadows.
+/// draws and as what the shader needs to paint the mat.
 pub fn set(plate: &BuildPlate, models: Option<Aabb>) -> (Vec<ModelDraw>, Desk) {
     let frame = Frame::of(plate);
     let around = models.map_or(
@@ -244,14 +240,12 @@ pub fn set(plate: &BuildPlate, models: Option<Aabb>) -> (Vec<ModelDraw>, Desk) {
     let layout = lay_out(around);
     let floor = -SINK_MM;
     let mut draws = Vec::with_capacity(layout.placed.len() + 1);
-    let mut shadows = [PropShadow::default(); MAX_PROP_SHADOWS];
-    for (index, (prop, rect)) in layout.placed.iter().enumerate() {
+    for (prop, rect) in &layout.placed {
         let at = rect.low.extend(floor) - prop.bounds.mins;
         let world = frame.to_world(at);
         let transform =
             Transform::from_scale_rotation_translation(Vec3::ONE, frame.turn * prop.turn, world);
         draws.push(draw(&prop.shaded, prop.material, transform));
-        shadows[index] = shadow_of(&frame, *rect);
     }
     let mat = layout.mat;
     let mat_low = frame.to_world(mat.low.extend(floor - MAT_THICK_MM));
@@ -267,7 +261,6 @@ pub fn set(plate: &BuildPlate, models: Option<Aabb>) -> (Vec<ModelDraw>, Desk) {
             mat_low.y.max(mat_high.y),
         ],
         mat_mm: mat.size().to_array(),
-        shadows,
     };
     (draws, desk)
 }
@@ -278,19 +271,6 @@ fn draw(shaded: &Shaded, material: Material, at: Transform) -> ModelDraw {
         shaded,
         ModelInstance::new(at, theme::scene().reference, slot),
     )
-}
-
-/// The soft shadow a prop filling `rect` casts, in world millimetres: a segment along its
-/// long side, half its short side out.
-fn shadow_of(frame: &Frame, rect: Rect) -> PropShadow {
-    let size = rect.size();
-    let middle = (rect.low + rect.high) / 2.0;
-    let (half_long, reach) = match size.x >= size.y {
-        true => (Vec2::new((size.x - size.y) / 2.0, 0.0), size.y / 2.0),
-        false => (Vec2::new(0.0, (size.y - size.x) / 2.0), size.x / 2.0),
-    };
-    let world = |at: Vec2| frame.to_world(at.extend(0.0)).truncate();
-    PropShadow::new(world(middle - half_long), world(middle + half_long), reach)
 }
 
 #[cfg(test)]

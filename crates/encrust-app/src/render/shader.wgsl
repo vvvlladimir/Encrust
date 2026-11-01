@@ -12,8 +12,6 @@ const MAX_BANDS = 8u;
 // in gpu.rs.
 const MAX_POCKETS = 32u;
 
-// How many soft shadows the props cast on their mat. Must match MAX_PROP_SHADOWS in gpu.
-const MAX_PROP_SHADOWS = 8u;
 
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
 // corner.xyz points at a polygon's first corner and corner.w counts its sides, 0 if round.
@@ -40,16 +38,12 @@ struct TrapBox {
     high: vec4<f32>,
 };
 
-// One soft shadow on the props' mat, in its millimetres: a segment, and the reach in x.
-struct PropShadow {
-    ends: vec4<f32>,
-    reach: vec4<f32>,
-};
-
 struct Globals {
     view_projection: mat4x4<f32>,
     // Its inverse, which the render view's backdrop turns a pixel into a line of sight by.
     inverse_view_projection: mat4x4<f32>,
+    // The key light's view over the render view's set, which its shadow map is drawn in.
+    key_view_projection: mat4x4<f32>,
     // The two lights: xyz the direction each travels towards, and their colours. The sky
     // and the ground are what the ambient is mixed from. All of it comes from
     // ui::theme, see docs/design/viewport.md; every w is unused padding.
@@ -111,10 +105,11 @@ struct Globals {
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
     pockets: array<TrapBox, MAX_POCKETS>,
-    prop_shadows: array<PropShadow, MAX_PROP_SHADOWS>,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
+@group(0) @binding(1) var key_shadow_map: texture_depth_2d;
+@group(0) @binding(2) var key_shadow_sampler: sampler_comparison;
 
 struct ModelVertex {
     @location(0) position: vec3<f32>,
@@ -231,6 +226,43 @@ fn softbox(mirror: vec3<f32>, towards: vec3<f32>) -> f32 {
     return lobe * lobe;
 }
 
+// The render view's key light shadow. A point is lifted off its surface this far before it
+// is looked up, and the map is read over a disc this many texels across, which softens the
+// edge as a softbox does.
+const KEY_LIFT_MM = 0.4;
+const KEY_SOFT_TEXELS = 2.5;
+const KEY_TAPS = 12;
+
+// How much of the key light reaches `world` on a surface facing `normal`: all of it outside
+// the render view or off the map.
+fn key_reaches(world: vec3<f32>, normal: vec3<f32>) -> f32 {
+    if (globals.look.y < 0.5) {
+        return 1.0;
+    }
+    let clip = globals.key_view_projection * vec4<f32>(world + normal * KEY_LIFT_MM, 1.0);
+    let at = clip.xyz / clip.w;
+    let uv = at.xy * vec2<f32>(0.5, -0.5) + 0.5;
+    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) || at.z > 1.0) {
+        return 1.0;
+    }
+    let texel = KEY_SOFT_TEXELS / vec2<f32>(textureDimensions(key_shadow_map));
+    var lit = 0.0;
+    for (var tap = 0; tap < KEY_TAPS; tap = tap + 1) {
+        let angle = f32(tap) * 2.39996323;
+        let out = sqrt((f32(tap) + 0.5) / f32(KEY_TAPS));
+        let shifted = uv + vec2<f32>(cos(angle), sin(angle)) * out * texel;
+        lit = lit + textureSampleCompareLevel(key_shadow_map, key_shadow_sampler, shifted, at.z);
+    }
+    return lit / f32(KEY_TAPS);
+}
+
+// A mesh as the key light sees it, for its shadow map.
+@vertex
+fn key_cast_vertex(in: ModelVertex) -> @builtin(position) vec4<f32> {
+    let model = mat4x4<f32>(in.model_0, in.model_1, in.model_2, in.model_3);
+    return globals.key_view_projection * model * vec4<f32>(in.position, 1.0);
+}
+
 // `lit` under the studio, for the same premultiplied `base` and `alpha`.
 fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     return finish(base, 0.0, alpha, normal, world);
@@ -244,12 +276,14 @@ fn finish(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec
     let fill = normalize(-globals.fill_towards.xyz);
     let top = vec3<f32>(0.0, 0.0, 1.0);
     let room = mix(globals.ground.rgb, globals.sky.rgb, smoothstep(-0.6, 1.0, normal.z));
+    let reaches = key_reaches(world, normal);
     let diffuse = room * STUDIO_AMBIENT
-        + globals.key_color.rgb * STUDIO_KEY * wrapped(dot(normal, key))
+        + globals.key_color.rgb * STUDIO_KEY * wrapped(dot(normal, key)) * reaches
         + globals.sky.rgb * STUDIO_TOP * wrapped(normal.z)
         + globals.fill_color.rgb * FILL_SHARE * max(dot(normal, fill), 0.0);
     let mirror = reflect(-view, normal);
-    let boxes = globals.key_color.rgb * softbox(mirror, key) + globals.sky.rgb * 0.6 * softbox(mirror, top);
+    let boxes = globals.key_color.rgb * softbox(mirror, key) * reaches
+        + globals.sky.rgb * 0.6 * softbox(mirror, top);
     let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
     let tint = mix(vec3<f32>(1.0), base, metal);
     let fresnel = mix(vec3<f32>(0.04), base, metal) + (1.0 - mix(vec3<f32>(0.04), base, metal)) * grazing;

@@ -450,9 +450,8 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
 - **The set.** A self-healing cutting mat lies under the models, its top 0.05 mm under the
   plate's level so the models' contact shadow never fights it, and things everyone knows
   the size of lie round them as Lychee's *At scale* lays them: in front, a ballpoint as long
-  as a BIC Cristal (149.5 mm) and a 100 mm steel ruler; on the left, a figure on a one-inch
-  (25 mm) base with its eyes 32 mm over it as the "32 mm heroic" scale measures, a one-euro
-  coin (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the right, a banana swept
+  as a BIC Cristal (149.5 mm) and a 100 mm steel ruler; on the left, a one-euro coin
+  (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the right, a banana swept
   along a 110 mm arc, about 180 mm long. `references::lay_out` places them 20 mm clear of
   the models' box seen from the front, each row on its own side so none can meet another,
   and picks the smallest mat sold, A3 to A0 either way round, that takes the whole set with
@@ -464,8 +463,18 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   studio's light with a metal term: the mat's 10 mm grid, every fifth line heavier, with a
   45° line from each near corner; the can's red lacquered wrap with a white wave between
   bare aluminium; the banana yellowing into a brown stem, dark at its blossom end, freckled;
-  the coin's two metals. Each prop casts a soft shadow on the mat, a segment along its long
-  side reaching half its short side, in plate millimetres. Nothing is shipped for any of it.
+  the coin's two metals. Nothing is shipped for any of it.
+- **The key's shadow.** Everything in the set, the models and the props and the mat, casts
+  a shadow from the key light. `light.rs` draws their depth from the key, orthographic over
+  the mat and 60 mm past it, into a 2048² map: an A2 mat is 0.3 mm a texel. It is drawn
+  only when what casts it changes and the camera rests, as the contact shadow is, so an
+  orbit costs nothing; a map just made is cleared to all lit. Every surface under the
+  studio's `finish`, and the table under the backdrop, reads it over twelve taps on a disc
+  2.5 texels across, which softens the edge as a softbox does, and loses the key's diffuse
+  and its reflection where it is shaded. Faces are pushed back by their slope as they are
+  drawn and points lifted 0.4 mm off their surface as they are read, so a lit surface
+  never shades itself. A clear resin casts none: it lets the key through, and what grounds
+  it is the contact shadow.
 
 On a WebGL canvas (`Backend::Gl`) neither the clear pass nor the creases run: the view draws
 opaque and unshaded.

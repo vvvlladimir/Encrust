@@ -593,7 +593,7 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Show as printed:** the printer put away and the models in a light studio, standing on a
   cutting mat with real things round them at their real size, as Lychee lays them: a pen,
-  a ruler, a one-euro coin, a 32 mm miniature figure, a 330 ml can and a banana. The models
+  a ruler, a one-euro coin, a 330 ml can and a banana, each casting a soft shadow. The models
   and supports are in the resin's own colour under soft studio light, the layers of the
   chosen layer height stepped into their surface where they will show. A clear resin bends,
   frosts and tints what stands behind it as deep as the part is thick, hazes as cured resin

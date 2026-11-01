@@ -3,16 +3,11 @@
 use std::f32::consts::PI;
 
 use core_geometry::{
-    Mesh, Scalar, Vec2, Vec3, ball, cuboid, cylinder, prism, revolve, signed_volume, turns,
+    Mesh, Scalar, Vec2, Vec3, cuboid, cylinder, prism, revolve, signed_volume, turns,
 };
 
 /// A one-euro coin, millimetres: diameter and thickness.
 pub const COIN_MM: [Scalar; 2] = [23.25, 2.33];
-/// The one-inch round base a tabletop miniature of a person stands on, millimetres.
-pub const BASE_MM: [Scalar; 2] = [25.0, 3.0];
-/// A "32 mm heroic" figure: millimetres from its soles to its eyes, which is what the scale
-/// names, not to the top of its head.
-pub const EYE_LEVEL_MM: Scalar = 32.0;
 /// A 330 ml drinks can, millimetres: its radius and height.
 pub const CAN_RADIUS_MM: Scalar = 33.1;
 pub const CAN_HEIGHT_MM: Scalar = 115.2;
@@ -86,27 +81,6 @@ pub fn pen() -> Mesh {
         Vec3::new(-1.2, -PEN_REST_MM - 1.0, 128.0),
         Vec3::new(1.2, -PEN_REST_MM + 0.4, 146.0),
     ));
-    mesh
-}
-
-/// A person at miniature scale on its base, in heroic proportions: a head a sixth of its
-/// eye height, limbs as bars. Recognisable, not a sculpt.
-pub fn figure() -> Mesh {
-    let mut mesh = disc(BASE_MM);
-    let at = |x: Scalar, z: Scalar| Vec3::new(x, 0.0, BASE_MM[1] + z);
-    let head_mm = EYE_LEVEL_MM / 6.0;
-    let shoulder = EYE_LEVEL_MM - head_mm;
-    let hip = EYE_LEVEL_MM * 0.47;
-    for part in [
-        cylinder(at(-1.8, 0.0), at(-1.6, hip), 1.6, 16),
-        cylinder(at(1.8, 0.0), at(1.6, hip), 1.6, 16),
-        cylinder(at(0.0, hip - 1.0), at(0.0, shoulder), 3.6, 24),
-        cylinder(at(-4.6, shoulder - 0.6), at(-5.6, hip - 0.5), 1.2, 12),
-        cylinder(at(4.6, shoulder - 0.6), at(5.6, hip - 0.5), 1.2, 12),
-        ball(at(0.0, EYE_LEVEL_MM), head_mm / 2.0, 16, 24),
-    ] {
-        mesh.append(&part);
-    }
     mesh
 }
 

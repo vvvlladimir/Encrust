@@ -18,8 +18,9 @@ its own and copied out (ADR 0184), with no multisampling.
 It draws every model and support in the resin's colour under a procedural studio light,
 steps the layer height into the surface in the shader, puts the printer away for a studio
 room worked out per pixel, and stands the models on a cutting mat among a ruler, a pen, a
-one-euro coin, a 32 mm figure on a 25 mm base, a 330 ml can and a banana, laid round them at
-their real size, built from primitives and painted by material in the shader. Picking,
+one-euro coin, a 330 ml can and a banana, laid round them at their real size, built from
+primitives and painted by material in the shader. The key light casts their shadows through
+a depth map drawn from it, only when what casts it changes. Picking,
 slicing and the written file do not change.
 
 **A resin carries `details.clarity`, 0.0 opaque to 1.0 water-clear**, default 0.0, so a

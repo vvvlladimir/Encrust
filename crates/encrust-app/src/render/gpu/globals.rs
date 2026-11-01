@@ -1,5 +1,8 @@
 //! The one uniform every pipeline reads, and how a frame fills it.
 
+use core_geometry::Vec3;
+
+use super::light::key_view_projection;
 use super::*;
 
 #[repr(C)]
@@ -8,6 +11,8 @@ pub(super) struct Globals {
     view_projection: [[f32; 4]; 4],
     /// Its inverse: the render view's backdrop turns a pixel back into a line of sight.
     inverse_view_projection: [[f32; 4]; 4],
+    /// The key light's view over the render view's set, which its shadow map is drawn in.
+    key_view_projection: [[f32; 4]; 4],
     /// The lights and the ambient, from `theme::Lighting`; every `w` is unused padding.
     key_towards: [f32; 4],
     fill_towards: [f32; 4],
@@ -69,8 +74,6 @@ pub(super) struct Globals {
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
     pockets: [TrapBox; MAX_POCKETS],
-    /// The shadows the render view's props cast on their mat.
-    prop_shadows: [PropShadow; MAX_PROP_SHADOWS],
 }
 
 /// What a fixed-size array the shader reads takes of `from`, and how much it took.
@@ -93,6 +96,12 @@ pub(super) fn globals_of(frame: &FrameInput<'_>) -> Globals {
     Globals {
         view_projection: frame.view_projection.to_cols_array_2d(),
         inverse_view_projection: frame.view_projection.inverse().to_cols_array_2d(),
+        key_view_projection: key_view_projection(
+            &desk,
+            frame.volume_mm.map_or(0.0, |[_, high]| high.z),
+            Vec3::from(light.key_towards),
+        )
+        .to_cols_array_2d(),
         key_towards: towards(light.key_towards),
         fill_towards: towards(light.fill_towards),
         key_color: theme::gamma(light.key),
@@ -150,7 +159,6 @@ pub(super) fn globals_of(frame: &FrameInput<'_>) -> Globals {
         cuts,
         bands,
         pockets,
-        prop_shadows: desk.shadows,
     }
 }
 

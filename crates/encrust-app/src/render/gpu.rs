@@ -19,6 +19,7 @@ mod clear;
 mod cost;
 mod draws;
 mod globals;
+mod light;
 mod paint;
 mod pipelines;
 mod shadow;
@@ -26,14 +27,15 @@ mod textures;
 mod timer;
 
 pub use draws::{
-    CutDraw, CutLine, Desk, DrainCut, ExposureBand, Floor, FrameInput, Look, MAX_PROP_SHADOWS,
-    ModelDraw, PropShadow, ReliefDraw, TrapBox,
+    CutDraw, CutLine, Desk, DrainCut, ExposureBand, Floor, FrameInput, Look, ModelDraw, ReliefDraw,
+    TrapBox,
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
 use clear::Clear;
 use draws::{Splits, cut_draws, splits_of};
 use globals::{Globals, globals_of};
+use light::KeyShadow;
 use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
 use shadow::ContactShadow;
 
@@ -111,6 +113,10 @@ struct CachedRelief {
 pub struct ViewportResources {
     globals: wgpu::Buffer,
     globals_bind_group: wgpu::BindGroup,
+    globals_layout: wgpu::BindGroupLayout,
+    /// The globals with the key's map stood in for, bound while the map is drawn.
+    casting_bind_group: wgpu::BindGroup,
+    key: KeyShadow,
     model_pipeline: Facing,
     xray_pipeline: Facing,
     /// The clear-resin view. `reads_planes` is false on a WebGL canvas, where the render view
@@ -204,16 +210,11 @@ impl ViewportResources {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("viewport_globals"),
-            layout: &globals_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: globals.as_entire_binding(),
-            }],
-        });
-
         let build = Builder::new(device, target_format, &globals_layout);
+        let key = KeyShadow::new(device, build.key_cast());
+        let globals_bind_group = key.globals_group(device, &globals_layout, &globals, false);
+        let casting_bind_group = key.globals_group(device, &globals_layout, &globals, true);
+
         let solid = build.solid();
         let label = build.label();
         let relief = build.relief();
@@ -222,6 +223,8 @@ impl ViewportResources {
         Self {
             globals,
             globals_bind_group,
+            casting_bind_group,
+            key,
             model_pipeline: solid.model,
             xray_pipeline: solid.xray,
             clear: build.clear(),
@@ -256,6 +259,7 @@ impl ViewportResources {
             report: None,
             planned_faces: None,
             card_ms: None,
+            globals_layout,
         }
     }
 
@@ -269,6 +273,7 @@ impl ViewportResources {
         self.count_frame(&frame);
         self.record(device, queue, &frame);
         self.shadow.want(&frame);
+        self.want_key_shadow(device, &frame);
         self.drop_what_nobody_drew();
     }
 

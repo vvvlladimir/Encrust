@@ -16,6 +16,7 @@ impl ViewportResources {
         viewport: egui::epaint::ViewportInPixels,
     ) {
         self.bake_shadow(encoder);
+        self.bake_key_shadow(encoder);
         self.measure_thickness(device, encoder, size_px, &viewport);
         let occlusion = self
             .frame

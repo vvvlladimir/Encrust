@@ -24,21 +24,21 @@ pub(super) struct ContactShadow {
 /// What the shadow was last baked from, what this frame would bake it from, and whether
 /// this frame may: one whose levels are still changing never does.
 #[derive(Debug, Default)]
-struct Bake {
-    baked: Option<u64>,
-    wanted: Option<u64>,
+pub(super) struct Bake {
+    pub(super) baked: Option<u64>,
+    pub(super) wanted: Option<u64>,
     held: bool,
 }
 
 impl Bake {
-    fn want(&mut self, wanted: Option<u64>, light: bool) {
+    pub(super) fn want(&mut self, wanted: Option<u64>, light: bool) {
         self.held = light;
         if !light {
             self.wanted = wanted;
         }
     }
 
-    fn due(&self) -> bool {
+    pub(super) fn due(&self) -> bool {
         !self.held && self.wanted.is_some() && self.wanted != self.baked
     }
 }
@@ -113,16 +113,21 @@ impl ContactShadow {
 fn cast_by(frame: &FrameInput<'_>, floor: Floor) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytemuck::bytes_of(&floor.area()).hash(&mut hasher);
+    hash_casters(frame, &mut hasher);
+    hasher.finish()
+}
+
+/// Every model's and marker's mesh, faces and placement, into `hasher`.
+pub(super) fn hash_casters(frame: &FrameInput<'_>, hasher: &mut DefaultHasher) {
     for draw in frame.models.iter().chain(frame.markers) {
-        (Arc::as_ptr(&draw.mesh) as usize).hash(&mut hasher);
-        draw.faces.hash(&mut hasher);
-        bytemuck::bytes_of(&draw.instance).hash(&mut hasher);
+        (Arc::as_ptr(&draw.mesh) as usize).hash(hasher);
+        draw.faces.hash(hasher);
+        bytemuck::bytes_of(&draw.instance).hash(hasher);
     }
     for draw in frame.reliefs {
-        (Arc::as_ptr(&draw.mesh) as usize).hash(&mut hasher);
-        bytemuck::bytes_of(&draw.instance).hash(&mut hasher);
+        (Arc::as_ptr(&draw.mesh) as usize).hash(hasher);
+        bytemuck::bytes_of(&draw.instance).hash(hasher);
     }
-    hasher.finish()
 }
 
 impl ViewportResources {

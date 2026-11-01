@@ -35,16 +35,6 @@ fn the_can_coin_ruler_and_pen_keep_their_real_size() {
 }
 
 #[test]
-fn the_figure_has_its_eyes_32_mm_over_its_base() {
-    let height = size_of(Material::Primer).z;
-    near(
-        height,
-        BASE_MM[1] + EYE_LEVEL_MM + EYE_LEVEL_MM / 12.0,
-        "figure's height",
-    );
-}
-
-#[test]
 fn the_banana_is_as_long_as_a_banana() {
     let steps = 200;
     let length: Scalar = (0..steps)
