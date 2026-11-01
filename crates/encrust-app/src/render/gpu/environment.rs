@@ -1,6 +1,5 @@
-//! The render view's studio as its reflections see it: worked out per direction, then baked
-//! once into an equirectangular map whose mips are prefiltered for rougher and rougher
-//! surfaces, as Karis's split sum does (UE4, 2013). See docs/design/viewport.md.
+//! The render view's studio as its reflections see it, baked once into an equirectangular
+//! map prefiltered by roughness per mip (Karis 2013). See docs/design/viewport.md.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -8,7 +7,7 @@ use super::*;
 
 pub(super) const ENVIRONMENT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// Texels of the sharpest mip, and how many mips, roughness 0.0 to 1.0 evenly between.
-/// Must match `ENVIRONMENT_MIPS` in shader.wgsl.
+/// Must match `ENVIRONMENT_MIPS` in studio.wgsl.
 const SIZE: [u32; 2] = [256, 128];
 pub(super) const MIPS: u32 = 6;
 

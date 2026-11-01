@@ -26,7 +26,7 @@ pub fn colour_field(ui: &mut Ui, rgba: &mut [u8; 4], name: &str) -> bool {
     paint_swatch(ui, rect, *rgba, response.hovered());
     super::focus_ring(ui, &response, theme::R_CONTROL);
     let hex = hex_of(*rgba);
-    let response = response.on_hover_text(format!("{name} {hex}"));
+    let response = response.on_hover_text(tr!("colour-swatch", name = name, hex = hex));
     super::popup_menu(&response)
         .gap(MENU_GAP)
         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)

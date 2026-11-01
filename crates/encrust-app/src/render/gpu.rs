@@ -19,6 +19,8 @@ mod clear;
 mod cost;
 mod draws;
 mod environment;
+#[cfg(test)]
+mod fixtures;
 mod globals;
 mod light;
 mod paint;

@@ -10,7 +10,7 @@ use super::*;
 pub(super) struct Globals {
     pub(super) view_projection: [[f32; 4]; 4],
     /// Its inverse: the render view's backdrop turns a pixel back into a line of sight.
-    inverse_view_projection: [[f32; 4]; 4],
+    pub(super) inverse_view_projection: [[f32; 4]; 4],
     /// The key light's view over the render view's set, which its shadow map is drawn in.
     key_view_projection: [[f32; 4]; 4],
     /// The lights and the ambient, from `theme::Lighting`; every `w` is unused padding.
@@ -24,16 +24,14 @@ pub(super) struct Globals {
     /// `zw` its size. `shadow_color.a` is how dark the shadow goes.
     shadow_area: [f32; 4],
     shadow_color: [f32; 4],
-    /// The colour the plate's own surface is filled with, over the same area, and the
-    /// grid drawn into it: `grid` is the minor and the major spacing, millimetres, and
-    /// 1.0 in `z` while the grid is shown.
+    /// The plate's fill over the same area and its grid: `grid` the minor and major spacing,
+    /// mm, and 1.0 in `z` while the grid is shown.
     plate_color: [f32; 4],
     grid_minor: [f32; 4],
     grid_major: [f32; 4],
     grid: [f32; 4],
-    /// `xyz` is where the camera stands, plate millimetres; `w` is how much of itself a
-    /// surface keeps at most while the models are drawn seen through, and 0.0 while they
-    /// are not. See `docs/design/viewport.md`.
+    /// `xyz` the camera, plate mm; `w` the most of itself a surface keeps while the models
+    /// are seen through, 0.0 while they are not. See `docs/design/viewport.md`.
     eye: [f32; 4],
     /// `x` is the height the models are cut at, plate millimetres, and `y` is 1.0 while
     /// there is a cut at all; `z` and `w` are the same for the cut from below.

@@ -9,7 +9,7 @@ use core_geometry::Mat4;
 use core_geometry::glam::Vec4;
 
 use super::globals::Globals;
-use super::shadow::hash_casters;
+use super::shadow::{hash_casters, hash_draw};
 use super::*;
 
 /// Frames averaged before the picture is held: enough that an edge has no step left.
@@ -48,9 +48,8 @@ pub(super) struct Lens {
     pub projection: Mat4,
 }
 
-/// `view_projection` seen from the `sample`-th point of `lens`'s aperture: the eye moved
-/// across it and the view sheared back so the plane in focus stands still. Averaged over the
-/// frames, what stands off it blurs.
+/// `view_projection` seen from the `sample`-th point of `lens`'s aperture, sheared back so
+/// the plane in focus stands still; averaged over the frames, what stands off it blurs.
 pub(super) fn through_lens(view_projection: Mat4, lens: &Lens, sample: u32) -> Mat4 {
     let out = halton(sample + 1, 5).sqrt() * lens.aperture_mm;
     let around = halton(sample + 1, 7) * std::f32::consts::TAU;
@@ -97,6 +96,24 @@ fn picture_of(
     hasher.finish()
 }
 
+/// Everything `frame` draws besides the globals, into `hasher`: the casters, and the lines,
+/// marks, label and cut surfaces a held picture would otherwise go on showing stale.
+fn hash_drawn(frame: &FrameInput<'_>, hasher: &mut DefaultHasher) {
+    hash_casters(frame, hasher);
+    for vertices in [frame.lines, frame.cap, frame.bottom_cap] {
+        bytemuck::cast_slice::<_, u8>(vertices).hash(hasher);
+    }
+    bytemuck::cast_slice::<_, u8>(frame.wide_lines).hash(hasher);
+    bytemuck::cast_slice::<_, u8>(frame.label).hash(hasher);
+    let cut = frame
+        .cut_surfaces
+        .iter()
+        .flat_map(|cut| [&cut.body, &cut.solid]);
+    for draw in frame.solids.iter().chain(cut) {
+        hash_draw(draw, hasher);
+    }
+}
+
 impl ViewportResources {
     /// Where the window hears how many frames the picture at rest has averaged.
     pub fn report_samples_to(&mut self, report: Arc<AtomicU32>) {
@@ -109,7 +126,7 @@ impl ViewportResources {
         let resting = frame.look.is_some() && !frame.light && self.reads_planes;
         let lens = self.frame.lens.as_ref();
         let picture =
-            resting.then(|| picture_of(globals, lens, |hasher| hash_casters(frame, hasher)));
+            resting.then(|| picture_of(globals, lens, |hasher| hash_drawn(frame, hasher)));
         let settling = &mut self.settling;
         settling.samples = match picture.is_some() && picture == settling.picture {
             true => settling.samples.saturating_add(1),
@@ -127,6 +144,7 @@ impl ViewportResources {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::vertex::WideLine;
 
     #[test]
     fn the_jitter_stays_inside_the_pixel_and_never_repeats_over_a_picture() {
@@ -179,6 +197,21 @@ mod tests {
         };
         let pinhole = picture_of(&globals, None, |_| {});
         assert_ne!(pinhole, picture_of(&globals, Some(&lens), |_| {}));
+    }
+
+    #[test]
+    fn marking_an_edge_starts_the_picture_at_rest_again() {
+        let globals = <Globals as bytemuck::Zeroable>::zeroed();
+        let ends = [core_geometry::Vec3::ZERO, core_geometry::Vec3::X];
+        let size = core_geometry::Vec2::new(800.0, 600.0);
+        let mark = [WideLine::new(ends, egui::Color32::RED, 2.0, size)];
+        let marked = FrameInput {
+            wide_lines: &mark,
+            ..fixtures::frame(&[])
+        };
+        let picture =
+            |frame: &FrameInput<'_>| picture_of(&globals, None, |hasher| hash_drawn(frame, hasher));
+        assert_ne!(picture(&fixtures::frame(&[])), picture(&marked));
     }
 
     #[test]

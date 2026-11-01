@@ -117,12 +117,17 @@ fn cast_by(frame: &FrameInput<'_>, floor: Floor) -> u64 {
     hasher.finish()
 }
 
+/// A draw's mesh, faces and placement, into `hasher`.
+pub(super) fn hash_draw(draw: &ModelDraw, hasher: &mut DefaultHasher) {
+    (Arc::as_ptr(&draw.mesh) as usize).hash(hasher);
+    draw.faces.hash(hasher);
+    bytemuck::bytes_of(&draw.instance).hash(hasher);
+}
+
 /// Every model's and marker's mesh, faces and placement, into `hasher`.
 pub(super) fn hash_casters(frame: &FrameInput<'_>, hasher: &mut DefaultHasher) {
     for draw in frame.models.iter().chain(frame.markers) {
-        (Arc::as_ptr(&draw.mesh) as usize).hash(hasher);
-        draw.faces.hash(hasher);
-        bytemuck::bytes_of(&draw.instance).hash(hasher);
+        hash_draw(draw, hasher);
     }
     for draw in frame.reliefs {
         (Arc::as_ptr(&draw.mesh) as usize).hash(hasher);
@@ -253,32 +258,8 @@ mod tests {
 
     fn frame(models: &[ModelDraw]) -> FrameInput<'_> {
         FrameInput {
-            view_projection: core_geometry::Mat4::IDENTITY,
-            eye: Vec3::Z,
-            section_mm: None,
-            lines: &[],
-            wide_lines: &[],
-            models,
-            markers: &[],
-            solids: &[],
-            cut_surfaces: &[],
-            cap: &[],
-            bottom_cut_mm: None,
-            bottom_cap: &[],
-            label: &[],
-            atlas: None,
-            cuts: &[],
-            pockets: &[],
-            reliefs: &[],
-            bands: &[],
-            band_floor_mm: 0.0,
-            volume_mm: None,
-            cut_line: None,
-            look: None,
-            xray: false,
             floor: Some(floor()),
-            grid: true,
-            light: false,
+            ..fixtures::frame(models)
         }
     }
 

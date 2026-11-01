@@ -28,7 +28,12 @@ impl ViewportResources {
         self.bake_key_shadow(encoder);
         self.bake_environment(encoder);
         self.measure_thickness(device, encoder, size_px, &viewport);
-        let occlusion = Occlusion::of(&viewport, self.frame.staged, self.frame.occlusion);
+        let occlusion = Occlusion::of(
+            &viewport,
+            self.frame.staged,
+            self.frame.occlusion,
+            self.frame.sample,
+        );
         self.target.occlude(queue, &occlusion);
         self.place(queue, &viewport);
         let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());
@@ -76,6 +81,12 @@ impl ViewportResources {
                 &self.globals,
                 at,
                 bytemuck::bytes_of(&moved.to_cols_array_2d()),
+            );
+            let at = std::mem::offset_of!(Globals, inverse_view_projection) as wgpu::BufferAddress;
+            queue.write_buffer(
+                &self.globals,
+                at,
+                bytemuck::bytes_of(&moved.inverse().to_cols_array_2d()),
             );
         }
     }

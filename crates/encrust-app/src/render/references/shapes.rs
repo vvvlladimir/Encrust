@@ -13,8 +13,7 @@ pub const CAN_RADIUS_MM: Scalar = 33.1;
 pub const CAN_HEIGHT_MM: Scalar = 115.2;
 /// Millimetres the lid sits under the rim.
 const LID_SUNK_MM: Scalar = 2.0;
-/// A ballpoint pen as long as a BIC Cristal, capped, and the radius of its cap, which it
-/// lies on: millimetres.
+/// A capped ballpoint pen's length and the radius of the cap it lies on: millimetres.
 pub const PEN_MM: Scalar = 149.5;
 pub const PEN_REST_MM: Scalar = 4.4;
 /// A ruler, millimetres: long, wide and thick, ticked every 5 mm and long at every 10.
@@ -23,7 +22,7 @@ const TICK_MM: Scalar = 5.0;
 const TICK_HALF_MM: Scalar = 0.25;
 const TICK_PROUD_MM: Scalar = 0.3;
 /// A banana: the radius of the arc its spine follows and the angles it runs between, and
-/// its greatest radius across. Must match `BANANA_FROM` and `BANANA_TO` in shader.wgsl.
+/// its greatest radius across. Must match `BANANA_FROM` and `BANANA_TO` in props.wgsl.
 pub const BANANA_ARC_MM: Scalar = 110.0;
 pub const BANANA_FROM: Scalar = 0.75;
 pub const BANANA_TO: Scalar = 2.39;

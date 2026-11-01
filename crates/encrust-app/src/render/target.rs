@@ -84,9 +84,8 @@ impl SceneTarget {
         queue.write_buffer(&self.occlusion, 0, bytemuck::bytes_of(occlusion));
     }
 
-    /// Begins a cleared pass over the planes, drawing into `viewport` of a window
-    /// `size_px` pixels large. The planes are remade whenever the window changes size.
-    /// `keep_depth` keeps the depth for a pass that resumes this one.
+    /// Begins a cleared pass over the planes, into `viewport` of a window `size_px` large,
+    /// remaking them when it resizes; `keep_depth` keeps depth for a pass resuming this one.
     pub fn begin(
         &mut self,
         device: &wgpu::Device,

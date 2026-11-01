@@ -420,18 +420,18 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   once, and again only when the theme's lights change, into a 256 × 128 equirectangular
   RGBA16Float map of six mips, mip *i* prefiltered for roughness *i*/5 by 128 GGX
   importance samples on Hammersley's sequence, the normal, the eye and the reflection taken
-  as one: Karis's split sum (UE4, 2013). A surface reads its reflection from the mip its
+  as one: Karis's split sum (2013). A surface reads its reflection from the mip its
   roughness picks, scaled by Karis's analytic fit of the environment BRDF (2014) in place
   of the split sum's table, and dimmed where the key's shadow falls; it reads the roughest
   mip about its normal as the light the room gives it, and adds the key's own light,
   wrapped round its edge, where the shadow lets it. A resin is 0.32 rough, 0.55 where its
   layers groove it; the props carry their own. All of it is summed in linear light
   (`radiance`: every colour token and resin decoded from gamma first) and handed to
-  `filmic`, AgX as Blender, three.js and Godot draw it — Rec. 2020 inset, log2 exposure
-  from −12.47 to +4.03 EV, the fitted sigmoid polynomial, outset — with a milder Punchy
-  look, the curve raised to 1.15, before it goes out in the target's gamma. AgX was chosen
-  over ACES for leaving a saturated resin's hue alone as it brightens. The backdrop goes
-  through the same curve; the working view does not.
+  `filmic`, AgX — Rec. 2020 inset, log2 exposure from −12.47 to +4.03 EV, the fitted
+  sigmoid polynomial, outset — with a milder punchy look, the curve raised to 1.15, before
+  it goes out in the target's gamma. AgX was chosen over ACES for leaving a saturated
+  resin's hue alone as it brightens. The backdrop goes through the same curve; the working
+  view does not.
 - **Layers.** `stepped` turns a surface's normal towards the stair a printer cuts it into:
   within each layer the share `|n.z| / (|n.xy| + |n.z|)` is a flat tread and the rest a
   vertical riser, so a wall shows only the lip line each layer leaves, a gentle slope the
@@ -446,12 +446,12 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   lobe, 0.12 wide along the layers and up to 0.67 across them.
 - **Thin parts glow.** At rest the thickness pass below runs for any resin, and the models
   are drawn by `glow_fragment` against it: light through a thin part, after Barré-Brisebois
-  and Bouchard (GDC 2011, Frostbite) — the key seen through the part, bent towards its
+  and Bouchard (GDC 2011) — the key seen through the part, bent towards its
   normal by 0.2, narrowed to the power of 4, over a little from all round — carried through
   `exp(−d / 2.5 mm)` of a part `d` thick, so an ear, a finger or an edge lights up in the
   resin's colour with the key behind it. The thickness stands in for the paper's baked
   local thickness. An open mesh, which measures none, does not glow.
-- **Clear resin.** Modelled after glTF's `KHR_materials_volume`, as three.js draws it, with
+- **Clear resin.** Modelled after glTF's `KHR_materials_volume`, with
   the surface the layers leave. A resin's opacity, picked with its colour, sets an
   attenuation distance *D* from 1 mm, barely clear, to 300 mm, water-clear
   (`1 · 300^clarity`). Two passes come before the frame. `measure_thickness` draws every
@@ -486,12 +486,13 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   while the camera moves, when the part is drawn opaque (ADR 0391).
 - **Creases.** At rest — no level settling, so not while the camera moves — the copy pass
   shades creases from the depth plane, which is kept past the scene pass for it, by
-  ground-truth ambient occlusion (Jimenez et al. 2016) as Intel's XeGTAO lays it out.
+  ground-truth ambient occlusion (Jimenez et al. 2016).
   `present.wgsl` rebuilds each pixel's point through the inverse projection and its normal
   from the shorter step to a neighbour, so a silhouette does not tear it; along three
-  slices turned by interleaved-gradient noise it finds the horizon both ways in four steps
-  each, spaced quadratically out to `REACH_MM` (4 mm) and at most 48 px, each sample's say
-  fading over the outer 61.5 % of the reach; and integrates the light the horizons let in
+  slices turned by interleaved-gradient noise, and a golden-ratio share of a turn more each
+  frame of a picture at rest, it finds the horizon both ways in four steps each, spaced
+  quadratically out to `REACH_MM` (4 mm) and at most 48 px, each sample's say fading over
+  the outer 61.5 % of the reach; and integrates the light the horizons let in
   over the arc the normal projected into the slice sees, cosine-weighted. It only ever
   darkens, in linear light. The paper's spatio-temporal denoise is the picture at rest:
   sixteen jittered frames average its noise away, so it has no blur pass of its own.
@@ -511,10 +512,9 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   out, as a lens vignettes.
 - **The set.** A self-healing cutting mat lies under the models, its top 0.05 mm under the
   plate's level so the models' contact shadow never fights it, and things everyone knows
-  the size of lie round them as Lychee's *At scale* lays them: in front, a ballpoint as long
-  as a BIC Cristal (149.5 mm) and a 100 mm steel ruler; on the left, a one-euro coin
-  (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the right, a banana swept
-  along a 110 mm arc, about 180 mm long. `references::lay_out` places them 20 mm clear of
+  the size of lie round them: in front, a 149.5 mm ballpoint and a 100 mm steel ruler; on
+  the left, a one-euro coin (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the
+  right, a banana swept along a 110 mm arc, about 180 mm long. `references::lay_out` places them 20 mm clear of
   the models' box seen from the front, each row on its own side so none can meet another,
   and picks the smallest mat sold, A3 to A0 either way round, that takes the whole set with
   a 30 mm margin, centred on it. Every mesh is built once from `core_geometry` primitives, a
@@ -533,7 +533,7 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   the mat and 60 mm past it, into a 2048² map: an A2 mat is 0.3 mm a texel. It is drawn
   only when what casts it changes and the camera rests, as the contact shadow is, so an
   orbit costs nothing; a map just made is cleared to all lit. It is read as percentage-closer
-  soft shadows (Fernando, NVIDIA 2005), the key a softbox 4° across: twelve probes 12 mm
+  soft shadows (Fernando 2005), the key a softbox 4° across: twelve probes 12 mm
   round a point find what stands nearer the key, each against the depth the point's own
   surface would have there, so a slope the key falls across is not taken for something over
   it (receiver plane depth bias); the penumbra is the depth under the nearest blockers
@@ -549,16 +549,16 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   itself. A clear resin casts none: it lets the key through, and what grounds it is the
   contact shadow.
 
-- **A picture at rest.** Once the camera stops, the render view sharpens over frames, as
-  three.js's `TAARenderPass` accumulates, with no reprojection: each frame is drawn a
-  fraction of a pixel aside, by Halton (2, 3) as TAA jitters, and averaged into an
-  RGBA16Float plane by a constant blend of `1/(n+1)` for the n-th, a running mean the copy
-  then shows. After sixteen frames the picture is held and nothing is drawn until it
-  changes; the window asks for a frame at a time until then. What it is a picture of is
-  hashed on the card — the whole uniform, the lens and every mesh, face range and placement
-  drawn — so
-  any change, not only the camera's, starts it again. Edges lose their steps, and the grain
-  of the crease shading, the frosting and the soft shadows averages away.
+- **A picture at rest.** Once the camera stops, the render view sharpens over frames, by
+  temporal accumulation with no reprojection: each frame is drawn a fraction of a pixel
+  aside, by Halton (2, 3) as TAA jitters — the backdrop's line of sight with it — and
+  averaged into an RGBA16Float plane by a constant blend of `1/(n+1)` for the n-th, a
+  running mean the copy then shows. After sixteen frames the picture is held and nothing is
+  drawn until it changes; the window asks for a frame at a time until then. What it is a
+  picture of is hashed — the whole uniform, the lens, every mesh, face range and placement
+  drawn, and every line, mark and label — so any change, not only the camera's, starts it
+  again. Edges lose their steps, and the grain of the crease shading, the frosting and the
+  soft shadows averages away.
 
 - **Depth of field.** With the View menu's *Depth of field*, a picture at rest is seen
   through a lens: each of its frames is drawn from another point of the aperture, by

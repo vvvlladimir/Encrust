@@ -17,9 +17,13 @@ pub(super) use models::{Models, Shaded, Studio};
 pub(super) use section::{Capping, Cutting, MATERIAL_ABOVE};
 pub(super) use shadow::{SHADOW_FORMAT, Shadowing};
 
-/// The viewport's shader, and the render view's props painted in a file of their own.
+/// The viewport's shader, the render view's light, resin and props, and the flat lines, each
+/// in a file of its own.
 const SHADER: &str = concat!(
     include_str!("../shader.wgsl"),
+    include_str!("../studio.wgsl"),
+    include_str!("../resin.wgsl"),
+    include_str!("../lines.wgsl"),
     include_str!("../props.wgsl")
 );
 

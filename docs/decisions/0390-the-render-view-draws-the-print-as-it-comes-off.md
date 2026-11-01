@@ -38,19 +38,31 @@ few pixels apart, and finer than that a roughness that spreads it across the lay
 The scene pass ends by laying every face of the clear models into it faintly, so walls
 inside a hollow read through.
 
-**Creases are shaded in the copy pass, from the depth plane, only while the camera rests.**
-The depth plane is kept past the scene pass for it; a moving camera keeps the plain copy.
+**Creases are shaded in the copy pass, from the depth plane, only while the camera rests**,
+by ground-truth ambient occlusion. The depth plane is kept past the scene pass for it; a
+moving camera keeps the plain copy.
 
-On a WebGL canvas the view draws opaque and unshaded: neither pass reads a plane there.
+**The light is summed in linear light and handed to AgX**, its studio a procedural room baked
+once into a prefiltered map (Karis's split sum), so reflections roughen with the surface;
+thin parts glow with the key behind them.
+
+**A picture at rest is averaged over sixteen jittered frames**, then held until anything it
+shows changes; that average is also the denoise of the creases, the frost and the soft
+shadows. With *Depth of field* each frame is drawn from another point of a lens focused on
+the models, so the set blurs with true occlusion and no post-process.
+
+On a WebGL canvas the view draws opaque and unshaded, with no key shadow, average or lens:
+none of these passes reads a plane there.
 
 ## Consequences
 
-The resin format gains a field; a reader that predates it ignores it. The clear view costs a
-second draw of every model, a second scene pass, a copy of the colour plane, and a
-window-sized half-float plane and colour copy, made on first use; the
-shading costs sixteen depth reads a pixel on a resting frame. The command line has nothing
-to show the view in, so it has no flag; it would need one if the view ever writes a picture.
-Reopen if a GPU without blendable R16Float or depth sampling turns up outside WebGL.
+The resin format gains a field; a reader that predates it ignores it. The clear view costs
+four draws of every model (ADR 0391), a copy of the colour plane, and window-sized
+half-float planes, made on first use and let go when the view is off; the crease shading
+costs 29 depth reads a pixel on a resting frame, and the average one more RGBA16Float plane.
+The command line has nothing to show the view in, so it has no flag; it would need one if
+the view ever writes a picture. Reopen if a GPU without blendable R16Float or depth sampling
+turns up outside WebGL.
 
 ## Alternatives considered
 
@@ -61,14 +73,14 @@ decisions first. References of known size answer the same question on every scre
 
 ### Photographed models of the desk's things
 
-Lychee's look, for a model format reader, compressed textures and megabytes in the
-repository and the web build; procedural shapes and materials ship nothing. Kept open: a
+The look of scanned props, for a model format reader, compressed textures and megabytes in
+the repository and the web build; procedural shapes and materials ship nothing. Kept open: a
 loader can come later behind its own decision, once the files are chosen.
 
 ### Image-based lighting from HDR environments
 
-The look of a product shot, for megabytes of assets and a prefiltering step; a sky gradient
-and two softboxes in the shader cost nothing to ship.
+The look of a product shot, for megabytes of assets; a sky and three softboxes worked out in
+the shader and prefiltered once on the card ship nothing.
 
 ### Order-independent transparency per surface
 
@@ -85,5 +97,5 @@ no WebGL canvas and few laptops afford.
 Thickness from one plane is exact for closed meshes only: an open or inverted mesh adds up
 to nonsense, clamped at zero. Refraction is read off one copy of the scene, so it bends
 only what is on screen and never one clear part seen through another, and it bends at the
-near face and at the first back face, not at every wall after. Shading creases from depth alone misses what the camera cannot
-see and grains at sixteen samples, accepted for no blur pass.
+near face and at the first back face, not at every wall after. Shading creases from depth
+alone misses what the camera cannot see, and its grain waits on the average to go.

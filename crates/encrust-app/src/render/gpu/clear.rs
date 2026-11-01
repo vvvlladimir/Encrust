@@ -64,9 +64,8 @@ impl Clear {
         }
     }
 
-    /// Begins a pass over the plane cleared to nothing crossed, drawing into `viewport` of a
-    /// window `size_px` pixels large, for a `clear` resin or an opaque one. The plane is remade
-    /// whenever either changes.
+    /// Begins a pass over the plane cleared to nothing crossed, into `viewport` of a window
+    /// `size_px` large, for a `clear` resin or an opaque one; either changing remakes it.
     pub(super) fn begin(
         &mut self,
         device: &wgpu::Device,

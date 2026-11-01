@@ -11,19 +11,20 @@ struct Occlusion {
     viewport: vec4<f32>,
     // x 1.0 while creases are shaded, y the reach in mm, z the strength.
     shading: vec4<f32>,
+    // x the share of a turn the slices are rotated by in this frame.
+    turn: vec4<f32>,
 };
 
 @group(0) @binding(2) var<uniform> occlusion: Occlusion;
 
-// Ground-truth ambient occlusion (Jimenez et al. 2016) as Intel's XeGTAO lays it out: a few
-// slices round each pixel, the horizon found both ways along each, and the light it lets
-// in integrated over the arc the normal sees. See docs/design/viewport.md.
+// Ground-truth ambient occlusion (Jimenez et al. 2016): horizons both ways along a few slices
+// round each pixel, integrated over the arc the normal sees. See docs/design/viewport.md.
 const SLICES = 3;
 const STEPS = 4;
 const PI_HALF = 1.5707963;
 // The most pixels a crease reaches across, so a close zoom costs no more than a far one.
 const MOST_REACH_PX = 48.0;
-// The share of the reach over which a sample's say fades out, as XeGTAO's falloff.
+// The share of the reach over which a sample's say fades out, as the paper's falloff.
 const FALLOFF_SHARE = 0.615;
 
 // One triangle covering the whole viewport; egui's viewport and scissor trim it.
@@ -76,7 +77,7 @@ fn enclosed(pixel: vec2<f32>, depth: f32) -> f32 {
     let falloff_mm = FALLOFF_SHARE * reach_mm;
     let falloff_mul = -1.0 / falloff_mm;
     let falloff_add = (reach_mm - falloff_mm) / falloff_mm + 1.0;
-    let turn = noise(pixel);
+    let turn = fract(noise(pixel) + occlusion.turn.x);
     let jitter = fract(turn * 7.31);
     var visible = 0.0;
     for (var slice = 0; slice < SLICES; slice = slice + 1) {

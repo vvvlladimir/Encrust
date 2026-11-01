@@ -40,10 +40,8 @@ pub(super) struct Draws {
 }
 
 impl Draws {
-    /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    /// `light` holds the lighter levels drawn in place of heavy meshes, `stand_in` a mesh
-    /// one model is drawn as in place of its own, `resin` the colour the render view draws
-    /// every model and support in.
+    /// `mark` is the overhang wash or `NOT_MARKED`; `light` the lighter levels, `stand_in` a
+    /// mesh one model is drawn as, `resin` the render view's colour for models and supports.
     pub(super) fn of(
         scene: &Scene,
         mark: f32,

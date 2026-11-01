@@ -606,6 +606,12 @@ dialog-close = Close  Esc
 list-hide = Hide in the view
 list-show = Show in the view
 
+## ui/widgets/colour.rs
+
+# Hover text of a colour swatch: what it colours, then its hex code.
+colour-swatch = { $name } { $hex }
+colour-opacity = Opacity { $percent }%
+
 ## panels/inspector/measure.rs
 
 measure-reading = Reading
@@ -1152,7 +1158,6 @@ resin-compensation = Compensation
 resin-cannot-save = cannot save the resin
 resin-cannot-rename = cannot rename the resin
 resin-colour = Colour
-colour-opacity = Opacity { $percent }%
 resin-per = per
 resin-per-kg = kg
 resin-per-litre = l

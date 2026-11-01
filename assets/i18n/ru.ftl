@@ -651,6 +651,11 @@ dialog-close = Закрыть  Esc
 list-hide = Скрыть в области просмотра
 list-show = Показать в области просмотра
 
+## ui/widgets/colour.rs
+
+colour-swatch = { $name } { $hex }
+colour-opacity = Непрозрачность { $percent }%
+
 ## panels/inspector/measure.rs
 
 measure-reading = Результат
@@ -1204,7 +1209,6 @@ resin-compensation = Компенсация
 resin-cannot-save = не удалось сохранить смолу
 resin-cannot-rename = не удалось переименовать смолу
 resin-colour = Цвет
-colour-opacity = Непрозрачность { $percent }%
 resin-per = за
 resin-per-kg = кг
 resin-per-litre = л
