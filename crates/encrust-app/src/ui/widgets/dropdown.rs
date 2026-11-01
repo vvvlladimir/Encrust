@@ -1,7 +1,10 @@
 //! Every list that drops from a box: the box that says what is chosen, the card the list
 //! hangs in, and a row of it. See `docs/design/ui-design-system.md`, Dropdown.
 
-use egui::{Align2, Color32, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType};
+use egui::{
+    Align2, Color32, PopupCloseBehavior, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo,
+    WidgetType,
+};
 use egui::{pos2, vec2};
 
 use super::chooser::{Lead, chooser_frame};
@@ -16,6 +19,8 @@ pub struct DropdownFace<'a> {
     pub label: &'a str,
     pub edited: bool,
     pub count: Option<usize>,
+    /// The list holds nothing: no caret, and a press opens nothing.
+    pub empty: bool,
 }
 
 impl<'a> DropdownFace<'a> {
@@ -26,7 +31,13 @@ impl<'a> DropdownFace<'a> {
             label,
             edited: false,
             count: None,
+            empty: false,
         }
+    }
+
+    /// The same face over a list that holds nothing while `empty`.
+    pub fn empty(self, empty: bool) -> Self {
+        Self { empty, ..self }
     }
 }
 
@@ -35,7 +46,12 @@ impl<'a> DropdownFace<'a> {
 pub fn dropdown(ui: &mut Ui, face: &DropdownFace<'_>, width: f32) -> Response {
     let colors = theme::colors();
     let size = vec2(width, theme::FIELD_H);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let sense = if face.empty {
+        Sense::hover()
+    } else {
+        Sense::click()
+    };
+    let (rect, response) = ui.allocate_exact_size(size, sense);
     let enabled = ui.is_enabled();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, enabled, face.label));
     let border = hover_mix(ui, &response, colors.hairline, colors.line);
@@ -47,14 +63,17 @@ pub fn dropdown(ui: &mut Ui, face: &DropdownFace<'_>, width: f32) -> Response {
         egui::Stroke::new(1.0, border),
         StrokeKind::Inside,
     );
-    let caret = painter.text(
-        pos2(rect.right() - PAD - GLYPH_W / 2.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        icon::CARET_DOWN,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    let mut right = caret.left() - GAP;
+    let mut right = rect.right() - PAD;
+    if !face.empty {
+        let caret = painter.text(
+            pos2(rect.right() - PAD - GLYPH_W / 2.0, rect.center().y),
+            Align2::CENTER_CENTER,
+            icon::CARET_DOWN,
+            theme::icon(14.0),
+            colors.text_low,
+        );
+        right = caret.left() - GAP;
+    }
     if let Some(count) = face.count {
         let at = pos2(right, rect.center().y);
         let figure = painter.text(
@@ -120,7 +139,23 @@ fn lead_at(painter: &egui::Painter, at: egui::Pos2, lead: &Lead<'_>) {
 
 /// The list under `response`, as wide as the box, in the card every dropdown hangs in.
 pub fn dropdown_menu<R>(response: &Response, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
+    menu(response, PopupCloseBehavior::CloseOnClick, add)
+}
+
+/// A [`dropdown_menu`] that a click inside leaves open, for a list headed by a field to
+/// type into; a row chosen closes it with `ui.close()`.
+pub fn dropdown_search_menu<R>(response: &Response, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
+    menu(response, PopupCloseBehavior::CloseOnClickOutside, add)
+}
+
+fn menu<R>(
+    response: &Response,
+    close: PopupCloseBehavior,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
     egui::Popup::menu(response)
+        .gap(MENU_GAP)
+        .close_behavior(close)
         .width(response.rect.width())
         .frame(chooser_frame())
         .show(|ui| {
@@ -207,6 +242,8 @@ const PAD: f32 = 10.0;
 const GLYPH_W: f32 = 14.0;
 const GAP: f32 = 8.0;
 const DOT_R: f32 = 4.5;
+/// Between a box and the list that drops from it, points.
+pub const MENU_GAP: f32 = 6.0;
 
 #[cfg(test)]
 mod tests {
@@ -225,5 +262,18 @@ mod tests {
                 .height();
         });
         assert_eq!((closed, row), (theme::FIELD_H, theme::FIELD_H));
+    }
+
+    #[test]
+    fn an_empty_dropdown_takes_no_press() {
+        let ctx = fixtures::context();
+        let mut senses = Vec::new();
+        fixtures::frame(&ctx, egui::RawInput::default(), |ui| {
+            for empty in [false, true] {
+                let face = DropdownFace::plain(icon::PRESET, "None").empty(empty);
+                senses.push(dropdown(ui, &face, 200.0).sense.senses_click());
+            }
+        });
+        assert_eq!(senses, [true, false]);
     }
 }

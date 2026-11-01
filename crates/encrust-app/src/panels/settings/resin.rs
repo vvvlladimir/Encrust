@@ -221,6 +221,7 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                 label: &shown,
                 edited: false,
                 count: None,
+                empty: false,
             };
             let response = dropdown(ui, &face, SMALL_DROPDOWN_W);
             dropdown_menu(&response, |ui| {
@@ -239,6 +240,7 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                 label: &details.currency,
                 edited: false,
                 count: None,
+                empty: false,
             };
             let response = dropdown(ui, &face, SMALL_DROPDOWN_W);
             dropdown_menu(&response, |ui| {

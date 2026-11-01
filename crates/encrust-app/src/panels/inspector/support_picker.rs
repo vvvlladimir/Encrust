@@ -3,7 +3,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::status::Status;
 use crate::ui::{
-    BinLook, DropdownFace, Lead, bin_button, chooser_frame, dropdown, hairline, theme,
+    BinLook, DropdownFace, Lead, MENU_GAP, bin_button, chooser_frame, dropdown, hairline, theme,
 };
 use crate::workspace::Tool;
 
@@ -15,9 +15,9 @@ use rows::{Act, Pick, Row, in_hand, presets, rows};
 use save::save_button;
 
 /// Height of one line of the list, points.
-const LINE_H: f32 = 26.0;
+const LINE_H: f32 = 32.0;
 /// How far the shapes of the automatic preset stand in under it, points.
-const SHAPE_INDENT: f32 = 16.0;
+const SHAPE_INDENT: f32 = 20.0;
 
 /// The preset in hand on one line under the card's heading: the picker that is also the
 /// list of groups standing, Save, and the bin. See `docs/decisions/0336`.
@@ -53,6 +53,7 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
         label: &hand.name,
         edited: hand.edited,
         count: (active.holds > 0).then_some(active.holds),
+        empty: false,
     };
     let response = dropdown(ui, &face, width);
     let list = List {
@@ -63,12 +64,13 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
     };
     let mut pick = None;
     egui::Popup::menu(&response)
+        .gap(MENU_GAP)
         .width(width + beside)
         .frame(chooser_frame())
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.set_min_width(width + beside - 12.0);
-            ui.spacing_mut().item_spacing.y = 1.0;
+            ui.spacing_mut().item_spacing.y = 0.0;
             pick = list.show(ui, &mut acts);
         });
     save_button(ui, window, &hand);
@@ -83,15 +85,16 @@ fn picker(ui: &mut egui::Ui, window: &mut Window) -> Vec<Act> {
 /// The count ending at `right`; answers where it begins.
 fn count_at(painter: &egui::Painter, right: f32, y: f32, count: usize) -> f32 {
     let low = theme::colors().text_low;
-    let galley = painter.layout_no_wrap(count.to_string(), theme::figures(11.5), low);
+    let galley = painter.layout_no_wrap(count.to_string(), theme::figures(12.0), low);
     let left = right - galley.size().x;
     painter.galley(egui::pos2(left, y - galley.size().y / 2.0), galley, low);
     left
 }
 
-/// The group's colour as a dot, faded while it is hidden.
+/// The group's colour as a dot, unfaded in the list, where a hidden group's eye says so.
 fn swatch(painter: &egui::Painter, center: egui::Pos2, row: &Row) {
-    painter.circle_filled(center, 4.5, tint(row));
+    let tint = theme::support_tint(row.group as usize);
+    painter.circle_filled(center, 4.0, tint);
 }
 
 /// The group's colour, faded while it is hidden.

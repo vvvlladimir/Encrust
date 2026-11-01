@@ -46,6 +46,7 @@ fn language(ui: &mut Ui, choice: &mut Option<Language>) {
         label: &shown,
         edited: false,
         count: None,
+        empty: false,
     };
     let response = dropdown(ui, &face, ui.available_width());
     dropdown_menu(&response, |ui| {

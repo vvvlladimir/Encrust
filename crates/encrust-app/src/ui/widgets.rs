@@ -31,7 +31,10 @@ pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
 };
 pub use confirm::{Confirm, any_armed, confirm_button};
-pub use dropdown::{DropdownFace, DropdownRow, dropdown, dropdown_menu, dropdown_row};
+pub use dropdown::{
+    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
+    dropdown_search_menu,
+};
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
     number_row, picker_row, row_name, stepped_row, text_box, text_row, unit_field,
