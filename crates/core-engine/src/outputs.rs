@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn a_dot_in_the_typed_name_keeps_the_plates_apart() {
-        let outputs = plate_outputs(Path::new("/tmp/my.part.goo"), &[(0, "A"), (1, "B")]);
+        let outputs = plate_outputs(Path::new("/tmp/my.part.goo"), &typed(&[(0, "A"), (1, "B")]));
         assert_eq!(outputs[0].1, PathBuf::from("/tmp/my.part-a.goo"));
         assert_eq!(outputs[1].1, PathBuf::from("/tmp/my.part-b.goo"));
     }
