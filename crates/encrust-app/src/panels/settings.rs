@@ -25,7 +25,6 @@ use crate::status::Status;
 use crate::ui::theme::layout::settings::BLOCK_PAD;
 pub(super) use crate::ui::theme::layout::settings::{FIND_GAP, GROUP_GAP};
 use crate::ui::window_frame as frame;
-use crate::ui::{HELP_D, SWITCH_TRACK, block_title, page_title, page_trail};
 use crate::ui::{
     Inline, NAV_ROW_H, NavAside, chooser_group, find_line, hairline, icon, icon_button,
     inline_button, nav_row, quiet_button, theme,

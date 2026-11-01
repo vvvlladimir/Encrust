@@ -93,10 +93,6 @@ fn paint_cell(ui: &Ui, cell: Rect, corner: CornerRadius, figure: &Figure<'_>) {
     }
 }
 
-<<<<<<< HEAD
-/// `figure` at `scale`, each run of letters in it — `m`, `s` of `17m26s`, `ч` of `12 ч` — set
-/// as a unit beside the numbers; the catalogue's spaces give way to one `UNIT_GAP`.
-=======
 /// `figure` laid out to fit `room`: at its own size, or shrunk as a whole until it does, so a
 /// long time in a long language is smaller rather than cut; with its height at its own size,
 /// which the shrunk one stands on the bottom of.
@@ -123,9 +119,8 @@ fn unit_w(painter: &egui::Painter, unit: &str) -> f32 {
     unit.size().x + VALUE_UNIT_GAP
 }
 
-/// `figure` with each run of letters in it — `m`, `s` of `17m26s` — set as a unit beside
-/// the numbers, both at `scale` of their own size.
->>>>>>> b137045b (fix(ui): write a time as one run without ≈ and shrink a figure to fit its cell)
+/// `figure` at `scale`, each run of letters in it — `m`, `s` of `17m26s`, `ч` of `12 ч` — set
+/// as a unit beside the numbers; the catalogue's spaces give way to one `UNIT_GAP`.
 fn figure_job(figure: &str, scale: f32) -> egui::text::LayoutJob {
     let colors = theme::colors();
     let scaled = |font: egui::FontId| egui::FontId::new(font.size * scale, font.family);
@@ -136,34 +131,22 @@ fn figure_job(figure: &str, scale: f32) -> egui::text::LayoutJob {
         let end = rest
             .find(|c: char| c.is_whitespace() || c.is_alphabetic() != letters)
             .unwrap_or(rest.len());
-        let (mut font, color) = if letters {
+        let (font, color) = if letters {
             (theme::small(), colors.text_low)
         } else {
             (theme::figure(), colors.text_high)
         };
-<<<<<<< HEAD
-=======
-        font.size *= scale;
->>>>>>> b137045b (fix(ui): write a time as one run without ≈ and shrink a figure to fit its cell)
         let leading = if job.is_empty() {
             0.0
         } else {
             UNIT_GAP * scale
         };
-<<<<<<< HEAD
         let format = egui::TextFormat::simple(scaled(font), color);
         job.append(&rest[..end], leading, format);
         rest = rest[end..].trim_start();
-=======
-        job.append(&rest[..end], leading, egui::TextFormat::simple(font, color));
-        rest = &rest[end..];
->>>>>>> b137045b (fix(ui): write a time as one run without ≈ and shrink a figure to fit its cell)
     }
     job
 }
-
-/// The least a figure is shrunk to fit its cell before the cell clips it.
-const LEAST_FIGURE_SCALE: f32 = 0.6;
 
 /// Room between a figure and a unit inside it (`17 m 26 s`), and the unit after it, points.
 const UNIT_GAP: f32 = 3.0;

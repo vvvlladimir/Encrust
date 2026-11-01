@@ -376,14 +376,14 @@ pub fn share_figure(ui: &mut Ui, text: &str) {
 /// A [`share_figure`]'s size, points.
 const SHARE_PT: f32 = 22.0;
 
-<<<<<<< HEAD
-/// A form block's title, quieter than the fields under it, wrapped short of the `beside`
-/// points kept for what stands after it.
-pub fn block_title(ui: &mut Ui, title: &str, beside: f32) {
+/// A form block's title, quieter than the fields under it, wrapped within its column rather
+/// than widening it, the room for `beside` points after it kept: its question mark and switch.
+pub fn block_title_in(ui: &mut Ui, title: &str, beside: f32) {
     let mid = theme::colors().text_mid;
     let title = RichText::new(title).font(theme::block_title()).color(mid);
-    let width = (ui.available_width() - beside).max(0.0);
-    ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+    let room = (ui.available_width() - beside).max(0.0);
+    ui.allocate_ui_with_layout(vec2(room, 0.0), Layout::top_down(Align::Min), |ui| {
+        ui.set_max_width(room);
         ui.add(Label::new(title).wrap());
     });
 }
@@ -396,30 +396,16 @@ pub fn paragraph(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> Response {
         .with_main_justify(false)
         .with_cross_justify(false);
     ui.with_layout(layout, |ui| ui.label(text)).inner
-=======
-/// A form block's title, quieter than the fields under it.
-fn block_title(ui: &mut Ui, title: &str) {
-    let mid = theme::colors().text_mid;
-    let text = RichText::new(title).font(theme::block_title()).color(mid);
-    ui.add(egui::Label::new(text).wrap());
-}
-
-/// A form block's title in its column, wrapped within it rather than widening it, the room
-/// for `beside` points after it kept: its question mark and its switch.
-pub fn block_title_in(ui: &mut Ui, title: &str, beside: f32) {
-    let room = (ui.available_width() - beside).max(0.0);
-    let layout = egui::Layout::top_down(egui::Align::Min);
-    ui.allocate_ui_with_layout(egui::vec2(room, 0.0), layout, |ui| {
-        ui.set_max_width(room);
-        block_title(ui, title);
-    });
->>>>>>> 2eb7c53d (fix(settings): wrap a long form block title inside its column so the fields stay aligned)
 }
 
 /// A glyph saying how a message stands, in `tint`, before its words.
 pub fn status_glyph(ui: &mut Ui, glyph: &str, tint: egui::Color32) {
-<<<<<<< HEAD
-    paragraph(ui, RichText::new(glyph).font(theme::icon(16.0)).color(tint));
+    paragraph(
+        ui,
+        RichText::new(glyph)
+            .font(theme::icon(theme::glyph::BUTTON))
+            .color(tint),
+    );
 }
 
 #[cfg(test)]
@@ -459,7 +445,7 @@ mod tests {
         let mut drawn = None;
         fixtures::frame(&ctx, egui::RawInput::default(), |ui| {
             ui.allocate_ui(vec2(theme::BLOCK_TITLE_W, 200.0), |ui| {
-                ui.horizontal_top(|ui| block_title(ui, title, 24.0));
+                ui.horizontal_top(|ui| block_title_in(ui, title, 24.0));
                 drawn = Some(ui.min_rect().width());
             });
         });
@@ -470,11 +456,4 @@ mod tests {
             theme::BLOCK_TITLE_W - 24.0
         );
     }
-=======
-    ui.label(
-        RichText::new(glyph)
-            .font(theme::icon(theme::glyph::BUTTON))
-            .color(tint),
-    );
->>>>>>> 3fa75409 (refactor(ui): draw every glyph and corner from named theme tokens)
 }

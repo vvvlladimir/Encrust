@@ -70,7 +70,7 @@ pub use layout::{
     HELP_D, address_label, block_title_in, body_and_foot, boxed, busy, card, card_foot, card_title,
     describe, described, describing, dialog, dialog_head, empty_state, field_note, figure_line,
     file_line, hairline, heading, help_mark, hint, inset, meta, mode_column, mode_group, name_line,
-    nested, notice, page_heading, page_title, page_trail, palette_dialog, progress_bar,
+    nested, notice, page_heading, page_title, page_trail, palette_dialog, paragraph, progress_bar,
     progress_bar_of, readings, share_figure, state_word, status_dot, status_glyph, step_bar,
     subheading, subheading_with_switch, title_line, tool_title, verdict_card, vertical_hairline,
 };

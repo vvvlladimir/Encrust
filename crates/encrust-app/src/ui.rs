@@ -9,6 +9,7 @@ pub mod kept;
 pub mod theme;
 mod widgets;
 
+pub use widgets::paragraph;
 pub use widgets::window_frame;
 pub use widgets::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
@@ -45,10 +46,6 @@ pub use widgets::{
     Figure, ZoomPress, details_fold, figure_grid, small_icon_button, split_readings, tag, zoom_bar,
 };
 pub use widgets::{HELP_D, SWITCH_W};
-pub use widgets::{
-    HELP_D, SWITCH_TRACK, address_label, block_title, figure_line, page_title, paragraph,
-    state_word, status_glyph, tool_title, verdict_card,
-};
 pub use widgets::{
     LAYER_HANDLE, LAYER_RISK_HOT, LAYER_RISK_REACH, LayerMark, LayerMarks, PROFILE_PITCH,
     paint_layer_track, span_fraction, up,

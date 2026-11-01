@@ -52,15 +52,10 @@ disabled with one sentence why; the way to change that is offered once per panel
 - **Voice:** a resin printer user's words, actions as verbs, no internals, no "please" or "!".
 - **Typography:** `×`, `µm`, `°`, `–` for ranges; figures through `theme::figures`.
 - **Length:** a card is its column's width in every language; a name longer than its room
-<<<<<<< HEAD
-  is cut with an ellipsis and read whole on hover, never widening the card; a block's title
-  wraps inside its column.
-- **Wrapped text** goes through `paragraph`, never `ui.label`: in a justified layout — a
-  popup, a menu — egui spreads the letters of each wrapped line across its width.
-=======
   is cut with an ellipsis and read whole on hover, never widening the card. A form block's
   title wraps inside its column, so every block's fields start on one line.
->>>>>>> b137045b (fix(ui): write a time as one run without ≈ and shrink a figure to fit its cell)
+- **Wrapped text** goes through `paragraph`, never `ui.label`: in a justified layout — a
+  popup, a menu — egui spreads the letters of each wrapped line across its width.
 
 ## Numbers
 

@@ -115,24 +115,6 @@ pub fn chooser_row(ui: &mut Ui, row: &ChooserRow<'_>) -> Response {
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-fn paint_lead(painter: &egui::Painter, at: egui::Pos2, lead: Lead<'_>) {
-    match lead {
-        Lead::Glyph(glyph) => {
-            let low = theme::colors().text_low;
-            painter.text(
-                at,
-                Align2::CENTER_CENTER,
-                glyph,
-                theme::icon(theme::glyph::BUTTON),
-                low,
-            );
-        }
-        Lead::Dot(tint) => {
-            painter.circle_filled(at, DOT_R, tint);
-        }
-    }
-}
-
 /// What stands left of the tick, its right edge at `right_at`.
 fn paint_aside(painter: &egui::Painter, right_at: egui::Pos2, aside: Option<Aside<'_>>) {
     match aside {
