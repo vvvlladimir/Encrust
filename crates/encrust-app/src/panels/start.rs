@@ -490,10 +490,10 @@ fn kind(file: &RecentFile) -> String {
     }
 }
 
-/// The file's picture as a texture, read from disk once a window. A file without one is
-/// remembered as having none, so the folder is not asked again every frame.
+/// The file's picture as a texture, read from disk once a window and theme. A file without
+/// one is remembered as having none, so the folder is not asked again every frame.
 fn picture(ctx: &egui::Context, path: &std::path::Path) -> Option<egui::TextureHandle> {
-    let id = egui::Id::new(("recent-picture", path));
+    let id = egui::Id::new(("recent-picture", path, ctx.theme()));
     if let Some(known) = ctx.data(|data| data.get_temp::<Option<egui::TextureHandle>>(id)) {
         return known;
     }
@@ -505,9 +505,9 @@ fn picture(ctx: &egui::Context, path: &std::path::Path) -> Option<egui::TextureH
     texture
 }
 
-/// The test print's picture as a texture, rendered from its mesh once a window.
+/// The test print's picture as a texture, rendered from its mesh once a window and theme.
 fn sample_picture(ctx: &egui::Context, index: usize) -> egui::TextureHandle {
-    let id = egui::Id::new(("sample-picture", index));
+    let id = egui::Id::new(("sample-picture", index, ctx.theme()));
     if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
         return texture;
     }
