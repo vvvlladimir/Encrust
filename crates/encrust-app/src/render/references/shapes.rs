@@ -18,8 +18,8 @@ const LID_SUNK_MM: Scalar = 2.0;
 /// A capped ballpoint pen's length and the radius of the cap it lies on: millimetres.
 pub const PEN_MM: Scalar = 149.5;
 pub const PEN_REST_MM: Scalar = 4.4;
-/// A ruler, millimetres: long, wide and thick, ticked every 5 mm and long at every 10.
-pub const RULER_MM: [Scalar; 3] = [100.0, 12.0, 1.2];
+/// A 150 mm steel rule, millimetres: long, wide and thick, ticked every 5 mm and long at every 10.
+pub const RULER_MM: [Scalar; 3] = [150.0, 13.0, 0.5];
 const TICK_MM: Scalar = 5.0;
 const TICK_HALF_MM: Scalar = 0.25;
 const TICK_PROUD_MM: Scalar = 0.3;

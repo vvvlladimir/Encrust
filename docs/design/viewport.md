@@ -512,7 +512,7 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   out, as a lens vignettes.
 - **The set.** A self-healing cutting mat lies under the models, its top 0.05 mm under the
   plate's level so the models' contact shadow never fights it, and things everyone knows
-  the size of lie round them: in front, a 149.5 mm ballpoint and a 100 mm steel ruler; on
+  the size of lie round them: in front, a 149.5 mm ballpoint and a 150 mm steel ruler; on
   the left, a one-euro coin (23.25 × 2.33 mm) and a 330 ml can (⌀ 66.2 × 115.2 mm); on the
   right, a banana swept along a 110 mm arc, about 180 mm long. `references::lay_out` places them 20 mm clear of
   the models' box seen from the front, each row on its own side so none can meet another,
