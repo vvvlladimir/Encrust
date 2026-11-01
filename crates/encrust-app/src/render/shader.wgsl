@@ -322,14 +322,63 @@ fn studio(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> v
     return finish(base, 0.0, alpha, normal, world);
 }
 
+// The same over a printed surface whose layers, too fine to see, groove it by `grooves`:
+// its reflections stretch across them, a satin sheen, as KHR_materials_anisotropy bends the
+// normal it reflects about towards the direction of the stretch.
+fn studio_grooved(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>, grooves: f32) -> vec3<f32> {
+    let view = normalize(globals.eye.xyz - world);
+    let bent = bent_by_layers(normal, view, grooves);
+    let sheen = layer_sheen(normal, view, world, grooves) * alpha;
+    return filmic(radiance(linear_of(base), 0.0, alpha, normal, bent, world) + sheen);
+}
+
+// The key's highlight off the grooves, Ward's anisotropic lobe: narrow along the layers,
+// stretched across them by how deep they groove. Its share of the key, and its widths.
+const SHEEN_SHARE = 0.35;
+const SHEEN_ALONG = 0.12;
+const SHEEN_ACROSS = 0.55;
+
+fn layer_sheen(normal: vec3<f32>, view: vec3<f32>, world: vec3<f32>, grooves: f32) -> vec3<f32> {
+    let across = across_layers(normal);
+    let key = normalize(-globals.key_towards.xyz);
+    let lit = dot(normal, key);
+    if (grooves <= 0.0 || dot(across, across) < 0.5 || lit <= 0.0) {
+        return vec3<f32>(0.0);
+    }
+    let along = cross(across, normal);
+    let half_way = normalize(key + view);
+    let width_across = SHEEN_ALONG + SHEEN_ACROSS * grooves;
+    let up = max(dot(half_way, normal), 1e-3);
+    let spread = pow(dot(half_way, along) / SHEEN_ALONG, 2.0) + pow(dot(half_way, across) / width_across, 2.0);
+    let lobe = exp(-spread / (up * up)) / (4.0 * 3.14159265 * SHEEN_ALONG * width_across * sqrt(lit * max(dot(normal, view), 1e-3)));
+    let reaches = key_reaches(world, normal);
+    return linear_of(globals.key_color.rgb) * SHEEN_SHARE * grooves * lobe * lit * reaches;
+}
+
+// How far the layers' grooves bend the normal a reflection is taken about, at their most.
+const SHEEN_BEND = 0.65;
+
+// KHR_materials_anisotropy's bent normal: towards the one facing the eye in the plane the
+// grooves stretch the light in, up the surface across the layers.
+fn bent_by_layers(normal: vec3<f32>, view: vec3<f32>, grooves: f32) -> vec3<f32> {
+    let stretch = across_layers(normal);
+    if (grooves <= 0.0 || dot(stretch, stretch) < 0.5) {
+        return normal;
+    }
+    let along = cross(stretch, view);
+    let facing = cross(along, stretch);
+    return normalize(mix(normal, facing, grooves * SHEEN_BEND));
+}
+
 // A surface under the studio: `metal` 0.0 for a dielectric, whose reflection is white, to
 // 1.0 for a metal, which has no diffuse and reflects in its own colour; `shine` scales both.
 fn finish(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    return filmic(radiance(linear_of(base), metal, shine, normal, world));
+    return filmic(radiance(linear_of(base), metal, shine, normal, normal, world));
 }
 
-// The light leaving a surface of linear colour `base` under the studio, before the curve.
-fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+// The light leaving a surface of linear colour `base` under the studio, before the curve:
+// lit about `normal`, reflecting about `reflecting`, which grooves may bend away from it.
+fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, reflecting: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     let view = normalize(globals.eye.xyz - world);
     let key = normalize(-globals.key_towards.xyz);
     let fill = normalize(-globals.fill_towards.xyz);
@@ -343,9 +392,9 @@ fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: v
         + key_colour * STUDIO_KEY * wrapped(dot(normal, key)) * reaches
         + sky * STUDIO_TOP * wrapped(normal.z)
         + linear_of(globals.fill_color.rgb) * FILL_SHARE * max(dot(normal, fill), 0.0);
-    let mirror = reflect(-view, normal);
+    let mirror = reflect(-view, reflecting);
     let boxes = key_colour * softbox(mirror, key) * reaches + sky * 0.6 * softbox(mirror, top);
-    let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
+    let grazing = pow(1.0 - max(dot(reflecting, view), 0.0), 5.0);
     let tint = mix(vec3<f32>(1.0), base, metal);
     let fresnel = mix(vec3<f32>(0.04), base, metal) + (1.0 - mix(vec3<f32>(0.04), base, metal)) * grazing;
     let seen = mix(ground, sky, mirror.z * 0.5 + 0.5);
@@ -354,9 +403,9 @@ fn radiance(base: vec3<f32>, metal: f32, shine: f32, normal: vec3<f32>, world: v
 }
 
 // Whichever light the frame is under: the working view's or the render view's studio.
-fn shade(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+fn shade(base: vec3<f32>, alpha: f32, normal: vec3<f32>, world: vec3<f32>, grooves: f32) -> vec3<f32> {
     if (globals.look.y > 0.5) {
-        return studio(base, alpha, normal, world);
+        return studio_grooved(base, alpha, normal, world, grooves);
     }
     return lit(base, alpha, normal, world);
 }
@@ -675,7 +724,8 @@ fn model_colour(in: ModelFragment, front_facing: bool) -> vec4<f32> {
         if (!front_facing) {
             shaded = mix(base, globals.inside_color.rgb, SECTION_WASH);
         }
-        shaded = shade(shaded, in.color.a, normal, in.world) * layered.w;
+        let grooves = layer_roughness(outward) * smoothstep(LAYER_FADE_FROM, LAYER_FADE_TO, per_px);
+        shaded = shade(shaded, in.color.a, normal, in.world, grooves) * layered.w;
     }
     // The token arrives premultiplied, so the wash scales colour and alpha alike and the
     // result stays premultiplied for the blend.
@@ -825,7 +875,7 @@ fn clear_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     let body = seen * tint * (1.0 - clouded) + colour.rgb * clouded;
     let grazing = pow(1.0 - max(dot(normal, view), 0.0), 5.0);
     let reflected = 0.04 + 0.96 * grazing;
-    let shine = studio(vec3<f32>(0.0), 1.0, normal, in.world);
+    let shine = studio_grooved(vec3<f32>(0.0), 1.0, normal, in.world, rough);
     return vec4<f32>(body * (1.0 - reflected) + shine, 1.0);
 }
 
@@ -870,7 +920,7 @@ fn marker_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool)
         }
         base = mix(base, globals.inside_color.rgb * in.color.a, SECTION_WASH);
     }
-    return vec4<f32>(shade(base, in.color.a, normal, in.world), in.color.a);
+    return vec4<f32>(shade(base, in.color.a, normal, in.world, 0.0), in.color.a);
 }
 
 // How much of itself a surface keeps when the models are drawn seen through: least where

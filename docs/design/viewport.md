@@ -420,6 +420,11 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   smooth surface between `LAYER_FADE_FROM` and `LAYER_FADE_TO` layers a pixel, under about
   four pixels a layer, where a stair would only beat against the pixel grid. The overhang
   test still reads the smooth normal.
+  Layers too fine to see still groove the surface, and the grooves stretch its highlight
+  across them, a satin sheen. As glTF's `KHR_materials_anisotropy` does it, reflections are
+  taken about a normal bent towards the one facing the eye in the plane across the layers,
+  by the layers' roughness (below) times `SHEEN_BEND`; and the key adds Ward's anisotropic
+  lobe, 0.12 wide along the layers and up to 0.67 across them.
 - **Clear resin.** Modelled after glTF's `KHR_materials_volume`, as three.js draws it, with
   the surface the layers leave. A resin's opacity, picked with its colour, sets an
   attenuation distance *D* from 1 mm, barely clear, to 300 mm, water-clear
