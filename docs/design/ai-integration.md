@@ -1,7 +1,8 @@
 # AI integration
 
-How a language model takes a model from its file to a checked printer file through Encrust:
-in Claude Desktop, ChatGPT and other chat clients, and later from inside the window. A
+How a language model takes a model from its file to a checked printer file through Encrust,
+on the user's computer: driven from a chat client over MCP, or from inside the window.
+Nothing runs on encrust.app. A
 proposal: the decisions it needs are listed at the end and get their ADRs once taken.
 
 ## The shape
@@ -11,9 +12,8 @@ orchestrates; every geometric choice — a pose, a wall, a hole, a tip — is th
 strict check decides when the work is done.
 
 ```
- Claude Desktop, Claude Code, Cursor ── stdio ──> encrust-mcp ─────────┐
- ChatGPT, claude.ai, mobile ── HTTPS ──> encrust.app Worker            │
-                                           └──> Container: encrust-mcp --http
+ Claude Desktop, Claude Code, Codex, Cursor ── stdio ──> encrust-mcp ──┐
+                                        └── or into the open window ───┤
  the window's agent panel ── in process ───────────────────────────────┤
                                                                        v
                                  agent-tools: the catalogue, its schemas, the plate state
@@ -23,8 +23,7 @@ strict check decides when the work is done.
 
 `agent-tools` holds what every transport shares, so a tool behaves the same in every client
 and the window (rule 9 of `architecture.md` extended to the model as a third front end).
-`encrust-mcp` is the MCP server over it: stdio for a desktop client, Streamable HTTP for the
-site.
+`encrust-mcp` is the MCP server over it, on stdio.
 
 ## The tools
 
@@ -54,8 +53,8 @@ MCP 2026-07-28 is stateless: no session, any request on any instance. A plate is
 named in every call by a handle, and the handle is a `.encrust` project revision — it
 already holds the shells and the support trees as they stand (ADR 0191). Each editing tool
 returns a new revision, which gives undo and lets any instance serve the next call; a
-process caches the opened plate by revision so a chain of calls does not reopen it. Locally
-a revision is a file beside the model; on the site it is an object in R2.
+process caches the opened plate by revision so a chain of calls does not reopen it. A
+revision is a file beside the model.
 
 ## Engine work first
 
@@ -80,49 +79,40 @@ building without them.
 
 ## The transports
 
-### On the user's computer
+### From a chat client
 
 `encrust-mcp` as a binary over stdio, packed as an `.mcpb` bundle per platform
 (`server.type = "binary"`) for a double-click install in Claude Desktop; Claude Code,
-Cursor, Codex and LM Studio take the same binary from their config. The files are the
-user's own paths, the compute is free, and it is the only transport that reaches a printer
-on the user's network, so `send` exists here alone. ChatGPT does not take stdio servers.
+Codex, Cursor and LM Studio take the same binary from their config. The files are the
+user's own paths and the printer is on the user's network. The client runs the agent loop
+on the user's own plan, so a subscription to Claude or ChatGPT is all it takes: this is the
+way a subscription reaches Encrust (see Providers).
 
-### On encrust.app
+When the window is open, `encrust-mcp` hands each call to it over a local socket instead of
+running it alone, so every step lands in the viewport and on the undo stack as the client
+makes it. With no window it runs the engine itself.
 
-A Worker cannot run the engine: an isolate has 128 MB, and a hollowed one-million-face
-figure took 257 MB of wasm memory (`web-build.md`, measured 2026-10-03). The site splits
-the work:
-
-- **The Worker** is the MCP endpoint: OAuth for the user (client ID metadata documents,
-  dynamic registration for older clients), uploads and outputs in R2 behind signed URLs,
-  limits per user, and the routing of each heavy call to a container.
-- **A Container** runs `encrust-mcp --http`, native and on every core: `standard-4` has
-  4 vCPU and 12 GiB. A job of 30 s on 4 cores and 12 GiB costs about half a cent at the
-  published rates; a cold start adds seconds, and a container sleeps when idle.
-- **Files.** A model does not fit in a tool's arguments. ChatGPT hands the widget a file
-  (`uploadFile`) and the tool a reference; elsewhere the widget uploads to a signed R2
-  URL. The result is a download link; the printer is reached by the local server or the
-  window.
-
-### Inside the chat, on the user's machine
-
-MCP Apps (SEP-1865, stable since 2026-01-26, shown by Claude and ChatGPT) lets a tool
-return a `ui://` page that the client renders in a sandboxed frame. That frame can show the
-plate in 3D, findings marked, and could run `web-engine` itself: one thread, so it needs no
-cross-origin isolation, and the compute costs the site nothing. Unknown until tried: whether
-each client's frame policy allows `'wasm-unsafe-eval'`, how much memory a frame gets, and
-`web-engine` slicing only a finished project today. A spike decides before anything rests
-on it.
+An MCP Apps page (SEP-1865, `ui://`, shown by Claude and ChatGPT) can show the plate in 3D
+with its findings beside the chat; the local server serves it. Optional, after the tools.
 
 ### In the window
 
 An agent panel in `encrust-app` runs the same catalogue in process on the plate that is
 open, so each step lands in the viewport and on the undo stack, and runs on the job
-threads the window already uses, never on the page's thread in a browser. The provider is
-the user's: the Anthropic Messages API with tool use, or any OpenAI-compatible endpoint,
-which covers local models (Ollama, LM Studio). A key lives in the system's keychain; the
-browser build reaches a provider through the site's Worker so no key sits in the page.
+threads the window already uses, never on the page's thread in a browser. Its provider is one of those below.
+
+### Providers
+
+| Provider | Needs | In the window | Over MCP |
+|---|---|---|---|
+| A Claude subscription | Claude Desktop or Claude Code | no: Anthropic lets no other product sign in with it | yes |
+| A ChatGPT subscription | Codex, or ChatGPT's desktop app | only through OpenAI's own "Sign in with ChatGPT" for apps, once its terms are read | yes |
+| An API key | Anthropic, OpenAI or any OpenAI-compatible service | yes, the key in the system's keychain | yes |
+| A local model | Ollama or LM Studio | yes, no key and no account | yes |
+
+The window never borrows a client's login token, nor drives an installed Claude Code as
+its engine: neither is a route its maker offers. A small local model calls tools less
+reliably, which the autopilot covers: it asks the model only what the engine cannot settle.
 
 ## What keeps it safe
 
@@ -131,9 +121,7 @@ browser build reaches a provider through the site's Worker so no key sits in the
 - `write` passes only a clean `check` unless the user accepts what it names; `send` waits
   for a person's confirmation in every client.
 - The agent loop and every retry have a stated bound; each tool can be cancelled.
-- A foreign file is read as `hostile-files.md` says; on the site each job runs in its own
-  container with size and time limits.
-- The served program offers its source, as the web build does for the AGPL.
+- A foreign file is read as `hostile-files.md` says.
 
 ## How quality is measured
 
@@ -155,9 +143,9 @@ procedure it is measured with.
 | 5 | The catalogue and plate revisions | `agent-tools` | 1 |
 | 6 | The stdio server and its bundle | `encrust-mcp` | 5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` | 4, 6 |
-| 8 | The site: Worker, Container, OAuth, R2 | `encrust-mcp --http`, the site repository | 6 |
-| 9 | The chat widget; the client-side compute spike | `encrust-mcp`, `web-engine` | 6 |
-| 10 | The window's agent panel | `encrust-app` | 5 |
+| 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |
+| 9 | The window's agent panel and its providers | `encrust-app` | 5 |
+| 10 | The MCP Apps page | `encrust-mcp` | 6 |
 
 Steps 1, 2 and 3 touch separate crates and run in parallel; 8, 9 and 10 likewise once 6
 stands.
@@ -183,8 +171,7 @@ stands.
    Recommended: additive, no new schema number.
 3. **The plate handle:** a `.encrust` revision. Recommended: yes; it exists and the window
    opens it.
-4. **Hosting:** Cloudflare Containers beside the site, on the Workers Paid plan, or a host
-   outside Cloudflare. Recommended: Containers, one account and one bill.
-5. **Compute in the chat's frame:** a spike only, until it runs in both clients.
-6. **The window's provider:** the user's key, Anthropic and OpenAI-compatible.
-   Recommended: yes, local models included.
+4. **The window as the server's engine:** a local socket the open window listens on.
+   Recommended: yes, after the stdio server works alone.
+5. **The window's providers:** an API key and local models first; "Sign in with ChatGPT"
+   once OpenAI's terms for apps are confirmed.
