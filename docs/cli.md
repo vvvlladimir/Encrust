@@ -547,8 +547,12 @@ else on the `PATH`, else `--encrust PATH` — and answers with its report (ADR 0
 are kept under the user's cache directory, or `--jobs DIR`.
 
 ```sh
+cargo xtask mcpb                                        # target/mcpb/encrust-<platform>.mcpb
 claude mcp add encrust -- /path/to/encrust-mcp          # Claude Code
 ```
+
+The bundle carries both binaries for the platform it is built on; Claude Desktop installs it
+by a double click or from Settings, Extensions.
 
 Claude Desktop takes it in `claude_desktop_config.json`, Codex in `~/.codex/config.toml`:
 

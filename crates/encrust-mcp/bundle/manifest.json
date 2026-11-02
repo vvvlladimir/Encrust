@@ -1,0 +1,37 @@
+{
+  "manifest_version": "0.3",
+  "name": "encrust",
+  "display_name": "Encrust",
+  "version": "{{version}}",
+  "description": "Prepare a 3D model for an MSLA resin printer: orient, hollow, drain, support, check and write the printer file.",
+  "long_description": "Encrust is an offline resin slicer. This extension lets Claude drive it on your computer: every tool runs the encrust command line on your own files, profiles and printers on your network. Exposure comes from your own resin profiles only.",
+  "author": { "name": "Encrust contributors" },
+  "homepage": "https://encrust.app",
+  "repository": { "type": "git", "url": "https://github.com/vvvlladimir/Encrust" },
+  "license": "AGPL-3.0-only",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/encrust-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/encrust-mcp",
+      "args": [],
+      "platform_overrides": {
+        "win32": { "command": "${__dirname}/server/encrust-mcp.exe", "args": [] }
+      }
+    }
+  },
+  "tools": [
+    { "name": "list_profiles", "description": "The printers, your resins and the support profiles" },
+    { "name": "inspect_model", "description": "What a model file is and what is wrong with it" },
+    { "name": "start_job", "description": "Starts preparing a model for a printer and resin" },
+    { "name": "set_pose", "description": "Orients the model, by the search or a turn" },
+    { "name": "set_hollow", "description": "Hollows the model, with or without infill" },
+    { "name": "set_drains", "description": "Drills drain holes into the cavity" },
+    { "name": "set_supports", "description": "Builds the supports the model stands on" },
+    { "name": "check", "description": "Checks a revision as it would print" },
+    { "name": "revert", "description": "Returns to an earlier revision" },
+    { "name": "write_file", "description": "Writes the printer file" },
+    { "name": "send_to_printer", "description": "Sends a written file to a printer on your network" }
+  ],
+  "compatibility": { "platforms": ["{{platform}}"] }
+}
