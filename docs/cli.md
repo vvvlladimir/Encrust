@@ -89,6 +89,8 @@ left corner after placement — the frame `--drain-at` takes — so a script can
 `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
 `supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model.
+`cured.clipped_layers`, present only when some did, counts the layers that ran past the panel
+and were cut off their masks.
 No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
 `auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
 `drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,
@@ -654,7 +656,8 @@ tool_timeout_sec = 1800
 resin — ids or TOML paths — and answers with the job and its first revision checked.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
 `estimate --check-drainage` and keep it as the next revision only if the command line took
-it; edits to one job wait for each other. A new pose clears the drains. `check` reads any
+it; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
+proven drain and vent per pocket; a new pose clears drain points given by hand. `check` reads any
 revision again and `revert` copies one forward. `write_file` slices a revision under
 `--strict` unless `accept_defects`, and answers `written: false` as a tool error when nothing
 was written; `send_to_printer` is `printer send`. `render` draws a revision with `encrust render` —

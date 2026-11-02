@@ -87,10 +87,12 @@ impl Server {
         let edited = self.edit(&set.job, &ctx, |recipe| {
             let had_drains = recipe
                 .drains
-                .take()
-                .is_some_and(|drains| !drains.at_mm.is_empty());
+                .as_mut()
+                .is_some_and(|drains| !std::mem::take(&mut drains.at_mm).is_empty());
             recipe.pose = set.pose;
-            had_drains.then_some("the drains were cleared: their points were on the old pose")
+            had_drains.then_some(
+                "the drain points were cleared: they were on the old pose; automatic drains stay",
+            )
         });
         Ok(answer(edited.await))
     }

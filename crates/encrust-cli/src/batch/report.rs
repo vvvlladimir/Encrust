@@ -217,6 +217,9 @@ pub struct Cured {
     pub likely_fails_layer: Option<usize>,
     /// Every risk counted above, located, in print order.
     pub risks: Vec<RiskAt>,
+    /// Layers that reached past the panel and were cut off the mask; absent when none did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clipped_layers: Option<usize>,
 }
 
 impl Cured {
@@ -243,6 +246,7 @@ impl Cured {
             islands_removed_layers: measured.removed_layers(),
             likely_fails_layer: measured.worst().map(|risk| risk.layer + 1),
             risks: frame.risks(measured),
+            clipped_layers: None,
         }
     }
 }
@@ -325,7 +329,10 @@ fn cured_of(outcome: &Outcome) -> Option<Cured> {
             panel: &raster.settings,
             plan: outcome.slice.plan(),
         };
-        Cured::of(&raster.measured, frame)
+        Cured {
+            clipped_layers: (raster.clipped_layers > 0).then_some(raster.clipped_layers),
+            ..Cured::of(&raster.measured, frame)
+        }
     })
 }
 
@@ -540,6 +547,7 @@ mod tests {
                 islands_removed_layers: 0,
                 likely_fails_layer: None,
                 risks: Vec::new(),
+                clipped_layers: None,
             }),
         }
     }

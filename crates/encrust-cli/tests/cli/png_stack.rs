@@ -240,3 +240,46 @@ fn without_a_profile_the_panel_is_unknown_and_no_masks_are_written() {
     assert!(!stdout(&output).contains("masks"));
     assert!(!out.exists());
 }
+
+#[test]
+fn the_report_says_how_many_layers_ran_off_the_display() {
+    // As above: 30 mm on a 20 mm panel whose build volume is 40, so only the masks say so.
+    let path = write_box_stl("raster-oversized-json", 30.0, 12, 0);
+    let out = output_dir("clipped-json");
+    let output = encrust(&[
+        "--json",
+        "slice",
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "5",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let report = json(&output);
+    assert_eq!(report["status"], "unclean");
+    assert_eq!(
+        report["cured"]["clipped_layers"], 6,
+        "six 5 mm layers in 30 mm: {report}"
+    );
+}
+
+#[test]
+fn a_model_drawn_whole_reports_no_clipped_layer() {
+    let path = write_box_stl("raster-fits-json", 10.0, 12, 0);
+    let out = output_dir("unclipped-json");
+    let output = encrust(&[
+        "--json",
+        "slice",
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "5",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let report = json(&output);
+    assert!(report["cured"]["clipped_layers"].is_null(), "{report}");
+}

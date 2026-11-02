@@ -45,7 +45,7 @@ pub struct JobRef {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SetPose {
     pub job: String,
-    /// Absent stands the model as its file does. A new pose clears the drains.
+    /// Absent stands the model as its file does. A new pose clears drain points, not `auto`.
     pub pose: Option<Pose>,
 }
 
