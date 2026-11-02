@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::VolumeError;
 use channel::tunnel;
 
+mod carried;
 mod channel;
 mod reach;
 
