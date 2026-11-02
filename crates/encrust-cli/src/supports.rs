@@ -16,14 +16,16 @@ pub struct SupportReport {
     /// Where each contact touches the model, plate coordinates, millimetres.
     pub contacts: Vec<Vec3>,
     pub standing: usize,
+    /// The contacts the run found but could not stand a column under, plate millimetres.
+    pub unheld: Vec<Vec3>,
     pub trees: usize,
     pub faces: usize,
 }
 
 impl SupportReport {
-    /// Contacts the run found but could not stand a column under.
+    /// How many contacts the run found but could not stand a column under.
     pub fn unsupported(&self) -> usize {
-        self.contacts.len().saturating_sub(self.standing)
+        self.unheld.len()
     }
 }
 
@@ -67,10 +69,16 @@ pub fn stand_under(
     };
     let stood =
         stand(model, plan, layer_height_mm).context("cannot stand supports under the model")?;
+    let unheld = stood
+        .unheld
+        .iter()
+        .filter_map(|&contact| stood.contacts.get(contact).copied())
+        .collect();
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,
         contacts: stood.contacts,
         standing: stood.standing,
+        unheld,
         trees: stood.trees,
         faces: stood.supports.faces.len(),
     };

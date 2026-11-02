@@ -42,6 +42,23 @@ impl PixelSpace {
         }
         Vec2::new(x, y)
     }
+
+    /// The inverse of `map` in millimetres: a point `panel_mm` off the first pixel, back on
+    /// the plate.
+    pub(crate) fn plate_mm(&self, panel_mm: Vec2) -> Vec2 {
+        let px = panel_mm / self.pitch;
+        let x = if self.mirror_x {
+            self.width_px - px.x
+        } else {
+            px.x
+        };
+        let y = if self.mirror_y {
+            self.height_px - px.y
+        } else {
+            px.y
+        };
+        Vec2::new(x, y) * self.pitch
+    }
 }
 
 #[cfg(test)]
@@ -90,6 +107,30 @@ mod tests {
         assert!(!space(true, true).reverses_winding(), "two reflections");
         assert!(space(true, false).reverses_winding());
         assert!(space(false, true).reverses_winding());
+    }
+
+    #[test]
+    fn a_point_read_off_a_panel_mirrored_in_x_comes_back_across_the_plate() {
+        // 1 mm off the first pixel of a 10 mm wide panel drawn mirrored is 9 mm from the left.
+        let found = space(true, false).plate_mm(Vec2::new(1.0, 2.0));
+        assert!(
+            (found - Vec2::new(9.0, 2.0)).length() < 1e-5,
+            "expected (9, 2) mm, found {found}"
+        );
+    }
+
+    #[test]
+    fn a_plate_point_drawn_then_read_back_is_where_it_was_on_every_panel() {
+        let plate = Vec2::new(2.5, 3.1);
+        for (mirror_x, mirror_y) in [(false, false), (true, false), (false, true), (true, true)] {
+            let space = space(mirror_x, mirror_y);
+            let panel_mm = space.map(plate) * Vec2::new(0.1, 0.1);
+            let found = space.plate_mm(panel_mm);
+            assert!(
+                (found - plate).length() < 1e-5,
+                "mirrored {mirror_x}, {mirror_y}: expected (2.5, 3.1) mm, found {found}"
+            );
+        }
     }
 
     #[test]

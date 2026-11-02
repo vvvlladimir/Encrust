@@ -139,14 +139,7 @@ pub(super) fn as_seen(settings: &RasterSettings) -> RasterSettings {
 /// Where on the plate a risk measured on this panel stands, `at_mm` being millimetres from
 /// the first pixel of the picture `as_seen` lays out.
 pub fn on_plate(settings: &RasterSettings, at_mm: [f32; 2]) -> core_geometry::Vec2 {
-    let seen = as_seen(settings);
-    let across = |mirrored: bool, at: f32, px: u32, pitch: f32| {
-        if mirrored { px as f32 * pitch - at } else { at }
-    };
-    core_geometry::Vec2::new(
-        across(seen.mirror_x, at_mm[0], seen.width_px, seen.pitch.x),
-        across(seen.mirror_y, at_mm[1], seen.height_px, seen.pitch.y),
-    )
+    as_seen(settings).plate_mm(at_mm)
 }
 
 impl Preview {
