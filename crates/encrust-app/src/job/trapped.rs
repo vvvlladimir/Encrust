@@ -189,37 +189,39 @@ fn look_through(
         looked.layers.store(layers, Relaxed);
         !stop.load(Relaxed)
     })
-    .map_err(|error| {
-        anyhow::Error::new(error)
-            .chain()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(": ")
-    })?;
+    .map_err(flattened)?;
     let Some(found) = read else {
         return Err(tr!("drain-cancelled"));
     };
+    Ok(into_model(found, task.transform))
+}
 
-    let matrix = task.transform.to_matrix();
+/// `error` with its causes in one line, as the window has no terminal.
+pub(super) fn flattened(error: core_engine::EngineError) -> String {
+    anyhow::Error::new(error)
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(": ")
+}
+
+/// Pockets found on the plate brought back into the own space of a model placed by
+/// `transform`, so they travel with it; none for a placement flat to nothing.
+pub(super) fn into_model(found: Vec<Trapped>, transform: Transform) -> Vec<Trapped> {
+    let matrix = transform.to_matrix();
     if matrix.determinant().abs() < f32::EPSILON {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let inverse = matrix.inverse();
-    let volume = task
-        .transform
-        .linear()
-        .determinant()
-        .abs()
-        .max(f32::EPSILON);
-
-    Ok(found
+    let volume = transform.linear().determinant().abs().max(f32::EPSILON);
+    found
         .into_iter()
         .map(|found| Trapped {
             at: inverse.transform_point3(found.at),
             volume_mm3: found.volume_mm3 / volume,
             bounds: carried(&found.bounds, inverse),
         })
-        .collect())
+        .collect()
 }
 
 /// `bounds` taken through `matrix` as the box of its own eight corners, so a pocket of a

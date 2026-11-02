@@ -107,7 +107,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size; a click on the model places one); Already done | Hollow |
-| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon); Plugs | Check drainage; running, `step_bar` with Looking for trapped resin and Cancel |
+| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon); Plugs | Check drainage, companion Auto (`companion_button`, the auto glyph), always with a vent as the command line's default; running, `step_bar` with Looking for trapped resin or Looking for drain holes and Cancel |
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |

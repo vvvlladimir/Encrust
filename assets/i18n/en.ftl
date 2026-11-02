@@ -1566,6 +1566,10 @@ drain-check = Check drainage
 drain-check-tooltip = Cuts the plate and follows the air through it, looking for resin with no way out.
 drain-checking = Checking drainage
 drain-cancelled = Drainage check cancelled
+# A word in the tight companion button beside Check drainage: drills the holes found for you.
+drain-auto = Auto
+drain-auto-tooltip = Looks for a drain hole and a vent for each pocket of trapped resin in the picked models, and drills those a new check proves to drain it.
+drain-auto-looking = Looking for drain holes
 drain-hole = Hole
 drain-channel = Channel
 drain-channel-note = Each click adds a point; the channel takes the hole's width and outline and runs under all of them, open at its two ends alone.
@@ -2143,6 +2147,10 @@ job-thread-stopped-network = the network thread stopped without finishing
 job-send-starting = Starting { $printer }
 job-send-connecting = Connecting to { $printer }
 
+## job/drains.rs
+
+job-thread-stopped-drain-search = the drain hole search thread stopped without finishing
+
 ## job/trapped.rs
 
 job-thread-stopped-drainage = the drainage thread stopped without finishing
@@ -2171,6 +2179,26 @@ drain-found =
         [0] No trapped resin: everything can drain
         [one] { $count } pocket of trapped resin
        *[other] { $count } pockets of trapped resin
+    }
+
+## drain/auto.rs
+
+drain-auto-cancelled = Drain hole search cancelled
+drain-auto-drilled =
+    { $count ->
+        [0] No hole drilled
+        [one] { $count } hole drilled
+       *[other] { $count } holes drilled
+    }
+drain-auto-trapped =
+    { $count ->
+        [one] { $count } pocket has no hole that drains it and stays red.
+       *[other] { $count } pockets have no hole that drains them and stay red.
+    }
+drain-auto-moved =
+    { $count ->
+        [one] { $count } model changed while the search ran and got no hole.
+       *[other] { $count } models changed while the search ran and got no hole.
     }
 
 ## exchange.rs
