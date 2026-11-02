@@ -12,12 +12,18 @@ use crate::pick::Shown;
 use crate::scene::{ObjectId, Scene};
 use crate::ui::theme;
 
+/// Most pieces of one pair's seam drawn: a seam past it covers the models anyway, and each
+/// piece is uploaded every frame. A duplicate in place cuts some hundred thousand.
+const SEAM_PIECES_MAX: usize = 10_000;
+
 /// The models last found to meet, and the search under way.
 #[derive(Default)]
 pub struct Meeting {
     /// What stood on the plate when `met` was found, as `Scene::standing_fingerprint` reads it.
     found_for: Option<u64>,
     met: Vec<Met>,
+    /// The seam every pair cuts, at most [`SEAM_PIECES_MAX`] pieces of each, plate mm.
+    seam: Vec<[Vec3; 2]>,
     run: Option<Run>,
     /// The pairs the last presses asked for and how many there were, so the next press on
     /// them goes on to the next place and a press on others starts at their first.
@@ -25,11 +31,10 @@ pub struct Meeting {
     flight: Option<Spot>,
 }
 
-/// Two models that meet, each place they do and the seam their faces cut, plate mm.
+/// Two models that meet and each place they do, plate mm.
 struct Met {
     ids: [ObjectId; 2],
     places: Vec<Aabb>,
-    seam: Vec<[Vec3; 2]>,
 }
 
 struct Run {
@@ -52,6 +57,7 @@ impl Meeting {
         let (owners, bodies) = bodies_of(scene);
         if owners.len() < 2 {
             self.met.clear();
+            self.seam.clear();
             self.found_for = Some(asked_for);
             return;
         }
@@ -72,21 +78,29 @@ impl Meeting {
             return true;
         };
         self.found_for = Some(run.asked_for);
+        self.seam = met
+            .iter()
+            .flat_map(|meeting| drawn(&meeting.seam_mm))
+            .collect();
         self.met = met
             .into_iter()
             .map(|meeting| Met {
                 ids: meeting.owners.map(|owner| run.owners[owner]),
                 places: meeting.places_mm,
-                seam: meeting.seam_mm,
             })
             .collect();
         self.run = None;
         false
     }
 
+    /// Whether the answer was found for the plate as it stands, not one searched again.
+    fn stands(&self, scene: &Scene) -> bool {
+        self.found_for == Some(scene.standing_fingerprint())
+    }
+
     /// The meetings found for the plate as it stands, none while it is searched again.
     fn current(&self, scene: &Scene) -> &[Met] {
-        match self.found_for == Some(scene.standing_fingerprint()) {
+        match self.stands(scene) {
             true => &self.met,
             false => &[],
         }
@@ -110,11 +124,15 @@ impl Meeting {
     /// The seam every pair of models cuts, traced in red over them in every tool, as far as
     /// the section leaves them `shown`.
     pub fn highlight(&self, scene: &Scene, shown: Shown) -> Highlight {
-        let seam: Vec<[Vec3; 2]> = self
-            .current(scene)
-            .iter()
-            .flat_map(|met| met.seam.iter().filter_map(|&ends| shown.part_of(ends)))
-            .collect();
+        let seam: Vec<[Vec3; 2]> = match (self.stands(scene), shown == Shown::default()) {
+            (false, _) => Vec::new(),
+            (true, true) => self.seam.clone(),
+            (true, false) => self
+                .seam
+                .iter()
+                .filter_map(|&ends| shown.part_of(ends))
+                .collect(),
+        };
         let edges = (!seam.is_empty()).then(|| EdgeMark {
             edges: seam,
             colour: theme::scene().meets,
@@ -166,6 +184,13 @@ impl Meeting {
         }
         panic!("the plate was still being searched after ten seconds");
     }
+}
+
+/// What is drawn of one pair's `seam`: an even spread of at most [`SEAM_PIECES_MAX`] pieces.
+fn drawn(seam: &[[Vec3; 2]]) -> impl Iterator<Item = [Vec3; 2]> + '_ {
+    seam.iter()
+        .copied()
+        .step_by(seam.len().div_ceil(SEAM_PIECES_MAX).max(1))
 }
 
 /// Each printable model of the plate being edited, by its place in the answer, and its

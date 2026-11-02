@@ -140,3 +140,21 @@ fn a_model_moved_apart_is_not_named_while_the_plate_is_searched_again() {
         "20 mm on, they stand apart"
     );
 }
+
+#[test]
+fn a_seam_past_the_budget_is_drawn_as_an_even_spread_within_it() {
+    let seam: Vec<[Vec3; 2]> = (0..25_000)
+        .map(|piece| {
+            let at = Vec3::X * piece as f32;
+            [at, at + Vec3::Y]
+        })
+        .collect();
+    let shown: Vec<[Vec3; 2]> = drawn(&seam).collect();
+    assert_eq!(shown.len(), 8_334, "every third of 25 000 pieces");
+    assert_eq!(shown[1][0].x, 3.0, "spread along the seam, not its head");
+    assert_eq!(
+        drawn(&seam[..10]).count(),
+        10,
+        "a seam within it is drawn whole"
+    );
+}

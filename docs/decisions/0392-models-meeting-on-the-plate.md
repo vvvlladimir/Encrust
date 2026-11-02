@@ -37,7 +37,8 @@ A `Bvh` or `Winding` a caller does not hand in is built the first time a pair ne
 
 **The window traces the seam in the scene's `meets` red, in every tool**: each segment two
 crossing faces cut each other along, between the points where the edges of each pierce
-the other, drawn as the Repair tool's marked edges are, a line a few pixels wide pulled a
+the other, an even spread of at most 10 000 a pair, as a duplicate in place cuts some
+hundred thousand, drawn as the Repair tool's marked edges are, a line a few pixels wide pulled a
 hair towards the eye, cut where the section cuts the models and left out of the render
 view, which shows the print and not its faults. The Check tool lists each pair that meets under *On the plate*, with
 the models past the build volume or in the inset, before any layer is read, and the

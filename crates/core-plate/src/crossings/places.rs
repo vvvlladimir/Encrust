@@ -10,31 +10,34 @@ const ONE_PLACE_MM: Scalar = 1.0;
 
 /// The box round each run of `seam` whose pieces stand within [`ONE_PLACE_MM`] of the next.
 pub(super) fn places(seam: &[[Vec3; 2]]) -> Vec<Aabb> {
-    let mut by_cell: FastMap<[i32; 3], Vec<u32>> = FastMap::default();
-    for (index, ends) in seam.iter().enumerate() {
-        for end in ends {
-            by_cell
-                .entry(cell_of_point(*end, ONE_PLACE_MM))
-                .or_default()
-                .push(index as u32);
-        }
+    // Cells are joined, not pieces: a dense seam holds hundreds of pieces a cell, which
+    // joined pairwise cost their square.
+    let mut cells: FastMap<[i32; 3], u32> = FastMap::default();
+    let ends_in: Vec<[u32; 2]> = seam
+        .iter()
+        .map(|ends| {
+            ends.map(|end| {
+                let next = cells.len() as u32;
+                *cells
+                    .entry(cell_of_point(end, ONE_PLACE_MM))
+                    .or_insert(next)
+            })
+        })
+        .collect();
+    let mut runs = Components::new(cells.len());
+    for &[from, to] in &ends_in {
+        runs.union(from, to);
     }
-    let mut runs = Components::new(seam.len());
-    for (index, ends) in seam.iter().enumerate() {
-        let near = ends
-            .iter()
-            .flat_map(|end| cells_around(cell_of_point(*end, ONE_PLACE_MM)))
-            .filter_map(|cell| by_cell.get(&cell))
-            .flatten();
-        for &other in near {
-            runs.union(index as u32, other);
+    for (&cell, &index) in &cells {
+        for &near in cells_around(cell).filter_map(|around| cells.get(&around)) {
+            runs.union(index, near);
         }
     }
     let mut boxes: FastMap<u32, Aabb> = FastMap::default();
-    for (index, [from, to]) in seam.iter().enumerate() {
+    for ([from, to], [cell, _]) in seam.iter().zip(&ends_in) {
         let piece = Aabb::new(from.min(*to), from.max(*to));
         boxes
-            .entry(runs.find(index as u32))
+            .entry(runs.find(*cell))
             .and_modify(|run| run.merge(&piece))
             .or_insert(piece);
     }
@@ -68,6 +71,22 @@ mod tests {
         assert_eq!(
             (places[1].mins, places[1].maxs),
             (Vec3::new(10.0, 0.0, 0.0), Vec3::new(10.0, 0.0, 0.5))
+        );
+    }
+
+    #[test]
+    fn pieces_in_cells_side_by_side_are_one_place_and_a_cell_apart_are_two() {
+        let piece = |x: f32| [Vec3::new(x, 0.5, 0.5), Vec3::new(x + 0.1, 0.5, 0.5)];
+        let places = places(&[piece(0.1), piece(1.5), piece(3.5)]);
+        assert_eq!(
+            places.len(),
+            2,
+            "cells 0 and 1 touch, cell 3 is past the empty cell 2: {places:?}"
+        );
+        assert_eq!(
+            (places[0].mins.x, places[0].maxs.x),
+            (0.1, 1.6),
+            "the first place spans x = 0.1..1.6 mm"
         );
     }
 }
