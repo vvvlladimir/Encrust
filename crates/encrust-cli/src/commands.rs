@@ -8,6 +8,7 @@ mod info;
 mod inspect;
 mod printer;
 mod profiles;
+mod render;
 pub mod slice;
 
 use std::io::IsTerminal;
@@ -27,6 +28,7 @@ pub use info::InfoCommand;
 pub use inspect::InspectCommand;
 pub use printer::PrinterCommand;
 pub use profiles::ProfilesCommand;
+pub use render::RenderCommand;
 pub use slice::SliceCommand;
 
 /// Slice meshes for MSLA resin printers.
@@ -107,6 +109,9 @@ pub enum Command {
     Batch(BatchCommand),
     /// Load and repair a model and say what was found, without slicing it.
     Inspect(InspectCommand),
+    /// Draw the plate as `slice` would build it, from the sides asked for, as PNG pictures
+    /// with points marked.
+    Render(RenderCommand),
     /// Open a sliced file, print what it states and decode every layer, or take one out.
     Info(InfoCommand),
     /// Write a sliced file again in another container, for a machine with the same panel.
@@ -126,7 +131,11 @@ impl Command {
     /// shell's own Ctrl-C, so the first press ends it.
     pub fn watches_stop(&self) -> bool {
         match self {
-            Self::Slice(_) | Self::Estimate(_) | Self::Batch(_) | Self::Convert(_) => true,
+            Self::Slice(_)
+            | Self::Estimate(_)
+            | Self::Render(_)
+            | Self::Batch(_)
+            | Self::Convert(_) => true,
             Self::Printer(command) => matches!(command, PrinterCommand::Send(_)),
             Self::Inspect(_) | Self::Info(_) | Self::Profiles(_) | Self::Completions(_) => false,
         }
@@ -154,6 +163,7 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Estimate(command) => command.run(global, stop),
         Command::Batch(command) => command.run(global, stop),
         Command::Inspect(command) => command.run(global),
+        Command::Render(command) => command.run(global, stop),
         Command::Info(command) => command.run(global),
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
