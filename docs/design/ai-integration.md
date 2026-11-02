@@ -41,7 +41,8 @@ catalogue moves into a crate of its own when the window's panel needs it too.
 | `render` | pictures from each side, the check's findings marked | `render --mark` | read |
 | `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
 
-Still to come: a suggested drain from step 2, and `prepare`, the autopilot of step 4. An
+Still to come: `prepare`, the autopilot of step 4. `set_drains` with `auto` drills the drains
+step 2 proves. An
 edit is kept only if the command line took it; every finding is located (ADR 0394), so the
 next call can act on it.
 
@@ -133,12 +134,12 @@ procedure it is measured with.
 
 | Step | What | Where | After |
 |---|---|---|---|
-| 1 | Located findings in the report | `core-analysis`, `core-supports`, `encrust-cli` | — |
+| 1 | Located findings in the report | `core-raster`, `core-engine`, `encrust-cli` (done, ADR 0394) | — |
 | 2 | Suggested drains, `--drain-at auto` | `core-volume`, `core-engine`, `encrust-cli` (done, ADR 0396; the window's Auto to come) | — |
-| 3 | Views with markers, `encrust render` | `core-thumbnail`, `encrust-cli` | — |
+| 3 | Views with markers, `encrust render` | `core-thumbnail`, `encrust-cli` (done) | — |
 | 4 | The autopilot, `encrust prepare` | `core-engine`, `encrust-cli` | 1, 2 |
 | 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0395) | — |
-| 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` | 1–5 |
+| 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` (1–3 and the bundle done) | 1–5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` | 4, 6 |
 | 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 6 |
