@@ -4,16 +4,15 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use core_engine::{PREPARE_REPAIR, hollowing, needs_repair};
 use core_geometry::{
     Aabb, Mat3, MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
     remove_duplicate_faces,
 };
-use core_volume::{
-    Cancel, HollowSettings, Progress, RepairSettings, VolumeError, hollowing_saves_mm3, repair,
-};
+use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
 use printer_profiles::PrinterProfile;
 
-use crate::args::{ImportArgs, RepairMethod};
+use crate::args::ImportArgs;
 use crate::edits;
 use crate::exit::Cancelled;
 use crate::pipeline::Watch;
@@ -40,8 +39,7 @@ pub(super) fn checked(
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
     let listed = with_shells.then(|| list_shells(mesh));
     let edited = edits::apply(mesh, args)?;
-    let repaired = args
-        .repair
+    let repaired = repair_asked(mesh, args)
         .map(|method| repaired(mesh, method, args, watch))
         .transpose()?;
     let (mended, wrapped) =
@@ -51,13 +49,9 @@ pub(super) fn checked(
     let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
     let bounds = Aabb::new(stats.min, stats.max);
     let fit = profile.map(|p| FitCheck::of(&bounds, p));
-    // A volume is read only off a sound mesh: an open one encloses nothing in particular.
-    let wall_mm = HollowSettings::default().thickness_mm;
     let hollowing_saves = diagnostics
         .as_ref()
-        .filter(|found| found.is_sound())
-        .and_then(|_| hollowing_saves_mm3(mesh, Mat3::IDENTITY, wall_mm))
-        .map(|saved_mm3| (saved_mm3, wall_mm));
+        .and_then(|found| hollowing(mesh, Mat3::IDENTITY, found));
 
     Ok(ImportReport {
         path: input.to_path_buf(),
@@ -76,10 +70,19 @@ pub(super) fn checked(
     })
 }
 
-/// Runs the repair `--repair` named on `mesh` in place: what it changed, and how a wrap went.
+/// The repair `--repair` names, or under `--prepare` the autopilot's for a model with defects.
+fn repair_asked(mesh: &Mesh, args: &ImportArgs) -> Option<core_volume::RepairMethod> {
+    match args.repair {
+        Some(method) => Some(method.into()),
+        None => (args.prepare && !args.no_validate && needs_repair(&diagnose(mesh)))
+            .then_some(PREPARE_REPAIR),
+    }
+}
+
+/// Runs `method` on `mesh` in place: what it changed, and how a wrap went.
 fn repaired(
     mesh: &mut Mesh,
-    method: RepairMethod,
+    method: core_volume::RepairMethod,
     args: &ImportArgs,
     watch: &Watch,
 ) -> Result<(Mended, Option<Wrapped>)> {
@@ -89,7 +92,6 @@ fn repaired(
             smallest_shell_mm2: args.smallest_shell,
         },
     };
-    let method = core_volume::RepairMethod::from(method);
     let done = watched_repair(mesh, method, settings, watch)?;
     *mesh = done.mesh;
     let wrapped = method.wraps().then_some(if done.wrapped {
