@@ -73,7 +73,38 @@ fn a_png_name_takes_the_one_view_and_lists_where_each_mark_landed() {
             );
         }
         assert_eq!(mark["hidden"], hidden, "mark {index}");
+        assert_eq!(mark["pinned"], false, "mark {index} is on the cube");
     }
+}
+
+#[test]
+fn a_mark_far_off_the_plate_is_pinned_to_the_edge_and_leaves_the_model_its_size() {
+    let cube = write_box_stl("render-far-mark", 10.0, 12, 0);
+    let out = output_file("render-far-mark.png");
+    let output = render(&[
+        cube.to_str().unwrap(),
+        "--view",
+        "top",
+        "--size",
+        "100",
+        "--mark",
+        "5000,5,10",
+        "-o",
+        out.to_str().unwrap(),
+        "--json",
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let mark = &json(&output)["pictures"][0]["markers"][0];
+    assert_eq!(mark["pinned"], true, "five metres off is off the picture");
+    let (width, height, pixels) = png_pixels(&out);
+    let channels = pixels.len() / (width * height) as usize;
+    let middle = (50 * width + 50) as usize * channels;
+    assert_ne!(
+        pixels[middle..middle + channels],
+        pixels[..channels],
+        "the cube still covers the picture's middle, not the background of its corner"
+    );
 }
 
 #[test]

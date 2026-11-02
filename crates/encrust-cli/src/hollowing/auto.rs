@@ -4,17 +4,20 @@ use std::fmt;
 
 use anyhow::{Context, Result};
 use core_engine::{DrainSearch, Drained, HoleRole, suggest_drains};
-use core_geometry::{Mesh, Scalar};
+use core_geometry::{Mesh, Scalar, Vec3};
 use core_volume::{Channel, DrainHole, drill};
 
 use super::{HollowArgs, pierced};
 
-/// Where a model prints, as the search for its drains needs it.
+/// Where a model prints, as its holes are placed and looked for before its supports stand.
 #[derive(Debug, Clone, Copy)]
 pub struct Ground {
     pub layer_height_mm: Scalar,
-    /// Whether the model prints standing on the plate, which no hole may open onto.
+    /// Whether the model prints resting on the plate or a raft, which no hole may open onto.
     pub on_plate: bool,
+    /// How far its supports will stand it up, millimetres: a point given on the command line
+    /// is that much higher than on the model here.
+    pub lifted_mm: Scalar,
 }
 
 /// The holes `--drain-at auto` drills into `shell`, which already has `placed` cut into it,
@@ -42,18 +45,18 @@ pub fn auto_drains(
         wall,
         vents: !args.no_vent,
         plate_z,
-        keep_clear: &[],
         layer_height_mm: ground.layer_height_mm,
     })
     .context("looking for drain holes")
 }
 
-/// What `--drain-at auto` chose, for a terminal.
-pub struct AutoReport<'a>(pub &'a Drained);
+/// What `--drain-at auto` chose, for a terminal, each mouth where it prints: lifted by the
+/// millimetres beside it.
+pub struct AutoReport<'a>(pub &'a Drained, pub Scalar);
 
 impl fmt::Display for AutoReport<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let drained = self.0;
+        let AutoReport(drained, lifted_mm) = *self;
         let emptied = (0..drained.pockets.len())
             .filter(|&pocket| drained.is_drained(pocket))
             .count();
@@ -68,7 +71,7 @@ impl fmt::Display for AutoReport<'_> {
                 HoleRole::Drain => "drain",
                 HoleRole::Vent => "vent ",
             };
-            let at = suggested.hole.at;
+            let at = suggested.hole.at + Vec3::Z * lifted_mm;
             writeln!(
                 f,
                 "    {role}       pocket {} at {:.2},{:.2},{:.2}",

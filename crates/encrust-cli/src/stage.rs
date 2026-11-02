@@ -16,7 +16,7 @@ use core_plate::{ArrangeSettings, Footprint, arrange};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
-use crate::hollowing::{Ground, HollowArgs, HollowReport, support_holes};
+use crate::hollowing::{HollowArgs, HollowReport, support_holes};
 use crate::modelling::{self, ModelArgs};
 use crate::pipeline::{
     OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of, warn_if_grey_ignored,
@@ -26,6 +26,10 @@ use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
 use crate::supports::{SupportReport, stand_under};
 use crate::{meeting, plate_file, project};
+
+mod ground;
+
+use ground::{check_lift, ground_of};
 
 /// What is done to one model on its way onto the plate.
 #[derive(Debug, Clone)]
@@ -373,10 +377,7 @@ fn put_down(
     drift_mm: Scalar,
     watch: &Watch,
 ) -> Result<PutDown> {
-    let ground = Ground {
-        layer_height_mm: layer_height,
-        on_plate: seated || shaping.supports.is_none(),
-    };
+    let ground = ground_of(&mesh, shaping, seated, layer_height)?;
     let shelled = hollow_and_cut(
         &mut mesh,
         &shaping.hollow,
@@ -413,6 +414,8 @@ fn put_down(
         })
         .transpose()?
         .filter(|(report, _)| !seated || !report.contacts.is_empty());
+    let lifted_mm = stood.as_ref().map_or(0.0, |(report, _)| report.lifted_mm);
+    check_lift(lifted_mm, ground, &shaping.hollow)?;
     if !shaping.hollow.drain_support_at.is_empty() {
         let Some((_, columns)) = &stood else {
             bail!("--drain-support-at drills into the supports, and none stand under the model");

@@ -1,6 +1,6 @@
-use core_geometry::{Aabb, Bvh, Mesh, Scalar, Vec3};
+use core_geometry::{BoundingVolume, Bvh, Mesh, Scalar, Vec3};
 use core_supports::Trapped;
-use core_volume::{DrainHole, HoleSize, Toward, drill, holes_out, pierce};
+use core_volume::{DrainHole, HoleSize, Toward, drill, holes_out};
 
 use crate::bake::Baked;
 use crate::error::EngineError;
@@ -28,8 +28,6 @@ pub struct DrainSearch<'a> {
     pub vents: bool,
     /// The plate's height under a model that prints standing on it; `None` for one lifted.
     pub plate_z: Option<Scalar>,
-    /// Points a mouth keeps a hole's spacing from, such as support contacts, millimetres.
-    pub keep_clear: &'a [Vec3],
     /// The layer the scan proving each hole cuts, millimetres.
     pub layer_height_mm: Scalar,
 }
@@ -100,7 +98,7 @@ pub fn suggest_drains(search: &DrainSearch) -> Result<Drained, EngineError> {
     }
 
     let bvh = Bvh::build(search.mesh);
-    let mut taken = search.keep_clear.to_vec();
+    let mut taken = Vec::new();
     let every: Vec<usize> = (0..pockets.len()).collect();
     let drains = scans.prove(&pockets, &every, Toward::Down, &bvh, &mut taken)?;
     let mut holes = suggested(&drains, HoleRole::Drain);
@@ -161,18 +159,15 @@ impl Scans<'_> {
     /// The holes into `pocket` looked for `toward`, best first, carried through the wall.
     fn proposals(&self, pocket: &Trapped, toward: Toward, bvh: &Bvh) -> Vec<DrainHole> {
         let search = self.search;
-        let found = holes_out(
+        holes_out(
             search.mesh,
             bvh,
             pocket.at,
             toward,
             search.size,
             search.plate_z,
-        );
-        match search.wall {
-            Some((thickness_mm, voxel_mm)) => pierce(&found, thickness_mm, voxel_mm),
-            None => found,
-        }
+            search.wall,
+        )
     }
 
     /// A hole for each of `wanted` of `pockets`, looked for `toward`, that drilled alone with
@@ -198,9 +193,10 @@ impl Scans<'_> {
         let spacing = SPACING_DIAMETERS * self.search.size.diameter_mm;
         let mut chosen: Vec<(usize, DrainHole)> = Vec::new();
         for _ in 0..MOST_TRIES {
-            let mut round = taken.clone();
+            let mut round: Vec<Vec3> = taken.iter().copied().chain(mouths(&chosen)).collect();
             let tries: Vec<(usize, DrainHole)> = candidates
                 .iter_mut()
+                .filter(|(pocket, _)| !chosen.iter().any(|(served, _)| served == pocket))
                 .filter_map(|(pocket, left)| {
                     let hole = left.find(|hole| clear_of(&round, hole.at, spacing))?;
                     round.push(hole.at);
@@ -213,33 +209,47 @@ impl Scans<'_> {
             let drilled: Vec<DrainHole> =
                 chosen.iter().chain(&tries).map(|(_, hole)| *hole).collect();
             let after = self.trapped(&drilled)?;
-            for (pocket, hole) in tries {
-                if !still_trapped(&pockets[pocket], &after) {
-                    chosen.push((pocket, hole));
-                    taken.push(hole.at);
-                    candidates.retain(|(waiting, _)| *waiting != pocket);
-                }
-            }
-            if candidates.is_empty() {
+            settle(pockets, &mut chosen, tries, &after);
+            if chosen.len() == wanted.len() {
                 break;
             }
         }
+        taken.extend(mouths(&chosen));
         Ok(chosen)
     }
+}
+
+fn mouths(chosen: &[(usize, DrainHole)]) -> impl Iterator<Item = Vec3> + '_ {
+    chosen.iter().map(|(_, hole)| hole.at)
 }
 
 fn clear_of(taken: &[Vec3], at: Vec3, spacing: Scalar) -> bool {
     taken.iter().all(|other| other.distance(at) >= spacing)
 }
 
-/// Whether `pocket` is among `trapped`: one whose box holds the point it was found at, since a
-/// hole that failed changes a pocket's box a little and not where its floor is.
-fn still_trapped(pocket: &Trapped, trapped: &[Trapped]) -> bool {
-    trapped.iter().any(|other| holds(&other.bounds, pocket.at))
+/// Keeps of `chosen` the holes whose pocket the round's scan, `after`, no longer finds, and adds
+/// each of `tries` that emptied its own; a pocket a failed try opened then waits for its own.
+fn settle(
+    pockets: &[Trapped],
+    chosen: &mut Vec<(usize, DrainHole)>,
+    tries: Vec<(usize, DrainHole)>,
+    after: &[Trapped],
+) {
+    let emptied = |pocket: usize| {
+        pockets
+            .get(pocket)
+            .is_some_and(|pocket| !still_trapped(pocket, after))
+    };
+    chosen.retain(|(pocket, _)| emptied(*pocket));
+    chosen.extend(tries.into_iter().filter(|(pocket, _)| emptied(*pocket)));
 }
 
-fn holds(bounds: &Aabb, at: Vec3) -> bool {
-    at.cmpge(bounds.mins).all() && at.cmple(bounds.maxs).all()
+/// Whether any of `trapped` overlaps `pocket`'s box: a hole that left part of a pocket, or moved
+/// its floor, leaves it there.
+fn still_trapped(pocket: &Trapped, trapped: &[Trapped]) -> bool {
+    trapped
+        .iter()
+        .any(|other| pocket.bounds.intersects(&other.bounds))
 }
 
 #[cfg(test)]

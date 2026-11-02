@@ -229,7 +229,7 @@ pub fn pierce(holes: &[DrainHole], thickness_mm: Scalar, voxel_mm: Scalar) -> Ve
 }
 
 /// The same surface turned the other way round, which is what makes it subtract.
-fn inward(mesh: &Mesh) -> Mesh {
+pub(crate) fn inward(mesh: &Mesh) -> Mesh {
     Mesh::new(
         mesh.vertices.clone(),
         mesh.faces.iter().map(|[a, b, c]| [*a, *c, *b]).collect(),

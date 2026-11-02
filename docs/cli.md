@@ -81,9 +81,9 @@ model of a batch share one report shape; `slice` of a plate prints one entry per
 resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
 Every finding the report counts it also locates, in plate millimetres from the plate's front
-left corner after placement — the frame `--drain-at` takes — so a script can act on each one
-(ADR 0394). `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind`
-(`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
+left corner as the model prints, after placement and the lift its supports give it — the frame
+`--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0394).
+`cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
 `at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
 `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
@@ -208,8 +208,11 @@ encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
 point is in plate millimetres from the plate's front left corner, after `--center` and the
-rest of the placement; `encrust inspect model.stl --center --printer …` prints the bounds to
-pick it out of:
+rest of the placement and after the lift `--supports` gives the model, which is worked out
+before the hole is placed: the frame the report gives `slicing.trapped` in, so a pocket's
+`at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …` prints the
+bounds to pick it out of. A model its supports stand otherwise than planned — a mould, whose
+wall grows under it — refuses a point:
 
 ```sh
 encrust slice model.stl \
@@ -219,8 +222,10 @@ encrust slice model.stl \
 `--drain-at auto` drills, after hollowing and before supports, the holes the engine proves
 empty every pocket still trapped: for each, a drain as low as it goes, on a face looking down
 where it can, and a vent as high, both `--drain` across, each kept only once a scan of the
-model with it drilled finds its pocket gone (ADR 0396). A model printing on the plate gets no
-mouth within a millimetre of it. `--no-drain-vent` leaves the vents out; `auto` goes beside
+model with it drilled finds its pocket gone (ADR 0396). A hole stops half a millimetre short of
+the cavity's far side, and a cavity too thin to stop in is not drilled across. A model resting on
+the plate or its raft — on no supports, set on the plate by `--orient`, or by a profile with no
+`z_lift_mm` — gets no mouth within a millimetre of it. `--no-drain-vent` leaves the vents out; `auto` goes beside
 points, which are drilled first. A pocket no hole drains stays in `slicing.trapped`, and the
 run is unclean:
 
@@ -450,7 +455,9 @@ under the plate with X to the right and the front edge at the top; `iso,bottom` 
 `-o` is a `.png` name for one view or a directory for several, each written as
 `<view>.png` (`render` without it). `--size PX` (512, 16 to 4096) is each picture's width
 and height. `--mark X,Y,Z` marks a point in plate mm on every picture, and may repeat: a
-disc where the point is seen, a hollow ring where the model stands in front of it. A
+disc where the point is seen, a hollow ring where the model stands in front of it. The
+picture frames the models alone, so a far mark does not shrink them; one off the picture is
+drawn at its edge nearest the point. A
 printer is named with a resin, as for `slice`; `--strict` exits 3 and draws nothing when
 the plate has a defect.
 
@@ -461,7 +468,7 @@ encrust render plate.encrust --view top -o top.png --mark 60,40,0 --size 1024
 ```
 
 `--json` lists each picture written, in the order asked, with where each mark landed in it
-(pixels from the top left) and whether the model hid it:
+(pixels from the top left), whether the model hid it and whether it was `pinned` to the edge:
 
 ```json
 {
@@ -473,7 +480,8 @@ encrust render plate.encrust --view top -o top.png --mark 60,40,0 --size 1024
       "width_px": 512,
       "height_px": 512,
       "markers": [
-        { "at_mm": [15.0, 20.0, 2.0], "x_px": 143.4, "y_px": 256.0, "hidden": false }
+        { "at_mm": [15.0, 20.0, 2.0], "x_px": 143.4, "y_px": 256.0, "hidden": false,
+          "pinned": false }
       ]
     }
   ]

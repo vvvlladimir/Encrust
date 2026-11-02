@@ -255,20 +255,46 @@ fn each_side_view_shows_the_front_left_top_corner_where_that_side_puts_it() {
 }
 
 #[test]
-fn a_marker_beside_the_part_widens_the_frame_to_hold_it() {
+fn a_marker_far_off_the_part_is_pinned_to_the_edge_and_leaves_the_part_its_size() {
     let mesh = unit_cube();
     let rendered = render_view(
         &[Part::placed(&mesh)],
         View::Top,
-        &[marked(Vec3::new(10.0, 0.5, 1.0))],
+        &[marked(Vec3::new(1000.0, 0.5, 1.0))],
         &square(128),
     );
 
-    // The frame spans 0..10 mm across, so the marker sits on its right margin: 0.94 * 128.
+    // The frame spans the 1 mm cube alone, so its middle is still the picture's middle.
+    let middle = rendered.image.pixels()[64 * 128 + 64];
+    assert_ne!(
+        middle,
+        square(128).background,
+        "the cube still fills the middle"
+    );
+    let spot = rendered.markers[0];
+    let radius = marker::radius_px(128, 128);
+    assert!(spot.pinned, "a point a metre off lies off the picture");
+    assert!(
+        (spot.x_px - (128.0 - radius)).abs() < 1e-3 && (spot.y_px - 64.0).abs() < 1.0,
+        "expected it on the right edge, a radius in, at ({}, 64), got ({}, {})",
+        128.0 - radius,
+        spot.x_px,
+        spot.y_px
+    );
+}
+
+#[test]
+fn a_marker_with_no_part_frames_the_picture_itself() {
+    let rendered = render_view(
+        &[],
+        View::Top,
+        &[marked(Vec3::new(5.0, 5.0, 0.0))],
+        &square(64),
+    );
     let spot = rendered.markers[0];
     assert!(
-        (spot.x_px - 120.32).abs() < 0.5,
-        "expected the marker at x 120.32, got {}",
-        spot.x_px
+        !spot.pinned,
+        "on an empty plate the marks are what is framed"
     );
+    assert!((spot.x_px - 32.0).abs() < 1e-3 && (spot.y_px - 32.0).abs() < 1e-3);
 }
