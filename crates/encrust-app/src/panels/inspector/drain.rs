@@ -109,38 +109,56 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         }
         return;
     }
-    if let Some(job) = &window.tools.drain.job {
+    if !running(ui, window) {
+        check_and_auto(ui, window);
+    }
+}
+
+/// The bar and Cancel of the check or the search going; answers whether one is.
+fn running(ui: &mut egui::Ui, window: &mut Window) -> bool {
+    let drain = &mut window.tools.drain;
+    let status = &mut window.machine.status;
+    if let Some(job) = &drain.job {
         if step_bar(ui, &tr!("hollow-looking"), job.fraction(), true) {
-            window.tools.drain.cancel(&mut window.machine.status);
+            drain.cancel(status);
         }
-        return;
+        return true;
     }
-    if let Some(job) = &window.tools.drain.auto {
+    if let Some(job) = &drain.auto {
         if step_bar(ui, &tr!("drain-auto-looking"), Some(job.fraction()), true) {
-            window.tools.drain.cancel_auto(&mut window.machine.status);
+            drain.cancel_auto(status);
         }
-        return;
+        return true;
     }
+    false
+}
+
+/// Check drainage, and Auto beside it; off with nothing on the plate or while Prepare runs.
+fn check_and_auto(ui: &mut egui::Ui, window: &mut Window) {
     let layer_height_mm = window.machine.slicing.layer_height_mm();
     let label = if window.tools.drain.checked {
         tr!("drain-check-again")
     } else {
         tr!("drain-check")
     };
-    let enabled = !window.doc.scene.is_empty();
+    let held = crate::prepare::holding(window.tools);
+    let enabled = !window.doc.scene.is_empty() && held.is_none();
     let (check, auto) = primary_with_companion(
         ui,
         (&label, enabled),
         (icon::AUTO_DRAIN, &tr!("drain-auto"), enabled),
     );
-    if check.on_hover_text(tr!("drain-check-tooltip")).clicked() {
+    let why = held.unwrap_or_default();
+    let check = check.on_hover_text(tr!("drain-check-tooltip"));
+    if check.on_disabled_hover_text(why.clone()).clicked() {
         let started = window.tools.drain.start(&window.doc.scene, layer_height_mm);
         window
             .machine
             .status
             .report(&tr!("drain-checking"), started);
     }
-    if auto.on_hover_text(tr!("drain-auto-tooltip")).clicked() {
+    let auto = auto.on_hover_text(tr!("drain-auto-tooltip"));
+    if auto.on_disabled_hover_text(why).clicked() {
         let started = window
             .tools
             .drain
