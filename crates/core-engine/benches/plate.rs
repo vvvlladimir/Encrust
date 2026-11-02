@@ -208,7 +208,6 @@ fn drains(c: &mut Criterion) {
         wall: Some((2.0, shell.voxel_mm)),
         vents: true,
         plate_z: Some(0.0),
-        keep_clear: &[],
         layer_height_mm: 0.05,
     };
     let mut group = c.benchmark_group("drains");

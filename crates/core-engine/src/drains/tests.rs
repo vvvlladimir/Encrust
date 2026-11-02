@@ -20,17 +20,9 @@ fn hollowed(mesh: &Mesh, open_floor: bool) -> (Mesh, (Scalar, Scalar)) {
     (shell.mesh, (WALL_MM, shell.voxel_mm))
 }
 
-/// `outer` with each of `cavities` sealed inside it, wound inward as a hollowed model carries them.
-fn sealed(outer: (Vec3, Vec3), cavities: &[(Vec3, Vec3)]) -> Mesh {
-    let mut mesh = cuboid(outer.0, outer.1);
-    for (min, max) in cavities {
-        let cavity = cuboid(*min, *max);
-        mesh.append(&Mesh::new(
-            cavity.vertices,
-            cavity.faces.iter().map(|[a, b, c]| [*a, *c, *b]).collect(),
-        ));
-    }
-    mesh
+/// A 20 mm cube hollowed to a 2 mm wall, sealed.
+fn sealed_cube() -> Mesh {
+    hollowed(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), false).0
 }
 
 fn search(mesh: &Mesh, wall: Option<(Scalar, Scalar)>, plate_z: Option<Scalar>) -> DrainSearch<'_> {
@@ -41,7 +33,6 @@ fn search(mesh: &Mesh, wall: Option<(Scalar, Scalar)>, plate_z: Option<Scalar>) 
         wall,
         vents: true,
         plate_z,
-        keep_clear: &[],
         layer_height_mm: LAYER_MM,
     }
 }
@@ -122,16 +113,15 @@ fn a_hollow_ball_drains_below_its_middle_and_vents_above_it() {
 
 #[test]
 fn two_cavities_get_a_drain_each() {
-    let mesh = sealed(
-        (Vec3::ZERO, Vec3::new(40.0, 20.0, 20.0)),
-        &[
-            (Vec3::splat(4.0), Vec3::new(16.0, 16.0, 16.0)),
-            (Vec3::new(24.0, 4.0, 4.0), Vec3::new(36.0, 16.0, 16.0)),
-        ],
-    );
+    let mut cubes = cuboid(Vec3::ZERO, Vec3::splat(16.0));
+    cubes.append(&cuboid(
+        Vec3::new(24.0, 0.0, 0.0),
+        Vec3::new(40.0, 16.0, 16.0),
+    ));
+    let (mesh, wall) = hollowed(&cubes, false);
     let drained = suggest_drains(&DrainSearch {
         vents: false,
-        ..search(&mesh, None, Some(0.0))
+        ..search(&mesh, Some(wall), Some(0.0))
     })
     .expect("the box slices");
     assert_eq!(drained.pockets.len(), 2);
@@ -151,10 +141,7 @@ fn an_open_floor_needs_no_hole() {
 
 #[test]
 fn a_pocket_no_hole_fits_stays_trapped() {
-    let mesh = sealed(
-        (Vec3::ZERO, Vec3::splat(20.0)),
-        &[(Vec3::splat(5.0), Vec3::splat(15.0))],
-    );
+    let mesh = sealed_cube();
     let drained = suggest_drains(&DrainSearch {
         size: HoleSize::round(24.0, 1.0, 1.0),
         ..search(&mesh, None, None)
@@ -167,10 +154,7 @@ fn a_pocket_no_hole_fits_stays_trapped() {
 
 #[test]
 fn every_scan_is_counted_and_bounded() {
-    let mesh = sealed(
-        (Vec3::ZERO, Vec3::splat(20.0)),
-        &[(Vec3::splat(5.0), Vec3::splat(15.0))],
-    );
+    let mesh = sealed_cube();
     let drained = suggest_drains(&search(&mesh, None, Some(0.0))).expect("the box slices");
     assert!(
         drained.scans <= 2 + 2 * MOST_TRIES,
@@ -182,10 +166,7 @@ fn every_scan_is_counted_and_bounded() {
 
 #[test]
 fn a_hole_of_no_width_cannot_be_drilled() {
-    let mesh = sealed(
-        (Vec3::ZERO, Vec3::splat(20.0)),
-        &[(Vec3::splat(5.0), Vec3::splat(15.0))],
-    );
+    let mesh = sealed_cube();
     let error = suggest_drains(&DrainSearch {
         size: HoleSize::round(0.0, 1.0, 1.0),
         ..search(&mesh, None, None)
@@ -199,14 +180,65 @@ fn a_hole_of_no_width_cannot_be_drilled() {
 
 #[test]
 fn a_layer_of_no_height_cannot_be_cut() {
-    let mesh = sealed(
-        (Vec3::ZERO, Vec3::splat(20.0)),
-        &[(Vec3::splat(5.0), Vec3::splat(15.0))],
-    );
+    let mesh = sealed_cube();
     let error = suggest_drains(&DrainSearch {
         layer_height_mm: 0.0,
         ..search(&mesh, None, None)
     })
     .unwrap_err();
     assert!(matches!(error, EngineError::Plan(_)), "got {error:?}");
+}
+
+/// A pocket filling the box from `low` to `high`, found at the middle of its floor.
+fn pocket(low: Vec3, high: Vec3) -> Trapped {
+    Trapped {
+        at: low.midpoint(high).with_z(low.z),
+        volume_mm3: (high - low).element_product(),
+        bounds: core_geometry::Aabb::new(low, high),
+    }
+}
+
+fn hole_at(x: Scalar) -> DrainHole {
+    DrainHole::sized(Vec3::new(x, 0.0, 0.0), Vec3::X, three_mm(), 0.0)
+}
+
+#[test]
+fn a_pocket_another_pockets_failed_try_opened_waits_for_a_hole_of_its_own() {
+    let pockets = [
+        pocket(Vec3::splat(2.0), Vec3::splat(8.0)),
+        pocket(Vec3::new(12.0, 2.0, 2.0), Vec3::new(18.0, 8.0, 8.0)),
+    ];
+    let mut chosen = Vec::new();
+    // Round one: the first pocket's try reaches nothing, the second's goes through the first
+    // and stops short of its own, so the scan finds only the second.
+    let tries = vec![(0, hole_at(1.0)), (1, hole_at(11.0))];
+    settle(&pockets, &mut chosen, tries, &[pockets[1]]);
+    assert_eq!(
+        chosen,
+        vec![(0, hole_at(1.0))],
+        "the first looks emptied by its own try"
+    );
+
+    // Round two: the second's next try empties it, and with the try through the first gone,
+    // the scan finds the first again.
+    let tries = vec![(1, hole_at(19.0))];
+    settle(&pockets, &mut chosen, tries, &[pockets[0]]);
+    assert_eq!(
+        chosen,
+        vec![(1, hole_at(19.0))],
+        "the first's hole is dropped and the first waits for another"
+    );
+}
+
+#[test]
+fn a_pocket_left_partly_trapped_is_not_drained() {
+    let whole = pocket(Vec3::splat(2.0), Vec3::splat(8.0));
+    // What stays is the pocket's top, whose box does not hold the floor it was found at.
+    let top = pocket(Vec3::new(2.0, 2.0, 6.0), Vec3::splat(8.0));
+    let drained = Drained {
+        pockets: vec![whole],
+        trapped: vec![top],
+        ..Drained::default()
+    };
+    assert!(!drained.is_drained(0), "resin is left in its top");
 }

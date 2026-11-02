@@ -2,7 +2,7 @@ use std::f32::consts::TAU;
 
 use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3};
 
-use super::{DrainHole, HoleSize, frame, lift_for};
+use super::{DrainHole, HoleSize, frame, lift_for, pierce};
 
 /// Rays cast round the vertical, once level and once tilted 45° toward it.
 const RAYS_AROUND: usize = 8;
@@ -27,6 +27,10 @@ const RIM_POINTS: usize = 8;
 /// spread on the plate and close a hole lower than this.
 const PLATE_CLEARANCE_MM: Scalar = 1.0;
 
+/// How far short of the cavity's far side a hole stops, millimetres, so the wall there stays
+/// whole: the cavity's surface lies within half a lattice cell of where it was cut.
+const FAR_CLEARANCE_MM: Scalar = 0.5;
+
 /// Which way out of a cavity a hole is looked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Toward {
@@ -36,12 +40,8 @@ pub enum Toward {
     Up,
 }
 
-/// Holes of `size` from the outer surface of `mesh` into the cavity around `inside`, best
-/// first, in the frame the mesh prints in, +Z up; see `docs/design/hollowing.md`.
-///
-/// Each is drilled square into the face a ray out of the cavity leaves by; one whose ray crossed
-/// more than the cavity's wall comes after every one that did not. With `plate_z`, the model
-/// stands on the plate there and no mouth comes near it.
+/// Holes of `size` from `mesh`'s outer surface into the cavity round `inside`, best first, +Z up,
+/// through a `wall` as [`pierce`] carries it, off a `plate_z` it stands on: `docs/design/hollowing.md`.
 pub fn holes_out(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -49,6 +49,7 @@ pub fn holes_out(
     toward: Toward,
     size: HoleSize,
     plate_z: Option<Scalar>,
+    wall: Option<(Scalar, Scalar)>,
 ) -> Vec<DrainHole> {
     let radius = size.diameter_mm / 2.0;
     let Some(origin) = origin_of(bvh, inside, toward, radius) else {
@@ -57,7 +58,7 @@ pub fn holes_out(
     let mut found: Vec<((bool, i64, Scalar), DrainHole)> = directions(toward)
         .filter_map(|direction| {
             let way = way_out(mesh, bvh, Ray::new(origin, direction))?;
-            let hole = way.hole(mesh, bvh, size, plate_z)?;
+            let hole = way.hole(mesh, bvh, size, plate_z, wall)?;
             let height = match toward {
                 Toward::Down => hole.at.z + radius * way.normal.z,
                 Toward::Up => -hole.at.z,
@@ -138,19 +139,35 @@ fn way_out(mesh: &Mesh, bvh: &Bvh, ray: Ray) -> Option<WayOut> {
     })
 }
 
+/// The least depth `hole` takes to be carried through a wall `cut` to that thickness on that
+/// lattice, by [`pierce`]: nothing for a model not hollowed here.
+fn carried(hole: DrainHole, cut: Option<(Scalar, Scalar)>) -> Scalar {
+    cut.and_then(|(thickness_mm, voxel_mm)| {
+        let shallow = DrainHole {
+            depth_mm: 0.0,
+            ..hole
+        };
+        pierce(&[shallow], thickness_mm, voxel_mm)
+            .first()
+            .map(|carried| carried.depth_mm)
+    })
+    .unwrap_or(0.0)
+}
+
 fn normal_of(mesh: &Mesh, face: usize) -> Option<Vec3> {
     mesh.triangle(face)?.normal_unnormalized().try_normalize()
 }
 
 impl WayOut {
-    /// The hole drilled square into the face the ray left by, a diameter past the wall there,
-    /// or `None` where it would open off an edge or a fin, on the plate, or reach no cavity.
+    /// The hole square into the face the ray left by, a diameter past the wall and short of the
+    /// far side; `None` off an edge or a fin, on the plate, or with no cavity to stop in.
     fn hole(
         &self,
         mesh: &Mesh,
         bvh: &Bvh,
         size: HoleSize,
         plate_z: Option<Scalar>,
+        cut: Option<(Scalar, Scalar)>,
     ) -> Option<DrainHole> {
         let (out, radius) = (self.normal, size.diameter_mm / 2.0);
         let lowest = self.mouth.z - radius * (1.0 - out.z.powi(2)).max(0.0).sqrt();
@@ -164,14 +181,32 @@ impl WayOut {
         if normal_of(mesh, wall.face)?.dot(out) > 0.0 {
             return None;
         }
-        let depth_mm = size.depth_mm.max(PAST_FACE_MM + wall.t + size.diameter_mm);
-        let lift_mm = lift_for(mesh, bvh, self.mouth, -out, size.diameter_mm, depth_mm);
-        Some(DrainHole::sized(
+        let wanted = size.depth_mm.max(PAST_FACE_MM + wall.t + size.diameter_mm);
+        let lift_mm = lift_for(mesh, bvh, self.mouth, -out, size.diameter_mm, wanted);
+        let hole = DrainHole::sized(
             self.mouth,
             -out,
-            HoleSize { depth_mm, ..size },
+            HoleSize {
+                depth_mm: 0.0,
+                ..size
+            },
             lift_mm,
-        ))
+        );
+        let least = carried(hole, cut).max(2.0 * PAST_FACE_MM + wall.t);
+        let most = self.far_side(bvh, wall.t, wanted.max(least)) - FAR_CLEARANCE_MM;
+        (least <= most).then(|| DrainHole {
+            depth_mm: wanted.min(most).max(least),
+            ..hole
+        })
+    }
+
+    /// How far along the hole from the mouth the cavity's far side stands, millimetres, looked
+    /// for no further than `reach` past the clearance: infinitely far when nothing is met.
+    fn far_side(&self, bvh: &Bvh, wall_mm: Scalar, reach: Scalar) -> Scalar {
+        let start = wall_mm + 2.0 * PAST_FACE_MM;
+        let across = Ray::new(self.mouth - self.normal * start, -self.normal);
+        bvh.raycast_within(&across, reach - start + FAR_CLEARANCE_MM)
+            .map_or(Scalar::INFINITY, |hit| start + hit.t)
     }
 
     /// Whether the surface lies under every point of the mouth's rim, within [`RIM_SAG`].

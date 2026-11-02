@@ -12,6 +12,8 @@ mod drain;
 mod drilled;
 mod error;
 mod extract;
+#[cfg(test)]
+mod fixtures;
 mod grid;
 mod hollow;
 mod infill;
