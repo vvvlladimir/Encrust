@@ -3,6 +3,7 @@
 
 mod bake;
 mod cut;
+mod drains;
 mod error;
 mod file_name;
 mod open;
@@ -11,10 +12,12 @@ mod plate;
 pub mod project;
 mod run;
 mod stand;
+mod trapped;
 mod trial;
 
 pub use bake::{Baked, bake, parts};
 pub use cut::{Cutting, cut};
+pub use drains::{DrainSearch, Drained, HoleRole, MOST_TRIES, SuggestedHole, suggest_drains};
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
 pub use open::{Machine, Opening, open_plate};
@@ -22,4 +25,5 @@ pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use run::Run;
 pub use stand::{Stood, SupportPlan, SupportShapes, ToStand, stand_seated, stand_under};
+pub use trapped::trapped_in;
 pub use trial::{Choice, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove};

@@ -115,6 +115,7 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
                 import: None,
                 oriented: None,
                 hollow: None,
+                drains: None,
                 supports: None,
                 standing: bounds(model).map(|bounds| FitCheck::of(&bounds, &built.printer)),
                 meets: Vec::new(),

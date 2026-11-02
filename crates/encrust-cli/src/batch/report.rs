@@ -15,9 +15,11 @@ use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
 use crate::stage::Part;
 
+mod drains;
 mod import;
 mod located;
 
+use drains::AutoDrains;
 pub use import::{Fit, Model, Repair};
 use import::{fit_of, model_of, repair_of};
 use located::{Frame, RiskAt, TrappedAt};
@@ -128,6 +130,8 @@ pub struct PartReport {
     pub oriented: Option<Oriented>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hollow: Option<Hollow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_drains: Option<AutoDrains>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports: Option<Supports>,
     /// The inputs of the other models it or its supports meet on the plate.
@@ -261,6 +265,10 @@ impl PartReport {
                 wall_mm: report.wall().0,
                 cavity_mm3: report.cavity_mm3(),
             }),
+            auto_drains: part.drains.as_ref().map(|drained| {
+                let lifted_mm = part.supports.as_ref().map_or(0.0, |found| found.lifted_mm);
+                AutoDrains::of(drained, lifted_mm)
+            }),
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
                 contacts: report.contacts.len(),
@@ -285,6 +293,7 @@ impl PartReport {
             fit: None,
             oriented: None,
             hollow: None,
+            auto_drains: None,
             supports: None,
             meets: Vec::new(),
         }
