@@ -1,0 +1,88 @@
+//! The Select card's Prepare for print: `--prepare` on the picked models, and what it decided
+//! for the one in the card (ADR 0397).
+
+use crate::i18n::tr;
+use crate::panels::Window;
+use crate::prepare::Prepared;
+use crate::scene::ObjectId;
+use crate::ui::{describe, icon, readings, secondary_button, section, step_bar, subheading};
+
+/// The button, the run's step while it goes, and what the last run did to model `id`.
+pub(super) fn prepare_section(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
+    section(ui, &tr!("position-prepare"), None, |ui| {
+        describe(ui, &tr!("position-prepare-help"));
+        if let Some((step, share)) = window.tools.prepare.progress() {
+            if step_bar(ui, &step.label(), Some(share), true) {
+                let status = &mut window.machine.status;
+                crate::prepare::cancel(window.doc, window.tools, status);
+            }
+        } else {
+            let blocked = crate::prepare::blocker(window.doc, window.tools);
+            let tip = match &blocked {
+                Some(why) => why.clone(),
+                None => tr!("position-prepare-tooltip", scope = window.doc.scene.scope()),
+            };
+            let pressed = ui
+                .add_enabled_ui(blocked.is_none(), |ui| {
+                    secondary_button(ui, icon::PREPARE, &tr!("position-prepare-run"))
+                })
+                .inner
+                .on_hover_text(tip)
+                .on_disabled_hover_text(blocked.unwrap_or_default())
+                .clicked();
+            if pressed {
+                start(window);
+            }
+        }
+        let object = window.doc.scene.get(id);
+        if let Some(prepared) = object.and_then(|object| window.tools.prepare.prepared(object)) {
+            subheading(ui, &tr!("position-prepared"));
+            readings(ui, &rows(prepared));
+        }
+    });
+}
+
+/// Starts Prepare for print, and says on the stage why when it cannot.
+pub(crate) fn start(window: &mut Window) {
+    let started = crate::prepare::start(window.doc, window.tools, window.machine);
+    if let Err(error) = started {
+        window.machine.status = crate::status::Status::failed(&error);
+    }
+}
+
+/// What the run did, as the command line's `prepared` lists it.
+fn rows(prepared: &Prepared) -> Vec<(String, String)> {
+    let said = |done: bool| {
+        if done {
+            tr!("position-prepared-yes")
+        } else {
+            tr!("position-prepared-no")
+        }
+    };
+    let mut rows = vec![
+        (tr!("position-prepared-oriented"), said(prepared.oriented)),
+        (tr!("position-prepared-repaired"), said(prepared.repaired)),
+    ];
+    match prepared.hollowed {
+        Some(wall) => {
+            let wall_mm = format!("{:.2}", wall.wall_mm);
+            let saved_ml = format!("{:.2}", wall.saves_mm3 / 1000.0);
+            rows.push((
+                tr!("position-prepared-wall"),
+                tr!("value-mm", value = wall_mm),
+            ));
+            rows.push((
+                tr!("position-prepared-saved"),
+                tr!("value-ml", value = saved_ml),
+            ));
+        }
+        None => rows.push((tr!("position-prepared-hollowed"), said(false))),
+    }
+    rows.push((tr!("position-prepared-drained"), said(prepared.drained)));
+    let supports = prepared
+        .supports
+        .clone()
+        .unwrap_or_else(|| tr!("position-prepared-none"));
+    rows.push((tr!("position-prepared-supports"), supports));
+    rows
+}

@@ -33,6 +33,18 @@ plate file's own key, wins over its step; a flag shaping a step not taken is set
 `repaired`, `oriented`, `hollowed` (`wall_mm`, `saves_mm3`) or `null`, `drained` and
 `supports`.
 
+The window takes it as Prepare for print, in the Select tool under Auto-orient and in the
+Edit menu, on the picked models or the whole plate. It starts each tool's own job in turn,
+on those models and with these decisions rather than the panels' values, in the command
+line's order: Auto-orient by `PREPARE_ORIENT` on the automatic supports for a model whose
+turn is nought, which is the window's `--rotate` left out; the full mend where the
+diagnosis is not sound; `hollowing` read off the repaired and posed model; Drain's Auto;
+the catalogue's automatic supports outside, then in the cavity. A step starts once the last
+one's job has landed and its cuts and support surface are built; a step that fails puts the
+plate back and leaves its error. A model already hollow keeps its own cavity: it is drained
+and held up inside, and is not said to be hollowed by the run. Select then lists for the
+model in its card what `prepared` would say, while it stands as the run left it.
+
 In the window a prepare is one edit, though its jobs land over many frames:
 `History::hold` keeps every change from the stack until `release` records them as one entry,
 and `abandon`, which Cancel calls, puts the plate back as the hold found it and records
@@ -49,10 +61,9 @@ model saving at least 10 ml stands without one.
 An agent's first call can be `--prepare` and its later ones the flags it disagrees with;
 the report says what to disagree with. The autopilot costs what its steps cost: up to ten
 slices for the drains, and an orientation search. The model is turned before it is
-repaired, as `--orient --repair` already does, so a broken model is searched as it came.
-The window has no single button yet: it would chain its Repair, Auto-orient, Hollow, Drain's
-Auto (ADR 0396) and Supports jobs, calling these functions. Reopen if users
-want infill or a thicker wall by size, or if repairing before orienting proves better.
+repaired, as `--orient --repair` already does, so a broken model is searched as it came; the
+window keeps that order so both make the same decisions. Reopen if users want infill or a
+thicker wall by size, or if repairing before orienting proves better.
 
 An edit the user makes while the window prepares falls in its entry, and Cancel takes it
 back with the rest.
