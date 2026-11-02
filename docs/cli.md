@@ -596,7 +596,7 @@ cargo run -p encrust-app --bin encrust-gui -- model.stl
 
 The command line as tools for a chat client that speaks the Model Context Protocol over
 stdio. The client starts it; each tool runs `encrust --json` — `--encrust PATH`, else the
-one beside the server, else the one on the `PATH` — and answers with its report (ADR 0396).
+one beside the server, else the one on the `PATH` — and answers with its report (ADR 0395).
 Jobs are kept under the user's cache directory, or `--jobs DIR`; a run is stopped after
 `--timeout-s` seconds (1800), and reports progress every five seconds while it runs.
 

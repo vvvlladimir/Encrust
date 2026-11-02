@@ -2,7 +2,7 @@
 
 How a language model takes a model from its file to a checked printer file through Encrust,
 on the user's computer: driven from a chat client over MCP, or from inside the window.
-Nothing runs on encrust.app. The server is ADR 0396; the rest is the plan.
+Nothing runs on encrust.app. The server is ADR 0395; the rest is the plan.
 
 ## The shape
 
@@ -50,7 +50,7 @@ MCP 2026-07-28 is stateless: no session, any request on any instance. A call the
 names its job, a directory in the user's cache of numbered revisions, each a TOML recipe —
 the model, printer, resin and each step's settings — that becomes `encrust` flags. An
 editing tool writes the next revision and checks it; `revert` copies an old one forward.
-The cost: each check stages the model again from its file (ADR 0396).
+The cost: each check stages the model again from its file (ADR 0395).
 
 ## Engine work first
 
@@ -136,7 +136,7 @@ procedure it is measured with.
 | 2 | Suggested drains, `--drain auto` | `core-volume`, `core-supports`, `encrust-cli` | — |
 | 3 | Views with markers, `encrust render` | `core-thumbnail`, `encrust-cli` | — |
 | 4 | The autopilot, `encrust prepare` | `core-engine`, `encrust-cli` | 1, 2 |
-| 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0396) | — |
+| 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0395) | — |
 | 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` | 1–5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` | 4, 6 |
 | 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |

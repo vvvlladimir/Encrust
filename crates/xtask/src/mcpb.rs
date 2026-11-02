@@ -1,5 +1,5 @@
 //! `cargo xtask mcpb`: the MCP server and the command line it drives in one `.mcpb` bundle for
-//! Claude Desktop, for the platform it is built on. See `docs/decisions/0396`.
+//! Claude Desktop, for the platform it is built on. See `docs/decisions/0395`.
 
 use std::fs;
 use std::path::PathBuf;
