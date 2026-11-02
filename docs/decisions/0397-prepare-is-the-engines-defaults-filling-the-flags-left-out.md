@@ -33,6 +33,13 @@ plate file's own key, wins over its step; a flag shaping a step not taken is set
 `repaired`, `oriented`, `hollowed` (`wall_mm`, `saves_mm3`) or `null`, `drained` and
 `supports`.
 
+In the window a prepare is one edit, though its jobs land over many frames:
+`History::hold` keeps every change from the stack until `release` records them as one entry,
+and `abandon`, which Cancel calls, puts the plate back as the hold found it and records
+nothing. This carries ADR 0257 from one frame to a run of them: what each landing sets off,
+a model settling onto its raft or the plugs for its holes, falls inside the hold, and an undo
+of the entry settles the plate as any undo does. Undo and redo wait while a hold runs.
+
 No infill: it is the window's default, a lattice can seal off a pocket the drain search
 cannot see, and it pushes the search's holes down its ranking (ADR 0396); a 2 mm wall on a
 model saving at least 10 ml stands without one.
@@ -47,7 +54,16 @@ The window has no single button yet: it would chain its Repair, Auto-orient, Hol
 Auto (ADR 0396) and Supports jobs, calling these functions. Reopen if users
 want infill or a thicker wall by size, or if repairing before orienting proves better.
 
+An edit the user makes while the window prepares falls in its entry, and Cancel takes it
+back with the rest.
+
 ## Alternatives considered
+
+### Merging the steps' entries once the run ends
+
+No new state in the history, but an entry recorded between two landings may be the user's,
+and Cancel would then have to undo a count of entries that a tool value changed meanwhile
+alters.
 
 ### A `prepare` subcommand with its own pipeline
 
