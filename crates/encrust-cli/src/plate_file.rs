@@ -111,7 +111,10 @@ pub fn stage(path: &Path, arrange: bool, job: &JobArgs, watch: &Watch) -> Result
         })
         .collect::<Result<_>>()?;
     let held_inside = |shaping: &Shaping| shaping.hollow.wanted() && shaping.supports.is_some();
-    if job.supports.support_cavity && !entries.iter().any(|(_, shaping)| held_inside(shaping)) {
+    if job.supports.support_cavity
+        && !job.prepare
+        && !entries.iter().any(|(_, shaping)| held_inside(shaping))
+    {
         bail!(
             "--support-cavity holds up a hollowed model's cavity, and no model is both hollowed and supported"
         );

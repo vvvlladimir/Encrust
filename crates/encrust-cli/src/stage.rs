@@ -25,9 +25,11 @@ use crate::supports::{SupportReport, stand_under};
 use crate::{meeting, plate_file, project};
 
 mod ground;
+mod prepare;
 mod room;
 
 use ground::{check_lift, ground_of};
+pub use prepare::Prepared;
 use room::{check_plugs_clear, spread_pieces, stood_at};
 
 /// What is done to one model on its way onto the plate.
@@ -44,8 +46,10 @@ pub struct Shaping {
 impl Shaping {
     /// What the flags ask of every model.
     pub fn of(job: &JobArgs) -> Result<Self> {
+        let mut import = job.import.clone();
+        import.prepare = job.prepare;
         Ok(Self {
-            import: job.import.clone(),
+            import,
             hollow: job.hollow.clone(),
             supports: job.supports.plan()?,
             position: None,
@@ -68,6 +72,8 @@ pub struct Part {
     pub standing: Option<FitCheck>,
     /// The inputs of the other parts it, or its supports, meet (ADR 0392).
     pub meets: Vec<PathBuf>,
+    /// What `--prepare` decided for it.
+    pub prepared: Option<Prepared>,
 }
 
 impl Part {
@@ -273,7 +279,7 @@ pub fn refuse_one_model_flags(shaping: &Shaping) -> Result<()> {
 
 /// Refuses `--support-cavity` where it would hold nothing up: no supports, or no cavity.
 fn refuse_idle_cavity(job: &JobArgs, shaping: &Shaping) -> Result<()> {
-    if !job.supports.support_cavity {
+    if !job.supports.support_cavity || job.prepare {
         return Ok(());
     }
     if shaping.supports.is_none() {
@@ -297,7 +303,11 @@ pub fn plate_of(
     chosen.measured()?;
     let printer = chosen.printer.as_ref();
     check_adaptive(job, printer)?;
-    let (meshes, found) = imported(entries, chosen, watch)?;
+    let mut entries = entries.to_vec();
+    prepare::supported(&mut entries)?;
+    let (meshes, found) = imported(&entries, chosen, watch)?;
+    let prepared = prepare::shaped(&mut entries, &found, watch.talk);
+    let entries = entries.as_slice();
     let mut pieces = modelling::shaped(meshes, &job.model, watch.talk)?;
     check_pieces(&pieces, entries, &job.model, arrange)?;
     watch.stop.check()?;
@@ -312,7 +322,7 @@ pub fn plate_of(
         models,
         owners,
         plugged,
-    } = put_down_every(pieces, found, entries, held, watch)?;
+    } = put_down_every(pieces, (found, prepared), entries, held, watch)?;
     check_plugs_clear(&models, &plugged, printer)?;
     meeting::mark(&mut parts, &models, &owners, watch.talk);
 
@@ -339,6 +349,9 @@ pub fn plate_of(
 
 /// What importing one model reported, and how it was turned.
 type Found = (ImportReport, Option<OrientSummary>);
+
+/// What importing each model found, and what `--prepare` made of it.
+type Imported = (Vec<Found>, Vec<Option<Prepared>>);
 
 /// Each entry's model imported and stood where it asks, with what its import reported.
 fn imported(
@@ -471,7 +484,7 @@ struct Laid<'a> {
 /// `held` is the printer, the layer height and the resin's drift, millimetres.
 fn put_down_every<'a>(
     pieces: Vec<Vec<Mesh>>,
-    found: Vec<Found>,
+    (found, prepared): Imported,
     entries: &'a [(PathBuf, Shaping)],
     (printer, layer_height, drift_mm): (Option<&PrinterProfile>, Scalar, Scalar),
     watch: &Watch,
@@ -482,8 +495,9 @@ fn put_down_every<'a>(
         owners: Vec::with_capacity(entries.len()),
         plugged: Vec::new(),
     };
-    for ((meshes, (import, oriented)), (path, shaping)) in
-        pieces.into_iter().zip(found).zip(entries)
+    let prepared_found = found.into_iter().zip(prepared);
+    for ((meshes, ((import, oriented), prepared)), (path, shaping)) in
+        pieces.into_iter().zip(prepared_found).zip(entries)
     {
         // The imports are all reported before the first model is shaped, so on a plate
         // these lines would otherwise read as the last model's.
@@ -519,6 +533,7 @@ fn put_down_every<'a>(
             supports,
             standing,
             meets: Vec::new(),
+            prepared,
         });
     }
     Ok(laid)
