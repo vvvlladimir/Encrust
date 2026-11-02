@@ -539,6 +539,37 @@ The window, optionally opening a model on startup:
 cargo run -p encrust-app --bin encrust-gui -- model.stl
 ```
 
+## `encrust-mcp`
+
+The command line as tools for a chat client that speaks the Model Context Protocol over
+stdio. The client starts it; each tool runs `encrust --json` — the one beside the server,
+else on the `PATH`, else `--encrust PATH` — and answers with its report (ADR 0396). Jobs
+are kept under the user's cache directory, or `--jobs DIR`.
+
+```sh
+claude mcp add encrust -- /path/to/encrust-mcp          # Claude Code
+```
+
+Claude Desktop takes it in `claude_desktop_config.json`, Codex in `~/.codex/config.toml`:
+
+```json
+{ "mcpServers": { "encrust": { "command": "/path/to/encrust-mcp" } } }
+```
+
+```toml
+[mcp_servers.encrust]
+command = "/path/to/encrust-mcp"
+```
+
+`list_profiles` and `inspect_model` read. `start_job` takes a model, a printer and a resin —
+ids or TOML paths — and answers with the job and its first revision checked. `set_pose`,
+`set_hollow`, `set_drains` and `set_supports` each write the next revision and check it with
+`estimate --check-drainage`; `check` reads any revision again and `revert` copies one
+forward. `write_file` slices the latest under `--strict`, unless `accept_defects`;
+`send_to_printer` is `printer send`. Those two are marked destructive, so a client asks
+before running them. A run that fails outright is a tool error carrying its message; one
+that ends in code 3 is an answer whose report names the defects.
+
 ## `hollow-lab`
 
 What each hollowing stage costs in time and in live bytes, over a matrix of settings, or

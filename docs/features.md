@@ -868,6 +868,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `profiles` | List, show, export and import profiles. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
+| `encrust-mcp` | The command line as tools for a chat client — Claude Desktop, Claude Code, Codex, Cursor — so a language model can prepare a model step by step, check it and write the file. |
 
 **For scripts:** `--json` output with a fixed schema, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,

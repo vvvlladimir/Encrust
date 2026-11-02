@@ -8,3 +8,7 @@ platforms = ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-wind
 # and TLS in ureq stays the window's alone (ADR 0172).
 [final-excludes]
 third-party = [{ name = "objc2" }, { name = "block2" }, { name = "ureq" }]
+
+# The MCP server's async runtime and SDK stay its own, out of every core's build (ADR 0396).
+[traversal-excludes]
+workspace-members = ["encrust-mcp"]
