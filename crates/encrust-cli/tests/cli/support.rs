@@ -146,8 +146,12 @@ pub fn test_resin() -> PathBuf {
 }
 
 pub fn layer_pixels(directory: &Path, index: usize) -> (u32, u32, Vec<u8>) {
-    let path = directory.join(format!("layer_{index:04}.png"));
-    let file = fs::File::open(&path).unwrap_or_else(|_| panic!("no {}", path.display()));
+    png_pixels(&directory.join(format!("layer_{index:04}.png")))
+}
+
+/// Width, height and the bytes of every pixel of a PNG the run wrote.
+pub fn png_pixels(path: &Path) -> (u32, u32, Vec<u8>) {
+    let file = fs::File::open(path).unwrap_or_else(|_| panic!("no {}", path.display()));
     let mut reader = png::Decoder::new(std::io::BufReader::new(file))
         .read_info()
         .expect("the layer is a PNG");

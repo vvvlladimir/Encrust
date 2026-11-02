@@ -114,8 +114,9 @@ A number typed after a flag may be negative — `--rotate -90,0,0`, `--relief -0
 
 On a terminal `slice` draws a bar over the layers on stderr, and `batch` one over the
 models; `--no-progress`, `--quiet` and `--json` turn it off. The first Ctrl-C stops the run
-between layers, inside the cavity a `--hollow` run is building and between the models of a
-batch, and removes the file it was writing; a second one exits at once. `inspect`, `info`
+between layers, inside the cavity a `--hollow` run is building, between the models of a
+batch and between the pictures of a `render`, and removes the file it was writing; a second
+one exits at once. `inspect`, `info`
 and `profiles` write at most one small file, so one Ctrl-C ends them.
 
 The output extension picks the format (ADR 0047): `.goo`, `.prz`, `.ctb`, `.cbddlp`, `.photon`,
@@ -406,6 +407,47 @@ transition it is and stated again as one, so a machine that reads the header alo
 takes the file; any other run of exposures becomes a band of height, which such a machine
 refuses. A stack of varying layer heights is refused for now, and
 the new file's previews are blank (ADR 0180).
+
+## Render
+
+`render` takes what `slice` takes — models, a plate file or a project, `--plate N`, and
+every flag that places, orients, hollows, drills and supports — builds the plate as `slice`
+would, and draws it as PNG pictures instead of cutting it, with the drain holes taken out
+(`docs/design/thumbnail.md`). `--view` names the sides, comma separated: `iso` (the sliced
+file's thumbnail), `front`, `back`, `left`, `right`, `top` and `bottom`, which looks up from
+under the plate with X to the right and the front edge at the top; `iso,bottom` without it.
+`-o` is a `.png` name for one view or a directory for several, each written as
+`<view>.png` (`render` without it). `--size PX` (512, 16 to 4096) is each picture's width
+and height. `--mark X,Y,Z` marks a point in plate mm on every picture, and may repeat: a
+disc where the point is seen, a hollow ring where the model stands in front of it. A
+printer is named with a resin, as for `slice`; `--strict` exits 3 and draws nothing when
+the plate has a defect.
+
+```sh
+encrust render model.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --hollow 2 --drain-at 15,20,2 --supports auto --view iso,front,bottom -o shots
+encrust render plate.encrust --view top -o top.png --mark 60,40,0 --size 1024
+```
+
+`--json` lists each picture written, in the order asked, with where each mark landed in it
+(pixels from the top left) and whether the model hid it:
+
+```json
+{
+  "schema": 1,
+  "pictures": [
+    {
+      "view": "bottom",
+      "path": "shots/bottom.png",
+      "width_px": 512,
+      "height_px": 512,
+      "markers": [
+        { "at_mm": [15.0, 20.0, 2.0], "x_px": 143.4, "y_px": 256.0, "hidden": false }
+      ]
+    }
+  ]
+}
+```
 
 ## Profiles, a config file, completions
 

@@ -222,6 +222,29 @@ fn a_run_stopped_by_ctrl_c_exits_130_and_leaves_no_file() {
 }
 
 #[test]
+fn a_render_stopped_by_ctrl_c_exits_130_and_writes_no_picture() {
+    let model = write_box_stl("render-cancelled", 10.0);
+    let out = temp("render-cancelled", "png");
+    let stop = Stop::default();
+    stop.request();
+
+    let argv = [
+        "encrust",
+        "render",
+        &as_str(&model),
+        "--view",
+        "top",
+        "-o",
+        &as_str(&out),
+    ];
+    let result = run(&Cli::parse_from(argv), &stop);
+
+    assert_eq!(exit_code(&result), 130, "got {result:?}");
+    assert!(!out.exists(), "nothing is drawn once the run is stopped");
+    let _ = fs::remove_file(&model);
+}
+
+#[test]
 fn a_png_stack_that_stops_half_way_takes_back_the_layers_it_wrote() {
     let model = write_box_stl("half-stack", 10.0);
     let out = temp("half-stack", "d");
@@ -255,6 +278,7 @@ fn only_a_run_that_reads_stop_takes_over_ctrl_c() {
     let watches = |argv: &[&str]| Cli::parse_from(argv).command.watches_stop();
     assert!(watches(&["encrust", "slice", "model.stl"]));
     assert!(watches(&["encrust", "batch", "models"]));
+    assert!(watches(&["encrust", "render", "model.stl"]));
     assert!(!watches(&["encrust", "info", "plate.ctb"]));
     assert!(!watches(&["encrust", "inspect", "model.stl"]));
     assert!(!watches(&["encrust", "profiles", "list"]));
