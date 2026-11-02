@@ -4,12 +4,12 @@ use crate::pipeline::Watch;
 use crate::profiles::Chosen;
 use crate::progress::bar;
 use anyhow::{Context, Result};
-use core_engine::{EngineError, SupportPlan, Trial, orient_for_print};
+use core_engine::{EngineError, PREPARE_ORIENT, SupportPlan, Trial, orient_for_print};
 use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     transform_mesh,
 };
-use core_plate::{OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
+use core_plate::{OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
 use printer_profiles::{PrinterProfile, SupportProfile};
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
@@ -81,8 +81,8 @@ pub(super) fn place(
         ),
         None => mesh,
     };
-    let (mesh, mut oriented) = if transform.orient {
-        let summary = orientation(&mesh, args, supports, chosen, watch)?;
+    let (mesh, mut oriented) = if let Some(preset) = orient_preset(args) {
+        let summary = orientation(&mesh, (args, preset), supports, chosen, watch)?;
         (turned_in_place(&mesh, summary.rotation)?, Some(summary))
     } else {
         (mesh, None)
@@ -116,11 +116,22 @@ pub(super) fn place(
     Ok((mesh, oriented))
 }
 
-/// The turn --orient finds, printed to choose between the search's best where a printer
-/// and supports to print it on are known, as the window does.
+/// What the model is oriented for: `--orient`'s goal, or under `--prepare` the autopilot's
+/// where no flag turned it; `None` leaves it as the file stands it.
+fn orient_preset(args: &ImportArgs) -> Option<OrientPreset> {
+    let transform = &args.transform;
+    if transform.orient {
+        Some(transform.orient_goal.into())
+    } else {
+        (args.prepare && transform.rotate.is_none()).then_some(PREPARE_ORIENT)
+    }
+}
+
+/// The turn the search for `preset` finds, printed to choose between the search's best where
+/// a printer and supports to print it on are known, as the window does.
 pub(super) fn orientation(
     mesh: &Mesh,
-    args: &ImportArgs,
+    (args, preset): (&ImportArgs, OrientPreset),
     supports: Option<&SupportPlan>,
     chosen: &Chosen,
     watch: &Watch,
@@ -128,7 +139,7 @@ pub(super) fn orientation(
     let transform = &args.transform;
     let profile = chosen.printer.as_ref();
     let settings = OrientSettings {
-        preset: transform.orient_goal.into(),
+        preset,
         max_tilt_deg: transform.max_tilt,
         build_volume_mm: profile
             .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
