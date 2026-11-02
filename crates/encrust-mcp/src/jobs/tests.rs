@@ -14,6 +14,7 @@ fn recipe() -> Recipe {
         model: PathBuf::from("/models/My Bust (final).stl"),
         printer: "elegoo-mars-4-ultra".into(),
         resin: "my-grey".into(),
+        prepare: false,
         repair: None,
         pose: None,
         hollow: None,

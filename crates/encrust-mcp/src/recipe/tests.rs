@@ -7,6 +7,7 @@ fn plain() -> Recipe {
         model: PathBuf::from("/models/bust.stl"),
         printer: "elegoo-mars-4-ultra".into(),
         resin: "my-grey".into(),
+        prepare: false,
         repair: None,
         pose: None,
         hollow: None,
@@ -98,6 +99,19 @@ fn a_negative_number_rides_on_its_flag() {
         turned.flags().last().map(String::as_str),
         Some("--rotate=-90,0,45")
     );
+}
+
+#[test]
+fn the_autopilot_rides_before_every_step_given_outright() {
+    let recipe = Recipe {
+        prepare: true,
+        supports: Some(Supports {
+            profile: "light".into(),
+            cavity: false,
+        }),
+        ..plain()
+    };
+    assert_eq!(recipe.flags()[5..], ["--prepare", "--supports=light"]);
 }
 
 #[test]

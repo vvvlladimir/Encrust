@@ -236,6 +236,7 @@ impl Server {
             plain(value, what)?;
         }
         let recipe = Recipe {
+            prepare: start.prepare.unwrap_or(true),
             repair: start.repair,
             ..Recipe::bare(start.model, start.printer, start.resin)
         };
