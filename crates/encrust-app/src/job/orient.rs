@@ -187,7 +187,14 @@ pub fn orient_tasks(
     scene
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
-        .map(|object| OrientTask {
+        .map(|object| OrientTask::of(object, plan_of(object)))
+        .collect()
+}
+
+impl OrientTask {
+    /// `object` as it stands, judged on supports built to `plan`.
+    pub fn of(object: &SceneObject, plan: SupportPlan) -> Self {
+        Self {
             id: object.id,
             mesh: Arc::clone(&object.mesh),
             shell: object.hollow.shell().map(Arc::clone),
@@ -195,9 +202,9 @@ pub fn orient_tasks(
             vents: vents_of(&object.hollow),
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
-            support: lifted(plan_of(object), object.lift_mm),
-        })
-        .collect()
+            support: lifted(plan, object.lift_mm),
+        }
+    }
 }
 
 /// `plan` standing a model `lift_mm` clear of the plate where the user asked for that.

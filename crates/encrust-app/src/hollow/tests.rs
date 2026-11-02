@@ -137,3 +137,28 @@ fn digging_a_channel_into_a_hollow_model_hollows_it_again_and_nothing_else_does(
     assert!(tool.rebuild(&scene), "the channel needs its sleeve now");
     assert!(tool.job.is_some());
 }
+
+#[test]
+fn a_start_on_walls_hollows_only_the_models_named_at_their_wall() {
+    use crate::scene::fixtures::scene_of_boxes;
+
+    let mut scene = scene_of_boxes(&[
+        (Vec3::ZERO, Vec3::splat(20.0)),
+        (Vec3::new(30.0, 0.0, 0.0), Vec3::new(50.0, 20.0, 20.0)),
+    ]);
+    let (named, other) = (scene.objects()[0].id, scene.objects()[1].id);
+    let mut tool = HollowTool::default();
+    tool.state.thickness_mm = 5.0;
+    tool.start_walls(&scene, &[(named, 1.5)])
+        .expect("a model is named");
+    let mut status = Status::default();
+    while tool.poll(&mut scene, &mut status) {
+        std::thread::yield_now();
+    }
+
+    let asked = scene.get(named).and_then(|object| object.hollow.asked());
+    let wall_mm = asked.map(|asked| asked.thickness_mm);
+    assert_eq!(wall_mm, Some(1.5), "the wall named, not the panel's 5 mm");
+    let left = scene.get(other).expect("on the plate");
+    assert!(!left.hollow.is_hollow(), "the model not named stays solid");
+}
