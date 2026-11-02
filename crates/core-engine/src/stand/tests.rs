@@ -149,3 +149,54 @@ fn a_seated_model_needing_no_supports_stays_on_the_plate_over_a_raft() {
     assert!(stood.contacts.is_empty(), "nothing on a cube hangs");
     assert!(stood.lifted_mm.abs() < 1e-6, "no raft is built, so no lift");
 }
+
+#[test]
+fn the_planned_lift_is_the_lift_standing_gives() {
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    let mut mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let planned = planned_lift(&mesh, &medium(), false, 0.05).expect("a cube has bounds");
+    let stood = stand_under(solid(&mut mesh, &mut None), &medium(), 0.05)
+        .expect("a cube on the plate can be supported");
+
+    assert!(
+        (planned.lifted_mm - profile.z_lift_mm).abs() < 1e-4,
+        "a cube on the plate goes up the profile's {} mm, planned {}",
+        profile.z_lift_mm,
+        planned.lifted_mm
+    );
+    assert!((planned.lifted_mm - stood.lifted_mm).abs() < 1e-4);
+    assert!(!planned.resting, "it stands clear of the plate");
+}
+
+#[test]
+fn a_profile_lifting_nothing_leaves_the_model_resting_on_the_plate() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.z_lift_mm = 0.0;
+    let mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let planned =
+        planned_lift(&mesh, &SupportPlan::of(profile), false, 0.05).expect("a cube has bounds");
+    assert_eq!(planned, Lift::ON_THE_PLATE);
+}
+
+#[test]
+fn a_seated_model_is_planned_onto_its_raft_only_when_something_hangs() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.raft.enabled = true;
+    let plan = SupportPlan::of(profile.clone());
+    let mut hanging = mushroom();
+    let planned = planned_lift(&hanging, &plan, true, 0.05).expect("a mushroom has bounds");
+    let stood = stand_seated(solid(&mut hanging, &mut None), &plan, 0.05)
+        .expect("a mushroom on the plate can be supported");
+    assert!(
+        (planned.lifted_mm - profile.raft.thickness_mm).abs() < 1e-4,
+        "up the raft's {} mm, planned {}",
+        profile.raft.thickness_mm,
+        planned.lifted_mm
+    );
+    assert!((planned.lifted_mm - stood.lifted_mm).abs() < 1e-4);
+    assert!(planned.resting, "on the raft's top");
+
+    let cube = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let planned = planned_lift(&cube, &plan, true, 0.05).expect("a cube has bounds");
+    assert_eq!(planned, Lift::ON_THE_PLATE, "nothing on a cube hangs");
+}
