@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, lift_over_plate, transform_mesh};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
     Blocked, Need, Placed, Profiles, SupportPoint, WallSide, columns, generate_supports, grow,
@@ -11,6 +11,11 @@ use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
+
+mod lift;
+
+use lift::lift_of;
+pub use lift::{Lift, planned_lift};
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -367,20 +372,19 @@ impl Run<'_> {
 }
 
 /// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how
-/// far they moved. A model already standing at least that high is left where it is: the
-/// lift makes room under a part, it does not place it.
+/// far they moved, by [`lift_of`].
 fn lift(mesh: &mut Mesh, cuts: &mut Option<Mesh>, lift_mm: Scalar) -> Result<Scalar, EngineError> {
     let bounds = mesh.aabb().ok_or(EngineError::EmptyPlate)?;
-    if bounds.mins.z >= lift_mm {
+    let up = lift_of(&bounds, lift_mm);
+    if up <= 0.0 {
         return Ok(0.0);
     }
-    let offset = lift_over_plate(&bounds, lift_mm);
-    let moved = Transform::from_translation(offset);
+    let moved = Transform::from_translation(Vec3::Z * up);
     *mesh = transform_mesh(mesh, moved);
     if let Some(cuts) = cuts.as_mut() {
         *cuts = transform_mesh(cuts, moved);
     }
-    Ok(offset.z)
+    Ok(up)
 }
 
 /// Adds `other`'s geometry to `mesh`, keeping each face pointing at its own vertices.
