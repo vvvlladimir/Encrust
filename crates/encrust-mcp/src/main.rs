@@ -1,17 +1,32 @@
-//! `encrust-mcp`: the server a desktop client starts, speaking MCP on stdin and stdout.
+//! `encrust-mcp`: the server a desktop client starts, speaking MCP on stdin and stdout and
+//! driving the `encrust` command line. See `docs/design/ai-integration.md`.
 
+mod jobs;
+mod params;
+mod recipe;
+mod runner;
+mod server;
+
+use std::ffi::OsString;
 use std::path::PathBuf;
+use std::time::Duration;
 
-use anyhow::{Context, Result};
-use encrust_mcp::{Cli, Jobs, Server};
+use anyhow::{Context, Result, bail};
 use rmcp::ServiceExt;
 use rmcp::transport::stdio;
 
-const USAGE: &str = "usage: encrust-mcp [--encrust PATH] [--jobs DIR]";
+use crate::jobs::Jobs;
+use crate::runner::Cli;
+use crate::server::Server;
+
+const USAGE: &str = "usage: encrust-mcp [--encrust PATH] [--jobs DIR] [--timeout-s SECONDS]";
+
+/// How long one run of the command line may take before it is stopped.
+const TIMEOUT: Duration = Duration::from_mins(30);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (cli, jobs) = parse(std::env::args().skip(1))?;
+    let (cli, jobs) = parse(std::env::args_os().skip(1))?;
     let service = Server::new(cli, jobs)
         .serve(stdio())
         .await
@@ -20,20 +35,35 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// `--encrust` names the command line to drive, `--jobs` where jobs are kept.
-fn parse(mut args: impl Iterator<Item = String>) -> Result<(Cli, Jobs)> {
+fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs)> {
     let server = std::env::current_exe().context("finding this server's own binary")?;
-    let mut cli = Cli::beside(&server);
-    let mut jobs = default_jobs_dir()?;
+    let mut program = Cli::program_beside(&server);
+    let mut jobs = None;
+    let mut timeout = TIMEOUT;
     while let Some(arg) = args.next() {
-        let value = || anyhow::anyhow!("{arg} takes a value; {USAGE}");
-        match arg.as_str() {
-            "--encrust" => cli = Cli::new(args.next().ok_or_else(value)?.into()),
-            "--jobs" => jobs = args.next().ok_or_else(value)?.into(),
-            _ => anyhow::bail!("unknown argument {arg}; {USAGE}"),
+        let mut value = || {
+            args.next()
+                .with_context(|| format!("{} takes a value; {USAGE}", arg.to_string_lossy()))
+        };
+        match arg.to_str() {
+            Some("--encrust") => program = value()?.into(),
+            Some("--jobs") => jobs = Some(PathBuf::from(value()?)),
+            Some("--timeout-s") => {
+                let seconds = value()?;
+                let seconds: u64 = seconds
+                    .to_str()
+                    .and_then(|text| text.parse().ok())
+                    .with_context(|| format!("--timeout-s takes whole seconds; {USAGE}"))?;
+                timeout = Duration::from_secs(seconds);
+            }
+            _ => bail!("unknown argument {}; {USAGE}", arg.to_string_lossy()),
         }
     }
-    Ok((cli, Jobs::new(jobs)))
+    let jobs = match jobs {
+        Some(jobs) => jobs,
+        None => default_jobs_dir()?,
+    };
+    Ok((Cli::new(program, timeout), Jobs::new(jobs)))
 }
 
 fn default_jobs_dir() -> Result<PathBuf> {

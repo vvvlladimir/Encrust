@@ -11,7 +11,9 @@ use rmcp::service::{RoleClient, RunningService};
 use rmcp::transport::{ConfigureCommandExt, TokioChildProcess};
 use serde_json::{Value, json};
 
-/// The `encrust` the workspace built beside this server; `cargo test --workspace` builds both.
+type Client = RunningService<RoleClient, ()>;
+
+/// The `encrust` built beside this server; `cargo test --workspace` builds both.
 fn encrust() -> PathBuf {
     let server = PathBuf::from(env!("CARGO_BIN_EXE_encrust-mcp"));
     let cli = server.with_file_name(format!("encrust{}", std::env::consts::EXE_SUFFIX));
@@ -23,7 +25,8 @@ fn encrust() -> PathBuf {
     cli
 }
 
-fn fixture(name: &str) -> PathBuf {
+/// The panel and resin the command line's own tests print on.
+fn profile(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../encrust-cli/tests/fixtures")
         .join(name)
@@ -52,7 +55,14 @@ fn write_stl(mesh: &Mesh, path: &Path) {
     fs::write(path, bytes).expect("the scratch dir is writable");
 }
 
-async fn serve(cli: &Path, jobs: &Path) -> RunningService<RoleClient, ()> {
+/// A 20 mm cube in `dir`, and a server keeping its jobs there.
+async fn cube_and_server(dir: &Path) -> (PathBuf, Client) {
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    (model, serve(&encrust(), &dir.join("jobs")).await)
+}
+
+async fn serve(cli: &Path, jobs: &Path) -> Client {
     let server = PathBuf::from(env!("CARGO_BIN_EXE_encrust-mcp"));
     let transport = TokioChildProcess::new(tokio::process::Command::new(server).configure(|cmd| {
         cmd.arg("--encrust").arg(cli).arg("--jobs").arg(jobs);
@@ -63,11 +73,7 @@ async fn serve(cli: &Path, jobs: &Path) -> RunningService<RoleClient, ()> {
         .expect("the server answers the handshake")
 }
 
-async fn call(
-    client: &RunningService<RoleClient, ()>,
-    tool: &'static str,
-    args: Value,
-) -> CallToolResult {
+async fn call(client: &Client, tool: &'static str, args: Value) -> CallToolResult {
     let Value::Object(arguments) = args else {
         panic!("arguments are an object");
     };
@@ -77,19 +83,37 @@ async fn call(
         .expect("the server answers every call")
 }
 
-fn body(result: &CallToolResult) -> String {
-    result
+fn answer(result: &CallToolResult) -> Value {
+    let text: String = result
         .content
         .iter()
         .filter_map(|block| match block {
             ContentBlock::Text(text) => Some(text.text.clone()),
             _ => None,
         })
-        .collect()
+        .collect();
+    serde_json::from_str(&text).expect("every answer is JSON")
 }
 
-fn answer(result: &CallToolResult) -> Value {
-    serde_json::from_str(&body(result)).expect("a tool that ran answers JSON")
+fn failed(result: &CallToolResult) -> bool {
+    result.is_error == Some(true)
+}
+
+async fn start(client: &Client, model: &Path) -> String {
+    let started = call(
+        client,
+        "start_job",
+        json!({
+            "model": model,
+            "printer": profile("test-panel.toml"),
+            "resin": profile("test-resin.toml"),
+        }),
+    )
+    .await;
+    assert!(!failed(&started), "start_job failed: {}", answer(&started));
+    let started = answer(&started);
+    assert_eq!(started["revision"], 1);
+    started["job"].as_str().expect("a job id").to_owned()
 }
 
 #[tokio::test]
@@ -128,33 +152,8 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
 #[tokio::test]
 async fn a_job_is_prepared_revision_by_revision_and_written() {
     let dir = scratch("job");
-    let model = dir.join("cube.stl");
-    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
-    let client = serve(&encrust(), &dir.join("jobs")).await;
-
-    let started = call(
-        &client,
-        "start_job",
-        json!({
-            "model": model,
-            "printer": fixture("test-panel.toml"),
-            "resin": fixture("test-resin.toml"),
-        }),
-    )
-    .await;
-    assert_ne!(
-        started.is_error,
-        Some(true),
-        "start_job failed: {}",
-        body(&started)
-    );
-    let started = answer(&started);
-    let job = started["job"].as_str().expect("a job id").to_owned();
-    assert_eq!(started["revision"], 1);
-    assert!(
-        started["report"]["status"].is_string(),
-        "no status in {started}"
-    );
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
 
     let supported = answer(
         &call(
@@ -184,26 +183,121 @@ async fn a_job_is_prepared_revision_by_revision_and_written() {
         json!({"job": job, "output": output, "accept_defects": true}),
     )
     .await;
-    assert_ne!(
-        written.is_error,
-        Some(true),
-        "write_file failed: {}",
-        body(&written)
-    );
+    assert!(!failed(&written), "write_file failed: {}", answer(&written));
+    assert_eq!(answer(&written)["revision"], 3);
     assert!(output.is_file(), "{} was not written", output.display());
     client.cancel().await.expect("the server stops");
 }
 
 #[tokio::test]
-async fn a_job_that_does_not_exist_is_a_tool_error_naming_it() {
-    let client = serve(&encrust(), &scratch("unknown")).await;
-    let result = call(&client, "check", json!({"job": "no-such-job"})).await;
-    assert_eq!(result.is_error, Some(true));
+async fn a_write_the_check_refuses_is_a_tool_error_and_leaves_no_file() {
+    let dir = scratch("refused");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
     assert!(
-        body(&result).contains("no-such-job"),
-        "said {}",
-        body(&result)
+        !failed(&hollowed),
+        "a sealed cavity is a finding: {}",
+        answer(&hollowed)
     );
+
+    let output = dir.join("cube.goo");
+    let written = call(&client, "write_file", json!({"job": job, "output": output})).await;
+    assert!(
+        failed(&written),
+        "the trapped resin was written: {}",
+        answer(&written)
+    );
+    assert_eq!(answer(&written)["written"], false);
+    assert!(!output.exists(), "{} is on disk", output.display());
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn an_edit_the_command_line_refuses_is_not_kept() {
+    let dir = scratch("not-kept");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let refused = call(
+        &client,
+        "set_supports",
+        json!({"job": job, "supports": {"profile": "no-such-profile"}}),
+    )
+    .await;
+    assert!(failed(&refused));
+    let refused = answer(&refused);
+    assert_eq!(refused["applied"], false);
+    assert_eq!(refused["latest_revision"], 1);
+    let latest = answer(&call(&client, "check", json!({"job": job})).await);
+    assert_eq!(latest["revision"], 1, "the refused edit became {latest}");
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn two_edits_at_once_both_land_one_after_the_other() {
+    let dir = scratch("race");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let (hollowed, supported) = tokio::join!(
+        call(
+            &client,
+            "set_hollow",
+            json!({"job": job, "hollow": {"wall_mm": 2.0, "open_floor": true}})
+        ),
+        call(
+            &client,
+            "set_supports",
+            json!({"job": job, "supports": {"profile": "light"}})
+        ),
+    );
+    let mut numbers = [
+        answer(&hollowed)["revision"].clone(),
+        answer(&supported)["revision"].clone(),
+    ];
+    numbers.sort_by_key(Value::as_u64);
+    assert_eq!(numbers, [json!(2), json!(3)]);
+    let latest = answer(&call(&client, "check", json!({"job": job})).await);
+    assert!(
+        !latest["recipe"]["hollow"].is_null(),
+        "the hollow was lost: {latest}"
+    );
+    assert!(
+        !latest["recipe"]["supports"].is_null(),
+        "the supports were lost: {latest}"
+    );
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_name_from_the_client_never_reaches_the_command_line_as_a_flag() {
+    let dir = scratch("flags");
+    let (model, client) = cube_and_server(&dir).await;
+    let relative = call(
+        &client,
+        "start_job",
+        json!({"model": "cube.stl", "printer": "elegoo-mars-4-ultra", "resin": "my-grey"}),
+    )
+    .await;
+    assert!(failed(&relative));
+    let dashed = call(
+        &client,
+        "start_job",
+        json!({"model": model, "printer": "--profile=/etc/passwd", "resin": "my-grey"}),
+    )
+    .await;
+    assert!(failed(&dashed));
+    let escaping = call(
+        &client,
+        "check",
+        json!({"job": "../outside", "revision": 1}),
+    )
+    .await;
+    assert!(failed(&escaping));
     client.cancel().await.expect("the server stops");
 }
 
@@ -219,11 +313,11 @@ async fn a_missing_command_line_is_a_tool_error_naming_it() {
         json!({"model": model, "printer": "elegoo-mars-4-ultra", "resin": "my-grey"}),
     )
     .await;
-    assert_eq!(result.is_error, Some(true));
+    assert!(failed(&result));
     assert!(
-        body(&result).contains("no-encrust"),
+        answer(&result).to_string().contains("no-encrust"),
         "said {}",
-        body(&result)
+        answer(&result)
     );
     client.cancel().await.expect("the server stops");
 }

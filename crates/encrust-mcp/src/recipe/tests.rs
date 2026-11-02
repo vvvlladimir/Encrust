@@ -21,10 +21,8 @@ fn a_plain_recipe_stages_the_model_centred_and_checks_drainage() {
         plain().flags(),
         [
             "/models/bust.stl",
-            "--printer",
-            "elegoo-mars-4-ultra",
-            "--resin",
-            "my-grey",
+            "--printer=elegoo-mars-4-ultra",
+            "--resin=my-grey",
             "--center",
             "--check-drainage"
         ]
@@ -34,15 +32,15 @@ fn a_plain_recipe_stages_the_model_centred_and_checks_drainage() {
 #[test]
 fn every_step_becomes_the_flags_the_command_line_documents() {
     let recipe = Recipe {
-        repair: Some("close-holes".into()),
+        repair: Some(Repair::CloseHoles),
         pose: Some(Pose::Search {
-            goal: "auto".into(),
+            goal: Goal::Auto,
             max_tilt_deg: Some(30.0),
         }),
         hollow: Some(Hollow {
             wall_mm: 2.0,
             open_floor: false,
-            infill: Some("hive".into()),
+            infill: Some(Infill::Hive),
             infill_cell_mm: Some(6.0),
             infill_density: None,
         }),
@@ -58,63 +56,69 @@ fn every_step_becomes_the_flags_the_command_line_documents() {
         ..plain()
     };
     let flags = recipe.flags();
-    let tail: Vec<&str> = flags[7..].iter().map(String::as_str).collect();
     assert_eq!(
-        tail,
+        flags[5..],
         [
             "--repair=close-holes",
             "--orient",
-            "--orient-goal",
-            "auto",
-            "--max-tilt",
-            "30",
-            "--hollow",
-            "2",
-            "--infill",
-            "hive",
-            "--infill-cell",
-            "6",
-            "--drain",
-            "4",
+            "--orient-goal=auto",
+            "--max-tilt=30",
+            "--hollow=2",
+            "--infill=hive",
+            "--infill-cell=6",
+            "--drain=4",
             "--drain-at=30,30,0.5",
             "--drain-at=-5,0,2",
             "--drain-plugs",
-            "--supports",
-            "auto",
+            "--supports=auto",
             "--support-cavity"
         ]
     );
 }
 
 #[test]
-fn a_turn_given_outright_is_one_rotate_flag_that_takes_negative_degrees() {
-    let recipe = Recipe {
+fn a_negative_number_rides_on_its_flag() {
+    let tilted = Recipe {
+        pose: Some(Pose::Search {
+            goal: Goal::LeastPeel,
+            max_tilt_deg: Some(-5.0),
+        }),
+        ..plain()
+    };
+    assert!(tilted.flags().contains(&"--max-tilt=-5".to_owned()));
+    let turned = Recipe {
         pose: Some(Pose::Rotate {
             degrees: [-90.0, 0.0, 45.0],
         }),
         ..plain()
     };
     assert_eq!(
-        recipe.flags().last().map(String::as_str),
+        turned.flags().last().map(String::as_str),
         Some("--rotate=-90,0,45")
     );
+}
+
+#[test]
+fn the_whole_repair_is_the_bare_flag() {
+    let recipe = Recipe {
+        repair: Some(Repair::Full),
+        ..plain()
+    };
+    assert_eq!(recipe.flags().last().map(String::as_str), Some("--repair"));
 }
 
 #[test]
 fn a_profile_given_as_a_toml_file_takes_the_path_flags() {
     let recipe = Recipe {
         printer: "/profiles/my-printer.toml".into(),
-        resin: "/profiles/grey.toml".into(),
+        resin: "/profiles/grey.TOML".into(),
         ..plain()
     };
-    let flags = recipe.flags();
     assert_eq!(
-        flags[1..5],
+        recipe.flags()[1..3],
         [
-            "--profile",
-            "/profiles/my-printer.toml",
-            "--material",
-            "/profiles/grey.toml"
+            "--profile=/profiles/my-printer.toml",
+            "--material=/profiles/grey.TOML"
         ]
     );
 }
@@ -135,8 +139,10 @@ fn drains_with_no_point_add_no_flag() {
 #[test]
 fn a_recipe_reads_back_from_the_toml_it_is_kept_in() {
     let recipe = Recipe {
-        pose: Some(Pose::Rotate {
-            degrees: [0.0, 35.0, 0.0],
+        repair: Some(Repair::Wrap),
+        pose: Some(Pose::Search {
+            goal: Goal::FewestSupports,
+            max_tilt_deg: None,
         }),
         supports: Some(Supports {
             profile: "medium".into(),
