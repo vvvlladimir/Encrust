@@ -29,4 +29,5 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [supports.md](supports.md) | Where a column can stand, the shape it is meshed as, placing one by hand |
 | [analysis.md](analysis.md) | A layer's pieces from its runs, the pull on the film, islands and levers |
 | [hostile-files.md](hostile-files.md) | What a reader believes of a header, and the three guards under every count |
+| [ai-integration.md](ai-integration.md) | A model driving the pipeline: the tools, the transports, the plate state, the bench |
 | [updates.md](updates.md) | The release feed, what an archive passes before it is unpacked, and the swap |
