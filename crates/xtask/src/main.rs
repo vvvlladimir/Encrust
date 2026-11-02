@@ -6,6 +6,7 @@ mod hygiene;
 mod i18n;
 mod licenses;
 mod man;
+mod mcpb;
 mod web;
 
 use anyhow::Result;
@@ -32,6 +33,8 @@ enum Command {
     Licenses(licenses::Args),
     /// Builds the window as a macOS app bundle macOS lets onto the local network, and opens it.
     App(app::Args),
+    /// Packs the MCP server and the command line into a `.mcpb` bundle for Claude Desktop.
+    Mcpb(mcpb::Args),
     /// Lists, as Fluent to paste and translate, the window's messages a language lacks.
     I18n(i18n::Args),
 }
@@ -45,5 +48,6 @@ fn main() -> Result<()> {
         Command::Licenses(args) => licenses::run(&args),
         Command::App(args) => app::run(&args),
         Command::I18n(args) => i18n::run(&args),
+        Command::Mcpb(args) => mcpb::run(&args),
     }
 }

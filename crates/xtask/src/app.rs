@@ -88,7 +88,7 @@ fn rename(bundle: &Path) -> Result<()> {
     Ok(())
 }
 
-fn run_tool(dir: &Path, tool: &str, args: &[&str]) -> Result<()> {
+pub(crate) fn run_tool(dir: &Path, tool: &str, args: &[&str]) -> Result<()> {
     let status = Command::new(tool)
         .current_dir(dir)
         .args(args)
@@ -100,12 +100,12 @@ fn run_tool(dir: &Path, tool: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn path_arg(path: &Path) -> Result<&str> {
+pub(crate) fn path_arg(path: &Path) -> Result<&str> {
     path.to_str()
         .with_context(|| format!("{} is not UTF-8", path.display()))
 }
 
-fn workspace_root() -> Result<PathBuf> {
+pub(crate) fn workspace_root() -> Result<PathBuf> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     manifest
         .ancestors()
