@@ -23,56 +23,54 @@ fn recipe() -> Recipe {
 }
 
 #[test]
-fn a_job_starts_at_revision_one_named_after_its_model() {
+fn a_job_is_named_after_its_model_and_starts_at_revision_one() {
     let jobs = scratch("start");
-    let first = jobs.start(recipe()).expect("the root is writable");
+    let job = Jobs::name_for(&recipe());
+    assert!(job.starts_with("my-bust--final-"), "named {job}");
+    let first = jobs.commit(&job, recipe()).expect("the root is writable");
     assert_eq!(first.number, 1);
-    assert!(
-        first.job.starts_with("my-bust--final-"),
-        "named {}",
-        first.job
-    );
-    assert!(is_job_name(&first.job));
 }
 
 #[test]
-fn each_edit_is_a_new_revision_and_the_old_one_stays_readable() {
+fn each_commit_is_a_new_revision_and_the_old_one_stays_readable() {
     let jobs = scratch("revisions");
-    let first = jobs.start(recipe()).expect("the root is writable");
-    let mut edited = first.recipe.clone();
+    let job = Jobs::name_for(&recipe());
+    jobs.commit(&job, recipe()).expect("the root is writable");
+    let mut edited = recipe();
     edited.supports = Some(Supports {
         profile: "auto".into(),
         cavity: false,
     });
-    let second = jobs
-        .next(&first.job, edited.clone())
-        .expect("the job exists");
+    let second = jobs.commit(&job, edited.clone()).expect("the job exists");
     assert_eq!(second.number, 2);
-    assert_eq!(jobs.open(&first.job, None).expect("latest").recipe, edited);
-    assert_eq!(
-        jobs.open(&first.job, Some(1)).expect("first").recipe,
-        recipe()
-    );
-}
-
-#[test]
-fn a_report_is_kept_beside_its_revision() {
-    let jobs = scratch("report");
-    let first = jobs.start(recipe()).expect("the root is writable");
-    let report = serde_json::json!({"status": "ok"});
-    jobs.keep_report(&first, &report).expect("the job exists");
-    let kept = fs::read_to_string(jobs.dir(&first.job).join("1.json")).expect("it was kept");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&kept).expect("JSON"),
-        report
-    );
+    assert_eq!(jobs.open(&job, None).expect("latest").recipe, edited);
+    assert_eq!(jobs.open(&job, Some(1)).expect("first").recipe, recipe());
 }
 
 #[test]
 fn a_job_name_cannot_reach_outside_the_root() {
     let jobs = scratch("escape");
-    for name in ["../etc", "a/b", "", "."] {
-        let refused = jobs.open(name, None);
-        assert!(refused.is_err(), "{name:?} was opened");
+    let outside = std::env::temp_dir().join("encrust-mcp-outside");
+    let absolute = outside.display().to_string();
+    for name in ["../etc", "a/b", "", ".", absolute.as_str()] {
+        assert!(jobs.open(name, None).is_err(), "{name:?} was opened");
+        assert!(
+            jobs.open(name, Some(1)).is_err(),
+            "{name:?} revision 1 was opened"
+        );
+        assert!(jobs.commit(name, recipe()).is_err(), "{name:?} was written");
     }
+    assert!(!outside.exists());
+}
+
+#[test]
+fn a_job_that_was_never_started_has_no_latest_revision() {
+    let jobs = scratch("never");
+    let refused = jobs
+        .open("no-such-job", None)
+        .expect_err("nothing was started");
+    assert!(
+        refused.to_string().contains("no-such-job"),
+        "said {refused}"
+    );
 }

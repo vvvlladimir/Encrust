@@ -1,22 +1,25 @@
-//! Jobs on disk: a directory per job, a numbered TOML recipe per revision beside the report
-//! the command line gave for it. A call names its job, so no state lives in the process.
+//! Jobs on disk: a directory per job, a numbered TOML recipe per revision. A call names its
+//! job, so no state lives in the process but the lock that orders edits to one job.
 
-use std::fs;
+use std::collections::HashMap;
+use std::fs::{self, OpenOptions};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
-use serde_json::Value;
 
 use crate::recipe::Recipe;
 
-/// Where the jobs are kept.
+/// Where the jobs are kept, and a lock per job so two edits never take one number.
 #[derive(Debug, Clone)]
 pub struct Jobs {
     root: PathBuf,
+    locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
-/// One revision of a job: its recipe and what checking it found.
+/// One revision of a job.
 #[derive(Debug, Clone)]
 pub struct Revision {
     pub job: String,
@@ -27,11 +30,14 @@ pub struct Revision {
 
 impl Jobs {
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            locks: Arc::default(),
+        }
     }
 
-    /// Starts a job at revision one.
-    pub fn start(&self, recipe: Recipe) -> Result<Revision> {
+    /// A new job's name, from its model's file name and the time; nothing is written yet.
+    pub fn name_for(recipe: &Recipe) -> String {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|since| since.as_nanos())
@@ -41,9 +47,13 @@ impl Jobs {
             .file_stem()
             .and_then(|stem| stem.to_str())
             .map_or_else(|| "model".into(), slug);
-        let job = format!("{stem}-{stamp:x}");
-        fs::create_dir_all(self.dir(&job)).with_context(|| format!("creating job {job}"))?;
-        self.write(job, 1, recipe)
+        format!("{stem}-{stamp:x}")
+    }
+
+    /// The lock an edit of `job` holds from reading its latest revision to writing the next.
+    pub fn lock(&self, job: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut locks = self.locks.lock().unwrap_or_else(PoisonError::into_inner);
+        Arc::clone(locks.entry(job.to_owned()).or_default())
     }
 
     /// The revision a call names, or the job's latest one.
@@ -52,11 +62,11 @@ impl Jobs {
             Some(number) => number,
             None => self.latest(job)?,
         };
-        let path = self.recipe_path(job, number);
+        let path = self.dir(job)?.join(format!("{number}.toml"));
         let text = fs::read_to_string(&path)
             .with_context(|| format!("job {job} has no revision {number}"))?;
-        let recipe =
-            toml::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
+        let recipe = toml::from_str(&text)
+            .with_context(|| format!("revision {number} of job {job} does not read"))?;
         Ok(Revision {
             job: job.to_owned(),
             number,
@@ -64,59 +74,55 @@ impl Jobs {
         })
     }
 
-    /// Writes `recipe` as the revision after the job's latest.
-    pub fn next(&self, job: &str, recipe: Recipe) -> Result<Revision> {
-        let number = self.latest(job)? + 1;
-        self.write(job.to_owned(), number, recipe)
-    }
-
-    /// Keeps what checking a revision reported, for the next call to compare against.
-    pub fn keep_report(&self, revision: &Revision, report: &Value) -> Result<()> {
-        let path = self
-            .dir(&revision.job)
-            .join(format!("{}.json", revision.number));
-        let text = serde_json::to_string_pretty(report)?;
-        fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+    /// Writes `recipe` as the revision after the job's latest, or as revision one of a job not
+    /// there yet. Hold the job's lock across reading the latest and this.
+    pub fn commit(&self, job: &str, recipe: Recipe) -> Result<Revision> {
+        let dir = self.dir(job)?;
+        let number = if dir.is_dir() {
+            self.latest(job)? + 1
+        } else {
+            1
+        };
+        fs::create_dir_all(&dir).with_context(|| format!("creating job {job}"))?;
+        let path = dir.join(format!("{number}.toml"));
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .with_context(|| format!("revision {number} of job {job} was taken"))?;
+        file.write_all(toml::to_string(&recipe)?.as_bytes())
+            .with_context(|| format!("writing {}", path.display()))?;
+        Ok(Revision {
+            job: job.to_owned(),
+            number,
+            recipe,
+        })
     }
 
     fn latest(&self, job: &str) -> Result<u32> {
-        let dir = self.dir(job);
-        if !is_job_name(job) || !dir.is_dir() {
+        let dir = self.dir(job)?;
+        if !dir.is_dir() {
             bail!("there is no job {job}; start one with start_job");
         }
-        let entries = fs::read_dir(&dir).with_context(|| format!("reading {}", dir.display()))?;
+        let entries = fs::read_dir(&dir).with_context(|| format!("reading job {job}"))?;
         entries
             .filter_map(|entry| revision_number(&entry.ok()?.path()))
             .max()
             .with_context(|| format!("job {job} has no revision"))
     }
 
-    fn write(&self, job: String, number: u32, recipe: Recipe) -> Result<Revision> {
-        let path = self.recipe_path(&job, number);
-        let text = toml::to_string(&recipe)?;
-        fs::write(&path, text).with_context(|| format!("writing {}", path.display()))?;
-        Ok(Revision {
-            job,
-            number,
-            recipe,
-        })
+    /// A job's directory under the root. A name of anything but letters, digits, `-` and `_`
+    /// is refused, so no name reaches outside it.
+    fn dir(&self, job: &str) -> Result<PathBuf> {
+        let plain = !job.is_empty()
+            && job
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if !plain {
+            bail!("{job:?} is not a job name; use the id start_job returned");
+        }
+        Ok(self.root.join(job))
     }
-
-    fn dir(&self, job: &str) -> PathBuf {
-        self.root.join(job)
-    }
-
-    fn recipe_path(&self, job: &str, number: u32) -> PathBuf {
-        self.dir(job).join(format!("{number}.toml"))
-    }
-}
-
-/// A job's name is made here, so one that holds anything else reaches outside the root.
-fn is_job_name(job: &str) -> bool {
-    !job.is_empty()
-        && job
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 fn slug(stem: &str) -> String {

@@ -17,14 +17,17 @@ stdio a server's stdout is the protocol, and the command line prints its report 
 
 **`encrust-mcp`**, a binary crate depending on no crate of this workspace, serves MCP over
 stdio with the official SDK `rmcp` 3.8 on `tokio`. Each tool runs `encrust --json` as a child
-process — the binary beside its own, else `--encrust PATH` — and answers with the report.
+process — `--encrust PATH`, else the binary beside its own, else the one on the `PATH` — with
+a time limit and a progress beat to the client, and answers with the report.
 
 A **job** is a directory of numbered revisions, each a TOML **recipe**: the model, the printer
-and resin, and each step's settings, which become `encrust` flags. A tool that edits writes the
-next revision and checks it with `estimate`; `revert` copies an old one forward; `write_file`
-slices the latest under `--strict` unless the user accepted the defects. A call names its job,
-so nothing lives in the process. `send_to_printer` and `write_file` are marked destructive, so
-a client asks first. The server's instructions tell the model never to invent a resin.
+and resin, and each step's settings, which become `encrust` flags given as `--flag=value`. A
+tool that edits checks the changed recipe with `estimate` and keeps it as the next revision only
+if the command line took it, under a lock per job; `revert` copies an old one forward;
+`write_file` slices under `--strict` unless the user accepted the defects, and a refusal is a
+tool error. A call names its job, so nothing lives in the process but the locks. Paths from the
+client must be absolute and no name may start with `-`. The instructions tell the model to ask
+for the printer and resin, never to choose or invent one, and to ask before writing or sending.
 
 ## Consequences
 
@@ -54,7 +57,7 @@ the tools could not edit it.
 The window's agent panel will run the same catalogue on its own plate. Shared now, it would
 be an abstraction with one user; it moves down when the panel needs it.
 
-### The cost of the choice
+### The option that won, and what it costs
 
 A recipe is flags, so what the window can do and the command line cannot is out of reach,
 and every edit waits on a full stage.

@@ -13,9 +13,9 @@ strict check decides when the work is done.
 ```
  Claude Desktop, Claude Code, Codex, Cursor ── stdio ──> encrust-mcp ──┐
                                         └── or into the open window ───┤
- the window's agent panel ── in process ───────────────────────────────┤
+ the window's agent panel (step 9) ── in process ───────────────────────┤
                                                                        v
-                                    encrust --json, a child per call
+                         encrust --json, a child per call (the panel: the scene)
                                                                        v
                                        core-engine, core-plate, core-volume, core-supports …
 ```
@@ -26,25 +26,23 @@ catalogue moves into a crate of its own when the window's panel needs it too.
 
 ## The tools
 
-| Tool | Does | Engine | Kind |
+| Tool | Does | Command line | Kind |
 |---|---|---|---|
-| `open_model` | reads a file or an upload, welds, diagnoses, repairs when asked | `core-mesh-io`, `mend` | creates a plate |
-| `list_profiles` | printers, the user's resins, support profiles | `Catalogue` | read |
-| `orient` | the search's finalists with their readings; applies one | `finalists`, `orient` | edits |
-| `hollow` | the wall, infill, open floor; the pockets left trapped | `hollow`, `TrapScan` | edits |
-| `suggest_drains` | ranked hole positions that empty every pocket | new, see below | read |
-| `drill` | holes at given points, plugs | `drill`, `plugs` | edits |
-| `support` | a profile or auto, the cavity too; contacts left without one | `stand_under` | edits |
-| `check` | every finding, located: kind, layer, plate point, size | `Measured`, `TrapScan` | read |
-| `render` | the plate from a view, findings marked, as an image | `core-thumbnail` | read |
-| `estimate` | time, resin, weight, cost | `print_out` | read |
-| `write` | the printer file; refused unless `check` is clean or the user accepts it | `core-pipeline` | writes a file |
-| `send` | the file to a printer on the user's network | `printer-link` | outward, confirmed by a person |
-| `prepare` | the whole chain with the engine's defaults, no model involved | new, see below | edits |
+| `list_profiles` | printers, the user's resins, support profiles | `profiles list` | read |
+| `inspect_model` | a file's size, shells, defects, what a repair would do | `inspect` | read |
+| `start_job` | a job for a model, printer and resin, checked as it stands | `estimate` | creates a job |
+| `set_pose` | the orientation search or a turn; clears the drains | `--orient`, `--rotate` | edits |
+| `set_hollow` | the wall, infill, open floor | `--hollow` and its flags | edits |
+| `set_drains` | holes at plate points, plugs | `--drain`, `--drain-at` | edits |
+| `set_supports` | a profile or auto, the cavity too | `--supports` | edits |
+| `check` | a revision as it would print | `estimate --check-drainage` | read |
+| `revert` | an earlier revision made the latest again | — | edits |
+| `write_file` | the printer file; refused while the check names defects | `slice --strict` | writes a file |
+| `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
 
-Each tool carries MCP annotations (`readOnlyHint`, `destructiveHint`) so a client asks
-before `write` and `send`. A result is JSON for the model plus, from `render`, an image; a
-finding is always located, so the next call can act on it.
+Still to come: `render` over step 3's views, a suggested drain from step 2, and `prepare`,
+the autopilot of step 4. An edit is kept only if the command line took it; a finding is
+located once step 1 lands, so the next call can act on it.
 
 ### State
 
