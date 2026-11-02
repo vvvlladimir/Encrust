@@ -1,0 +1,32 @@
+[package]
+name = "encrust-mcp"
+description = "Model Context Protocol server: a language model drives the encrust command line."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "encrust-mcp"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+rmcp = { workspace = true, features = ["server", "macros", "schemars", "transport-io"] }
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "io-std", "fs"] }
+toml.workspace = true
+directories.workspace = true
+
+[dev-dependencies]
+core-geometry.workspace = true
+rmcp = { workspace = true, features = ["client", "transport-child-process"] }
+
+[lints]
+workspace = true

@@ -2,12 +2,11 @@
 
 How a language model takes a model from its file to a checked printer file through Encrust,
 on the user's computer: driven from a chat client over MCP, or from inside the window.
-Nothing runs on encrust.app. A
-proposal: the decisions it needs are listed at the end and get their ADRs once taken.
+Nothing runs on encrust.app. The server is ADR 0396; the rest is the plan.
 
 ## The shape
 
-One catalogue of tools over `core-engine`, put in front of a model three ways. The model
+One catalogue of tools over the engine, put in front of a model three ways. The model
 orchestrates; every geometric choice — a pose, a wall, a hole, a tip — is the engine's; a
 strict check decides when the work is done.
 
@@ -16,14 +15,14 @@ strict check decides when the work is done.
                                         └── or into the open window ───┤
  the window's agent panel ── in process ───────────────────────────────┤
                                                                        v
-                                 agent-tools: the catalogue, its schemas, the plate state
+                                    encrust --json, a child per call
                                                                        v
                                        core-engine, core-plate, core-volume, core-supports …
 ```
 
-`agent-tools` holds what every transport shares, so a tool behaves the same in every client
-and the window (rule 9 of `architecture.md` extended to the model as a third front end).
-`encrust-mcp` is the MCP server over it, on stdio.
+`encrust-mcp` runs the command line for every tool, so a tool can do what `encrust` does and
+nothing else (rule 9 of `architecture.md` extended to the model as a third front end). The
+catalogue moves into a crate of its own when the window's panel needs it too.
 
 ## The tools
 
@@ -49,12 +48,11 @@ finding is always located, so the next call can act on it.
 
 ### State
 
-MCP 2026-07-28 is stateless: no session, any request on any instance. A plate is therefore
-named in every call by a handle, and the handle is a `.encrust` project revision — it
-already holds the shells and the support trees as they stand (ADR 0191). Each editing tool
-returns a new revision, which gives undo and lets any instance serve the next call; a
-process caches the opened plate by revision so a chain of calls does not reopen it. A
-revision is a file beside the model.
+MCP 2026-07-28 is stateless: no session, any request on any instance. A call therefore
+names its job, a directory in the user's cache of numbered revisions, each a TOML recipe —
+the model, printer, resin and each step's settings — that becomes `encrust` flags. An
+editing tool writes the next revision and checks it; `revert` copies an old one forward.
+The cost: each check stages the model again from its file (ADR 0396).
 
 ## Engine work first
 
@@ -140,11 +138,11 @@ procedure it is measured with.
 | 2 | Suggested drains, `--drain auto` | `core-volume`, `core-supports`, `encrust-cli` | — |
 | 3 | Views with markers, `encrust render` | `core-thumbnail`, `encrust-cli` | — |
 | 4 | The autopilot, `encrust prepare` | `core-engine`, `encrust-cli` | 1, 2 |
-| 5 | The catalogue and plate revisions | `agent-tools` | 1 |
-| 6 | The stdio server and its bundle | `encrust-mcp` | 5 |
+| 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0396) | — |
+| 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` | 1–5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` | 4, 6 |
 | 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |
-| 9 | The window's agent panel and its providers | `encrust-app` | 5 |
+| 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 6 |
 | 10 | The MCP Apps page | `encrust-mcp` | 6 |
 
 Steps 1, 2 and 3 touch separate crates and run in parallel; 8, 9 and 10 likewise once 6
@@ -164,14 +162,7 @@ stands.
 
 ## Open decisions
 
-1. **Two crates and their dependencies:** `agent-tools` (on `core-engine`, `serde`, and
-   `schemars` for the schemas) and the binary `encrust-mcp` (`rmcp`, `tokio`). Recommended:
-   yes, a binary of its own keeps `tokio` out of the command line and the cores.
-2. **The report:** located findings added to schema 1, every existing field kept.
-   Recommended: additive, no new schema number.
-3. **The plate handle:** a `.encrust` revision. Recommended: yes; it exists and the window
-   opens it.
-4. **The window as the server's engine:** a local socket the open window listens on.
-   Recommended: yes, after the stdio server works alone.
-5. **The window's providers:** an API key and local models first; "Sign in with ChatGPT"
+1. **The window as the server's engine:** a local socket the open window listens on, after
+   the stdio server works alone.
+2. **The window's providers:** an API key and local models first; "Sign in with ChatGPT"
    once OpenAI's terms for apps are confirmed.

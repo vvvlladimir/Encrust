@@ -85,6 +85,10 @@ clap_mangen = "0.3"
 indicatif = { version = "0.18", default-features = false }
 ctrlc = "3.5"
 directories = "6.0"
+# The server a language model drives the command line through, over stdio; see
+# docs/decisions/0396.
+rmcp = { version = "3.8", default-features = false }
+tokio = { version = "1", default-features = false }
 # The date and time a sliced file's name may carry; see docs/decisions/0387.
 jiff = "0.2"
 
