@@ -7,12 +7,13 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use core_analysis::{Cured, Measured, cure};
-use core_engine::{Cutting, Model, Plate, Run};
+use core_engine::{Cutting, DrainSearch, Model, Plate, Run, suggest_drains};
 use core_format::ExposurePlan;
-use core_geometry::{Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::{LayerRuns, RasterSettings, Rasterizer, ScanlineRasterizer};
 use core_slicer::{Layer, SliceError};
+use core_volume::{Cancel, HoleSize, HollowSettings, hollow};
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use printer_profiles::{Catalogue, MaterialProfile};
 use rayon::prelude::*;
@@ -194,5 +195,29 @@ fn cured(runs: &[LayerRuns], panel: &RasterSettings) -> Vec<Cured> {
         .collect()
 }
 
-criterion_group!(benches, plates, stages);
+/// `--drain-at auto` on a 40 mm ball hollowed to a 2 mm wall, standing on the plate, at a
+/// print's layer: each scan cuts the whole stack, so the search costs its scans.
+fn drains(c: &mut Criterion) {
+    let ball = core_geometry::ball(Vec3::new(0.0, 0.0, 20.0), 20.0, 64, 96);
+    let asked = HollowSettings::for_wall(2.0);
+    let shell = hollow(&ball, &Bvh::build(&ball), &asked, Cancel::never()).expect("a ball hollows");
+    let search = DrainSearch {
+        mesh: &shell.mesh,
+        cuts: None,
+        size: HoleSize::round(3.0, 3.0, 1.0),
+        wall: Some((2.0, shell.voxel_mm)),
+        vents: true,
+        plate_z: Some(0.0),
+        keep_clear: &[],
+        layer_height_mm: 0.05,
+    };
+    let mut group = c.benchmark_group("drains");
+    group.sample_size(10);
+    group.bench_function("auto_40mm_ball", |b| {
+        b.iter(|| suggest_drains(&search).expect("the shell slices"));
+    });
+    group.finish();
+}
+
+criterion_group!(benches, plates, stages, drains);
 criterion_main!(benches);

@@ -65,7 +65,7 @@ building without them.
    print's pose, on faces looking down or out of sight, clear of supports and of each other,
    each proven by drilling it and scanning again. A model picking `--drain-at X,Y,Z` by
    itself is the weakest link of the chain; this makes it a choice among proven candidates.
-   The command line gets it as `--drain auto`.
+   The command line gets it as `--drain-at auto` (ADR 0396; `--drain` is the diameter).
 3. **Views with markers.** `core-thumbnail` renders the plate from four sides and from
    below with each finding marked, for a model that reads images, and for `encrust render`.
 4. **An autopilot.** `prepare`: repair, `--orient-goal auto`, hollow where the wall saves
@@ -133,7 +133,7 @@ procedure it is measured with.
 | Step | What | Where | After |
 |---|---|---|---|
 | 1 | Located findings in the report | `core-analysis`, `core-supports`, `encrust-cli` | — |
-| 2 | Suggested drains, `--drain auto` | `core-volume`, `core-supports`, `encrust-cli` | — |
+| 2 | Suggested drains, `--drain-at auto` | `core-volume`, `core-engine`, `encrust-cli` (done, ADR 0396; the window's Auto to come) | — |
 | 3 | Views with markers, `encrust render` | `core-thumbnail`, `encrust-cli` | — |
 | 4 | The autopilot, `encrust prepare` | `core-engine`, `encrust-cli` | 1, 2 |
 | 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0395) | — |
