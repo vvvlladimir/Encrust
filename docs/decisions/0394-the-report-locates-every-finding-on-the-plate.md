@@ -18,8 +18,13 @@ column. The window already turned a risk into a plate point, in a function of it
 Each count gains a list beside it, in schema 1, every field it had kept with its meaning:
 `cured.risks`, `slicing.trapped` and `supports.no_room_at_mm`, wherever `Cured`, `Slicing`
 and `Supports` appear. Every point is in plate millimetres from the plate's front left
-corner after placement, the frame `--drain-at` takes. A risk's z is the bottom of its layer,
-where it cures onto what is under it and where the window's Check stands a support under an
+corner as the model prints: after placement and after the lift its supports give it, the frame
+the stack is cut in. `--drain-at` and `--channel` take the same frame, so a point the report
+gives can be fed straight back: the command line works out the lift before it places a hole —
+`core_engine::planned_lift`, by the rule standing follows, the profile's lift and raft against
+the model's lowest point, a raft under a seated model only when something on it hangs — places
+the point that much lower on the model, and refuses the run if the supports stood it otherwise.
+A risk's z is the bottom of its layer, where it cures onto what is under it and where the window's Check stands a support under an
 island; its layer counts from one, as the other `*_layer` fields do; its kind is kebab-case
 and carries the kind's own readings. `docs/cli.md` lists the fields.
 
@@ -41,6 +46,14 @@ engine names later is located here too, or the additive promise breaks. The term
 lines still read the mask's own millimetres; a reason to reopen is a script reading those.
 
 ## Alternatives considered
+
+### Points before the lift, as the holes are placed
+
+The holes are placed on the model before its supports stand, so taking points there needs no
+lift worked out ahead. But the report can only locate what it cut, after the lift: a pocket's
+point fed back would land the lift higher, through the lid. Two frames is the mistake an agent
+cannot see. Working out the lift first costs a slice of a seated model with a raft, and a mould,
+whose wall grows under it, cannot take a point with supports.
 
 ### A new schema number
 

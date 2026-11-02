@@ -372,13 +372,18 @@ eight round it at 45° and eight level. Each is followed through the `Bvh` face 
 32, and ends where it last leaves material, having entered by the face before. There the hole is
 drilled along the face's normal, not the ray, as a click drills it; it must meet the cavity
 within the wall the ray crossed, else it would run through the solid to a far side, and it
-reaches a diameter past that wall. Three things drop a mouth:
+reaches a diameter past that wall, or as far as `pierce` carries it through the wall the cavity
+was cut to. A second cast, on from the wall across the cavity, finds its far side: the hole stops
+0.5 mm short of it, half a lattice cell of the far surface's error and a layer to spare, so a
+cavity a millimetre thin under a lid is not drilled through the lid. Four things drop a mouth:
 
 - off a face: eight points of the rim, cast back along the normal from `0.2 r` out, must each
   meet an outward face within `0.4 r` — a sphere of `2.5 r` curves away by `0.2 r`, and an edge
   or a fin narrower than the hole leaves a point over air;
-- on the plate: on a model printing on it, the mouth's lowest point `z − r·sqrt(1 − n_z²)` must
-  stand a millimetre over it, where the first layers spread and close it;
+- on the plate: on a model resting on it or on its raft, the mouth's lowest point
+  `z − r·sqrt(1 − n_z²)` must stand a millimetre over it, where the first layers spread and
+  close it;
+- no room: a cavity whose far side stands nearer than the wall's crossing plus the clearance;
 - crossing: a ray that crossed more than one wall goes to the end of the list, since its hole
   may serve a second cavity on the way.
 
@@ -386,14 +391,17 @@ A drain ranks by `z + r·n_z` in steps of 0.1 mm — lower first, a face looking
 lower — then by its distance from where the rays start; a vent by height alone.
 
 `core_engine::suggest_drains` proves them. One scan finds the pockets. A round drills one
-untried proposal a pocket still waiting, each two diameters clear of every mouth chosen and of
-points the caller keeps clear, beside the holes already kept, and scans once; a hole is kept
-when no pocket of the scan holds its pocket's `p`. Four rounds at most for drains, then four
-for vents, a vent proven with only the vents drilled so it reaches its pocket alone, then one
-scan with everything for what is left: ten at most. A hole that fails for its own pocket but
-drains a neighbour gives that neighbour's hole a pass it did not earn; the last scan then
-reports the neighbour trapped rather than trying again. The scans cut the model at the run's layer height, so a hole is proven at the layers
-it prints at.
+untried proposal a pocket still waiting, each two diameters clear of every mouth chosen,
+beside the holes already kept, and scans once; a pocket is still there while a box of the scan
+overlaps its own, which a hole that left part of it or moved its floor cannot hide. Each scan
+checks every hole kept so far again: a try that fails for its own pocket but opens a neighbour
+gives the neighbour's hole a pass it did not earn, and once that try is gone the next scan finds
+the neighbour again, drops its hole and sends it to its next proposal. Four rounds at most for
+drains, then four for vents, a vent proven with only the vents drilled so it reaches its pocket
+alone, then one scan with everything for what is left: ten at most. A pass earned in the last
+round is checked only by that last scan, which reports the pocket trapped rather than trying
+again. The scans cut the model at the run's layer height, so a hole is proven at the layers it
+prints at.
 
 ## What it does not do
 

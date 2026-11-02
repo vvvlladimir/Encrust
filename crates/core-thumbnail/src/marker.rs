@@ -20,6 +20,8 @@ pub struct MarkerSpot {
     pub y_px: f32,
     /// Whether something drawn stands between the eye and the point.
     pub hidden: bool,
+    /// Whether the point lies off the picture, so the marker stands at the edge nearest it.
+    pub pinned: bool,
 }
 
 /// What lines a marker, so that it reads on the background and on the model alike.

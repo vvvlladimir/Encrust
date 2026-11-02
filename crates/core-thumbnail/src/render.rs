@@ -46,8 +46,8 @@ pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
     render_view(parts, View::Iso, &[], settings).image
 }
 
-/// Renders every part from `view` with `markers` drawn over it, framed so the parts and the
-/// markers all fit. How a hidden marker is drawn: `docs/design/thumbnail.md`.
+/// Renders every part from `view` with `markers` drawn over it, framed so the parts fit: a
+/// marker off the picture is pinned to its edge. How each is drawn: `docs/design/thumbnail.md`.
 pub fn render_view(
     parts: &[Part<'_>],
     view: View,
@@ -61,7 +61,9 @@ pub fn render_view(
     let basis = view.basis();
     let viewed: Vec<Vec<Vec3>> = parts.iter().map(|part| project(part, &basis)).collect();
     let marked: Vec<Vec3> = markers.iter().map(|marker| basis.of(marker.at)).collect();
-    let Some(frame) = Frame::around(viewed.iter().flatten().chain(&marked), width, height) else {
+    let framed = Frame::around(viewed.iter().flatten(), width, height)
+        .or_else(|| Frame::around(marked.iter(), width, height));
+    let Some(frame) = framed else {
         return Rendered {
             image: Thumbnail::filled(width, height, settings.background),
             markers: Vec::new(),
@@ -98,14 +100,26 @@ fn mark(
     markers: &[Marker],
 ) -> Vec<MarkerSpot> {
     let size = (frame.width as u32, frame.height as u32);
+    let radius = marker::radius_px(size.0, size.1);
     let spots: Vec<MarkerSpot> = marked
         .iter()
         .map(|point| {
             let screen = frame.to_screen(*point);
+            let off = |at: f32, across: f32| !(0.0..across).contains(&at);
+            if off(screen.x, frame.width) || off(screen.y, frame.height) {
+                let pin = |at: f32, across: f32| at.clamp(radius, (across - radius).max(radius));
+                return MarkerSpot {
+                    x_px: pin(screen.x, frame.width),
+                    y_px: pin(screen.y, frame.height),
+                    hidden: false,
+                    pinned: true,
+                };
+            }
             MarkerSpot {
                 x_px: screen.x,
                 y_px: screen.y,
                 hidden: marker::hidden(depths, size, screen, frame.scale),
+                pinned: false,
             }
         })
         .collect();
