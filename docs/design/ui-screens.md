@@ -45,7 +45,8 @@ A menu of the bar is a `menu_row` list 264 wide on `raised` ringed in `line`, th
 on `hover`. Rows 28, glyph column 18, keys right in `text_low`; a hairline between groups; a
 row that cannot run is `text_low`, the first of its group with why under it. File: New plate,
 New project · Open project, Add model, Open recent ▸ (files with their age, Clear the list),
-Test prints ▸ · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
+Test prints ▸ (Crustling with Download, its percentage or STL as keys, then the four drawn
+in code) · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
 (Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
@@ -103,7 +104,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (Lay on face, Centre, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size; a click on the model places one); Already done | Hollow |
@@ -320,7 +321,11 @@ plate* at 26 and the machine without its maker, resin and layer height under it;
 the drop glyph on `accent_wash`, its words, and Open a model (primary) and Open a project at
 its right; then Recent / Test prints as a `Segmented` 220 wide and, on Recent with
 anything in it, Clear the list at its right; then tiles of at least 180 on `panel` ringed in
-`hairline` (`line` under the pointer), a 120 picture over the name, when and kind.
+`hairline` (`line` under the pointer), a 120 picture over the name, when and kind. A test
+print kept in the repository comes first and says Download for its kind until fetched;
+while it comes, a `progress_bar` inset 12 runs along the picture's foot and the kind is its
+percentage, or Downloading while the size is unknown; fetched, it says STL and opens like
+the rest.
 
 ## A small window
 

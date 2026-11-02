@@ -1,6 +1,8 @@
 //! The start page, shown until the first model, project or sliced file arrives: a drop target
 //! over recent files or bundled test prints. See `docs/decisions/0220`, `0232`, `0234`.
 
+pub(super) mod remote;
+
 use egui::{Align, Layout, Rect, Ui, UiBuilder, pos2, vec2};
 
 use crate::files::{self, Handed, Wanted};
@@ -8,6 +10,7 @@ use crate::i18n::tr;
 use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
+use crate::samples::remote::REMOTES;
 use crate::ui::theme::layout::start::{
     CAPTION_H, PAD_SIDE, PAD_TOP, SHELF_SWITCH_W, TILE_GAP, TILE_MIN_W, ZONE_H, ZONE_TOP,
 };
@@ -246,6 +249,7 @@ fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
             left: ago(Some(file.opened_at_s), now),
             right: kind(file),
             picture: picture(ui.ctx(), &file.path),
+            fetching: None,
         };
         picture_tile(ui, &shown, size).on_hover_text(file.path.display().to_string())
     });
@@ -254,9 +258,15 @@ fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
     }
 }
 
-/// The bundled test prints as tiles, each put on the plate by a click.
+/// The test prints as tiles: those kept in the repository, fetched first, then the bundled
+/// ones, each put on the plate by a click.
 fn test_prints(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
-    let picked = grid(ui, SAMPLES.len(), columns, |ui, index| {
+    let fetches = &window.machine.fetches;
+    let count = REMOTES.len() + SAMPLES.len();
+    let picked = grid(ui, count, columns, |ui, index| {
+        let Some(index) = index.checked_sub(REMOTES.len()) else {
+            return remote::tile(ui, fetches, index, size);
+        };
         let sample = &SAMPLES[index];
         let name = sample.name();
         let shown = PictureTile {
@@ -264,11 +274,15 @@ fn test_prints(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usiz
             left: tr!("start-test-print"),
             right: "STL".to_owned(),
             picture: Some(sample_picture(ui.ctx(), index)),
+            fetching: None,
         };
         picture_tile(ui, &shown, size).on_hover_text(sample.about())
     });
     if let Some(index) = picked {
-        crate::app::open_by_what_it_is(window, SAMPLES[index].handed());
+        match index.checked_sub(REMOTES.len()) {
+            Some(bundled) => crate::app::open_by_what_it_is(window, SAMPLES[bundled].handed()),
+            None => remote::picked(ui, window, index),
+        }
     }
 }
 

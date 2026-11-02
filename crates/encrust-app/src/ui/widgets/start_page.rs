@@ -1,9 +1,9 @@
 //! The start page's own parts: its title, the zone a file is dropped on, and a tile of a
 //! picture over a name; see `docs/design/ui-design-system.md`, Start page.
 
-use egui::{Align2, Rect, Response, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Align2, Rect, Response, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
 
-use super::{focus_ring, hover_mix};
+use super::{focus_ring, hover_mix, progress_bar_of};
 use crate::ui::{icon, theme};
 
 const DASH: f32 = 4.0;
@@ -132,6 +132,8 @@ pub struct PictureTile<'a> {
     pub left: String,
     pub right: String,
     pub picture: Option<egui::TextureHandle>,
+    /// A fetch under way: the bar along the picture's foot, filled to the share known.
+    pub fetching: Option<Option<f32>>,
 }
 
 /// Draws `shown` as a tile of `size`, ringed in `line` under the pointer.
@@ -166,6 +168,17 @@ pub fn picture_tile(ui: &mut Ui, shown: &PictureTile<'_>, size: egui::Vec2) -> e
                 colors.text_low,
             );
         }
+    }
+    if let Some(share) = shown.fetching {
+        let foot = Rect::from_x_y_ranges(
+            stage.x_range().shrink(12.0),
+            stage.bottom() - 12.0 - theme::BAR_H..=stage.bottom() - 12.0,
+        );
+        progress_bar_of(
+            &mut ui.new_child(UiBuilder::new().max_rect(foot)),
+            share,
+            theme::BAR_H,
+        );
     }
     painter.rect_stroke(
         rect,

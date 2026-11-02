@@ -41,8 +41,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   Open recent.
 - The **File, Edit and View menus** list every action with its keys; one that cannot run says
   why under itself (Slice to a file with no model, Duplicate with nothing picked).
-- Start from one of **four built-in test prints**: detail test, exposure check, surface
-  finish and fit gauge.
+- Start from **Crustling**, the mascot, 30 mm across, downloaded from the project's
+  repository on the first click and opened from disk on the next; or from one of **four
+  built-in test prints**: detail test, exposure check, surface finish and fit gauge. The
+  start page and the File menu's Test prints list all five, Crustling first.
 
 **You cannot:**
 - Open other 3D formats (STEP, PLY, AMF and so on).

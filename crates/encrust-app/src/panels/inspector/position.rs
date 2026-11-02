@@ -100,12 +100,7 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
     });
     match pressed {
         Some(0) => recentre(scene, plate, id),
-        Some(_) => {
-            if let Some(object) = scene.get_mut(id) {
-                object.stand_on_plate();
-                object.lift_mm = None;
-            }
-        }
+        Some(_) => place::stand_on_plate(scene, id),
         None => {}
     }
 }

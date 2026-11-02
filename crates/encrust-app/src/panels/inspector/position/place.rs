@@ -17,18 +17,22 @@ use crate::ui::{
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
 const COPY_GAP_MM: f32 = 5.0;
 
-/// Laying a face down, centring over the plate, mirroring, and the lift off it.
+/// Standing on the plate, centring over it, laying a face down, mirroring, and the lift off it.
 pub(super) fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     let copy_id = ui.id().with("mirror-copy");
     let mut copy = kept::get(ui.ctx(), copy_id).unwrap_or(false);
     section(ui, &tr!("position-place"), None, |ui| {
-        describe(ui, &tr!("position-place-help"));
+        describe(ui, &tr!("position-place-about"));
         ui.columns(2, |columns| {
-            lay_on_face(&mut columns[0], window);
+            let on_plate = tr!("position-on-plate");
+            if secondary_button(&mut columns[0], icon::DROP_TO_PLATE, &on_plate).clicked() {
+                stand_on_plate(&mut window.doc.scene, id);
+            }
             if secondary_button(&mut columns[1], icon::CENTRE, &tr!("position-centre")).clicked() {
                 centre(&mut window.doc.scene, &window.doc.plate, id);
             }
         });
+        lay_on_face(ui, window);
         mirror(ui, &mut window.doc.scene, copy);
         switch(ui, &mut copy, &tr!("position-mirror-copy"));
         lift(ui, &mut window.doc.scene, id);
@@ -56,6 +60,14 @@ fn lay_on_face(ui: &mut egui::Ui, window: &mut Window) {
         orient.stop_picking();
     } else if laid {
         orient.picking_face = true;
+    }
+}
+
+/// Stands the model on the plate, forgetting a lift typed for it.
+pub(super) fn stand_on_plate(scene: &mut Scene, id: ObjectId) {
+    if let Some(object) = scene.get_mut(id) {
+        object.stand_on_plate();
+        object.lift_mm = None;
     }
 }
 

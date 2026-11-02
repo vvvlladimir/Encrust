@@ -1508,7 +1508,7 @@ orient-preset-shortest-hint = The fewest layers that still print.
 orient-preset-auto-hint = Supports, pull and print time balanced: none gives up much for the others.
 position-mirror-across = Mirror across { $axis }
 position-mirror-copy = Mirror a copy
-position-place-help = Lay on face turns the face you click down onto the plate; Centre moves the model over the middle of the plate; Mirror flips the picked models, or copies of them stood beside them.
+position-place-about = On the plate stands the model on the plate; Centre moves it over the middle of the plate; Lay on face turns the face you click down onto the plate; Mirror flips the picked models, or copies of them stood beside them.
 
 ## panels/inspector/paint.rs
 
@@ -1679,6 +1679,14 @@ start-models =
 start-nothing-recent = Nothing opened yet. A model or a project you open is shown here.
 start-test-print = Test print
 start-gone = { $path } is no longer there
+# A test print's tile, before it is fetched.
+start-download = Download
+# A test print's tile, while it is fetched and its size is not known yet.
+start-downloading = Downloading
+# Why a fetched test print could not be put on disk; the reason follows in English.
+start-download-write = cannot write { $path }
+# A test print that could not be fetched, and why.
+start-download-failed = { $name } was not downloaded: { $error }
 start-project = Project
 
 ## panels/unreadable_profiles.rs
@@ -1839,6 +1847,8 @@ sample-surface = Surface finish
 sample-surface-about = A dome and a column show the pixel steps and anti-aliasing, a ramp the layers.
 sample-fit = Fit gauge
 sample-fit-about = Pins 0.3 mm under to 0.1 mm over a 6 mm hole, shortest smallest: which go in.
+sample-crustling = Crustling
+sample-crustling-about = The project's mascot: a small stone tortoise with crystals growing out of its shell, 30 mm across. Its claws, sharp crystal faces and pitted plates show how fine a detail your resin and supports can hold. Fetched from the project's repository on the first click, about 9 MB.
 
 ## job.rs
 
