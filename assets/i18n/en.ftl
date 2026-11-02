@@ -467,7 +467,6 @@ check-filter-peel = Peel
 check-filter-cups = Cups
 check-filter-thin = Thin
 check-support-islands = Support them
-check-drill-cups = Drill them
 check-issues = Found
 check-previous = Previous issue
 check-next = Next issue
@@ -524,6 +523,10 @@ check-row-past = past the build volume
 check-row-inset = in the plate inset
 # The other model's name.
 check-row-meets = meets { $name }
+# Beside the name of a hollowed model none of whose holes drains its cavity.
+check-row-sealed = hollow with no drain hole
+# Beside the name of a solid model that hollowing would save much resin on.
+check-row-solid = worth hollowing
 check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->

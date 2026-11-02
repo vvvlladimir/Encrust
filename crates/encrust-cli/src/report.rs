@@ -82,6 +82,9 @@ pub struct ImportReport {
     /// The shells as import left the model, when `--shells` asked for them.
     pub shells: Option<Vec<Shell>>,
     pub fit: Option<FitCheck>,
+    /// What hollowing the solid model would save and the wall it was read at, mm³ and mm,
+    /// where Check would suggest it.
+    pub hollowing_saves: Option<(Scalar, Scalar)>,
 }
 
 impl ImportReport {
@@ -92,6 +95,21 @@ impl ImportReport {
         }
         if let Some(edited) = &self.edited {
             writeln!(f, "  by hand       {}", describe_edits(edited))?;
+        }
+        Ok(())
+    }
+
+    /// Whether the model fits the machine, and what hollowing it would save.
+    fn fmt_printing(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(fit) = &self.fit {
+            writeln!(f, "  fits          {}", describe_fit(fit))?;
+        }
+        if let Some((saved_mm3, wall_mm)) = self.hollowing_saves {
+            writeln!(
+                f,
+                "  solid         hollowing to a {wall_mm:.1} mm wall saves {:.1} ml",
+                saved_mm3 / 1000.0
+            )?;
         }
         Ok(())
     }
@@ -190,10 +208,7 @@ impl fmt::Display for ImportReport {
             }
         }
 
-        if let Some(fit) = &self.fit {
-            writeln!(f, "  fits          {}", describe_fit(fit))?;
-        }
-        Ok(())
+        self.fmt_printing(f)
     }
 }
 

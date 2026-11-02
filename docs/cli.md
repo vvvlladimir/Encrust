@@ -24,6 +24,8 @@ cavity wound inward is kept, a part wholly inside another is lost in it (ADR 035
 draws a bar on a terminal, spanned by its steps as the window's is, and Ctrl-C stops it
 (exit 130); the drainage check rides the layers' bar of the slice it is made in (ADR 0384).
 `inspect --intersections` counts the pairs of faces that cross (ADR 0353).
+`inspect` of a solid model that hollowing to a 2 mm wall would save at least 10 ml and
+40 % of says how much on its `solid` line (ADR 0393).
 `--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
 MM2` (1) the least area an open shell keeps. By hand, as the window's Faces mode and Shells

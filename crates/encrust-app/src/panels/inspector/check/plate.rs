@@ -1,17 +1,20 @@
 //! What Check lists before any layer is read: models past the build volume or in its inset,
-//! and models that meet, each a click from the camera on it (ADR 0392).
+//! models that meet, and resin a model keeps, each a click from the camera on it (ADR 0392,
+//! 0393).
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::plate::{Astray, astray};
+use crate::plate::{Astray, KeptResin, astray, kept_resin};
 use crate::scene::{ObjectId, Scene};
 use crate::ui::{describe, issue_list, issue_row, section, theme};
+use crate::workspace::Tool;
 
 /// One issue of the plate as it stands.
 #[derive(Debug, Clone, Copy)]
 enum PlateIssue {
     Astray(Astray),
     Meeting([ObjectId; 2]),
+    Kept(KeptResin),
 }
 
 /// The plate's issues, found as soon as the models stand still; none of its bounds without
@@ -23,10 +26,12 @@ fn issues(ctx: &egui::Context, window: &Window) -> Vec<PlateIssue> {
         None => Vec::new(),
     };
     let meetings = window.doc.meeting.pairs(scene);
+    let kept = kept_resin(ctx, scene, &window.tools.hollow);
     astray
         .into_iter()
         .map(PlateIssue::Astray)
         .chain(meetings.into_iter().map(PlateIssue::Meeting))
+        .chain(kept.into_iter().map(PlateIssue::Kept))
         .collect()
 }
 
@@ -36,7 +41,8 @@ pub(super) fn count(ctx: &egui::Context, window: &Window) -> usize {
 }
 
 /// The plate's issues in a section of their own, whatever the layers say; a press on a
-/// row flies the camera there, again to the next place two models meet.
+/// row flies the camera there, again to the next place two models meet, or opens Hollow or
+/// Drain on the model keeping resin.
 pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let issues = issues(ui.ctx(), window);
     if issues.is_empty() {
@@ -67,8 +73,17 @@ pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
             let doc = &mut *window.doc;
             doc.meeting.fly_to(&doc.scene, |ids| ids == pair);
         }
+        Some(PlateIssue::Kept(KeptResin::Sealed(id))) => open_on(window, id, Tool::Drain),
+        Some(PlateIssue::Kept(KeptResin::Solid(id))) => open_on(window, id, Tool::Hollow),
         None => {}
     }
+}
+
+/// Picks the model keeping resin and opens `tool` on it, its card open.
+fn open_on(window: &mut Window, id: ObjectId, tool: Tool) {
+    window.doc.scene.select(Some(id));
+    *window.tool = tool;
+    window.view.options.inspector = true;
 }
 
 /// A row's colour, the model it names and what is wrong with it.
@@ -89,5 +104,7 @@ fn words(scene: &Scene, issue: &PlateIssue) -> (egui::Color32, String, String) {
             name(one),
             tr!("check-row-meets", name = name(other)),
         ),
+        PlateIssue::Kept(KeptResin::Sealed(id)) => (colors.warn, name(id), tr!("check-row-sealed")),
+        PlateIssue::Kept(KeptResin::Solid(id)) => (colors.warn, name(id), tr!("check-row-solid")),
     }
 }

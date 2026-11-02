@@ -185,6 +185,9 @@ whole-surface fill is Cmd-Shift-click.
   **Meets** tag, flies the camera there; on a meeting each further click goes to the next
   place. None of it stops the slice. The Check tool on the rail carries a red dot while
   any of them stands, before Check is opened, and loses it once the models are moved clear.
+- Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
+  resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
+  the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.
@@ -587,7 +590,6 @@ smoothing, not the original model.
 - **Support every island** in one press.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
-- **Drill the suction cups.**
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
 Resin is counted from what is actually cured. Before slicing, the plate's card states

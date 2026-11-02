@@ -1,5 +1,7 @@
+mod resin;
 mod standing;
 
+pub use resin::{KeptResin, kept_resin};
 pub use standing::{Astray, astray};
 
 use crate::i18n::tr;

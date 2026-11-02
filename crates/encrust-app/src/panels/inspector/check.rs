@@ -14,7 +14,7 @@ use crate::ui::verdict_card;
 use crate::ui::{
     describe, hint, icon, readings, secondary_button, section, section_with_actions, theme,
 };
-use crate::workspace::{Mode, Tool};
+use crate::workspace::Mode;
 
 mod issues;
 mod plate;
@@ -46,13 +46,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         section(ui, &tr!("check-issues"), None, verdict);
     } else {
         found(ui, window, &risks);
-    }
-    if risks.iter().any(|risk| Filter::Cups.admits(&risk.kind)) {
-        section(ui, &tr!("check-filter-cups"), None, |ui| {
-            if secondary_button(ui, icon::DRAIN, &tr!("check-drill-cups")).clicked() {
-                crate::shortcuts::pick(window, Tool::Drain);
-            }
-        });
     }
     pull(ui, window);
 }
