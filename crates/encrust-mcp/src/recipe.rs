@@ -94,7 +94,14 @@ pub struct Hollow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Drains {
     pub diameter_mm: f32,
+    /// Lets the engine find and prove a drain low on each trapped pocket, as `--drain-at auto`.
+    #[serde(default)]
+    pub auto: bool,
+    /// With `auto`, a vent high on each pocket as well, so air can follow the resin out.
+    #[serde(default = "yes")]
+    pub vent: bool,
     /// Plate millimetres, from the plate's front left corner: the surface nearest each is drilled.
+    #[serde(default)]
     pub at_mm: Vec<[f32; 3]>,
     /// Prints a plug for each hole beside the model.
     #[serde(default)]
@@ -202,12 +209,18 @@ impl Hollow {
 
 impl Drains {
     fn push_flags(&self, flags: &mut Vec<String>) {
-        if self.at_mm.is_empty() {
+        if self.at_mm.is_empty() && !self.auto {
             return;
         }
         flags.push(format!("--drain={}", self.diameter_mm));
         for at in &self.at_mm {
             flags.push(format!("--drain-at={}", triple(*at)));
+        }
+        if self.auto {
+            flags.push("--drain-at=auto".into());
+            if !self.vent {
+                flags.push("--no-drain-vent".into());
+            }
         }
         if self.plugs {
             flags.push("--drain-plugs".into());
@@ -229,6 +242,10 @@ fn kebab<T: Serialize>(value: &T) -> String {
         .ok()
         .and_then(|value| value.as_str().map(str::to_owned))
         .unwrap_or_default()
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn triple([x, y, z]: [f32; 3]) -> String {

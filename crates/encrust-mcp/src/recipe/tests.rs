@@ -46,6 +46,8 @@ fn every_step_becomes_the_flags_the_command_line_documents() {
         }),
         drains: Some(Drains {
             diameter_mm: 4.0,
+            auto: false,
+            vent: true,
             at_mm: vec![[30.0, 30.0, 0.5], [-5.0, 0.0, 2.0]],
             plugs: true,
         }),
@@ -124,10 +126,31 @@ fn a_profile_given_as_a_toml_file_takes_the_path_flags() {
 }
 
 #[test]
+fn automatic_drains_ask_the_engine_and_may_leave_out_the_vent() {
+    let auto = |vent| Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            auto: true,
+            vent,
+            at_mm: Vec::new(),
+            plugs: false,
+        }),
+        ..plain()
+    };
+    assert_eq!(auto(true).flags()[5..], ["--drain=3", "--drain-at=auto"]);
+    assert_eq!(
+        auto(false).flags()[5..],
+        ["--drain=3", "--drain-at=auto", "--no-drain-vent"]
+    );
+}
+
+#[test]
 fn drains_with_no_point_add_no_flag() {
     let recipe = Recipe {
         drains: Some(Drains {
             diameter_mm: 4.0,
+            auto: false,
+            vent: true,
             at_mm: Vec::new(),
             plugs: true,
         }),

@@ -25,7 +25,8 @@ fn encrust() -> PathBuf {
     cli
 }
 
-/// The panel and resin the command line's own tests print on.
+/// The panel and resin the command line's own tests print on; `project-panel` lights its whole
+/// build volume, so a centred model is drawn whole.
 fn profile(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../encrust-cli/tests/fixtures")
@@ -105,7 +106,7 @@ async fn start(client: &Client, model: &Path) -> String {
         "start_job",
         json!({
             "model": model,
-            "printer": profile("test-panel.toml"),
+            "printer": profile("project-panel.toml"),
             "resin": profile("test-resin.toml"),
         }),
     )
@@ -178,12 +179,7 @@ async fn a_job_is_prepared_revision_by_revision_and_written() {
     assert!(reverted["recipe"]["supports"].is_null());
 
     let output = dir.join("cube.goo");
-    let written = call(
-        &client,
-        "write_file",
-        json!({"job": job, "output": output, "accept_defects": true}),
-    )
-    .await;
+    let written = call(&client, "write_file", json!({"job": job, "output": output})).await;
     assert!(!failed(&written), "write_file failed: {}", answer(&written));
     assert_eq!(answer(&written)["revision"], 3);
     assert!(output.is_file(), "{} was not written", output.display());
@@ -252,6 +248,45 @@ async fn a_render_shows_the_plate_from_each_side_with_the_trapped_resin_marked()
         .filter_map(|picture| picture["view"].as_str())
         .collect();
     assert_eq!(views, ["iso", "bottom"]);
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_hollow_model_drained_by_the_engine_leaves_no_resin_trapped() {
+    let dir = scratch("auto-drain");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let sealed = answer(
+        &call(
+            &client,
+            "set_hollow",
+            json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+        )
+        .await,
+    );
+    assert_eq!(
+        sealed["report"]["slicing"]["trapped_pockets"], 1,
+        "said {sealed}"
+    );
+    let drained = call(
+        &client,
+        "set_drains",
+        json!({"job": job, "drains": {"diameter_mm": 3.0, "auto": true}}),
+    )
+    .await;
+    assert!(!failed(&drained), "set_drains failed: {}", answer(&drained));
+    let drained = answer(&drained);
+    assert_eq!(
+        drained["report"]["slicing"]["trapped_pockets"], 0,
+        "said {drained}"
+    );
+    let output = dir.join("cube.goo");
+    let written = call(&client, "write_file", json!({"job": job, "output": output})).await;
+    assert!(
+        !failed(&written),
+        "a drained cube is clean: {}",
+        answer(&written)
+    );
     client.cancel().await.expect("the server stops");
 }
 
