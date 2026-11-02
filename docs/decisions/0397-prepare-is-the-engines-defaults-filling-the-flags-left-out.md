@@ -43,9 +43,8 @@ An agent's first call can be `--prepare` and its later ones the flags it disagre
 the report says what to disagree with. The autopilot costs what its steps cost: up to ten
 slices for the drains, and an orientation search. The model is turned before it is
 repaired, as `--orient --repair` already does, so a broken model is searched as it came.
-The window has no single button yet: it would chain its Repair, Auto-orient, Hollow and
-Supports jobs, and its Drain tool has no automatic search (ADR 0396), so a "Prepare for print"
-action is the next step once Drain offers one, calling these functions. Reopen if users
+The window has no single button yet: it would chain its Repair, Auto-orient, Hollow, Drain's
+Auto (ADR 0396) and Supports jobs, calling these functions. Reopen if users
 want infill or a thicker wall by size, or if repairing before orienting proves better.
 
 ## Alternatives considered

@@ -1,6 +1,7 @@
 use crate::i18n::tr;
 mod boolean;
 mod cut;
+mod drains;
 mod drill;
 mod edit;
 mod format;
@@ -24,6 +25,7 @@ mod trapped;
 pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest, Method};
 pub use core_pipeline::SlicedFormat;
 pub use cut::{CutJob, CutOutcome, CutRequest, spawn_cut};
+pub use drains::{DrainsJob, DrainsOutcome, DrainsRequest, DrainsTask, Proposed};
 pub use drill::{
     DrillJob, DrillRequest, PrintedSupportsJob, PrintedSupportsRequest, spawn_drill,
     spawn_printed_supports,
