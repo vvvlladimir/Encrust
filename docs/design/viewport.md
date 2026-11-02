@@ -496,7 +496,7 @@ height, 1.0 for the studio, the resin's absorption per mm and the eye's pivot di
   over the arc the normal projected into the slice sees, cosine-weighted. It only ever
   darkens, in linear light. The paper's spatio-temporal denoise is the picture at rest:
   sixteen jittered frames average its noise away, so it has no blur pass of its own.
-- **The room.** The printer is put away: no plate, grid, outline or Front word. The scene
+- **The room.** The printer is put away: no plate, grid, outline, axes or Front word. The scene
   pass starts with `backdrop_fragment` in `props.wgsl`, which turns each pixel back into a
   line of sight through the inverse view-projection and finds where it meets a
   photographer's infinity cove round the mat's middle: the table 3.05 mm under the plate's
