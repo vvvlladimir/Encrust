@@ -1,7 +1,9 @@
 use core_geometry::{Mesh, Transform, Vec3};
 
 use crate::image::Thumbnail;
+use crate::marker::{self, Marker, MarkerSpot};
 use crate::settings::{Rgb, ThumbnailSettings};
+use crate::view::{Basis, View};
 
 /// One mesh on the plate together with where it stands.
 pub struct Part<'m> {
@@ -20,9 +22,13 @@ impl<'m> Part<'m> {
     }
 }
 
-/// Where the plate is looked at from, in plate coordinates with Z up. The front right corner, a
-/// little above the part: it shows a silhouette, a top and a side.
-const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
+/// A picture of the plate from one view, and where each marker asked for landed in it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rendered {
+    pub image: Thumbnail,
+    /// One per marker, in the order given; none in an image of no pixels.
+    pub markers: Vec<MarkerSpot>,
+}
 
 /// Direction the light comes from, in view coordinates: over the camera's left shoulder.
 const LIGHT: Vec3 = Vec3::new(-0.3, 0.55, -1.0);
@@ -37,13 +43,29 @@ const MARGIN: f32 = 0.06;
 /// Renders every part into one shaded image, framed so the whole plate fits. The view fits the
 /// parts, not the build volume, as a thumbnail is a centimetre wide.
 pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
+    render_view(parts, View::Iso, &[], settings).image
+}
+
+/// Renders every part from `view` with `markers` drawn over it, framed so the parts and the
+/// markers all fit. How a hidden marker is drawn: `docs/design/thumbnail.md`.
+pub fn render_view(
+    parts: &[Part<'_>],
+    view: View,
+    markers: &[Marker],
+    settings: &ThumbnailSettings,
+) -> Rendered {
     let (width, height) = (settings.width_px, settings.height_px);
     let mut colours = vec![settings.background; (width as usize) * (height as usize)];
     let mut depths = vec![f32::INFINITY; colours.len()];
 
-    let viewed: Vec<Vec<Vec3>> = parts.iter().map(project).collect();
-    let Some(frame) = Frame::around(&viewed, width, height) else {
-        return Thumbnail::filled(width, height, settings.background);
+    let basis = view.basis();
+    let viewed: Vec<Vec<Vec3>> = parts.iter().map(|part| project(part, &basis)).collect();
+    let marked: Vec<Vec3> = markers.iter().map(|marker| basis.of(marker.at)).collect();
+    let Some(frame) = Frame::around(viewed.iter().flatten().chain(&marked), width, height) else {
+        return Rendered {
+            image: Thumbnail::filled(width, height, settings.background),
+            markers: Vec::new(),
+        };
     };
 
     for (part, vertices) in parts.iter().zip(&viewed) {
@@ -56,25 +78,53 @@ pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
             fill(&mut colours, &mut depths, width, height, screen, colour);
         }
     }
+    let spots = mark(&mut colours, &depths, &frame, &marked, markers);
 
-    Thumbnail::from_pixels(width, height, colours)
-        .unwrap_or_else(|| Thumbnail::filled(width, height, settings.background))
+    let image = Thumbnail::from_pixels(width, height, colours)
+        .unwrap_or_else(|| Thumbnail::filled(width, height, settings.background));
+    Rendered {
+        image,
+        markers: spots,
+    }
+}
+
+/// Draws every marker over the shaded picture and says where each landed. `marked` holds their
+/// points in view coordinates, in the order of `markers`.
+fn mark(
+    colours: &mut [Rgb],
+    depths: &[f32],
+    frame: &Frame,
+    marked: &[Vec3],
+    markers: &[Marker],
+) -> Vec<MarkerSpot> {
+    let size = (frame.width as u32, frame.height as u32);
+    let spots: Vec<MarkerSpot> = marked
+        .iter()
+        .map(|point| {
+            let screen = frame.to_screen(*point);
+            MarkerSpot {
+                x_px: screen.x,
+                y_px: screen.y,
+                hidden: marker::hidden(depths, size, screen, frame.scale),
+            }
+        })
+        .collect();
+    // The hidden ones first, so one behind the model never covers one in plain sight.
+    let mut order: Vec<usize> = (0..spots.len()).collect();
+    order.sort_by_key(|&index| !spots[index].hidden);
+    for index in order {
+        marker::draw(colours, size, spots[index], markers[index].colour);
+    }
+    spots
 }
 
 /// Every vertex of one part in view coordinates: right, up and depth away from the eye.
-fn project(part: &Part<'_>) -> Vec<Vec3> {
-    let forward = -EYE.normalize();
-    let right = forward.cross(Vec3::Z).normalize();
-    let up = right.cross(forward);
+fn project(part: &Part<'_>, basis: &Basis) -> Vec<Vec3> {
     let matrix = part.transform.to_matrix();
-
     part.mesh
         .vertices
         .iter()
-        .map(|vertex| {
-            let placed = matrix.transform_point3(*vertex);
-            Vec3::new(placed.dot(right), placed.dot(up), placed.dot(forward))
-        })
+        .map(|vertex| basis.of(matrix.transform_point3(*vertex)))
         .collect()
 }
 
@@ -106,10 +156,14 @@ struct Frame {
 }
 
 impl Frame {
-    fn around(viewed: &[Vec<Vec3>], width_px: u32, height_px: u32) -> Option<Self> {
+    fn around<'a>(
+        viewed: impl Iterator<Item = &'a Vec3>,
+        width_px: u32,
+        height_px: u32,
+    ) -> Option<Self> {
         let mut min = Vec3::splat(f32::INFINITY);
         let mut max = Vec3::splat(f32::NEG_INFINITY);
-        for vertex in viewed.iter().flatten() {
+        for vertex in viewed {
             min = min.min(*vertex);
             max = max.max(*vertex);
         }
@@ -201,109 +255,4 @@ fn bounds(a: f32, b: f32, c: f32, limit_px: u32) -> (u32, u32) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
-    fn unit_cube() -> Mesh {
-        core_geometry::cuboid(Vec3::ZERO, Vec3::ONE)
-    }
-
-    fn settings() -> ThumbnailSettings {
-        ThumbnailSettings {
-            width_px: 64,
-            height_px: 64,
-            ..ThumbnailSettings::default()
-        }
-    }
-
-    #[test]
-    fn an_empty_plate_renders_to_the_background() {
-        let settings = settings();
-        let image = render(&[], &settings);
-        assert!(
-            image
-                .pixels()
-                .iter()
-                .all(|pixel| *pixel == settings.background)
-        );
-    }
-
-    #[test]
-    fn a_cube_covers_the_middle_and_leaves_the_corners_empty() {
-        let mesh = unit_cube();
-        let settings = settings();
-        let image = render(&[Part::placed(&mesh)], &settings);
-
-        let middle = image.pixels()[(32 * 64 + 32) as usize];
-        assert_ne!(middle, settings.background, "the part covers the centre");
-        for corner in [0usize, 63, 63 * 64, 64 * 64 - 1] {
-            assert_eq!(
-                image.pixels()[corner],
-                settings.background,
-                "the margin keeps the part off the border"
-            );
-        }
-    }
-
-    #[test]
-    fn three_faces_of_a_cube_are_shaded_differently() {
-        let mesh = unit_cube();
-        let image = render(&[Part::placed(&mesh)], &settings());
-
-        let mut shades: Vec<Rgb> = image.pixels().to_vec();
-        shades.sort_unstable();
-        shades.dedup();
-        assert!(
-            shades.len() >= 4,
-            "background plus one shade per visible face, got {}",
-            shades.len()
-        );
-    }
-
-    #[test]
-    fn the_view_frames_the_part_wherever_it_stands() {
-        let mesh = unit_cube();
-        let settings = settings();
-        let here = render(&[Part::placed(&mesh)], &settings);
-        let there = render(
-            &[Part::new(
-                &mesh,
-                Transform::from_translation(Vec3::new(40.0, -25.0, 3.0)),
-            )],
-            &settings,
-        );
-
-        assert_eq!(
-            here, there,
-            "the frame follows the part, so moving it on the plate changes nothing"
-        );
-    }
-
-    #[test]
-    fn a_nearer_part_hides_the_one_behind_it() {
-        let mesh = unit_cube();
-        let settings = ThumbnailSettings {
-            model: [255, 255, 255],
-            ..settings()
-        };
-        // The second cube sits directly behind the first along the view direction, so the
-        // image must look exactly like the front one alone.
-        let behind = Transform::from_translation(EYE.normalize() * -4.0);
-        let alone = render(&[Part::placed(&mesh)], &settings);
-        let stacked = render(&[Part::placed(&mesh), Part::new(&mesh, behind)], &settings);
-
-        let lit = |image: &Thumbnail| {
-            image
-                .pixels()
-                .iter()
-                .filter(|pixel| **pixel != settings.background)
-                .count()
-        };
-        assert_eq!(
-            lit(&alone),
-            lit(&stacked),
-            "the far cube is hidden behind the near one"
-        );
-    }
-}
+mod tests;

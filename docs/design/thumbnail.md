@@ -2,8 +2,9 @@
 
 How the picture inside a `.goo` or `.ctb` file is made. The renderer is
 `core-thumbnail/src/render.rs`, the image and its resampling `core-thumbnail/src/image.rs`,
-and the one caller is `core-engine/src/run.rs`, which renders it for every front end. Why
-it is a software renderer rather than the viewport's is in ADR 0048.
+and the one caller is `core-engine/src/run.rs`, which renders it for every front end;
+`encrust render` draws the plate from the other views below. Why it is a software renderer
+rather than the viewport's is in ADR 0048.
 
 ## What is drawn
 
@@ -54,6 +55,39 @@ than as a hole.
 A 980k-triangle sphere renders in 39 ms at 512 pixels square, single-threaded. It runs
 once per exported file, beside seconds of slicing, which is why there is no parallelism
 here.
+
+## Other views and markers
+
+`render_view` draws the same plate from a named `View`, and `render` is its isometric one
+with no markers, so a file's thumbnail is unchanged by it. The six others look straight
+along an axis, with `up = right × forward` in each so that none is a mirror image:
+
+| View | right | up | looking along |
+|---|---|---|---|
+| `front` | +X | +Z | +Y |
+| `back` | −X | +Z | −Y |
+| `left` | −Y | +Z | +X |
+| `right` | +Y | +Z | −X |
+| `top` | +X | +Y | −Z |
+| `bottom` | +X | −Y | +Z |
+
+`bottom` keeps X to the right, so the front edge of the plate is at the top of the picture:
+the drain holes and the support tips a resin print hangs from, or the raft when supports
+stand under the model.
+
+A `Marker` is a point in plate millimetres and a colour. The frame fits the markers as well
+as the parts, so a point off the model is never cut off. Each is drawn after every face, on
+top of the picture, so none is ever lost: a disc where the eye sees the point, a hollow ring
+of the same size where something drawn stands in front of it, the model showing through the
+middle. Both are outlined in near-white to read on the background and on the model alike;
+the radius is 1/48 of the picture's shorter side, four pixels at least. The rings go down
+first, so a ring never covers a disc.
+
+A point is hidden when the depth buffer at its pixel holds a surface more than three pixels'
+worth of depth nearer the eye. The slack lets a point lying on a surface count as seen,
+on a face tilted up to about 75° off the line of sight. `Rendered::markers` says, for each
+marker in order, which pixel it landed on and whether it was hidden, so a reader of the
+picture — a person or a model — can tell which mark is which.
 
 ## From one image to four records
 

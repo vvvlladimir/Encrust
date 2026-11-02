@@ -863,6 +863,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
 | `estimate` | Time, resin, weight, cost and risky layers, without writing a file. |
 | `inspect` | What is wrong with a model and whether it fits. |
+| `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
