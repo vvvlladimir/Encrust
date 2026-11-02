@@ -114,6 +114,26 @@ pub fn write_boxes_stl(name: &str, boxes: &[([f32; 3], [f32; 3])]) -> PathBuf {
     path
 }
 
+/// Binary STL of `mesh`, three fresh vertices per triangle as an exporter writes them.
+pub fn write_mesh_stl(name: &str, mesh: &core_geometry::Mesh) -> PathBuf {
+    let mut bytes = vec![0u8; 80];
+    bytes.extend_from_slice(&(mesh.faces.len() as u32).to_le_bytes());
+    for face in &mesh.faces {
+        bytes.extend_from_slice(&[0u8; 12]);
+        for &corner in face {
+            for value in mesh.vertices[corner as usize].to_array() {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        bytes.extend_from_slice(&[0u8; 2]);
+    }
+    let dir = std::env::temp_dir().join("encrust-cli-tests");
+    fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join(format!("{name}.stl"));
+    fs::write(&path, bytes).expect("write fixture");
+    path
+}
+
 /// The profile shipped in the repository, resolved without depending on the test's
 /// working directory.
 pub fn shipped_profile() -> PathBuf {

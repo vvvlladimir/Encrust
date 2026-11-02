@@ -490,3 +490,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |
 | [0395](0395-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
+| [0397](0397-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |

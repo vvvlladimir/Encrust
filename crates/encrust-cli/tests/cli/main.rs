@@ -11,6 +11,7 @@ mod import;
 mod modelling;
 mod plate;
 mod png_stack;
+mod prepare;
 mod profiles;
 mod render;
 mod slicing;
