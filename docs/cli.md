@@ -628,7 +628,10 @@ resin — ids or TOML paths — and answers with the job and its first revision 
 it; edits to one job wait for each other. A new pose clears the drains. `check` reads any
 revision again and `revert` copies one forward. `write_file` slices a revision under
 `--strict` unless `accept_defects`, and answers `written: false` as a tool error when nothing
-was written; `send_to_printer` is `printer send`. Paths must be absolute, and no name the
+was written; `send_to_printer` is `printer send`. `render` draws a revision with `encrust render` —
+`iso` and `bottom` unless `views` says otherwise — marks the first 48 findings of its check
+with `--mark`, and answers with the PNGs and a list saying which finding each mark is. Paths
+must be absolute, and no name the
 client gives may start with `-`. The two that write are marked destructive, which a client
 may show; the server's instructions tell the model to ask the user first.
 

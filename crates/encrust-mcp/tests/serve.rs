@@ -128,6 +128,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "check",
             "inspect_model",
             "list_profiles",
+            "render",
             "revert",
             "send_to_printer",
             "set_drains",
@@ -215,6 +216,42 @@ async fn a_write_the_check_refuses_is_a_tool_error_and_leaves_no_file() {
     );
     assert_eq!(answer(&written)["written"], false);
     assert!(!output.exists(), "{} is on disk", output.display());
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_render_shows_the_plate_from_each_side_with_the_trapped_resin_marked() {
+    let dir = scratch("render");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    let drawn = call(&client, "render", json!({"job": job, "size_px": 128})).await;
+    assert!(!failed(&drawn), "render failed: {:?}", drawn.content);
+    let images = drawn
+        .content
+        .iter()
+        .filter(
+            |block| matches!(block, ContentBlock::Image(image) if image.mime_type == "image/png"),
+        )
+        .count();
+    assert_eq!(images, 2, "iso and bottom were asked for");
+    let listing = answer(&drawn);
+    assert_eq!(
+        listing["findings"][0]["kind"], "trapped-resin",
+        "said {listing}"
+    );
+    let views: Vec<&str> = listing["pictures"]
+        .as_array()
+        .expect("pictures are listed")
+        .iter()
+        .filter_map(|picture| picture["view"].as_str())
+        .collect();
+    assert_eq!(views, ["iso", "bottom"]);
     client.cancel().await.expect("the server stops");
 }
 

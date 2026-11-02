@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -13,10 +15,11 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use serde_json::{Value, json};
 
+use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    JobRef, ListProfiles, Model, Revert, SendFile, SetDrains, SetHollow, SetPose, SetSupports,
-    Start, WriteFile, absolute, plain,
+    JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow, SetPose,
+    SetSupports, Start, View, WriteFile, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -175,6 +178,16 @@ impl Server {
         Ok(answer(self.write(write, &ctx).await))
     }
 
+    /// Draws a revision as it would be built — supports, drain holes and all — from the sides
+    /// asked, with the check's findings marked, as PNG pictures.
+    #[tool(annotations(read_only_hint = true, open_world_hint = false))]
+    async fn render(&self, Parameters(render): Parameters<Render>, ctx: Context) -> Answer {
+        Ok(self
+            .pictures(render, &ctx)
+            .await
+            .unwrap_or_else(|error| answer(Err(error))))
+    }
+
     /// Sends a written file to a printer on the local network, and starts it if asked.
     #[tool(annotations(
         read_only_hint = false,
@@ -284,6 +297,62 @@ impl Server {
             body,
             failed: !written,
         })
+    }
+
+    /// The pictures of a revision, and a JSON list of each one with the findings it marks.
+    async fn pictures(&self, render: Render, ctx: &Context) -> Result<CallToolResult> {
+        let revision = self.jobs.open(&render.job, render.revision)?;
+        let views = render
+            .views
+            .unwrap_or_else(|| vec![View::Iso, View::Bottom]);
+        if views.is_empty() {
+            bail!("name at least one view");
+        }
+        let size = render.size_px.unwrap_or(512).clamp(64, 1024);
+        let marked = if render.mark_findings.unwrap_or(true) {
+            let outcome = self.estimate(&revision.recipe, ctx).await?;
+            findings(&outcome.report)
+        } else {
+            Vec::new()
+        };
+        let dir = self.jobs.pictures_dir(&revision)?;
+        let names: Vec<&str> = views.iter().map(|view| view.name()).collect();
+        let mut args = vec!["render".to_owned()];
+        args.extend(revision.recipe.flags());
+        args.push(format!("--view={}", names.join(",")));
+        args.push(format!("--size={size}"));
+        args.push(format!("--output={}", dir.display()));
+        for finding in marked.iter().take(MOST_MARKED) {
+            let [x, y, z] = finding.at_mm;
+            args.push(format!("--mark={x},{y},{z}"));
+        }
+        let outcome = self.watched(&args, ctx).await?;
+        if outcome.exit_code != 0 {
+            return Ok(answer(Ok(reported(&outcome, outcome.report.clone()))));
+        }
+        let mut content = vec![ContentBlock::text(
+            json!({
+                "job": revision.job,
+                "revision": revision.number,
+                "findings": marked,
+                "unmarked": marked.len().saturating_sub(MOST_MARKED),
+                "pictures": outcome.report["pictures"],
+            })
+            .to_string(),
+        )];
+        for picture in outcome.report["pictures"]
+            .as_array()
+            .map_or(&[][..], Vec::as_slice)
+        {
+            let path = picture["path"]
+                .as_str()
+                .context("a picture names its file")?;
+            let bytes = tokio::fs::read(path)
+                .await
+                .with_context(|| format!("reading {path}"))?;
+            content.push(ContentBlock::image(BASE64.encode(bytes), "image/png"));
+        }
+        Ok(CallToolResult::success(content))
     }
 
     async fn send(&self, send: SendFile, ctx: &Context) -> Result<Reply> {

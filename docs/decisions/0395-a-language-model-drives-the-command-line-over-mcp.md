@@ -28,6 +28,8 @@ if the command line took it, under a lock per job; `revert` copies an old one fo
 tool error. A call names its job, so nothing lives in the process but the locks. Paths from the
 client must be absolute and no name may start with `-`. The instructions tell the model to ask
 for the printer and resin, never to choose or invent one, and to ask before writing or sending.
+`render` answers with the pictures `encrust render` drew, as base64 PNG images, the `base64`
+crate encoding them.
 
 ## Consequences
 

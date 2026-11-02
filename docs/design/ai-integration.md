@@ -38,11 +38,12 @@ catalogue moves into a crate of its own when the window's panel needs it too.
 | `check` | a revision as it would print | `estimate --check-drainage` | read |
 | `revert` | an earlier revision made the latest again | — | edits |
 | `write_file` | the printer file; refused while the check names defects | `slice --strict` | writes a file |
+| `render` | pictures from each side, the check's findings marked | `render --mark` | read |
 | `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
 
-Still to come: `render` over step 3's views, a suggested drain from step 2, and `prepare`,
-the autopilot of step 4. An edit is kept only if the command line took it; a finding is
-located once step 1 lands, so the next call can act on it.
+Still to come: a suggested drain from step 2, and `prepare`, the autopilot of step 4. An
+edit is kept only if the command line took it; every finding is located (ADR 0394), so the
+next call can act on it.
 
 ### State
 
