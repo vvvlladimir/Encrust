@@ -4,6 +4,7 @@
 mod batch;
 mod containers;
 mod editing;
+mod findings;
 mod hollowing;
 mod import;
 mod modelling;
