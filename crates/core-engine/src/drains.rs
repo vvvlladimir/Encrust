@@ -80,14 +80,71 @@ impl Drained {
 /// scanning again, and a vent above each drain that is proven the same way; see
 /// `docs/design/hollowing.md`, "Suggested drains". A pocket no candidate drains stays trapped.
 pub fn suggest_drains(search: &DrainSearch) -> Result<Drained, EngineError> {
+    let found = suggest_drains_heard(search, |_| true)?;
+    Ok(found.unwrap_or_default())
+}
+
+/// [`suggest_drains`], telling `heard` where each scan has got before it is cut and before
+/// each window is read; answering false stops the search, and the answer is `None`.
+pub fn suggest_drains_heard(
+    search: &DrainSearch,
+    mut heard: impl FnMut(Scanning) -> bool,
+) -> Result<Option<Drained>, EngineError> {
+    match search_heard(search, &mut heard) {
+        Ok(drained) => Ok(Some(drained)),
+        Err(Halt::Asked) => Ok(None),
+        Err(Halt::Failed(error)) => Err(error),
+    }
+}
+
+/// Where a drain search has got: the scan in hand, counted from 0, and its layers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Scanning {
+    pub scan: usize,
+    /// The most scans the search can take: it may end sooner.
+    pub most_scans: usize,
+    pub layers_read: usize,
+    pub layers: usize,
+}
+
+impl Scanning {
+    /// The share of the most the search can take that is done.
+    pub fn share(&self) -> f32 {
+        let within = match self.layers {
+            0 => 0.0,
+            layers => self.layers_read.min(layers) as f32 / layers as f32,
+        };
+        ((self.scan as f32 + within) / self.most_scans.max(1) as f32).min(1.0)
+    }
+}
+
+/// Why a search ended before its answer.
+enum Halt {
+    Asked,
+    Failed(EngineError),
+}
+
+impl From<EngineError> for Halt {
+    fn from(error: EngineError) -> Self {
+        Self::Failed(error)
+    }
+}
+
+fn search_heard(
+    search: &DrainSearch,
+    heard: &mut dyn FnMut(Scanning) -> bool,
+) -> Result<Drained, Halt> {
     let mut base = search.mesh.clone();
     if let Some(cuts) = search.cuts {
         base.append(cuts);
     }
+    let rounds = if search.vents { 2 } else { 1 };
     let mut scans = Scans {
         search,
         base,
         count: 0,
+        most: 2 + rounds * MOST_TRIES,
+        heard,
     };
     let pockets = scans.trapped(&[])?;
     if pockets.is_empty() {
@@ -128,17 +185,19 @@ fn suggested(chosen: &[(usize, DrainHole)], role: HoleRole) -> Vec<SuggestedHole
         .collect()
 }
 
-/// The model a search scans, and how often it has.
+/// The model a search scans, how often it has, and who hears it.
 struct Scans<'a> {
     search: &'a DrainSearch<'a>,
     /// The model with the cuts it already had.
     base: Mesh,
     count: usize,
+    most: usize,
+    heard: &'a mut dyn FnMut(Scanning) -> bool,
 }
 
 impl Scans<'_> {
     /// What is trapped with `holes` drilled besides the cuts the model had.
-    fn trapped(&mut self, holes: &[DrainHole]) -> Result<Vec<Trapped>, EngineError> {
+    fn trapped(&mut self, holes: &[DrainHole]) -> Result<Vec<Trapped>, Halt> {
         let Some(material) = self.search.mesh.aabb() else {
             return Ok(Vec::new());
         };
@@ -151,9 +210,22 @@ impl Scans<'_> {
             ceiling_mm: material.maxs.z,
             floor_mm: material.mins.z,
         };
+        let (scan, most_scans) = (self.count, self.most);
         self.count += 1;
-        let found = trapped_in(&baked, self.search.layer_height_mm, |_, _| true)?;
-        Ok(found.unwrap_or_default())
+        let heard = &mut *self.heard;
+        let found = trapped_in(
+            &baked,
+            self.search.layer_height_mm,
+            |layers_read, layers| {
+                heard(Scanning {
+                    scan,
+                    most_scans,
+                    layers_read,
+                    layers,
+                })
+            },
+        )?;
+        found.ok_or(Halt::Asked)
     }
 
     /// The holes into `pocket` looked for `toward`, best first, carried through the wall.
@@ -180,7 +252,7 @@ impl Scans<'_> {
         toward: Toward,
         bvh: &Bvh,
         taken: &mut Vec<Vec3>,
-    ) -> Result<Vec<(usize, DrainHole)>, EngineError> {
+    ) -> Result<Vec<(usize, DrainHole)>, Halt> {
         let mut candidates: Vec<(usize, std::vec::IntoIter<DrainHole>)> = wanted
             .iter()
             .map(|&pocket| {

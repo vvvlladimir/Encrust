@@ -242,3 +242,56 @@ fn a_pocket_left_partly_trapped_is_not_drained() {
     };
     assert!(!drained.is_drained(0), "resin is left in its top");
 }
+
+#[test]
+fn a_search_asked_to_stop_answers_nothing_and_hears_the_first_scan_first() {
+    let shell = sealed_cube();
+    let mut heard = Vec::new();
+    let found = suggest_drains_heard(&search(&shell, None, Some(0.0)), |scanning| {
+        heard.push(scanning);
+        false
+    })
+    .expect("the shell slices");
+    assert_eq!(found, None, "the search stopped");
+    assert_eq!(
+        heard,
+        vec![Scanning {
+            scan: 0,
+            most_scans: 2 + 2 * MOST_TRIES,
+            layers_read: 0,
+            layers: 40,
+        }],
+        "20 mm in 0.5 mm layers, with a vent: ten scans at most"
+    );
+}
+
+#[test]
+fn a_search_heard_through_reports_its_scans_in_order_and_ends_as_the_unheard_one() {
+    let shell = sealed_cube();
+    let mut scans = Vec::new();
+    let found = suggest_drains_heard(&search(&shell, None, Some(0.0)), |scanning| {
+        scans.push(scanning.scan);
+        true
+    })
+    .expect("the shell slices")
+    .expect("nothing stopped it");
+    assert!(scans.is_sorted(), "scans are heard in order: {scans:?}");
+    assert_eq!(scans.last().copied(), Some(found.scans - 1));
+    let unheard = suggest_drains(&search(&shell, None, Some(0.0))).expect("the shell slices");
+    assert_eq!(found, unheard);
+}
+
+#[test]
+fn a_scan_half_read_is_its_share_of_the_most_the_search_takes() {
+    let scanning = Scanning {
+        scan: 2,
+        most_scans: 10,
+        layers_read: 20,
+        layers: 40,
+    };
+    assert!(
+        (scanning.share() - 0.25).abs() < 1e-6,
+        "2.5 scans of 10 is 0.25, got {}",
+        scanning.share()
+    );
+}
