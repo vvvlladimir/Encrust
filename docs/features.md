@@ -638,7 +638,9 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 
 ## File formats
 
-Every file Encrust writes is read back and checked. The output extension picks the format.
+Every file Encrust writes is read back and checked. The output extension picks the format;
+its revision (`.ctb` v4, v5 or encrypted, `.goo` 3.0 or 5.1) is the printer's own, set under
+Output in its settings, so the save dialog lists each extension once.
 
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|

@@ -47,9 +47,44 @@ pub fn applied_to(format: SlicedFormat, path: PathBuf) -> PathBuf {
     }
 }
 
+/// The save dialog's file types: `format` first, under the revision it writes, then each other
+/// extension once and bare, because a dialog hands back a name and not the row picked.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn dialog_filters(
+    format: SlicedFormat,
+    offered: impl IntoIterator<Item = SlicedFormat>,
+) -> Vec<(String, &'static str)> {
+    let mut filters = vec![(label_of(format).to_owned(), format.extension())];
+    for extension in offered.into_iter().map(SlicedFormat::extension) {
+        if filters.iter().all(|(_, listed)| *listed != extension) {
+            filters.push((format!(".{extension}"), extension));
+        }
+    }
+    filters
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_save_dialog_lists_each_extension_once_and_the_written_revision_first() {
+        let filters = dialog_filters(SlicedFormat::Ctb(CtbVersion::V5), SlicedFormat::CHOICES);
+        let extensions: Vec<_> = filters.iter().map(|(_, extension)| *extension).collect();
+        let mut once = extensions.clone();
+        once.sort_unstable();
+        once.dedup();
+        assert_eq!(
+            extensions.len(),
+            once.len(),
+            "a dialog hands back a name, not the row picked: {extensions:?}"
+        );
+        assert_eq!(filters[0], (".ctb v5".to_owned(), "ctb"));
+        assert!(
+            filters.contains(&(".goo".to_owned(), "goo")),
+            "another container is named without a revision it would not get"
+        );
+    }
 
     #[test]
     fn a_name_without_an_extension_gets_the_chosen_one() {
