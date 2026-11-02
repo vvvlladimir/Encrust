@@ -10,6 +10,7 @@ mod modelling;
 mod plate;
 mod png_stack;
 mod profiles;
+mod render;
 mod slicing;
 mod support;
 mod talking;
