@@ -29,6 +29,7 @@ mod panels;
 mod pick;
 mod plate;
 mod prefs;
+mod prepare;
 mod preview;
 mod profiles;
 mod project;
