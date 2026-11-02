@@ -75,8 +75,10 @@ along an axis, with `up = right × forward` in each so that none is a mirror ima
 the drain holes and the support tips a resin print hangs from, or the raft when supports
 stand under the model.
 
-A `Marker` is a point in plate millimetres and a colour. The frame fits the markers as well
-as the parts, so a point off the model is never cut off. Each is drawn after every face, on
+A `Marker` is a point in plate millimetres and a colour. The frame fits the parts alone, so a
+point a metre off cannot shrink them to a speck; a marker off the picture is pinned a radius in
+from the edge nearest it, and `MarkerSpot::pinned` says so. With no parts the markers are
+framed instead. Each is drawn after every face, on
 top of the picture, so none is ever lost: a disc where the eye sees the point, a hollow ring
 of the same size where something drawn stands in front of it, the model showing through the
 middle. Both are outlined in near-white to read on the background and on the model alike;
