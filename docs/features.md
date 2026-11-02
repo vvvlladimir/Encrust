@@ -873,7 +873,8 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 command line as tools, so a language model prepares a model step by step on your
 computer, checks it and writes the file; it asks you for the printer and resin.
 
-**For scripts:** `--json` output with a fixed schema, clear exit codes, `--strict` (fail
+**For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear
+exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
