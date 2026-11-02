@@ -82,7 +82,8 @@ impl RenderCommand {
 
     /// Every point to mark, drawn alike.
     fn markers(&self) -> Vec<Marker> {
-        // TODO(step-3): mark the check's located findings once the report carries them, in commands/render.rs
+        // TODO(step-7): --mark-findings, a mark per slicing.trapped, cured.risks and no_room_at_mm
+        // point; render cuts no stack, so it needs the check's slice first, here.
         self.mark
             .iter()
             .map(|&at| Marker { at, colour: MARK })
@@ -189,6 +190,8 @@ struct Spot {
     x_px: f32,
     y_px: f32,
     hidden: bool,
+    /// Off the picture, which frames the models alone, so drawn at the edge nearest it.
+    pinned: bool,
 }
 
 impl Picture {
@@ -201,6 +204,7 @@ impl Picture {
                 x_px: spot.x_px,
                 y_px: spot.y_px,
                 hidden: spot.hidden,
+                pinned: spot.pinned,
             })
             .collect();
         Self {

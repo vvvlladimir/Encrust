@@ -455,7 +455,9 @@ under the plate with X to the right and the front edge at the top; `iso,bottom` 
 `-o` is a `.png` name for one view or a directory for several, each written as
 `<view>.png` (`render` without it). `--size PX` (512, 16 to 4096) is each picture's width
 and height. `--mark X,Y,Z` marks a point in plate mm on every picture, and may repeat: a
-disc where the point is seen, a hollow ring where the model stands in front of it. A
+disc where the point is seen, a hollow ring where the model stands in front of it. The
+picture frames the models alone, so a far mark does not shrink them; one off the picture is
+drawn at its edge nearest the point. A
 printer is named with a resin, as for `slice`; `--strict` exits 3 and draws nothing when
 the plate has a defect.
 
@@ -466,7 +468,7 @@ encrust render plate.encrust --view top -o top.png --mark 60,40,0 --size 1024
 ```
 
 `--json` lists each picture written, in the order asked, with where each mark landed in it
-(pixels from the top left) and whether the model hid it:
+(pixels from the top left), whether the model hid it and whether it was `pinned` to the edge:
 
 ```json
 {
@@ -478,7 +480,8 @@ encrust render plate.encrust --view top -o top.png --mark 60,40,0 --size 1024
       "width_px": 512,
       "height_px": 512,
       "markers": [
-        { "at_mm": [15.0, 20.0, 2.0], "x_px": 143.4, "y_px": 256.0, "hidden": false }
+        { "at_mm": [15.0, 20.0, 2.0], "x_px": 143.4, "y_px": 256.0, "hidden": false,
+          "pinned": false }
       ]
     }
   ]
