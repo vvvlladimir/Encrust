@@ -362,6 +362,39 @@ wherever a pocket stands in it — `Hollowed::cavity` is the face range of the s
 bounds the lot, and each pocket's own box is what the shader keeps the red inside
 (ADR 0190, 0200). The x-ray of `viewport.md` is what shows it, turned on by hand.
 
+## Suggested drains
+
+`--drain-at auto` puts the holes in itself (ADR 0396). `core_volume::holes_out` proposes them
+for one pocket from its point `p`, the middle of its floor, in the pose the model prints in.
+A drain's rays start a radius `r` over `p`, so a level hole's lowest point is the floor; a
+vent's start `r` under the ceiling straight over `p`. Seventeen rays go out: the vertical,
+eight round it at 45° and eight level. Each is followed through the `Bvh` face by face, at most
+32, and ends where it last leaves material, having entered by the face before. There the hole is
+drilled along the face's normal, not the ray, as a click drills it; it must meet the cavity
+within the wall the ray crossed, else it would run through the solid to a far side, and it
+reaches a diameter past that wall. Three things drop a mouth:
+
+- off a face: eight points of the rim, cast back along the normal from `0.2 r` out, must each
+  meet an outward face within `0.4 r` — a sphere of `2.5 r` curves away by `0.2 r`, and an edge
+  or a fin narrower than the hole leaves a point over air;
+- on the plate: on a model printing on it, the mouth's lowest point `z − r·sqrt(1 − n_z²)` must
+  stand a millimetre over it, where the first layers spread and close it;
+- crossing: a ray that crossed more than one wall goes to the end of the list, since its hole
+  may serve a second cavity on the way.
+
+A drain ranks by `z + r·n_z` in steps of 0.1 mm — lower first, a face looking down a radius
+lower — then by its distance from where the rays start; a vent by height alone.
+
+`core_engine::suggest_drains` proves them. One scan finds the pockets. A round drills one
+untried proposal a pocket still waiting, each two diameters clear of every mouth chosen and of
+points the caller keeps clear, beside the holes already kept, and scans once; a hole is kept
+when no pocket of the scan holds its pocket's `p`. Four rounds at most for drains, then four
+for vents, a vent proven with only the vents drilled so it reaches its pocket alone, then one
+scan with everything for what is left: ten at most. A hole that fails for its own pocket but
+drains a neighbour gives that neighbour's hole a pass it did not earn; the last scan then
+reports the neighbour trapped rather than trying again. The scans cut the model at the run's layer height, so a hole is proven at the layers
+it prints at.
+
 ## What it does not do
 
 - A hollowed mesh is not watertight and `diagnose` says so. Nothing downstream of the
