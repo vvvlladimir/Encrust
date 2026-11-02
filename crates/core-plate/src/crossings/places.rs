@@ -8,7 +8,8 @@ use core_geometry::{
 /// width across is one place, and supports a few millimetres apart are as many.
 const ONE_PLACE_MM: Scalar = 1.0;
 
-/// The box round each run of `seam` whose pieces stand within [`ONE_PLACE_MM`] of the next.
+/// The box round each run of `seam` whose pieces end in the same or a neighbouring cell
+/// [`ONE_PLACE_MM`] wide.
 pub(super) fn places(seam: &[[Vec3; 2]]) -> Vec<Aabb> {
     // Cells are joined, not pieces: a dense seam holds hundreds of pieces a cell, which
     // joined pairwise cost their square.

@@ -72,6 +72,8 @@ fn measured(object: &SceneObject, hollow: &HollowTool) -> Option<KeptResin> {
         Some(asked) => (object.hollow.cavity_mm3() > 0.0
             && holds_resin(asked, object.hollow.drains()))
         .then_some(KeptResin::Sealed(object.id)),
+        // Read only off a sound mesh, as the CLI does: an open one encloses nothing.
+        None if !object.summary.is_sound() => None,
         None => {
             let wall_mm = hollow.settings_for(object).thickness_mm;
             hollowing_saves_mm3(object.printed(), object.transform.linear(), wall_mm)
@@ -120,6 +122,20 @@ mod tests {
             kept,
             vec![KeptResin::Solid(ids[0])],
             "a 2 mm wall saves 44.8 ml of the 40 mm cube and 3.2 ml of the 20 mm one"
+        );
+    }
+
+    #[test]
+    fn an_open_model_is_not_measured() {
+        let mut scene = scene_of_boxes(&[(Vec3::ZERO, Vec3::splat(40.0))]);
+        let id = scene.objects()[0].id;
+        let object = scene.get_mut(id).expect("the cube is on the plate");
+        object.summary.diagnostics.boundary_edges = 3;
+        assert!(
+            Kept::default()
+                .refresh(&scene, &HollowTool::default(), true)
+                .is_empty(),
+            "an open mesh encloses nothing, though its box would save 44.8 ml"
         );
     }
 

@@ -40,11 +40,9 @@ pub struct Crossing {
 /// Each face of `one` and face of `other` that cross, each where it stands, in no set order.
 /// Only faces in the box both stand in are asked; a placement scaled flat crosses nothing.
 pub fn placed_crossings(one: &PlacedMesh<'_>, other: &PlacedMesh<'_>) -> Vec<Crossing> {
-    let low = one.bounds_mm.mins.max(other.bounds_mm.mins);
-    let high = one.bounds_mm.maxs.min(other.bounds_mm.maxs);
-    if low.cmpgt(high).any() {
+    let Some(shared) = one.bounds_mm.intersection(&other.bounds_mm) else {
         return Vec::new();
-    }
+    };
     let (Some(into_one), Some(into_other)) = (
         one.transform.inverse_matrix(),
         other.transform.inverse_matrix(),
@@ -53,7 +51,7 @@ pub fn placed_crossings(one: &PlacedMesh<'_>, other: &PlacedMesh<'_>) -> Vec<Cro
     };
     let mut near = Vec::new();
     one.bvh
-        .faces_meeting(&box_through(into_one, low, high), &mut near);
+        .faces_meeting(&box_through(into_one, shared.mins, shared.maxs), &mut near);
     let one_to_other = into_other * one.transform.to_matrix();
     let other_to_plate = other.transform.to_matrix();
     near.par_iter()

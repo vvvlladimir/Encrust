@@ -97,7 +97,7 @@ fn candidates(
             let (a, b) = (&bodies[one], &bodies[other]);
             let apart = a.owner == b.owner
                 || (a.kind == BodyKind::Supports && b.kind == BodyKind::Supports)
-                || !bounds[other].is_some_and(|box_b| boxes_meet(found, &box_b));
+                || !bounds[other].is_some_and(|box_b| found.intersects(&box_b));
             if apart || other <= one || !seen.insert([one, other]) {
                 continue;
             }
@@ -106,10 +106,6 @@ fn candidates(
         }
     }
     grouped
-}
-
-fn boxes_meet(one: &Aabb, other: &Aabb) -> bool {
-    one.mins.cmple(other.maxs).all() && other.mins.cmple(one.maxs).all()
 }
 
 /// The hierarchies each body is asked through, built the first time a pair needs them.
@@ -190,8 +186,7 @@ fn faces_box(bodies: &[Body<'_>], faces: &[(usize, u32)]) -> Option<Aabb> {
 /// vertices does, and only a box inside the other's can.
 fn inside(bodies: &[Body<'_>], lazy: &Lazy, inner: (usize, &Aabb), outer: (usize, &Aabb)) -> bool {
     let ((inner, inner_box), (outer, outer_box)) = (inner, outer);
-    let contained =
-        outer_box.mins.cmple(inner_box.mins).all() && inner_box.maxs.cmple(outer_box.maxs).all();
+    let contained = outer_box.contains(inner_box);
     let (body, around) = (&bodies[inner], &bodies[outer]);
     let (true, Some(vertex), Some(into_outer)) = (
         contained,

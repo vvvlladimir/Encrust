@@ -364,8 +364,9 @@ to print but hanging off the plate is named as off it, because the panel clips w
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
 reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371). Once
-`--supports` has stood them, or for each model of a project, an *On the plate* block answers
-again for the model with its supports and raft where it was put down; `--strict` fails on
+`--supports` has stood them, an *On the plate* block answers again for the model with its
+supports and raft where it was put down, and each project model that does not fit so is
+named with its `fits` line; `--strict` fails on
 it, and a `batch` model's `fit` is that answer. Two models standing into each other, or the
 supports of one reaching into another, are named once under *Plate* as `meeting a.stl and
 b.stl`: they would slice as one piece. Touching counts, a gap does not, and supports meeting

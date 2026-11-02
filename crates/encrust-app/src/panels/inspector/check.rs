@@ -102,11 +102,11 @@ fn support_islands(window: &mut Window, risks: &[Risk]) {
 /// inspector's heading, and its colour.
 pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
     let colors = theme::colors();
-    let on_plate = plate::count(ctx, window);
+    let on_plate = plate::tally(ctx, window);
     let issues = |count: usize, colour| Some((tr!("check-fact-issues", count = count), colour));
     let Some(measured) = window.measured() else {
-        if on_plate > 0 {
-            return issues(on_plate, colors.danger);
+        if let Some((count, colour)) = on_plate {
+            return issues(count, colour);
         }
         return window
             .machine
@@ -114,26 +114,38 @@ pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
             .is_measuring()
             .then(|| (tr!("check-fact-checking"), colors.text_low));
     };
-    match (measured.worst(), on_plate) {
-        (None, 0) => Some((tr!("check-fact-none"), colors.text_mid)),
-        (None, _) => issues(on_plate, colors.danger),
-        (Some(_), on_plate) if on_plate > 0 => {
-            issues(measured.risks().len() + on_plate, colors.danger)
+    let layers = measured.worst().map(|worst| tint(&worst));
+    match (layers, on_plate) {
+        (None, None) => Some((tr!("check-fact-none"), colors.text_mid)),
+        (None, Some((count, colour))) => issues(count, colour),
+        (Some(colour), None) => issues(measured.risks().len(), colour),
+        (Some(colour), Some((count, plate))) => {
+            issues(measured.risks().len() + count, gravest(colour, plate))
         }
-        (Some(worst), _) => issues(measured.risks().len(), tint(&worst)),
     }
 }
 
-/// The dot the rail's Check carries: `danger` while the plate has an issue, found without
-/// Check open, else the colour of the worst the layers hold once read.
+/// The dot the rail's Check carries: the colour of the gravest issue, the plate's found
+/// without Check open, the layers' once read.
 pub fn badge(ctx: &egui::Context, window: &Window) -> Option<Color32> {
-    if plate::count(ctx, window) > 0 {
-        return Some(theme::colors().danger);
-    }
-    window
+    let layers = window
         .measured()
         .and_then(Measured::worst)
-        .map(|worst| tint(&worst))
+        .map(|worst| tint(&worst));
+    let on_plate = plate::tally(ctx, window).map(|(_, colour)| colour);
+    match (layers, on_plate) {
+        (Some(layers), Some(plate)) => Some(gravest(layers, plate)),
+        (layers, plate) => layers.or(plate),
+    }
+}
+
+/// `danger` if either colour is, else the first.
+fn gravest(one: Color32, other: Color32) -> Color32 {
+    if other == theme::colors().danger {
+        other
+    } else {
+        one
+    }
 }
 
 /// Before there is anything to read: the stack being read, or the way to have it cut.

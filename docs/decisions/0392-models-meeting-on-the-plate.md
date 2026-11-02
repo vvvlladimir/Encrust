@@ -17,8 +17,9 @@ measured on the bare model, so supports or a raft past the build volume were cli
 **`core_plate::crossings` names each pair of models that meet, and where**: a face of
 one, or of its supports and raft, crosses a face of the other, or one stands wholly inside
 it. Each `Meeting` carries the seam their faces cut and the places they meet: the box
-round each run of the seam, runs a millimetre apart being one place, round faces lying on
-each other, or the inner body's box.
+round each run of the seam, runs ending in the same or a neighbouring 1 mm cell being one
+place (so up to about 3.5 mm apart), round faces lying on each other, or the inner body's
+box.
 Touching counts, faces lying on each other included; a gap of any width does not. The
 bodies of one model never meet each other, and supports never meet supports.
 
@@ -46,7 +47,7 @@ models' rows carry *Meets*; a press on either flies the camera to a place, the n
 to the next. The CLI names the pairs and fails `--strict`.
 
 **Past the plate measures what prints**: `core_plate::PlateFit` takes a model with its
-supports and raft where it was put down, for the window's striping and Check rows and the
+supports and raft where it was put down, for the window's Check rows and the
 CLI's *On the plate* answer alike; `--strict` fails past the build volume, the inset still
 only warns (ADR 0371).
 

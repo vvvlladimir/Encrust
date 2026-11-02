@@ -1,6 +1,5 @@
-//! What Check lists before any layer is read: models past the build volume or in its inset,
-//! models that meet, and resin a model keeps, each a click from the camera on it (ADR 0392,
-//! 0393).
+//! What Check lists before any layer is read: models off the plate or in its inset, models
+//! that meet, and resin a model keeps (ADR 0392, 0393).
 
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -35,14 +34,28 @@ fn issues(ctx: &egui::Context, window: &Window) -> Vec<PlateIssue> {
         .collect()
 }
 
-/// How many issues the plate has, for the heading's count.
-pub(super) fn count(ctx: &egui::Context, window: &Window) -> usize {
-    issues(ctx, window).len()
+/// How many issues the plate has and the colour of the gravest, for the heading and the
+/// rail's dot; `None` while it has none.
+pub(super) fn tally(ctx: &egui::Context, window: &Window) -> Option<(usize, egui::Color32)> {
+    let issues = issues(ctx, window);
+    let gravest = issues
+        .iter()
+        .map(tint)
+        .max_by_key(|&colour| colour == theme::colors().danger)?;
+    Some((issues.len(), gravest))
 }
 
-/// The plate's issues in a section of their own, whatever the layers say; a press on a
-/// row flies the camera there, again to the next place two models meet, or opens Hollow or
-/// Drain on the model keeping resin.
+/// `danger` for what slices wrong, a model cut off or fused to another; `warn` for the rest.
+fn tint(issue: &PlateIssue) -> egui::Color32 {
+    let colors = theme::colors();
+    match issue {
+        PlateIssue::Astray(Astray { past: true, .. }) | PlateIssue::Meeting(_) => colors.danger,
+        PlateIssue::Astray(_) | PlateIssue::Kept(_) => colors.warn,
+    }
+}
+
+/// The plate's issues in a section of their own, whatever the layers say; a row's press
+/// flies the camera to it, or opens Hollow or Drain on a model keeping resin.
 pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let issues = issues(ui.ctx(), window);
     if issues.is_empty() {
@@ -88,23 +101,19 @@ fn open_on(window: &mut Window, id: ObjectId, tool: Tool) {
 
 /// A row's colour, the model it names and what is wrong with it.
 fn words(scene: &Scene, issue: &PlateIssue) -> (egui::Color32, String, String) {
-    let colors = theme::colors();
     let name = |id| {
         scene
             .get(id)
             .map_or_else(String::new, |object| object.name.clone())
     };
-    match *issue {
-        PlateIssue::Astray(Astray { id, past: true, .. }) => {
-            (colors.danger, name(id), tr!("check-row-past"))
+    let (place, detail) = match *issue {
+        PlateIssue::Astray(Astray { id, past: true, .. }) => (name(id), tr!("check-row-past")),
+        PlateIssue::Astray(Astray { id, .. }) => (name(id), tr!("check-row-inset")),
+        PlateIssue::Meeting([one, other]) => {
+            (name(one), tr!("check-row-meets", name = name(other)))
         }
-        PlateIssue::Astray(Astray { id, .. }) => (colors.warn, name(id), tr!("check-row-inset")),
-        PlateIssue::Meeting([one, other]) => (
-            colors.danger,
-            name(one),
-            tr!("check-row-meets", name = name(other)),
-        ),
-        PlateIssue::Kept(KeptResin::Sealed(id)) => (colors.warn, name(id), tr!("check-row-sealed")),
-        PlateIssue::Kept(KeptResin::Solid(id)) => (colors.warn, name(id), tr!("check-row-solid")),
-    }
+        PlateIssue::Kept(KeptResin::Sealed(id)) => (name(id), tr!("check-row-sealed")),
+        PlateIssue::Kept(KeptResin::Solid(id)) => (name(id), tr!("check-row-solid")),
+    };
+    (tint(issue), place, detail)
 }

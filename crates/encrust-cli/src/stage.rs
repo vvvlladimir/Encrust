@@ -582,7 +582,6 @@ fn standing_of(
     Some(check)
 }
 
-/// The box covering both `a` and `b`.
 /// One piece ready to slice, the plugs for its holes, and what hollowing and supporting
 /// it found.
 struct PutDown {

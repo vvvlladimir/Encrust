@@ -83,8 +83,8 @@ Nine tools in three groups split by a vertical rule: Select, Measure | Repair, H
 Cut, Relief | Supports, Check. Each is a `rail_button`: glyph 19 over its name in 10.5, 50
 tall, the room shared equally but no wider than 56 (its height, or the least a name needs), 2 apart. The tool in hand is washed in
 `accent_wash` with its glyph and name in `accent_soft`; a tool that needs attention carries
-a 7 point `warn` dot at its top right; Check's is `danger` the moment the plate has an issue,
-open or not, and goes once it is fixed. While the pointer is on the row each tool shows its
+a 7 point `warn` dot at its top right; Check's takes the colour of its gravest issue, the
+plate's the moment it has one, open or not, and goes once it is fixed. While the pointer is on the row each tool shows its
 key's digit, 1 to 9, at its top left in `text_low`. Narrower than 9 × 56, the names go and
 each tool is a 36 tall square of its glyph.
 

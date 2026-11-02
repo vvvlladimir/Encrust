@@ -183,8 +183,9 @@ whole-surface fill is Cmd-Shift-click.
   read: past the build volume (its overhang is cut off the layers) or in the inset (it
   still slices whole) once a printer is chosen, and meeting another model. A click on a row, or on a
   **Meets** tag, flies the camera there; on a meeting each further click goes to the next
-  place. None of it stops the slice. The Check tool on the rail carries a red dot while
-  any of them stands, before Check is opened, and loses it once the models are moved clear.
+  place. None of it stops the slice. The Check tool on the rail carries a dot while any of
+  them stands, before Check is opened: red past the build volume or for a meeting, amber for
+  the rest, gone once each is fixed.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
