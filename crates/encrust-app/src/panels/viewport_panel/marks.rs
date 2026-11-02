@@ -8,14 +8,20 @@ use crate::camera::CameraTurn;
 use crate::panels::{Window, section};
 use crate::workspace::Tool;
 
-/// The seam where models meet, in every tool, then what the Repair tool found or the issues
-/// Check went to while the plate and the cut at `section_mm` stay as they were, in hand.
+/// The seam where models meet, in every tool but the render view, then what the Repair tool
+/// found or the issues Check went to while the plate and the cut at `section_mm` stay put.
 pub(super) fn marked(
     window: &Window,
     section_mm: Option<Scalar>,
     (rect, cursor): (egui::Rect, Option<egui::Pos2>),
 ) -> crate::highlight::Highlight {
-    let mut marked = window.doc.meeting.highlight(&window.doc.scene);
+    let mut marked = match window.view.options.render {
+        true => crate::highlight::Highlight::default(),
+        false => window
+            .doc
+            .meeting
+            .highlight(&window.doc.scene, section::shown(window)),
+    };
     let tool = by_tool(window, section_mm, (rect, cursor));
     marked.faces.extend(tool.faces);
     marked.edges.extend(tool.edges);
@@ -37,9 +43,8 @@ fn by_tool(
     }
 }
 
-/// Flies the camera to where models meet, from a press on a tag, or where the Repair tool's
-/// last press or Check's last pick went, on the frame that place is worked out, seen past
-/// what the section leaves drawn.
+/// Flies the camera, past what the section leaves drawn, to where a press on a *Meets* tag,
+/// the Repair tool's last press or Check's last pick went, once that place is worked out.
 pub(super) fn fly_to_marked(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
     let by_tool = match *window.tool {
         Tool::Repair => repair::flight(window),

@@ -53,7 +53,6 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
 | [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
 | [0389](0389-a-support-profile-is-saved-by-a-press.md) | Save a support profile's form by a press, and ask before leaving it unsaved | Accepted |
-| [0390](0390-models-meeting-on-the-plate.md) | Warn of models that meet on the plate, by their faces and by winding | Proposed |
 | [0388](0388-the-update-feed-dates-its-release-and-sizes-each-archive.md) | Date the release and size each archive in the update feed | Accepted |
 | [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292 |
 | [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
@@ -329,6 +328,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0343](0343-a-proof-stands-supports-to-the-plan-the-window-builds-them-to.md) | A proof stands supports to the plan the window builds them to, automatic sizing included | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
+| [0392](0392-models-meeting-on-the-plate.md) | Warn of models that meet on the plate, by their faces and by winding, and of supports past it | Proposed |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
 | [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319 |

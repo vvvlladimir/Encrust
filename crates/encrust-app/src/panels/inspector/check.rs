@@ -143,7 +143,7 @@ pub fn badge(ctx: &egui::Context, window: &Window) -> Option<Color32> {
         .map(|worst| tint(&worst))
 }
 
-/// Before there is anything to read:the stack being read, or the way to have it cut.
+/// Before there is anything to read: the stack being read, or the way to have it cut.
 fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.preview.is_measuring() || window.machine.preview.is_building() {
         section(ui, &tr!("check-checking"), None, |ui| {

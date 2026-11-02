@@ -1,5 +1,5 @@
 //! Which models of a staged plate meet another, said once before the plate is cut
-//! (ADR 0390).
+//! (ADR 0392).
 
 use core_engine::Model;
 use core_geometry::Transform;

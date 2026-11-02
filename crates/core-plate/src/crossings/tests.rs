@@ -1,5 +1,5 @@
 use super::*;
-use core_geometry::{Vec3, cuboid};
+use core_geometry::{Region, Vec3, cuboid, flip_faces};
 
 /// Cubes from `low` to `high`, each with the owner and kind given.
 fn bodies_of(cubes: &[(usize, BodyKind, Vec3, Vec3)]) -> Vec<Mesh> {
@@ -176,6 +176,48 @@ fn supports_reaching_into_another_model_meet_it() {
 }
 
 #[test]
+fn two_cubes_standing_face_to_face_meet_where_they_touch() {
+    let met = meetings(&[
+        (0, Model, Vec3::ZERO, Vec3::splat(10.0)),
+        (
+            1,
+            Model,
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(20.0, 10.0, 10.0),
+        ),
+    ]);
+    assert_eq!(met.len(), 1, "touching counts");
+    let place = met[0].places_mm[0];
+    assert!(
+        (place.mins.x - 10.0).abs() < 1e-4 && (place.maxs.x - 10.0).abs() < 1e-4,
+        "the faces lying on each other at x = 10 mm, got {place:?}"
+    );
+}
+
+#[test]
+fn a_model_and_its_supports_cutting_one_seam_into_another_meet_it_in_one_place() {
+    // The model cuts a frame at x = 10 mm down to z = 1, the support a loop at z = 1 over
+    // x = 9..12 mm, crossing it.
+    let met = meetings(&[
+        (0, Model, Vec3::ZERO, Vec3::splat(10.0)),
+        (
+            0,
+            Supports,
+            Vec3::new(9.0, 3.0, 0.0),
+            Vec3::new(12.0, 5.0, 3.0),
+        ),
+        (
+            1,
+            Model,
+            Vec3::new(8.0, 2.0, 1.0),
+            Vec3::new(18.0, 8.0, 9.0),
+        ),
+    ]);
+    assert_eq!(met.len(), 1);
+    assert_eq!(met[0].places_mm.len(), 1, "got {:?}", met[0].places_mm);
+}
+
+#[test]
 fn supports_meeting_supports_and_a_models_own_supports_are_not_a_meeting() {
     let met = met(&[
         (
@@ -206,5 +248,27 @@ fn supports_meeting_supports_and_a_models_own_supports_are_not_a_meeting() {
     assert!(
         met.is_empty(),
         "the rafts overlap at x = 11..12 mm only, got {met:?}"
+    );
+}
+
+#[test]
+fn a_model_standing_in_anothers_cavity_does_not_meet_it() {
+    let mut hollow = cuboid(Vec3::ZERO, Vec3::splat(20.0));
+    let mut cavity = cuboid(Vec3::splat(5.0), Vec3::splat(15.0));
+    let every_face: Region = (0..cavity.faces.len()).collect();
+    flip_faces(&mut cavity, &every_face);
+    hollow.append(&cavity);
+    let inner = cuboid(Vec3::splat(8.0), Vec3::splat(12.0));
+    let body = |owner, mesh| Body {
+        owner,
+        kind: Model,
+        mesh,
+        bvh: None,
+        transform: Transform::default(),
+    };
+    let met = crossings(&[body(0, &hollow), body(1, &inner)]);
+    assert!(
+        met.is_empty(),
+        "the cavity is outside the wall, got {met:?}"
     );
 }

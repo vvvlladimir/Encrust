@@ -3,7 +3,7 @@
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use core_geometry::{Aabb, Vec3};
+use core_geometry::{Aabb, BoundingVolume, Vec3};
 
 use super::BuildPlate;
 use crate::highlight::Spot;
@@ -82,7 +82,7 @@ fn bounds(object: &SceneObject) -> Option<Aabb> {
         .world_bounds()
         .into_iter()
         .chain(supports.filter_map(|group| group.mesh.aabb()))
-        .reduce(|a, b| Aabb::new(a.mins.min(b.mins), a.maxs.max(b.maxs)))
+        .reduce(|a, b| a.merged(&b))
 }
 
 fn fingerprint(scene: &Scene, plate: &BuildPlate) -> u64 {

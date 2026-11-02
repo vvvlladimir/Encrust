@@ -1,6 +1,5 @@
-//! Which models on the plate meet another, asked of a thread once the plate settles: the
-//! seam they cut traced in red, listed by Check and flown to from it and the models card
-//! (ADR 0390).
+//! Which models on the plate meet another, asked of a thread once the plate settles, and
+//! where the camera flies to see each (ADR 0392).
 
 use std::sync::Arc;
 
@@ -9,6 +8,7 @@ use core_plate::BodyKind;
 
 use crate::highlight::{EdgeMark, Highlight, Spot};
 use crate::job::{MeetingBody, MeetingJob, spawn_meeting};
+use crate::pick::Shown;
 use crate::scene::{ObjectId, Scene};
 use crate::ui::theme;
 
@@ -19,8 +19,9 @@ pub struct Meeting {
     found_for: Option<u64>,
     met: Vec<Met>,
     run: Option<Run>,
-    /// How many presses have flown to a meeting, so the next goes on to the next place.
-    turns: usize,
+    /// The pairs the last presses asked for and how many there were, so the next press on
+    /// them goes on to the next place and a press on others starts at their first.
+    turns: (Vec<[ObjectId; 2]>, usize),
     flight: Option<Spot>,
 }
 
@@ -106,12 +107,13 @@ impl Meeting {
         self.current(scene).iter().filter_map(other).collect()
     }
 
-    /// The seam every pair of models cuts, traced in red over them, in every tool.
-    pub fn highlight(&self, scene: &Scene) -> Highlight {
+    /// The seam every pair of models cuts, traced in red over them in every tool, as far as
+    /// the section leaves them `shown`.
+    pub fn highlight(&self, scene: &Scene, shown: Shown) -> Highlight {
         let seam: Vec<[Vec3; 2]> = self
             .current(scene)
             .iter()
-            .flat_map(|met| met.seam.iter().copied())
+            .flat_map(|met| met.seam.iter().filter_map(|&ends| shown.part_of(ends)))
             .collect();
         let edges = (!seam.is_empty()).then(|| EdgeMark {
             edges: seam,
@@ -126,18 +128,25 @@ impl Meeting {
     /// Sends the camera to a place where the pair `keep` answers for meet; each press goes
     /// on to the next place.
     pub fn fly_to(&mut self, scene: &Scene, keep: impl Fn([ObjectId; 2]) -> bool) {
-        let spots: Vec<Spot> = self
+        let asked: Vec<&Met> = self
             .current(scene)
             .iter()
             .filter(|met| keep(met.ids))
+            .collect();
+        let spots: Vec<Spot> = asked
+            .iter()
             .flat_map(|met| &met.places)
             .filter_map(|place| Spot::around([place.mins, place.maxs], Vec3::ZERO))
             .collect();
         if spots.is_empty() {
             return;
         }
-        self.flight = Some(spots[self.turns % spots.len()]);
-        self.turns += 1;
+        let pairs: Vec<[ObjectId; 2]> = asked.iter().map(|met| met.ids).collect();
+        if self.turns.0 != pairs {
+            self.turns = (pairs, 0);
+        }
+        self.flight = Some(spots[self.turns.1 % spots.len()]);
+        self.turns.1 += 1;
     }
 
     /// Where a press asked the camera to go, once.

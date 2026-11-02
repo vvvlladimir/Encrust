@@ -1,6 +1,8 @@
 //! The seam two bodies cut, split into the places it runs through apart from each other.
 
-use core_geometry::{Aabb, Components, FastMap, Scalar, Vec3, cell_of_point, cells_around};
+use core_geometry::{
+    Aabb, BoundingVolume, Components, FastMap, Scalar, Vec3, cell_of_point, cells_around,
+};
 
 /// How near two pieces of seam stand to be one place, millimetres: a contact a finger's
 /// width across is one place, and supports a few millimetres apart are as many.
@@ -33,7 +35,7 @@ pub(super) fn places(seam: &[[Vec3; 2]]) -> Vec<Aabb> {
         let piece = Aabb::new(from.min(*to), from.max(*to));
         boxes
             .entry(runs.find(index as u32))
-            .and_modify(|run| *run = super::merged(*run, piece))
+            .and_modify(|run| run.merge(&piece))
             .or_insert(piece);
     }
     let mut places: Vec<Aabb> = boxes.into_values().collect();

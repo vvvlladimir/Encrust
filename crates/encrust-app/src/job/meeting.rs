@@ -16,7 +16,7 @@ pub struct MeetingBody {
 }
 
 /// The models that meet, by their `owner`, and where, found on a thread of their own
-/// (ADR 0390).
+/// (ADR 0392).
 pub type MeetingJob = Worker<Vec<Meeting>>;
 
 /// Starts the search. A thread that fails finds nothing: the warning is only a warning.

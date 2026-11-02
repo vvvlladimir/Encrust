@@ -1,11 +1,11 @@
 //! Which models on the plate meet another: a face of one, or of its supports, crosses a face
-//! of the other, or one stands inside it. See `docs/decisions/0390-models-meeting-on-the-plate.md`.
+//! of the other, or one stands inside it. See `docs/decisions/0392-models-meeting-on-the-plate.md`.
 
 use std::sync::OnceLock;
 
 use core_geometry::{
-    Aabb, Buckets, Bvh, FastMap, FastSet, Mesh, PlacedMesh, Scalar, Transform, Vec3, Winding,
-    placed_aabb, placed_crossings,
+    Aabb, BoundingVolume, Buckets, Bvh, FastMap, FastSet, Mesh, PlacedMesh, Scalar, Transform,
+    Vec3, Winding, placed_aabb, placed_crossings,
 };
 use rayon::prelude::*;
 
@@ -66,6 +66,7 @@ pub fn crossings(bodies: &[Body<'_>]) -> Vec<Meeting> {
                     seam_mm.extend(seam);
                 }
             }
+            places_mm.extend(places(&seam_mm));
             (!places_mm.is_empty()).then_some(Meeting {
                 owners,
                 places_mm,
@@ -75,10 +76,6 @@ pub fn crossings(bodies: &[Body<'_>]) -> Vec<Meeting> {
         .collect();
     met.sort_unstable_by_key(|meeting| meeting.owners);
     met
-}
-
-fn merged(one: Aabb, other: Aabb) -> Aabb {
-    Aabb::new(one.mins.min(other.mins), one.maxs.max(other.maxs))
 }
 
 /// The pairs of bodies whose boxes meet, grouped by the two models they belong to.
@@ -130,8 +127,8 @@ impl Lazy {
     }
 }
 
-/// Where two bodies meet, and the seam their faces cut: round each run of it, round faces
-/// lying on each other where they cut none, or the box of one standing wholly inside.
+/// The seam two bodies' faces cut, or where they meet cutting none: round faces lying on
+/// each other, or the box of one standing wholly inside.
 fn meet(
     bodies: &[Body<'_>],
     bounds: &[Option<Aabb>],
@@ -158,7 +155,7 @@ fn meet(
         .filter_map(|crossing| crossing.seam_mm)
         .collect();
     if !seam.is_empty() {
-        return Some((places(&seam), seam));
+        return Some((Vec::new(), seam));
     }
     let faces: Vec<(usize, u32)> = crossed
         .iter()
@@ -186,7 +183,7 @@ fn faces_box(bodies: &[Body<'_>], faces: &[(usize, u32)]) -> Option<Aabb> {
     });
     corners
         .map(|corner| Aabb::new(corner, corner))
-        .reduce(merged)
+        .reduce(|one, other| one.merged(&other))
 }
 
 /// Whether `inner`, crossing none of `outer`'s faces, stands inside it: then any one of its

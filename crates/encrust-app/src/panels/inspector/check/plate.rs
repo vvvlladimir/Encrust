@@ -1,5 +1,5 @@
 //! What Check lists before any layer is read: models past the build volume or in its inset,
-//! and models that meet, each a click from the camera on it (ADR 0390).
+//! and models that meet, each a click from the camera on it (ADR 0392).
 
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -14,8 +14,8 @@ enum PlateIssue {
     Meeting([ObjectId; 2]),
 }
 
-/// The plate's issues, found as soon as the models stand still; none without a printer,
-/// as the plate is a stand-in until then.
+/// The plate's issues, found as soon as the models stand still; none of its bounds without
+/// a printer, as the plate is a stand-in until then.
 fn issues(ctx: &egui::Context, window: &Window) -> Vec<PlateIssue> {
     let (scene, plate) = (&window.doc.scene, &window.doc.plate);
     let astray = match plate.name {

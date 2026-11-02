@@ -173,6 +173,17 @@ fn a_cube_moved_by_a_round_half_crosses_though_every_crossing_lands_on_a_rim() {
 }
 
 #[test]
+fn a_cube_standing_on_another_of_its_footprint_touches_it() {
+    // Top and bottom are split along one diagonal, so the faces lying on each other are equal.
+    assert!(cubes_cross(Transform::from_translation(Vec3::Z)));
+}
+
+#[test]
+fn a_cube_standing_face_to_face_with_another_touches_it() {
+    assert!(cubes_cross(Transform::from_translation(Vec3::X)));
+}
+
+#[test]
 fn a_cube_moved_clear_of_another_crosses_nothing() {
     assert!(!cubes_cross(Transform::from_translation(Vec3::new(
         1.5, 0.0, 0.0
@@ -181,9 +192,8 @@ fn a_cube_moved_clear_of_another_crosses_nothing() {
 
 #[test]
 fn a_turned_cube_whose_box_overlaps_but_whose_faces_stop_short_crosses_nothing() {
-    // Turned 45° about Z and centred at (1.6, 1.6), its box reaches x = 1.6 - √2/2 = 0.89 mm,
-    // inside the other's, but its face towards the corner (1, 1) stands 0.5 mm from its
-    // centre and the corner 0.6·√2 = 0.85 mm.
+    // Turned 45° about Z at (1.6, 1.6), its box reaches x = 0.89 mm, into the other's, but its
+    // face towards the corner (1, 1) stands 0.5 mm from its centre and the corner 0.85 mm.
     let turn = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
     let centre = Vec3::new(1.6, 1.6, 0.5);
     let at = Transform::from_scale_rotation_translation(

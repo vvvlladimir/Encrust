@@ -174,12 +174,14 @@ whole-surface fill is Cmd-Shift-click.
   view, and so is what reaches into the plate inset a printer keeps clear along its edges.
 - Models standing into each other, or a model's supports or raft reaching into another
   model, are found once the plate stops moving, and the seam they cut is traced in a thin
-  red line, in every tool. Their rows in the models card are tagged **Meets**, naming the others on hover.
+  red line in every tool, only where the section leaves the models drawn, and never in the
+  render view.
+  Their rows in the models card are tagged **Meets**, naming the others on hover.
   Touching counts, a gap of any width does not; a model's own supports, and supports or
   rafts meeting each other, never do. They would slice as one piece.
-- With a printer chosen, the Check tool lists each of these under **On the plate** at once,
-  before any layer is read: past the build volume (its overhang is cut off the layers), in
-  the inset (it still slices whole), or meeting another model. A click on a row, or on a
+- The Check tool lists each of these under **On the plate** at once, before any layer is
+  read: past the build volume (its overhang is cut off the layers) or in the inset (it
+  still slices whole) once a printer is chosen, and meeting another model. A click on a row, or on a
   **Meets** tag, flies the camera there; on a meeting each further click goes to the next
   place. None of it stops the slice. The Check tool on the rail carries a red dot while
   any of them stands, before Check is opened, and loses it once the models are moved clear.

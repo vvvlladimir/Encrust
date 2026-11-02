@@ -155,7 +155,7 @@ enum Rim {
 fn cross(one: &Corners, other: &Corners, rim: Rim) -> bool {
     let sides = other.map(|point| orient(one, point));
     if sides.iter().all(|&side| side == 0.0) {
-        return overlap_flat(one, other);
+        return overlap_flat(one, other, rim);
     }
     edges(one).any(|edge| through(other, edge, rim))
         || edges(other).any(|edge| through(one, edge, rim))
@@ -189,8 +189,8 @@ fn through(triangle: &Corners, [from, to]: [DVec3; 2], rim: Rim) -> bool {
 }
 
 /// Whether two triangles in one plane overlap inside: two edges cross, or a corner of one
-/// stands inside the other.
-fn overlap_flat(one: &Corners, other: &Corners) -> bool {
+/// stands inside the other, or with `Rim::Closed` its centre, as when the two are equal.
+fn overlap_flat(one: &Corners, other: &Corners, rim: Rim) -> bool {
     let normal = (one[1] - one[0]).cross(one[2] - one[0]).abs();
     let [u, v] = if normal.x >= normal.y && normal.x >= normal.z {
         [1, 2]
@@ -209,9 +209,11 @@ fn overlap_flat(one: &Corners, other: &Corners) -> bool {
             )
         })
     });
+    let centre = |triangle: &[DVec2; 3]| (triangle[0] + triangle[1] + triangle[2]) / 3.0;
     edges_cross
         || one.iter().any(|&point| inside(&other, point))
         || other.iter().any(|&point| inside(&one, point))
+        || (rim == Rim::Closed && (inside(&other, centre(&one)) || inside(&one, centre(&other))))
 }
 
 fn turn(a: DVec2, b: DVec2, point: DVec2) -> f64 {

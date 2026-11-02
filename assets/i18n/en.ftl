@@ -518,7 +518,9 @@ check-erased-note = Erased from the file; anything left hanging is listed below.
 check-more-layers = and { $count } more layers
 check-plate = On the plate
 check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
+# Beside a model's name, where it, its supports or its raft stand.
 check-row-past = past the build volume
+# Beside a model's name, where it, its supports or its raft stand.
 check-row-inset = in the plate inset
 # The other model's name.
 check-row-meets = meets { $name }

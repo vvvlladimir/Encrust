@@ -34,10 +34,6 @@ impl FitCheck {
             ),
         }
     }
-
-    pub fn fits(&self) -> bool {
-        self.fit.fits()
-    }
 }
 
 /// How a wrap went.
@@ -106,7 +102,7 @@ impl ImportReport {
             .diagnostics
             .as_ref()
             .is_none_or(MeshDiagnostics::is_sound);
-        let fits = self.fit.as_ref().is_none_or(FitCheck::fits);
+        let fits = self.fit.as_ref().is_none_or(|check| check.fit.fits());
         sound && fits
     }
 }
@@ -447,7 +443,7 @@ z = {z}
             &stats(Vec3::new(10.0, 10.0, 10.0)),
             &profile(20.0, 20.0, 20.0),
         );
-        assert!(fit.fits());
+        assert!(fit.fit.fits());
         assert_eq!(describe_fit(&fit), "Test: yes");
     }
 
@@ -457,7 +453,7 @@ z = {z}
             &stats(Vec3::new(30.0, 10.0, 25.0)),
             &profile(20.0, 20.0, 20.0),
         );
-        assert!(!fit.fits());
+        assert!(!fit.fit.fits());
         assert_eq!(
             describe_fit(&fit),
             "Test: no, over X by 10.000 mm, Z by 5.000 mm"
@@ -471,7 +467,7 @@ z = {z}
             &profile(20.0, 20.0, 20.0),
         );
         assert!(
-            !fit.fits(),
+            !fit.fit.fits(),
             "what hangs off the plate is clipped off the mask"
         );
         assert_eq!(
@@ -491,7 +487,7 @@ z = {z}
             &standing(Vec3::new(0.5, 5.0, 0.0), Vec3::new(10.5, 15.0, 10.0)),
             &printer,
         );
-        assert!(fit.fits(), "the inset warns, it never clips");
+        assert!(fit.fit.fits(), "the inset warns, it never clips");
         assert_eq!(
             describe_fit(&fit),
             "Test: yes, in the plate's inset in X by 1.000 mm"

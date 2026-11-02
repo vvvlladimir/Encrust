@@ -72,7 +72,7 @@ pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3};
 /// The maths library itself, for the corners it covers that this crate does not wrap,
 /// such as `glam::camera` for view and projection matrices.
 pub use glam;
-pub use parry3d::bounding_volume::Aabb;
+pub use parry3d::bounding_volume::{Aabb, BoundingVolume};
 
 /// Scalar type used across the whole pipeline.
 pub type Scalar = f32;

@@ -1,4 +1,4 @@
-# 0390. Warn of models that meet on the plate, by their faces and by winding
+# 0392. Warn of models that meet on the plate, by their faces and by winding, and of supports past it
 
 - **Status:** Proposed
 - **Date:** 2026-11-01
@@ -9,7 +9,8 @@ Two models standing into each other, or a support of one reaching into another, 
 into one piece: the slicer fills by positive winding, so what overlaps is united. Nothing
 breaks and nothing says so; the user finds two figures fused on the plate. Supports are
 grown per model and bite into their own model by design, and the rafts of neighbours
-often overlap without harm. A warning that fires on those is soon ignored.
+often overlap without harm. A warning that fires on those is soon ignored. The fit was
+measured on the bare model, so supports or a raft past the build volume were clipped unsaid.
 
 ## Decision
 
@@ -37,10 +38,16 @@ A `Bvh` or `Winding` a caller does not hand in is built the first time a pair ne
 **The window traces the seam in the scene's `meets` red, in every tool**: each segment two
 crossing faces cut each other along, between the points where the edges of each pierce
 the other, drawn as the Repair tool's marked edges are, a line a few pixels wide pulled a
-hair towards the eye. The Check tool lists each pair that meets under *On the plate*, with
+hair towards the eye, cut where the section cuts the models and left out of the render
+view, which shows the print and not its faults. The Check tool lists each pair that meets under *On the plate*, with
 the models past the build volume or in the inset, before any layer is read, and the
 models' rows carry *Meets*; a press on either flies the camera to a place, the next press
 to the next. The CLI names the pairs and fails `--strict`.
+
+**Past the plate measures what prints**: `core_plate::PlateFit` takes a model with its
+supports and raft where it was put down, for the window's striping and Check rows and the
+CLI's *On the plate* answer alike; `--strict` fails past the build volume, the inset still
+only warns (ADR 0371).
 
 ## Consequences
 

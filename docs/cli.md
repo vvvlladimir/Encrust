@@ -368,7 +368,7 @@ it, and a `batch` model's `fit` is that answer. Two models standing into each ot
 supports of one reaching into another, are named once under *Plate* as `meeting a.stl and
 b.stl`: they would slice as one piece. Touching counts, a gap does not, and supports meeting
 supports never do; `--strict` fails on it, and each `batch` model lists the others in
-`meets` (ADR 0390).
+`meets` (ADR 0392).
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).

@@ -8,7 +8,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use core_engine::{Cutting, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
-use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec2, Vec3, placed_aabb, transform_mesh};
+use core_geometry::{
+    Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec2, Vec3, placed_aabb, transform_mesh,
+};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{ArrangeSettings, Footprint, arrange};
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -59,7 +61,7 @@ pub struct Part {
     pub supports: Option<SupportReport>,
     /// How the model with its supports and raft sits on the plate where it was put down.
     pub standing: Option<FitCheck>,
-    /// The inputs of the other parts it, or its supports, meet (ADR 0390).
+    /// The inputs of the other parts it, or its supports, meet (ADR 0392).
     pub meets: Vec<PathBuf>,
 }
 
@@ -68,7 +70,7 @@ impl Part {
     pub fn is_clean(&self) -> bool {
         self.import.as_ref().is_none_or(ImportReport::is_clean)
             && self.hollow.as_ref().is_none_or(HollowReport::is_clean)
-            && self.standing.as_ref().is_none_or(FitCheck::fits)
+            && self.standing.as_ref().is_none_or(|check| check.fit.fits())
             && self.meets.is_empty()
     }
 
@@ -202,7 +204,7 @@ pub fn stage(
 /// Names each model of a saved plate that does not stand inside the build volume.
 fn print_off_the_plate(parts: &[Part]) {
     let off = parts.iter().filter_map(|part| {
-        let check = part.standing.as_ref().filter(|check| !check.fits())?;
+        let check = part.standing.as_ref().filter(|check| !check.fit.fits())?;
         Some((part, check))
     });
     for (part, check) in off {
@@ -483,7 +485,7 @@ pub(crate) fn bounds(model: &Model) -> Option<Aabb> {
     placed_aabb(&model.mesh, model.transform)
         .into_iter()
         .chain(supports)
-        .reduce(merged)
+        .reduce(|one, other| one.merged(&other))
 }
 
 /// Every model of a plate put down, and which part each model, plug or piece is of.
@@ -527,7 +529,7 @@ fn put_down_every<'a>(
             stands_in = [stands_in, bounds(&down.model)]
                 .into_iter()
                 .flatten()
-                .reduce(merged);
+                .reduce(|one, other| one.merged(&other));
             laid.models.push(down.model);
             let first = laid.models.len();
             laid.models.extend(down.plugs);
@@ -574,17 +576,13 @@ fn standing_of(
     talk: bool,
 ) -> Option<FitCheck> {
     let check = FitCheck::of(&stands_in?, printer?);
-    if talk && (supported || !check.fits()) {
+    if talk && (supported || !check.fit.fits()) {
         println!("On the plate\n  fits           {}\n", describe_fit(&check));
     }
     Some(check)
 }
 
 /// The box covering both `a` and `b`.
-fn merged(a: Aabb, b: Aabb) -> Aabb {
-    Aabb::new(a.mins.min(b.mins), a.maxs.max(b.maxs))
-}
-
 /// One piece ready to slice, the plugs for its holes, and what hollowing and supporting
 /// it found.
 struct PutDown {
