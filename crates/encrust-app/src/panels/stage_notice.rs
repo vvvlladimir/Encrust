@@ -22,7 +22,8 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     let machine = &window.machine;
     let running = machine.network.job.is_some()
         || machine.slicing.job.is_some()
-        || machine.preview.is_building();
+        || machine.preview.is_building()
+        || window.tools.prepare.is_running();
     let mut stack = Stack {
         ctx: ui.ctx().clone(),
         room: stage,
@@ -96,6 +97,14 @@ fn jobs(stack: &mut Stack, window: &mut Window) {
     let shown = slicing.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
     if job_card(stack, "slicing", shown) {
         slicing.inspect(|job| job.cancel());
+    }
+    let prepare = window.tools.prepare.progress().map(|(step, share)| {
+        let label = tr!("notice-preparing", step = step.label());
+        (label, Some(share), false)
+    });
+    if job_card(stack, "prepare", prepare) {
+        let status = &mut window.machine.status;
+        crate::prepare::cancel(window.doc, window.tools, status);
     }
     let network = window.machine.network.job.as_ref();
     let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
