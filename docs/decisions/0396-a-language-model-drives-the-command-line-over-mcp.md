@@ -32,7 +32,8 @@ Every tool is the command line, so it can do no less and no more than `encrust`,
 to one reaches both. A crash or a runaway hollow ends a child, not the server. Each check
 stages the model again from its file, so a chain of edits pays for hollowing and supports
 each time; a model that takes a minute to hollow takes a minute a call. `tokio` and `rmcp`
-enter the lockfile for this binary alone. Reopen when the window serves the tools (the
+enter the lockfile for this binary alone: hakari leaves it out of `workspace-hack`, so no
+other crate is built with their features (ADR 0272). Reopen when the window serves the tools (the
 plate already in memory), or when a client needs results streamed.
 
 ## Alternatives considered
