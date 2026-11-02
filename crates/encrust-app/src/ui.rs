@@ -29,9 +29,10 @@ pub use widgets::{
     notice_card, number_field, number_row, numbered_square, page_trail, palette_dialog, picker_row,
     picture_square, primary_button, primary_with_companion, progress_bar, progress_bar_of,
     quiet_button, quiet_square, rail_button, readings, rename_box, row_name, search_button,
-    secondary_button, section, section_with_action, section_with_actions, section_with_switch,
-    spinner, start_rename, step_bar, subheading, subheading_with_switch, summary_button, swatch,
-    switch, text_box, text_row, toggle_button, tone, unit_field, vertical_hairline, zone_button,
+    secondary_button, secondary_button_unless, section, section_with_action, section_with_actions,
+    section_with_switch, spinner, start_rename, step_bar, subheading, subheading_with_switch,
+    summary_button, swatch, switch, text_box, text_row, toggle_button, tone, unit_field,
+    vertical_hairline, zone_button,
 };
 pub use widgets::{ChipPart, chip_text_w, name_line, paint_chip, row_mark};
 pub use widgets::{Confirm, any_armed, confirm_button, is_armed, key_foot, key_row};

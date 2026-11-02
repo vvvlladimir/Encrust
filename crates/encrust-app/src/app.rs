@@ -443,11 +443,10 @@ impl SlicerApp {
         working |= tools.text.poll(scene, status);
         working |= tools.cut.poll(scene, status);
         working |= tools.drain.poll(scene, status);
+        working |= tools.orient.poll(scene, &doc.plate, status);
         working |= self.land_plugs();
-        let (scene, status) = (&mut self.doc.scene, &mut self.machine.status);
-        working |= self.tools.orient.poll(scene, &self.doc.plate, status);
-        let settled = ctx.input(|input| !input.pointer.any_down());
-        working |= crate::prepare::poll(&mut self.doc, &mut self.tools, &mut self.machine, settled);
+        let (doc, settled) = (&mut self.doc, ctx.input(|input| !input.pointer.any_down()));
+        working |= crate::prepare::poll(doc, &mut self.tools, &mut self.machine, settled);
         working | crate::panels::animate_preview(ctx, &mut self.machine.preview)
     }
 

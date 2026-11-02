@@ -42,8 +42,8 @@ pub use button::{
     Inline, RailButton, SquareLook, bar_pill, blocked_hover, compact_button, companion_button,
     companion_square, filter_chip, focus_ring, hover_mix, icon_button, icon_toggle, inline_button,
     numbered_square, picture_square, primary_button, primary_with_companion, quiet_button,
-    quiet_square, rail_button, secondary_button, small_icon_button, summary_button, swatch,
-    toggle_button, zone_button,
+    quiet_square, rail_button, secondary_button, secondary_button_unless, small_icon_button,
+    summary_button, swatch, toggle_button, zone_button,
 };
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
