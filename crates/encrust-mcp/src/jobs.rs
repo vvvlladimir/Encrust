@@ -99,6 +99,18 @@ impl Jobs {
         })
     }
 
+    /// An empty directory of the job's for the pictures of one revision.
+    pub fn pictures_dir(&self, revision: &Revision) -> Result<PathBuf> {
+        let dir = self
+            .dir(&revision.job)?
+            .join(format!("pictures-{}", revision.number));
+        if dir.exists() {
+            fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
+        }
+        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        Ok(dir)
+    }
+
     fn latest(&self, job: &str) -> Result<u32> {
         let dir = self.dir(job)?;
         if !dir.is_dir() {

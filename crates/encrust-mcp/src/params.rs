@@ -91,6 +91,51 @@ pub struct WriteFile {
     pub accept_defects: bool,
 }
 
+/// A side the plate is drawn from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum View {
+    /// From the front right corner, above: the sliced file's thumbnail.
+    Iso,
+    Front,
+    Back,
+    Left,
+    Right,
+    Top,
+    /// From under the plate, X to the right: drain holes and support feet.
+    Bottom,
+}
+
+impl View {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Iso => "iso",
+            Self::Front => "front",
+            Self::Back => "back",
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct Render {
+    pub job: String,
+    /// Counted from one; absent for the latest.
+    #[schemars(range(min = 1))]
+    pub revision: Option<u32>,
+    /// Absent draws `iso` and `bottom`.
+    pub views: Option<Vec<View>>,
+    /// Each picture's width and height in pixels, 64 to 1024; 512 when absent.
+    #[schemars(range(min = 64, max = 1024))]
+    pub size_px: Option<u32>,
+    /// Marks where the check found each problem; the answer says which mark is which, by
+    /// its pixel. True when absent.
+    pub mark_findings: Option<bool>,
+}
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SendFile {
     /// Absolute path of a file `write_file` wrote.

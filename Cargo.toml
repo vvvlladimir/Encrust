@@ -89,6 +89,7 @@ directories = "6.0"
 # docs/decisions/0395.
 rmcp = { version = "3.8", default-features = false }
 tokio = { version = "1", default-features = false }
+base64 = "0.23"
 # The date and time a sliced file's name may carry; see docs/decisions/0387.
 jiff = "0.2"
 

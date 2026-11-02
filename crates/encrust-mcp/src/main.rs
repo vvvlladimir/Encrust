@@ -1,6 +1,7 @@
 //! `encrust-mcp`: the server a desktop client starts, speaking MCP on stdin and stdout and
 //! driving the `encrust` command line. See `docs/design/ai-integration.md`.
 
+mod findings;
 mod jobs;
 mod params;
 mod recipe;

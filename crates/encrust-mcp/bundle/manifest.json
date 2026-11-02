@@ -29,6 +29,7 @@
     { "name": "set_drains", "description": "Drills drain holes into the cavity" },
     { "name": "set_supports", "description": "Builds the supports the model stands on" },
     { "name": "check", "description": "Checks a revision as it would print" },
+    { "name": "render", "description": "Draws the prepared plate from each side, problems marked" },
     { "name": "revert", "description": "Returns to an earlier revision" },
     { "name": "write_file", "description": "Writes the printer file" },
     { "name": "send_to_printer", "description": "Sends a written file to a printer on your network" }
