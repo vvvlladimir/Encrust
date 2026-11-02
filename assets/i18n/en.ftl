@@ -1454,6 +1454,23 @@ orient-supports-ml = { $value } ml of supports
 orient-pull = { $value } N of pull
 orient-tall = { $value } mm tall
 
+## prepare.rs
+
+prepare-nothing-visible = Nothing visible on the plate to prepare.
+prepare-busy = Wait for the job running on the plate to end.
+prepare-step-orient = Orienting
+prepare-step-repair = Repairing
+prepare-step-hollow = Hollowing
+prepare-step-drain = Looking for drain holes
+prepare-step-supports = Placing supports
+prepare-step-cavity = Placing supports in the cavity
+prepare-cancelled = Prepare for print cancelled; the plate is as it was
+prepare-done =
+    { $count ->
+        [one] Prepared { $count } model for print
+       *[other] Prepared { $count } models for print
+    }
+
 ## relief.rs
 
 relief-nothing-visible = Nothing visible on the plate to press a texture into.
