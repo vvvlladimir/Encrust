@@ -5,14 +5,11 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use core_engine::{Cutting, Drained, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
-use core_geometry::{
-    Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec2, Vec3, placed_aabb, transform_mesh,
-};
+use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec2, placed_aabb};
 use core_pipeline::{PanelOverrides, SlicedFormat};
-use core_plate::{ArrangeSettings, Footprint, arrange};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
@@ -28,8 +25,10 @@ use crate::supports::{SupportReport, stand_under};
 use crate::{meeting, plate_file, project};
 
 mod ground;
+mod room;
 
 use ground::{check_lift, ground_of};
+use room::{check_plugs_clear, spread_pieces, stood_at};
 
 /// What is done to one model on its way onto the plate.
 #[derive(Debug, Clone)]
@@ -449,47 +448,6 @@ fn put_down(
     })
 }
 
-/// Refuses plugs that land off the plate or on a model: laid in a row past their own
-/// model, they know nothing of the plate's edge or of its neighbours.
-fn check_plugs_clear(
-    models: &[Model],
-    plugged: &[(Range<usize>, &Path)],
-    printer: Option<&PrinterProfile>,
-) -> Result<()> {
-    let footprints: Vec<Option<(Vec2, Vec2)>> = models.iter().map(footprint).collect();
-    for (plugs, path) in plugged {
-        for (mins, maxs) in footprints[plugs.clone()].iter().flatten() {
-            let off = printer.is_some_and(|printer| {
-                let plate = Vec2::new(printer.build_volume.x, printer.build_volume.y);
-                mins.cmplt(Vec2::ZERO).any() || maxs.cmpgt(plate).any()
-            });
-            if off {
-                bail!(
-                    "the plugs for {} run off the plate; move the model left or leave out --drain-plugs",
-                    path.display()
-                );
-            }
-            let crowded = footprints.iter().enumerate().any(|(index, other)| {
-                !plugs.contains(&index)
-                    && other
-                        .is_some_and(|(low, high)| mins.cmplt(high).all() && low.cmplt(*maxs).all())
-            });
-            if crowded {
-                bail!(
-                    "the plugs for {} land on another model; give it room on its right or leave out --drain-plugs",
-                    path.display()
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-/// What `model` and its supports cover of the plate, its least and greatest corners.
-fn footprint(model: &Model) -> Option<(Vec2, Vec2)> {
-    bounds(model).map(|bounds| (bounds.mins.truncate(), bounds.maxs.truncate()))
-}
-
 /// The box `model` and its supports stand in, plate millimetres.
 pub(crate) fn bounds(model: &Model) -> Option<Aabb> {
     let supports = model.supports.iter().filter_map(|mesh| mesh.aabb());
@@ -566,20 +524,6 @@ fn put_down_every<'a>(
     Ok(laid)
 }
 
-/// Spreads every piece of every entry over `printer`'s plate.
-fn spread_pieces(
-    pieces: &mut [Vec<Mesh>],
-    entries: &[(PathBuf, Shaping)],
-    printer: Option<&PrinterProfile>,
-) -> Result<()> {
-    let mut spread_out: Vec<(&mut Mesh, &Path)> = pieces
-        .iter_mut()
-        .zip(entries)
-        .flat_map(|(meshes, (path, _))| meshes.iter_mut().map(move |mesh| (mesh, path.as_path())))
-        .collect();
-    spread(&mut spread_out, printer)
-}
-
 /// How a model put down in `stands_in` sits on `printer`'s plate, said when supports changed
 /// what stands there or it does not fit.
 fn standing_of(
@@ -650,42 +594,4 @@ fn check_adaptive(job: &JobArgs, printer: Option<&PrinterProfile>) -> Result<()>
 /// Whether anything done to this model past import has a report of its own to print.
 fn shapes_anything(shaping: &Shaping) -> bool {
     shaping.hollow.wanted() || shaping.hollow.cutting() || shaping.supports.is_some()
-}
-
-/// The model moved so the middle of its footprint is over `position` and its lowest
-/// point is on the plate.
-fn stood_at(mesh: &Mesh, position: Vec2) -> Result<Mesh> {
-    let bounds = mesh.aabb().context("mesh has no vertices")?;
-    let middle = (bounds.mins.truncate() + bounds.maxs.truncate()) / 2.0;
-    let offset = (position - middle).extend(-bounds.mins.z);
-    Ok(transform_mesh(mesh, Transform::from_translation(offset)))
-}
-
-/// Packs the models over the plate, biggest first, and refuses a plate they do not fit.
-fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -> Result<()> {
-    let printer = printer.context("--arrange needs a printer to know the plate")?;
-    let settings = ArrangeSettings::default();
-    let footprints = placed
-        .iter()
-        .map(|(mesh, path)| {
-            Footprint::of(mesh, Transform::default(), settings.cell_mm)
-                .with_context(|| format!("{} has no footprint", path.display()))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let plate = Vec2::new(printer.build_volume.x, printer.build_volume.y);
-    let arranged = arrange(&footprints, plate, &settings);
-    if let Some(&first) = arranged.left_out.first() {
-        bail!(
-            "{} of {} models found no room on the plate, {} among them",
-            arranged.left_out.len(),
-            placed.len(),
-            placed[first].1.display()
-        );
-    }
-    for spot in &arranged.placed {
-        let mesh = &mut *placed[spot.index].0;
-        let offset = Vec3::new(spot.offset_mm.x, spot.offset_mm.y, 0.0);
-        *mesh = transform_mesh(mesh, Transform::from_translation(offset));
-    }
-    Ok(())
 }
