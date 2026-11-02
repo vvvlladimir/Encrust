@@ -90,6 +90,7 @@ pub fn new_plate(window: &mut Window) {
 /// Takes everything off the plate and forgets which file it came from. The chosen
 /// profiles and the tools' own numbers stay; the print settings go back to the profiles'.
 pub fn clear(window: &mut Window) {
+    crate::prepare::forget(window.tools);
     window.doc.scene = Scene::default();
     window.machine.slicing.take_profile_settings();
     window.doc.history = History::default();
@@ -145,6 +146,7 @@ pub fn open(window: &mut Window, file: &Handed) {
     remember(window, &path, preview);
     window.doc.project.path = Some(path);
     window.doc.project.saved = Some(digest(&captured(window).manifest));
+    crate::prepare::forget(window.tools);
     window.doc.history = History::default();
     frame_view(
         &window.doc.scene,

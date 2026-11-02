@@ -337,13 +337,18 @@ fn a_start_on_named_models_searches_afresh_and_leaves_the_others_standing() {
     ));
     let plans = |_: &SceneObject| medium();
 
-    tool.start_on(&scene, &[slab], (OrientPreset::Auto, plans), None)
-        .expect("the slab can be oriented");
-    assert!(
-        tool.is_running(),
-        "where the button would step to the next pose, it searches again"
-    );
-    settle(&mut tool, &mut scene, &mut status);
+    let mut job = tool
+        .start_on(&scene, &[slab], (OrientPreset::Auto, plans), None)
+        .expect("where the button would step to the next pose, it searches again");
+    let turns = loop {
+        match job.poll() {
+            Some(crate::job::OrientOutcome::Turned(turns)) => break turns,
+            Some(other) => panic!("the search ended {other:?}"),
+            None => std::thread::yield_now(),
+        }
+    };
+    stand_turned(&mut scene, &BuildPlate::default(), &turns);
+    assert!(!tool.is_running(), "the tool's own run is left alone");
     let standing = scene.get(post).expect("on the plate").transform;
     assert_eq!(
         standing,

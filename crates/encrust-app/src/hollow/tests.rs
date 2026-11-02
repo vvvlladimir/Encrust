@@ -149,12 +149,16 @@ fn a_start_on_walls_hollows_only_the_models_named_at_their_wall() {
     let (named, other) = (scene.objects()[0].id, scene.objects()[1].id);
     let mut tool = HollowTool::default();
     tool.state.thickness_mm = 5.0;
-    tool.start_walls(&scene, &[(named, 1.5)])
+    let mut job = tool
+        .start_walls(&scene, &[(named, 1.5)])
         .expect("a model is named");
-    let mut status = Status::default();
-    while tool.poll(&mut scene, &mut status) {
-        std::thread::yield_now();
-    }
+    let outcome = loop {
+        match job.poll() {
+            Some(outcome) => break outcome,
+            None => std::thread::yield_now(),
+        }
+    };
+    tool.land(&mut scene, outcome);
 
     let asked = scene.get(named).and_then(|object| object.hollow.asked());
     let wall_mm = asked.map(|asked| asked.thickness_mm);

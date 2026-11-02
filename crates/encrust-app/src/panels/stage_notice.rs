@@ -103,8 +103,7 @@ fn jobs(stack: &mut Stack, window: &mut Window) {
         (label, Some(share), false)
     });
     if job_card(stack, "prepare", prepare) {
-        let status = &mut window.machine.status;
-        crate::prepare::cancel(window.doc, window.tools, status);
+        crate::prepare::cancel(window.doc, window.tools, window.machine);
     }
     let network = window.machine.network.job.as_ref();
     let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
@@ -208,8 +207,12 @@ fn broken(stack: &mut Stack, window: &mut Window) {
         acted: repair,
         closed: keep,
     } = shown.inner;
+    let held = crate::prepare::holding(window.tools);
+    if let (true, Some(why)) = (repair, &held) {
+        window.machine.status = Status::Info(why.clone());
+    }
     for (id, _, _) in &offered {
-        if repair {
+        if repair && held.is_none() {
             let (repairs, state) = (&mut window.doc.repairs, window.tools.repair.state.plain());
             repairs.start(&window.doc.scene, *id, state, &mut window.machine.status);
         } else if keep {

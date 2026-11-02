@@ -177,23 +177,25 @@ impl OrientTool {
         Ok(())
     }
 
-    /// Searches afresh for the way `ids` print best by `preset`, whatever the panel is set
-    /// to and whatever the last run found: what Prepare turns a model by.
+    /// A fresh search for the way `ids` print best by `preset`, whatever the panel is set to
+    /// and whatever the last run found, handed back rather than kept: what Prepare turns by.
     pub fn start_on(
         &mut self,
         scene: &Scene,
         ids: &[ObjectId],
         (preset, plan_of): (OrientPreset, impl Fn(&SceneObject) -> SupportPlan),
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
-    ) -> Result<()> {
-        let tasks = ids
-            .iter()
-            .filter_map(|id| scene.get(*id))
+    ) -> Result<OrientJob> {
+        let tasks = scene
+            .named(ids)
             .map(|object| OrientTask::of(object, plan_of(object)))
             .collect();
         let asked = self.asking(tasks, preset, machine)?;
-        self.search(asked);
-        Ok(())
+        Ok(OrientJob::spawn(OrientRequest {
+            tasks: asked.tasks,
+            settings: asked.settings,
+            proof: asked.proof,
+        }))
     }
 
     /// What a run over `tasks` by `preset` asks, printed for `machine` where there is one.
@@ -273,13 +275,7 @@ impl OrientTool {
         self.job = None;
         match outcome {
             OrientOutcome::Turned(turns) => {
-                let mut moved = 0;
-                for turn in &turns {
-                    if let Some(object) = scene.get_mut(turn.id) {
-                        moved += usize::from(stand(object, turn.poses[0], turn.lift_mm, plate));
-                    }
-                }
-                *status = turned(&turns, moved);
+                *status = stand_turned(scene, plate, &turns);
                 self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
             }
             OrientOutcome::Failed(message) => {
@@ -318,6 +314,17 @@ impl OrientTool {
             (None, stepped) => Status::Info(tr!("orient-stepped", count = stepped)),
         }
     }
+}
+
+/// Stands each model `turns` names its best way on `plate`, and says what that did.
+pub fn stand_turned(scene: &mut Scene, plate: &BuildPlate, turns: &[Turn]) -> Status {
+    let mut moved = 0;
+    for turn in turns {
+        if let Some(object) = scene.get_mut(turn.id) {
+            moved += usize::from(stand(object, turn.poses[0], turn.lift_mm, plate));
+        }
+    }
+    turned(turns, moved)
 }
 
 /// What a run did: how many models it turned, how many stand on the plate, how many other

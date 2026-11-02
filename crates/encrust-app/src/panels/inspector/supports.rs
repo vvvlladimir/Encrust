@@ -198,7 +198,8 @@ fn fill(ui: &mut egui::Ui, window: &mut Window) {
 
 /// Grow, and at its right the bin that takes every support away on a second click.
 fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
-    let blocker = window.tools.supports.blocker(&window.doc.scene);
+    let blocker = (window.tools.supports.blocker(&window.doc.scene))
+        .or_else(|| crate::prepare::holding(window.tools));
     let label = if points > 0 {
         tr!("supports-grow-again")
     } else {
@@ -211,7 +212,9 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
         let width = ui.available_width() - theme::PRIMARY_H - theme::BUTTON_GAP;
         let grow = ui
             .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
-                primary_button(ui, &label, blocker.is_none()).on_hover_text(what)
+                primary_button(ui, &label, blocker.is_none())
+                    .on_hover_text(what)
+                    .on_disabled_hover_text(blocker.clone().unwrap_or_default())
             })
             .inner;
         if grow.clicked() {
@@ -409,6 +412,10 @@ fn inside_count(ctx: &egui::Context, scene: &Scene) -> usize {
 
 /// Starts a run on one side of the wall, and says on the stage whether it could.
 fn start(window: &mut Window, side: Side) {
+    if let Some(why) = crate::prepare::holding(window.tools) {
+        window.machine.status = crate::status::Status::Info(why);
+        return;
+    }
     let started = window.tools.supports.start(
         &mut window.doc.scene,
         window.machine.slicing.layer_height_mm(),

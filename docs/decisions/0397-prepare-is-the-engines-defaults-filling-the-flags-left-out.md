@@ -39,9 +39,13 @@ on those models and with these decisions rather than the panels' values, in the 
 line's order: Auto-orient by `PREPARE_ORIENT` on the automatic supports for a model whose
 turn is nought, which is the window's `--rotate` left out; the full mend where the
 diagnosis is not sound; `hollowing` read off the repaired and posed model; Drain's Auto;
-the catalogue's automatic supports outside, then in the cavity. A step starts once the last
-one's job has landed and its cuts and support surface are built; a step that fails puts the
-plate back and leaves its error. A model already hollow keeps its own cavity: it is drained
+the catalogue's automatic supports outside, then in the cavity. The run owns each step's
+job, so no tool's own Cancel or start reaches it, and the tools' own starts wait, saying why,
+while it runs; it begins only once no other job that lands on the plate is running. A step
+starts once the last one's job has landed and its cuts and support surface are built, waiting
+on frames with a button down as the window's cutting does; a step that fails or stops puts the
+plate and the tool values back and leaves its reason. What the run did to a model is read off
+what each step changed: a turn, a new mesh, more holes, a cavity, supports. A model already hollow keeps its own cavity: it is drained
 and held up inside, and is not said to be hollowed by the run. Select then lists for the
 model in its card what `prepared` would say, while it stands as the run left it.
 

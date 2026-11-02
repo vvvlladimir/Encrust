@@ -26,6 +26,12 @@ impl Bench {
         self.history.observe(&self.scene, &tools, chosen, settled);
     }
 
+    fn hold(&mut self) {
+        let tools = ToolSettings::of(&self.tools, &self.slicing);
+        let chosen = self.slicing.chosen();
+        self.history.hold(&self.scene, &tools, chosen);
+    }
+
     fn add(&mut self) -> ObjectId {
         let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
         let summary = ImportSummary::made(diagnose(&mesh));
@@ -53,7 +59,7 @@ fn landings_under_a_hold_are_one_undo() {
     let mut bench = Bench::default();
     let id = bench.add();
     bench.frame();
-    bench.history.hold();
+    bench.hold();
     bench.land_three(id);
     assert!(!bench.history.can_undo(), "undo waits while the hold runs");
     bench.history.release();
@@ -76,9 +82,11 @@ fn an_abandoned_hold_puts_the_plate_back_and_records_nothing() {
     let mut bench = Bench::default();
     let id = bench.add();
     bench.frame();
-    bench.history.hold();
+    bench.hold();
     bench.land_three(id);
-    bench.history.abandon(&mut bench.scene, &mut bench.tools);
+    bench
+        .history
+        .abandon(&mut bench.scene, &mut bench.tools, &mut bench.slicing);
     bench.frame();
 
     assert_eq!(bench.x_of(id), Some(0.0), "the plate as the hold found it");
@@ -100,7 +108,7 @@ fn a_job_landing_under_a_hold_joins_its_entry() {
     let id = bench.add();
     bench.frame();
     let asked_by = bench.history.next_edit();
-    bench.history.hold();
+    bench.hold();
     bench.history.land(&mut bench.scene, asked_by, |scene| {
         if let Some(object) = scene.get_mut(id) {
             object.transform.translation.x = 5.0;
@@ -116,4 +124,27 @@ fn a_job_landing_under_a_hold_joins_its_entry() {
         Some(0.0),
         "taken back with the hold's entry"
     );
+}
+
+#[test]
+fn an_edit_still_being_typed_when_the_hold_begins_is_an_entry_of_its_own() {
+    let mut bench = Bench::default();
+    let id = bench.add();
+    bench.frame();
+    if let Some(object) = bench.scene.get_mut(id) {
+        object.transform.translation.x = 7.0;
+    }
+    let tools = ToolSettings::of(&bench.tools, &bench.slicing);
+    let typing = Frame {
+        settled: true,
+        typing: true,
+    };
+    let chosen = bench.slicing.chosen();
+    bench.history.observe(&bench.scene, &tools, chosen, typing);
+    bench.hold();
+    bench.land_three(id);
+    bench
+        .history
+        .abandon(&mut bench.scene, &mut bench.tools, &mut bench.slicing);
+    assert_eq!(bench.x_of(id), Some(7.0), "the typed move stays");
 }

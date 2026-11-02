@@ -1526,6 +1526,7 @@ orient-tall = высота { $value } мм
 
 prepare-nothing-visible = На платформе нет видимых моделей для подготовки.
 prepare-busy = Дождитесь окончания задания, идущего на платформе.
+prepare-running-why = Дождитесь окончания подготовки к печати.
 prepare-step-orient = Ориентация
 prepare-step-repair = Починка
 prepare-step-hollow = Создание полости

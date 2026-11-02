@@ -89,13 +89,14 @@ fn plate_items(ui: &mut egui::Ui, window: &mut Window) {
             crate::arrange::arrange_plate(&mut window.doc.scene, &window.doc.plate, gap_mm);
     }
     let can_orient = window.tools.orient.blocker(&window.doc.scene).is_none()
-        && !window.tools.orient.is_running();
+        && !window.tools.orient.is_running()
+        && crate::prepare::holding(window.tools).is_none();
     let orient = tr!("menu-auto-orient-plate");
     let orient = MenuRow::new(Some(icon::AUTO_ORIENT), &orient).enabled(can_orient);
     if clicked(ui, &orient) {
-        crate::panels::inspector::auto_orient(window, None);
+        crate::panels::auto_orient(window, None);
     }
-    let blocked = crate::prepare::blocker(window.doc, window.tools);
+    let blocked = crate::prepare::blocker(window.doc, window.tools, window.machine);
     let prepare = tr!("menu-prepare");
     let prepare = MenuRow::new(Some(icon::PREPARE), &prepare).unless(blocked.as_deref());
     if clicked(ui, &prepare) {

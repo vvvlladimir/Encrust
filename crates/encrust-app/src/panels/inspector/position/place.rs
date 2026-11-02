@@ -132,7 +132,7 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
 /// changed it stands the model the next good way it found.
 pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, &tr!("position-auto-orient"), None, |ui| {
-        let running = window.tools.orient.is_running();
+        let running = window.tools.orient.is_running() || window.tools.prepare.is_running();
         let preset = &mut window.tools.orient.settings.preset;
         let goals = OrientGoal::ALL.into_iter().map(OrientPreset::Goal);
         let segments: Vec<Segment<'_, OrientPreset>> = std::iter::once(OrientPreset::Auto)

@@ -80,31 +80,31 @@ impl HollowTool {
     /// Starts a run over everything visible on the plate.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
         let tasks = hollow_tasks(scene, |object| self.settings_for(object));
-        self.spawn(tasks)
+        self.job = Some(self.spawn(tasks)?);
+        Ok(())
     }
 
-    /// Starts a run over `models` alone, each at its wall beside it, millimetres, and
-    /// Hollow's defaults otherwise, whatever the panel is set to: what Prepare hollows.
-    pub fn start_walls(&mut self, scene: &Scene, models: &[(ObjectId, Scalar)]) -> Result<()> {
+    /// A run over `models` alone, each at its wall beside it, millimetres, and Hollow's
+    /// defaults otherwise, handed back rather than kept: what Prepare hollows.
+    pub fn start_walls(&self, scene: &Scene, models: &[(ObjectId, Scalar)]) -> Result<HollowJob> {
         let tasks = models
             .iter()
             .filter_map(|(id, wall_mm)| {
-                let object = scene.get(*id).filter(|object| !object.mesh.is_empty())?;
+                let object = scene.named(std::slice::from_ref(id)).next()?;
                 Some(HollowTask::of(object, &HollowSettings::for_wall(*wall_mm)))
             })
             .collect();
         self.spawn(tasks)
     }
 
-    fn spawn(&mut self, tasks: Vec<HollowTask>) -> Result<()> {
+    fn spawn(&self, tasks: Vec<HollowTask>) -> Result<HollowJob> {
         if tasks.is_empty() {
             bail!(tr!("hollow-nothing-visible-error"));
         }
-        self.job = Some(HollowJob::spawn(HollowRequest {
+        Ok(HollowJob::spawn(HollowRequest {
             tasks,
             fields: Arc::clone(&self.fields),
-        }));
-        Ok(())
+        }))
     }
 
     /// Builds again every hollow model whose cuts moved under its shell, at the numbers it
@@ -160,6 +160,12 @@ impl HollowTool {
         };
 
         self.job = None;
+        *status = self.land(scene, outcome);
+        false
+    }
+
+    /// Puts what a run ended with into the scene, and says what it did.
+    pub fn land(&mut self, scene: &mut Scene, outcome: HollowOutcome) -> Status {
         let saved = outcome.saved_mm3();
         match outcome {
             HollowOutcome::Hollowed(shells) => {
@@ -170,16 +176,15 @@ impl HollowTool {
                         object.hollow.take(shell.shell);
                     }
                 }
-                *status = Status::Info(tr!(
+                Status::Info(tr!(
                     "hollow-done",
                     count = models,
                     saved = format!("{:.1}", saved / 1000.0)
-                ));
+                ))
             }
-            HollowOutcome::Cancelled => *status = Status::Info(tr!("hollow-cancelled")),
-            HollowOutcome::Failed(message) => *status = Status::Error(message),
+            HollowOutcome::Cancelled => Status::Info(tr!("hollow-cancelled")),
+            HollowOutcome::Failed(message) => Status::Error(message),
         }
-        false
     }
 }
 

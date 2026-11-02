@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use core_engine::Hollowing;
-use core_geometry::Transform;
+use core_geometry::{Quat, Transform};
 
-use super::Step;
+use super::{Step, UNTURNED_RAD};
 use crate::scene::{ObjectId, SceneObject};
 
 /// What a run did to one model, as the command line's `prepared` states it.
@@ -17,8 +17,21 @@ pub struct Prepared {
     pub drained: bool,
     /// The automatic profile its supports were sized by, by name.
     pub supports: Option<String>,
+    /// The model as the step in hand found it, which what it landed is measured against.
+    was: Option<Was>,
     /// The model as the run left it, so a later edit retires what is said of it.
     left: Option<(usize, Transform)>,
+}
+
+/// What a step may change on a model, as it stood when the step started.
+#[derive(Debug, Clone, PartialEq)]
+struct Was {
+    step: Step,
+    mesh: usize,
+    rotation: Quat,
+    holes: usize,
+    /// The wall a Hollow was asked at.
+    wall: Option<Hollowing>,
 }
 
 impl Prepared {
@@ -30,30 +43,39 @@ impl Prepared {
             hollowed: None,
             drained: false,
             supports: None,
+            was: None,
             left: None,
         }
     }
 
-    /// Notes `step` started on the model, with the wall a Hollow is asked at.
-    pub(super) fn started(&mut self, step: Step, wall: Option<Hollowing>) {
-        match step {
-            Step::Orient => self.oriented = true,
-            Step::Repair => self.repaired = true,
-            Step::Hollow => self.hollowed = wall,
-            Step::Drain => self.drained = true,
-            Step::Supports | Step::Cavity => {}
-        }
+    /// Notes `object` as `step` found it, with the wall a Hollow is asked at.
+    pub(super) fn started(&mut self, step: Step, object: &SceneObject, wall: Option<Hollowing>) {
+        self.was = Some(Was {
+            step,
+            mesh: Arc::as_ptr(&object.mesh) as usize,
+            rotation: object.transform.rotation,
+            holes: object.hollow.drains().len(),
+            wall,
+        });
     }
 
-    /// Notes what `step` left on `object` once it landed: a hollow that did not come, or
-    /// the supports it stands on.
+    /// Decides from what `step` changed on `object` once it landed what the run did to it.
     pub(super) fn landed(&mut self, step: Step, object: &SceneObject, profile: &str) {
+        let Some(was) = self.was.take().filter(|was| was.step == step) else {
+            return;
+        };
         match step {
-            Step::Hollow if !object.hollow.is_hollow() => self.hollowed = None,
-            Step::Supports if !object.supports.is_empty() => {
-                self.supports = Some(profile.to_owned());
+            Step::Orient => {
+                self.oriented =
+                    object.transform.rotation.angle_between(was.rotation) > UNTURNED_RAD;
             }
-            _ => {}
+            Step::Repair => self.repaired = Arc::as_ptr(&object.mesh) as usize != was.mesh,
+            Step::Hollow => self.hollowed = was.wall.filter(|_| object.hollow.is_hollow()),
+            Step::Drain => self.drained = object.hollow.drains().len() > was.holes,
+            Step::Supports => {
+                self.supports = (!object.supports.is_empty()).then(|| profile.to_owned());
+            }
+            Step::Cavity => {}
         }
     }
 

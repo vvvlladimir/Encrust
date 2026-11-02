@@ -1,4 +1,4 @@
-use super::{ISLANDS_GROUP, SHAPES, Side, SupportGroup, SupportTool};
+use super::{ISLANDS_GROUP, SHAPES, Side, Sizing, SupportGroup, SupportTool};
 use crate::i18n::tr;
 use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask, tasks_of};
 use crate::scene::{ObjectId, Scene};
@@ -63,61 +63,28 @@ impl SupportTool {
             Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
             None => tasks_of(scene, |object| self.profile_for(object).clone()),
         };
-        self.place(scene, tasks, layer_height_mm, side)
+        let job = spawn(scene, tasks, (layer_height_mm, side), self.sizing.as_ref())?;
+        self.job = Some(job);
+        self.side = side;
+        Ok(())
     }
 
-    /// Starts placement on `ids` alone, sized by the catalogue's automatic profile whatever
-    /// the panel holds, as `--supports auto` builds them: what Prepare stands a model on.
+    /// Placement on `ids` alone, sized by the catalogue's automatic profile whatever the panel
+    /// holds, handed back with that sizing rather than kept: what Prepare stands a model on.
     pub fn start_automatic_on(
-        &mut self,
         scene: &Scene,
         ids: &[ObjectId],
         (layer_height_mm, catalogue): (Scalar, &Catalogue),
         side: Side,
-    ) -> Result<()> {
-        let (auto, shapes) = catalogue_auto(catalogue)?;
-        let tasks = ids
-            .iter()
-            .filter_map(|id| scene.get(*id).filter(|object| !object.mesh.is_empty()))
+    ) -> Result<(SupportJob, Sizing)> {
+        let sizing = catalogue_auto(catalogue)?;
+        let (auto, shapes) = &sizing;
+        let tasks = scene
+            .named(ids)
             .map(|object| SupportTask::of(object, auto.placing_with(&shapes[0])))
             .collect();
-        self.sizing = Some((auto, shapes));
-        self.place(scene, tasks, layer_height_mm, side)
-    }
-
-    /// Spawns the run over `tasks`, each held up on `side` of its wall.
-    fn place(
-        &mut self,
-        scene: &Scene,
-        mut tasks: Vec<SupportTask>,
-        layer_height_mm: Scalar,
-        side: Side,
-    ) -> Result<()> {
-        for task in &mut tasks {
-            let Some(object) = scene.get(task.id) else {
-                continue;
-            };
-            task.side = object.wall_side(side == Side::Inside);
-            if side == Side::Inside {
-                let into_model = object.transform.to_matrix().inverse();
-                task.seeds
-                    .retain(|seed| !object.holds_inside(into_model.transform_point3(*seed)));
-            }
-        }
-        if side == Side::Inside {
-            tasks.retain(|task| task.side.is_some());
-        }
-        if tasks.is_empty() {
-            bail!(tr!("supports-nothing-visible-error"));
-        }
-        self.side = side;
-
-        self.job = Some(SupportJob::spawn(SupportRequest {
-            tasks,
-            layer_height_mm,
-            sizing: self.sizing.as_ref().map(|(auto, _)| auto.clone()),
-        }));
-        Ok(())
+        let job = spawn(scene, tasks, (layer_height_mm, side), Some(&sizing))?;
+        Ok((job, sizing))
     }
 
     /// Drains a running placement run into the scene and the stage notice. Returns whether
@@ -132,25 +99,38 @@ impl SupportTool {
         self.job = None;
         *status = match outcome {
             SupportOutcome::Placed(placements) => {
-                if self.side == Side::Inside {
-                    let placed: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
-                    Self::clear_inside_of(scene, &placed);
-                    // A frozen tree taken away renumbers the ones after it.
-                    self.picked.clear();
-                }
-                let placements = self.on_its_side(placements, scene);
-                match self.sizing.take() {
-                    Some((auto, shapes)) => self.place_sized(placements, &auto, shapes, scene),
-                    None => {
-                        let count = add_needs(scene, placements, |_| self.active);
-                        Status::Info(tr!("supports-placed", count = count))
-                    }
-                }
+                let sizing = self.sizing.take();
+                self.land_placed(scene, placements, self.side, sizing)
             }
             SupportOutcome::Cancelled => Status::Info(tr!("supports-cancelled")),
             SupportOutcome::Failed(message) => Status::Error(message),
         };
         false
+    }
+
+    /// Puts what a run placed on `side` of the wall into the scene, sized by `sizing` or in
+    /// the group in hand, and says how many.
+    pub fn land_placed(
+        &mut self,
+        scene: &mut Scene,
+        placements: Vec<Placement>,
+        side: Side,
+        sizing: Option<Sizing>,
+    ) -> Status {
+        if side == Side::Inside {
+            let placed: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
+            Self::clear_inside_of(scene, &placed);
+            // A frozen tree taken away renumbers the ones after it.
+            self.picked.clear();
+        }
+        let placements = Self::on_its_side(placements, scene, side);
+        match sizing {
+            Some((auto, shapes)) => self.place_sized(placements, &auto, shapes, scene),
+            None => {
+                let count = add_needs(scene, placements, |_| self.active);
+                Status::Info(tr!("supports-placed", count = count))
+            }
+        }
     }
 
     /// Puts each need of `placements` in the group of the shape `auto` sizes it to, making
@@ -235,6 +215,37 @@ impl SupportTool {
         });
         (self.groups.len() - 1) as u16
     }
+}
+
+/// Spawns the run over `tasks`, each held up on `side` of its wall.
+fn spawn(
+    scene: &Scene,
+    mut tasks: Vec<SupportTask>,
+    (layer_height_mm, side): (Scalar, Side),
+    sizing: Option<&Sizing>,
+) -> Result<SupportJob> {
+    for task in &mut tasks {
+        let Some(object) = scene.get(task.id) else {
+            continue;
+        };
+        task.side = object.wall_side(side == Side::Inside);
+        if side == Side::Inside {
+            let into_model = object.transform.to_matrix().inverse();
+            task.seeds
+                .retain(|seed| !object.holds_inside(into_model.transform_point3(*seed)));
+        }
+    }
+    if side == Side::Inside {
+        tasks.retain(|task| task.side.is_some());
+    }
+    if tasks.is_empty() {
+        bail!(tr!("supports-nothing-visible-error"));
+    }
+    Ok(SupportJob::spawn(SupportRequest {
+        tasks,
+        layer_height_mm,
+        sizing: sizing.map(|(auto, _)| auto.clone()),
+    }))
 }
 
 /// Adds every need of `placements` to its model in the group `group_of` answers, and
