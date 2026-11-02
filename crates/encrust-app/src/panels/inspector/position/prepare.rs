@@ -5,31 +5,27 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::prepare::Prepared;
 use crate::scene::ObjectId;
-use crate::ui::{describe, icon, readings, secondary_button, section, step_bar, subheading};
+use core_volume::HollowSettings;
+
+use crate::ui::{describe, icon, readings, secondary_button_unless, section, step_bar, subheading};
 
 /// The button, the run's step while it goes, and what the last run did to model `id`.
 pub(super) fn prepare_section(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, &tr!("position-prepare"), None, |ui| {
-        describe(ui, &tr!("position-prepare-help"));
+        let wall_mm = format!("{:.2}", HollowSettings::default().thickness_mm);
+        let wall = tr!("value-mm", value = wall_mm);
+        describe(ui, &tr!("position-prepare-help-wall", wall = wall));
         if let Some((step, share)) = window.tools.prepare.progress() {
             if step_bar(ui, &step.label(), Some(share), true) {
                 crate::prepare::cancel(window.doc, window.tools, window.machine);
             }
         } else {
             let blocked = crate::prepare::blocker(window.doc, window.tools, window.machine);
-            let tip = match &blocked {
-                Some(why) => why.clone(),
-                None => tr!("position-prepare-tooltip", scope = window.doc.scene.scope()),
-            };
-            let pressed = ui
-                .add_enabled_ui(blocked.is_none(), |ui| {
-                    secondary_button(ui, icon::PREPARE, &tr!("position-prepare-run"))
-                })
-                .inner
-                .on_hover_text(tip)
-                .on_disabled_hover_text(blocked.unwrap_or_default())
-                .clicked();
-            if pressed {
+            let scope = window.doc.scene.scope();
+            let label = tr!("position-prepare-run");
+            let button = secondary_button_unless(ui, icon::PREPARE, &label, blocked.as_deref());
+            let tip = tr!("position-prepare-tooltip", scope = scope);
+            if button.on_hover_text(tip).clicked() {
                 start(window);
             }
         }

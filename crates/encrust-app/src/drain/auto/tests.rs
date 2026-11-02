@@ -189,3 +189,34 @@ fn a_search_on_named_models_ignores_what_is_picked() {
     );
     assert_eq!(drilled(picked), Some(0), "nothing in the box picked");
 }
+
+#[test]
+fn a_mirrored_cube_is_drained_through_its_own_walls() {
+    let mirrored = Transform {
+        scale: Vec3::new(-1.0, 1.0, 1.0),
+        ..posed()
+    };
+    let mut scene = hollow_cube(20.0, 2.0, mirrored);
+    let mut tool = DrainTool::default();
+    let mut status = Status::default();
+    tool.start_auto(&scene, 0.5).expect("a model to search");
+    while tool.poll(&mut scene, &mut status) {
+        std::thread::yield_now();
+    }
+
+    let object = &scene.objects()[0];
+    assert_eq!(
+        object.hollow.drains().len(),
+        2,
+        "a drain and a vent, got {status:?}"
+    );
+    assert!(object.traps.found().is_empty(), "nothing left trapped");
+    for hole in object.hollow.drains() {
+        let inside = hole.at.cmpge(Vec3::splat(-0.01)) & hole.at.cmple(Vec3::splat(20.01));
+        assert!(
+            inside.all(),
+            "{:?} lies on the cube in its own space",
+            hole.at
+        );
+    }
+}
