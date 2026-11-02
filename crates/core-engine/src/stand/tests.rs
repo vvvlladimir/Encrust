@@ -104,6 +104,36 @@ fn a_seated_model_with_supports_stands_on_its_rafts_top() {
 }
 
 #[test]
+fn contacts_over_a_body_that_may_not_be_stood_on_are_named_unheld() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.land_on_model = false;
+    // A 10 mm slab 2 mm over the middle of a 40 mm block: under it there is only block.
+    let mut mesh = Mesh::default();
+    cuboid(&mut mesh, Vec3::ZERO, Vec3::new(40.0, 40.0, 5.0));
+    cuboid(
+        &mut mesh,
+        Vec3::new(15.0, 15.0, 7.0),
+        Vec3::new(25.0, 25.0, 9.0),
+    );
+    let stood = stand_under(solid(&mut mesh, &mut None), &SupportPlan::of(profile), 0.05)
+        .expect("a block and a slab can be supported");
+
+    assert!(!stood.unheld.is_empty(), "nothing can hold the slab up");
+    assert_eq!(
+        stood.unheld.len(),
+        stood.contacts.len() - stood.standing,
+        "every contact is either held or named"
+    );
+    for &contact in &stood.unheld {
+        let at = stood.contacts[contact];
+        assert!(
+            (14.0..=26.0).contains(&at.x) && (14.0..=26.0).contains(&at.y),
+            "an unheld contact lies under the slab, 15..25 mm across, found {at}"
+        );
+    }
+}
+
+#[test]
 fn a_seated_model_needing_no_supports_stays_on_the_plate_over_a_raft() {
     let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     profile.raft.enabled = true;
