@@ -31,6 +31,10 @@ pub struct Start {
     /// The resin the user named: an id `list_profiles` lists, or a resin TOML's path.
     pub resin: String,
     pub repair: Option<Repair>,
+    /// Lets the engine's autopilot decide every step no tool sets: repair when broken, the
+    /// orientation search, a 2 mm hollow where it saves resin, drains, supports. True when
+    /// absent; what it decided is in each model's `prepared`.
+    pub prepare: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

@@ -14,6 +14,9 @@ pub struct Recipe {
     pub printer: String,
     /// A resin id of the user's, or the path of a resin TOML.
     pub resin: String,
+    /// The engine's autopilot, `--prepare`, decides every step this recipe leaves out.
+    #[serde(default)]
+    pub prepare: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repair: Option<Repair>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -135,6 +138,7 @@ impl Recipe {
             model,
             printer,
             resin,
+            prepare: false,
             repair: None,
             pose: None,
             hollow: None,
@@ -153,6 +157,9 @@ impl Recipe {
             "--center".into(),
             "--check-drainage".into(),
         ];
+        if self.prepare {
+            flags.push("--prepare".into());
+        }
         if let Some(repair) = self.repair {
             flags.push(repair.flag());
         }

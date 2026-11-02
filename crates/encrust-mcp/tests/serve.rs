@@ -108,6 +108,7 @@ async fn start(client: &Client, model: &Path) -> String {
             "model": model,
             "printer": profile("project-panel.toml"),
             "resin": profile("test-resin.toml"),
+            "prepare": false,
         }),
     )
     .await;
@@ -183,6 +184,42 @@ async fn a_job_is_prepared_revision_by_revision_and_written() {
     assert!(!failed(&written), "write_file failed: {}", answer(&written));
     assert_eq!(answer(&written)["revision"], 3);
     assert!(output.is_file(), "{} was not written", output.display());
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_job_the_autopilot_prepares_is_hollowed_drained_and_ready_to_write() {
+    let dir = scratch("autopilot");
+    let model = dir.join("block.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(40.0)), &model);
+    let client = serve(&encrust(), &dir.join("jobs")).await;
+    let started = call(
+        &client,
+        "start_job",
+        json!({
+            "model": model,
+            "printer": profile("project-panel.toml"),
+            "resin": profile("test-resin.toml"),
+        }),
+    )
+    .await;
+    assert!(!failed(&started), "start_job failed: {}", answer(&started));
+    let started = answer(&started);
+    let prepared = &started["report"]["models"][0]["prepared"];
+    assert_eq!(
+        prepared["hollowed"]["wall_mm"], 2.0,
+        "a 40 mm block is worth hollowing: {started}"
+    );
+    assert_eq!(prepared["drained"], true);
+    assert_eq!(started["report"]["slicing"]["trapped_pockets"], 0);
+    let job = started["job"].as_str().expect("a job id");
+    let output = dir.join("block.goo");
+    let written = call(&client, "write_file", json!({"job": job, "output": output})).await;
+    assert!(
+        !failed(&written),
+        "the autopilot's block is clean: {}",
+        answer(&written)
+    );
     client.cancel().await.expect("the server stops");
 }
 

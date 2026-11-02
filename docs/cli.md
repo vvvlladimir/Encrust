@@ -702,7 +702,8 @@ tool_timeout_sec = 1800
 
 `list_profiles` reads the catalogue, its printers cut to id, name and volume and filtered by
 `printer_query`; `inspect_model` reads a model. `start_job` takes a model, a printer and a
-resin — ids or TOML paths — and answers with the job and its first revision checked.
+resin — ids or TOML paths — and answers with the job and its first revision checked; it
+runs under `--prepare` unless `prepare: false`, so every step no tool sets is the autopilot's.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
 `estimate --check-drainage` and keep it as the next revision only if the command line took
 it; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
