@@ -6708,12 +6708,12 @@ Used by:
 - [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
 - [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
 - [roff 1.1.1](https://github.com/rust-cli/roff-rs)
-- [serde_spanned 1.1.1](https://github.com/toml-rs/toml)
-- [toml 1.1.6+spec-1.1.0](https://github.com/toml-rs/toml)
+- [serde_spanned 1.1.2](https://github.com/toml-rs/toml)
+- [toml 1.1.8+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_datetime 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_edit 0.25.15+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_parser 1.1.5+spec-1.1.0](https://github.com/toml-rs/toml)
-- [toml_writer 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml)
+- [toml_writer 1.1.3+spec-1.1.0](https://github.com/toml-rs/toml)
 
 ```text
 Copyright (c) Individual contributors
@@ -7304,7 +7304,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Used by:
 
-- [meshoptimizer-rs 0.2.14](https://github.com/Tavrin/meshoptimizer-rs)
+- [meshoptimizer-rs 0.2.16](https://github.com/Tavrin/meshoptimizer-rs)
 
 ```text
 MIT License
@@ -8570,7 +8570,7 @@ Used by:
 - [quote 1.0.47](https://github.com/dtolnay/quote)
 - [rustc-hash 1.1.0](https://github.com/rust-lang-nursery/rustc-hash)
 - [rustix 0.38.44](https://github.com/bytecodealliance/rustix)
-- [rustix 1.1.5](https://github.com/bytecodealliance/rustix)
+- [rustix 1.1.6](https://github.com/bytecodealliance/rustix)
 - [rustversion 1.0.23](https://github.com/dtolnay/rustversion)
 - [serde 1.0.229](https://github.com/serde-rs/serde)
 - [serde_core 1.0.229](https://github.com/serde-rs/serde)
