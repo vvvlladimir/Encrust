@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use core_engine::{Cutting, Model, Plate, SupportPlan};
+use core_engine::{Cutting, Drained, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
 use core_geometry::{
     Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec2, Vec3, placed_aabb, transform_mesh,
@@ -16,7 +16,7 @@ use core_plate::{ArrangeSettings, Footprint, arrange};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
-use crate::hollowing::{HollowArgs, HollowReport, support_holes};
+use crate::hollowing::{Ground, HollowArgs, HollowReport, support_holes};
 use crate::modelling::{self, ModelArgs};
 use crate::pipeline::{
     OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of, warn_if_grey_ignored,
@@ -58,6 +58,8 @@ pub struct Part {
     pub import: Option<ImportReport>,
     pub oriented: Option<OrientSummary>,
     pub hollow: Option<HollowReport>,
+    /// What `--drain-at auto` found and drilled, where the model stood before its supports.
+    pub drains: Option<Drained>,
     pub supports: Option<SupportReport>,
     /// How the model with its supports and raft sits on the plate where it was put down.
     pub standing: Option<FitCheck>,
@@ -260,7 +262,7 @@ pub fn refuse_one_model_flags(shaping: &Shaping) -> Result<()> {
     if shaping.import.transform.center {
         bail!("--center stands every model in the middle of the plate; --arrange spreads them");
     }
-    if shaping.hollow.cutting() {
+    if shaping.hollow.pointing() {
         bail!("--drain-at and --channel point at one model; a plate file places them per model");
     }
     Ok(())
@@ -371,14 +373,19 @@ fn put_down(
     drift_mm: Scalar,
     watch: &Watch,
 ) -> Result<PutDown> {
+    let ground = Ground {
+        layer_height_mm: layer_height,
+        on_plate: seated || shaping.supports.is_none(),
+    };
     let shelled = hollow_and_cut(
         &mut mesh,
         &shaping.hollow,
-        shaping.import.precision,
-        drift_mm,
+        (shaping.import.precision, drift_mm),
+        ground,
         watch,
     )?;
     let (hollow, cavity, mut cuts) = (shelled.report, shelled.cavity, shelled.cuts);
+    let drains = shelled.drains;
     let plugs = shelled
         .plugs
         .into_iter()
@@ -434,6 +441,7 @@ fn put_down(
         model,
         plugs,
         hollow,
+        drains,
         supports,
     })
 }
@@ -522,7 +530,7 @@ fn put_down_every<'a>(
             println!("{}", path.display());
         }
         let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
-        let (mut hollow, mut supports) = (None, None);
+        let (mut hollow, mut drains, mut supports) = (None, None, None);
         let mut stands_in = None;
         for mesh in meshes {
             let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
@@ -537,6 +545,7 @@ fn put_down_every<'a>(
                 .push((first..laid.models.len(), path.as_path()));
             laid.owners.resize(laid.models.len(), laid.parts.len());
             hollow = hollow.or(down.hollow);
+            drains = drains.or(down.drains);
             supports = supports.or(down.supports);
         }
         let standing = standing_of(stands_in, printer, supports.is_some(), watch.talk);
@@ -545,6 +554,7 @@ fn put_down_every<'a>(
             import: Some(import),
             oriented,
             hollow,
+            drains,
             supports,
             standing,
             meets: Vec::new(),
@@ -588,6 +598,7 @@ struct PutDown {
     model: Model,
     plugs: Vec<Model>,
     hollow: Option<HollowReport>,
+    drains: Option<Drained>,
     supports: Option<SupportReport>,
 }
 

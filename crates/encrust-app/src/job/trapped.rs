@@ -2,10 +2,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 
 use core_geometry::{Aabb, Mat4, Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_slicer::{SliceError, Windows};
-use core_supports::{TrapScan, Trapped};
+use core_supports::Trapped;
 
-use core_engine::{Baked, Cutting, cut};
+use core_engine::{Baked, trapped_in};
 
 use crate::i18n::tr;
 use crate::job::{Highest, Worker, pooled};
@@ -134,18 +133,6 @@ fn check(request: &TrapRequest, (stop, looked): (&AtomicBool, &Looked)) -> TrapO
     TrapOutcome::Checked(checked)
 }
 
-/// Why a model's layers stopped coming before its last.
-enum Halt {
-    Slice(SliceError),
-    Asked,
-}
-
-impl From<SliceError> for Halt {
-    fn from(error: SliceError) -> Self {
-        Self::Slice(error)
-    }
-}
-
 /// An earlier task `task` is a copy of: one mesh and one set of cuts, standing the same
 /// way at the same height and only somewhere else on the plate. Its pockets are kept in
 /// the model's own space and the scan's grid starts at the model's corner, so the copy's
@@ -192,26 +179,26 @@ fn look_through(
     if let Some(cuts) = &task.cuts {
         append(&mut placed, &transform_mesh(cuts, task.transform));
     }
-    let bounds = placed.aabb().unwrap_or(material);
     let baked = Baked {
         solid: placed.into(),
         ceiling_mm: material.maxs.z,
         floor_mm: material.mins.z,
     };
-    let windows = cut(&baked, &Cutting::uniform(layer_height_mm)).map_err(|error| {
+    let read = trapped_in(&baked, layer_height_mm, |layers, total| {
+        looked.layers_total.store(total, Relaxed);
+        looked.layers.store(layers, Relaxed);
+        !stop.load(Relaxed)
+    })
+    .map_err(|error| {
         anyhow::Error::new(error)
             .chain()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(": ")
     })?;
-
-    let mut scan = TrapScan::new(
-        bounds.mins.truncate(),
-        bounds.maxs.truncate(),
-        layer_height_mm,
-    );
-    scan_layers(&windows, &baked, &mut scan, (stop, looked))?;
+    let Some(found) = read else {
+        return Err(tr!("drain-cancelled"));
+    };
 
     let matrix = task.transform.to_matrix();
     if matrix.determinant().abs() < f32::EPSILON {
@@ -225,8 +212,7 @@ fn look_through(
         .abs()
         .max(f32::EPSILON);
 
-    Ok(scan
-        .finish()
+    Ok(found
         .into_iter()
         .map(|found| Trapped {
             at: inverse.transform_point3(found.at),
@@ -234,32 +220,6 @@ fn look_through(
             bounds: carried(&found.bounds, inverse),
         })
         .collect())
-}
-
-/// Hands every layer of `baked` to `scan`, counting them into `looked` and stopping
-/// between windows once `stop` is set.
-fn scan_layers(
-    windows: &Windows,
-    baked: &Baked,
-    scan: &mut TrapScan,
-    (stop, looked): (&AtomicBool, &Looked),
-) -> Result<(), String> {
-    looked.layers_total.store(windows.layer_count(), Relaxed);
-    windows
-        .stream(&baked.solid, |sliced| {
-            if stop.load(Relaxed) {
-                return Err(Halt::Asked);
-            }
-            for layer in &sliced.layers {
-                scan.push(layer);
-            }
-            looked.layers.fetch_add(sliced.layers.len(), Relaxed);
-            Ok(())
-        })
-        .map_err(|halt| match halt {
-            Halt::Slice(error) => error.to_string(),
-            Halt::Asked => tr!("drain-cancelled"),
-        })
 }
 
 /// `bounds` taken through `matrix` as the box of its own eight corners, so a pocket of a

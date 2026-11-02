@@ -34,8 +34,8 @@ pub use build::{FieldSettings, build};
 pub use cancel::{Cancel, Progress, Step};
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
-    CUT_WEIGHT, Channel, DrainHole, HoleKind, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM,
-    channel_under, drill, hole_at, lift_for, pierce, turn_in_model,
+    CUT_WEIGHT, Channel, DrainHole, HoleKind, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, Toward,
+    channel_under, drill, hole_at, holes_out, lift_for, pierce, turn_in_model,
 };
 pub use drilled::{Drilled, drilled, drilled_pieces, drilled_reached};
 pub use error::VolumeError;

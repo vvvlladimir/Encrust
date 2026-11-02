@@ -6,8 +6,10 @@ use crate::error::VolumeError;
 use channel::tunnel;
 
 mod channel;
+mod reach;
 
 pub use channel::Leg;
+pub use reach::{Toward, holes_out};
 
 /// Sides of a hole's tube. A three millimetre hole is then within thirteen micrometres of
 /// round, which is under half a pixel on any panel the workspace writes for.

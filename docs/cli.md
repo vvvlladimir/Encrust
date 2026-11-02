@@ -89,7 +89,23 @@ left corner after placement — the frame `--drain-at` takes — so a script can
 `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
 `supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model.
-No list is cut short: each is as long as its count.
+No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
+`auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
+`drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,
+`at_mm` the middle of its mouth, `axis` the unit direction it is drilled in, `diameter_mm`
+and `depth_mm`; and `scans`, the times the model was cut to choose them:
+
+```json
+"auto_drains": {
+  "pockets": [{"at_mm": [8.0, 8.0, 2.25], "volume_mm3": 1724.1,
+               "bounds_mm": {"min": [2.0, 2.0, 2.0], "max": [14.0, 14.0, 14.0]}, "drained": true}],
+  "holes": [{"pocket": 0, "role": "drain", "at_mm": [16.0, 8.0, 3.75], "axis": [-1.0, 0.0, 0.0],
+             "diameter_mm": 3.0, "depth_mm": 5.0},
+            {"pocket": 0, "role": "vent", "at_mm": [8.0, 8.0, 16.0], "axis": [0.0, 0.0, -1.0],
+             "diameter_mm": 3.0, "depth_mm": 5.0}],
+  "scans": 4
+}
+```
 
 Resin is counted from the masks and nowhere else — `cured volume` in the text, `cured` in
 the JSON — so a run without a printer reports layers and no resin at all (ADR 0206). The
@@ -196,6 +212,19 @@ pick it out of:
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --drain 4 --drain-at 30,30,60 -o model.goo
+```
+
+`--drain-at auto` drills, after hollowing and before supports, the holes the engine proves
+empty every pocket still trapped: for each, a drain as low as it goes, on a face looking down
+where it can, and a vent as high, both `--drain` across, each kept only once a scan of the
+model with it drilled finds its pocket gone (ADR 0396). A model printing on the plate gets no
+mouth within a millimetre of it. `--no-drain-vent` leaves the vents out; `auto` goes beside
+points, which are drilled first. A pocket no hole drains stays in `slicing.trapped`, and the
+run is unclean:
+
+```sh
+encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --hollow 2 --drain-at auto --supports auto --strict -o model.goo
 ```
 
 A point off an edge or a corner of the model, rather than over a face, is refused: the hole
@@ -312,8 +341,8 @@ room for a support. One already standing that high is left where it is, and a pr
 ## Plates: several models, a plate file, a project
 
 Several models go on one plate. `--arrange` spreads them, biggest first; without it each
-stands where its file put it. `--center` and `--drain-at` point at one model, so they are
-refused for several:
+stands where its file put it. `--center` and a `--drain-at` point aim at one model, so they
+are refused for several; `--drain-at auto` drains each model on its own:
 
 ```sh
 encrust slice a.stl b.stl c.stl \

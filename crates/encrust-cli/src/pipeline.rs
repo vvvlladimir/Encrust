@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, SupportPlan, bake, cut};
+use core_engine::{Cutting, Drained, SupportPlan, bake, cut};
 use core_geometry::{Mesh, Scalar, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
@@ -15,7 +15,7 @@ use printer_profiles::{Compensation, EdgeSmoothing, MaterialProfile, PrinterProf
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
-use crate::hollowing::{self, HollowArgs, HollowReport};
+use crate::hollowing::{self, AutoReport, Ground, HollowArgs, HollowReport, Placed, auto_drains};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
@@ -147,6 +147,8 @@ pub struct Shelled {
     pub cuts: Option<Mesh>,
     /// A plug for each hole, laid on the plate beside the model (ADR 0313).
     pub plugs: Vec<Mesh>,
+    /// What `--drain-at auto` found and drilled (ADR 0396).
+    pub drains: Option<Drained>,
 }
 
 /// Shells the model when asked, then meshes the bodies its holes and channels cut, and the plugs.
@@ -154,15 +156,15 @@ pub struct Shelled {
 pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
-    precision: Scalar,
-    drift_mm: Scalar,
+    (precision, drift_mm): (Scalar, Scalar),
+    ground: Ground,
     watch: &Watch,
 ) -> Result<Shelled> {
     let talk = watch.talk;
     args.check_flags()?;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
-    let placed = args
+    let mut placed = args
         .cutting()
         .then(|| hollowing::placed(mesh, args))
         .transpose()?;
@@ -181,6 +183,9 @@ pub fn hollow_and_cut(
         hollow = Some(report);
     }
     let wall = hollow.as_ref().map(HollowReport::wall);
+    let printed = shell.as_ref().unwrap_or(&*mesh);
+    let drains = drill_auto(printed, placed.as_mut(), args, (wall, ground), talk)?;
+    watch.stop.check()?;
     // A plug is the solid a hole takes out as it is cut, so it is read off the model before
     // the model is the shell.
     let plugs = match &placed {
@@ -213,7 +218,28 @@ pub fn hollow_and_cut(
         cavity,
         cuts: bodies,
         plugs,
+        drains,
     })
+}
+
+/// `--drain-at auto` over the model as it prints, its holes added to those `placed` cuts;
+/// `None` when it was not asked for.
+fn drill_auto(
+    printed: &Mesh,
+    placed: Option<&mut Placed>,
+    args: &HollowArgs,
+    (wall, ground): (Option<(Scalar, Scalar)>, Ground),
+    talk: bool,
+) -> Result<Option<Drained>> {
+    let Some((holes, channels)) = placed.filter(|_| args.auto()) else {
+        return Ok(None);
+    };
+    let drained = auto_drains(printed, (holes, channels), args, wall, ground)?;
+    holes.extend(drained.drain_holes());
+    if talk {
+        print!("{}", AutoReport(&drained));
+    }
+    Ok(Some(drained))
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.
