@@ -131,7 +131,19 @@ pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
     }
 }
 
-/// Before there is anything to read: the stack being read, or the way to have it cut.
+/// The dot the rail's Check carries: `danger` while the plate has an issue, found without
+/// Check open, else the colour of the worst the layers hold once read.
+pub fn badge(ctx: &egui::Context, window: &Window) -> Option<Color32> {
+    if plate::count(ctx, window) > 0 {
+        return Some(theme::colors().danger);
+    }
+    window
+        .measured()
+        .and_then(Measured::worst)
+        .map(|worst| tint(&worst))
+}
+
+/// Before there is anything to read:the stack being read, or the way to have it cut.
 fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.preview.is_measuring() || window.machine.preview.is_building() {
         section(ui, &tr!("check-checking"), None, |ui| {

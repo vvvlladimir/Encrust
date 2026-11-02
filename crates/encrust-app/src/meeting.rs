@@ -144,6 +144,19 @@ impl Meeting {
     pub fn take_flight(&mut self) -> Option<Spot> {
         self.flight.take()
     }
+
+    /// Runs frames until the search under way has ended, as the frames after an edit do.
+    #[cfg(test)]
+    pub fn settle(&mut self, scene: &Scene) {
+        for _ in 0..10_000 {
+            self.start(scene, true);
+            if !self.poll() && self.run.is_none() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        panic!("the plate was still being searched after ten seconds");
+    }
 }
 
 /// Each printable model of the plate being edited, by its place in the answer, and its

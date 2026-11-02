@@ -1,18 +1,6 @@
 use super::*;
 use crate::scene::fixtures::scene_of_boxes;
 
-/// Runs frames until the search under way has ended, as the frames after an edit do.
-fn settle(meeting: &mut Meeting, scene: &Scene) {
-    for _ in 0..10_000 {
-        meeting.start(scene, true);
-        if !meeting.poll() && meeting.run.is_none() {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    panic!("the plate was still being searched after ten seconds");
-}
-
 fn ids(scene: &Scene) -> Vec<ObjectId> {
     scene.objects().iter().map(|object| object.id).collect()
 }
@@ -25,7 +13,7 @@ fn two_boxes_standing_into_each_other_meet_and_their_seam_is_traced_in_red() {
         (Vec3::new(40.0, 0.0, 0.0), Vec3::new(50.0, 10.0, 10.0)),
     ]);
     let mut meeting = Meeting::default();
-    settle(&mut meeting, &scene);
+    meeting.settle(&scene);
     let ids = ids(&scene);
 
     assert_eq!(meeting.pairs(&scene), vec![[ids[0], ids[1]]]);
@@ -54,7 +42,7 @@ fn each_press_flies_to_the_next_place_the_pair_asked_for_meets() {
         (Vec3::new(18.0, 2.0, 0.0), Vec3::new(25.0, 8.0, 10.0)),
     ]);
     let mut meeting = Meeting::default();
-    settle(&mut meeting, &scene);
+    meeting.settle(&scene);
     let middle = ids(&scene)[0];
 
     let mut flown = Vec::new();
@@ -78,14 +66,14 @@ fn a_model_moved_apart_is_not_named_while_the_plate_is_searched_again() {
         (Vec3::new(5.0, 2.0, 0.0), Vec3::new(15.0, 8.0, 10.0)),
     ]);
     let mut meeting = Meeting::default();
-    settle(&mut meeting, &scene);
+    meeting.settle(&scene);
     scene.objects_mut()[1].transform.translation.x += 20.0;
 
     assert!(
         meeting.pairs(&scene).is_empty() && meeting.highlight(&scene).edges.is_empty(),
         "the answer was for the plate before the move"
     );
-    settle(&mut meeting, &scene);
+    meeting.settle(&scene);
     assert!(
         meeting.pairs(&scene).is_empty(),
         "20 mm on, they stand apart"

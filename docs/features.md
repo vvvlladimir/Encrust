@@ -181,7 +181,8 @@ whole-surface fill is Cmd-Shift-click.
   before any layer is read: past the build volume (its overhang is cut off the layers), in
   the inset (it still slices whole), or meeting another model. A click on a row, or on a
   **Meets** tag, flies the camera there; on a meeting each further click goes to the next
-  place. None of it stops the slice.
+  place. None of it stops the slice. The Check tool on the rail carries a red dot while
+  any of them stands, before Check is opened, and loses it once the models are moved clear.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.
