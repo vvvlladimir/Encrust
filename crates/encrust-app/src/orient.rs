@@ -168,14 +168,49 @@ impl OrientTool {
         status: &mut Status,
     ) -> Result<()> {
         let tasks = orient_tasks(scene, only, plan_of);
+        let asked = self.asking(tasks, self.settings.preset, machine)?;
+        if self.found_for(&asked) {
+            *status = self.step(scene, plate);
+            return Ok(());
+        }
+        self.search(asked);
+        Ok(())
+    }
+
+    /// Searches afresh for the way `ids` print best by `preset`, whatever the panel is set
+    /// to and whatever the last run found: what Prepare turns a model by.
+    pub fn start_on(
+        &mut self,
+        scene: &Scene,
+        ids: &[ObjectId],
+        (preset, plan_of): (OrientPreset, impl Fn(&SceneObject) -> SupportPlan),
+        machine: Option<(&PrinterProfile, &MaterialProfile)>,
+    ) -> Result<()> {
+        let tasks = ids
+            .iter()
+            .filter_map(|id| scene.get(*id))
+            .map(|object| OrientTask::of(object, plan_of(object)))
+            .collect();
+        let asked = self.asking(tasks, preset, machine)?;
+        self.search(asked);
+        Ok(())
+    }
+
+    /// What a run over `tasks` by `preset` asks, printed for `machine` where there is one.
+    fn asking(
+        &mut self,
+        tasks: Vec<OrientTask>,
+        preset: OrientPreset,
+        machine: Option<(&PrinterProfile, &MaterialProfile)>,
+    ) -> Result<Asked> {
         if tasks.is_empty() {
             bail!(tr!("orient-nothing-visible-error"));
         }
-
         self.stop_picking();
-        let asked = Asked {
+        Ok(Asked {
             tasks,
             settings: OrientSettings {
+                preset,
                 on_supports: true,
                 rest_on_plate: true,
                 build_volume_mm: machine.map(|(printer, _)| {
@@ -188,12 +223,10 @@ impl OrientTool {
                 printer: printer.clone(),
                 material: material.clone(),
             }),
-        };
-        if self.found_for(&asked) {
-            *status = self.step(scene, plate);
-            return Ok(());
-        }
+        })
+    }
 
+    fn search(&mut self, asked: Asked) {
         self.offers.clear();
         self.job = Some(OrientJob::spawn(OrientRequest {
             tasks: asked.tasks.clone(),
@@ -201,7 +234,6 @@ impl OrientTool {
             proof: asked.proof.clone(),
         }));
         self.asked = Some(asked);
-        Ok(())
     }
 
     /// Whether the last run was asked `asked` and every model stands as it left it.

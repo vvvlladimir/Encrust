@@ -7,8 +7,8 @@ use core_volume::{HollowMode, HollowSettings, InfillSettings, plate_down};
 
 use crate::i18n::tr;
 use crate::job::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks, lock_fields,
-    rebuild_tasks,
+    HollowJob, HollowOutcome, HollowRequest, HollowTask, SharedFields, again_tasks, hollow_tasks,
+    lock_fields, rebuild_tasks,
 };
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
@@ -80,10 +80,26 @@ impl HollowTool {
     /// Starts a run over everything visible on the plate.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
         let tasks = hollow_tasks(scene, |object| self.settings_for(object));
+        self.spawn(tasks)
+    }
+
+    /// Starts a run over `models` alone, each at its wall beside it, millimetres, and
+    /// Hollow's defaults otherwise, whatever the panel is set to: what Prepare hollows.
+    pub fn start_walls(&mut self, scene: &Scene, models: &[(ObjectId, Scalar)]) -> Result<()> {
+        let tasks = models
+            .iter()
+            .filter_map(|(id, wall_mm)| {
+                let object = scene.get(*id).filter(|object| !object.mesh.is_empty())?;
+                Some(HollowTask::of(object, &HollowSettings::for_wall(*wall_mm)))
+            })
+            .collect();
+        self.spawn(tasks)
+    }
+
+    fn spawn(&mut self, tasks: Vec<HollowTask>) -> Result<()> {
         if tasks.is_empty() {
             bail!(tr!("hollow-nothing-visible-error"));
         }
-
         self.job = Some(HollowJob::spawn(HollowRequest {
             tasks,
             fields: Arc::clone(&self.fields),

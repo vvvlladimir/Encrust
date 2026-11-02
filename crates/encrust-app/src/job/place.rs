@@ -164,17 +164,24 @@ pub fn tasks_of(
     scene
         .targets()
         .filter(|object| !object.mesh.is_empty())
-        .map(|object| SupportTask {
+        .map(|object| SupportTask::of(object, profile_of(object)))
+        .collect()
+}
+
+impl SupportTask {
+    /// `object` as it stands, with the supports already under it, placed to `profile`.
+    pub fn of(object: &SceneObject, profile: SupportProfile) -> Self {
+        Self {
             id: object.id,
             mesh: Arc::clone(&object.mesh),
             surface: Arc::clone(object.support_surface().0),
             transform: object.transform,
             seeds: object.supports.contacts(object.transform),
             blocked: object.supports.blocked().clone(),
-            profile: profile_of(object),
+            profile,
             side: None,
-        })
-        .collect()
+        }
+    }
 }
 
 /// Cuts every model of the request and works out where it needs holding up.

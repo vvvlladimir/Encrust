@@ -357,6 +357,7 @@ supports-placed =
 supports-cancelled = Расстановка отменена
 supports-placed-sized = Поставлено поддержек: { $count }, из них лёгких { $light }, средних { $medium }, тяжёлых { $heavy } и стабилизирующих { $steady }
 supports-auto-no-shape = { $name } строит поддержки по профилю { $id }, которого нет в каталоге
+supports-no-automatic = В каталоге нет автоматического профиля поддержек
 supports-group-name = Группа { $index }
 supports-cannot-grow = Не удалось построить поддержки: { $reason }
 supports-growth-stopped = Построение поддержек прервалось без результата

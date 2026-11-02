@@ -204,14 +204,21 @@ pub fn hollow_tasks(
     scene
         .targets()
         .filter(|object| !object.mesh.is_empty())
-        .map(|object| HollowTask {
+        .map(|object| HollowTask::of(object, &settings(object)))
+        .collect()
+}
+
+impl HollowTask {
+    /// `object` hollowed as `settings` ask, with the blockers it carries.
+    pub fn of(object: &SceneObject, settings: &HollowSettings) -> Self {
+        Self {
             id: object.id,
             mesh: Arc::clone(&object.mesh),
             bvh: Arc::clone(&object.bvh),
             shape: object.transform.unturned(),
-            settings: object.hollow.asking(&settings(object)),
-        })
-        .collect()
+            settings: object.hollow.asking(settings),
+        }
+    }
 }
 
 /// Every visible model whose shell no longer matches the cuts it carries, to be built
