@@ -1,0 +1,225 @@
+//! Which models on the plate meet another, asked of a thread once the plate settles, and
+//! where the camera flies to see each (ADR 0392).
+
+use std::sync::Arc;
+
+use core_geometry::{Aabb, Transform, Vec3};
+use core_plate::BodyKind;
+
+use crate::highlight::{EdgeMark, Highlight, Spot};
+use crate::job::{MeetingBody, MeetingJob, spawn_meeting};
+use crate::pick::Shown;
+use crate::scene::{ObjectId, Scene};
+use crate::ui::theme;
+
+/// Most pieces of one pair's seam drawn: a seam past it covers the models anyway, and each
+/// piece is uploaded every frame. A duplicate in place cuts some hundred thousand.
+const SEAM_PIECES_MAX: usize = 10_000;
+
+/// The models last found to meet, and the search under way.
+#[derive(Default)]
+pub struct Meeting {
+    /// What stood on the plate when `met` was found, as `Scene::standing_fingerprint` reads it.
+    found_for: Option<u64>,
+    met: Vec<Met>,
+    /// The seam every pair cuts, at most [`SEAM_PIECES_MAX`] pieces of each, plate mm.
+    seam: Vec<[Vec3; 2]>,
+    run: Option<Run>,
+    /// The pairs the last presses asked for and how many there were, so the next press on
+    /// them goes on to the next place and a press on others starts at their first.
+    turns: (Vec<[ObjectId; 2]>, usize),
+    flight: Option<Spot>,
+}
+
+/// Two models that meet and each place they do, plate mm.
+struct Met {
+    ids: [ObjectId; 2],
+    places: Vec<Aabb>,
+}
+
+struct Run {
+    asked_for: u64,
+    owners: Vec<ObjectId>,
+    job: MeetingJob,
+}
+
+impl Meeting {
+    /// Starts a search once the plate has settled and differs from what was last searched;
+    /// one runs at a time, so a plate moved meanwhile is searched when it ends.
+    pub fn start(&mut self, scene: &Scene, settled: bool) {
+        if !settled || self.run.is_some() {
+            return;
+        }
+        let asked_for = scene.standing_fingerprint();
+        if self.found_for == Some(asked_for) {
+            return;
+        }
+        let (owners, bodies) = bodies_of(scene);
+        if owners.len() < 2 {
+            self.met.clear();
+            self.seam.clear();
+            self.found_for = Some(asked_for);
+            return;
+        }
+        let job = spawn_meeting(bodies.into());
+        self.run = Some(Run {
+            asked_for,
+            owners,
+            job,
+        });
+    }
+
+    /// Takes the search's answer on the frame it ends. Returns whether one is still running.
+    pub fn poll(&mut self) -> bool {
+        let Some(run) = &mut self.run else {
+            return false;
+        };
+        let Some(met) = run.job.poll() else {
+            return true;
+        };
+        self.found_for = Some(run.asked_for);
+        self.seam = met
+            .iter()
+            .flat_map(|meeting| drawn(&meeting.seam_mm))
+            .collect();
+        self.met = met
+            .into_iter()
+            .map(|meeting| Met {
+                ids: meeting.owners.map(|owner| run.owners[owner]),
+                places: meeting.places_mm,
+            })
+            .collect();
+        self.run = None;
+        false
+    }
+
+    /// Whether the answer was found for the plate as it stands, not one searched again.
+    fn stands(&self, scene: &Scene) -> bool {
+        self.found_for == Some(scene.standing_fingerprint())
+    }
+
+    /// The meetings found for the plate as it stands, none while it is searched again.
+    fn current(&self, scene: &Scene) -> &[Met] {
+        match self.stands(scene) {
+            true => &self.met,
+            false => &[],
+        }
+    }
+
+    /// The pairs of models that meet, lower first, while the answer stands for the plate.
+    pub fn pairs(&self, scene: &Scene) -> Vec<[ObjectId; 2]> {
+        self.current(scene).iter().map(|met| met.ids).collect()
+    }
+
+    /// The models `id` meets, while the answer stands for the plate.
+    pub fn met_by(&self, scene: &Scene, id: ObjectId) -> Vec<ObjectId> {
+        let other = |met: &Met| match met.ids {
+            [one, other] if one == id => Some(other),
+            [one, other] if other == id => Some(one),
+            _ => None,
+        };
+        self.current(scene).iter().filter_map(other).collect()
+    }
+
+    /// The seam every pair of models cuts, traced in red over them in every tool, as far as
+    /// the section leaves them `shown`.
+    pub fn highlight(&self, scene: &Scene, shown: Shown) -> Highlight {
+        let seam: Vec<[Vec3; 2]> = match (self.stands(scene), shown == Shown::default()) {
+            (false, _) => Vec::new(),
+            (true, true) => self.seam.clone(),
+            (true, false) => self
+                .seam
+                .iter()
+                .filter_map(|&ends| shown.part_of(ends))
+                .collect(),
+        };
+        let edges = (!seam.is_empty()).then(|| EdgeMark {
+            edges: seam,
+            colour: theme::scene().meets,
+        });
+        Highlight {
+            faces: Vec::new(),
+            edges: edges.into_iter().collect(),
+        }
+    }
+
+    /// Sends the camera to a place where the pair `keep` answers for meet; each press goes
+    /// on to the next place.
+    pub fn fly_to(&mut self, scene: &Scene, keep: impl Fn([ObjectId; 2]) -> bool) {
+        let asked: Vec<&Met> = self
+            .current(scene)
+            .iter()
+            .filter(|met| keep(met.ids))
+            .collect();
+        let spots: Vec<Spot> = asked
+            .iter()
+            .flat_map(|met| &met.places)
+            .filter_map(|place| Spot::around([place.mins, place.maxs], Vec3::ZERO))
+            .collect();
+        if spots.is_empty() {
+            return;
+        }
+        let pairs: Vec<[ObjectId; 2]> = asked.iter().map(|met| met.ids).collect();
+        if self.turns.0 != pairs {
+            self.turns = (pairs, 0);
+        }
+        self.flight = Some(spots[self.turns.1 % spots.len()]);
+        self.turns.1 += 1;
+    }
+
+    /// Where a press asked the camera to go, once.
+    pub fn take_flight(&mut self) -> Option<Spot> {
+        self.flight.take()
+    }
+
+    /// Runs frames until the search under way has ended, as the frames after an edit do.
+    #[cfg(test)]
+    pub fn settle(&mut self, scene: &Scene) {
+        for _ in 0..10_000 {
+            self.start(scene, true);
+            if !self.poll() && self.run.is_none() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        panic!("the plate was still being searched after ten seconds");
+    }
+}
+
+/// What is drawn of one pair's `seam`: an even spread of at most [`SEAM_PIECES_MAX`] pieces.
+fn drawn(seam: &[[Vec3; 2]]) -> impl Iterator<Item = [Vec3; 2]> + '_ {
+    seam.iter()
+        .copied()
+        .step_by(seam.len().div_ceil(SEAM_PIECES_MAX).max(1))
+}
+
+/// Each printable model of the plate being edited, by its place in the answer, and its
+/// bodies: itself as it prints, and the supports last drawn under it.
+fn bodies_of(scene: &Scene) -> (Vec<ObjectId>, Vec<MeetingBody>) {
+    let mut owners = Vec::new();
+    let mut bodies = Vec::new();
+    for object in scene.printable(scene.active_plate()) {
+        let owner = owners.len();
+        owners.push(object.id);
+        let printed = Arc::clone(object.printed());
+        let bvh = Arc::ptr_eq(&printed, &object.mesh).then(|| Arc::clone(&object.bvh));
+        bodies.push(MeetingBody {
+            owner,
+            kind: BodyKind::Model,
+            mesh: printed,
+            bvh,
+            transform: object.transform,
+        });
+        bodies.extend(object.supports.drawn().iter().map(|group| MeetingBody {
+            owner,
+            kind: BodyKind::Supports,
+            mesh: Arc::clone(&group.mesh),
+            bvh: None,
+            transform: Transform::default(),
+        }));
+    }
+    (owners, bodies)
+}
+
+#[cfg(test)]
+mod tests;

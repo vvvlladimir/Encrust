@@ -36,7 +36,7 @@ pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangl
 pub use faults::{Faults, faults};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
-pub use intersect::self_intersections;
+pub use intersect::{Crossing, PlacedMesh, placed_crossings, self_intersections};
 pub use mend::{MendMethod, MendSettings, Mended, mend};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
@@ -57,7 +57,8 @@ pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};
 pub use topology::{Adjacency, Components};
 pub use transform::{
-    Transform, center_over_plate, drop_to_plate, lift_over_plate, smallest_scale, transform_mesh,
+    Transform, center_over_plate, drop_to_plate, lift_over_plate, placed_aabb, smallest_scale,
+    transform_mesh,
 };
 pub use triangle::Triangle;
 pub use triangulate::triangulate;
@@ -71,7 +72,7 @@ pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3};
 /// The maths library itself, for the corners it covers that this crate does not wrap,
 /// such as `glam::camera` for view and projection matrices.
 pub use glam;
-pub use parry3d::bounding_volume::Aabb;
+pub use parry3d::bounding_volume::{Aabb, BoundingVolume};
 
 /// Scalar type used across the whole pipeline.
 pub type Scalar = f32;

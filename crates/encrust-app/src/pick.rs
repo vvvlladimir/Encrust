@@ -41,6 +41,32 @@ pub struct Shown {
 }
 
 impl Shown {
+    /// The part of the segment `ends`, plate mm, that stands between the cuts, or `None`
+    /// when it lies wholly past one.
+    pub fn part_of(self, [from, to]: [Vec3; 2]) -> Option<[Vec3; 2]> {
+        let (mut start, mut end) = (0.0, 1.0);
+        for (bound, kept_above) in [(self.floor_mm, true), (self.top_mm, false)] {
+            let Some(height) = bound else {
+                continue;
+            };
+            let kept = |point: Vec3| match kept_above {
+                true => point.z - height,
+                false => height - point.z,
+            };
+            let (near, far) = (kept(from), kept(to));
+            if near < 0.0 && far < 0.0 {
+                return None;
+            }
+            let crossing = near / (near - far);
+            if near < 0.0 {
+                start = Scalar::max(start, crossing);
+            } else if far < 0.0 {
+                end = Scalar::min(end, crossing);
+            }
+        }
+        (start <= end).then(|| [from.lerp(to, start), from.lerp(to, end)])
+    }
+
     /// The stretch of `ray` between the cuts, as distances along it, or `None` when it
     /// never passes between them.
     fn span(self, ray: &Ray) -> Option<(Scalar, Scalar)> {

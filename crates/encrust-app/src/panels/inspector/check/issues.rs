@@ -190,7 +190,7 @@ pub(super) fn listing(
         .into_iter()
         .filter(|row| filter == Filter::All || row.filter == filter)
         .collect();
-    let picked = issue_list(ui, |ui| {
+    let picked = issue_list(ui, "check-layers", |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
             let place = tr!("check-layer", layer = row.layer + 1);

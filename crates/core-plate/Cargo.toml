@@ -32,3 +32,7 @@ harness = false
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "crossings"
+harness = false

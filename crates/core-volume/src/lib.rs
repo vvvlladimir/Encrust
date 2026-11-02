@@ -21,6 +21,7 @@ mod parts;
 mod plug;
 mod relief;
 mod repair;
+mod resin;
 mod scatter;
 mod sdf;
 mod shells;
@@ -53,6 +54,7 @@ pub use relief::{
     press_painted_tiled, press_reusing, press_tiled, press_tiled_reusing,
 };
 pub use repair::{RepairMethod, RepairSettings, Repaired, repair, wrap};
+pub use resin::{MIN_SAVED_MM3, MIN_SAVED_SHARE, holds_resin, hollowing_saves_mm3};
 pub use sdf::Sdf;
 pub use sign::SignMode;
 pub use stack::{Panel, StackField};

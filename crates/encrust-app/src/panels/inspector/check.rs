@@ -14,9 +14,10 @@ use crate::ui::verdict_card;
 use crate::ui::{
     describe, hint, icon, readings, secondary_button, section, section_with_actions, theme,
 };
-use crate::workspace::{Mode, Tool};
+use crate::workspace::Mode;
 
 mod issues;
+mod plate;
 
 pub(crate) use issues::issue_name;
 use issues::{Filter, filter, listing, neighbour};
@@ -24,6 +25,7 @@ use issues::{Filter, filter, listing, neighbour};
 /// What the stack will fail on: a way to take the islands out, the verdict, every issue a
 /// click away from its layer, and what pulls hardest on the film.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    plate::ui(ui, window);
     let Some((risks, removed)) = window
         .measured()
         .map(|measured| (measured.risks(), measured.removed_islands()))
@@ -44,13 +46,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         section(ui, &tr!("check-issues"), None, verdict);
     } else {
         found(ui, window, &risks);
-    }
-    if risks.iter().any(|risk| Filter::Cups.admits(&risk.kind)) {
-        section(ui, &tr!("check-filter-cups"), None, |ui| {
-            if secondary_button(ui, icon::DRAIN, &tr!("check-drill-cups")).clicked() {
-                crate::shortcuts::pick(window, Tool::Drain);
-            }
-        });
     }
     pull(ui, window);
 }
@@ -103,23 +98,54 @@ fn support_islands(window: &mut Window, risks: &[Risk]) {
     window.machine.status = Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP));
 }
 
-/// What the check has found so far, for the inspector's heading, and its colour.
-pub fn fact(window: &Window) -> Option<(String, Color32)> {
+/// What the check has found so far, the plate's own issues with the layers', for the
+/// inspector's heading, and its colour.
+pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
     let colors = theme::colors();
+    let on_plate = plate::tally(ctx, window);
+    let issues = |count: usize, colour| Some((tr!("check-fact-issues", count = count), colour));
     let Some(measured) = window.measured() else {
+        if let Some((count, colour)) = on_plate {
+            return issues(count, colour);
+        }
         return window
             .machine
             .preview
             .is_measuring()
             .then(|| (tr!("check-fact-checking"), colors.text_low));
     };
-    Some(match measured.worst() {
-        None => (tr!("check-fact-none"), colors.text_mid),
-        Some(worst) => (
-            tr!("check-fact-issues", count = measured.risks().len()),
-            tint(&worst),
-        ),
-    })
+    let layers = measured.worst().map(|worst| tint(&worst));
+    match (layers, on_plate) {
+        (None, None) => Some((tr!("check-fact-none"), colors.text_mid)),
+        (None, Some((count, colour))) => issues(count, colour),
+        (Some(colour), None) => issues(measured.risks().len(), colour),
+        (Some(colour), Some((count, plate))) => {
+            issues(measured.risks().len() + count, gravest(colour, plate))
+        }
+    }
+}
+
+/// The dot the rail's Check carries: the colour of the gravest issue, the plate's found
+/// without Check open, the layers' once read.
+pub fn badge(ctx: &egui::Context, window: &Window) -> Option<Color32> {
+    let layers = window
+        .measured()
+        .and_then(Measured::worst)
+        .map(|worst| tint(&worst));
+    let on_plate = plate::tally(ctx, window).map(|(_, colour)| colour);
+    match (layers, on_plate) {
+        (Some(layers), Some(plate)) => Some(gravest(layers, plate)),
+        (layers, plate) => layers.or(plate),
+    }
+}
+
+/// `danger` if either colour is, else the first.
+fn gravest(one: Color32, other: Color32) -> Color32 {
+    if other == theme::colors().danger {
+        other
+    } else {
+        one
+    }
 }
 
 /// Before there is anything to read: the stack being read, or the way to have it cut.

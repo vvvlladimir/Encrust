@@ -2,7 +2,10 @@ use std::fmt;
 use std::path::PathBuf;
 
 use core_format::ExposureRange;
-use core_geometry::{Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec2, Vec3, Welded};
+use core_geometry::{
+    Aabb, Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec2, Vec3, Welded,
+};
+use core_plate::PlateFit;
 use printer_profiles::PrinterProfile;
 
 use crate::edits::{Edited, describe as describe_edits};
@@ -11,55 +14,26 @@ use crate::stats::MeshStats;
 /// Whether the model fits the machine it is meant for, and whether it stands inside it.
 pub struct FitCheck {
     pub printer: String,
-    /// How much larger than the build envelope the model is, per axis, millimetres.
-    pub overflow: Vec3,
-    /// How far the model reaches outside the envelope where it stands, per axis, mm.
-    /// Whatever hangs off the plate is clipped off the masks.
-    pub outside: Vec3,
-    /// How far it reaches into the plate's inset along X and Y, mm: a warning, as it slices
-    /// whole. The inset is a band of the plate, so it has no Z.
-    pub inset: Vec2,
+    pub fit: PlateFit,
 }
 
-/// How far past the envelope counts as past it, millimetres. Under a micron is float dust
-/// from the placement, not a model hanging off the plate.
-const PAST_THE_PLATE_MM: Scalar = 1.0e-3;
-
 impl FitCheck {
-    pub fn of(stats: &MeshStats, profile: &PrinterProfile) -> Self {
+    /// How `bounds`, plate millimetres, sit on `profile`'s plate.
+    pub fn of(bounds: &Aabb, profile: &PrinterProfile) -> Self {
         let volume = &profile.build_volume;
-        let plate = Vec3::new(volume.x, volume.y, volume.z);
         let [low, high] = profile
             .plate_inset
             .unwrap_or_default()
             .area_mm(volume.x, volume.y);
-        let (low, high) = (Vec2::from(low), Vec2::from(high));
-        let inset = past(
-            (low - stats.min.truncate())
-                .max(stats.max.truncate() - high)
-                .extend(0.0),
-        )
-        .truncate();
         Self {
             printer: profile.name.clone(),
-            overflow: past(stats.size() - plate),
-            outside: past((-stats.min).max(stats.max - plate)),
-            inset,
+            fit: PlateFit::of(
+                bounds,
+                Vec3::new(volume.x, volume.y, volume.z),
+                [Vec2::from(low), Vec2::from(high)],
+            ),
         }
     }
-
-    pub fn fits(&self) -> bool {
-        self.overflow == Vec3::ZERO && self.outside == Vec3::ZERO
-    }
-}
-
-/// What is left of `amount` once the axes inside the envelope, and the dust, are dropped.
-fn past(amount: Vec3) -> Vec3 {
-    Vec3::select(
-        amount.cmpgt(Vec3::splat(PAST_THE_PLATE_MM)),
-        amount,
-        Vec3::ZERO,
-    )
 }
 
 /// How a wrap went.
@@ -108,6 +82,9 @@ pub struct ImportReport {
     /// The shells as import left the model, when `--shells` asked for them.
     pub shells: Option<Vec<Shell>>,
     pub fit: Option<FitCheck>,
+    /// What hollowing the solid model would save and the wall it was read at, mm³ and mm,
+    /// where Check would suggest it.
+    pub hollowing_saves: Option<(Scalar, Scalar)>,
 }
 
 impl ImportReport {
@@ -122,13 +99,28 @@ impl ImportReport {
         Ok(())
     }
 
+    /// Whether the model fits the machine, and what hollowing it would save.
+    fn fmt_printing(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(fit) = &self.fit {
+            writeln!(f, "  fits          {}", describe_fit(fit))?;
+        }
+        if let Some((saved_mm3, wall_mm)) = self.hollowing_saves {
+            writeln!(
+                f,
+                "  solid         hollowing to a {wall_mm:.1} mm wall saves {:.1} ml",
+                saved_mm3 / 1000.0
+            )?;
+        }
+        Ok(())
+    }
+
     /// True when nothing found would stop the model printing correctly.
     pub fn is_clean(&self) -> bool {
         let sound = self
             .diagnostics
             .as_ref()
             .is_none_or(MeshDiagnostics::is_sound);
-        let fits = self.fit.as_ref().is_none_or(FitCheck::fits);
+        let fits = self.fit.as_ref().is_none_or(|check| check.fit.fits());
         sound && fits
     }
 }
@@ -216,10 +208,7 @@ impl fmt::Display for ImportReport {
             }
         }
 
-        if let Some(fit) = &self.fit {
-            writeln!(f, "  fits          {}", describe_fit(fit))?;
-        }
-        Ok(())
+        self.fmt_printing(f)
     }
 }
 
@@ -321,18 +310,19 @@ fn describe_repair(mended: &Mended) -> String {
 
 /// An axis the model is too big for is named as that; one it merely stands off is named
 /// as where it stands, because the two ask for different things of the user.
-fn describe_fit(fit: &FitCheck) -> String {
+pub(crate) fn describe_fit(check: &FitCheck) -> String {
+    let fit = &check.fit;
     if fit.fits() {
-        let inset: Vec<String> = [("X", fit.inset.x), ("Y", fit.inset.y)]
+        let inset: Vec<String> = [("X", fit.inset_mm.x), ("Y", fit.inset_mm.y)]
             .iter()
             .filter(|(_, mm)| *mm > 0.0)
             .map(|(axis, mm)| format!("{axis} by {mm:.3} mm"))
             .collect();
         return match inset.is_empty() {
-            true => format!("{}: yes", fit.printer),
+            true => format!("{}: yes", check.printer),
             false => format!(
                 "{}: yes, in the plate's inset in {}",
-                fit.printer,
+                check.printer,
                 inset.join(", ")
             ),
         };
@@ -340,10 +330,10 @@ fn describe_fit(fit: &FitCheck) -> String {
     let mut over = Vec::new();
     let mut outside = Vec::new();
     for (axis, index) in [("X", 0), ("Y", 1), ("Z", 2)] {
-        if fit.overflow[index] > 0.0 {
-            over.push(format!("{axis} by {:.3} mm", fit.overflow[index]));
-        } else if fit.outside[index] > 0.0 {
-            outside.push(format!("{axis} by {:.3} mm", fit.outside[index]));
+        if fit.overflow_mm[index] > 0.0 {
+            over.push(format!("{axis} by {:.3} mm", fit.overflow_mm[index]));
+        } else if fit.outside_mm[index] > 0.0 {
+            outside.push(format!("{axis} by {:.3} mm", fit.outside_mm[index]));
         }
     }
     let mut parts = Vec::new();
@@ -353,7 +343,7 @@ fn describe_fit(fit: &FitCheck) -> String {
     if !outside.is_empty() {
         parts.push(format!("off the plate in {}", outside.join(", ")));
     }
-    format!("{}: no, {}", fit.printer, parts.join(", "))
+    format!("{}: no, {}", check.printer, parts.join(", "))
 }
 
 /// Parses `1.5` as uniform and `1,2,3` as per-axis.
@@ -454,20 +444,12 @@ z = {z}
         PrinterProfile::from_toml_str(&source, Path::new("inline.toml")).expect("valid")
     }
 
-    fn stats(size: Vec3) -> MeshStats {
+    fn stats(size: Vec3) -> Aabb {
         standing(Vec3::ZERO, size)
     }
 
-    fn standing(min: Vec3, max: Vec3) -> MeshStats {
-        MeshStats {
-            vertices: 0,
-            faces: 0,
-            min,
-            max,
-            surface_area: 0.0,
-            volume: 0.0,
-            shells_overlap: false,
-        }
+    fn standing(min: Vec3, max: Vec3) -> Aabb {
+        Aabb::new(min, max)
     }
 
     #[test]
@@ -476,7 +458,7 @@ z = {z}
             &stats(Vec3::new(10.0, 10.0, 10.0)),
             &profile(20.0, 20.0, 20.0),
         );
-        assert!(fit.fits());
+        assert!(fit.fit.fits());
         assert_eq!(describe_fit(&fit), "Test: yes");
     }
 
@@ -486,7 +468,7 @@ z = {z}
             &stats(Vec3::new(30.0, 10.0, 25.0)),
             &profile(20.0, 20.0, 20.0),
         );
-        assert!(!fit.fits());
+        assert!(!fit.fit.fits());
         assert_eq!(
             describe_fit(&fit),
             "Test: no, over X by 10.000 mm, Z by 5.000 mm"
@@ -500,7 +482,7 @@ z = {z}
             &profile(20.0, 20.0, 20.0),
         );
         assert!(
-            !fit.fits(),
+            !fit.fit.fits(),
             "what hangs off the plate is clipped off the mask"
         );
         assert_eq!(
@@ -520,20 +502,11 @@ z = {z}
             &standing(Vec3::new(0.5, 5.0, 0.0), Vec3::new(10.5, 15.0, 10.0)),
             &printer,
         );
-        assert!(fit.fits(), "the inset warns, it never clips");
+        assert!(fit.fit.fits(), "the inset warns, it never clips");
         assert_eq!(
             describe_fit(&fit),
             "Test: yes, in the plate's inset in X by 1.000 mm"
         );
-    }
-
-    #[test]
-    fn float_dust_under_the_plate_is_not_a_model_off_it() {
-        let fit = FitCheck::of(
-            &standing(Vec3::new(0.0, 0.0, -1.0e-5), Vec3::new(10.0, 10.0, 10.0)),
-            &profile(20.0, 20.0, 20.0),
-        );
-        assert!(fit.fits(), "{} mm is placement dust", 1.0e-5);
     }
 
     #[test]

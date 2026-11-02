@@ -5,10 +5,12 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use core_geometry::{
-    MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
+    Aabb, Mat3, MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
     remove_duplicate_faces,
 };
-use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
+use core_volume::{
+    Cancel, HollowSettings, Progress, RepairSettings, VolumeError, hollowing_saves_mm3, repair,
+};
 use printer_profiles::PrinterProfile;
 
 use crate::args::{ImportArgs, RepairMethod};
@@ -47,7 +49,15 @@ pub(super) fn checked(
     let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
     let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
-    let fit = profile.map(|p| FitCheck::of(&stats, p));
+    let bounds = Aabb::new(stats.min, stats.max);
+    let fit = profile.map(|p| FitCheck::of(&bounds, p));
+    // A volume is read only off a sound mesh: an open one encloses nothing in particular.
+    let wall_mm = HollowSettings::default().thickness_mm;
+    let hollowing_saves = diagnostics
+        .as_ref()
+        .filter(|found| found.is_sound())
+        .and_then(|_| hollowing_saves_mm3(mesh, Mat3::IDENTITY, wall_mm))
+        .map(|saved_mm3| (saved_mm3, wall_mm));
 
     Ok(ImportReport {
         path: input.to_path_buf(),
@@ -62,6 +72,7 @@ pub(super) fn checked(
         edited,
         shells: listed,
         fit,
+        hollowing_saves,
     })
 }
 

@@ -169,6 +169,27 @@ whole-surface fill is Cmd-Shift-click.
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.
 
+**Past the plate:**
+- Whatever stands past the build volume, model, supports or raft, is striped red in the
+  view, and so is what reaches into the plate inset a printer keeps clear along its edges.
+- Models standing into each other, or a model's supports or raft reaching into another
+  model, are found once the plate stops moving, and the seam they cut is traced in a thin
+  red line in every tool, only where the section leaves the models drawn, and never in the
+  render view.
+  Their rows in the models card are tagged **Meets**, naming the others on hover.
+  Touching counts, a gap of any width does not; a model's own supports, and supports or
+  rafts meeting each other, never do. They would slice as one piece.
+- The Check tool lists each of these under **On the plate** at once, before any layer is
+  read: past the build volume (its overhang is cut off the layers) or in the inset (it
+  still slices whole) once a printer is chosen, and meeting another model. A click on a row, or on a
+  **Meets** tag, flies the camera there; on a meeting each further click goes to the next
+  place. None of it stops the slice. The Check tool on the rail carries a dot while any of
+  them stands, before Check is opened: red past the build volume or for a meeting, amber for
+  the rest, gone once each is fixed.
+- Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
+  resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
+  the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
+
 **Many models:**
 - **Arrange the plate** automatically, largest model first.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.
@@ -570,7 +591,6 @@ smoothing, not the original model.
 - **Support every island** in one press.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
-- **Drill the suction cups.**
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
 Resin is counted from what is actually cured. Before slicing, the plate's card states

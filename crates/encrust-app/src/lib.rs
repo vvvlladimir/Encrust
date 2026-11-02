@@ -22,6 +22,7 @@ mod job;
 mod landing;
 mod launch;
 mod measure;
+mod meeting;
 mod network;
 mod orient;
 mod panels;

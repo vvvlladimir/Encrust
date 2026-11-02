@@ -100,7 +100,7 @@ fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool, ke
         tooltip: &tooltip,
         labelled,
         active: window.tool.card() == tool,
-        badge: badge(window, tool),
+        badge: badge(ui.ctx(), window, tool),
         key: key.as_deref(),
     };
     if rail_button(ui, &button).clicked() {
@@ -110,7 +110,7 @@ fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool, ke
 
 /// The dot a tool carries while it has something the user must deal with. Only Repair,
 /// Drain and Check carry one, so a dot is never noise; see `docs/decisions/0218`, `0354`.
-fn badge(window: &Window, tool: Tool) -> Option<Color32> {
+fn badge(ctx: &egui::Context, window: &Window, tool: Tool) -> Option<Color32> {
     let colors = theme::colors();
     match tool {
         Tool::Repair => {
@@ -122,10 +122,7 @@ fn badge(window: &Window, tool: Tool) -> Option<Color32> {
             .targets()
             .any(|object| !object.traps.found().is_empty())
             .then_some(colors.danger),
-        Tool::Check => window
-            .measured()
-            .and_then(core_analysis::Measured::worst)
-            .map(|worst| super::inspector::risk_tint(&worst)),
+        Tool::Check => super::inspector::check_badge(ctx, window),
         _ => None,
     }
 }
@@ -205,5 +202,46 @@ mod tests {
     fn the_names_show_in_a_window_of_1280_and_go_in_the_least_one() {
         assert!(Fit::into(row_in_window(1280.0), 9).labelled);
         assert!(!Fit::into(row_in_window(theme::WINDOW_MIN_W), 9).labelled);
+    }
+
+    /// BUG: Check's dot waited for the layers, read only with Check open, so two models
+    /// standing into each other left the rail quiet.
+    #[test]
+    fn check_carries_a_dot_while_two_models_meet_and_drops_it_once_they_part() {
+        use core_geometry::Vec3;
+
+        use crate::scene::fixtures::scene_of_boxes;
+        use crate::state::{Doc, Machine, Tools, View};
+        use crate::workspace::Mode;
+
+        let mut doc = Doc {
+            scene: scene_of_boxes(&[
+                (Vec3::ZERO, Vec3::splat(10.0)),
+                (Vec3::new(5.0, 2.0, 0.0), Vec3::new(15.0, 8.0, 10.0)),
+            ]),
+            ..Doc::default()
+        };
+        let (mut mode, mut tool) = (Mode::default(), Tool::Position);
+        let (mut view, mut tools, mut machine) = (
+            View::framing(&doc.plate),
+            Tools::default(),
+            Machine::default(),
+        );
+        let ctx = egui::Context::default();
+        let mut dot = |doc: &mut Doc| {
+            doc.meeting.settle(&doc.scene);
+            let window = Window {
+                mode: &mut mode,
+                tool: &mut tool,
+                doc,
+                view: &mut view,
+                tools: &mut tools,
+                machine: &mut machine,
+            };
+            badge(&ctx, &window, Tool::Check)
+        };
+        assert_eq!(dot(&mut doc), Some(theme::colors().danger));
+        doc.scene.objects_mut()[1].transform.translation.x += 20.0;
+        assert_eq!(dot(&mut doc), None, "the boxes stand 10 mm apart");
     }
 }

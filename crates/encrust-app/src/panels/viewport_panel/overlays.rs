@@ -46,8 +46,12 @@ const AIMED_OPACITY: f32 = 0.55;
 const AXIS_LETTER_GAP_MM: f32 = 5.0;
 
 /// X, Y and Z past the tips of the arrows in the plate's origin corner. Drawn over the 3D pass
-/// rather than in it, so a letter always faces the camera; a letter a model hides is left out.
+/// rather than in it, so a letter always faces the camera; none in the render view, which
+/// draws no arrows, and a letter a model hides is left out.
 pub(super) fn draw_axis_letters(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
+    if window.view.options.render {
+        return;
+    }
     let camera = &window.view.camera;
     let project = projector(camera, viewport);
     for ((axis, letter), colour) in [(Vec3::X, "X"), (Vec3::Y, "Y"), (Vec3::Z, "Z")]

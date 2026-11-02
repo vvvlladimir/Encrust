@@ -1,5 +1,12 @@
+mod resin;
+mod standing;
+
+pub use resin::{KeptResin, kept_resin};
+pub use standing::{Astray, astray};
+
 use crate::i18n::tr;
-use core_geometry::{Quat, Vec2, Vec3};
+use core_geometry::{Aabb, Quat, Vec2, Vec3};
+use core_plate::PlateFit;
 use printer_profiles::{FrontEdge, PlateInset, PrinterProfile};
 
 /// The build volume the viewport draws and models are placed on, in millimetres.
@@ -71,6 +78,16 @@ impl BuildPlate {
     pub fn usable_area(&self) -> (Vec2, Vec2) {
         let [low, high] = self.inset.area_mm(self.x_mm, self.y_mm);
         (Vec2::from_array(low), Vec2::from_array(high))
+    }
+
+    /// How `bounds`, plate millimetres, sit in the build volume and against the inset.
+    pub fn fit(&self, bounds: &Aabb) -> PlateFit {
+        let (low, high) = self.usable_area();
+        PlateFit::of(
+            bounds,
+            Vec3::new(self.x_mm, self.y_mm, self.z_mm),
+            [low, high],
+        )
     }
 
     /// Longest straight line through the build volume, used to size the default view.

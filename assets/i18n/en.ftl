@@ -467,7 +467,6 @@ check-filter-peel = Peel
 check-filter-cups = Cups
 check-filter-thin = Thin
 check-support-islands = Support them
-check-drill-cups = Drill them
 check-issues = Found
 check-previous = Previous issue
 check-next = Next issue
@@ -516,6 +515,18 @@ check-remove-next-note = Takes one layer more off each part left hanging, the on
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
 check-more-layers = and { $count } more layers
+check-plate = On the plate
+check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
+# Beside a model's name, where it, its supports or its raft stand.
+check-row-past = past the build volume
+# Beside a model's name, where it, its supports or its raft stand.
+check-row-inset = in the plate inset
+# The other model's name.
+check-row-meets = meets { $name }
+# Beside the name of a hollowed model none of whose holes drains its cavity.
+check-row-sealed = hollow with no drain hole
+# Beside the name of a solid model that hollowing would save much resin on.
+check-row-solid = worth hollowing
 check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->
@@ -1801,6 +1812,10 @@ scope-plate = all { $count } models on the plate
 ## panels/scene_panel.rs
 
 models-broken = Broken
+# A model standing into another model, or its supports into one.
+models-meets = Meets
+# The models it meets, by name, joined by commas.
+models-meets-names = Meets { $names }. Click to go to where they meet.
 models-title = Models
 models-selected = { $count } selected
 models-picked = { $count } picked

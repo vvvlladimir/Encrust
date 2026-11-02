@@ -1,3 +1,4 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 pub use core_engine::project::Axis;
@@ -9,6 +10,8 @@ use core_volume::ModelHollow;
 use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::PrintedSupports;
 
+#[cfg(test)]
+pub mod fixtures;
 mod import_summary;
 mod object;
 mod plates;
@@ -318,6 +321,21 @@ impl Scene {
     pub fn remove(&mut self, id: ObjectId) {
         self.objects.retain(|object| object.id != id);
         self.selected.retain(|picked| *picked != id);
+    }
+
+    /// A hash of what stands on the plate being edited: each printable model's mesh as it
+    /// prints, its placement and the supports drawn under it. Cheap enough for every frame.
+    pub fn standing_fingerprint(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        for object in self.printable(self.active) {
+            Arc::as_ptr(object.printed()).hash(&mut hasher);
+            let placed = object.transform.to_matrix().to_cols_array();
+            placed.map(f32::to_bits).hash(&mut hasher);
+            for group in object.supports.drawn() {
+                Arc::as_ptr(&group.mesh).hash(&mut hasher);
+            }
+        }
+        hasher.finish()
     }
 
     /// Bounds covering every visible model on the plate being edited, or `None` when

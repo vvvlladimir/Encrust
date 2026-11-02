@@ -24,6 +24,8 @@ cavity wound inward is kept, a part wholly inside another is lost in it (ADR 035
 draws a bar on a terminal, spanned by its steps as the window's is, and Ctrl-C stops it
 (exit 130); the drainage check rides the layers' bar of the slice it is made in (ADR 0384).
 `inspect --intersections` counts the pairs of faces that cross (ADR 0353).
+`inspect` of a solid model that hollowing to a 2 mm wall would save at least 10 ml and
+40 % of says how much on its `solid` line (ADR 0393).
 `--seam-tolerance MM` (0.01) is
 how far a vertex may stand off an open edge to be stitched in (ADR 0350), `--smallest-shell
 MM2` (1) the least area an open shell keeps. By hand, as the window's Faces mode and Shells
@@ -361,7 +363,15 @@ resin has one, and the layers likely to fail. `--strict` fails it on the same de
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
-reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371).
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371). Once
+`--supports` has stood them, an *On the plate* block answers again for the model with its
+supports and raft where it was put down, and each project model that does not fit so is
+named with its `fits` line; `--strict` fails on
+it, and a `batch` model's `fit` is that answer. Two models standing into each other, or the
+supports of one reaching into another, are named once under *Plate* as `meeting a.stl and
+b.stl`: they would slice as one piece. Touching counts, a gap does not, and supports meeting
+supports never do; `--strict` fails on it, and each `batch` model lists the others in
+`meets` (ADR 0392).
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).

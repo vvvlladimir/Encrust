@@ -384,3 +384,38 @@ fn plate_and_all_plates_are_for_a_project_only() {
     assert_eq!(output.status.code(), Some(1));
     assert!(stderr(&output).contains("project"), "{}", stderr(&output));
 }
+
+#[test]
+fn two_models_standing_into_each_other_are_named_and_fail_strict() {
+    let left = write_boxes_stl("meeting-left", &[([10.0, 10.0, 0.0], [20.0, 20.0, 10.0])]);
+    let right = write_boxes_stl("meeting-right", &[([15.0, 12.0, 0.0], [25.0, 18.0, 10.0])]);
+    let apart = write_boxes_stl("meeting-apart", &[([40.0, 10.0, 0.0], [50.0, 20.0, 10.0])]);
+    let output = estimate(&[
+        left.to_str().unwrap(),
+        right.to_str().unwrap(),
+        apart.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--strict",
+    ]);
+    let text = stdout(&output);
+
+    let meeting: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("meeting"))
+        .collect();
+    assert_eq!(
+        meeting.len(),
+        1,
+        "only the first two share x = 15..20 mm: {text}"
+    );
+    assert!(
+        meeting[0].contains("meeting-left") && meeting[0].contains("meeting-right"),
+        "{text}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "--strict has to notice two models the slicer would fuse: {text}"
+    );
+}

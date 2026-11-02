@@ -86,6 +86,12 @@ impl Visit {
         });
     }
 
+    /// Sends the camera to `spot` with nothing ringed: an issue of the plate, not of a layer.
+    pub fn fly(&mut self, spot: Spot) {
+        self.visited = None;
+        self.flight = Some(spot);
+    }
+
     /// Forgets the issues gone to.
     pub fn clear(&mut self) {
         *self = Self::default();

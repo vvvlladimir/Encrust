@@ -559,3 +559,21 @@ fn holding_up_a_cavity_without_hollowing_is_refused() {
     assert!(!output.status.success());
     assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
 }
+
+#[test]
+fn a_large_solid_model_is_told_what_hollowing_saves_and_a_small_one_is_not() {
+    let large = write_box_stl("solid-large", 40.0, 12, 0);
+    let text = stdout(&encrust(&["inspect", large.to_str().unwrap()]));
+    assert_eq!(
+        field(&text, "solid"),
+        "hollowing to a 2.0 mm wall saves 44.8 ml",
+        "64000 - 9600 x 2 = 44800 mm^3"
+    );
+
+    let small = write_box_stl("solid-small", 20.0, 12, 0);
+    let text = stdout(&encrust(&["inspect", small.to_str().unwrap()]));
+    assert!(
+        !text.contains("  solid "),
+        "a 20 mm cube saves 3.2 ml, under 10 ml:\n{text}"
+    );
+}

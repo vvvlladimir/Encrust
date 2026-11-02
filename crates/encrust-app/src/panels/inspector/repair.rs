@@ -117,7 +117,7 @@ fn marking(ui: &mut egui::Ui, found: &mut Found, scene: &Scene, rows: &[(String,
         tone(ui, &tr!("repair-nothing-found"), theme::colors().ok);
         return;
     }
-    issue_list(ui, |ui| {
+    issue_list(ui, "repair-found", |ui| {
         for (name, count, finding) in rows {
             let shown = found.shown() == Some(*finding);
             let tint = theme::scene().fault;

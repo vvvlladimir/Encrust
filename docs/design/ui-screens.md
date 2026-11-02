@@ -83,7 +83,8 @@ Nine tools in three groups split by a vertical rule: Select, Measure | Repair, H
 Cut, Relief | Supports, Check. Each is a `rail_button`: glyph 19 over its name in 10.5, 50
 tall, the room shared equally but no wider than 56 (its height, or the least a name needs), 2 apart. The tool in hand is washed in
 `accent_wash` with its glyph and name in `accent_soft`; a tool that needs attention carries
-a 7 point `warn` dot at its top right. While the pointer is on the row each tool shows its
+a 7 point `warn` dot at its top right; Check's takes the colour of its gravest issue, the
+plate's the moment it has one, open or not, and goes once it is fixed. While the pointer is on the row each tool shows its
 key's digit, 1 to 9, at its top left in `text_low`. Narrower than 9 × 56, the names go and
 each tool is a 36 tall square of its glyph.
 
@@ -110,7 +111,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues | — | Islands (Support them · Remove them side by side); Found (`issue_row`s: the layer, and at its right the kind with its reading — N, mm and MPa, mm² — the kind's name on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Cups (Drill them); Peel | — (the check runs by itself) |
+| Check | the number of issues, the plate's with the layers' | — | On the plate, first and before any layer is read (`issue_row`s: the model, and at its right past the build volume in `danger`, in the plate inset in `warn`, or meets and the other model in `danger`, hollow with no drain hole or worth hollowing in `warn`; a press flies the camera there, on a meeting to its next place, and on a model keeping resin picks it and opens Drain or Hollow); Islands (Support them · Remove them side by side); Found (`issue_row`s: the layer, and at its right the kind with its reading — N, mm and MPa, mm² — the kind's name on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Peel | — (the check runs by itself) |
 | Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
@@ -140,7 +141,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 |---|---|---|
 | Plates | numbered 26 squares, the current washed in `accent_wash`; + | row 42 |
 | Heading | *Models*, `· project name` in `text_low`, `n picked` in `accent_soft`, + | 36 |
-| Rows | eye or eye-slash, name cut with an ellipsis, a state tag (`Broken` in `danger_wash`) | 32; picked washed in `picked_wash`, no stripe |
+| Rows | eye or eye-slash, name cut with an ellipsis, state tags from the right: `Broken` in `danger_wash`, then `Meets` in `danger_wash` naming the models it meets on hover, a click flying the camera to where they meet, the next click to the next place | 32; picked washed in `picked_wash`, no stripe |
 | Actions | Duplicate, Array, Arrange, Remove as 26 squares, spread evenly | 34, hairline over it |
 
 ## Plate card
@@ -174,7 +175,7 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 | Nothing to slice | Slice to .goo disabled, and why under it |
 
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
-not print.* In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
+not print.* What stands past the plate or meets another model is Check's, not the card's. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
 print until that layer is done), Cured area and Volume of the layer shown, and there is no Details.
 
 ## Layer strip

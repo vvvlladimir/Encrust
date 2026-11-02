@@ -235,3 +235,28 @@ fn a_stretch_along_one_of_the_models_own_axes_stays_a_scale() {
         "at 45 degrees no axis of the model is Z"
     );
 }
+
+#[test]
+fn a_cube_turned_on_its_edge_stands_in_a_box_as_wide_as_its_diagonal() {
+    let turned = Transform::from_scale_rotation_translation(
+        Vec3::ONE,
+        Quat::from_rotation_z(FRAC_PI_4),
+        Vec3::new(10.0, 0.0, 0.0),
+    );
+    let bounds =
+        placed_aabb(&crate::cuboid(Vec3::ZERO, Vec3::ONE), turned).expect("a cube has vertices");
+    let width = bounds.maxs.x - bounds.mins.x;
+    assert!(
+        (width - std::f32::consts::SQRT_2).abs() < 1e-5,
+        "a unit cube turned 45° is √2 wide, got {width}"
+    );
+    assert!(
+        (bounds.mins.z, bounds.maxs.z) == (0.0, 1.0),
+        "the turn about Z keeps its height"
+    );
+}
+
+#[test]
+fn a_mesh_with_no_vertices_stands_in_no_box() {
+    assert_eq!(placed_aabb(&Mesh::default(), Transform::default()), None);
+}

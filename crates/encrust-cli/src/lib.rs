@@ -10,6 +10,7 @@ mod estimate;
 mod exit;
 mod hollowing;
 mod json;
+mod meeting;
 mod modelling;
 mod plate_file;
 mod png_stack;

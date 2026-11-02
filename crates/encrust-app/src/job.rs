@@ -8,6 +8,7 @@ mod highest;
 mod hollow;
 mod import;
 mod measure;
+mod meeting;
 mod orient;
 mod pipeline;
 mod place;
@@ -38,6 +39,7 @@ pub use hollow::{
 };
 pub use import::{ImportJob, ImportOutcome, ImportStage};
 pub use measure::{MeasureJob, MeasureOutcome};
+pub use meeting::{MeetingBody, MeetingJob, spawn_meeting};
 pub use orient::{
     Costs, OrientJob, OrientOutcome, OrientRequest, OrientTask, Pose, Proof, Turn, orient_tasks,
 };

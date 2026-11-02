@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{Aabb, Mat3, Mat4, Mesh, Quat, Scalar, Vec3};
@@ -247,6 +248,21 @@ pub fn transform_mesh(mesh: &Mesh, transform: Transform) -> Mesh {
         .collect();
 
     Mesh::new(vertices, faces)
+}
+
+/// The box `mesh` stands in once placed by `transform`: of its vertices as placed, not of
+/// its own box turned, which grows by up to √3 at an angle.
+pub fn placed_aabb(mesh: &Mesh, transform: Transform) -> Option<Aabb> {
+    let matrix = transform.to_matrix();
+    let (low, high) = mesh
+        .vertices
+        .par_iter()
+        .map(|vertex| {
+            let placed = matrix.transform_point3(*vertex);
+            (placed, placed)
+        })
+        .reduce_with(|(low_a, high_a), (low_b, high_b)| (low_a.min(low_b), high_a.max(high_b)))?;
+    Some(Aabb::new(low, high))
 }
 
 /// Translation that puts the lowest point of `bounds` on the build plate.

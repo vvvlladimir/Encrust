@@ -228,6 +228,31 @@ fn the_notices_at_the_foot_of_the_stage() {
     picture("notices", app);
 }
 
+/// Check listing, before any layer is read, a copy of the cube past the plate's edge and the
+/// cube with the copy standing into it, which the models card tags.
+#[test]
+fn check_listing_models_past_the_plate_and_models_that_meet() {
+    let mut app = pictured();
+    let scene = &mut app.doc.scene;
+    let cube = scene
+        .selection()
+        .first()
+        .copied()
+        .expect("the pictured plate picks a cube");
+    scene.duplicate(cube, core_geometry::Vec3::new(4.0, 2.0, 0.0));
+    scene.duplicate(cube, core_geometry::Vec3::new(app.doc.plate.x_mm, 0.0, 0.0));
+    scene.select(Some(cube));
+    app.doc.meeting.start(&app.doc.scene, true);
+    for _ in 0..10_000 {
+        if !app.doc.meeting.poll() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    app.tool = Tool::Check;
+    picture("check_plate", app);
+}
+
 /// The printer's Network tab with two boards of its model listed and named, and a third
 /// found on the network still to tick.
 #[test]

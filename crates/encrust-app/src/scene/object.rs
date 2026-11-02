@@ -5,11 +5,10 @@ use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
 use core_engine::project::{DrainState, HollowState};
-use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3};
+use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb};
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
-use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -102,16 +101,7 @@ impl PlacedBounds {
         {
             return Some(bounds);
         }
-        let matrix = transform.to_matrix();
-        let (lo, hi) = mesh
-            .vertices
-            .par_iter()
-            .map(|vertex| {
-                let placed = matrix.transform_point3(*vertex);
-                (placed, placed)
-            })
-            .reduce_with(|(lo_a, hi_a), (lo_b, hi_b)| (lo_a.min(lo_b), hi_a.max(hi_b)))?;
-        let bounds = Aabb::new(lo, hi);
+        let bounds = placed_aabb(mesh, transform)?;
         *self
             .0
             .lock()
