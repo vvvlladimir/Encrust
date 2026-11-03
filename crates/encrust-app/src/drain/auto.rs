@@ -26,7 +26,7 @@ impl DrainTool {
     /// a vent, as the command line's `--drain-at auto` does.
     pub fn start_auto(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
         let ids: Vec<ObjectId> = scene.targets().map(|object| object.id).collect();
-        self.auto = Some(self.search_on(scene, &ids, layer_height_mm)?);
+        self.auto = Some(self.search_on(scene, &ids, layer_height_mm, true)?);
         Ok(())
     }
 
@@ -37,6 +37,7 @@ impl DrainTool {
         scene: &Scene,
         ids: &[ObjectId],
         layer_height_mm: Scalar,
+        vents: bool,
     ) -> Result<DrainsJob> {
         let tasks: Vec<DrainsTask> = scene
             .named(ids)
@@ -48,7 +49,7 @@ impl DrainTool {
         Ok(DrainsJob::spawn(DrainsRequest {
             tasks,
             layer_height_mm,
-            vents: true,
+            vents,
         }))
     }
 

@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use core_engine::{EngineError, PREPARE_ORIENT, SupportPlan, Trial, orient_for_print};
 use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
-    transform_mesh,
+    rotation_xyz_deg, transform_mesh,
 };
 use core_plate::{OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
 use printer_profiles::{PrinterProfile, SupportProfile};
@@ -88,7 +88,7 @@ pub(super) fn place(
         (mesh, None)
     };
 
-    let rotation = transform.rotate.map_or(Quat::IDENTITY, euler_degrees);
+    let rotation = transform.rotate.map_or(Quat::IDENTITY, rotation_xyz_deg);
     let mut mesh = if rotation == Quat::IDENTITY {
         mesh
     } else {
@@ -244,11 +244,4 @@ pub(super) fn centred(mesh: Mesh, profile: Option<&PrinterProfile>) -> Result<Me
         return Ok(mesh);
     }
     Ok(transform_mesh(&mesh, Transform::from_translation(offset)))
-}
-
-pub(super) fn euler_degrees(angles: Vec3) -> Quat {
-    let radians = angles * (std::f32::consts::PI / 180.0);
-    Quat::from_rotation_z(radians.z)
-        * Quat::from_rotation_y(radians.y)
-        * Quat::from_rotation_x(radians.x)
 }

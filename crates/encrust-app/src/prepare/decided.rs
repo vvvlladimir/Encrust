@@ -71,7 +71,9 @@ impl Prepared {
             }
             Step::Repair => self.repaired = Arc::as_ptr(&object.mesh) as usize != was.mesh,
             Step::Hollow => self.hollowed = was.wall.filter(|_| object.hollow.is_hollow()),
-            Step::Drain => self.drained = object.hollow.drains().len() > was.holes,
+            Step::Drill | Step::Drain => {
+                self.drained |= object.hollow.drains().len() > was.holes;
+            }
             Step::Supports => {
                 self.supports = (!object.supports.is_empty()).then(|| profile.to_owned());
             }

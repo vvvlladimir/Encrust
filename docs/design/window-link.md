@@ -51,10 +51,13 @@ newer revision of the job stops the replay of an older one, and a job of the use
 running on the plate holds the replay until it ends. A model taken off the plate is read in
 again for its job's next revision.
 
-Replayed as the recipe says: the orientation search and its goal, the repair mode, the wall,
-automatic drains, automatic supports and the cavity's. Named in `unshown` and left out: a turn
-given in degrees, `max_tilt_deg`, an open floor and infill, drain points and plugs, a named
-support profile, and the printer and resin, which stay the window's own.
+Replayed as the recipe says: the orientation search with its goal and tilt limit, or a turn
+given in degrees, turned as `--rotate` turns; the repair mode; the wall with its open floor and
+infill, measured inside at the command line's precision; holes drilled into the surface nearest
+each point, at the recipe's diameter, then the automatic drains with or without vents; supports
+by the automatic profile or the one named, kept as the model's own for the group in hand, and
+the cavity's. The window lays a plug beside every hole whatever the recipe says, and
+`unshown` says so where it asked for none. The printer and resin stay the window's own.
 
 The check every tool answers with is still the command line's: the window shows the steps,
 it does not answer for them.

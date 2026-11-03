@@ -1,8 +1,9 @@
 //! What a run does at each step: decide as `--prepare` does, do what it was told, or leave the
 //! step out. Prepare for print decides every step; a job a chat client edits says some.
 
+use core_engine::project::{DrainState, HollowState};
 use core_engine::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_repair};
-use core_geometry::{Quat, Scalar};
+use core_geometry::{Quat, Scalar, Vec3};
 use core_plate::OrientPreset;
 use core_volume::RepairMethod;
 
@@ -19,16 +20,41 @@ pub enum Choice<T> {
     Skip,
 }
 
-/// What a run does at each step. Supports, drains and the cavity's supports have nothing to
-/// give: where they are not skipped they are done where they can be, as the autopilot does.
+/// How a model is turned: by the search, or by a turn given outright.
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Orient {
+    Search {
+        preset: OrientPreset,
+        /// How far from the way it came in the search may turn it, degrees.
+        max_tilt_deg: Option<Scalar>,
+    },
+    /// From the way the model came in, as `--rotate` turns it.
+    Turn(Quat),
+}
+
+/// The holes a run drills: at points, and where the engine proves they drain.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Drains {
+    /// Plate millimetres as the model stands when they are drilled.
+    pub at_mm: Vec<Vec3>,
+    pub auto: bool,
+    /// With `auto`, a vent high on each pocket too.
+    pub vent: bool,
+    /// The size every hole is drilled to, the Drain tool's where `None`.
+    pub size: Option<DrainState>,
+}
+
+/// What a run does at each step.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Plan {
-    pub orient: Choice<OrientPreset>,
+    pub orient: Choice<Orient>,
     pub repair: Choice<RepairMethod>,
-    /// The wall, millimetres.
-    pub hollow: Choice<Scalar>,
-    pub drain: bool,
-    pub supports: bool,
+    pub hollow: Choice<HollowState>,
+    /// `None` drills nothing.
+    pub drains: Option<Drains>,
+    /// `None` stands nothing on supports; `Some(None)` sizes them by the automatic profile,
+    /// `Some(Some(id))` builds them to that support profile.
+    pub supports: Option<Option<String>>,
     pub cavity: bool,
 }
 
@@ -42,8 +68,13 @@ impl Plan {
             orient: Choice::Decide,
             repair: Choice::Decide,
             hollow: Choice::Decide,
-            drain: true,
-            supports: true,
+            drains: Some(Drains {
+                at_mm: Vec::new(),
+                auto: true,
+                vent: true,
+                size: None,
+            }),
+            supports: Some(None),
             cavity: true,
         }
     }
@@ -63,8 +94,14 @@ impl Plan {
                 Choice::Skip => false,
             },
             Step::Hollow => return self.wall(object).map(|wall| (object.id, Some(wall))),
-            Step::Drain => self.drain && object.hollow.is_hollow(),
-            Step::Supports => self.supports,
+            Step::Drill => self
+                .drains
+                .as_ref()
+                .is_some_and(|drains| !drains.at_mm.is_empty()),
+            Step::Drain => {
+                self.drains.as_ref().is_some_and(|drains| drains.auto) && object.hollow.is_hollow()
+            }
+            Step::Supports => self.supports.is_some(),
             Step::Cavity => self.cavity && object.supported_inside(),
         };
         chosen.filter(|_| wanted)
@@ -75,17 +112,20 @@ impl Plan {
     pub(super) fn reckons(&self, step: Step, object: &SceneObject) -> bool {
         let hollowed = object.hollow.is_hollow() || self.wall(object).is_some();
         match step {
-            Step::Drain => self.drain && hollowed,
+            Step::Drain => self.drains.as_ref().is_some_and(|drains| drains.auto) && hollowed,
             Step::Cavity => self.cavity && hollowed,
             step => self.wants(step, object).is_some(),
         }
     }
 
-    /// The search Orient runs.
-    pub(super) fn preset(&self) -> OrientPreset {
+    /// How Orient turns a model.
+    pub(super) fn orient(&self) -> Orient {
         match self.orient {
-            Choice::Given(preset) => preset,
-            Choice::Decide | Choice::Skip => PREPARE_ORIENT,
+            Choice::Given(orient) => orient,
+            Choice::Decide | Choice::Skip => Orient::Search {
+                preset: PREPARE_ORIENT,
+                max_tilt_deg: None,
+            },
         }
     }
 
@@ -97,19 +137,27 @@ impl Plan {
         }
     }
 
+    /// The Hollow settings given, where they were.
+    pub(super) fn hollow_given(&self) -> Option<&HollowState> {
+        match &self.hollow {
+            Choice::Given(state) => Some(state),
+            Choice::Decide | Choice::Skip => None,
+        }
+    }
+
     /// The wall a solid `object` is hollowed at: the one given, or Hollow's default where it
     /// saves enough resin to name.
     fn wall(&self, object: &SceneObject) -> Option<Hollowing> {
         if object.hollow.is_hollow() {
             return None;
         }
-        match self.hollow {
+        match &self.hollow {
             Choice::Decide => {
                 let found = &object.summary.diagnostics;
                 hollowing(&object.mesh, object.transform.linear(), found)
             }
-            Choice::Given(wall_mm) => Some(Hollowing {
-                wall_mm,
+            Choice::Given(state) => Some(Hollowing {
+                wall_mm: state.thickness_mm,
                 saves_mm3: 0.0,
             }),
             Choice::Skip => None,

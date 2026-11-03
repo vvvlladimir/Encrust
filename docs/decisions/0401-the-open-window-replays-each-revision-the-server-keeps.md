@@ -27,7 +27,9 @@ no window. `--window FILE` and `--no-window` steer it.
 revision and put back as it came in on each later one, then a Prepare run by a **plan** that
 takes each step the recipe sets as given, decides what it leaves out as the autopilot would
 under `prepare` and skips it otherwise. What it cannot replay yet it names in `unshown`. The
-command line still answers every check. Each side reads the line into types of its own, as
+command line still answers every check. A turn given in degrees, the open floor and infill,
+drain points and named support profiles are replayed through the same steps; where the window
+does a step its own way — a plug beside every hole — the answer says so. Each side reads the line into types of its own, as
 the server reads the command line's report: the schema is the contract, written in
 `docs/design/window-link.md`. The window takes `directories`, already the catalogue's, to find
 the cache.
@@ -37,8 +39,7 @@ the cache.
 Every step a client takes shows in the viewport and undoes as one entry, with no change to
 the client or its tools, and the server works as before when no window is open. Each revision
 is staged twice, by the command line for the check and by the window for the plate, and is
-replayed from the model as it came in, so a long hollow pays again in the window. A turn given
-outright, infill, drain points, plugs and named support profiles are not replayed yet. Any
+replayed from the model as it came in, so a long hollow pays again in the window. Any
 program of the user's that reads their cache can drive the window; nothing from the network
 can. Reopen when the window answers checks itself from the plate in memory (step 9's catalogue
 moving down), or when a client needs the window's own state back.

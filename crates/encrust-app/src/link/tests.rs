@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use super::recipe::Recipe;
 use super::*;
 use crate::camera::OrbitCamera;
-use crate::prepare::Choice;
+use crate::prepare::{Choice, Orient};
 use crate::undo::Frame;
 
 fn recipe(value: Value) -> Recipe {
@@ -56,36 +56,55 @@ fn a_recipe_of_the_autopilot_plans_every_step_decided() {
 fn what_a_recipe_sets_is_given_and_what_it_leaves_out_is_skipped_without_prepare() {
     let (plan, _) = recipe(json!({
         "model": "/m.stl",
-        "hollow": {"wall_mm": 1.5},
-        "supports": {"profile": "auto", "cavity": true},
+        "hollow": {"wall_mm": 1.5, "open_floor": true, "infill": "grid", "infill_density": 0.4},
+        "supports": {"profile": "light", "cavity": true},
     }))
     .plan();
-    assert_eq!(plan.hollow, Choice::Given(1.5));
+    let Choice::Given(hollow) = &plan.hollow else {
+        panic!("the hollow is given: {plan:?}");
+    };
+    assert_eq!(hollow.thickness_mm, 1.5);
+    assert!(hollow.open_floor && hollow.infill_on);
+    assert_eq!(hollow.infill.pattern, core_volume::InfillPattern::Grid);
+    assert_eq!(hollow.infill.density, 0.4);
     assert_eq!(plan.orient, Choice::Skip);
     assert_eq!(plan.repair, Choice::Skip);
     assert!(
-        !plan.drain,
+        plan.drains.is_none(),
         "no drains asked and no autopilot to decide them"
     );
-    assert!(plan.supports && plan.cavity);
+    assert_eq!(plan.supports, Some(Some("light".to_owned())));
+    assert!(plan.cavity);
 }
 
 #[test]
-fn what_the_window_cannot_replay_is_named_to_the_server() {
+fn a_turn_is_given_as_the_command_line_turns_by_it() {
     let (plan, unshown) = recipe(json!({
         "model": "/m.stl",
-        "prepare": true,
-        "pose": {"by": "rotate", "degrees": [90.0, 0.0, 0.0]},
-        "supports": {"profile": "light"},
+        "pose": {"by": "rotate", "degrees": [90.0, 0.0, 30.0]},
     }))
     .plan();
+    let turn = core_geometry::rotation_xyz_deg(core_geometry::Vec3::new(90.0, 0.0, 30.0));
+    assert_eq!(plan.orient, Choice::Given(Orient::Turn(turn)));
+    assert!(unshown.is_empty());
+}
+
+#[test]
+fn drain_points_are_drilled_and_a_missing_plug_is_named() {
+    let (plan, unshown) = recipe(json!({
+        "model": "/m.stl",
+        "drains": {"diameter_mm": 4.0, "at_mm": [[1.0, 2.0, 3.0]], "auto": true, "vent": false},
+    }))
+    .plan();
+    let drains = plan.drains.expect("drains asked");
+    assert_eq!(drains.at_mm, [core_geometry::Vec3::new(1.0, 2.0, 3.0)]);
+    assert!(drains.auto && !drains.vent);
+    assert_eq!(drains.size.map(|size| size.diameter_mm), Some(4.0));
     assert_eq!(
-        plan.orient,
-        Choice::Skip,
-        "a turn is not replayed as a search"
+        unshown.len(),
+        1,
+        "the window lays plugs anyway: {unshown:?}"
     );
-    assert_eq!(unshown.len(), 2, "the turn and the profile: {unshown:?}");
-    assert!(unshown[1].contains("light"), "{unshown:?}");
 }
 
 #[test]

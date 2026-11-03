@@ -143,7 +143,7 @@ on faces looking up are not in the report yet, so not in the score.
 | 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0397) | — |
 | 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` (done) | 1–5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` (done, ADR 0400) | 4, 6 |
-| 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` (first slice done, ADR 0401: each revision replayed; turns, infill, drain points, plugs and named profiles to come) | 6 |
+| 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` (done, ADR 0401: each revision replayed on the plate) | 6 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 6 |
 | 10 | The MCP Apps page | `encrust-mcp` | 6 |
 

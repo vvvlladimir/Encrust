@@ -1534,10 +1534,17 @@ prepare-running-why = Дождитесь окончания подготовки
 prepare-step-orient = Ориентация
 prepare-step-repair = Починка
 prepare-step-hollow = Создание полости
+prepare-step-drill = Сверление дренажных отверстий
 prepare-step-drain = Поиск дренажных отверстий
 prepare-step-supports = Расстановка поддержек
 prepare-step-cavity = Расстановка поддержек в полости
 prepare-cancelled = Подготовка к печати отменена; платформа осталась как была
+prepare-drilled =
+    { $count ->
+        [one] Просверлено { $count } дренажное отверстие
+        [few] Просверлено { $count } дренажных отверстия
+       *[many] Просверлено { $count } дренажных отверстий
+    }
 prepare-done =
     { $count ->
         [one] К печати подготовлена { $count } модель

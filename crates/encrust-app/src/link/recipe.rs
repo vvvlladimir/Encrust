@@ -1,14 +1,21 @@
 //! A job's revision as `encrust-mcp` hands it over (`docs/design/window-link.md`), and the plan
-//! the window replays it by. What the window cannot replay yet is named, not guessed.
+//! the window replays it by. Where the window does a step differently it says so.
 
 use std::path::PathBuf;
 
-use core_geometry::{MendMethod, Scalar};
+use core_engine::project::{DrainState, HollowState};
+use core_geometry::{MendMethod, Scalar, Vec3, rotation_xyz_deg};
 use core_plate::{OrientGoal, OrientPreset};
-use core_volume::RepairMethod;
+use core_volume::{HollowMode, InfillPattern, InfillSettings, RepairMethod};
 use serde::{Deserialize, Serialize};
 
-use crate::prepare::{Choice, Plan};
+use crate::hollow::DEFAULT_BLOCKER_MM;
+use crate::prepare::{Choice, Drains as PlanDrains, Orient, Plan};
+
+/// What `--precision` is when the server gives none, as `docs/cli.md` states it.
+const CLI_PRECISION: Scalar = 0.5;
+/// What `--drain-depth` is when the server gives none.
+const CLI_DRAIN_DEPTH_MM: Scalar = 3.0;
 
 /// The schema this window reads.
 pub const SCHEMA: u32 = 1;
@@ -63,10 +70,11 @@ pub enum Repair {
 pub enum Pose {
     Search {
         goal: Goal,
-        max_tilt_deg: Option<f32>,
+        max_tilt_deg: Option<Scalar>,
     },
-    /// Its degrees are passed over: a turn is not replayed yet.
-    Rotate {},
+    Rotate {
+        degrees: [Scalar; 3],
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -78,20 +86,33 @@ pub enum Goal {
     Auto,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Infill {
+    Hive,
+    Grid,
+    Scaffold,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Hollow {
     pub wall_mm: Scalar,
     #[serde(default)]
     pub open_floor: bool,
-    pub infill: Option<String>,
+    pub infill: Option<Infill>,
+    pub infill_cell_mm: Option<Scalar>,
+    pub infill_density: Option<Scalar>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Drains {
+    pub diameter_mm: Scalar,
     #[serde(default)]
     pub auto: bool,
+    #[serde(default = "yes")]
+    pub vent: bool,
     #[serde(default)]
-    pub at_mm: Vec<[f32; 3]>,
+    pub at_mm: Vec<[Scalar; 3]>,
     #[serde(default)]
     pub plugs: bool,
 }
@@ -104,56 +125,37 @@ pub struct Supports {
 }
 
 impl Recipe {
-    /// The plan that replays this recipe, and what of it the plate will not show.
+    /// The plan that replays this recipe, and what of it the plate does not show.
     pub fn plan(&self) -> (Plan, Vec<String>) {
         let mut unshown = Vec::new();
         let orient = match &self.pose {
             None => self.left_out(),
-            Some(Pose::Search { goal, max_tilt_deg }) => {
-                if max_tilt_deg.is_some() {
-                    unshown.push("max_tilt_deg: the window searches every tilt".to_owned());
-                }
-                Choice::Given(goal.preset())
-            }
-            Some(Pose::Rotate { .. }) => {
-                // TODO(step-8): stand a turn given outright as `--rotate` does, with no job.
-                unshown.push("a turn given in degrees: the model stands as it came in".to_owned());
-                Choice::Skip
+            Some(Pose::Search { goal, max_tilt_deg }) => Choice::Given(Orient::Search {
+                preset: goal.preset(),
+                max_tilt_deg: *max_tilt_deg,
+            }),
+            Some(Pose::Rotate { degrees }) => {
+                Choice::Given(Orient::Turn(rotation_xyz_deg(Vec3::from_array(*degrees))))
             }
         };
-        let hollow = match &self.hollow {
-            None => self.left_out(),
-            Some(hollow) => {
-                if hollow.open_floor || hollow.infill.is_some() {
-                    // TODO(step-8): carry open_floor and infill into Hollow's settings for the run.
-                    unshown
-                        .push("open_floor and infill: the cavity is drawn empty and closed".into());
-                }
-                Choice::Given(hollow.wall_mm)
-            }
-        };
-        let drain = match &self.drains {
-            None => self.prepare,
+        let hollow = self
+            .hollow
+            .as_ref()
+            .map_or_else(|| self.left_out(), |hollow| Choice::Given(hollow.state()));
+        let drains = match &self.drains {
+            None => self.prepare.then(|| Plan::autopilot().drains).flatten(),
             Some(drains) => {
-                if !drains.at_mm.is_empty() || drains.plugs {
-                    // TODO(step-8): drill the points given and lay the plugs, as the Drain tool does.
-                    unshown
-                        .push("drain points and plugs: only automatic drains are drilled".into());
+                if !drains.plugs && (drains.auto || !drains.at_mm.is_empty()) {
+                    unshown.push("plugs: the window lays a plug beside every hole".to_owned());
                 }
-                drains.auto
+                Some(drains.plan())
             }
         };
         let (supports, cavity) = match &self.supports {
-            None => (self.prepare, self.prepare),
+            None => (self.prepare.then_some(None), self.prepare),
             Some(supports) => {
-                if supports.profile != "auto" {
-                    // TODO(step-8): stand the model on the named profile's group.
-                    unshown.push(format!(
-                        "the {} profile: supports are sized by the automatic one",
-                        supports.profile
-                    ));
-                }
-                (true, supports.cavity)
+                let named = (supports.profile != "auto").then(|| supports.profile.clone());
+                (Some(named), supports.cavity)
             }
         };
         let repair = self
@@ -163,12 +165,58 @@ impl Recipe {
             orient,
             repair,
             hollow,
-            drain,
+            drains,
             supports,
             cavity,
         };
         (plan, unshown)
     }
+}
+
+impl Hollow {
+    /// Hollow's settings as the command line's flags ask for them: a wall measured inside, at
+    /// the command line's precision, every infill size left out at its default.
+    fn state(&self) -> HollowState {
+        let default = InfillSettings::default();
+        HollowState {
+            thickness_mm: self.wall_mm,
+            mode: HollowMode::Internal,
+            precision: CLI_PRECISION,
+            infill_on: self.infill.is_some(),
+            infill: InfillSettings {
+                pattern: self.infill.map_or(default.pattern, Infill::pattern),
+                cell_mm: self.infill_cell_mm.unwrap_or(default.cell_mm),
+                density: self.infill_density.unwrap_or(default.density),
+            },
+            blocker_mm: DEFAULT_BLOCKER_MM,
+            open_floor: self.open_floor,
+        }
+    }
+}
+
+impl Drains {
+    fn plan(&self) -> PlanDrains {
+        PlanDrains {
+            at_mm: self.at_mm.iter().copied().map(Vec3::from_array).collect(),
+            auto: self.auto,
+            vent: self.vent,
+            size: Some(DrainState::round(self.diameter_mm, CLI_DRAIN_DEPTH_MM, 1.0)),
+        }
+    }
+}
+
+impl Infill {
+    fn pattern(self) -> InfillPattern {
+        match self {
+            Self::Hive => InfillPattern::Hive,
+            Self::Grid => InfillPattern::Grid,
+            Self::Scaffold => InfillPattern::Scaffold,
+        }
+    }
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Recipe {
