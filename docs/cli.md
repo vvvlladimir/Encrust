@@ -716,6 +716,13 @@ tool_timeout_sec = 1800
 `printer_query`; `inspect_model` reads a model. `start_job` takes a model, a printer and a
 resin — ids or TOML paths — and answers with the job and its first revision checked; it
 runs under `--prepare` unless `prepare: false`, so every step no tool sets is the autopilot's.
+`set_shape` — scale, combine with other models, label, cut with a joint, split, part off,
+arrange, relief — `set_repair` — the repair, its seam and shell limits, faces flipped or
+dropped and shells dropped by number, bridges — and `set_slicing` — layer height, adaptive
+layers, exposure bands, anti-aliasing, greys, blur, islands removed — reach the rest of the
+command line's flags; `set_hollow` takes the mode, precision and `keep_solid_at_mm`,
+`set_drains` the hole's depth, taper, sides, turn, walled holes, holes into the supports and
+channels, and `set_supports` a profile TOML and `at_mm` with `only_at`.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
 `estimate --check-drainage` and keep it as the next revision only if the command line took
 it; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a

@@ -73,7 +73,10 @@ fn what_a_recipe_sets_is_given_and_what_it_leaves_out_is_skipped_without_prepare
         plan.drains.is_none(),
         "no drains asked and no autopilot to decide them"
     );
-    assert_eq!(plan.supports, Some(Some("light".to_owned())));
+    assert_eq!(
+        plan.supports.and_then(|stand| stand.profile),
+        Some("light".to_owned())
+    );
     assert!(plan.cavity);
 }
 
@@ -189,4 +192,17 @@ fn a_revision_is_read_in_hollowed_on_the_plate_and_undone_as_one_edit() {
         objects.len() == 1 && !objects[0].hollow.is_hollow(),
         "one undo takes the revision off and leaves the model as it came in"
     );
+}
+
+#[test]
+fn a_cut_and_a_relief_are_named_as_not_shown_and_the_scale_is_replayed() {
+    let (plan, unshown) = recipe(json!({
+        "model": "/m.stl",
+        "modelling": {"scale": [2.0, 2.0, 2.0], "cut": {"axis": "z", "at_mm": 5.0}},
+        "relief": {"depth_mm": 0.5},
+    }))
+    .plan();
+    assert_eq!(plan.scale, Some(core_geometry::Vec3::splat(2.0)));
+    assert_eq!(unshown.len(), 2, "the cut and the relief: {unshown:?}");
+    assert!(unshown[0].starts_with("cut") && unshown[1].starts_with("relief"));
 }

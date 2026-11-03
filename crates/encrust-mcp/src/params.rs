@@ -7,7 +7,7 @@ use anyhow::{Result, bail};
 use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 
-use crate::recipe::{Drains, Hollow, Pose, Repair, Supports};
+use crate::recipe::{Drains, Hollow, Mend, Modelling, Pose, Relief, Repair, Slicing, Supports};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListProfiles {
@@ -72,6 +72,31 @@ pub struct SetSupports {
     pub job: String,
     /// Absent stands the model on nothing but the plate.
     pub supports: Option<Supports>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetShape {
+    pub job: String,
+    /// Absent leaves the model's size and shape as its file has them.
+    pub modelling: Option<Modelling>,
+    /// Absent presses no texture in.
+    pub relief: Option<Relief>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetRepair {
+    pub job: String,
+    /// Absent repairs nothing.
+    pub repair: Option<Repair>,
+    /// Absent changes no face by hand and keeps repair's defaults.
+    pub mend: Option<Mend>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetSlicing {
+    pub job: String,
+    /// Absent slices and draws by the resin's and the printer's own settings.
+    pub slicing: Option<Slicing>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

@@ -6,11 +6,13 @@ use std::path::PathBuf;
 use core_engine::project::{DrainState, HollowState};
 use core_geometry::{MendMethod, Scalar, Vec3, rotation_xyz_deg};
 use core_plate::{OrientGoal, OrientPreset};
-use core_volume::{HollowMode, InfillPattern, InfillSettings, RepairMethod};
+use core_volume::{
+    HoleShape, HollowMode, InfillPattern, InfillSettings, PLUG_GAP_MM, RepairMethod,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::hollow::DEFAULT_BLOCKER_MM;
-use crate::prepare::{Choice, Drains as PlanDrains, Orient, Plan};
+use crate::prepare::{Choice, Drains as PlanDrains, Orient, Plan, Stand};
 
 /// What `--precision` is when the server gives none, as `docs/cli.md` states it.
 const CLI_PRECISION: Scalar = 0.5;
@@ -52,6 +54,22 @@ pub struct Recipe {
     pub hollow: Option<Hollow>,
     pub drains: Option<Drains>,
     pub supports: Option<Supports>,
+    pub modelling: Option<Modelling>,
+    /// The parts the window does not replay yet, read only to say so.
+    pub relief: Option<serde_json::Value>,
+    pub mend: Option<serde_json::Value>,
+    pub slicing: Option<serde_json::Value>,
+}
+
+/// What the window replays of the modelling, and the rest read only to say it does not.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Modelling {
+    pub scale: Option<[Scalar; 3]>,
+    pub combine: Option<serde_json::Value>,
+    pub label: Option<serde_json::Value>,
+    pub cut: Option<serde_json::Value>,
+    pub split_smallest_mm3: Option<Scalar>,
+    pub part_off_at_mm: Option<[Scalar; 3]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -102,6 +120,18 @@ pub struct Hollow {
     pub infill: Option<Infill>,
     pub infill_cell_mm: Option<Scalar>,
     pub infill_density: Option<Scalar>,
+    pub mode: Option<Mode>,
+    pub precision: Option<Scalar>,
+    #[serde(default)]
+    pub keep_solid_at_mm: Vec<[Scalar; 3]>,
+    pub keep_solid_radius_mm: Option<Scalar>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Mode {
+    Internal,
+    External,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -115,6 +145,16 @@ pub struct Drains {
     pub at_mm: Vec<[Scalar; 3]>,
     #[serde(default)]
     pub plugs: bool,
+    pub plug_gap_mm: Option<Scalar>,
+    pub depth_mm: Option<Scalar>,
+    pub taper: Option<Scalar>,
+    pub sides: Option<u8>,
+    pub turn_deg: Option<Scalar>,
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub support_at_mm: Vec<[Scalar; 3]>,
+    #[serde(default)]
+    pub channels: Vec<Vec<[Scalar; 3]>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -122,12 +162,16 @@ pub struct Supports {
     pub profile: String,
     #[serde(default)]
     pub cavity: bool,
+    #[serde(default)]
+    pub at_mm: Vec<[Scalar; 3]>,
+    #[serde(default)]
+    pub only_at: bool,
 }
 
 impl Recipe {
     /// The plan that replays this recipe, and what of it the plate does not show.
     pub fn plan(&self) -> (Plan, Vec<String>) {
-        let mut unshown = Vec::new();
+        let mut unshown = self.unshown();
         let orient = match &self.pose {
             None => self.left_out(),
             Some(Pose::Search { goal, max_tilt_deg }) => Choice::Given(Orient::Search {
@@ -152,16 +196,23 @@ impl Recipe {
             }
         };
         let (supports, cavity) = match &self.supports {
-            None => (self.prepare.then_some(None), self.prepare),
-            Some(supports) => {
-                let named = (supports.profile != "auto").then(|| supports.profile.clone());
-                (Some(named), supports.cavity)
-            }
+            None => (self.prepare.then(Stand::default), self.prepare),
+            Some(supports) => (Some(supports.stand()), supports.cavity),
         };
         let repair = self
             .repair
             .map_or_else(|| self.left_out(), |repair| Choice::Given(repair.method()));
+        let keep_solid = self
+            .hollow
+            .iter()
+            .flat_map(|hollow| &hollow.keep_solid_at_mm);
         let plan = Plan {
+            scale: self
+                .modelling
+                .as_ref()
+                .and_then(|modelling| modelling.scale)
+                .map(Vec3::from_array),
+            keep_solid: keep_solid.copied().map(Vec3::from_array).collect(),
             orient,
             repair,
             hollow,
@@ -180,15 +231,18 @@ impl Hollow {
         let default = InfillSettings::default();
         HollowState {
             thickness_mm: self.wall_mm,
-            mode: HollowMode::Internal,
-            precision: CLI_PRECISION,
+            mode: match self.mode {
+                Some(Mode::External) => HollowMode::External,
+                Some(Mode::Internal) | None => HollowMode::Internal,
+            },
+            precision: self.precision.unwrap_or(CLI_PRECISION),
             infill_on: self.infill.is_some(),
             infill: InfillSettings {
                 pattern: self.infill.map_or(default.pattern, Infill::pattern),
                 cell_mm: self.infill_cell_mm.unwrap_or(default.cell_mm),
                 density: self.infill_density.unwrap_or(default.density),
             },
-            blocker_mm: DEFAULT_BLOCKER_MM,
+            blocker_mm: self.keep_solid_radius_mm.unwrap_or(DEFAULT_BLOCKER_MM),
             open_floor: self.open_floor,
         }
     }
@@ -200,7 +254,28 @@ impl Drains {
             at_mm: self.at_mm.iter().copied().map(Vec3::from_array).collect(),
             auto: self.auto,
             vent: self.vent,
-            size: Some(DrainState::round(self.diameter_mm, CLI_DRAIN_DEPTH_MM, 1.0)),
+            size: Some(DrainState {
+                shape: self
+                    .sides
+                    .map_or(HoleShape::Round, |sides| HoleShape::Polygon { sides }),
+                turn_deg: self.turn_deg.unwrap_or(0.0),
+                plug_gap_mm: self.plug_gap_mm.unwrap_or(PLUG_GAP_MM),
+                ..DrainState::round(
+                    self.diameter_mm,
+                    self.depth_mm.unwrap_or(CLI_DRAIN_DEPTH_MM),
+                    self.taper.unwrap_or(1.0),
+                )
+            }),
+        }
+    }
+}
+
+impl Supports {
+    fn stand(&self) -> Stand {
+        Stand {
+            profile: (self.profile != "auto").then(|| self.profile.clone()),
+            at_mm: self.at_mm.iter().copied().map(Vec3::from_array).collect(),
+            only: self.only_at,
         }
     }
 }

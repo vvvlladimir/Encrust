@@ -17,7 +17,13 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    drills a proven drain low on each pocket and a vent high up. Give points only where the
    user wants a hole, near the cavity's lowest place in the pose it prints in. Check that
    `slicing.trapped` is empty; `render` with `bottom` shows the holes.
-6. `set_supports` with `auto`, and `cavity: true` for a hollow model.
+6. `set_supports` with `auto`, and `cavity: true` for a hollow model. `at_mm` stands a support
+   under the surface nearest each point, by hand; `keep_solid_at_mm` on `set_hollow` keeps the
+   wall solid round a point, as for a hole or a thin part. `set_shape` scales, combines,
+   labels, cuts with a joint (`arrange: true` lays the halves apart), splits or cuts a part off,
+   and presses a texture in; `set_repair` repairs and turns or drops faces by `inspect_model`'s
+   numbers; `set_slicing` sets the layer height, exposure bands, anti-aliasing and islands.
+   Change these only when the user asks or a finding needs it.
 7. `render` (`iso`, `bottom`) and look at it; `check`, and fix what it names. `revert` returns to an earlier revision.
 8. `write_file` when the check is clean. If defects remain, tell the user what they are and
    write with `accept_defects` only when they accept them.

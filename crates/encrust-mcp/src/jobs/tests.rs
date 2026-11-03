@@ -22,6 +22,10 @@ fn recipe() -> Recipe {
         hollow: None,
         drains: None,
         supports: None,
+        mend: None,
+        modelling: None,
+        relief: None,
+        slicing: None,
     }
 }
 
@@ -46,6 +50,7 @@ fn each_commit_is_a_new_revision_and_the_old_one_stays_readable() {
     edited.supports = Some(Supports {
         profile: "auto".into(),
         cavity: false,
+        ..Default::default()
     });
     let second = jobs
         .commit(&job, edited.clone(), &Value::Null)

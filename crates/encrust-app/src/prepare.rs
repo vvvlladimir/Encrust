@@ -16,7 +16,7 @@ mod step;
 
 pub use decided::Prepared;
 use plan::Chosen;
-pub use plan::{Choice, Drains, Orient, Plan};
+pub use plan::{Choice, Drains, Orient, Plan, Stand};
 use step::{Ended, Going};
 
 /// Settled polls the plate may wait on cuts or a support surface no job is building, which the
@@ -212,6 +212,9 @@ fn begin(
     for object in fresh {
         if let Some(standing) = doc.scene.get_mut(object.id) {
             *standing = object.clone();
+            if let Some(scale) = plan.scale {
+                step::scale(standing, scale, &doc.plate);
+            }
         }
     }
     let mut run = Run {

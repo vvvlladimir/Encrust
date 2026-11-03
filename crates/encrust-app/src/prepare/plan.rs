@@ -44,17 +44,31 @@ pub struct Drains {
     pub size: Option<DrainState>,
 }
 
+/// What a run stands a model on.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Stand {
+    /// Built to this support profile, or sized by the automatic one where `None`.
+    pub profile: Option<String>,
+    /// Supports stood under the surface nearest each, plate millimetres, in the group in hand.
+    pub at_mm: Vec<Vec3>,
+    /// Stands only those.
+    pub only: bool,
+}
+
 /// What a run does at each step.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Plan {
+    /// X, Y and Z factors the model is scaled by from the way it came in, before anything else.
+    pub scale: Option<Vec3>,
     pub orient: Choice<Orient>,
     pub repair: Choice<RepairMethod>,
     pub hollow: Choice<HollowState>,
+    /// Plate points the wall is kept solid round, at the hollow's blocker radius.
+    pub keep_solid: Vec<Vec3>,
     /// `None` drills nothing.
     pub drains: Option<Drains>,
-    /// `None` stands nothing on supports; `Some(None)` sizes them by the automatic profile,
-    /// `Some(Some(id))` builds them to that support profile.
-    pub supports: Option<Option<String>>,
+    /// `None` stands nothing on supports.
+    pub supports: Option<Stand>,
     pub cavity: bool,
 }
 
@@ -65,16 +79,18 @@ impl Plan {
     /// Every step decided: Prepare for print.
     pub fn autopilot() -> Self {
         Self {
+            scale: None,
             orient: Choice::Decide,
             repair: Choice::Decide,
             hollow: Choice::Decide,
+            keep_solid: Vec::new(),
             drains: Some(Drains {
                 at_mm: Vec::new(),
                 auto: true,
                 vent: true,
                 size: None,
             }),
-            supports: Some(None),
+            supports: Some(Stand::default()),
             cavity: true,
         }
     }

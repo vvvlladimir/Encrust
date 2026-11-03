@@ -3,6 +3,7 @@
 
 mod listen;
 mod recipe;
+mod unshown;
 
 use std::path::PathBuf;
 
