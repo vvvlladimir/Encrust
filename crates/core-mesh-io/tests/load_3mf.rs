@@ -195,3 +195,117 @@ fn a_part_claiming_more_bytes_than_fit_in_memory_is_refused_rather_than_reserved
         assert!(reason.contains("claims"), "{name}: {reason}");
     }
 }
+
+#[test]
+fn a_build_item_reaches_an_object_in_another_model_part() {
+    let mesh = ThreeMfLoader
+        .load(&fixture("production.3mf"))
+        .expect("the root is the part the relationships name")
+        .mesh;
+
+    // A unit cube kept in /3D/parts/cube.model, named /3D/Parts/Cube.model: part names
+    // compare without case. The item moves it five millimetres along x.
+    assert_eq!(mesh.faces.len(), 12);
+    let aabb = mesh.aabb().expect("non-empty mesh");
+    assert_eq!(aabb.mins, Vec3::new(5.0, 0.0, 0.0));
+    assert_eq!(aabb.maxs, Vec3::new(6.0, 1.0, 1.0));
+}
+
+#[test]
+fn a_component_outside_the_root_naming_another_part_is_malformed() {
+    let err = ThreeMfLoader
+        .load(&fixture("component_path_outside_root.3mf"))
+        .expect_err("only the root model may name another part");
+    let MeshIoError::Malformed { format, reason, .. } = err else {
+        panic!("a second level of parts is malformed, not something else");
+    };
+    assert_eq!(format, "3MF");
+    assert!(reason.contains("outside the root"), "got {reason}");
+}
+
+#[test]
+fn a_triangle_naming_only_p1_maps_every_corner_to_it() {
+    let loaded = ThreeMfLoader
+        .load(&fixture("one_property_per_triangle.3mf"))
+        .expect("fixture loads");
+
+    let uvs = loaded.uvs.expect("the triangle names the texture group");
+    let p1 = Vec2::new(0.25, 0.75);
+    assert_eq!(uvs.of_face(0), Some(Mapping::sole([p1, p1, p1])));
+    assert_eq!(loaded.textures.len(), 1);
+}
+
+#[test]
+fn a_boolean_shape_is_refused_rather_than_dropped() {
+    let err = ThreeMfLoader
+        .load(&fixture("boolean_shape.3mf"))
+        .expect_err("the build places a boolean shape");
+    assert!(
+        matches!(err, MeshIoError::Unimplemented(_)),
+        "an empty mesh would be a silent loss, got {err:?}"
+    );
+}
+
+#[test]
+fn a_vertex_at_nan_is_malformed() {
+    let err = ThreeMfLoader
+        .load(&fixture("vertex_not_a_number.3mf"))
+        .expect_err("NaN is no coordinate");
+    let MeshIoError::Malformed { reason, .. } = err else {
+        panic!("a number that is none is malformed, not something else");
+    };
+    assert!(reason.contains("vertex"), "got {reason}");
+}
+
+#[test]
+fn an_object_inside_an_unknown_namespace_is_skipped() {
+    let mesh = ThreeMfLoader
+        .load(&fixture("foreign_namespace_object.3mf"))
+        .expect("fixture loads")
+        .mesh;
+
+    // The core tetrahedron, not the one-triangle object an unknown extension wraps.
+    assert_eq!(mesh.faces.len(), 4);
+}
+
+#[test]
+fn the_first_of_two_objects_sharing_an_id_is_placed() {
+    let mesh = ThreeMfLoader
+        .load(&fixture("duplicate_object_id.3mf"))
+        .expect("fixture loads")
+        .mesh;
+
+    assert_eq!(mesh.faces.len(), 4, "the tetrahedron comes first");
+}
+
+#[test]
+fn a_component_path_with_escapes_reaches_its_part() {
+    let mesh = ThreeMfLoader
+        .load(&fixture("percent_escaped_part.3mf"))
+        .expect("/3D/My%20Part.model is the entry 3D/My Part.model")
+        .mesh;
+
+    assert_eq!(mesh.faces.len(), 4);
+}
+
+#[test]
+fn a_triangle_naming_no_property_takes_its_objects_pindex() {
+    let loaded = ThreeMfLoader
+        .load(&fixture("object_pindex.3mf"))
+        .expect("fixture loads");
+
+    let uvs = loaded.uvs.expect("the object names the texture group");
+    let pindex = Vec2::new(0.5, 0.25);
+    assert_eq!(uvs.of_face(3), Some(Mapping::sole([pindex; 3])));
+}
+
+#[test]
+fn a_texture_failing_its_checksum_is_malformed() {
+    let err = ThreeMfLoader
+        .load(&fixture("corrupt_texture.3mf"))
+        .expect_err("the image bytes do not match their CRC");
+    let MeshIoError::Malformed { reason, .. } = err else {
+        panic!("a damaged part is malformed, not something else, got {err:?}");
+    };
+    assert!(reason.contains("white.png"), "got {reason}");
+}

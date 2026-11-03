@@ -33,6 +33,8 @@ pub use drill::{
 pub use edit::{Edit, EditJob, EditOutcome};
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;
+#[cfg(not(target_arch = "wasm32"))]
+pub use format::dialog_filters;
 pub use format::label_of;
 pub use highest::Highest;
 pub use hollow::{

@@ -93,7 +93,12 @@ fn colors() -> (Rgb, Rgb) {
 /// show. One kept before pictures were tinted has no alpha and is shown as it was drawn.
 pub fn load(path: &Path) -> Option<egui::ColorImage> {
     let bytes = std::fs::read(dir()?.join(file_name(path))).ok()?;
-    let image = image::load_from_memory(&bytes).ok()?;
+    decoded(&bytes)
+}
+
+/// A kept picture's PNG in this frame's colours, or `None` for bytes that are not one.
+pub fn decoded(bytes: &[u8]) -> Option<egui::ColorImage> {
+    let image = image::load_from_memory(bytes).ok()?;
     let size = [image.width() as usize, image.height() as usize];
     if !image.color().has_alpha() {
         return Some(egui::ColorImage::from_rgb(size, image.to_rgb8().as_raw()));

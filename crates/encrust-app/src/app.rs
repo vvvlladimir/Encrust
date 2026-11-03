@@ -436,6 +436,7 @@ impl SlicerApp {
         working |= machine.network.poll(status);
         working |= machine.preview.poll(status);
         working |= machine.updates.poll(status);
+        working |= machine.fetches.poll(status);
         working |= tools.supports.poll(scene, status);
         working |= tools.hollow.poll(scene, status);
         working |= tools.relief.poll(scene, status);

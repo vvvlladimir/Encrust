@@ -1,6 +1,7 @@
 # 0232. The start page offers resin test prints of its own, and leaves the machine to the top bar
 
-- **Status:** Accepted; the row of tests under the recent files is superseded by 0234
+- **Status:** Accepted; the row of tests under the recent files is superseded by 0234; a test
+  print too large to bundle is added by 0394
 - **Date:** 2026-10-12
 
 ## Context

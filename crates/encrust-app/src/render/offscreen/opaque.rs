@@ -21,12 +21,14 @@ fn the_opaque_pipeline_paints_what_the_clipped_one_does() {
         ..Look::default()
     };
     let cuts = [far_cut()];
+    // Moving, the key's shadow is one hard tap, which the two shader builds may round apart on
+    // a few edge pixels of 768²: 4 under lavapipe, 2 under WARP, none on Metal.
     let views = [
-        ("the working view", None, false),
-        ("the render view moving", Some(studio), true),
-        ("the render view at rest", Some(studio), false),
+        ("the working view", None, false, 0),
+        ("the render view moving", Some(studio), true, 16),
+        ("the render view at rest", Some(studio), false, 0),
     ];
-    for (view, look, moving) in views {
+    for (view, look, moving, allowed_px) in views {
         let marks = |cuts| Marks {
             cuts,
             look,
@@ -37,10 +39,10 @@ fn the_opaque_pipeline_paints_what_the_clipped_one_does() {
             return;
         };
         let clipped = paint_marked_ball(marks(&cuts)).expect("the adapter drew once");
-        assert_eq!(
-            differing(&opaque, &clipped),
-            0,
-            "in {view} no pixel differs"
+        let differ = differing(&opaque, &clipped);
+        assert!(
+            differ <= allowed_px,
+            "in {view} {differ} pixels differ, at most {allowed_px} expected"
         );
     }
 }

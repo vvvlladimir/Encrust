@@ -143,6 +143,8 @@ pub struct Machine {
     pub report: Report,
     /// The files opened lately, for the start page.
     pub recent: Recent,
+    /// The test prints being fetched from the repository, for the start page.
+    pub fetches: crate::samples::remote::Fetches,
     /// How the window itself behaves, from the Settings window's General page.
     pub general: crate::prefs::General,
 }

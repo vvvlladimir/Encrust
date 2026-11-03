@@ -125,8 +125,8 @@ fn fetch(url: &str, limit: u64, timeout: Duration) -> Result<Vec<u8>, UpdateErro
         .map_err(failed)
 }
 
-/// The archive at `url`, a chunk at a time so `progress` counts it and can stop it.
-fn fetch_counted(url: &str, progress: &Progress) -> Result<Vec<u8>, UpdateError> {
+/// The body at `url`, a chunk at a time so `progress` counts it and can stop it.
+pub(crate) fn fetch_counted(url: &str, progress: &Progress) -> Result<Vec<u8>, UpdateError> {
     let failed = |source| fetch_failed(url, source);
     if progress.is_cancelled() {
         return Err(UpdateError::Cancelled);

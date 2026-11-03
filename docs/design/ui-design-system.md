@@ -229,7 +229,7 @@ paints from tokens only.
 | `paint_layer_track`, `layer_readout` | The layer strip: its rule with the cured area behind it, scale, fill, risk bars and thumbs; the layer in a sunken box to type into, the count and the height |
 | `window_frame` | The Settings and Machine and resin windows' frame: title row, list, header, page, action bar, tabs and table |
 | `section_tab` | One of the tabs over a form that scroll to its blocks: a pill washed in the accent while its block is in view, a quiet *OFF* after it while switched off |
-| `start_title`, `drop_zone_box`, `picture_tile` | The start page's title and lede; the dashed zone a file is dropped on; a tile of a picture over a name |
+| `start_title`, `drop_zone_box`, `picture_tile` | The start page's title and lede; the dashed zone a file is dropped on; a tile of a picture over a name, a fetch's `progress_bar` along the picture's foot |
 
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under
 a `field_label` of its own carries the unit in that label's brackets instead.

@@ -1,6 +1,6 @@
 # 0112. Parse 3MF with `threemf2`, and resolve its graph ourselves
 
-- **Status:** Accepted
+- **Status:** Superseded by 0395
 - **Date:** 2026-09-27
 
 ## Context

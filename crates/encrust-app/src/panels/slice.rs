@@ -5,7 +5,7 @@ use printer_profiles::Connection;
 use crate::i18n::tr;
 use crate::job::SlicedFormat;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::job::{applied_to, label_of};
+use crate::job::{applied_to, dialog_filters};
 use crate::network::{Reach, temporary_path};
 use crate::panels::{Window, destination};
 use crate::prefs::General;
@@ -353,8 +353,8 @@ fn save_path(
         || SlicedFormat::CHOICES.to_vec(),
         |printer| SlicedFormat::choices_for(printer).collect(),
     );
-    for choice in [format].into_iter().chain(offered) {
-        dialog = dialog.add_filter(label_of(choice), &[choice.extension()]);
+    for (label, extension) in dialog_filters(format, offered) {
+        dialog = dialog.add_filter(label, &[extension]);
     }
     Some(applied_to(format, dialog.save_file()?))
 }
