@@ -17,8 +17,6 @@ doctest = false
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 clap = { version = "4", features = ["derive", "env"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
-crc32fast = { version = "1" }
-flate2 = { version = "1", features = ["zlib-rs"] }
 getrandom = { version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 glam = { version = "0.32", features = ["mint"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
@@ -34,7 +32,6 @@ regex-automata = { version = "0.4", default-features = false, features = ["dfa-b
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
-simd-adler32 = { version = "0.3" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 tracing-core = { version = "0.1" }
 
@@ -47,6 +44,7 @@ syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-trai
 
 [target.aarch64-apple-darwin.dependencies]
 bitflags = { version = "2", default-features = false, features = ["std"] }
+flate2 = { version = "1", features = ["zlib-rs"] }
 half = { version = "2" }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "tga", "tiff"] }
 libc = { version = "0.2", features = ["extra_traits"] }

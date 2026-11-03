@@ -64,7 +64,7 @@ serde_json = "1.0"
 aes = "0.9"
 cbc = "0.2"
 sha2 = "0.11"
-zip = { version = "9.0", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.0", default-features = false, features = ["deflate-flate2", "deflate-flate2-zlib-rs"] }
 toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -103,7 +103,7 @@ tar = { version = "0.4", default-features = false }
 
 stl_io = "0.11"
 tobj = { version = "4.0", default-features = false }
-threemf2 = { version = "0.4", default-features = false, features = ["package-memory-optimized-read"] }
+quick-xml = "0.41"
 png = "0.18"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga"] }
 eframe = "0.36"

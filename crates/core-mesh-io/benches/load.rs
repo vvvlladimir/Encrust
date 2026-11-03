@@ -5,12 +5,13 @@
 )]
 
 use std::f32::consts::PI;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use core_geometry::{Mesh, Vec3};
-use core_mesh_io::{MeshLoader, ObjLoader, StlLoader};
+use core_mesh_io::{MeshLoader, ObjLoader, StlLoader, ThreeMfLoader};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 /// Roughly 200k triangles, the size of a detailed miniature.
@@ -71,6 +72,44 @@ fn write_obj(mesh: &Mesh, path: &Path) {
     }
 }
 
+/// A 3MF package of one mesh object, deflated as exporters write it.
+fn write_3mf(mesh: &Mesh, path: &Path) {
+    let file = fs::File::create(path).expect("the temporary directory is writable");
+    let mut zip = zip::ZipWriter::new(file);
+    let deflated = zip::write::SimpleFileOptions::default();
+    let mut part = |name: &str, body: &[u8]| {
+        zip.start_file(name, deflated).expect("writing to a file");
+        zip.write_all(body).expect("writing to a file");
+    };
+    part(
+        "[Content_Types].xml",
+        br#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>"#,
+    );
+    part(
+        "_rels/.rels",
+        br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>"#,
+    );
+    let mut model = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices>"#,
+    );
+    for vertex in &mesh.vertices {
+        write!(
+            model,
+            r#"<vertex x="{}" y="{}" z="{}"/>"#,
+            vertex.x, vertex.y, vertex.z
+        )
+        .expect("writing to a string");
+    }
+    model += "</vertices><triangles>";
+    for [a, b, c] in &mesh.faces {
+        write!(model, r#"<triangle v1="{a}" v2="{b}" v3="{c}"/>"#).expect("writing to a string");
+    }
+    model +=
+        r#"</triangles></mesh></object></resources><build><item objectid="1"/></build></model>"#;
+    part("3D/3dmodel.model", model.as_bytes());
+    zip.finish().expect("writing to a file");
+}
+
 fn benchmarks(c: &mut Criterion) {
     let mesh = sphere(20.0, 320, 320);
     let directory = std::env::temp_dir().join("encrust-mesh-io-bench");
@@ -80,6 +119,8 @@ fn benchmarks(c: &mut Criterion) {
     let obj: PathBuf = directory.join("sphere.obj");
     write_stl(&mesh, &stl);
     write_obj(&mesh, &obj);
+    let three_mf: PathBuf = directory.join("sphere.3mf");
+    write_3mf(&mesh, &three_mf);
 
     c.bench_function("load 200k triangles from binary stl", |b| {
         b.iter(|| {
@@ -93,6 +134,14 @@ fn benchmarks(c: &mut Criterion) {
         b.iter(|| {
             ObjLoader
                 .load(std::hint::black_box(&obj))
+                .expect("the fixture loads")
+        });
+    });
+
+    c.bench_function("load 200k triangles from 3mf", |b| {
+        b.iter(|| {
+            ThreeMfLoader
+                .load(std::hint::black_box(&three_mf))
                 .expect("the fixture loads")
         });
     });

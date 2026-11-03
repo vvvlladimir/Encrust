@@ -171,8 +171,9 @@ two callers merely happen to share. `core-mesh-io`,
 sliced-file format is a new `format-*` crate beside `format-goo`, depending on
 `core-format` and nothing else in the workspace; a format whose container is someone else's
 may take that container's crate with it, as the archive formats take `zip` (ADR 0148).
-`core-mesh-io` takes `zip` for the same container, to refuse a 3MF whose directory claims a
-part larger than memory before the loader under it reserves one (ADR 0171). A new printer network protocol is a new
+`core-mesh-io` takes `zip` for the same container: it reads 3MF through it with `quick-xml`,
+refusing one whose directory claims a part larger than memory before reading any (ADR 0171,
+0395). A new printer network protocol is a new
 `net-*` crate, taking the path of a file that is already written and depending on nothing
 in the workspace at all — not even on another `net-*` crate (ADR 0136). Where two of them
 have something in common, it is settled in `printer-link` above them by an enum over
