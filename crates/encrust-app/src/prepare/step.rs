@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 
-use super::plan::{Drains, Orient};
+use super::plan::{Drains, Orient, Wish};
 use super::{Chosen, Plan, Step};
 use crate::i18n::tr;
 use crate::job::{
@@ -72,7 +72,8 @@ impl Going {
                 Orient::Search {
                     preset,
                     max_tilt_deg,
-                } => Self::orient(&ids, (preset, max_tilt_deg), doc, tools, machine)?,
+                    wish,
+                } => Self::orient(&ids, (preset, max_tilt_deg, &wish), doc, tools, machine)?,
             },
             Step::Repair => Self::repair(&ids, plan, doc),
             Step::Hollow => {
@@ -133,7 +134,7 @@ impl Going {
 
     fn orient(
         ids: &[ObjectId],
-        (preset, max_tilt_deg): (core_plate::OrientPreset, Option<f32>),
+        (preset, max_tilt_deg, wish): (core_plate::OrientPreset, Option<f32>, &Wish),
         doc: &Doc,
         tools: &mut Tools,
         machine: &Machine,
@@ -145,9 +146,12 @@ impl Going {
             .as_ref()
             .map(|printer| (printer, &slicing.material));
         let asked = (preset, max_tilt_deg, plans);
-        Ok(Self::Orient(
-            tools.orient.start_on(&doc.scene, ids, asked, proof)?,
-        ))
+        Ok(Self::Orient(tools.orient.start_on(
+            &doc.scene,
+            ids,
+            asked,
+            (wish, proof),
+        )?))
     }
 
     /// Each model at the settings given, else at Hollow's defaults round the wall decided.

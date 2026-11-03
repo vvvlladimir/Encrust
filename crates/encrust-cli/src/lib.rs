@@ -28,6 +28,7 @@ mod supports;
 pub mod pipeline;
 pub mod profiles;
 pub mod report;
+pub mod score;
 
 pub use commands::{Cli, Command, GlobalArgs, init_tracing, run};
 pub use config::parse_from;

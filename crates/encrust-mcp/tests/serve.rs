@@ -133,6 +133,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
         names,
         [
             "check",
+            "compare_poses",
             "inspect_model",
             "list_profiles",
             "render",
@@ -520,4 +521,70 @@ async fn a_missing_command_line_is_a_tool_error_naming_it() {
         answer(&result)
     );
     client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn the_ways_to_stand_a_model_are_compared_drawn_and_one_is_taken() {
+    let dir = scratch("poses");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let pose = json!({"by": "search", "goal": "auto"});
+    let compared = call(
+        &client,
+        "compare_poses",
+        json!({"job": job, "pose": pose, "count": 2, "size_px": 64}),
+    )
+    .await;
+    assert!(!failed(&compared), "{:?}", compared.content);
+    let first = match &compared.content[0] {
+        ContentBlock::Text(text) => serde_json::from_str::<Value>(&text.text).expect("JSON"),
+        other => panic!("the answer opens with its list, found {other:?}"),
+    };
+    let choices = first["choices"].as_array().expect("the choices are listed");
+    assert!(!choices.is_empty() && choices.len() <= 2, "{first}");
+    let pictures = compared
+        .content
+        .iter()
+        .filter(|block| matches!(block, ContentBlock::Image(_)))
+        .count();
+    assert_eq!(pictures, choices.len(), "one iso picture a choice");
+
+    let picked = json!({"by": "search", "goal": "auto", "pick": 1});
+    let taken = call(&client, "set_pose", json!({"job": job, "pose": picked})).await;
+    assert!(!failed(&taken), "{}", answer(&taken));
+    assert_eq!(
+        answer(&taken)["report"]["models"][0]["oriented"]["rotate_deg"],
+        choices[0]["rotate_deg"],
+        "the pick stands the model as the first choice"
+    );
+}
+
+#[tokio::test]
+async fn an_edit_is_set_against_the_revision_before_and_the_autopilot() {
+    let dir = scratch("against");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let supported = json!({"job": job, "supports": {"profile": "medium"}});
+    let edited = answer(&call(&client, "set_supports", supported).await);
+    let compared = &edited["compared"];
+    for name in ["previous", "autopilot"] {
+        assert!(
+            compared[name]["standing"].is_string(),
+            "set against the {name}: {edited}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn points_kept_clear_are_kept_with_the_turn_they_were_seen_in() {
+    let dir = scratch("keep-clear");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let pose = json!({"by": "search", "goal": "auto", "keep_clear_at_mm": [[40.0, 40.0, 20.0]]});
+    let taken = answer(&call(&client, "set_pose", json!({"job": job, "pose": pose})).await);
+    assert_eq!(
+        taken["recipe"]["pose"]["keep_clear_seen_deg"],
+        json!([0.0, 0.0, 0.0]),
+        "revision one stands the cube as its file does: {taken}"
+    );
 }

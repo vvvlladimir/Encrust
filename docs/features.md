@@ -897,12 +897,21 @@ turn, scale, repair and faces by hand, relief, combine, label, cut, split, arran
 infill and Keep solid, drain holes and channels, supports by any profile and by hand, on the
 job's printer, resin and slicing; the check is still the command line's. Every flag of the command line is a tool's: `set_shape` cuts, labels,
 splits and presses reliefs, `set_repair` mends, `set_slicing` sets the layers.
+`compare_poses` shows the model the best few ways the engine found to stand it, each drawn
+with what it prints, and the model picks one for what the print is — keeping supports off a
+face you named, say, which the search then ranks first. Every step it takes is set against
+the step before and the autopilot's own preparation, so it can undo one that made the print
+worse. Two models of two chat jobs on one plate each keep what their own job did.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear
 exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
+
+**Choosing a pose:** `--orient-choices` lists the search's best ways to stand a model with
+what each prints, `--orient-pick` takes one of them, and `--orient-keep-clear` keeps supports
+off the surface round a point. `estimate --against` sets a run beside a report kept before.
 
 **Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
 it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves

@@ -2,6 +2,7 @@
 //! way a finished plate is. See `docs/design/orientation.md`.
 
 mod islands;
+mod keep_clear;
 
 use std::sync::Arc;
 
@@ -25,6 +26,7 @@ use crate::plate::{Model, Plate};
 use crate::run::Run;
 use crate::stand::{SupportPlan, ToStand, stand_seated, stand_under};
 use crate::trial::islands::islands_born;
+pub use crate::trial::keep_clear::KeepClear;
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
 /// of a million faces, more for a lighter one, which prints as many in the same time, but
@@ -80,6 +82,8 @@ pub struct Trial<'a> {
     pub support: &'a SupportPlan,
     /// Layers rasterised at once, as `Plate::raster_window`.
     pub raster_window: usize,
+    /// Places no support should touch, which outrank every goal but a lost print.
+    pub keep_clear: Option<&'a KeepClear>,
 }
 
 /// What a pose costs once it is supported, cut and cured.
@@ -93,6 +97,8 @@ pub struct Printout {
     pub hanging: usize,
     /// Contacts on faces that look up in the model's own file.
     pub top_contacts: usize,
+    /// Contacts touching a place the trial was asked to keep clear.
+    pub kept_clear_touched: usize,
     pub layers: usize,
     /// How tall the stack stands, model and supports, millimetres: what the time follows.
     pub stack_mm: f32,
@@ -238,7 +244,11 @@ pub fn prove(
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
-    Ok(judged(&tried, settings.preset, is_standing))
+    let mut ranked = judged(&tried, settings.preset, is_standing);
+    if trial.keep_clear.is_some_and(|kept| !kept.at_mm.is_empty()) {
+        keep_clear::clear_first(&mut ranked);
+    }
+    Ok(ranked)
 }
 
 /// The first `finalists` of `found`, the way the model stands and the best pose set on the
@@ -360,6 +370,13 @@ fn print_held(
         supports_mm3: signed_volume(&stood.supports).abs(),
         hanging: stood.contacts.len().saturating_sub(stood.standing),
         top_contacts: looking_up(&stood.facing, rotation),
+        kept_clear_touched: trial.keep_clear.map_or(0, |kept| {
+            kept.touched(
+                &stood.contacts,
+                rotation,
+                offset + Vec3::Z * stood.lifted_mm,
+            )
+        }),
         supports: (!stood.supports.faces.is_empty())
             .then(|| Arc::new(stood.supports))
             .into_iter()
@@ -416,6 +433,7 @@ struct Held {
     supports_mm3: Scalar,
     hanging: usize,
     top_contacts: usize,
+    kept_clear_touched: usize,
     supports: Vec<Arc<Mesh>>,
 }
 
@@ -466,6 +484,7 @@ fn printout(held: &Held, measured: &Measured, layer_mm: Scalar) -> Printout {
         supports_ml: held.supports_mm3 / 1000.0,
         hanging: held.hanging,
         top_contacts: held.top_contacts,
+        kept_clear_touched: held.kept_clear_touched,
         layers: measured.layer_count(),
         stack_mm: measured.layer_count() as Scalar * layer_mm,
         pull_n: measured

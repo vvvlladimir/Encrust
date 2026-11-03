@@ -34,4 +34,6 @@ pub use stand::{
     stand_under,
 };
 pub use trapped::trapped_in;
-pub use trial::{Choice, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove};
+pub use trial::{
+    Choice, KeepClear, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove,
+};

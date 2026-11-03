@@ -1,7 +1,9 @@
 //! What a prepared model is scored on, read from `estimate --json`, and how one preparation
-//! stands against the autopilot's: the rule is in `docs/cli.md`, `agent-lab`.
+//! stands against another's: the rule `agent-lab` and `estimate --against` judge by (`cli.md`).
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -152,6 +154,42 @@ pub fn judge(prepared: &Score, baseline: &Score) -> Judged {
         standing,
         worse,
         better,
+    }
+}
+
+/// `report` judged against each report kept in a file, by the name it was given; a file that
+/// does not read or score is answered with why.
+pub fn compared(report: &Value, against: &[(String, PathBuf)]) -> BTreeMap<String, Value> {
+    let mine = Score::of(report);
+    against
+        .iter()
+        .map(|(name, file)| {
+            let judged = mine
+                .as_ref()
+                .map_err(|error| anyhow::anyhow!("this run has no score: {error:#}"))
+                .and_then(|mine| Ok(judge(mine, &Score::of(&kept(file)?)?)))
+                .map_or_else(
+                    |error| serde_json::json!({ "error": format!("{error:#}") }),
+                    |judged| serde_json::to_value(judged).unwrap_or_default(),
+                );
+            (name.clone(), judged)
+        })
+        .collect()
+}
+
+fn kept(file: &Path) -> Result<Value> {
+    let text =
+        std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    serde_json::from_str(&text).with_context(|| format!("{} is not JSON", file.display()))
+}
+
+/// `NAME=FILE` for `--against`.
+pub fn parse_against(text: &str) -> Result<(String, PathBuf), String> {
+    match text.split_once('=') {
+        Some((name, file)) if !name.is_empty() && !file.is_empty() => {
+            Ok((name.to_owned(), PathBuf::from(file)))
+        }
+        _ => Err("expected NAME=FILE".to_owned()),
     }
 }
 

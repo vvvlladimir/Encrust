@@ -20,7 +20,7 @@ mod step;
 pub use decided::Prepared;
 pub use order::Step;
 use plan::Chosen;
-pub use plan::{Choice, Drains, Orient, Plan, Stand};
+pub use plan::{Choice, Drains, Kept, Orient, Plan, Stand, Wish};
 pub use shape::{CutAsk, LabelAsk, Mend, ReliefAsk, Shaping, SplitAsk};
 use step::{Ended, Going};
 

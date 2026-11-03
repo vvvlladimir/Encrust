@@ -51,7 +51,8 @@ newer revision of the job stops the replay of an older one, while another job's 
 job of the user's own running on the plate, holds the replay until it ends. A model taken off the plate is read in
 again for its job's next revision.
 
-Replayed as the recipe says: the orientation search with its goal and tilt limit, or a turn
+Replayed as the recipe says: the orientation search with its goal and tilt limit, the way it
+ranks that `pick` names and the points kept clear in the turn they were seen in, or a turn
 given in degrees, turned as `--rotate` turns; the repair mode; the wall with its open floor and
 infill, measured inside at the command line's precision; holes drilled into the surface nearest
 each point, at the recipe's diameter, then the automatic drains with or without vents; supports

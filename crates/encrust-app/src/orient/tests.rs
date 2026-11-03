@@ -338,7 +338,12 @@ fn a_start_on_named_models_searches_afresh_and_leaves_the_others_standing() {
     let plans = |_: &SceneObject| medium();
 
     let mut job = tool
-        .start_on(&scene, &[slab], (OrientPreset::Auto, None, plans), None)
+        .start_on(
+            &scene,
+            &[slab],
+            (OrientPreset::Auto, None, plans),
+            (&crate::prepare::Wish::default(), None),
+        )
         .expect("where the button would step to the next pose, it searches again");
     let turns = loop {
         match job.poll() {

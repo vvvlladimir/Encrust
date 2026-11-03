@@ -11,6 +11,7 @@ use crate::job::{
     Costs, OrientJob, OrientOutcome, OrientRequest, OrientTask, Pose, Proof, Turn, orient_tasks,
 };
 use crate::plate::BuildPlate;
+use crate::prepare::Wish;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::{Reading, Status};
 
@@ -179,7 +180,7 @@ impl OrientTool {
 
     /// A fresh search for the way `ids` print best by `preset`, within `max_tilt_deg` of the
     /// way each stands where given, whatever the panel is set to and whatever the last run
-    /// found, handed back rather than kept: what Prepare turns by.
+    /// found, handed back rather than kept: what Prepare turns by, taking the way `wish` picks.
     pub fn start_on(
         &mut self,
         scene: &Scene,
@@ -189,11 +190,18 @@ impl OrientTool {
             Option<Scalar>,
             impl Fn(&SceneObject) -> SupportPlan,
         ),
-        machine: Option<(&PrinterProfile, &MaterialProfile)>,
+        (wish, machine): (&Wish, Option<(&PrinterProfile, &MaterialProfile)>),
     ) -> Result<OrientJob> {
+        let plate_mm = machine.map_or(Vec2::ZERO, |(printer, _)| {
+            Vec2::new(printer.build_volume.x, printer.build_volume.y)
+        });
         let tasks = scene
             .named(ids)
-            .map(|object| OrientTask::of(object, plan_of(object)))
+            .map(|object| {
+                let task = OrientTask::of(object, plan_of(object));
+                let kept = wish.keep_clear.as_ref().map(|kept| (kept, plate_mm));
+                task.wishing(wish.pick, kept)
+            })
             .collect();
         let mut asked = self.asking(tasks, preset, machine)?;
         asked.settings.max_tilt_deg = max_tilt_deg;

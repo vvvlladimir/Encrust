@@ -281,6 +281,12 @@ for a column, the pose fails every goal that weighs cups, as a cup would. All ar
 by the rule above on what they printed — support resin, newtons, millimetres of stack —
 and `prove` answers every finalist with what decided its place, `core_plate::rulings`.
 
+Places a person asks no support to touch (`KeepClear`, ADR 0403) are counted on each trial:
+the contacts within a radius of a point. The ranked finalists are then sorted, stably, by
+whether they lose the print and then by that count, so a pose touching fewer comes first
+unless it has a cup, a tearing pull or an overflow a sounder one has not. A pick past the
+first takes the finalist that many down.
+
 The command line orients through the same `orient_for_print`, and stands a model the search
 set on the plate the way the proof does, `stand_seated`: supports under what hangs, none if
 nothing does.

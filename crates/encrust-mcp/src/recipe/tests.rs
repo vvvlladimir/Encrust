@@ -38,10 +38,7 @@ fn a_plain_recipe_stages_the_model_centred_and_checks_drainage() {
 fn every_step_becomes_the_flags_the_command_line_documents() {
     let recipe = Recipe {
         repair: Some(Repair::CloseHoles),
-        pose: Some(Pose::Search {
-            goal: Goal::Auto,
-            max_tilt_deg: Some(30.0),
-        }),
+        pose: Some(Pose::search(Goal::Auto, Some(30.0))),
         hollow: Some(Hollow {
             wall_mm: 2.0,
             open_floor: false,
@@ -88,11 +85,28 @@ fn every_step_becomes_the_flags_the_command_line_documents() {
 
 #[test]
 fn a_negative_number_rides_on_its_flag() {
-    let tilted = Recipe {
+    let picked = Recipe {
         pose: Some(Pose::Search {
-            goal: Goal::LeastPeel,
-            max_tilt_deg: Some(-5.0),
+            keep_clear_at_mm: vec![[10.0, -2.0, 3.0]],
+            keep_clear_seen_deg: Some([0.0, -90.0, 0.0]),
+            keep_clear_radius_mm: Some(5.0),
+            pick: Some(2),
+            goal: Goal::Auto,
+            max_tilt_deg: None,
         }),
+        ..plain()
+    };
+    let flags = picked.flags();
+    for flag in [
+        "--orient-pick=2",
+        "--orient-keep-clear=10,-2,3",
+        "--orient-keep-clear-turn=0,-90,0",
+        "--orient-keep-clear-radius=5",
+    ] {
+        assert!(flags.contains(&flag.to_owned()), "{flag} in {flags:?}");
+    }
+    let tilted = Recipe {
+        pose: Some(Pose::search(Goal::LeastPeel, Some(-5.0))),
         ..plain()
     };
     assert!(tilted.flags().contains(&"--max-tilt=-5".to_owned()));
@@ -187,10 +201,7 @@ fn drains_with_no_point_add_no_flag() {
 fn a_recipe_reads_back_from_the_toml_it_is_kept_in() {
     let recipe = Recipe {
         repair: Some(Repair::Wrap),
-        pose: Some(Pose::Search {
-            goal: Goal::FewestSupports,
-            max_tilt_deg: None,
-        }),
+        pose: Some(Pose::search(Goal::FewestSupports, None)),
         supports: Some(Supports {
             profile: "medium".into(),
             cavity: false,

@@ -3,8 +3,8 @@
 
 mod agent;
 mod corpus;
+mod judge;
 mod report;
-mod score;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -14,9 +14,10 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use serde_json::Value;
 
-use crate::agent::{Agent, Programs, run_bounded};
+use crate::agent::{Agent, Left, Programs, run_bounded};
+use crate::judge::{Drawn, Judge};
 use crate::report::{AgentRow, ModelRow, Prepared, Report};
-use crate::score::{Score, judge};
+use encrust_cli::score::{Score, judge};
 
 /// What every client is asked, the model, printer and resin filled in.
 const PROMPT: &str = "Prepare the model {model} for printing on the printer {printer} with the \
@@ -65,6 +66,13 @@ struct Args {
     /// autopilot worse than it was, fails the run.
     #[arg(long)]
     baseline: Option<PathBuf>,
+    /// Draw every preparation from the front and from below, beside its run.
+    #[arg(long)]
+    pictures: bool,
+    /// A judge, as COMMAND with `{prompt}`, shown both preparations drawn and asked which
+    /// prints better; another model than the clients', so none grades its own work.
+    #[arg(long, value_name = "COMMAND")]
+    judge: Option<String>,
 }
 
 /// One model to prepare.
@@ -84,6 +92,7 @@ fn main() -> Result<ExitCode> {
         .iter()
         .map(|spec| Agent::parse(spec))
         .collect::<Result<Vec<_>>>()?;
+    let judge = args.judge.as_deref().map(Judge::parse).transpose()?;
     let programs = Programs {
         encrust: program(args.encrust.as_deref(), "encrust")?,
         encrust_mcp: program(args.encrust_mcp.as_deref(), "encrust-mcp")?,
@@ -107,7 +116,7 @@ fn main() -> Result<ExitCode> {
     for subject in subjects(&args)? {
         let row = bench(
             &subject,
-            &args,
+            (&args, judge.as_ref()),
             &agents,
             &programs,
             &work.join(&subject.name),
@@ -195,7 +204,7 @@ fn name_of(path: &Path) -> String {
 /// a row with no score, so a corpus still finishes.
 fn bench(
     subject: &Subject,
-    args: &Args,
+    (args, judge): (&Args, Option<&Judge>),
     agents: &[Agent],
     programs: &Programs,
     work: &Path,
@@ -209,32 +218,21 @@ fn bench(
     if subject.skip.is_some() {
         return row;
     }
-    row.autopilot = autopilot(subject, args, programs, &work.join("autopilot"))
+    let drawing = args.pictures || judge.is_some();
+    let flags = autopilot_flags(subject, args);
+    row.autopilot = autopilot(&flags, programs, &work.join("autopilot"))
         .unwrap_or_else(|error| unscored(format!("{error:#}"), 0.0));
+    if drawing {
+        row.autopilot.pictures = drawn(&flags, &work.join("autopilot/pictures"), programs);
+    }
     let prompt = PROMPT
         .replace("{model}", &subject.path.display().to_string())
         .replace("{printer}", &args.printer)
         .replace("{resin}", &args.resin);
     for agent in agents {
-        let agent_row = match agent.run(&prompt, &work.join(&agent.name), programs) {
-            Ok(left) => {
-                let prepared = match left.check.as_ref().map(Score::of) {
-                    Some(Ok(score)) => scored(score, left.seconds),
-                    Some(Err(error)) => unscored(format!("{error:#}"), left.seconds),
-                    None => unscored(left.why_not.unwrap_or_default(), left.seconds),
-                };
-                AgentRow {
-                    agent: agent.name.clone(),
-                    judged: prepared
-                        .score
-                        .zip(row.autopilot.score)
-                        .map(|(mine, theirs)| judge(&mine, &theirs)),
-                    prepared,
-                    tool_calls: left.tool_calls,
-                    failed_calls: left.failed_calls,
-                    tokens: left.tokens,
-                }
-            }
+        let work = work.join(&agent.name);
+        let mut agent_row = match agent.run(&prompt, &work, programs) {
+            Ok(left) => left_row(agent, left, &row.autopilot, (drawing, &work, programs)),
             Err(error) => AgentRow {
                 agent: agent.name.clone(),
                 prepared: unscored(format!("{error:#}"), 0.0),
@@ -242,24 +240,113 @@ fn bench(
                 failed_calls: 0,
                 tokens: None,
                 judged: None,
+                verdict: None,
             },
         };
+        if let Some(judge) = judge {
+            agent_row.verdict = ruled(
+                judge,
+                &subject.name,
+                (&row.autopilot, &agent_row),
+                &work,
+                programs,
+            );
+        }
         row.agents.push(agent_row);
     }
     row
 }
 
-/// The model checked under `--prepare`, as `start_job` checks it with no step overridden.
-fn autopilot(subject: &Subject, args: &Args, programs: &Programs, work: &Path) -> Result<Prepared> {
+/// What a client left, scored and set against the autopilot's `autopilot`, drawn if asked.
+fn left_row(
+    agent: &Agent,
+    left: Left,
+    autopilot: &Prepared,
+    (drawing, work, programs): (bool, &Path, &Programs),
+) -> AgentRow {
+    let mut prepared = match left.check.as_ref().map(Score::of) {
+        Some(Ok(score)) => scored(score, left.seconds),
+        Some(Err(error)) => unscored(format!("{error:#}"), left.seconds),
+        None => unscored(left.why_not.unwrap_or_default(), left.seconds),
+    };
+    if let (true, Some(flags)) = (drawing, &left.args) {
+        prepared.pictures = drawn(flags, &work.join("pictures"), programs);
+    }
+    AgentRow {
+        agent: agent.name.clone(),
+        judged: prepared
+            .score
+            .zip(autopilot.score)
+            .map(|(mine, theirs)| judge(&mine, &theirs)),
+        prepared,
+        tool_calls: left.tool_calls,
+        failed_calls: left.failed_calls,
+        tokens: left.tokens,
+        verdict: None,
+    }
+}
+
+/// The pictures of a preparation, or none and why on stderr: a run goes on without them.
+fn drawn(flags: &[String], dir: &Path, programs: &Programs) -> Vec<PathBuf> {
+    judge::draw(flags, dir, programs).unwrap_or_else(|error| {
+        eprintln!("not drawn: {error:#}");
+        Vec::new()
+    })
+}
+
+/// The judge's verdict on a client's preparation against the autopilot's, where both are
+/// drawn; none, and why on stderr, where it gave none.
+fn ruled(
+    judge: &Judge,
+    model: &str,
+    (autopilot, agent): (&Prepared, &AgentRow),
+    work: &Path,
+    programs: &Programs,
+) -> Option<judge::Verdict> {
+    if autopilot.pictures.is_empty() || agent.prepared.pictures.is_empty() {
+        return None;
+    }
+    let drawn = |prepared: &Prepared| {
+        (
+            prepared.pictures.clone(),
+            judge::shown(prepared.score.as_ref()),
+        )
+    };
+    let (a, b) = (drawn(autopilot), drawn(&agent.prepared));
+    let shown = (
+        Drawn {
+            pictures: &a.0,
+            score: &a.1,
+        },
+        Drawn {
+            pictures: &b.0,
+            score: &b.1,
+        },
+    );
+    judge
+        .rule(model, shown, &work.join("judge"), programs)
+        .inspect_err(|error| eprintln!("no verdict: {error:#}"))
+        .ok()
+}
+
+/// The flags that stage the model under `--prepare`, as `start_job` does with no step
+/// overridden.
+fn autopilot_flags(subject: &Subject, args: &Args) -> Vec<String> {
+    vec![
+        subject.path.display().to_string(),
+        profile_flag(&args.printer, "--printer", "--profile"),
+        profile_flag(&args.resin, "--resin", "--material"),
+        "--center".into(),
+        "--check-drainage".into(),
+        "--prepare".into(),
+    ]
+}
+
+/// The model checked as `flags` stage it.
+fn autopilot(flags: &[String], programs: &Programs, work: &Path) -> Result<Prepared> {
     std::fs::create_dir_all(work).with_context(|| format!("creating {}", work.display()))?;
     let mut command = Command::new(&programs.encrust);
-    command
-        .arg("--json")
-        .arg("estimate")
-        .arg(&subject.path)
-        .arg(profile_flag(&args.printer, "--printer", "--profile"))
-        .arg(profile_flag(&args.resin, "--resin", "--material"))
-        .args(["--center", "--check-drainage", "--prepare"]);
+    command.args(["--json", "estimate"]).args(flags);
     let stdout = work.join("report.json");
     let started = Instant::now();
     let status = run_bounded(command, &stdout, &work.join("stderr.txt"), programs.timeout)?;
@@ -306,6 +393,7 @@ fn scored(score: Score, seconds: f64) -> Prepared {
         score: Some(score),
         why_not: None,
         seconds,
+        pictures: Vec::new(),
     }
 }
 
@@ -314,5 +402,6 @@ fn unscored(why: String, seconds: f64) -> Prepared {
         score: None,
         why_not: Some(why),
         seconds,
+        pictures: Vec::new(),
     }
 }

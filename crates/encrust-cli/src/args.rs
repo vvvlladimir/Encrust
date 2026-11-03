@@ -198,6 +198,36 @@ pub struct TransformArgs {
     /// How far --orient may turn the model from the way its file stands it, degrees.
     #[arg(long, value_name = "DEG", requires = "orient")]
     pub max_tilt: Option<Scalar>,
+
+    /// Report the search's best N ways to stand the model, each with what it prints.
+    #[arg(long, value_name = "N", requires = "orient",
+          value_parser = clap::value_parser!(u16).range(1..=16))]
+    pub orient_choices: Option<u16>,
+
+    /// Stand the model the Nth way the search ranks, counted from one, not the first.
+    #[arg(long, value_name = "N", requires = "orient",
+          value_parser = clap::value_parser!(u16).range(1..=64))]
+    pub orient_pick: Option<u16>,
+
+    /// Keep supports off the surface near this point, plate mm as the model stands turned by
+    /// --orient-keep-clear-turn and centred on z = 0. Repeat for more.
+    #[arg(long, value_name = "X,Y,Z", value_parser = crate::hollowing::point,
+          allow_hyphen_values = true, requires = "orient")]
+    pub orient_keep_clear: Vec<Vec3>,
+
+    /// The turn, degrees around X, Y and Z, the --orient-keep-clear points were given in.
+    #[arg(long, value_name = "X,Y,Z", value_parser = parse_rotation, allow_hyphen_values = true,
+          requires = "orient_keep_clear")]
+    pub orient_keep_clear_turn: Option<Vec3>,
+
+    /// How far from a --orient-keep-clear point a support still touches it, mm.
+    #[arg(
+        long,
+        value_name = "MM",
+        default_value_t = 4.0,
+        requires = "orient_keep_clear"
+    )]
+    pub orient_keep_clear_radius: Scalar,
 }
 
 /// Which repair `--repair` runs.

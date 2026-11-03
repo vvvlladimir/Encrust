@@ -10,8 +10,12 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    decided. Each tool below overrides one step. Every editing tool answers with the new
    revision and its check: read `status` and the findings before the next step. An edit the
    command line refuses is not applied, and the latest revision stays as it was.
-4. `set_pose` with the search (`goal: auto` unless the user says what matters). A new pose
-   clears drain points given by hand, which were on the old one.
+4. Look before you turn: `render` the job and say what the model is and which surfaces a person
+   will see. `compare_poses` shows the search's best ways, each drawn with what it prints —
+   `top_contacts` are support marks on faces looking up. Pick one for a reason you can name and
+   `set_pose` with that search and `pick`. Points no support should touch go in
+   `keep_clear_at_mm`, plate mm as the latest revision stands. A new pose clears drain points
+   given by hand, which were on the old one.
 5. `set_hollow` only for a large, thick solid; a 2 mm wall is typical. A hollow model needs
    a way out for its resin: `open_floor`, or `set_drains` with `auto: true` (3 mm), which
    drills a proven drain low on each pocket and a vent high up. Give points only where the
@@ -24,7 +28,9 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    and presses a texture in; `set_repair` repairs and turns or drops faces by `inspect_model`'s
    numbers; `set_slicing` sets the layer height, exposure bands, anti-aliasing and islands.
    Change these only when the user asks or a finding needs it.
-7. `render` (`iso`, `bottom`) and look at it; `check`, and fix what it names. `revert` returns to an earlier revision.
+7. Every edit answers with `compared`: how it stands against the revision before and the
+   autopilot. An edit `behind` either one is reverted with `revert` unless the user asked for
+   it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names.
 8. `write_file` when the check is clean. If defects remain, tell the user what they are and
    write with `accept_defects` only when they accept them.
 9. `send_to_printer` only when the user asks for that printer; `start` only when they ask to

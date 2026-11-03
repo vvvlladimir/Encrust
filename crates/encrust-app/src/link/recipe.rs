@@ -13,10 +13,12 @@ use serde::{Deserialize, Serialize};
 
 use super::shaping::{Mend, Modelling, Relief};
 use crate::hollow::DEFAULT_BLOCKER_MM;
-use crate::prepare::{Choice, Drains as PlanDrains, Orient, Plan, Stand};
+use crate::prepare::{Choice, Drains as PlanDrains, Kept, Orient, Plan, Stand, Wish};
 
 /// What `--precision` is when the server gives none, as `docs/cli.md` states it.
 const CLI_PRECISION: Scalar = 0.5;
+/// What `--orient-keep-clear-radius` is when the server gives none.
+const CLI_KEEP_CLEAR_MM: Scalar = 4.0;
 /// What `--drain-depth` is when the server gives none.
 const CLI_DRAIN_DEPTH_MM: Scalar = 3.0;
 
@@ -82,6 +84,11 @@ pub enum Pose {
     Search {
         goal: Goal,
         max_tilt_deg: Option<Scalar>,
+        pick: Option<u16>,
+        #[serde(default)]
+        keep_clear_at_mm: Vec<[Scalar; 3]>,
+        keep_clear_radius_mm: Option<Scalar>,
+        keep_clear_seen_deg: Option<[Scalar; 3]>,
     },
     Rotate {
         degrees: [Scalar; 3],
@@ -168,9 +175,14 @@ impl Recipe {
         let mut unshown = self.unshown();
         let orient = match &self.pose {
             None => self.left_out(),
-            Some(Pose::Search { goal, max_tilt_deg }) => Choice::Given(Orient::Search {
+            Some(
+                pose @ Pose::Search {
+                    goal, max_tilt_deg, ..
+                },
+            ) => Choice::Given(Orient::Search {
                 preset: goal.preset(),
                 max_tilt_deg: *max_tilt_deg,
+                wish: pose.wish(),
             }),
             Some(Pose::Rotate { degrees }) => {
                 Choice::Given(Orient::Turn(rotation_xyz_deg(Vec3::from_array(*degrees))))
@@ -304,6 +316,35 @@ impl Recipe {
             Choice::Decide
         } else {
             Choice::Skip
+        }
+    }
+}
+
+impl Pose {
+    /// The pick and the places kept clear a search asks for, as the command line takes them.
+    fn wish(&self) -> Wish {
+        let Self::Search {
+            pick,
+            keep_clear_at_mm,
+            keep_clear_radius_mm,
+            keep_clear_seen_deg,
+            ..
+        } = self
+        else {
+            return Wish::default();
+        };
+        let kept = Kept {
+            at_mm: keep_clear_at_mm
+                .iter()
+                .copied()
+                .map(Vec3::from_array)
+                .collect(),
+            seen: rotation_xyz_deg(Vec3::from_array(keep_clear_seen_deg.unwrap_or_default())),
+            radius_mm: keep_clear_radius_mm.unwrap_or(CLI_KEEP_CLEAR_MM),
+        };
+        Wish {
+            pick: *pick,
+            keep_clear: (!kept.at_mm.is_empty()).then_some(kept),
         }
     }
 }

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
-use core_engine::{SupportPlan, Trial, orient_for_print};
-use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
+use core_engine::{KeepClear, SupportPlan, Trial, orient_for_print};
+use core_geometry::{Mesh, Quat, Transform, Vec2, Vec3, transform_mesh};
 use core_plate::{OrientSettings, Phase, Printed, Watch};
 use core_volume::ModelHollow;
 #[cfg(test)]
@@ -41,6 +41,10 @@ pub struct OrientTask {
     /// What this model's supports are built to, as a run in the window builds them: the
     /// search counts overhangs and contacts by its placing profile, and a proof prints it.
     pub support: SupportPlan,
+    /// Places no support should touch, in the frame of the model as sized (ADR 0403).
+    pub keep_clear: Option<KeepClear>,
+    /// Which of the ways ranked to stand it by, from nought: the first unless a client asked.
+    pub pick: usize,
 }
 
 impl OrientTask {
@@ -58,6 +62,8 @@ impl OrientTask {
             support: SupportPlan::of(
                 SupportProfile::shipped("medium").expect("the medium preset ships"),
             ),
+            keep_clear: None,
+            pick: 0,
         }
     }
 
@@ -74,6 +80,23 @@ impl OrientTask {
             && self.vents == other.vents
             && self.sizing == other.sizing
             && self.support == other.support
+            && self.keep_clear == other.keep_clear
+            && self.pick == other.pick
+    }
+
+    /// This task taking the `pick`th way ranked, from one, and keeping clear the points
+    /// `kept` gives as seen on a plate `plate_mm` across.
+    pub fn wishing(
+        mut self,
+        pick: Option<u16>,
+        kept: Option<(&crate::prepare::Kept, Vec2)>,
+    ) -> Self {
+        self.pick = pick.map_or(0, |pick| usize::from(pick.saturating_sub(1)));
+        self.keep_clear = kept.and_then(|(kept, plate_mm)| {
+            let sized = self.sized(&self.mesh);
+            KeepClear::seen_turned(&sized, kept.seen, plate_mm, &kept.at_mm, kept.radius_mm)
+        });
+        self
     }
 
     /// `mesh` as it measures on the plate. A model nobody resized is not copied.
@@ -203,6 +226,8 @@ impl OrientTask {
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
             support: lifted(plan, object.lift_mm),
+            keep_clear: None,
+            pick: 0,
         }
     }
 }
@@ -222,18 +247,22 @@ fn lifted(mut plan: SupportPlan, lift_mm: Option<f32>) -> SupportPlan {
 fn choose(
     printed: &Printed,
     settings: &OrientSettings,
-    support: &SupportPlan,
+    task: &OrientTask,
     proof: Option<&Proof>,
     watch: Watch<'_>,
 ) -> Result<Vec<Pose>, String> {
     let trial = proof.map(|proof| Trial {
         printer: &proof.printer,
         material: &proof.material,
-        support,
+        support: &task.support,
         raster_window: worker_threads(),
+        keep_clear: task.keep_clear.as_ref(),
     });
-    let chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
+    let mut chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
         .map_err(|error| error.to_string())?;
+    if let Some(picked) = chosen.get_mut(..=task.pick) {
+        picked.rotate_right(1);
+    }
     Ok(offered(chosen.iter().map(|choice| {
         let pose = Pose {
             rotation: choice.oriented.rotation,
@@ -316,13 +345,7 @@ fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Resu
         cuts: cuts.as_deref(),
         vents: &vents,
     };
-    let poses = choose(
-        &printed,
-        &settings,
-        &task.support,
-        request.proof.as_ref(),
-        watch,
-    )?;
+    let poses = choose(&printed, &settings, task, request.proof.as_ref(), watch)?;
     if poses.is_empty() {
         return Err(tr!("job-orient-none"));
     }
@@ -409,6 +432,38 @@ mod tests {
         });
         let judged = tasks[0].shell.as_ref().expect("the task carries the shell");
         assert!(Arc::ptr_eq(judged, &shell));
+    }
+
+    #[test]
+    fn a_pick_stands_the_model_the_way_the_search_ranks_that_many_down() {
+        let request = |pick: usize| OrientRequest {
+            tasks: vec![OrientTask {
+                pick,
+                ..OrientTask::solid(
+                    ObjectId::for_test(1),
+                    Arc::new(cuboid(Vec3::new(40.0, 20.0, 4.0))),
+                )
+            }],
+            settings: OrientSettings::default(),
+            proof: None,
+        };
+        let first_of = |pick| {
+            let OrientOutcome::Turned(turns) = quietly(&request(pick)) else {
+                panic!("a slab can be oriented");
+            };
+            turns[0].poses[0].rotation
+        };
+        let OrientOutcome::Turned(ranked) = quietly(&request(0)) else {
+            panic!("a slab can be oriented");
+        };
+        assert!(
+            ranked[0].poses.len() >= 2,
+            "a slab stands more than one way"
+        );
+        assert!(
+            !first_of(1).abs_diff_eq(first_of(0), 1e-4),
+            "the second way ranked stands it otherwise than the first"
+        );
     }
 
     #[test]

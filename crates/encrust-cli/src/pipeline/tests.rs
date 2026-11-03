@@ -14,6 +14,7 @@ fn summary(rotation: Quat) -> OrientSummary {
         peak_mm2: 0.0,
         overhang_mm2: 0.0,
         on_plate: false,
+        choices: Vec::new(),
     }
 }
 

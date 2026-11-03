@@ -1,6 +1,5 @@
-//! Jobs on disk: a directory per job, a numbered TOML recipe per revision and the JSON report
-//! of its check beside it. A call names its job, so no state lives in the process but the
-//! lock that orders edits to one job.
+//! Jobs on disk, a directory per job and a numbered recipe per revision with its check and
+//! flags beside it; a call names its job, so no state lives in the process but a lock per job.
 
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -13,6 +12,9 @@ use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use crate::recipe::Recipe;
+
+/// The file in a job's directory that keeps the autopilot's check.
+const AUTOPILOT: &str = "autopilot.json";
 
 /// Where the jobs are kept, and a lock per job so two edits never take one number.
 #[derive(Debug, Clone)]
@@ -98,6 +100,10 @@ impl Jobs {
         let checked = dir.join(format!("{number}.json"));
         fs::write(&checked, report.to_string())
             .with_context(|| format!("writing {}", checked.display()))?;
+        // The flags beside it, so a bench draws the revision without reading a recipe.
+        let args = dir.join(format!("{number}.args.json"));
+        fs::write(&args, serde_json::to_string(&recipe.flags())?)
+            .with_context(|| format!("writing {}", args.display()))?;
         Ok(Revision {
             job: job.to_owned(),
             number,
@@ -105,11 +111,61 @@ impl Jobs {
         })
     }
 
+    /// The file the check of revision `number` is kept in, if it is there.
+    pub fn report_file(&self, job: &str, number: u32) -> Option<PathBuf> {
+        let file = self.dir(job).ok()?.join(format!("{number}.json"));
+        file.is_file().then_some(file)
+    }
+
+    /// The check of a revision as it was kept.
+    pub fn report(&self, revision: &Revision) -> Result<Value> {
+        let file = self
+            .report_file(&revision.job, revision.number)
+            .with_context(|| format!("revision {} keeps no check", revision.number))?;
+        let text =
+            fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+        serde_json::from_str(&text).with_context(|| format!("{} does not read", file.display()))
+    }
+
+    /// The file the autopilot's own check of the job's model is kept in, if it is there.
+    pub fn autopilot_file(&self, job: &str) -> Option<PathBuf> {
+        let file = self.dir(job).ok()?.join(AUTOPILOT);
+        file.is_file().then_some(file)
+    }
+
+    /// Keeps `report` as the autopilot's check of the job's model, what every revision is
+    /// set against.
+    pub fn keep_autopilot(&self, job: &str, report: &Value) -> Result<()> {
+        let file = self.dir(job)?.join(AUTOPILOT);
+        fs::write(&file, report.to_string()).with_context(|| format!("writing {}", file.display()))
+    }
+
+    /// The `--against` flags that set a check of `job` beside the revision `previous` and
+    /// the autopilot's, where each was kept.
+    pub fn against(&self, job: &str, previous: Option<u32>) -> Vec<String> {
+        let previous = previous.and_then(|number| self.report_file(job, number));
+        let kept = [
+            ("previous", previous),
+            ("autopilot", self.autopilot_file(job)),
+        ];
+        kept.into_iter()
+            .filter_map(|(name, file)| Some(format!("--against={name}={}", file?.display())))
+            .collect()
+    }
+
     /// An empty directory of the job's for the pictures of one revision.
     pub fn pictures_dir(&self, revision: &Revision) -> Result<PathBuf> {
-        let dir = self
-            .dir(&revision.job)?
-            .join(format!("pictures-{}", revision.number));
+        self.empty_dir(&revision.job, &format!("pictures-{}", revision.number))
+    }
+
+    /// An empty directory of the job's for the pictures of the `pick`th pose offered for a
+    /// revision.
+    pub fn poses_dir(&self, revision: &Revision, pick: u64) -> Result<PathBuf> {
+        self.empty_dir(&revision.job, &format!("poses-{}-{pick}", revision.number))
+    }
+
+    fn empty_dir(&self, job: &str, name: &str) -> Result<PathBuf> {
+        let dir = self.dir(job)?.join(name);
         if dir.exists() {
             fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
         }
