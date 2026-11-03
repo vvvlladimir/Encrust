@@ -11,11 +11,14 @@ use crate::job::{
     SupportJob, SupportOutcome,
 };
 use crate::orient::stand_turned;
+use crate::plate::BuildPlate;
 use crate::repair::RepairState;
-use crate::scene::{ObjectId, Scene, Taken};
+use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::supports::{Side, Sizing, SupportTool};
+use core_geometry::{Vec2, Vec3};
+use core_volume::DEFAULT_BLOCKER_MM;
 use core_volume::{HollowSettings, hole_at};
 
 /// A step's job, running.
@@ -25,8 +28,9 @@ pub(super) enum Going {
     Repair(Vec<(RepairJob, Taken)>, usize),
     Hollow(HollowJob),
     Drain(DrainsJob),
-    /// Sized by the automatic profile where it carries one, built to a named profile where not.
-    Supports(SupportJob, Side, Option<Box<Sizing>>),
+    /// Sized by the automatic profile where it carries one, built to a named profile where not,
+    /// and the supports placed by hand that land with it.
+    Supports(SupportJob, Side, Option<Box<Sizing>>, Vec<Vec3>),
     /// A step done as it started, with what it said: a turn given outright, holes drilled.
     Done(Status),
 }
@@ -67,7 +71,10 @@ impl Going {
                 } => Self::orient(&ids, (preset, max_tilt_deg), doc, tools, machine)?,
             },
             Step::Repair => Self::repair(&ids, plan, doc),
-            Step::Hollow => Self::hollow(chosen, plan, doc, tools)?,
+            Step::Hollow => {
+                keep_solid(&ids, plan, &mut doc.scene);
+                Self::hollow(chosen, plan, doc, tools)?
+            }
             Step::Drill => match &plan.drains {
                 Some(drains) => Self::Done(drill(&ids, drains, &mut doc.scene, tools)),
                 None => Self::Done(Status::default()),
@@ -136,10 +143,20 @@ impl Going {
     ) -> Result<Self> {
         let slicing = &machine.slicing;
         let layer_mm = slicing.layer_height_mm();
-        let Some(Some(named)) = plan.supports.as_ref() else {
+        let stand = plan.supports.clone().unwrap_or_default();
+        let by_hand = if side == Side::Outside {
+            stand.at_mm.clone()
+        } else {
+            Vec::new()
+        };
+        if stand.only {
+            let group = tools.supports.active;
+            return Ok(Self::Done(by_hand_on(ids, &by_hand, group, &mut doc.scene)));
+        }
+        let Some(named) = stand.profile.as_ref() else {
             let asked = (layer_mm, &slicing.catalogue);
             let (job, sizing) = SupportTool::start_automatic_on(&doc.scene, ids, asked, side)?;
-            return Ok(Self::Supports(job, side, Some(Box::new(sizing))));
+            return Ok(Self::Supports(job, side, Some(Box::new(sizing)), by_hand));
         };
         let profile = slicing.catalogue.support(named)?.profile.clone();
         for id in ids {
@@ -151,7 +168,7 @@ impl Going {
             }
         }
         let job = SupportTool::start_profile_on(&doc.scene, ids, (layer_mm, &profile), side)?;
-        Ok(Self::Supports(job, side, None))
+        Ok(Self::Supports(job, side, None, by_hand))
     }
 
     fn repair(ids: &[ObjectId], plan: &Plan, doc: &Doc) -> Self {
@@ -212,10 +229,13 @@ impl Going {
                 }
                 DrainsOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
             }),
-            Self::Supports(job, side, sizing) => Some(match job.poll()? {
+            Self::Supports(job, side, sizing, by_hand) => Some(match job.poll()? {
                 SupportOutcome::Placed(placements) => {
                     let sizing = sizing.as_deref().cloned();
-                    Ended::Landed(tools.supports.land_placed(scene, placements, *side, sizing))
+                    let ids: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
+                    let said = tools.supports.land_placed(scene, placements, *side, sizing);
+                    by_hand_on(&ids, by_hand, tools.supports.active, scene);
+                    Ended::Landed(said)
                 }
                 SupportOutcome::Cancelled => {
                     Ended::Stopped(Status::Info(tr!("supports-cancelled")))
@@ -272,4 +292,52 @@ fn drill(ids: &[ObjectId], drains: &Drains, scene: &mut Scene, tools: &Tools) ->
         }
     }
     Status::Info(tr!("prepare-drilled", count = drilled))
+}
+
+/// Scales `object` by `scale` from the way it came in, as `--scale` does before anything else,
+/// and stands it back on the middle of the plate.
+pub(super) fn scale(object: &mut SceneObject, scale: Vec3, plate: &BuildPlate) {
+    object.transform.scale = scale;
+    object.slide_onto_plate(Vec2::new(plate.x_mm, plate.y_mm));
+    object.stand_on_plate();
+}
+
+/// Keeps the wall solid round each of the plan's points on the models it hollows, at the
+/// blocker radius of the hollow given or Hollow's default.
+fn keep_solid(ids: &[ObjectId], plan: &Plan, scene: &mut Scene) {
+    let radius_mm = plan
+        .hollow_given()
+        .map_or(DEFAULT_BLOCKER_MM, |state| state.blocker_mm);
+    for id in ids {
+        if let Some(object) = scene.get_mut(*id) {
+            let transform = object.transform;
+            for at in &plan.keep_solid {
+                object.hollow.add_blocker(*at, radius_mm, transform);
+            }
+        }
+    }
+}
+
+/// Stands a support in `group` under the surface of each model nearest each of `at_mm`, as a
+/// click in Supports' Edit mode does. Says how many.
+fn by_hand_on(ids: &[ObjectId], at_mm: &[Vec3], group: u16, scene: &mut Scene) -> Status {
+    let mut placed = 0;
+    for id in ids {
+        let Some(object) = scene.get_mut(*id) else {
+            continue;
+        };
+        let transform = object.transform;
+        let (Some(inverse), world) = (transform.inverse_matrix(), transform.to_matrix()) else {
+            continue;
+        };
+        for at in at_mm {
+            if let Some(found) = object.bvh.closest(inverse.transform_point3(*at)) {
+                object
+                    .supports
+                    .add(world.transform_point3(found.point), transform, group);
+                placed += 1;
+            }
+        }
+    }
+    Status::Info(tr!("supports-placed", count = placed))
 }

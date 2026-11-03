@@ -56,8 +56,12 @@ given in degrees, turned as `--rotate` turns; the repair mode; the wall with its
 infill, measured inside at the command line's precision; holes drilled into the surface nearest
 each point, at the recipe's diameter, then the automatic drains with or without vents; supports
 by the automatic profile or the one named, kept as the model's own for the group in hand, and
-the cavity's. The window lays a plug beside every hole whatever the recipe says, and
-`unshown` says so where it asked for none. The printer and resin stay the window's own.
+the cavity's, with those placed by hand at their points; the scale, before anything else; the
+hollow's mode, precision and Keep solid balls; a hole's depth, taper, sides, turn and plug gap.
+The window lays a plug beside every hole whatever the recipe says, and `unshown` says so where
+it asked for none. Not replayed yet, and named in `unshown`: combine, label, cut, split, part
+off, relief, the mend's face edits, slicing, channels, holes into the supports and walled
+holes. The printer and resin stay the window's own.
 
 The check every tool answers with is still the command line's: the window shows the steps,
 it does not answer for them.

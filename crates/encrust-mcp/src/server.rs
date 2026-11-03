@@ -20,7 +20,7 @@ use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
     JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow, SetPose,
-    SetSupports, Start, View, WriteFile, absolute, plain,
+    SetRepair, SetShape, SetSlicing, SetSupports, Start, View, WriteFile, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -151,6 +151,53 @@ impl Server {
         Ok(answer(edited.await))
     }
 
+    /// Sets the model's size and the modelling done to it — combined with others, labelled,
+    /// cut with a joint, split, a part cut off — and a texture pressed in; checks the result.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn set_shape(&self, Parameters(set): Parameters<SetShape>, ctx: Context) -> Answer {
+        let edited = self.edit(&set.job, &ctx, |recipe| {
+            recipe.modelling = set.modelling;
+            recipe.relief = set.relief;
+            None
+        });
+        Ok(answer(edited.await))
+    }
+
+    /// Sets the repair the model gets and the faces and shells changed by hand, by the numbers
+    /// `inspect_model` gives; checks the result.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn set_repair(&self, Parameters(set): Parameters<SetRepair>, ctx: Context) -> Answer {
+        let edited = self.edit(&set.job, &ctx, |recipe| {
+            recipe.repair = set.repair;
+            recipe.mend = set.mend;
+            None
+        });
+        Ok(answer(edited.await))
+    }
+
+    /// Sets how the model is sliced and its masks drawn — layer height, adaptive layers,
+    /// exposure bands, anti-aliasing, islands taken out — and checks the result.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn set_slicing(&self, Parameters(set): Parameters<SetSlicing>, ctx: Context) -> Answer {
+        let edited = self.edit(&set.job, &ctx, |recipe| {
+            recipe.slicing = set.slicing;
+            None
+        });
+        Ok(answer(edited.await))
+    }
+
     /// Checks a revision as it would print: islands, peel, suction cups, trapped resin, fit,
     /// time and resin.
     #[tool(annotations(read_only_hint = true, open_world_hint = false))]
@@ -268,9 +315,7 @@ impl Server {
         let latest = self.jobs.open(job, None)?;
         let mut recipe = latest.recipe.clone();
         let note = change(&mut recipe);
-        if let Some(supports) = &recipe.supports {
-            plain(&supports.profile, "the support profile")?;
-        }
+        recipe.check_paths()?;
         let outcome = self.estimate(&recipe, ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(Some(&latest), &outcome));

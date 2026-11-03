@@ -28,8 +28,10 @@ revision and put back as it came in on each later one, then a Prepare run by a *
 takes each step the recipe sets as given, decides what it leaves out as the autopilot would
 under `prepare` and skips it otherwise. What it cannot replay yet it names in `unshown`. The
 command line still answers every check. A turn given in degrees, the open floor and infill,
-drain points and named support profiles are replayed through the same steps; where the window
-does a step its own way — a plug beside every hole — the answer says so. Each side reads the line into types of its own, as
+drain points, hand supports, Keep solid and the scale and named support profiles are replayed
+through the same steps; where the window does a step its own way — a plug beside every hole —
+or has no replay yet — the modelling, a relief, the mend, slicing, channels — the answer says
+so. Each side reads the line into types of its own, as
 the server reads the command line's report: the schema is the contract, written in
 `docs/design/window-link.md`. The window takes `directories`, already the catalogue's, to find
 the cache.

@@ -141,6 +141,9 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "set_drains",
             "set_hollow",
             "set_pose",
+            "set_repair",
+            "set_shape",
+            "set_slicing",
             "set_supports",
             "start_job",
             "write_file"
@@ -223,6 +226,56 @@ async fn a_traced_server_writes_a_line_per_call_and_keeps_each_revisions_check()
     )
     .expect("JSON");
     assert!(kept["slicing"].is_object(), "the estimate's report: {kept}");
+}
+
+#[tokio::test]
+async fn a_cut_a_slicing_and_supports_placed_by_hand_are_each_kept_as_the_command_line_takes_them()
+{
+    let dir = scratch("shape");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let cut = call(
+        &client,
+        "set_shape",
+        json!({"job": job, "modelling": {"cut": {"axis": "z", "at_mm": 10.0, "keep": "lower"}, "arrange": true}}),
+    )
+    .await;
+    assert!(!failed(&cut), "the cut was refused: {}", answer(&cut));
+    let height = answer(&cut)["report"]["slicing"]["layers"]
+        .as_u64()
+        .expect("layers");
+    let sliced = call(
+        &client,
+        "set_slicing",
+        json!({"job": job, "slicing": {"layer_height_mm": 0.1}}),
+    )
+    .await;
+    assert!(
+        !failed(&sliced),
+        "the slicing was refused: {}",
+        answer(&sliced)
+    );
+    let thicker = answer(&sliced)["report"]["slicing"]["layers"]
+        .as_u64()
+        .expect("layers");
+    assert_eq!(
+        thicker * 2,
+        height,
+        "0.1 mm layers are half as many as the test resin's 0.05 mm ones"
+    );
+    let held = call(
+        &client,
+        "set_supports",
+        json!({"job": job, "supports": {"profile": "medium", "at_mm": [[10.0, 10.0, 0.0]], "only_at": true}}),
+    )
+    .await;
+    assert!(
+        !failed(&held),
+        "the supports were refused: {}",
+        answer(&held)
+    );
+    assert_eq!(answer(&held)["revision"], 4);
+    client.cancel().await.expect("the server stops");
 }
 
 #[tokio::test]

@@ -509,6 +509,8 @@ fn a_planned_turn_turns_the_model_as_the_command_line_would() {
     let fresh = bench.object(id).clone();
     let turn = Quat::from_rotation_z(0.5);
     let plan = Plan {
+        scale: None,
+        keep_solid: Vec::new(),
         orient: Choice::Given(Orient::Turn(turn)),
         repair: Choice::Skip,
         hollow: Choice::Skip,
@@ -544,6 +546,8 @@ fn a_planned_point_drills_the_surface_nearest_it() {
     let world = fresh.transform.to_matrix();
     let side = world.transform_point3(Vec3::new(0.0, 20.0, 20.0));
     let plan = Plan {
+        scale: None,
+        keep_solid: Vec::new(),
         orient: Choice::Skip,
         repair: Choice::Skip,
         hollow: Choice::Skip,
@@ -583,11 +587,16 @@ fn a_named_support_profile_becomes_the_models_own() {
     let (mut bench, id) = Bench::with(large_cube());
     let fresh = bench.object(id).clone();
     let plan = Plan {
+        scale: None,
+        keep_solid: Vec::new(),
         orient: Choice::Skip,
         repair: Choice::Skip,
         hollow: Choice::Skip,
         drains: None,
-        supports: Some(Some("light".to_owned())),
+        supports: Some(Stand {
+            profile: Some("light".to_owned()),
+            ..Stand::default()
+        }),
         cavity: false,
     };
     let Bench {
@@ -607,4 +616,86 @@ fn a_named_support_profile_becomes_the_models_own() {
         .profile;
     let active = bench.tools.supports.active;
     assert_eq!(bench.object(id).own.supports.get(&active), Some(light));
+}
+
+/// A plan that does nothing but what a test sets.
+fn nothing() -> Plan {
+    Plan {
+        scale: None,
+        keep_solid: Vec::new(),
+        orient: Choice::Skip,
+        repair: Choice::Skip,
+        hollow: Choice::Skip,
+        drains: None,
+        supports: None,
+        cavity: false,
+    }
+}
+
+#[test]
+fn a_planned_scale_and_supports_placed_only_by_hand_land_as_given() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let fresh = bench.object(id).clone();
+    let plan = Plan {
+        scale: Some(Vec3::splat(0.5)),
+        supports: Some(Stand {
+            at_mm: vec![Vec3::new(10.0, 10.0, 0.0)],
+            only: true,
+            ..Stand::default()
+        }),
+        ..nothing()
+    };
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
+    start_planned(doc, tools, machine, plan, &[fresh]).expect("nothing else runs");
+    bench.run_to_end();
+    let object = bench.object(id);
+    assert_eq!(object.transform.scale, Vec3::splat(0.5), "halved as given");
+    assert_eq!(
+        object.supports.point_count(),
+        1,
+        "the one support placed by hand alone"
+    );
+}
+
+#[test]
+fn a_wall_kept_solid_round_a_point_leaves_a_blocker_there() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let fresh = bench.object(id).clone();
+    let world = fresh.transform.to_matrix();
+    let state = core_engine::project::HollowState {
+        thickness_mm: 2.0,
+        mode: core_volume::HollowMode::Internal,
+        precision: 0.5,
+        infill_on: false,
+        infill: core_volume::InfillSettings::default(),
+        blocker_mm: 5.0,
+        open_floor: false,
+    };
+    let plan = Plan {
+        hollow: Choice::Given(state),
+        keep_solid: vec![world.transform_point3(Vec3::new(2.0, 20.0, 20.0))],
+        ..nothing()
+    };
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
+    start_planned(doc, tools, machine, plan, &[fresh]).expect("nothing else runs");
+    bench.run_to_end();
+    let object = bench.object(id);
+    assert!(object.hollow.is_hollow(), "hollowed as given");
+    let blockers = object.hollow.blockers();
+    assert_eq!(blockers.len(), 1, "one ball kept solid");
+    assert!(
+        (blockers[0].radius_mm - 5.0).abs() < 1e-4,
+        "at the hollow's 5 mm radius, found {}",
+        blockers[0].radius_mm
+    );
 }
