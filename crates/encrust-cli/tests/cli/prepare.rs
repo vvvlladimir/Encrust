@@ -1,5 +1,5 @@
 //! `--prepare`: the autopilot's defaults filled in where no flag was typed, and the report of
-//! what it decided (ADR 0397).
+//! what it decided (ADR 0399).
 
 use std::path::{Path, PathBuf};
 

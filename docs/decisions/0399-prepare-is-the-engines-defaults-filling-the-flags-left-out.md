@@ -1,4 +1,4 @@
-# 0397. Prepare a model by the engine's defaults, filling in the flags left out
+# 0399. Prepare a model by the engine's defaults, filling in the flags left out
 
 - **Status:** Proposed
 - **Date:** 2026-11-02
@@ -7,10 +7,10 @@
 
 Preparing a model for print takes six flags chosen by judgement: whether to repair, how to
 turn it, whether and how thick to hollow, where to drain, what to stand it on. A language
-model driving the command line (ADR 0395) needs a baseline to be measured against, and a
+model driving the command line (ADR 0397) needs a baseline to be measured against, and a
 user with no model needs the same answer without one (`docs/design/ai-integration.md`, step
 4). Each piece exists: the import diagnosis, `--orient-goal auto`, the saving of ADR 0393,
-`--drain-at auto` (ADR 0396), `--supports auto` (ADR 0325) and `--support-cavity` (ADR 0332).
+`--drain-at auto` (ADR 0398), `--supports auto` (ADR 0325) and `--support-cavity` (ADR 0332).
 What is missing is the rule that chains them, and the window must be able to run the same
 rule (rule 9 of `architecture.md`).
 
@@ -57,7 +57,7 @@ a model settling onto its raft or the plugs for its holes, falls inside the hold
 of the entry settles the plate as any undo does. Undo and redo wait while a hold runs.
 
 No infill: it is the window's default, a lattice can seal off a pocket the drain search
-cannot see, and it pushes the search's holes down its ranking (ADR 0396); a 2 mm wall on a
+cannot see, and it pushes the search's holes down its ranking (ADR 0398); a 2 mm wall on a
 model saving at least 10 ml stands without one.
 
 ## Consequences

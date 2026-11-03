@@ -1,5 +1,5 @@
 //! Prepare for print: the decisions `--prepare` makes, taken on the picked models by starting
-//! each tool's own job in turn and waiting for it to land, all one undo (ADR 0397).
+//! each tool's own job in turn and waiting for it to land, all one undo (ADR 0399).
 
 use anyhow::{Result, bail};
 use core_engine::{Hollowing, hollowing, needs_repair};

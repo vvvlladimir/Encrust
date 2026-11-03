@@ -7,7 +7,7 @@ use crate::error::EngineError;
 use crate::trapped::trapped_in;
 
 /// The most holes tried for one pocket in each role. A search scans the model once to find
-/// the pockets, once a round for drains and for vents, and once more for what is left (ADR 0396).
+/// the pockets, once a round for drains and for vents, and once more for what is left (ADR 0398).
 pub const MOST_TRIES: usize = 4;
 
 /// How far apart two mouths stand, in hole diameters, so the wall between them holds.

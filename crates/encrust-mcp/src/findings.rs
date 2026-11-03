@@ -1,4 +1,4 @@
-//! The located findings of a check's report (ADR 0394), as points to mark on a picture.
+//! The located findings of a check's report (ADR 0396), as points to mark on a picture.
 
 use serde::Serialize;
 use serde_json::Value;

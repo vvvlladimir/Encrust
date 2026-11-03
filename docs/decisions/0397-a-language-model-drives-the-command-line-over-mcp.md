@@ -1,4 +1,4 @@
-# 0395. A language model drives the command line over MCP
+# 0397. A language model drives the command line over MCP
 
 - **Status:** Proposed
 - **Date:** 2026-11-02

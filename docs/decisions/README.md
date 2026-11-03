@@ -59,7 +59,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
-| [0394](0394-the-report-locates-every-finding-on-the-plate.md) | Locate every finding of the JSON report in plate millimetres, in schema 1 | Proposed |
+| [0396](0396-the-report-locates-every-finding-on-the-plate.md) | Locate every finding of the JSON report in plate millimetres, in schema 1 | Proposed |
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
 | [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
@@ -294,7 +294,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
-| [0396](0396-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
+| [0398](0398-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
@@ -491,5 +491,5 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |
-| [0395](0395-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
-| [0397](0397-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |
+| [0397](0397-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
+| [0399](0399-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |
