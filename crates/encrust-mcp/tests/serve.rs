@@ -64,9 +64,17 @@ async fn cube_and_server(dir: &Path) -> (PathBuf, Client) {
 }
 
 async fn serve(cli: &Path, jobs: &Path) -> Client {
+    serve_with(cli, jobs, &[]).await
+}
+
+async fn serve_with(cli: &Path, jobs: &Path, extra: &[&std::ffi::OsStr]) -> Client {
     let server = PathBuf::from(env!("CARGO_BIN_EXE_encrust-mcp"));
     let transport = TokioChildProcess::new(tokio::process::Command::new(server).configure(|cmd| {
-        cmd.arg("--encrust").arg(cli).arg("--jobs").arg(jobs);
+        cmd.arg("--encrust")
+            .arg(cli)
+            .arg("--jobs")
+            .arg(jobs)
+            .args(extra);
     }))
     .expect("the server binary starts");
     ().serve(transport)
@@ -185,6 +193,39 @@ async fn a_job_is_prepared_revision_by_revision_and_written() {
     assert_eq!(answer(&written)["revision"], 3);
     assert!(output.is_file(), "{} was not written", output.display());
     client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_traced_server_writes_a_line_per_call_and_keeps_each_revisions_check() {
+    let dir = scratch("trace");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let trace = dir.join("trace.jsonl");
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--trace".as_ref(), trace.as_os_str()]).await;
+    let job = start(&client, &model).await;
+    let refused = call(&client, "check", json!({"job": "no-such-job"})).await;
+    assert!(failed(&refused));
+    client.cancel().await.expect("the server stops");
+
+    let lines: Vec<Value> = fs::read_to_string(&trace)
+        .expect("the trace is written")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each line is JSON"))
+        .collect();
+    assert_eq!(lines.len(), 2, "one line per call: {lines:?}");
+    assert_eq!(lines[0]["tool"], "start_job");
+    assert_eq!(lines[0]["job"], job.as_str());
+    assert_eq!(lines[0]["revision"], 1);
+    assert_eq!(lines[0]["failed"], false);
+    assert_eq!(lines[1]["tool"], "check");
+    assert_eq!(lines[1]["failed"], true);
+
+    let kept: Value = serde_json::from_str(
+        &fs::read_to_string(jobs.join(&job).join("1.json")).expect("the check is kept"),
+    )
+    .expect("JSON");
+    assert!(kept["slicing"].is_object(), "the estimate's report: {kept}");
 }
 
 #[tokio::test]

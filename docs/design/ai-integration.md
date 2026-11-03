@@ -123,12 +123,13 @@ reliably, which the autopilot covers: it asks the model only what the engine can
 
 ## How quality is measured
 
-An `agent-lab` beside `orient-lab` and `support-lab`, on their corpora: each model run by
-the autopilot and by each model and client under test, scored on what the labs already
-read — the strict status, islands, trapped resin, tips on faces looking up, resin, print
-time — plus tool calls and tokens, against a kept baseline. A model's path is offered where
-it matches or beats the autopilot, and the server's `instructions` and prompts carry the
-procedure it is measured with.
+`agent-lab` (ADR 0400; `docs/cli.md`) prepares each model by the autopilot and by each
+client under test, run as its own command against `encrust-mcp`, and scores both on the
+check's report — status, islands, suction cups, trapped pockets, contacts with no room,
+resin, print time — with the client's tool calls from the server's trace and its tokens from
+its own output, against a kept baseline. A model's path is offered where it matches or beats
+the autopilot, and the server's `instructions` carry the procedure it is measured with. Tips
+on faces looking up are not in the report yet, so not in the score.
 
 ## Steps
 
@@ -140,7 +141,7 @@ procedure it is measured with.
 | 4 | The autopilot, `--prepare` | `core-engine`, `encrust-cli` (done, ADR 0399; the window's button to come) | 1, 2 |
 | 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0397) | — |
 | 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` (done) | 1–5 |
-| 7 | The bench | `agent-lab` in `encrust-cli` | 4, 6 |
+| 7 | The bench | `agent-lab` in `encrust-cli` (done, ADR 0400) | 4, 6 |
 | 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 6 |
 | 10 | The MCP Apps page | `encrust-mcp` | 6 |

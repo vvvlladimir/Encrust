@@ -7,6 +7,7 @@ mod params;
 mod recipe;
 mod runner;
 mod server;
+mod trace;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -19,16 +20,18 @@ use rmcp::transport::stdio;
 use crate::jobs::Jobs;
 use crate::runner::Cli;
 use crate::server::Server;
+use crate::trace::Trace;
 
-const USAGE: &str = "usage: encrust-mcp [--encrust PATH] [--jobs DIR] [--timeout-s SECONDS]";
+const USAGE: &str =
+    "usage: encrust-mcp [--encrust PATH] [--jobs DIR] [--timeout-s SECONDS] [--trace FILE]";
 
 /// How long one run of the command line may take before it is stopped.
 const TIMEOUT: Duration = Duration::from_mins(30);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (cli, jobs) = parse(std::env::args_os().skip(1))?;
-    let service = Server::new(cli, jobs)
+    let (cli, jobs, trace) = parse(std::env::args_os().skip(1))?;
+    let service = Server::new(cli, jobs, trace)
         .serve(stdio())
         .await
         .context("starting the MCP server on stdio")?;
@@ -36,10 +39,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs)> {
+fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs, Trace)> {
     let server = std::env::current_exe().context("finding this server's own binary")?;
     let mut program = Cli::program_beside(&server);
     let mut jobs = None;
+    let mut trace = None;
     let mut timeout = TIMEOUT;
     while let Some(arg) = args.next() {
         let mut value = || {
@@ -49,6 +53,7 @@ fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs)> {
         match arg.to_str() {
             Some("--encrust") => program = value()?.into(),
             Some("--jobs") => jobs = Some(PathBuf::from(value()?)),
+            Some("--trace") => trace = Some(PathBuf::from(value()?)),
             Some("--timeout-s") => {
                 let seconds = value()?;
                 let seconds: u64 = seconds
@@ -64,7 +69,11 @@ fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs)> {
         Some(jobs) => jobs,
         None => default_jobs_dir()?,
     };
-    Ok((Cli::new(program, timeout), Jobs::new(jobs)))
+    Ok((
+        Cli::new(program, timeout),
+        Jobs::new(jobs),
+        Trace::new(trace),
+    ))
 }
 
 fn default_jobs_dir() -> Result<PathBuf> {

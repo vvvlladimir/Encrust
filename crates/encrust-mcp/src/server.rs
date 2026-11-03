@@ -1,15 +1,16 @@
 //! The tools a client sees, each one or two runs of the command line over a job's revision.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use rmcp::handler::server::router::tool::ToolRouter;
+use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolResult, ContentBlock, Implementation, ProgressNotificationParam, ServerCapabilities,
-    ServerConfig,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ProgressNotificationParam, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
@@ -23,17 +24,20 @@ use crate::params::{
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
+use crate::trace::Trace;
 
 const INSTRUCTIONS: &str = include_str!("instructions.md");
 
 /// How often a client hears that a long run is still going, so it does not time out.
 const BEAT: Duration = Duration::from_secs(5);
 
-/// The server: the command line it drives and where its jobs are kept.
+/// The server: the command line it drives, where its jobs are kept and where its calls are
+/// traced.
 #[derive(Debug, Clone)]
 pub struct Server {
     cli: Cli,
     jobs: Jobs,
+    trace: Trace,
     tool_router: ToolRouter<Self>,
 }
 
@@ -42,10 +46,11 @@ type Context = RequestContext<RoleServer>;
 
 #[tool_router]
 impl Server {
-    pub fn new(cli: Cli, jobs: Jobs) -> Self {
+    pub fn new(cli: Cli, jobs: Jobs, trace: Trace) -> Self {
         Self {
             cli,
             jobs,
+            trace,
             tool_router: Self::tool_router(),
         }
     }
@@ -162,8 +167,8 @@ impl Server {
             let lock = self.jobs.lock(&revert.job);
             let _held = lock.lock().await;
             let old = self.jobs.open(&revert.job, Some(revert.revision))?;
-            let revision = self.jobs.commit(&revert.job, old.recipe)?;
-            let outcome = self.estimate(&revision.recipe, &ctx).await?;
+            let outcome = self.estimate(&old.recipe, &ctx).await?;
+            let revision = self.jobs.commit(&revert.job, old.recipe, &outcome.report)?;
             Ok(revised(&revision, &outcome, None))
         };
         Ok(answer(reverted.await))
@@ -245,7 +250,7 @@ impl Server {
             return Ok(not_applied(None, &outcome));
         }
         let job = Jobs::name_for(&recipe);
-        let revision = self.jobs.commit(&job, recipe)?;
+        let revision = self.jobs.commit(&job, recipe, &outcome.report)?;
         Ok(revised(&revision, &outcome, None))
     }
 
@@ -269,7 +274,7 @@ impl Server {
         if !outcome.reported() {
             return Ok(not_applied(Some(&latest), &outcome));
         }
-        let revision = self.jobs.commit(job, recipe)?;
+        let revision = self.jobs.commit(job, recipe, &outcome.report)?;
         Ok(revised(&revision, &outcome, note))
     }
 
@@ -487,6 +492,21 @@ fn answer(reply: Result<Reply>) -> CallToolResult {
 )]
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Server {
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: Context,
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        let started = Instant::now();
+        let tool = request.name.clone();
+        let response = self
+            .tool_router
+            .call(ToolCallContext::new(self, request, context))
+            .await;
+        self.trace.record(&tool, started.elapsed(), &response).await;
+        response
+    }
+
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("encrust", env!("CARGO_PKG_VERSION")))

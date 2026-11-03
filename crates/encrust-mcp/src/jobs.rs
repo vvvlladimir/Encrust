@@ -1,5 +1,6 @@
-//! Jobs on disk: a directory per job, a numbered TOML recipe per revision. A call names its
-//! job, so no state lives in the process but the lock that orders edits to one job.
+//! Jobs on disk: a directory per job, a numbered TOML recipe per revision and the JSON report
+//! of its check beside it. A call names its job, so no state lives in the process but the
+//! lock that orders edits to one job.
 
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -9,6 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
+use serde_json::Value;
 
 use crate::recipe::Recipe;
 
@@ -74,9 +76,10 @@ impl Jobs {
         })
     }
 
-    /// Writes `recipe` as the revision after the job's latest, or as revision one of a job not
-    /// there yet. Hold the job's lock across reading the latest and this.
-    pub fn commit(&self, job: &str, recipe: Recipe) -> Result<Revision> {
+    /// Writes `recipe` and the `report` of its check as the revision after the job's latest, or
+    /// as revision one of a job not there yet. Hold the job's lock across reading the latest
+    /// and this.
+    pub fn commit(&self, job: &str, recipe: Recipe, report: &Value) -> Result<Revision> {
         let dir = self.dir(job)?;
         let number = if dir.is_dir() {
             self.latest(job)? + 1
@@ -92,6 +95,9 @@ impl Jobs {
             .with_context(|| format!("revision {number} of job {job} was taken"))?;
         file.write_all(toml::to_string(&recipe)?.as_bytes())
             .with_context(|| format!("writing {}", path.display()))?;
+        let checked = dir.join(format!("{number}.json"));
+        fs::write(&checked, report.to_string())
+            .with_context(|| format!("writing {}", checked.display()))?;
         Ok(Revision {
             job: job.to_owned(),
             number,
