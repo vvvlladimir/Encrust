@@ -78,6 +78,8 @@ snapshots = []
 
 # A browser has no TLS stack to build and no native dialogs; see docs/decisions/0181.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Where the file that tells encrust-mcp of an open window goes; see docs/decisions/0401.
+directories.workspace = true
 fontdb.workspace = true
 ureq = { workspace = true, features = ["rustls"] }
 rfd.workspace = true

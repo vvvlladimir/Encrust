@@ -15,7 +15,7 @@ use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
 use crate::recent::picture::Parts;
-use crate::scene::{ImportSummary, Imported, Mapped, Scene};
+use crate::scene::{ImportSummary, Imported, Mapped, ObjectId, Scene};
 use crate::status::Status;
 
 /// The imports currently being read, one thread each.
@@ -28,6 +28,8 @@ pub struct Imports {
     /// The files on disk that reached the plate since the window last took them, for the
     /// recent list, each with what its picture is drawn from.
     opened: Vec<(PathBuf, Parts)>,
+    /// The models read from disk that reached the plate since the window last took them.
+    landed: Vec<(PathBuf, ObjectId)>,
 }
 
 impl Imports {
@@ -52,6 +54,11 @@ impl Imports {
             path = file.path().display().to_string()
         ));
         self.jobs.push(ImportJob::spawn_sliced(file, placement));
+    }
+
+    /// The files read from disk and the models they became, since the last call.
+    pub fn take_landed(&mut self) -> Vec<(PathBuf, ObjectId)> {
+        std::mem::take(&mut self.landed)
     }
 
     /// The files that reached the plate since the last call.
@@ -99,7 +106,10 @@ impl Imports {
                         let parts = vec![(Arc::clone(&imported.mesh), imported.transform)];
                         self.opened.push((path.clone(), parts));
                     }
-                    scene.insert(*imported);
+                    let id = scene.insert(*imported);
+                    if on_disk {
+                        self.landed.push((path.clone(), id));
+                    }
                     *status = Status::Info(tr!("status-opened", path = path.display().to_string()));
                     frame_view(scene, plate, camera);
                 }

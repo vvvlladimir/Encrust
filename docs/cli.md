@@ -681,7 +681,11 @@ Jobs are kept under the user's cache directory, or `--jobs DIR`, each revision a
 with the report of its check as `N.json`; a run is stopped after `--timeout-s` seconds
 (1800), and reports progress every five seconds while it runs. `--trace FILE` appends a JSON
 line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
-`null` when it named none.
+`null` when it named none. With a window open, each revision kept is also handed to it to
+replay on its plate (`docs/design/window-link.md`), and the answer carries the window's
+reply as `window`: `shown`, and what it left out as `unshown` or why it showed nothing as
+`why_not`. `--window FILE` reads where the window listens from another file than the one in
+the cache directory, `--no-window` hands nothing over.
 
 ```sh
 cargo xtask mcpb                                        # target/mcpb/encrust-<platform>.mcpb

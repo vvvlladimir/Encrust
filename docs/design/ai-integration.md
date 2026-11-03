@@ -86,9 +86,10 @@ user's own paths and the printer is on the user's network. The client runs the a
 on the user's own plan, so a subscription to Claude or ChatGPT is all it takes: this is the
 way a subscription reaches Encrust (see Providers).
 
-When the window is open, `encrust-mcp` hands each call to it over a local socket instead of
-running it alone, so every step lands in the viewport and on the undo stack as the client
-makes it. With no window it runs the engine itself.
+When the window is open, `encrust-mcp` hands each revision it keeps to it over a loopback
+port, and the window replays it on its plate, so every step lands in the viewport and on the
+undo stack as the client makes it (ADR 0401, `window-link.md`). The check is still the command
+line's; with no window the server works alone.
 
 An MCP Apps page (SEP-1865, `ui://`, shown by Claude and ChatGPT) can show the plate in 3D
 with its findings beside the chat; the local server serves it. Optional, after the tools.
@@ -142,7 +143,7 @@ on faces looking up are not in the report yet, so not in the score.
 | 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0397) | — |
 | 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` (done) | 1–5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` (done, ADR 0400) | 4, 6 |
-| 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |
+| 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` (first slice done, ADR 0401: each revision replayed; turns, infill, drain points, plugs and named profiles to come) | 6 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 6 |
 | 10 | The MCP Apps page | `encrust-mcp` | 6 |
 
@@ -165,7 +166,5 @@ stands.
 
 ## Open decisions
 
-1. **The window as the server's engine:** a local socket the open window listens on, after
-   the stdio server works alone.
-2. **The window's providers:** an API key and local models first; "Sign in with ChatGPT"
+1. **The window's providers:** an API key and local models first; "Sign in with ChatGPT"
    once OpenAI's terms for apps are confirmed.

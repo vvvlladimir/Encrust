@@ -1818,6 +1818,7 @@ dependencies = [
  "core-text",
  "core-thumbnail",
  "core-volume",
+ "directories",
  "eframe",
  "egui",
  "egui-phosphor",

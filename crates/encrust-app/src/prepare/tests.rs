@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use core_geometry::{Mesh, Transform, Vec3, cuboid, diagnose};
+use core_geometry::{Mesh, Quat, Transform, Vec3, cuboid, diagnose};
 
 use super::*;
 use crate::scene::{ImportSummary, Imported};
@@ -479,4 +479,26 @@ fn nothing_on_the_plate_or_no_automatic_profile_starts_nothing() {
     let said = started.expect_err("no automatic profile").to_string();
     assert_eq!(said, tr!("supports-no-automatic"));
     assert!(!bench.doc.history.is_held());
+}
+
+#[test]
+fn a_planned_run_leaves_out_the_steps_its_plan_skips() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let fresh = bench.object(id).clone();
+    let plan = Plan {
+        hollow: Choice::Skip,
+        ..Plan::autopilot()
+    };
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
+    start_planned(doc, tools, machine, plan, &[fresh]).expect("nothing else runs");
+    bench.run_to_end();
+    let object = bench.object(id);
+    assert!(!object.hollow.is_hollow(), "Hollow was left out");
+    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
+    assert_eq!(prepared.hollowed, None);
 }

@@ -364,6 +364,10 @@ supports-growth-stopped = Построение поддержек прервал
 surfaces-cannot-build = Не удалось подготовить поверхность для поддержек: { $reason }
 surfaces-build-stopped = Подготовка поверхности для поддержек прервалась без результата
 
+## link.rs
+
+link-replaying = Показываю ревизию { $revision } задания чат-клиента { $job }
+
 ## measure.rs
 
 measure-snapped-corner = на углу

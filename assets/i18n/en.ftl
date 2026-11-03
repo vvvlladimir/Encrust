@@ -351,6 +351,11 @@ supports-growth-stopped = Building the supports stopped without an answer
 surfaces-cannot-build = The surface supports stand on could not be prepared: { $reason }
 surfaces-build-stopped = Preparing the surface supports stand on stopped without an answer
 
+## link.rs
+
+# A chat client prepares a model over MCP; each change it keeps is a numbered revision of its job, shown again on the plate.
+link-replaying = Showing revision { $revision } of the chat client's job { $job }
+
 ## measure.rs
 
 measure-snapped-corner = on a corner

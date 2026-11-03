@@ -214,7 +214,9 @@ track. With no stack it reads *No layers*.
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Prepare for print's is *Preparing
-  for print:* and its step, standing whichever tool is in hand.
+  for print:* and its step, standing whichever tool is in hand; a chat client's revision
+  replayed (ADR 0401) runs as the same notice, after *Showing revision N of the chat
+  client's job* in the status line.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30

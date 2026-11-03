@@ -2,9 +2,8 @@
 //! reaches it, and its outcome comes back to the run rather than through the status line.
 
 use anyhow::Result;
-use core_engine::{PREPARE_ORIENT, PREPARE_REPAIR};
 
-use super::{Chosen, Step};
+use super::{Chosen, Plan, Step};
 use crate::i18n::tr;
 use crate::job::{
     DrainsJob, DrainsOutcome, HollowJob, HollowOutcome, OrientJob, OrientOutcome, RepairJob,
@@ -40,9 +39,9 @@ impl std::fmt::Debug for Going {
 }
 
 impl Going {
-    /// Starts `step` on the models `chosen` names.
+    /// Starts `step` of `plan` on the models `chosen` names.
     pub(super) fn start(
-        step: Step,
+        (step, plan): (Step, Plan),
         chosen: &[Chosen],
         doc: &Doc,
         tools: &mut Tools,
@@ -52,8 +51,8 @@ impl Going {
         let (scene, slicing) = (&doc.scene, &machine.slicing);
         let layer_mm = slicing.layer_height_mm();
         Ok(match step {
-            Step::Orient => Self::orient(&ids, doc, tools, machine)?,
-            Step::Repair => Self::repair(&ids, doc),
+            Step::Orient => Self::orient(&ids, plan, doc, tools, machine)?,
+            Step::Repair => Self::repair(&ids, plan, doc),
             Step::Hollow => {
                 let walls: Vec<(ObjectId, f32)> = chosen
                     .iter()
@@ -75,22 +74,28 @@ impl Going {
         })
     }
 
-    fn orient(ids: &[ObjectId], doc: &Doc, tools: &mut Tools, machine: &Machine) -> Result<Self> {
+    fn orient(
+        ids: &[ObjectId],
+        plan: Plan,
+        doc: &Doc,
+        tools: &mut Tools,
+        machine: &Machine,
+    ) -> Result<Self> {
         let slicing = &machine.slicing;
         let plans = tools.supports.automatic_plans(&slicing.catalogue)?;
         let proof = slicing
             .printer
             .as_ref()
             .map(|printer| (printer, &slicing.material));
-        let asked = (PREPARE_ORIENT, plans);
+        let asked = (plan.preset(), plans);
         Ok(Self::Orient(
             tools.orient.start_on(&doc.scene, ids, asked, proof)?,
         ))
     }
 
-    fn repair(ids: &[ObjectId], doc: &Doc) -> Self {
+    fn repair(ids: &[ObjectId], plan: Plan, doc: &Doc) -> Self {
         let state = RepairState {
-            method: PREPARE_REPAIR,
+            method: plan.method(),
             ..RepairState::default()
         };
         let jobs: Vec<(RepairJob, Taken)> = ids
