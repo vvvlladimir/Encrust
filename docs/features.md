@@ -891,7 +891,10 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 
 **For a chat client:** `encrust-mcp` gives Claude Desktop, Claude Code, Codex or Cursor the
 command line as tools, so a language model prepares a model step by step on your
-computer, checks it and writes the file; it asks you for the printer and resin.
+computer, checks it and writes the file; it asks you for the printer and resin. With the
+window open, each step it keeps is replayed on the plate as it makes it, one undo each; a
+turn given in degrees, infill, drain points, plugs and named support profiles are not
+replayed yet, and the check is still the command line's.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear
 exit codes, `--strict` (fail

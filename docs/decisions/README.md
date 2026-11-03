@@ -494,3 +494,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0397](0397-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
 | [0399](0399-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |
 | [0400](0400-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
+| [0401](0401-the-open-window-replays-each-revision-the-server-keeps.md) | The open window replays each revision the server keeps, over a loopback port | Proposed |

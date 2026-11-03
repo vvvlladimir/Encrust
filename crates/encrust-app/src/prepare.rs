@@ -2,8 +2,6 @@
 //! each tool's own job in turn and waiting for it to land, all one undo (ADR 0399).
 
 use anyhow::{Result, bail};
-use core_engine::{Hollowing, hollowing, needs_repair};
-use core_geometry::Quat;
 
 use crate::i18n::tr;
 use crate::job::Highest;
@@ -13,9 +11,12 @@ use crate::status::Status;
 use crate::tool_settings::ToolSettings;
 
 mod decided;
+mod plan;
 mod step;
 
 pub use decided::Prepared;
+use plan::Chosen;
+pub use plan::{Choice, Plan};
 use step::{Ended, Going};
 
 /// Settled polls the plate may wait on cuts or a support surface no job is building, which the
@@ -78,6 +79,7 @@ pub struct Prepare {
 #[derive(Debug)]
 struct Run {
     ids: Vec<ObjectId>,
+    plan: Plan,
     step: Step,
     /// The step's job, while it runs.
     going: Option<Going>,
@@ -134,6 +136,11 @@ pub fn blocker(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
     if doc.scene.target_count() == 0 {
         return Some(tr!("prepare-nothing-visible"));
     }
+    busy(doc, tools, machine)
+}
+
+/// Why no run can start now: one is going, or a job that will land on the plate.
+pub fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
     let busy = tools.prepare.is_running()
         || tools.orient.is_running()
         || tools.hollow.job.is_some()
@@ -165,6 +172,32 @@ pub fn start(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<
     if ids.is_empty() {
         bail!(tr!("prepare-nothing-visible"));
     }
+    begin(doc, tools, machine, (ids, Plan::autopilot()), &[])
+}
+
+/// Starts a run by `plan` on each of `fresh`'s models, put back first as `fresh` holds them,
+/// within the run's one undo: a revision of a job, done again from the model as it came in.
+pub fn start_planned(
+    doc: &mut Doc,
+    tools: &mut Tools,
+    machine: &mut Machine,
+    plan: Plan,
+    fresh: &[SceneObject],
+) -> Result<()> {
+    if let Some(why) = busy(doc, tools, machine) {
+        bail!(why);
+    }
+    let ids = fresh.iter().map(|object| object.id).collect();
+    begin(doc, tools, machine, (ids, plan), fresh)
+}
+
+fn begin(
+    doc: &mut Doc,
+    tools: &mut Tools,
+    machine: &mut Machine,
+    (ids, plan): (Vec<ObjectId>, Plan),
+    fresh: &[SceneObject],
+) -> Result<()> {
     let Some(auto) = machine.slicing.catalogue.autos().next() else {
         bail!(tr!("supports-no-automatic"));
     };
@@ -172,9 +205,15 @@ pub fn start(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<
     let settings = ToolSettings::of(tools, &machine.slicing);
     let chosen = machine.slicing.chosen();
     doc.history.hold(&doc.scene, &settings, chosen);
+    for object in fresh {
+        if let Some(standing) = doc.scene.get_mut(object.id) {
+            *standing = object.clone();
+        }
+    }
     let mut run = Run {
         prepared: ids.iter().map(|id| Prepared::new(*id)).collect(),
         ids,
+        plan,
         step: Step::Orient,
         going: None,
         profile,
@@ -259,7 +298,8 @@ fn advance(run: &mut Run, doc: &mut Doc, tools: &mut Tools, machine: &mut Machin
     loop {
         let chosen = run.wanting(run.step, &doc.scene);
         if !chosen.is_empty() {
-            run.going = Some(Going::start(run.step, &chosen, doc, tools, machine)?);
+            let asked = (run.step, run.plan);
+            run.going = Some(Going::start(asked, &chosen, doc, tools, machine)?);
             run.mark(&chosen, &doc.scene);
             return Ok(true);
         }
@@ -284,53 +324,23 @@ fn finish(run: Run, doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bo
     false
 }
 
-/// Hollow's default wall where a sound, solid model saves enough resin to name.
-fn worth_hollowing(object: &SceneObject) -> Option<Hollowing> {
-    if object.hollow.is_hollow() {
-        return None;
-    }
-    let found = &object.summary.diagnostics;
-    hollowing(&object.mesh, object.transform.linear(), found)
-}
-
-fn unturned(object: &SceneObject) -> bool {
-    object.transform.rotation.angle_between(Quat::IDENTITY) < UNTURNED_RAD
-}
-
-/// A model a step acts on, and the wall it is hollowed at where the step is Hollow.
-type Chosen = (ObjectId, Option<Hollowing>);
-
 impl Run {
     /// The models of the run `step` acts on, decided from the plate as it stands now.
     fn wanting(&self, step: Step, scene: &Scene) -> Vec<Chosen> {
-        let chosen = |object: &SceneObject| {
-            let wanted = match step {
-                Step::Orient => unturned(object),
-                Step::Repair => needs_repair(&object.summary.diagnostics),
-                Step::Hollow => return worth_hollowing(object).map(|wall| (object.id, Some(wall))),
-                Step::Drain => object.hollow.is_hollow(),
-                Step::Cavity => object.supported_inside(),
-                Step::Supports => true,
-            };
-            wanted.then_some((object.id, None))
-        };
+        let plan = &self.plan;
+        let chosen = |object: &SceneObject| plan.wants(step, object);
         scene.named(&self.ids).filter_map(chosen).collect()
     }
 
-    /// How many steps from the one in hand the run is reckoned to take, as the plate stands:
-    /// a model hollow, or worth hollowing, will be drained and held up inside.
+    /// How many steps from the one in hand the run is reckoned to take, as the plate stands.
     fn steps_left(&self, scene: &Scene) -> usize {
         let models: Vec<&SceneObject> = scene.named(&self.ids).collect();
-        let any = |wanted: fn(&SceneObject) -> bool| models.iter().any(|object| wanted(object));
-        let hollowed = any(|object| object.hollow.is_hollow() || worth_hollowing(object).is_some());
         Step::ALL[self.step.index()..]
             .iter()
-            .filter(|step| match step {
-                Step::Orient => any(unturned),
-                Step::Repair => any(|object| needs_repair(&object.summary.diagnostics)),
-                Step::Hollow => any(|object| worth_hollowing(object).is_some()),
-                Step::Drain | Step::Cavity => hollowed,
-                Step::Supports => true,
+            .filter(|step| {
+                models
+                    .iter()
+                    .any(|object| self.plan.reckons(**step, object))
             })
             .count()
     }

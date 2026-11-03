@@ -35,6 +35,9 @@ pub struct SlicerApp {
     prefs: Preferences,
     /// The keys this frame asked for, read off the raw input before egui saw it.
     keys: Vec<shortcuts::Action>,
+    /// What `encrust-mcp` hands the open window, while it listens.
+    #[cfg(not(target_arch = "wasm32"))]
+    link: Option<crate::link::Link>,
 }
 
 impl Default for SlicerApp {
@@ -50,6 +53,8 @@ impl Default for SlicerApp {
             machine: Machine::default(),
             prefs: Preferences::default(),
             keys: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            link: None,
         }
     }
 }
@@ -89,6 +94,10 @@ impl SlicerApp {
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            app.link = crate::link::Link::for_window(&cc.egui_ctx);
         }
         app
     }
@@ -448,6 +457,10 @@ impl SlicerApp {
         working |= self.land_plugs();
         let (doc, settled) = (&mut self.doc, ctx.input(|input| !input.pointer.any_down()));
         working |= crate::prepare::poll(doc, &mut self.tools, &mut self.machine, settled);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(link) = &mut self.link {
+            working |= link.poll(&mut self.doc, &mut self.tools, &mut self.machine);
+        }
         working | crate::panels::animate_preview(ctx, &mut self.machine.preview)
     }
 
