@@ -47,8 +47,8 @@ The first revision of a job reads its model in, as Open does. Each revision then
 model back as it came in and replays the recipe on it as a Prepare for print run with a plan
 (`prepare/plan.rs`): a step the recipe sets is done as it says, one it leaves out is decided as
 the autopilot decides it under `prepare` and skipped otherwise. The run is one undo entry; a
-newer revision of the job stops the replay of an older one, and a job of the user's own
-running on the plate holds the replay until it ends. A model taken off the plate is read in
+newer revision of the job stops the replay of an older one, while another job's replay, or a
+job of the user's own running on the plate, holds the replay until it ends. A model taken off the plate is read in
 again for its job's next revision.
 
 Replayed as the recipe says: the orientation search with its goal and tilt limit, or a turn

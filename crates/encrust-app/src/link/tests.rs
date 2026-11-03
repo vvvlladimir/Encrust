@@ -172,7 +172,12 @@ impl Bench {
 
     /// Hands `recipe` over as revision `revision` of job `cube-1`, answering on frames.
     fn hand_over(&mut self, file: &Path, revision: u32, recipe: Value) -> Value {
-        let line = json!({"schema": 1, "token": token_of(file), "job": "cube-1",
+        self.hand_over_job(file, "cube-1", revision, recipe)
+    }
+
+    /// Hands `recipe` over as revision `revision` of `job`, answering on frames.
+    fn hand_over_job(&mut self, file: &Path, job: &str, revision: u32, recipe: Value) -> Value {
+        let line = json!({"schema": 1, "token": token_of(file), "job": job,
                           "revision": revision, "recipe": recipe});
         let file = file.to_owned();
         let server = std::thread::spawn(move || send(&file, &line));
@@ -380,5 +385,27 @@ fn a_combine_reads_the_other_model_in_and_leaves_one() {
     assert!(
         wide_mm > 20.0,
         "the union reaches across both boxes, 25 mm, found {wide_mm}"
+    );
+}
+
+#[test]
+fn a_second_job_waits_for_the_first_jobs_replay_instead_of_undoing_it() {
+    let file = scratch("two-jobs");
+    let mut bench = Bench::new(file.clone());
+    let supported = json!({"model": cube(), "pose": {"by": "rotate", "degrees": [35.0, 35.0, 0.0]},
+                           "supports": {"profile": "auto"}});
+    bench.hand_over_job(&file, "cube-1", 1, supported);
+    while !bench.tools.prepare.is_running() {
+        bench.frame();
+    }
+    let cut = json!({"model": two_boxes("two-jobs"),
+                     "modelling": {"cut": {"axis": "z", "at_mm": 5.0}}});
+    bench.hand_over_job(&file, "boxes-1", 1, cut);
+    bench.run_to_end();
+    let objects = bench.doc.scene.objects();
+    assert_eq!(objects.len(), 3, "the cube and the two halves of the boxes");
+    assert!(
+        objects.iter().any(|object| !object.supports.is_empty()),
+        "the first job's cube still stands on its supports"
     );
 }
