@@ -183,14 +183,20 @@ impl Link {
 
     /// Starts the job's waiting revision once its models are in and nothing else runs on the
     /// plate: on the job's machine, from the models as they came in, what the last replay left
-    /// taken away. A newer revision stops the replay of an older one first.
+    /// taken away. A newer revision stops the replay of an older one of its own job first.
     fn replay(&mut self, index: usize, window: &mut Window) {
         let followed = &self.followed[index];
         let ready = followed.models.iter().all(|(_, model)| model.is_some());
         if !ready || followed.waiting.is_none() {
             return;
         }
-        if self.replaying.is_some() && window.tools.prepare.is_running() {
+        if let Some((replaying, _)) = self.replaying
+            && window.tools.prepare.is_running()
+        {
+            // Another job's replay is never undone: this one waits for it to land.
+            if replaying != index {
+                return;
+            }
             crate::prepare::cancel(window.doc, window.tools, window.machine);
         }
         self.note_what_was_left(window);
