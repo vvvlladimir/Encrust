@@ -2,7 +2,9 @@
 //! on the open plate, one undo entry a revision (ADR 0401, `docs/design/window-link.md`).
 
 mod listen;
+mod machine;
 mod recipe;
+mod shaping;
 mod unshown;
 
 use std::path::PathBuf;
@@ -11,9 +13,9 @@ use anyhow::Result;
 
 use crate::files::Handed;
 use crate::i18n::tr;
+use crate::panels::Window;
 use crate::prepare::Plan;
-use crate::scene::SceneObject;
-use crate::state::{Doc, Machine, Tools};
+use crate::scene::{ObjectId, SceneObject};
 use crate::status::Status;
 
 use listen::{Listening, default_file};
@@ -24,18 +26,29 @@ use recipe::{Reply, Request};
 pub struct Link {
     listening: Listening,
     followed: Vec<Followed>,
-    /// Whether the Prepare run going is a replay, which a newer revision may stop.
-    replaying: bool,
+    /// The job whose replay the Prepare run going is, and the plate's models as it began,
+    /// to tell what it left.
+    replaying: Option<(usize, Vec<ObjectId>)>,
 }
 
-/// One job on the plate: its model as it came in, and the revision waiting to be replayed.
+/// One job on the plate: its model and the others a combine joins, each as it came in once
+/// read, what the last replay left besides, and the revision waiting to be replayed.
 #[derive(Debug)]
 struct Followed {
     job: String,
-    path: PathBuf,
-    /// `None` while the model is being read.
-    fresh: Option<SceneObject>,
-    waiting: Option<(u32, Plan)>,
+    models: Vec<(PathBuf, Option<SceneObject>)>,
+    left: Vec<ObjectId>,
+    waiting: Option<Waiting>,
+}
+
+/// A revision to replay: its plan and the machine it is printed on.
+#[derive(Debug)]
+struct Waiting {
+    revision: u32,
+    plan: Plan,
+    printer: String,
+    resin: String,
+    slicing: Option<machine::Slicing>,
 }
 
 impl Link {
@@ -54,98 +67,172 @@ impl Link {
         Ok(Self {
             listening: Listening::start(file, wake)?,
             followed: Vec::new(),
-            replaying: false,
+            replaying: None,
         })
     }
 
     /// Answers what the server asked since the last frame and replays what is waiting.
     /// Called every frame after the jobs are polled; returns whether a revision waits or is
     /// being replayed.
-    pub fn poll(&mut self, doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> bool {
-        for (path, id) in doc.imports.take_landed() {
-            let reading = self
+    pub fn poll(&mut self, window: &mut Window) -> bool {
+        for (path, id) in window.doc.imports.take_landed() {
+            let mut reading = self
                 .followed
                 .iter_mut()
-                .find(|followed| followed.fresh.is_none() && followed.path == path);
-            if let Some(followed) = reading {
-                followed.fresh = doc.scene.get(id).cloned();
+                .flat_map(|followed| &mut followed.models);
+            if let Some((_, model)) = reading.find(|(at, model)| model.is_none() && *at == path) {
+                *model = window.doc.scene.get(id).cloned();
             }
         }
         while let Ok((request, reply)) = self.listening.asked.try_recv() {
-            let _ = reply.send(self.take(request, doc, machine));
+            let _ = reply.send(self.take(request, window));
         }
-        self.replaying &= tools.prepare.is_running();
+        self.note_what_was_left(window);
         for index in 0..self.followed.len() {
-            self.replay(index, doc, tools, machine);
+            self.replay(index, window);
         }
-        self.replaying
+        self.replaying.is_some()
             || self
                 .followed
                 .iter()
                 .any(|followed| followed.waiting.is_some())
     }
 
-    /// Notes a revision to replay, reading its model in first if the plate does not have it.
-    fn take(&mut self, request: Request, doc: &mut Doc, machine: &mut Machine) -> Reply {
+    /// Notes a revision to replay, reading in the models the plate does not have yet.
+    fn take(&mut self, request: Request, window: &mut Window) -> Reply {
         let (plan, unshown) = request.recipe.plan();
-        // A model taken off the plate is read in again for its job's next revision.
-        self.followed.retain(|followed| {
-            (followed.fresh.as_ref()).is_none_or(|fresh| doc.scene.get(fresh.id).is_some())
-        });
-        let known = self.followed.iter().position(|followed| {
-            followed.job == request.job && followed.path == request.recipe.model
-        });
-        let followed = match known {
-            Some(index) => &mut self.followed[index],
+        let mut paths = vec![request.recipe.model.clone()];
+        let combine = request
+            .recipe
+            .modelling
+            .as_ref()
+            .and_then(|modelling| modelling.combine.as_ref());
+        paths.extend(
+            combine
+                .iter()
+                .flat_map(|combine| combine.with.iter().cloned()),
+        );
+        let index = match self
+            .followed
+            .iter()
+            .position(|followed| followed.job == request.job)
+        {
+            Some(index) => index,
             None => {
-                let file = Handed::Path(request.recipe.model.clone());
-                doc.imports.open(file, &doc.plate, &mut machine.status);
                 self.followed.push(Followed {
                     job: request.job.clone(),
-                    path: request.recipe.model.clone(),
-                    fresh: None,
+                    models: Vec::new(),
+                    left: Vec::new(),
                     waiting: None,
                 });
-                let last = self.followed.len() - 1;
-                &mut self.followed[last]
+                self.followed.len() - 1
             }
         };
-        followed.waiting = Some((request.revision, plan));
+        let followed = &mut self.followed[index];
+        followed.models.retain(|(path, _)| paths.contains(path));
+        for path in paths {
+            if !followed.models.iter().any(|(at, _)| *at == path) {
+                let (doc, status) = (&mut window.doc, &mut window.machine.status);
+                doc.imports
+                    .open(Handed::Path(path.clone()), &doc.plate, status);
+                followed.models.push((path, None));
+            }
+        }
+        let first = &request.recipe.model;
+        followed.models.sort_by_key(|(path, _)| path != first);
+        followed.waiting = Some(Waiting {
+            revision: request.revision,
+            plan,
+            printer: request.recipe.printer.clone(),
+            resin: request.recipe.resin.clone(),
+            slicing: request.recipe.slicing.clone(),
+        });
         Reply {
             shown: true,
             unshown,
             why_not: None,
         }
     }
-}
 
-impl Link {
-    /// Starts the job's waiting revision once its model is in and nothing else runs on the
-    /// plate; a newer revision stops the replay of an older one first.
-    fn replay(&mut self, index: usize, doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) {
+    /// Once the replay going has ended, notes what it left on the plate besides its models,
+    /// for the next revision to take away.
+    fn note_what_was_left(&mut self, window: &Window) {
+        let Some((index, before)) = &self.replaying else {
+            return;
+        };
+        if window.tools.prepare.is_running() {
+            return;
+        }
+        if let Some(followed) = self.followed.get_mut(*index) {
+            let models: Vec<ObjectId> = followed
+                .models
+                .iter()
+                .filter_map(|(_, model)| Some(model.as_ref()?.id))
+                .collect();
+            followed.left = window
+                .doc
+                .scene
+                .objects()
+                .iter()
+                .map(|object| object.id)
+                .filter(|id| !before.contains(id) && !models.contains(id))
+                .collect();
+        }
+        self.replaying = None;
+    }
+
+    /// Starts the job's waiting revision once its models are in and nothing else runs on the
+    /// plate: on the job's machine, from the models as they came in, what the last replay left
+    /// taken away. A newer revision stops the replay of an older one first.
+    fn replay(&mut self, index: usize, window: &mut Window) {
+        let followed = &self.followed[index];
+        let ready = followed.models.iter().all(|(_, model)| model.is_some());
+        if !ready || followed.waiting.is_none() {
+            return;
+        }
+        if self.replaying.is_some() && window.tools.prepare.is_running() {
+            crate::prepare::cancel(window.doc, window.tools, window.machine);
+        }
+        self.note_what_was_left(window);
+        if crate::prepare::busy(window.doc, window.tools, window.machine).is_some() {
+            return;
+        }
         let followed = &mut self.followed[index];
-        let (Some(fresh), Some((revision, _))) = (&followed.fresh, &followed.waiting) else {
+        let Some(waiting) = followed.waiting.take() else {
             return;
         };
-        let revision = *revision;
-        if self.replaying {
-            crate::prepare::cancel(doc, tools, machine);
-            self.replaying = false;
-        }
-        if crate::prepare::busy(doc, tools, machine).is_some() {
-            return;
-        }
-        let Some((_, plan)) = followed.waiting.take() else {
-            return;
-        };
-        let fresh = std::slice::from_ref(fresh);
-        let started = crate::prepare::start_planned(doc, tools, machine, plan, fresh);
-        self.replaying = started.is_ok() && tools.prepare.is_running();
-        machine.status = match started {
+        let fresh: Vec<SceneObject> = followed
+            .models
+            .iter()
+            .filter_map(|(_, model)| model.clone())
+            .collect();
+        let machine = (waiting.printer.as_str(), waiting.resin.as_str());
+        let started =
+            machine::set_machine(window, machine, waiting.slicing.as_ref()).and_then(|()| {
+                let (doc, tools, held) =
+                    (&mut *window.doc, &mut *window.tools, &mut *window.machine);
+                crate::prepare::start_planned(
+                    doc,
+                    tools,
+                    held,
+                    waiting.plan,
+                    (&fresh, &followed.left),
+                )
+            });
+        let before = window
+            .doc
+            .scene
+            .objects()
+            .iter()
+            .map(|object| object.id)
+            .collect();
+        self.replaying =
+            (started.is_ok() && window.tools.prepare.is_running()).then_some((index, before));
+        window.machine.status = match started {
             Ok(()) => Status::Info(tr!(
                 "link-replaying",
                 job = followed.job.clone(),
-                revision = revision
+                revision = waiting.revision
             )),
             Err(error) => Status::failed(&error),
         };

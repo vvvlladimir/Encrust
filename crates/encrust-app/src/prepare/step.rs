@@ -11,15 +11,13 @@ use crate::job::{
     SupportJob, SupportOutcome,
 };
 use crate::orient::stand_turned;
-use crate::plate::BuildPlate;
 use crate::repair::RepairState;
-use crate::scene::{ObjectId, Scene, SceneObject, Taken};
+use crate::scene::{ObjectId, Scene, Taken};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::supports::{Side, Sizing, SupportTool};
-use core_geometry::{Vec2, Vec3};
-use core_volume::DEFAULT_BLOCKER_MM;
-use core_volume::{HollowSettings, hole_at};
+use core_geometry::Vec3;
+use core_volume::HollowSettings;
 
 /// A step's job, running.
 pub(super) enum Going {
@@ -33,11 +31,17 @@ pub(super) enum Going {
     Supports(SupportJob, Side, Option<Box<Sizing>>, Vec<Vec3>),
     /// A step done as it started, with what it said: a turn given outright, holes drilled.
     Done(Status),
+    /// A modelling step, done by the window's own tool, which says what it did.
+    Shaped(Box<super::shape::Shaped>),
+    /// Holes to drill into the supports of these models at these points, once built.
+    SupportHoles(Vec<ObjectId>, Vec<Vec3>),
 }
 
 /// How a step's job ended: landed, with what it said, or stopped short with why.
 pub(super) enum Ended {
     Landed(Status),
+    /// Landed, the tool that did it having said what it did.
+    Kept,
     Stopped(Status),
 }
 
@@ -54,7 +58,7 @@ impl Going {
         chosen: &[Chosen],
         doc: &mut Doc,
         tools: &mut Tools,
-        machine: &Machine,
+        machine: &mut Machine,
     ) -> Result<Self> {
         let ids: Vec<ObjectId> = chosen.iter().map(|(id, _)| *id).collect();
         let layer_mm = machine.slicing.layer_height_mm();
@@ -72,16 +76,49 @@ impl Going {
             },
             Step::Repair => Self::repair(&ids, plan, doc),
             Step::Hollow => {
-                keep_solid(&ids, plan, &mut doc.scene);
+                super::placed::keep_solid(&ids, plan, &mut doc.scene);
+                if let Some(drains) = plan.drains.as_ref().filter(|drains| drains.walled) {
+                    let points = Drains {
+                        channels: Vec::new(),
+                        ..drains.clone()
+                    };
+                    super::placed::drill(&ids, &points, &mut doc.scene, tools);
+                }
                 Self::hollow(chosen, plan, doc, tools)?
             }
             Step::Drill => match &plan.drains {
-                Some(drains) => Self::Done(drill(&ids, drains, &mut doc.scene, tools)),
+                Some(drains) if drains.walled => {
+                    let channels = Drains {
+                        at_mm: Vec::new(),
+                        ..drains.clone()
+                    };
+                    Self::Done(super::placed::drill(&ids, &channels, &mut doc.scene, tools))
+                }
+                Some(drains) => {
+                    Self::Done(super::placed::drill(&ids, drains, &mut doc.scene, tools))
+                }
                 None => Self::Done(Status::default()),
             },
+            Step::SupportHoles => {
+                let drains = plan.drains.as_ref();
+                Self::SupportHoles(ids, drains.map_or_else(Vec::new, |d| d.support_at.clone()))
+            }
             Step::Drain => {
                 let vents = plan.drains.as_ref().is_none_or(|drains| drains.vent);
                 Self::Drain(tools.drain.search_on(&doc.scene, &ids, layer_mm, vents)?)
+            }
+            Step::Mend
+            | Step::Relief
+            | Step::Combine
+            | Step::Label
+            | Step::Cut
+            | Step::Split
+            | Step::Arrange => {
+                let shaping = &plan.shape;
+                let asked = (&mut *doc, &mut *tools, machine);
+                Self::Shaped(Box::new(super::shape::Shaped::start(
+                    step, &ids, shaping, asked,
+                )?))
             }
             Step::Supports | Step::Cavity => {
                 let side = if step == Step::Cavity {
@@ -151,14 +188,23 @@ impl Going {
         };
         if stand.only {
             let group = tools.supports.active;
-            return Ok(Self::Done(by_hand_on(ids, &by_hand, group, &mut doc.scene)));
+            return Ok(Self::Done(super::placed::by_hand_on(
+                ids,
+                &by_hand,
+                group,
+                &mut doc.scene,
+            )));
         }
         let Some(named) = stand.profile.as_ref() else {
             let asked = (layer_mm, &slicing.catalogue);
             let (job, sizing) = SupportTool::start_automatic_on(&doc.scene, ids, asked, side)?;
             return Ok(Self::Supports(job, side, Some(Box::new(sizing)), by_hand));
         };
-        let profile = slicing.catalogue.support(named)?.profile.clone();
+        let profile = if named.to_ascii_lowercase().ends_with(".toml") {
+            printer_profiles::SupportProfile::load(std::path::Path::new(named))?
+        } else {
+            slicing.catalogue.support(named)?.profile.clone()
+        };
         for id in ids {
             if let Some(object) = doc.scene.get_mut(*id) {
                 object
@@ -184,6 +230,15 @@ impl Going {
         Self::Repair(jobs, count)
     }
 
+    /// The run's models once this step has landed, where it is one that makes pieces in place
+    /// of the models it took.
+    pub(super) fn models_after(&self, ids: &[ObjectId], scene: &Scene) -> Option<Vec<ObjectId>> {
+        match self {
+            Self::Shaped(shaped) => Some(shaped.models_after(ids, scene)),
+            _ => None,
+        }
+    }
+
     /// The share of the step's job done, where it counts it.
     pub(super) fn fraction(&self) -> Option<f32> {
         match self {
@@ -201,6 +256,7 @@ impl Going {
             Self::Drain(job) => Some(job.fraction()),
             Self::Supports(job, ..) => job.fraction(),
             Self::Done(_) => Some(1.0),
+            Self::Shaped(_) | Self::SupportHoles(..) => None,
         }
     }
 
@@ -216,6 +272,12 @@ impl Going {
             }),
             Self::Repair(jobs, _) => Self::poll_repairs(jobs, scene),
             Self::Done(said) => Some(Ended::Landed(std::mem::take(said))),
+            Self::SupportHoles(ids, at) => super::placed::support_holes(ids, at, scene, tools),
+            Self::Shaped(shaped) => match shaped.poll(doc, tools) {
+                Ok(false) => None,
+                Ok(true) => Some(Ended::Kept),
+                Err(error) => Some(Ended::Stopped(Status::failed(&error))),
+            },
             Self::Hollow(job) => Some(match job.poll()? {
                 outcome @ HollowOutcome::Hollowed(_) => {
                     Ended::Landed(tools.hollow.land(scene, outcome))
@@ -234,7 +296,7 @@ impl Going {
                     let sizing = sizing.as_deref().cloned();
                     let ids: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
                     let said = tools.supports.land_placed(scene, placements, *side, sizing);
-                    by_hand_on(&ids, by_hand, tools.supports.active, scene);
+                    super::placed::by_hand_on(&ids, by_hand, tools.supports.active, scene);
                     Ended::Landed(said)
                 }
                 SupportOutcome::Cancelled => {
@@ -262,82 +324,4 @@ impl Going {
         jobs.is_empty()
             .then(|| Ended::Landed(said.unwrap_or_default()))
     }
-}
-
-/// Drills a hole into the surface nearest each of `drains`' points on each model, at its size
-/// or the Drain tool's, as `--drain-at` drills: kept as the model's own size, so its plugs and
-/// any search after follow it. Says how many were drilled.
-fn drill(ids: &[ObjectId], drains: &Drains, scene: &mut Scene, tools: &Tools) -> Status {
-    let mut drilled = 0;
-    for id in ids {
-        let Some(object) = scene.get_mut(*id) else {
-            continue;
-        };
-        if let Some(size) = &drains.size {
-            object.own.drain = Some(size.clone());
-        }
-        let Some(inverse) = object.transform.inverse_matrix() else {
-            continue;
-        };
-        let least = object.transform.least_scale();
-        let mut size = tools.drain.size_for(object);
-        size.diameter_mm /= least;
-        size.depth_mm /= least;
-        for at in &drains.at_mm {
-            let near = inverse.transform_point3(*at);
-            if let Some(hole) = hole_at(&object.mesh, &object.bvh, near, size) {
-                object.hollow.add_hole(hole);
-                drilled += 1;
-            }
-        }
-    }
-    Status::Info(tr!("prepare-drilled", count = drilled))
-}
-
-/// Scales `object` by `scale` from the way it came in, as `--scale` does before anything else,
-/// and stands it back on the middle of the plate.
-pub(super) fn scale(object: &mut SceneObject, scale: Vec3, plate: &BuildPlate) {
-    object.transform.scale = scale;
-    object.slide_onto_plate(Vec2::new(plate.x_mm, plate.y_mm));
-    object.stand_on_plate();
-}
-
-/// Keeps the wall solid round each of the plan's points on the models it hollows, at the
-/// blocker radius of the hollow given or Hollow's default.
-fn keep_solid(ids: &[ObjectId], plan: &Plan, scene: &mut Scene) {
-    let radius_mm = plan
-        .hollow_given()
-        .map_or(DEFAULT_BLOCKER_MM, |state| state.blocker_mm);
-    for id in ids {
-        if let Some(object) = scene.get_mut(*id) {
-            let transform = object.transform;
-            for at in &plan.keep_solid {
-                object.hollow.add_blocker(*at, radius_mm, transform);
-            }
-        }
-    }
-}
-
-/// Stands a support in `group` under the surface of each model nearest each of `at_mm`, as a
-/// click in Supports' Edit mode does. Says how many.
-fn by_hand_on(ids: &[ObjectId], at_mm: &[Vec3], group: u16, scene: &mut Scene) -> Status {
-    let mut placed = 0;
-    for id in ids {
-        let Some(object) = scene.get_mut(*id) else {
-            continue;
-        };
-        let transform = object.transform;
-        let (Some(inverse), world) = (transform.inverse_matrix(), transform.to_matrix()) else {
-            continue;
-        };
-        for at in at_mm {
-            if let Some(found) = object.bvh.closest(inverse.transform_point3(*at)) {
-                object
-                    .supports
-                    .add(world.transform_point3(found.point), transform, group);
-                placed += 1;
-            }
-        }
-    }
-    Status::Info(tr!("supports-placed", count = placed))
 }

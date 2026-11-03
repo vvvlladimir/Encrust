@@ -42,6 +42,13 @@ pub struct Drains {
     pub vent: bool,
     /// The size every hole is drilled to, the Drain tool's where `None`.
     pub size: Option<DrainState>,
+    /// Drilled before the cavity, so each keeps a wall round it.
+    pub walled: bool,
+    /// Channels, each a polyline of plate points, at `channel_mm` across or the hole's size.
+    pub channels: Vec<Vec<Vec3>>,
+    pub channel_mm: Option<Scalar>,
+    /// Plate points nearest which a hole is drilled into the supports once they are built.
+    pub support_at: Vec<Vec3>,
 }
 
 /// What a run stands a model on.
@@ -70,6 +77,8 @@ pub struct Plan {
     /// `None` stands nothing on supports.
     pub supports: Option<Stand>,
     pub cavity: bool,
+    /// The modelling, done after the repair and before the hollow.
+    pub shape: super::Shaping,
 }
 
 /// A model a step acts on, and the wall it is hollowed at where the step is Hollow.
@@ -89,9 +98,14 @@ impl Plan {
                 auto: true,
                 vent: true,
                 size: None,
+                walled: false,
+                channels: Vec::new(),
+                channel_mm: None,
+                support_at: Vec::new(),
             }),
             supports: Some(Stand::default()),
             cavity: true,
+            shape: super::Shaping::default(),
         }
     }
 
@@ -110,15 +124,19 @@ impl Plan {
                 Choice::Skip => false,
             },
             Step::Hollow => return self.wall(object).map(|wall| (object.id, Some(wall))),
-            Step::Drill => self
+            Step::Drill => self.drains.as_ref().is_some_and(|drains| {
+                (!drains.at_mm.is_empty() && !drains.walled) || !drains.channels.is_empty()
+            }),
+            Step::SupportHoles => self
                 .drains
                 .as_ref()
-                .is_some_and(|drains| !drains.at_mm.is_empty()),
+                .is_some_and(|drains| !drains.support_at.is_empty()),
             Step::Drain => {
                 self.drains.as_ref().is_some_and(|drains| drains.auto) && object.hollow.is_hollow()
             }
             Step::Supports => self.supports.is_some(),
             Step::Cavity => self.cavity && object.supported_inside(),
+            step => self.shape.wants(step),
         };
         chosen.filter(|_| wanted)
     }

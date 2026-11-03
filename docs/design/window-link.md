@@ -58,10 +58,20 @@ each point, at the recipe's diameter, then the automatic drains with or without 
 by the automatic profile or the one named, kept as the model's own for the group in hand, and
 the cavity's, with those placed by hand at their points; the scale, before anything else; the
 hollow's mode, precision and Keep solid balls; a hole's depth, taper, sides, turn and plug gap.
-The window lays a plug beside every hole whatever the recipe says, and `unshown` says so where
-it asked for none. Not replayed yet, and named in `unshown`: combine, label, cut, split, part
-off, relief, the mend's face edits, slicing, channels, holes into the supports and walled
-holes. The printer and resin stay the window's own.
+After the repair, in the command line's order, each by the window's own tool set as the
+recipe says: faces turned, bridged and dropped and shells dropped, by the numbers `inspect`
+gives; the relief, its picture read where one is named; combine, the other models read in as
+the job's own; the label, at the surface nearest its point; the cut with its joint; the split,
+or the part cut off at a point; the plate arranged. A step that makes pieces — a cut, a split,
+a combine — hands them to the steps after it, and the next revision takes them away before it
+puts the models back. Walled holes are drilled before the cavity, channels dug through the
+points given, holes into the supports drilled once the trees are built.
+
+The window is put on the recipe's printer and resin, catalogue ids or TOML files, and takes
+its slicing: layer height, adaptive layers, exposure bands, anti-aliasing, greys, blur and
+islands removed; a revision that gives no layer height leaves the window's as it is. The
+window lays a plug beside every hole whatever the recipe says, and arranges every model on
+its plate where the command line arranges the job's; `unshown` says both.
 
 The check every tool answers with is still the command line's: the window shows the steps,
 it does not answer for them.

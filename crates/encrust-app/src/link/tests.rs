@@ -7,8 +7,11 @@ use serde_json::{Value, json};
 use super::recipe::Recipe;
 use super::*;
 use crate::camera::OrbitCamera;
+use crate::panels::Window;
 use crate::prepare::{Choice, Orient};
+use crate::state::{Doc, Machine, Tools, View};
 use crate::undo::Frame;
+use crate::workspace::{Mode, Tool};
 
 fn recipe(value: Value) -> Recipe {
     serde_json::from_value(value).expect("a recipe as the server writes it")
@@ -128,61 +131,120 @@ fn a_line_with_another_token_is_refused_and_never_reaches_the_window() {
     assert!(!file.exists(), "a closed window takes its file away");
 }
 
-/// The jobs polled in the window's order, then the link, then the frame recorded.
-fn frame(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, link: &mut Link) -> bool {
-    let mut camera = OrbitCamera::default();
-    let (scene, status) = (&mut doc.scene, &mut machine.status);
-    let mut working = doc.imports.poll(scene, &doc.plate, &mut camera, status);
-    working |= doc.repairs.poll(scene, status);
-    working |= doc.drilling.poll(scene, status);
-    working |= doc.surfaces.poll(scene, status);
-    working |= tools.supports.poll(scene, status);
-    working |= tools.hollow.poll(scene, status);
-    working |= tools.drain.poll(scene, status);
-    working |= tools.orient.poll(scene, &doc.plate, status);
-    working |= crate::prepare::poll(doc, tools, machine, true);
-    working |= link.poll(doc, tools, machine);
-    doc.surfaces.start(&mut doc.scene);
-    tools.supports.settle_on_raft(&mut doc.scene);
-    doc.drilling.start(&doc.scene, true);
-    let settings = crate::tool_settings::ToolSettings::of(tools, &machine.slicing);
-    let chosen = machine.slicing.chosen();
-    let settled = Frame {
-        settled: true,
-        typing: false,
-    };
-    doc.history.observe(&doc.scene, &settings, chosen, settled);
-    working
+/// The window's state, run a frame at a time as the window runs it.
+struct Bench {
+    mode: Mode,
+    tool: Tool,
+    doc: Doc,
+    view: View,
+    tools: Tools,
+    machine: Machine,
+    link: Link,
+}
+
+impl Bench {
+    fn new(file: PathBuf) -> Self {
+        let doc = Doc::default();
+        let mut machine = Machine::default();
+        machine.slicing.material.layer_height_mm = 0.5;
+        Self {
+            mode: Mode::default(),
+            tool: Tool::default(),
+            view: View::framing(&doc.plate),
+            doc,
+            tools: Tools::default(),
+            machine,
+            link: Link::start(file, || {}).expect("a loopback port is free"),
+        }
+    }
+
+    fn poll_link(&mut self) -> bool {
+        let mut window = Window {
+            mode: &mut self.mode,
+            tool: &mut self.tool,
+            doc: &mut self.doc,
+            view: &mut self.view,
+            tools: &mut self.tools,
+            machine: &mut self.machine,
+        };
+        self.link.poll(&mut window)
+    }
+
+    /// Hands `recipe` over as revision `revision` of job `cube-1`, answering on frames.
+    fn hand_over(&mut self, file: &Path, revision: u32, recipe: Value) -> Value {
+        let line = json!({"schema": 1, "token": token_of(file), "job": "cube-1",
+                          "revision": revision, "recipe": recipe});
+        let file = file.to_owned();
+        let server = std::thread::spawn(move || send(&file, &line));
+        while !server.is_finished() {
+            self.poll_link();
+            std::thread::yield_now();
+        }
+        server.join().expect("the server's thread ends")
+    }
+
+    /// Frames until nothing runs.
+    fn run_to_end(&mut self) {
+        while self.frame() || self.doc.surfaces.is_running() || self.doc.drilling.is_running() {
+            std::thread::yield_now();
+        }
+    }
+
+    /// The jobs polled in the window's order, then the link, then the frame recorded.
+    fn frame(&mut self) -> bool {
+        let mut camera = OrbitCamera::default();
+        let (doc, tools, machine) = (&mut self.doc, &mut self.tools, &mut self.machine);
+        let (scene, status) = (&mut doc.scene, &mut machine.status);
+        let mut working = doc.imports.poll(scene, &doc.plate, &mut camera, status);
+        working |= doc.repairs.poll(scene, status);
+        working |= doc.drilling.poll(scene, status);
+        working |= doc.surfaces.poll(scene, status);
+        working |= tools.supports.poll(scene, status);
+        working |= tools.hollow.poll(scene, status);
+        working |= tools.relief.poll(scene, status);
+        working |= tools.boolean.poll(scene, status);
+        working |= tools.text.poll(scene, status);
+        working |= tools.cut.poll(scene, status);
+        working |= tools.drain.poll(scene, status);
+        working |= tools.orient.poll(scene, &doc.plate, status);
+        working |= crate::prepare::poll(doc, tools, machine, true);
+        working |= self.poll_link();
+        let (doc, tools, machine) = (&mut self.doc, &mut self.tools, &mut self.machine);
+        doc.surfaces.start(&mut doc.scene);
+        tools.supports.settle_on_raft(&mut doc.scene);
+        doc.drilling.start(&doc.scene, true);
+        let settings = crate::tool_settings::ToolSettings::of(tools, &machine.slicing);
+        let chosen = machine.slicing.chosen();
+        let settled = Frame {
+            settled: true,
+            typing: false,
+        };
+        doc.history.observe(&doc.scene, &settings, chosen, settled);
+        working
+    }
 }
 
 #[test]
 fn a_revision_is_read_in_hollowed_on_the_plate_and_undone_as_one_edit() {
     let file = scratch("replay");
-    let mut link = Link::start(file.clone(), || {}).expect("a loopback port is free");
-    let (mut doc, mut tools, mut machine) = (Doc::default(), Tools::default(), Machine::default());
-    machine.slicing.material.layer_height_mm = 0.5;
-    let line = json!({"schema": 1, "token": token_of(&file), "job": "cube-1", "revision": 1,
-                      "recipe": {"model": cube(), "hollow": {"wall_mm": 1.5}}});
-    let server = std::thread::spawn(move || send(&file, &line));
-    while !server.is_finished() {
-        link.poll(&mut doc, &mut tools, &mut machine);
-        std::thread::yield_now();
-    }
-    let reply = server.join().expect("the server's thread ends");
+    let mut bench = Bench::new(file.clone());
+    let reply = bench.hand_over(
+        &file,
+        1,
+        json!({"model": cube(), "hollow": {"wall_mm": 1.5}}),
+    );
     assert_eq!(reply["shown"], true, "{reply}");
-
-    let (doc, tools, machine) = (&mut doc, &mut tools, &mut machine);
-    while frame(doc, tools, machine, &mut link) || doc.surfaces.is_running() {
-        std::thread::yield_now();
-    }
-    let objects = doc.scene.objects();
+    bench.run_to_end();
+    let objects = bench.doc.scene.objects();
     assert_eq!(objects.len(), 1, "the job's model was read in once");
     let wall_mm = objects[0].hollow.asked().map(|asked| asked.thickness_mm);
     assert_eq!(wall_mm, Some(1.5), "hollowed at the recipe's wall");
-    assert!(
-        objects[0].supports.is_empty(),
-        "no supports asked, none placed"
-    );
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
     assert!(
         doc.history
             .undo(&mut doc.scene, tools, &mut machine.slicing)
@@ -195,14 +257,128 @@ fn a_revision_is_read_in_hollowed_on_the_plate_and_undone_as_one_edit() {
 }
 
 #[test]
-fn a_cut_and_a_relief_are_named_as_not_shown_and_the_scale_is_replayed() {
+fn a_cut_lands_its_halves_and_the_next_revision_takes_them_back() {
+    let file = scratch("cut");
+    let mut bench = Bench::new(file.clone());
+    let cut = json!({"model": cube(), "modelling": {"cut": {"axis": "z", "at_mm": 5.0}}});
+    bench.hand_over(&file, 1, cut);
+    bench.run_to_end();
+    assert_eq!(bench.doc.scene.objects().len(), 2, "two halves of the cube");
+    bench.hand_over(&file, 2, json!({"model": cube()}));
+    bench.run_to_end();
+    let objects = bench.doc.scene.objects();
+    assert_eq!(objects.len(), 1, "the halves gone, the cube back whole");
+}
+
+#[test]
+fn a_cut_a_relief_and_the_scale_are_replayed_with_nothing_unshown() {
     let (plan, unshown) = recipe(json!({
         "model": "/m.stl",
-        "modelling": {"scale": [2.0, 2.0, 2.0], "cut": {"axis": "z", "at_mm": 5.0}},
+        "modelling": {"scale": [2.0, 2.0, 2.0], "cut": {"axis": "z", "at_mm": 5.0, "keep": "lower"}},
         "relief": {"depth_mm": 0.5},
     }))
     .plan();
     assert_eq!(plan.scale, Some(core_geometry::Vec3::splat(2.0)));
-    assert_eq!(unshown.len(), 2, "the cut and the relief: {unshown:?}");
-    assert!(unshown[0].starts_with("cut") && unshown[1].starts_with("relief"));
+    let cut = plan.shape.cut.expect("the cut is replayed");
+    assert_eq!(cut.keep, core_engine::project::Keep::Below);
+    assert_eq!(plan.shape.relief.map(|relief| relief.depth_mm), Some(0.5));
+    assert!(unshown.is_empty(), "{unshown:?}");
+}
+
+#[test]
+fn a_revision_puts_the_window_on_its_printer_resin_and_layer_height() {
+    let file = scratch("machine");
+    let mut bench = Bench::new(file.clone());
+    let resin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../encrust-cli/tests/fixtures/test-resin.toml");
+    bench.hand_over(
+        &file,
+        1,
+        json!({"model": cube(), "printer": "elegoo-mars-4-ultra", "resin": resin,
+               "slicing": {"layer_height_mm": 0.1}}),
+    );
+    bench.run_to_end();
+    let slicing = &bench.machine.slicing;
+    assert_eq!(slicing.printer_id.as_deref(), Some("elegoo-mars-4-ultra"));
+    assert_eq!(slicing.material.name, "Test resin");
+    assert!(
+        (slicing.layer_height_mm() - 0.1).abs() < 1e-6,
+        "0.1 mm layers as asked, found {}",
+        slicing.layer_height_mm()
+    );
+}
+
+/// Two 10 mm boxes 5 mm apart, as binary STL in a file of the test's own.
+fn two_boxes(name: &str) -> PathBuf {
+    let mut mesh =
+        core_geometry::cuboid(core_geometry::Vec3::ZERO, core_geometry::Vec3::splat(10.0));
+    mesh.append(&core_geometry::cuboid(
+        core_geometry::Vec3::new(15.0, 0.0, 0.0),
+        core_geometry::Vec3::new(25.0, 10.0, 10.0),
+    ));
+    let mut bytes = vec![0u8; 80];
+    bytes.extend_from_slice(&(mesh.faces.len() as u32).to_le_bytes());
+    for face in &mesh.faces {
+        bytes.extend_from_slice(&[0u8; 12]);
+        for &index in face {
+            for component in mesh.vertices[index as usize].to_array() {
+                bytes.extend_from_slice(&component.to_le_bytes());
+            }
+        }
+        bytes.extend_from_slice(&[0u8; 2]);
+    }
+    let path = scratch(&format!("{name}-model")).with_file_name("boxes.stl");
+    std::fs::create_dir_all(path.parent().expect("in a directory")).expect("writable");
+    std::fs::write(&path, bytes).expect("writable");
+    path
+}
+
+#[test]
+fn a_split_puts_each_body_on_the_plate_as_a_model_of_its_own() {
+    let file = scratch("split");
+    let mut bench = Bench::new(file.clone());
+    let recipe = json!({"model": two_boxes("split"), "modelling": {"split_smallest_mm3": 1.0}});
+    bench.hand_over(&file, 1, recipe);
+    bench.run_to_end();
+    assert_eq!(bench.doc.scene.objects().len(), 2, "one model a box");
+}
+
+#[test]
+fn a_shell_dropped_by_hand_leaves_the_other() {
+    let file = scratch("mend");
+    let mut bench = Bench::new(file.clone());
+    let recipe = json!({"model": two_boxes("mend"), "mend": {"drop_shells": [2]}});
+    bench.hand_over(&file, 1, recipe);
+    bench.run_to_end();
+    let objects = bench.doc.scene.objects();
+    assert_eq!(objects.len(), 1);
+    assert_eq!(
+        objects[0].mesh.faces.len(),
+        12,
+        "one box's twelve faces left"
+    );
+}
+
+#[test]
+fn a_combine_reads_the_other_model_in_and_leaves_one() {
+    let file = scratch("combine");
+    let mut bench = Bench::new(file.clone());
+    let other = two_boxes("combine");
+    let recipe =
+        json!({"model": cube(), "modelling": {"combine": {"op": "union", "with": [other]}}});
+    bench.hand_over(&file, 1, recipe);
+    bench.run_to_end();
+    assert_eq!(
+        bench.doc.scene.objects().len(),
+        1,
+        "the two files joined into one model"
+    );
+    let bounds = bench.doc.scene.objects()[0]
+        .world_bounds()
+        .expect("a model with faces");
+    let wide_mm = bounds.maxs.x - bounds.mins.x;
+    assert!(
+        wide_mm > 20.0,
+        "the union reaches across both boxes, 25 mm, found {wide_mm}"
+    );
 }

@@ -459,7 +459,15 @@ impl SlicerApp {
         working |= crate::prepare::poll(doc, &mut self.tools, &mut self.machine, settled);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(link) = &mut self.link {
-            working |= link.poll(&mut self.doc, &mut self.tools, &mut self.machine);
+            let mut window = crate::panels::Window {
+                mode: &mut self.mode,
+                tool: &mut self.tool,
+                doc: &mut self.doc,
+                view: &mut self.view,
+                tools: &mut self.tools,
+                machine: &mut self.machine,
+            };
+            working |= link.poll(&mut window);
         }
         working | crate::panels::animate_preview(ctx, &mut self.machine.preview)
     }

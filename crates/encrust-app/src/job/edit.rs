@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use core_geometry::{BridgeError, Mesh, Region, bridge, flip_faces, remove_faces, remove_shells};
+use core_geometry::{
+    BridgeError, Mesh, Region, bridge, flip_faces, list_shells, remove_faces, remove_shells,
+};
 
 use crate::i18n::tr;
 use crate::job::{Worker, pooled};
@@ -15,6 +17,9 @@ pub enum Edit {
     Bridge([u32; 2], [u32; 2]),
     /// Shells numbered in `core_geometry::list_shells` order.
     DropShells(Vec<usize>),
+    /// Faces and the faces of shells dropped together, as `--drop-faces` and `--drop-shells`
+    /// drop them: numbered on one mesh, so neither renumbers the other.
+    Drop(Region, Vec<usize>),
 }
 
 /// How one change by hand ended.
@@ -68,6 +73,19 @@ fn run(mesh: &Mesh, name: &str, edit: Edit) -> EditOutcome {
             Ok(count) => tr!("edit-bridged", name = name, count = count),
             Err(error) => return EditOutcome::Failed(refused(error)),
         },
+        Edit::Drop(mut faces, which) => {
+            let shells = list_shells(&mesh);
+            for shell in which.iter().filter_map(|at| shells.get(*at)) {
+                for face in &shell.faces {
+                    faces.set(*face as usize, true);
+                }
+            }
+            tr!(
+                "edit-removed",
+                name = name,
+                count = remove_faces(&mut mesh, &faces)
+            )
+        }
         Edit::DropShells(which) => {
             tr!(
                 "edit-dropped-shells",

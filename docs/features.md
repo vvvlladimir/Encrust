@@ -893,9 +893,9 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 command line as tools, so a language model prepares a model step by step on your
 computer, checks it and writes the file; it asks you for the printer and resin. With the
 window open, each step it keeps is replayed on the plate as it makes it, one undo each —
-turn, scale, repair, hollow, infill and Keep solid, drain holes, supports by any profile and by
-hand; the modelling, a relief, slicing and channels are not replayed yet, and the check is
-still the command line's. Every flag of the command line is a tool's: `set_shape` cuts, labels,
+turn, scale, repair and faces by hand, relief, combine, label, cut, split, arrange, hollow,
+infill and Keep solid, drain holes and channels, supports by any profile and by hand, on the
+job's printer, resin and slicing; the check is still the command line's. Every flag of the command line is a tool's: `set_shape` cuts, labels,
 splits and presses reliefs, `set_repair` mends, `set_slicing` sets the layers.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear
