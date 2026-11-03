@@ -11,12 +11,17 @@ use crate::status::Status;
 use crate::tool_settings::ToolSettings;
 
 mod decided;
+mod order;
+mod placed;
 mod plan;
+mod shape;
 mod step;
 
 pub use decided::Prepared;
+pub use order::Step;
 use plan::Chosen;
 pub use plan::{Choice, Drains, Orient, Plan, Stand};
+pub use shape::{CutAsk, LabelAsk, Mend, ReliefAsk, Shaping, SplitAsk};
 use step::{Ended, Going};
 
 /// Settled polls the plate may wait on cuts or a support surface no job is building, which the
@@ -25,52 +30,6 @@ const IDLE_POLLS: u8 = 3;
 
 /// A turn this small, radians, is a model nobody turned: the window's `--rotate` left out.
 const UNTURNED_RAD: f32 = 1e-4;
-
-/// The steps in the order they run, the command line's: turned before it is repaired.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Step {
-    Orient,
-    Repair,
-    Hollow,
-    /// Holes drilled at the points a plan gives, before any are searched for.
-    Drill,
-    Drain,
-    Supports,
-    Cavity,
-}
-
-impl Step {
-    const ALL: [Self; 7] = [
-        Self::Orient,
-        Self::Repair,
-        Self::Hollow,
-        Self::Drill,
-        Self::Drain,
-        Self::Supports,
-        Self::Cavity,
-    ];
-
-    fn index(self) -> usize {
-        Self::ALL.iter().position(|step| *step == self).unwrap_or(0)
-    }
-
-    fn next(self) -> Option<Self> {
-        Self::ALL.get(self.index() + 1).copied()
-    }
-
-    /// What the bar says while it runs.
-    pub fn label(self) -> String {
-        match self {
-            Self::Orient => tr!("prepare-step-orient"),
-            Self::Repair => tr!("prepare-step-repair"),
-            Self::Hollow => tr!("prepare-step-hollow"),
-            Self::Drill => tr!("prepare-step-drill"),
-            Self::Drain => tr!("prepare-step-drain"),
-            Self::Supports => tr!("prepare-step-supports"),
-            Self::Cavity => tr!("prepare-step-cavity"),
-        }
-    }
-}
 
 /// The run going, if any, and what the last one decided.
 #[derive(Debug, Default)]
@@ -176,23 +135,24 @@ pub fn start(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<
     if ids.is_empty() {
         bail!(tr!("prepare-nothing-visible"));
     }
-    begin(doc, tools, machine, (ids, Plan::autopilot()), &[])
+    begin(doc, tools, machine, (ids, Plan::autopilot()), (&[], &[]))
 }
 
-/// Starts a run by `plan` on each of `fresh`'s models, put back first as `fresh` holds them,
-/// within the run's one undo: a revision of a job, done again from the model as it came in.
+/// Starts a run by `plan` on each of `fresh`'s models, put back first as `fresh` holds them
+/// and the models `clear` names taken away, within the run's one undo: a revision of a job,
+/// done again from the models as they came in, the pieces the last one made gone.
 pub fn start_planned(
     doc: &mut Doc,
     tools: &mut Tools,
     machine: &mut Machine,
     plan: Plan,
-    fresh: &[SceneObject],
+    (fresh, clear): (&[SceneObject], &[ObjectId]),
 ) -> Result<()> {
     if let Some(why) = busy(doc, tools, machine) {
         bail!(why);
     }
     let ids = fresh.iter().map(|object| object.id).collect();
-    begin(doc, tools, machine, (ids, plan), fresh)
+    begin(doc, tools, machine, (ids, plan), (fresh, clear))
 }
 
 fn begin(
@@ -200,7 +160,7 @@ fn begin(
     tools: &mut Tools,
     machine: &mut Machine,
     (ids, plan): (Vec<ObjectId>, Plan),
-    fresh: &[SceneObject],
+    (fresh, clear): (&[SceneObject], &[ObjectId]),
 ) -> Result<()> {
     let Some(auto) = machine.slicing.catalogue.autos().next() else {
         bail!(tr!("supports-no-automatic"));
@@ -209,12 +169,16 @@ fn begin(
     let settings = ToolSettings::of(tools, &machine.slicing);
     let chosen = machine.slicing.chosen();
     doc.history.hold(&doc.scene, &settings, chosen);
+    for id in clear {
+        doc.scene.remove(*id);
+    }
     for object in fresh {
-        if let Some(standing) = doc.scene.get_mut(object.id) {
-            *standing = object.clone();
-            if let Some(scale) = plan.scale {
-                step::scale(standing, scale, &doc.plate);
-            }
+        match doc.scene.get_mut(object.id) {
+            Some(standing) => *standing = object.clone(),
+            None => doc.scene.restore(object.clone()),
+        }
+        if let (Some(standing), Some(scale)) = (doc.scene.get_mut(object.id), plan.scale) {
+            placed::scale(standing, scale, &doc.plate);
         }
     }
     let mut run = Run {
@@ -265,9 +229,13 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
             tools.prepare.run = Some(run);
             return true;
         };
+        if let Some(models) = going.models_after(&run.ids, &doc.scene) {
+            run.adopt(models);
+        }
         run.going = None;
         match ended {
             Ended::Landed(said) => machine.status = said,
+            Ended::Kept => {}
             Ended::Stopped(why) => return stop(doc, tools, machine, why),
         }
         run.landed(&doc.scene);
@@ -368,6 +336,17 @@ impl Run {
             self.idle += 1;
         }
         self.idle < IDLE_POLLS
+    }
+
+    /// Takes `models` as the run's from here: the pieces a cut, a split or a combine made in
+    /// place of the models it took.
+    fn adopt(&mut self, models: Vec<ObjectId>) {
+        for id in &models {
+            if !self.prepared.iter().any(|prepared| prepared.id == *id) {
+                self.prepared.push(Prepared::new(*id));
+            }
+        }
+        self.ids = models;
     }
 
     /// Notes the models `chosen` names as the step in hand found them.

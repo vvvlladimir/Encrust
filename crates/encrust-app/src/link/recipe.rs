@@ -11,6 +11,7 @@ use core_volume::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::shaping::{Mend, Modelling, Relief};
 use crate::hollow::DEFAULT_BLOCKER_MM;
 use crate::prepare::{Choice, Drains as PlanDrains, Orient, Plan, Stand};
 
@@ -48,6 +49,10 @@ pub struct Reply {
 pub struct Recipe {
     pub model: PathBuf,
     #[serde(default)]
+    pub printer: String,
+    #[serde(default)]
+    pub resin: String,
+    #[serde(default)]
     pub prepare: bool,
     pub repair: Option<Repair>,
     pub pose: Option<Pose>,
@@ -55,21 +60,9 @@ pub struct Recipe {
     pub drains: Option<Drains>,
     pub supports: Option<Supports>,
     pub modelling: Option<Modelling>,
-    /// The parts the window does not replay yet, read only to say so.
-    pub relief: Option<serde_json::Value>,
-    pub mend: Option<serde_json::Value>,
-    pub slicing: Option<serde_json::Value>,
-}
-
-/// What the window replays of the modelling, and the rest read only to say it does not.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct Modelling {
-    pub scale: Option<[Scalar; 3]>,
-    pub combine: Option<serde_json::Value>,
-    pub label: Option<serde_json::Value>,
-    pub cut: Option<serde_json::Value>,
-    pub split_smallest_mm3: Option<Scalar>,
-    pub part_off_at_mm: Option<[Scalar; 3]>,
+    pub relief: Option<Relief>,
+    pub mend: Option<Mend>,
+    pub slicing: Option<super::machine::Slicing>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -155,6 +148,7 @@ pub struct Drains {
     pub support_at_mm: Vec<[Scalar; 3]>,
     #[serde(default)]
     pub channels: Vec<Vec<[Scalar; 3]>>,
+    pub channel_mm: Option<Scalar>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -188,12 +182,7 @@ impl Recipe {
             .map_or_else(|| self.left_out(), |hollow| Choice::Given(hollow.state()));
         let drains = match &self.drains {
             None => self.prepare.then(|| Plan::autopilot().drains).flatten(),
-            Some(drains) => {
-                if !drains.plugs && (drains.auto || !drains.at_mm.is_empty()) {
-                    unshown.push("plugs: the window lays a plug beside every hole".to_owned());
-                }
-                Some(drains.plan())
-            }
+            Some(drains) => Some(drains.plan()),
         };
         let (supports, cavity) = match &self.supports {
             None => (self.prepare.then(Stand::default), self.prepare),
@@ -213,6 +202,7 @@ impl Recipe {
                 .and_then(|modelling| modelling.scale)
                 .map(Vec3::from_array),
             keep_solid: keep_solid.copied().map(Vec3::from_array).collect(),
+            shape: self.shaping(&mut unshown),
             orient,
             repair,
             hollow,
@@ -266,6 +256,19 @@ impl Drains {
                     self.taper.unwrap_or(1.0),
                 )
             }),
+            walled: self.kind.as_deref() == Some("walled"),
+            channels: self
+                .channels
+                .iter()
+                .map(|channel| channel.iter().copied().map(Vec3::from_array).collect())
+                .collect(),
+            channel_mm: self.channel_mm,
+            support_at: self
+                .support_at_mm
+                .iter()
+                .copied()
+                .map(Vec3::from_array)
+                .collect(),
         }
     }
 }

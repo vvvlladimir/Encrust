@@ -318,6 +318,14 @@ impl Scene {
         true
     }
 
+    /// Puts back a model taken off, with its own identifier, unless one by it is standing.
+    pub fn restore(&mut self, object: SceneObject) {
+        if self.get(object.id).is_none() {
+            self.next_id = self.next_id.max(object.id.0 + 1);
+            self.objects.push(object);
+        }
+    }
+
     pub fn remove(&mut self, id: ObjectId) {
         self.objects.retain(|object| object.id != id);
         self.selected.retain(|picked| *picked != id);

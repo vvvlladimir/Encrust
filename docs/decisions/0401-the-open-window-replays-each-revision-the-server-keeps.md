@@ -29,9 +29,10 @@ takes each step the recipe sets as given, decides what it leaves out as the auto
 under `prepare` and skips it otherwise. What it cannot replay yet it names in `unshown`. The
 command line still answers every check. A turn given in degrees, the open floor and infill,
 drain points, hand supports, Keep solid and the scale and named support profiles are replayed
-through the same steps; where the window does a step its own way — a plug beside every hole —
-or has no replay yet — the modelling, a relief, the mend, slicing, channels — the answer says
-so. Each side reads the line into types of its own, as
+through the same steps, and the mend, a relief, combine, a label, a cut, a split and Arrange
+through steps that set the window's own tool and wait for it; a revision puts the window on its
+printer, resin and slicing. Where the window does a step its own way — a plug beside every
+hole, the whole plate arranged — the answer says so. Each side reads the line into types of its own, as
 the server reads the command line's report: the schema is the contract, written in
 `docs/design/window-link.md`. The window takes `directories`, already the catalogue's, to find
 the cache.
