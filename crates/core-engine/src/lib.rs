@@ -30,7 +30,8 @@ pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_repair};
 pub use run::Run;
 pub use stand::{
-    Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_seated, stand_under,
+    ByHand, Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_seated,
+    stand_under,
 };
 pub use trapped::trapped_in;
 pub use trial::{Choice, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove};

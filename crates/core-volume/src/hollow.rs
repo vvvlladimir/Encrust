@@ -48,6 +48,9 @@ const MAX_LATTICE_SQUARES: Scalar = 7.0e6;
 /// Under this a wall is thinner than the lattice can resolve, so what comes out is not the
 /// wall that was asked for. It is the only floor there is: what used to keep walls above
 /// 0.3 mm was the field such a wall asked for, and that is no longer what it costs.
+/// The radius of a Keep solid blocker where none is asked for, millimetres of the plate.
+pub const DEFAULT_BLOCKER_MM: Scalar = 4.0;
+
 pub const MIN_WALL_MM: Scalar = 3.0 * FINE_LATTICE_MM;
 
 /// The lattice a wall of `thickness_mm` on a model of `area_mm2` is cut on at

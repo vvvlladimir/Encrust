@@ -172,8 +172,10 @@ would print. A file whose name says nothing is recognised by its own first bytes
 Hollowing, with an infill lattice in the cavity. `--hollow-mode internal` grows the wall
 inward, which is the default; `external` grows it outward and makes a mould of the model.
 `--hollow-open-floor` opens a shell through the floor it stands on, so it drains with no
-hole; a mould has no floor to open and refuses it. Otherwise nothing opens the cavity by
-itself — `--drain-at` below is what lets the resin out:
+hole; a mould has no floor to open and refuses it. `--keep-solid X,Y,Z`, repeated, keeps the
+wall solid in a ball round each point — plate millimetres as the model prints, lift included —
+`--keep-solid-radius` mm across its radius (4), as the window's **Keep solid** does (ADR 0402).
+Otherwise nothing opens the cavity by itself — `--drain-at` below is what lets the resin out:
 
 ```sh
 encrust slice model.stl \
@@ -320,7 +322,10 @@ default), `least-peel`, `shortest-print` or `auto`, which balances the three, an
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
 into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), and
 `--support-cavity` holds up the cavity `--hollow`, or a plate file's `hollow`, leaves as well
-as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
+as the outside, as the window's **Support the cavity** does (ADR 0332). `--support-at X,Y,Z`,
+repeated, stands one more support under the surface nearest each point, in the same frame as
+`--drain-at`, built as sturdy as a steadying one, as a click in the window's **Edit** mode
+places it; `--support-only-at` stands those alone (ADR 0402). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
 (ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.

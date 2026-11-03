@@ -495,3 +495,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0399](0399-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |
 | [0400](0400-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
 | [0401](0401-the-open-window-replays-each-revision-the-server-keeps.md) | The open window replays each revision the server keeps, over a loopback port | Proposed |
+| [0402](0402-the-command-line-places-supports-and-blockers-by-hand.md) | Place supports and Keep solid blockers by hand on the command line | Proposed |

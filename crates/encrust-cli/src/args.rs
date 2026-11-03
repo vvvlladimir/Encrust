@@ -4,7 +4,7 @@ use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use core_engine::SupportPlan;
+use core_engine::{ByHand, SupportPlan};
 use core_format::ExposureRange;
 use core_geometry::{
     DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, DEFAULT_WELD_TOLERANCE, MendMethod, Scalar,
@@ -271,6 +271,16 @@ pub struct SupportArgs {
     /// Hold up the cavity --hollow leaves as well as the outside.
     #[arg(long)]
     pub support_cavity: bool,
+
+    /// Stand a support under the surface nearest this point as well, plate mm as the model
+    /// prints, lift included, as a click in the window's Edit mode does. Repeat for more.
+    #[arg(long, value_name = "X,Y,Z", value_parser = crate::hollowing::point,
+          allow_hyphen_values = true)]
+    pub support_at: Vec<Vec3>,
+
+    /// Stand only the supports --support-at places, none automatically.
+    #[arg(long, requires = "support_at")]
+    pub support_only_at: bool,
 }
 
 impl SupportArgs {
@@ -286,8 +296,17 @@ impl SupportArgs {
                 .map(crate::profiles::plan_of)
                 .transpose()?
         };
+        if !self.support_at.is_empty() && plan.is_none() {
+            anyhow::bail!(
+                "--support-at stands supports, and neither --supports nor --support-profile was given"
+            );
+        }
         Ok(plan.map(|plan| SupportPlan {
             cavity: self.support_cavity,
+            by_hand: ByHand {
+                at_mm: self.support_at.clone(),
+                only: self.support_only_at,
+            },
             ..plan
         }))
     }

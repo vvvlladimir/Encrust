@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
-    InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside,
-    pierce, plug_wall_mm, plugs, sleeves,
+    Blocker, Cancel, Channel, DEFAULT_BLOCKER_MM, DrainHole, HoleKind, HoleShape, HoleSize,
+    HollowMode, HollowSettings, InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill,
+    hole_at, hollow, laid_beside, pierce, plug_wall_mm, plugs, sleeves,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -80,6 +80,15 @@ pub struct HollowArgs {
     /// How much of the cavity the lattice fills, 0 to 1; its walls or struts follow.
     #[arg(long = "infill-density", value_name = "0..1")]
     pub density: Option<Scalar>,
+
+    /// Keep the wall solid in a ball round this point, plate mm as the model prints, lift
+    /// included, as the window's Keep solid does. Repeat for more.
+    #[arg(long = "keep-solid", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
+    pub keep_solid: Vec<Vec3>,
+
+    /// The radius of each --keep-solid ball, millimetres.
+    #[arg(long = "keep-solid-radius", value_name = "MM", default_value_t = DEFAULT_BLOCKER_MM)]
+    pub keep_solid_mm: Scalar,
 
     /// Diameter of the drain holes, millimetres.
     #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
@@ -214,14 +223,25 @@ impl HollowArgs {
 
     /// What was asked for, cut on the lattice `precision` picks, or `None` without `--hollow`.
     /// Every channel and walled hole `placed` cuts keeps a solid wall around it.
-    fn settings(&self, precision: Scalar, placed: &Placed) -> Option<HollowSettings> {
+    fn settings(
+        &self,
+        (precision, lifted_mm): (Scalar, Scalar),
+        placed: &Placed,
+    ) -> Option<HollowSettings> {
         let thickness_mm = self.thickness_mm?;
+        let mut blockers = sleeves(&placed.1, &placed.0, thickness_mm);
+        let up = Vec3::Z * lifted_mm;
+        let solid = self
+            .keep_solid
+            .iter()
+            .map(|at| Blocker::ball(*at - up, self.keep_solid_mm));
+        blockers.extend(solid);
         Some(HollowSettings {
             thickness_mm,
             mode: self.mode.into(),
             precision,
             infill: self.infill.map(|pattern| self.infill_settings(pattern)),
-            blockers: sleeves(&placed.1, &placed.0, thickness_mm),
+            blockers,
             // The model already stands where it prints, so the plate is straight down.
             open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()
@@ -234,6 +254,9 @@ impl HollowArgs {
         self.check_infill()?;
         if self.infill.is_some() && !self.wanted() {
             bail!("--infill fills a shell's cavity, and --hollow was not given");
+        }
+        if !self.keep_solid.is_empty() && !self.wanted() {
+            bail!("--keep-solid keeps part of a shell's wall solid, and --hollow was not given");
         }
         if self.open_floor && !self.wanted() {
             bail!("--hollow-open-floor opens a shell's floor, and --hollow was not given");
@@ -362,18 +385,19 @@ fn refuse_off_a_face(near: Vec3, hole: DrainHole, up: Vec3) -> Result<DrainHole>
     Ok(hole)
 }
 
-/// Hollows the mesh, keeping the cavity off the channels and walled holes `placed` cuts, and says
-/// what that cost and saved. `stop` is asked while the field is built, so a Ctrl-C lands inside it.
+/// Hollows the mesh, keeping the cavity off the channels and walled holes `placed` cuts and the
+/// balls `--keep-solid` names, at `lattice`'s precision with the model lifted its second by
+/// its supports, and says what that cost and saved. `stop` is asked while the field is built.
 pub fn run(
     mesh: &Mesh,
     placed: &Placed,
     args: &HollowArgs,
-    precision: Scalar,
+    lattice: (Scalar, Scalar),
     stop: &Stop,
 ) -> Result<(Mesh, Range<usize>, HollowReport)> {
     let started = Instant::now();
     let bvh = Bvh::build(mesh);
-    let Some(settings) = args.settings(precision, placed) else {
+    let Some(settings) = args.settings(lattice, placed) else {
         bail!("--hollow was not given, so there is nothing to hollow");
     };
     let asked = || stop.requested();

@@ -3,6 +3,7 @@
 
 mod agent_lab;
 mod batch;
+mod by_hand;
 mod containers;
 mod drains;
 mod editing;
