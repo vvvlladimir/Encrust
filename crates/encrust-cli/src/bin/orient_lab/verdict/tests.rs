@@ -14,6 +14,7 @@ fn printout(contacts: usize) -> Printout {
         supports_ml: contacts as f32 / 10.0,
         hanging: 0,
         top_contacts: 0,
+        kept_clear_touched: 0,
         layers: 100,
         stack_mm: 5.0,
         pull_n: contacts as f64,

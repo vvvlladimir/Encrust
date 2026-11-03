@@ -54,6 +54,24 @@ pub struct SetPose {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct ComparePoses {
+    pub job: String,
+    /// A search to compare the ways of, as `set_pose` takes it; absent, the latest revision's
+    /// search, or `auto`. Its `pick` is ignored.
+    pub pose: Option<Pose>,
+    /// How many of the search's best ways, 2 to 8; 4 when absent.
+    #[schemars(range(min = 2, max = 8))]
+    pub count: Option<u16>,
+    /// Draws each way; true when absent. Each picture is one more run of the command line.
+    pub pictures: Option<bool>,
+    /// Absent draws `iso`.
+    pub views: Option<Vec<View>>,
+    /// Each picture's width and height in pixels, 64 to 1024; 320 when absent.
+    #[schemars(range(min = 64, max = 1024))]
+    pub size_px: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct SetHollow {
     pub job: String,
     /// Absent leaves the model solid.

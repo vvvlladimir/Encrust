@@ -329,6 +329,26 @@ places it; `--support-only-at` stands those alone (ADR 0402). A plate file's `su
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
 (ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
+`--orient-choices N` reports the search's first N ways to stand the model under the report's
+`oriented.choices`, each numbered as `pick`, with its `rotate_deg`, whether it is set on the
+plate and offered beside the first, and with a printer what its trial printed: `contacts`,
+`top_contacts` on faces looking up in the file, `kept_clear_touched`, `hanging`,
+`supports_ml`, `resin_ml`, `layers`, `stack_mm`, `pull_n`, `islands`, `suction_cups`, `peels`
+and `overflows`, on the coarse stack a trial cuts, to compare them by. `--orient-pick N`
+stands the model the Nth way instead of the first, and a pick past the ways found fails the
+run. `--orient-keep-clear X,Y,Z`, repeated, keeps supports off the surface near each point,
+given in plate mm as the model stood turned by `--orient-keep-clear-turn X,Y,Z` (none when
+left out) and centred on z = 0: with a printer, the sound poses whose supports touch fewest
+points within `--orient-keep-clear-radius` (4 mm) are ranked first, and a pose with a cup, a
+tearing pull or an overflow never above a sound one (ADR 0403).
+
+```sh
+encrust estimate bust.stl --printer elegoo-mars-4-ultra --supports auto --orient \
+  --orient-choices 4 --orient-keep-clear 60,40,52 --json
+encrust slice bust.stl --printer elegoo-mars-4-ultra --supports auto --orient --orient-pick 2 \
+  -o bust.goo
+```
+
 A model the search sets on the plate gets supports only under what would hang there, and none
 if nothing does; with supports and a raft it stands on the raft's top. A `--rotate` that tips
 it off that face stands it on supports. For example:
@@ -466,6 +486,17 @@ supports of one reaching into another, are named once under *Plate* as `meeting 
 b.stl`: they would slice as one piece. Touching counts, a gap does not, and supports meeting
 supports never do; `--strict` fails on it, and each `batch` model lists the others in
 `meets` (ADR 0392).
+
+`--against NAME=FILE`, repeated, sets the run beside a report `estimate --json` kept before:
+the report's `compared` gives, under each name, its `standing` — `beats`, `matches` or
+`behind` — and the readings `worse` and `better`, by the rule `agent-lab` judges a client by;
+a file that does not read or has no score is answered with its `error` (ADR 0403).
+
+```sh
+encrust --json estimate model.stl --printer elegoo-mars-4-ultra --prepare > autopilot.json
+encrust --json estimate model.stl --printer elegoo-mars-4-ultra --hollow 2 --drain-at auto \
+  --supports auto --against autopilot=autopilot.json
+```
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).
@@ -683,7 +714,8 @@ The command line as tools for a chat client that speaks the Model Context Protoc
 stdio. The client starts it; each tool runs `encrust --json` — `--encrust PATH`, else the
 one beside the server, else the one on the `PATH` — and answers with its report (ADR 0397).
 Jobs are kept under the user's cache directory, or `--jobs DIR`, each revision as `N.toml`
-with the report of its check as `N.json`; a run is stopped after `--timeout-s` seconds
+with the report of its check as `N.json` and the flags it stages with as `N.args.json`, and
+the autopilot's own check of the model as `autopilot.json`; a run is stopped after `--timeout-s` seconds
 (1800), and reports progress every five seconds while it runs. `--trace FILE` appends a JSON
 line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
 `null` when it named none. With a window open, each revision kept is also handed to it to
@@ -725,7 +757,12 @@ command line's flags; `set_hollow` takes the mode, precision and `keep_solid_at_
 channels, and `set_supports` a profile TOML and `at_mm` with `only_at`.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
 `estimate --check-drainage` and keep it as the next revision only if the command line took
-it; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
+it; every check is set `--against` the revision before and the autopilot, and the answer
+carries `compared`. `compare_poses` runs a search with `--orient-choices` — 4 ways unless
+`count`, 2 to 8 — and answers with each way's numbers and an `iso` picture each, drawn with
+`--orient-pick`; `set_pose` with that search and `pick` takes one. A search's
+`keep_clear_at_mm` are plate points as the latest revision stands: the server keeps with them
+the turn that revision stood in as `keep_clear_seen_deg` and takes its supports' lift off them; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
 proven drain and vent per pocket; a new pose clears drain points given by hand. `check` reads any
 revision again and `revert` copies one forward. `write_file` slices a revision under
 `--strict` unless `accept_defects`, and answers `written: false` as a tool error when nothing
@@ -843,12 +880,21 @@ run; `--baseline FILE` exits non-zero when a client that matched there does not 
 autopilot is worse than it was. `encrust` and `encrust-mcp` are taken from beside the bench
 unless `--encrust` and `--encrust-mcp` name them, so build all three with one profile.
 
+`--pictures` draws each preparation from `iso` and `bottom` into its directory, the autopilot's
+from its flags and a client's from the `N.args.json` the server kept with its latest revision,
+and the run lists them as `pictures`. `--judge COMMAND`, with `{prompt}` filled in, draws them
+too and asks another model which of the two prints better, showing it both pictures' paths
+and scores; the last `{"winner": "a" | "b" | "tie", "why": …}` it prints, on a line or inside a
+client's JSON `result`, is kept as the client's `verdict` beside its standing, which it does
+not change (ADR 0403).
+
 ```sh
 cargo build --release -p encrust-cli -p encrust-mcp
 target/release/agent-lab model.stl --printer elegoo-mars-4-ultra --resin my-grey \
   --agent 'sonnet=claude -p {prompt} --model sonnet --output-format json --mcp-config {mcp_config} --strict-mcp-config --allowedTools mcp__encrust' \
   --agent 'codex=codex exec --json -c mcp_servers.encrust.command={encrust_mcp} -c mcp_servers.encrust.args={mcp_args} -c mcp_servers.encrust.tool_timeout_sec=1800 {prompt}' \
-  --json now.json --baseline before.json
+  --json now.json --baseline before.json \
+  --judge 'claude -p {prompt} --model opus --allowedTools Read'
 ```
 
 `claude -p` takes the prompt before `--allowedTools`, which would read it as one more tool.

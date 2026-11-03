@@ -32,7 +32,7 @@ mod relief;
 use checked::checked;
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
-pub use place::{OrientSummary, orient_settings};
+pub use place::{OrientChoice, OrientSummary, orient_settings, rotate_degrees};
 use place::{centred, place};
 use relief::press_relief;
 

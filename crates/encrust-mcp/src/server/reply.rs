@@ -1,7 +1,9 @@
 //! What a tool answers, built from a run of the command line: a revision and its check, an
-//! edit not kept, a report as it came.
+//! edit not kept, a report as it came, the pictures it drew.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::{Value, json};
 
@@ -21,6 +23,7 @@ pub(super) fn revised(revision: &Revision, outcome: &Outcome, note: Option<&str>
             "revision": revision.number,
             "recipe": revision.recipe,
             "note": note,
+            "compared": outcome.report.get("compared"),
             "exit_code": outcome.exit_code,
             "report": outcome.report,
         }),
@@ -73,6 +76,21 @@ pub(super) fn trim_profiles(mut listing: Value, query: Option<&str>) -> Value {
         *printers = kept;
     }
     listing
+}
+
+/// The PNGs a `render` run reports, read in as images.
+pub(super) async fn images(report: &serde_json::Value) -> Result<Vec<ContentBlock>> {
+    let mut content = Vec::new();
+    for picture in report["pictures"].as_array().map_or(&[][..], Vec::as_slice) {
+        let path = picture["path"]
+            .as_str()
+            .context("a picture names its file")?;
+        let bytes = tokio::fs::read(path)
+            .await
+            .with_context(|| format!("reading {path}"))?;
+        content.push(ContentBlock::image(BASE64.encode(bytes), "image/png"));
+    }
+    Ok(content)
 }
 
 pub(super) fn answer(reply: Result<Reply>) -> CallToolResult {

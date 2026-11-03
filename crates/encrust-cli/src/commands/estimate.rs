@@ -1,6 +1,11 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
+use serde::Serialize;
+use serde_json::Value;
 
 use crate::args::JobArgs;
 use crate::batch::EstimateReport;
@@ -16,6 +21,11 @@ pub struct EstimateCommand {
 
     #[command(flatten)]
     pub job: JobArgs,
+
+    /// Set this run beside a report `estimate --json` kept, under NAME, as `agent-lab` judges
+    /// one preparation against another; the report's `compared` says how it stands. Repeat.
+    #[arg(long, value_name = "NAME=FILE", value_parser = crate::score::parse_against)]
+    pub against: Vec<(String, PathBuf)>,
 }
 
 impl EstimateCommand {
@@ -31,15 +41,29 @@ impl EstimateCommand {
             &watch,
         )?;
         let estimate = estimate::estimate(&mut staged, &self.job.raster, &watch)?;
+        let report = EstimateReport::of(
+            &self.plate.inputs,
+            &staged.parts,
+            &estimate,
+            started.elapsed(),
+        );
+        let compared = if self.against.is_empty() {
+            BTreeMap::new()
+        } else {
+            let mut value = serde_json::to_value(&report)?;
+            value["schema"] = json::SCHEMA.into();
+            crate::score::compared(&value, &self.against)
+        };
         if global.json {
-            json::print(&EstimateReport::of(
-                &self.plate.inputs,
-                &staged.parts,
-                &estimate,
-                started.elapsed(),
-            ))?;
+            json::print(&Compared {
+                report: &report,
+                compared,
+            })?;
         } else if global.talks() {
             print!("{estimate}");
+            for (name, judged) in &compared {
+                println!("Against {name}: {judged}");
+            }
         }
         let clean = staged.parts.iter().all(crate::stage::Part::is_clean) && estimate.is_clean();
         Ok(if self.job.strict && !clean {
@@ -48,4 +72,13 @@ impl EstimateCommand {
             Exit::Success
         })
     }
+}
+
+/// The report, and how it stands against each kept one `--against` named.
+#[derive(Serialize)]
+struct Compared<'a> {
+    #[serde(flatten)]
+    report: &'a EstimateReport,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    compared: BTreeMap<String, Value>,
 }

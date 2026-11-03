@@ -76,6 +76,21 @@ pub enum Pose {
         /// Keeps the turn within this many degrees of the way the file stands.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max_tilt_deg: Option<f32>,
+        /// Takes the Nth way the search ranks, from one, as `compare_poses` numbers them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(range(min = 1, max = 64))]
+        pick: Option<u16>,
+        /// Points no support should touch — a face, a lip, a detail — in plate mm as the latest
+        /// revision stands; the search ranks first the sound poses that leave them clear.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        keep_clear_at_mm: Vec<[f32; 3]>,
+        /// How far from a point a support still touches it; 4 mm when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        keep_clear_radius_mm: Option<f32>,
+        /// The turn the points were seen in, lift taken off: the server's, kept with them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(skip)]
+        keep_clear_seen_deg: Option<[f32; 3]>,
     },
     /// Degrees around X, Y and Z, as `--rotate`.
     Rotate { degrees: [f32; 3] },
@@ -318,12 +333,49 @@ impl Supports {
 }
 
 impl Pose {
+    /// The search for `goal` within `max_tilt_deg`, taking its first pose and keeping nothing
+    /// clear.
+    pub fn search(goal: Goal, max_tilt_deg: Option<f32>) -> Self {
+        Self::Search {
+            goal,
+            max_tilt_deg,
+            pick: None,
+            keep_clear_at_mm: Vec::new(),
+            keep_clear_radius_mm: None,
+            keep_clear_seen_deg: None,
+        }
+    }
+
     fn push_flags(&self, flags: &mut Vec<String>) {
         match self {
-            Self::Search { goal, max_tilt_deg } => {
+            Self::Search {
+                goal,
+                max_tilt_deg,
+                pick,
+                keep_clear_at_mm,
+                keep_clear_radius_mm,
+                keep_clear_seen_deg,
+            } => {
                 flags.extend(["--orient".into(), format!("--orient-goal={}", kebab(goal))]);
                 if let Some(tilt) = max_tilt_deg {
                     flags.push(format!("--max-tilt={tilt}"));
+                }
+                if let Some(pick) = pick {
+                    flags.push(format!("--orient-pick={pick}"));
+                }
+                if keep_clear_at_mm.is_empty() {
+                    return;
+                }
+                flags.extend(
+                    keep_clear_at_mm
+                        .iter()
+                        .map(|at| format!("--orient-keep-clear={}", triple(*at))),
+                );
+                if let Some(seen) = keep_clear_seen_deg {
+                    flags.push(format!("--orient-keep-clear-turn={}", triple(*seen)));
+                }
+                if let Some(radius) = keep_clear_radius_mm {
+                    flags.push(format!("--orient-keep-clear-radius={radius}"));
                 }
             }
             Self::Rotate { degrees } => flags.push(format!("--rotate={}", triple(*degrees))),

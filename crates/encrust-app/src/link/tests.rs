@@ -96,6 +96,29 @@ fn a_turn_is_given_as_the_command_line_turns_by_it() {
 }
 
 #[test]
+fn a_pick_and_places_kept_clear_reach_the_search_with_the_turn_they_were_seen_in() {
+    let (plan, unshown) = recipe(json!({
+        "model": "/m.stl",
+        "pose": {"by": "search", "goal": "auto", "pick": 2, "keep_clear_at_mm": [[1.0, 2.0, 3.0]],
+                 "keep_clear_seen_deg": [0.0, 90.0, 0.0]},
+    }))
+    .plan();
+    let Choice::Given(Orient::Search { wish, .. }) = plan.orient else {
+        panic!("a search is given: {:?}", plan.orient);
+    };
+    assert_eq!(wish.pick, Some(2));
+    let kept = wish.keep_clear.expect("the point is kept clear");
+    assert_eq!(kept.at_mm, [core_geometry::Vec3::new(1.0, 2.0, 3.0)]);
+    let seen = core_geometry::rotation_xyz_deg(core_geometry::Vec3::new(0.0, 90.0, 0.0));
+    assert!(kept.seen.abs_diff_eq(seen, 1e-6));
+    assert!(
+        (kept.radius_mm - 4.0).abs() < 1e-6,
+        "the command line's 4 mm"
+    );
+    assert!(unshown.is_empty());
+}
+
+#[test]
 fn drain_points_are_drilled_and_a_missing_plug_is_named() {
     let (plan, unshown) = recipe(json!({
         "model": "/m.stl",

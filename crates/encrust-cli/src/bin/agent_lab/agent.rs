@@ -36,6 +36,8 @@ pub struct Left {
     pub tokens: Option<u64>,
     /// The check of its job's latest revision, if it started one.
     pub check: Option<Value>,
+    /// The flags that revision stages with, where the server kept them.
+    pub args: Option<Vec<String>>,
     /// Why there is no check to score.
     pub why_not: Option<String>,
 }
@@ -102,7 +104,10 @@ impl Agent {
             (None, _) => left.why_not = Some(format!("ran past {} s", programs.timeout.as_secs())),
             (_, None) => left.why_not = Some("started no job".into()),
             (Some(_), Some(job)) => match latest_check(&jobs.join(job)) {
-                Ok(check) => left.check = Some(check),
+                Ok((check, args)) => {
+                    left.check = Some(check);
+                    left.args = args;
+                }
                 Err(error) => left.why_not = Some(format!("{error:#}")),
             },
         }
@@ -151,8 +156,9 @@ fn read_trace(path: &Path) -> Result<Vec<Value>> {
         .collect()
 }
 
-/// The kept check of a job's latest revision: the highest `N.toml`'s `N.json`.
-fn latest_check(job: &Path) -> Result<Value> {
+/// The kept check of a job's latest revision, the highest `N.toml`'s `N.json`, and the flags
+/// kept as `N.args.json`.
+fn latest_check(job: &Path) -> Result<(Value, Option<Vec<String>>)> {
     let latest = fs::read_dir(job)
         .with_context(|| format!("reading the job {}", job.display()))?
         .filter_map(|entry| {
@@ -164,7 +170,12 @@ fn latest_check(job: &Path) -> Result<Value> {
         .with_context(|| format!("the job {} has no revision", job.display()))?;
     let path = job.join(format!("{latest}.json"));
     let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("{} is not JSON", path.display()))
+    let check =
+        serde_json::from_str(&text).with_context(|| format!("{} is not JSON", path.display()))?;
+    let args = fs::read_to_string(job.join(format!("{latest}.args.json")))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok());
+    Ok((check, args))
 }
 
 /// The tokens of the last `usage` object the client printed, as one JSON document or a line
@@ -263,7 +274,13 @@ mod tests {
             )
             .expect("writable");
         }
-        let check = latest_check(&job).expect("the job has revisions");
+        fs::write(job.join("10.args.json"), r#"["/m.stl", "--prepare"]"#).expect("writable");
+        let (check, args) = latest_check(&job).expect("the job has revisions");
         assert_eq!(check["status"], "failed", "revision 10 is after revision 2");
+        assert_eq!(
+            args,
+            Some(vec!["/m.stl".to_owned(), "--prepare".to_owned()]),
+            "its flags are read beside it"
+        );
     }
 }

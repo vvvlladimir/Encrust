@@ -190,3 +190,46 @@ fn a_project_refuses_prepare() {
     assert!(!output.status.success(), "a project carries its own steps");
     assert!(stderr(&output).contains("--prepare"), "{}", stderr(&output));
 }
+
+#[test]
+fn a_run_set_against_its_own_kept_report_matches_it_and_a_missing_one_says_why() {
+    let model = box_of("against", Vec3::splat(20.0));
+    let panel = whole_panel();
+    let run = |extra: &[&str]| {
+        let mut args = vec![
+            model.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--layer-height",
+            "0.5",
+            "--center",
+            "--prepare",
+            "--json",
+        ];
+        args.extend_from_slice(extra);
+        let output = estimate(&args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        output
+    };
+    let kept = output_dir("against").join("kept.json");
+    std::fs::create_dir_all(kept.parent().expect("in a directory")).expect("writable");
+    std::fs::write(&kept, run(&[]).stdout).expect("writable");
+    let against = format!("autopilot={}", kept.display());
+    let missing = format!("gone={}", kept.with_file_name("gone.json").display());
+    let report = json(&run(&["--against", &against, "--against", &missing]));
+    assert_eq!(
+        report["compared"]["autopilot"]["standing"], "matches",
+        "{report}"
+    );
+    assert!(
+        report["compared"]["gone"]["error"].is_string(),
+        "a missing report is answered with why: {report}"
+    );
+}
+
+#[test]
+fn an_against_without_a_name_is_an_argument_error() {
+    let model = box_of("against-bare", Vec3::splat(10.0));
+    let output = estimate(&[model.to_str().unwrap(), "--against", "kept.json"]);
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+}

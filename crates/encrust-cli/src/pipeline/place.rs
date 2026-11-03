@@ -1,12 +1,15 @@
-use crate::args::ImportArgs;
+use crate::args::{ImportArgs, TransformArgs};
 use crate::exit::Cancelled;
 use crate::pipeline::Watch;
 use crate::profiles::Chosen;
 use crate::progress::bar;
 use anyhow::{Context, Result};
-use core_engine::{ByHand, EngineError, PREPARE_ORIENT, SupportPlan, Trial, orient_for_print};
+use core_engine::{
+    ByHand, Choice, EngineError, KeepClear, PREPARE_ORIENT, Printout, SupportPlan, Trial,
+    orient_for_print,
+};
 use core_geometry::{
-    Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
+    Mesh, Quat, Scalar, Transform, Vec2, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     rotation_xyz_deg, transform_mesh,
 };
 use core_plate::{OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
@@ -20,6 +23,35 @@ pub struct OrientSummary {
     pub overhang_mm2: Scalar,
     /// Whether the model needs no supports this way up, set straight on the plate.
     pub on_plate: bool,
+    /// The search's best ways to stand it, as many as `--orient-choices` asks for.
+    pub choices: Vec<OrientChoice>,
+}
+
+/// One way the search offers to stand the model, and what it printed when tried.
+pub struct OrientChoice {
+    pub rotation: Quat,
+    pub on_plate: bool,
+    /// Whether it is worth offering beside the first.
+    pub offered: bool,
+    pub printout: Option<Printout>,
+}
+
+impl OrientChoice {
+    fn of(choice: &Choice) -> Self {
+        Self {
+            rotation: choice.oriented.rotation,
+            on_plate: choice.oriented.on_plate,
+            offered: choice.ruling.is_offered(),
+            printout: choice.printout,
+        }
+    }
+}
+
+/// The angles `--rotate X,Y,Z` repeats `rotation` with, degrees. Zero is added to each, so
+/// float dust never reads as a turn of minus nothing.
+pub fn rotate_degrees(rotation: Quat) -> Vec3 {
+    let (x, y, z) = rotation.to_euler(EulerRot::XYZEx);
+    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
 }
 
 impl OrientSummary {
@@ -28,11 +60,9 @@ impl OrientSummary {
         self.rotation.to_axis_angle().1.to_degrees()
     }
 
-    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees. Zero is added to each,
-    /// so float dust never reads as a turn of minus nothing.
+    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees.
     pub fn rotate_degrees(&self) -> Vec3 {
-        let (x, y, z) = self.rotation.to_euler(EulerRot::XYZEx);
-        Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
+        rotate_degrees(self.rotation)
     }
 
     /// The turn in words: its axis where that is one of the plate's own, and the flag that
@@ -150,6 +180,7 @@ pub(super) fn orientation(
         by_hand: ByHand::default(),
         ..plan.clone()
     });
+    let keep_clear = keep_clear(mesh, transform, profile);
     let trial = profile
         .zip(unhanded.as_ref())
         .map(|(printer, support)| Trial {
@@ -157,6 +188,7 @@ pub(super) fn orientation(
             material: &chosen.material,
             support,
             raster_window: rayon::current_num_threads(),
+            keep_clear: keep_clear.as_ref(),
         });
     let progress = watch.progress.then(|| bar("% of the orientation search"));
     if let Some(progress) = &progress {
@@ -181,19 +213,49 @@ pub(super) fn orientation(
     if let Some(progress) = &progress {
         progress.finish_and_clear();
     }
-    let found = match searched {
+    let ranked = match searched {
         Err(EngineError::Orient(PlateError::Cancelled)) => return Err(Cancelled.into()),
         other => other.context("cannot find an orientation for this model")?,
-    }
-    .into_iter()
-    .next()
-    .context("the search found no orientation for this model")?;
+    };
+    let pick = usize::from(transform.orient_pick.unwrap_or(1)) - 1;
+    let found = ranked.get(pick).with_context(|| {
+        format!(
+            "--orient-pick {}: the search found {} ways to stand this model",
+            pick + 1,
+            ranked.len()
+        )
+    })?;
+    let shown = usize::from(transform.orient_choices.unwrap_or(0));
     Ok(OrientSummary {
         rotation: found.oriented.rotation,
         peak_mm2: found.oriented.score.peak_mm2.unwrap_or_default(),
         overhang_mm2: found.oriented.score.overhang_mm2,
         on_plate: supports.is_some() && found.oriented.on_plate,
+        choices: ranked.iter().take(shown).map(OrientChoice::of).collect(),
     })
+}
+
+/// The `--orient-keep-clear` points taken back into `mesh`'s own frame, from the turn they were
+/// given in and the plate they stood centred on.
+fn keep_clear(
+    mesh: &Mesh,
+    transform: &TransformArgs,
+    profile: Option<&PrinterProfile>,
+) -> Option<KeepClear> {
+    if transform.orient_keep_clear.is_empty() {
+        return None;
+    }
+    let seen = rotation_xyz_deg(transform.orient_keep_clear_turn.unwrap_or(Vec3::ZERO));
+    let plate_mm = profile.map_or(Vec2::ZERO, |p| {
+        Vec2::new(p.build_volume.x, p.build_volume.y)
+    });
+    KeepClear::seen_turned(
+        mesh,
+        seen,
+        plate_mm,
+        &transform.orient_keep_clear,
+        transform.orient_keep_clear_radius,
+    )
 }
 
 /// `mesh` turned by `rotation` and stood on z = 0 over the middle it stood over, where a

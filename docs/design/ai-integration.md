@@ -31,7 +31,8 @@ catalogue moves into a crate of its own when the window's panel needs it too.
 | `list_profiles` | printers, the user's resins, support profiles | `profiles list` | read |
 | `inspect_model` | a file's size, shells, defects, what a repair would do | `inspect` | read |
 | `start_job` | a job for a model, printer and resin, checked as it stands | `estimate` | creates a job |
-| `set_pose` | the orientation search or a turn; clears the drains | `--orient`, `--rotate` | edits |
+| `set_pose` | the orientation search, one of its ways or a turn; places kept clear; clears the drains | `--orient`, `--orient-pick`, `--orient-keep-clear`, `--rotate` | edits |
+| `compare_poses` | the search's best ways, each with what it prints and drawn | `estimate --orient-choices`, `render --orient-pick` | read |
 | `set_hollow` | the wall, infill, open floor | `--hollow` and its flags | edits |
 | `set_drains` | holes at plate points, plugs | `--drain`, `--drain-at` | edits |
 | `set_supports` | a profile or auto, the cavity too | `--supports` | edits |
@@ -45,6 +46,15 @@ catalogue moves into a crate of its own when the window's panel needs it too.
 tool overrides one of its steps; `set_drains` with `auto` drills the drains step 2 proves. An
 edit is kept only if the command line took it; every finding is located (ADR 0396), so the
 next call can act on it.
+
+### Better than the autopilot
+
+A client beats the autopilot only by what it knows and the engine does not: what the model
+is. So it chooses, and the engine proves (ADR 0403). `compare_poses` lays the search's
+finalists side by side, each printed on a trial and drawn; the client picks one for a reason
+it can state, and names the places no support should touch — a face, a lip — which the proof
+ranks first. Each check answers with `compared`, set against the revision before and the
+autopilot's own, so an edit that falls behind is reverted unless the user asked for it.
 
 ### State
 
@@ -128,7 +138,9 @@ reliably, which the autopilot covers: it asks the model only what the engine can
 client under test, run as its own command against `encrust-mcp`, and scores both on the
 check's report — status, islands, suction cups, trapped pockets, contacts with no room,
 resin, print time — with the client's tool calls from the server's trace and its tokens from
-its own output, against a kept baseline. A model's path is offered where it matches or beats
+its own output, against a kept baseline. `--judge` draws both preparations and asks another
+model which prints better, so marks on a visible face count, and no model grades its own
+work. A model's path is offered where it matches or beats
 the autopilot, and the server's `instructions` carry the procedure it is measured with. Tips
 on faces looking up are not in the report yet, so not in the score.
 
@@ -146,6 +158,7 @@ on faces looking up are not in the report yet, so not in the score.
 | 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` (done, ADR 0401: each revision replayed on the plate) | 6 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 6 |
 | 10 | The MCP Apps page | `encrust-mcp` | 6 |
+| 11 | Poses offered and chosen, places kept clear, each check set against the last and the autopilot, a judge on the bench | `core-engine`, `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0403) | 6, 7, 8 |
 
 Steps 1, 2 and 3 touch separate crates and run in parallel; 8, 9 and 10 likewise once 6
 stands.

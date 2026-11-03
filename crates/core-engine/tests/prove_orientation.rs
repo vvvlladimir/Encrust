@@ -9,7 +9,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 use core_engine::{
-    Choice, EngineError, Printout, SupportPlan, Trial, orient_for_print, print_out, prove,
+    Choice, EngineError, KeepClear, Printout, SupportPlan, Trial, orient_for_print, print_out,
+    prove,
 };
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{
@@ -59,6 +60,7 @@ impl Bench {
             material: &self.material,
             support: &self.support,
             raster_window: 2,
+            keep_clear: None,
         }
     }
 
@@ -478,4 +480,65 @@ fn a_proof_stopped_part_way_ends_without_a_choice() {
     )
     .expect_err("the watcher gave up on the proof");
     assert!(matches!(error, EngineError::Orient(PlateError::Cancelled)));
+}
+
+#[test]
+fn a_place_asked_clear_turns_the_supports_off_it() {
+    let bench = Bench::new();
+    // A 30 by 20 mm tile with a knob on one face: tilted on supports, it is held under one face.
+    let mesh = boxes(&[
+        (Vec3::ZERO, Vec3::new(30.0, 20.0, 2.0)),
+        (Vec3::new(13.0, 8.0, 2.0), Vec3::new(17.0, 12.0, 4.0)),
+    ]);
+    let settings = OrientSettings {
+        rest_on_plate: false,
+        ..bench.settings(OrientGoal::LeastPeel)
+    };
+    let (first, _) = best(&mesh, &settings, &bench.trial());
+    // The middle of the lowest face looking down in that pose, where its supports stand.
+    let turn = first.oriented.rotation;
+    let hanging = mesh
+        .faces
+        .iter()
+        .map(|face| face.map(|at| turn * mesh.vertices[at as usize]))
+        .filter(|[a, b, c]| (*b - *a).cross(*c - *a).normalize().z < -0.5)
+        .map(|[a, b, c]| (a + b + c) / 3.0)
+        .min_by(|one, two| one.z.total_cmp(&two.z))
+        .map(|middle| turn.inverse() * middle)
+        .expect("a pose on supports looks down somewhere");
+    let kept = KeepClear {
+        at_mm: vec![hanging],
+        radius_mm: 8.0,
+    };
+    let trial = Trial {
+        keep_clear: Some(&kept),
+        ..bench.trial()
+    };
+    let ranked = orient_for_print(
+        &Printed::solid(&mesh),
+        &settings,
+        Some(&trial),
+        Watch::never(),
+    )
+    .expect("the model can be oriented");
+    let touched = |choice: &Choice| choice.printout.expect("printed").kept_clear_touched;
+    let was = ranked
+        .iter()
+        .find(|choice| {
+            choice
+                .oriented
+                .rotation
+                .abs_diff_eq(first.oriented.rotation, 1e-4)
+        })
+        .map(touched)
+        .expect("the pose chosen before is printed again");
+    assert!(
+        was > 0,
+        "the supports of the pose chosen before stand on the place"
+    );
+    assert!(
+        touched(&ranked[0]) < was,
+        "the first pose now touches it {} times, against {was}",
+        touched(&ranked[0])
+    );
 }

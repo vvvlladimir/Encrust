@@ -6,7 +6,9 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::score::{Judged, Score, Standing};
+use encrust_cli::score::{Judged, Score, Standing};
+
+use crate::judge::{Verdict, Winner};
 
 /// A whole run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,6 +37,9 @@ pub struct Prepared {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why_not: Option<String>,
     pub seconds: f64,
+    /// The preparation drawn, under `--pictures` or `--judge`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pictures: Vec<std::path::PathBuf>,
 }
 
 /// One agent on one model.
@@ -49,6 +54,9 @@ pub struct AgentRow {
     /// Against the autopilot, when both have a score.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub judged: Option<Judged>,
+    /// What `--judge` said, looking at both drawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<Verdict>,
 }
 
 /// Something that changed since the run kept before.
@@ -112,7 +120,7 @@ pub fn compare(kept: &Report, now: &Report) -> Vec<Change> {
             continue;
         };
         if let (Some(old), Some(new)) = (&before.autopilot.score, &model.autopilot.score) {
-            let judged = crate::score::judge(new, old);
+            let judged = encrust_cli::score::judge(new, old);
             if judged.standing == Standing::Behind {
                 changes.push(Change::AutopilotWorse {
                     model: model.name.clone(),
@@ -169,6 +177,14 @@ pub fn print_model(model: &ModelRow) {
             }
             println!("{said}");
         }
+        if let Some(verdict) = &row.verdict {
+            let winner = match verdict.winner {
+                Winner::Autopilot => "the autopilot",
+                Winner::Agent => row.agent.as_str(),
+                Winner::Tie => "neither",
+            };
+            println!("{:<16} judged: {winner} prints better: {}", "", verdict.why);
+        }
     }
     println!();
 }
@@ -218,7 +234,7 @@ pub fn print_changes(changes: &[Change]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::score::Status;
+    use encrust_cli::score::Status;
 
     fn score(islands: u64) -> Score {
         Score {
@@ -237,6 +253,7 @@ mod tests {
             score: Some(score(islands)),
             why_not: None,
             seconds: 1.0,
+            pictures: Vec::new(),
         }
     }
 
@@ -259,6 +276,7 @@ mod tests {
                         worse: Vec::new(),
                         better: Vec::new(),
                     }),
+                    verdict: None,
                 }],
             }],
         }

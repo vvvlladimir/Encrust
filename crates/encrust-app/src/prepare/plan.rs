@@ -21,15 +21,33 @@ pub enum Choice<T> {
 }
 
 /// How a model is turned: by the search, or by a turn given outright.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Orient {
     Search {
         preset: OrientPreset,
         /// How far from the way it came in the search may turn it, degrees.
         max_tilt_deg: Option<Scalar>,
+        wish: Wish,
     },
     /// From the way the model came in, as `--rotate` turns it.
     Turn(Quat),
+}
+
+/// What a chat client asks of the search beyond its goal (ADR 0403).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Wish {
+    /// The way the search ranks to take, counted from one; the first where `None`.
+    pub pick: Option<u16>,
+    pub keep_clear: Option<Kept>,
+}
+
+/// Points no support should touch, plate mm as the model stood turned by `seen`, centred on
+/// the plate and on z = 0.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Kept {
+    pub at_mm: Vec<Vec3>,
+    pub seen: Quat,
+    pub radius_mm: Scalar,
 }
 
 /// The holes a run drills: at points, and where the engine proves they drain.
@@ -154,11 +172,12 @@ impl Plan {
 
     /// How Orient turns a model.
     pub(super) fn orient(&self) -> Orient {
-        match self.orient {
-            Choice::Given(orient) => orient,
+        match &self.orient {
+            Choice::Given(orient) => orient.clone(),
             Choice::Decide | Choice::Skip => Orient::Search {
                 preset: PREPARE_ORIENT,
                 max_tilt_deg: None,
+                wish: Wish::default(),
             },
         }
     }

@@ -496,3 +496,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0400](0400-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
 | [0401](0401-the-open-window-replays-each-revision-the-server-keeps.md) | The open window replays each revision the server keeps, over a loopback port | Proposed |
 | [0402](0402-the-command-line-places-supports-and-blockers-by-hand.md) | Place supports and Keep solid blockers by hand on the command line | Proposed |
+| [0403](0403-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |

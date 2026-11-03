@@ -2,9 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use anyhow::{Context as _, Result, bail};
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64;
+use anyhow::{Result, bail};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
@@ -19,17 +17,18 @@ use serde_json::json;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow, SetPose,
-    SetRepair, SetShape, SetSlicing, SetSupports, Start, View, WriteFile, absolute, plain,
+    ComparePoses, JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow,
+    SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, View, WriteFile, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
 use crate::trace::Trace;
 use crate::window::Window;
 
+mod poses;
 mod reply;
 
-use reply::{Reply, answer, not_applied, reported, revised, trim_profiles};
+use reply::{Reply, answer, images, not_applied, reported, revised, trim_profiles};
 
 const INSTRUCTIONS: &str = include_str!("instructions.md");
 
@@ -96,6 +95,16 @@ impl Server {
         open_world_hint = false
     ))]
     async fn set_pose(&self, Parameters(set): Parameters<SetPose>, ctx: Context) -> Answer {
+        let mut set = set;
+        if let Some(pose) = set.pose.as_mut() {
+            let seated = self
+                .jobs
+                .open(&set.job, None)
+                .and_then(|latest| self.seat_keep_clear(pose, &latest));
+            if let Err(error) = seated {
+                return Ok(answer(Err(error)));
+            }
+        }
         let edited = self.edit(&set.job, &ctx, |recipe| {
             let had_drains = recipe
                 .drains
@@ -107,6 +116,20 @@ impl Server {
             )
         });
         Ok(answer(edited.await))
+    }
+
+    /// The search's best ways to stand the model, each with what it prints and drawn, to
+    /// choose one by what the model is; `set_pose` with `pick` takes it.
+    #[tool(annotations(read_only_hint = true, open_world_hint = false))]
+    async fn compare_poses(
+        &self,
+        Parameters(compare): Parameters<ComparePoses>,
+        ctx: Context,
+    ) -> Answer {
+        Ok(self
+            .poses(compare, &ctx)
+            .await
+            .unwrap_or_else(|error| answer(Err(error))))
     }
 
     /// Sets the model's cavity and infill, or none, and checks for resin left trapped.
@@ -204,7 +227,10 @@ impl Server {
     async fn check(&self, Parameters(at): Parameters<JobRef>, ctx: Context) -> Answer {
         let checked = async {
             let revision = self.jobs.open(&at.job, at.revision)?;
-            let outcome = self.estimate(&revision.recipe, &ctx).await?;
+            let against = self
+                .jobs
+                .against(&revision.job, revision.number.checked_sub(1));
+            let outcome = self.estimate(&revision.recipe, &against, &ctx).await?;
             Ok(revised(&revision, &outcome, None))
         };
         Ok(answer(checked.await))
@@ -221,7 +247,9 @@ impl Server {
             let lock = self.jobs.lock(&revert.job);
             let _held = lock.lock().await;
             let old = self.jobs.open(&revert.job, Some(revert.revision))?;
-            let outcome = self.estimate(&old.recipe, &ctx).await?;
+            let latest = self.jobs.open(&revert.job, None)?;
+            let against = self.jobs.against(&revert.job, Some(latest.number));
+            let outcome = self.estimate(&old.recipe, &against, &ctx).await?;
             let revision = self.jobs.commit(&revert.job, old.recipe, &outcome.report)?;
             Ok(self.kept(&revision, &outcome, None).await)
         };
@@ -293,12 +321,26 @@ impl Server {
             repair: start.repair,
             ..Recipe::bare(start.model, start.printer, start.resin)
         };
-        let outcome = self.estimate(&recipe, ctx).await?;
+        let outcome = self.estimate(&recipe, &[], ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(None, &outcome));
         }
         let job = Jobs::name_for(&recipe);
+        let autopilot = if recipe.prepare && recipe.repair.is_none() {
+            outcome.report.clone()
+        } else {
+            let alone = Recipe {
+                prepare: true,
+                ..Recipe::bare(
+                    recipe.model.clone(),
+                    recipe.printer.clone(),
+                    recipe.resin.clone(),
+                )
+            };
+            self.estimate(&alone, &[], ctx).await?.report
+        };
         let revision = self.jobs.commit(&job, recipe, &outcome.report)?;
+        self.jobs.keep_autopilot(&job, &autopilot)?;
         Ok(self.kept(&revision, &outcome, None).await)
     }
 
@@ -316,7 +358,8 @@ impl Server {
         let mut recipe = latest.recipe.clone();
         let note = change(&mut recipe);
         recipe.check_paths()?;
-        let outcome = self.estimate(&recipe, ctx).await?;
+        let against = self.jobs.against(job, Some(latest.number));
+        let outcome = self.estimate(&recipe, &against, ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(Some(&latest), &outcome));
         }
@@ -364,7 +407,7 @@ impl Server {
         }
         let size = render.size_px.unwrap_or(512).clamp(64, 1024);
         let marked = if render.mark_findings.unwrap_or(true) {
-            let outcome = self.estimate(&revision.recipe, ctx).await?;
+            let outcome = self.estimate(&revision.recipe, &[], ctx).await?;
             findings(&outcome.report)
         } else {
             Vec::new()
@@ -394,18 +437,7 @@ impl Server {
             })
             .to_string(),
         )];
-        for picture in outcome.report["pictures"]
-            .as_array()
-            .map_or(&[][..], Vec::as_slice)
-        {
-            let path = picture["path"]
-                .as_str()
-                .context("a picture names its file")?;
-            let bytes = tokio::fs::read(path)
-                .await
-                .with_context(|| format!("reading {path}"))?;
-            content.push(ContentBlock::image(BASE64.encode(bytes), "image/png"));
-        }
+        content.extend(images(&outcome.report).await?);
         Ok(CallToolResult::success(content))
     }
 
@@ -434,9 +466,15 @@ impl Server {
         reply
     }
 
-    async fn estimate(&self, recipe: &Recipe, ctx: &Context) -> Result<Outcome> {
+    async fn estimate(
+        &self,
+        recipe: &Recipe,
+        against: &[String],
+        ctx: &Context,
+    ) -> Result<Outcome> {
         let mut args = vec!["estimate".to_owned()];
         args.extend(recipe.flags());
+        args.extend(against.iter().cloned());
         self.watched(&args, ctx).await
     }
 

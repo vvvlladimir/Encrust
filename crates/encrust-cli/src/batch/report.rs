@@ -18,11 +18,13 @@ use crate::stage::{Part, Prepared};
 mod drains;
 mod import;
 mod located;
+mod oriented;
 
 use drains::AutoDrains;
 pub use import::{Fit, Model, Repair};
 use import::{fit_of, model_of, repair_of};
 use located::{Frame, RiskAt, TrappedAt};
+pub use oriented::Oriented;
 
 /// One model's run, from its file to what came out.
 #[derive(Debug, Serialize)]
@@ -154,15 +156,6 @@ pub enum Status {
 }
 
 #[derive(Debug, Serialize)]
-pub struct Oriented {
-    pub degrees: Scalar,
-    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees.
-    pub rotate_deg: [Scalar; 3],
-    pub peak_section_mm2: Scalar,
-    pub overhang_mm2: Scalar,
-}
-
-#[derive(Debug, Serialize)]
 pub struct Hollow {
     pub wall_mm: Scalar,
     pub cavity_mm3: Scalar,
@@ -262,12 +255,7 @@ impl PartReport {
             model: import.map(model_of),
             repair: import.map(repair_of),
             fit: part.fit().map(fit_of),
-            oriented: part.oriented.as_ref().map(|found| Oriented {
-                degrees: found.degrees(),
-                rotate_deg: found.rotate_degrees().to_array(),
-                peak_section_mm2: found.peak_mm2,
-                overhang_mm2: found.overhang_mm2,
-            }),
+            oriented: part.oriented.as_ref().map(Oriented::of),
             hollow: part.hollow.as_ref().map(|report| Hollow {
                 wall_mm: report.wall().0,
                 cavity_mm3: report.cavity_mm3(),

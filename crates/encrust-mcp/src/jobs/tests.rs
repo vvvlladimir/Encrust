@@ -103,3 +103,26 @@ fn a_job_that_was_never_started_has_no_latest_revision() {
         "said {refused}"
     );
 }
+
+#[test]
+fn a_revision_keeps_the_flags_it_stages_with_and_the_autopilot_s_check_beside_it() {
+    let jobs = scratch("args");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, recipe(), &json!({"status": "ok"}))
+        .expect("the root is writable");
+    let file = jobs.dir(&job).expect("a plain name").join("1.args.json");
+    let args: Vec<String> =
+        serde_json::from_str(&fs::read_to_string(file).expect("kept")).expect("JSON");
+    assert_eq!(args, first.recipe.flags());
+    assert_eq!(jobs.report(&first).expect("kept")["status"], "ok");
+    assert!(jobs.autopilot_file(&job).is_none(), "none kept yet");
+    jobs.keep_autopilot(&job, &json!({"status": "unclean"}))
+        .expect("the root is writable");
+    assert!(jobs.autopilot_file(&job).is_some());
+    assert_eq!(
+        jobs.latest(&job).expect("one revision"),
+        1,
+        "the kept files are no revision"
+    );
+}
