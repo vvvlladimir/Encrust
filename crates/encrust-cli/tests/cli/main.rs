@@ -1,6 +1,7 @@
 //! The command line driven as a user drives it: the binary spawned, its exit code, its
 //! stdout and the files it leaves behind. `in_process.rs` covers the library under it.
 
+mod agent_lab;
 mod batch;
 mod containers;
 mod drains;

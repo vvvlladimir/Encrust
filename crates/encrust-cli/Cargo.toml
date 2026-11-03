@@ -30,6 +30,12 @@ path = "src/bin/orient_lab/main.rs"
 name = "support-lab"
 path = "src/bin/support_lab/main.rs"
 
+# A bench for language models: each model prepared by the autopilot and by chat clients
+# over encrust-mcp, scored alike.
+[[bin]]
+name = "agent-lab"
+path = "src/bin/agent_lab/main.rs"
+
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true

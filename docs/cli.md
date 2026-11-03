@@ -677,8 +677,11 @@ cargo run -p encrust-app --bin encrust-gui -- model.stl
 The command line as tools for a chat client that speaks the Model Context Protocol over
 stdio. The client starts it; each tool runs `encrust --json` — `--encrust PATH`, else the
 one beside the server, else the one on the `PATH` — and answers with its report (ADR 0397).
-Jobs are kept under the user's cache directory, or `--jobs DIR`; a run is stopped after
-`--timeout-s` seconds (1800), and reports progress every five seconds while it runs.
+Jobs are kept under the user's cache directory, or `--jobs DIR`, each revision as `N.toml`
+with the report of its check as `N.json`; a run is stopped after `--timeout-s` seconds
+(1800), and reports progress every five seconds while it runs. `--trace FILE` appends a JSON
+line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
+`null` when it named none.
 
 ```sh
 cargo xtask mcpb                                        # target/mcpb/encrust-<platform>.mcpb
@@ -800,3 +803,36 @@ cargo run --release -p encrust-cli --bin support-lab -- a.stl --auto default --h
 cargo run --release -p encrust-cli --bin support-lab -- --corpus corpus.toml --sweep --export out --json now.json --baseline before.json
 cargo run --release -p encrust-cli --bin support-lab -- --coupon coupon.stl --coupon-spec coupon.toml
 ```
+
+## `agent-lab`
+
+Each model prepared twice and more: by the autopilot, `estimate --prepare` with nothing
+else, and by each chat client under test driving `encrust-mcp`, asked one fixed prompt to
+prepare it for `--printer` and `--resin` (an id, or a TOML path) and to ask, write and send
+nothing. `--agent NAME=COMMAND`, repeated, is the client's own command line, split at
+whitespace, with `{prompt}`, `{mcp_config}` — a JSON file in the `mcpServers` shape that
+starts the server with a job directory and `--trace` of its own — `{encrust_mcp}`,
+`{mcp_args}` (the server's arguments as a JSON array) and `{work}` filled in. The client's
+answer is its job's latest revision, scored by the check the server kept with it; its tool
+calls come from the trace and its tokens from the last `usage` object it prints on stdout.
+
+Both are read for status, islands, suction cups, trapped pockets, contacts with no room,
+resin and print time (ADR 0400). A client matches the autopilot when no status or count is
+worse and resin and print time are within a tenth above; better on one as well, it beats
+it; a client that started no job, or ran past `--timeout-s` (3600), has no score. Each
+client runs in a directory of its own under `--work`, where its jobs, trace, stdout and
+stderr stay to be read. `--corpus FILE` reads a TOML list of `[[model]]` entries — `path`,
+`name`, `skip` — and `--only` keeps the models whose name holds it. `--json FILE` keeps the
+run; `--baseline FILE` exits non-zero when a client that matched there does not here, or the
+autopilot is worse than it was. `encrust` and `encrust-mcp` are taken from beside the bench
+unless `--encrust` and `--encrust-mcp` name them, so build all three with one profile.
+
+```sh
+cargo build --release -p encrust-cli -p encrust-mcp
+target/release/agent-lab model.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --agent 'sonnet=claude -p {prompt} --model sonnet --output-format json --mcp-config {mcp_config} --strict-mcp-config --allowedTools mcp__encrust' \
+  --agent 'codex=codex exec --json -c mcp_servers.encrust.command={encrust_mcp} -c mcp_servers.encrust.args={mcp_args} -c mcp_servers.encrust.tool_timeout_sec=1800 {prompt}' \
+  --json now.json --baseline before.json
+```
+
+`claude -p` takes the prompt before `--allowedTools`, which would read it as one more tool.
