@@ -922,8 +922,10 @@ once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no ho
 still reported; the window's Drain tool does the same with Auto. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.
 
-**You cannot** (from the command line): paint supports or where a relief goes, place supports
-by hand, set blockers, take the pieces of a cut or a split out as meshes, or hollow or support
+**By hand:** stand a support under the surface nearest a point with `--support-at`, alone with
+`--support-only-at`, and keep a hollow model's wall solid round a point with `--keep-solid`.
+
+**You cannot** (from the command line): paint supports or where a relief goes, take the pieces of a cut or a split out as meshes, or hollow or support
 a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
 Nor can you open a sliced file as a model, use a saved Hollow or Drain preset, press one of
 the built-in textures, pick an edge-smoothing look by name, set a model's lift off the plate

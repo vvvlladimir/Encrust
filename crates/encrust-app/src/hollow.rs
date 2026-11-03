@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
-use core_geometry::{Scalar, Transform};
+use core_geometry::Transform;
 use core_volume::{HollowMode, HollowSettings, InfillSettings, plate_down};
 
 use crate::i18n::tr;
@@ -13,8 +13,7 @@ use crate::job::{
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
-/// How wide a blocker a click drops, in millimetres of the plate.
-pub const DEFAULT_BLOCKER_MM: Scalar = 4.0;
+pub use core_volume::DEFAULT_BLOCKER_MM;
 
 /// What the Hollow tool is set to, and the run it has going.
 ///

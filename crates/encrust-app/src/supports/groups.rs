@@ -100,6 +100,7 @@ impl SupportTool {
                         shapes: Box::new(shapes.clone()),
                     },
                     cavity: false,
+                    by_hand: core_engine::ByHand::default(),
                 },
                 None => SupportPlan::of(self.profile_for(object).clone()),
             };

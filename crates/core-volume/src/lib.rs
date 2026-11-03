@@ -44,8 +44,8 @@ pub use error::VolumeError;
 pub use extract::extract;
 pub use grid::{TILE, VoxelGrid};
 pub use hollow::{
-    Blocker, CavityField, HollowMode, HollowSettings, Hollowed, MIN_WALL_MM, carve, cavity_field,
-    hollow, hollow_at_scale, lattice_mm, plate_down, sleeves,
+    Blocker, CavityField, DEFAULT_BLOCKER_MM, HollowMode, HollowSettings, Hollowed, MIN_WALL_MM,
+    carve, cavity_field, hollow, hollow_at_scale, lattice_mm, plate_down, sleeves,
 };
 pub use infill::{InfillPattern, InfillSettings};
 pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};

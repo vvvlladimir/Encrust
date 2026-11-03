@@ -4,7 +4,7 @@ use crate::pipeline::Watch;
 use crate::profiles::Chosen;
 use crate::progress::bar;
 use anyhow::{Context, Result};
-use core_engine::{EngineError, PREPARE_ORIENT, SupportPlan, Trial, orient_for_print};
+use core_engine::{ByHand, EngineError, PREPARE_ORIENT, SupportPlan, Trial, orient_for_print};
 use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     rotation_xyz_deg, transform_mesh,
@@ -145,12 +145,19 @@ pub(super) fn orientation(
             .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
         ..orient_settings(supports.map(SupportPlan::placing).as_ref())
     };
-    let trial = profile.zip(supports).map(|(printer, support)| Trial {
-        printer,
-        material: &chosen.material,
-        support,
-        raster_window: rayon::current_num_threads(),
+    // Points placed by hand stand where the chosen pose puts them, so no trial pose takes them.
+    let unhanded = supports.map(|plan| SupportPlan {
+        by_hand: ByHand::default(),
+        ..plan.clone()
     });
+    let trial = profile
+        .zip(unhanded.as_ref())
+        .map(|(printer, support)| Trial {
+            printer,
+            material: &chosen.material,
+            support,
+            raster_window: rayon::current_num_threads(),
+        });
     let progress = watch.progress.then(|| bar("% of the orientation search"));
     if let Some(progress) = &progress {
         progress.set_length(100);

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, SupportPoint, WallSide, columns, generate_supports, grow,
-    low_points, mesh_trees,
+    Blocked, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns, generate_supports,
+    grow, low_points, mesh_trees,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
@@ -35,6 +35,17 @@ pub enum SupportShapes {
 pub struct SupportPlan {
     pub shapes: SupportShapes,
     pub cavity: bool,
+    /// Contacts placed by hand, as the window's Edit mode places them.
+    pub by_hand: ByHand,
+}
+
+/// Where supports touch the model by hand: each point snapped to the surface nearest it, in
+/// plate millimetres as the model prints, lift included.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ByHand {
+    pub at_mm: Vec<Vec3>,
+    /// Stands only these, with none placed automatically.
+    pub only: bool,
 }
 
 impl SupportPlan {
@@ -43,6 +54,7 @@ impl SupportPlan {
         Self {
             shapes: SupportShapes::One(Box::new(profile)),
             cavity: false,
+            by_hand: ByHand::default(),
         }
     }
 
@@ -55,6 +67,7 @@ impl SupportPlan {
                 shapes: Box::new(shapes),
             },
             cavity: false,
+            by_hand: ByHand::default(),
         })
     }
 
@@ -334,10 +347,25 @@ fn needs_under(
             inside,
         })
     };
-    let mut needs = run.place(side(false));
-    if plan.cavity && inner.is_some() {
-        needs.extend(run.place(side(true)));
+    let mut needs = Vec::new();
+    if !plan.by_hand.only {
+        needs = run.place(side(false));
+        if plan.cavity && inner.is_some() {
+            needs.extend(run.place(side(true)));
+        }
     }
+    // A support placed by hand is built as sturdy as one steadying a part: it holds what the
+    // user says, not a measured load.
+    let by_hand = plan
+        .by_hand
+        .at_mm
+        .iter()
+        .filter_map(|at| bvh.closest(*at))
+        .map(|found| Need {
+            contact: found.point,
+            reason: Reason::Steady,
+        });
+    needs.extend(by_hand);
     Ok(needs)
 }
 

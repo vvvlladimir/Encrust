@@ -175,7 +175,8 @@ pub fn hollow_and_cut(
     if args.wanted() {
         let uncut = Placed::default();
         let cut = placed.as_ref().unwrap_or(&uncut);
-        let (shelled, faces, report) = hollowing::run(mesh, cut, args, precision, watch.stop)?;
+        let (shelled, faces, report) =
+            hollowing::run(mesh, cut, args, (precision, ground.lifted_mm), watch.stop)?;
         if talk {
             print!("{report}");
         }
