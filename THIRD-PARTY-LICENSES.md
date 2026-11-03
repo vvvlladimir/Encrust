@@ -8250,7 +8250,7 @@ Used by:
 - [adler2 2.0.1](https://github.com/oyvindln/adler2)
 - [anyhow 1.0.104](https://github.com/dtolnay/anyhow)
 - [async-channel 2.5.0](https://github.com/smol-rs/async-channel)
-- [async-executor 1.14.0](https://github.com/smol-rs/async-executor)
+- [async-executor 1.14.1](https://github.com/smol-rs/async-executor)
 - [async-io 2.6.0](https://github.com/smol-rs/async-io)
 - [async-lock 3.4.2](https://github.com/smol-rs/async-lock)
 - [async-process 2.5.0](https://github.com/smol-rs/async-process)

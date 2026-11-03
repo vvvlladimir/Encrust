@@ -21,12 +21,12 @@ fn the_opaque_pipeline_paints_what_the_clipped_one_does() {
         ..Look::default()
     };
     let cuts = [far_cut()];
-    // Moving, the key's shadow is one hard tap, which the two shader builds may round apart on
-    // a few edge pixels of 768²: 4 under lavapipe, 2 under WARP, none on Metal.
+    // The key's shadow compares depths, which the two shader builds may round apart on a few
+    // edge pixels of 768²: 4 under lavapipe moving or at rest, 2 under WARP, none on Metal.
     let views = [
         ("the working view", None, false, 0),
         ("the render view moving", Some(studio), true, 16),
-        ("the render view at rest", Some(studio), false, 0),
+        ("the render view at rest", Some(studio), false, 16),
     ];
     for (view, look, moving, allowed_px) in views {
         let marks = |cuts| Marks {
