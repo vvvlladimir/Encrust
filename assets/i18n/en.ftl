@@ -1468,10 +1468,16 @@ prepare-running-why = Wait for Prepare for print to end.
 prepare-step-orient = Orienting
 prepare-step-repair = Repairing
 prepare-step-hollow = Hollowing
+prepare-step-drill = Drilling drain holes
 prepare-step-drain = Looking for drain holes
 prepare-step-supports = Placing supports
 prepare-step-cavity = Placing supports in the cavity
 prepare-cancelled = Prepare for print cancelled; the plate is as it was
+prepare-drilled =
+    { $count ->
+        [one] Drilled { $count } drain hole
+       *[other] Drilled { $count } drain holes
+    }
 prepare-done =
     { $count ->
         [one] Prepared { $count } model for print

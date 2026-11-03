@@ -87,6 +87,21 @@ impl SupportTool {
         Ok((job, sizing))
     }
 
+    /// Placement on `ids` alone, built to `profile` whatever the panel holds, handed back rather
+    /// than kept: what Prepare stands a model on when a support profile is named.
+    pub fn start_profile_on(
+        scene: &Scene,
+        ids: &[ObjectId],
+        (layer_height_mm, profile): (Scalar, &SupportProfile),
+        side: Side,
+    ) -> Result<SupportJob> {
+        let tasks = scene
+            .named(ids)
+            .map(|object| SupportTask::of(object, profile.clone()))
+            .collect();
+        spawn(scene, tasks, (layer_height_mm, side), None)
+    }
+
     /// Drains a running placement run into the scene and the stage notice. Returns whether
     /// one is still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {

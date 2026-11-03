@@ -228,6 +228,15 @@ fn smallest_eigenvalue(matrix: Mat3) -> Scalar {
     mean + 2.0 * spread * (angle + 2.0 * std::f32::consts::FRAC_PI_3).cos()
 }
 
+/// The turn `--rotate X,Y,Z` and the window give in degrees: about X, then Y, then Z, each
+/// about the plate's own axes.
+pub fn rotation_xyz_deg(degrees: Vec3) -> Quat {
+    let radians = degrees * (std::f32::consts::PI / 180.0);
+    Quat::from_rotation_z(radians.z)
+        * Quat::from_rotation_y(radians.y)
+        * Quat::from_rotation_x(radians.x)
+}
+
 /// Applies a transform to every vertex.
 ///
 /// A mirroring scale reverses winding order, so faces are flipped to keep normals

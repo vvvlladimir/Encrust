@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::SupportPlan;
-use core_geometry::{Adjacency, Mesh, Region, Vec2, Vec3};
+use core_geometry::{Adjacency, Mesh, Quat, Region, Scalar, Vec2, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -177,20 +177,26 @@ impl OrientTool {
         Ok(())
     }
 
-    /// A fresh search for the way `ids` print best by `preset`, whatever the panel is set to
-    /// and whatever the last run found, handed back rather than kept: what Prepare turns by.
+    /// A fresh search for the way `ids` print best by `preset`, within `max_tilt_deg` of the
+    /// way each stands where given, whatever the panel is set to and whatever the last run
+    /// found, handed back rather than kept: what Prepare turns by.
     pub fn start_on(
         &mut self,
         scene: &Scene,
         ids: &[ObjectId],
-        (preset, plan_of): (OrientPreset, impl Fn(&SceneObject) -> SupportPlan),
+        (preset, max_tilt_deg, plan_of): (
+            OrientPreset,
+            Option<Scalar>,
+            impl Fn(&SceneObject) -> SupportPlan,
+        ),
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
     ) -> Result<OrientJob> {
         let tasks = scene
             .named(ids)
             .map(|object| OrientTask::of(object, plan_of(object)))
             .collect();
-        let asked = self.asking(tasks, preset, machine)?;
+        let mut asked = self.asking(tasks, preset, machine)?;
+        asked.settings.max_tilt_deg = max_tilt_deg;
         Ok(OrientJob::spawn(OrientRequest {
             tasks: asked.tasks,
             settings: asked.settings,
@@ -327,6 +333,23 @@ pub fn stand_turned(scene: &mut Scene, plate: &BuildPlate, turns: &[Turn]) -> St
     turned(turns, moved)
 }
 
+/// Turns each of `ids` by `rotation` from the way it came in, as `--rotate` does, and stands
+/// it back on the middle of where it was on `plate`.
+pub fn stand_rotated(
+    scene: &mut Scene,
+    plate: &BuildPlate,
+    ids: &[ObjectId],
+    rotation: Quat,
+) -> Status {
+    let mut moved = 0;
+    for id in ids {
+        if let Some(object) = scene.get_mut(*id) {
+            moved += usize::from(turn_in_place(object, rotation, plate));
+        }
+    }
+    Status::Info(tr!("orient-turned", count = moved))
+}
+
 /// What a run did: how many models it turned, how many stand on the plate, how many other
 /// good poses the button steps through next, and what one model now costs.
 fn turned(turns: &[Turn], moved: usize) -> Status {
@@ -378,22 +401,29 @@ fn costed(headline: String, costs: Option<Costs>, was: Option<Costs>) -> Status 
 /// keeps it on `plate`, dropped back onto it and lifted `lift_mm` onto its supports where it
 /// is not set on it. Returns whether that turned it.
 fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32, plate: &BuildPlate) -> bool {
+    let turned = turn_in_place(object, pose.rotation, plate);
+    if !pose.on_plate {
+        object.transform.translation.z += lift_mm;
+    }
+    turned
+}
+
+/// Turns `object` to `rotation` about the middle of its footprint and stands it on `plate`;
+/// answers whether that turned it more than a settled pose differs by.
+fn turn_in_place(object: &mut SceneObject, rotation: Quat, plate: &BuildPlate) -> bool {
     let middle = |object: &SceneObject| {
         object
             .world_bounds()
             .map(|bounds| ((bounds.mins + bounds.maxs) / 2.0).truncate())
     };
     let before = middle(object);
-    let by = pose.rotation * object.transform.rotation.inverse();
+    let by = rotation * object.transform.rotation.inverse();
     object.transform = object.transform.turned(by);
     if let Some((before, after)) = before.zip(middle(object)) {
         object.transform.translation += (before - after).extend(0.0);
     }
     object.slide_onto_plate(Vec2::new(plate.x_mm, plate.y_mm));
     object.stand_on_plate();
-    if !pose.on_plate {
-        object.transform.translation.z += lift_mm;
-    }
     by.to_axis_angle().1.to_degrees() > SETTLED_DEG
 }
 

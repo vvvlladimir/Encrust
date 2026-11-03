@@ -16,7 +16,7 @@ mod step;
 
 pub use decided::Prepared;
 use plan::Chosen;
-pub use plan::{Choice, Plan};
+pub use plan::{Choice, Drains, Orient, Plan};
 use step::{Ended, Going};
 
 /// Settled polls the plate may wait on cuts or a support surface no job is building, which the
@@ -32,16 +32,19 @@ pub enum Step {
     Orient,
     Repair,
     Hollow,
+    /// Holes drilled at the points a plan gives, before any are searched for.
+    Drill,
     Drain,
     Supports,
     Cavity,
 }
 
 impl Step {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Orient,
         Self::Repair,
         Self::Hollow,
+        Self::Drill,
         Self::Drain,
         Self::Supports,
         Self::Cavity,
@@ -61,6 +64,7 @@ impl Step {
             Self::Orient => tr!("prepare-step-orient"),
             Self::Repair => tr!("prepare-step-repair"),
             Self::Hollow => tr!("prepare-step-hollow"),
+            Self::Drill => tr!("prepare-step-drill"),
             Self::Drain => tr!("prepare-step-drain"),
             Self::Supports => tr!("prepare-step-supports"),
             Self::Cavity => tr!("prepare-step-cavity"),
@@ -298,7 +302,7 @@ fn advance(run: &mut Run, doc: &mut Doc, tools: &mut Tools, machine: &mut Machin
     loop {
         let chosen = run.wanting(run.step, &doc.scene);
         if !chosen.is_empty() {
-            let asked = (run.step, run.plan);
+            let asked = (run.step, &run.plan);
             run.going = Some(Going::start(asked, &chosen, doc, tools, machine)?);
             run.mark(&chosen, &doc.scene);
             return Ok(true);

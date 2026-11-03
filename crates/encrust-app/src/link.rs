@@ -123,9 +123,10 @@ impl Link {
     /// plate; a newer revision stops the replay of an older one first.
     fn replay(&mut self, index: usize, doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) {
         let followed = &mut self.followed[index];
-        let (Some(fresh), Some((revision, plan))) = (&followed.fresh, followed.waiting) else {
+        let (Some(fresh), Some((revision, _))) = (&followed.fresh, &followed.waiting) else {
             return;
         };
+        let revision = *revision;
         if self.replaying {
             crate::prepare::cancel(doc, tools, machine);
             self.replaying = false;
@@ -133,7 +134,9 @@ impl Link {
         if crate::prepare::busy(doc, tools, machine).is_some() {
             return;
         }
-        followed.waiting = None;
+        let Some((_, plan)) = followed.waiting.take() else {
+            return;
+        };
         let fresh = std::slice::from_ref(fresh);
         let started = crate::prepare::start_planned(doc, tools, machine, plan, fresh);
         self.replaying = started.is_ok() && tools.prepare.is_running();

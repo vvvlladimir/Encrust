@@ -171,7 +171,7 @@ fn a_search_on_named_models_ignores_what_is_picked() {
     let mut tool = DrainTool::default();
 
     let mut job = tool
-        .search_on(&scene, &[cube], 0.5)
+        .search_on(&scene, &[cube], 0.5, true)
         .expect("the cube is named");
     let found = loop {
         match job.poll() {

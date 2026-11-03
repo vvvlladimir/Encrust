@@ -84,14 +84,18 @@ impl HollowTool {
         Ok(())
     }
 
-    /// A run over `models` alone, each at its wall beside it, millimetres, and Hollow's
-    /// defaults otherwise, handed back rather than kept: what Prepare hollows.
-    pub fn start_walls(&self, scene: &Scene, models: &[(ObjectId, Scalar)]) -> Result<HollowJob> {
+    /// A run over `models` alone, each at the settings beside it, handed back rather than
+    /// kept: what Prepare hollows.
+    pub fn start_settings(
+        &self,
+        scene: &Scene,
+        models: &[(ObjectId, HollowSettings)],
+    ) -> Result<HollowJob> {
         let tasks = models
             .iter()
-            .filter_map(|(id, wall_mm)| {
+            .filter_map(|(id, settings)| {
                 let object = scene.named(std::slice::from_ref(id)).next()?;
-                Some(HollowTask::of(object, &HollowSettings::for_wall(*wall_mm)))
+                Some(HollowTask::of(object, settings))
             })
             .collect();
         self.spawn(tasks)
@@ -190,7 +194,7 @@ impl HollowTool {
 
 /// The run settings a panel's numbers ask for, on a model standing under `transform`. An
 /// open floor faces the plate it stands on, so turning such a model makes its shell stale.
-fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
+pub(crate) fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
     let opens = state.open_floor && state.mode == HollowMode::Internal;
     HollowSettings {
         thickness_mm: state.thickness_mm,

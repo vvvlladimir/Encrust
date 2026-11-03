@@ -502,3 +502,109 @@ fn a_planned_run_leaves_out_the_steps_its_plan_skips() {
     let prepared = bench.tools.prepare.prepared(object).expect("said of it");
     assert_eq!(prepared.hollowed, None);
 }
+
+#[test]
+fn a_planned_turn_turns_the_model_as_the_command_line_would() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let fresh = bench.object(id).clone();
+    let turn = Quat::from_rotation_z(0.5);
+    let plan = Plan {
+        orient: Choice::Given(Orient::Turn(turn)),
+        repair: Choice::Skip,
+        hollow: Choice::Skip,
+        drains: Some(Drains {
+            at_mm: Vec::new(),
+            auto: false,
+            vent: false,
+            size: None,
+        }),
+        supports: None,
+        cavity: false,
+    };
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
+    start_planned(doc, tools, machine, plan, &[fresh]).expect("nothing else runs");
+    bench.run_to_end();
+    let rotation = bench.object(id).transform.rotation;
+    assert!(
+        rotation.angle_between(turn) < 1e-4,
+        "turned by 0.5 rad about Z as given, found {rotation:?}"
+    );
+    assert!(bench.object(id).supports.is_empty(), "no supports asked");
+}
+
+#[test]
+fn a_planned_point_drills_the_surface_nearest_it() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let fresh = bench.object(id).clone();
+    let world = fresh.transform.to_matrix();
+    let side = world.transform_point3(Vec3::new(0.0, 20.0, 20.0));
+    let plan = Plan {
+        orient: Choice::Skip,
+        repair: Choice::Skip,
+        hollow: Choice::Skip,
+        drains: Some(Drains {
+            at_mm: vec![side],
+            auto: false,
+            vent: false,
+            size: Some(core_engine::project::DrainState::round(4.0, 3.0, 1.0)),
+        }),
+        supports: None,
+        cavity: false,
+    };
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
+    start_planned(doc, tools, machine, plan, &[fresh]).expect("nothing else runs");
+    bench.run_to_end();
+    let holes = bench.object(id).hollow.drains();
+    assert_eq!(holes.len(), 1, "one hole at the one point");
+    assert!(
+        (holes[0].diameter_mm - 4.0).abs() < 1e-4,
+        "drilled 4 mm across as given, found {}",
+        holes[0].diameter_mm
+    );
+    assert!(
+        holes[0].at.x.abs() < 1e-3,
+        "on the face x = 0 nearest the point, found {:?}",
+        holes[0].at
+    );
+}
+
+#[test]
+fn a_named_support_profile_becomes_the_models_own() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let fresh = bench.object(id).clone();
+    let plan = Plan {
+        orient: Choice::Skip,
+        repair: Choice::Skip,
+        hollow: Choice::Skip,
+        drains: None,
+        supports: Some(Some("light".to_owned())),
+        cavity: false,
+    };
+    let Bench {
+        doc,
+        tools,
+        machine,
+        ..
+    } = &mut bench;
+    start_planned(doc, tools, machine, plan, &[fresh]).expect("nothing else runs");
+    bench.run_to_end();
+    let light = &bench
+        .machine
+        .slicing
+        .catalogue
+        .support("light")
+        .expect("the catalogue ships Light")
+        .profile;
+    let active = bench.tools.supports.active;
+    assert_eq!(bench.object(id).own.supports.get(&active), Some(light));
+}
