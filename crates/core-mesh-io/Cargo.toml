@@ -14,10 +14,10 @@ doctest = false
 [dependencies]
 core-geometry.workspace = true
 image.workspace = true
+quick-xml.workspace = true
 stl_io.workspace = true
 thiserror.workspace = true
 tobj.workspace = true
-threemf2.workspace = true
 tracing.workspace = true
 zip.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

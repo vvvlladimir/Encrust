@@ -1,10 +1,12 @@
 //! The test prints the start page offers: resin tests of the project's own, built in code
 //! with the mark raised on each, and pictured from the same mesh; see `docs/decisions/0232` and `0234`.
+//! Those too large to bundle are [`remote`] (ADR 0394).
 
 pub(crate) mod detail;
 mod exposure;
 mod fit;
 mod mark;
+pub mod remote;
 pub(crate) mod solid;
 mod surface;
 

@@ -31,8 +31,8 @@ that is where the panel comes from.
 **An archive entry is grown, not reserved.** A zip states each entry's uncompressed size in
 its own directory, and the obvious reader allocates that much before decompressing a byte.
 `read_entry` reads with a cap instead and refuses anything past `MAX_ENTRY_BYTES`. The
-3MF loader cannot do this — the reader underneath it owns the zip — so it checks the
-directory itself and refuses the archive before handing it over.
+3MF loader grows each part it reads as well, and checks the whole directory first, refusing
+the archive before reading any part.
 
 ## Where this is proven
 

@@ -2,6 +2,7 @@ mod edit;
 
 use super::{PAD, open_machines, toggle_settings};
 use crate::i18n::tr;
+use crate::panels::start::remote;
 use crate::panels::{Window, frame_view};
 use crate::profiles;
 use crate::project;
@@ -290,8 +291,20 @@ pub(super) fn recent_menu(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The test prints drawn for the window, the ones the start page offers.
+/// The test prints the start page offers: those kept in the repository, each saying whether
+/// it is fetched, then those drawn for the window.
 pub(super) fn test_print_menu(ui: &mut egui::Ui, window: &mut Window) {
+    for (index, sample) in crate::samples::remote::REMOTES.iter().enumerate() {
+        let name = sample.name();
+        let state = remote::state(&window.machine.fetches, index);
+        if menu_row(ui, &MenuRow::new(None, &name).keys(state))
+            .on_hover_text(sample.about())
+            .clicked()
+        {
+            ui.close();
+            remote::picked(ui, window, index);
+        }
+    }
     for sample in &crate::samples::SAMPLES {
         let name = sample.name();
         if menu_row(ui, &MenuRow::new(None, &name))

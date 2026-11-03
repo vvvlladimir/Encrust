@@ -41,8 +41,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   Open recent.
 - The **File, Edit and View menus** list every action with its keys; one that cannot run says
   why under itself (Slice to a file with no model, Duplicate with nothing picked).
-- Start from one of **four built-in test prints**: detail test, exposure check, surface
-  finish and fit gauge.
+- Start from **Crustling**, the mascot, 30 mm across, downloaded from the project's
+  repository on the first click and opened from disk on the next; or from one of **four
+  built-in test prints**: detail test, exposure check, surface finish and fit gauge. The
+  start page and the File menu's Test prints list all five, Crustling first.
 
 **You cannot:**
 - Open other 3D formats (STEP, PLY, AMF and so on).
@@ -651,7 +653,9 @@ shown: its exposure, the print time until it is done, the area it cures and the 
 
 ## File formats
 
-Every file Encrust writes is read back and checked. The output extension picks the format.
+Every file Encrust writes is read back and checked. The output extension picks the format;
+its revision (`.ctb` v4, v5 or encrypted, `.goo` 3.0 or 5.1) is the printer's own, set under
+Output in its settings, so the save dialog lists each extension once.
 
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
