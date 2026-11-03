@@ -1,4 +1,4 @@
-# 0396. Propose drain holes and prove each by scanning again
+# 0398. Propose drain holes and prove each by scanning again
 
 - **Status:** Proposed
 - **Date:** 2026-11-02
@@ -39,9 +39,9 @@ with the window's drainage check.
 The command line takes it as `--drain-at auto`, beside points, with a vent unless
 `--no-drain-vent`; it runs after hollowing and before supports, in the pose the model prints
 in, resting on the plate unless the lift its supports will give it, worked out first as for a
-point (ADR 0394), stands it clear. `--json` adds `auto_drains` per model: `pockets`
+point (ADR 0396), stands it clear. `--json` adds `auto_drains` per model: `pockets`
 (`slicing.trapped`'s fields and `drained`), `holes` (`pocket`, `role` `drain` or `vent`,
-`at_mm`, `axis`, `diameter_mm`, `depth_mm`) and `scans`, in the plate frame of ADR 0394.
+`at_mm`, `axis`, `diameter_mm`, `depth_mm`) and `scans`, in the plate frame of ADR 0396.
 
 The window's Drain tool takes it as Auto, the companion of Check drainage at the tool's foot:
 it is that check carried further, so it stands beside it rather than in a section. It searches

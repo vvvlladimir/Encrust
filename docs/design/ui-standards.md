@@ -79,7 +79,7 @@ never both, never neither. A typed value is clamped to its range; no error popup
 
 - **Undoable:** every change to the plate and every tool value; one gesture is one entry,
   recorded on a settled frame (no button down, no field focused). Prepare for print is one
-  entry however many frames its jobs land over, and undo waits while it runs (ADR 0397).
+  entry however many frames its jobs land over, and undo waits while it runs (ADR 0399).
 - **By snapshot:** a value is undoable because it lives in the scene's inputs or in
   `ToolSettings`. A new value anywhere else is not, and that is a bug.
 - **Not edits:** choosing a printer or resin (a new baseline), opening a project, a mesh a job

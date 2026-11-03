@@ -82,7 +82,7 @@ resin, weight, cost and the risks — when there is a printer to draw the masks 
 
 Every finding the report counts it also locates, in plate millimetres from the plate's front
 left corner as the model prints, after placement and the lift its supports give it — the frame
-`--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0394).
+`--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0396).
 `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
 `at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
@@ -222,7 +222,7 @@ encrust slice model.stl \
 `--drain-at auto` drills, after hollowing and before supports, the holes the engine proves
 empty every pocket still trapped: for each, a drain as low as it goes, on a face looking down
 where it can, and a vent as high, both `--drain` across, each kept only once a scan of the
-model with it drilled finds its pocket gone (ADR 0396). A hole stops half a millimetre short of
+model with it drilled finds its pocket gone (ADR 0398). A hole stops half a millimetre short of
 the cavity's far side, and a cavity too thin to stop in is not drilled across. A model resting on
 the plate or its raft — on no supports, set on the plate by `--orient`, or by a profile with no
 `z_lift_mm` — gets no mouth within a millimetre of it. `--no-drain-vent` leaves the vents out; `auto` goes beside
@@ -346,7 +346,7 @@ room for a support. One already standing that high is left where it is, and a pr
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
 `--prepare` on `slice`, `estimate`, `render` and `batch` prepares each model as the engine's
-own defaults would, with nothing tuned (ADR 0397): the baseline a language model is measured
+own defaults would, with nothing tuned (ADR 0399): the baseline a language model is measured
 against, and a print for a user with none. In order, each step a flag typed wins over:
 
 1. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
@@ -676,7 +676,7 @@ cargo run -p encrust-app --bin encrust-gui -- model.stl
 
 The command line as tools for a chat client that speaks the Model Context Protocol over
 stdio. The client starts it; each tool runs `encrust --json` — `--encrust PATH`, else the
-one beside the server, else the one on the `PATH` — and answers with its report (ADR 0395).
+one beside the server, else the one on the `PATH` — and answers with its report (ADR 0397).
 Jobs are kept under the user's cache directory, or `--jobs DIR`; a run is stopped after
 `--timeout-s` seconds (1800), and reports progress every five seconds while it runs.
 

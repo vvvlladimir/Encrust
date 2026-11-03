@@ -12,7 +12,7 @@ use crate::job::{Highest, Worker, pooled};
 use crate::scene::{ObjectId, SceneObject};
 
 /// Nearer the plate than this a model's lowest point rests on it, millimetres: no hole may
-/// open where the first layers spread (ADR 0396).
+/// open where the first layers spread (ADR 0398).
 const ON_PLATE_MM: Scalar = 1e-2;
 
 /// One model the drain search looks through, owned so it can cross to the worker.

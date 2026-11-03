@@ -1,5 +1,5 @@
 //! The findings of `--json` located in plate millimetres, the frame `--drain-at` takes, so
-//! whatever reads the report can act on each one (ADR 0394).
+//! whatever reads the report can act on each one (ADR 0396).
 
 use std::fs;
 use std::path::{Path, PathBuf};

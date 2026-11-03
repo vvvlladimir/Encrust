@@ -86,7 +86,7 @@ indicatif = { version = "0.18", default-features = false }
 ctrlc = "3.5"
 directories = "6.0"
 # The server a language model drives the command line through, over stdio; see
-# docs/decisions/0395.
+# docs/decisions/0397.
 rmcp = { version = "3.8", default-features = false }
 tokio = { version = "1", default-features = false }
 base64 = "0.23"

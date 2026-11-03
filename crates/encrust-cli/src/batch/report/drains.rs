@@ -1,5 +1,5 @@
 //! What `--drain-at auto` chose, located where the model prints, as `slicing.trapped` is
-//! (ADR 0394, 0396).
+//! (ADR 0396, 0398).
 
 use core_engine::{Drained, HoleRole};
 use core_geometry::{Aabb, Scalar, Vec3};

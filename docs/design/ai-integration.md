@@ -2,7 +2,7 @@
 
 How a language model takes a model from its file to a checked printer file through Encrust,
 on the user's computer: driven from a chat client over MCP, or from inside the window.
-Nothing runs on encrust.app. The server is ADR 0395; the rest is the plan.
+Nothing runs on encrust.app. The server is ADR 0397; the rest is the plan.
 
 ## The shape
 
@@ -43,7 +43,7 @@ catalogue moves into a crate of its own when the window's panel needs it too.
 
 `start_job` runs the autopilot of step 4 (`--prepare`) unless told not to, and each `set_*`
 tool overrides one of its steps; `set_drains` with `auto` drills the drains step 2 proves. An
-edit is kept only if the command line took it; every finding is located (ADR 0394), so the
+edit is kept only if the command line took it; every finding is located (ADR 0396), so the
 next call can act on it.
 
 ### State
@@ -52,7 +52,7 @@ MCP 2026-07-28 is stateless: no session, any request on any instance. A call the
 names its job, a directory in the user's cache of numbered revisions, each a TOML recipe —
 the model, printer, resin and each step's settings — that becomes `encrust` flags. An
 editing tool writes the next revision and checks it; `revert` copies an old one forward.
-The cost: each check stages the model again from its file (ADR 0395).
+The cost: each check stages the model again from its file (ADR 0397).
 
 ## Engine work first
 
@@ -67,7 +67,7 @@ building without them.
    print's pose, on faces looking down or out of sight, clear of supports and of each other,
    each proven by drilling it and scanning again. A model picking `--drain-at X,Y,Z` by
    itself is the weakest link of the chain; this makes it a choice among proven candidates.
-   The command line gets it as `--drain-at auto` (ADR 0396; `--drain` is the diameter).
+   The command line gets it as `--drain-at auto` (ADR 0398; `--drain` is the diameter).
 3. **Views with markers.** `core-thumbnail` renders the plate from four sides and from
    below with each finding marked, for a model that reads images, and for `encrust render`.
 4. **An autopilot.** `prepare`: repair, `--orient-goal auto`, hollow where the wall saves
@@ -134,11 +134,11 @@ procedure it is measured with.
 
 | Step | What | Where | After |
 |---|---|---|---|
-| 1 | Located findings in the report | `core-raster`, `core-engine`, `encrust-cli` (done, ADR 0394) | — |
-| 2 | Suggested drains, `--drain-at auto` | `core-volume`, `core-engine`, `encrust-cli` (done, ADR 0396; the window's Auto to come) | — |
+| 1 | Located findings in the report | `core-raster`, `core-engine`, `encrust-cli` (done, ADR 0396) | — |
+| 2 | Suggested drains, `--drain-at auto` | `core-volume`, `core-engine`, `encrust-cli` (done, ADR 0398; the window's Auto to come) | — |
 | 3 | Views with markers, `encrust render` | `core-thumbnail`, `encrust-cli` (done) | — |
-| 4 | The autopilot, `--prepare` | `core-engine`, `encrust-cli` (done, ADR 0397; the window's button to come) | 1, 2 |
-| 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0395) | — |
+| 4 | The autopilot, `--prepare` | `core-engine`, `encrust-cli` (done, ADR 0399; the window's button to come) | 1, 2 |
+| 5 | The stdio server, its jobs and recipes | `encrust-mcp` (done, ADR 0397) | — |
 | 6 | Its tools for steps 1–4, and the `.mcpb` bundle | `encrust-mcp` (done) | 1–5 |
 | 7 | The bench | `agent-lab` in `encrust-cli` | 4, 6 |
 | 8 | `encrust-mcp` driving the open window | `encrust-mcp`, `encrust-app` | 6 |

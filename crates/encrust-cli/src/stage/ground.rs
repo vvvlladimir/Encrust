@@ -1,5 +1,5 @@
 //! Where a model's supports will stand it, worked out before its holes are placed, so a point
-//! the command line gives is the point the report locates (ADR 0394).
+//! the command line gives is the point the report locates (ADR 0396).
 
 use anyhow::{Context, Result, bail};
 use core_engine::{Lift, planned_lift};

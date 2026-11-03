@@ -1,4 +1,4 @@
-//! Drain holes the engine proposes and proves, as `--drain-at auto` drills them (ADR 0396).
+//! Drain holes the engine proposes and proves, as `--drain-at auto` drills them (ADR 0398).
 
 use std::sync::Arc;
 

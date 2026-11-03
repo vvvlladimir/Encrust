@@ -1,4 +1,4 @@
-//! The autopilot: what the engine's own defaults do to a model nobody tuned (ADR 0397). A
+//! The autopilot: what the engine's own defaults do to a model nobody tuned (ADR 0399). A
 //! hollowed model is then drained by [`crate::suggest_drains`], vent included, and stood on
 //! the catalogue's automatic supports, its cavity held up as well.
 
