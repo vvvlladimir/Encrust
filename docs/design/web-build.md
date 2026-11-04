@@ -46,6 +46,10 @@ that prefix and replaces its own Content-Security-Policy there with one allowing
 build that needs anything more from the page's policy (another origin, `blob:` workers) needs
 that script changed first: `scripts/web-app.mjs` in the site repository.
 
+To fix the site alone, run `release.yml` by hand on the live release's tag with only *web*
+ticked and `web_ref` naming the fixed commit or `main`: it replaces that release's
+`encrust-web.tar.gz`, and the site's sync pins it by its new checksum.
+
 ### How it runs
 
 - **Threads.** `web/thread.js` is both the page's way to start a worker and the worker:

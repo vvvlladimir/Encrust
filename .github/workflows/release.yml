@@ -27,6 +27,7 @@ on:
       windows: { type: boolean, default: true }
       store: { type: boolean, default: true }
       web: { type: boolean, default: true }
+      web_ref: { type: string, default: "" }
       feed: { type: boolean, default: true }
   workflow_dispatch:
     inputs:
@@ -54,6 +55,10 @@ on:
         description: Browser build (encrust-web.tar.gz)
         type: boolean
         default: true
+      web_ref:
+        description: Build the browser build from this branch or commit instead of the tag, to fix the site alone
+        type: string
+        default: ""
       feed:
         description: Sign the update archives on the release and rewrite latest.json
         type: boolean
@@ -268,9 +273,11 @@ jobs:
       TOOLCHAIN: nightly-2026-10-01
       BINARYEN: version_133
     steps:
+      # A fix for the site alone is built from a later commit and replaces only this archive on the
+      # tag's release; the desktop builds always come from the tag.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.web_ref || inputs.tag }}
 
       - name: Install the nightly with the standard library's source
         run: |
