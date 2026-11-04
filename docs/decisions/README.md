@@ -62,7 +62,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
 | [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
-| [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
+| [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted; when a new web build takes over is superseded by 0399 |
 | [0207](0207-a-test-run-rebuilds-nothing-it-does-not-have-to.md) | A test run rebuilds nothing it does not have to | Accepted |
 | [0214](0214-the-libraries-terms-ship-generated-from-the-lockfile.md) | The libraries' terms ship with the binary, generated from the lockfile | Accepted |
 | [0215](0215-the-panels-are-pictured-and-compared-by-hand.md) | The panels are pictured and compared, by hand | Accepted |
@@ -70,6 +70,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0273](0273-ci-checks-a-tree-once-and-the-other-platforms-nightly.md) | CI checks a tree once, and the other platforms nightly | Accepted |
 | [0381](0381-dependabot-pull-requests-regenerate-what-the-lockfile-drives.md) | A dependabot pull request regenerates what the lockfile drives | Accepted |
 | [0398](0398-the-browser-build-is-opened-in-chromium-before-and-after-it-ships.md) | The browser build is opened in Chromium before it ships and once a week after | Proposed |
+| [0399](0399-a-reload-opens-a-newer-browser-build-and-the-page-keeps-the-module.md) | A reload opens a newer browser build, and the page keeps the module it downloaded | Proposed |
 | [0288](0288-the-windows-binaries-carry-their-c-runtime-and-the-window-no-console.md) | The Windows binaries carry their C runtime, and the window opens no console | Accepted |
 
 ### Geometry

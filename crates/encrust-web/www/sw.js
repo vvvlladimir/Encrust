@@ -11,15 +11,34 @@ self.addEventListener("install", (event) => {
     // costs working offline.
     try {
       const cache = await caches.open(CACHE);
-      // "no-store": "reload" rewrote the HTTP cache entry the page was still streaming the
-      // module from, and Chromium aborted the page's copy (ERR_CACHE_WRITE_FAILURE).
-      await cache.addAll(FILES.map((file) => new Request(file, { cache: "no-store" })));
+      // The page keeps the module once it has it, so it is never fetched twice (ADR 0399).
+      const small = FILES.filter((file) => !file.endsWith(".wasm"));
+      // "no-store": "reload" rewrote the HTTP cache entry the page was still reading, and
+      // Chromium aborted the page's copy (ERR_CACHE_WRITE_FAILURE).
+      await cache.addAll(small.map((file) => new Request(file, { cache: "no-store" })));
     } catch (error) {
       console.warn("Encrust will not open offline:", error);
     }
-    // The first worker takes the page at once, which is what isolates it. A later build waits
-    // until every tab of the old one is closed, because their threads import the old script.
+    // The first worker takes the page at once, which is what isolates it. A later build
+    // waits until a starting page asks it to take over (below).
     if (!self.registration.active) {
+      await self.skipWaiting();
+    }
+  })());
+});
+
+// A page asks before it starts. The new build takes over only if that page is the build's
+// one tab: a running tab's threads import the old script (ADR 0399).
+self.addEventListener("message", (event) => {
+  if (event.data !== "take-over") {
+    return;
+  }
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const alone = windows.filter((client) => client.url.startsWith(self.registration.scope))
+      .length <= 1;
+    event.ports[0]?.postMessage(alone);
+    if (alone) {
       await self.skipWaiting();
     }
   })());

@@ -410,7 +410,9 @@ fn pipeline(
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some(kind.vertex_entry),
-            compilation_options: compilation_options.clone(),
+            // Only fragments read the overrides; Safari fails a vertex stage handed constants
+            // its entry point never reads ("Vertex library failed creation").
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: kind.buffers,
         },
         fragment: Some(wgpu::FragmentState {

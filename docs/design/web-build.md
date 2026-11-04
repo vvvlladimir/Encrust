@@ -28,12 +28,16 @@ its origin, so a host that cannot send them still gets an isolated page: on a pa
 not isolated the script waits for the worker to be active and reloads once, and where even
 that fails it says what the host must send. It also keeps every file of the build in a
 cache named for the build, which `cargo xtask web` writes in as the version and a hash of
-the files, with their list, so the window opens offline after the first visit.
+the files, with their list, so the window opens offline after the first visit. The module
+is the exception: the page downloads it once, showing its progress against the size
+`xtask` writes into the page, and puts it into that cache itself (ADR 0399).
 
-A new build installs in the background and takes over once every tab of the old one is
-closed. It cannot take over a running page: that page's threads import the module script
-as they start, and the new script over the old memory would not run. Only the first worker
-takes the page at once, which is what isolates it. `manifest.webmanifest` and the icons
+A new build installs in the background. Before it imports anything, a starting page asks it
+to take over, and it does if that page is the build's only tab, so one reload opens it. It
+never takes over a running page: that page's threads import the module script as they
+start, and the new script over the old memory would not run. With a second tab open, the
+new build waits until the old tabs close. Only the first worker takes the page at once,
+which is what isolates it. `manifest.webmanifest` and the icons
 under `icons/` make the page installable. The top bar carries a Source link to the tag
 the build was made from, which the AGPL asks of a program served over a network.
 

@@ -15,33 +15,76 @@
     #notice { display: none; color: #d8d9dc; font: 15px system-ui, sans-serif;
               max-width: 36rem; margin: 20vh auto; line-height: 1.5; }
     a { color: #8ab4ff; }
+    #loading { position: fixed; inset: 0; display: flex; flex-direction: column;
+               align-items: center; justify-content: center; gap: 12px;
+               font: 14px system-ui, sans-serif; color: #a9a7a3; }
+    #loading img { width: 56px; height: 56px; }
+    #loading .name { font-size: 17px; font-weight: 600; color: #efebe5; }
+    #loading .bar { width: 240px; height: 4px; border-radius: 2px; background: #252a31;
+                    overflow: hidden; }
+    #loading .fill { width: 0; height: 100%; background: #f2763a; }
+    #loading .said { font-variant-numeric: tabular-nums; min-height: 1.3em; }
     @media (prefers-color-scheme: light) {
       html, body { background: #eff2f5; }
       #notice { color: #151a21; }
       a { color: #2a74d9; }
+      #loading { color: #444c57; }
+      #loading .name { color: #151a21; }
+      #loading .bar { background: #dfe3e8; }
+      #loading .fill { background: #ec6b2d; }
     }
   </style>
 </head>
 <body>
   <canvas id="encrust"></canvas>
+  <div id="loading" role="status" aria-live="polite">
+    <img src="icons/encrust.svg" alt="">
+    <div class="name">Encrust</div>
+    <div class="bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100">
+      <div class="fill"></div>
+    </div>
+    <div class="said">Loading…</div>
+  </div>
   <div id="notice"></div>
   <script type="module">
     // The window runs on threads that share memory, which a browser allows only on a page
     // isolated from other origins; see docs/design/web-build.md.
+
+    // `cargo xtask web` writes the build id and the module's size in.
+    const BUILD = "__BUILD__";
+    const MODULE_BYTES = __MODULE_BYTES__;
+    // How long a start waits on a newer build before opening the one it has (ADR 0399).
+    const UPDATE_CHECK_MS = 5_000;
+    const INSTALL_MS = 15_000;
+    const TAKE_OVER_MS = 5_000;
+
+    const loading = document.getElementById("loading");
+    const say = (text, share) => {
+      loading.querySelector(".said").textContent = text;
+      const bar = loading.querySelector(".bar");
+      if (share === undefined) {
+        bar.removeAttribute("aria-valuenow");
+      } else {
+        bar.setAttribute("aria-valuenow", Math.round(share * 100));
+        loading.querySelector(".fill").style.width = `${Math.min(share, 1) * 100}%`;
+      }
+    };
     const notice = (html) => {
       document.getElementById("encrust").remove();
+      loading.remove();
       const box = document.getElementById("notice");
       box.innerHTML = html;
       box.style.display = "block";
     };
     const source = `<a href="https://github.com/vvvlladimir/Encrust">Source code</a> (AGPL-3.0).`;
+    const within = (ms, promise) =>
+      Promise.race([promise, new Promise((done) => setTimeout(done, ms))]);
 
     // One worker isolates a page whose host cannot send the headers, and keeps the build
     // for working offline; it takes over a page that was not isolated once it is active.
-    const registering = "serviceWorker" in navigator
-      ? navigator.serviceWorker.register("sw.js")
-        .then(() => navigator.serviceWorker.ready)
-        .then(() => true, () => false)
+    const workers = "serviceWorker" in navigator ? navigator.serviceWorker : null;
+    const registering = workers
+      ? workers.register("sw.js").then(() => workers.ready).then(() => true, () => false)
       : Promise.resolve(false);
 
     if (!crossOriginIsolated) {
@@ -53,16 +96,86 @@
           one is not. The host has to send <code>Cross-Origin-Opener-Policy: same-origin</code>
           and <code>Cross-Origin-Embedder-Policy: require-corp</code>. ${source}`);
       }
+    } else if (await newerBuildTookOver()) {
+      location.reload();
     } else {
       sessionStorage.removeItem("encrust.isolating");
       const bindings = new URL("./encrust_web.js", import.meta.url).href;
       try {
         const { default: init, start } = await import(bindings);
-        await init();
+        await init({ module_or_path: await download(new URL("./encrust_web_bg.wasm", bindings)) });
         await start(document.getElementById("encrust"), bindings);
+        loading.remove();
       } catch (error) {
         notice(`Encrust could not start in this browser: ${error}. ${source}`);
       }
+    }
+
+    // A newer build installed or installing takes over before anything starts, so a reload
+    // opens it, unless another tab still runs this one; see ADR 0399.
+    async function newerBuildTookOver() {
+      if (!workers?.controller) return false;
+      const registration = await workers.getRegistration().catch(() => undefined);
+      if (!registration) return false;
+      await within(UPDATE_CHECK_MS, registration.update().catch(() => {}));
+      if (registration.installing) say("Updating…");
+      const waiting = await within(INSTALL_MS, installed(registration));
+      if (!waiting) return false;
+      const changed = new Promise((done) =>
+        workers.addEventListener("controllerchange", () => done(true), { once: true }));
+      const reply = new MessageChannel();
+      const alone = new Promise((done) => { reply.port1.onmessage = ({ data }) => done(data); });
+      waiting.postMessage("take-over", [reply.port2]);
+      if (!await within(TAKE_OVER_MS, alone)) return false;
+      return await within(TAKE_OVER_MS, changed) === true;
+    }
+
+    function installed(registration) {
+      if (registration.waiting) return Promise.resolve(registration.waiting);
+      const worker = registration.installing;
+      if (!worker) return Promise.resolve(null);
+      return new Promise((done) => worker.addEventListener("statechange", () => {
+        if (worker.state === "installed") done(registration.waiting);
+        if (worker.state === "redundant") done(null);
+      }));
+    }
+
+    // The module, counted as it arrives, and kept for working offline once it is whole.
+    async function download(url) {
+      const cache = await globalThis.caches?.open(`encrust-${BUILD}`).catch(() => null);
+      const kept = Boolean(await cache?.match(url));
+      const response = await fetch(url);
+      if (!response.ok || !response.body) return response;
+      // The body is decoded already: a stated encoding or length would describe other bytes.
+      const headers = new Headers(response.headers);
+      headers.delete("Content-Encoding");
+      headers.delete("Content-Length");
+      const reader = response.body.getReader();
+      // Kept from the stream rather than a clone of it, whose copy Chromium broke off.
+      const chunks = cache && !kept ? [] : null;
+      let received = 0;
+      const body = new ReadableStream({
+        async pull(controller) {
+          const { done, value } = await reader.read();
+          if (done) {
+            say("Starting…", 1);
+            controller.close();
+            if (chunks) {
+              cache.put(url, new Response(new Blob(chunks), { status: response.status, headers }))
+                .catch((error) => console.warn("Encrust will not open offline:", error));
+            }
+            return;
+          }
+          chunks?.push(value);
+          received += value.byteLength;
+          say("Loading…", MODULE_BYTES > 0 ? received / MODULE_BYTES : undefined);
+          controller.enqueue(value);
+        },
+        cancel(reason) {
+          return reader.cancel(reason);
+        },
+      });
+      return new Response(body, { status: response.status, headers });
     }
   </script>
 </body>

@@ -105,7 +105,7 @@ pub fn run(args: &Args) -> Result<()> {
             notices.display()
         )
     })?;
-    stamp_worker(&pkg)?;
+    stamp_build(&pkg)?;
     println!("{}", pkg.display());
     Ok(())
 }
@@ -148,9 +148,9 @@ fn copy_icons(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Writes into the service worker every file it keeps for working offline, and a build id
-/// taken from their bytes, so that any change to them is a new worker and a new cache.
-fn stamp_worker(pkg: &Path) -> Result<()> {
+/// Writes a build id taken from every file's bytes into the service worker, with the files it
+/// keeps offline, and into the page, with the module's size for its progress bar.
+fn stamp_build(pkg: &Path) -> Result<()> {
     let mut files = Vec::new();
     listed(pkg, pkg, &mut files)?;
     // The worker itself and the header file are not pages, and the licence file is read
@@ -164,12 +164,32 @@ fn stamp_worker(pkg: &Path) -> Result<()> {
     }
     let build = format!("{}-{:016x}", env!("CARGO_PKG_VERSION"), hasher.finish());
     let kept: Vec<String> = std::iter::once("./".to_owned()).chain(files).collect();
-    let worker = pkg.join("sw.js");
-    let source = std::fs::read_to_string(&worker)
-        .with_context(|| format!("cannot read {}", worker.display()))?
-        .replace("__BUILD__", &build)
-        .replace("__FILES__", &format!("{kept:?}"));
-    std::fs::write(&worker, source).with_context(|| format!("cannot write {}", worker.display()))
+    let module_bytes = std::fs::metadata(pkg.join("encrust_web_bg.wasm"))
+        .context("cannot read the module's size")?
+        .len();
+    stamp(
+        &pkg.join("sw.js"),
+        &[
+            ("__BUILD__", build.clone()),
+            ("__FILES__", format!("{kept:?}")),
+        ],
+    )?;
+    stamp(
+        &pkg.join("index.html"),
+        &[
+            ("__BUILD__", build),
+            ("__MODULE_BYTES__", module_bytes.to_string()),
+        ],
+    )
+}
+
+fn stamp(file: &Path, values: &[(&str, String)]) -> Result<()> {
+    let mut source =
+        std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
+    for (name, value) in values {
+        source = source.replace(name, value);
+    }
+    std::fs::write(file, source).with_context(|| format!("cannot write {}", file.display()))
 }
 
 /// Every file under `dir`, as a path relative to `root` with forward slashes.
