@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/vvvlladimir/Encrust/compare/v0.6.0...v0.7.0) (2026-11-04)
+
+
+### ✨ New
+
+* **hollow:** add model-fitting and rod placement for keep-solid ([a1d0a17](https://github.com/vvvlladimir/Encrust/commit/a1d0a17c2472c54f9b8e988e05be29b06d53993d))
+* **intersection:** Add plate standing check and warning for models on plate ([#250](https://github.com/vvvlladimir/Encrust/issues/250)) ([28454b0](https://github.com/vvvlladimir/Encrust/commit/28454b076d848ac6ba69132fc49bcd874bc1b118))
+* **mesh-io:** read 3MF with quick-xml and zip 9, drop threemf2 ([cf129a2](https://github.com/vvvlladimir/Encrust/commit/cf129a23bea65d7db0e26e918df32076a2bb2904))
+* **render:** Add render UI layout, widgets, and viewport interactions ([#248](https://github.com/vvvlladimir/Encrust/issues/248)) ([de34a2d](https://github.com/vvvlladimir/Encrust/commit/de34a2dab657d3d73a7eafd41450564455f87b3f))
+* **samples:** fetch large remote test prints on demand ([71631ea](https://github.com/vvvlladimir/Encrust/commit/71631eac0073923c9698dcaa5a3bb6ad49d24492))
+
+
+### 🐛 Fixed
+
+* **app:** list each extension once in the save dialog ([4149102](https://github.com/vvvlladimir/Encrust/commit/41491020fd83ebeef5fb7a1685d31e9d6af40ac1)), closes [#251](https://github.com/vvvlladimir/Encrust/issues/251)
+* **mesh-io:** refuse OBJ relative face indices before the first element ([5e316a3](https://github.com/vvvlladimir/Encrust/commit/5e316a30909a6b372de25b6af14f6117dec87669))
+
 ## [0.6.0](https://github.com/vvvlladimir/Encrust/compare/v0.5.0...v0.6.0) (2026-10-29)
 
 
