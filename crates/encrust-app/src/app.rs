@@ -546,6 +546,8 @@ impl eframe::App for SlicerApp {
 mod plate_card;
 #[cfg(test)]
 mod sheet_keys;
+#[cfg(all(test, feature = "showcase"))]
+mod showcase;
 #[cfg(test)]
 mod small_window;
 #[cfg(all(test, feature = "snapshots"))]
