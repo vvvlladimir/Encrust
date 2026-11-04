@@ -46,7 +46,7 @@ on `hover`. Rows 28, glyph column 18, keys right in `text_low`; a hairline betwe
 row that cannot run is `text_low`, the first of its group with why under it. File: New plate,
 New project · Open project, Add model, Open recent ▸ (files with their age, Clear the list),
 Test prints ▸ (Crustling with Download, its percentage or STL as keys, then the four drawn
-in code) · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
+in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
 (Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
@@ -322,10 +322,10 @@ the drop glyph on `accent_wash`, its words, and Open a model (primary) and Open 
 its right; then Recent / Test prints as a `Segmented` 220 wide and, on Recent with
 anything in it, Clear the list at its right; then tiles of at least 180 on `panel` ringed in
 `hairline` (`line` under the pointer), a 120 picture over the name, when and kind. A test
-print kept in the repository comes first and says Download for its kind until fetched;
-while it comes, a `progress_bar` inset 12 runs along the picture's foot and the kind is its
-percentage, or Downloading while the size is unknown; fetched, it says STL and opens like
-the rest.
+print kept in the repository, never in a browser, comes first and says Download for its
+kind until fetched; while it comes, a `progress_bar` inset 12 runs along the picture's foot
+and the kind is its percentage, or Downloading while the size is unknown; fetched, it says
+STL and opens like the rest.
 
 ## A small window
 

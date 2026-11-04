@@ -296,6 +296,22 @@ jobs:
       - name: Build
         run: cargo xtask web --toolchain "$TOOLCHAIN"
 
+      # A build Chromium cannot draw a model with never reaches the site (ADR 0398).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Open the build in Chromium
+        working-directory: .github/scripts/web-smoke
+        run: |
+          npm ci
+          npx playwright install --with-deps --no-shell chromium
+          node smoke.mjs --dist "$GITHUB_WORKSPACE/target/web/dist" --out "$RUNNER_TEMP/web-smoke"
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-smoke
+          path: ${{ runner.temp }}/web-smoke
+
       # Cloudflare serves no single file over 25 MiB, so a module past that could never go live.
       - name: Pack and attach to the draft
         env:

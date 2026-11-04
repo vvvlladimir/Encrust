@@ -11,7 +11,9 @@ self.addEventListener("install", (event) => {
     // costs working offline.
     try {
       const cache = await caches.open(CACHE);
-      await cache.addAll(FILES.map((file) => new Request(file, { cache: "reload" })));
+      // "no-store": "reload" rewrote the HTTP cache entry the page was still streaming the
+      // module from, and Chromium aborted the page's copy (ERR_CACHE_WRITE_FAILURE).
+      await cache.addAll(FILES.map((file) => new Request(file, { cache: "no-store" })));
     } catch (error) {
       console.warn("Encrust will not open offline:", error);
     }

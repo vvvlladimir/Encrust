@@ -24,3 +24,6 @@ CLAUDE.md
 /crates/encrust-app/tests/snapshots/*.old.png
 
 *.log
+
+# The web smoke check's packages; see docs/design/web-build.md.
+/.github/scripts/web-smoke/node_modules

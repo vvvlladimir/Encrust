@@ -98,7 +98,7 @@ fn digit_cover(at: vec2<f32>, digit: u32, pixel: f32) -> f32 {
     var cover = 0.0;
     let lit = DIGIT_SEGMENTS[min(digit, 9u)];
     for (var segment = 0u; segment < 7u; segment = segment + 1u) {
-        if ((lit >> segment & 1u) == 1u) {
+        if (((lit >> segment) & 1u) == 1u) {
             let end = ends[segment];
             cover = max(cover, segment_cover(at, end.xy, end.zw, pixel));
         }

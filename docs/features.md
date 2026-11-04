@@ -18,7 +18,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 | | What you get | What you don't |
 |---|---|---|
 | **Desktop window** | Windows 10/11 (installer, or the Microsoft Store), macOS 12+ (Apple silicon and Intel), Linux (AppImage, `.deb`). Every feature. | Downloaded builds are not code-signed yet, so the first launch needs one extra step; the Store copy does not. Needs a GPU with Vulkan, Metal or DirectX 12. |
-| **Browser** | The same core, at encrust.app/app. Nothing to install, keeps working offline after the first visit, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge). It cannot send to a printer: the sliced file is downloaded instead. No self-update. The section cut is drawn without its cap. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. It trails the desktop build. |
+| **Browser** | The same core, at encrust.app/app. Nothing to install, keeps working offline after the first visit, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. The section cut is drawn without its cap. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. It trails the desktop build. |
 | **Command line** (`encrust`) | The same pipeline with no window, for scripts and batches. | No painting, no manual supports. Anything you would click on a model is done in the window and saved as a project, which the command line can then slice. |
 
 ---
@@ -45,7 +45,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Start from **Crustling**, the mascot, 30 mm across, downloaded from the project's
   repository on the first click and opened from disk on the next; or from one of **four
   built-in test prints**: detail test, exposure check, surface finish and fit gauge. The
-  start page and the File menu's Test prints list all five, Crustling first.
+  start page and the File menu's Test prints list all five, Crustling first; the browser
+  build lists the four built-in ones only.
 
 **You cannot:**
 - Open other 3D formats (STEP, PLY, AMF and so on).

@@ -1,0 +1,13 @@
+{
+  "name": "encrust-web-smoke",
+  "private": true,
+  "description": "Opens the browser build in Chromium and fails if the window does not draw a model.",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

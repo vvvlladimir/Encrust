@@ -69,6 +69,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0272](0272-a-dependency-is-built-once-at-one-feature-set.md) | A dependency is built once, at one feature set, and a bump is checked once over the workspace | Accepted |
 | [0273](0273-ci-checks-a-tree-once-and-the-other-platforms-nightly.md) | CI checks a tree once, and the other platforms nightly | Accepted |
 | [0381](0381-dependabot-pull-requests-regenerate-what-the-lockfile-drives.md) | A dependabot pull request regenerates what the lockfile drives | Accepted |
+| [0398](0398-the-browser-build-is-opened-in-chromium-before-and-after-it-ships.md) | The browser build is opened in Chromium before it ships and once a week after | Proposed |
 | [0288](0288-the-windows-binaries-carry-their-c-runtime-and-the-window-no-console.md) | The Windows binaries carry their C runtime, and the window opens no console | Accepted |
 
 ### Geometry

@@ -69,6 +69,20 @@ that script changed first: `scripts/web-app.mjs` in the site repository.
 - **Storage.** Preferences are the `localStorage` entry `encrust.preferences`, and each of
   the user's profiles one entry under `encrust.profiles/`.
 
+### Checking a build
+
+`.github/scripts/web-smoke/smoke.mjs` opens a build in Chromium, drops a cube on it and
+fails unless the window draws it with no shader, GPU or start-up error (ADR 0398). It runs
+before a release attaches the build and on the live site after; locally:
+
+```sh
+cd .github/scripts/web-smoke && npm ci && npx playwright install --no-shell chromium
+node smoke.mjs --dist ../../../target/web/dist    # or --url https://encrust.app/app/run/
+```
+
+The desktop's shader compiler accepts WGSL a browser refuses, such as `>>` beside `&`
+without brackets; only this check sees it.
+
 ### What a browser does not have yet
 
 - The printer network: a sliced file is downloaded, and the Network card says so (ADR 0182).

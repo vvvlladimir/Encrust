@@ -1,0 +1,108 @@
+name: Web smoke
+
+# Opens the live browser build at encrust.app/app/run/ in Chromium and drops a model on it
+# (ADR 0398). After a release it first waits for the site to serve that version or a later one;
+# a rebuild of the same version passes. A failure opens one issue, a later pass closes it.
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: web-smoke
+
+env:
+  URL: https://encrust.app/app/run/
+  LABEL: web-smoke
+
+jobs:
+  live:
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts/web-smoke
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Chromium
+        working-directory: .github/scripts/web-smoke
+        run: |
+          npm ci
+          npx playwright install --with-deps --no-shell chromium
+
+      # The site picks a release up through notify-site.yml or its daily check, so a release run
+      # waits for it; any other run expects the latest release to be live already.
+      - name: The release the site should serve
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$EVENT_TAG" ]; then
+            echo "tag=$EVENT_TAG" >> "$GITHUB_OUTPUT"
+            echo "wait=60" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)" >> "$GITHUB_OUTPUT"
+            echo "wait=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      # One retry five minutes on, so a passing hiccup of the host opens no issue.
+      - name: Open the live build in Chromium
+        working-directory: .github/scripts/web-smoke
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          WAIT: ${{ steps.release.outputs.wait }}
+        run: |
+          check() { node smoke.mjs --url "$URL" --at-least "$TAG" --wait-minutes "$1" --out "$RUNNER_TEMP/web-smoke"; }
+          check "$WAIT" || { sleep 300; check 0; }
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-smoke
+          path: ${{ runner.temp }}/web-smoke
+
+      - name: Open or update the issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "The web app at $URL failed its smoke check ([run]($RUN), pictures and console log in its artifact)."
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/web-smoke/failures.txt" 2>/dev/null || echo "the check did not finish; see the run"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          gh label create "$LABEL" --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "The live web app fails its smoke check" 2>/dev/null || true
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$LABEL" --state open --json number -q '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label "$LABEL" \
+              --title "The web app at encrust.app fails its smoke check" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Close the issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for number in $(gh issue list --repo "$GITHUB_REPOSITORY" --label "$LABEL" --state open --json number -q '.[].number'); do
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Passes again: $RUN"
+          done
