@@ -34,8 +34,9 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   built back into a mesh that stands where it stood on the plate, so you can move it,
   support it again or cut it for another printer. Its supports and raft come back as part
   of the model, edges are rounded by about a layer height (0.05 mm at the finest), and layer steps stay. A `.sl1` is slow
-  to open (a minute for a full 16K stack). A file
-  with the wrong extension is recognised by its first bytes.
+  to open (a minute for a full 16K stack). The window
+  goes by the extension, so a file with the wrong one is read as a mesh; `encrust info`
+  recognises a sliced file by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
   file in the window's light or dark colours and can be cleared from the start page or File →
   Open recent.
@@ -185,7 +186,7 @@ whole-surface fill is Cmd-Shift-click.
   read: past the build volume (its overhang is cut off the layers) or in the inset (it
   still slices whole) once a printer is chosen, and meeting another model. A click on a row, or on a
   **Meets** tag, flies the camera there; on a meeting each further click goes to the next
-  place. None of it stops the slice. The Check tool on the rail carries a dot while any of
+  place. None of it stops the slice. The Check tool on the tool row carries a dot while any of
   them stands, before Check is opened: red past the build volume or for a meeting, amber for
   the rest, gone once each is fixed.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
@@ -211,7 +212,7 @@ whole-surface fill is Cmd-Shift-click.
 
 ### Cut
 - Cut a model with a plane. Position the plane by height from the plate or by an offset
-  from the centre of mass, or click to place it on the model.
+  from the centre of mass.
 - The cut only divides: the halves keep the model's drain holes and channels, cut into them.
   A model whose holes cannot be cut into it exactly is left whole, and the window says so.
 - **Join the halves** so they glue back true, choosing one of four kinds:
@@ -711,9 +712,8 @@ until you set it up on another one.
 **Switching in the top bar:** the machine and the resin in the chip each open a list: your
 machines with their maker, the file they write and whether a printer they list answers;
 the resins set up on the machine with their colour, kind, layer height and exposure. A
-row takes it in hand; *Add a machine*, *Machine and resin…*, *Edit this resin…* and *Add a
-resin* lead to the window. In a narrow window the chip names the machine without its
-maker.
+row takes it in hand; *Add a machine* and *Add a resin* lead to the window. In a narrow
+window the chip names the machine without its maker.
 
 **Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
 printer's resins (**Import a resin** on a printer with none yet) and pick a file another slicer wrote for it; the resin is saved on that
@@ -768,6 +768,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
 | Last prints, film wear | yes | no |
 | Camera | turns it on and gives you the RTSP address | no |
 
+- With a printer set up, the window looks for printers on the network when it opens and
+  every 30 s while it is open, and Scan again looks at once; with none set up, it does not
+  look. The browser build never looks.
 - Printer cards in the window show each printer's status, a picture of the plate, and its
   controls. Stop needs a second press, because a stopped print cannot be resumed.
 - Slice to a file from the plate's card, or, while the printer answers and is free, slice

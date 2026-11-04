@@ -484,8 +484,16 @@ fn a_held_window_does_not_ask_the_network_on_its_own() {
 }
 
 #[test]
+fn a_window_with_no_printer_does_not_ask_the_network_on_its_own() {
+    let mut network = Network::default();
+    network.keep_fresh(0.0);
+    assert!(!network.is_scanning());
+}
+
+#[test]
 fn the_list_in_view_is_asked_again_only_once_it_is_stale() {
     let mut network = Network::default();
+    network.bind_to(Some("saturn".to_owned()), None);
     network.keep_fresh(100.0);
     assert!(network.is_scanning(), "the first look goes out at once");
     network.scan = None;

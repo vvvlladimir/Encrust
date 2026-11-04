@@ -33,8 +33,9 @@ The user's own directory has the same shape:
 ```
 
 `<config>` is the platform configuration directory, or whatever `ENCRUST_PROFILE_DIR`
-names. A file there whose stem matches a shipped id replaces it; a new stem adds a
-profile. Nothing is merged inside a file: the user's file is the whole profile.
+names. A file there whose stem matches a shipped id takes its place; a new stem adds a
+profile. A file of a shipped printer holds only the user's edits, laid over the printer this
+build ships field by field (ADR 0372); any other file is the whole profile.
 
 A printer or resin the user makes, copies or imports is named for itself with a random
 tail, `my-saturn-7f3a9c2e`, so that a project naming it never lands on somebody else's

@@ -16,10 +16,8 @@ use crate::job::ImportStage;
 use crate::scene::{ImportSummary, Imported};
 
 /// The containers a reader claims, which open as a model would.
-pub const EXTENSIONS: [&str; 14] = [
-    "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "pws", "sl1", "sl1s", "zip", "cxdlp",
-    "svgx", "cws",
-];
+pub const EXTENSIONS: [&str; core_pipeline::SLICED_EXTENSIONS.len()] =
+    core_pipeline::SLICED_EXTENSIONS;
 
 /// Finest lattice a file is built back on, millimetres: a few pixels of any panel sold, and
 /// fine enough that a miniature's features survive.

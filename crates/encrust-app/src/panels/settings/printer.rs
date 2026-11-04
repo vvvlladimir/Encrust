@@ -75,7 +75,7 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
 /// Answers whether the shipped profile was asked for back.
 fn own_copy_note(ui: &mut egui::Ui) -> bool {
     ui.add_space(theme::NOTE_GAP);
-    hint(ui, &tr!("printer-own-copy"));
+    hint(ui, &tr!("printer-edited-copy"));
     ui.add_space(theme::NOTE_GAP);
     secondary_button(ui, icon::UPDATE, &tr!("printer-use-shipped")).clicked()
 }

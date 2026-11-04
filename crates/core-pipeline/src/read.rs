@@ -259,6 +259,53 @@ impl Family {
     }
 }
 
+/// Every extension a reader claims, which is what a front end's Open dialog offers.
+pub const SLICED_EXTENSIONS: [&str; 43] = [
+    "goo",
+    "prz",
+    "ctb",
+    "cbddlp",
+    "photon",
+    "sl1",
+    "sl1s",
+    "zip",
+    "crmaslice",
+    "cxdlp",
+    "cxdlpv4",
+    "svgx",
+    "cws",
+    "fdg",
+    "photons",
+    "phz",
+    "cxline",
+    "pws",
+    "pwsz",
+    "pm7",
+    "pm7m",
+    "pm4u",
+    "pp1m",
+    "pwmx",
+    "pwmo",
+    "pwms",
+    "pmsq",
+    "pw0",
+    "pwx",
+    "dlp",
+    "dl2p",
+    "pwma",
+    "pwmb",
+    "px6s",
+    "pmx2",
+    "pm3n",
+    "pm3",
+    "pm3m",
+    "pm3r",
+    "pm5",
+    "pm5s",
+    "m5sp",
+    "pm4n",
+];
+
 /// Whether a name is one a reader claims, which is how a front end tells a sliced file from
 /// a mesh without opening it.
 pub fn reads_sliced_file(path: &Path) -> bool {
@@ -290,6 +337,26 @@ fn claimed_by(path: &Path) -> Option<Family> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_extensions_offered_are_exactly_the_ones_a_reader_claims() {
+        for extension in SLICED_EXTENSIONS {
+            let name = format!("a.{extension}");
+            assert!(
+                reads_sliced_file(Path::new(&name)),
+                "{name} is offered but not read"
+            );
+        }
+        let anycubic =
+            format_anycubic::AnycubicFlavour::ALL.map(format_anycubic::AnycubicFlavour::extension);
+        let pwsz = PwszFlavour::ALL.map(PwszFlavour::extension);
+        for extension in anycubic.iter().chain(&pwsz) {
+            assert!(
+                SLICED_EXTENSIONS.contains(extension),
+                ".{extension} is read but not offered"
+            );
+        }
+    }
 
     #[test]
     fn every_extension_we_write_is_an_extension_we_can_open() {

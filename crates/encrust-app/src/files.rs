@@ -167,32 +167,30 @@ pub const PICTURES: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "tga"];
 pub const PROJECTS: [&str; 1] = [core_engine::project::EXTENSION];
 
 /// What a model is read from: a mesh, or a sliced file built back into one (ADR 0294).
-pub const MODELS: [&str; 17] = [
-    "stl", "obj", "3mf", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "pws", "sl1",
-    "sl1s", "zip", "cxdlp", "svgx", "cws",
-];
+pub const MODELS: [&str; MESHES.len() + crate::sliced::EXTENSIONS.len()] =
+    joined(MESHES, crate::sliced::EXTENSIONS);
 
 /// What the plate can be filled from in one dialog: a model or a project.
-pub const OPENABLE: [&str; 18] = [
-    "stl",
-    "obj",
-    "3mf",
-    "goo",
-    "ctb",
-    "cbddlp",
-    "photon",
-    "pwmx",
-    "pwmo",
-    "pwms",
-    "pws",
-    "sl1",
-    "sl1s",
-    "zip",
-    "cxdlp",
-    "svgx",
-    "cws",
-    core_engine::project::EXTENSION,
-];
+pub const OPENABLE: [&str; MODELS.len() + PROJECTS.len()] = joined(MODELS, PROJECTS);
+
+/// `a` then `b` as one list, for the lists above.
+const fn joined<const A: usize, const B: usize, const N: usize>(
+    a: [&'static str; A],
+    b: [&'static str; B],
+) -> [&'static str; N] {
+    assert!(A + B == N, "the joined list holds both");
+    let mut out = [""; N];
+    let mut i = 0;
+    while i < A {
+        out[i] = a[i];
+        i += 1;
+    }
+    while i < N {
+        out[i] = b[i - A];
+        i += 1;
+    }
+    out
+}
 
 /// Whether `path` ends in one of `extensions`, whatever case it was written in.
 pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
