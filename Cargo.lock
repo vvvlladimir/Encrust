@@ -984,7 +984,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "core-analysis"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-raster",
  "core-slicer",
@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "core-csg"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "boolmesh",
  "core-geometry",
@@ -1007,7 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "core-engine"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-analysis",
  "core-format",
@@ -1035,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "core-format"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-raster",
  "core-slicer",
@@ -1066,7 +1066,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "core-geometry"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "criterion",
  "earcutr",
@@ -1105,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "core-joint"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-csg",
  "core-geometry",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "core-mesh-io"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-geometry",
  "criterion",
@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "core-pipeline"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-analysis",
  "core-format",
@@ -1157,7 +1157,7 @@ dependencies = [
 
 [[package]]
 name = "core-plate"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-analysis",
  "core-geometry",
@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "core-raster"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-slicer",
  "criterion",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "core-slicer"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-geometry",
  "criterion",
@@ -1198,7 +1198,7 @@ dependencies = [
 
 [[package]]
 name = "core-supports"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-geometry",
  "core-raster",
@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "core-text"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-geometry",
  "rayon",
@@ -1223,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "core-thumbnail"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-geometry",
  "workspace-hack",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "core-volume"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-csg",
  "core-geometry",
@@ -1747,7 +1747,7 @@ checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
 name = "encrust-app"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1813,7 +1813,7 @@ dependencies = [
 
 [[package]]
 name = "encrust-cli"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "encrust-web"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "encrust-app",
  "getrandom 0.3.4",
@@ -2175,7 +2175,7 @@ dependencies = [
 
 [[package]]
 name = "format-anycubic"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2190,7 +2190,7 @@ dependencies = [
 
 [[package]]
 name = "format-chitu"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2203,7 +2203,7 @@ dependencies = [
 
 [[package]]
 name = "format-creality"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2216,7 +2216,7 @@ dependencies = [
 
 [[package]]
 name = "format-ctb-encrypted"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "aes",
  "cbc",
@@ -2229,7 +2229,7 @@ dependencies = [
 
 [[package]]
 name = "format-cws"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2241,7 +2241,7 @@ dependencies = [
 
 [[package]]
 name = "format-gcode-zip"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2253,7 +2253,7 @@ dependencies = [
 
 [[package]]
 name = "format-goo"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2268,7 +2268,7 @@ dependencies = [
 
 [[package]]
 name = "format-sl1"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2282,7 +2282,7 @@ dependencies = [
 
 [[package]]
 name = "format-svgx"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -3382,7 +3382,7 @@ dependencies = [
 
 [[package]]
 name = "net-prusalink"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "md-5",
  "serde",
@@ -3395,7 +3395,7 @@ dependencies = [
 
 [[package]]
 name = "net-sdcp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "if-addrs",
  "md-5",
@@ -4156,7 +4156,7 @@ checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 
 [[package]]
 name = "printer-link"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "net-prusalink",
  "net-sdcp",
@@ -4169,7 +4169,7 @@ dependencies = [
 
 [[package]]
 name = "printer-profiles"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "directories",
  "getrandom 0.4.3",
@@ -5789,7 +5789,7 @@ dependencies = [
 
 [[package]]
 name = "web-engine"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "core-engine",
  "core-pipeline",
@@ -6545,7 +6545,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
