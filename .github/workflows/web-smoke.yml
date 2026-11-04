@@ -41,6 +41,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps --no-shell chromium
+          sudo apt-get install -y --no-install-recommends xvfb xauth libvulkan1 mesa-vulkan-drivers
 
       # The site picks a release up through notify-site.yml or its daily check, so a release run
       # waits for it; any other run expects the latest release to be live already.
@@ -65,7 +66,7 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           WAIT: ${{ steps.release.outputs.wait }}
         run: |
-          check() { node smoke.mjs --url "$URL" --at-least "$TAG" --wait-minutes "$1" --out "$RUNNER_TEMP/web-smoke"; }
+          check() { xvfb-run -a -s '-screen 0 1280x800x24' node smoke.mjs --url "$URL" --at-least "$TAG" --wait-minutes "$1" --out "$RUNNER_TEMP/web-smoke"; }
           check "$WAIT" || { sleep 300; check 0; }
 
       - if: always()

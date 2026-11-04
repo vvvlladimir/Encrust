@@ -312,7 +312,9 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps --no-shell chromium
-          node smoke.mjs --dist "$GITHUB_WORKSPACE/target/web/dist" --out "$RUNNER_TEMP/web-smoke"
+          sudo apt-get install -y --no-install-recommends xvfb xauth libvulkan1 mesa-vulkan-drivers
+          xvfb-run -a -s '-screen 0 1280x800x24' \
+            node smoke.mjs --dist "$GITHUB_WORKSPACE/target/web/dist" --out "$RUNNER_TEMP/web-smoke"
       - if: failure()
         uses: actions/upload-artifact@v7
         with:

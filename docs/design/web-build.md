@@ -84,6 +84,11 @@ cd .github/scripts/web-smoke && npm ci && npx playwright install --no-shell chro
 node smoke.mjs --dist ../../../target/web/dist    # or --url https://encrust.app/app/run/
 ```
 
+A Linux runner has no GPU: the check installs `libvulkan1` and `mesa-vulkan-drivers`, runs
+Chromium with a window under `xvfb-run`, SwiftShader as its adapter and no Vulkan surface.
+Headless, or without either package, the device is lost before the first frame and every
+frame is blank. A failure keeps `chrome://gpu` as `gpu.txt` beside its log.
+
 The desktop's shader compiler accepts WGSL a browser refuses, such as `>>` beside `&`
 without brackets; only this check sees it.
 

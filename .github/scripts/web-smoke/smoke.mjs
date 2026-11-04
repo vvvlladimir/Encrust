@@ -47,8 +47,13 @@ if (failures.length) {
 say('the web window opens and draws a model');
 
 async function open(url) {
-  // The full browser in its new headless mode: the headless shell draws no WebGPU canvas.
-  const browser = await chromium.launch({ channel: 'chromium', args: gpuFlags() });
+  // The full browser: the headless shell draws no WebGPU canvas. Linux runs it with a window on
+  // the virtual display xvfb-run gives it, where SwiftShader's frames reach the screenshot.
+  const browser = await chromium.launch({
+    channel: 'chromium',
+    headless: process.platform !== 'linux',
+    args: gpuFlags(),
+  });
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   page.on('console', (message) => {
@@ -63,8 +68,12 @@ async function open(url) {
   });
 
   await page.goto(url, { waitUntil: 'load', timeout: 60_000 });
-  const adapter = await page.evaluate(async () => !!(await navigator.gpu?.requestAdapter()));
-  if (!adapter) fail('this browser has no WebGPU adapter: the runner, not the build');
+  const adapter = await page.evaluate(async () => {
+    const found = await navigator.gpu?.requestAdapter();
+    return found && `${found.info.vendor} ${found.info.architecture} ${found.info.description}`.trim();
+  });
+  say(`WebGPU adapter: ${adapter ?? 'none'}`);
+  if (adapter === undefined || adapter === null) fail('this browser has no WebGPU adapter: the runner, not the build');
   // The module is 13 MB; the start page is up once the canvas has drawn more than one colour.
   const start = await settle(page, 'start', 90_000);
   const notice = await page.locator('#notice').innerText().catch(() => '');
@@ -83,16 +92,30 @@ async function open(url) {
     new Promise((done) => setTimeout(() => done(false), 5_000)),
   ]);
   if (!alive) fail("the page's thread does not answer");
+  if (failures.length) await describeGpu(context);
   await browser.close();
 }
 
-// Linux runners have no GPU: Chromium's own SwiftShader is the WebGPU adapter there.
+// Linux runners have no GPU: SwiftShader on the system's Vulkan loader is the adapter there, and
+// without a Vulkan surface, which it cannot present to; see docs/design/web-build.md.
 function gpuFlags() {
   const flags = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'];
   return process.platform === 'linux'
     ? [...flags, '--enable-features=Vulkan', '--use-angle=vulkan', '--use-vulkan=swiftshader',
-      '--use-webgpu-adapter=swiftshader', '--enable-unsafe-swiftshader']
+      '--use-webgpu-adapter=swiftshader', '--disable-vulkan-surface', '--enable-unsafe-swiftshader']
     : flags;
+}
+
+// What the browser made of the GPU, kept beside the log for a failure the runner may cause.
+async function describeGpu(context) {
+  const page = await context.newPage();
+  try {
+    await page.goto('chrome://gpu', { timeout: 15_000 });
+    await page.waitForTimeout(2_000);
+    writeFileSync(join(OUT, 'gpu.txt'), await page.locator('body').innerText());
+  } catch (error) {
+    say(`chrome://gpu unreadable: ${error.message}`);
+  }
 }
 
 // Waits until the window shows more than a flat fill, and keeps that picture.
