@@ -3514,7 +3514,7 @@ Used by:
 
 - [bitflags 1.3.2](https://github.com/bitflags/bitflags)
 - [bitflags 2.13.2](https://github.com/bitflags/bitflags)
-- [log 0.4.34](https://github.com/rust-lang/log)
+- [log 0.4.35](https://github.com/rust-lang/log)
 - [num-complex 0.4.6](https://github.com/rust-num/num-complex)
 - [num-derive 0.5.1](https://github.com/rust-num/num-derive)
 - [num-traits 0.2.19](https://github.com/rust-num/num-traits)
@@ -6497,12 +6497,12 @@ Used by:
 - [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
 - [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
 - [roff 1.1.1](https://github.com/rust-cli/roff-rs)
-- [serde_spanned 1.1.1](https://github.com/toml-rs/toml)
-- [toml 1.1.6+spec-1.1.0](https://github.com/toml-rs/toml)
+- [serde_spanned 1.1.2](https://github.com/toml-rs/toml)
+- [toml 1.1.8+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_datetime 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_edit 0.25.15+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_parser 1.1.5+spec-1.1.0](https://github.com/toml-rs/toml)
-- [toml_writer 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml)
+- [toml_writer 1.1.3+spec-1.1.0](https://github.com/toml-rs/toml)
 
 ```text
 Copyright (c) Individual contributors
@@ -7093,7 +7093,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Used by:
 
-- [meshoptimizer-rs 0.2.14](https://github.com/Tavrin/meshoptimizer-rs)
+- [meshoptimizer-rs 0.2.17](https://github.com/Tavrin/meshoptimizer-rs)
 
 ```text
 MIT License
@@ -8288,7 +8288,7 @@ Used by:
 - [quote 1.0.47](https://github.com/dtolnay/quote)
 - [rustc-hash 1.1.0](https://github.com/rust-lang-nursery/rustc-hash)
 - [rustix 0.38.44](https://github.com/bytecodealliance/rustix)
-- [rustix 1.1.5](https://github.com/bytecodealliance/rustix)
+- [rustix 1.1.6](https://github.com/bytecodealliance/rustix)
 - [serde 1.0.229](https://github.com/serde-rs/serde)
 - [serde_core 1.0.229](https://github.com/serde-rs/serde)
 - [serde_derive 1.0.229](https://github.com/serde-rs/serde)
@@ -8508,7 +8508,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 Used by:
 
 - [tracing-core 0.1.36](https://github.com/tokio-rs/tracing)
-- [zip 9.1.3](https://github.com/zip-rs/zip2)
+- [zip 9.3.0](https://github.com/zip-rs/zip2)
 
 ```text
 The MIT License (MIT)
