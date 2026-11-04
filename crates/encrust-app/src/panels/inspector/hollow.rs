@@ -83,7 +83,7 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
     });
     window.tools.hollow.state.infill_on = on;
     section(ui, &tr!("hollow-keep-solid"), None, |ui| {
-        describe(ui, &tr!("hollow-keep-solid-note"));
+        describe(ui, &tr!("hollow-keep-solid-clicks"));
         blockers(ui, window);
     });
 }
@@ -278,17 +278,31 @@ fn thickness(ui: &mut egui::Ui, infill: &InfillSettings) {
     }
 }
 
-/// How wide a blocker the next click drops, and how many are standing.
+/// How wide a blocker the next click drops — fitted to the part or by hand, the window's
+/// whichever model is picked — and how many are standing.
 fn blockers(ui: &mut egui::Ui, window: &mut Window) {
-    number_row(
-        ui,
-        &tr!("hollow-blocker-size"),
-        &mut window.tools.hollow.state.blocker_mm,
-        &tr!("unit-mm"),
-        COARSE_STEP,
-        0.5..=40.0,
-        1,
-    );
+    let size = &mut window.tools.hollow.blocker;
+    let segments = [
+        Segment::new(false, tr!("hollow-blocker-fixed")),
+        Segment::new(true, tr!("hollow-blocker-fit")),
+    ];
+    Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, &mut size.fit);
+    if size.fit {
+        describe(ui, &tr!("hollow-blocker-fit-note"));
+    } else {
+        number_row(
+            ui,
+            &tr!("hollow-blocker-reach"),
+            &mut size.reach_mm,
+            &tr!("unit-mm"),
+            COARSE_STEP,
+            0.5..=40.0,
+            1,
+        );
+        describe(ui, &tr!("hollow-blocker-reach-note"));
+    }
 
     let placed: usize = window
         .doc

@@ -1,8 +1,9 @@
 use std::ops::Range;
 use std::sync::{Arc, Weak};
 
-use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
+use core_geometry::{Bvh, Mat3, Mesh, Ray, Scalar, Transform, Vec3, cylinder, smallest_scale};
 
+use crate::keep_solid::{first_crossed, rod_on, walled_by};
 use crate::{
     Blocker, Channel, DrainHole, Drilled, HoleKind, HoleSize, HollowSettings, channel_under, drill,
     hole_at, lift_for, pierce, sleeves, turn_in_model,
@@ -211,8 +212,8 @@ impl ModelHollow {
         true
     }
 
-    /// The blockers as balls in the model's own space, for the viewport to draw, or
-    /// `None` when there are none.
+    /// The blockers, and the points of a channel being laid out, as meshes in the model's own
+    /// space for the viewport to draw, or `None` when there are none.
     pub fn markers(&self) -> Option<&Arc<Mesh>> {
         self.markers.as_ref()
     }
@@ -275,11 +276,10 @@ impl ModelHollow {
         (wanted != *built).then_some(wanted)
     }
 
-    /// What the tool is asking for, with what this model carries laid over it: its own
-    /// blockers, and a sleeve of wall around every channel and walled hole so the cavity
-    /// keeps off them. A channel placed on a hollow model therefore makes its shell stale.
+    /// What the tool asks for, with this model's blockers walled by the shell (ADR 0396) and a
+    /// sleeve round every channel and walled hole laid over it.
     pub fn asking(&self, asked: &HollowSettings) -> HollowSettings {
-        let mut blockers = self.blockers.clone();
+        let mut blockers: Vec<Blocker> = walled_by(&self.blockers, asked.thickness_mm).collect();
         blockers.extend(sleeves(&self.channels, &self.drains, asked.thickness_mm));
         HollowSettings {
             blockers,
@@ -287,12 +287,15 @@ impl ModelHollow {
         }
     }
 
-    /// Puts a blocker where the model was clicked. `point` is in plate coordinates.
-    pub fn add_blocker(&mut self, point: Vec3, radius_mm: Scalar, transform: Transform) {
-        if let Some(blocker) = Self::blocker_at(point, radius_mm, transform) {
-            self.blockers.push(blocker);
-            self.remesh_markers();
-        }
+    /// Puts down `blocker`, already in the model's own space.
+    pub fn place_blocker(&mut self, blocker: Blocker) {
+        self.blockers.push(blocker);
+        self.remesh_markers();
+    }
+
+    /// [`rod_on`] from the last blocker to `next`, or `None` before the first.
+    pub fn rod_to(&self, next: &Blocker) -> Option<Blocker> {
+        Some(rod_on(self.blockers.last()?, next))
     }
 
     /// The blocker a click at `point`, in plate coordinates, would put down, in the
@@ -308,18 +311,17 @@ impl ModelHollow {
         ))
     }
 
-    /// Takes away the blocker the click landed in, if any, and says whether it did.
-    pub fn remove_blocker(&mut self, point: Vec3, transform: Transform) -> bool {
+    /// Takes away the blocker nearest along `ray`, in plate coordinates, of those it enters
+    /// within `reach_mm` of its origin, and says whether it did.
+    pub fn remove_blocker(&mut self, ray: &Ray, reach_mm: Scalar, transform: Transform) -> bool {
         let Some(inverse) = transform.inverse_matrix() else {
             return false;
         };
-        let local = inverse.transform_point3(point);
+        let along = inverse.transform_vector3(ray.direction);
+        let local = Ray::new(inverse.transform_point3(ray.origin), along);
+        let local_reach = reach_mm * along.length();
 
-        let hit = self
-            .blockers
-            .iter()
-            .position(|blocker| blocker.depth_at(local) >= 0.0);
-        if let Some(index) = hit {
+        if let Some(index) = first_crossed(&self.blockers, &local, local_reach) {
             self.blockers.remove(index);
             self.remesh_markers();
             return true;
@@ -509,16 +511,11 @@ impl ModelHollow {
     }
 
     fn remesh_markers(&mut self) {
-        let balls = self
-            .blockers
+        let points = self
+            .pending
             .iter()
-            .map(|blocker| (blocker.from, blocker.radius_mm))
-            .chain(
-                self.pending
-                    .iter()
-                    .map(|(point, _)| (*point, PENDING_MARKER_MM)),
-            );
-        self.markers = markers(balls).map(Arc::new);
+            .map(|(point, _)| Blocker::ball(*point, PENDING_MARKER_MM));
+        self.markers = blocker_markers(self.blockers.iter().copied().chain(points)).map(Arc::new);
     }
 
     /// Re-cuts what is placed. A hole is drilled to the depth it was asked for, and once
@@ -644,9 +641,24 @@ fn in_model(
 /// Balls of the given radii about the given centres, in one mesh, or `None` for none: how
 /// a marked point is drawn, so that every marker in a viewport looks the same.
 pub fn markers(balls: impl IntoIterator<Item = (Vec3, Scalar)>) -> Option<Mesh> {
+    blocker_markers(
+        balls
+            .into_iter()
+            .map(|(center, radius_mm)| Blocker::ball(center, radius_mm)),
+    )
+}
+
+/// Blockers drawn as what they keep solid, a ball or a rod with round ends, in one mesh, or
+/// `None` for none.
+pub fn blocker_markers(blockers: impl IntoIterator<Item = Blocker>) -> Option<Mesh> {
     let mut mesh = Mesh::default();
-    for (center, radius_mm) in balls {
-        append(&mut mesh, &ball(center, radius_mm));
+    for blocker in blockers {
+        append(&mut mesh, &ball(blocker.from, blocker.radius_mm));
+        if blocker.to != blocker.from {
+            append(&mut mesh, &ball(blocker.to, blocker.radius_mm));
+            let side = cylinder(blocker.from, blocker.to, blocker.radius_mm, MARKER_SEGMENTS);
+            append(&mut mesh, &side);
+        }
     }
     (!mesh.is_empty()).then_some(mesh)
 }

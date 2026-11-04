@@ -5,12 +5,13 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
+    Blocker, Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
     InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside,
-    pierce, plug_wall_mm, plugs, sleeves,
+    pierce, plug_wall_mm, plugs, sleeves, walled_by,
 };
 
 use crate::exit::{Cancelled, Stop};
+use crate::keep_solid::KeepSolidArgs;
 
 /// Which surface `--hollow-mode` measures the wall from.
 #[derive(Debug, Default, Clone, Copy, clap::ValueEnum, serde::Deserialize)]
@@ -135,6 +136,9 @@ pub struct HollowArgs {
     /// Diameter of the drainage channels, millimetres.
     #[arg(long = "channel-size", value_name = "MM", default_value_t = 2.0)]
     pub channel_mm: Scalar,
+
+    #[command(flatten)]
+    pub keep_solid: KeepSolidArgs,
 }
 
 /// One `x,y,z` point of the command line, in plate millimetres.
@@ -154,7 +158,7 @@ pub(crate) fn point(text: &str) -> Result<Vec3, String> {
 }
 
 /// A polyline of points separated by colons.
-fn polyline(text: &str) -> Result<Vec<Vec3>, String> {
+pub(crate) fn polyline(text: &str) -> Result<Vec<Vec3>, String> {
     text.split(':').map(point).collect()
 }
 
@@ -171,15 +175,22 @@ impl HollowArgs {
     }
 
     /// What was asked for, cut on the lattice `precision` picks, or `None` without `--hollow`.
-    /// Every channel and walled hole of `holes` keeps a solid wall around it.
-    fn settings(&self, precision: Scalar, holes: &[DrainHole]) -> Option<HollowSettings> {
+    /// Every `kept` blocker, channel and walled hole of `holes` keeps a solid wall around it.
+    fn settings(
+        &self,
+        precision: Scalar,
+        holes: &[DrainHole],
+        kept: &[Blocker],
+    ) -> Option<HollowSettings> {
         let thickness_mm = self.thickness_mm?;
+        let mut blockers: Vec<Blocker> = walled_by(kept, thickness_mm).collect();
+        blockers.extend(sleeves(&self.dug(), holes, thickness_mm));
         Some(HollowSettings {
             thickness_mm,
             mode: self.mode.into(),
             precision,
             infill: self.infill.map(|pattern| self.infill_settings(pattern)),
-            blockers: sleeves(&self.dug(), holes, thickness_mm),
+            blockers,
             // The model already stands where it prints, so the plate is straight down.
             open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()
@@ -190,6 +201,7 @@ impl HollowArgs {
     /// close or a gap that would make them wider than it.
     pub(crate) fn check_flags(&self) -> Result<()> {
         self.check_infill()?;
+        self.keep_solid.check_flags(self.wanted())?;
         if self.infill.is_some() && !self.wanted() {
             bail!("--infill fills a shell's cavity, and --hollow was not given");
         }
@@ -325,7 +337,8 @@ pub fn run(
 ) -> Result<(Mesh, Range<usize>, HollowReport)> {
     let started = Instant::now();
     let bvh = Bvh::build(mesh);
-    let Some(settings) = args.settings(precision, holes) else {
+    let kept = args.keep_solid.blockers(mesh, &bvh)?;
+    let Some(settings) = args.settings(precision, holes, &kept) else {
         bail!("--hollow was not given, so there is nothing to hollow");
     };
     let asked = || stop.requested();

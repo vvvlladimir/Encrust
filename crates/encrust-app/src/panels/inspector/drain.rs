@@ -43,9 +43,9 @@ const MAX_PLUG_GAP_MM: f32 = 0.5;
 /// yet.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let scoped = Scoped {
-        plate: |tools| &mut tools.drain.state,
-        own: |object| &mut object.own.drain,
-        read: |object| &object.own.drain,
+        plate: |tools| &mut tools.drain.state.plug_gap_mm,
+        own: |object| &mut object.own.plug_gap_mm,
+        read: |object| &object.own.plug_gap_mm,
     };
     let own = inset(ui, |ui| {
         let own = scope::owner(ui, window, &scoped);

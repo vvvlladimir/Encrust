@@ -26,8 +26,8 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
 | Layer strip | the stage's right edge, its full height | 64 |
-| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
-| View cube | 8 left of the models card: level with the tool row while 8 clear of it, else 8 under it | 80 square |
+| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
+| View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
 
@@ -107,8 +107,8 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
-| Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Blocker size; a click on the model places one); Already done | Hollow |
-| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon); Plugs | Check drainage; running, `step_bar` with Looking for trapped resin and Cancel |
+| Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
+| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon, the window's whichever model is picked); Plugs | Check drainage; running, `step_bar` with Looking for trapped resin and Cancel |
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |

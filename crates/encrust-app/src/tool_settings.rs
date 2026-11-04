@@ -9,7 +9,7 @@ use core_engine::project::{
 };
 use serde::{Deserialize, Serialize};
 
-use core_volume::Boolean;
+use core_volume::{BlockerSize, Boolean};
 
 use crate::relief::ReliefState;
 use crate::repair::RepairState;
@@ -38,6 +38,10 @@ pub struct ToolSettings {
     pub combine: Boolean,
     #[serde(default)]
     pub repair: RepairState,
+    /// How the next Keep solid click sizes its blocker; the window's, never a project's
+    /// (ADR 0397).
+    #[serde(default)]
+    pub keep_solid: BlockerSize,
     /// What the Print settings panel holds; never written, so neither a project nor the next
     /// run takes it.
     #[serde(skip)]
@@ -58,6 +62,7 @@ impl ToolSettings {
             text: tools.text.state.clone(),
             combine: tools.boolean.op,
             repair: tools.repair.state,
+            keep_solid: tools.hollow.blocker,
             print: Some(slicing.print_settings()),
         }
     }
@@ -78,6 +83,7 @@ impl ToolSettings {
         tools.text.state = self.text;
         tools.boolean.op = self.combine;
         tools.repair.state = self.repair;
+        tools.hollow.blocker = self.keep_solid;
     }
 }
 
@@ -159,6 +165,10 @@ mod tests {
         let mut tools = Tools::default();
         tools.hollow.state.thickness_mm = 3.5;
         tools.hollow.state.mode = HollowMode::External;
+        tools.hollow.blocker = BlockerSize {
+            fit: false,
+            reach_mm: 3.0,
+        };
         tools.drain.state.diameter_mm = 4.25;
         tools.cut.state.axis = Axis::X;
         tools.cut.state.keep = Keep::Above;
@@ -269,8 +279,10 @@ mod tests {
         fields.remove("text");
         fields.remove("combine");
         fields.remove("repair");
+        fields.remove("keep_solid");
         let read: ToolSettings = serde_json::from_value(written).expect("an older record reads");
         assert_eq!(read.text, TextState::default());
+        assert_eq!(read.keep_solid, BlockerSize::default());
         assert_eq!(read.combine, Boolean::Union);
         assert_eq!(read.repair, RepairState::default());
         assert!(

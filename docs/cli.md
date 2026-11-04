@@ -156,6 +156,16 @@ and `--infill-density`, 0 to 1; the walls or struts and the crossing holes follo
 (ADR 0320). Every number left out is the window's default, and one given without
 `--infill` is refused.
 
+`--keep-solid X,Y,Z` keeps the wall solid at the surface nearest the point, as a click in
+the window's Hollow tool does: the ball fills the model there, or reaches
+`--keep-solid-size` millimetres past the wall into the cavity. More points, `x,y,z:x,y,z`,
+run a rod on from each to the next, as shift-clicks do; repeat the flag for more (ADR 0396):
+
+```sh
+encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
+  --keep-solid 40,20,15:40,20,45 --keep-solid 60,30,70 --keep-solid-size 3 -o figure.goo
+```
+
 Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
 supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
 a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest

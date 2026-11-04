@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::support::*;
 
 /// A 16 mm cube sliced at 1 mm, with whatever hollowing arguments follow.
-fn hollow_cube(name: &str, extra: &[&str]) -> (PathBuf, String) {
+pub(crate) fn hollow_cube(name: &str, extra: &[&str]) -> (PathBuf, String) {
     let path = write_box_stl(&format!("hollow-{name}"), 16.0, 12, 0);
     let out = output_dir(name);
     let mut args = vec![

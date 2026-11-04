@@ -1,5 +1,5 @@
 use super::*;
-use core_geometry::{Quat, signed_volume};
+use core_geometry::{Quat, Ray, signed_volume};
 use std::f32::consts::FRAC_PI_2;
 
 fn drain_tool(diameter_mm: Scalar, depth_mm: Scalar) -> HoleSize {
@@ -44,7 +44,10 @@ fn a_new_object_is_solid() {
 fn a_blocker_is_stored_in_the_models_own_space() {
     let transform = Transform::from_translation(Vec3::new(50.0, 0.0, 0.0));
     let mut hollow = ModelHollow::default();
-    hollow.add_blocker(Vec3::new(60.0, 1.0, 2.0), 4.0, transform);
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::new(60.0, 1.0, 2.0), 4.0, transform)
+            .expect("the placement inverts"),
+    );
 
     let blocker = hollow.blockers()[0];
     assert!(blocker.from.abs_diff_eq(Vec3::new(10.0, 1.0, 2.0), 1e-4));
@@ -58,7 +61,10 @@ fn a_blocker_on_a_scaled_model_keeps_the_size_it_was_asked_for() {
         ..Transform::default()
     };
     let mut hollow = ModelHollow::default();
-    hollow.add_blocker(Vec3::new(4.0, 0.0, 0.0), 4.0, transform);
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::new(4.0, 0.0, 0.0), 4.0, transform)
+            .expect("the placement inverts"),
+    );
 
     // Two millimetres in the model's own space is four on a plate it is doubled on.
     let blocker = hollow.blockers()[0];
@@ -73,7 +79,10 @@ fn a_blocker_travels_with_the_model_it_was_put_on() {
         ..Transform::default()
     };
     let mut hollow = ModelHollow::default();
-    hollow.add_blocker(Vec3::new(-10.0, 10.0, 0.0), 4.0, transform);
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::new(-10.0, 10.0, 0.0), 4.0, transform)
+            .expect("the placement inverts"),
+    );
 
     // A quarter turn about z maps the model's own (10, 10) onto the plate's (-10, 10).
     assert!(
@@ -86,10 +95,14 @@ fn a_blocker_travels_with_the_model_it_was_put_on() {
 #[test]
 fn clicking_a_blocker_takes_it_away() {
     let mut hollow = ModelHollow::default();
-    hollow.add_blocker(Vec3::ZERO, 4.0, Transform::default());
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::ZERO, 4.0, Transform::default())
+            .expect("the placement inverts"),
+    );
 
-    assert!(!hollow.remove_blocker(Vec3::new(20.0, 0.0, 0.0), Transform::default()));
-    assert!(hollow.remove_blocker(Vec3::new(1.0, 0.0, 0.0), Transform::default()));
+    let down_at = |x: Scalar| Ray::new(Vec3::new(x, 0.0, 50.0), Vec3::NEG_Z);
+    assert!(!hollow.remove_blocker(&down_at(20.0), Scalar::INFINITY, Transform::default()));
+    assert!(hollow.remove_blocker(&down_at(1.0), Scalar::INFINITY, Transform::default()));
     assert!(hollow.blockers().is_empty());
     assert!(
         hollow.markers().is_none(),
@@ -100,7 +113,10 @@ fn clicking_a_blocker_takes_it_away() {
 #[test]
 fn a_blocker_is_drawn_as_a_ball_where_it_stands() {
     let mut hollow = ModelHollow::default();
-    hollow.add_blocker(Vec3::new(3.0, 0.0, 0.0), 2.0, Transform::default());
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::new(3.0, 0.0, 0.0), 2.0, Transform::default())
+            .expect("the placement inverts"),
+    );
 
     let markers = hollow.markers().expect("a blocker is drawn").clone();
     let bounds = markers.aabb().expect("the marker has vertices");
@@ -487,7 +503,10 @@ fn adding_a_blocker_makes_the_shell_stale() {
     let asked = HollowSettings::default();
     let mut hollow = ModelHollow::default();
     hollow.take(shell(Mat3::IDENTITY, asked.clone()));
-    hollow.add_blocker(Vec3::ZERO, 4.0, Transform::default());
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::ZERO, 4.0, Transform::default())
+            .expect("the placement inverts"),
+    );
 
     assert!(hollow.is_stale(&asked, Transform::default()));
 }
@@ -600,7 +619,10 @@ fn cuts_carried_onto_a_pressed_surface_stand_where_they_printed_and_the_model_is
         ..Transform::default()
     };
     let mut hollow = ModelHollow::default();
-    hollow.add_blocker(Vec3::new(10.0, 0.0, 0.0), 4.0, placed);
+    hollow.place_blocker(
+        ModelHollow::blocker_at(Vec3::new(10.0, 0.0, 0.0), 4.0, placed)
+            .expect("the placement inverts"),
+    );
     let (lid, bvh) = (lid(), Bvh::build(&lid()));
     hollow.add_drain(
         &lid,

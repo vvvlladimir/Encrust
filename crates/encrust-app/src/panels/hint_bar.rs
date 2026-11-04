@@ -14,8 +14,8 @@ use crate::supports::Placing as Supports;
 use crate::ui::{hint_bar, hint_bar_names, icon};
 use crate::workspace::Tool;
 
-/// The tool in hand's hint bar at the top of `room`, centred under the tool `row`; the keys
-/// alone, flush left, when it is narrow or `keys_only`, as beside the mask.
+/// The tool in hand's hint bar at the top of `room`, centred in it; the keys alone, flush with
+/// the tool `row`'s left, when it is narrow or `keys_only`, as beside the mask.
 pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>, keys_only: bool) {
     let Some(named) = pairs(window, &Keys::words(ui.ctx())) else {
         return;
@@ -26,8 +26,7 @@ pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>, keys_on
         .map(|(key, what)| (key.as_str(), what.as_str()))
         .collect();
     let keys: Vec<&str> = glyphs.iter().map(|(key, _)| key.as_str()).collect();
-    let centred = row.map_or(room, |row| centred_on(room, row.center().x));
-    let names_room = if keys_only { 0.0 } else { centred.width() };
+    let names_room = if keys_only { 0.0 } else { room.width() };
     let flush = row.filter(|_| !hint_bar_names(ui, &named, names_room));
     let (corner, pivot, width) = match flush {
         Some(row) => (
@@ -35,7 +34,7 @@ pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>, keys_on
             Align2::LEFT_TOP,
             room.right() - row.left(),
         ),
-        None => (centred.center_top(), Align2::CENTER_TOP, centred.width()),
+        None => (room.center_top(), Align2::CENTER_TOP, room.width()),
     };
     egui::Area::new(Id::new("hint-bar"))
         .order(egui::Order::Middle)
@@ -44,12 +43,6 @@ pub fn ui(ui: &egui::Ui, window: &Window, room: Rect, row: Option<Rect>, keys_on
         .show(ui.ctx(), |ui| {
             hint_bar(ui, &named, &keys, width.min(names_room))
         });
-}
-
-/// The widest stretch of `room` centred on `x`.
-fn centred_on(room: Rect, x: f32) -> Rect {
-    let half = (x - room.left()).min(room.right() - x).max(0.0);
-    Rect::from_x_y_ranges(x - half..=x + half, room.y_range())
 }
 
 /// What the keys and the pointer's moves are called: in words, or as glyphs where the bar
@@ -115,7 +108,11 @@ fn pairs(window: &Window, keys: &Keys) -> Option<Vec<(String, String)>> {
     let tools = &window.tools;
     let pairs = match *window.tool {
         Tool::Measure => measure(window, keys),
-        Tool::Hollow => vec![click(tr!("hint-hollow-solid")), remove()],
+        Tool::Hollow => vec![
+            click(tr!("hint-hollow-solid")),
+            (keys.click_with(&keys.shift), tr!("hint-hollow-rod")),
+            remove(),
+        ],
         Tool::Drain => {
             let first = match tools.drain.placing {
                 Drain::Hole => tr!("hint-drain-hole"),
@@ -188,17 +185,4 @@ fn brush(keys: &Keys, what: String) -> Vec<(String, String)> {
         (keys.drag.clone(), what),
         (keys.drag_with(&keys.alt), tr!("hint-erase")),
     ]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_bar_centres_on_the_row_whatever_room_the_inspector_leaves() {
-        let room = Rect::from_min_max(pos2(0.0, 0.0), pos2(1000.0, 28.0));
-        let centred = centred_on(room, 700.0);
-        assert_eq!(centred.center().x, 700.0, "under the row's middle");
-        assert_eq!(centred.width(), 600.0, "kept within the room's right edge");
-    }
 }

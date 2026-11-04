@@ -10,6 +10,7 @@ mod estimate;
 mod exit;
 mod hollowing;
 mod json;
+mod keep_solid;
 mod meeting;
 mod modelling;
 mod plate_file;

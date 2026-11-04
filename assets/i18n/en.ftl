@@ -653,7 +653,7 @@ measure-not-parallel = Not parallel, so there is no one gap between them.
 hollow-shell = Shell
 hollow-infill = Infill
 hollow-keep-solid = Keep solid
-hollow-keep-solid-note = Click the model to keep its wall solid there, alt-click a blocker to take it away.
+hollow-keep-solid-clicks = Click the model to keep its wall solid there, shift-click to run a rod on from the last blocker, alt-click a blocker to take it away.
 hollow-drainage = Drainage
 hollow-looking = Looking for trapped resin
 hollow-drains = The resin can get out of every cavity on the plate.
@@ -689,7 +689,11 @@ hollow-infill-struts-are = The struts come out { $mm } mm thick.
 hollow-infill-thin = The lattice comes out { $mm } mm thick, too thin to print: make the cells bigger or the density higher.
 hollow-walled-note = Cells stand on the plate, joined to each other by round holes row above row, so resin runs from cell to cell towards a drain hole.
 hollow-scaffold-note = Struts on the edges of a cube stood on its corner: every one leans, so none starts in mid-air, and the lattice braces sideways as well.
-hollow-blocker-size = Blocker size
+hollow-blocker-fit = Fit to thickness
+hollow-blocker-fixed = Fixed size
+hollow-blocker-fit-note = Each blocker fills the model where you click, as thick as the model is there.
+hollow-blocker-reach = Past the wall
+hollow-blocker-reach-note = How far each blocker reaches through the wall into the cavity.
 hollow-clear-blockers =
     { $count ->
         [one] Clear { $count } blocker
@@ -1084,7 +1088,6 @@ diagram-plate = plate
 
 ## panels/settings/presets.rs
 
-presets-blocker = Blocker
 presets-depth = Depth
 presets-taper = Taper
 presets-empty =
@@ -2307,6 +2310,7 @@ hint-supports-pick = a part of a support to pick it
 hint-supports-carry = carry what is picked
 hint-supports-add = add to what is picked
 hint-hollow-solid = the model to keep it solid there
+hint-hollow-rod = a rod on from the last blocker
 hint-area-paint = where supports must go
 hint-area-block = where no support may go
 hint-repair-faces = the faces to pick

@@ -24,10 +24,9 @@ const HOLLOW: Table = Table {
             tr!("table-profile"),
             tr!("hollow-wall"),
             tr!("hollow-infill"),
-            tr!("presets-blocker"),
         ]
     },
-    columns: &[0.0, 0.55, 0.7, 0.85],
+    columns: &[0.0, 0.6, 0.8],
     words: 1,
     lead: 12.0,
 };
@@ -180,7 +179,6 @@ fn cells(kind: Kind, entry: &Entry<Preset>) -> Option<Vec<String>> {
                 name,
                 tr!("value-mm", value = format!("{:.2}", state.thickness_mm)),
                 infill,
-                tr!("value-mm", value = format!("{:.1}", state.blocker_mm)),
             ]
         }
         _ => {

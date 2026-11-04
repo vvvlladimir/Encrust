@@ -3,37 +3,42 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, PlacedHit, Scalar, Transform, Vec3};
-use core_volume::{DrainHole, ModelHollow, PENDING_MARKER_MM, markers};
+use core_geometry::{Bvh, Mesh, PlacedHit, Transform};
+use core_volume::{Blocker, DrainHole, ModelHollow, PENDING_MARKER_MM, across_mm, blocker_markers};
 
 use crate::panels::Window;
 use crate::panels::inspector::drain::rebuild_around_cuts;
-use crate::pick::Printed;
+use crate::pick::{Printed, ray_through};
 use crate::render::{Ghost, GhostShape};
 use crate::scene::{ObjectId, SceneObject};
 use crate::ui::theme;
 
 use super::picking::{material_under, printed_under, surface_under};
 
-/// Keeps the wall solid where the model was clicked, and selects what it was put on so
-/// that the inspector is talking about the same object.
+/// Keeps the wall solid where the model was clicked, with `rod` on from the last blocker,
+/// and selects what it was put on so that the inspector is talking about the same object.
 pub(super) fn place_blocker_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
+    rod: bool,
 ) {
     let Some((id, hit)) = material_under(window, viewport, cursor) else {
         return;
     };
     window.doc.scene.select(Some(id));
-    let radius_mm = window.tools.hollow.state.blocker_mm;
+    let Some(object) = window.doc.scene.get(id) else {
+        return;
+    };
+    let Some(blocker) = window.tools.hollow.blocker_for(object, &hit, rod) else {
+        return;
+    };
     if let Some(object) = window.doc.scene.get_mut(id) {
-        let transform = object.transform;
-        object.hollow.add_blocker(hit.point, radius_mm, transform);
+        object.hollow.place_blocker(blocker);
     }
 }
 
-/// Takes away the blocker the click landed in.
+/// Takes away the blocker the click went through, deep in the model or not.
 pub(super) fn remove_blocker_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
@@ -42,9 +47,21 @@ pub(super) fn remove_blocker_under_cursor(
     let Some((id, hit)) = material_under(window, viewport, cursor) else {
         return;
     };
+    let Some(ray) = ray_through(&window.view.camera, viewport, cursor) else {
+        return;
+    };
     if let Some(object) = window.doc.scene.get_mut(id) {
         let transform = object.transform;
-        object.hollow.remove_blocker(hit.point, transform);
+        // Halfway across the part: deep enough for a fitted ball, short of its far side's.
+        let across = across_mm(
+            &object.mesh,
+            &object.bvh,
+            transform,
+            hit.point,
+            ray.direction,
+        );
+        let reach_mm = (hit.point - ray.origin).dot(ray.direction) + across.unwrap_or(0.0) / 2.0;
+        object.hollow.remove_blocker(&ray, reach_mm, transform);
     }
 }
 
@@ -77,7 +94,7 @@ fn hole_under(
     printed: Printed,
     hit: &PlacedHit,
 ) -> Option<DrainHole> {
-    let size = window.tools.drain.size_for(object);
+    let size = window.tools.drain.size();
     let (point, normal, transform) = (hit.point, hit.normal, object.transform);
     match printed {
         Printed::Model => {
@@ -135,12 +152,17 @@ pub(super) fn remove_drain_under_cursor(
     rebuild_around_cuts(window);
 }
 
-/// The blocker a click at `hit` on object `id` would put down.
-pub(super) fn blocker_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
+/// The blocker a click at `hit` on object `id` would put down, with `rod` run on from the
+/// last one.
+pub(super) fn blocker_ghost(
+    window: &Window,
+    id: ObjectId,
+    hit: &PlacedHit,
+    rod: bool,
+) -> Option<Ghost> {
     let object = window.doc.scene.get(id)?;
-    let radius_mm = window.tools.hollow.state.blocker_mm;
-    let blocker = ModelHollow::blocker_at(hit.point, radius_mm, object.transform)?;
-    marker_ghost(blocker.from, blocker.radius_mm, object.transform)
+    let blocker = window.tools.hollow.blocker_for(object, hit, rod)?;
+    marker_ghost(blocker, object.transform)
 }
 
 /// The drain hole a click at `hit` on `printed` of object `id` would drill, as deep as it
@@ -172,14 +194,14 @@ pub(super) fn drain_ghost(
 pub(super) fn channel_point_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
     let object = window.doc.scene.get(id)?;
     let (point, _) = ModelHollow::channel_point_at(hit.point, hit.normal, object.transform)?;
-    marker_ghost(point, PENDING_MARKER_MM, object.transform)
+    marker_ghost(Blocker::ball(point, PENDING_MARKER_MM), object.transform)
 }
 
-/// A ball about `center` in the model's own space, drawn the way placed markers are.
-fn marker_ghost(center: Vec3, radius_mm: Scalar, transform: Transform) -> Option<Ghost> {
+/// `blocker`, in the model's own space, drawn the way placed markers are.
+fn marker_ghost(blocker: Blocker, transform: Transform) -> Option<Ghost> {
     Some(Ghost {
         shape: GhostShape::Body {
-            mesh: Arc::new(markers([(center, radius_mm)])?),
+            mesh: Arc::new(blocker_markers([blocker])?),
             transform,
         },
         colour: theme::scene().blocker,

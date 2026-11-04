@@ -316,11 +316,14 @@ whole-surface fill is Cmd-Shift-click.
     every cell. Walls come out flat and holes round, at any precision.
   - **Scaffold** is struts on the edges of a cube stood on its corner. None of them is
     level, so none starts in mid-air, and it braces the part sideways too.
-- **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
-  set their size.
+- **Keep solid:** click spots on the model where the wall must stay solid (blockers). A
+  blocker fits the thickness of the model where you click, or takes a size you set, which
+  is how far it reaches past the wall into the cavity. Shift-click runs a rod on from the
+  last blocker, to keep a whole limb solid. On the command line, `--keep-solid`.
 - With one model picked, the settings you change are that model's own and are there again
   when you come back to it; with none picked they are the plate's, which every other model
-  uses. You can save settings as named presets.
+  uses. Fixed size or Fit to thickness, and the size, are the window's: whichever model is
+  picked, and the same after a restart. You can save settings as named presets.
 - While it runs, the panel names the step the model is on and shows how much of the run is
   done.
 - **Cancel** stops a run inside the model it is on, not only between models.
@@ -362,7 +365,8 @@ whole-surface fill is Cmd-Shift-click.
   and a copied model gets plugs of its own.
 - **Channel:** dig a tube of the hole's width and outline through a path of points, open
   only at its two ends.
-- Settings work as in **Hollow**: one picked model keeps its own.
+- The hole's size, depth, taper and outline are the window's, kept after a restart, for
+  whichever model you click; one picked model keeps its own plug gap, as in **Hollow**.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
   of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
   you can see through the model to find them.

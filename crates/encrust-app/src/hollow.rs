@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
-use core_geometry::{Scalar, Transform};
-use core_volume::{HollowMode, HollowSettings, InfillSettings, plate_down};
+use core_geometry::{PlacedHit, Transform};
+use core_volume::{
+    Blocker, BlockerSize, HollowMode, HollowSettings, InfillSettings, blocker_under, plate_down,
+};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -12,9 +14,6 @@ use crate::job::{
 };
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
-
-/// How wide a blocker a click drops, in millimetres of the plate.
-pub const DEFAULT_BLOCKER_MM: Scalar = 4.0;
 
 /// What the Hollow tool is set to, and the run it has going.
 ///
@@ -25,6 +24,8 @@ pub const DEFAULT_BLOCKER_MM: Scalar = 4.0;
 pub struct HollowTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
     pub state: HollowState,
+    /// How the next click sizes its blocker: the window's, whichever model it lands on (ADR 0397).
+    pub blocker: BlockerSize,
     pub job: Option<HollowJob>,
     /// Whether a run has just put a cavity on the plate, which is what takes the pockets
     /// an older check found off it; see ADR 0198.
@@ -44,9 +45,9 @@ impl Default for HollowTool {
                 precision: asked.precision,
                 infill_on: false,
                 infill: InfillSettings::default(),
-                blocker_mm: DEFAULT_BLOCKER_MM,
                 open_floor: false,
             },
+            blocker: BlockerSize::default(),
             job: None,
             hollowed: false,
             fields: SharedFields::default(),
@@ -65,8 +66,21 @@ impl HollowTool {
     /// What `object` is hollowed with: its own settings, or the plate's, with its floor
     /// opened toward the plate as it stands now.
     pub fn settings_for(&self, object: &SceneObject) -> HollowSettings {
-        let state = object.own.hollow.as_ref().unwrap_or(&self.state);
-        settings_of(state, object.transform)
+        settings_of(self.state_for(object), object.transform)
+    }
+
+    /// The numbers `object` is set to: its own, or the plate's.
+    fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a HollowState {
+        object.own.hollow.as_ref().unwrap_or(&self.state)
+    }
+
+    /// The blocker a click at `hit` on `object` puts down, with `rod` run on from the last one.
+    pub fn blocker_for(&self, object: &SceneObject, hit: &PlacedHit, rod: bool) -> Option<Blocker> {
+        let (mesh, bvh) = (&object.mesh, &object.bvh);
+        let (point, normal) = (hit.point, hit.normal);
+        let blocker = blocker_under(mesh, bvh, object.transform, point, normal, self.blocker)?;
+        let joined = rod.then(|| object.hollow.rod_to(&blocker)).flatten();
+        Some(joined.unwrap_or(blocker))
     }
 
     /// Why the Hollow button is greyed out, or `None` when it is not.
@@ -182,148 +196,4 @@ fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
-    use core_volume::Shell;
-    use std::sync::Arc;
-
-    use crate::scene::{ImportSummary, Imported};
-
-    fn scene_with_a_tetrahedron() -> Scene {
-        let mesh = Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(20.0, 0.0, 0.0),
-                Vec3::new(0.0, 20.0, 0.0),
-                Vec3::new(0.0, 0.0, 20.0),
-            ],
-            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
-        );
-        let mut scene = Scene::default();
-        scene.insert(Imported::new(
-            "tetrahedron".to_owned(),
-            Arc::new(mesh.clone()),
-            Transform::default(),
-            ImportSummary {
-                vertices_merged: 0,
-                faces_removed: 0,
-                orientation: Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
-                diagnostics: diagnose(&mesh),
-            },
-        ));
-        scene
-    }
-
-    #[test]
-    fn a_model_with_its_own_wall_is_hollowed_to_it() {
-        let mut scene = scene_with_a_tetrahedron();
-        let tool = HollowTool::default();
-        let plate_mm = tool.state.thickness_mm;
-        let mut own = tool.state.clone();
-        own.thickness_mm = plate_mm + 1.0;
-        scene.objects_mut()[0].own.hollow = Some(own);
-
-        let tasks = crate::job::hollow_tasks(&scene, |object| tool.settings_for(object));
-        assert_eq!(tasks.len(), 1);
-        assert!(
-            (tasks[0].settings.thickness_mm - (plate_mm + 1.0)).abs() < 1e-6,
-            "the model's own wall, not the plate's {plate_mm} mm"
-        );
-    }
-
-    #[test]
-    fn turning_a_model_with_an_open_floor_makes_its_shell_stale_and_a_closed_one_not() {
-        let mut scene = scene_with_a_tetrahedron();
-        let mut tool = HollowTool::default();
-        for open_floor in [true, false] {
-            tool.state.open_floor = open_floor;
-            let object = &mut scene.objects_mut()[0];
-            object.transform = Transform::default();
-            let built = object.hollow.asking(&tool.settings_for(object));
-            object.hollow.take(Shell {
-                mesh: Arc::new(Mesh::default()),
-                cavity: 0..0,
-                cavity_mm3: 0.0,
-                voxel_mm: 0.2,
-                coarsened: false,
-                shape: core_geometry::Mat3::IDENTITY,
-                settings: built,
-            });
-            object.transform.rotation = core_geometry::Quat::from_rotation_x(1.0);
-            let object = &scene.objects()[0];
-            assert_eq!(
-                object
-                    .hollow
-                    .is_stale(&tool.settings_for(object), object.transform),
-                open_floor,
-                "an open floor faces the plate, a closed shell does not care which way it turns"
-            );
-        }
-    }
-
-    #[test]
-    fn a_finished_run_asks_once_for_the_drainage_check_that_follows_it() {
-        let mut scene = scene_with_a_tetrahedron();
-        let mut tool = HollowTool::default();
-        let mut status = Status::default();
-        tool.start(&scene).expect("a model is on the plate");
-        while tool.poll(&mut scene, &mut status) {
-            std::thread::yield_now();
-        }
-
-        assert!(
-            tool.take_hollowed(),
-            "a run put a new cavity on the plate, so what an older check found is stale"
-        );
-        assert!(
-            !tool.take_hollowed(),
-            "and it looks once per run, not once per frame"
-        );
-    }
-
-    #[test]
-    fn digging_a_channel_into_a_hollow_model_hollows_it_again_and_nothing_else_does() {
-        let mut scene = scene_with_a_tetrahedron();
-        let mut tool = HollowTool::default();
-        assert!(
-            !tool.rebuild(&scene),
-            "a solid model has no shell to rebuild"
-        );
-
-        let object = &mut scene.objects_mut()[0];
-        let built = object.hollow.asking(&tool.settings());
-        object.hollow.take(Shell {
-            mesh: Arc::new(Mesh::default()),
-            cavity: 0..0,
-            cavity_mm3: 0.0,
-            voxel_mm: 0.2,
-            coarsened: false,
-            shape: core_geometry::Mat3::IDENTITY,
-            settings: built,
-        });
-        assert!(!tool.rebuild(&scene), "the shell is what it was built from");
-
-        let object = &mut scene.objects_mut()[0];
-        object.hollow.add_channel_point(
-            Vec3::new(5.0, 5.0, 0.0),
-            Vec3::NEG_Z,
-            Transform::default(),
-        );
-        object.hollow.add_channel_point(
-            Vec3::new(10.0, 5.0, 0.0),
-            Vec3::NEG_Z,
-            Transform::default(),
-        );
-        assert!(object.hollow.finish_channel(
-            core_volume::HoleSize::round(2.0, 0.0, 1.0),
-            Transform::default()
-        ));
-        assert!(tool.rebuild(&scene), "the channel needs its sleeve now");
-        assert!(tool.job.is_some());
-    }
-}
+mod tests;

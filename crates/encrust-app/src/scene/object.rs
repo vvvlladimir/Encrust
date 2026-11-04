@@ -4,7 +4,7 @@ use super::{ObjectId, Scene, Shaped};
 use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
-use core_engine::project::{DrainState, HollowState};
+use core_engine::project::HollowState;
 use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb};
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
@@ -67,7 +67,8 @@ pub struct SceneObject {
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
 pub struct OwnSettings {
     pub hollow: Option<HollowState>,
-    pub drain: Option<DrainState>,
+    /// The plugs' gap, millimetres a side; the hole sizes are the window's (ADR 0397).
+    pub plug_gap_mm: Option<Scalar>,
     /// By the number of the group each one stands in for.
     pub supports: BTreeMap<u16, SupportProfile>,
     /// The raft under this model, where it is not the plate's; see ADR 0253.

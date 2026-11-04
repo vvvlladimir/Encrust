@@ -61,15 +61,9 @@ impl Default for DrainTool {
 }
 
 impl DrainTool {
-    /// The hole the plate's numbers drill.
-    #[cfg(test)]
+    /// The hole the next click drills, into whichever model: the window's (ADR 0397).
     pub fn size(&self) -> HoleSize {
         size_of(&self.state)
-    }
-
-    /// The hole drilled into `object`: its own size, or the plate's.
-    pub fn size_for(&self, object: &SceneObject) -> HoleSize {
-        size_of(self.state_for(object))
     }
 
     /// Starts looking for resin that cannot get out of anything visible on the plate.
@@ -132,7 +126,7 @@ impl DrainTool {
         self.stale();
         let mut dug = 0;
         for object in scene.targets_mut() {
-            let size = self.size_for(object);
+            let size = self.size();
             let transform = object.transform;
             if !object.hollow.pending().is_empty() && object.hollow.finish_channel(size, transform)
             {
@@ -152,7 +146,7 @@ impl DrainTool {
             return false;
         };
         self.stale();
-        let size = self.size_for(object);
+        let size = self.size();
         let drilled =
             object
                 .hollow
@@ -170,7 +164,7 @@ impl DrainTool {
         let mut drilled = 0;
 
         for object in scene.targets_mut() {
-            let size = self.size_for(object);
+            let size = self.size();
             let targets: Vec<_> = object
                 .traps
                 .found()
@@ -193,9 +187,10 @@ impl DrainTool {
         drilled
     }
 
-    /// What `object` drills with: its own settings, or the plate's.
-    pub(crate) fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a DrainState {
-        object.own.drain.as_ref().unwrap_or(&self.state)
+    /// How much narrower than its hole a plug of `object` is drawn, millimetres a side: its
+    /// own gap, or the plate's.
+    pub(crate) fn plug_gap_for(&self, object: &SceneObject) -> Scalar {
+        object.own.plug_gap_mm.unwrap_or(self.state.plug_gap_mm)
     }
 }
 

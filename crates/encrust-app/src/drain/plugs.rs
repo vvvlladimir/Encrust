@@ -259,7 +259,7 @@ impl DrainTool {
                 .hollow
                 .asked()
                 .and_then(|asked| plug_wall_mm(asked.mode, asked.thickness_mm / least)),
-            gap_mm: (self.state_for(object).plug_gap_mm - drift_mm) / least,
+            gap_mm: (self.plug_gap_for(object) - drift_mm) / least,
         }
     }
 }

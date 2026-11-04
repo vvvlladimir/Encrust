@@ -17,8 +17,9 @@ use crate::state::Tools;
 use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
-    BuiltCavity, Cavity, Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState,
-    OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
+    BuiltCavity, Cavity, DrainState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    ObjectSupportState, OwnDrain, OwnSupportState, Project, Summary, VERSION, hollow_of,
+    supports_of,
 };
 use printer_profiles::{Raft, SupportProfile};
 
@@ -134,7 +135,10 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
             built: built_cavity(object),
         },
         own_hollow: object.own.hollow.clone(),
-        own_drain: object.own.drain.clone(),
+        own_drain: object
+            .own
+            .plug_gap_mm
+            .map(|plug_gap_mm| OwnDrain { plug_gap_mm }),
         own_raft: object.own.raft,
         plug_of: object
             .plug_of
@@ -194,15 +198,20 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
         },
         supports: manifest.supports,
         hollow: manifest.hollow,
-        drain: manifest.drain,
+        // The next hole's size is the window's; a project brings only its plugs' gap (ADR 0397).
+        drain: DrainState {
+            plug_gap_mm: manifest.drain.plug_gap_mm,
+            ..tools.drain.state.clone()
+        },
         cut: manifest.cut,
-        // The manifest has no entry for the Relief, Text, Combine or Repair tools, so they
-        // keep what they are set to.
+        // The manifest has no entry for the Relief, Text, Combine or Repair tools, nor for how
+        // the next blocker is sized, so they keep what they are set to.
         relief: tools.relief.state,
         array: manifest.array,
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
         repair: tools.repair.state,
+        keep_solid: tools.hollow.blocker,
         print: None,
     }
     .apply(tools, slicing);
@@ -301,7 +310,7 @@ fn restore_objects(
             .collect();
         let own = OwnSettings {
             hollow: state.own_hollow,
-            drain: state.own_drain,
+            plug_gap_mm: state.own_drain.map(|own| own.plug_gap_mm),
             supports: own_supports,
             raft: state.own_raft,
         };

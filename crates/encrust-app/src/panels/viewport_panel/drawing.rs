@@ -43,11 +43,16 @@ pub(super) fn ghost(
             drain_ghost(window, id, printed, &hit)
         });
     }
+    // A blocker is a volume, so it can be put inside the material through the cap of a cut.
+    if *window.tool == Tool::Hollow {
+        let (id, hit) = material_under(window, rect, cursor)?;
+        return faded(&window.doc.scene, id, || {
+            blocker_ghost(window, id, &hit, line)
+        });
+    }
     type Under = fn(&Window, egui::Rect, egui::Pos2) -> Option<(ObjectId, PlacedHit)>;
     type Shows = fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost>;
-    // A blocker is a volume, so it can be put inside the material through the cap of a cut.
     let (under, shows): (Under, Shows) = match *window.tool {
-        Tool::Hollow => (material_under, blocker_ghost),
         Tool::Drain if window.tools.drain.placing == Placing::Channel => {
             (surface_under, channel_point_ghost)
         }

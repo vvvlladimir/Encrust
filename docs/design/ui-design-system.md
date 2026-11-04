@@ -165,7 +165,7 @@ paints from tokens only.
 | `release_hero`, `steps` | The release a sheet offers: its name, the line under it; the install's steps in a row, done ticked in `ok`, the one under way in the accent |
 | `dropdown_search_menu` | A `dropdown_menu` a click inside keeps open, headed by a field that filters its rows: the text tool's font families |
 | `picker_row` | A `dropdown` under a `field_label` of its own, for a choice too long for a field box |
-| `primary_button` | The one action a screen is for: its words alone, in Medium, `on_accent` on `accent`, no glyph — the tool's glyph already heads the card. There is never a second in view |
+| `primary_button` | The one action a screen is for: its words alone, in Medium, `on_accent` on `accent`, no glyph — the tool's glyph already heads the card; unusable, it is the raised button's off look, bordered in `line`. There is never a second in view |
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
 | `secondary_button` | The ordinary full-width button |

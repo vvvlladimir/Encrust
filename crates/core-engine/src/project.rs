@@ -257,7 +257,6 @@ pub struct HollowState {
     pub precision: Scalar,
     pub infill_on: bool,
     pub infill: InfillSettings,
-    pub blocker_mm: Scalar,
     /// Whether a shell opens through the floor it stands on; a file without it reads a
     /// closed one (ADR 0313).
     #[serde(default)]
@@ -277,6 +276,14 @@ pub struct DrainState {
     pub shape: HoleShape,
     #[serde(default)]
     pub turn_deg: Scalar,
+    #[serde(default = "plug_gap")]
+    pub plug_gap_mm: Scalar,
+}
+
+/// What a model keeps of the Drain tool's settings as its own: its plugs' gap, millimetres a
+/// side. A file's own hole sizes are the window's now, and read past (ADR 0397).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct OwnDrain {
     #[serde(default = "plug_gap")]
     pub plug_gap_mm: Scalar,
 }
@@ -334,7 +341,7 @@ pub struct ObjectState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_hollow: Option<HollowState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub own_drain: Option<DrainState>,
+    pub own_drain: Option<OwnDrain>,
     /// The support profiles this model is built to instead of its groups', where it has
     /// its own (ADR 0246). A file without them reads as a model with none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

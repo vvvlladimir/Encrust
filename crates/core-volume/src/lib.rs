@@ -15,6 +15,7 @@ mod extract;
 mod grid;
 mod hollow;
 mod infill;
+mod keep_solid;
 mod mend;
 mod model;
 mod parts;
@@ -46,7 +47,10 @@ pub use hollow::{
     hollow, hollow_at_scale, lattice_mm, plate_down, sleeves,
 };
 pub use infill::{InfillPattern, InfillSettings};
-pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};
+pub use keep_solid::{
+    BLOCKER_REACH_MM, BlockerSize, across_mm, blocker_under, fitted_blocker, rod_on, walled_by,
+};
+pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, blocker_markers, markers};
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
 pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, PlugSource, Plugs, laid_beside, plug_wall_mm, plugs};
 pub use relief::{

@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use core_geometry::{Mesh, Quat, Transform, Vec3, diagnose};
 use core_supports::{ModelSupports, SupportPoint};
-use core_volume::{Blocker, Channel, HollowMode, ModelHollow};
+use core_volume::{Blocker, BlockerSize, Channel, HollowMode, ModelHollow};
 
 use crate::cut::Keep;
 
@@ -302,14 +302,9 @@ fn every_tool_opens_set_the_way_it_was_saved() {
     assert_eq!(back.tools.hollow.state.mode, saved.tools.hollow.state.mode);
     assert!(back.tools.hollow.state.infill_on);
     assert_eq!(
-        back.tools.drain.state.diameter_mm,
-        saved.tools.drain.state.diameter_mm
+        back.tools.drain.state.plug_gap_mm,
+        saved.tools.drain.state.plug_gap_mm
     );
-    assert_eq!(
-        back.tools.drain.state.depth_mm,
-        saved.tools.drain.state.depth_mm
-    );
-    assert_eq!(back.tools.drain.state.taper, saved.tools.drain.state.taper);
     assert_eq!(back.tools.cut.state.axis, saved.tools.cut.state.axis);
     assert_eq!(
         back.tools.cut.state.height_mm,
@@ -412,10 +407,35 @@ fn a_models_own_hollow_numbers_are_saved_with_it() {
     let mut own = saved.tools.hollow.state.clone();
     own.thickness_mm = 3.5;
     saved.scene.objects_mut()[0].own.hollow = Some(own.clone());
+    saved.scene.objects_mut()[0].own.plug_gap_mm = Some(0.3);
 
     let back = round_trip(&saved);
     assert_eq!(back.scene.objects()[0].own.hollow, Some(own));
-    assert_eq!(back.scene.objects()[0].own.drain, None);
+    assert_eq!(back.scene.objects()[0].own.plug_gap_mm, Some(0.3));
+}
+
+#[test]
+fn opening_a_project_keeps_the_windows_next_hole_and_blocker_and_takes_its_plug_gap() {
+    let mut saved = bench();
+    saved.tools.drain.state.diameter_mm = 6.0;
+    saved.tools.drain.state.plug_gap_mm = 0.3;
+    saved.tools.hollow.blocker = BlockerSize {
+        fit: false,
+        reach_mm: 7.0,
+    };
+
+    let (back, _) = reopened(capture(saved.plate()));
+    let window = Tools::default();
+    assert_eq!(
+        back.tools.drain.size(),
+        window.drain.size(),
+        "the next hole is the window's"
+    );
+    assert_eq!(back.tools.hollow.blocker, window.hollow.blocker);
+    assert!(
+        (back.tools.drain.state.plug_gap_mm - 0.3).abs() < 1e-6,
+        "the plugs' gap is the plate's"
+    );
 }
 
 #[test]

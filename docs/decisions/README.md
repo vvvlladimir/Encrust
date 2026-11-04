@@ -289,6 +289,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted; its sizes for walls and holes superseded by 0320 |
 | [0320](0320-an-infill-is-a-cell-and-a-density.md) | State an infill by its cell and its density, and derive its walls and holes | Accepted |
 | [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted; the plug's shape superseded by 0321 |
+| [0396](0396-a-blocker-reaches-past-the-wall-and-can-fit-the-model.md) | A blocker reaches past the wall, can fit the model, and runs on as a rod | Proposed |
 | [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity |
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
@@ -333,8 +334,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0393](0393-check-warns-of-a-sealed-cavity-and-a-solid-model-worth-hollowing.md) | Warn of a cavity with no drain hole and of a solid model worth hollowing | Proposed |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
-| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319 |
+| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319; the next click's sizes superseded by 0397 |
 | [0319](0319-a-picked-model-is-edited-without-a-switch.md) | Edit the picked model's Hollow and Drain numbers without a switch | Accepted |
+| [0397](0397-the-next-clicks-size-is-the-windows.md) | The size the next click puts down is the window's, not a model's | Proposed |
 | [0246](0246-a-model-keeps-the-support-profile-it-was-edited-to.md) | Keep an edited support profile on the picked models until it is saved | Accepted; what choosing another profile from the list does is superseded by 0247 |
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
 | [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325 |

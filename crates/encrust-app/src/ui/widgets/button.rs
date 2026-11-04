@@ -238,16 +238,10 @@ pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
 /// The one action a screen is for, in words alone: the tool's glyph already heads the
 /// card. There is never a second one of these in view.
 pub fn primary_button(ui: &mut Ui, text: &str, enabled: bool) -> Response {
-    let colors = theme::colors();
-    let (fill, foreground) = if enabled {
-        (colors.accent, colors.on_accent)
+    let skin = if enabled {
+        Skin::accent()
     } else {
-        (colors.raised, colors.text_low)
-    };
-    let skin = Skin {
-        fill,
-        foreground,
-        ..Skin::accent()
+        Skin::raised_or_off(false)
     };
     let size = vec2(ui.available_width(), theme::PRIMARY_H);
     let face = Face {

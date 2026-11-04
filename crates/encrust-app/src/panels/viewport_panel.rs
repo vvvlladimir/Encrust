@@ -8,7 +8,7 @@ use crate::drain::Placing;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene};
-use crate::state::View;
+use crate::state::{Tools, View};
 use crate::viewport_input::{Drag, Pointer};
 use crate::workspace::Tool;
 
@@ -68,8 +68,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
         pointer_state(ui, rect)
     };
     // The gizmo's report is one frame old, which matters only on the frame a handle is crossed.
-    // Only Place reads a shift-click, as a line of supports; elsewhere shift pans.
-    let shift_clicks = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
+    let shift_clicks = reads_shift_click(*window.tool, window.tools);
     let gesture = window
         .view
         .input
@@ -185,7 +184,10 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         Tool::Hollow if ui.input(|input| input.modifiers.alt) => {
             remove_blocker_under_cursor(window, rect, cursor);
         }
-        Tool::Hollow => place_blocker_under_cursor(window, rect, cursor),
+        Tool::Hollow => {
+            let rod = ui.input(|input| input.modifiers.shift);
+            place_blocker_under_cursor(window, rect, cursor, rod);
+        }
         Tool::Drain if ui.input(|input| input.modifiers.alt) => {
             remove_drain_under_cursor(window, rect, cursor);
         }
@@ -210,6 +212,16 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         // The brush has already picked whatever faces the click landed on.
         Tool::Repair if paint::picks_faces(window) => {}
         _ => select_under_cursor(window, rect, cursor, false),
+    }
+}
+
+/// Whether `tool` reads a shift press that stays put as a click — a line of supports, a rod
+/// of blockers; elsewhere shift pans.
+fn reads_shift_click(tool: Tool, tools: &Tools) -> bool {
+    match tool {
+        Tool::Paint => !tools.supports.placing.paints(),
+        Tool::Hollow => true,
+        _ => false,
     }
 }
 
@@ -368,6 +380,14 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shift_click_is_a_click_where_it_lays_a_line_or_a_rod() {
+        let tools = Tools::default();
+        assert!(reads_shift_click(Tool::Paint, &tools), "a line of supports");
+        assert!(reads_shift_click(Tool::Hollow, &tools), "a rod of blockers");
+        assert!(!reads_shift_click(Tool::Position, &tools), "shift pans");
+    }
 
     #[test]
     fn framing_an_empty_scene_falls_back_to_the_plate() {

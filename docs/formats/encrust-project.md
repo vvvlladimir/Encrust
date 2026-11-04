@@ -40,10 +40,10 @@ hold no built geometry or diagnostics.
 | `printer`, `resin` | the catalogue id, or `null`; never the profile itself (ADR 0261) |
 | `slicing` | island removal and its hanging passes, `OutputFormat`; taken up only with the printer. The print settings are the printer's and resin's (ADR 0380) |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
-| `hollow` | what the Hollow tool is set to, not what it built |
+| `hollow` | what the Hollow tool is set to, not what it built; an older file's `blocker_mm` and `fit_blocker` are read past (ADR 0397) |
 | `hollow.infill` | the lattice's `pattern`, `cell_mm` and `density`, from which its walls and crossing holes follow; an older file's `wall_mm` reads as the density it made (ADR 0320); `null` for an empty cavity |
 | `hollow.open_floor` | whether a shell opens through the floor it stands on (ADR 0313); absent in older files and read as closed |
-| `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
+| `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to; of `drain`, only `plug_gap_mm` is taken up on opening, the hole being the window's (ADR 0397) |
 | `drain.shape`, `drain.turn_deg`, `drain.plug_gap_mm` | the next hole's outline, its turn from the plate's level in degrees, and a plug's gap a side (ADR 0313); absent in older files and read as round, unturned and 0.15 mm |
 | `cut.parts` | what Split into its parts goes by: the smallest part (ADR 0307); absent in older files and read as the defaults, and the narrow-join fields of files written before it are ignored |
 | `cut.joints` | how a cut's halves are joined and what each kind is set to (ADR 0306); absent in older files and read as a plain cut |
@@ -58,6 +58,7 @@ hold no built geometry or diagnostics.
 | `supports.sizing` | the automatic profile supports are sized by, numbers as edited, and whether a run uses it (ADR 0334); absent when none was chosen, and in older files |
 | `supports.inline_spacing_mm` | how far apart a line of supports drawn with shift stands, mm (ADR 0330); absent in older files and read as the default |
 | `supports.fill_profiles` | the saved support profiles a fill builds its `rim` and its `inside` to, by id (ADR 0331); absent, or either one, builds to the group in hand |
+| `objects[].own_hollow`, `objects[].own_drain` | the Hollow numbers and plugs' gap this model keeps instead of the plate's (ADR 0227); `own_drain` is `{ plug_gap_mm }`, an older file's hole sizes in it read past (ADR 0397); absent when it keeps none |
 | `objects[].own_raft` | the raft this model stands on instead (ADR 0253); absent when it keeps none, and in older files |
 | `objects[].own_supports` | the profile this model is built to in place of a group's, by group number (ADR 0246); absent when it keeps none, and in older files |
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |

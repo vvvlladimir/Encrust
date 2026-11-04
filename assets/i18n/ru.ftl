@@ -692,7 +692,7 @@ measure-not-parallel = Не параллельны, поэтому единог�
 hollow-shell = Оболочка
 hollow-infill = Заполнение
 hollow-keep-solid = Оставить сплошным
-hollow-keep-solid-note = Щёлкните по модели, чтобы оставить стенку сплошной в этом месте; Alt + щелчок по блокиратору убирает его.
+hollow-keep-solid-clicks = Щёлкните по модели, чтобы оставить стенку сплошной в этом месте; Shift + щелчок тянет стержень от последнего блокиратора, Alt + щелчок по блокиратору убирает его.
 hollow-drainage = Дренаж
 hollow-looking = Поиск запертой смолы
 hollow-drains = Из всех полостей на платформе смола может вытечь.
@@ -729,7 +729,11 @@ hollow-infill-struts-are = Стойки получаются толщиной { 
 hollow-infill-thin = Каркас получается толщиной { $mm } мм — слишком тонко для печати: увеличьте ячейку или плотность.
 hollow-walled-note = Ячейки стоят на платформе и соединены круглыми отверстиями ряд за рядом, поэтому смола перетекает из ячейки в ячейку к дренажному отверстию.
 hollow-scaffold-note = Стойки по рёбрам куба, поставленного на вершину: все наклонены, ни одна не начинается в воздухе, и каркас держит нагрузку и вбок.
-hollow-blocker-size = Размер блокиратора
+hollow-blocker-fit = По толщине
+hollow-blocker-fixed = Свой размер
+hollow-blocker-fit-note = Каждый блокиратор заполняет модель там, где вы щёлкнули, во всю её толщину.
+hollow-blocker-reach = За стенкой
+hollow-blocker-reach-note = Насколько каждый блокиратор заходит сквозь стенку в полость.
 hollow-clear-blockers =
     { $count ->
         [one] Убрать { $count } блокиратор
@@ -1130,7 +1134,6 @@ diagram-plate = платформа
 
 ## panels/settings/presets.rs
 
-presets-blocker = Блокиратор
 presets-depth = Глубина
 presets-taper = Конусность
 presets-empty =
@@ -2415,6 +2418,7 @@ hint-supports-pick = по части поддержки, чтобы выбрат
 hint-supports-carry = перенести выбранное
 hint-supports-add = добавить к выбранному
 hint-hollow-solid = по модели, чтобы оставить там сплошную стенку
+hint-hollow-rod = стержень от последнего блокиратора
 hint-area-paint = где нужны поддержки
 hint-area-block = где поддержек быть не должно
 hint-repair-faces = выбрать грани

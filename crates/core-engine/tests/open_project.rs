@@ -115,7 +115,7 @@ fn project() -> Project {
                 precision: 0.5,
                 infill_on: false,
                 infill: InfillSettings::default(),
-                blocker_mm: 4.0,
+
                 open_floor: false,
             },
             drain: DrainState::round(3.0, 3.0, 1.0),

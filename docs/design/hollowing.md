@@ -79,8 +79,16 @@ solid, kept in model space so it travels with the model, subtracted from the cav
 anything is meshed: `max(cavity, r + w - d(p, rod))` over the cavity's tiles and the rod's
 own. `core` and `r` scale with the model; `w` is plate millimetres, so a sleeve's wall is the
 shell's thickness at any scale. They keep a cavity out of a thin spar or a spike that would
-print hollow and snap, and out of the sleeve around a channel or a walled hole. A click drops a ball at the inspector's radius — both ends
-the same point — and an alt-click removes the one the click landed in.
+print hollow and snap, and out of the sleeve around a channel or a walled hole.
+
+A click drops a ball on the surface, and `ModelHollow::asking` walls every one a user placed
+by the shell's thickness, so its radius is how far it reaches past the wall into the cavity
+(ADR 0396). `blocker_under` picks the ball for a click and for `--keep-solid`. Fitted, it is
+`fitted_blocker`'s: a ray from the click straight in to the
+far side, the ball centred halfway with half that width; with no far side the inspector's
+radius stands. A shift-click puts down `rod_to`: a rod from the last blocker's end to the new
+ball, as wide as it. An alt-click removes the nearest one the view ray enters before halfway across the part, so one
+deep inside goes and one behind the far wall stays.
 
 ## The lattice
 
