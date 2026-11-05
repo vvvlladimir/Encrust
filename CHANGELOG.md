@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.0](https://github.com/vvvlladimir/Encrust/compare/v0.7.0...v0.8.0) (2026-11-05)
+
+
+### ✨ New
+
+* **measure:** measure along a model's surface ([c748577](https://github.com/vvvlladimir/Encrust/commit/c748577e97911f7848fd558d16b7cc1b17e3e88c))
+* **thumbnails:** Enhance preview handling and rendering for thumbnails ([#257](https://github.com/vvvlladimir/Encrust/issues/257)) ([5743d0e](https://github.com/vvvlladimir/Encrust/commit/5743d0ea0e4b8343428599c1d464fad16c99a58c))
+* **web:** add loading progress and instant updates for browser build ([6671d8c](https://github.com/vvvlladimir/Encrust/commit/6671d8cc78e69ff83259ae487b01fd4c3579d456))
+
+
+### 🐛 Fixed
+
+* **app:** only scan network when a printer is selected ([67deb3a](https://github.com/vvvlladimir/Encrust/commit/67deb3a611031b40a81ab3074889d571e4712f4d))
+* **picker:** name the file a machine is sliced into ([8b087ca](https://github.com/vvvlladimir/Encrust/commit/8b087ca81dd3347365b30f1f8ff1343cfafecbee))
+
 ## [0.7.0](https://github.com/vvvlladimir/Encrust/compare/v0.6.0...v0.7.0) (2026-11-04)
 
 
