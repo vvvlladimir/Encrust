@@ -3,6 +3,7 @@
 
 mod batch;
 mod containers;
+mod drains;
 mod editing;
 mod findings;
 mod hollowing;

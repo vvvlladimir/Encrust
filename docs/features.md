@@ -901,7 +901,10 @@ does (`--supports auto`), and hold up a hollowed model's cavity as well as its o
 (`--support-cavity`).
 
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
-print a plug for each beside the model, with the gap you choose. A run whose plugs have no
+print a plug for each beside the model, with the gap you choose. `--drain-at auto` finds the
+holes itself: a drain low on each pocket of trapped resin and a vent high on it, each kept only
+once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no hole can drain is
+still reported. The window does not offer this yet. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.
 
 **You cannot** (from the command line): paint supports or where a relief goes, place supports
