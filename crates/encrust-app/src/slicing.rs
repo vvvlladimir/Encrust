@@ -190,8 +190,8 @@ impl Slicing {
     /// profile or a restored session never arms a button that can only fail.
     pub fn set_format(&mut self, format: SlicedFormat) {
         self.format = match self.printer.as_ref() {
-            Some(printer) if !format.writable_for(printer) => SlicedFormat::default(),
-            _ => format,
+            Some(printer) => format.or_default_for(printer),
+            None => format,
         };
     }
 

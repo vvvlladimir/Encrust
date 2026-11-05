@@ -25,14 +25,7 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
     for entry in installed_printers(&window.machine.slicing.catalogue) {
         listed = true;
         let profile = &entry.profile;
-        let detail = match SlicedFormat::choices_for(profile).next() {
-            Some(format) => tr!(
-                "picker-machine-detail",
-                maker = profile.manufacturer.clone(),
-                extension = format.extension()
-            ),
-            None => profile.manufacturer.clone(),
-        };
+        let detail = machine_detail(profile);
         let row = ChooserRow {
             lead: Lead::Glyph(icon::PRINTER),
             name: &profile.name,
@@ -58,6 +51,15 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.close();
         apply_printer(window, profile, Some(id));
     }
+}
+
+fn machine_detail(profile: &PrinterProfile) -> String {
+    let format = SlicedFormat::from(profile.output).or_default_for(profile);
+    tr!(
+        "picker-machine-detail",
+        maker = profile.manufacturer.clone(),
+        extension = format.extension()
+    )
 }
 
 /// The colour of the dot a machine's row carries: `ok` while a printer it lists answers,
@@ -234,5 +236,34 @@ pub fn import_material(machine: &mut Machine, file: &Handed) {
         let resin = entry.profile.clone();
         slicing.resin_id = Some(id);
         slicing.set_material(resin);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use printer_profiles::Catalogue;
+
+    use super::*;
+
+    #[test]
+    fn a_machine_row_names_the_file_its_firmware_reads() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue parses");
+        for (id, maker, extension) in [
+            ("anycubic-photon-mono-4-ultra", "Anycubic", "pm4u"),
+            ("anycubic-photon-mono-m7-pro", "Anycubic", "pwsz"),
+            ("creality-ld-002h", "Creality", "ctb"),
+            ("elegoo-saturn-4-ultra", "Elegoo", "goo"),
+        ] {
+            let printer = catalogue.printer(id).expect("shipped");
+            assert_eq!(
+                machine_detail(&printer.profile),
+                tr!(
+                    "picker-machine-detail",
+                    maker = maker,
+                    extension = extension
+                ),
+                "{id} is sliced into .{extension}"
+            );
+        }
     }
 }
