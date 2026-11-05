@@ -66,6 +66,7 @@ pub fn stand_under(
         cavity,
         cuts,
         drill_exactly: true,
+        held: &[],
     };
     let stood =
         stand(model, plan, layer_height_mm).context("cannot stand supports under the model")?;

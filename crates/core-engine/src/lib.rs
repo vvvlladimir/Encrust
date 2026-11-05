@@ -6,6 +6,7 @@ mod cut;
 mod drains;
 mod error;
 mod file_name;
+mod held;
 mod open;
 mod outputs;
 mod plate;
@@ -24,6 +25,7 @@ pub use drains::{
 };
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
+pub use held::{island_floors, island_underside};
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};

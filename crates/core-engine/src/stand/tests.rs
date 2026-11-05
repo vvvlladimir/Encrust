@@ -11,6 +11,7 @@ fn solid<'a>(mesh: &'a mut Mesh, cuts: &'a mut Option<Mesh>) -> ToStand<'a> {
         cavity: None,
         cuts,
         drill_exactly: true,
+        held: &[],
     }
 }
 
@@ -199,4 +200,38 @@ fn a_seated_model_is_planned_onto_its_raft_only_when_something_hangs() {
     let cube = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
     let planned = planned_lift(&cube, &plan, true, 0.05).expect("a cube has bounds");
     assert_eq!(planned, Lift::ON_THE_PLATE, "nothing on a cube hangs");
+}
+
+#[test]
+fn a_contact_held_besides_placement_gets_a_column_lifted_with_the_model() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.raft.enabled = false;
+    let plan = SupportPlan::of(profile);
+    let mut placed = mushroom();
+    let found = stand_under(solid(&mut placed, &mut None), &plan, 0.05)
+        .expect("a mushroom can be supported");
+
+    let mut mesh = mushroom();
+    let island = Vec3::new(1.0, 1.0, 10.0);
+    let mut cuts = None;
+    let model = ToStand {
+        held: &[island],
+        ..solid(&mut mesh, &mut cuts)
+    };
+    let stood = stand_under(model, &plan, 0.05).expect("a mushroom can be supported");
+    assert_eq!(
+        stood.contacts.len(),
+        found.contacts.len() + 1,
+        "one more held"
+    );
+    let lifted = island + Vec3::Z * stood.lifted_mm;
+    assert!(
+        stood
+            .contacts
+            .iter()
+            .any(|contact| contact.distance(lifted) < 1e-4),
+        "the island's contact rides up {} mm with the model: {:?}",
+        stood.lifted_mm,
+        stood.contacts
+    );
 }

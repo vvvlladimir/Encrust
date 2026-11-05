@@ -4,8 +4,8 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, SupportPoint, WallSide, columns, generate_supports, grow,
-    low_points, mesh_trees,
+    Blocked, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns, generate_supports,
+    grow, low_points, mesh_trees,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
@@ -129,6 +129,9 @@ pub struct ToStand<'a> {
     /// Whether the cuts are taken out exactly, as the window takes them out, or left to the
     /// winding rule: a search over poses cannot afford the engine on every one.
     pub drill_exactly: bool,
+    /// Contacts held up besides those placement finds, plate mm as the model stands before
+    /// it is lifted: the islands a check found under it.
+    pub held: &'a [Vec3],
 }
 
 /// Stands supports under the model, lifted first by the plan's lift and raft, against what
@@ -139,9 +142,11 @@ pub fn stand_under(
     layer_height_mm: Scalar,
 ) -> Result<Stood, EngineError> {
     let lift_mm = plan.placing().lift_mm();
+    let held = model.held;
     let (lifted_mm, surface, inner) = touched(model, lift_mm)?;
     let bvh = Arc::new(Bvh::build(&surface));
-    let needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    let mut needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    needs.extend(held_needs(held, lifted_mm));
     grown(lifted_mm, &surface, &bvh, &needs, plan)
 }
 
@@ -159,16 +164,19 @@ pub fn stand_seated(
         cavity,
         cuts,
         drill_exactly,
+        held,
     } = model;
     let seated = ToStand {
         mesh: &mut *mesh,
         cavity,
         cuts: &mut *cuts,
         drill_exactly,
+        held,
     };
     let (mut lifted_mm, mut surface, inner) = touched(seated, 0.0)?;
     let mut bvh = Arc::new(Bvh::build(&surface));
     let mut needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    needs.extend(held_needs(held, lifted_mm));
     if raft.enabled && !needs.is_empty() {
         let up = Vec3::Z * raft.thickness_mm;
         let moved = Transform::from_translation(up);
@@ -184,6 +192,15 @@ pub fn stand_seated(
         lifted_mm += up.z;
     }
     grown(lifted_mm, &surface, &bvh, &needs, plan)
+}
+
+/// What holding each of `held` up asks, lifted `lifted_mm` with the model: an island of no
+/// area, which an automatic profile builds to its lightest shape.
+fn held_needs(held: &[Vec3], lifted_mm: Scalar) -> impl Iterator<Item = Need> + '_ {
+    held.iter().map(move |contact| Need {
+        contact: *contact + Vec3::Z * lifted_mm,
+        reason: Reason::Island { area_mm2: 0.0 },
+    })
 }
 
 /// The model lifted `lift_mm` clear of the plate with its cuts, then how far it moved, the
