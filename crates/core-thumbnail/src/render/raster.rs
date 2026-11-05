@@ -2,6 +2,8 @@
 
 use core_geometry::Vec3;
 
+use super::Look;
+
 /// One corner of a face: pixel coordinates with depth, and its normal in view coordinates.
 pub(super) struct Corner {
     pub screen: Vec3,
@@ -15,6 +17,7 @@ pub(super) struct Surfaces {
     pub height_px: u32,
     pub depths: Vec<f32>,
     pub normals: Vec<Vec3>,
+    pub looks: Vec<Look>,
 }
 
 impl Surfaces {
@@ -25,6 +28,7 @@ impl Surfaces {
             height_px,
             depths: vec![f32::INFINITY; count],
             normals: vec![Vec3::ZERO; count],
+            looks: vec![Look::Model; count],
         }
     }
 
@@ -37,8 +41,9 @@ impl Surfaces {
         depth.is_finite().then_some(depth)
     }
 
-    /// Fills one screen-space triangle, keeping whichever face is nearest the eye.
-    pub fn fill(&mut self, corners: &[Corner; 3]) {
+    /// Fills one screen-space triangle of a part that looks `look`, keeping whichever face is
+    /// nearest the eye.
+    pub fn fill(&mut self, corners: &[Corner; 3], look: Look) {
         let [a, b, c] = corners.each_ref().map(|corner| corner.screen);
         let area = edge(a, b, c.x, c.y);
         if area.abs() < f32::EPSILON {
@@ -66,6 +71,7 @@ impl Surfaces {
                 let index = (y * self.width_px + x) as usize;
                 if depth < self.depths[index] {
                     self.depths[index] = depth;
+                    self.looks[index] = look;
                     self.normals[index] = weights[0] * corners[0].normal
                         + weights[1] * corners[1].normal
                         + weights[2] * corners[2].normal;

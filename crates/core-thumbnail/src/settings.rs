@@ -21,6 +21,15 @@ pub fn rgb_of_565(word: u16) -> Rgb {
     ]
 }
 
+/// The resin and support colours of the window's dark viewport, so a file's picture shows the
+/// plate as it was set up.
+pub const RESIN: Rgb = [0x86, 0xAB, 0xBB];
+pub const SUPPORT: Rgb = [0xC9, 0xC2, 0xB6];
+
+/// Bits each channel keeps in a five-six-five word and in a five-five-five one.
+pub const RGB565_BITS: [u32; 3] = [5, 6, 5];
+pub const RGB15_BITS: [u32; 3] = [5, 5, 5];
+
 /// Size and colours one thumbnail is rendered at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThumbnailSettings {
@@ -29,8 +38,9 @@ pub struct ThumbnailSettings {
     /// Colour every pixel no triangle covers, and the colour padding is filled with when
     /// the image is fitted into a record of another shape.
     pub background: Rgb,
-    /// Colour a fully lit face is shaded towards.
+    /// Colour a fully lit face of a model is shaded towards, and of a support.
     pub model: Rgb,
+    pub support: Rgb,
 }
 
 impl ThumbnailSettings {
@@ -45,7 +55,8 @@ impl Default for ThumbnailSettings {
             width_px: Self::SOURCE_PX,
             height_px: Self::SOURCE_PX,
             background: [0x1A, 0x1C, 0x20],
-            model: [0x3F, 0x8C, 0xD8],
+            model: RESIN,
+            support: SUPPORT,
         }
     }
 }

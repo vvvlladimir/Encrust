@@ -786,8 +786,8 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
 - A sliced file carries a picture of the plate for the printer's screen: the models and
-  their supports, shaded smooth with a line where one part passes in front of another,
-  cropped to fill each preview the format holds, on that preview's own background.
+  their supports in the viewport's resin and support colours, shaded smooth, darker in
+  folds, with a line where one part passes in front of another, cropped to fill each preview the format holds, on that preview's own background.
 - A Prusa login is kept in the window's settings, never in the profile.
 
 **You cannot:** send from the browser build, or watch the camera inside Encrust (open the

@@ -5,7 +5,7 @@ use core_raster::Shading;
 use core_format::Fields;
 use core_format::PrintJob;
 use core_format::Thumbnail;
-use core_format::rgb565;
+use core_format::{RGB565_BITS, rgb565};
 
 use crate::version::{ByteOrder, GooVersion};
 
@@ -97,7 +97,11 @@ fn write_preview(
         return fields.zeros(2 * side_px * side_px);
     };
     let side = side_px as u32;
-    for pixel in thumbnail.fitted_to(side, side, BACKGROUND).pixels() {
+    for pixel in thumbnail
+        .fitted_to(side, side, BACKGROUND)
+        .dithered(RGB565_BITS)
+        .pixels()
+    {
         order.put_u16(fields, rgb565(*pixel))?;
     }
     Ok(())

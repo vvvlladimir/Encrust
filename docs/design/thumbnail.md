@@ -76,13 +76,29 @@ on to tell a part from the background.
 
 Where one surface passes in front of another, a pixel keeps 40% of its colour. A jump is
 the second difference of depth two pixels either side, across and down, deeper than six
-pixel widths: a plane has none however steep it stands, so only a real step draws a line.
-A neighbour with no surface draws none; the silhouette is the rim light's.
+pixel widths and than 2.5% of the parts' largest extent: a plane has none however steep it
+stands, and the pores and cracks of a sculpted surface are shallower than the share, so only
+a limb in front of a body draws a line. A neighbour with no surface draws none; the
+silhouette is the rim light's. Supports take no line and no occlusion: on their thin struts
+either turns into a dark mesh.
+
+## Colours and shut-in surfaces
+
+Models are drawn in `RESIN` and supports in `SUPPORT`, both in `core-thumbnail/src/settings.rs`:
+the window's dark viewport takes its own colours from there, so a file's picture shows the
+plate as it was set up. `core_engine::parts` marks each mesh with its `Look`.
+
+A covered pixel's diffuse light is scaled by how shut in it is (`render/occlusion.rs`): for
+four directions and two radii, 1.4% and 2.2% of the image width, wider than a sculpt's pores, the mean depth of the two
+opposite samples is compared with the pixel's. Standing nearer the eye by 0.6 radii shuts it
+in fully along that pair, past 3 radii it is another part in front and counts as open. The
+mean over the pairs takes up to 33% of the light. A plane or a ridge stays open; the floor of
+a groove and the folds of a figure darken.
 
 ## Cost
 
-A 980k-triangle sphere renders and is cut to a 400 x 300 record in 100 ms at 1024 pixels
-square, single-threaded but for the normal smoothing, on an Apple M1: 51 ms flat-shaded at
+A 980k-triangle sphere renders, is cut to a 400 x 300 record and dithered in 148 ms at 1024
+pixels square, single-threaded but for the normal smoothing, on an Apple M1: 51 ms flat-shaded at
 1024, 32 ms at 512. It runs once per exported file, beside seconds of slicing, which is why
 the rest is not parallel.
 
@@ -102,6 +118,11 @@ the record less a 6% margin on each side, keeping its aspect ratio, and centres 
 uncovered pixel counts as the record's background, so the render's own background never
 reaches a file and a 4:3 record shows a wide part across its width rather than a square with
 bars beside it. A picture read from a file has no mask: it is fitted whole and padded.
+
+A writer that packs pixels into 16-bit words, `.goo`, `.ctb`, `.cxdlp`, `.photons` and the
+Anycubic tables, first calls `Thumbnail::dithered`: a 4 x 4 ordered dither adds up to one
+step of the kept bits, so a gradient packs to a fine pattern instead of bands, and black,
+which gains less than a step, stays black and still packs into runs.
 
 The resampling is a box filter — every source pixel inside the destination pixel's
 footprint, averaged. A point sample at this reduction drops a thin support out of the

@@ -165,7 +165,11 @@ fn thumbnail(models: &[Model]) -> Option<core_thumbnail::Thumbnail> {
     let placed = parts(models);
     let parts: Vec<Part<'_>> = placed
         .iter()
-        .map(|(mesh, transform)| Part::new(mesh, *transform))
+        .map(|(mesh, transform, look)| Part {
+            mesh,
+            transform: *transform,
+            look: *look,
+        })
         .collect();
     (!parts.is_empty()).then(|| render(&parts, &ThumbnailSettings::default()))
 }

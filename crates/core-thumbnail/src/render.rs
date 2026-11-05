@@ -1,3 +1,4 @@
+mod occlusion;
 mod raster;
 mod shade;
 #[cfg(test)]
@@ -11,20 +12,41 @@ use crate::image::Thumbnail;
 use crate::settings::ThumbnailSettings;
 use raster::{Corner, Surfaces};
 
+/// What a part is, which picks its colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Look {
+    #[default]
+    Model,
+    Support,
+}
+
 /// One mesh on the plate together with where it stands.
 pub struct Part<'m> {
     pub mesh: &'m Mesh,
     pub transform: Transform,
+    pub look: Look,
 }
 
 impl<'m> Part<'m> {
     pub fn new(mesh: &'m Mesh, transform: Transform) -> Self {
-        Self { mesh, transform }
+        Self {
+            mesh,
+            transform,
+            look: Look::Model,
+        }
     }
 
     /// A mesh whose vertices are already in plate coordinates.
     pub fn placed(mesh: &'m Mesh) -> Self {
         Self::new(mesh, Transform::default())
+    }
+
+    /// Supports, which stand in plate coordinates.
+    pub fn support(mesh: &'m Mesh) -> Self {
+        Self {
+            look: Look::Support,
+            ..Self::placed(mesh)
+        }
     }
 }
 
@@ -56,11 +78,12 @@ pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
     for part in &viewed {
         for face in 0..part.mesh.faces.len() {
             if let Some(corners) = part.corners(face, &view, &frame) {
-                surfaces.fill(&corners);
+                surfaces.fill(&corners, part.look);
             }
         }
     }
-    shade::image(&surfaces, 1.0 / frame.scale, settings).unwrap_or_else(|| empty(settings))
+    shade::image(&surfaces, 1.0 / frame.scale, frame.span_mm, settings)
+        .unwrap_or_else(|| empty(settings))
 }
 
 /// A render nothing landed on, so a record shows its own background alone.
@@ -104,6 +127,7 @@ impl View {
 
 /// One part placed on the plate, its vertices in view coordinates and its smoothed normals.
 struct Viewed<'m> {
+    look: Look,
     mesh: Cow<'m, Mesh>,
     vertices: Vec<Vec3>,
     normals: SmoothNormals,
@@ -123,6 +147,7 @@ impl<'m> Viewed<'m> {
             .collect();
         let normals = smooth_normals(&mesh, CREASE_DEG);
         Self {
+            look: part.look,
             mesh,
             vertices,
             normals,
@@ -162,6 +187,8 @@ struct Frame {
     centre: Vec3,
     /// Pixels per millimetre.
     scale: f32,
+    /// The parts' largest extent along any view axis, depth included.
+    span_mm: f32,
     width: f32,
     height: f32,
 }
@@ -199,6 +226,7 @@ impl Frame {
         Some(Self {
             centre: (min + max) * 0.5,
             scale,
+            span_mm: span.max_element(),
             width,
             height,
         })

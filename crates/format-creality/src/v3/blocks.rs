@@ -3,7 +3,7 @@
 
 use std::io;
 
-use core_format::{CHITU_ANTI_ALIAS_CAP, Fields, PrintJob, Rgb, Thumbnail, rgb565};
+use core_format::{CHITU_ANTI_ALIAS_CAP, Fields, PrintJob, RGB565_BITS, Rgb, Thumbnail, rgb565};
 
 use crate::family::MAGIC;
 
@@ -40,7 +40,8 @@ pub(crate) fn write_previews(
     thumbnail: Option<&Thumbnail>,
 ) -> io::Result<()> {
     for (width, height) in PREVIEW_SIZES_PX {
-        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, PREVIEW_BACKGROUND);
+        let image = Thumbnail::fitted_or_filled(thumbnail, width, height, PREVIEW_BACKGROUND)
+            .dithered(RGB565_BITS);
         for &pixel in image.pixels() {
             fields.u16_be(rgb565(pixel))?;
         }

@@ -182,6 +182,38 @@ impl Thumbnail {
     }
 }
 
+/// A 4 by 4 ordered dither: sixteen thresholds spread so neighbours differ most.
+const BAYER: [[u8; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+
+impl Thumbnail {
+    /// This image ready to be cut to `bits` a channel by dropping the low bits: each pixel
+    /// nudged by an ordered dither, so a gradient turns to a fine pattern, not steps. Black
+    /// stays black, so a background still packs into long runs.
+    #[must_use]
+    pub fn dithered(&self, bits: [u32; 3]) -> Self {
+        let width = self.width_px.max(1) as usize;
+        let pixels = self
+            .pixels
+            .iter()
+            .enumerate()
+            .map(|(index, pixel)| {
+                let threshold = f32::from(BAYER[(index / width) % 4][index % width % 4]);
+                let mut out = *pixel;
+                for (channel, bits) in out.iter_mut().zip(bits) {
+                    let step = f32::from(1u16 << (8 - bits.min(8)));
+                    let nudge = (threshold + 0.5) / 16.0 * step;
+                    *channel = (f32::from(*channel) + nudge).min(255.0) as u8;
+                }
+                out
+            })
+            .collect();
+        Self {
+            pixels,
+            ..self.clone()
+        }
+    }
+}
+
 /// Source pixels `start..end` that destination pixel `index` of `count` covers, inside a run
 /// of `length` source pixels from `from`; never empty.
 fn span(index: u32, count: u32, from: u32, length: u32) -> (u32, u32) {
@@ -271,6 +303,33 @@ mod tests {
         assert_eq!(
             empty.fitted_to(6, 3, [1, 2, 3]),
             Thumbnail::filled(6, 3, [1, 2, 3])
+        );
+    }
+
+    #[test]
+    fn a_dithered_grey_averages_back_to_itself_once_cut_to_five_bits() {
+        let grey = Thumbnail::filled(4, 4, [100; 3]).dithered([5, 5, 5]);
+        let mean = grey
+            .pixels()
+            .iter()
+            .map(|pixel| f32::from(pixel[0] >> 3) * 8.0)
+            .sum::<f32>()
+            / 16.0;
+        // Cut without a dither, 100 is 96 everywhere.
+        assert!(
+            (mean - 100.0).abs() < 1.0,
+            "the mean of the cut words is {mean}"
+        );
+    }
+
+    #[test]
+    fn a_dither_leaves_black_black() {
+        let black = Thumbnail::filled(4, 4, [0; 3]).dithered([5, 6, 5]);
+        assert!(
+            black
+                .pixels()
+                .iter()
+                .all(|pixel| crate::settings::rgb565(*pixel) == 0)
         );
     }
 

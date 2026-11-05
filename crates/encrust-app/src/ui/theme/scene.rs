@@ -99,10 +99,11 @@ pub struct Lighting {
     pub fill_towards: [f32; 3],
 }
 
-/// The viewport under the dark palette.
+/// The viewport under the dark palette. Resin and supports are the colours a sliced file's
+/// picture is drawn in, so the two agree.
 pub(super) const DARK: Scene = Scene {
-    object: Color32::from_rgb(0x86, 0xab, 0xbb),
-    support: Color32::from_rgb(0xc9, 0xc2, 0xb6),
+    object: from_rgb(core_thumbnail::RESIN),
+    support: from_rgb(core_thumbnail::SUPPORT),
     selected: Color32::from_rgb(0xff, 0xc1, 0x5a),
     unsound: Color32::from_rgb(0xe0, 0x44, 0x62),
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
@@ -179,3 +180,7 @@ pub(super) const LIGHT: Scene = Scene {
     gizmo_hot: Color32::from_rgb(0xe0, 0xa0, 0x00),
     ..DARK
 };
+
+const fn from_rgb([r, g, b]: [u8; 3]) -> Color32 {
+    Color32::from_rgb(r, g, b)
+}

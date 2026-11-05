@@ -71,4 +71,4 @@ pub use core_slicer::LayerPlan;
 
 // The thumbnail is rendered before a job starts and carried by it, so a format crate
 // needs the type but not the renderer.
-pub use core_thumbnail::{Rgb, Thumbnail, rgb_of_565, rgb565};
+pub use core_thumbnail::{RGB15_BITS, RGB565_BITS, Rgb, Thumbnail, rgb_of_565, rgb565};
