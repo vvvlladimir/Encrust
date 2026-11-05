@@ -17,7 +17,10 @@ mod trial;
 
 pub use bake::{Baked, bake, parts};
 pub use cut::{Cutting, cut};
-pub use drains::{DrainSearch, Drained, HoleRole, MOST_TRIES, SuggestedHole, suggest_drains};
+pub use drains::{
+    DrainSearch, Drained, HoleRole, MOST_TRIES, Scanning, SuggestedHole, suggest_drains,
+    suggest_drains_heard,
+};
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
 pub use open::{Machine, Opening, open_plate};
