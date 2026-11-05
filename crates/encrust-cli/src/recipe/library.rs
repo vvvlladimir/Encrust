@@ -28,6 +28,15 @@ impl Source {
     }
 }
 
+impl From<Origin> for Source {
+    fn from(origin: Origin) -> Self {
+        match origin {
+            Origin::BuiltIn => Self::BuiltIn,
+            Origin::User => Self::User,
+        }
+    }
+}
+
 /// One recipe of `recipes list`: its id, its name, or why it would not read.
 #[derive(Serialize, Debug)]
 pub struct Line {
@@ -89,10 +98,7 @@ pub fn list() -> Result<Listing> {
             Line {
                 name: listed.recipe().map(|recipe| recipe.name.clone()),
                 id: listed.id,
-                source: match listed.origin {
-                    Origin::BuiltIn => Source::BuiltIn,
-                    Origin::User => Source::User,
-                },
+                source: listed.origin.into(),
                 error,
             }
         })
@@ -117,10 +123,7 @@ pub fn find(asked: &str) -> Result<(Source, Recipe)> {
         Vec::new()
     };
     if let Some(listed) = core_recipe::find(asked, pairs(&kept)) {
-        let source = match listed.origin {
-            Origin::BuiltIn => Source::BuiltIn,
-            Origin::User => Source::User,
-        };
+        let source = Source::from(listed.origin);
         return match listed.read {
             Read::Valid(plan) => Ok((source, plan.recipe().clone())),
             Read::Invalid { recipe, .. } => Ok((source, recipe)),

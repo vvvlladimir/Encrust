@@ -84,8 +84,8 @@ fn repair(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     Ok(Did::default())
 }
 
-/// `--hollow` at the step's wall, mode, infill and thinnest part hollowed, keeping a wall round the holes drilled
-/// before it.
+/// `--hollow` at the step's wall, mode, infill and thinnest part hollowed, keeping a wall
+/// round the holes drilled before it.
 fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     if piece.cavity.is_some() {
         return Ok(Did::nothing("the model is hollow already"));
