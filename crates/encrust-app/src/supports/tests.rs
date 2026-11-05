@@ -91,6 +91,40 @@ fn a_small_island_is_held_by_the_lightest_shape_in_the_empty_group() {
 }
 
 #[test]
+fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut scene = one_cube();
+    let floating = scene.objects()[0].id;
+    scene.objects_mut()[0].transform.translation.z = 10.0;
+    let mut tool = SupportTool::default();
+    assert!(tool.auto.is_none(), "the panel builds to the group in hand");
+
+    tool.start_automatic_on(&scene, &[floating], (0.05, &catalogue), Side::Outside)
+        .expect("a model to place under");
+    let mut status = Status::default();
+    while tool.poll(&mut scene, &mut status) {
+        std::thread::yield_now();
+    }
+    let auto = catalogue.autos().next().expect("the catalogue ships one");
+    let shapes = auto.profile.shapes_in(&catalogue).expect("its shapes ship");
+    let named: Vec<&str> = tool
+        .groups
+        .iter()
+        .map(|group| group.name.as_str())
+        .collect();
+    assert!(
+        shapes
+            .iter()
+            .any(|shape| named.contains(&shape.name.as_str())),
+        "the supports stand in a group of an automatic shape, found {named:?}"
+    );
+    assert!(
+        tool.auto.is_none(),
+        "and the panel's choice is left as it was"
+    );
+}
+
+#[test]
 fn a_plate_nothing_was_chosen_for_starts_sized_and_one_chosen_for_is_left_alone() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut fresh = SupportTool::default();

@@ -3,6 +3,7 @@ use core_geometry::{Quat, Transform, Vec3};
 use core_volume::{DrainHole, HoleSize};
 
 use crate::scene::fixtures::hollow_cube;
+use crate::scene::{ImportSummary, Imported};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
@@ -151,4 +152,35 @@ fn a_search_run_through_drains_the_cube_and_says_the_plate_is_checked() {
     );
     assert!(tool.checked, "the search's last scan is a drainage check");
     assert_eq!(status, Status::Info("2 holes drilled".to_owned()));
+}
+
+#[test]
+fn a_search_on_named_models_ignores_what_is_picked() {
+    let mut scene = hollow_cube(20.0, 2.0, posed());
+    let cube = scene.objects()[0].id;
+    let other = core_geometry::cuboid(Vec3::splat(60.0), Vec3::splat(70.0));
+    let summary = ImportSummary::made(core_geometry::diagnose(&other));
+    let other = Imported::new(
+        "box".to_owned(),
+        Arc::new(other),
+        Transform::default(),
+        summary,
+    );
+    let picked = scene.insert(other);
+    scene.select(Some(picked));
+    let mut tool = DrainTool::default();
+
+    tool.start_auto_on(&scene, &[cube], 0.5)
+        .expect("the cube is named");
+    let mut status = Status::default();
+    while tool.poll(&mut scene, &mut status) {
+        std::thread::yield_now();
+    }
+    let drilled = |id| scene.get(id).map(|object| object.hollow.drains().len());
+    assert_eq!(
+        drilled(cube),
+        Some(2),
+        "a drain and a vent in the cube named"
+    );
+    assert_eq!(drilled(picked), Some(0), "nothing in the box picked");
 }

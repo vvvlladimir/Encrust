@@ -38,7 +38,7 @@ pub use format::dialog_filters;
 pub use format::label_of;
 pub use highest::Highest;
 pub use hollow::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks,
+    HollowJob, HollowOutcome, HollowRequest, HollowTask, SharedFields, again_tasks, hollow_tasks,
     lock as lock_fields, rebuild_tasks,
 };
 pub use import::{ImportJob, ImportOutcome, ImportStage};
@@ -50,7 +50,7 @@ pub use orient::{
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::run_into;
 pub use pipeline::{SliceRequest, worker_threads};
-pub use place::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
+pub use place::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask, tasks_of};
 pub use plate::models_of;
 pub use plugs::{PlugsJob, PlugsRequest, spawn_plugs};
 pub use preview::{PreviewJob, PreviewOutcome};

@@ -1,12 +1,24 @@
 use super::{ISLANDS_GROUP, SHAPES, Side, SupportGroup, SupportTool};
 use crate::i18n::tr;
-use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
-use crate::scene::Scene;
+use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask, tasks_of};
+use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 use anyhow::{Result, bail};
 use core_geometry::Scalar;
 use core_supports::Need;
 use printer_profiles::{AutoProfile, Catalogue, ProfileError, SupportProfile};
+
+/// The catalogue's automatic profile, the window's Auto and `--supports auto`, and its shapes.
+pub(super) fn catalogue_auto(
+    catalogue: &Catalogue,
+) -> Result<(AutoProfile, [SupportProfile; SHAPES])> {
+    let Some(entry) = catalogue.autos().next() else {
+        bail!(tr!("supports-no-automatic"));
+    };
+    let auto = entry.profile.clone();
+    let shapes = shapes_of(&auto, catalogue)?;
+    Ok((auto, shapes))
+}
 
 /// The support profiles `auto` names, lightest first and the steadying one last, as
 /// `catalogue` has them.
@@ -47,10 +59,40 @@ impl SupportTool {
         side: Side,
     ) -> Result<()> {
         self.sizing = self.sized(catalogue)?;
-        let mut tasks = match &self.sizing {
+        let tasks = match &self.sizing {
             Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
             None => tasks_of(scene, |object| self.profile_for(object).clone()),
         };
+        self.place(scene, tasks, layer_height_mm, side)
+    }
+
+    /// Starts placement on `ids` alone, sized by the catalogue's automatic profile whatever
+    /// the panel holds, as `--supports auto` builds them: what Prepare stands a model on.
+    pub fn start_automatic_on(
+        &mut self,
+        scene: &Scene,
+        ids: &[ObjectId],
+        (layer_height_mm, catalogue): (Scalar, &Catalogue),
+        side: Side,
+    ) -> Result<()> {
+        let (auto, shapes) = catalogue_auto(catalogue)?;
+        let tasks = ids
+            .iter()
+            .filter_map(|id| scene.get(*id).filter(|object| !object.mesh.is_empty()))
+            .map(|object| SupportTask::of(object, auto.placing_with(&shapes[0])))
+            .collect();
+        self.sizing = Some((auto, shapes));
+        self.place(scene, tasks, layer_height_mm, side)
+    }
+
+    /// Spawns the run over `tasks`, each held up on `side` of its wall.
+    fn place(
+        &mut self,
+        scene: &Scene,
+        mut tasks: Vec<SupportTask>,
+        layer_height_mm: Scalar,
+        side: Side,
+    ) -> Result<()> {
         for task in &mut tasks {
             let Some(object) = scene.get(task.id) else {
                 continue;

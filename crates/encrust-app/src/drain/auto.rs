@@ -8,7 +8,7 @@ use core_geometry::Scalar;
 use super::DrainTool;
 use crate::i18n::tr;
 use crate::job::{DrainsJob, DrainsOutcome, DrainsRequest, DrainsTask, Proposed};
-use crate::scene::Scene;
+use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 
 /// What landing a search put in.
@@ -25,11 +25,30 @@ impl DrainTool {
     /// Starts looking for the holes that drain the picked models as they stand, each with
     /// a vent, as the command line's `--drain-at auto` does.
     pub fn start_auto(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
-        let tasks: Vec<DrainsTask> = scene
+        let tasks = scene
             .targets()
             .filter(|object| !object.mesh.is_empty())
             .map(|object| DrainsTask::of(object, self.size_for(object)))
             .collect();
+        self.search(tasks, layer_height_mm)
+    }
+
+    /// The same search on `ids` alone, whatever is picked: what Prepare drains.
+    pub fn start_auto_on(
+        &mut self,
+        scene: &Scene,
+        ids: &[ObjectId],
+        layer_height_mm: Scalar,
+    ) -> Result<()> {
+        let tasks = ids
+            .iter()
+            .filter_map(|id| scene.get(*id).filter(|object| !object.mesh.is_empty()))
+            .map(|object| DrainsTask::of(object, self.size_for(object)))
+            .collect();
+        self.search(tasks, layer_height_mm)
+    }
+
+    fn search(&mut self, tasks: Vec<DrainsTask>, layer_height_mm: Scalar) -> Result<()> {
         if tasks.is_empty() {
             bail!(tr!("drain-nothing-visible"));
         }

@@ -344,6 +344,7 @@ supports-placed-sized =
        *[other] Placed { $count } supports: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
     }
 supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
+supports-no-automatic = The catalogue has no automatic support profile
 supports-group-name = Group { $index }
 supports-cannot-grow = The supports could not be built: { $reason }
 supports-growth-stopped = Building the supports stopped without an answer
