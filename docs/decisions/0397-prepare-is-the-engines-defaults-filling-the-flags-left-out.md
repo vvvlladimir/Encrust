@@ -70,7 +70,8 @@ window keeps that order so both make the same decisions. Reopen if users want in
 thicker wall by size, or if repairing before orienting proves better.
 
 An edit the user makes while the window prepares falls in its entry, and Cancel takes it
-back with the rest.
+back with the rest. In a browser a worker that panics never answers, so the step it ran stays
+under way until Cancel.
 
 ## Alternatives considered
 

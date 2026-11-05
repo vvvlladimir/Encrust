@@ -1547,7 +1547,8 @@ position-place-about = On the plate stands the model on the plate; Centre moves 
 position-prepare = Prepare for print
 # The button of the Prepare for print section.
 position-prepare-run = Prepare for print
-position-prepare-help = Does in one go what the other tools would: turns a model nobody has turned the way it prints best, repairs a broken one, hollows a solid one at a 2 mm wall where that saves enough resin, drills the holes that drain it and stands it on automatic supports, its cavity too. One undo takes all of it back, and Cancel leaves the plate as it was.
+# $wall is the wall Hollow builds by default, with its unit.
+position-prepare-help-wall = Does in one go what the other tools would: turns a model nobody has turned the way it prints best, repairs a broken one, hollows a solid one to a wall of { $wall } where that saves enough resin, drills the holes that drain it and stands it on automatic supports, its cavity too. One undo takes all of it back, and Cancel leaves the plate as it was.
 position-prepare-tooltip = Prepares { $scope } for print.
 # Over what the last Prepare for print did to the model in the card.
 position-prepared = Prepared

@@ -1,3 +1,5 @@
+mod jobs;
+
 use egui::{Align2, Id, Rect, RichText, pos2, vec2};
 
 use crate::i18n::tr;
@@ -6,9 +8,7 @@ use crate::scene::ObjectId;
 use crate::status::{Change, Status};
 use crate::ui::status_glyph;
 use crate::ui::theme::layout::stage_notice::{COME_IN, FOOT_RISE, GAP, MESSAGE_W};
-use crate::ui::{
-    NoticeReply, card, icon, icon_button, job_notice, notice_card, theme, theme::motion,
-};
+use crate::ui::{NoticeReply, card, icon, icon_button, notice_card, theme, theme::motion};
 
 /// How long a message that is not a failure stays up after it changed, or after the
 /// pointer left it, seconds.
@@ -35,7 +35,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     release(&mut stack, window);
     broken(&mut stack, window);
     unreadable(&mut stack, window);
-    jobs(&mut stack, window);
+    jobs::jobs(&mut stack, window);
 }
 
 /// The notices stacked up from the foot of `room`, each in an area of its own centred on
@@ -80,56 +80,6 @@ impl Stack {
         self.bottom = shown.response.rect.top() - GAP;
         shown
     }
-}
-
-/// One card per job that reports progress here, the latest to start nearest the foot; a
-/// job that ended fades out by `CLOSE` as it last stood.
-fn jobs(stack: &mut Stack, window: &mut Window) {
-    let preview = window
-        .machine
-        .preview
-        .is_building()
-        .then(|| (tr!("notice-cutting-preview"), None, false));
-    if job_card(stack, "preview", preview) {
-        window.machine.preview.cancel();
-    }
-    let slicing = window.machine.slicing.job.as_ref();
-    let shown = slicing.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
-    if job_card(stack, "slicing", shown) {
-        slicing.inspect(|job| job.cancel());
-    }
-    let walk = window.tools.measure_walk.notice();
-    let shown = walk.map(|share| (tr!("notice-finding-walk"), Some(share), false));
-    if job_card(stack, "measure-walk", shown) {
-        window.tools.measure_walk.cancel(&mut window.tools.measure);
-    }
-    let prepare = window.tools.prepare.progress().map(|(step, share)| {
-        let label = tr!("notice-preparing", step = step.label());
-        (label, Some(share), false)
-    });
-    if job_card(stack, "prepare", prepare) {
-        crate::prepare::cancel(window.doc, window.tools, window.machine);
-    }
-    let network = window.machine.network.job.as_ref();
-    let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
-    if job_card(stack, "network", shown) {
-        network.inspect(|job| job.cancel());
-    }
-}
-
-/// What a job is doing — its words, how far along, whether it is stopping — and a way out,
-/// or the card it last stood as while that fades. Answers whether to stop.
-fn job_card(stack: &mut Stack, name: &str, job: Option<(String, Option<f32>, bool)>) -> bool {
-    let Some(((label, fraction, cancelling), left)) = remembered(&stack.ctx, name, job) else {
-        return false;
-    };
-    let going = left < 1.0;
-    let stop = stack
-        .fading_card(name, left, |ui| {
-            job_notice(ui, &label, fraction, cancelling || going)
-        })
-        .inner;
-    stop && !going
 }
 
 /// What card `name` shows: `now` while it stands, kept as it goes; once gone, what it last

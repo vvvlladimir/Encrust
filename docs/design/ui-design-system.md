@@ -168,7 +168,7 @@ paints from tokens only.
 | `primary_button` | The one action a screen is for: its words alone, in Medium, `on_accent` on `accent`, no glyph — the tool's glyph already heads the card; unusable, it is the raised button's off look, bordered in `line`. There is never a second in view |
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
-| `secondary_button` | The ordinary full-width button |
+| `secondary_button`, `secondary_button_unless` | The ordinary full-width button; the second off while it cannot be used, why on hover |
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
