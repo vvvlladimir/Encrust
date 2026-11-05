@@ -13,7 +13,7 @@ use crate::estimate::Estimate;
 use crate::pipeline::Outcome;
 use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
-use crate::stage::Part;
+use crate::stage::{Part, Prepared};
 
 mod drains;
 mod import;
@@ -137,6 +137,9 @@ pub struct PartReport {
     /// The inputs of the other models it or its supports meet on the plate.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub meets: Vec<String>,
+    /// What `--prepare` decided for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared: Option<Prepared>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -282,6 +285,7 @@ impl PartReport {
                 .iter()
                 .map(|input| input.display().to_string())
                 .collect(),
+            prepared: part.prepared.clone(),
         }
     }
 
@@ -296,6 +300,7 @@ impl PartReport {
             auto_drains: None,
             supports: None,
             meets: Vec::new(),
+            prepared: None,
         }
     }
 }

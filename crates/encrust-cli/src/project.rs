@@ -119,6 +119,7 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
                 supports: None,
                 standing: bounds(model).map(|bounds| FitCheck::of(&bounds, &built.printer)),
                 meets: Vec::new(),
+                prepared: None,
             })
             .collect(),
         models: built.models,
@@ -211,6 +212,7 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
             job.supports.supports.is_some() || job.supports.support_profile.is_some(),
         ),
         ("--support-cavity", job.supports.support_cavity),
+        ("--prepare", job.prepare),
         ("--remove-islands", job.raster.remove_islands),
         ("--hanging-passes", job.raster.hanging_passes != 0),
     ];

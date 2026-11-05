@@ -9,6 +9,7 @@ mod file_name;
 mod open;
 mod outputs;
 mod plate;
+mod prepare;
 pub mod project;
 mod run;
 mod stand;
@@ -26,6 +27,7 @@ pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
+pub use prepare::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_repair};
 pub use run::Run;
 pub use stand::{
     Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_seated, stand_under,

@@ -353,6 +353,47 @@ thickness on top when it has one, before anything is put under it, the way the w
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
+`--prepare` on `slice`, `estimate`, `render` and `batch` prepares each model as the engine's
+own defaults would, with nothing tuned (ADR 0397): the baseline a language model is measured
+against, and a print for a user with none. In order, each step a flag typed wins over:
+
+1. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
+   or one drawn twice. `--repair=METHOD` picks the method and always runs; `--no-validate`
+   skips it.
+2. **Orient** as `--orient --orient-goal auto`, unless `--rotate` or `--orient` was given, or
+   a plate file turns the model.
+3. **Hollow** at Hollow's default 2 mm wall, with no infill, only where `inspect`'s `solid`
+   line names a saving: at least 10 ml and 40 % of the model (ADR 0393). `--hollow MM`, or a
+   plate file's `hollow`, sets the wall.
+4. **Drain** a hollowed model with `--drain-at auto`, a vent included, unless `--drain-at` or
+   `--channel` was given.
+5. **Support** with `--supports auto`, or the profile `--supports`, `--support-profile` or a
+   plate file names, holding up the cavity of a hollowed model.
+
+A flag that shapes a step the model did not get — `--no-drain-vent`, `--infill`,
+`--hollow-open-floor`, `--drain-plugs` — is set aside rather than refused. `--prepare` does not
+imply `--strict`: the run is judged as ever, and `--strict` decides what is kept. A project
+carries its own steps and refuses it. The text report says what was decided under `Prepared`,
+and `--json` as `prepared` beside each model's other fields:
+
+```json
+"prepared": {"repaired": false, "oriented": true,
+             "hollowed": {"wall_mm": 2.0, "saves_mm3": 44800.0},
+             "drained": true, "supports": "Auto"}
+```
+
+`repaired` says the model was repaired, `oriented` that a search turned it, `hollowed` the
+wall, or `null` for a model printed solid, with `saves_mm3` the saving reckoned before
+hollowing, `null` for a wall `--hollow` gave; `drained` that `--drain-at auto` ran, and
+`supports` the name of the profile the supports are built to.
+
+```sh
+encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
+  --prepare --json -o model.goo
+encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
+  --prepare --hollow 3 --supports light -o model.goo
+```
+
 ## Plates: several models, a plate file, a project
 
 Several models go on one plate. `--arrange` spreads them, biggest first; without it each

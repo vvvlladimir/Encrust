@@ -1,6 +1,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use core_engine::Hollowing;
 use core_format::ExposureRange;
 use core_geometry::{
     Aabb, Mended, MeshDiagnostics, Orientation, Scalar, Shell, Vec2, Vec3, Welded,
@@ -82,9 +83,9 @@ pub struct ImportReport {
     /// The shells as import left the model, when `--shells` asked for them.
     pub shells: Option<Vec<Shell>>,
     pub fit: Option<FitCheck>,
-    /// What hollowing the solid model would save and the wall it was read at, mm³ and mm,
-    /// where Check would suggest it.
-    pub hollowing_saves: Option<(Scalar, Scalar)>,
+    /// What hollowing the solid model would save and the wall it was read at, where Check
+    /// would suggest it.
+    pub hollowing_saves: Option<Hollowing>,
 }
 
 impl ImportReport {
@@ -104,11 +105,11 @@ impl ImportReport {
         if let Some(fit) = &self.fit {
             writeln!(f, "  fits          {}", describe_fit(fit))?;
         }
-        if let Some((saved_mm3, wall_mm)) = self.hollowing_saves {
+        if let Some(Hollowing { wall_mm, saves_mm3 }) = self.hollowing_saves {
             writeln!(
                 f,
                 "  solid         hollowing to a {wall_mm:.1} mm wall saves {:.1} ml",
-                saved_mm3 / 1000.0
+                saves_mm3 / 1000.0
             )?;
         }
         Ok(())

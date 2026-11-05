@@ -893,6 +893,11 @@ and leave nothing on disk if a model has defects), a config file for flags you a
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
 
+**Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
+it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
+resin, and stand it on Auto supports. Every flag you type wins over its step, and `--json` says
+what was decided for each model. The window does not offer this as one button yet.
+
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
 

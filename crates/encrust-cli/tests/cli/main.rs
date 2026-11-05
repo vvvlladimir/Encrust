@@ -13,6 +13,7 @@ mod measure;
 mod modelling;
 mod plate;
 mod png_stack;
+mod prepare;
 mod profiles;
 mod slicing;
 mod support;
