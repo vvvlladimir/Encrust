@@ -11,23 +11,30 @@ pub fn rgb565(pixel: Rgb) -> u16 {
 /// The pixel a five-six-five word holds, each channel widened by repeating its top bits so
 /// that full intensity reads back as 255.
 pub fn rgb_of_565(word: u16) -> Rgb {
-    let r = ((word >> 11) & 0x1F) as u8;
-    let g = ((word >> 5) & 0x3F) as u8;
-    let b = (word & 0x1F) as u8;
+    let [r_bits, g_bits, b_bits] = RGB565_BITS;
     [
-        (r << 3) | (r >> 2),
-        (g << 2) | (g >> 4),
-        (b << 3) | (b >> 2),
+        widen(word >> 11, r_bits),
+        widen(word >> 5, g_bits),
+        widen(word, b_bits),
     ]
 }
 
-/// The resin and support colours of the window's dark viewport, so a file's picture shows the
-/// plate as it was set up.
+/// The low `bits` of `channel` as eight bits, its top bits repeated below it so that full
+/// intensity reads back as 255.
+pub fn widen(channel: u16, bits: u32) -> u8 {
+    let value = channel & ((1 << bits) - 1);
+    ((value << (8 - bits)) | (value >> (2 * bits - 8))) as u8
+}
+
+/// The resin colour of the window's dark viewport, so a file's picture shows the plate as it
+/// was set up.
 pub const RESIN: Rgb = [0x86, 0xAB, 0xBB];
+/// The support colour of the window's dark viewport.
 pub const SUPPORT: Rgb = [0xC9, 0xC2, 0xB6];
 
-/// Bits each channel keeps in a five-six-five word and in a five-five-five one.
+/// Bits each channel keeps in a five-six-five word.
 pub const RGB565_BITS: [u32; 3] = [5, 6, 5];
+/// Bits each channel keeps in a five-five-five word.
 pub const RGB15_BITS: [u32; 3] = [5, 5, 5];
 
 /// Size and colours one thumbnail is rendered at.
@@ -38,8 +45,9 @@ pub struct ThumbnailSettings {
     /// Colour every pixel no triangle covers, and the colour padding is filled with when
     /// the image is fitted into a record of another shape.
     pub background: Rgb,
-    /// Colour a fully lit face of a model is shaded towards, and of a support.
+    /// Colour a fully lit face of a model is shaded towards.
     pub model: Rgb,
+    /// Colour a fully lit face of a support is shaded towards.
     pub support: Rgb,
 }
 

@@ -37,7 +37,7 @@ pub fn read_raw_preview<S: ReadSeek>(
         .iter()
         .map(|&pair| pixel(pair))
         .collect();
-    thumbnail(width_px, height_px, pixels)
+    thumbnail_of_pixels(width_px, height_px, pixels)
 }
 
 /// The PNG preview an archive container holds under `name`.
@@ -53,7 +53,7 @@ pub fn read_png_preview<S: ReadSeek>(
 }
 
 /// Wraps decoded pixels, refusing a count that does not fill the stated shape.
-pub(crate) fn thumbnail(
+pub fn thumbnail_of_pixels(
     width_px: u32,
     height_px: u32,
     pixels: Vec<Rgb>,
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn pixels_that_do_not_fill_the_shape_are_refused() {
-        let err = thumbnail(2, 2, vec![[0; 3]; 3]).unwrap_err();
+        let err = thumbnail_of_pixels(2, 2, vec![[0; 3]; 3]).unwrap_err();
         assert!(matches!(err, FormatError::PreviewShort { pixels: 3, .. }));
     }
 }

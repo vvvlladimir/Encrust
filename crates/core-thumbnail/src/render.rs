@@ -8,7 +8,7 @@ use std::borrow::Cow;
 
 use core_geometry::{Mesh, SmoothNormals, Transform, Vec3, smooth_normals, transform_mesh};
 
-use crate::image::Thumbnail;
+use crate::image::{MARGIN, Thumbnail};
 use crate::settings::ThumbnailSettings;
 use raster::{Corner, Surfaces};
 
@@ -57,9 +57,6 @@ const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
 /// Degrees two faces may turn apart and still be shaded as one surface: a ball's facets
 /// blend, a box keeps its edges.
 const CREASE_DEG: f32 = 40.0;
-
-/// Fraction of the image left empty around the part on each side.
-const MARGIN: f32 = 0.06;
 
 /// Renders every part into one shaded image framed to the parts, not the build volume, as a
 /// thumbnail is a centimetre wide; see `docs/design/thumbnail.md`.
@@ -214,7 +211,7 @@ impl Frame {
         // A part seen exactly edge on spans nothing in one direction; the other still
         // decides the scale, and a part that spans nothing at all is drawn as a point.
         let fit = |available: f32, span: f32| {
-            (span > f32::EPSILON).then(|| available * (1.0 - 2.0 * MARGIN) / span)
+            (span > f32::EPSILON).then(|| available * (1.0 - 2.0 * MARGIN as f32) / span)
         };
         let scale = match (fit(width, span.x), fit(height, span.y)) {
             (Some(x), Some(y)) => x.min(y),

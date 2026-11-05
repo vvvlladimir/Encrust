@@ -36,7 +36,7 @@ pub struct SlicedFile {
     /// One entry per layer, in print order.
     pub layers: Vec<LayerEntry>,
     /// The largest preview picture the file carries, which a converted file's records are
-    /// cut from; `None` where the container has none or the reader does not decode it yet.
+    /// cut from; `None` where the container has none or it does not decode.
     pub preview: Option<Thumbnail>,
 }
 

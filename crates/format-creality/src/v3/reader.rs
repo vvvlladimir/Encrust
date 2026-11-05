@@ -129,7 +129,6 @@ impl SlicedFileReader for CxdlpReader {
     }
 }
 
-/// A length-prefixed, nul-terminated string, or `None` where it is empty.
 /// The three raw previews in a row, of which the first large one is kept.
 pub(crate) fn read_previews<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Thumbnail, FormatError> {
     let [small, large, last] = PREVIEW_SIZES_PX;
@@ -143,6 +142,7 @@ pub(crate) fn read_previews<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Thumbna
     Ok(preview)
 }
 
+/// A length-prefixed, nul-terminated string, or `None` where it is empty.
 pub(crate) fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, FormatError> {
     let length = reads.u32_be()?;
     if length == 0 {

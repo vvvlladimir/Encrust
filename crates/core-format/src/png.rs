@@ -3,7 +3,7 @@
 use core_raster::{LayerRuns, Run};
 use core_thumbnail::Thumbnail;
 
-use crate::preview::{preview_in_range, thumbnail};
+use crate::preview::{preview_in_range, thumbnail_of_pixels};
 use crate::{FormatError, panel_in_range};
 
 /// Expands a layer into an eight-bit greyscale PNG, one layer of an archive container.
@@ -85,7 +85,7 @@ pub fn decode_colour(bytes: &[u8]) -> Result<Thumbnail, FormatError> {
             _ => [0, 1, 2].map(|channel| over_black(pixel[channel], pixel[3])),
         })
         .collect();
-    thumbnail(width_px, height_px, pixels)
+    thumbnail_of_pixels(width_px, height_px, pixels)
 }
 
 fn over_black(value: u8, alpha: u8) -> u8 {

@@ -5,6 +5,7 @@ use std::io;
 
 use core_format::{
     Fields, FormatError, PrintJob, ReadSeek, Reads, Rgb, Thumbnail, preview_in_range,
+    thumbnail_of_pixels,
 };
 
 /// What the file is headed by, in a sixteen-byte field padded with nuls.
@@ -119,12 +120,7 @@ pub(crate) fn read_bitmap<S: ReadSeek>(
         let line = &data[stored * stride..][..width_px as usize * 3];
         pixels.extend(line.as_chunks::<3>().0.iter().map(|&[b, g, r]| [r, g, b]));
     }
-    let count = pixels.len() as u64;
-    Thumbnail::from_pixels(width_px, height_px, pixels).ok_or(FormatError::PreviewShort {
-        width_px,
-        height_px,
-        pixels: count,
-    })
+    thumbnail_of_pixels(width_px, height_px, pixels)
 }
 
 #[cfg(test)]

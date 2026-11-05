@@ -1,7 +1,8 @@
 use crate::settings::Rgb;
 
-/// Fraction of a record left empty around a rendered part on each side.
-const MARGIN: f64 = 0.06;
+/// Fraction of a picture left empty around the parts on each side, in a render and in each
+/// record cut from it.
+pub(crate) const MARGIN: f64 = 0.06;
 
 /// A rendered thumbnail: plain RGB pixels, row by row from the top left.
 #[derive(Debug, Clone, PartialEq, Eq)]

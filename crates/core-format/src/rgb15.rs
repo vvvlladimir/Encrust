@@ -3,9 +3,9 @@
 
 use std::io;
 
-use core_thumbnail::{Rgb, Thumbnail};
+use core_thumbnail::{Rgb, Thumbnail, widen};
 
-use crate::preview::{preview_in_range, thumbnail};
+use crate::preview::{preview_in_range, thumbnail_of_pixels};
 use crate::{Fields, FormatError, ReadSeek, Reads};
 
 /// Set on a colour word when a repeat count follows it.
@@ -59,11 +59,8 @@ pub fn rgb15(pixel: [u8; 3]) -> u16 {
 /// The pixel an RGB15 word holds, its flag bit ignored and each five-bit channel widened by
 /// repeating its top bits, so that full intensity reads back as 255.
 pub fn rgb_of_rgb15(word: u16) -> Rgb {
-    let widen = |channel: u16| {
-        let channel = (channel & 0x1F) as u8;
-        (channel << 3) | (channel >> 2)
-    };
-    [widen(word >> 11), widen(word >> 6), widen(word)]
+    let five_bits = |channel: u16| widen(channel, 5);
+    [five_bits(word >> 11), five_bits(word >> 6), five_bits(word)]
 }
 
 fn rgb15_word([r, g, b]: [u8; 3]) -> u16 {
@@ -122,7 +119,7 @@ pub fn decode_rgb15(data: &[u8], width_px: u32, height_px: u32) -> Result<Thumbn
         }
         pixels.extend(std::iter::repeat_n(rgb_of_rgb15(word), run));
     }
-    thumbnail(width_px, height_px, pixels)
+    thumbnail_of_pixels(width_px, height_px, pixels)
 }
 
 /// The preview whose record starts at `record`: its shape, where its data sits and how long

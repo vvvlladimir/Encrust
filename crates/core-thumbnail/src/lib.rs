@@ -8,5 +8,5 @@ mod settings;
 pub use image::Thumbnail;
 pub use render::{Look, Part, render};
 pub use settings::{
-    RESIN, RGB15_BITS, RGB565_BITS, Rgb, SUPPORT, ThumbnailSettings, rgb_of_565, rgb565,
+    RESIN, RGB15_BITS, RGB565_BITS, Rgb, SUPPORT, ThumbnailSettings, rgb_of_565, rgb565, widen,
 };

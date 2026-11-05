@@ -34,7 +34,9 @@ pub use job::PrintJob;
 pub use png::{
     decode_colour, decode_grey, encode_colour, encode_colour_alpha, encode_grey, png_shape,
 };
-pub use preview::{MAX_PREVIEW_PX, preview_in_range, read_png_preview, read_raw_preview};
+pub use preview::{
+    MAX_PREVIEW_PX, preview_in_range, read_png_preview, read_raw_preview, thumbnail_of_pixels,
+};
 pub use reader::{
     LayerEntry, MAX_PANEL_PX, OpenFile, SlicedFile, SlicedFileReader, layer_in_range,
     panel_in_range,
