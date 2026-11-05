@@ -74,7 +74,7 @@ fn selection_items(ui: &mut egui::Ui, window: &mut Window) {
     move_to_plate(ui, window.doc);
 }
 
-/// Laying the plate out, and turning every model on it.
+/// Laying the plate out, turning every model on it, and preparing it for print.
 fn plate_items(ui: &mut egui::Ui, window: &mut Window) {
     let anything = window
         .doc
@@ -94,6 +94,12 @@ fn plate_items(ui: &mut egui::Ui, window: &mut Window) {
     let orient = MenuRow::new(Some(icon::AUTO_ORIENT), &orient).enabled(can_orient);
     if clicked(ui, &orient) {
         crate::panels::inspector::auto_orient(window, None);
+    }
+    let blocked = crate::prepare::blocker(window.doc, window.tools);
+    let prepare = tr!("menu-prepare");
+    let prepare = MenuRow::new(Some(icon::PREPARE), &prepare).unless(blocked.as_deref());
+    if clicked(ui, &prepare) {
+        crate::panels::inspector::start_prepare(window);
     }
 }
 

@@ -121,6 +121,15 @@ whole-surface fill is Cmd-Shift-click.
   height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
   on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
+**Prepare for print:** in Select under Auto-orient, and in the Edit menu for the picked
+models or the whole plate, it does what `--prepare` does: turns a model you have not turned
+by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
+saves enough resin, drills the holes that drain it with a vent, and stands it on the
+catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
+`--rotate` keeps it. The notice and the section name the step under way over a bar;
+**Cancel** stops it and leaves the plate as it was, and one undo takes a finished run back.
+Select then lists what was decided for the model in the card.
+
 **Auto-orient:**
 - Searches for the best angle for one of four presets: **fewest supports**, **least
   peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
@@ -901,7 +910,7 @@ removes the half-written file.
 **Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
 it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
 resin, and stand it on Auto supports. Every flag you type wins over its step, and `--json` says
-what was decided for each model. The window does not offer this as one button yet.
+what was decided for each model. The window does the same as **Prepare for print**.
 
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.

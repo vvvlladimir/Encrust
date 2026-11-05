@@ -982,6 +982,7 @@ menu-quit = Выйти из Encrust
 menu-nothing-recent = Пока ничего не открывалось
 menu-arrange-plate = Расставить на платформе
 menu-auto-orient-plate = Автоориентация платформы
+menu-prepare = Подготовить к печати
 menu-move-to-plate = Переместить на платформу
 menu-frame-view = Показать всё
 menu-plate-grid = Сетка платформы
@@ -1609,6 +1610,25 @@ position-mirror-across = Отразить по { $axis }
 position-mirror-copy = Отражать копию
 position-place-about = «На платформе» ставит модель на платформу; «По центру» переносит её к середине платформы; «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете; «Отразить» переворачивает выбранные модели или их копии, поставленные рядом.
 
+## panels/inspector/position/prepare.rs
+
+position-prepare = Подготовка к печати
+# The button of the Prepare for print section.
+position-prepare-run = Подготовить к печати
+position-prepare-help = Делает за один раз то, что сделали бы другие инструменты: модель, которую никто не поворачивал, ставит так, как она лучше печатается; сломанную чинит; сплошную делает полой со стенкой 2 мм, если это сберегает достаточно смолы; сверлит отверстия для слива и ставит её на автоматические поддержки, в том числе внутри полости. Всё сделанное отменяется одним действием «Отменить», а кнопка «Отмена» во время работы оставляет платформу как была.
+position-prepare-tooltip = Готовит к печати { $scope }.
+position-prepared = Подготовлено
+position-prepared-oriented = Ориентация
+position-prepared-repaired = Починка
+position-prepared-hollowed = Полость
+position-prepared-wall = Стенка
+position-prepared-saved = Сбережено смолы
+position-prepared-drained = Дренаж
+position-prepared-supports = Поддержки
+position-prepared-yes = Да
+position-prepared-no = Нет
+position-prepared-none = Нет
+
 ## panels/inspector/paint.rs
 
 paint-brush = Кисть
@@ -1812,6 +1832,7 @@ notice-delete-profiles = Удалить их
 
 notice-cutting-preview = Нарезка слоёв для предпросмотра
 notice-finding-walk = Поиск кратчайшего пути по поверхности
+notice-preparing = Подготовка к печати: { $step }
 notice-broken-one = { $name } повреждена
 notice-broken-several =
     { $count ->

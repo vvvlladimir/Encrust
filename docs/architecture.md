@@ -303,7 +303,8 @@ tool_settings.rs
 workspace.rs Mode, Tool, ViewOptions, Array
 shortcuts.rs every key the window answers, and what each one does
 scene.rs     Scene, SceneObject, ObjectId, ImportSummary, the plates, duplicate, mirror
-undo.rs      History: scene snapshots and tool-value snapshots, found by watching both
+undo.rs      History: scene snapshots and tool-value snapshots, found by watching both, and
+             the hold that makes a run of landings one entry
 measure.rs   the two picked points, and the corner a click snaps to
 import.rs    the files being opened: load, repair, index, place
 repair.rs    the question a broken model raises, and the runs that close its holes
@@ -315,6 +316,8 @@ slicing.rs   the slicing settings the window carries, and the job they start
 hollow.rs    the hollow tool's settings and its run
 drain.rs     the drain tool, and `Traps`: what the last drainage check found in a model
 orient.rs    the auto-orient run, and the turn it applies to the scene
+prepare.rs   Prepare for print: the tools' jobs started in turn by `--prepare`'s decisions,
+             held as one undo entry (ADR 0397)
 arrange.rs   packing everything visible onto the plate
 cut.rs       the cut plane, the halves it leaves, and splitting into parts
 preview/     the sliced stack and the slider over it, the file it may be read from, the

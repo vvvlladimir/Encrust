@@ -142,7 +142,7 @@ paints from tokens only.
 | `rename_box` | A table row's name being typed, on `sunken`, after `start_rename` on a double click |
 | `card` | The frame of anything floating over the viewport |
 | `card_foot` | The foot of a side card, on `base` and rounded to fit inside the card |
-| `step_bar` | A run that tells its step: the step above `progress_bar`, and Cancel where it can be stopped; Auto-orient, Repair and Drain |
+| `step_bar` | A run that tells its step: the step above `progress_bar`, and Cancel where it can be stopped; Auto-orient, Prepare for print, Repair and Drain |
 | `progress_bar`, `progress_bar_of` | A running job: filled to its fraction, or running on its own when the job cannot count its work; the second as tall as asked, the printer sheet's 6 |
 | `spinner` | A running job's glyph, turning: every wait in the window, never egui's own |
 | `hover_mix` | A fill easing to its hover by `FAST`, for every control painted by hand |
@@ -273,6 +273,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Reset, look again or rescan | `ARROW_COUNTER_CLOCKWISE`, `ARROWS_CLOCKWISE` |
 | Drop to the plate, lay on face, centre | `ALIGN_BOTTOM`, `HAND_POINTING`, `CROSSHAIR` |
 | Mirror, mirror a copy, auto-orient and auto drains, fit | `FLIP_HORIZONTAL`, `COPY_SIMPLE`, `MAGIC_WAND`, `ARROWS_OUT` |
+| Prepare for print | `SEAL_CHECK` |
 | Points, planes | `LINE_SEGMENT`, `PARALLELOGRAM` |
 | Pick, place, paint, shape | `CURSOR`, `PLUS`, `PAINT_BRUSH`, `WRENCH` |
 | Texture, text, combine | `CHECKERBOARD`, `TEXT_T`, `UNITE` |

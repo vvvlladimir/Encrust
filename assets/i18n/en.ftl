@@ -937,6 +937,7 @@ menu-quit = Quit Encrust
 menu-nothing-recent = Nothing opened yet
 menu-arrange-plate = Arrange plate
 menu-auto-orient-plate = Auto-orient plate
+menu-prepare = Prepare for print
 menu-move-to-plate = Move to plate
 menu-frame-view = Frame view
 menu-plate-grid = Plate grid
@@ -1540,6 +1541,27 @@ position-mirror-across = Mirror across { $axis }
 position-mirror-copy = Mirror a copy
 position-place-about = On the plate stands the model on the plate; Centre moves it over the middle of the plate; Lay on face turns the face you click down onto the plate; Mirror flips the picked models, or copies of them stood beside them.
 
+## panels/inspector/position/prepare.rs
+
+position-prepare = Prepare for print
+# The button of the Prepare for print section.
+position-prepare-run = Prepare for print
+position-prepare-help = Does in one go what the other tools would: turns a model nobody has turned the way it prints best, repairs a broken one, hollows a solid one at a 2 mm wall where that saves enough resin, drills the holes that drain it and stands it on automatic supports, its cavity too. One undo takes all of it back, and Cancel leaves the plate as it was.
+position-prepare-tooltip = Prepares { $scope } for print.
+# Over what the last Prepare for print did to the model in the card.
+position-prepared = Prepared
+position-prepared-oriented = Oriented
+position-prepared-repaired = Repaired
+position-prepared-hollowed = Hollowed
+position-prepared-wall = Wall
+position-prepared-saved = Resin saved
+position-prepared-drained = Drained
+position-prepared-supports = Supports
+position-prepared-yes = Yes
+position-prepared-no = No
+# No supports were placed.
+position-prepared-none = None
+
 ## panels/inspector/paint.rs
 
 paint-brush = Brush
@@ -1738,6 +1760,8 @@ notice-delete-profiles = Delete them
 
 notice-cutting-preview = Cutting the layers to preview
 notice-finding-walk = Finding the shortest way along the surface
+# $step is one of the prepare-step messages: what the run is doing now.
+notice-preparing = Preparing for print: { $step }
 notice-broken-one = { $name } is broken
 notice-broken-several = { $count } models on this plate are broken
 notice-repair = Repair
