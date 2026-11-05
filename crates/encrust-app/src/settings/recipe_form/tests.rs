@@ -148,3 +148,15 @@ fn a_form_read_from_a_recipe_writes_the_same_recipe_back() {
         assert_eq!(again.recipe(), plan.recipe(), "{id}");
     }
 }
+
+#[test]
+fn nothing_open_saves_nothing_and_a_recipe_that_does_not_read_is_not_copied() {
+    let mut catalogue = writable("refused");
+    let mut settings = Settings::default();
+    let mut chosen = "prepare".to_owned();
+    assert!(save_recipe(&mut settings, &mut catalogue, &mut chosen).is_err());
+    let odd = core_recipe::find("odd", [("odd", "name = ")]).expect("kept");
+    assert!(duplicate_recipe(&mut settings, &mut catalogue, &odd).is_err());
+    assert_eq!(catalogue.recipes().count(), 0);
+    assert!(settings.recipe.is_none());
+}
