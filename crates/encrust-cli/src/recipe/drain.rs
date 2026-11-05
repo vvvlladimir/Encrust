@@ -44,13 +44,12 @@ pub(super) fn drain(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result
 /// A plug for each hole from the `drilled`th on, cut out of the model as `--drain-plugs`
 /// cuts one: through the wall where there is one, narrower by the gap less the resin's drift.
 fn plug(piece: &mut Piece, drilled: usize, ctx: &Ctx) -> Result<()> {
-    let holes = pierced(&piece.holes, piece.wall);
+    let holes = pierced(&piece.holes[drilled..], piece.wall);
     let wall_mm = piece.hollow.as_ref().and_then(HollowReport::plug_wall_mm);
     let drift_mm = ctx.chosen.material.compensation.fit_drift_mm();
     let gap_mm = piece.shaping.hollow.plug_gap_mm - drift_mm;
     let made = cut_plugs(&piece.solid(), &holes, wall_mm, gap_mm)?;
-    let new = made.into_iter().zip(holes).skip(drilled);
-    piece.plugs.extend(new);
+    piece.plugs.extend(made.into_iter().zip(holes));
     Ok(())
 }
 
