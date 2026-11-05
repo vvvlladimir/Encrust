@@ -6,9 +6,10 @@ use core_recipe::{Listed, Origin};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::prepare::{PlanLine, foreseen_lines, running_lines};
+use crate::settings::Section;
 use crate::ui::{
     DropdownFace, DropdownRow, Lead, PlanRow, busy, dropdown, dropdown_menu, dropdown_row,
-    group_name, hint, icon, plan_row, subheading,
+    group_name, hairline, hint, icon, picker_foot, plan_row, subheading,
 };
 
 /// The picker of recipes: the built-in ones, then the user's; one that cannot run says why
@@ -28,8 +29,44 @@ pub(super) fn picker(ui: &mut egui::Ui, window: &mut Window) {
         .add_enabled_ui(!running, |ui| dropdown(ui, &face, ui.available_width()))
         .inner
         .on_hover_text(tr!("position-prepare-recipe"));
-    let mut choice = None;
-    dropdown_menu(&response, |ui| {
+    let (choice, edit) = menu(&response, &listed, chosen).unwrap_or_default();
+    let why = match picked {
+        Some(entry) => entry.plan().err().map(ToString::to_string),
+        None => Some(tr!("prepare-recipe-missing", recipe = chosen.as_str())),
+    };
+    if let Some(why) = why {
+        hint(ui, &why);
+    }
+    if let Some(id) = choice {
+        window.tools.prepare.recipe = id;
+    }
+    if edit {
+        open_recipes(window);
+    }
+}
+
+/// Opens Settings on the Recipes page, the recipe picked here picked there.
+fn open_recipes(window: &mut Window) {
+    let settings = &mut window.machine.settings;
+    if !settings.open {
+        crate::panels::toggle_settings(window.machine);
+    }
+    let settings = &mut window.machine.settings;
+    if settings.leave(crate::settings::Leaving::Turn(Section::Recipes)) {
+        settings.recipe_pick = Some(window.tools.prepare.recipe.clone());
+    }
+}
+
+/// The list under the picker: the built-in recipes, then the user's, a recipe that cannot
+/// run led by the warning glyph, and at its foot the way to Settings. Answers the recipe
+/// chosen and whether the foot was pressed, while it is open.
+fn menu(
+    response: &egui::Response,
+    listed: &[Listed],
+    chosen: &str,
+) -> Option<(Option<String>, bool)> {
+    dropdown_menu(response, |ui| {
+        let mut choice = None;
         for (origin, title) in [
             (Origin::BuiltIn, tr!("position-prepare-built-in")),
             (Origin::User, tr!("position-prepare-yours")),
@@ -45,24 +82,17 @@ pub(super) fn picker(ui: &mut egui::Ui, window: &mut Window) {
                     lead,
                     name: entry.name(),
                     aside: None,
-                    chosen: entry.id == *chosen,
+                    chosen: entry.id == chosen,
                 };
                 if dropdown_row(ui, &row).clicked() {
                     choice = Some(entry.id.clone());
                 }
             }
         }
-    });
-    let why = match picked {
-        Some(entry) => entry.plan().err().map(ToString::to_string),
-        None => Some(tr!("prepare-recipe-missing", recipe = chosen.as_str())),
-    };
-    if let Some(why) = why {
-        hint(ui, &why);
-    }
-    if let Some(id) = choice {
-        window.tools.prepare.recipe = id;
-    }
+        hairline(ui);
+        let edit = picker_foot(ui, icon::PROFILES, &tr!("position-prepare-edit-recipes"));
+        (choice, edit.clicked())
+    })
 }
 
 /// What each step of the picked recipe will do with the models in hand, or, while a run

@@ -53,83 +53,79 @@ pub struct PlanRow<'a> {
 /// Draws a [`PlanRow`]; the readings and the note are cut to one line each, read whole on
 /// hover.
 pub fn plan_row(ui: &mut Ui, row: &PlanRow<'_>) -> Response {
-    let lines =
-        1.0 + f32::from(u8::from(row.reading.is_some())) + f32::from(u8::from(row.note.is_some()));
-    let size = vec2(ui.available_width(), PLAN_LINE_H * lines);
+    let under: Vec<(&str, Color32)> = [
+        row.reading
+            .map(|reading| (reading, theme::colors().text_low)),
+        row.note.map(|note| (note, theme::colors().warn)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let size = vec2(ui.available_width(), PLAN_LINE_H * (1 + under.len()) as f32);
     let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     response.widget_info(|| {
-        WidgetInfo::labeled(
-            WidgetType::Label,
-            true,
-            format!("{}, {}", row.name, row.verdict),
-        )
+        let said = format!("{}, {}", row.name, row.verdict);
+        WidgetInfo::labeled(WidgetType::Label, true, said)
     });
+    head_line(ui, rect, row);
+    let left = rect.left() + PLAN_GLYPH_W;
+    for (line, (text, ink)) in under.iter().enumerate() {
+        let at = pos2(left, rect.top() + PLAN_LINE_H * (line as f32 + 1.5));
+        cut_line(
+            ui.painter(),
+            at,
+            text,
+            theme::small(),
+            *ink,
+            rect.right() - left,
+        );
+    }
+    match under.is_empty() {
+        true => response,
+        false => {
+            let whole: Vec<&str> = under.iter().map(|(text, _)| *text).collect();
+            response.on_hover_text(whole.join("\n"))
+        }
+    }
+}
+
+/// A plan row's first line: the glyph, turning while the step runs, the name and the verdict.
+fn head_line(ui: &Ui, rect: egui::Rect, row: &PlanRow<'_>) {
     let colors = theme::colors();
     let (glyph, tint) = row.mark.look();
     let painter = ui.painter();
-    let first = rect.top() + PLAN_LINE_H / 2.0;
+    let middle = rect.top() + PLAN_LINE_H / 2.0;
     let turn = match row.mark {
         PlanMark::Running => motion::spin(ui.ctx()).unwrap_or(0.0) * std::f32::consts::TAU,
         _ => 0.0,
     };
-    let glyph_galley =
-        painter.layout_no_wrap(glyph.to_owned(), theme::icon(theme::glyph::MARK), tint);
-    let corner = pos2(rect.left() + PLAN_GLYPH_W / 2.0, first) - glyph_galley.size() / 2.0;
-    painter.add(
-        egui::epaint::TextShape::new(corner, glyph_galley, tint)
-            .with_angle_and_anchor(turn, Align2::CENTER_CENTER),
-    );
+    let font = theme::icon(theme::glyph::MARK);
+    let glyph = painter.layout_no_wrap(glyph.to_owned(), font, tint);
+    let corner = pos2(rect.left() + PLAN_GLYPH_W / 2.0, middle) - glyph.size() / 2.0;
+    let shape = egui::epaint::TextShape::new(corner, glyph, tint);
+    painter.add(shape.with_angle_and_anchor(turn, Align2::CENTER_CENTER));
+    let right = pos2(rect.right(), middle);
     let verdict = painter.text(
-        pos2(rect.right(), first),
+        right,
         Align2::RIGHT_CENTER,
         row.verdict,
         theme::small(),
         tint,
     );
     let left = rect.left() + PLAN_GLYPH_W;
-    let ink = if row.mark.quiet() {
-        colors.text_low
-    } else {
-        colors.text_high
+    let ink = match row.mark.quiet() {
+        true => colors.text_low,
+        false => colors.text_high,
     };
-    let name_room = verdict.left() - PLAN_GAP - left;
+    let room = verdict.left() - PLAN_GAP - left;
     cut_line(
         painter,
-        pos2(left, first),
+        pos2(left, middle),
         row.name,
         theme::label(),
         ink,
-        name_room,
+        room,
     );
-    let mut at = first + PLAN_LINE_H;
-    let room = rect.right() - left;
-    if let Some(reading) = row.reading {
-        cut_line(
-            painter,
-            pos2(left, at),
-            reading,
-            theme::small(),
-            colors.text_low,
-            room,
-        );
-        at += PLAN_LINE_H;
-    }
-    if let Some(note) = row.note {
-        cut_line(
-            painter,
-            pos2(left, at),
-            note,
-            theme::small(),
-            colors.warn,
-            room,
-        );
-    }
-    let whole: Vec<&str> = [row.reading, row.note].into_iter().flatten().collect();
-    if whole.is_empty() {
-        response
-    } else {
-        response.on_hover_text(whole.join("\n"))
-    }
 }
 
 /// `text` from `left_center`, cut with an ellipsis at `room` points.

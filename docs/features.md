@@ -141,7 +141,15 @@ says, before you start, what each step will do with the models in hand: run, ski
 readings that decided it (`worth_hollowing false`), decided when it is reached, or off, with a
 note under a step that undoes an earlier one; while the run goes it marks each step done,
 running or skipped. A recipe of yours that no longer reads or passes its check says why under
-the picker and cannot be started.
+the picker and cannot be started. **Settings → Recipes** lists every recipe, the built-in ones
+first: a built-in one opens to read and **Duplicate** makes a copy of your own; yours you
+rename, give variables, and change step by step — add a step of any kind, switch it off, move
+it up or down, remove it, type its condition (checked as you type, the error under the field),
+choose what a failure does, set or leave out each setting, work a number or a switch out by an
+expression, add rules that choose other settings, and a gate's, a pause's or a check's own
+fields. **Save** writes it only once it passes its check, under a new file name when you
+renamed it, the picker following; a draft that does not pass stays in the form. **Delete**
+asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 **Auto-orient:**
 - Searches for the best angle for one of four presets: **fewest supports**, **least

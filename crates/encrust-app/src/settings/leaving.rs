@@ -17,8 +17,11 @@ pub enum Leaving {
 }
 
 impl Settings {
-    /// Whether the support profile open in the form holds edits not yet saved.
+    /// Whether the profile or the recipe open in the form holds edits not yet saved.
     pub fn unsaved(&self) -> bool {
+        if self.section == Section::Recipes {
+            return self.recipe.as_ref().is_some_and(Draft::is_dirty);
+        }
         self.editing_support
             && match &self.auto {
                 Some(auto) => auto.is_dirty(),
@@ -41,7 +44,10 @@ impl Settings {
     pub fn go(&mut self, to: Leaving) {
         self.leaving = None;
         match to {
-            Leaving::Back => self.editing_support = false,
+            Leaving::Back => {
+                self.editing_support = false;
+                self.recipe = None;
+            }
             Leaving::Close | Leaving::Keys | Leaving::Machines => self.shut(),
             Leaving::Turn(section) => self.turn_to(section),
         }
@@ -49,6 +55,14 @@ impl Settings {
 
     /// Puts the profile open in the form back as it was last saved.
     pub fn discard(&mut self) {
+        if let Some(recipe) = self
+            .recipe
+            .as_mut()
+            .filter(|_| self.section == Section::Recipes)
+        {
+            recipe.discard();
+            return;
+        }
         match (&mut self.auto, &mut self.support) {
             (Some(auto), _) => auto.discard(),
             (None, Some(support)) => support.discard(),

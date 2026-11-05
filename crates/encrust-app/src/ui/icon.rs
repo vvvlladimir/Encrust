@@ -49,8 +49,10 @@ pub use egui_phosphor::regular::{
     CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE,
 };
 
-/// A recipe's plan: a step skipped, one decided when it is reached, one switched off.
+/// A recipe's plan: a step skipped, one decided when it is reached, one switched off; in
+/// its editor a step moved up or down, and a setting worked out by an expression.
 pub use egui_phosphor::regular::{
+    ARROW_DOWN as MOVE_DOWN, ARROW_UP as MOVE_UP, FUNCTION as EXPRESSION,
     HOURGLASS_SIMPLE as WHEN_REACHED, MINUS_CIRCLE as SKIPPED, PROHIBIT as STEP_OFF,
 };
 
@@ -169,6 +171,9 @@ mod tests {
         ("SKIPPED", SKIPPED),
         ("WHEN_REACHED", WHEN_REACHED),
         ("STEP_OFF", STEP_OFF),
+        ("MOVE_UP", MOVE_UP),
+        ("MOVE_DOWN", MOVE_DOWN),
+        ("EXPRESSION", EXPRESSION),
         ("CHANGES", CHANGES),
         ("MOVE_TO_PLATE", MOVE_TO_PLATE),
         ("UNDO", UNDO),

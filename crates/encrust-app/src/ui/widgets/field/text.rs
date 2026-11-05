@@ -51,3 +51,46 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
     });
     changed
 }
+
+/// A named condition typed in the code face, checked as it is typed: while `error` says why
+/// it does not read, the box is ringed in `danger` and the why stands under it on one line,
+/// read whole on hover. Returns whether the text changed.
+pub fn condition_row(ui: &mut Ui, label: &str, value: &mut String, error: Option<&str>) -> bool {
+    let colors = theme::colors();
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        row_name(ui, label);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let field = text_box(egui::TextEdit::singleline(value))
+                .font(theme::code(12.0))
+                .background_color(colors.sunken);
+            let response = ui.add_sized(vec2(ui.available_width(), theme::FIELD_H), field);
+            name_for_reader(ui, response.id, label);
+            if error.is_some() {
+                ui.painter().rect_stroke(
+                    response.rect,
+                    theme::R_CONTROL,
+                    egui::Stroke::new(1.0, colors.danger),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            changed = response.changed();
+        });
+    });
+    if let Some(error) = error {
+        ui.horizontal(|ui| {
+            ui.add_space(theme::ROW_NAME_W + ui.spacing().item_spacing.x);
+            field_error(ui, error);
+        });
+    }
+    changed
+}
+
+/// Why what was typed is refused: one line in `danger`, cut short and read whole on hover.
+pub fn field_error(ui: &mut Ui, error: &str) {
+    let line = egui::RichText::new(error)
+        .font(theme::small())
+        .color(theme::colors().danger);
+    ui.add(egui::Label::new(line).truncate())
+        .on_hover_text(error);
+}

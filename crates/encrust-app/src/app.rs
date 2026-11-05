@@ -524,6 +524,8 @@ impl eframe::App for SlicerApp {
 #[cfg(test)]
 mod plate_card;
 #[cfg(test)]
+mod recipe_page;
+#[cfg(test)]
 mod sheet_keys;
 #[cfg(all(test, feature = "showcase"))]
 mod showcase;

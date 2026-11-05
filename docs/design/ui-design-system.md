@@ -212,6 +212,7 @@ paints from tokens only.
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `colour_field` | A `FIELD_H` swatch of a colour over a checkerboard; a click opens a picker: a saturation and value square, a hue strip, an opacity strip over the checkerboard, and the colour as `#RRGGBBAA` beside its opacity |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
+| `condition_row`, `field_error` | A named condition typed in the code face, a `text_row`'s shape; while it does not read, ringed in `danger` with why on one line under it, cut short and read whole on hover; that line alone, for an error a form shows elsewhere |
 | `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
 | `page_heading` | A page's title and, smaller and quieter after it, the name it belongs under: a machine and its maker |
 | `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
@@ -290,6 +291,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Undo, redo, select all, move to plate | `ARROW_U_UP_LEFT`, `ARROW_U_UP_RIGHT`, `SELECTION_ALL`, `ARROW_SQUARE_RIGHT` |
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
 | A plan's step skipped, decided when reached, off | `MINUS_CIRCLE`, `HOURGLASS_SIMPLE`, `PROHIBIT` |
+| Move a step up, down; work a setting out by an expression | `ARROW_UP`, `ARROW_DOWN`, `FUNCTION` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
 A glyph stands at one size of `theme::glyph`, named for where it stands: `HELP` 10, `CARET`

@@ -313,6 +313,7 @@ binding-reset = Back to the keys it came with
 settings-page-supports = Supports
 settings-page-hollow = Hollow
 settings-page-drain = Drain
+settings-page-recipes = Recipes
 settings-page-general = General
 settings-page-updates = Updates
 settings-tab-resins = Resins
@@ -1101,6 +1102,93 @@ diagram-max = max { $value }
 diagram-model = model
 diagram-plate = plate
 
+## settings/recipes.rs
+
+recipes-nothing-open = no recipe is open
+recipes-built-in-why = A built-in recipe cannot be changed or deleted; duplicate it to make one of your own.
+recipes-cannot-save = the recipe cannot be saved
+recipes-unreadable-why = the recipe does not read
+# The name a copy of a recipe starts with.
+recipes-copy-name = { $name } copy
+
+## panels/settings/recipes.rs
+
+recipes-table-recipe = Recipe
+# Where a recipe is kept: one of the built-in ones, or the user's.
+recipes-table-kept = Kept
+recipes-table-steps = Steps
+recipes-kept-built-in = Built-in
+recipes-kept-yours = Yours
+recipes-kept-broken = Does not run
+recipes-fix-first = Fix what is marked in red before saving.
+recipes-saved = Saved the recipe { $recipe }
+
+## panels/settings/recipes/form.rs
+
+recipes-built-in = Built-in recipe
+recipes-built-in-how = Duplicate it to make a recipe of your own you can change.
+recipes-block-recipe = Recipe
+recipes-block-recipe-help = The name is what the Prepare for print picker shows. Variables are numbers of your own that the conditions and the settings of the steps can name, such as a volume a model has to save before it is hollowed.
+recipes-does-not-run = The recipe does not run as it is
+recipes-var-value = Value
+recipes-var-remove = Remove the variable
+recipes-var-add = Add a variable
+# The block at the foot of the form that adds a step to the recipe.
+recipes-block-add = New step
+recipes-step-add = Add a step
+
+## panels/settings/recipes/step.rs
+
+recipes-step-help = A step runs in its place in the list, on the model as the steps before it left it. When is a condition on the model, such as saves_ml >= 30; left empty, the step always runs. On failure says whether a failed step stops the run and puts the plate back, or is skipped. A setting left out takes the engine's default; a number or a switch can be worked out by an expression instead. Choose lays other settings over these where its condition holds, the first that holds taken.
+recipes-step-up = Move the step up
+recipes-step-down = Move the step down
+recipes-step-remove = Remove the step
+# A condition: the step runs when it holds.
+recipes-when = When
+recipes-stop-if = Stop if
+recipes-message = Message
+recipes-on-fail = On failure
+recipes-on-fail-stop = Stop
+recipes-on-fail-skip = Skip
+recipes-retry = Support the islands again
+# A condition: the islands are supported again while it holds.
+recipes-retry-while = While
+recipes-retry-max = At most
+# Rules that choose other settings for the step.
+recipes-choose = Choose
+recipes-rule-remove = Remove the rule
+recipes-rule-add = Add a rule
+
+## panels/settings/recipes/setting.rs
+
+recipes-setting-set = Set it
+recipes-setting-default = Back to the default
+recipes-setting-expression = Work it out by an expression
+# Said of a setting left out of a step: the engine's default stands.
+recipes-setting-left-out = Default
+recipes-point-remove = Remove the point
+recipes-point-add = Add a point
+recipes-set-method = Method
+recipes-set-goal = Goal
+recipes-set-max-tilt = Most tilt
+recipes-set-wall = Wall
+recipes-set-mode = Mode
+recipes-set-infill = Infill
+recipes-set-keep-solid = Keep solid under
+# Where the drain holes go: found by the search, or at the points given.
+recipes-set-at = Where
+recipes-set-points = Points
+recipes-set-diameter = Diameter
+recipes-set-depth = Depth
+recipes-set-vent = Vent
+recipes-set-plugs = Plugs
+recipes-set-profile = Support profile
+recipes-set-cavity = In the cavity
+recipes-set-spacing = Spacing
+recipes-set-folder = Folder
+recipes-set-name = File name
+recipes-set-send = Send to the printer
+
 ## panels/settings/presets.rs
 
 presets-depth = Depth
@@ -1613,6 +1701,7 @@ position-prepare-built-in = Built-in
 position-prepare-yours = Yours
 position-prepare-plan = Plan
 position-prepare-measuring = Reading the models…
+position-prepare-edit-recipes = Edit the recipes
 # Over what the last Prepare for print did to the model in the card.
 position-prepared = Prepared
 position-prepared-oriented = Oriented

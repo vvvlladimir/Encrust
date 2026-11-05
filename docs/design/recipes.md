@@ -165,5 +165,6 @@ catalogue as `Kind::Recipe`, a text each under its stem: `recipes/` beside their
 the desk, the page's storage in a browser (ADR 0405). `core-recipe` reads no files: the
 front ends hand it the texts, and `core_recipe::library` lists the built-in ones then the
 user's by id, `find` an id among the built-in ones first, so a user file named like one is
-reached by its path. `encrust recipes list` and `show` print them. The window has no picker
-yet.
+reached by its path. `encrust recipes list` and `show` print them; the window picks one for
+Prepare for print and edits the user's in Settings → Recipes, saving only what `validate`
+passes, under a stem no built-in one holds: a new name is a new stem.

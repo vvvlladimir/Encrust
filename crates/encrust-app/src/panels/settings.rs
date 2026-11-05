@@ -10,6 +10,7 @@ pub(super) mod machines;
 mod presets;
 mod printer;
 mod profile_files;
+mod recipes;
 mod resin;
 mod supports;
 mod unsaved;
@@ -31,7 +32,7 @@ use crate::ui::{
 };
 use crate::ui::{page_title, page_trail};
 use frame::{child, scrolled, with_header};
-pub(super) use profile_files::{ask_for_profile, export_profile, forget_profile};
+pub(super) use profile_files::{ask_for_profile, export_profile, export_text, forget_profile};
 pub use profile_files::{import_dropped, import_profile};
 
 /// The window, while it is open, and the question over it, which may be asked without it.
@@ -130,7 +131,7 @@ fn matches(section: Section, find: &str) -> bool {
         Section::Appearance => tr!("settings-words-appearance"),
         Section::General => tr!("settings-words-general"),
         Section::Updates => tr!("settings-words-updates"),
-        Section::Supports | Section::Hollow | Section::Drain => String::new(),
+        Section::Supports | Section::Hollow | Section::Drain | Section::Recipes => String::new(),
     };
     format!("{} {words}", section.label())
         .to_lowercase()
@@ -151,6 +152,7 @@ fn aside_of(window: &Window, section: Section) -> NavAside {
         }
         Section::Hollow => NavAside::Count(catalogue.presets(Kind::Hollow).count()),
         Section::Drain => NavAside::Count(catalogue.presets(Kind::Drain).count()),
+        Section::Recipes => NavAside::Count(window.tools.prepare.library.listed(catalogue).len()),
         Section::Updates if window.machine.updates.waiting().is_some() => NavAside::Waiting,
         Section::Appearance | Section::General | Section::Updates => NavAside::None,
     }
@@ -161,6 +163,7 @@ fn section_icon(section: Section) -> &'static str {
         Section::Supports => icon::SUPPORTS,
         Section::Hollow => icon::HOLLOW,
         Section::Drain => icon::DRAIN,
+        Section::Recipes => icon::PREPARE,
         Section::Appearance => icon::APPEARANCE,
         Section::General => icon::GENERAL,
         Section::Updates => icon::UPDATE,
@@ -171,12 +174,13 @@ fn section_icon(section: Section) -> &'static str {
 fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     let section = window.machine.settings.section;
     let (mut head, content) = with_header(ui, side);
-    let pressed = match supports::editing(&window.machine.settings) {
-        Some(open) if section == Section::Supports => form_heading(&mut head, &open),
-        _ => heading(&mut head, section),
+    let pressed = match editing(&window.machine.settings) {
+        Some(open) => form_heading(&mut head, &open, section),
+        None => heading(&mut head, section),
     };
     match section {
         Section::Supports => supports::page(ui, content, window),
+        Section::Recipes => recipes::page(ui, content, window),
         Section::Hollow | Section::Drain => presets::page(ui, content, window),
         Section::Appearance => scrolled(&mut child(ui, content), |ui| {
             appearance::form(ui, window.machine);
@@ -205,16 +209,25 @@ enum Heading {
     Reset,
 }
 
+/// The profile or the recipe open in the form of the page in view, while one is.
+fn editing(settings: &crate::settings::Settings) -> Option<supports::Open> {
+    match settings.section {
+        Section::Supports => supports::editing(settings),
+        Section::Recipes => recipes::editing(settings),
+        _ => None,
+    }
+}
+
 /// The way back to every profile, the trail to the profile open in the form, and at the
 /// right Reset to defaults.
-fn form_heading(ui: &mut Ui, open: &supports::Open) -> Option<Heading> {
+fn form_heading(ui: &mut Ui, open: &supports::Open, section: Section) -> Option<Heading> {
     ui.horizontal_centered(|ui| {
         let mut pressed = None;
         if icon_button(ui, icon::BACK, &tr!("profiles-every")).clicked() {
             pressed = Some(Heading::Back);
         }
         ui.add_space(theme::NOTE_GAP);
-        let parent = Section::Supports.label();
+        let parent = section.label();
         if page_trail(ui, &parent, &open.name, open.kind.as_deref()).clicked() {
             pressed = Some(Heading::Back);
         }
@@ -286,7 +299,7 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
 /// Saves or drops the form's edits as answered, then goes where it was being left for.
 fn ask_unsaved(ctx: &egui::Context, window: &mut Window) {
     let settings = &window.machine.settings;
-    let (Some(to), Some(open)) = (settings.leaving, supports::editing(settings)) else {
+    let (Some(to), Some(open)) = (settings.leaving, editing(settings)) else {
         return;
     };
     let Some(answer) = unsaved::ask(ctx, &open.name) else {
@@ -300,7 +313,17 @@ fn ask_unsaved(ctx: &egui::Context, window: &mut Window) {
         }
         unsaved::Answer::Discard => settings.discard(),
         unsaved::Answer::Save => {
-            if !supports::save(window.machine) {
+            let saved = match window.machine.settings.section {
+                Section::Recipes => match recipes::save(window) {
+                    Ok(_) => true,
+                    Err(error) => {
+                        window.machine.status = Status::failed(&error);
+                        false
+                    }
+                },
+                _ => supports::save(window.machine),
+            };
+            if !saved {
                 window.machine.settings.leaving = None;
                 return;
             }

@@ -104,7 +104,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel); Prepare for print (the recipe as a full-width `dropdown` with the prepare glyph, its list *Built-in* then *Yours* under `group_name`s, a recipe that cannot run led by the warning glyph and, once picked, why under the box as a `hint`; off while a run goes; Prepare for print as a `secondary_button`, the prepare glyph, what it acts on or why it cannot in its tooltip; running, `step_bar` with the step and Cancel; then *Plan* as a `subheading` over a `plan_row` a step — *1. Orientation* and its verdict at the right: Runs (or Runs on 2 of 3), Skipped with the readings that decided it under it (`worth_hollowing false`), Decided when reached, Off, Stops the run, Pauses; a note in `warn` under a step that undoes an earlier one; while the models are read, `busy` with *Reading the models…*; while a run goes, Done, Running with the glyph turning, Skipped, Off or To come; after a run, *Prepared* as a `subheading` over `readings` of the model in the card while it stands as the run left it: Oriented, Repaired, Wall and Resin saved or Hollowed no, Drained, Supports by the automatic profile's name) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel); Prepare for print (the recipe as a full-width `dropdown` with the prepare glyph, its list *Built-in* then *Yours* under `group_name`s and, under a rule, *Edit the recipes* as its `picker_foot` opening Settings → Recipes, a recipe that cannot run led by the warning glyph and, once picked, why under the box as a `hint`; off while a run goes; Prepare for print as a `secondary_button`, the prepare glyph, what it acts on or why it cannot in its tooltip; running, `step_bar` with the step and Cancel; then *Plan* as a `subheading` over a `plan_row` a step — *1. Orientation* and its verdict at the right: Runs (or Runs on 2 of 3), Skipped with the readings that decided it under it (`worth_hollowing false`), Decided when reached, Off, Stops the run, Pauses; a note in `warn` under a step that undoes an earlier one; while the models are read, `busy` with *Reading the models…*; while a run goes, Done, Running with the glyph turning, Skipped, Off or To come; after a run, *Prepared* as a `subheading` over `readings` of the model in the card while it stands as the run left it: Oriented, Repaired, Wall and Resin saved or Hollowed no, Drained, Supports by the automatic profile's name) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ, Measure along the surface); Reading (Along the surface first when on, or why there is none) | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading, not for a mould); Keep solid (Keep thin parts solid as a `switch`, off at first, and under it while on Thinner than as a `number_row`, mm; then, not for a mould, Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
@@ -244,7 +244,7 @@ right), the page, and a bar 56 tall on `base` along its foot with the row's acti
 and the one that applies right.
 
 - *Settings* lists, under *Find a setting* (`⌘F`, narrowing the pages by name and by the
-  settings they hold), Tool profiles (Supports, Hollow, Drain, each with its count),
+  settings they hold), Tool profiles (Supports, Hollow, Drain, Recipes, each with its count),
   Application (Appearance, General, Updates, an accent `1` while a release waits) and Help
   (Keyboard shortcuts ↗) under 10.5 capital group names, and Machine and resin ↗ at the foot.
 - *Appearance*: Theme as three `theme_card`s, System (both halves, *Now light* or *Now
@@ -262,6 +262,27 @@ and the one that applies right.
 - *Hollow* and *Drain*: the table alone, a double click turning a name into a `sunken` box
   over 60 % of its column (Enter or a click elsewhere renames), and under it at the right
   *Open the Hollow tool* ↗ (or Drain). The bar: Export, Delete.
+- *Recipes*: the `table` of every recipe, the built-in ones first — name, *Kept* (Built-in,
+  Yours, or Does not run for one of yours that no longer reads or passes its check, why it
+  does not as a `hint` under the table once picked) and the steps it takes — Import in the
+  header. The bar: Edit (a double click too), Duplicate, Export, Delete (`confirm_button`,
+  off with why for a built-in one). The form, under the trail *Recipes › Busts* (*Built-in*
+  after a built-in one's name): a built-in one is read under a `notice` saying to duplicate
+  it, every field off. Blocks: *Recipe* (Name, the variables as a code-face name box, its
+  figure and a bin a row, *Add a variable*), then a block a step titled *1. Orientation* with
+  its switch, the step's move up, move down and bin at the right of its first row, *When* as a
+  `condition_row`, *On failure* Stop / Skip, its settings by kind — a setting left out its
+  name and *Default* with a + to set it; one set its field (`number_row` with the unit its key
+  names, `switch`, a `dropdown` of its words, `text_row`, points as rows of three fields and
+  a bin) with the reset arrow back to the default and, for a number or a switch, the
+  expression glyph trading it for a `condition_row` —, a gate's *Stop if* and *Message*, a
+  pause's *Message*, a check's *Support the islands again* switch with *While* and *At most*
+  `nested` under it, then *Choose*: each rule `nested`, its *When* and settings and *Remove
+  the rule*, and *Add a rule*; why the recipe does not run as a `field_error` at the top of
+  the step it names, else a `danger` `notice` over the steps. Last, *New step*: a dropdown
+  of every kind. Save at the bar's right is the accent only while there are unsaved edits
+  that pass the check, its why on hover otherwise; leaving with unsaved edits asks as a
+  profile's form does.
 - A profile's form is blocks one under another. Its header: the way back, the trail
   *Supports › Heavy* (an automatic profile's kind, *Automatic sizing*, after the name),
   Reset to defaults at the right; Save at the bar's right, in the accent while anything is

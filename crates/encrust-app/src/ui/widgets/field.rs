@@ -10,7 +10,7 @@ mod text;
 
 pub(in crate::ui::widgets) use rows::row;
 pub use rows::{Carried, carried_row, count_row, number_row, picker_row};
-pub use text::{address_field, row_name, text_box, text_row};
+pub use text::{address_field, condition_row, field_error, row_name, text_box, text_row};
 
 /// What a field is called, in `color`, with its unit in brackets after it: the one way
 /// a number is labelled anywhere in the window. Cut short with an ellipsis, never wider

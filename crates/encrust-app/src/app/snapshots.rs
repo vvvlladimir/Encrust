@@ -409,3 +409,30 @@ fn an_update_found_told_and_installed() {
     downloading.machine.updates.sheet = true;
     results.extend(picture("update_download", downloading));
 }
+
+/// The Recipes page: the table with a recipe of the user's picked, and that recipe open in
+/// its form with a condition that does not read.
+#[test]
+fn the_recipes_page() {
+    let mut results = SnapshotResults::new();
+    let text = core_recipe::BUILT_IN[0]
+        .1
+        .replace("Prepare for print", "Busts");
+    let with_mine = || {
+        let mut app = with_settings();
+        let catalogue = &mut app.machine.slicing.catalogue;
+        catalogue.save_recipe("busts", &text).expect("writable");
+        app.machine
+            .settings
+            .turn_to(crate::settings::Section::Recipes);
+        app.machine.settings.recipe_pick = Some("busts".to_owned());
+        app
+    };
+    results.extend(picture("settings_recipes", with_mine()));
+    let mut form = with_mine();
+    let entry = core_recipe::find("busts", [("busts", text.as_str())]).expect("kept");
+    form.machine.settings.open_recipe(&entry);
+    let draft = form.machine.settings.recipe.as_mut().expect("open");
+    draft.values.steps[0].when = "!turned &&".to_owned();
+    results.extend(picture("settings_recipe_form", form));
+}

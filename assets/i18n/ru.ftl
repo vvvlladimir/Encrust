@@ -329,6 +329,7 @@ binding-reset = Вернуть исходные клавиши
 settings-page-supports = Поддержки
 settings-page-hollow = Полость
 settings-page-drain = Дренаж
+settings-page-recipes = Рецепты
 settings-page-general = Общие
 settings-page-updates = Обновления
 settings-tab-resins = Смолы
@@ -1146,6 +1147,85 @@ diagram-max = макс. { $value }
 diagram-model = модель
 diagram-plate = платформа
 
+## settings/recipes.rs
+
+recipes-nothing-open = не открыт ни один рецепт
+recipes-built-in-why = Стандартный рецепт нельзя изменить или удалить; скопируйте его, чтобы сделать свой.
+recipes-cannot-save = не удалось сохранить рецепт
+recipes-unreadable-why = рецепт не читается
+recipes-copy-name = { $name } — копия
+
+## panels/settings/recipes.rs
+
+recipes-table-recipe = Рецепт
+recipes-table-kept = Где
+recipes-table-steps = Шаги
+recipes-kept-built-in = Стандартный
+recipes-kept-yours = Ваш
+recipes-kept-broken = Не выполняется
+recipes-fix-first = Перед сохранением исправьте то, что отмечено красным.
+recipes-saved = Рецепт { $recipe } сохранён
+
+## panels/settings/recipes/form.rs
+
+recipes-built-in = Стандартный рецепт
+recipes-built-in-how = Скопируйте его, чтобы сделать свой рецепт, который можно менять.
+recipes-block-recipe = Рецепт
+recipes-block-recipe-help = Название — то, что показывает список рецептов подготовки к печати. Переменные — ваши числа, которые могут называть условия и настройки шагов, например объём, который модель должна сберечь, прежде чем её сделают полой.
+recipes-does-not-run = В таком виде рецепт не выполняется
+recipes-var-value = Значение
+recipes-var-remove = Удалить переменную
+recipes-var-add = Добавить переменную
+recipes-block-add = Новый шаг
+recipes-step-add = Добавить шаг
+
+## panels/settings/recipes/step.rs
+
+recipes-step-help = Шаг выполняется на своём месте в списке, над моделью такой, какой её оставили шаги до него. «Когда» — условие на модель, например saves_ml >= 30; если оно пустое, шаг выполняется всегда. «При ошибке» говорит, остановит ли неудачный шаг подготовку и вернёт платформу как была, или будет пропущен. Настройка, которую не задали, берёт значение движка по умолчанию; число или переключатель можно вместо этого вычислять выражением. «Выбор» накладывает другие настройки там, где выполняется его условие, — берётся первое выполненное.
+recipes-step-up = Поднять шаг
+recipes-step-down = Опустить шаг
+recipes-step-remove = Удалить шаг
+recipes-when = Когда
+recipes-stop-if = Остановить, если
+recipes-message = Сообщение
+recipes-on-fail = При ошибке
+recipes-on-fail-stop = Остановить
+recipes-on-fail-skip = Пропустить
+recipes-retry = Поддержать острова снова
+recipes-retry-while = Пока
+recipes-retry-max = Не больше
+recipes-choose = Выбор
+recipes-rule-remove = Удалить правило
+recipes-rule-add = Добавить правило
+
+## panels/settings/recipes/setting.rs
+
+recipes-setting-set = Задать
+recipes-setting-default = Вернуть по умолчанию
+recipes-setting-expression = Вычислять выражением
+recipes-setting-left-out = По умолчанию
+recipes-point-remove = Удалить точку
+recipes-point-add = Добавить точку
+recipes-set-method = Метод
+recipes-set-goal = Цель
+recipes-set-max-tilt = Наклон, макс.
+recipes-set-wall = Стенка
+recipes-set-mode = Режим
+recipes-set-infill = Заполнение
+recipes-set-keep-solid = Сплошное тоньше
+recipes-set-at = Где
+recipes-set-points = Точки
+recipes-set-diameter = Диаметр
+recipes-set-depth = Глубина
+recipes-set-vent = Вентиляционное отверстие
+recipes-set-plugs = Пробки
+recipes-set-profile = Профиль поддержек
+recipes-set-cavity = В полости
+recipes-set-spacing = Отступ
+recipes-set-folder = Папка
+recipes-set-name = Имя файла
+recipes-set-send = Отправить на принтер
+
 ## panels/settings/presets.rs
 
 presets-depth = Глубина
@@ -1672,6 +1752,7 @@ position-prepare-built-in = Стандартные
 position-prepare-yours = Ваши
 position-prepare-plan = План
 position-prepare-measuring = Чтение моделей…
+position-prepare-edit-recipes = Изменить рецепты
 position-prepared = Подготовлено
 position-prepared-oriented = Ориентация
 position-prepared-repaired = Починка
