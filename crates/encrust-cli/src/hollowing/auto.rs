@@ -42,7 +42,6 @@ pub fn auto_drains(
         wall,
         vents: !args.no_vent,
         plate_z,
-        keep_clear: &[],
         layer_height_mm: ground.layer_height_mm,
     })
     .context("looking for drain holes")

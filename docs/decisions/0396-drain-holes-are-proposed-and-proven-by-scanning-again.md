@@ -19,23 +19,27 @@ finds each pocket and its floor (ADR 0072), `core-volume` places and drills hole
 `core_volume::holes_out` proposes the holes into one cavity, best first: rays cast out of a
 point inside it — straight down, eight round at 45° below level and eight level, or the same
 upward for a vent — each followed through at most 32 faces through the `Bvh`, the hole drilled
-square into the face it leaves by, a diameter past the wall there. A mouth off an edge or a
-fin narrower than the hole, or within a millimetre of the plate a model stands on, is
-dropped; a drain ranks by its height less a radius for a face looking down, a vent by its
-height alone.
+square into the face it leaves by, a diameter past the wall there, carried through the wall by
+`pierce`, and half a millimetre short of the cavity's far side, cast for across it. A mouth off
+an edge or a fin narrower than the hole, within a millimetre of the plate a model stands on, or
+into a cavity too thin to stop in, is dropped; a drain ranks by its height less a radius for a
+face looking down, a vent by its height alone.
 
 `core_engine::suggest_drains` scans the model as it prints at the run's layer height, takes
 each trapped pocket's proposals and proves them: a round drills one untried proposal a pocket,
-clear by two diameters of every mouth already chosen and of points the caller keeps clear,
-scans once, and keeps a hole whose pocket no longer appears. At most `MOST_TRIES` = 4 rounds
-for drains and 4 for vents, a vent proven with only the vents drilled, then one scan with every
-hole for what is left: at most ten scans. A pocket nothing drains is reported trapped. The
-holes are `HoleKind::Drain`, carried through the wall by `pierce` before they are proven.
-`trapped_in` is the scan, shared with the window's drainage check.
+clear by two diameters of every mouth already chosen, scans once, and keeps a hole whose pocket
+no longer appears. After each round's scan every hole kept so far is checked again: one whose
+pocket is found again was credited for a neighbour's failed try, and is dropped, its pocket
+trying its next proposal. A pocket is still trapped while any box of a scan overlaps its own.
+At most `MOST_TRIES` = 4 rounds for drains and 4 for vents, a vent proven with only the vents
+drilled, then one scan with every hole for what is left: at most ten scans. A pocket nothing
+drains is reported trapped. The holes are `HoleKind::Drain`. `trapped_in` is the scan, shared
+with the window's drainage check.
 
 The command line takes it as `--drain-at auto`, beside points, with a vent unless
 `--no-drain-vent`; it runs after hollowing and before supports, in the pose the model prints
-in, on the plate unless supports lift it. `--json` adds `auto_drains` per model: `pockets`
+in, resting on the plate unless the lift its supports will give it, worked out first as for a
+point (ADR 0394), stands it clear. `--json` adds `auto_drains` per model: `pockets`
 (`slicing.trapped`'s fields and `drained`), `holes` (`pocket`, `role` `drain` or `vent`,
 `at_mm`, `axis`, `diameter_mm`, `depth_mm`) and `scans`, in the plate frame of ADR 0394.
 
