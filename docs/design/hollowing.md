@@ -372,7 +372,7 @@ bounds the lot, and each pocket's own box is what the shader keeps the red insid
 
 ## Suggested drains
 
-`--drain-at auto` puts the holes in itself (ADR 0396). `core_volume::holes_out` proposes them
+`--drain-at auto` puts the holes in itself (ADR 0401). `core_volume::holes_out` proposes them
 for one pocket from its point `p`, the middle of its floor, in the pose the model prints in.
 A drain's rays start a radius `r` over `p`, so a level hole's lowest point is the floor; a
 vent's start `r` under the ceiling straight over `p`. Seventeen rays go out: the vertical,

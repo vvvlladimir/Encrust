@@ -147,7 +147,7 @@ pub struct Shelled {
     pub cuts: Option<Mesh>,
     /// A plug for each hole, laid on the plate beside the model (ADR 0313).
     pub plugs: Vec<Mesh>,
-    /// What `--drain-at auto` found and drilled (ADR 0396).
+    /// What `--drain-at auto` found and drilled (ADR 0401).
     pub drains: Option<Drained>,
 }
 

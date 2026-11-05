@@ -1,5 +1,5 @@
 //! The Select card's Prepare for print: `--prepare` on the picked models, and what it decided
-//! for the one in the card (ADR 0397).
+//! for the one in the card (ADR 0402).
 
 use crate::i18n::tr;
 use crate::panels::Window;

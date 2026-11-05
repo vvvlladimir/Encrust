@@ -1,5 +1,5 @@
 //! Where each finding of a report is, in plate millimetres from the plate's front left
-//! corner after placement: the frame `--drain-at` takes (ADR 0394).
+//! corner after placement: the frame `--drain-at` takes (ADR 0400).
 
 use core_analysis::{Measured, Risk, RiskKind};
 use core_geometry::{Aabb, Scalar};

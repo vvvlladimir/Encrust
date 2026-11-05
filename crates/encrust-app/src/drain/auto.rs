@@ -1,4 +1,4 @@
-//! Drain holes the engine proposes and proves, as `--drain-at auto` drills them (ADR 0396).
+//! Drain holes the engine proposes and proves, as `--drain-at auto` drills them (ADR 0401).
 
 use std::sync::Arc;
 
@@ -40,7 +40,7 @@ impl DrainTool {
     ) -> Result<DrainsJob> {
         let tasks: Vec<DrainsTask> = scene
             .named(ids)
-            .map(|object| DrainsTask::of(object, self.size_for(object)))
+            .map(|object| DrainsTask::of(object, self.size()))
             .collect();
         if tasks.is_empty() {
             bail!(tr!("drain-nothing-visible"));

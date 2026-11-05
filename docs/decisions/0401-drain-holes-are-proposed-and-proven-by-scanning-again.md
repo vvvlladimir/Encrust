@@ -1,4 +1,4 @@
-# 0396. Propose drain holes and prove each by scanning again
+# 0401. Propose drain holes and prove each by scanning again
 
 - **Status:** Proposed
 - **Date:** 2026-11-02
@@ -6,8 +6,7 @@
 ## Context
 
 A hollowed model drains only through a hole someone placed: a click in the window, or
-`--drain-at X,Y,Z` picked by hand, which is the weakest step of a prepare a script or a
-language model drives (`docs/design/ai-integration.md`, step 2). The window's "drill a hole
+`--drain-at X,Y,Z` picked by hand, which is the weakest step of a prepare a script drives. The window's "drill a hole
 into each" goes from the nearest surface to the pocket's floor, which may be the lid of a
 seated box and is never checked. The pieces exist apart: the drainage scan in `core-supports`
 finds each pocket and its floor (ADR 0072), `core-volume` places and drills holes (ADR 0075,
@@ -39,9 +38,9 @@ with the window's drainage check.
 The command line takes it as `--drain-at auto`, beside points, with a vent unless
 `--no-drain-vent`; it runs after hollowing and before supports, in the pose the model prints
 in, resting on the plate unless the lift its supports will give it, worked out first as for a
-point (ADR 0394), stands it clear. `--json` adds `auto_drains` per model: `pockets`
+point (ADR 0400), stands it clear. `--json` adds `auto_drains` per model: `pockets`
 (`slicing.trapped`'s fields and `drained`), `holes` (`pocket`, `role` `drain` or `vent`,
-`at_mm`, `axis`, `diameter_mm`, `depth_mm`) and `scans`, in the plate frame of ADR 0394.
+`at_mm`, `axis`, `diameter_mm`, `depth_mm`) and `scans`, in the plate frame of ADR 0400.
 
 The window's Drain tool takes it as Auto, the companion of Check drainage at the tool's foot:
 it is that check carried further, so it stands beside it rather than in a section. It searches

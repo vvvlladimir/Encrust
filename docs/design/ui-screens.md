@@ -49,7 +49,7 @@ Test prints ▸ (Crustling with Download, its percentage or STL as keys, then th
 in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
 (Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
-(the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
+(the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate, Prepare for print (why when off) · Find. View:
 Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,
 See through models, Show as printed, Depth of field when shown as printed, ticked when on ·
 Keyboard shortcuts.
@@ -104,11 +104,11 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel); Prepare for print (Prepare for print as a `secondary_button`, the prepare glyph, what it acts on or why it cannot in its tooltip; running, `step_bar` with the step and Cancel; after a run, *Prepared* as a `subheading` over `readings` of the model in the card while it stands as the run left it: Oriented, Repaired, Wall and Resin saved or Hollowed no, Drained, Supports by the automatic profile's name) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ, Measure along the surface); Reading (Along the surface first when on, or why there is none) | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
-| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon, the window's whichever model is picked); Plugs | Check drainage; running, `step_bar` with Looking for trapped resin and Cancel |
+| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon); Plugs | Check drainage, companion Auto (`companion_button`, the auto glyph), always with a vent as the command line's default; running, `step_bar` with Looking for trapped resin or Looking for drain holes and Cancel |
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
@@ -214,7 +214,8 @@ track. With no stack it reads *No layers*.
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
-  its card only once it has run 0.3 s, so a short one does not flash.
+  its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
+  *Preparing for print:* and its step, standing whichever tool is in hand.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30

@@ -1,4 +1,4 @@
-//! `--drain-at auto`: the holes the engine proves drain each trapped pocket (ADR 0396).
+//! `--drain-at auto`: the holes the engine proves drain each trapped pocket (ADR 0401).
 
 use std::fmt;
 

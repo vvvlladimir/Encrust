@@ -1,4 +1,4 @@
-# 0397. Prepare a model by the engine's defaults, filling in the flags left out
+# 0402. Prepare a model by the engine's defaults, filling in the flags left out
 
 - **Status:** Proposed
 - **Date:** 2026-11-02
@@ -6,11 +6,9 @@
 ## Context
 
 Preparing a model for print takes six flags chosen by judgement: whether to repair, how to
-turn it, whether and how thick to hollow, where to drain, what to stand it on. A language
-model driving the command line (ADR 0395) needs a baseline to be measured against, and a
-user with no model needs the same answer without one (`docs/design/ai-integration.md`, step
-4). Each piece exists: the import diagnosis, `--orient-goal auto`, the saving of ADR 0393,
-`--drain-at auto` (ADR 0396), `--supports auto` (ADR 0325) and `--support-cavity` (ADR 0332).
+turn it, whether and how thick to hollow, where to drain, what to stand it on. A script or a
+user who tuned nothing needs one answer for all six. Each piece exists: the import diagnosis, `--orient-goal auto`, the saving of ADR 0393,
+`--drain-at auto` (ADR 0401), `--supports auto` (ADR 0325) and `--support-cavity` (ADR 0332).
 What is missing is the rule that chains them, and the window must be able to run the same
 rule (rule 9 of `architecture.md`).
 
@@ -23,7 +21,7 @@ default 2 mm wall only where ADR 0393 names a saving, its cavity left empty. A h
 model is drained by `suggest_drains` with a vent, and every model stands on the catalogue's
 automatic supports, a hollowed one's cavity held up too.
 
-The command line takes it as `--prepare` on `slice`, `estimate`, `render` and `batch`, as a
+The command line takes it as `--prepare` on `slice`, `estimate` and `batch`, as a
 resolution of the flags, not a second pipeline: before import each model left without
 supports gets `auto`, and one no `--rotate` or `--orient` turned is oriented; at import an
 unsound model is repaired; after it, the wall, `--drain-at auto` and the cavity's supports
@@ -57,7 +55,7 @@ a model settling onto its raft or the plugs for its holes, falls inside the hold
 of the entry settles the plate as any undo does. Undo and redo wait while a hold runs.
 
 No infill: it is the window's default, a lattice can seal off a pocket the drain search
-cannot see, and it pushes the search's holes down its ranking (ADR 0396); a 2 mm wall on a
+cannot see, and it pushes the search's holes down its ranking (ADR 0401); a 2 mm wall on a
 model saving at least 10 ml stands without one.
 
 ## Consequences

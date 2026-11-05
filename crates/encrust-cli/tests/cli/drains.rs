@@ -1,5 +1,5 @@
 //! `--drain-at auto`: holes the engine proves drain every trapped pocket, listed in `--json`
-//! beside `slicing.trapped` (ADR 0396).
+//! beside `slicing.trapped` (ADR 0401).
 
 use std::fs;
 use std::path::Path;

@@ -1,4 +1,4 @@
-//! A run of several landings recorded as one edit: Prepare's (ADR 0397).
+//! A run of several landings recorded as one edit: Prepare's (ADR 0402).
 
 use super::{Frame, History, fingerprint, put_scene_back};
 use crate::scene::Scene;

@@ -83,7 +83,7 @@ resin, weight, cost and the risks — when there is a printer to draw the masks 
 
 Every finding the report counts it also locates, in plate millimetres from the plate's front
 left corner as the model prints, after placement and the lift its supports give it — the frame
-`--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0394).
+`--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0400).
 `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
 `at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
@@ -353,9 +353,8 @@ thickness on top when it has one, before anything is put under it, the way the w
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
-`--prepare` on `slice`, `estimate`, `render` and `batch` prepares each model as the engine's
-own defaults would, with nothing tuned (ADR 0397): the baseline a language model is measured
-against, and a print for a user with none. In order, each step a flag typed wins over:
+`--prepare` on `slice`, `estimate` and `batch` prepares each model as the engine's own
+defaults would, with nothing tuned (ADR 0402): a print for a user who tuned nothing. In order, each step a flag typed wins over:
 
 1. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
    or one drawn twice. `--repair=METHOD` picks the method and always runs; `--no-validate`

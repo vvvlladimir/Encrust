@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
-use core_geometry::{PlacedHit, Transform};
+use core_geometry::{PlacedHit, Scalar, Transform};
 use core_volume::{
     Blocker, BlockerSize, HollowMode, HollowSettings, InfillSettings, blocker_under, plate_down,
 };

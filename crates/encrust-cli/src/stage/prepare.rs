@@ -1,5 +1,5 @@
 //! `--prepare`: each model's flags filled in where the user left them out, as the autopilot
-//! of `core_engine` decides (ADR 0397), so the run stages as if they had been typed.
+//! of `core_engine` decides (ADR 0402), so the run stages as if they had been typed.
 
 use std::fmt;
 use std::path::PathBuf;
