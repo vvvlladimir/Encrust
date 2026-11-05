@@ -106,6 +106,24 @@ fn the_archive_holds_the_entries_a_printer_reads() {
 }
 
 #[test]
+fn each_preview_is_an_opaque_four_channel_png_on_near_black_as_known_files_hold() {
+    let mut archive = written(PwszFlavour::Pm7, &[layer(centre_block)]);
+    for name in [
+        "preview_images/preview_0.png",
+        "preview_images/preview_1.png",
+    ] {
+        let png = entry(&mut archive, name);
+        assert_eq!(png[25], 6, "{name} holds red, green, blue and alpha");
+        let preview = core_format::decode_colour(&png).expect("a preview of our own decodes");
+        assert_eq!(
+            preview.pixels()[0],
+            [10, 10, 11],
+            "{name} has no teal border"
+        );
+    }
+}
+
+#[test]
 fn a_layer_entry_is_the_layer_in_the_pw0_codec() {
     let mut archive = written(PwszFlavour::Pwsz, &[layer(centre_block)]);
     let runs = decode(&entry(&mut archive, "layer_images/layer_0.pw0Img")).expect("PW0 runs");
@@ -342,6 +360,14 @@ fn an_archive_reads_back_what_it_was_told() {
     assert!(
         (facts.layers[1].z_mm - job.layer_z_mm(1)).abs() < 1e-5,
         "a layer's top"
+    );
+    assert_eq!(
+        facts
+            .preview
+            .as_ref()
+            .map(|p| (p.width_px(), p.height_px())),
+        Some((224, 168)),
+        "the plate's preview is read"
     );
 
     let lit: u32 = core_format::OpenFile::layer(&mut open, 0)

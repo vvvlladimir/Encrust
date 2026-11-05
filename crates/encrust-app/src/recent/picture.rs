@@ -180,6 +180,7 @@ fn shades(parts: &Parts) -> Vec<u8> {
         height_px: (SIZE_PX[1] * SUPERSAMPLE) as u32,
         background,
         model,
+        support: model,
     };
     let large = render(&placed, &settings);
     halved(large.pixels(), SIZE_PX)

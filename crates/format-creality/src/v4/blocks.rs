@@ -5,7 +5,8 @@
 use std::io;
 
 use core_format::{
-    CHITU_ANTI_ALIAS_CAP, Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, Thumbnail, encode_rgb15,
+    CHITU_ANTI_ALIAS_CAP, Fields, PREVIEW_HEADER_BYTES, PrintJob, RGB15_BITS, Rgb, Thumbnail,
+    encode_rgb15,
 };
 
 use crate::family::MAGIC;
@@ -124,7 +125,8 @@ fn write_preview(
     (width, height): (u32, u32),
 ) -> io::Result<u32> {
     let image =
-        Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND);
+        Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND)
+            .dithered(RGB15_BITS);
     let data = encode_rgb15(image.pixels());
     let record = fields.position()?;
 

@@ -1,7 +1,7 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range, stated_distance_mm, stated_speed_mm_min,
-    stated_wait_s,
+    SlicedFileReader, Thumbnail, layer_in_range, panel_in_range, read_raw_preview, rgb_of_565,
+    stated_distance_mm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -16,6 +16,7 @@ const FILE_MARK: &[u8] = b"ANYCUBIC";
 /// Where the mark states each table is, by its own offset. The machine address is there
 /// when the mark claims eight tables or more; see `docs/formats/anycubic.md`.
 const HEADER_ADDRESS: u64 = 0x14;
+const PREVIEW_ADDRESS: u64 = 0x1C;
 const LAYER_TABLE_ADDRESS: u64 = 0x24;
 const MACHINE_ADDRESS: u64 = 0x2C;
 
@@ -111,25 +112,7 @@ impl Codec {
 
 fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, FormatError> {
     let mut reads = Reads::new(source);
-
-    let mark = reads.array::<8>()?;
-    if mark != FILE_MARK {
-        reads.seek_to(0)?;
-        return Err(FormatError::NotThisFormat {
-            format: codec.format(),
-            found: reads.u32_le()?,
-        });
-    }
-    reads.seek_to(0x0C)?;
-    let version = reads.u32_le()?;
-    // Every revision puts the header's own address in the same slot and its first
-    // twenty fields in the same order, so one pass reads them all.
-    if !READ_VERSIONS.iter().any(|known| known.number() == version) {
-        return Err(FormatError::UnsupportedVersion {
-            format: codec.format(),
-            version,
-        });
-    }
+    let version = read_version(&mut reads, codec)?;
 
     reads.seek_to(HEADER_ADDRESS)?;
     let header = u64::from(reads.u32_le()?);
@@ -172,6 +155,7 @@ fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, Form
     let layer_count = reads.u32_le()?;
     let layers = read_table(&mut reads, table, layer_count)?;
     let machine = read_machine_name(&mut reads)?;
+    let preview = read_preview(&mut reads).ok();
 
     let display_mm = (
         width_px as f32 * pitch_um / 1000.0,
@@ -198,8 +182,33 @@ fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, Form
             grey_steps: codec.grey_steps(),
             stated,
             layers,
+            preview,
         },
     })
+}
+
+/// The revision behind the file mark, refusing a file without the mark or at a revision
+/// this reader does not know.
+fn read_version<S: ReadSeek>(reads: &mut Reads<S>, codec: Codec) -> Result<u32, FormatError> {
+    let mark = reads.array::<8>()?;
+    if mark != FILE_MARK {
+        reads.seek_to(0)?;
+        return Err(FormatError::NotThisFormat {
+            format: codec.format(),
+            found: reads.u32_le()?,
+        });
+    }
+    reads.seek_to(0x0C)?;
+    let version = reads.u32_le()?;
+    // Every revision puts the header's own address in the same slot and its first
+    // twenty fields in the same order, so one pass reads them all.
+    if !READ_VERSIONS.iter().any(|known| known.number() == version) {
+        return Err(FormatError::UnsupportedVersion {
+            format: codec.format(),
+            version,
+        });
+    }
+    Ok(version)
 }
 
 /// The name the machine block carries, which is what the firmware matches its own against.
@@ -221,6 +230,20 @@ fn read_machine_name<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>
     reads.seek_to(block + u64::from(TABLE_BASE_BYTES))?;
     let name = reads.text(MACHINE_NAME_BYTES)?;
     Ok((!name.is_empty()).then_some(name))
+}
+
+/// The preview table: its width, a constant word and its height behind the table's head,
+/// then raw five-six-five pixels in little-endian words.
+fn read_preview<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Thumbnail, FormatError> {
+    reads.seek_to(PREVIEW_ADDRESS)?;
+    let table = u64::from(reads.u32_le()?);
+    reads.seek_to(table + u64::from(TABLE_BASE_BYTES))?;
+    let width_px = reads.u32_le()?;
+    reads.skip(4)?;
+    let height_px = reads.u32_le()?;
+    read_raw_preview(reads, width_px, height_px, |pair| {
+        rgb_of_565(u16::from_le_bytes(pair))
+    })
 }
 
 /// The layer table, whose rows carry a thickness rather than a height above the plate, so

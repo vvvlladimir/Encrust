@@ -8,8 +8,8 @@ use core_slicer::Layer;
 
 use super::blocks::{MACHINE_BLOCK_BYTES, MAGIC, VERSION};
 use super::rings::{self, POINT_BYTES};
-use crate::v3::blocks::{PAGE_BREAK, PREVIEW_SIZES_PX};
-use crate::v3::reader::{read_text, read_utf16_number};
+use crate::v3::blocks::PAGE_BREAK;
+use crate::v3::reader::{read_previews, read_text, read_utf16_number};
 
 /// Reads the `.cxline`. Layout is in `docs/formats/cxline.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -37,9 +37,7 @@ impl SlicedFileReader for CxlineReader {
         let end = reads.length()?;
         let header = read_header(&mut reads)?;
         panel_in_range(header.width_px, header.height_px)?;
-        for (width, height) in PREVIEW_SIZES_PX {
-            reads.skip(u64::from(width * height * 2) + PAGE_BREAK.len() as u64)?;
-        }
+        let preview = read_previews(&mut reads)?;
 
         let width_mm = read_utf16_number(&mut reads)?;
         let height_mm = read_utf16_number(&mut reads)?;
@@ -80,6 +78,7 @@ impl SlicedFileReader for CxlineReader {
                 grey_steps: 2,
                 stated: stated(settings, light_off),
                 layers,
+                preview: Some(preview),
             },
         })
     }

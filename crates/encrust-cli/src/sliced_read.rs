@@ -2,7 +2,7 @@ use std::fmt::{self, Write as _};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use core_format::{OpenFile, SlicedFile, encode_grey};
+use core_format::{OpenFile, SlicedFile, encode_colour, encode_grey};
 use core_pipeline::open;
 use core_raster::LayerRuns;
 use serde::Serialize;
@@ -290,6 +290,14 @@ struct Document<'a> {
 }
 
 impl Info {
+    /// The file's own preview picture as a colour PNG, refused where it carries none.
+    pub fn preview_png(&self) -> Result<Vec<u8>> {
+        let Some(preview) = &self.facts.preview else {
+            anyhow::bail!("the .{} file carries no preview picture", self.facts.format);
+        };
+        Ok(encode_colour(preview)?)
+    }
+
     /// The same facts as the text, as `info --json` prints them.
     pub fn document(&self) -> impl Serialize + '_ {
         let facts = &self.facts;
@@ -496,6 +504,7 @@ mod tests {
                 offset: 0,
                 size: 0,
             }],
+            preview: None,
         }
     }
 

@@ -359,19 +359,23 @@ Grouped by what the decision governs; the number is still the order it was taken
 |---|---|---|
 | [0046](0046-ctb-layer-data-is-written-in-the-clear.md) | `.ctb` layer data is written unencrypted | Superseded by 0365 |
 | [0047](0047-the-output-extension-picks-the-format.md) | The output extension picks the sliced-file format, in each binary | Accepted |
-| [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted |
+| [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted; one 512-pixel square padded into each record is superseded by 0402, flat shading by 0403 |
+| [0402](0402-a-preview-record-is-cropped-to-the-parts-on-its-own-background.md) | A preview record is cropped to the parts, on its own background | Proposed; the `.pwsz` colours are superseded by 0403 |
+| [0403](0403-a-thumbnail-is-shaded-smooth-and-pwsz-previews-take-their-known-form.md) | Shade the thumbnail smooth with lines, and write `.pwsz` previews in their known form | Proposed |
+| [0404](0404-a-thumbnail-takes-the-viewport-colours-and-darkens-its-folds.md) | Draw the thumbnail in the viewport's colours, darken its folds, dither it into 16 bits | Proposed |
 | [0146](0146-the-chitu-family-is-one-crate-and-cbddlp-carries-grey-in-eight-passes.md) | Keep the Chitu family in one crate, and buy `.cbddlp` grey with eight passes | Accepted |
 | [0147](0147-one-crate-writes-every-anycubic-extension-at-version-one.md) | Write every Anycubic extension from one crate, at version 1 | Accepted |
 | [0148](0148-the-sl1-settings-go-in-last-and-a-varying-stack-is-refused.md) | Write the `.sl1` settings last, and refuse a stack it cannot carry | Accepted; `numFade` as our transition layers is superseded by 0296 |
 | [0149](0149-a-reader-is-a-trait-and-a-container-names-itself.md) | Make a reader a trait, and let a container name itself | Accepted |
 | [0150](0150-an-open-file-owns-the-source-it-reads-from.md) | Let an open file own the source it reads from | Accepted |
+| [0401](0401-a-reader-hands-over-the-largest-preview-it-carries.md) | A reader hands over the largest preview a file carries | Proposed |
 | [0167](0167-the-gcode-zip-is-its-own-crate-and-the-png-codec-moves-down.md) | Give the gcode zip its own crate, and move the PNG codec down into `core-format` | Accepted |
 | [0379](0379-an-archive-failure-is-turned-into-a-format-error-in-core-format.md) | Turn an archive's failure into a `FormatError` in `core-format` | Accepted |
 | [0168](0168-one-creality-crate-holds-both-revisions-and-the-chitu-codecs-move-down.md) | Write both `.cxdlp` revisions from one crate, and move the Chitu codecs down | Accepted; the version 4 codec, extension and model rule are superseded by 0367 |
 | [0169](0169-the-vector-container-traces-its-polygons-out-of-the-mask.md) | Trace the `.svgx` polygons out of the mask rather than carry contours to the writer | Accepted |
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
-| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
+| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted; blank previews are superseded by 0401 |
 | [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
 | [0365](0365-write-the-ctb-the-printers-read.md) | Write the `.ctb` the printers read, and pick its revision by the panel | Accepted |
 | [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted |

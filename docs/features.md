@@ -18,7 +18,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 | | What you get | What you don't |
 |---|---|---|
 | **Desktop window** | Windows 10/11 (installer, or the Microsoft Store), macOS 12+ (Apple silicon and Intel), Linux (AppImage, `.deb`). Every feature. | Downloaded builds are not code-signed yet, so the first launch needs one extra step; the Store copy does not. Needs a GPU with Vulkan, Metal or DirectX 12. |
-| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. The section cut is drawn without its cap. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. It trails the desktop build. |
+| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. |
 | **Command line** (`encrust`) | The same pipeline with no window, for scripts and batches. | No painting, no manual supports. Anything you would click on a model is done in the window and saved as a project, which the command line can then slice. |
 
 ---
@@ -676,8 +676,9 @@ Encrust also opens the `.pws` of the original Photon and Photon S, which it does
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
 same size in pixels. The file is taken as cut for that printer: where the new format lays
 the plate from the other edge, each layer is turned to match, so the part prints where it
-stood. A stack with varying layer heights cannot be converted yet, and the converted file's
-preview pictures are blank.
+stood. The file's own preview picture goes with it, cut to the new format's sizes; a format
+with no picture (`.cws`), or one that does not decode, leaves the new one blank. A stack with
+varying layer heights cannot be converted yet.
 
 The window offers only the machines whose format Encrust can actually write.
 
@@ -784,6 +785,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   on it lists the others and scans again. A printer busy printing gets no file: the card
   says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
+- A sliced file carries a picture of the plate for the printer's screen: the models and
+  their supports in the viewport's resin and support colours, shaded smooth, darker in
+  folds, with a line where one part passes in front of another, cropped to fill each preview the format holds, on that preview's own background.
 - A Prusa login is kept in the window's settings, never in the profile.
 
 **You cannot:** send from the browser build, or watch the camera inside Encrust (open the
@@ -878,7 +882,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
 | `estimate` | Time, resin, weight, cost and risky layers, without writing a file. |
 | `inspect` | What is wrong with a model and whether it fits. |
-| `info` | What a sliced file says, checked layer by layer. Export one layer as PNG. |
+| `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
@@ -917,8 +921,8 @@ by a number of your own, or support the islands and drill the suction cups Check
 - **Orientation:** every file lays the plate out as the twenty known files checked do;
   `.sl1`, the DLP machines and nine FlashForge and Nova3D profiles have no known file.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
-- **Convert** cannot carry varying layer heights or the preview pictures.
-- **Browser build:** no network sending, no updates, uncapped section cut.
+- **Convert** cannot carry varying layer heights.
+- **Browser build:** no network sending, no updates.
 - **Camera:** the address only, no video inside Encrust.
 - **Translations:** messages from inside the slicing engine (a file that cannot be read, a
   format it does not know) stay in English under a translated first line.

@@ -2,7 +2,6 @@
 # that brings one under its limit is blessed, and nothing new is ever added here.
 fn crates/encrust-app/src/undo.rs fingerprint 92
 fn crates/encrust-cli/src/bin/hollow_lab.rs matrix 86
-fn crates/format-chitu/src/reader.rs open 92
-fn crates/format-creality/src/v3/reader.rs open 97
-fn crates/format-cws/src/reader.rs open 90
+fn crates/format-creality/src/v3/reader.rs open 96
+fn crates/format-cws/src/reader.rs open 82
 tests crates/core-slicer/src/stitch.rs - 151

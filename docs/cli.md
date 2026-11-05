@@ -46,6 +46,7 @@ are ignored for it, with a warning (ADR 0377).
 encrust profiles list
 encrust profiles show elegoo-mars-4-ultra -o my-printer.toml   # a profile to start from
 encrust info plate.ctb                       # open a sliced file
+encrust info plate.ctb --thumbnail plate.png # its preview picture
 encrust inspect model.stl --printer elegoo-mars-4-ultra
 encrust inspect broken.stl --repair            # what closing its holes would do
 encrust slice broken.stl --repair=close-small-holes -o out   # only the missing faces
@@ -390,6 +391,9 @@ advises, and write the file as asked (ADR 0368).
 counts: where it tops out, how thick it is, how long it burns and how much of the panel it
 lights. `--png out.png` writes that layer's mask beside the report.
 
+`info --thumbnail out.png` writes the picture the file carries for the printer's screen, the
+largest of its previews, as a colour PNG; a file with none, a `.cws` for one, is an error.
+
 Over the whole file, `info` names every run of layers exposed differently from the header —
 a resin's transition ramp is one such run, an `--exposure-at` band another — and for a stack
 that does not keep one height, its thinnest and thickest layer in place of the header's one
@@ -403,8 +407,8 @@ container lays the plate out otherwise (ADR 0366). The layer heights and every e
 gives the lifts, waits and price. A ramp above the bottom block is read back as the resin
 transition it is and stated again as one, so a machine that reads the header alone still
 takes the file; any other run of exposures becomes a band of height, which such a machine
-refuses. A stack of varying layer heights is refused for now, and
-the new file's previews are blank (ADR 0180).
+refuses. The file's preview goes into the new one's records (ADR 0401). A stack of varying
+layer heights is refused for now (ADR 0180).
 
 `measure MODEL --from X,Y,Z --to X,Y,Z` reads a model as its file holds it and takes each
 end to the nearest point of its surface. It prints both ends, the straight distance and its

@@ -1,6 +1,6 @@
 use core_format::{
     ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range, stated_pwm, stated_rests,
+    SlicedFileReader, layer_in_range, panel_in_range, read_rgb15_preview, stated_pwm, stated_rests,
     stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
@@ -17,6 +17,7 @@ const MAGIC_CTB_V4: u32 = 0x12FD_0106;
 /// Fields of the header, by their offset. The whole list is in `docs/formats/chitu.md`.
 const LAYER_HEIGHT: u64 = 0x20;
 const RESOLUTION: u64 = 0x34;
+const LARGE_PREVIEW: u64 = 0x3C;
 const LAYER_TABLE: u64 = 0x40;
 const PRINT_TIME: u64 = 0x4C;
 const PRINT_PARAMETERS: u64 = 0x54;
@@ -31,6 +32,40 @@ enum Family {
     Cbddlp,
     /// `.ctb`: seven bits a pixel in one pass.
     Ctb,
+}
+
+impl Family {
+    /// The container a file's leading magic names.
+    fn of_magic(magic: u32) -> Result<Self, FormatError> {
+        match magic {
+            MAGIC_CBDDLP => Ok(Self::Cbddlp),
+            MAGIC_CTB | MAGIC_CTB_V4 => Ok(Self::Ctb),
+            found => Err(FormatError::NotThisFormat {
+                format: "ctb",
+                found,
+            }),
+        }
+    }
+
+    /// The passes a layer is read in, of the `stated` ones the header gives.
+    fn passes(self, stated: u32) -> Result<u32, FormatError> {
+        // A `.cbddlp` holds one row per pass per layer, laid out pass-major, so the table
+        // is that many times longer than the stack; see docs/formats/chitu.md.
+        let passes = match self {
+            Self::Cbddlp => stated,
+            Self::Ctb => 1,
+        };
+        if passes > rle1::GREY_PASSES {
+            return Err(FormatError::Encoding {
+                what: "the layer passes",
+                reason: format!(
+                    "the header states {passes}, more than the {} the codec carries",
+                    rle1::GREY_PASSES
+                ),
+            });
+        }
+        Ok(passes)
+    }
 }
 
 /// Reads the Chitu container family. Layout is in `docs/formats/chitu.md`.
@@ -57,17 +92,7 @@ impl SlicedFileReader for ChituReader {
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
         let mut reads = Reads::new(source);
 
-        let magic = reads.u32_le()?;
-        let family = match magic {
-            MAGIC_CBDDLP => Family::Cbddlp,
-            MAGIC_CTB | MAGIC_CTB_V4 => Family::Ctb,
-            found => {
-                return Err(FormatError::NotThisFormat {
-                    format: "ctb",
-                    found,
-                });
-            }
-        };
+        let family = Family::of_magic(reads.u32_le()?)?;
         let version = reads.u32_le()?;
         // The bed's X and Y, which every writer of the family fills with the panel's size.
         let bed = (reads.f32_le()?, reads.f32_le()?);
@@ -85,6 +110,8 @@ impl SlicedFileReader for ChituReader {
         let height_px = reads.u32_le()?;
         let pixel_count = panel_in_range(width_px, height_px)?;
 
+        reads.seek_to(LARGE_PREVIEW)?;
+        let large_preview = u64::from(reads.u32_le()?);
         reads.seek_to(LAYER_TABLE)?;
         let table = u64::from(reads.u32_le()?);
         let layer_count = reads.u32_le()?;
@@ -110,22 +137,9 @@ impl SlicedFileReader for ChituReader {
             ..read_slicer_info(&mut reads, peel)?
         };
 
-        // A `.cbddlp` holds one row per pass per layer, laid out pass-major, so the table
-        // is that many times longer than the stack; see docs/formats/chitu.md.
-        let passes = match family {
-            Family::Cbddlp => passes,
-            Family::Ctb => 1,
-        };
-        if passes > rle1::GREY_PASSES {
-            return Err(FormatError::Encoding {
-                what: "the layer passes",
-                reason: format!(
-                    "the header states {passes}, more than the {} the codec carries",
-                    rle1::GREY_PASSES
-                ),
-            });
-        }
+        let passes = family.passes(passes)?;
         let rows = read_table(&mut reads, table, layer_count, passes)?;
+        let preview = read_rgb15_preview(&mut reads, large_preview).ok();
 
         Ok(OpenChitu {
             reads,
@@ -153,6 +167,7 @@ impl SlicedFileReader for ChituReader {
                 },
                 stated,
                 layers: rows.iter().take(layer_count as usize).copied().collect(),
+                preview,
             },
             family,
             passes,

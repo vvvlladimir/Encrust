@@ -3,14 +3,17 @@ use std::collections::BTreeMap;
 
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
-    decode_grey, layer_in_range, panel_in_range, png_shape, read_entry, stated_distance_mm,
-    stated_pwm, stated_speed_mm_min, stated_wait_s,
+    decode_grey, layer_in_range, panel_in_range, png_shape, read_entry, read_png_preview,
+    stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 use zip::ZipArchive;
 
 use crate::gcode::GENERATED_BY;
 use crate::writer::PROGRAM;
+
+/// The larger of the two previews.
+const PREVIEW: &str = "preview.png";
 
 /// Reads the zip of greyscale PNGs a Chitu board runs as gcode. Layout is in
 /// `docs/formats/gcode-zip.md`.
@@ -67,6 +70,7 @@ impl SlicedFileReader for GcodeZipReader {
                 }
             })
             .collect();
+        let preview = read_png_preview(&mut zip, PREVIEW).ok();
 
         Ok(OpenGcodeZip {
             zip,
@@ -91,6 +95,7 @@ impl SlicedFileReader for GcodeZipReader {
                 grey_steps: 256,
                 stated: stated(number),
                 layers: entries,
+                preview,
             },
         })
     }

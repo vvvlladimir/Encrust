@@ -94,8 +94,8 @@ pub fn convert(
     converted
 }
 
-/// The header the new file carries: the file's stack and exposures on the new machine,
-/// with the resin's motion around them.
+/// The header the new file carries: the file's stack, exposures and preview on the new
+/// machine, with the resin's motion around them.
 fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, PipelineError> {
     let printer = converting.printer;
     let display = &printer.display;
@@ -139,7 +139,7 @@ fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, P
         plan,
         material,
         volume_mm3: facts.volume_mm3.unwrap_or(0.0),
-        thumbnail: None,
+        thumbnail: facts.preview.clone(),
         created_unix_s: converting.created_unix_s,
     })
 }

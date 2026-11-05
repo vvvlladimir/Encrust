@@ -51,6 +51,16 @@ fn a_known_file_gives_its_settings_resin_and_layers() {
     assert!((waits.before_lift_s - 1.3).abs() < 1e-4);
     assert!((waits.after_lift_s - 0.7).abs() < 1e-4);
     assert!((waits.after_retract_s - 2.1).abs() < 1e-4);
+    let preview = facts
+        .preview
+        .as_ref()
+        .expect("the known file has a preview");
+    assert_eq!((preview.width_px(), preview.height_px()), (415, 500));
+    assert_eq!(
+        preview.pixels()[250 * 415 + 207],
+        [8, 107, 173],
+        "the cube is blue"
+    );
 
     let expected = u64::from(facts.width_px) * u64::from(facts.height_px);
     for index in 0..facts.layer_count() {

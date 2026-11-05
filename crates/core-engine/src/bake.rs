@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use core_geometry::{Aabb, Mat4, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{Repeated, Solid};
+use core_thumbnail::Look;
 use core_volume::{drilled, drilled_pieces};
 use printer_profiles::Compensation;
 
@@ -250,15 +251,15 @@ fn drilled_body(model: &Model) -> Option<Arc<Mesh>> {
         .or_else(|| drilled(&model.mesh, cuts).ok().map(Arc::new))
 }
 
-/// Every mesh on the plate and where it stands, without copying any of them. The thumbnail renders
-/// from this rather than [`bake`], which would copy the plate; supports are in plate coordinates.
-pub fn parts(models: &[Model]) -> Vec<(Arc<Mesh>, Transform)> {
+/// Every mesh on the plate, where it stands and what it is, without copying any of them. The
+/// thumbnail renders from this rather than [`bake`], which would copy the plate.
+pub fn parts(models: &[Model]) -> Vec<(Arc<Mesh>, Transform, Look)> {
     let mut parts = Vec::new();
     for model in models {
         let mesh = model.drilled.as_ref().unwrap_or(&model.mesh);
-        parts.push((Arc::clone(mesh), model.transform));
+        parts.push((Arc::clone(mesh), model.transform, Look::Model));
         for supports in &model.supports {
-            parts.push((Arc::clone(supports), Transform::default()));
+            parts.push((Arc::clone(supports), Transform::default(), Look::Support));
         }
     }
     parts

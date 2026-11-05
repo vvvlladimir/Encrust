@@ -157,6 +157,14 @@ fn every_layer_reads_back_as_the_mask_it_was_traced_from() {
     assert_eq!((facts.width_px, facts.height_px), (WIDTH_PX, HEIGHT_PX));
     assert_eq!(facts.machine.as_deref(), Some("Foto 8.9"));
     assert_eq!(facts.resin.as_deref(), Some("Test resin"));
+    assert_eq!(
+        facts
+            .preview
+            .as_ref()
+            .map(|p| (p.width_px(), p.height_px())),
+        Some((200, 240)),
+        "the larger bitmap is read"
+    );
     assert_eq!(facts.bottom_layers, 2);
     assert!((facts.exposure_s - 2.6).abs() < 1e-6);
     assert!((facts.bottom_exposure_s - 32.0).abs() < 1e-6);

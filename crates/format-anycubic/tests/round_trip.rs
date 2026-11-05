@@ -333,6 +333,32 @@ fn the_preview_carries_the_job_thumbnail_as_five_six_five_colour() {
 }
 
 #[test]
+fn a_written_file_reads_back_its_preview() {
+    let job = PrintJob {
+        thumbnail: Some(Thumbnail::filled(8, 8, [255, 0, 0])),
+        ..job(1)
+    };
+    let file = write(&job, &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()]);
+
+    let open = AnycubicReader
+        .open(std::io::Cursor::new(file))
+        .expect("a written file opens");
+
+    let preview = open.facts().preview.as_ref().expect("the preview is read");
+    assert_eq!((preview.width_px(), preview.height_px()), (224, 168));
+    assert_eq!(
+        preview.pixels()[84 * 224 + 112],
+        [255, 0, 0],
+        "the middle is the part"
+    );
+    assert_eq!(
+        preview.pixels()[0],
+        [0, 0, 0],
+        "the padding stays background"
+    );
+}
+
+#[test]
 fn a_band_of_height_writes_its_own_exposure_into_the_layer_table() {
     let banded = PrintJob {
         material: MaterialProfile {

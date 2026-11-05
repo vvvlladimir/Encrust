@@ -1,6 +1,6 @@
 use core_format::{
     Buffer, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range,
+    SlicedFileReader, layer_in_range, panel_in_range, read_rgb15_preview,
 };
 use core_raster::Run;
 
@@ -37,7 +37,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         reads.skip(4)?;
         let table = u64::from(reads.u32_le()?);
         let layer_count = reads.u32_le()?;
-        reads.skip(4)?;
+        let large_preview = u64::from(reads.u32_le()?);
         let print_time_s = reads.u32_le()?;
         reads.skip(4)?;
         let print_parameters = u64::from(reads.u32_le()?);
@@ -62,6 +62,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         } = read_print_parameters(&mut reads)?;
 
         let layers = read_table(&mut reads, table, layer_count, end)?;
+        let preview = read_rgb15_preview(&mut reads, large_preview).ok();
 
         Ok(OpenCxdlpV4 {
             reads,
@@ -88,6 +89,7 @@ impl SlicedFileReader for CxdlpV4Reader {
                     ..PrinterTuning::default()
                 },
                 layers,
+                preview,
             },
         })
     }

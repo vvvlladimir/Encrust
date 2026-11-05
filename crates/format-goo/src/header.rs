@@ -5,7 +5,7 @@ use core_raster::Shading;
 use core_format::Fields;
 use core_format::PrintJob;
 use core_format::Thumbnail;
-use core_format::rgb565;
+use core_format::{RGB565_BITS, rgb565};
 
 use crate::version::{ByteOrder, GooVersion};
 
@@ -22,7 +22,7 @@ pub(crate) const ENDING_STRING: [u8; 11] = [
 const MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
 
 const SMALL_PREVIEW_PX: usize = 116;
-const BIG_PREVIEW_PX: usize = 290;
+pub(crate) const BIG_PREVIEW_PX: usize = 290;
 
 /// Colour the previews are padded with where the square image does not reach.
 const BACKGROUND: [u8; 3] = [0, 0, 0];
@@ -97,7 +97,11 @@ fn write_preview(
         return fields.zeros(2 * side_px * side_px);
     };
     let side = side_px as u32;
-    for pixel in thumbnail.fitted_to(side, side, BACKGROUND).pixels() {
+    for pixel in thumbnail
+        .fitted_to(side, side, BACKGROUND)
+        .dithered(RGB565_BITS)
+        .pixels()
+    {
         order.put_u16(fields, rgb565(*pixel))?;
     }
     Ok(())

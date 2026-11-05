@@ -1,4 +1,5 @@
 use core_raster::Run;
+use core_thumbnail::Thumbnail;
 use printer_profiles::{MaterialProfile, PrinterTuning};
 
 use crate::{FormatError, ReadSeek};
@@ -34,6 +35,9 @@ pub struct SlicedFile {
     pub stated: PrinterTuning,
     /// One entry per layer, in print order.
     pub layers: Vec<LayerEntry>,
+    /// The largest preview picture the file carries, which a converted file's records are
+    /// cut from; `None` where the container has none or it does not decode.
+    pub preview: Option<Thumbnail>,
 }
 
 impl SlicedFile {
@@ -172,6 +176,7 @@ mod tests {
                 ..PrinterTuning::default()
             },
             layers: Vec::new(),
+            preview: None,
         }
     }
 

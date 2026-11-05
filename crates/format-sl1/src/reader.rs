@@ -3,13 +3,16 @@ use std::collections::BTreeMap;
 
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
-    decode_grey, layer_in_range, png_shape, read_entry,
+    decode_grey, layer_in_range, png_shape, read_entry, read_png_preview,
 };
 use core_raster::Run;
 use zip::ZipArchive;
 
 use crate::fade::bottom_and_transition;
 use crate::writer::{Sl1Flavour, index_digits};
+
+/// The larger of the two previews.
+const PREVIEW: &str = "thumbnail/thumbnail800x480.png";
 
 /// Reads the Prusa `.sl1` archive. Layout is in `docs/formats/sl1.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -64,6 +67,7 @@ impl SlicedFileReader for Sl1Reader {
             .collect();
 
         layers.sort_by_key(|(index, _)| *index);
+        let preview = read_png_preview(&mut zip, PREVIEW).ok();
         Ok(OpenSl1 {
             zip,
             names: layers.into_iter().map(|(_, name)| name).collect(),
@@ -93,6 +97,7 @@ impl SlicedFileReader for Sl1Reader {
                     ..PrinterTuning::default()
                 },
                 layers: entries,
+                preview,
             },
         })
     }

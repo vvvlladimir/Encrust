@@ -287,6 +287,11 @@ fn a_models_supports_are_listed_beside_it_without_being_copied() {
         "supports are already in plate coordinates"
     );
     assert!(Arc::ptr_eq(&listed[1].0, &supports), "nothing is copied");
+    assert_eq!(
+        [listed[0].2, listed[1].2],
+        [core_thumbnail::Look::Model, core_thumbnail::Look::Support],
+        "the supports are drawn as supports"
+    );
 }
 
 #[test]

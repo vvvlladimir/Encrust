@@ -1,6 +1,6 @@
 use std::io;
 
-use core_format::{Fields, PrintJob, Rgb, rgb565};
+use core_format::{Fields, PrintJob, RGB565_BITS, Rgb, rgb565};
 
 use crate::blocks::{
     self, COLOUR_TABLE_BYTES, EXTRA_BYTES, MACHINE_BYTES, MODEL_BYTES, SOFTWARE_BYTES,
@@ -233,6 +233,7 @@ fn write_preview(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
         Some(thumbnail) => {
             for pixel in thumbnail
                 .fitted_to(width, height, PREVIEW_BACKGROUND)
+                .dithered(RGB565_BITS)
                 .pixels()
             {
                 fields.u16_le(rgb565(*pixel))?;

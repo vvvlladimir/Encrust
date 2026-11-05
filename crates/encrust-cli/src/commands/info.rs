@@ -7,7 +7,6 @@ use crate::commands::GlobalArgs;
 use crate::exit::Exit;
 use crate::{json, sliced_read};
 
-// TODO(step-B5): `--thumbnail out.png` waits on every reader handing over its preview records.
 #[derive(clap::Args, Debug)]
 pub struct InfoCommand {
     /// Sliced file in any container this writes, whoever wrote it.
@@ -21,6 +20,10 @@ pub struct InfoCommand {
     /// Where `--layer` writes its image.
     #[arg(long, value_name = "PATH", requires = "layer")]
     pub png: Option<PathBuf>,
+
+    /// Where the file's own preview picture is written, as a PNG.
+    #[arg(long, value_name = "PATH", conflicts_with = "layer")]
+    pub thumbnail: Option<PathBuf>,
 }
 
 /// The document `info --layer N --json` prints: the layer, and the image where one was
@@ -30,6 +33,15 @@ struct OneLayer<'a, L: serde::Serialize> {
     layer: L,
     #[serde(skip_serializing_if = "Option::is_none")]
     png: Option<&'a std::path::Path>,
+}
+
+/// The document `info --json` prints: the file, and its preview's path where one was asked for.
+#[derive(serde::Serialize)]
+struct WholeFile<'a, F: serde::Serialize> {
+    #[serde(flatten)]
+    file: F,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thumbnail: Option<&'a std::path::Path>,
 }
 
 impl InfoCommand {
@@ -54,10 +66,20 @@ impl InfoCommand {
             return Ok(Exit::Success);
         }
         let info = sliced_read::read(&self.file)?;
+        if let Some(thumbnail) = &self.thumbnail {
+            std::fs::write(thumbnail, info.preview_png()?)
+                .with_context(|| format!("cannot write {}", thumbnail.display()))?;
+        }
         if global.json {
-            json::print(&info.document())?;
+            json::print(&WholeFile {
+                file: info.document(),
+                thumbnail: self.thumbnail.as_deref(),
+            })?;
         } else if !global.quiet {
             print!("{info}");
+            if let Some(thumbnail) = &self.thumbnail {
+                println!("  {:<14}{}", "preview to", thumbnail.display());
+            }
         }
         Ok(Exit::Success)
     }
