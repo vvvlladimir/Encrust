@@ -6,10 +6,11 @@ use core_volume::HoleSize;
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
-use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
+use crate::job::{DrainsJob, TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
+mod auto;
 mod plugs;
 
 pub use plugs::PlugsLaid;
@@ -34,6 +35,8 @@ pub struct DrainTool {
     pub state: DrainState,
     pub placing: Placing,
     pub job: Option<TrapJob>,
+    /// The search for holes that drain the picked models, going.
+    pub auto: Option<DrainsJob>,
     /// Whether a check has finished since the plate last changed under it. A check is
     /// asked for by hand and never follows a run; see ADR 0198.
     pub checked: bool,
@@ -52,6 +55,7 @@ impl Default for DrainTool {
             state: DrainState::round(3.0, 3.0, 1.0),
             placing: Placing::default(),
             job: None,
+            auto: None,
             checked: false,
             laying: Vec::new(),
             waiting: Vec::new(),
@@ -94,9 +98,13 @@ impl DrainTool {
         self.checked = false;
     }
 
-    /// Drains a running check into the scene and the stage notice. Returns whether one is
-    /// still going, which is what tells the window to keep repainting.
+    /// Drains a running check or drain search into the scene and the stage notice. Returns
+    /// whether one is still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
+        self.poll_check(scene, status) | self.poll_auto(scene, status)
+    }
+
+    fn poll_check(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
             return false;
         };

@@ -376,6 +376,11 @@ whole-surface fill is Cmd-Shift-click.
   of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
   you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
+- **Auto**, beside Check drainage, finds the holes itself in the picked models as they stand,
+  hollowed, turned and lifted: a drain low on each pocket of trapped resin and a vent high on
+  it, each kept only once a fresh scan shows the pocket empty, as `--drain-at auto` does. It
+  runs with a bar and Cancel; the holes are drilled as clicks drill them, with their plugs,
+  one undo takes them all back, and a pocket no hole can drain stays painted red.
 - Drain settings can be saved as presets too.
 
 ---
@@ -910,7 +915,7 @@ print a plug for each beside the model, with the gap you choose. A hole's point 
 model prints, supports' lift included, so a point `--json` reports can be drilled as it stands. `--drain-at auto` finds the
 holes itself: a drain low on each pocket of trapped resin and a vent high on it, each kept only
 once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no hole can drain is
-still reported. The window does not offer this yet. A run whose plugs have no
+still reported; the window's Drain tool does the same with Auto. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.
 
 **You cannot** (from the command line): paint supports or where a relief goes, place supports

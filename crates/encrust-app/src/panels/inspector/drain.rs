@@ -11,8 +11,8 @@ use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
     Inline, Segment, Segmented, count_row, describe, figure_line, hint, icon, inline_button, inset,
-    notice, number_row, primary_button, secondary_button, section, status_dot, step_bar, theme,
-    tone,
+    notice, number_row, primary_button, primary_with_companion, secondary_button, section,
+    status_dot, step_bar, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -115,22 +115,40 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         }
         return;
     }
+    if let Some(job) = &window.tools.drain.auto {
+        if step_bar(ui, &tr!("drain-auto-looking"), Some(job.fraction()), true) {
+            window.tools.drain.cancel_auto(&mut window.machine.status);
+        }
+        return;
+    }
     let layer_height_mm = window.machine.slicing.layer_height_mm();
     let label = if window.tools.drain.checked {
         tr!("drain-check-again")
     } else {
         tr!("drain-check")
     };
-    let what = tr!("drain-check-tooltip");
-    if primary_button(ui, &label, !window.doc.scene.is_empty())
-        .on_hover_text(what)
-        .clicked()
-    {
+    let enabled = !window.doc.scene.is_empty();
+    let (check, auto) = primary_with_companion(
+        ui,
+        (&label, enabled),
+        (icon::AUTO_DRAIN, &tr!("drain-auto"), enabled),
+    );
+    if check.on_hover_text(tr!("drain-check-tooltip")).clicked() {
         let started = window.tools.drain.start(&window.doc.scene, layer_height_mm);
         window
             .machine
             .status
             .report(&tr!("drain-checking"), started);
+    }
+    if auto.on_hover_text(tr!("drain-auto-tooltip")).clicked() {
+        let started = window
+            .tools
+            .drain
+            .start_auto(&window.doc.scene, layer_height_mm);
+        window
+            .machine
+            .status
+            .report(&tr!("drain-auto-looking"), started);
     }
 }
 

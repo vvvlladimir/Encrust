@@ -43,15 +43,26 @@ point (ADR 0394), stands it clear. `--json` adds `auto_drains` per model: `pocke
 (`slicing.trapped`'s fields and `drained`), `holes` (`pocket`, `role` `drain` or `vent`,
 `at_mm`, `axis`, `diameter_mm`, `depth_mm`) and `scans`, in the plate frame of ADR 0394.
 
+The window's Drain tool takes it as Auto, the companion of Check drainage at the tool's foot:
+it is that check carried further, so it stands beside it rather than in a section. It searches
+each picked model where it stands — its shell, its cuts, turned and lifted as the plate holds
+it, resting on the plate where its lowest point is — on a worker through
+`suggest_drains_heard`, which hears each scan and stops between windows, so the bar fills
+over the most scans the search can take and Cancel drops what it found. Each hole comes back
+into the model's own space, its sizes through the model's least scale as a click's are, and
+is drilled as a click drills it; what is left trapped is marked as the check marks it. All
+land in one frame, so one undo takes them back (ADR 0257); a model moved or remade while
+the search ran gets nothing. It always vents, as the command line does by default: a switch
+would be a field of the project's `DrainState` for a choice nobody has asked to make.
+
 ## Consequences
 
 A run that drains reports `slicing.trapped` empty, and one that cannot stays unclean as
 before, so an agent tries `auto` first and a point only where it fails. Each scan cuts the
 whole model, so the search costs up to ten slices of it; the `drains` group of
 `core-engine/benches/plate.rs` times it at 0.46 s, four scans, on a 40 mm ball at 0.05 mm layers. Supports placed after the holes land on the drilled surface but
-not clear of a mouth's rim. The window's Drain tool does not yet offer it (rule 9 of
-`architecture.md`): an Auto action on a worker, filling `ModelHollow`'s drains in the model's
-space, is the next step. Reopen if a pocket the search drains is reported trapped once written
+not clear of a mouth's rim. The window cannot ask for a search without a vent; add a switch
+if a user asks for one. Reopen if a pocket the search drains is reported trapped once written
 — a scan at the run's layers that disagrees with the file's.
 
 ## Alternatives considered
