@@ -7,6 +7,7 @@ mod decide;
 mod error;
 #[cfg(test)]
 mod fixtures;
+mod library;
 mod metrics;
 mod orient;
 mod planned;
@@ -19,6 +20,7 @@ pub use builtin::{BUILT_IN, built_in};
 pub use condition::{BinaryOp, Condition, Expr, Function, Kind, Value};
 pub use decide::{Decision, Foreseen, Reading, Resolved, decide, decide_forced, preview, retry};
 pub use error::RecipeError;
+pub use library::{Listed, Origin, Read, find, is_built_in, library};
 pub use metrics::{Metric, Metrics, Model, measure};
 pub use orient::preset_of;
 pub use planned::{measure_planned, planned_wall};

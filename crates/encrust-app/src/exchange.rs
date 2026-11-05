@@ -31,6 +31,10 @@ pub fn import_file(
         foreign_resin(catalogue, file, printer)
     } else if kind == Kind::Resin && core_pipeline::reads_sliced_file(path) {
         resin_of_sliced(catalogue, file, printer)
+    } else if kind == Kind::Recipe {
+        file.text()
+            .map_err(anyhow::Error::new)
+            .and_then(|text| import_recipe(catalogue, &text))
     } else {
         file.text()
             .map_err(anyhow::Error::new)
@@ -67,6 +71,15 @@ fn resin_of_sliced(
     Ok(catalogue.import_resin(facts.resin(&stem), Some(&printer))?)
 }
 
+/// Takes in a recipe that reads and passes its check, under an id of its own that no
+/// built-in recipe holds. Answers the new id.
+pub fn import_recipe(catalogue: &mut Catalogue, text: &str) -> anyhow::Result<String> {
+    let plan = core_recipe::validate(core_recipe::Recipe::from_toml(text)?)?;
+    let id = catalogue.fresh_recipe_id(&plan.recipe().name, core_recipe::is_built_in);
+    catalogue.save_recipe(&id, text)?;
+    Ok(id)
+}
+
 /// Takes in a resin another program exported, set up on `printer` or else on the machine
 /// it names. Answers the new id.
 fn foreign_resin(
@@ -96,7 +109,7 @@ pub fn import(
     match kind {
         Kind::Hollow => catalogue.import_preset::<HollowState>(kind, text, path),
         Kind::Drain => catalogue.import_preset::<DrainState>(kind, text, path),
-        Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => {
+        Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto | Kind::Recipe => {
             catalogue.import(kind, text, path, printer)
         }
     }
@@ -151,5 +164,23 @@ mod tests {
             matches!(refused, Err(ProfileError::Parse { .. })),
             "drain numbers are not a hollow preset: {refused:?}"
         );
+    }
+
+    #[test]
+    fn a_recipe_travels_under_a_stem_no_built_in_holds_and_one_that_fails_its_check_stays_out() {
+        let mut catalogue = writable("recipes");
+        let text = core_recipe::BUILT_IN[0].1;
+        let id = import_recipe(&mut catalogue, text).expect("a shipped recipe is valid");
+        assert_eq!(id, "prepare-for-print");
+        assert_eq!(catalogue.export(Kind::Recipe, &id).expect("kept"), text);
+
+        let early = "name = \"Early\"\n[[step]]\ndo = \"orient\"\nwhen = \"trapped > 0\"\n";
+        let refused = import_recipe(&mut catalogue, early);
+        let error = refused.expect_err("trapped is not known before a drain");
+        assert!(matches!(
+            error.downcast_ref::<core_recipe::RecipeError>(),
+            Some(core_recipe::RecipeError::NotYetKnown { .. })
+        ));
+        assert_eq!(catalogue.recipes().count(), 1);
     }
 }

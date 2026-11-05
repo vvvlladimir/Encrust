@@ -1,12 +1,12 @@
-//! The recipes by id: the built-in ones, then the user's `<stem>.toml` files in the
-//! `recipes/` folder beside their profiles (ADR 0403).
+//! The recipes by id as `core_recipe::library` lists and finds them: the built-in ones, then
+//! the user's `<stem>.toml` files the catalogue keeps in `recipes/` (ADR 0403, 0405).
 
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use core_recipe::{BUILT_IN, Recipe, validate};
-use printer_profiles::{is_valid_id, user_dir};
+use core_recipe::{BUILT_IN, Origin, Read, Recipe};
+use printer_profiles::{Kind, is_valid_id, user_dir};
 use serde::Serialize;
 
 /// Where a recipe was found.
@@ -64,69 +64,40 @@ impl fmt::Display for Listing {
     }
 }
 
-/// The folder of the user's recipes, which may not exist.
-fn user_folder() -> Option<PathBuf> {
-    user_dir().map(|dir| dir.join("recipes"))
+/// The user's recipes as the catalogue keeps them: the `recipes/` folder beside their
+/// profiles, the same place the window writes to (ADR 0405).
+fn kept() -> Result<Vec<(String, String)>> {
+    let catalogue = crate::profiles::catalogue()?;
+    Ok(catalogue
+        .recipes()
+        .map(|entry| (entry.id.clone(), entry.profile.clone()))
+        .collect())
 }
 
-/// The file of the user's recipe `id`, when there is one.
-fn user_file(id: &str) -> Option<PathBuf> {
-    if !is_valid_id(id) {
-        return None;
-    }
-    let path = user_folder()?.join(format!("{id}.toml"));
-    path.is_file().then_some(path)
+fn pairs(kept: &[(String, String)]) -> impl Iterator<Item = (&str, &str)> {
+    kept.iter().map(|(id, text)| (id.as_str(), text.as_str()))
 }
 
 /// Every built-in recipe, then the user's by stem; one that would not read is listed with
 /// its error.
-pub fn list() -> Listing {
-    let mut recipes: Vec<Line> = BUILT_IN
-        .iter()
-        .map(|(id, text)| line(id, Source::BuiltIn, read_text(text)))
-        .collect();
-    let mut users: Vec<(String, PathBuf)> = user_folder()
-        .and_then(|folder| std::fs::read_dir(folder).ok())
+pub fn list() -> Result<Listing> {
+    let kept = kept()?;
+    let recipes = core_recipe::library(pairs(&kept))
         .into_iter()
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.ok()?.path();
-            let stem = path.file_stem()?.to_str()?.to_owned();
-            (path.extension()? == "toml").then_some((stem, path))
+        .map(|listed| {
+            let error = listed.plan().err().map(ToString::to_string);
+            Line {
+                name: listed.recipe().map(|recipe| recipe.name.clone()),
+                id: listed.id,
+                source: match listed.origin {
+                    Origin::BuiltIn => Source::BuiltIn,
+                    Origin::User => Source::User,
+                },
+                error,
+            }
         })
         .collect();
-    users.sort();
-    recipes.extend(
-        users
-            .into_iter()
-            .map(|(id, path)| line(&id, Source::User, read_file(&path))),
-    );
-    Listing { recipes }
-}
-
-fn line(id: &str, source: Source, read: Result<Recipe>) -> Line {
-    let (name, error) = match read {
-        Ok(recipe) => (Some(recipe.name), None),
-        Err(error) => (None, Some(format!("{error:#}"))),
-    };
-    Line {
-        id: id.to_owned(),
-        name,
-        source,
-        error,
-    }
-}
-
-fn read_text(text: &str) -> Result<Recipe> {
-    let recipe = Recipe::from_toml(text)?;
-    validate(recipe.clone())?;
-    Ok(recipe)
-}
-
-fn read_file(path: &Path) -> Result<Recipe> {
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("cannot read the recipe {}", path.display()))?;
-    read_text(&text)
+    Ok(Listing { recipes })
 }
 
 /// The recipe `asked` names, and where it was found: a built-in id, else the user's recipe
@@ -140,22 +111,30 @@ pub fn find(asked: &str) -> Result<(Source, Recipe)> {
             .with_context(|| format!("{} is not a recipe this build reads", path.display()))?;
         return Ok((Source::File, recipe));
     }
-    if let Some((_, text)) = BUILT_IN.iter().find(|(id, _)| *id == asked) {
-        return Ok((Source::BuiltIn, Recipe::from_toml(text)?));
-    }
-    if let Some(path) = user_file(asked) {
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("cannot read the recipe {}", path.display()))?;
-        let recipe = Recipe::from_toml(&text)
-            .with_context(|| format!("{} is not a recipe this build reads", path.display()))?;
-        return Ok((Source::User, recipe));
+    let kept = if is_valid_id(asked) {
+        kept()?
+    } else {
+        Vec::new()
+    };
+    if let Some(listed) = core_recipe::find(asked, pairs(&kept)) {
+        let source = match listed.origin {
+            Origin::BuiltIn => Source::BuiltIn,
+            Origin::User => Source::User,
+        };
+        return match listed.read {
+            Read::Valid(plan) => Ok((source, plan.recipe().clone())),
+            Read::Invalid { recipe, .. } => Ok((source, recipe)),
+            Read::Unreadable(error) => Err(anyhow::Error::new(error)
+                .context(format!("{asked} is not a recipe this build reads"))),
+        };
     }
     let ids: Vec<&str> = BUILT_IN.iter().map(|(id, _)| *id).collect();
+    let folder = user_dir().map(|dir| dir.join(Kind::Recipe.dir()));
     bail!(
         "no recipe `{asked}`: the built-in ones are {}; yours are the files in {}; \
          `encrust recipes list` shows them",
         ids.join(", "),
-        user_folder().map_or_else(|| "recipes/".to_owned(), |dir| dir.display().to_string())
+        folder.map_or_else(|| "recipes/".to_owned(), |dir| dir.display().to_string())
     )
 }
 
@@ -165,7 +144,7 @@ mod tests {
 
     #[test]
     fn every_built_in_recipe_is_listed_first_and_reads() {
-        let listing = list();
+        let listing = list().expect("the shipped catalogue reads");
         let built_in: Vec<_> = listing
             .recipes
             .iter()

@@ -160,8 +160,10 @@ each step together; a gate that stops on one stops the run.
 
 ## Where recipes live
 
-The built-in ones in `assets/recipes/`, compiled into `core-recipe`; the user's beside
-their profiles in `recipes/`, a file each, its stem the id. `core-recipe` reads no files:
-the front ends hand it the text. The command line looks an id up among the built-in ones
-first, so a user file named like one is reached by its path; `encrust recipes list` and
-`show` print them. The window has no picker yet.
+The built-in ones in `assets/recipes/`, compiled into `core-recipe`; the user's in the profile
+catalogue as `Kind::Recipe`, a text each under its stem: `recipes/` beside their profiles at
+the desk, the page's storage in a browser (ADR 0405). `core-recipe` reads no files: the
+front ends hand it the texts, and `core_recipe::library` lists the built-in ones then the
+user's by id, `find` an id among the built-in ones first, so a user file named like one is
+reached by its path. `encrust recipes list` and `show` print them. The window has no picker
+yet.

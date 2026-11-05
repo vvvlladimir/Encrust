@@ -24,7 +24,7 @@ impl RecipesCommand {
     pub fn run(&self, global: &GlobalArgs) -> Result<Exit> {
         match self {
             Self::List => {
-                let listing = library::list();
+                let listing = library::list()?;
                 if global.json {
                     json::print(&listing)?;
                 } else if !global.quiet {
