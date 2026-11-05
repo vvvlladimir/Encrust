@@ -11,13 +11,14 @@ use core_volume::HollowSettings;
 
 use super::piece::Piece;
 use super::prepared::{Wall, profile_name};
-use super::settings::{Settings, flag, number, word};
+use super::settings::Settings;
 use super::{Ctx, Did, drain};
 use crate::args::RepairMethod;
 use crate::hollowing::{self, HollowArgs, Mode, Pattern};
 use crate::pipeline::{orientation, read_again, repaired_later, turn_in_place};
 use crate::profiles::{AUTO, plan_of};
 use crate::supports::{stand_at, stand_under};
+use core_recipe::resolved::{flag, number, text};
 
 /// A turn this small, degrees, leaves the model as it stood.
 const UNTURNED_DEG: Scalar = 1e-3;
@@ -44,7 +45,7 @@ pub(super) fn run(
 /// The search `--orient` runs, judged on the supports the recipe stands it on; supports
 /// already under it are taken off.
 fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    let preset = word(settings, "goal").map_or(OrientSettings::default().preset, preset_of);
+    let preset = text(settings, "goal").map_or(OrientSettings::default().preset, preset_of);
     let asked = (preset, number(settings, "max_tilt_deg"));
     piece.take_off_supports();
     let judged = ctx.support_plan(piece)?;
@@ -74,7 +75,7 @@ fn preset_of(goal: &str) -> OrientPreset {
 /// `--repair` by the step's method; a shell repaired is remeshed, so its cavity is not known
 /// any more.
 fn repair(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    let method = match word(settings, "method") {
+    let method = match text(settings, "method") {
         Some(name) => RepairMethod::from_str(name, true)
             .map_err(|why| anyhow::anyhow!("no repair method `{name}`: {why}"))?
             .into(),
@@ -102,7 +103,7 @@ fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
         bail!("keep_solid_under_mm is not supported yet");
     }
     let wall_mm = number(settings, "wall_mm").unwrap_or(HollowSettings::default().thickness_mm);
-    let (mode, open_floor) = match word(settings, "mode") {
+    let (mode, open_floor) = match text(settings, "mode") {
         Some("outside") => (Mode::External, false),
         Some("open-floor") => (Mode::Internal, true),
         _ => (Mode::Internal, false),
@@ -141,7 +142,7 @@ fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
 fn supports(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     let mut plan = match &piece.shaping.supports {
         Some(plan) => plan.clone(),
-        None => plan_of(word(settings, "profile").unwrap_or(AUTO))?,
+        None => plan_of(text(settings, "profile").unwrap_or(AUTO))?,
     };
     plan.cavity = flag(settings, "cavity").unwrap_or(false);
     piece.take_off_supports();

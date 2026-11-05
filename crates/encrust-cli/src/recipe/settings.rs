@@ -1,46 +1,14 @@
-//! A step's resolved settings read by key, and the flags typed for a model laid over them:
+//! The flags typed for a model laid over a step's resolved settings:
 //! a flag shaping a setting wins over it in every step of its kind (`docs/design/recipes.md`).
 
-use std::collections::BTreeMap;
-
 use clap::ValueEnum;
-use core_geometry::Scalar;
 use core_recipe::{Resolved, StepKind};
 
 use super::prepared::profile_name;
 use crate::hollowing::Mode;
 use crate::stage::Shaping;
 
-pub(super) type Settings = BTreeMap<String, Resolved>;
-
-pub(super) fn number(settings: &Settings, key: &str) -> Option<Scalar> {
-    match settings.get(key)? {
-        Resolved::Number(number) => Some(*number),
-        _ => None,
-    }
-}
-
-pub(super) fn flag(settings: &Settings, key: &str) -> Option<bool> {
-    match settings.get(key)? {
-        Resolved::Bool(flag) => Some(*flag),
-        _ => None,
-    }
-}
-
-/// A word or a text, which a setting such as a profile id may be written as.
-pub(super) fn word<'a>(settings: &'a Settings, key: &str) -> Option<&'a str> {
-    match settings.get(key)? {
-        Resolved::Word(text) | Resolved::Text(text) => Some(text),
-        _ => None,
-    }
-}
-
-pub(super) fn points<'a>(settings: &'a Settings, key: &str) -> &'a [[Scalar; 3]] {
-    match settings.get(key) {
-        Some(Resolved::Points(points)) => points,
-        _ => &[],
-    }
-}
+pub(super) type Settings = core_recipe::ResolvedSettings;
 
 /// The step kinds a flag typed for a model, or a plate file's key, makes run whatever their
 /// `when`, each with the flag that asks it.

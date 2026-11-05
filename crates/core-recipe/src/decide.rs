@@ -8,6 +8,7 @@ use crate::condition::{Condition, Value};
 use crate::error::RecipeError;
 use crate::metrics::{Metric, Metrics};
 use crate::recipe::{Setting, Settings, Step, StepKind};
+use crate::resolved::ResolvedSettings;
 use crate::validate::Plan;
 
 #[cfg(test)]
@@ -35,7 +36,7 @@ pub enum Resolved {
 pub enum Decision {
     /// Run the step with these settings; a key left out takes the engine's default.
     Run {
-        settings: BTreeMap<String, Resolved>,
+        settings: ResolvedSettings,
         read: Vec<Reading>,
     },
     /// Its `when` does not hold.
@@ -208,7 +209,7 @@ impl<'a> Reader<'a> {
     }
 
     /// `set`, with the first `choose` that holds merged over it, every expression worked out.
-    fn settings(&mut self, step: &Step) -> Result<BTreeMap<String, Resolved>, RecipeError> {
+    fn settings(&mut self, step: &Step) -> Result<ResolvedSettings, RecipeError> {
         let mut merged: Settings = step.set.clone();
         for choice in &step.choose {
             if self.holds(&choice.when)? {

@@ -8,9 +8,10 @@ use core_recipe::Metric;
 use core_volume::{HoleKind, HoleSize};
 
 use super::piece::Piece;
-use super::settings::{Settings, flag, number, points, word};
+use super::settings::Settings;
 use super::{Ctx, Did};
 use crate::hollowing::{AutoReport, Ground, HollowArgs, auto_drains, hole_near};
+use core_recipe::resolved::{flag, number, points, text};
 
 /// Drills the holes the step asks for and notes what is left trapped.
 pub(super) fn drain(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
@@ -25,7 +26,7 @@ pub(super) fn drain(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result
         ..typed
     };
     let drilled = piece.holes.len();
-    let did = match word(settings, "at") {
+    let did = match text(settings, "at") {
         Some("points") => at_points(piece, points(settings, "points"), size, ctx)?,
         _ => {
             let vent = flag(settings, "vent").unwrap_or(true);

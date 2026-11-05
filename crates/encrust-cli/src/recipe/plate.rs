@@ -10,7 +10,7 @@ use core_plate::ArrangeSettings;
 use core_recipe::{Metric, retry, save_folder};
 
 use super::piece::Piece;
-use super::settings::{Settings, flag, number, word};
+use super::settings::Settings;
 use super::steps::{checked, hold_up};
 use super::{Ctx, Did, Run, Saved};
 use crate::batch::sliced_name;
@@ -20,6 +20,7 @@ use crate::pipeline::{Watch, raster_window, slice_staged};
 use crate::profiles::{AUTO, plan_of};
 use crate::slice_report::SliceReport;
 use crate::stage::{Staged, arranged, staged};
+use core_recipe::resolved::{flag, number, text};
 
 impl Run<'_> {
     /// The plate as the pieces stand now, staged to be cut.
@@ -155,8 +156,8 @@ impl Run<'_> {
         if !ctx.watch.writes {
             return Ok(Did::nothing("estimate writes nothing"));
         }
-        let folder = folder_of(word(settings, "folder"))?;
-        let template = word(settings, "name").unwrap_or(DEFAULT_TEMPLATE);
+        let folder = folder_of(text(settings, "folder"))?;
+        let template = text(settings, "name").unwrap_or(DEFAULT_TEMPLATE);
         let named = self.pieces.first().map(|piece| piece.input.clone());
         let when = jiff::Zoned::now().datetime();
         let machine = (ctx.chosen, ctx.layer_height_mm);

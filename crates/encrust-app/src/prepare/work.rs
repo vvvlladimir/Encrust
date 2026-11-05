@@ -1,19 +1,18 @@
 //! What a recipe step's resolved settings ask of a tool's job; a key left out takes the
 //! engine's default, never what a panel holds (`docs/design/recipes.md`).
 
-use std::collections::BTreeMap;
-
 use core_engine::{PREPARE_ORIENT, PREPARE_REPAIR};
 use core_geometry::{MendMethod, Scalar, Transform};
 use core_plate::{ArrangeSettings, OrientGoal, OrientPreset};
-use core_recipe::{Resolved, StepKind};
+use core_recipe::StepKind;
+use core_recipe::resolved::{flag, number, points, text};
 use core_volume::{HoleSize, HollowMode, HollowSettings, InfillSettings, RepairMethod, plate_down};
 
 use super::Step;
 use crate::scene::ObjectId;
 use crate::supports::Side;
 
-pub(super) type Settings = BTreeMap<String, Resolved>;
+pub(super) type Settings = core_recipe::ResolvedSettings;
 
 /// The job one batch of a step runs, the same for every model in it.
 #[derive(Debug, Clone, PartialEq)]
@@ -97,11 +96,11 @@ impl Work {
     pub(super) fn of(kind: StepKind, settings: &Settings) -> Result<Self, NotYet> {
         Ok(match kind {
             StepKind::Orient => Self::Orient {
-                preset: word(settings, "goal").map_or(PREPARE_ORIENT, preset_of),
+                preset: text(settings, "goal").map_or(PREPARE_ORIENT, preset_of),
                 max_tilt_deg: number(settings, "max_tilt_deg"),
             },
             StepKind::Repair => {
-                Self::Repair(word(settings, "method").map_or(PREPARE_REPAIR, method_of))
+                Self::Repair(text(settings, "method").map_or(PREPARE_REPAIR, method_of))
             }
             StepKind::Hollow => {
                 // TODO(step-6): keep_solid_under_mm as core_volume's Keep solid, fitted.
@@ -168,7 +167,7 @@ pub(super) fn cavity(settings: &Settings) -> bool {
 impl Hollowed {
     fn of(settings: &Settings) -> Self {
         let default = HollowSettings::default();
-        let (mode, open_floor) = match word(settings, "mode") {
+        let (mode, open_floor) = match text(settings, "mode") {
             Some("outside") => (HollowMode::External, false),
             Some("open-floor") => (HollowMode::Internal, true),
             _ => (default.mode, false),
@@ -204,13 +203,10 @@ fn drain_of(settings: &Settings) -> Result<Work, NotYet> {
         depth_mm: number(settings, "depth_mm").unwrap_or(default.depth_mm),
         ..default
     };
-    Ok(match word(settings, "at") {
+    Ok(match text(settings, "at") {
         Some("points") => Work::DrainPoints {
             size,
-            points: match settings.get("points") {
-                Some(Resolved::Points(points)) => points.clone(),
-                _ => Vec::new(),
-            },
+            points: points(settings, "points").to_vec(),
         },
         _ => Work::DrainAuto {
             size,
@@ -234,33 +230,5 @@ fn method_of(method: &str) -> RepairMethod {
         "wrap" => RepairMethod::Wrap,
         "deep" => RepairMethod::Deep,
         _ => RepairMethod::Mend(MendMethod::Repair),
-    }
-}
-
-fn number(settings: &Settings, key: &str) -> Option<Scalar> {
-    match settings.get(key)? {
-        Resolved::Number(number) => Some(*number),
-        _ => None,
-    }
-}
-
-fn flag(settings: &Settings, key: &str) -> Option<bool> {
-    match settings.get(key)? {
-        Resolved::Bool(flag) => Some(*flag),
-        _ => None,
-    }
-}
-
-fn word<'a>(settings: &'a Settings, key: &str) -> Option<&'a str> {
-    match settings.get(key)? {
-        Resolved::Word(word) => Some(word),
-        _ => None,
-    }
-}
-
-fn text<'a>(settings: &'a Settings, key: &str) -> Option<&'a str> {
-    match settings.get(key)? {
-        Resolved::Text(text) | Resolved::Word(text) => Some(text),
-        _ => None,
     }
 }
