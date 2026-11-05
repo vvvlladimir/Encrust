@@ -1566,6 +1566,40 @@ prepare-done =
        *[many] К печати подготовлено { $count } моделей
     }
 
+## prepare/recipes.rs
+
+prepare-recipe-missing = рецепт { $recipe } не найден
+prepare-recipe-cannot-run = рецепт «{ $recipe }» нельзя выполнить
+recipe-kind-repair = Починка
+recipe-kind-orient = Ориентация
+recipe-kind-hollow = Полость
+recipe-kind-drain = Дренаж
+recipe-kind-supports = Поддержки
+recipe-kind-check = Проверка
+recipe-kind-arrange = Расстановка
+recipe-kind-save = Сохранение
+recipe-kind-gate = Условие остановки
+recipe-kind-pause = Пауза
+recipe-note-orient-supports = Снимает поддержки шага { $step }; следующий шаг поддержек построит их заново
+recipe-note-orient-drain = Отверстия шага { $step } выбраны для прежнего положения
+recipe-note-hollow-supports = Поддержки шага { $step } не стоят внутри новой полости
+recipe-note-repair = Починка перестраивает поверхность и может закрыть отверстия шага { $step }
+recipe-note-supports-again = Заменяет поддержки шага { $step }
+
+## prepare/foresee.rs
+
+recipe-step-numbered = { $number }. { $step }
+recipe-plan-runs = Выполнится
+recipe-plan-runs-on = Для { $count } из { $total }
+recipe-plan-skipped = Пропущен
+recipe-plan-when-reached = Решится по ходу
+recipe-plan-off = Выкл.
+recipe-plan-stops = Остановит
+recipe-plan-pauses = Пауза
+recipe-plan-done = Готово
+recipe-plan-running = Идёт
+recipe-plan-to-come = Впереди
+
 ## relief.rs
 
 relief-nothing-visible = На платформе нет видимых моделей, в которые можно вдавить текстуру.
@@ -1632,6 +1666,12 @@ position-prepare = Подготовка к печати
 position-prepare-run = Подготовить к печати
 position-prepare-help-wall = Делает за один раз то, что сделали бы другие инструменты: модель, которую никто не поворачивал, ставит так, как она лучше печатается; сломанную чинит; сплошную делает полой со стенкой { $wall }, если это сберегает достаточно смолы; сверлит отверстия для слива и ставит её на автоматические поддержки, в том числе внутри полости. Всё сделанное отменяется одним действием «Отменить», а кнопка «Отмена» во время работы оставляет платформу как была.
 position-prepare-tooltip = Готовит к печати { $scope }.
+position-prepare-help-plan = Подготовка к печати выполняет выбранный рецепт: сначала идут стандартные, затем ваши из настроек. Под ним план показывает, что каждый шаг сделает с выбранными моделями: выполнится; будет пропущен — с показаниями, по которым это решено; решится по ходу, если читает то, что измеряет более ранний шаг; или выключен. Заметка под шагом говорит, что он отменяет сделанное раньше. Во время работы план отмечает шаги готовыми, идущими или пропущенными.
+position-prepare-recipe = Рецепт, который выполняет подготовка к печати
+position-prepare-built-in = Стандартные
+position-prepare-yours = Ваши
+position-prepare-plan = План
+position-prepare-measuring = Чтение моделей…
 position-prepared = Подготовлено
 position-prepared-oriented = Ориентация
 position-prepared-repaired = Починка

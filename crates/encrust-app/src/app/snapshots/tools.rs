@@ -217,3 +217,15 @@ fn the_preview_of_a_cut_cube() {
     app.machine.preview.set_layer(211);
     picture("preview", app);
 }
+
+/// Tall enough for Select to show Prepare for print at its foot: the recipe and its plan.
+const PREPARE_WINDOW: egui::Vec2 = egui::vec2(1280.0, 1700.0);
+
+#[test]
+fn the_select_tool_planning_prepare_for_print() {
+    let mut app = pictured();
+    app.tool = Tool::Position;
+    let mut harness = drawn(Harness::builder().with_size(PREPARE_WINDOW).wgpu(), app);
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("tool_position_prepare");
+}

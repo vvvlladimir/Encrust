@@ -500,5 +500,6 @@ fn nothing_on_the_plate_or_no_automatic_profile_starts_nothing() {
     assert!(!bench.doc.history.is_held());
 }
 
+mod picked;
 mod recipes;
 mod steps;

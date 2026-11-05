@@ -1500,6 +1500,46 @@ prepare-done =
        *[other] Prepared { $count } models for print
     }
 
+## prepare/recipes.rs
+
+prepare-recipe-missing = there is no recipe { $recipe }
+# The window's line over the recipe's own error, which stays in English.
+prepare-recipe-cannot-run = the recipe { $recipe } cannot run
+# The kind of a recipe's step, a noun naming what the step does.
+recipe-kind-repair = Repair
+recipe-kind-orient = Orientation
+recipe-kind-hollow = Hollowing
+recipe-kind-drain = Drain holes
+recipe-kind-supports = Supports
+recipe-kind-check = Check
+recipe-kind-arrange = Arrangement
+recipe-kind-save = Save
+# A step that ends the run when its condition holds.
+recipe-kind-gate = Stop condition
+recipe-kind-pause = Pause
+# Under a step of a plan that undoes the earlier step numbered { $step }.
+recipe-note-orient-supports = Takes off the supports of step { $step }; a later supports step builds them again
+recipe-note-orient-drain = The holes of step { $step } were placed for the pose before this one
+recipe-note-hollow-supports = The supports of step { $step } stand nothing inside the new cavity
+recipe-note-repair = A repair rebuilds the surface and may close the holes of step { $step }
+recipe-note-supports-again = Replaces the supports of step { $step }
+
+## prepare/foresee.rs
+
+# A step of a plan: its place in the recipe, then its kind.
+recipe-step-numbered = { $number }. { $step }
+# What a step of the plan will do, at the right of its row.
+recipe-plan-runs = Runs
+recipe-plan-runs-on = Runs on { $count } of { $total }
+recipe-plan-skipped = Skipped
+recipe-plan-when-reached = Decided when reached
+recipe-plan-off = Off
+recipe-plan-stops = Stops the run
+recipe-plan-pauses = Pauses
+recipe-plan-done = Done
+recipe-plan-running = Running
+recipe-plan-to-come = To come
+
 ## relief.rs
 
 relief-nothing-visible = Nothing visible on the plate to press a texture into.
@@ -1565,6 +1605,14 @@ position-prepare-run = Prepare for print
 # $wall is the wall Hollow builds by default, with its unit.
 position-prepare-help-wall = Does in one go what the other tools would: turns a model nobody has turned the way it prints best, repairs a broken one, hollows a solid one to a wall of { $wall } where that saves enough resin, drills the holes that drain it and stands it on automatic supports, its cavity too. One undo takes all of it back, and Cancel leaves the plate as it was.
 position-prepare-tooltip = Prepares { $scope } for print.
+# What the recipe picker and the plan under it are; read from the section's question mark.
+position-prepare-help-plan = The recipe picked is the one Prepare for print runs: the built-in ones first, then yours from Settings. Under it the plan says what each step will do with the models in hand: run, be skipped with the readings that decided it, be decided when reached where it reads what an earlier step measures, or stay off. A note under a step says where it undoes an earlier one. While the run goes, the plan marks each step done, running or skipped.
+position-prepare-recipe = The recipe Prepare for print runs
+# Group names in the list of recipes.
+position-prepare-built-in = Built-in
+position-prepare-yours = Yours
+position-prepare-plan = Plan
+position-prepare-measuring = Reading the models…
 # Over what the last Prepare for print did to the model in the card.
 position-prepared = Prepared
 position-prepared-oriented = Oriented

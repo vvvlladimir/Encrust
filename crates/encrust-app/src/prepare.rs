@@ -17,13 +17,17 @@ use crate::tool_settings::ToolSettings;
 
 mod check;
 mod decided;
+mod foresee;
 mod measures;
+mod recipes;
 mod run;
 mod save;
 mod step;
 mod work;
 
 pub use decided::Prepared;
+pub use foresee::{Foresight, PlanLine, foreseen_lines, running_lines};
+pub use recipes::{Library, kind_name, note_text};
 use run::Next;
 use step::{Ended, Going};
 use work::Batch;
@@ -35,8 +39,8 @@ const IDLE_POLLS: u8 = 3;
 /// A turn this small, radians, is a model nobody turned: the window's `--rotate` left out.
 const UNTURNED_RAD: f32 = 1e-4;
 
-/// The recipe Prepare for print runs until one can be chosen.
-const RECIPE: &str = "prepare";
+/// The recipe Prepare for print runs until another is picked.
+pub const DEFAULT_RECIPE: &str = "prepare";
 
 /// The job a step runs, which the bar names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,11 +80,29 @@ impl Step {
     }
 }
 
-/// The run going, if any, and what the last one decided.
-#[derive(Debug, Default)]
+/// The recipe picked, the run going, if any, and what the last one decided.
+#[derive(Debug)]
 pub struct Prepare {
+    /// The recipe a run takes, by id: a built-in one or the user's (ADR 0405).
+    pub recipe: String,
     run: Option<Run>,
     prepared: Vec<Prepared>,
+    /// The plan of the picked recipe for the models in hand, before a run.
+    pub foresight: Foresight,
+    /// The recipes there are to pick from.
+    pub library: Library,
+}
+
+impl Default for Prepare {
+    fn default() -> Self {
+        Self {
+            recipe: DEFAULT_RECIPE.to_owned(),
+            run: None,
+            prepared: Vec::new(),
+            foresight: Foresight::default(),
+            library: Library::default(),
+        }
+    }
 }
 
 /// One run: the models it took, the plan, the step in hand and what has been decided so far.
@@ -101,6 +123,8 @@ struct Run {
     step: Step,
     /// What the run measured on each model after a step, as `trapped` after a drain.
     measured: Vec<(ObjectId, Metrics)>,
+    /// Where each plan step stands, which the plan list shows while the run goes.
+    marks: Vec<crate::ui::PlanMark>,
     /// The models a supports step of this run stood on supports, which a later one replaces.
     supported: Vec<ObjectId>,
     /// What each model's latest supports step built to, which a check's retry stands islands on.
@@ -127,6 +151,12 @@ impl Prepare {
         let inner = run.going.as_ref().and_then(|(_, going)| going.fraction());
         let share = (run.done as f32 + inner.unwrap_or(0.0)) / run.steps.max(1) as f32;
         Some((run.step, run.shown.keep(share.min(1.0))))
+    }
+
+    /// The plan the run takes and where each of its steps stands, while it runs.
+    pub fn marks(&self) -> Option<(&Plan, &[crate::ui::PlanMark])> {
+        let run = self.run.as_ref()?;
+        Some((&run.plan, &run.marks))
     }
 
     /// What the pause the run waits at says, while it waits.
@@ -194,12 +224,27 @@ pub fn blocker(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
         || doc.repairs.is_busy()
         || doc.imports.is_busy()
         || machine.slicing.job.is_some();
-    busy.then(|| tr!("prepare-busy"))
+    if busy {
+        return Some(tr!("prepare-busy"));
+    }
+    let catalogue = &machine.slicing.catalogue;
+    let prepare = &tools.prepare;
+    prepare
+        .library
+        .plan(catalogue, &prepare.recipe)
+        .err()
+        .map(|error| format!("{error:#}"))
 }
 
-/// Starts preparing what a tool would act on now: the picked models, or the whole plate.
+/// Starts preparing what a tool would act on now, the picked models or the whole plate, by
+/// the recipe picked.
 pub fn start(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<()> {
-    start_with(core_recipe::built_in(RECIPE)?, doc, tools, machine)
+    let catalogue = &machine.slicing.catalogue;
+    let plan = tools
+        .prepare
+        .library
+        .plan(catalogue, &tools.prepare.recipe)?;
+    start_with(plan, doc, tools, machine)
 }
 
 /// The same by `plan`.

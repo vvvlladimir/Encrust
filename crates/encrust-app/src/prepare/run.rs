@@ -17,6 +17,7 @@ use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::supports::{BuiltTo, Side};
+use crate::ui::PlanMark;
 
 /// Where a run stands once it has moved on.
 pub(super) enum Next {
@@ -38,6 +39,7 @@ enum Decided {
 impl Run {
     pub(super) fn new(plan: Plan, ids: Vec<ObjectId>) -> Self {
         Self {
+            marks: vec![PlanMark::ToCome; plan.recipe().steps.len()],
             prepared: ids.iter().map(|id| Prepared::new(*id)).collect(),
             ids,
             paused: None,
@@ -184,6 +186,11 @@ impl Run {
         let index = self.next;
         self.index = index;
         self.next += 1;
+        if let Some(earlier) = index.checked_sub(1).and_then(|at| self.marks.get_mut(at))
+            && matches!(earlier, PlanMark::Running | PlanMark::Pauses)
+        {
+            *earlier = PlanMark::Done;
+        }
         let kind = self.plan.recipe().steps[index].kind;
         let mut runs: Vec<(ObjectId, Settings)> = Vec::new();
         for object in scene.named(&self.ids) {
@@ -193,13 +200,21 @@ impl Run {
                     return Ok(Decided::Stop(Status::Error(tr!("prepare-gate-stopped"))));
                 }
                 Decision::Stop { message, .. } => return Ok(Decided::Stop(Status::Error(message))),
-                Decision::Pause { message } if message.is_empty() => {
-                    return Ok(Decided::Pause(tr!("prepare-paused")));
+                Decision::Pause { message } => {
+                    self.marks[index] = PlanMark::Pauses;
+                    return Ok(Decided::Pause(match message.is_empty() {
+                        true => tr!("prepare-paused"),
+                        false => message,
+                    }));
                 }
-                Decision::Pause { message } => return Ok(Decided::Pause(message)),
                 Decision::Skip { .. } | Decision::Disabled => {}
             }
         }
+        self.marks[index] = match (self.plan.recipe().steps[index].enabled, runs.is_empty()) {
+            (false, _) => PlanMark::Disabled,
+            (true, true) => PlanMark::Skipped,
+            (true, false) => PlanMark::Running,
+        };
         match batches(kind, runs) {
             Ok(batches) => Ok(Decided::Batches(batches)),
             Err(not) => Ok(Decided::Stop(not_yet(not))),

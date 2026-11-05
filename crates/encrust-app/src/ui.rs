@@ -61,6 +61,7 @@ pub use widgets::{PICKER_ICON_SQUARE, PickerLine, eye_square, picker_foot, picke
 pub use widgets::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
+pub use widgets::{PlanMark, PlanRow, plan_row};
 pub use widgets::{ReadoutWords, layer_readout};
 pub use widgets::{ZONE_INSET, inline_button_w};
 pub use widgets::{

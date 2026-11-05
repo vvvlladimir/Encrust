@@ -49,6 +49,11 @@ pub use egui_phosphor::regular::{
     CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE,
 };
 
+/// A recipe's plan: a step skipped, one decided when it is reached, one switched off.
+pub use egui_phosphor::regular::{
+    HOURGLASS_SIMPLE as WHEN_REACHED, MINUS_CIRCLE as SKIPPED, PROHIBIT as STEP_OFF,
+};
+
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
 /// the rest of a Mac keyboard's symbols; a click and a drag of the mouse.
 pub use egui_phosphor::regular::{
@@ -161,6 +166,9 @@ mod tests {
         ("ERROR", ERROR),
         ("APPEARANCE", APPEARANCE),
         ("STEP_LATER", STEP_LATER),
+        ("SKIPPED", SKIPPED),
+        ("WHEN_REACHED", WHEN_REACHED),
+        ("STEP_OFF", STEP_OFF),
         ("CHANGES", CHANGES),
         ("MOVE_TO_PLATE", MOVE_TO_PLATE),
         ("UNDO", UNDO),

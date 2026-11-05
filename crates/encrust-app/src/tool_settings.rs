@@ -42,6 +42,9 @@ pub struct ToolSettings {
     /// (ADR 0397).
     #[serde(default)]
     pub keep_solid: BlockerSize,
+    /// The recipe Prepare for print takes, by id (ADR 0405).
+    #[serde(default = "prepare_recipe")]
+    pub recipe: String,
     /// What the Print settings panel holds; never written, so neither a project nor the next
     /// run takes it.
     #[serde(skip)]
@@ -63,6 +66,7 @@ impl ToolSettings {
             combine: tools.boolean.op,
             repair: tools.repair.state,
             keep_solid: tools.hollow.blocker,
+            recipe: tools.prepare.recipe.clone(),
             print: Some(slicing.print_settings()),
         }
     }
@@ -84,7 +88,12 @@ impl ToolSettings {
         tools.boolean.op = self.combine;
         tools.repair.state = self.repair;
         tools.hollow.blocker = self.keep_solid;
+        tools.prepare.recipe = self.recipe;
     }
+}
+
+fn prepare_recipe() -> String {
+    crate::prepare::DEFAULT_RECIPE.to_owned()
 }
 
 fn slicing_state(slicing: &Slicing) -> SlicingState {
@@ -182,6 +191,7 @@ mod tests {
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
+        tools.prepare.recipe = "flat".to_owned();
         let catalogue = printer_profiles::Catalogue::bundled().expect("the bundle reads");
         tools.supports.set_automatic(true, &catalogue);
         if let Some(auto) = tools.supports.auto.as_mut() {

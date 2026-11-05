@@ -9,12 +9,16 @@ use core_volume::HollowSettings;
 
 use crate::ui::{describe, icon, readings, secondary_button_unless, section, step_bar, subheading};
 
+mod plan;
+
 /// The button, the run's step while it goes, and what the last run did to model `id`.
 pub(super) fn prepare_section(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, &tr!("position-prepare"), None, |ui| {
         let wall_mm = format!("{:.2}", HollowSettings::default().thickness_mm);
         let wall = tr!("value-mm", value = wall_mm);
         describe(ui, &tr!("position-prepare-help-wall", wall = wall));
+        describe(ui, &tr!("position-prepare-help-plan"));
+        plan::picker(ui, window);
         if let Some((step, share)) = window.tools.prepare.progress() {
             if step_bar(ui, &step.label(), Some(share), true) {
                 crate::prepare::cancel(window.doc, window.tools, window.machine);
@@ -29,6 +33,7 @@ pub(super) fn prepare_section(ui: &mut egui::Ui, window: &mut Window, id: Object
                 start(window);
             }
         }
+        plan::plan(ui, window);
         let object = window.doc.scene.get(id);
         if let Some(prepared) = object.and_then(|object| window.tools.prepare.prepared(object)) {
             subheading(ui, &tr!("position-prepared"));
