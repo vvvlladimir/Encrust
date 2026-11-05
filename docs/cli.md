@@ -81,6 +81,17 @@ model of a batch share one report shape; `slice` of a plate prints one entry per
 `models` beside the stack they make, and `estimate` adds `print` — layers, height, time,
 resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
+Every finding the report counts it also locates, in plate millimetres from the plate's front
+left corner after placement — the frame `--drain-at` takes — so a script can act on each one
+(ADR 0394). `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind`
+(`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
+`at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
+`stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
+`slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
+lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
+`supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model.
+No list is cut short: each is as long as its count.
+
 Resin is counted from the masks and nowhere else — `cured volume` in the text, `cured` in
 the JSON — so a run without a printer reports layers and no resin at all (ADR 0206). The
 `volume` an `inspect` of a model with several shells prints is their sum, and says so where

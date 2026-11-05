@@ -107,6 +107,8 @@ pub struct Stood {
     pub sized: Vec<usize>,
     /// Contacts a column was stood under.
     pub standing: usize,
+    /// Indices into `contacts` of those no column could stand under.
+    pub unheld: Vec<usize>,
     pub trees: usize,
     /// The supports themselves, in plate coordinates.
     pub supports: Mesh,
@@ -252,6 +254,12 @@ fn grown(
     let columns = columns(&points, &placed, profiles);
     let trees = grow(&columns, &placed, profiles);
     let facing = facing(surface, bvh, &contacts);
+    let mut held = vec![false; contacts.len()];
+    for point in trees.iter().flat_map(core_supports::SupportTree::points) {
+        if let Some(slot) = held.get_mut(point) {
+            *slot = true;
+        }
+    }
     Ok(Stood {
         lifted_mm,
         contacts,
@@ -261,6 +269,11 @@ fn grown(
             .iter()
             .map(core_supports::SupportTree::tip_count)
             .sum(),
+        unheld: held
+            .iter()
+            .enumerate()
+            .filter_map(|(point, &held)| (!held).then_some(point))
+            .collect(),
         trees: trees.len(),
         supports: mesh_trees(&trees, &placed, profiles),
     })

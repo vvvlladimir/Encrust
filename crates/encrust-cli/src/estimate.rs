@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Run, bake, cut};
 use core_format::PrintJob;
+use core_raster::RasterSettings;
 
 use crate::exit::Cancelled;
 use crate::pipeline::{Watch, raster_window, report_of};
@@ -26,6 +27,8 @@ pub struct Print {
     /// The header the file would carry, its resin volume taken from the masks.
     pub job: PrintJob,
     pub measured: Measured,
+    /// The panel the masks were drawn for, which places what they show on the plate.
+    pub panel: RasterSettings,
 }
 
 impl Print {
@@ -64,7 +67,11 @@ pub fn estimate(
             job.volume_mm3 = measured.volume_mm3();
             Estimate {
                 slice,
-                print: Some(Print { job, measured }),
+                print: Some(Print {
+                    job,
+                    measured,
+                    panel: *run.panel(),
+                }),
             }
         }
         None => {

@@ -888,7 +888,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
-**For scripts:** `--json` output with a fixed schema, clear exit codes, `--strict` (fail
+**For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
