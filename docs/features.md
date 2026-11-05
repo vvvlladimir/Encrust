@@ -128,6 +128,7 @@ saves enough resin, drills the holes that drain it with a vent, and stands it on
 catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
 `--rotate` keeps it. The notice and the section name the step under way over a bar;
 **Cancel** stops it and leaves the plate as it was, and one undo takes a finished run back.
+While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait.
 Select then lists what was decided for the model in the card.
 
 **Auto-orient:**

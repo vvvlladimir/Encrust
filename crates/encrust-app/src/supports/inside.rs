@@ -35,11 +35,11 @@ impl SupportTool {
     /// the run was started for. A contact is inside when the surface nearest it bounds the
     /// cavity (ADR 0332).
     pub(super) fn on_its_side(
-        &self,
         mut placements: Vec<Placement>,
         scene: &Scene,
+        side: Side,
     ) -> Vec<Placement> {
-        let inside = self.side == Side::Inside;
+        let inside = side == Side::Inside;
         for placement in &mut placements {
             let Some(object) = scene.get(placement.id) else {
                 continue;

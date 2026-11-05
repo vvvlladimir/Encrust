@@ -25,39 +25,31 @@ impl DrainTool {
     /// Starts looking for the holes that drain the picked models as they stand, each with
     /// a vent, as the command line's `--drain-at auto` does.
     pub fn start_auto(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
-        let tasks = scene
-            .targets()
-            .filter(|object| !object.mesh.is_empty())
-            .map(|object| DrainsTask::of(object, self.size_for(object)))
-            .collect();
-        self.search(tasks, layer_height_mm)
+        let ids: Vec<ObjectId> = scene.targets().map(|object| object.id).collect();
+        self.auto = Some(self.search_on(scene, &ids, layer_height_mm)?);
+        Ok(())
     }
 
-    /// The same search on `ids` alone, whatever is picked: what Prepare drains.
-    pub fn start_auto_on(
-        &mut self,
+    /// The same search on `ids` alone, whatever is picked, handed back rather than kept:
+    /// what Prepare drains.
+    pub fn search_on(
+        &self,
         scene: &Scene,
         ids: &[ObjectId],
         layer_height_mm: Scalar,
-    ) -> Result<()> {
-        let tasks = ids
-            .iter()
-            .filter_map(|id| scene.get(*id).filter(|object| !object.mesh.is_empty()))
+    ) -> Result<DrainsJob> {
+        let tasks: Vec<DrainsTask> = scene
+            .named(ids)
             .map(|object| DrainsTask::of(object, self.size_for(object)))
             .collect();
-        self.search(tasks, layer_height_mm)
-    }
-
-    fn search(&mut self, tasks: Vec<DrainsTask>, layer_height_mm: Scalar) -> Result<()> {
         if tasks.is_empty() {
             bail!(tr!("drain-nothing-visible"));
         }
-        self.auto = Some(DrainsJob::spawn(DrainsRequest {
+        Ok(DrainsJob::spawn(DrainsRequest {
             tasks,
             layer_height_mm,
             vents: true,
-        }));
-        Ok(())
+        }))
     }
 
     /// Gives up on the search going; nothing it found lands.
@@ -78,15 +70,20 @@ impl DrainTool {
         };
         self.auto = None;
         match outcome {
-            DrainsOutcome::Found(found) => {
-                let landed = land(scene, found);
-                self.checked = landed.moved == 0;
-                *status = told(landed);
-            }
+            DrainsOutcome::Found(found) => *status = self.land_found(scene, found),
             DrainsOutcome::Cancelled => *status = Status::Info(tr!("drain-auto-cancelled")),
             DrainsOutcome::Failed(message) => *status = Status::Error(message),
         }
         false
+    }
+}
+
+impl DrainTool {
+    /// Lands what a search found and says what it drilled.
+    pub fn land_found(&mut self, scene: &mut Scene, found: Vec<Proposed>) -> Status {
+        let landed = land(scene, found);
+        self.checked = landed.moved == 0;
+        told(landed)
     }
 }
 

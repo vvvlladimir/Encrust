@@ -26,6 +26,7 @@ mod view_column;
 mod view_cube;
 mod viewport_panel;
 
+pub(crate) use inspector::auto_orient;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use settings::{import_dropped, import_profile};

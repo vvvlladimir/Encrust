@@ -170,12 +170,17 @@ fn a_search_on_named_models_ignores_what_is_picked() {
     scene.select(Some(picked));
     let mut tool = DrainTool::default();
 
-    tool.start_auto_on(&scene, &[cube], 0.5)
+    let mut job = tool
+        .search_on(&scene, &[cube], 0.5)
         .expect("the cube is named");
-    let mut status = Status::default();
-    while tool.poll(&mut scene, &mut status) {
-        std::thread::yield_now();
-    }
+    let found = loop {
+        match job.poll() {
+            Some(DrainsOutcome::Found(found)) => break found,
+            Some(other) => panic!("the search ended {other:?}"),
+            None => std::thread::yield_now(),
+        }
+    };
+    tool.land_found(&mut scene, found);
     let drilled = |id| scene.get(id).map(|object| object.hollow.drains().len());
     assert_eq!(
         drilled(cube),

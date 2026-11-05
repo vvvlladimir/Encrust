@@ -1471,6 +1471,7 @@ orient-tall = { $value } mm tall
 
 prepare-nothing-visible = Nothing visible on the plate to prepare.
 prepare-busy = Wait for the job running on the plate to end.
+prepare-running-why = Wait for Prepare for print to end.
 prepare-step-orient = Orienting
 prepare-step-repair = Repairing
 prepare-step-hollow = Hollowing

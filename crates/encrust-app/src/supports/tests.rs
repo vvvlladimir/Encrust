@@ -99,12 +99,17 @@ fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
     let mut tool = SupportTool::default();
     assert!(tool.auto.is_none(), "the panel builds to the group in hand");
 
-    tool.start_automatic_on(&scene, &[floating], (0.05, &catalogue), Side::Outside)
-        .expect("a model to place under");
-    let mut status = Status::default();
-    while tool.poll(&mut scene, &mut status) {
-        std::thread::yield_now();
-    }
+    let (mut job, sizing) =
+        SupportTool::start_automatic_on(&scene, &[floating], (0.05, &catalogue), Side::Outside)
+            .expect("a model to place under");
+    let placements = loop {
+        match job.poll() {
+            Some(crate::job::SupportOutcome::Placed(placements)) => break placements,
+            Some(_) => panic!("the run did not place"),
+            None => std::thread::yield_now(),
+        }
+    };
+    tool.land_placed(&mut scene, placements, Side::Outside, Some(sizing));
     let auto = catalogue.autos().next().expect("the catalogue ships one");
     let shapes = auto.profile.shapes_in(&catalogue).expect("its shapes ship");
     let named: Vec<&str> = tool
@@ -1041,19 +1046,14 @@ fn needs_at(placements: &[Placement]) -> Vec<Scalar> {
 #[test]
 fn a_run_keeps_only_the_contacts_on_its_side_of_the_wall() {
     let scene = hollow_cube();
-    let tool = SupportTool {
-        side: Side::Inside,
-        ..SupportTool::default()
-    };
-    let inside = tool.on_its_side(inside_and_out(&scene), &scene);
+    let inside = SupportTool::on_its_side(inside_and_out(&scene), &scene, Side::Inside);
     assert_eq!(
         needs_at(&inside),
         [20.95],
         "only the cavity's ceiling is held from inside"
     );
 
-    let tool = SupportTool::default();
-    let outside = tool.on_its_side(inside_and_out(&scene), &scene);
+    let outside = SupportTool::on_its_side(inside_and_out(&scene), &scene, Side::Outside);
     assert_eq!(
         needs_at(&outside),
         [4.95],
@@ -1223,7 +1223,6 @@ fn a_cavity_run_cancelled_leaves_what_stood_inside_it() {
 #[test]
 fn a_solid_model_has_nothing_inside() {
     let scene = one_cube();
-    let tool = SupportTool::default();
     let object = &scene.objects()[0];
     let placements = vec![Placement {
         id: object.id,
@@ -1234,7 +1233,7 @@ fn a_solid_model_has_nothing_inside() {
         }],
     }];
     assert!(!object.supported_inside());
-    let outside = tool.on_its_side(placements, &scene);
+    let outside = SupportTool::on_its_side(placements, &scene, Side::Outside);
     assert_eq!(
         outside[0].needs.len(),
         1,

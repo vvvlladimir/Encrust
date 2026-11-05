@@ -13,11 +13,10 @@ pub(super) fn prepare_section(ui: &mut egui::Ui, window: &mut Window, id: Object
         describe(ui, &tr!("position-prepare-help"));
         if let Some((step, share)) = window.tools.prepare.progress() {
             if step_bar(ui, &step.label(), Some(share), true) {
-                let status = &mut window.machine.status;
-                crate::prepare::cancel(window.doc, window.tools, status);
+                crate::prepare::cancel(window.doc, window.tools, window.machine);
             }
         } else {
-            let blocked = crate::prepare::blocker(window.doc, window.tools);
+            let blocked = crate::prepare::blocker(window.doc, window.tools, window.machine);
             let tip = match &blocked {
                 Some(why) => why.clone(),
                 None => tr!("position-prepare-tooltip", scope = window.doc.scene.scope()),

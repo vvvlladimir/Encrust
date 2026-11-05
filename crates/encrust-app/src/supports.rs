@@ -13,6 +13,9 @@ pub use groups::{own_raft_shown, with_own};
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
 const SHAPES: usize = AUTO_SIZES + 1;
 
+/// An automatic profile and the shapes it sizes supports into, lightest first.
+pub type Sizing = (AutoProfile, [SupportProfile; SHAPES]);
+
 /// How near a support has to stand to where the last one was placed to start a line from
 /// it, millimetres: both are the same point put through the same matrix.
 const LINE_START_MM: Scalar = 1e-3;
@@ -140,7 +143,7 @@ pub struct SupportTool {
     /// that sizing turned back on finds its numbers as they were left.
     parked_auto: Option<AutoProfile>,
     /// What the run going sizes its supports by, and the shapes it sizes them into.
-    sizing: Option<(AutoProfile, [SupportProfile; SHAPES])>,
+    sizing: Option<Sizing>,
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
