@@ -23,8 +23,9 @@ and Prepare for print runs the recipe in hand.
 
 A new crate, **`core-recipe`**, owns the format, the condition language, the order a recipe
 may take, the variables measured on a model and `decide`, which answers a step `Run`, `Skip`,
-`Stop` or `Pause` with what it read. It depends on `core-engine` for the measures, reads no
-files and runs no step. The window and the command line depend on it and run each step as
+`Stop` or `Pause` with what it read. It depends on `core-engine` and `core-volume` for the
+measures and on `core-plate` for the goal an orient step names, reads no files and runs no
+step. The window and the command line depend on it and run each step as
 they run it today: the window by each tool's own job, the command line step by step over the
 plan, each kind by the call its flag makes, so `--prepare` is no longer a resolution of flags
 into the one pass of ADR 0402. There a flag typed, or a plate file's key, wins over the
