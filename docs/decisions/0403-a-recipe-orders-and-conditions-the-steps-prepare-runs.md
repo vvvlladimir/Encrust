@@ -28,7 +28,9 @@ files and runs no step. The window and the command line depend on it and run eac
 they run it today: the window by each tool's own job, the command line step by step over the
 plan, each kind by the call its flag makes, so `--prepare` is no longer a resolution of flags
 into the one pass of ADR 0402. There a flag typed, or a plate file's key, wins over the
-setting it shapes in every step of its kind; it never overrides a condition.
+setting it shapes in every step of its kind; `--orient`, `--repair`, `--hollow` and
+`--supports` also run every step of their kind whatever its `when`, and are refused where the
+recipe has no such step.
 
 Conditions are a small expression language parsed by `core-recipe` itself: comparisons,
 `&&`, `||`, `!`, arithmetic and four functions over numbers and booleans, no loops. Steps
@@ -39,8 +41,9 @@ five.
 
 ## Consequences
 
-`--prepare --hollow 3` on a model too thin to save resin now prints it solid, where ADR 0402
-hollowed it: the typed wall is a setting and the step's condition still decides.
+`--prepare --hollow 3` hollows any model, as under ADR 0402: a typed step is the user's
+decision over the recipe's. A recipe cannot keep a typed step from running, only leave its
+kind out, and then the flag is an error rather than a silent no-op.
 
 Each new step kind is a variant in `core-recipe` and an executor in both front ends, in one
 change. A recipe file is a format: its `format` number moves when a key changes meaning. A

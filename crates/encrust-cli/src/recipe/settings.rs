@@ -42,6 +42,28 @@ pub(super) fn points<'a>(settings: &'a Settings, key: &str) -> &'a [[Scalar; 3]]
     }
 }
 
+/// The step kinds a flag typed for a model, or a plate file's key, makes run whatever their
+/// `when`, each with the flag that asks it.
+pub(super) fn forced(shaping: &Shaping) -> impl Iterator<Item = (StepKind, &'static str)> {
+    let typed = [
+        (
+            StepKind::Orient,
+            "--orient",
+            shaping.import.transform.orient,
+        ),
+        (
+            StepKind::Repair,
+            "--repair",
+            shaping.import.repair.is_some(),
+        ),
+        (StepKind::Hollow, "--hollow", shaping.hollow.wanted()),
+        (StepKind::Supports, "--supports", shaping.supports.is_some()),
+    ];
+    typed
+        .into_iter()
+        .filter_map(|(kind, flag, typed)| typed.then_some((kind, flag)))
+}
+
 /// `settings` of a step of `kind` with what `shaping` was given by a flag or a plate file
 /// laid over them.
 pub(super) fn typed_over(kind: StepKind, mut settings: Settings, shaping: &Shaping) -> Settings {

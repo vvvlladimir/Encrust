@@ -307,7 +307,7 @@ pub fn plate_of(
     let printer = chosen.printer.as_ref();
     check_adaptive(job, printer)?;
     let asked = recipe::Asked::of(job)?;
-    let (meshes, found) = imported(entries, chosen, watch)?;
+    let (meshes, found) = imported(entries, chosen, watch, asked.is_some())?;
     let mut pieces = modelling::shaped(meshes, &job.model, watch.talk)?;
     check_pieces(&pieces, entries, (&job.model, arrange), asked.is_some())?;
     watch.stop.check()?;
@@ -379,22 +379,25 @@ pub(crate) fn staged(
 /// What importing one model reported, and how it was turned.
 pub(crate) type Found = (ImportReport, Option<OrientSummary>);
 
-/// Each entry's model imported and stood where it asks, with what its import reported.
+/// Each entry's model imported and stood where it asks, with what its import reported;
+/// `by_recipe`, left for the recipe's steps to orient and repair.
 fn imported(
     entries: &[(PathBuf, Shaping)],
     chosen: &Chosen,
     watch: &Watch,
+    by_recipe: bool,
 ) -> Result<(Vec<Mesh>, Vec<Found>)> {
     let mut meshes = Vec::with_capacity(entries.len());
     let mut found = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
-        let (mut mesh, import, oriented) = import(
-            path,
-            &shaping.import,
-            shaping.supports.as_ref(),
-            chosen,
-            watch,
-        )?;
+        let mut asked = shaping.import.clone();
+        if by_recipe {
+            // A recipe's orient and repair steps run what --orient and --repair ask.
+            asked.transform.orient = false;
+            asked.repair = None;
+        }
+        let (mut mesh, import, oriented) =
+            import(path, &asked, shaping.supports.as_ref(), chosen, watch)?;
         if let Some(position) = shaping.position {
             mesh = stood_at(&mesh, position)?;
         }

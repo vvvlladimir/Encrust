@@ -11,7 +11,7 @@ mod validate;
 
 pub use builtin::{BUILT_IN, built_in};
 pub use condition::{BinaryOp, Condition, Expr, Function, Kind, Value};
-pub use decide::{Decision, Foreseen, Reading, Resolved, decide, preview, retry};
+pub use decide::{Decision, Foreseen, Reading, Resolved, decide, decide_forced, preview, retry};
 pub use error::RecipeError;
 pub use metrics::{Metric, Metrics, Model, measure};
 pub use recipe::{

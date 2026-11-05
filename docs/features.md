@@ -919,7 +919,8 @@ resin, and stand it on Auto supports. Every flag you type wins over its step, an
 what was decided for each model. The window does the same as **Prepare for print**.
 `--recipe` runs a recipe of your own the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
-of the plate where the recipe says; a flag you type wins over its setting in every step.
+of the plate where the recipe says; a flag you type wins over its setting in every step, and
+`--orient`, `--repair`, `--hollow` or `--supports` runs every step of its kind.
 Keeping a wall solid where the model is thin and plugs for the holes are not run yet.
 
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split

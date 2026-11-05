@@ -370,8 +370,10 @@ refused with what is wrong in it.
 A flag typed for a model, or a plate file's key, wins over the setting it shapes in every step
 of its kind: `--hollow`, `--hollow-mode`, `--hollow-open-floor` and `--infill`;
 `--no-drain-vent`, `--drain-at auto` and `--drain-plugs`; `--supports`, `--support-profile`
-and `--support-cavity`. `--rotate` makes `turned` true, and `--orient` and `--repair` still run
-at import as typed, then shape the later steps of their kind. A `--drain-at` point,
+and `--support-cavity`; `--orient-goal` and `--max-tilt`; `--repair=METHOD`. `--orient`,
+`--repair`, `--hollow` and `--supports` also run every step of their kind whatever its `when`,
+and are refused naming the flag where the recipe has none; under a recipe they run at its
+steps, not at import. `--rotate` makes `turned` true. A `--drain-at` point,
 `--channel` and `--drain-support-at` point at the model as imported, which a step may turn,
 and are refused; `keep_solid_under_mm` and `plugs = true` are not supported yet.
 
@@ -405,13 +407,13 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
 to `out` without `-o`. In order:
 
 1. **Orient** as `--orient --orient-goal auto`, judged on the automatic supports, unless
-   `--rotate` or `--orient` was given, or a plate file turns the model.
+   `--rotate` was given or a plate file turns the model; `--orient` runs it to its goal.
 2. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
    or one drawn twice. `--repair=METHOD` picks the method and always runs; `--no-validate`
    skips it.
 3. **Hollow** at Hollow's default 2 mm wall, with no infill, only where `inspect`'s `solid`
    line names a saving: at least 10 ml and 40 % of the model (ADR 0393). `--hollow MM`, or a
-   plate file's `hollow`, sets the wall.
+   plate file's `hollow`, hollows it whatever the saving, at that wall.
 4. **Drain** a hollowed model as `--drain-at auto`, a vent included.
 5. **Support** with `--supports auto`, or the profile `--supports`, `--support-profile` or a
    plate file names, holding up the cavity of a hollowed model.

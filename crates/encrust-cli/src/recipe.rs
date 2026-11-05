@@ -8,7 +8,7 @@ use core_engine::{Model, SupportPlan};
 use core_geometry::{Mesh, Scalar};
 use core_recipe::{
     BUILT_IN, Decision, Metrics, OnFail, Plan, Recipe, Resolved, Setting, StepKind, built_in,
-    decide, validate,
+    decide, decide_forced, validate,
 };
 use core_volume::HollowSettings;
 
@@ -24,7 +24,7 @@ use piece::Piece;
 pub use prepared::Prepared;
 pub use report::RecipeRun;
 use report::StepRun;
-use settings::{Settings, typed_over};
+use settings::{Settings, forced, typed_over};
 
 use crate::args::JobArgs;
 use crate::pipeline::Watch;
@@ -150,6 +150,7 @@ pub fn lay(
 ) -> Result<(Vec<Part>, Vec<Model>, Option<Saved>)> {
     for (_, shaping) in entries {
         refuse_pointing(shaping)?;
+        refuse_unstepped(&asked.plan, shaping)?;
     }
     check_sends(&asked.plan, ctx)?;
     let mut steps = asked.plan.recipe().steps.iter();
@@ -187,6 +188,23 @@ fn refuse_pointing(shaping: &Shaping) -> Result<()> {
             "--drain-at, --channel and --drain-support-at point at the model as imported; a \
              recipe's drain step takes `points`, fractions of the box the model stands in"
         );
+    }
+    Ok(())
+}
+
+/// Refuses a flag that forces a step of a kind `plan` has none of to run.
+fn refuse_unstepped(plan: &Plan, shaping: &Shaping) -> Result<()> {
+    let recipe = plan.recipe();
+    for (kind, flag) in forced(shaping) {
+        let mut steps = recipe.steps.iter();
+        if !steps.any(|step| step.enabled && step.kind == kind) {
+            bail!(
+                "{flag} runs the recipe's {} steps, and {} has no {} step",
+                kind.name(),
+                recipe.name,
+                kind.name()
+            );
+        }
     }
     Ok(())
 }
@@ -255,6 +273,8 @@ impl Run<'_> {
         let mut stopped = None;
         for id in 0..self.pieces.len() {
             let metrics = self.metrics_of(&self.pieces[id])?;
+            let typed = forced(&self.pieces[id].shaping).any(|(typed, _)| typed == kind);
+            let decide = if typed { decide_forced } else { decide };
             let decision = decide(&self.asked.plan, index, &metrics)?;
             let settings = match &decision {
                 Decision::Run { settings, .. } => {

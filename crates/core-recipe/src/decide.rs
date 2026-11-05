@@ -63,12 +63,31 @@ pub enum Foreseen {
 
 /// Decides step `index` of `plan` for a model measured as `metrics`.
 pub fn decide(plan: &Plan, index: usize, metrics: &Metrics) -> Result<Decision, RecipeError> {
+    decided(plan, index, metrics, false)
+}
+
+/// [`decide`] as though the step's `when` held: a step a front end runs whatever its
+/// condition, as a typed flag asks (`docs/design/recipes.md`).
+pub fn decide_forced(
+    plan: &Plan,
+    index: usize,
+    metrics: &Metrics,
+) -> Result<Decision, RecipeError> {
+    decided(plan, index, metrics, true)
+}
+
+fn decided(
+    plan: &Plan,
+    index: usize,
+    metrics: &Metrics,
+    forced: bool,
+) -> Result<Decision, RecipeError> {
     let step = step_at(plan, index)?;
     if !step.enabled {
         return Ok(Decision::Disabled);
     }
     let mut reader = Reader::new(plan, metrics);
-    if let Some(when) = &step.when
+    if let Some(when) = step.when.as_ref().filter(|_| !forced)
         && !reader.holds(when)?
     {
         return Ok(Decision::Skip { read: reader.read });

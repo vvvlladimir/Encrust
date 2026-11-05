@@ -241,3 +241,19 @@ fn preview_leaves_what_reads_an_unmeasured_name_until_reached() {
     ));
     assert_eq!(foreseen[2], Foreseen::WhenReached);
 }
+
+#[test]
+fn a_forced_step_runs_with_its_settings_whatever_its_when() {
+    let unsound = plan(&step(
+        "hollow",
+        "when = \"!sound\"\nset = { wall_mm = 2.5 }",
+    ));
+    let settings = settings_of(decide_forced(&unsound, 0, &tall()).expect("decided"));
+    assert_eq!(settings["wall_mm"], Resolved::Number(2.5));
+    let off = plan(&step("hollow", "enabled = false"));
+    assert_eq!(
+        decide_forced(&off, 0, &tall()),
+        Ok(Decision::Disabled),
+        "a step kept out of the run stays out"
+    );
+}

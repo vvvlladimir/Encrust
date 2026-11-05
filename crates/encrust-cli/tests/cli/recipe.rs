@@ -273,3 +273,41 @@ fn a_typed_hollow_wins_over_the_recipes_wall() {
     assert_eq!(report["hollow"]["wall_mm"], 3.0, "{report}");
     assert_eq!(step(&report, 0)["settings"]["wall_mm"], 3.0, "{report}");
 }
+
+#[test]
+fn a_typed_hollow_hollows_where_the_recipes_condition_would_not() {
+    let report = sliced(
+        "recipe-forced",
+        "name = \"Never\"\n[[step]]\ndo = \"hollow\"\nwhen = \"false\"\n",
+        &["--hollow", "3"],
+    );
+    assert_eq!(step(&report, 0)["decision"], "run", "{report}");
+    assert_eq!(report["hollow"]["wall_mm"], 3.0, "{report}");
+}
+
+#[test]
+fn a_typed_flag_with_no_step_of_its_kind_is_refused_naming_it() {
+    let name = "recipe-unstepped";
+    let recipe = recipe_file(name, "name = \"Checks\"\n[[step]]\ndo = \"check\"\n");
+    let output = run("estimate", name, &recipe, &["--supports", "auto"]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    let said = stderr(&output);
+    assert!(
+        said.contains("--supports") && said.contains("no supports step"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_typed_orient_turns_the_model_once_at_its_step() {
+    let report = sliced(
+        "recipe-orient",
+        "name = \"Turned\"\n[[step]]\ndo = \"orient\"\nwhen = \"!turned\"\n",
+        &["--orient"],
+    );
+    assert_eq!(
+        step(&report, 0)["decision"],
+        "run",
+        "the step runs, not the import: {report}"
+    );
+}
