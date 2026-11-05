@@ -24,6 +24,8 @@ pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use run::Run;
-pub use stand::{Stood, SupportPlan, SupportShapes, ToStand, stand_seated, stand_under};
+pub use stand::{
+    Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_seated, stand_under,
+};
 pub use trapped::trapped_in;
 pub use trial::{Choice, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove};

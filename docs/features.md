@@ -901,7 +901,8 @@ does (`--supports auto`), and hold up a hollowed model's cavity as well as its o
 (`--support-cavity`).
 
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
-print a plug for each beside the model, with the gap you choose. `--drain-at auto` finds the
+print a plug for each beside the model, with the gap you choose. A hole's point is where the
+model prints, supports' lift included, so a point `--json` reports can be drilled as it stands. `--drain-at auto` finds the
 holes itself: a drain low on each pocket of trapped resin and a vent high on it, each kept only
 once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no hole can drain is
 still reported. The window does not offer this yet. A run whose plugs have no

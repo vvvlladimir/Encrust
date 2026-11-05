@@ -166,15 +166,16 @@ pub fn hollow_and_cut(
     // into may be the shell. See ADR 0075.
     let mut placed = args
         .cutting()
-        .then(|| hollowing::placed(mesh, args))
+        .then(|| hollowing::placed(mesh, args, ground.lifted_mm))
         .transpose()?;
 
     let mut hollow = None;
     let mut shell = None;
     let mut cavity = None;
     if args.wanted() {
-        let holes = placed.as_ref().map_or(&[][..], |(holes, _)| holes);
-        let (shelled, faces, report) = hollowing::run(mesh, holes, args, precision, watch.stop)?;
+        let uncut = Placed::default();
+        let cut = placed.as_ref().unwrap_or(&uncut);
+        let (shelled, faces, report) = hollowing::run(mesh, cut, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }
@@ -237,7 +238,7 @@ fn drill_auto(
     let drained = auto_drains(printed, (holes, channels), args, wall, ground)?;
     holes.extend(drained.drain_holes());
     if talk {
-        print!("{}", AutoReport(&drained));
+        print!("{}", AutoReport(&drained, ground.lifted_mm));
     }
     Ok(Some(drained))
 }
