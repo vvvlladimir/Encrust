@@ -8,6 +8,12 @@ use core_geometry::Scalar;
 use crate::condition::Condition;
 use crate::error::RecipeError;
 
+mod read;
+mod write;
+
+#[cfg(test)]
+mod tests;
+
 /// The layout this build reads and writes, the file's `format`.
 pub const FORMAT: u32 = 1;
 
@@ -59,8 +65,18 @@ impl StepKind {
 
     /// The word `do` names it by.
     pub fn name(self) -> &'static str {
-        // TODO(step-2): the `do` column of docs/design/recipes.md.
-        todo!()
+        match self {
+            Self::Repair => "repair",
+            Self::Orient => "orient",
+            Self::Hollow => "hollow",
+            Self::Drain => "drain",
+            Self::Supports => "supports",
+            Self::Check => "check",
+            Self::Arrange => "arrange",
+            Self::Save => "save",
+            Self::Gate => "gate",
+            Self::Pause => "pause",
+        }
     }
 
     pub fn from_name(name: &str) -> Option<Self> {
@@ -69,8 +85,35 @@ impl StepKind {
 
     /// The keys its `set` takes, and what each takes.
     pub fn settings(self) -> &'static [(&'static str, SettingKind)] {
-        // TODO(step-2): the Settings column of docs/design/recipes.md.
-        todo!()
+        use SettingKind::{Bool, Number, Points, Text, Word};
+        match self {
+            Self::Repair => &[("method", Word(&["repair", "close-holes", "wrap", "deep"]))],
+            Self::Orient => &[
+                (
+                    "goal",
+                    Word(&["auto", "fewest-supports", "least-peel", "shortest-print"]),
+                ),
+                ("max_tilt_deg", Number),
+            ],
+            Self::Hollow => &[
+                ("wall_mm", Number),
+                ("mode", Word(&["inside", "outside", "open-floor"])),
+                ("infill", Bool),
+                ("keep_solid_under_mm", Number),
+            ],
+            Self::Drain => &[
+                ("at", Word(&["auto", "points"])),
+                ("points", Points),
+                ("diameter_mm", Number),
+                ("depth_mm", Number),
+                ("vent", Bool),
+                ("plugs", Bool),
+            ],
+            Self::Supports => &[("profile", Text), ("cavity", Bool)],
+            Self::Arrange => &[("spacing_mm", Number)],
+            Self::Save => &[("folder", Text), ("name", Text), ("send", Bool)],
+            Self::Check | Self::Gate | Self::Pause => &[],
+        }
     }
 }
 
@@ -136,14 +179,11 @@ pub struct Recipe {
 impl Recipe {
     /// Reads a recipe file's text, its keys and kinds checked but not its order.
     pub fn from_toml(text: &str) -> Result<Self, RecipeError> {
-        // TODO(step-2): serde over the `toml` crate into a raw table, then each step checked.
-        let _ = text;
-        todo!()
+        read::recipe_from_toml(text)
     }
 
     /// The file's text, which `from_toml` reads back to the same recipe.
     pub fn to_toml(&self) -> String {
-        // TODO(step-2): the editor saves through this.
-        todo!()
+        write::recipe_to_toml(self)
     }
 }
