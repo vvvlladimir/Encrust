@@ -1,6 +1,6 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range,
+    SlicedFileReader, Thumbnail, layer_in_range, panel_in_range, read_raw_preview, rgb_of_565,
 };
 use core_raster::Run;
 
@@ -53,11 +53,7 @@ impl SlicedFileReader for CxdlpReader {
         panel_in_range(width_px, height_px)?;
         reads.skip(64)?;
 
-        // The previews are raw and of a fixed size, so they are stepped over rather than
-        // decoded: a reader of ours shows the layers, not the picture somebody rendered.
-        for (width, height) in PREVIEW_SIZES_PX {
-            reads.skip(u64::from(width * height * 2) + PAGE_BREAK.len() as u64)?;
-        }
+        let preview = read_previews(&mut reads)?;
 
         let display_mm_x = read_utf16_number(&mut reads)?;
         let display_mm_y = read_utf16_number(&mut reads)?;
@@ -127,12 +123,26 @@ impl SlicedFileReader for CxdlpReader {
                 grey_steps: 256,
                 stated: PrinterTuning::default(),
                 layers,
+                preview: Some(preview),
             },
         })
     }
 }
 
 /// A length-prefixed, nul-terminated string, or `None` where it is empty.
+/// The three raw previews in a row, of which the first large one is kept.
+pub(crate) fn read_previews<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Thumbnail, FormatError> {
+    let [small, large, last] = PREVIEW_SIZES_PX;
+    let raw_bytes = |(width, height): (u32, u32)| u64::from(width * height * 2);
+    let page_break = PAGE_BREAK.len() as u64;
+    reads.skip(raw_bytes(small) + page_break)?;
+    let preview = read_raw_preview(reads, large.0, large.1, |pair| {
+        rgb_of_565(u16::from_be_bytes(pair))
+    })?;
+    reads.skip(page_break + raw_bytes(last) + page_break)?;
+    Ok(preview)
+}
+
 pub(crate) fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, FormatError> {
     let length = reads.u32_be()?;
     if length == 0 {

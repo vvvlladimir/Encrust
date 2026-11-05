@@ -56,5 +56,5 @@ not known.
 
 ## What we do not write
 
-Grey, which a polygon has none of; per-layer settings, likewise. Preview words in this
-container may drop some of green's bits; ours are the plain RGB565 of `.cxdlp`.
+Grey, which a polygon has none of; per-layer settings, likewise. Known files' preview words
+lose red and green's top bits as `.cxdlp`'s do; ours are plain RGB565, read back as stated.

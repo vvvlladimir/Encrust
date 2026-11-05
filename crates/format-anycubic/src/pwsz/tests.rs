@@ -343,6 +343,14 @@ fn an_archive_reads_back_what_it_was_told() {
         (facts.layers[1].z_mm - job.layer_z_mm(1)).abs() < 1e-5,
         "a layer's top"
     );
+    assert_eq!(
+        facts
+            .preview
+            .as_ref()
+            .map(|p| (p.width_px(), p.height_px())),
+        Some((224, 168)),
+        "the plate's preview is read"
+    );
 
     let lit: u32 = core_format::OpenFile::layer(&mut open, 0)
         .expect("the first layer")

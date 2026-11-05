@@ -102,6 +102,14 @@ fn a_written_file_reads_back() {
     assert_eq!(facts.layer_count(), 3);
     assert_eq!((facts.width_px, facts.height_px), (8, 4));
     assert_eq!(facts.machine.as_deref(), Some("Test"));
+    assert_eq!(
+        facts
+            .preview
+            .as_ref()
+            .map(|p| (p.width_px(), p.height_px())),
+        Some((400, 300)),
+        "the large preview is read"
+    );
 
     let lit: u32 = open
         .layer(2)

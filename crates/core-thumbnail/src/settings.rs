@@ -8,6 +8,19 @@ pub fn rgb565(pixel: Rgb) -> u16 {
     (u16::from(r >> 3) << 11) | (u16::from(g >> 2) << 5) | u16::from(b >> 3)
 }
 
+/// The pixel a five-six-five word holds, each channel widened by repeating its top bits so
+/// that full intensity reads back as 255.
+pub fn rgb_of_565(word: u16) -> Rgb {
+    let r = ((word >> 11) & 0x1F) as u8;
+    let g = ((word >> 5) & 0x3F) as u8;
+    let b = (word & 0x1F) as u8;
+    [
+        (r << 3) | (r >> 2),
+        (g << 2) | (g >> 4),
+        (b << 3) | (b >> 2),
+    ]
+}
+
 /// Size and colours one thumbnail is rendered at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThumbnailSettings {
@@ -33,6 +46,40 @@ impl Default for ThumbnailSettings {
             height_px: Self::SOURCE_PX,
             background: [0x1A, 0x1C, 0x20],
             model: [0x3F, 0x8C, 0xD8],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_five_six_five_word_reads_back_to_the_pixel_it_packed_at_full_and_no_intensity() {
+        for pixel in [
+            [0, 0, 0],
+            [255, 255, 255],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+        ] {
+            assert_eq!(
+                rgb_of_565(rgb565(pixel)),
+                pixel,
+                "{pixel:?} survives the round trip"
+            );
+        }
+    }
+
+    #[test]
+    fn a_read_pixel_is_within_one_step_of_the_packed_one() {
+        let pixel = [0x3F, 0x8C, 0xD8];
+        let back = rgb_of_565(rgb565(pixel));
+        for (channel, (was, is)) in pixel.iter().zip(back).enumerate() {
+            assert!(
+                was.abs_diff(is) < 8,
+                "channel {channel}: {was} read back as {is}"
+            );
         }
     }
 }

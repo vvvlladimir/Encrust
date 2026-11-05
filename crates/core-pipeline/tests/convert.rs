@@ -115,6 +115,7 @@ fn written() -> Written {
                     size: 0,
                 })
                 .collect(),
+            preview: None,
         },
         layers,
         broken: None,

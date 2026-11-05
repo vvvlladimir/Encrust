@@ -43,7 +43,7 @@ Everything is big-endian unless a field says otherwise.
 | — | u16 | layer count |
 | — | u16, u16 | panel width and height, pixels |
 | — | 64 bytes | zero |
-| — | — | three previews: 116×116, 290×290, 290×290, raw big-endian RGB565, each closed by `0D 0A` |
+| — | — | three previews: 116×116, 290×290, 290×290, raw big-endian RGB565, each closed by `0D 0A`; known files set the high byte of every lit word to `F8`, losing red and green's top bits, so their pictures read back red and pink |
 | — | u32 + UTF-16BE | panel width in millimetres, as text to six decimals |
 | — | u32 + UTF-16BE | panel height in millimetres, the same |
 | — | u32 + UTF-16BE | layer height in millimetres, the same |

@@ -22,7 +22,7 @@ pub(crate) const ENDING_STRING: [u8; 11] = [
 const MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
 
 const SMALL_PREVIEW_PX: usize = 116;
-const BIG_PREVIEW_PX: usize = 290;
+pub(crate) const BIG_PREVIEW_PX: usize = 290;
 
 /// Colour the previews are padded with where the square image does not reach.
 const BACKGROUND: [u8; 3] = [0, 0, 0];

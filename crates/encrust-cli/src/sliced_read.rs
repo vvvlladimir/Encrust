@@ -496,6 +496,7 @@ mod tests {
                 offset: 0,
                 size: 0,
             }],
+            preview: None,
         }
     }
 

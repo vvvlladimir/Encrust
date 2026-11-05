@@ -147,6 +147,25 @@ fn a_written_file_reads_back() {
 }
 
 #[test]
+fn a_written_file_reads_back_its_preview() {
+    let job = core_format::PrintJob {
+        thumbnail: Some(core_format::Thumbnail::filled(8, 8, [255, 0, 0])),
+        ..sample_job(1)
+    };
+    let open = PhotonsReader
+        .open(Cursor::new(written_by(&PhotonsWriter, &job)))
+        .expect("a .photons we wrote");
+
+    let preview = open.facts().preview.as_ref().expect("the preview is read");
+    assert_eq!((preview.width_px(), preview.height_px()), PREVIEW_PX);
+    assert_eq!(
+        preview.pixels()[84 * 224 + 112],
+        [255, 0, 0],
+        "the middle is the part"
+    );
+}
+
+#[test]
 fn another_container_is_not_taken_for_this_one() {
     let err = PhotonsReader
         .open(Cursor::new(vec![0x12, 0xFD, 0x00, 0x19, 0, 0]))

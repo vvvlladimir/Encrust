@@ -365,6 +365,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0148](0148-the-sl1-settings-go-in-last-and-a-varying-stack-is-refused.md) | Write the `.sl1` settings last, and refuse a stack it cannot carry | Accepted; `numFade` as our transition layers is superseded by 0296 |
 | [0149](0149-a-reader-is-a-trait-and-a-container-names-itself.md) | Make a reader a trait, and let a container name itself | Accepted |
 | [0150](0150-an-open-file-owns-the-source-it-reads-from.md) | Let an open file own the source it reads from | Accepted |
+| [0401](0401-a-reader-hands-over-the-largest-preview-it-carries.md) | A reader hands over the largest preview a file carries | Proposed |
 | [0167](0167-the-gcode-zip-is-its-own-crate-and-the-png-codec-moves-down.md) | Give the gcode zip its own crate, and move the PNG codec down into `core-format` | Accepted |
 | [0379](0379-an-archive-failure-is-turned-into-a-format-error-in-core-format.md) | Turn an archive's failure into a `FormatError` in `core-format` | Accepted |
 | [0168](0168-one-creality-crate-holds-both-revisions-and-the-chitu-codecs-move-down.md) | Write both `.cxdlp` revisions from one crate, and move the Chitu codecs down | Accepted; the version 4 codec, extension and model rule are superseded by 0367 |

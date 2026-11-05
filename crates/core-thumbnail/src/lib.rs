@@ -7,4 +7,4 @@ mod settings;
 
 pub use image::Thumbnail;
 pub use render::{Part, render};
-pub use settings::{Rgb, ThumbnailSettings, rgb565};
+pub use settings::{Rgb, ThumbnailSettings, rgb_of_565, rgb565};

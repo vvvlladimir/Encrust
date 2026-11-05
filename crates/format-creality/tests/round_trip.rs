@@ -11,6 +11,7 @@ use std::path::Path;
 
 use core_format::{
     ExposurePlan, LayerPlan, LayerSink, OpenFile, PrintJob, SlicedFileReader, SlicedFileWriter,
+    Thumbnail,
 };
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
 use format_creality::{
@@ -337,6 +338,33 @@ fn a_version_four_file_states_the_resins_buffer_over_the_machines() {
         .open(&mut source)
         .expect("what we wrote is one of these");
     assert_eq!(opened.facts().stated.buffer, Some(resin));
+}
+
+#[test]
+fn both_revisions_read_back_the_thumbnail_they_were_written_with() {
+    let job = PrintJob {
+        thumbnail: Some(Thumbnail::filled(8, 8, [255, 0, 0])),
+        ..job(1)
+    };
+    let three = CxdlpReader
+        .open(Cursor::new(write(&job, &[layer()], 10.0)))
+        .expect("what we wrote opens");
+    let four = CxdlpV4Reader
+        .open(Cursor::new(write_v4(&job, &[layer()], 10.0)))
+        .expect("what we wrote opens");
+
+    let three = three
+        .facts()
+        .preview
+        .as_ref()
+        .expect("a raw preview is read");
+    assert_eq!(three, &Thumbnail::filled(290, 290, [255, 0, 0]));
+    let four = four
+        .facts()
+        .preview
+        .as_ref()
+        .expect("a run-length preview is read");
+    assert_eq!(four, &Thumbnail::filled(300, 300, [255, 0, 0]));
 }
 
 #[test]

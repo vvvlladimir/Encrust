@@ -161,6 +161,14 @@ fn every_layer_reads_back_with_its_own_z_and_exposure() {
     assert_eq!(facts.bottom_layers, 2);
     assert!((facts.bottom_exposure_s - 30.0).abs() < 1e-6);
     assert_eq!(facts.machine.as_deref(), Some("Test panel"));
+    assert_eq!(
+        facts
+            .preview
+            .as_ref()
+            .map(|p| (p.width_px(), p.height_px())),
+        Some((954, 850)),
+        "the larger preview is read"
+    );
     assert!(
         facts
             .slicer

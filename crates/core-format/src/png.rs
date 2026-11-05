@@ -3,6 +3,7 @@
 use core_raster::{LayerRuns, Run};
 use core_thumbnail::Thumbnail;
 
+use crate::preview::{preview_in_range, thumbnail};
 use crate::{FormatError, panel_in_range};
 
 /// Expands a layer into an eight-bit greyscale PNG, one layer of an archive container.
@@ -37,6 +38,46 @@ pub fn encode_colour(image: &Thumbnail) -> Result<Vec<u8>, FormatError> {
         .map_err(failed("a preview"))?;
     writer.finish().map_err(failed("a preview"))?;
     Ok(bytes)
+}
+
+/// A colour or grey PNG preview as plain RGB over black where it is transparent, any depth
+/// brought to eight bits.
+pub fn decode_colour(bytes: &[u8]) -> Result<Thumbnail, FormatError> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder.read_info().map_err(|e| preview_decoding(&e))?;
+    let (width_px, height_px) = (reader.info().width, reader.info().height);
+    preview_in_range(width_px, height_px)?;
+
+    let size = reader
+        .output_buffer_size()
+        .ok_or_else(|| preview_decoding(&"the image is larger than memory"))?;
+    let mut buffer = vec![0; size];
+    let frame = reader
+        .next_frame(&mut buffer)
+        .map_err(|e| preview_decoding(&e))?;
+    let channels = frame.color_type.samples();
+    let pixels = buffer[..frame.buffer_size()]
+        .chunks_exact(channels)
+        .map(|pixel| match channels {
+            1 => [pixel[0]; 3],
+            2 => [over_black(pixel[0], pixel[1]); 3],
+            3 => [pixel[0], pixel[1], pixel[2]],
+            _ => [0, 1, 2].map(|channel| over_black(pixel[channel], pixel[3])),
+        })
+        .collect();
+    thumbnail(width_px, height_px, pixels)
+}
+
+fn over_black(value: u8, alpha: u8) -> u8 {
+    ((u16::from(value) * u16::from(alpha) + 127) / 255) as u8
+}
+
+fn preview_decoding(reason: &dyn std::fmt::Display) -> FormatError {
+    FormatError::Encoding {
+        what: "a preview",
+        reason: reason.to_string(),
+    }
 }
 
 /// The shape of one image, which for a container of separate PNGs is the only place its
@@ -113,6 +154,46 @@ mod tests {
         let png = encode_colour(&Thumbnail::filled(4, 2, [255, 0, 0])).expect("a preview encodes");
         assert_eq!(png[24], 8);
         assert_eq!(png[25], 2, "three channels, with no palette and no alpha");
+    }
+
+    #[test]
+    fn a_colour_png_decodes_back_to_its_pixels() {
+        let image = Thumbnail::from_pixels(2, 1, vec![[255, 0, 0], [0, 0, 255]])
+            .expect("two pixels fill 2x1");
+        let png = encode_colour(&image).expect("a preview encodes");
+        assert_eq!(decode_colour(&png).expect("it was just encoded"), image);
+    }
+
+    #[test]
+    fn a_grey_png_decodes_as_a_colour_preview() {
+        let mut runs = LayerRuns::builder(2, 1);
+        runs.push(1, 0);
+        runs.push(1, 200);
+        let png = encode_grey(&runs.finish()).expect("a layer of our own encodes");
+        let expected = Thumbnail::from_pixels(2, 1, vec![[0; 3], [200; 3]]).expect("2x1");
+        assert_eq!(decode_colour(&png).expect("a grey PNG decodes"), expected);
+    }
+
+    #[test]
+    fn a_transparent_pixel_reads_as_black_and_a_half_transparent_one_as_half_its_colour() {
+        let mut bytes = Vec::new();
+        let mut encoder = png::Encoder::new(&mut bytes, 2, 1);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().expect("a vec takes a header");
+        writer
+            .write_image_data(&[255, 255, 255, 0, 200, 100, 50, 128])
+            .expect("a vec takes the pixels");
+        writer.finish().expect("the image closes");
+
+        let preview = decode_colour(&bytes).expect("an RGBA PNG decodes");
+        assert_eq!(preview.pixels(), [[0, 0, 0], [100, 50, 25]]);
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_png_are_refused_as_a_preview() {
+        let err = decode_colour(b"not a picture").unwrap_err();
+        assert!(matches!(err, FormatError::Encoding { what, .. } if what == "a preview"));
     }
 
     #[test]

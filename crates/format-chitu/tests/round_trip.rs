@@ -323,6 +323,40 @@ fn both_previews_carry_the_job_thumbnail() {
 }
 
 #[test]
+fn a_written_file_reads_back_its_large_preview() {
+    let job = PrintJob {
+        thumbnail: Some(Thumbnail::filled(8, 8, [255, 0, 0])),
+        ..job(1)
+    };
+    let file = write_job(
+        CtbVersion::V4,
+        &job,
+        &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()],
+    );
+
+    let opened = ChituReader::default()
+        .open(std::io::Cursor::new(file))
+        .expect("a written file opens");
+
+    let preview = opened
+        .facts()
+        .preview
+        .as_ref()
+        .expect("the large preview is read");
+    assert_eq!((preview.width_px(), preview.height_px()), (400, 300));
+    assert_eq!(
+        preview.pixels()[150 * 400 + 200],
+        [255, 0, 0],
+        "the middle is the part"
+    );
+    assert_eq!(
+        preview.pixels()[0],
+        [0, 0, 0],
+        "the padding stays background"
+    );
+}
+
+#[test]
 fn a_job_without_a_thumbnail_still_writes_both_previews_black() {
     let file = write(
         CtbVersion::V4,

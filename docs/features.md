@@ -18,7 +18,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 | | What you get | What you don't |
 |---|---|---|
 | **Desktop window** | Windows 10/11 (installer, or the Microsoft Store), macOS 12+ (Apple silicon and Intel), Linux (AppImage, `.deb`). Every feature. | Downloaded builds are not code-signed yet, so the first launch needs one extra step; the Store copy does not. Needs a GPU with Vulkan, Metal or DirectX 12. |
-| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. The section cut is drawn without its cap. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. It trails the desktop build. |
+| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. |
 | **Command line** (`encrust`) | The same pipeline with no window, for scripts and batches. | No painting, no manual supports. Anything you would click on a model is done in the window and saved as a project, which the command line can then slice. |
 
 ---
@@ -918,7 +918,7 @@ by a number of your own, or support the islands and drill the suction cups Check
   `.sl1`, the DLP machines and nine FlashForge and Nova3D profiles have no known file.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
-- **Browser build:** no network sending, no updates, uncapped section cut.
+- **Browser build:** no network sending, no updates.
 - **Camera:** the address only, no video inside Encrust.
 - **Translations:** messages from inside the slicing engine (a file that cannot be read, a
   format it does not know) stay in English under a translated first line.
