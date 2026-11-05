@@ -1,11 +1,12 @@
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use net_prusalink::Link;
 use net_sdcp::{Printer, Transport};
 use printer_link::{Command, SendError, State, Wire};
+use printer_profiles::{Connection, PrinterProfile};
 use serde::Serialize;
 
 use crate::commands::GlobalArgs;
@@ -80,7 +81,7 @@ pub struct MachineArgs {
     pub password: Option<String>,
 
     /// How long a board is given to answer, seconds.
-    #[arg(long, value_name = "S", default_value_t = 2.0)]
+    #[arg(long, value_name = "S", default_value_t = SEND_WAIT_S)]
     pub wait: f32,
 }
 
@@ -258,7 +259,7 @@ fn send(args: &SendArgs, global: &GlobalArgs, stop: &Stop) -> Result<()> {
         bail!("{} is not a file", args.file.display());
     }
     let wire = args.machine.wire()?;
-    let filename = upload(&wire, args, global, stop)?;
+    let filename = upload(&wire, &args.file, global.shows_progress(), stop)?;
     if args.start {
         stop.check()?;
         printer_link::start_print(&wire, &filename)
@@ -281,22 +282,64 @@ fn send(args: &SendArgs, global: &GlobalArgs, stop: &Stop) -> Result<()> {
     Ok(())
 }
 
-/// Sends the file with a bar over its bytes, where the protocol counts them.
-fn upload(wire: &Wire, args: &SendArgs, global: &GlobalArgs, stop: &Stop) -> Result<String> {
-    let bar = (global.shows_progress() && wire.counts_bytes())
-        .then(|| progress::bytes_bar(&format!("to {}", wire.name())));
+/// Sends `file` with a bar over its bytes where the protocol counts them and `shown` asks.
+fn upload(wire: &Wire, file: &Path, shown: bool, stop: &Stop) -> Result<String> {
+    let bar =
+        (shown && wire.counts_bytes()).then(|| progress::bytes_bar(&format!("to {}", wire.name())));
     let mut progress = |transfer: printer_link::Transfer| {
         if let Some(bar) = &bar {
             bar.set_length(transfer.total_bytes);
             bar.set_position(transfer.sent_bytes);
         }
     };
-    let sent = printer_link::upload(wire, &args.file, &mut progress, &|| stop.requested());
+    let sent = printer_link::upload(wire, file, &mut progress, &|| stop.requested());
     if let Some(bar) = &bar {
         bar.finish_and_clear();
     }
     sent.map_err(|error| cancelled_or(error, stop))
-        .with_context(|| format!("cannot send {} to {}", args.file.display(), wire.name()))
+        .with_context(|| format!("cannot send {} to {}", file.display(), wire.name()))
+}
+
+/// The printer `profile` sends its files to: the first machine it lists, by the connection
+/// it names, a Prusa machine's login read from the variables `printer send` reads.
+pub(crate) fn machine_of(profile: Option<&PrinterProfile>) -> Result<MachineArgs> {
+    let profile =
+        profile.context("sending needs the printer: name it with --printer or --profile")?;
+    let prusalink = match profile.connection {
+        Connection::None => bail!("{} takes no file over the network", profile.name),
+        Connection::Sdcp => false,
+        Connection::PrusaLink => true,
+    };
+    let machine = profile.machines.first().with_context(|| {
+        format!(
+            "{} lists no printer on the network to send to",
+            profile.name
+        )
+    })?;
+    let variable = |name: &str| std::env::var(name).ok();
+    Ok(MachineArgs {
+        address: machine.address.clone(),
+        prusalink,
+        key: variable("ENCRUST_PRUSALINK_KEY"),
+        user: variable("ENCRUST_PRUSALINK_USER")
+            .unwrap_or_else(|| net_prusalink::DEFAULT_USER.to_owned()),
+        password: variable("ENCRUST_PRUSALINK_PASSWORD"),
+        wait: SEND_WAIT_S,
+    })
+}
+
+/// How long a board is given to answer unless `--wait` says, seconds.
+const SEND_WAIT_S: f32 = 2.0;
+
+/// Sends `file` to `machine` as `printer send` does, without starting it; answers its name there.
+pub(crate) fn send_to(
+    machine: &MachineArgs,
+    file: &Path,
+    shown: bool,
+    stop: &Stop,
+) -> Result<String> {
+    let wire = machine.wire()?;
+    upload(&wire, file, shown, stop)
 }
 
 /// A transfer the user stopped is a cancellation, which exits 130, not a failure.

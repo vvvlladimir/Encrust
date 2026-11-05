@@ -25,7 +25,10 @@ A new crate, **`core-recipe`**, owns the format, the condition language, the ord
 may take, the variables measured on a model and `decide`, which answers a step `Run`, `Skip`,
 `Stop` or `Pause` with what it read. It depends on `core-engine` for the measures, reads no
 files and runs no step. The window and the command line depend on it and run each step as
-they run it today.
+they run it today: the window by each tool's own job, the command line step by step over the
+plan, each kind by the call its flag makes, so `--prepare` is no longer a resolution of flags
+into the one pass of ADR 0402. There a flag typed, or a plate file's key, wins over the
+setting it shapes in every step of its kind; it never overrides a condition.
 
 Conditions are a small expression language parsed by `core-recipe` itself: comparisons,
 `&&`, `||`, `!`, arithmetic and four functions over numbers and booleans, no loops. Steps
@@ -35,6 +38,9 @@ in the plan, never refused. The one retry, `check` supporting islands again, is 
 five.
 
 ## Consequences
+
+`--prepare --hollow 3` on a model too thin to save resin now prints it solid, where ADR 0402
+hollowed it: the typed wall is a setting and the step's condition still decides.
 
 Each new step kind is a variant in `core-recipe` and an executor in both front ends, in one
 change. A recipe file is a format: its `format` number moves when a key changes meaning. A

@@ -11,9 +11,10 @@ use serde::Serialize;
 
 use crate::estimate::Estimate;
 use crate::pipeline::Outcome;
+use crate::recipe::{Prepared, RecipeRun};
 use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
-use crate::stage::{Part, Prepared};
+use crate::stage::Part;
 
 mod drains;
 mod import;
@@ -140,6 +141,9 @@ pub struct PartReport {
     /// What `--prepare` decided for it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prepared: Option<Prepared>,
+    /// What each step of `--recipe` decided for it, and read to decide.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<RecipeRun>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -286,6 +290,7 @@ impl PartReport {
                 .map(|input| input.display().to_string())
                 .collect(),
             prepared: part.prepared.clone(),
+            recipe: part.recipe.clone(),
         }
     }
 
@@ -301,6 +306,7 @@ impl PartReport {
             supports: None,
             meets: Vec::new(),
             prepared: None,
+            recipe: None,
         }
     }
 }

@@ -4,7 +4,7 @@ A recipe is the order, the conditions and the settings Prepare for print and `--
 run a model through, written down as a TOML file (ADR 0403). `core-recipe` reads it, checks
 it and answers, step by step, whether to run that step and with what; each front end runs
 the step with its own machinery: the window by the tools' own jobs, the command line by
-the flags it resolves (ADR 0402). The autopilot is the built-in recipe `prepare`.
+the call each flag makes (`--recipe`). The autopilot is the built-in recipe `prepare`.
 
 ## The file
 
@@ -133,6 +133,12 @@ resolved, `Skip` with why, `Stop` with the gate's message, or `Pause`. Each carr
 read, which the plan before a run and the report after it show:
 `hollow — run: saves_ml 42 ≥ big_ml 30`. Before a run, a step whose condition reads
 a name not yet measured is shown as *decided when reached*.
+
+On the command line a flag typed for a model, or a plate file's key for it, wins over the
+setting it shapes in every step of its kind: `--hollow 3` is every hollow step's `wall_mm`,
+`--supports light` every supports step's `profile`, `--no-drain-vent` every drain's `vent`;
+`--rotate` makes `turned` true, and `--orient` and `--repair` still run at import as typed.
+Conditions are not overridden: a hollow step whose `when` fails stays skipped.
 
 A step that fails ends the run by `on_fail`: `stop` puts the plate back as the run found it
 (the window's one undo entry, ADR 0402), `skip` goes on to the next step. Several models run

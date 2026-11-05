@@ -1,0 +1,275 @@
+//! `--recipe`: a model taken step by step through a recipe file or a built-in one, each step
+//! decided on the model as the steps before left it (ADR 0403).
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Output;
+
+use serde_json::Value;
+
+use crate::support::*;
+
+/// `text` written as the recipe file `name`.toml.
+fn recipe_file(name: &str, text: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join("encrust-cli-tests");
+    fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join(format!("{name}.toml"));
+    fs::write(&path, text).expect("write the recipe");
+    path
+}
+
+/// A 16 mm cube on the tests' panel, run by `command` through `recipe` with `extra`.
+fn run(command: &str, name: &str, recipe: &Path, extra: &[&str]) -> Output {
+    let model = write_box_stl(name, 16.0, 12, 0);
+    let panel = test_panel();
+    let mut args = vec![
+        command,
+        model.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "0.5",
+        "--recipe",
+        recipe.to_str().unwrap(),
+        "--json",
+    ];
+    args.extend_from_slice(extra);
+    encrust(&args)
+}
+
+/// The same, sliced into a directory of its own, which must succeed.
+fn sliced(name: &str, recipe: &str, extra: &[&str]) -> Value {
+    let out = output_dir(name);
+    let recipe = recipe_file(name, recipe);
+    let mut args = vec!["-o", out.to_str().unwrap()];
+    args.extend_from_slice(extra);
+    let output = run("slice", name, &recipe, &args);
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
+    json(&output)
+}
+
+/// The record of step `index` in a model's report.
+fn step(report: &Value, index: usize) -> &Value {
+    &report["recipe"]["steps"][index]
+}
+
+#[test]
+fn points_drilled_before_the_hollow_are_a_recess_that_drains_nothing() {
+    let report = sliced(
+        "recipe-recess",
+        r#"
+        name = "Recess"
+        [[step]]
+        do = "drain"
+        set = { at = "points", points = [[0.5, 0.5, 1.0]] }
+        [[step]]
+        do = "hollow"
+        set = { wall_mm = 2 }
+        "#,
+        &[],
+    );
+    assert_eq!(report["recipe"]["name"], "Recess");
+    assert_eq!(step(&report, 0)["decision"], "run", "{report}");
+    assert_eq!(
+        step(&report, 0)["holes"],
+        1,
+        "one hole on the top: {report}"
+    );
+    assert_eq!(report["hollow"]["wall_mm"], 2.0);
+    assert!(
+        report["slicing"]["trapped_pockets"].as_u64() >= Some(1),
+        "a walled recess does not reach the cavity: {report}"
+    );
+}
+
+#[test]
+fn a_gate_on_resin_left_trapped_stops_the_run_and_writes_nothing() {
+    let name = "recipe-gate";
+    let out = output_dir(name);
+    let recipe = recipe_file(
+        name,
+        r#"
+        name = "Gated"
+        [[step]]
+        do = "hollow"
+        [[step]]
+        do = "check"
+        [[step]]
+        do = "gate"
+        stop_if = "trapped > 0"
+        message = "Resin stays trapped; drill it by hand"
+        "#,
+    );
+    let output = run("slice", name, &recipe, &["-o", out.to_str().unwrap()]);
+    assert!(
+        !output.status.success(),
+        "the gate holds: {}",
+        stdout(&output)
+    );
+    assert!(
+        stderr(&output).contains("Resin stays trapped; drill it by hand"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!out.exists(), "nothing was written");
+}
+
+#[test]
+fn a_step_that_fails_with_on_fail_skip_is_noted_and_the_run_goes_on() {
+    let report = sliced(
+        "recipe-skip",
+        r#"
+        name = "Skipping"
+        [[step]]
+        do = "hollow"
+        [[step]]
+        do = "drain"
+        on_fail = "skip"
+        set = { plugs = true }
+        [[step]]
+        do = "drain"
+        "#,
+        &[],
+    );
+    let failed = step(&report, 1)["note"].as_str().unwrap_or_default();
+    assert!(failed.contains("not supported yet"), "{report}");
+    assert!(step(&report, 2)["holes"].as_u64() > Some(0), "{report}");
+    assert_eq!(
+        report["slicing"]["trapped_pockets"], 0,
+        "the next drain ran: {report}"
+    );
+}
+
+#[test]
+fn a_step_that_fails_stops_the_run_naming_it() {
+    let name = "recipe-stop";
+    let recipe = recipe_file(
+        name,
+        "name = \"Stopping\"\n[[step]]\ndo = \"hollow\"\nset = { keep_solid_under_mm = 1 }\n",
+    );
+    let output = run("estimate", name, &recipe, &[]);
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("step 0 (hollow)") && said.contains("not supported yet"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_check_supports_its_islands_again_at_most_max_times() {
+    let report = sliced(
+        "recipe-retry",
+        r#"
+        name = "Retrying"
+        [[step]]
+        do = "check"
+        retry = { while = "islands >= 0", max = 2 }
+        "#,
+        &[],
+    );
+    assert_eq!(
+        step(&report, 0)["retries"],
+        2,
+        "the retry always holds: {report}"
+    );
+    assert!(report["recipe"]["steps"][0]["read"].is_object());
+}
+
+#[test]
+fn a_save_step_writes_the_templated_name_into_its_folder() {
+    let name = "recipe-save";
+    let folder = output_dir(name);
+    let recipe = recipe_file(
+        name,
+        &format!(
+            "name = \"Saving\"\n[[step]]\ndo = \"save\"\nset = {{ folder = {:?}, name = \"{{model}}-saved\" }}\n",
+            folder.display().to_string()
+        ),
+    );
+    let output = run("slice", name, &recipe, &[]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let saved: Vec<String> = fs::read_dir(&folder)
+        .expect("the folder was made")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        saved
+            .iter()
+            .any(|file| file.starts_with(&format!("{name}-saved."))),
+        "the model's stem and the template's tail: {saved:?}"
+    );
+    let report = json(&output);
+    let written = report["output"].as_str().unwrap_or_default();
+    assert!(
+        written.contains("-saved."),
+        "the report is of the saved file: {report}"
+    );
+}
+
+#[test]
+fn a_recipe_that_saves_nothing_needs_an_output() {
+    let name = "recipe-nowhere";
+    let recipe = recipe_file(name, "name = \"Nowhere\"\n[[step]]\ndo = \"hollow\"\n");
+    let output = run("slice", name, &recipe, &[]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("nothing would be written"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn recipe_prepare_reports_what_prepare_does() {
+    let model = write_box_stl("recipe-prepare", 30.0, 12, 0);
+    let panel = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project-panel.toml");
+    let prepared = |asked: &[&str]| {
+        let mut args = vec![
+            "estimate",
+            model.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--layer-height",
+            "0.5",
+            "--center",
+            "--json",
+        ];
+        args.extend_from_slice(asked);
+        let output = encrust(&args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["models"][0]["prepared"].clone()
+    };
+    let by_flag = prepared(&["--prepare"]);
+    assert_eq!(by_flag["oriented"], true, "{by_flag}");
+    assert_eq!(by_flag, prepared(&["--recipe", "prepare"]));
+}
+
+#[test]
+fn a_recipe_file_that_does_not_read_fails_naming_why() {
+    let name = "recipe-invalid";
+    let recipe = recipe_file(name, "name = \"Broken\"\n[[step]]\ndo = \"polish\"\n");
+    let output = run("estimate", name, &recipe, &[]);
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("is not a recipe") && said.contains("there is no step `polish`"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_typed_hollow_wins_over_the_recipes_wall() {
+    let report = sliced(
+        "recipe-typed",
+        "name = \"Walled\"\n[[step]]\ndo = \"hollow\"\nset = { wall_mm = 2 }\n",
+        &["--hollow", "3"],
+    );
+    assert_eq!(report["hollow"]["wall_mm"], 3.0, "{report}");
+    assert_eq!(step(&report, 0)["settings"]["wall_mm"], 3.0, "{report}");
+}

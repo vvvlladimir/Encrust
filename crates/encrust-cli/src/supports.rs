@@ -46,15 +46,14 @@ impl fmt::Display for SupportReport {
     }
 }
 
-/// Stands supports under `mesh`, in plate coordinates: `stand_under`, or `stand_seated`
-/// for a model left on the plate, with what it found laid out for a terminal.
+/// Supports under `mesh`, plate coordinates, holding `held` up besides, by `stand_under`, or
+/// `stand_seated` for a model left on the plate, with what it found laid out for a terminal.
 pub fn stand_under(
-    mesh: &mut Mesh,
-    cavity: Option<Range<usize>>,
-    cuts: &mut Option<Mesh>,
+    (mesh, cavity, cuts): (&mut Mesh, Option<Range<usize>>, &mut Option<Mesh>),
     plan: &SupportPlan,
     layer_height_mm: Scalar,
     seated: bool,
+    held: &[Vec3],
 ) -> Result<(SupportReport, Mesh)> {
     let stand = if seated {
         core_engine::stand_seated
@@ -66,7 +65,7 @@ pub fn stand_under(
         cavity,
         cuts,
         drill_exactly: true,
-        held: &[],
+        held,
     };
     let stood =
         stand(model, plan, layer_height_mm).context("cannot stand supports under the model")?;
@@ -131,8 +130,9 @@ mod tests {
     #[test]
     fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let (report, supports) = stand_under(&mut mesh, None, &mut None, &medium(), 0.05, false)
-            .expect("a slab slices and supports");
+        let (report, supports) =
+            stand_under((&mut mesh, None, &mut None), &medium(), 0.05, false, &[])
+                .expect("a slab slices and supports");
 
         assert!(!report.contacts.is_empty(), "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
@@ -179,12 +179,11 @@ mod tests {
         let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
 
         let (report, _) = stand_under(
-            &mut mesh,
-            None,
-            &mut None,
+            (&mut mesh, None, &mut None),
             &SupportPlan::of(profile.clone()),
             0.05,
             false,
+            &[],
         )
         .expect("a slab slices and supports");
 
@@ -210,7 +209,7 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let (report, _) = stand_under(&mut mesh, None, &mut None, &medium(), 0.05, false)
+        let (report, _) = stand_under((&mut mesh, None, &mut None), &medium(), 0.05, false, &[])
             .expect("a slab slices and supports");
 
         assert!(

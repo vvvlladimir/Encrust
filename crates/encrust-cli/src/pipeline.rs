@@ -30,10 +30,12 @@ mod place;
 mod relief;
 
 use checked::checked;
+pub(crate) use checked::{read_again, repaired_later};
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
 pub use place::{OrientSummary, orient_settings};
 use place::{centred, place};
+pub(crate) use place::{orientation, turn_in_place};
 use relief::press_relief;
 
 /// How a run talks while it works, and what can stop it.
@@ -44,6 +46,8 @@ pub struct Watch<'a> {
     /// Draw a bar over the layers as they are written.
     pub progress: bool,
     pub stop: &'a Stop,
+    /// Whether a recipe's save steps write their file, which `estimate` turns off.
+    pub writes: bool,
 }
 
 impl<'a> Watch<'a> {
@@ -53,6 +57,7 @@ impl<'a> Watch<'a> {
             talk: false,
             progress: false,
             stop,
+            writes: true,
         }
     }
 }

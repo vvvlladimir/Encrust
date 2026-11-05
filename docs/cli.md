@@ -353,27 +353,74 @@ thickness on top when it has one, before anything is put under it, the way the w
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
-`--prepare` on `slice`, `estimate` and `batch` prepares each model as the engine's own
-defaults would, with nothing tuned (ADR 0402): a print for a user who tuned nothing. In order, each step a flag typed wins over:
+`--recipe ID|PATH` on `slice`, `estimate` and `batch` takes each model through a recipe step
+by step (`docs/design/recipes.md`, ADR 0403): a built-in one by id, or a recipe file. Each step
+is decided on the model as the steps before left it and run by the call its flag makes:
+`orient` as `--orient`, `repair` as `--repair`, `hollow` as `--hollow`, `drain` as
+`--drain-at auto`, or a hole at each of `points`, fractions of the box the model stands in,
+snapped onto the surface as `--drain-at` snaps one, and `supports` as `--supports`. `check`
+cuts and measures the plate as the report does, `arrange` is `--arrange`, and `save` writes the
+plate there and then into its `folder` under its `name` template, the home and the default
+name without them, and with `send = true` sends it to the first printer the profile lists, as
+`encrust printer send` does; a send with no printer to go to is refused before anything is
+cut. A gate that holds ends the run with its message and exit code 1, writing nothing; a pause
+says its message and goes on; `estimate` saves nothing. A file that does not read or check is
+refused with what is wrong in it.
 
-1. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
+A flag typed for a model, or a plate file's key, wins over the setting it shapes in every step
+of its kind: `--hollow`, `--hollow-mode`, `--hollow-open-floor` and `--infill`;
+`--no-drain-vent`, `--drain-at auto` and `--drain-plugs`; `--supports`, `--support-profile`
+and `--support-cavity`. `--rotate` makes `turned` true, and `--orient` and `--repair` still run
+at import as typed, then shape the later steps of their kind. A `--drain-at` point,
+`--channel` and `--drain-support-at` point at the model as imported, which a step may turn,
+and are refused; `keep_solid_under_mm` and `plugs = true` are not supported yet.
+
+`-o` writes the plate as the recipe leaves it. Without it a recipe must save the plate itself,
+and the report is of the last file it saved; with neither nothing would be written, and the run
+is refused. `--json` gives each model `recipe`, what each step decided, on what, and with which
+settings:
+
+```json
+"recipe": {"name": "Busts", "steps": [
+  {"index": 0, "kind": "hollow", "decision": "run",
+   "read": {"saves_ml": 42.0, "big_ml": 30.0}, "settings": {"wall_mm": 2.0}},
+  {"index": 1, "kind": "drain", "decision": "run", "read": {"hollow": true},
+   "settings": {"vent": true}, "holes": 2},
+  {"index": 2, "kind": "check", "decision": "run", "read": {}, "settings": {}, "retries": 1},
+  {"index": 3, "kind": "save", "decision": "run", "read": {}, "settings": {"folder": "~/prints"},
+   "saved": "/home/me/prints/bust.goo"}]}
+```
+
+`decision` is `run`, `skip`, `stop`, `pause` or `disabled`; `note` says why a step that ran did
+nothing, why it failed where `on_fail = "skip"` let the run go on, or what a gate or pause said.
+
+```sh
+encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
+  --recipe busts.toml --json
+encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe busts.toml \
+  --hollow 3 -o sliced/
+```
+
+`--prepare` is `--recipe prepare`, the autopilot of ADR 0402 with nothing tuned, and writes
+to `out` without `-o`. In order:
+
+1. **Orient** as `--orient --orient-goal auto`, judged on the automatic supports, unless
+   `--rotate` or `--orient` was given, or a plate file turns the model.
+2. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
    or one drawn twice. `--repair=METHOD` picks the method and always runs; `--no-validate`
    skips it.
-2. **Orient** as `--orient --orient-goal auto`, unless `--rotate` or `--orient` was given, or
-   a plate file turns the model.
 3. **Hollow** at Hollow's default 2 mm wall, with no infill, only where `inspect`'s `solid`
    line names a saving: at least 10 ml and 40 % of the model (ADR 0393). `--hollow MM`, or a
    plate file's `hollow`, sets the wall.
-4. **Drain** a hollowed model with `--drain-at auto`, a vent included, unless `--drain-at` or
-   `--channel` was given.
+4. **Drain** a hollowed model as `--drain-at auto`, a vent included.
 5. **Support** with `--supports auto`, or the profile `--supports`, `--support-profile` or a
    plate file names, holding up the cavity of a hollowed model.
 
 A flag that shapes a step the model did not get — `--no-drain-vent`, `--infill`,
-`--hollow-open-floor`, `--drain-plugs` — is set aside rather than refused. `--prepare` does not
-imply `--strict`: the run is judged as ever, and `--strict` decides what is kept. A project
-carries its own steps and refuses it. The text report says what was decided under `Prepared`,
-and `--json` as `prepared` beside each model's other fields:
+`--hollow-open-floor` — changes nothing. `--prepare` does not imply `--strict`: the run is
+judged as ever, and `--strict` decides what is kept. A project carries its own steps and
+refuses it, and `--recipe`. The text report says what was decided under `Prepared`, and
+`--json` as `prepared` beside each model's other fields, for `--recipe prepare` too:
 
 ```json
 "prepared": {"repaired": false, "oriented": true,
@@ -383,7 +430,7 @@ and `--json` as `prepared` beside each model's other fields:
 
 `repaired` says the model was repaired, `oriented` that a search turned it, `hollowed` the
 wall, or `null` for a model printed solid, with `saves_mm3` the saving reckoned before
-hollowing, `null` for a wall `--hollow` gave; `drained` that `--drain-at auto` ran, and
+hollowing, `null` for a wall `--hollow` gave; `drained` that the proven search ran, and
 `supports` the name of the profile the supports are built to.
 
 ```sh

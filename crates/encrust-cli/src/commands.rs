@@ -7,7 +7,7 @@ mod estimate;
 mod info;
 mod inspect;
 mod measure;
-mod printer;
+pub(crate) mod printer;
 mod profiles;
 pub mod slice;
 
@@ -83,6 +83,7 @@ impl GlobalArgs {
             talk: self.talks(),
             progress: self.shows_progress(),
             stop,
+            writes: true,
         }
     }
 

@@ -166,10 +166,6 @@ pub struct ImportArgs {
     /// the outside of the model never passes through the lattice.
     #[arg(long, value_name = "0..1", default_value_t = 0.5)]
     pub precision: Scalar,
-
-    /// Whether `--prepare` repairs a model with defects and orients one no flag turned.
-    #[arg(skip)]
-    pub prepare: bool,
 }
 
 /// Where the model stands on the plate.
@@ -413,11 +409,26 @@ pub struct JobArgs {
 
     /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
     /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on
-    /// automatic supports. A flag given wins over the step it sets.
-    #[arg(long)]
+    /// automatic supports. The same as `--recipe prepare`, writing to `out` without -o.
+    #[arg(long, conflicts_with = "recipe")]
     pub prepare: bool,
+
+    /// Prepare each model step by step by a recipe: the id of a built-in one (`prepare`) or
+    /// a recipe file. A flag given wins over what it sets in every step of its kind.
+    #[arg(long, value_name = "ID|PATH")]
+    pub recipe: Option<String>,
 
     /// Exit with code 3 when the model has defects or does not fit.
     #[arg(long)]
     pub strict: bool,
+}
+
+impl JobArgs {
+    /// The recipe each model is prepared by, by id or path: `--recipe`, or `prepare` for
+    /// `--prepare`.
+    pub fn recipe_asked(&self) -> Option<&str> {
+        self.recipe
+            .as_deref()
+            .or(self.prepare.then_some(crate::recipe::PREPARE))
+    }
 }

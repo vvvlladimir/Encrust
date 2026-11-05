@@ -1,6 +1,6 @@
 # 0402. Prepare a model by the engine's defaults, filling in the flags left out
 
-- **Status:** Proposed
+- **Status:** Superseded by 0403 (the command line's resolution of the flags only)
 - **Date:** 2026-11-02
 
 ## Context
