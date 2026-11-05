@@ -33,7 +33,7 @@ impl Saving {
         }
         let general = &machine.general;
         let template = saved.name.as_deref().unwrap_or(&general.file_name);
-        let name = crate::panels::file_name(scene, &machine.slicing, template);
+        let name = crate::file_name::file_name(scene, &machine.slicing, template);
         let folder = folder_of(saved.folder.as_deref(), general.sliced_dir.as_deref());
         Ok(Self {
             path: path_in(folder, &name),

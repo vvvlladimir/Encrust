@@ -30,7 +30,6 @@ pub(crate) use inspector::auto_orient;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use settings::{import_dropped, import_profile};
-pub(crate) use slice::file_name;
 pub use slice::{slice_every_plate, slice_this_plate};
 pub use start::{open_recent, still_starting};
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
