@@ -18,3 +18,16 @@ pub fn built_in(id: &str) -> Result<Plan, RecipeError> {
         .ok_or_else(|| RecipeError::UnknownBuiltIn { id: id.to_owned() })?;
     validate(Recipe::from_toml(text)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_id_no_recipe_ships_under_is_unknown() {
+        assert!(matches!(
+            built_in("busts"),
+            Err(RecipeError::UnknownBuiltIn { id }) if id == "busts"
+        ));
+    }
+}
