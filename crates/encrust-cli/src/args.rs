@@ -413,8 +413,9 @@ pub struct JobArgs {
     #[arg(long, conflicts_with = "recipe")]
     pub prepare: bool,
 
-    /// Prepare each model step by step by a recipe: the id of a built-in one (`prepare`) or
-    /// a recipe file. A flag given wins over what it sets in every step of its kind.
+    /// Prepare each model step by step by a recipe: the id of a built-in one (`prepare`), one
+    /// of yours by file stem, or a recipe file. A flag given wins over what it sets in every
+    /// step of its kind.
     #[arg(long, value_name = "ID|PATH")]
     pub recipe: Option<String>,
 

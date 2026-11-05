@@ -1,14 +1,26 @@
-//! The recipes that ship, by id: `prepare` is the autopilot of ADR 0402.
+//! The recipes that ship, by id: `prepare` is the autopilot of ADR 0402, the others are
+//! starting points for a kind of model.
 
 use crate::error::RecipeError;
 use crate::recipe::Recipe;
 use crate::validate::{Plan, validate};
 
-/// Each built-in recipe's id and text.
-pub const BUILT_IN: [(&str, &str); 1] = [(
-    "prepare",
-    include_str!("../../../assets/recipes/prepare.toml"),
-)];
+/// Each built-in recipe's id, the file stem, and text.
+pub const BUILT_IN: [(&str, &str); 4] = [
+    (
+        "prepare",
+        include_str!("../../../assets/recipes/prepare.toml"),
+    ),
+    (
+        "miniatures",
+        include_str!("../../../assets/recipes/miniatures.toml"),
+    ),
+    (
+        "large-solid",
+        include_str!("../../../assets/recipes/large-solid.toml"),
+    ),
+    ("flat", include_str!("../../../assets/recipes/flat.toml")),
+];
 
 /// The built-in recipe `id`, read and checked.
 pub fn built_in(id: &str) -> Result<Plan, RecipeError> {
@@ -22,6 +34,13 @@ pub fn built_in(id: &str) -> Result<Plan, RecipeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_built_in_recipe_reads_and_is_valid() {
+        for (id, _) in BUILT_IN {
+            built_in(id).unwrap_or_else(|error| panic!("{id}: {error}"));
+        }
+    }
 
     #[test]
     fn an_id_no_recipe_ships_under_is_unknown() {

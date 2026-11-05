@@ -905,6 +905,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
+| `recipes` | List the built-in and your own recipes, and show one as TOML to copy and edit. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
@@ -917,7 +918,9 @@ removes the half-written file.
 it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
 resin, and stand it on Auto supports. Every flag you type wins over its step, and `--json` says
 what was decided for each model. The window does the same as **Prepare for print**.
-`--recipe` runs a recipe of your own the same way, step by step and in any order: its
+Built-in recipes beside it, each a starting point for a kind of model: `miniatures`,
+`large-solid` and `flat`; `encrust recipes list` names them and `recipes show` prints one.
+`--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
 of the plate where the recipe says; a flag you type wins over its setting in every step, and
 `--orient`, `--repair`, `--hollow` or `--supports` runs every step of its kind.

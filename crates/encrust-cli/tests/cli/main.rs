@@ -16,6 +16,7 @@ mod png_stack;
 mod prepare;
 mod profiles;
 mod recipe;
+mod recipes;
 mod slicing;
 mod support;
 mod talking;

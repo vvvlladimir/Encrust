@@ -354,7 +354,8 @@ room for a support. One already standing that high is left where it is, and a pr
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
 `--recipe ID|PATH` on `slice`, `estimate` and `batch` takes each model through a recipe step
-by step (`docs/design/recipes.md`, ADR 0403): a built-in one by id, or a recipe file. Each step
+by step (`docs/design/recipes.md`, ADR 0403): a built-in one by id, one of yours by file
+stem, or a recipe file by its path. Each step
 is decided on the model as the steps before left it and run by the call its flag makes:
 `orient` as `--orient`, `repair` as `--repair`, `hollow` as `--hollow`, `drain` as
 `--drain-at auto`, or a hole at each of `points`, fractions of the box the model stands in,
@@ -401,6 +402,24 @@ encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
   --recipe busts.toml --json
 encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe busts.toml \
   --hollow 3 -o sliced/
+```
+
+The built-in recipes, by id: `prepare` below; `miniatures` (orient for the least peel, tilted
+at most 45 degrees, no hollowing, Auto supports, a check that supports islands again up to
+twice, and a gate on any left); `large-solid` (repair if open, orient, hollow where it saves
+resin at a wall of a fiftieth of the height between 1.5 and 3 mm, drain, a gate on trapped
+resin, Auto supports inside and out, a check); `flat` (orient for the shortest print, no
+supports, a check and a gate on any island). Your own are the files `<id>.toml` in the
+`recipes/` folder beside your profiles (where `profiles` keeps them, `ENCRUST_PROFILE_DIR`
+moves it); `--recipe <id>` takes the built-in of that id first, so a file of yours named
+like one is reached by its path. `recipes list` prints each built-in recipe and then yours,
+one that would not read with its error, and `recipes show <ID|PATH>` prints a recipe as the
+TOML it reads back, comments aside, to copy and edit; `--json` for both:
+
+```sh
+encrust recipes list
+encrust recipes show miniatures > my-minis.toml
+encrust slice figure.stl --printer elegoo-mars-4-ultra --resin my-grey --recipe miniatures
 ```
 
 `--prepare` is `--recipe prepare`, the autopilot of ADR 0402 with nothing tuned, and writes

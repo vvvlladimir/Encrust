@@ -1,17 +1,17 @@
 //! `--recipe`: each model taken through a recipe's steps, each decided by `core_recipe` on the
 //! model as the steps before left it and run by its flag's own call (ADR 0403).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use core_engine::{Model, SupportPlan};
 use core_geometry::{Mesh, Scalar};
 use core_recipe::{
-    BUILT_IN, Decision, Metrics, OnFail, Plan, Recipe, Setting, StepKind, built_in, decide,
-    decide_forced, validate,
+    Decision, Metrics, OnFail, Plan, Setting, StepKind, decide, decide_forced, validate,
 };
 
 mod drain;
+pub mod library;
 mod piece;
 mod plate;
 mod prepared;
@@ -64,24 +64,11 @@ impl Asked {
     }
 }
 
-/// The built-in recipe `asked` names, or the recipe file at that path.
+/// The recipe `asked` names, read and checked: a built-in id, else one of the user's by
+/// stem, else a recipe file.
 fn plan_of_recipe(asked: &str) -> Result<Plan> {
-    let path = Path::new(asked);
-    let is_file = path.is_file() || path.extension().is_some_and(|ext| ext == "toml");
-    if !is_file {
-        let ids: Vec<&str> = BUILT_IN.iter().map(|(id, _)| *id).collect();
-        return built_in(asked).with_context(|| {
-            format!(
-                "--recipe takes a recipe file or a built-in id: {}",
-                ids.join(", ")
-            )
-        });
-    }
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("cannot read the recipe {}", path.display()))?;
-    Recipe::from_toml(&text)
-        .and_then(validate)
-        .with_context(|| format!("{} is not a recipe this build runs", path.display()))
+    let (source, recipe) = library::find(asked)?;
+    validate(recipe).with_context(|| format!("the {} recipe {asked} cannot run", source.label()))
 }
 
 /// What a recipe runs with: the flags, the machine, the layer height and how the run talks.

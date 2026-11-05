@@ -157,4 +157,6 @@ each step together; a gate that stops on one stops the run.
 
 The built-in ones in `assets/recipes/`, compiled into `core-recipe`; the user's beside
 their profiles in `recipes/`, a file each, its stem the id. `core-recipe` reads no files:
-the front ends hand it the text.
+the front ends hand it the text. The command line looks an id up among the built-in ones
+first, so a user file named like one is reached by its path; `encrust recipes list` and
+`show` print them. The window has no picker yet.
