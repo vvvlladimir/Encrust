@@ -129,14 +129,26 @@ pub(super) fn draw_measure(ui: &egui::Ui, window: &Window, viewport: egui::Rect)
     if measure.show_axes {
         draw_axis_legs(&painter, &on_screen, from, to);
     }
-    let (Some(from), Some(to)) = (on_screen(from), on_screen(to)) else {
+    let (line, middle, length_mm) = match measure.surface_path() {
+        Some(path) => (path.points.clone(), path.halfway(), path.length_mm()),
+        None => (vec![from, to], None, distance_mm),
+    };
+    let Some(line) = line.into_iter().map(&on_screen).collect::<Option<Vec<_>>>() else {
         return;
     };
-    painter.line_segment([from, to], egui::Stroke::new(2.0, accent));
+    let middle = match (middle, line.as_slice()) {
+        (Some(halfway), _) => on_screen(halfway),
+        (None, [from, to]) => Some(from.lerp(*to, 0.5)),
+        (None, _) => None,
+    };
+    let Some(middle) = middle else {
+        return;
+    };
+    painter.add(egui::Shape::line(line, egui::Stroke::new(2.0, accent)));
     tag(
         &painter,
-        from.lerp(to, 0.5),
-        tr!("value-mm", value = format!("{distance_mm:.2}")),
+        middle,
+        tr!("value-mm", value = format!("{length_mm:.2}")),
         accent,
     );
 }

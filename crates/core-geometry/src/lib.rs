@@ -20,6 +20,7 @@ mod repair;
 mod ring;
 mod smooth;
 mod split;
+mod surface_path;
 mod topology;
 mod transform;
 mod triangle;
@@ -55,6 +56,7 @@ pub use repair::{
 pub use ring::{ring_area, ring_contains};
 pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};
+pub use surface_path::{SurfacePath, SurfacePathError, SurfacePoint, WalkWatch, surface_path};
 pub use topology::{Adjacency, Components};
 pub use transform::{
     Transform, center_over_plate, drop_to_plate, lift_over_plate, placed_aabb, smallest_scale,

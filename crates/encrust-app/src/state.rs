@@ -126,6 +126,7 @@ pub struct Tools {
     pub orient: OrientTool,
     pub measure: Measure,
     pub measure_edges: crate::measure::EdgeCache,
+    pub measure_walk: crate::measure::Walking,
     pub array: Array,
 }
 

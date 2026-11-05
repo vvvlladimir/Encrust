@@ -2,9 +2,9 @@
 mod bodies;
 
 use core_geometry::{
-    Bvh, DEFAULT_WELD_TOLERANCE, Mesh, Quat, Ray, Scalar, Transform, Triangle, Vec3, Winding,
-    closest_point, diagnose, orient_outward, point_triangle, ray_aabb, ray_triangle, raycast,
-    signed_volume, transform_mesh, weld, winding_number,
+    Adjacency, Bvh, DEFAULT_WELD_TOLERANCE, Mat4, Mesh, Quat, Ray, Scalar, SurfacePoint, Transform,
+    Triangle, Vec3, Winding, closest_point, diagnose, orient_outward, point_triangle, ray_aabb,
+    ray_triangle, raycast, signed_volume, surface_path, transform_mesh, weld, winding_number,
 };
 use proptest::prelude::*;
 
@@ -227,5 +227,38 @@ proptest! {
             (exact - approximate).abs() < 0.05,
             "every face gives {exact}, the hierarchy {approximate}"
         );
+    }
+}
+
+fn any_direction() -> impl Strategy<Value = Vec3> {
+    (-1.0f32..1.0, -1.0f32..1.0, -1.0f32..1.0).prop_filter_map(
+        "direction must not be zero",
+        |(x, y, z)| {
+            Vec3::new(x, y, z)
+                .try_normalize()
+                .filter(|_| Vec3::new(x, y, z).length() > 1e-2)
+        },
+    )
+}
+
+proptest! {
+    /// A walk over a ball is no shorter than the chord and, within its corridor's slack, no
+    /// longer than the great-circle arc between its ends.
+    #[test]
+    fn a_walk_over_a_ball_lies_between_chord_and_arc(a in any_direction(), b in any_direction()) {
+        let radius = 10.0;
+        let mesh = core_geometry::ball(Vec3::ZERO, radius, 24, 48);
+        let bvh = Bvh::build(&mesh);
+        let on = |direction: Vec3| {
+            let closest = bvh.closest(direction * radius).expect("the ball has faces");
+            SurfacePoint { face: closest.face, point: closest.point }
+        };
+        let (from, to) = (on(a), on(b));
+        let path = surface_path(&mesh, &Adjacency::of(&mesh), Mat4::IDENTITY, from, to, &mut |_| std::ops::ControlFlow::Continue(()))
+            .expect("a ball is one closed body");
+        let chord = from.point.distance(to.point);
+        let arc = radius * a.angle_between(b);
+        prop_assert!(path.length_mm() >= chord - 1e-3, "{} under the chord {chord}", path.length_mm());
+        prop_assert!(path.length_mm() <= arc * 1.05 + 0.1, "{} over the arc {arc}", path.length_mm());
     }
 }

@@ -87,7 +87,7 @@ pub(super) fn measure_under_cursor(
         reach_mm,
         measure.snap_now(alt),
     );
-    measure.pick(point, snapped);
+    measure.pick(point, snapped, measure::Anchor::of(object, point));
 }
 
 /// How near the cursor a corner or an edge catches a click, points of the screen.

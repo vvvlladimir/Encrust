@@ -677,6 +677,13 @@ measure-snap-corner-note = Щелчок захватывает ближайши�
 measure-snap-edge-note = Щелчок захватывает ближайшее ребро, где поверхность меняет направление.
 measure-snap-free-note = Точно там, где пришёлся щелчок.
 measure-show-axes = Показывать dX, dY, dZ в области просмотра
+measure-along-surface = Измерять по поверхности
+measure-on-surface = По поверхности
+measure-walk-finding = Поиск кратчайшего пути по поверхности…
+measure-walk-apart = Точки не на одной модели, поэтому поверхность их не соединяет.
+measure-walk-unreachable = Точки на разных оболочках модели, поэтому поверхность их не соединяет.
+measure-walk-stopped = Отменено до того, как путь по поверхности был найден.
+measure-walk-failed = Путь по поверхности не найден: { $why }.
 measure-second-point = Щёлкните по второй точке.
 measure-two-points = Щёлкните по двум точкам на модели.
 measure-distance = Расстояние
@@ -900,6 +907,7 @@ boolean-done-sampled =
 job-thread-stopped-boolean = поток объединения остановился, не закончив
 job-thread-stopped-cut = поток разреза остановился, не закончив
 job-thread-stopped-split = поток разделения остановился, не закончив
+job-thread-stopped-measure-walk = поток измерения остановился, не закончив
 job-thread-stopped-plugs = поток вырезания пробок остановился, не закончив
 job-thread-stopped-drill = поток вырезания отверстий остановился, не закончив
 job-model-changed = пока шла работа, { $name } изменили, поэтому результат отброшен
@@ -1781,6 +1789,7 @@ notice-delete-profiles = Удалить их
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Нарезка слоёв для предпросмотра
+notice-finding-walk = Поиск кратчайшего пути по поверхности
 notice-broken-one = { $name } повреждена
 notice-broken-several =
     { $count ->

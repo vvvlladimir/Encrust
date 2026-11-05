@@ -6,6 +6,7 @@ mod convert;
 mod estimate;
 mod info;
 mod inspect;
+mod measure;
 mod printer;
 mod profiles;
 pub mod slice;
@@ -25,6 +26,7 @@ pub use convert::ConvertCommand;
 pub use estimate::EstimateCommand;
 pub use info::InfoCommand;
 pub use inspect::InspectCommand;
+pub use measure::MeasureCommand;
 pub use printer::PrinterCommand;
 pub use profiles::ProfilesCommand;
 pub use slice::SliceCommand;
@@ -107,6 +109,8 @@ pub enum Command {
     Batch(BatchCommand),
     /// Load and repair a model and say what was found, without slicing it.
     Inspect(InspectCommand),
+    /// How far apart two points of a model are, straight and, when asked, over its surface.
+    Measure(MeasureCommand),
     /// Open a sliced file, print what it states and decode every layer, or take one out.
     Info(InfoCommand),
     /// Write a sliced file again in another container, for a machine with the same panel.
@@ -128,7 +132,11 @@ impl Command {
         match self {
             Self::Slice(_) | Self::Estimate(_) | Self::Batch(_) | Self::Convert(_) => true,
             Self::Printer(command) => matches!(command, PrinterCommand::Send(_)),
-            Self::Inspect(_) | Self::Info(_) | Self::Profiles(_) | Self::Completions(_) => false,
+            Self::Inspect(_)
+            | Self::Measure(_)
+            | Self::Info(_)
+            | Self::Profiles(_)
+            | Self::Completions(_) => false,
         }
     }
 }
@@ -154,6 +162,7 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Estimate(command) => command.run(global, stop),
         Command::Batch(command) => command.run(global, stop),
         Command::Inspect(command) => command.run(global),
+        Command::Measure(command) => command.run(global),
         Command::Info(command) => command.run(global),
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),

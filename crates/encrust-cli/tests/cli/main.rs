@@ -7,6 +7,7 @@ mod editing;
 mod hollowing;
 mod import;
 mod keep_solid;
+mod measure;
 mod modelling;
 mod plate;
 mod png_stack;

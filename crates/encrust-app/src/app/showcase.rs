@@ -379,8 +379,8 @@ fn showcase_measure() {
             panic!("the Crustling has vertices");
         };
         let measure = &mut app.tools.measure;
-        measure.pick(lowest, crate::measure::Snapped::Corner);
-        measure.pick(highest, crate::measure::Snapped::Corner);
+        measure.pick(lowest, crate::measure::Snapped::Corner, None);
+        measure.pick(highest, crate::measure::Snapped::Corner, None);
         app
     });
 }

@@ -116,6 +116,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0309](0309-ship-a-dozen-height-maps-in-the-window.md) | Ship a dozen height maps in the window | Accepted |
 | [0310](0310-a-field-is-moved-as-it-is-built-and-flat-faces-collapse.md) | Move a relief's field as it is built, and collapse faces with no area | Accepted |
 | [0318](0318-a-relief-is-pressed-only-where-it-is-painted.md) | Press a relief only where it is painted, by moving the painted faces | Accepted |
+| [0400](0400-a-walk-over-a-surface-is-a-corridor-pulled-taut.md) | Find a walk over a surface as an A* corridor pulled taut | Accepted |
 
 ### Mesh and texture input
 

@@ -97,6 +97,11 @@ fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "slicing", shown) {
         slicing.inspect(|job| job.cancel());
     }
+    let walk = window.tools.measure_walk.notice();
+    let shown = walk.map(|share| (tr!("notice-finding-walk"), Some(share), false));
+    if job_card(stack, "measure-walk", shown) {
+        window.tools.measure_walk.cancel(&mut window.tools.measure);
+    }
     let network = window.machine.network.job.as_ref();
     let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
     if job_card(stack, "network", shown) {

@@ -22,6 +22,7 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [ui-standards.md](ui-standards.md) | How every panel is built: text, units, undo, what is remembered |
 | [ui-screens.md](ui-screens.md) | Where every part of every screen stands, and how big it is |
 | [distance-queries.md](distance-queries.md) | The nearest point on a mesh, and the winding number that signs it |
+| [surface-path.md](surface-path.md) | The shortest walk over a surface between two of its points |
 | [volume.md](volume.md) | The distance field, its sparse storage, the CSG operators and extraction |
 | [hollowing.md](hollowing.md) | The three hollow modes, the blockers, and the lattices that fill a cavity |
 | [parts.md](parts.md) | How a model is split into parts: shells by edges, nesting, scraps, narrow joins |

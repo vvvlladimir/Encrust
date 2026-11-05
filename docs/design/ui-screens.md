@@ -105,7 +105,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
 | Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
-| Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ); Reading | — |
+| Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ, Measure along the surface); Reading (Along the surface first when on, or why there is none) | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
 | Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon, the window's whichever model is picked); Plugs | Check drainage; running, `step_bar` with Looking for trapped resin and Cancel |
@@ -213,7 +213,8 @@ track. With no stack it reads *No layers*.
 - **Notices:** each a card 40 tall: glyph in its colour (`warn` warning, `danger`
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
-  and percent and a quiet Cancel instead of the close.
+  and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
+  its card only once it has run 0.3 s, so a short one does not flash.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30

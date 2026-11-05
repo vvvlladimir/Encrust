@@ -638,6 +638,14 @@ measure-snap-corner-note = The nearest corner where the surface turns catches a 
 measure-snap-edge-note = The nearest edge where the surface turns catches a click.
 measure-snap-free-note = Exactly where the click lands.
 measure-show-axes = Show dX, dY, dZ in the view
+measure-along-surface = Measure along the surface
+# A reading's label: the length of the shortest way between the points over the model.
+measure-on-surface = Along the surface
+measure-walk-finding = Finding the shortest way along the surface…
+measure-walk-apart = The points are not on one model, so no surface joins them.
+measure-walk-unreachable = The points are on separate shells of the model, so no surface joins them.
+measure-walk-stopped = Cancelled before the way along the surface was found.
+measure-walk-failed = No way along the surface was found: { $why }.
 measure-second-point = Click the second point.
 measure-two-points = Click two points on a model.
 measure-distance = Distance
@@ -854,6 +862,7 @@ boolean-done-sampled =
 job-thread-stopped-boolean = the combining thread stopped without finishing
 job-thread-stopped-cut = the cutting thread stopped without finishing
 job-thread-stopped-split = the splitting thread stopped without finishing
+job-thread-stopped-measure-walk = the measuring thread stopped without finishing
 job-thread-stopped-plugs = the thread cutting the plugs stopped without finishing
 job-thread-stopped-drill = the thread cutting the holes stopped without finishing
 job-model-changed = { $name } changed while it was being worked on, so the result was dropped
@@ -1706,6 +1715,7 @@ notice-delete-profiles = Delete them
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Cutting the layers to preview
+notice-finding-walk = Finding the shortest way along the surface
 notice-broken-one = { $name } is broken
 notice-broken-several = { $count } models on this plate are broken
 notice-repair = Repair

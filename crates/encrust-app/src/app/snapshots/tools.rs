@@ -27,8 +27,8 @@ fn across_the_top(measure: &mut crate::measure::Measure) {
     use crate::measure::Snapped;
     use core_geometry::Vec3;
 
-    measure.pick(Vec3::new(99.44, 51.44, 20.0), Snapped::Corner);
-    measure.pick(Vec3::new(119.44, 71.44, 20.0), Snapped::Corner);
+    measure.pick(Vec3::new(99.44, 51.44, 20.0), Snapped::Corner, None);
+    measure.pick(Vec3::new(119.44, 71.44, 20.0), Snapped::Corner, None);
 }
 
 /// Check over a cube with a block beside it 10 mm up on nothing: that block an island.

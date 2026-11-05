@@ -40,5 +40,9 @@ harness = false
 name = "smooth_normals"
 harness = false
 
+[[bench]]
+name = "surface_path"
+harness = false
+
 [lints]
 workspace = true

@@ -13,6 +13,20 @@ impl Triangle {
         Self { a, b, c }
     }
 
+    /// Weights of `point` at `a`, `b` and `c`, or `None` for a triangle with no area.
+    pub(crate) fn barycentric(&self, point: Vec3) -> Option<[Scalar; 3]> {
+        let normal = self.normal_unnormalized();
+        let twice_area = normal.length_squared();
+        if twice_area <= Scalar::EPSILON {
+            return None;
+        }
+        // A corner's weight is the area of the sub-triangle opposite it over the whole, and
+        // `normal.dot` of a cross product is twice that area with its sign.
+        let at_a = normal.dot((self.c - self.b).cross(point - self.b)) / twice_area;
+        let at_b = normal.dot((self.a - self.c).cross(point - self.c)) / twice_area;
+        Some([at_a, at_b, 1.0 - at_a - at_b])
+    }
+
     /// Unnormalised normal; its length is twice the triangle area.
     pub fn normal_unnormalized(&self) -> Vec3 {
         (self.b - self.a).cross(self.c - self.a)

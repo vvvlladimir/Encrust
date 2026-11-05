@@ -104,6 +104,7 @@ pub struct Modes {
     snap: Snap,
     target: Target,
     show_axes: bool,
+    along_surface: bool,
     axes: Axes,
     repair: RepairMode,
     picking: Picking,
@@ -118,6 +119,7 @@ impl Modes {
             snap: tools.measure.snap,
             target: tools.measure.target,
             show_axes: tools.measure.show_axes,
+            along_surface: tools.measure.along_surface,
             axes,
             repair: tools.repair.mode,
             picking: tools.repair.picking,
@@ -130,6 +132,7 @@ impl Modes {
         tools.measure.snap = self.snap;
         tools.measure.target = self.target;
         tools.measure.show_axes = self.show_axes;
+        tools.measure.along_surface = self.along_surface;
         *axes = self.axes;
         tools.repair.mode = self.repair;
         tools.repair.picking = self.picking;

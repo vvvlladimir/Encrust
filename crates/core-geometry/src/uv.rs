@@ -108,7 +108,7 @@ impl UvMap {
     pub fn at(&self, mesh: &Mesh, face: usize, point: Vec3) -> Option<(usize, Vec2)> {
         let mapping = self.of_face(face)?;
         let triangle = mesh.triangle(face)?;
-        let weights = barycentric(triangle.a, triangle.b, triangle.c, point)?;
+        let weights = triangle.barycentric(point)?;
         let uv = std::iter::zip(mapping.corners, weights)
             .map(|(corner, weight)| corner * weight)
             .sum();
@@ -188,20 +188,6 @@ fn wrap(value: Scalar) -> Scalar {
 /// `index` brought into `0..len`, wrapping either way.
 fn wrapped(index: isize, len: usize) -> usize {
     index.rem_euclid(len.cast_signed()) as usize
-}
-
-/// Weights of `point` in the triangle `a b c`, or `None` for a degenerate triangle.
-fn barycentric(a: Vec3, b: Vec3, c: Vec3, point: Vec3) -> Option<[Scalar; 3]> {
-    let normal = (b - a).cross(c - a);
-    let twice_area = normal.length_squared();
-    if twice_area <= Scalar::EPSILON {
-        return None;
-    }
-    // A corner's weight is the area of the sub-triangle opposite it over the whole, and
-    // `normal.dot` of a cross product is twice that area with its sign.
-    let at_a = normal.dot((c - b).cross(point - b)) / twice_area;
-    let at_b = normal.dot((a - c).cross(point - c)) / twice_area;
-    Some([at_a, at_b, 1.0 - at_a - at_b])
 }
 
 #[cfg(test)]

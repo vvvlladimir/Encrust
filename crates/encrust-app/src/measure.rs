@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::i18n::tr;
 use crate::scene::{ObjectId, SceneObject};
 
+mod surface;
+
+pub use surface::{Anchor, Walk, Walking};
+
 /// The most triangles a snap looks through around the click: a reach that takes in more
 /// is a model zoomed out so far that the triangle clicked is as good as any.
 const MAX_AROUND: usize = 20_000;
@@ -170,8 +174,13 @@ pub struct Measure {
     pub target: Target,
     /// Draws the span's run along X, Y and Z in the view beside its straight line.
     pub show_axes: bool,
+    /// Measures the span along the model's surface rather than straight through the air.
+    pub along_surface: bool,
     from: Option<Vec3>,
     to: Option<Vec3>,
+    /// The model and face under each end, where it was picked on one.
+    anchors: [Option<Anchor>; 2],
+    walk: Option<Walk>,
     /// What caught the last point picked.
     snapped: Option<Snapped>,
     planes: [Option<Plane>; 2],
@@ -183,16 +192,47 @@ impl Measure {
         if alt { Snap::Free } else { self.snap }
     }
 
-    /// Takes the next point: the first click starts a span, the second closes it, and the
-    /// third starts a new one.
-    pub fn pick(&mut self, point: Vec3, snapped: Snapped) {
+    /// Takes the next point, with the model and face under it: the first click starts a span,
+    /// the second closes it, and the third starts a new one.
+    pub fn pick(&mut self, point: Vec3, snapped: Snapped, anchor: Option<Anchor>) {
         self.snapped = Some(snapped);
+        self.walk = None;
         match (self.from, self.to) {
-            (Some(_), None) => self.to = Some(point),
+            (Some(_), None) => {
+                self.to = Some(point);
+                self.anchors[1] = anchor;
+            }
             _ => {
                 self.from = Some(point);
                 self.to = None;
+                self.anchors = [anchor, None];
             }
+        }
+    }
+
+    /// Both ends with the model and face each lies on, once both are picked on models.
+    fn anchored(&self) -> Option<[(Vec3, &Anchor); 2]> {
+        let (from, to) = self.span()?;
+        Some([
+            (from, self.anchors[0].as_ref()?),
+            (to, self.anchors[1].as_ref()?),
+        ])
+    }
+
+    /// The walk over the surface between the ends, once found.
+    pub fn walk(&self) -> Option<&Walk> {
+        self.walk.as_ref()
+    }
+
+    fn set_walk(&mut self, walk: Walk) {
+        self.walk = Some(walk);
+    }
+
+    /// The walk over the surface to draw and read, when it is asked for and found.
+    pub fn surface_path(&self) -> Option<&core_geometry::SurfacePath> {
+        match &self.walk {
+            Some(Walk::Found(path)) if self.along_surface => Some(path),
+            _ => None,
         }
     }
 
@@ -222,6 +262,7 @@ impl Measure {
             snap: self.snap,
             target: self.target,
             show_axes: self.show_axes,
+            along_surface: self.along_surface,
             ..Self::default()
         };
     }

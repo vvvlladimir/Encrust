@@ -406,6 +406,17 @@ takes the file; any other run of exposures becomes a band of height, which such 
 refuses. A stack of varying layer heights is refused for now, and
 the new file's previews are blank (ADR 0180).
 
+`measure MODEL --from X,Y,Z --to X,Y,Z` reads a model as its file holds it and takes each
+end to the nearest point of its surface. It prints both ends, the straight distance and its
+run along X, Y and Z; `--along-surface` adds the shortest way between them over the
+surface, the window's *Measure along the surface* (ADR 0400), and `--json` the walk itself
+as `along_surface_points`, a point on every edge it crosses. Two ends on parts of the model
+no edge joins fail with nothing printed.
+
+```sh
+encrust measure figure.stl --from 12,4,30 --to -6,10,2 --along-surface
+```
+
 ## Profiles, a config file, completions
 
 `profiles list` prints the catalogue in three blocks — printers, resins and support

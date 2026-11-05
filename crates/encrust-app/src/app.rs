@@ -444,6 +444,9 @@ impl SlicerApp {
         working |= tools.text.poll(scene, status);
         working |= tools.cut.poll(scene, status);
         working |= tools.drain.poll(scene, status);
+        working |= tools
+            .measure_walk
+            .poll(&mut tools.measure, &mut tools.measure_edges, scene);
         working |= self.land_plugs();
         let (scene, status) = (&mut self.doc.scene, &mut self.machine.status);
         working |= self.tools.orient.poll(scene, &self.doc.plate, status);
