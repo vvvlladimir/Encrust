@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use core_engine::{Drained, Model, SupportPlan, bake, trapped_in};
 use core_geometry::{Aabb, BoundingVolume, Mesh, MeshDiagnostics, Scalar, Transform, Vec3};
 use core_geometry::{diagnose, placed_aabb, signed_volume, transform_mesh};
-use core_recipe::{Metric, Metrics, Value, measure};
+use core_recipe::{Metric, Metrics, Plan, Value, measure_planned};
 use core_volume::{DrainHole, drill};
 use printer_profiles::{Compensation, PrinterProfile};
 
@@ -157,7 +157,7 @@ impl Piece {
 
     /// Every variable of the model as it stands, `saves_ml` at `wall_mm`, with what steps
     /// measured on it since.
-    pub(super) fn metrics(&self, wall_mm: Scalar, printer: Option<&PrinterProfile>) -> Metrics {
+    pub(super) fn metrics(&self, plan: &Plan, printer: Option<&PrinterProfile>) -> Metrics {
         let diagnostics = self.diagnostics();
         let fits = match (self.bounds(), printer) {
             (Some(bounds), Some(printer)) => FitCheck::of(&bounds, printer).fit.fits(),
@@ -171,13 +171,8 @@ impl Piece {
             hollow: self.cavity.is_some(),
             fits,
         };
-        let mut metrics = measure(&model, wall_mm);
-        for metric in Metric::ALL {
-            if let Some(value) = self.measured.get(metric) {
-                metrics.set(metric, value);
-            }
-        }
-        metrics
+        let wall_mm = self.shaping.hollow.thickness_mm;
+        measure_planned(plan, &model, wall_mm, &self.measured)
     }
 
     fn diagnostics(&self) -> MeshDiagnostics {

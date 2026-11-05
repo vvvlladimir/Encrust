@@ -4,9 +4,9 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
+use core_engine::Hollowing;
 use core_recipe::{Decision, Metric, OnFail, Plan, StepKind, decide};
 
-use super::measures::{hollowing_at, wall_of};
 use super::step::Going;
 use super::work::{self, Batch, NotYet, Settings, Work};
 use super::{IDLE_POLLS, Prepared, Run, Step};
@@ -37,12 +37,9 @@ enum Decided {
 
 impl Run {
     pub(super) fn new(plan: Plan, ids: Vec<ObjectId>) -> Self {
-        let (wall_mm, wall_at) = wall_of(&plan);
         Self {
             prepared: ids.iter().map(|id| Prepared::new(*id)).collect(),
             ids,
-            wall_mm,
-            wall_at,
             paused: None,
             plan,
             next: 0,
@@ -241,7 +238,8 @@ impl Run {
         for id in &batch.ids {
             let prepared = self.prepared.iter_mut().find(|prepared| prepared.id == *id);
             if let Some((prepared, object)) = prepared.zip(scene.get(*id)) {
-                let wall = wall.map(|wall_mm| hollowing_at(object, wall_mm));
+                let linear = object.transform.linear();
+                let wall = wall.map(|wall_mm| Hollowing::reckoned(&object.mesh, linear, wall_mm));
                 prepared.started(batch.work.step(), object, wall);
             }
         }

@@ -3,11 +3,11 @@
 
 use anyhow::{Result, bail};
 use clap::ValueEnum;
-use core_engine::{PREPARE_REPAIR, SupportPlan};
+use core_engine::{Hollowing, PREPARE_REPAIR, SupportPlan};
 use core_geometry::{Mat3, Scalar, Transform, Vec3};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings};
 use core_recipe::{Metric, StepKind};
-use core_volume::{HollowSettings, hollowing_saves_mm3, placed_volume_and_area, raw_saving_mm3};
+use core_volume::HollowSettings;
 
 use super::piece::Piece;
 use super::prepared::{Wall, profile_name};
@@ -117,7 +117,7 @@ fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
             .then(|| typed.infill.unwrap_or(Pattern::Hive)),
         ..typed.clone()
     };
-    let saves_mm3 = saves_mm3(piece, wall_mm);
+    let saves_mm3 = Hollowing::reckoned(&piece.mesh, Mat3::IDENTITY, wall_mm).saves_mm3;
     let placed = (piece.holes.clone(), Vec::new());
     let precision = piece.shaping.import.precision;
     let (shell, cavity, report) =
@@ -134,15 +134,6 @@ fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
         saves_mm3: typed.thickness_mm.is_none().then_some(saves_mm3),
     });
     Ok(Did::default())
-}
-
-/// What ADR 0393 reckons hollowing `piece` at `wall_mm` saves, mm³, the plain estimate where
-/// the saving is too small to name.
-fn saves_mm3(piece: &Piece, wall_mm: Scalar) -> Scalar {
-    hollowing_saves_mm3(&piece.mesh, Mat3::IDENTITY, wall_mm).unwrap_or_else(|| {
-        let (volume_mm3, area_mm2) = placed_volume_and_area(&piece.mesh, Mat3::IDENTITY);
-        raw_saving_mm3(volume_mm3, area_mm2, wall_mm).max(0.0) as Scalar
-    })
 }
 
 /// `--supports` to the step's profile, inside the cavity too where it asks; the supports of

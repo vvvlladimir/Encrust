@@ -4,7 +4,9 @@
 
 use core_geometry::{Mat3, MendMethod, Mesh, MeshDiagnostics, Scalar};
 use core_plate::OrientPreset;
-use core_volume::{HollowSettings, RepairMethod, hollowing_saves_mm3};
+use core_volume::{
+    HollowSettings, RepairMethod, hollowing_saves_mm3, placed_volume_and_area, raw_saving_mm3,
+};
 
 /// The repair a model with defects gets: the window's full mend.
 pub const PREPARE_REPAIR: RepairMethod = RepairMethod::Mend(MendMethod::Repair);
@@ -18,6 +20,16 @@ pub struct Hollowing {
     pub wall_mm: Scalar,
     /// The estimate of ADR 0393, cubic millimetres.
     pub saves_mm3: Scalar,
+}
+
+impl Hollowing {
+    /// A wall of `wall_mm` on `mesh` placed by `linear`, with the resin ADR 0393 reckons it
+    /// saves there, none below zero, whether or not that is worth hollowing for.
+    pub fn reckoned(mesh: &Mesh, linear: Mat3, wall_mm: Scalar) -> Self {
+        let (volume_mm3, area_mm2) = placed_volume_and_area(mesh, linear);
+        let saves_mm3 = raw_saving_mm3(volume_mm3, area_mm2, wall_mm).max(0.0) as Scalar;
+        Self { wall_mm, saves_mm3 }
+    }
 }
 
 /// Whether a model whose import found `found` is repaired before anything else is done to it.
@@ -43,6 +55,23 @@ mod tests {
 
     fn wall_for(mesh: &Mesh) -> Option<Hollowing> {
         hollowing(mesh, Mat3::IDENTITY, &diagnose(mesh))
+    }
+
+    #[test]
+    fn a_wall_is_reckoned_to_save_the_volume_less_its_surface_times_the_wall_never_below_zero() {
+        let cube = cuboid(Vec3::ZERO, Vec3::splat(40.0));
+        let reckoned = Hollowing::reckoned(&cube, Mat3::IDENTITY, 2.0);
+        let expected_mm3 = 64_000.0 - 9_600.0 * 2.0;
+        assert!(
+            (reckoned.saves_mm3 - expected_mm3).abs() < 1.0,
+            "saves {expected_mm3} mm³, found {}",
+            reckoned.saves_mm3
+        );
+        let thick = Hollowing::reckoned(&cube, Mat3::IDENTITY, 30.0);
+        assert_eq!(
+            thick.saves_mm3, 0.0,
+            "a wall thicker than the cube saves nothing"
+        );
     }
 
     #[test]

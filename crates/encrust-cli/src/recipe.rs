@@ -7,10 +7,9 @@ use anyhow::{Context, Result, bail};
 use core_engine::{Model, SupportPlan};
 use core_geometry::{Mesh, Scalar};
 use core_recipe::{
-    BUILT_IN, Decision, Metrics, OnFail, Plan, Recipe, Resolved, Setting, StepKind, built_in,
-    decide, decide_forced, validate,
+    BUILT_IN, Decision, Metrics, OnFail, Plan, Recipe, Setting, StepKind, built_in, decide,
+    decide_forced, validate,
 };
-use core_volume::HollowSettings;
 
 mod drain;
 mod piece;
@@ -272,7 +271,7 @@ impl Run<'_> {
         let mut runs = Vec::new();
         let mut stopped = None;
         for id in 0..self.pieces.len() {
-            let metrics = self.metrics_of(&self.pieces[id])?;
+            let metrics = self.metrics_of(&self.pieces[id]);
             let typed = forced(&self.pieces[id].shaping).any(|(typed, _)| typed == kind);
             let decide = if typed { decide_forced } else { decide };
             let decision = decide(&self.asked.plan, index, &metrics)?;
@@ -348,25 +347,9 @@ impl Run<'_> {
         Ok(())
     }
 
-    /// Every variable of `piece` as it stands; `saves_ml` at the wall its hollow step would
-    /// hollow it at, the wall a flag gave, or Hollow's default.
-    fn metrics_of(&self, piece: &Piece) -> Result<Metrics> {
-        let printer = self.ctx.chosen.printer.as_ref();
-        let (wall_mm, worked_out) = match piece.shaping.hollow.thickness_mm {
-            Some(wall_mm) => (wall_mm, None),
-            None => wall_of(&self.asked.plan),
-        };
-        let metrics = piece.metrics(wall_mm, printer);
-        let Some(index) = worked_out else {
-            return Ok(metrics);
-        };
-        Ok(match decide(&self.asked.plan, index, &metrics)? {
-            Decision::Run { settings, .. } => match settings.get("wall_mm") {
-                Some(Resolved::Number(wall_mm)) => piece.metrics(*wall_mm, printer),
-                _ => metrics,
-            },
-            _ => metrics,
-        })
+    /// Every variable of `piece` as it stands.
+    fn metrics_of(&self, piece: &Piece) -> Metrics {
+        piece.metrics(&self.asked.plan, self.ctx.chosen.printer.as_ref())
     }
 
     /// The parts and models the pieces make as the run left them, with what `--prepare`
@@ -396,18 +379,5 @@ fn noted(piece: &mut Piece, did: Did) {
         step.holes = did.holes;
         step.retries = did.retries;
         step.saved = did.saved;
-    }
-}
-
-/// The wall `saves_ml` is reckoned at before a model is reached: the first hollow step's when
-/// it names one outright, else Hollow's default; and that step, when it is worked out.
-fn wall_of(plan: &Plan) -> (Scalar, Option<usize>) {
-    let default = HollowSettings::default().thickness_mm;
-    let mut steps = plan.recipe().steps.iter().enumerate();
-    let first = steps.find(|(_, step)| step.enabled && step.kind == StepKind::Hollow);
-    match first.map(|(index, step)| (index, step.set.get("wall_mm"))) {
-        Some((_, Some(Setting::Number(wall_mm)))) => (*wall_mm, None),
-        Some((index, Some(Setting::Expr(_)))) => (default, Some(index)),
-        _ => (default, None),
     }
 }

@@ -4,7 +4,7 @@
 use std::collections::VecDeque;
 
 use anyhow::{Result, bail};
-use core_geometry::{Quat, Scalar};
+use core_geometry::Quat;
 use core_recipe::{Metrics, Plan, StepKind};
 
 use crate::i18n::tr;
@@ -87,10 +87,6 @@ pub struct Prepare {
 struct Run {
     ids: Vec<ObjectId>,
     plan: Plan,
-    /// The wall `saves_ml` is reckoned at: the plan's hollow step's, else Hollow's default.
-    wall_mm: Scalar,
-    /// The hollow step whose wall is an expression, worked out for each model in turn.
-    wall_at: Option<usize>,
     /// What a pause says while the run waits for Continue.
     paused: Option<String>,
     /// The plan step decided next, and the one in hand, by place.

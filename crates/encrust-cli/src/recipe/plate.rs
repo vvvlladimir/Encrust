@@ -96,7 +96,7 @@ impl Run<'_> {
 
     fn retries(&self, index: usize, ids: &[usize], attempt: u8) -> Result<bool> {
         for &id in ids {
-            let metrics = self.metrics_of(&self.pieces[id])?;
+            let metrics = self.metrics_of(&self.pieces[id]);
             if retry(&self.asked.plan, index, &metrics, attempt)? {
                 return Ok(true);
             }
