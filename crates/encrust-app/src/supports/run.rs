@@ -133,7 +133,8 @@ impl SupportTool {
         *status = match outcome {
             SupportOutcome::Placed(placements) => {
                 if self.side == Side::Inside {
-                    Self::clear_inside(scene);
+                    let placed: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
+                    Self::clear_inside_of(scene, &placed);
                     // A frozen tree taken away renumbers the ones after it.
                     self.picked.clear();
                 }

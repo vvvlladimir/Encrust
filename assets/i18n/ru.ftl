@@ -1532,6 +1532,24 @@ orient-supports-ml = { $value } мл на поддержки
 orient-pull = отрыв { $value } Н
 orient-tall = высота { $value } мм
 
+## prepare.rs
+
+prepare-nothing-visible = На платформе нет видимых моделей для подготовки.
+prepare-busy = Дождитесь окончания задания, идущего на платформе.
+prepare-step-orient = Ориентация
+prepare-step-repair = Починка
+prepare-step-hollow = Создание полости
+prepare-step-drain = Поиск дренажных отверстий
+prepare-step-supports = Расстановка поддержек
+prepare-step-cavity = Расстановка поддержек в полости
+prepare-cancelled = Подготовка к печати отменена; платформа осталась как была
+prepare-done =
+    { $count ->
+        [one] К печати подготовлена { $count } модель
+        [few] К печати подготовлены { $count } модели
+       *[many] К печати подготовлено { $count } моделей
+    }
+
 ## relief.rs
 
 relief-nothing-visible = На платформе нет видимых моделей, в которые можно вдавить текстуру.

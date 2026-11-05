@@ -75,8 +75,17 @@ impl SupportTool {
     /// Takes every support standing inside a cavity off the models aimed at, the ones a
     /// hand has frozen included. Answers how many went.
     pub fn clear_inside(scene: &mut Scene) -> usize {
+        let aimed: Vec<ObjectId> = scene.targets().map(|object| object.id).collect();
+        Self::clear_inside_of(scene, &aimed)
+    }
+
+    /// The same, off the models `ids` names.
+    pub(super) fn clear_inside_of(scene: &mut Scene, ids: &[ObjectId]) -> usize {
         let mut gone = 0;
-        for object in scene.targets_mut() {
+        for id in ids {
+            let Some(object) = scene.get_mut(*id) else {
+                continue;
+            };
             if !object.supported_inside() {
                 continue;
             }
