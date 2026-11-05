@@ -13,6 +13,7 @@ impl Catalogue {
         self.recipes.values()
     }
 
+    /// The user's recipe `id` as its text.
     pub fn recipe(&self, id: &str) -> Result<&Entry<String>, ProfileError> {
         self.recipes.get(id).ok_or_else(|| ProfileError::Unknown {
             kind: Kind::Recipe.label(),

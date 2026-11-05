@@ -27,6 +27,7 @@ pub enum Read {
 }
 
 impl Read {
+    /// `text` read as a recipe and checked.
     pub fn of(text: &str) -> Self {
         match Recipe::from_toml(text) {
             Ok(recipe) => match validate(recipe.clone()) {

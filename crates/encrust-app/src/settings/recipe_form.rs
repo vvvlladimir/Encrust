@@ -19,6 +19,7 @@ pub struct RecipeForm {
     pub steps: Vec<StepForm>,
 }
 
+/// One step in the form, its conditions kept as typed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StepForm {
     pub kind: StepKind,
@@ -40,6 +41,7 @@ pub struct ChoiceForm {
     pub set: SettingsForm,
 }
 
+/// A step's or a rule's settings by key.
 pub type SettingsForm = BTreeMap<String, SettingForm>;
 
 /// One setting as the form holds it: a value, or an expression as typed, without its `=`.
@@ -87,6 +89,7 @@ pub struct Checked {
 }
 
 impl Checked {
+    /// Why the condition typed at `field` does not read, if it does not.
     pub fn at(&self, field: &Field) -> Option<&RecipeError> {
         self.fields
             .iter()
@@ -96,6 +99,7 @@ impl Checked {
 }
 
 impl RecipeForm {
+    /// `recipe` as the form holds it.
     pub fn of(recipe: &Recipe) -> Self {
         Self {
             name: recipe.name.clone(),

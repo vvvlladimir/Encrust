@@ -44,7 +44,7 @@ impl Catalogue {
             Kind::Resin => self.import_resin(MaterialProfile::from_toml_str(text, path)?, printer),
             Kind::Support => self.import_support(SupportProfile::from_toml_str(text, path)?),
             // No automatic profile is ever added, so none is taken in either; a recipe is
-            // read by `core-recipe` first and kept through `Catalogue::import_recipe`.
+            // checked by `core-recipe` first and kept through `Catalogue::save_recipe`.
             Kind::Hollow | Kind::Drain | Kind::Auto | Kind::Recipe => Err(ProfileError::Unknown {
                 kind: kind.label(),
                 id: path.display().to_string(),
