@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
+use core_recipe::save_folder;
 use printer_profiles::Connection;
 
 use super::step::Ended;
@@ -104,12 +105,7 @@ fn send_blocker(machine: &Machine) -> Option<String> {
 fn folder_of(asked: Option<&str>, sliced_dir: Option<&Path>) -> PathBuf {
     let home = std::env::home_dir();
     match asked {
-        Some(folder) => match (folder.strip_prefix('~'), home) {
-            (Some(rest), Some(home)) if rest.is_empty() || rest.starts_with(['/', '\\']) => {
-                home.join(rest.trim_start_matches(['/', '\\']))
-            }
-            _ => PathBuf::from(folder),
-        },
+        Some(folder) => save_folder(folder, home.as_deref()),
         None => sliced_dir
             .map(Path::to_path_buf)
             .or(home)

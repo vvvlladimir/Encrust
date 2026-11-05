@@ -77,6 +77,15 @@ pub struct HoleSize {
     pub turn_deg: Scalar,
 }
 
+impl Default for HoleSize {
+    /// The hole drilled where nothing names a size, in the window and on the command line.
+    fn default() -> Self {
+        // Three millimetres is what a resin slicer offers by default, and drains a cavity of
+        // any size the machine can print.
+        Self::round(3.0, 3.0, 1.0)
+    }
+}
+
 impl HoleSize {
     /// A round hole, as every hole was before ADR 0313.
     pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {

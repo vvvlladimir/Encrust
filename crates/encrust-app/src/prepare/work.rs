@@ -10,7 +10,6 @@ use core_recipe::{Resolved, StepKind};
 use core_volume::{HoleSize, HollowMode, HollowSettings, InfillSettings, RepairMethod, plate_down};
 
 use super::Step;
-use crate::drain::DrainTool;
 use crate::scene::ObjectId;
 use crate::supports::Side;
 
@@ -199,7 +198,7 @@ fn drain_of(settings: &Settings) -> Result<Work, NotYet> {
     if flag(settings, "plugs") == Some(true) {
         return Err(NotYet(StepKind::Drain));
     }
-    let default = DrainTool::default().size();
+    let default = HoleSize::default();
     let size = HoleSize {
         diameter_mm: number(settings, "diameter_mm").unwrap_or(default.diameter_mm),
         depth_mm: number(settings, "depth_mm").unwrap_or(default.depth_mm),

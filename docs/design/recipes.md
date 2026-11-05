@@ -58,8 +58,14 @@ The window and the command line run every kind; what each kind sets:
 | `pause` | `message` | the window waits for Continue; the command line says it and goes on |
 
 `check`, `arrange` and `save` work on the plate as a whole, once a step. `save` writes into
-`folder`, `~` the home, else where the window saves sliced files, else the home; named by
-`name`, else the window's template; `send` fails the step with no printer to send to.
+`folder`, `~` the home (`save_folder`), named by `name`; `send` fails the step with no printer
+to send to. Left out, the window takes its preferences, where it saves sliced files (else the
+home) and its file name template, which the command line cannot know: it takes the home and
+`DEFAULT_TEMPLATE`. That is the one default the front ends hold apart.
+
+A drain's `diameter_mm` and `depth_mm` left out are `core_volume`'s `HoleSize::default()`,
+3 mm across and 3 mm deep, in both front ends; on the command line `--drain` and
+`--drain-depth`, typed, stand in for them, their defaults that same hole.
 
 `keep_solid_under_mm` keeps the wall solid wherever the model is thinner than that
 (`core_volume`'s Keep solid, fitted). `check`'s retry supports every island again while

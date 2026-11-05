@@ -49,12 +49,16 @@ pub struct DrainTool {
     read: Option<plugs::ReadModel>,
 }
 
+/// The panel's numbers before the user sets any: the engine's own hole.
+fn default_state() -> DrainState {
+    let hole = HoleSize::default();
+    DrainState::round(hole.diameter_mm, hole.depth_mm, hole.taper)
+}
+
 impl Default for DrainTool {
     fn default() -> Self {
         Self {
-            // Three millimetres is what a resin slicer offers by default, and drains a
-            // cavity of any size the machine can print.
-            state: DrainState::round(3.0, 3.0, 1.0),
+            state: default_state(),
             placing: Placing::default(),
             job: None,
             auto: None,

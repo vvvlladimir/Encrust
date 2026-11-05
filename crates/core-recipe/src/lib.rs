@@ -8,6 +8,7 @@ mod error;
 mod metrics;
 mod planned;
 mod recipe;
+mod save;
 mod validate;
 
 pub use builtin::{BUILT_IN, built_in};
@@ -20,4 +21,5 @@ pub use recipe::{
     Choice, FORMAT, MAX_RETRY, OnFail, Recipe, Retry, Setting, SettingKind, Settings, Step,
     StepKind,
 };
+pub use save::save_folder;
 pub use validate::{Note, Plan, validate};

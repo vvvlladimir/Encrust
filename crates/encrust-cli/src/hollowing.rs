@@ -83,7 +83,7 @@ pub struct HollowArgs {
     pub density: Option<Scalar>,
 
     /// Diameter of the drain holes, millimetres.
-    #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
+    #[arg(long = "drain", value_name = "MM", default_value_t = HoleSize::default().diameter_mm)]
     pub drain_mm: Scalar,
 
     /// Drill a drain hole into the surface nearest this point, plate mm from the front left corner
@@ -98,11 +98,11 @@ pub struct HollowArgs {
     pub no_vent: bool,
 
     /// How far past the surface a drain hole reaches, millimetres.
-    #[arg(long = "drain-depth", value_name = "MM", default_value_t = 3.0)]
+    #[arg(long = "drain-depth", value_name = "MM", default_value_t = HoleSize::default().depth_mm)]
     pub drain_depth_mm: Scalar,
 
     /// Diameter of a hole's far end as a fraction of its mouth: 1 is a cylinder.
-    #[arg(long = "drain-taper", value_name = "0..1", default_value_t = 1.0)]
+    #[arg(long = "drain-taper", value_name = "0..1", default_value_t = HoleSize::default().taper)]
     pub drain_taper: Scalar,
 
     /// Cut the drain holes and channels as polygons of this many sides, their corners on the

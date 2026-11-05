@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use core_engine::{DEFAULT_TEMPLATE, Hanging, island_floors, island_holds};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
-use core_recipe::{Metric, retry};
+use core_recipe::{Metric, retry, save_folder};
 
 use super::piece::Piece;
 use super::settings::{Settings, flag, number, word};
@@ -206,12 +206,9 @@ fn standing_mesh(piece: &Piece) -> Mesh {
 /// The folder a save step names, `~` its user's home; the home without one.
 fn folder_of(asked: Option<&str>) -> Result<PathBuf> {
     let home = std::env::home_dir();
-    let folder = match (asked, home) {
-        (Some("~"), Some(home)) => home,
-        (Some(folder), Some(home)) if folder.starts_with("~/") => home.join(&folder[2..]),
-        (Some(folder), _) => PathBuf::from(folder),
-        (None, Some(home)) => home,
+    match (asked, home) {
+        (Some(folder), home) => Ok(save_folder(folder, home.as_deref())),
+        (None, Some(home)) => Ok(home),
         (None, None) => bail!("a save step with no folder saves into the home, and there is none"),
-    };
-    Ok(folder)
+    }
 }
