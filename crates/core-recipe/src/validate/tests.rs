@@ -1,14 +1,7 @@
 use super::*;
 use crate::builtin::built_in;
 use crate::condition::Kind;
-
-fn plan(body: &str) -> Result<Plan, RecipeError> {
-    validate(Recipe::from_toml(&format!("name = \"t\"\n{body}")).expect("the fixture reads"))
-}
-
-fn step(kind: &str, extra: &str) -> String {
-    format!("[[step]]\ndo = \"{kind}\"\n{extra}\n")
-}
+use crate::fixtures::{checked as plan, step};
 
 #[test]
 fn built_in_prepare_validates() {

@@ -5,6 +5,8 @@ mod builtin;
 mod condition;
 mod decide;
 mod error;
+#[cfg(test)]
+mod fixtures;
 mod metrics;
 mod planned;
 mod recipe;

@@ -1,15 +1,5 @@
 use super::*;
-use crate::recipe::Recipe;
-use crate::validate::validate;
-
-fn plan(body: &str) -> Plan {
-    let recipe = Recipe::from_toml(&format!("name = \"t\"\n{body}")).expect("the fixture reads");
-    validate(recipe).expect("the fixture is a valid recipe")
-}
-
-fn step(kind: &str, extra: &str) -> String {
-    format!("[[step]]\ndo = \"{kind}\"\n{extra}\n")
-}
+use crate::fixtures::{plan, step};
 
 /// A 100 mm tall sound solid model, nothing measured after a step.
 fn tall() -> Metrics {

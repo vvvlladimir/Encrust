@@ -2,13 +2,7 @@ use core_geometry::{Transform, Vec3, cuboid, diagnose};
 
 use super::*;
 use crate::condition::Value;
-use crate::recipe::Recipe;
-use crate::validate::validate;
-
-fn plan(body: &str) -> Plan {
-    let recipe = Recipe::from_toml(&format!("name = \"t\"\n{body}")).expect("the fixture reads");
-    validate(recipe).expect("the fixture is a valid recipe")
-}
+use crate::fixtures::plan;
 
 /// `saves_ml` of a 40 mm cube measured as `plan` stands to it.
 fn saves_ml(plan: &Plan, wall_mm: Option<Scalar>) -> Scalar {
