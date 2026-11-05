@@ -480,3 +480,5 @@ fn nothing_on_the_plate_or_no_automatic_profile_starts_nothing() {
     assert_eq!(said, tr!("supports-no-automatic"));
     assert!(!bench.doc.history.is_held());
 }
+
+mod recipes;

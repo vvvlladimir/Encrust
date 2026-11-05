@@ -358,6 +358,7 @@ supports-cancelled = Расстановка отменена
 supports-placed-sized = Поставлено поддержек: { $count }, из них лёгких { $light }, средних { $medium }, тяжёлых { $heavy } и стабилизирующих { $steady }
 supports-auto-no-shape = { $name } строит поддержки по профилю { $id }, которого нет в каталоге
 supports-no-automatic = В каталоге нет автоматического профиля поддержек
+supports-no-profile = В каталоге нет профиля поддержек { $id }
 supports-group-name = Группа { $index }
 supports-cannot-grow = Не удалось построить поддержки: { $reason }
 supports-growth-stopped = Построение поддержек прервалось без результата
@@ -1545,6 +1546,8 @@ prepare-step-drain = Поиск дренажных отверстий
 prepare-step-supports = Расстановка поддержек
 prepare-step-cavity = Расстановка поддержек в полости
 prepare-cancelled = Подготовка к печати отменена; платформа осталась как была
+prepare-gate-stopped = Подготовка к печати остановлена условием рецепта; платформа осталась как была
+prepare-step-not-yet = Шаг рецепта «{ $step }» здесь пока не выполняется; платформа осталась как была
 prepare-done =
     { $count ->
         [one] К печати подготовлена { $count } модель

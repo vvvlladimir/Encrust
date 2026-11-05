@@ -99,9 +99,9 @@ fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
     let mut tool = SupportTool::default();
     assert!(tool.auto.is_none(), "the panel builds to the group in hand");
 
-    let (mut job, sizing) =
-        SupportTool::start_automatic_on(&scene, &[floating], (0.05, &catalogue), Side::Outside)
-            .expect("a model to place under");
+    let built = BuiltTo::of("auto", &catalogue).expect("the catalogue ships an automatic profile");
+    let mut job = SupportTool::start_built_on(&scene, &[floating], (0.05, &built), Side::Outside)
+        .expect("a model to place under");
     let placements = loop {
         match job.poll() {
             Some(crate::job::SupportOutcome::Placed(placements)) => break placements,
@@ -109,7 +109,7 @@ fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
             None => std::thread::yield_now(),
         }
     };
-    tool.land_placed(&mut scene, placements, Side::Outside, Some(sizing));
+    tool.land_built(&mut scene, placements, Side::Outside, built);
     let auto = catalogue.autos().next().expect("the catalogue ships one");
     let shapes = auto.profile.shapes_in(&catalogue).expect("its shapes ship");
     let named: Vec<&str> = tool

@@ -122,7 +122,9 @@ whole-surface fill is Cmd-Shift-click.
   on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
 **Prepare for print:** in Select under Auto-orient, and in the Edit menu for the picked
-models or the whole plate, it does what `--prepare` does: turns a model you have not turned
+models or the whole plate, it runs the steps of the built-in recipe `prepare`
+(`docs/design/recipes.md`), each model decided step by step, and a recipe's gate that holds
+stops the run and puts the plate back. Like `--prepare`, it turns a model you have not turned
 by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
 saves enough resin, drills the holes that drain it with a vent, and stands it on the
 catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as

@@ -9,6 +9,7 @@ mod groups;
 mod inside;
 mod run;
 pub use groups::{own_raft_shown, with_own};
+pub use run::BuiltTo;
 
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
 const SHAPES: usize = AUTO_SIZES + 1;

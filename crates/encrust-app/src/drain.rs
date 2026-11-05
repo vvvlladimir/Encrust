@@ -12,8 +12,10 @@ use crate::status::Status;
 
 mod auto;
 mod plugs;
+mod points;
 
 pub use plugs::PlugsLaid;
+pub use points::drill_at_fractions;
 
 /// What a click in the viewport puts down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

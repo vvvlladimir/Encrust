@@ -181,7 +181,7 @@ fn a_start_on_walls_hollows_only_the_models_named_at_their_wall() {
     let mut tool = HollowTool::default();
     tool.state.thickness_mm = 5.0;
     let mut job = tool
-        .start_walls(&scene, &[(named, 1.5)])
+        .start_asked(&scene, &[(named, HollowSettings::for_wall(1.5))])
         .expect("a model is named");
     let outcome = loop {
         match job.poll() {

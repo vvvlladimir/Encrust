@@ -2,7 +2,7 @@ mod resin;
 mod standing;
 
 pub use resin::{KeptResin, kept_resin};
-pub use standing::{Astray, astray};
+pub use standing::{Astray, astray, bounds};
 
 use crate::i18n::tr;
 use core_geometry::{Aabb, Quat, Vec2, Vec3};

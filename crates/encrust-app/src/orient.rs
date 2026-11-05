@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::SupportPlan;
-use core_geometry::{Adjacency, Mesh, Region, Vec2, Vec3};
+use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec2, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -177,13 +177,17 @@ impl OrientTool {
         Ok(())
     }
 
-    /// A fresh search for the way `ids` print best by `preset`, whatever the panel is set to
-    /// and whatever the last run found, handed back rather than kept: what Prepare turns by.
+    /// A fresh search for the way `ids` print best by `preset`, tilted at most `max_tilt_deg`,
+    /// whatever the panel is set to and the last run found, handed back: what Prepare turns by.
     pub fn start_on(
         &mut self,
         scene: &Scene,
         ids: &[ObjectId],
-        (preset, plan_of): (OrientPreset, impl Fn(&SceneObject) -> SupportPlan),
+        (preset, max_tilt_deg, plan_of): (
+            OrientPreset,
+            Option<Scalar>,
+            impl Fn(&SceneObject) -> SupportPlan,
+        ),
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
     ) -> Result<OrientJob> {
         let tasks = scene
@@ -193,7 +197,10 @@ impl OrientTool {
         let asked = self.asking(tasks, preset, machine)?;
         Ok(OrientJob::spawn(OrientRequest {
             tasks: asked.tasks,
-            settings: asked.settings,
+            settings: OrientSettings {
+                max_tilt_deg,
+                ..asked.settings
+            },
             proof: asked.proof,
         }))
     }

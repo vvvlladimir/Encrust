@@ -345,6 +345,7 @@ supports-placed-sized =
     }
 supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
 supports-no-automatic = The catalogue has no automatic support profile
+supports-no-profile = The catalogue has no support profile { $id }
 supports-group-name = Group { $index }
 supports-cannot-grow = The supports could not be built: { $reason }
 supports-growth-stopped = Building the supports stopped without an answer
@@ -1479,6 +1480,8 @@ prepare-step-drain = Looking for drain holes
 prepare-step-supports = Placing supports
 prepare-step-cavity = Placing supports in the cavity
 prepare-cancelled = Prepare for print cancelled; the plate is as it was
+prepare-gate-stopped = Prepare for print stopped where the recipe says to; the plate is as it was
+prepare-step-not-yet = The recipe's { $step } step cannot run here yet; the plate is as it was
 prepare-done =
     { $count ->
         [one] Prepared { $count } model for print

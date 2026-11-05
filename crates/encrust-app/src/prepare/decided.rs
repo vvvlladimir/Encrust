@@ -66,12 +66,12 @@ impl Prepared {
         };
         match step {
             Step::Orient => {
-                self.oriented =
+                self.oriented |=
                     object.transform.rotation.angle_between(was.rotation) > UNTURNED_RAD;
             }
-            Step::Repair => self.repaired = Arc::as_ptr(&object.mesh) as usize != was.mesh,
+            Step::Repair => self.repaired |= Arc::as_ptr(&object.mesh) as usize != was.mesh,
             Step::Hollow => self.hollowed = was.wall.filter(|_| object.hollow.is_hollow()),
-            Step::Drain => self.drained = object.hollow.drains().len() > was.holes,
+            Step::Drain => self.drained |= object.hollow.drains().len() > was.holes,
             Step::Supports => {
                 self.supports = (!object.supports.is_empty()).then(|| profile.to_owned());
             }

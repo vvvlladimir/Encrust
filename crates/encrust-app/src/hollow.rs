@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
-use core_geometry::{PlacedHit, Scalar, Transform};
+use core_geometry::{PlacedHit, Transform};
 use core_volume::{
     Blocker, BlockerSize, HollowMode, HollowSettings, InfillSettings, blocker_under, plate_down,
 };
@@ -98,14 +98,18 @@ impl HollowTool {
         Ok(())
     }
 
-    /// A run over `models` alone, each at its wall beside it, millimetres, and Hollow's
-    /// defaults otherwise, handed back rather than kept: what Prepare hollows.
-    pub fn start_walls(&self, scene: &Scene, models: &[(ObjectId, Scalar)]) -> Result<HollowJob> {
+    /// A run over `models` alone, each with the settings beside it, handed back rather than
+    /// kept: what Prepare hollows.
+    pub fn start_asked(
+        &self,
+        scene: &Scene,
+        models: &[(ObjectId, HollowSettings)],
+    ) -> Result<HollowJob> {
         let tasks = models
             .iter()
-            .filter_map(|(id, wall_mm)| {
+            .filter_map(|(id, settings)| {
                 let object = scene.named(std::slice::from_ref(id)).next()?;
-                Some(HollowTask::of(object, &HollowSettings::for_wall(*wall_mm)))
+                Some(HollowTask::of(object, settings))
             })
             .collect();
         self.spawn(tasks)

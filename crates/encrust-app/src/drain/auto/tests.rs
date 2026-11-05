@@ -170,9 +170,8 @@ fn a_search_on_named_models_ignores_what_is_picked() {
     scene.select(Some(picked));
     let mut tool = DrainTool::default();
 
-    let mut job = tool
-        .search_on(&scene, &[cube], 0.5)
-        .expect("the cube is named");
+    let mut job =
+        DrainTool::search_on(&scene, &[cube], 0.5, (tool.size(), true)).expect("the cube is named");
     let found = loop {
         match job.poll() {
             Some(DrainsOutcome::Found(found)) => break found,

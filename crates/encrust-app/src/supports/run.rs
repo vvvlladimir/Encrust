@@ -8,6 +8,41 @@ use core_geometry::Scalar;
 use core_supports::Need;
 use printer_profiles::{AutoProfile, Catalogue, ProfileError, SupportProfile};
 
+/// The word a recipe and `--supports` name the catalogue's automatic profile by.
+const AUTO: &str = "auto";
+
+/// What Prepare builds supports to: an automatic profile's sizing, or one profile alone.
+#[derive(Debug, Clone)]
+pub enum BuiltTo {
+    Sized(Box<Sizing>),
+    Alone(Box<SupportProfile>),
+}
+
+impl BuiltTo {
+    /// The profile `id` names in `catalogue`: [`AUTO`], an automatic one, or a support one.
+    pub fn of(id: &str, catalogue: &Catalogue) -> Result<Self> {
+        if id == AUTO {
+            return Ok(Self::Sized(Box::new(catalogue_auto(catalogue)?)));
+        }
+        if let Some(entry) = catalogue.autos().find(|entry| entry.id == id) {
+            let shapes = shapes_of(&entry.profile, catalogue)?;
+            return Ok(Self::Sized(Box::new((entry.profile.clone(), shapes))));
+        }
+        match catalogue.support(id) {
+            Ok(entry) => Ok(Self::Alone(Box::new(entry.profile.clone()))),
+            Err(_) => bail!(tr!("supports-no-profile", id = id)),
+        }
+    }
+
+    /// The profile's name, as the Select card says what a model stands on.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Sized(sizing) => &sizing.0.name,
+            Self::Alone(profile) => &profile.name,
+        }
+    }
+}
+
 /// The catalogue's automatic profile, the window's Auto and `--supports auto`, and its shapes.
 pub(super) fn catalogue_auto(
     catalogue: &Catalogue,
@@ -69,22 +104,45 @@ impl SupportTool {
         Ok(())
     }
 
-    /// Placement on `ids` alone, sized by the catalogue's automatic profile whatever the panel
-    /// holds, handed back with that sizing rather than kept: what Prepare stands a model on.
-    pub fn start_automatic_on(
+    /// Placement on `ids` alone, built to `built` whatever the panel holds, handed back
+    /// rather than kept: what Prepare stands a model on.
+    pub fn start_built_on(
         scene: &Scene,
         ids: &[ObjectId],
-        (layer_height_mm, catalogue): (Scalar, &Catalogue),
+        (layer_height_mm, built): (Scalar, &BuiltTo),
         side: Side,
-    ) -> Result<(SupportJob, Sizing)> {
-        let sizing = catalogue_auto(catalogue)?;
-        let (auto, shapes) = &sizing;
+    ) -> Result<SupportJob> {
+        let (profile, sizing) = match built {
+            BuiltTo::Sized(sizing) => (sizing.0.placing_with(&sizing.1[0]), Some(&**sizing)),
+            BuiltTo::Alone(profile) => ((**profile).clone(), None),
+        };
         let tasks = scene
             .named(ids)
-            .map(|object| SupportTask::of(object, auto.placing_with(&shapes[0])))
+            .map(|object| SupportTask::of(object, profile.clone()))
             .collect();
-        let job = spawn(scene, tasks, (layer_height_mm, side), Some(&sizing))?;
-        Ok((job, sizing))
+        spawn(scene, tasks, (layer_height_mm, side), sizing)
+    }
+
+    /// Puts what a run started by [`Self::start_built_on`] placed into the scene.
+    pub fn land_built(
+        &mut self,
+        scene: &mut Scene,
+        placements: Vec<Placement>,
+        side: Side,
+        built: BuiltTo,
+    ) -> Status {
+        let profile = match built {
+            BuiltTo::Sized(sizing) => {
+                return self.land_placed(scene, placements, side, Some(*sizing));
+            }
+            BuiltTo::Alone(profile) => *profile,
+        };
+        let placements = self.cleared_for(scene, placements, side);
+        let mut wanted: [Option<SupportProfile>; SHAPES] = Default::default();
+        wanted[0] = Some(profile);
+        let group = self.groups_for(wanted, scene)[0];
+        let count = add_needs(scene, placements, |_| group);
+        Status::Info(tr!("supports-placed", count = count))
     }
 
     /// Drains a running placement run into the scene and the stage notice. Returns whether
@@ -117,13 +175,7 @@ impl SupportTool {
         side: Side,
         sizing: Option<Sizing>,
     ) -> Status {
-        if side == Side::Inside {
-            let placed: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
-            Self::clear_inside_of(scene, &placed);
-            // A frozen tree taken away renumbers the ones after it.
-            self.picked.clear();
-        }
-        let placements = Self::on_its_side(placements, scene, side);
+        let placements = self.cleared_for(scene, placements, side);
         match sizing {
             Some((auto, shapes)) => self.place_sized(placements, &auto, shapes, scene),
             None => {
@@ -131,6 +183,23 @@ impl SupportTool {
                 Status::Info(tr!("supports-placed", count = count))
             }
         }
+    }
+
+    /// The needs of `placements` on `side` of the wall, what stood inside taken away first
+    /// where that side is the cavity.
+    fn cleared_for(
+        &mut self,
+        scene: &mut Scene,
+        placements: Vec<Placement>,
+        side: Side,
+    ) -> Vec<Placement> {
+        if side == Side::Inside {
+            let placed: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
+            Self::clear_inside_of(scene, &placed);
+            // A frozen tree taken away renumbers the ones after it.
+            self.picked.clear();
+        }
+        Self::on_its_side(placements, scene, side)
     }
 
     /// Puts each need of `placements` in the group of the shape `auto` sizes it to, making
