@@ -1,28 +1,19 @@
-use super::fill::underside;
 use super::{ISLANDS_GROUP, Side, SupportGroup, SupportTool, frozen_inside};
 use crate::job::Placement;
 use crate::scene::{ObjectId, Scene};
-use core_geometry::{Scalar, Vec3};
+use core_geometry::Vec3;
 use core_supports::SupportTree;
 
 impl SupportTool {
-    /// Stands one support under each island floor of `floors` (plate, `layer_mm` deep), in the
-    /// islands' group, and answers how many; a ring or a crescent is left to the hand.
-    pub fn support_islands(
-        &mut self,
-        scene: &mut Scene,
-        floors: &[Vec3],
-        layer_mm: Scalar,
-    ) -> usize {
-        let found: Vec<(ObjectId, Vec3)> = floors
-            .iter()
-            .filter_map(|floor| underside(scene, *floor, layer_mm))
-            .collect();
+    /// Stands a support at each of `found`, a model and the plate point of its underside an
+    /// island hangs from, in the islands' group, and answers how many; a ring or a crescent
+    /// is left to the hand.
+    pub fn support_islands(&mut self, scene: &mut Scene, found: &[(ObjectId, Vec3)]) -> usize {
         if found.is_empty() {
             return 0;
         }
         let group = self.islands_group();
-        for (id, contact) in &found {
+        for (id, contact) in found {
             if let Some(object) = scene.get_mut(*id) {
                 let transform = object.transform;
                 object.supports.add(*contact, transform, group);

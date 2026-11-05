@@ -63,7 +63,9 @@ The window and the command line run every kind; what each kind sets:
 
 `keep_solid_under_mm` keeps the wall solid wherever the model is thinner than that
 (`core_volume`'s Keep solid, fitted). `check`'s retry supports every island again while
-`while` holds, at most `max` times, `max` no more than 5.
+`while` holds, at most `max` times, `max` no more than 5: one support under each island the
+stack shows (`core_engine::island_holds`), added to what the model stands on as Check's
+Support every island adds it, nothing standing grown again.
 
 `drain` with `at = "auto"` (the default) is the proven search of ADR 0401 and needs a
 cavity; with `at = "points"` it drills a hole at each of `points`, `[x, y, z]` fractions of

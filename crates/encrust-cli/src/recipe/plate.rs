@@ -4,14 +4,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::{DEFAULT_TEMPLATE, island_floors, island_underside};
+use core_engine::{DEFAULT_TEMPLATE, Hanging, island_floors, island_holds};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
 use core_recipe::{Metric, retry};
 
 use super::piece::Piece;
 use super::settings::{Settings, flag, number, word};
-use super::steps::{checked, stand};
+use super::steps::{checked, hold_up};
 use super::{Ctx, Did, Run, Saved};
 use crate::batch::sliced_name;
 use crate::commands::printer::{machine_of, send_to};
@@ -85,16 +85,13 @@ impl Run<'_> {
             .iter()
             .map(|piece| Bvh::build(&piece.mesh))
             .collect();
-        floors
+        let models: Vec<Hanging> = self
+            .pieces
             .iter()
-            .map(|floor| {
-                bvhs.iter()
-                    .enumerate()
-                    .filter_map(|(id, bvh)| Some((id, island_underside(bvh, *floor, layer_mm)?)))
-                    .min_by(|(_, (one, _)), (_, (other, _))| one.total_cmp(other))
-                    .map(|(id, (_, at))| (id, at))
-            })
-            .collect()
+            .zip(&bvhs)
+            .map(|(piece, bvh)| (&piece.mesh, bvh, Transform::default()))
+            .collect();
+        island_holds(floors, layer_mm, &models)
     }
 
     fn retries(&self, index: usize, ids: &[usize], attempt: u8) -> Result<bool> {
@@ -107,28 +104,25 @@ impl Run<'_> {
         Ok(false)
     }
 
-    /// A support under every island `owners` names on one of `ids`, as Check's Support every
-    /// island stands one; each such piece stands on its supports again with them.
+    /// A support under every island `owners` names on one of `ids`, added to what each
+    /// stands on, as Check's Support every island stands one.
     fn hold_islands(&mut self, ids: &[usize], owners: &[Option<(usize, Vec3)>]) -> Result<()> {
         for &id in ids {
-            let piece = &mut self.pieces[id];
-            let down = Vec3::Z * piece.lifted_mm();
             let found: Vec<Vec3> = owners
                 .iter()
                 .flatten()
                 .filter(|(owner, _)| *owner == id)
-                .map(|(_, at)| *at - down)
+                .map(|(_, at)| *at)
                 .collect();
             if found.is_empty() {
                 continue;
             }
-            piece.held.extend(found);
+            let piece = &mut self.pieces[id];
             let plan = match piece.plan.clone().or(piece.shaping.supports.clone()) {
                 Some(plan) => plan,
                 None => plan_of(AUTO)?,
             };
-            piece.take_off_supports();
-            stand(piece, plan, self.ctx)?;
+            hold_up(piece, &plan, &found)?;
         }
         Ok(())
     }

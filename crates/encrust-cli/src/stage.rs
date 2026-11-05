@@ -445,7 +445,7 @@ fn put_down(
         .as_ref()
         .map(|plan| {
             let model = (&mut mesh, cavity.clone(), &mut cuts);
-            stand_under(model, plan, layer_height, seated, &[])
+            stand_under(model, plan, layer_height, seated)
         })
         .transpose()?
         .filter(|(report, _)| !seated || !report.contacts.is_empty());

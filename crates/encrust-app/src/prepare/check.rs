@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use core_analysis::Risk;
+use core_engine::island_floors;
 use core_raster::RasterSettings;
 use core_recipe::{Metric, retry};
 use core_slicer::LayerPlan;
@@ -11,13 +12,13 @@ use core_slicer::LayerPlan;
 use super::Run;
 use super::step::Ended;
 use super::work::{Batch, Work};
-use crate::check::{island_floors, support_islands};
+use crate::check::support_islands;
 use crate::i18n::tr;
-use crate::preview::stack_fingerprint;
+use crate::preview::{as_seen, stack_fingerprint};
 use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
-use crate::supports::island_owner;
+use crate::supports::island_holds;
 
 /// The stack a check waits on: the plate it asked to be cut and measured as, so that a cut
 /// or a measurement that ended with nothing is a failure, not a reason to ask again.
@@ -147,9 +148,10 @@ fn islands_of(
     (plan, settings): (&LayerPlan, &RasterSettings),
 ) -> Vec<(ObjectId, usize)> {
     let layer_mm = plan.nominal_thickness();
-    let owners: Vec<Option<ObjectId>> = island_floors(risks, plan, settings)
+    let floors = island_floors(risks, plan, &as_seen(settings));
+    let owners: Vec<Option<ObjectId>> = island_holds(scene, &floors, layer_mm)
         .into_iter()
-        .map(|floor| island_owner(scene, floor, layer_mm))
+        .map(|held| held.map(|(id, _)| id))
         .collect();
     ids.iter()
         .map(|id| {

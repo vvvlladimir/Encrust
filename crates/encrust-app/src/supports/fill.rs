@@ -1,28 +1,26 @@
 use super::SupportTool;
 use crate::scene::{ObjectId, Scene, SceneObject};
-use core_geometry::{Adjacency, Ray, Scalar, Vec3, raycast_placed};
+use core_engine::Hanging;
+use core_geometry::{Adjacency, Scalar, Vec3};
 use core_supports::{Placed, Projected, project};
 use printer_profiles::Catalogue;
 
-/// The first surface straight over a point a layer under `floor`, if it is no more than
-/// two layers up: the underside of the island standing there.
-pub(super) fn underside(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<(ObjectId, Vec3)> {
-    let ray = Ray::new(floor - Vec3::Z * layer_mm, Vec3::Z);
-    scene
-        .printable(scene.active_plate())
-        .filter_map(|object| {
-            let hit = raycast_placed(&object.mesh, &object.bvh, object.transform, &ray)?;
-            Some((object.id, hit))
-        })
-        .min_by(|(_, a), (_, b)| a.distance.total_cmp(&b.distance))
-        .filter(|(_, hit)| hit.distance <= 2.0 * layer_mm)
-        .map(|(id, hit)| (id, hit.point))
-}
-
-/// The model an island whose floor is `floor` hangs from: the one a support stood there
-/// would hold up.
-pub fn island_owner(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<ObjectId> {
-    underside(scene, floor, layer_mm).map(|(id, _)| id)
+/// For each of `floors`, the printable model of the plate in hand its island hangs from and
+/// where a support there touches it, by `core_engine::island_holds`.
+pub fn island_holds(
+    scene: &Scene,
+    floors: &[Vec3],
+    layer_mm: Scalar,
+) -> Vec<Option<(ObjectId, Vec3)>> {
+    let objects: Vec<&SceneObject> = scene.printable(scene.active_plate()).collect();
+    let models: Vec<Hanging> = objects
+        .iter()
+        .map(|object| (&*object.mesh, &*object.bvh, object.transform))
+        .collect();
+    core_engine::island_holds(floors, layer_mm, &models)
+        .into_iter()
+        .map(|held| held.map(|(at, contact)| (objects[at].id, contact)))
+        .collect()
 }
 
 impl SupportTool {

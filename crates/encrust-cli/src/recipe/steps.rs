@@ -4,7 +4,7 @@
 use anyhow::{Result, bail};
 use clap::ValueEnum;
 use core_engine::{PREPARE_REPAIR, SupportPlan};
-use core_geometry::{Mat3, Scalar, Transform};
+use core_geometry::{Mat3, Scalar, Transform, Vec3};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings};
 use core_recipe::{Metric, StepKind};
 use core_volume::{HollowSettings, hollowing_saves_mm3, placed_volume_and_area, raw_saving_mm3};
@@ -17,7 +17,7 @@ use crate::args::RepairMethod;
 use crate::hollowing::{self, HollowArgs, Mode, Pattern};
 use crate::pipeline::{orientation, read_again, repaired_later, turn_in_place};
 use crate::profiles::{AUTO, plan_of};
-use crate::supports::stand_under;
+use crate::supports::{stand_at, stand_under};
 
 /// A turn this small, degrees, leaves the model as it stood.
 const UNTURNED_DEG: Scalar = 1e-3;
@@ -47,7 +47,6 @@ fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     let preset = word(settings, "goal").map_or(OrientSettings::default().preset, preset_of);
     let asked = (preset, number(settings, "max_tilt_deg"));
     piece.take_off_supports();
-    piece.held.clear();
     let judged = ctx.support_plan(piece)?;
     let found = orientation(&piece.mesh, asked, judged.as_ref(), ctx.chosen, ctx.watch)?;
     let turn = turn_in_place(&piece.mesh, found.rotation)?;
@@ -155,24 +154,22 @@ fn supports(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     };
     plan.cavity = flag(settings, "cavity").unwrap_or(false);
     piece.take_off_supports();
-    piece.held.clear();
     piece.prepared.supports = Some(profile_name(&plan));
     stand(piece, plan, ctx)?;
     Ok(Did::default())
 }
 
-/// Stands `piece` on supports by `plan`, holding up its held islands, from where it stands
-/// with none under it.
-pub(super) fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<()> {
+/// Stands `piece` on supports by `plan`, from where it stands with none under it.
+fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<()> {
     let mut cuts = piece.cuts()?;
     let model = (&mut piece.mesh, piece.cavity.clone(), &mut cuts);
     let seated = piece.seated;
-    let stood = stand_under(model, &plan, ctx.layer_height_mm, seated, &piece.held)?;
+    let stood = stand_under(model, &plan, ctx.layer_height_mm, seated)?;
     piece.plan = Some(plan);
     if seated && stood.0.contacts.is_empty() {
         return Ok(());
     }
-    let up = Transform::from_translation(core_geometry::Vec3::Z * stood.0.lifted_mm);
+    let up = Transform::from_translation(Vec3::Z * stood.0.lifted_mm);
     for hole in &mut piece.holes {
         hole.at = up.to_matrix().transform_point3(hole.at);
     }
@@ -180,6 +177,21 @@ pub(super) fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<(
         print!("{}", stood.0);
     }
     piece.supports = Some(stood);
+    Ok(())
+}
+
+/// A support by `plan` under each of `contacts`, plate mm, added to those `piece` stands on.
+pub(super) fn hold_up(piece: &mut Piece, plan: &SupportPlan, contacts: &[Vec3]) -> Result<()> {
+    let mut cuts = piece.cuts()?;
+    let model = (&mut piece.mesh, piece.cavity.clone(), &mut cuts);
+    let (report, mesh) = stand_at(model, plan, contacts)?;
+    match &mut piece.supports {
+        Some((standing, under)) => {
+            standing.add(report);
+            under.append(&mesh);
+        }
+        None => piece.supports = Some((report, mesh)),
+    }
     Ok(())
 }
 

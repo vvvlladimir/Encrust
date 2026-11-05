@@ -18,7 +18,7 @@ use crate::scene::Scene;
 mod job;
 mod picture;
 
-pub use picture::{MaskView, PixelRect, on_plate};
+pub use picture::{MaskView, PixelRect, as_seen, on_plate};
 
 /// The sliced stack the preview panel is showing, and the build that produces it.
 #[derive(Default)]

@@ -42,8 +42,6 @@ pub(super) struct Piece {
     /// The supports standing under it and what stood them, with the plan they were built to.
     pub supports: Option<(SupportReport, Mesh)>,
     pub plan: Option<SupportPlan>,
-    /// The islands a check stood a support under, as the model stands before it is lifted.
-    pub held: Vec<Vec3>,
     pub import: ImportReport,
     pub oriented: Option<OrientSummary>,
     pub hollow: Option<HollowReport>,
@@ -79,7 +77,6 @@ impl Piece {
             holes: Vec::new(),
             supports: None,
             plan: None,
-            held: Vec::new(),
             import,
             oriented,
             hollow: None,
@@ -96,7 +93,7 @@ impl Piece {
             .map_or(0.0, |(report, _)| report.lifted_mm)
     }
 
-    /// Moves the model, its supports, holes and held islands by `transform`.
+    /// Moves the model, its supports and holes by `transform`.
     pub(super) fn moved(&mut self, transform: Transform) {
         self.mesh = transform_mesh(&self.mesh, transform);
         if let Some((_, supports)) = &mut self.supports {
@@ -107,18 +104,13 @@ impl Piece {
             hole.at = matrix.transform_point3(hole.at);
             hole.axis = matrix.transform_vector3(hole.axis);
         }
-        for held in &mut self.held {
-            *held = matrix.transform_point3(*held);
-        }
     }
 
     /// Takes the supports off and sets the model down where it stood before they lifted it.
     pub(super) fn take_off_supports(&mut self) {
         let down = Transform::from_translation(Vec3::NEG_Z * self.lifted_mm());
         self.supports = None;
-        let held = std::mem::take(&mut self.held);
         self.moved(down);
-        self.held = held;
     }
 
     /// The bodies its holes cut, deepened through the wall where it has one.

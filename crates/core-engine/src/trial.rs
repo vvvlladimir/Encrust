@@ -352,7 +352,6 @@ fn print_held(
         cavity: None,
         cuts: &mut cuts,
         drill_exactly: false,
-        held: &[],
     };
     let stood = stand(model, trial.support, layer_mm)?;
     told()?;

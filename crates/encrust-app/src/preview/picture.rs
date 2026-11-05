@@ -128,7 +128,7 @@ pub(super) fn tinted(mask: &LayerMask, islands: &LayerMask) -> egui::ColorImage 
 /// The same panel read against the plate rather than against the machine: no panel
 /// mirroring (ADR 0109), and the rows flipped, because a file starts at the near edge of
 /// the plate while a picture starts at the far one (ADR 0134).
-pub(super) fn as_seen(settings: &RasterSettings) -> RasterSettings {
+pub fn as_seen(settings: &RasterSettings) -> RasterSettings {
     RasterSettings {
         mirror_x: false,
         mirror_y: true,

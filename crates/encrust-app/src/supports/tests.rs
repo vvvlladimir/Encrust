@@ -941,13 +941,22 @@ fn floating_cube() -> Scene {
     scene
 }
 
+/// The undersides `floors` hang from, a layer of 0.05 mm deep.
+fn held(scene: &Scene, floors: &[Vec3]) -> Vec<(crate::scene::ObjectId, Vec3)> {
+    island_holds(scene, floors, 0.05)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
 #[test]
 fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
     let mut scene = floating_cube();
     let mut tool = SupportTool::default();
     let floor = Vec3::new(0.5, 0.5, 5.0);
 
-    assert_eq!(tool.support_islands(&mut scene, &[floor], 0.05), 1);
+    let found = held(&scene, &[floor]);
+    assert_eq!(tool.support_islands(&mut scene, &found), 1);
     assert_eq!(tool.groups.len(), 2);
     assert_eq!(tool.groups[1].name, ISLANDS_GROUP);
     assert_eq!(tool.active, 0, "the group in hand stays in hand");
@@ -962,7 +971,8 @@ fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
         "the cube's bottom face is straight over the floor, got {contact}"
     );
 
-    tool.support_islands(&mut scene, &[floor], 0.05);
+    let found = held(&scene, &[floor]);
+    tool.support_islands(&mut scene, &found);
     assert_eq!(tool.groups.len(), 2, "a second press joins the same group");
 }
 
@@ -973,10 +983,8 @@ fn an_island_with_nothing_over_its_centre_stands_nothing_and_adds_no_group() {
     let beside = Vec3::new(3.0, 0.5, 5.0);
     let far_under = Vec3::new(0.5, 0.5, 2.0);
 
-    assert_eq!(
-        tool.support_islands(&mut scene, &[beside, far_under], 0.05),
-        0
-    );
+    let found = held(&scene, &[beside, far_under]);
+    assert_eq!(tool.support_islands(&mut scene, &found), 0);
     assert_eq!(tool.groups.len(), 1);
 }
 /// The cube 20 mm a side, 5 mm over the plate, hollowed to a cavity 12 mm a side in its

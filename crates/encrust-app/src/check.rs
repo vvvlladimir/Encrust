@@ -2,6 +2,7 @@
 //! layer while the view stays as it was left, and the camera sent to them once.
 
 use core_analysis::{Risk, RiskKind};
+use core_engine::island_floors;
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
@@ -9,10 +10,10 @@ use egui::Color32;
 
 use crate::highlight::{EdgeMark, Highlight, LIFT_MM, Spot, ring};
 use crate::i18n::tr;
-use crate::preview::on_plate;
+use crate::preview::{as_seen, on_plate};
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
-use crate::supports::{ISLANDS_GROUP, SupportTool, island_owner};
+use crate::supports::{ISLANDS_GROUP, SupportTool, island_holds};
 
 /// The least radius an issue is ringed at, mm: an island of a few pixels still shows, and
 /// an issue with no area of its own is ringed at this.
@@ -53,24 +54,6 @@ pub fn covered_mm2(kind: &RiskKind) -> Option<f32> {
     }
 }
 
-/// Whether `kind` cured over nothing: an island, or what hangs over one taken out.
-pub fn is_island(kind: &RiskKind) -> bool {
-    matches!(kind, RiskKind::Island { .. } | RiskKind::Floating { .. })
-}
-
-/// Where each island of `risks` stands a support: on the plate under it, at the top of the
-/// layer below, mm. The stack was measured under `settings` and cut by `plan`.
-pub fn island_floors(risks: &[Risk], plan: &LayerPlan, settings: &RasterSettings) -> Vec<Vec3> {
-    risks
-        .iter()
-        .filter(|risk| is_island(&risk.kind))
-        .filter_map(|risk| {
-            let floor_mm = plan.top_of(risk.layer.checked_sub(1)?)?;
-            Some(on_plate(settings, risk.at_mm).extend(floor_mm))
-        })
-        .collect()
-}
-
 /// Check's Support them: a support under every island of `risks`, on the models `only`
 /// names or on any, in the islands' group; says how many stood.
 pub fn support_islands(
@@ -80,15 +63,13 @@ pub fn support_islands(
     only: Option<&[ObjectId]>,
 ) -> Status {
     let layer_mm = plan.nominal_thickness();
-    let floors: Vec<Vec3> = island_floors(risks, plan, settings)
+    let floors = island_floors(risks, plan, &as_seen(settings));
+    let found: Vec<(ObjectId, Vec3)> = island_holds(scene, &floors, layer_mm)
         .into_iter()
-        .filter(|floor| {
-            only.is_none_or(|ids| {
-                island_owner(scene, *floor, layer_mm).is_some_and(|id| ids.contains(&id))
-            })
-        })
+        .flatten()
+        .filter(|(id, _)| only.is_none_or(|ids| ids.contains(id)))
         .collect();
-    let stood = supports.support_islands(scene, &floors, layer_mm);
+    let stood = supports.support_islands(scene, &found);
     Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
 }
 
