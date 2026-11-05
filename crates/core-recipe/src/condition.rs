@@ -6,6 +6,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::RecipeError;
 
+mod analyse;
+mod eval;
+mod parse;
+
+#[cfg(test)]
+mod tests;
+
 /// What a condition or a part of one evaluates to.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -74,9 +81,11 @@ pub struct Condition {
 impl Condition {
     /// Parses `text`, a `when` or the part of a setting after its `=`.
     pub fn parse(text: &str) -> Result<Self, RecipeError> {
-        // TODO(step-1): the recursive-descent parser of the grammar in docs/design/recipes.md.
-        let _ = text;
-        todo!()
+        let expr = parse::parse_expr(text)?;
+        Ok(Self {
+            text: text.to_owned(),
+            expr,
+        })
     }
 
     pub fn text(&self) -> &str {
@@ -89,15 +98,12 @@ impl Condition {
 
     /// Every name the expression reads, once each, in the order they appear.
     pub fn names(&self) -> Vec<&str> {
-        // TODO(step-1): walk `expr`.
-        todo!()
+        analyse::names(&self.expr)
     }
 
     /// The kind it evaluates to, given the kind of every name, or why the kinds do not fit.
     pub fn kind(&self, kind_of: &dyn Fn(&str) -> Option<Kind>) -> Result<Kind, RecipeError> {
-        // TODO(step-1): check operands as the grammar's typing in docs/design/recipes.md says.
-        let _ = kind_of;
-        todo!()
+        analyse::kind(&self.text, &self.expr, kind_of)
     }
 
     /// Evaluates it, each name looked up by `value_of`, which may note what it read.
@@ -105,8 +111,6 @@ impl Condition {
         &self,
         value_of: &mut dyn FnMut(&str) -> Result<Value, RecipeError>,
     ) -> Result<Value, RecipeError> {
-        // TODO(step-1): evaluate `expr`; `&&` and `||` stop at the first operand that decides.
-        let _ = value_of;
-        todo!()
+        eval::eval(&self.text, &self.expr, value_of)
     }
 }
