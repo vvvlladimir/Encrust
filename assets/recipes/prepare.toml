@@ -1,0 +1,29 @@
+# The autopilot of ADR 0402: what --prepare and Prepare for print do with nothing tuned.
+# The layout is in docs/design/recipes.md.
+
+name = "Prepare for print"
+format = 1
+
+[[step]]
+do = "orient"
+when = "!turned"
+set = { goal = "auto" }
+
+[[step]]
+do = "repair"
+when = "!sound"
+set = { method = "repair" }
+
+[[step]]
+do = "hollow"
+when = "sound && !hollow && worth_hollowing"
+set = { wall_mm = 2.0 }
+
+[[step]]
+do = "drain"
+when = "hollow"
+set = { vent = true }
+
+[[step]]
+do = "supports"
+set = { profile = "auto", cavity = "= hollow" }

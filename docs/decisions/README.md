@@ -300,6 +300,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
 | [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
 | [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |
+| [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |

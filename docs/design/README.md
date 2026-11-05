@@ -25,6 +25,7 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [surface-path.md](surface-path.md) | The shortest walk over a surface between two of its points |
 | [volume.md](volume.md) | The distance field, its sparse storage, the CSG operators and extraction |
 | [hollowing.md](hollowing.md) | The three hollow modes, the blockers, and the lattices that fill a cavity |
+| [recipes.md](recipes.md) | A recipe's file, its steps and their order, the variables and the condition language |
 | [parts.md](parts.md) | How a model is split into parts: shells by edges, nesting, scraps, narrow joins |
 | [joints.md](joints.md) | Where a cut's pins, dowels, magnets and key go, how big they are, and the pillars under them |
 | [supports.md](supports.md) | Where a column can stand, the shape it is meshed as, placing one by hand |
