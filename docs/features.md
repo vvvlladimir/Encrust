@@ -879,7 +879,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
 | `estimate` | Time, resin, weight, cost and risky layers, without writing a file. |
 | `inspect` | What is wrong with a model and whether it fits. |
-| `info` | What a sliced file says, checked layer by layer. Export one layer as PNG. |
+| `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |

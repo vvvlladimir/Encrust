@@ -46,6 +46,7 @@ are ignored for it, with a warning (ADR 0377).
 encrust profiles list
 encrust profiles show elegoo-mars-4-ultra -o my-printer.toml   # a profile to start from
 encrust info plate.ctb                       # open a sliced file
+encrust info plate.ctb --thumbnail plate.png # its preview picture
 encrust inspect model.stl --printer elegoo-mars-4-ultra
 encrust inspect broken.stl --repair            # what closing its holes would do
 encrust slice broken.stl --repair=close-small-holes -o out   # only the missing faces
@@ -389,6 +390,9 @@ advises, and write the file as asked (ADR 0368).
 `info --layer N` reports one layer of a sliced file, counted from one as a printer's screen
 counts: where it tops out, how thick it is, how long it burns and how much of the panel it
 lights. `--png out.png` writes that layer's mask beside the report.
+
+`info --thumbnail out.png` writes the picture the file carries for the printer's screen, the
+largest of its previews, as a colour PNG; a file with none, a `.cws` for one, is an error.
 
 Over the whole file, `info` names every run of layers exposed differently from the header —
 a resin's transition ramp is one such run, an `--exposure-at` band another — and for a stack
