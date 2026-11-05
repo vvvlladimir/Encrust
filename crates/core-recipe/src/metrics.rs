@@ -1,6 +1,7 @@
 //! What a condition can read off a model: the variables of `docs/design/recipes.md`.
 
-use core_geometry::{Mesh, MeshDiagnostics, Scalar, Transform};
+use core_geometry::{Mat3, Mesh, MeshDiagnostics, Scalar, Transform, Vec3, placed_aabb};
+use core_volume::{hollowing_saves_mm3, placed_volume_and_area, raw_saving_mm3};
 
 use crate::condition::{Kind, Value};
 use crate::recipe::StepKind;
@@ -52,8 +53,26 @@ impl Metric {
 
     /// The name a condition reads it by.
     pub fn name(self) -> &'static str {
-        // TODO(step-3): the names of the table in docs/design/recipes.md.
-        todo!()
+        match self {
+            Self::HeightMm => "height_mm",
+            Self::WidthMm => "width_mm",
+            Self::DepthMm => "depth_mm",
+            Self::VolumeMl => "volume_ml",
+            Self::SurfaceCm2 => "surface_cm2",
+            Self::Faces => "faces",
+            Self::Sound => "sound",
+            Self::Defects => "defects",
+            Self::Turned => "turned",
+            Self::Hollow => "hollow",
+            Self::SavesMl => "saves_ml",
+            Self::SavesShare => "saves_share",
+            Self::WorthHollowing => "worth_hollowing",
+            Self::Fits => "fits",
+            Self::Trapped => "trapped",
+            Self::Islands => "islands",
+            Self::PeelN => "peel_n",
+            Self::SupportMl => "support_ml",
+        }
     }
 
     pub fn from_name(name: &str) -> Option<Self> {
@@ -61,15 +80,22 @@ impl Metric {
     }
 
     pub fn kind(self) -> Kind {
-        // TODO(step-3): Sound, Turned, Hollow, WorthHollowing and Fits are booleans.
-        todo!()
+        match self {
+            Self::Sound | Self::Turned | Self::Hollow | Self::WorthHollowing | Self::Fits => {
+                Kind::Bool
+            }
+            _ => Kind::Number,
+        }
     }
 
     /// The steps any one of which, earlier in the recipe, measures it; empty when it is known
     /// from the start.
     pub fn known_after(self) -> &'static [StepKind] {
-        // TODO(step-3): Trapped after Drain or Check; Islands, PeelN, SupportMl after Check.
-        todo!()
+        match self {
+            Self::Trapped => &[StepKind::Drain, StepKind::Check],
+            Self::Islands | Self::PeelN | Self::SupportMl => &[StepKind::Check],
+            _ => &[],
+        }
     }
 }
 
@@ -109,7 +135,49 @@ pub struct Model<'a> {
 
 /// Every variable known from the start, `saves_ml` reckoned at `wall_mm`.
 pub fn measure(model: &Model, wall_mm: Scalar) -> Metrics {
-    // TODO(step-3): one pass over the faces, through core_engine and core_volume's estimate.
-    let _ = (model, wall_mm);
-    todo!()
+    let found = model.diagnostics;
+    let linear = Mat3::from_mat4(model.transform.to_matrix());
+    let (volume_mm3, area_mm2) = placed_volume_and_area(model.mesh, linear);
+    let saved_mm3 = raw_saving_mm3(volume_mm3, area_mm2, wall_mm).max(0.0);
+    let share = if volume_mm3 > 0.0 {
+        saved_mm3 / volume_mm3
+    } else {
+        0.0
+    };
+    let worth = found.is_sound()
+        && !model.hollow
+        && hollowing_saves_mm3(model.mesh, linear, wall_mm).is_some();
+    let size = placed_aabb(model.mesh, *model.transform).map_or(Vec3::ZERO, |aabb| aabb.extents());
+    let defects =
+        found.holes + found.degenerate_faces + found.duplicate_faces + found.non_manifold_edges;
+
+    let mut metrics = Metrics::default();
+    let numbers = [
+        (Metric::WidthMm, size.x),
+        (Metric::DepthMm, size.y),
+        (Metric::HeightMm, size.z),
+        (Metric::VolumeMl, (volume_mm3 / 1000.0) as Scalar),
+        (Metric::SurfaceCm2, (area_mm2 / 100.0) as Scalar),
+        (Metric::Faces, model.mesh.faces.len() as Scalar),
+        (Metric::Defects, defects as Scalar),
+        (Metric::SavesMl, (saved_mm3 / 1000.0) as Scalar),
+        (Metric::SavesShare, share as Scalar),
+    ];
+    for (metric, number) in numbers {
+        metrics.set(metric, Value::Number(number));
+    }
+    let flags = [
+        (Metric::Sound, found.is_sound()),
+        (Metric::Turned, model.turned),
+        (Metric::Hollow, model.hollow),
+        (Metric::WorthHollowing, worth),
+        (Metric::Fits, model.fits),
+    ];
+    for (metric, flag) in flags {
+        metrics.set(metric, Value::Bool(flag));
+    }
+    metrics
 }
+
+#[cfg(test)]
+mod tests;

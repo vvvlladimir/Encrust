@@ -1186,6 +1186,7 @@ version = "0.7.0"
 dependencies = [
  "core-engine",
  "core-geometry",
+ "core-volume",
  "proptest",
  "serde",
  "thiserror 2.0.21",

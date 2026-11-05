@@ -23,17 +23,23 @@ pub fn holds_resin(settings: &HollowSettings, holes: &[DrainHole]) -> bool {
 /// Resin a wall of `wall_mm` would save in the solid `mesh` placed by `linear`, mm³, when it
 /// is past both `MIN_SAVED_MM3` and `MIN_SAVED_SHARE` of the model.
 pub fn hollowing_saves_mm3(mesh: &Mesh, linear: Mat3, wall_mm: Scalar) -> Option<Scalar> {
-    let (volume_mm3, area_mm2) = volume_and_area(mesh, linear);
-    // The wall is taken as surface times thickness, which a convex model never needs in
-    // full, so the saving is never overstated where it counts.
-    let saved_mm3 = volume_mm3 - area_mm2 * f64::from(wall_mm);
+    let (volume_mm3, area_mm2) = placed_volume_and_area(mesh, linear);
+    let saved_mm3 = raw_saving_mm3(volume_mm3, area_mm2, wall_mm);
     let worth = saved_mm3 >= f64::from(MIN_SAVED_MM3)
         && saved_mm3 >= f64::from(MIN_SAVED_SHARE) * volume_mm3;
     worth.then_some(saved_mm3 as Scalar)
 }
 
-/// The volume `mesh` encloses and its surface, once placed by `linear`, in `f64`.
-fn volume_and_area(mesh: &Mesh, linear: Mat3) -> (f64, f64) {
+/// The resin a wall of `wall_mm` is reckoned to save in a model of `volume_mm3` and
+/// `area_mm2`, before the thresholds of [`hollowing_saves_mm3`], mm³.
+pub fn raw_saving_mm3(volume_mm3: f64, area_mm2: f64, wall_mm: Scalar) -> f64 {
+    // The wall is taken as surface times thickness, which a convex model never needs in
+    // full, so the saving is never overstated where it counts.
+    volume_mm3 - area_mm2 * f64::from(wall_mm)
+}
+
+/// The volume `mesh` encloses (mm³) and its surface (mm²), once placed by `linear`, in `f64`.
+pub fn placed_volume_and_area(mesh: &Mesh, linear: Mat3) -> (f64, f64) {
     let volume_mm3 = f64::from(signed_volume(mesh).abs() * linear.determinant().abs());
     let area_x2: f64 = (0..mesh.faces.len())
         .into_par_iter()
@@ -122,9 +128,28 @@ mod tests {
     }
 
     #[test]
+    fn a_placed_cube_has_its_closed_form_volume_and_surface() {
+        let cube = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let (volume, area) = placed_volume_and_area(&cube, Mat3::from_diagonal(Vec3::splat(4.0)));
+        assert!(
+            (volume - 64_000.0).abs() < 1.0,
+            "40³ = 64000 mm³, got {volume}"
+        );
+        assert!(
+            (area - 9_600.0).abs() < 1.0,
+            "6 x 40² = 9600 mm², got {area}"
+        );
+        let saved = raw_saving_mm3(volume, area, 2.0);
+        assert!(
+            (saved - 44_800.0).abs() < 1.0,
+            "64000 - 9600 x 2, got {saved}"
+        );
+    }
+
+    #[test]
     fn a_saving_under_the_share_is_not_worth_hollowing() {
         let bar = cuboid(Vec3::ZERO, Vec3::new(300.0, 12.0, 12.0));
-        let (volume, area) = volume_and_area(&bar, Mat3::IDENTITY);
+        let (volume, area) = placed_volume_and_area(&bar, Mat3::IDENTITY);
         let saved = volume - area * 2.0;
         assert!(
             saved >= f64::from(MIN_SAVED_MM3) && saved < f64::from(MIN_SAVED_SHARE) * volume,
