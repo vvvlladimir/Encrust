@@ -10,7 +10,7 @@ use core_engine::{Drained, Model, SupportPlan, bake, trapped_in};
 use core_geometry::{Aabb, BoundingVolume, Mesh, MeshDiagnostics, Scalar, Transform, Vec3};
 use core_geometry::{diagnose, placed_aabb, signed_volume, transform_mesh};
 use core_recipe::{Metric, Metrics, Plan, Value, measure_planned};
-use core_volume::{DrainHole, drill};
+use core_volume::{DrainHole, drill, laid_beside};
 use printer_profiles::{Compensation, PrinterProfile};
 
 use super::prepared::Prepared;
@@ -39,6 +39,8 @@ pub(super) struct Piece {
     /// The wall the cavity was cut to and the lattice it was cut on, millimetres.
     pub wall: Option<(Scalar, Scalar)>,
     pub holes: Vec<DrainHole>,
+    /// A plug for each hole a drain step asked plugs for, with the hole as it was cut then.
+    pub plugs: Vec<(Mesh, DrainHole)>,
     /// The supports standing under it and what stood them, with the plan they were built to.
     pub supports: Option<(SupportReport, Mesh)>,
     pub plan: Option<SupportPlan>,
@@ -75,6 +77,7 @@ impl Piece {
             cavity: None,
             wall: None,
             holes: Vec::new(),
+            plugs: Vec::new(),
             supports: None,
             plan: None,
             import,
@@ -135,6 +138,35 @@ impl Piece {
                 .map(|(_, supports)| Arc::new(supports.clone()))
                 .collect(),
         })
+    }
+
+    /// The model without the cavity it carries: what a plug is cut out of.
+    pub(super) fn solid(&self) -> Mesh {
+        match &self.cavity {
+            Some(cavity) => Mesh::new(
+                self.mesh.vertices.clone(),
+                self.mesh.faces[..cavity.start].to_vec(),
+            ),
+            None => self.mesh.clone(),
+        }
+    }
+
+    /// Its plugs, laid in a row past its right-hand side as `--drain-plugs` lays them.
+    pub(super) fn plug_models(&self) -> Vec<Model> {
+        let Some(beside) = self.bounds() else {
+            return Vec::new();
+        };
+        let (meshes, holes): (Vec<Mesh>, Vec<DrainHole>) = self.plugs.iter().cloned().unzip();
+        laid_beside(&meshes, &holes, Transform::default(), beside)
+            .into_iter()
+            .map(|plug| Model {
+                mesh: Arc::new(plug),
+                transform: Transform::default(),
+                cuts: None,
+                drilled: None,
+                supports: Vec::new(),
+            })
+            .collect()
     }
 
     /// The box it and its supports stand in.
@@ -203,15 +235,16 @@ impl Piece {
         Ok(found.len())
     }
 
-    /// The part the report states and the model the plate cuts, from the piece as the recipe
-    /// `name` left it; `prepared` keeps what `--prepare` says of it.
+    /// The part the report states, the model the plate cuts and its plugs, from the piece as
+    /// the recipe `name` left it; `prepared` keeps what `--prepare` says of it.
     pub(super) fn laid(
         self,
         (name, prepared): (&str, bool),
         printer: Option<&PrinterProfile>,
         talk: bool,
-    ) -> Result<(Part, Model)> {
+    ) -> Result<(Part, Model, Vec<Model>)> {
         let model = self.model()?;
+        let plugs = self.plug_models();
         let standing = standing_of(self.bounds(), printer, self.supports.is_some(), talk);
         let part = Part {
             input: self.input,
@@ -228,6 +261,6 @@ impl Piece {
                 steps: self.steps,
             }),
         };
-        Ok((part, model))
+        Ok((part, model, plugs))
     }
 }

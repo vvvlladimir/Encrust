@@ -85,7 +85,7 @@ impl Going {
             Work::DrainAuto { .. } if hollow.is_empty() => {
                 return Ok(None);
             }
-            Work::DrainAuto { size, vent } => {
+            Work::DrainAuto { size, vent, .. } => {
                 let asked = (*size, *vent);
                 Self::Drain(DrainTool::search_on(scene, &hollow, layer_mm, asked)?)
             }

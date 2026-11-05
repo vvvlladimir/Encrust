@@ -211,3 +211,41 @@ fn orient_takes_the_engines_settings_whatever_the_orient_panel_holds() {
         "turned alike, {engine} and {changed}"
     );
 }
+
+/// The plugs standing for model `id` after a run hollowing the large cube and drilling two
+/// holes in its top by a drain step setting `plugs`.
+fn plugs_after_drain(plugs: &str) -> usize {
+    let (mut bench, id) = Bench::with(large_cube());
+    bench.start_by(&format!(
+        "[[step]]\ndo = \"hollow\"\n\
+         [[step]]\ndo = \"drain\"\n\
+         set = {{ at = \"points\", points = [[0.3, 0.5, 1.0], [0.7, 0.5, 1.0]]{plugs} }}\n"
+    ));
+    bench.run_to_end();
+    assert_eq!(
+        bench.object(id).hollow.drains().len(),
+        2,
+        "two holes drilled"
+    );
+    let scene = &bench.doc.scene;
+    scene
+        .objects()
+        .iter()
+        .filter(|object| object.plug_of == Some(id))
+        .count()
+}
+
+#[test]
+fn a_drain_step_with_plugs_lays_one_per_hole() {
+    assert_eq!(
+        plugs_after_drain(", plugs = true"),
+        2,
+        "a plug for each hole"
+    );
+}
+
+#[test]
+fn a_drain_step_without_plugs_lays_none() {
+    assert_eq!(plugs_after_drain(", plugs = false"), 0, "plugs = false");
+    assert_eq!(plugs_after_drain(""), 0, "plugs left out");
+}

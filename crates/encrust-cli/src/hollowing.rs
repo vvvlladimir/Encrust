@@ -438,7 +438,19 @@ pub fn plugs_beside(
     let wall_mm = args
         .thickness_mm
         .and_then(|thickness_mm| plug_wall_mm(args.mode.into(), thickness_mm));
-    let gap_mm = args.plug_gap_mm - drift_mm;
+    let made = cut_plugs(mesh, holes, wall_mm, args.plug_gap_mm - drift_mm)?;
+    let bounds = mesh.aabb().context("mesh has no vertices")?;
+    Ok(laid_beside(&made, holes, Transform::default(), bounds))
+}
+
+/// A plug for each of `holes` cut out of the solid `mesh`, `wall_mm` long where there is a
+/// wall, `gap_mm` narrower a side, saying where one only follows the surface or gets none.
+pub(crate) fn cut_plugs(
+    mesh: &Mesh,
+    holes: &[DrainHole],
+    wall_mm: Option<Scalar>,
+    gap_mm: Scalar,
+) -> Result<Vec<Mesh>> {
     let made = plugs(&mut None, mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
         .context("cutting the plugs for the drain holes")?;
     if made.sampled > 0 {
@@ -455,13 +467,7 @@ pub fn plugs_beside(
             made.meshes.len()
         );
     }
-    let bounds = mesh.aabb().context("mesh has no vertices")?;
-    Ok(laid_beside(
-        &made.meshes,
-        holes,
-        Transform::default(),
-        bounds,
-    ))
+    Ok(made.meshes)
 }
 
 /// `holes` as a model hollowed to `wall` cuts them: deepened through the wall, where there
@@ -547,6 +553,11 @@ impl HollowReport {
     /// hole has to reach through to drain it.
     pub fn wall(&self) -> (Scalar, Scalar) {
         (self.settings.thickness_mm, self.voxel_mm)
+    }
+
+    /// How long a plug for a hole through this wall is, millimetres: `plug_wall_mm`'s.
+    pub fn plug_wall_mm(&self) -> Option<Scalar> {
+        plug_wall_mm(self.settings.mode, self.settings.thickness_mm)
     }
 
     /// True when the wall left room for a cavity at all.

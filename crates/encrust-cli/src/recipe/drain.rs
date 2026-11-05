@@ -1,7 +1,8 @@
 //! The drain step: `--drain-at auto`'s proven search over the cavity, or a hole at each
-//! point of the placed box snapped onto the surface as `--drain-at` snaps one.
+//! point of the placed box snapped onto the surface as `--drain-at` snaps one, and the
+//! plugs for them as `--drain-plugs` cuts them.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use core_engine::planned_lift;
 use core_geometry::{Bvh, Scalar, Vec3};
 use core_recipe::Metric;
@@ -10,15 +11,13 @@ use core_volume::{HoleKind, HoleSize};
 use super::piece::Piece;
 use super::settings::Settings;
 use super::{Ctx, Did};
-use crate::hollowing::{AutoReport, Ground, HollowArgs, auto_drains, hole_near};
+use crate::hollowing::{
+    AutoReport, Ground, HollowArgs, HollowReport, auto_drains, cut_plugs, hole_near, pierced,
+};
 use core_recipe::resolved::{flag, number, points, text};
 
 /// Drills the holes the step asks for and notes what is left trapped.
 pub(super) fn drain(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    // TODO(step-6): plugs, as `--drain-plugs` lays them beside the model.
-    if flag(settings, "plugs") == Some(true) {
-        bail!("plugs = true is not supported yet");
-    }
     let typed = piece.shaping.hollow.hole_size();
     let size = HoleSize {
         diameter_mm: number(settings, "diameter_mm").unwrap_or(typed.diameter_mm),
@@ -33,10 +32,26 @@ pub(super) fn drain(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result
             proven(piece, (size, vent), ctx)?
         }
     };
+    if flag(settings, "plugs").unwrap_or(false) {
+        plug(piece, drilled, ctx)?;
+    }
     Ok(Did {
         holes: Some(piece.holes.len() - drilled),
         ..did
     })
+}
+
+/// A plug for each hole from the `drilled`th on, cut out of the model as `--drain-plugs`
+/// cuts one: through the wall where there is one, narrower by the gap less the resin's drift.
+fn plug(piece: &mut Piece, drilled: usize, ctx: &Ctx) -> Result<()> {
+    let holes = pierced(&piece.holes, piece.wall);
+    let wall_mm = piece.hollow.as_ref().and_then(HollowReport::plug_wall_mm);
+    let drift_mm = ctx.chosen.material.compensation.fit_drift_mm();
+    let gap_mm = piece.shaping.hollow.plug_gap_mm - drift_mm;
+    let made = cut_plugs(&piece.solid(), &holes, wall_mm, gap_mm)?;
+    let new = made.into_iter().zip(holes).skip(drilled);
+    piece.plugs.extend(new);
+    Ok(())
 }
 
 /// A hole on the surface nearest each of `points`, fractions of the box the model stands in:

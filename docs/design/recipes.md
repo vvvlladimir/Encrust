@@ -63,6 +63,11 @@ to send to. Left out, the window takes its preferences, where it saves sliced fi
 home) and its file name template, which the command line cannot know: it takes the home and
 `DEFAULT_TEMPLATE`. That is the one default the front ends hold apart.
 
+A drain's `plugs = true` lays a plug for each hole the step drills beside the model, as
+`--drain-plugs` and Drain's plugs lay them; left out it is `false` in both front ends, as the
+command line lays none without the flag, so Prepare for print's holes get none either while
+Drain plugs every hole a user drills by hand.
+
 A drain's `diameter_mm` and `depth_mm` left out are `core_volume`'s `HoleSize::default()`,
 3 mm across and 3 mm deep, in both front ends; on the command line `--drain` and
 `--drain-depth`, typed, stand in for them, their defaults that same hole.

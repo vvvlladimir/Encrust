@@ -927,8 +927,10 @@ Built-in recipes beside it, each a starting point for a kind of model: `miniatur
 `--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
 of the plate where the recipe says; a flag you type wins over its setting in every step, and
-`--orient`, `--repair`, `--hollow` or `--supports` runs every step of its kind.
-Keeping a wall solid where the model is thin and plugs for the holes are not run yet.
+`--orient`, `--repair`, `--hollow` or `--supports` runs every step of its kind. A hollow
+step keeps the wall solid where the model is thin (`keep_solid_under_mm`), and a drain step
+with `plugs = true` lays a plug beside the model for each hole it drills; without it, none,
+in the window's Prepare for print too.
 
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.

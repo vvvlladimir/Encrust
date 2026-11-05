@@ -27,11 +27,13 @@ pub(super) enum Work {
     DrainAuto {
         size: HoleSize,
         vent: bool,
+        plugs: bool,
     },
     /// A hole at each point, `[x, y, z]` fractions of the placed box.
     DrainPoints {
         size: HoleSize,
         points: Vec<[Scalar; 3]>,
+        plugs: bool,
     },
     /// Supports to the catalogue profile `profile`, `auto` the automatic one.
     Supports {
@@ -105,7 +107,7 @@ impl Work {
                 Self::Repair(text(settings, "method").map_or(PREPARE_REPAIR, method_of))
             }
             StepKind::Hollow => Self::Hollow(Hollowed::of(settings)),
-            StepKind::Drain => drain_of(settings)?,
+            StepKind::Drain => drain_of(settings),
             StepKind::Supports => Self::Supports {
                 profile: text(settings, "profile").unwrap_or("auto").to_owned(),
                 side: Side::Outside,
@@ -144,6 +146,14 @@ impl Work {
             Self::Arrange { .. } => Step::Arrange,
             Self::Save(_) => Step::Save,
         }
+    }
+
+    /// Whether it is a drain whose holes are left with no plug.
+    pub(super) fn unplugged(&self) -> bool {
+        matches!(
+            self,
+            Self::DrainAuto { plugs: false, .. } | Self::DrainPoints { plugs: false, .. }
+        )
     }
 
     /// Whether it works on the plate as a whole, once a step whatever its models.
@@ -190,27 +200,27 @@ impl Hollowed {
     }
 }
 
-fn drain_of(settings: &Settings) -> Result<Work, NotYet> {
-    // TODO(step-6): plugs, as Drain's Lay plugs.
-    if flag(settings, "plugs") == Some(true) {
-        return Err(NotYet(StepKind::Drain));
-    }
+fn drain_of(settings: &Settings) -> Work {
+    // Left out, a recipe lays no plug, as the command line lays none without the flag.
+    let plugs = flag(settings, "plugs").unwrap_or(false);
     let default = HoleSize::default();
     let size = HoleSize {
         diameter_mm: number(settings, "diameter_mm").unwrap_or(default.diameter_mm),
         depth_mm: number(settings, "depth_mm").unwrap_or(default.depth_mm),
         ..default
     };
-    Ok(match text(settings, "at") {
+    match text(settings, "at") {
         Some("points") => Work::DrainPoints {
             size,
             points: points(settings, "points").to_vec(),
+            plugs,
         },
         _ => Work::DrainAuto {
             size,
             vent: flag(settings, "vent").unwrap_or(true),
+            plugs,
         },
-    })
+    }
 }
 
 fn method_of(method: &str) -> RepairMethod {

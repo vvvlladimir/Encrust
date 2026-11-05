@@ -25,11 +25,12 @@ use core_recipe::resolved::{flag, number, text};
 impl Run<'_> {
     /// The plate as the pieces stand now, staged to be cut.
     fn staged(&self) -> Result<Staged> {
-        let models = self
+        let mut models = self
             .pieces
             .iter()
             .map(Piece::model)
             .collect::<Result<Vec<_>>>()?;
+        models.extend(self.pieces.iter().flat_map(Piece::plug_models));
         let drainage = self
             .pieces
             .iter()

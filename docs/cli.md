@@ -386,7 +386,8 @@ and `--support-cavity`; `--orient-goal` and `--max-tilt`; `--repair=METHOD`. `--
 and are refused naming the flag where the recipe has none; under a recipe they run at its
 steps, not at import. `--rotate` makes `turned` true. A `--drain-at` point,
 `--channel` and `--drain-support-at` point at the model as imported, which a step may turn,
-and are refused; `plugs = true` is not supported yet.
+and are refused. A drain step's `plugs = true` lays a plug for each hole it drills, as
+`--drain-plugs` does; left out, it lays none.
 
 `-o` writes the plate as the recipe leaves it. Without it a recipe must save the plate itself,
 and the report is of the last file it saved; with neither nothing would be written, and the run

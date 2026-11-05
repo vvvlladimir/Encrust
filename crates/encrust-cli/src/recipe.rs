@@ -118,6 +118,9 @@ impl Did {
     }
 }
 
+/// A model as a recipe left it, and the plugs laid beside it.
+pub type Laid = (Model, Vec<Model>);
+
 /// A recipe going over the models of a plate.
 struct Run<'a> {
     asked: &'a Asked,
@@ -133,7 +136,7 @@ pub fn lay(
     (pieces, found): (Vec<Vec<Mesh>>, Vec<Found>),
     entries: &[(PathBuf, Shaping)],
     ctx: &Ctx,
-) -> Result<(Vec<Part>, Vec<Model>, Option<Saved>)> {
+) -> Result<(Vec<Part>, Vec<Laid>, Option<Saved>)> {
     for (_, shaping) in entries {
         refuse_pointing(shaping)?;
         refuse_unstepped(&asked.plan, shaping)?;
@@ -341,7 +344,7 @@ impl Run<'_> {
 
     /// The parts and models the pieces make as the run left them, with what `--prepare`
     /// says of each where it was asked.
-    fn finish(self) -> Result<(Vec<Part>, Vec<Model>, Option<Saved>)> {
+    fn finish(self) -> Result<(Vec<Part>, Vec<Laid>, Option<Saved>)> {
         let ctx = self.ctx;
         let name = self.asked.plan.recipe().name.clone();
         let printer = ctx.chosen.printer.as_ref();
@@ -351,9 +354,10 @@ impl Run<'_> {
             if ctx.watch.talk && self.asked.prepare {
                 print!("{}", piece.prepared);
             }
-            let (part, model) = piece.laid((&name, self.asked.prepare), printer, ctx.watch.talk)?;
+            let (part, model, plugs) =
+                piece.laid((&name, self.asked.prepare), printer, ctx.watch.talk)?;
             parts.push(part);
-            models.push(model);
+            models.push((model, plugs));
         }
         Ok((parts, models, self.saved))
     }

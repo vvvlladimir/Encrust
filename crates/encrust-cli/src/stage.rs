@@ -326,7 +326,7 @@ pub fn plate_of(
                 watch,
             };
             let (parts, models, saved) = recipe::lay(asked, (pieces, found), entries, &ctx)?;
-            (Laid::alone(parts, models), saved)
+            (Laid::recipe_left(parts, models, entries), saved)
         }
         None => (put_down_every(pieces, found, entries, held, watch)?, None),
     };
@@ -562,15 +562,33 @@ fn put_down_every<'a>(
     Ok(laid)
 }
 
-impl Laid<'_> {
-    /// One model of each of `parts`, with nothing beside it.
-    fn alone(parts: Vec<Part>, models: Vec<Model>) -> Self {
-        Self {
-            owners: (0..parts.len()).collect(),
-            parts,
-            models,
+impl<'a> Laid<'a> {
+    /// One model of each of `parts`, with the plugs a recipe laid beside it; `entries` are
+    /// the files the parts came from.
+    fn recipe_left(
+        parts: Vec<Part>,
+        left: Vec<recipe::Laid>,
+        entries: &'a [(PathBuf, Shaping)],
+    ) -> Self {
+        let mut laid = Self {
+            parts: Vec::with_capacity(parts.len()),
+            models: Vec::with_capacity(left.len()),
+            owners: Vec::with_capacity(left.len()),
             plugged: Vec::new(),
+        };
+        for (part, (model, plugs)) in parts.into_iter().zip(left) {
+            laid.models.push(model);
+            let first = laid.models.len();
+            laid.models.extend(plugs);
+            let path = entries.iter().find(|(path, _)| *path == part.input);
+            if let Some((path, _)) = path {
+                laid.plugged
+                    .push((first..laid.models.len(), path.as_path()));
+            }
+            laid.owners.resize(laid.models.len(), laid.parts.len());
+            laid.parts.push(part);
         }
+        laid
     }
 }
 

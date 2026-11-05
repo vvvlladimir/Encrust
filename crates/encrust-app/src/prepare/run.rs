@@ -50,6 +50,7 @@ impl Run {
             measured: Vec::new(),
             supported: Vec::new(),
             built: Vec::new(),
+            unplugged: Vec::new(),
             idle: 0,
             done: 0,
             steps: 0,
@@ -272,6 +273,12 @@ impl Run {
                 self.note(id, Metric::Trapped, trapped as f32);
             }
         }
+        if matches!(batch.work.step(), Step::Drain) {
+            self.unplugged.retain(|id| !batch.ids.contains(id));
+            if batch.work.unplugged() {
+                self.unplugged.extend(&batch.ids);
+            }
+        }
         if let Work::DrainPoints { .. } = batch.work {
             self.queue
                 .push_front(Batch::of(Work::Scan, batch.ids.clone()));
@@ -292,6 +299,15 @@ impl Run {
         }
     }
 
+    /// Keeps the window's plugs off the holes of the models a drain step left unplugged, as
+    /// they stand now: a later step may deepen them.
+    pub(super) fn leave_unplugged(&self, doc: &mut Doc, tools: &Tools, machine: &Machine) {
+        let drift_mm = machine.slicing.material.compensation.fit_drift_mm();
+        for id in &self.unplugged {
+            tools.drain.leave_unplugged(&mut doc.scene, *id, drift_mm);
+        }
+    }
+
     /// Takes off the supports an earlier supports step of this run stood `ids` on.
     fn take_off_earlier(&self, scene: &mut Scene, ids: &[ObjectId]) {
         for id in ids.iter().filter(|id| self.supported.contains(id)) {
@@ -303,7 +319,7 @@ impl Run {
 
     /// Drills a hole at each of the batch's points, as a click drills one.
     fn drill_points(&mut self, scene: &mut Scene, batch: &Batch) {
-        let Work::DrainPoints { size, points } = &batch.work else {
+        let Work::DrainPoints { size, points, .. } = &batch.work else {
             return;
         };
         self.step = Step::Drain;

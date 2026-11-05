@@ -129,14 +129,14 @@ fn a_step_that_fails_with_on_fail_skip_is_noted_and_the_run_goes_on() {
         [[step]]
         do = "drain"
         on_fail = "skip"
-        set = { plugs = true }
+        set = { diameter_mm = 0 }
         [[step]]
         do = "drain"
         "#,
         &[],
     );
     let failed = step(&report, 1)["note"].as_str().unwrap_or_default();
-    assert!(failed.contains("not supported yet"), "{report}");
+    assert!(failed.contains("no width"), "{report}");
     assert!(step(&report, 2)["holes"].as_u64() > Some(0), "{report}");
     assert_eq!(
         report["slicing"]["trapped_pockets"], 0,
@@ -329,4 +329,57 @@ fn a_hollow_step_keeps_a_model_thinner_than_keep_solid_under_mm_solid() {
         "1728 mm3 open, got {open}"
     );
     assert_eq!(kept, 0.0, "a 16 mm cube is under 20 mm, so 0 mm3 of cavity");
+}
+
+/// The first layer's lit pixels of an 8 mm cube, hollowed and drilled at the top's middle by
+/// a drain step setting `plugs`: the tests' 20 mm panel has no room for plugs past the 16 mm one.
+fn first_layer_plugged(name: &str, plugs: &str) -> usize {
+    let recipe = recipe_file(
+        name,
+        &format!(
+            "name = \"Plugged\"\n[[step]]\ndo = \"hollow\"\n\
+             [[step]]\ndo = \"drain\"\nset = {{ at = \"points\", points = [[0.5, 0.5, 1.0]]{plugs} }}\n"
+        ),
+    );
+    let model = write_box_stl(name, 8.0, 12, 0);
+    let (panel, out) = (test_panel(), output_dir(name));
+    let output = encrust(&[
+        "slice",
+        model.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--recipe",
+        recipe.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
+    lit_pixels(&out, 0)
+}
+
+#[test]
+fn a_drain_step_with_plugs_lays_a_plug_per_hole_and_without_none() {
+    // The 8 mm cube's floor is 6 400 pixels; a 3 mm hole's plug, 1.35 mm in radius after
+    // the 0.15 mm gap, adds about 570 beside it.
+    let plugged = first_layer_plugged("recipe-plugs", ", plugs = true") as f32;
+    assert!(
+        (plugged - 6_970.0).abs() < 150.0,
+        "the cube and one plug, about 6 970 pixels, got {plugged}"
+    );
+    for (name, plugs) in [
+        ("recipe-no-plugs", ", plugs = false"),
+        ("recipe-plugs-left-out", ""),
+    ] {
+        let bare = first_layer_plugged(name, plugs) as f32;
+        assert!(
+            (bare - 6_400.0).abs() < 150.0,
+            "the cube alone, about 6 400 pixels, got {bare} with `{plugs}`"
+        );
+    }
 }

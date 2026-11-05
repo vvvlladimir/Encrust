@@ -55,7 +55,12 @@ impl Bench {
         working |= tools.hollow.poll(scene, status);
         working |= tools.drain.poll(scene, status);
         working |= tools.orient.poll(scene, &doc.plate, status);
+        working |= land_plugs(doc, tools, &mut machine.status);
         working |= poll(doc, tools, machine, self.settled);
+        let drift_mm = machine.slicing.material.compensation.fit_drift_mm();
+        let asked_by = doc.history.next_edit();
+        let (scene, settled) = (&mut doc.scene, self.settled);
+        tools.drain.lay_plugs(scene, drift_mm, settled, asked_by);
         crate::growth::refresh_supports(doc, &mut tools.supports, !self.settled);
         doc.drilling.start(&doc.scene, self.settled);
         let settings = ToolSettings::of(tools, &machine.slicing);
@@ -104,6 +109,18 @@ impl Bench {
         doc.history
             .undo(&mut doc.scene, tools, &mut machine.slicing)
     }
+}
+
+/// Lays the plugs a worker has cut into the edit that asked for them, as the window does;
+/// answers whether any is still being cut.
+fn land_plugs(doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bool {
+    let plate_mm = core_geometry::Vec2::new(doc.plate.x_mm, doc.plate.y_mm);
+    for ended in tools.drain.poll_plugs() {
+        doc.history.land(&mut doc.scene, ended.asked_by(), |scene| {
+            crate::drain::DrainTool::land_plugs(scene, &ended, plate_mm, status);
+        });
+    }
+    tools.drain.laying_plugs()
 }
 
 /// What a plate edit changes about a model, to tell the plate before from after.

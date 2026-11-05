@@ -105,6 +105,8 @@ struct Run {
     supported: Vec<ObjectId>,
     /// What each model's latest supports step built to, which a check's retry stands islands on.
     built: Vec<(ObjectId, BuiltTo)>,
+    /// The models whose latest drain step left their holes with no plug.
+    unplugged: Vec<ObjectId>,
     /// Settled polls the plate has been unsettled with nothing building, see [`IDLE_POLLS`].
     idle: u8,
     /// Steps done, and the steps the run is reckoned to take in all.
@@ -279,11 +281,14 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
         }
         run.batch_ended();
     }
+    run.leave_unplugged(doc, tools, machine);
     if run.settling(doc, settled) {
         tools.prepare.run = Some(run);
         return true;
     }
-    match run.advance(doc, tools, machine) {
+    let next = run.advance(doc, tools, machine);
+    run.leave_unplugged(doc, tools, machine);
+    match next {
         Ok(Next::Working) => {
             tools.prepare.run = Some(run);
             true
