@@ -78,8 +78,23 @@ pub(super) fn stood_at(mesh: &Mesh, position: Vec2) -> Result<Mesh> {
 
 /// Packs the models over the plate, biggest first, and refuses a plate they do not fit.
 fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -> Result<()> {
+    let footprints: Vec<(&Mesh, &Path)> =
+        placed.iter().map(|(mesh, path)| (&**mesh, *path)).collect();
+    let offsets = arranged(&footprints, printer, &ArrangeSettings::default())?;
+    for ((mesh, _), offset) in placed.iter_mut().zip(offsets) {
+        **mesh = transform_mesh(mesh, Transform::from_translation(offset));
+    }
+    Ok(())
+}
+
+/// How far each of `placed`, a mesh standing where it prints and the file it came from, moves
+/// to pack the plate biggest first by `settings`; refuses a plate they do not fit.
+pub(crate) fn arranged(
+    placed: &[(&Mesh, &Path)],
+    printer: Option<&PrinterProfile>,
+    settings: &ArrangeSettings,
+) -> Result<Vec<Vec3>> {
     let printer = printer.context("--arrange needs a printer to know the plate")?;
-    let settings = ArrangeSettings::default();
     let footprints = placed
         .iter()
         .map(|(mesh, path)| {
@@ -88,7 +103,7 @@ fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -
         })
         .collect::<Result<Vec<_>>>()?;
     let plate = Vec2::new(printer.build_volume.x, printer.build_volume.y);
-    let arranged = arrange(&footprints, plate, &settings);
+    let arranged = arrange(&footprints, plate, settings);
     if let Some(&first) = arranged.left_out.first() {
         bail!(
             "{} of {} models found no room on the plate, {} among them",
@@ -97,10 +112,9 @@ fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -
             placed[first].1.display()
         );
     }
+    let mut offsets = vec![Vec3::ZERO; placed.len()];
     for spot in &arranged.placed {
-        let mesh = &mut *placed[spot.index].0;
-        let offset = Vec3::new(spot.offset_mm.x, spot.offset_mm.y, 0.0);
-        *mesh = transform_mesh(mesh, Transform::from_translation(offset));
+        offsets[spot.index] = spot.offset_mm.extend(0.0);
     }
-    Ok(())
+    Ok(offsets)
 }

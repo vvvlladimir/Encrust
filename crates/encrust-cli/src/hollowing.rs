@@ -324,23 +324,31 @@ impl HollowArgs {
     /// A hole on the surface nearest each `--drain-at`, drilled straight into it, the point
     /// brought down `up` onto the model as it stands here.
     fn drains(&self, mesh: &Mesh, bvh: &Bvh, up: Vec3) -> Result<Vec<DrainHole>> {
+        let kind = if self.walled {
+            HoleKind::Walled
+        } else {
+            HoleKind::Drain
+        };
         self.points()
-            .map(|near| {
-                hole_at(mesh, bvh, near - up, self.hole_size())
-                    .map(|hole| refuse_off_a_face(near, hole, up))
-                    .transpose()?
-                    .map(|hole| DrainHole {
-                        kind: if self.walled {
-                            HoleKind::Walled
-                        } else {
-                            HoleKind::Drain
-                        },
-                        ..hole
-                    })
-                    .with_context(|| format!("no surface near {near} to drill a drain hole into"))
-            })
+            .map(|near| hole_near(mesh, bvh, (near, up), self.hole_size(), kind))
             .collect()
     }
+}
+
+/// A hole of `size` on the surface nearest `near`, which stands `up` over the model as it is
+/// here, drilled straight into it, refused off an edge or a corner as `--drain-at` is.
+pub(crate) fn hole_near(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    (near, up): (Vec3, Vec3),
+    size: HoleSize,
+    kind: HoleKind,
+) -> Result<DrainHole> {
+    hole_at(mesh, bvh, near - up, size)
+        .map(|hole| refuse_off_a_face(near, hole, up))
+        .transpose()?
+        .map(|hole| DrainHole { kind, ..hole })
+        .with_context(|| format!("no surface near {near} to drill a drain hole into"))
 }
 
 /// Past this, the point is off an edge or corner rather than over the face the hole is
