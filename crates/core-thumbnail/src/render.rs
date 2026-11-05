@@ -43,7 +43,7 @@ pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
 
     let viewed: Vec<Vec<Vec3>> = parts.iter().map(project).collect();
     let Some(frame) = Frame::around(&viewed, width, height) else {
-        return Thumbnail::filled(width, height, settings.background);
+        return empty(settings);
     };
 
     for (part, vertices) in parts.iter().zip(&viewed) {
@@ -57,8 +57,22 @@ pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
         }
     }
 
-    Thumbnail::from_pixels(width, height, colours)
-        .unwrap_or_else(|| Thumbnail::filled(width, height, settings.background))
+    let coverage = depths.iter().map(|depth| depth.is_finite()).collect();
+    Thumbnail::rendered(width, height, colours, coverage).unwrap_or_else(|| empty(settings))
+}
+
+/// A render nothing landed on, so a record shows its own background alone.
+fn empty(settings: &ThumbnailSettings) -> Thumbnail {
+    let count = (settings.width_px as usize) * (settings.height_px as usize);
+    Thumbnail::rendered(
+        settings.width_px,
+        settings.height_px,
+        vec![settings.background; count],
+        vec![false; count],
+    )
+    .unwrap_or_else(|| {
+        Thumbnail::filled(settings.width_px, settings.height_px, settings.background)
+    })
 }
 
 /// Every vertex of one part in view coordinates: right, up and depth away from the eye.

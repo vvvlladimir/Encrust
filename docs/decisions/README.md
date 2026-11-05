@@ -359,7 +359,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 |---|---|---|
 | [0046](0046-ctb-layer-data-is-written-in-the-clear.md) | `.ctb` layer data is written unencrypted | Superseded by 0365 |
 | [0047](0047-the-output-extension-picks-the-format.md) | The output extension picks the sliced-file format, in each binary | Accepted |
-| [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted |
+| [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted; one 512-pixel square padded into each record is superseded by 0402 |
+| [0402](0402-a-preview-record-is-cropped-to-the-parts-on-its-own-background.md) | A preview record is cropped to the parts, on its own background | Proposed |
 | [0146](0146-the-chitu-family-is-one-crate-and-cbddlp-carries-grey-in-eight-passes.md) | Keep the Chitu family in one crate, and buy `.cbddlp` grey with eight passes | Accepted |
 | [0147](0147-one-crate-writes-every-anycubic-extension-at-version-one.md) | Write every Anycubic extension from one crate, at version 1 | Accepted |
 | [0148](0148-the-sl1-settings-go-in-last-and-a-varying-stack-is-refused.md) | Write the `.sl1` settings last, and refuse a stack it cannot carry | Accepted; `numFade` as our transition layers is superseded by 0296 |

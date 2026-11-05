@@ -34,9 +34,9 @@ pub struct ThumbnailSettings {
 }
 
 impl ThumbnailSettings {
-    /// The size a writer's largest preview record is cut down from. Square and larger than every
-    /// record, so a record is a reduction, never a magnification.
-    pub const SOURCE_PX: u32 = 512;
+    /// The size a writer's largest preview record is cut down from. The parts span 88% of it,
+    /// more than every record's longest side, so a record is a reduction, never a magnification.
+    pub const SOURCE_PX: u32 = 1024;
 }
 
 impl Default for ThumbnailSettings {

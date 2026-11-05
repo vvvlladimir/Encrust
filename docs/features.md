@@ -785,6 +785,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   on it lists the others and scans again. A printer busy printing gets no file: the card
   says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
+- A sliced file carries a picture of the plate for the printer's screen: the models and
+  their supports, cropped to fill each preview the format holds, on that preview's own
+  background.
 - A Prusa login is kept in the window's settings, never in the profile.
 
 **You cannot:** send from the browser build, or watch the camera inside Encrust (open the

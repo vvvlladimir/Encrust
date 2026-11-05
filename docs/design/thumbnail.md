@@ -51,28 +51,34 @@ shoulder, with 28% ambient. The dot product's sign is dropped: a repaired mesh p
 faces outwards, but a thumbnail of an unrepaired one should still read as a solid rather
 than as a hole.
 
-A 980k-triangle sphere renders in 39 ms at 512 pixels square, single-threaded. It runs
-once per exported file, beside seconds of slicing, which is why there is no parallelism
-here.
+A 980k-triangle sphere renders and is cut to a 400 x 300 record in 0.69 s at 1024 pixels
+square, single-threaded on an Apple M1 (0.50 s at 512). It runs once per exported
+file, beside seconds of slicing, which is why there is no parallelism here.
 
-## From one image to four records
+## From one image to every record
 
-One 512-pixel square image is rendered per job. Each format then cuts its own records out
-of it with `Thumbnail::fitted_to`:
+One 1024-pixel square image is rendered per job, and with it a coverage mask: the pixels
+whose depth a face wrote. Each format then cuts its own records out of it with
+`Thumbnail::fitted_to` (ADR 0402):
 
 | Format | Records |
 |---|---|
 | `.goo` | 116 x 116 and 290 x 290, RGB565, big-endian, uncompressed at fixed offsets |
 | `.ctb` | 400 x 300 and 200 x 125, run-length RGB15, at offsets the header carries |
 
-`fitted_to` keeps the aspect ratio, centres what fits and pads the rest with the record's
-background, so a square image in a 4:3 record gains bars either side instead of a model
-stretched sideways. The resampling is a box filter — every source pixel inside the
-destination pixel's footprint, averaged. A point sample at this reduction drops a thin
-support out of the picture altogether.
+For a render, `fitted_to` crops to the box around the covered pixels, scales that box to fill
+the record less a 6% margin on each side, keeping its aspect ratio, and centres it. An
+uncovered pixel counts as the record's background, so the render's own background never
+reaches a file and a 4:3 record shows a wide part across its width rather than a square with
+bars beside it. A picture read from a file has no mask: it is fitted whole and padded.
 
-512 is larger than every record either format holds, so a record is always a reduction of
-what was rendered and never a magnification of it.
+The resampling is a box filter — every source pixel inside the destination pixel's
+footprint, averaged. A point sample at this reduction drops a thin support out of the
+picture altogether.
+
+The render frames the parts to 88% of its longer side, about 900 pixels, more than the
+longest side of every record (800), so a record is always a reduction of what was rendered
+and never a magnification of it.
 
 `PrintJob::thumbnail` is optional. `None` writes a blank record of the right size at the
 offset the header points at, which is what the writers' own tests use and what any caller
