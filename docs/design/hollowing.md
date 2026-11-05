@@ -35,7 +35,8 @@ A wall thicker than the model leaves the field empty, `extract` returns nothing 
 model comes back unchanged with `cavity_mm3` at zero — the honest answer to "hollow this
 3 mm spar with a 2 mm wall", and the CLI reports it as a defect.
 
-`External` is the same build at `iso_mm = +t`: a mould. Infill and blockers do not apply.
+`External` is the same build at `iso_mm = +t`: a mould. Infill and blockers do not apply;
+thin parts kept solid do.
 
 The fields are built from the shells that bound the solid, not from every shell of the
 mesh. A shell most of whose faces have the rest of the mesh standing just outside them — a

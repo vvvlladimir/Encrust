@@ -46,6 +46,7 @@ impl Default for HollowTool {
                 infill_on: false,
                 infill: InfillSettings::default(),
                 open_floor: false,
+                solid_under_mm: asked.solid_under_mm,
             },
             blocker: BlockerSize::default(),
             job: None,
@@ -216,6 +217,7 @@ fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
         precision: state.precision,
         infill: state.infill_on.then_some(state.infill),
         open_toward: opens.then(|| plate_down(transform)),
+        solid_under_mm: state.solid_under_mm,
         ..HollowSettings::default()
     }
 }

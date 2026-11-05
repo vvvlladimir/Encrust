@@ -194,6 +194,15 @@ encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
   --keep-solid 40,20,15:40,20,45 --keep-solid 60,30,70 --keep-solid-size 3 -o figure.goo
 ```
 
+`--keep-solid-under MM` keeps the wall solid wherever the model is thinner than `MM`, in
+any `--hollow-mode`, as the Hollow tool's Keep thin parts solid does (ADR 0404): a figure's
+fingers and a sword's blade stay solid while its body is hollowed.
+
+```sh
+encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 --keep-solid-under 6 \
+  -o figure.goo
+```
+
 Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
 supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
 a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
@@ -369,14 +378,15 @@ says its message and goes on; `estimate` saves nothing. A file that does not rea
 refused with what is wrong in it.
 
 A flag typed for a model, or a plate file's key, wins over the setting it shapes in every step
-of its kind: `--hollow`, `--hollow-mode`, `--hollow-open-floor` and `--infill`;
+of its kind: `--hollow`, `--hollow-mode`, `--hollow-open-floor`, `--infill` and
+`--keep-solid-under`;
 `--no-drain-vent`, `--drain-at auto` and `--drain-plugs`; `--supports`, `--support-profile`
 and `--support-cavity`; `--orient-goal` and `--max-tilt`; `--repair=METHOD`. `--orient`,
 `--repair`, `--hollow` and `--supports` also run every step of their kind whatever its `when`,
 and are refused naming the flag where the recipe has none; under a recipe they run at its
 steps, not at import. `--rotate` makes `turned` true. A `--drain-at` point,
 `--channel` and `--drain-support-at` point at the model as imported, which a step may turn,
-and are refused; `keep_solid_under_mm` and `plugs = true` are not supported yet.
+and are refused; `plugs = true` is not supported yet.
 
 `-o` writes the plate as the recipe leaves it. Without it a recipe must save the plate itself,
 and the report is of the last file it saved; with neither nothing would be written, and the run

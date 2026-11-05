@@ -149,13 +149,13 @@ fn a_step_that_fails_stops_the_run_naming_it() {
     let name = "recipe-stop";
     let recipe = recipe_file(
         name,
-        "name = \"Stopping\"\n[[step]]\ndo = \"hollow\"\nset = { keep_solid_under_mm = 1 }\n",
+        "name = \"Stopping\"\n[[step]]\ndo = \"hollow\"\nset = { keep_solid_under_mm = -1 }\n",
     );
     let output = run("estimate", name, &recipe, &[]);
     assert!(!output.status.success());
     let said = stderr(&output);
     assert!(
-        said.contains("step 0 (hollow)") && said.contains("not supported yet"),
+        said.contains("step 0 (hollow)") && said.contains("kept solid under a positive thickness"),
         "{said}"
     );
 }
@@ -310,4 +310,23 @@ fn a_typed_orient_turns_the_model_once_at_its_step() {
         "run",
         "the step runs, not the import: {report}"
     );
+}
+
+#[test]
+fn a_hollow_step_keeps_a_model_thinner_than_keep_solid_under_mm_solid() {
+    let hollowed = |name: &str, kept: &str| {
+        let recipe =
+            format!("name = \"Kept\"\n[[step]]\ndo = \"hollow\"\nset = {{ wall_mm = 2{kept} }}\n");
+        sliced(name, &recipe, &[])["hollow"]["cavity_mm3"]
+            .as_f64()
+            .expect("a cavity")
+    };
+    let open = hollowed("recipe-kept-open", "");
+    let kept = hollowed("recipe-kept-solid", ", keep_solid_under_mm = 20");
+    // The 16 mm cube's cavity is 12 mm across, 1728 mm3, and the whole cube is under 20 mm.
+    assert!(
+        (open - 1728.0).abs() < 1728.0 * 0.02,
+        "1728 mm3 open, got {open}"
+    );
+    assert_eq!(kept, 0.0, "a 16 mm cube is under 20 mm, so 0 mm3 of cavity");
 }

@@ -40,6 +40,7 @@ fn project(objects: usize) -> Project {
                 infill: InfillSettings::default(),
 
                 open_floor: false,
+                solid_under_mm: Some(6.0),
             },
             drain: DrainState::round(3.0, 3.0, 1.0),
             cut: CutState {
@@ -123,6 +124,7 @@ fn object(index: usize) -> ObjectState {
                     precision: 0.25,
                     infill: None,
                     open_toward: None,
+                    solid_under_mm: Some(6.0),
                 },
                 cavity_faces: 0..1,
                 cavity_mm3: 12.5,

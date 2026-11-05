@@ -72,6 +72,9 @@ pub(super) fn typed_over(kind: StepKind, mut settings: Settings, shaping: &Shapi
             if hollow.infill.is_some() {
                 set("infill", Resolved::Bool(true));
             }
+            if let Some(under_mm) = hollow.keep_solid.under_mm {
+                set("keep_solid_under_mm", Resolved::Number(under_mm));
+            }
         }
         StepKind::Drain => {
             if hollow.no_vent {

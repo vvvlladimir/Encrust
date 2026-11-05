@@ -66,6 +66,8 @@ pub(super) struct Hollowed {
     pub mode: HollowMode,
     pub open_floor: bool,
     pub infill: bool,
+    /// The wall stays solid wherever the model is thinner than this, millimetres.
+    pub solid_under_mm: Option<Scalar>,
 }
 
 /// A step kind or setting this window does not run yet.
@@ -102,13 +104,7 @@ impl Work {
             StepKind::Repair => {
                 Self::Repair(text(settings, "method").map_or(PREPARE_REPAIR, method_of))
             }
-            StepKind::Hollow => {
-                // TODO(step-6): keep_solid_under_mm as core_volume's Keep solid, fitted.
-                if settings.contains_key("keep_solid_under_mm") {
-                    return Err(NotYet(kind));
-                }
-                Self::Hollow(Hollowed::of(settings))
-            }
+            StepKind::Hollow => Self::Hollow(Hollowed::of(settings)),
             StepKind::Drain => drain_of(settings)?,
             StepKind::Supports => Self::Supports {
                 profile: text(settings, "profile").unwrap_or("auto").to_owned(),
@@ -177,6 +173,7 @@ impl Hollowed {
             mode,
             open_floor,
             infill: flag(settings, "infill").unwrap_or(false),
+            solid_under_mm: number(settings, "keep_solid_under_mm"),
         }
     }
 
@@ -187,6 +184,7 @@ impl Hollowed {
             mode: self.mode,
             infill: self.infill.then(InfillSettings::default),
             open_toward: self.open_floor.then(|| plate_down(transform)),
+            solid_under_mm: self.solid_under_mm,
             ..HollowSettings::default()
         }
     }

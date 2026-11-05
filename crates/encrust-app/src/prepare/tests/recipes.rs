@@ -131,14 +131,24 @@ fn supports_again_replace_the_earlier_ones() {
 }
 
 #[test]
-fn a_step_the_window_cannot_run_yet_puts_the_plate_back() {
-    let (mut bench, id) = Bench::with(large_cube());
-    let before = standing(bench.object(id));
-    bench.start_by("[[step]]\ndo = \"hollow\"\nset = { keep_solid_under_mm = 2.0 }\n");
-    bench.run_to_end();
-    let said = Status::Error(tr!("prepare-step-not-yet", step = "hollow"));
-    assert_eq!(bench.machine.status, said);
-    assert_eq!(standing(bench.object(id)), before);
+fn a_hollow_step_keeps_a_model_thinner_than_keep_solid_under_mm_solid() {
+    let cavity_mm3 = |kept: &str| {
+        let (mut bench, id) = Bench::with(large_cube());
+        bench.start_by(&format!(
+            "[[step]]\ndo = \"hollow\"\nset = {{ wall_mm = 2.0{kept} }}\n"
+        ));
+        bench.run_to_end();
+        bench.object(id).hollow.cavity_mm3()
+    };
+    // The 40 mm cube's cavity is 36 mm across; the whole cube is under 50 mm.
+    let open = cavity_mm3("");
+    let expected = 36.0_f32.powi(3);
+    assert!(
+        (open - expected).abs() < expected * 0.02,
+        "{expected} mm3 open, got {open}"
+    );
+    let kept = cavity_mm3(", keep_solid_under_mm = 50.0");
+    assert_eq!(kept, 0.0, "a 40 mm cube is under 50 mm, so 0 mm3 of cavity");
 }
 
 #[test]

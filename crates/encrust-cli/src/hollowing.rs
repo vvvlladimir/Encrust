@@ -234,6 +234,7 @@ impl HollowArgs {
             precision,
             infill: self.infill.map(|pattern| self.infill_settings(pattern)),
             blockers,
+            solid_under_mm: self.keep_solid.under_mm,
             // The model already stands where it prints, so the plate is straight down.
             open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()

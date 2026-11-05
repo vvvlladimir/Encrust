@@ -117,6 +117,7 @@ fn project() -> Project {
                 infill: InfillSettings::default(),
 
                 open_floor: false,
+                solid_under_mm: None,
             },
             drain: DrainState::round(3.0, 3.0, 1.0),
             cut: CutState {
@@ -157,6 +158,7 @@ fn hollowed(saved: &mut Project, thickness_mm: f32) {
             precision: 0.5,
             infill: None,
             open_toward: None,
+            solid_under_mm: None,
         },
         cavity_faces: 0..12,
         cavity_mm3: 16.0f32.powi(3),

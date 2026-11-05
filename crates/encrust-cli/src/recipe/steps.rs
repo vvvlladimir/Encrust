@@ -1,7 +1,7 @@
 //! The steps a recipe runs on one model at a time, each by the command line's own call for
 //! it: `--orient`'s search, `--repair`, `--hollow`, `--drain-at` and `--supports`.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::ValueEnum;
 use core_engine::{Hollowing, PREPARE_REPAIR, SupportPlan};
 use core_geometry::{Mat3, Scalar, Transform, Vec3};
@@ -15,6 +15,7 @@ use super::settings::Settings;
 use super::{Ctx, Did, drain};
 use crate::args::RepairMethod;
 use crate::hollowing::{self, HollowArgs, Mode, Pattern};
+use crate::keep_solid::KeepSolidArgs;
 use crate::pipeline::{orientation, read_again, repaired_later, turn_in_place};
 use crate::profiles::{AUTO, plan_of};
 use crate::supports::{stand_at, stand_under};
@@ -83,15 +84,11 @@ fn repair(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     Ok(Did::default())
 }
 
-/// `--hollow` at the step's wall, mode and infill, keeping a wall round the holes drilled
+/// `--hollow` at the step's wall, mode, infill and thinnest part hollowed, keeping a wall round the holes drilled
 /// before it.
 fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     if piece.cavity.is_some() {
         return Ok(Did::nothing("the model is hollow already"));
-    }
-    // TODO(step-6): keep_solid_under_mm as core_volume's Keep solid, fitted to the model.
-    if settings.contains_key("keep_solid_under_mm") {
-        bail!("keep_solid_under_mm is not supported yet");
     }
     let wall_mm = number(settings, "wall_mm").unwrap_or(HollowSettings::default().thickness_mm);
     let (mode, open_floor) = match text(settings, "mode") {
@@ -107,6 +104,10 @@ fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
         infill: flag(settings, "infill")
             .unwrap_or(false)
             .then(|| typed.infill.unwrap_or(Pattern::Hive)),
+        keep_solid: KeepSolidArgs {
+            under_mm: number(settings, "keep_solid_under_mm"),
+            ..typed.keep_solid.clone()
+        },
         ..typed.clone()
     };
     let saves_mm3 = Hollowing::reckoned(&piece.mesh, Mat3::IDENTITY, wall_mm).saves_mm3;

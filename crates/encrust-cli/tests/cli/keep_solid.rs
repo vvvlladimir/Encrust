@@ -62,12 +62,34 @@ fn points_run_together_lay_a_rod_between_them() {
 }
 
 #[test]
+fn a_cube_thinner_than_the_thickness_kept_solid_gets_no_cavity() {
+    let open = saved_mm3("solid-under-open", &[]);
+    let under = saved_mm3("solid-under-thin", &["--keep-solid-under", "4"]);
+    let thick = saved_mm3("solid-under-thick", &["--keep-solid-under", "20"]);
+
+    // The 10 mm cavity of the 16 mm cube is 1000 mm3, and nothing of it is under 4 mm.
+    assert!(
+        (under - open).abs() < open * 0.02,
+        "nothing is under 4 mm, so {open} mm3 saved, got {under}"
+    );
+    assert!(
+        thick == 0.0,
+        "a 16 mm cube is under 20 mm, so 0 mm3 saved, got {thick}"
+    );
+}
+
+#[test]
 fn keeping_solid_with_no_shell_or_a_size_with_no_point_is_refused() {
     let path = write_box_stl("solid-refused", 16.0, 12, 0);
     let out = output_dir("solid-refused");
     let panel = test_panel();
     for (flags, named) in [
         (&["--keep-solid", "8,8,16"][..], "--keep-solid"),
+        (&["--keep-solid-under", "4"][..], "--keep-solid-under"),
+        (
+            &["--hollow", "3", "--keep-solid-under", "0"][..],
+            "--keep-solid-under",
+        ),
         (
             &["--hollow", "3", "--keep-solid-size", "2"][..],
             "--keep-solid-size",

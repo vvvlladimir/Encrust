@@ -67,8 +67,8 @@ A drain's `diameter_mm` and `depth_mm` left out are `core_volume`'s `HoleSize::d
 3 mm across and 3 mm deep, in both front ends; on the command line `--drain` and
 `--drain-depth`, typed, stand in for them, their defaults that same hole.
 
-`keep_solid_under_mm` keeps the wall solid wherever the model is thinner than that
-(`core_volume`'s Keep solid, fitted). `check`'s retry supports every island again while
+`keep_solid_under_mm` keeps the wall solid wherever the model is thinner than that, in
+every mode: `HollowSettings::solid_under_mm`, the model opened by a ball (ADR 0404). `check`'s retry supports every island again while
 `while` holds, at most `max` times, `max` no more than 5: one support under each island the
 stack shows (`core_engine::island_holds`), added to what the model stands on as Check's
 Support every island adds it, nothing standing grown again.
