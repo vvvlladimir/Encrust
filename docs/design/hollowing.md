@@ -90,6 +90,18 @@ radius stands. A shift-click puts down `rod_to`: a rod from the last blocker's e
 ball, as wide as it. An alt-click removes the nearest one the view ray enters before halfway across the part, so one
 deep inside goes and one behind the far wall stays.
 
+## Thin parts kept solid
+
+`HollowSettings::solid_under_mm` keeps the wall solid wherever the model is thinner than
+`s`: the cavity is taken only inside the model opened by a ball of `r = s / 2` (ADR 0404).
+A band reaches two voxels, so neither half moves a field: the model's band is built at
+`iso = -r`, its surface extracted as the eroded solid, and that solid's band built at
+`iso = +r` on the cavity's lattice. A part thinner than `2r` has no eroded solid and so no
+opened one; a shell's cavity field is intersected with the opened one before the floor and
+the blockers, a mould's void is the opened model instead of the model. `cavity_field` does
+it, so a kept field moves its blockers without opening again. The 40 mm ball of the
+`opening` bench hollows in 0.93 s plain and 2.1 s with 6 mm kept solid.
+
 ## The lattice
 
 | Pattern | What it is | Its numbers |
