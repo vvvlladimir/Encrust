@@ -1,6 +1,6 @@
 # 0048. Render the sliced file's thumbnail in software, in a crate of its own
 
-- **Status:** Accepted; one 512-pixel square padded into each record is superseded by 0402
+- **Status:** Accepted; one 512-pixel square padded into each record is superseded by 0402, flat shading by 0403
 - **Date:** 2026-09-19
 
 ## Context

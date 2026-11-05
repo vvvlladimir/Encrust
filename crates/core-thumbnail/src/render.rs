@@ -1,7 +1,15 @@
-use core_geometry::{Mesh, Transform, Vec3};
+mod raster;
+mod shade;
+#[cfg(test)]
+mod tests;
+
+use std::borrow::Cow;
+
+use core_geometry::{Mesh, SmoothNormals, Transform, Vec3, smooth_normals, transform_mesh};
 
 use crate::image::Thumbnail;
-use crate::settings::{Rgb, ThumbnailSettings};
+use crate::settings::ThumbnailSettings;
+use raster::{Corner, Surfaces};
 
 /// One mesh on the plate together with where it stands.
 pub struct Part<'m> {
@@ -24,41 +32,35 @@ impl<'m> Part<'m> {
 /// little above the part: it shows a silhouette, a top and a side.
 const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
 
-/// Direction the light comes from, in view coordinates: over the camera's left shoulder.
-const LIGHT: Vec3 = Vec3::new(-0.3, 0.55, -1.0);
-
-/// Share of a face's colour that does not depend on which way it points, so that a face
-/// turned away from the light is still read as a surface rather than as a hole.
-const AMBIENT: f32 = 0.28;
+/// Degrees two faces may turn apart and still be shaded as one surface: a ball's facets
+/// blend, a box keeps its edges.
+const CREASE_DEG: f32 = 40.0;
 
 /// Fraction of the image left empty around the part on each side.
 const MARGIN: f32 = 0.06;
 
-/// Renders every part into one shaded image, framed so the whole plate fits. The view fits the
-/// parts, not the build volume, as a thumbnail is a centimetre wide.
+/// Renders every part into one shaded image framed to the parts, not the build volume, as a
+/// thumbnail is a centimetre wide; see `docs/design/thumbnail.md`.
 pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
-    let (width, height) = (settings.width_px, settings.height_px);
-    let mut colours = vec![settings.background; (width as usize) * (height as usize)];
-    let mut depths = vec![f32::INFINITY; colours.len()];
-
-    let viewed: Vec<Vec<Vec3>> = parts.iter().map(project).collect();
-    let Some(frame) = Frame::around(&viewed, width, height) else {
+    let view = View::new();
+    let viewed: Vec<Viewed<'_>> = parts.iter().map(|part| Viewed::of(part, &view)).collect();
+    let Some(frame) = Frame::around(
+        viewed.iter().map(|part| part.vertices.as_slice()),
+        settings.width_px,
+        settings.height_px,
+    ) else {
         return empty(settings);
     };
 
-    for (part, vertices) in parts.iter().zip(&viewed) {
-        for face in &part.mesh.faces {
-            let Some(corners) = corners(vertices, *face) else {
-                continue;
-            };
-            let colour = shade(&corners, settings.model);
-            let screen = corners.map(|corner| frame.to_screen(corner));
-            fill(&mut colours, &mut depths, width, height, screen, colour);
+    let mut surfaces = Surfaces::new(settings.width_px, settings.height_px);
+    for part in &viewed {
+        for face in 0..part.mesh.faces.len() {
+            if let Some(corners) = part.corners(face, &view, &frame) {
+                surfaces.fill(&corners);
+            }
         }
     }
-
-    let coverage = depths.iter().map(|depth| depth.is_finite()).collect();
-    Thumbnail::rendered(width, height, colours, coverage).unwrap_or_else(|| empty(settings))
+    shade::image(&surfaces, 1.0 / frame.scale, settings).unwrap_or_else(|| empty(settings))
 }
 
 /// A render nothing landed on, so a record shows its own background alone.
@@ -75,55 +77,104 @@ fn empty(settings: &ThumbnailSettings) -> Thumbnail {
     })
 }
 
-/// Every vertex of one part in view coordinates: right, up and depth away from the eye.
-fn project(part: &Part<'_>) -> Vec<Vec3> {
-    let forward = -EYE.normalize();
-    let right = forward.cross(Vec3::Z).normalize();
-    let up = right.cross(forward);
-    let matrix = part.transform.to_matrix();
-
-    part.mesh
-        .vertices
-        .iter()
-        .map(|vertex| {
-            let placed = matrix.transform_point3(*vertex);
-            Vec3::new(placed.dot(right), placed.dot(up), placed.dot(forward))
-        })
-        .collect()
+/// The view's axes in plate coordinates: right, up, and forward away from the eye.
+struct View {
+    right: Vec3,
+    up: Vec3,
+    forward: Vec3,
 }
 
-fn corners(vertices: &[Vec3], face: [u32; 3]) -> Option<[Vec3; 3]> {
-    Some([
-        *vertices.get(face[0] as usize)?,
-        *vertices.get(face[1] as usize)?,
-        *vertices.get(face[2] as usize)?,
-    ])
+impl View {
+    fn new() -> Self {
+        let forward = -EYE.normalize();
+        let right = forward.cross(Vec3::Z).normalize();
+        let up = right.cross(forward);
+        Self { right, up, forward }
+    }
+
+    /// A plate point or direction in view coordinates; the third is depth.
+    fn of(&self, vector: Vec3) -> Vec3 {
+        Vec3::new(
+            vector.dot(self.right),
+            vector.dot(self.up),
+            vector.dot(self.forward),
+        )
+    }
 }
 
-/// Flat Lambert shading of one face, two-sided. The normal's sign is dropped so an unrepaired mesh
-/// still shows a solid.
-fn shade(corners: &[Vec3; 3], model: Rgb) -> Rgb {
-    let normal = (corners[1] - corners[0])
-        .cross(corners[2] - corners[0])
-        .normalize_or_zero();
-    let lambert = normal.dot(LIGHT.normalize()).abs();
-    let level = AMBIENT + (1.0 - AMBIENT) * lambert;
-    model.map(|channel| (f32::from(channel) * level).round().clamp(0.0, 255.0) as u8)
+/// One part placed on the plate, its vertices in view coordinates and its smoothed normals.
+struct Viewed<'m> {
+    mesh: Cow<'m, Mesh>,
+    vertices: Vec<Vec3>,
+    normals: SmoothNormals,
+}
+
+impl<'m> Viewed<'m> {
+    fn of(part: &Part<'m>, view: &View) -> Self {
+        let mesh = if part.transform == Transform::default() {
+            Cow::Borrowed(part.mesh)
+        } else {
+            Cow::Owned(transform_mesh(part.mesh, part.transform))
+        };
+        let vertices = mesh
+            .vertices
+            .iter()
+            .map(|vertex| view.of(*vertex))
+            .collect();
+        let normals = smooth_normals(&mesh, CREASE_DEG);
+        Self {
+            mesh,
+            vertices,
+            normals,
+        }
+    }
+
+    /// Face `face` on screen, each corner with its normal in view coordinates; a corner of a
+    /// face the smoothing skipped takes the face's own.
+    fn corners(&self, face: usize, view: &View, frame: &Frame) -> Option<[Corner; 3]> {
+        let indices = self.mesh.faces.get(face)?;
+        let points = [
+            *self.vertices.get(indices[0] as usize)?,
+            *self.vertices.get(indices[1] as usize)?,
+            *self.vertices.get(indices[2] as usize)?,
+        ];
+        let flat = (points[1] - points[0])
+            .cross(points[2] - points[0])
+            .normalize_or_zero();
+        let corners = std::array::from_fn(|slot| {
+            let normal = self
+                .normals
+                .corners
+                .get(face * 3 + slot)
+                .and_then(|&index| self.normals.normals.get(index as usize))
+                .map_or(flat, |normal| view.of(*normal));
+            Corner {
+                screen: frame.to_screen(points[slot]),
+                normal,
+            }
+        });
+        Some(corners)
+    }
 }
 
 /// How view coordinates land on pixels: the part scaled to fill the image, centred.
 struct Frame {
     centre: Vec3,
+    /// Pixels per millimetre.
     scale: f32,
     width: f32,
     height: f32,
 }
 
 impl Frame {
-    fn around(viewed: &[Vec<Vec3>], width_px: u32, height_px: u32) -> Option<Self> {
+    fn around<'v>(
+        viewed: impl Iterator<Item = &'v [Vec3]>,
+        width_px: u32,
+        height_px: u32,
+    ) -> Option<Self> {
         let mut min = Vec3::splat(f32::INFINITY);
         let mut max = Vec3::splat(f32::NEG_INFINITY);
-        for vertex in viewed.iter().flatten() {
+        for vertex in viewed.flatten() {
             min = min.min(*vertex);
             max = max.max(*vertex);
         }
@@ -160,164 +211,5 @@ impl Frame {
             self.height * 0.5 - (point.y - self.centre.y) * self.scale,
             point.z,
         )
-    }
-}
-
-/// Fills one screen-space triangle, keeping whichever face is nearest the eye.
-fn fill(
-    colours: &mut [Rgb],
-    depths: &mut [f32],
-    width_px: u32,
-    height_px: u32,
-    screen: [Vec3; 3],
-    colour: Rgb,
-) {
-    let [a, b, c] = screen;
-    let area = edge(a, b, c.x, c.y);
-    if area.abs() < f32::EPSILON {
-        return;
-    }
-    let inverse = 1.0 / area;
-
-    let (left, right) = bounds(a.x, b.x, c.x, width_px);
-    let (top, bottom) = bounds(a.y, b.y, c.y, height_px);
-    for y in top..bottom {
-        for x in left..right {
-            let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
-            // Dividing by the signed area normalises both windings, so a mesh with
-            // flipped faces fills the same pixels.
-            let wa = edge(b, c, px, py) * inverse;
-            let wb = edge(c, a, px, py) * inverse;
-            let wc = edge(a, b, px, py) * inverse;
-            if wa < 0.0 || wb < 0.0 || wc < 0.0 {
-                continue;
-            }
-
-            let depth = wa * a.z + wb * b.z + wc * c.z;
-            let index = (y * width_px + x) as usize;
-            if depth < depths[index] {
-                depths[index] = depth;
-                colours[index] = colour;
-            }
-        }
-    }
-}
-
-fn edge(from: Vec3, to: Vec3, x: f32, y: f32) -> f32 {
-    (to.x - from.x) * (y - from.y) - (to.y - from.y) * (x - from.x)
-}
-
-/// Half-open pixel range a triangle's extent covers, clamped to the image.
-fn bounds(a: f32, b: f32, c: f32, limit_px: u32) -> (u32, u32) {
-    let low = a.min(b).min(c).floor().max(0.0) as u32;
-    let high = (a.max(b).max(c).ceil().max(0.0) as u32).min(limit_px);
-    (low.min(limit_px), high)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
-    fn unit_cube() -> Mesh {
-        core_geometry::cuboid(Vec3::ZERO, Vec3::ONE)
-    }
-
-    fn settings() -> ThumbnailSettings {
-        ThumbnailSettings {
-            width_px: 64,
-            height_px: 64,
-            ..ThumbnailSettings::default()
-        }
-    }
-
-    #[test]
-    fn an_empty_plate_renders_to_the_background() {
-        let settings = settings();
-        let image = render(&[], &settings);
-        assert!(
-            image
-                .pixels()
-                .iter()
-                .all(|pixel| *pixel == settings.background)
-        );
-    }
-
-    #[test]
-    fn a_cube_covers_the_middle_and_leaves_the_corners_empty() {
-        let mesh = unit_cube();
-        let settings = settings();
-        let image = render(&[Part::placed(&mesh)], &settings);
-
-        let middle = image.pixels()[(32 * 64 + 32) as usize];
-        assert_ne!(middle, settings.background, "the part covers the centre");
-        for corner in [0usize, 63, 63 * 64, 64 * 64 - 1] {
-            assert_eq!(
-                image.pixels()[corner],
-                settings.background,
-                "the margin keeps the part off the border"
-            );
-        }
-    }
-
-    #[test]
-    fn three_faces_of_a_cube_are_shaded_differently() {
-        let mesh = unit_cube();
-        let image = render(&[Part::placed(&mesh)], &settings());
-
-        let mut shades: Vec<Rgb> = image.pixels().to_vec();
-        shades.sort_unstable();
-        shades.dedup();
-        assert!(
-            shades.len() >= 4,
-            "background plus one shade per visible face, got {}",
-            shades.len()
-        );
-    }
-
-    #[test]
-    fn the_view_frames_the_part_wherever_it_stands() {
-        let mesh = unit_cube();
-        let settings = settings();
-        let here = render(&[Part::placed(&mesh)], &settings);
-        let there = render(
-            &[Part::new(
-                &mesh,
-                Transform::from_translation(Vec3::new(40.0, -25.0, 3.0)),
-            )],
-            &settings,
-        );
-
-        assert_eq!(
-            here, there,
-            "the frame follows the part, so moving it on the plate changes nothing"
-        );
-    }
-
-    #[test]
-    fn a_nearer_part_hides_the_one_behind_it() {
-        let mesh = unit_cube();
-        let settings = ThumbnailSettings {
-            model: [255, 255, 255],
-            ..settings()
-        };
-        // The second cube sits directly behind the first along the view direction, so the
-        // image must look exactly like the front one alone.
-        let behind = Transform::from_translation(EYE.normalize() * -4.0);
-        let alone = render(&[Part::placed(&mesh)], &settings);
-        let stacked = render(&[Part::placed(&mesh), Part::new(&mesh, behind)], &settings);
-
-        let lit = |image: &Thumbnail| {
-            image
-                .pixels()
-                .iter()
-                .filter(|pixel| **pixel != settings.background)
-                .count()
-        };
-        assert_eq!(
-            lit(&alone),
-            lit(&stacked),
-            "the far cube is hidden behind the near one"
-        );
     }
 }

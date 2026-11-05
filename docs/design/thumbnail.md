@@ -1,7 +1,8 @@
 # The sliced file's thumbnail
 
 How the picture inside a `.goo` or `.ctb` file is made. The renderer is
-`core-thumbnail/src/render.rs`, the image and its resampling `core-thumbnail/src/image.rs`,
+`core-thumbnail/src/render.rs` and the files beside it in `render/`, the image and its
+resampling `core-thumbnail/src/image.rs`,
 and the one caller is `core-engine/src/run.rs`, which renders it for every front end. Why
 it is a software renderer rather than the viewport's is in ADR 0048.
 
@@ -28,8 +29,8 @@ up      = right × forward
 
 and every vertex becomes `(dot(v, right), dot(v, up), dot(v, forward))`. The third
 component is the depth, growing away from the eye, and the first two are what lands on
-pixels. Because the basis is orthonormal, a face normal in view coordinates is the world
-normal rotated, so shading works in view space and no vertex is transformed twice.
+pixels. Because the basis is orthonormal, a normal in view coordinates is the plate normal
+rotated, so shading works in view space.
 
 The frame fits the part, not the build volume: the projected bounds of every vertex are
 measured, and the scale is whichever of the two axes is tighter, with a 6% margin on each
@@ -39,21 +40,51 @@ part that spans nothing at all is drawn as a point rather than dividing by zero.
 
 ## Filling a triangle
 
-A depth buffer, one `f32` per pixel, starts at infinity. Each face is projected, shaded
-once as a flat colour, and filled over its screen bounding box with the standard edge
-function test. The three edge values are divided by the signed area of the triangle, which
-normalises both windings: a mesh whose faces were never oriented fills the same pixels as
-one that was. Depth is interpolated from the three barycentric weights, and a pixel is only
+Shading is deferred: the faces are filled first into a depth and a normal per pixel, and
+every covered pixel is lit once afterwards (`render/raster.rs`, `render/shade.rs`).
+
+A part placed anywhere but where its vertices stand is copied into plate coordinates, and
+its normals are smoothed with `core_geometry::smooth_normals` across every edge whose faces
+turn less than 40°: a ball's facets blend into one surface, a box keeps its edges. A corner
+the smoothing skips, on a face of no area, takes the face's own normal.
+
+Each face is filled over its screen bounding box with the standard edge function test. The
+three edge values are divided by the signed area of the triangle, which normalises both
+windings: a mesh whose faces were never oriented fills the same pixels as one that was.
+Depth and normal are interpolated from the three barycentric weights, and a pixel is only
 written when it is nearer than what is already there.
 
-Shading is flat Lambert against a fixed light in view space, over the camera's left
-shoulder, with 28% ambient. The dot product's sign is dropped: a repaired mesh points its
-faces outwards, but a thumbnail of an unrepaired one should still read as a solid rather
-than as a hole.
+## Lighting
 
-A 980k-triangle sphere renders and is cut to a 400 x 300 record in 0.69 s at 1024 pixels
-square, single-threaded on an Apple M1 (0.50 s at 512). It runs once per exported
-file, beside seconds of slicing, which is why there is no parallelism here.
+Per pixel, the normal is turned towards the eye first, so an unrepaired mesh shows its back
+faces lit as fronts and still reads as a solid. Then, in view space:
+
+| Term | Direction | Share |
+|---|---|---|
+| Ambient | — | 24% of the model colour |
+| Key, diffuse | high over the camera's left shoulder | up to 80% |
+| Fill, diffuse | low on the camera's right | up to 25% |
+| Key, highlight | Blinn, exponent 40 | up to 22% towards white |
+| Rim | `(1 - n·v)³`, strongest seen edge on | up to 45% towards white |
+
+The key sits high so a box's top, left and right faces come out at about 96%, 57% and 49%:
+three tones, not two. The rim light lifts the outline off a dark background, where a dark
+line would vanish. A lit pixel is never black, which the window's recent-file pictures rely
+on to tell a part from the background.
+
+## Lines
+
+Where one surface passes in front of another, a pixel keeps 40% of its colour. A jump is
+the second difference of depth two pixels either side, across and down, deeper than six
+pixel widths: a plane has none however steep it stands, so only a real step draws a line.
+A neighbour with no surface draws none; the silhouette is the rim light's.
+
+## Cost
+
+A 980k-triangle sphere renders and is cut to a 400 x 300 record in 100 ms at 1024 pixels
+square, single-threaded but for the normal smoothing, on an Apple M1: 51 ms flat-shaded at
+1024, 32 ms at 512. It runs once per exported file, beside seconds of slicing, which is why
+the rest is not parallel.
 
 ## From one image to every record
 

@@ -26,15 +26,34 @@ pub fn encode_grey(layer: &LayerRuns) -> Result<Vec<u8>, FormatError> {
 
 /// Encodes a preview as a colour PNG, which is what an archive container holds two of.
 pub fn encode_colour(image: &Thumbnail) -> Result<Vec<u8>, FormatError> {
+    let pixels: Vec<u8> = image.pixels().iter().flatten().copied().collect();
+    encode_preview(image, png::ColorType::Rgb, &pixels)
+}
+
+/// Encodes a preview as an opaque colour PNG with an alpha channel, for a container whose
+/// known files hold their previews so.
+pub fn encode_colour_alpha(image: &Thumbnail) -> Result<Vec<u8>, FormatError> {
+    let pixels: Vec<u8> = image
+        .pixels()
+        .iter()
+        .flat_map(|&[r, g, b]| [r, g, b, u8::MAX])
+        .collect();
+    encode_preview(image, png::ColorType::Rgba, &pixels)
+}
+
+fn encode_preview(
+    image: &Thumbnail,
+    colour: png::ColorType,
+    pixels: &[u8],
+) -> Result<Vec<u8>, FormatError> {
     let mut bytes = Vec::new();
     let mut encoder = png::Encoder::new(&mut bytes, image.width_px(), image.height_px());
-    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_color(colour);
     encoder.set_depth(png::BitDepth::Eight);
 
     let mut writer = encoder.write_header().map_err(failed("a preview"))?;
-    let pixels: Vec<u8> = image.pixels().iter().flatten().copied().collect();
     writer
-        .write_image_data(&pixels)
+        .write_image_data(pixels)
         .map_err(failed("a preview"))?;
     writer.finish().map_err(failed("a preview"))?;
     Ok(bytes)
@@ -161,6 +180,15 @@ mod tests {
         let image = Thumbnail::from_pixels(2, 1, vec![[255, 0, 0], [0, 0, 255]])
             .expect("two pixels fill 2x1");
         let png = encode_colour(&image).expect("a preview encodes");
+        assert_eq!(decode_colour(&png).expect("it was just encoded"), image);
+    }
+
+    #[test]
+    fn an_opaque_alpha_preview_is_four_channels_and_reads_back_to_its_pixels() {
+        let image = Thumbnail::from_pixels(2, 1, vec![[255, 0, 0], [10, 10, 11]])
+            .expect("two pixels fill 2x1");
+        let png = encode_colour_alpha(&image).expect("a preview encodes");
+        assert_eq!(png[25], 6, "red, green, blue and alpha");
         assert_eq!(decode_colour(&png).expect("it was just encoded"), image);
     }
 

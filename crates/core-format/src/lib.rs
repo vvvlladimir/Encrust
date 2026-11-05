@@ -31,7 +31,9 @@ pub use de::{MAX_ENTRY_BYTES, ReadSeek, Reads, read_entry};
 pub use error::FormatError;
 pub use exposure::{ExposurePlan, ExposureRange};
 pub use job::PrintJob;
-pub use png::{decode_colour, decode_grey, encode_colour, encode_grey, png_shape};
+pub use png::{
+    decode_colour, decode_grey, encode_colour, encode_colour_alpha, encode_grey, png_shape,
+};
 pub use preview::{MAX_PREVIEW_PX, preview_in_range, read_png_preview, read_raw_preview};
 pub use reader::{
     LayerEntry, MAX_PANEL_PX, OpenFile, SlicedFile, SlicedFileReader, layer_in_range,

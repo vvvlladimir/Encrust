@@ -1,6 +1,6 @@
 # 0402. Crop a preview record to the parts, on the record's own background
 
-- **Status:** Proposed
+- **Status:** Proposed; the `.pwsz` colours are superseded by 0403
 - **Date:** 2026-11-05
 
 ## Context
