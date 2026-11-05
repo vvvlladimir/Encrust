@@ -215,7 +215,10 @@ track. With no stack it reads *No layers*.
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
   its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
-  *Preparing for print:* and its step, standing whichever tool is in hand.
+  *Preparing for print:* and its step, standing whichever tool is in hand. Paused at a
+  recipe's `pause`, it is a notice instead: the pause glyph in `accent_soft`, the pause's
+  message (else *Prepare for print is paused*), *Continue* as its action and Cancel as its
+  close; the view still turns, no tool starts a job, and Select's bar says *Waiting for you*.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30

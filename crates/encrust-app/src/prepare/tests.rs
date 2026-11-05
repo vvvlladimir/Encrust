@@ -48,13 +48,15 @@ impl Bench {
         let mut working = doc.repairs.poll(scene, status);
         working |= doc.drilling.poll(scene, status);
         working |= doc.surfaces.poll(scene, status);
+        working |= doc.growth.poll(scene, status);
+        working |= machine.slicing.poll(scene, status);
+        working |= machine.preview.poll(status);
         working |= tools.supports.poll(scene, status);
         working |= tools.hollow.poll(scene, status);
         working |= tools.drain.poll(scene, status);
         working |= tools.orient.poll(scene, &doc.plate, status);
         working |= poll(doc, tools, machine, self.settled);
-        doc.surfaces.start(&mut doc.scene);
-        tools.supports.settle_on_raft(&mut doc.scene);
+        crate::growth::refresh_supports(doc, &mut tools.supports, !self.settled);
         doc.drilling.start(&doc.scene, self.settled);
         let settings = ToolSettings::of(tools, &machine.slicing);
         let settled = Frame {
@@ -482,3 +484,4 @@ fn nothing_on_the_plate_or_no_automatic_profile_starts_nothing() {
 }
 
 mod recipes;
+mod steps;

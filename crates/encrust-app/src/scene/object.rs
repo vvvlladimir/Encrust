@@ -5,7 +5,9 @@ use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
 use core_engine::project::HollowState;
-use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb};
+use core_geometry::{
+    Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb, signed_volume,
+};
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
@@ -202,6 +204,12 @@ impl SceneObject {
     /// The support groups as they print and their hierarchies, once built for them.
     pub fn supports_built(&self) -> Option<(&[core_supports::Shaded], &[Arc<Bvh>])> {
         self.printed_supports.built(self.supports_under())
+    }
+
+    /// The resin its supports as last built come to, mm³; none until they are built.
+    pub fn supports_mm3(&self) -> Scalar {
+        let meshes = self.supports.meshes().unwrap_or_default();
+        meshes.iter().map(|mesh| signed_volume(mesh).abs()).sum()
     }
 
     /// The mesh the model prints as: its cuts taken out exactly where they have been, its

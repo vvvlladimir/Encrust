@@ -274,6 +274,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Drop to the plate, lay on face, centre | `ALIGN_BOTTOM`, `HAND_POINTING`, `CROSSHAIR` |
 | Mirror, mirror a copy, auto-orient and auto drains, fit | `FLIP_HORIZONTAL`, `COPY_SIMPLE`, `MAGIC_WAND`, `ARROWS_OUT` |
 | Prepare for print | `SEAL_CHECK` |
+| Pause | `PAUSE` |
 | Points, planes | `LINE_SEGMENT`, `PARALLELOGRAM` |
 | Pick, place, paint, shape | `CURSOR`, `PLUS`, `PAINT_BRUSH`, `WRENCH` |
 | Texture, text, combine | `CHECKERBOARD`, `TEXT_T`, `UNITE` |

@@ -19,6 +19,12 @@ pub(super) fn underside(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<
         .map(|(id, hit)| (id, hit.point))
 }
 
+/// The model an island whose floor is `floor` hangs from: the one a support stood there
+/// would hold up.
+pub fn island_owner(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<ObjectId> {
+    underside(scene, floor, layer_mm).map(|(id, _)| id)
+}
+
 impl SupportTool {
     /// Fills every painted patch on the plate with supports, and returns how many were
     /// put down: the rim and the inside each in the group of its chosen profile (ADR 0331).

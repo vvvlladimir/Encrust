@@ -3,12 +3,14 @@
 
 use anyhow::Result;
 
+use super::check::Checking;
+use super::save::Saving;
 use super::work::{Batch, Work};
 use crate::drain::DrainTool;
 use crate::i18n::tr;
 use crate::job::{
     DrainsJob, DrainsOutcome, HollowJob, HollowOutcome, OrientJob, OrientOutcome, RepairJob,
-    SupportJob, SupportOutcome,
+    SupportJob, SupportOutcome, TrapJob, TrapOutcome,
 };
 use crate::orient::stand_turned;
 use crate::repair::RepairState;
@@ -25,6 +27,9 @@ pub(super) enum Going {
     Hollow(HollowJob),
     Drain(DrainsJob),
     Supports(SupportJob, Side, Box<BuiltTo>),
+    Scan(TrapJob),
+    Check(Checking),
+    Save(Saving),
 }
 
 /// How a step's job ended: landed, with what it said, or stopped short with why.
@@ -102,6 +107,12 @@ impl Going {
                 let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), *side)?;
                 Self::Supports(job, *side, Box::new(built))
             }
+            Work::Scan if hollow.is_empty() => return Ok(None),
+            Work::Scan => Self::Scan(DrainTool::scan_on(scene, &hollow, layer_mm)?),
+            Work::Check { .. } => Self::Check(Checking::default()),
+            // Done where it is decided, in one frame, by `advance`.
+            Work::Arrange { .. } => return Ok(None),
+            Work::Save(saved) => Self::Save(Saving::new(saved, scene, machine)?),
         }))
     }
 
@@ -142,11 +153,23 @@ impl Going {
             Self::Hollow(job) => job.fraction(),
             Self::Drain(job) => Some(job.fraction()),
             Self::Supports(job, ..) => job.fraction(),
+            Self::Scan(job) => job.fraction(),
+            Self::Check(_) | Self::Save(_) => None,
         }
     }
 
     /// Lands the job into the plate once it has ended, and `None` while it runs.
-    pub(super) fn poll(&mut self, doc: &mut Doc, tools: &mut Tools) -> Option<Ended> {
+    pub(super) fn poll(
+        &mut self,
+        doc: &mut Doc,
+        tools: &mut Tools,
+        machine: &mut Machine,
+    ) -> Option<Ended> {
+        match self {
+            Self::Check(checking) => return checking.poll(doc, machine),
+            Self::Save(saving) => return saving.poll(&doc.scene, machine),
+            _ => {}
+        }
         let scene = &mut doc.scene;
         match self {
             Self::Orient(job) => Some(match job.poll()? {
@@ -179,6 +202,14 @@ impl Going {
                 }
                 SupportOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
             }),
+            Self::Scan(job) => Some(match job.poll()? {
+                TrapOutcome::Checked(models) => {
+                    let found = crate::drain::land_checked(scene, models);
+                    Ended::Landed(Status::Info(tr!("drain-found", count = found)))
+                }
+                TrapOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
+            }),
+            Self::Check(_) | Self::Save(_) => None,
         }
     }
 

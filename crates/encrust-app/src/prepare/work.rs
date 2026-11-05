@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use core_engine::{PREPARE_ORIENT, PREPARE_REPAIR};
 use core_geometry::{MendMethod, Scalar, Transform};
-use core_plate::{OrientGoal, OrientPreset};
+use core_plate::{ArrangeSettings, OrientGoal, OrientPreset};
 use core_recipe::{Resolved, StepKind};
 use core_volume::{HoleSize, HollowMode, HollowSettings, InfillSettings, RepairMethod, plate_down};
 
@@ -40,6 +40,25 @@ pub(super) enum Work {
         profile: String,
         side: Side,
     },
+    /// Drain's Check drainage, which `trapped` is read off.
+    Scan,
+    /// The stack measured as Check measures it, after `attempt` supportings of its islands.
+    Check {
+        attempt: u8,
+    },
+    Arrange {
+        spacing_mm: Scalar,
+    },
+    Save(Saved),
+}
+
+/// A save step's settings; a name or folder left out is the window's.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Saved {
+    pub folder: Option<String>,
+    /// A name template, ADR 0387's tags.
+    pub name: Option<String>,
+    pub send: bool,
 }
 
 /// A hollow step's settings.
@@ -63,6 +82,17 @@ pub(super) struct Batch {
     pub inside: Vec<ObjectId>,
 }
 
+impl Batch {
+    /// `work` on `ids`, none of them held up inside after.
+    pub(super) fn of(work: Work, ids: Vec<ObjectId>) -> Self {
+        Self {
+            work,
+            ids,
+            inside: Vec::new(),
+        }
+    }
+}
+
 impl Work {
     /// What step `kind` asks with `settings`.
     pub(super) fn of(kind: StepKind, settings: &Settings) -> Result<Self, NotYet> {
@@ -75,7 +105,7 @@ impl Work {
                 Self::Repair(word(settings, "method").map_or(PREPARE_REPAIR, method_of))
             }
             StepKind::Hollow => {
-                // TODO(step-4b): keep_solid_under_mm as core_volume's Keep solid, fitted.
+                // TODO(step-6): keep_solid_under_mm as core_volume's Keep solid, fitted.
                 if settings.contains_key("keep_solid_under_mm") {
                     return Err(NotYet(kind));
                 }
@@ -86,12 +116,18 @@ impl Work {
                 profile: text(settings, "profile").unwrap_or("auto").to_owned(),
                 side: Side::Outside,
             },
-            // TODO(step-4b): check and pause; TODO(step-6): arrange and save.
-            StepKind::Check
-            | StepKind::Arrange
-            | StepKind::Save
-            | StepKind::Gate
-            | StepKind::Pause => return Err(NotYet(kind)),
+            StepKind::Check => Self::Check { attempt: 0 },
+            StepKind::Arrange => Self::Arrange {
+                spacing_mm: number(settings, "spacing_mm")
+                    .unwrap_or(ArrangeSettings::default().clearance_mm),
+            },
+            StepKind::Save => Self::Save(Saved {
+                folder: text(settings, "folder").map(str::to_owned),
+                name: text(settings, "name").map(str::to_owned),
+                send: flag(settings, "send").unwrap_or(false),
+            }),
+            // A gate and a pause are decided, never run.
+            StepKind::Gate | StepKind::Pause => return Err(NotYet(kind)),
         })
     }
 
@@ -109,7 +145,19 @@ impl Work {
             Self::Supports {
                 side: Side::Inside, ..
             } => Step::Cavity,
+            Self::Scan => Step::Scan,
+            Self::Check { .. } => Step::Check,
+            Self::Arrange { .. } => Step::Arrange,
+            Self::Save(_) => Step::Save,
         }
+    }
+
+    /// Whether it works on the plate as a whole, once a step whatever its models.
+    pub(super) fn whole_plate(&self) -> bool {
+        matches!(
+            self,
+            Self::Check { .. } | Self::Arrange { .. } | Self::Save(_)
+        )
     }
 }
 
@@ -147,7 +195,7 @@ impl Hollowed {
 }
 
 fn drain_of(settings: &Settings) -> Result<Work, NotYet> {
-    // TODO(step-4b): plugs, as Drain's Lay plugs.
+    // TODO(step-6): plugs, as Drain's Lay plugs.
     if flag(settings, "plugs") == Some(true) {
         return Err(NotYet(StepKind::Drain));
     }

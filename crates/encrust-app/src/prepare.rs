@@ -5,8 +5,7 @@ use std::collections::VecDeque;
 
 use anyhow::{Result, bail};
 use core_geometry::{Quat, Scalar};
-use core_recipe::{Metrics, Plan, Setting, StepKind};
-use core_volume::HollowSettings;
+use core_recipe::{Metrics, Plan, StepKind};
 
 use crate::i18n::tr;
 use crate::job::Highest;
@@ -15,8 +14,11 @@ use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::tool_settings::ToolSettings;
 
+mod check;
 mod decided;
+mod measures;
 mod run;
+mod save;
 mod step;
 mod work;
 
@@ -45,6 +47,13 @@ pub enum Step {
     Supports,
     /// Supports inside a cavity, after those outside.
     Cavity,
+    /// Drain's Check drainage.
+    Scan,
+    Check,
+    Arrange,
+    Save,
+    /// Waiting for Continue.
+    Pause,
 }
 
 impl Step {
@@ -57,6 +66,11 @@ impl Step {
             Self::Drain => tr!("prepare-step-drain"),
             Self::Supports => tr!("prepare-step-supports"),
             Self::Cavity => tr!("prepare-step-cavity"),
+            Self::Scan => tr!("prepare-step-scan"),
+            Self::Check => tr!("prepare-step-check"),
+            Self::Arrange => tr!("prepare-step-arrange"),
+            Self::Save => tr!("prepare-step-save"),
+            Self::Pause => tr!("prepare-step-pause"),
         }
     }
 }
@@ -75,6 +89,10 @@ struct Run {
     plan: Plan,
     /// The wall `saves_ml` is reckoned at: the plan's hollow step's, else Hollow's default.
     wall_mm: Scalar,
+    /// The hollow step whose wall is an expression, worked out for each model in turn.
+    wall_at: Option<usize>,
+    /// What a pause says while the run waits for Continue.
+    paused: Option<String>,
     /// The plan step decided next, and the one in hand, by place.
     next: usize,
     index: usize,
@@ -110,11 +128,33 @@ impl Prepare {
         Some((run.step, run.shown.keep(share.min(1.0))))
     }
 
+    /// What the pause the run waits at says, while it waits.
+    pub fn paused(&self) -> Option<&str> {
+        self.run.as_ref()?.paused.as_deref()
+    }
+
+    /// Moves a paused run on to its next step.
+    pub fn resume(&mut self) {
+        if let Some(run) = &mut self.run {
+            run.paused = None;
+        }
+    }
+
     /// The step whose job is running now.
     #[cfg(test)]
     fn going(&self) -> Option<Step> {
         let run = self.run.as_ref()?;
         run.going.as_ref().map(|(batch, _)| batch.work.step())
+    }
+
+    /// How many times the check whose stack is being measured has supported islands.
+    #[cfg(test)]
+    fn attempt(&self) -> Option<u8> {
+        let run = self.run.as_ref()?;
+        match run.going.as_ref()?.0.work {
+            work::Work::Check { attempt } => Some(attempt),
+            _ => None,
+        }
     }
 
     /// What the last run decided for `object`, while it stands as that run left it.
@@ -213,8 +253,13 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
     if !doc.history.is_held() {
         return false;
     }
+    // Nothing to poll while paused: the frame after Continue moves it on.
+    if run.paused.is_some() {
+        tools.prepare.run = Some(run);
+        return false;
+    }
     if let Some((batch, mut going)) = run.going.take() {
-        let Some(ended) = going.poll(doc, tools) else {
+        let Some(ended) = going.poll(doc, tools, machine) else {
             run.going = Some((batch, going));
             tools.prepare.run = Some(run);
             return true;
@@ -222,6 +267,9 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
         match ended {
             Ended::Landed(said) => {
                 machine.status = said;
+                if let Err(error) = run.checked(doc, tools, machine, &batch) {
+                    return stop(doc, tools, machine, Status::failed(&error));
+                }
                 run.landed(&doc.scene, batch, going.profile());
             }
             Ended::Stopped(why) if run.skips() => {
@@ -271,18 +319,6 @@ fn finish(run: Run, doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bo
 
 fn unturned(object: &SceneObject) -> bool {
     object.transform.rotation.angle_between(Quat::IDENTITY) < UNTURNED_RAD
-}
-
-/// The wall the first hollow step of `plan` names outright, else Hollow's default.
-fn wall_of(plan: &Plan) -> Scalar {
-    let steps = plan.recipe().steps.iter();
-    steps
-        .filter(|step| step.kind == StepKind::Hollow)
-        .find_map(|step| match step.set.get("wall_mm") {
-            Some(Setting::Number(wall_mm)) => Some(*wall_mm),
-            _ => None,
-        })
-        .unwrap_or(HollowSettings::default().thickness_mm)
 }
 
 #[cfg(test)]

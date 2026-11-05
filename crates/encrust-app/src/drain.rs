@@ -6,7 +6,7 @@ use core_volume::HoleSize;
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
-use crate::job::{DrainsJob, TrapJob, TrapOutcome, TrapRequest, trap_tasks};
+use crate::job::{DrainsJob, Pockets, TrapJob, TrapOutcome, TrapRequest, TrapTask, trap_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
@@ -87,6 +87,19 @@ impl DrainTool {
         Ok(())
     }
 
+    /// The same check of `ids` alone, whatever is picked, handed back: what Prepare reads
+    /// `trapped` off.
+    pub fn scan_on(scene: &Scene, ids: &[ObjectId], layer_height_mm: Scalar) -> Result<TrapJob> {
+        let tasks: Vec<TrapTask> = scene.named(ids).map(TrapTask::of).collect();
+        if tasks.is_empty() {
+            bail!(tr!("drain-nothing-visible"));
+        }
+        Ok(TrapJob::spawn(TrapRequest {
+            tasks,
+            layer_height_mm,
+        }))
+    }
+
     /// Gives up on the check going, which leaves what the last one found.
     pub fn cancel(&mut self, status: &mut Status) {
         if self.job.take().is_some() {
@@ -117,12 +130,7 @@ impl DrainTool {
         self.job = None;
         match outcome {
             TrapOutcome::Checked(models) => {
-                let found: usize = models.iter().map(|model| model.trapped.len()).sum();
-                for model in models {
-                    if let Some(object) = scene.get_mut(model.id) {
-                        object.traps.set(model.trapped);
-                    }
-                }
+                let found = land_checked(scene, models);
                 self.checked = true;
                 *status = Status::Info(tr!("drain-found", count = found));
             }
@@ -212,6 +220,17 @@ fn size_of(state: &DrainState) -> HoleSize {
         shape: state.shape,
         turn_deg: state.turn_deg,
     }
+}
+
+/// Marks on each model checked the pockets the check found in it; answers how many in all.
+pub fn land_checked(scene: &mut Scene, models: Vec<Pockets>) -> usize {
+    let found = models.iter().map(|model| model.trapped.len()).sum();
+    for model in models {
+        if let Some(object) = scene.get_mut(model.id) {
+            object.traps.set(model.trapped);
+        }
+    }
+    found
 }
 
 /// The pockets of resin the last drainage check found in one model, in its own space.

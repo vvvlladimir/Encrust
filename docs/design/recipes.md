@@ -57,6 +57,10 @@ The window and the command line run every kind; what each kind sets:
 | `gate` | `stop_if`, `message` | ends the run, the plate put back |
 | `pause` | `message` | the window waits for Continue; the command line says it and goes on |
 
+`check`, `arrange` and `save` work on the plate as a whole, once a step. `save` writes into
+`folder`, `~` the home, else where the window saves sliced files, else the home; named by
+`name`, else the window's template; `send` fails the step with no printer to send to.
+
 `keep_solid_under_mm` keeps the wall solid wherever the model is thinner than that
 (`core_volume`'s Keep solid, fitted). `check`'s retry supports every island again while
 `while` holds, at most `max` times, `max` no more than 5.
@@ -98,8 +102,9 @@ step (the last column) is refused in a condition placed before that step.
 | `saves_ml`, `saves_share` | ADR 0393's estimate at the `hollow` step's wall, 2 mm without one | — |
 | `worth_hollowing` | the estimate past `MIN_SAVED_MM3` and `MIN_SAVED_SHARE` | — |
 | `fits` | it fits the build volume with what stands under it | — |
-| `trapped` | pockets of resin with no way out | `drain` or `check` |
-| `islands`, `peel_n`, `support_ml` | the cut stack | `check` |
+| `trapped` | pockets of resin with no way out, by Drain's Check drainage; 0 with no cavity | `drain` or `check` |
+| `islands` | the cut stack's islands the model hangs from, and those that hang from none | `check` |
+| `peel_n`, `support_ml` | the stack's hardest pull on the film, N; the model's supports, ml | `check` |
 
 A `[vars]` name may not shadow one of these.
 

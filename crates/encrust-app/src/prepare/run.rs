@@ -4,17 +4,16 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
-use core_engine::Hollowing;
-use core_recipe::{Decision, Metric, Metrics, Model, OnFail, Plan, Value, decide, measure};
-use core_volume::{hollowing_saves_mm3, placed_volume_and_area, raw_saving_mm3};
+use core_recipe::{Decision, Metric, OnFail, Plan, StepKind, decide};
 
+use super::measures::{hollowing_at, wall_of};
 use super::step::Going;
 use super::work::{self, Batch, NotYet, Settings, Work};
-use super::{IDLE_POLLS, Prepared, Run, Step, unturned, wall_of};
+use super::{IDLE_POLLS, Prepared, Run, Step};
 use crate::i18n::tr;
 use crate::job::Highest;
 use crate::plate::BuildPlate;
-use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::supports::Side;
@@ -32,14 +31,19 @@ pub(super) enum Next {
 enum Decided {
     Batches(Vec<Batch>),
     Stop(Status),
+    /// Wait for Continue, saying this.
+    Pause(String),
 }
 
 impl Run {
     pub(super) fn new(plan: Plan, ids: Vec<ObjectId>) -> Self {
+        let (wall_mm, wall_at) = wall_of(&plan);
         Self {
             prepared: ids.iter().map(|id| Prepared::new(*id)).collect(),
             ids,
-            wall_mm: wall_of(&plan),
+            wall_mm,
+            wall_at,
+            paused: None,
             plan,
             next: 0,
             index: 0,
@@ -70,26 +74,13 @@ impl Run {
     ) -> Result<Next> {
         loop {
             let Some(batch) = self.queue.pop_front() else {
-                if self.next >= self.plan.recipe().steps.len() {
-                    return Ok(Next::Done);
-                }
-                match self.decide_next(&doc.scene, &doc.plate)? {
-                    Decided::Batches(batches) => self.queue = batches.into(),
-                    Decided::Stop(why) => return Ok(Next::Stopped(why)),
+                if let Some(next) = self.refill(doc)? {
+                    return Ok(next);
                 }
                 continue;
             };
-            if let Work::DrainPoints { .. } = &batch.work {
-                self.drill_points(&mut doc.scene, &batch);
-                self.batch_ended();
-                return Ok(Next::Working);
-            }
-            if let Work::Supports {
-                side: Side::Outside,
-                ..
-            } = &batch.work
-            {
-                self.take_off_earlier(&mut doc.scene, &batch.ids);
+            if let Some(next) = self.in_frame(&batch, doc, machine) {
+                return Ok(next);
             }
             match Going::start(&batch, doc, tools, machine) {
                 Ok(Some(going)) => {
@@ -104,6 +95,81 @@ impl Run {
                 }
                 Err(error) => return Err(error),
             }
+        }
+    }
+
+    /// Queues the batches of the next plan step, or says where the run stands instead: at
+    /// its end, stopped by a gate, or waiting at a pause.
+    fn refill(&mut self, doc: &Doc) -> Result<Option<Next>> {
+        if self.next >= self.plan.recipe().steps.len() {
+            return Ok(Some(Next::Done));
+        }
+        Ok(match self.decide_next(&doc.scene, &doc.plate)? {
+            Decided::Batches(batches) => {
+                self.queue = batches.into();
+                None
+            }
+            Decided::Stop(why) => Some(Next::Stopped(why)),
+            Decided::Pause(message) => {
+                self.step = Step::Pause;
+                self.paused = Some(message);
+                Some(Next::Working)
+            }
+        })
+    }
+
+    /// Does what `batch` asks that takes no job, in this frame, answering where that leaves
+    /// the run; `None` where its job is still to start.
+    fn in_frame(&mut self, batch: &Batch, doc: &mut Doc, machine: &mut Machine) -> Option<Next> {
+        match &batch.work {
+            Work::DrainPoints { .. } => {
+                self.drill_points(&mut doc.scene, batch);
+                self.batch_ended();
+                Some(Next::Working)
+            }
+            Work::Arrange { spacing_mm } => {
+                let said = crate::arrange::arrange_plate(&mut doc.scene, &doc.plate, *spacing_mm);
+                let stopped = self.ended_by(said, &mut machine.status);
+                Some(stopped.map_or(Next::Working, Next::Stopped))
+            }
+            Work::Supports {
+                side: Side::Outside,
+                ..
+            } => {
+                self.take_off_earlier(&mut doc.scene, &batch.ids);
+                None
+            }
+            Work::Scan => {
+                self.note_solid(&doc.scene, &batch.ids);
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Ends a step done in the frame it was reached, as `said` tells: on to the next, or
+    /// the run's end when it failed and does not skip.
+    fn ended_by(&mut self, said: Status, status: &mut Status) -> Option<Status> {
+        if said.is_error() && !self.skips() {
+            return Some(said);
+        }
+        if said.is_error() {
+            self.queue.clear();
+        }
+        *status = said;
+        self.batch_ended();
+        None
+    }
+
+    /// No pocket to trap resin in a model with no cavity: `trapped` is nought.
+    fn note_solid(&mut self, scene: &Scene, ids: &[ObjectId]) {
+        let solid: Vec<ObjectId> = scene
+            .named(ids)
+            .filter(|object| !object.hollow.is_hollow())
+            .map(|object| object.id)
+            .collect();
+        for id in solid {
+            self.note(id, Metric::Trapped, 0.0);
         }
     }
 
@@ -128,8 +194,10 @@ impl Run {
                     return Ok(Decided::Stop(Status::Error(tr!("prepare-gate-stopped"))));
                 }
                 Decision::Stop { message, .. } => return Ok(Decided::Stop(Status::Error(message))),
-                // TODO(step-4b): a pause waits for Continue.
-                Decision::Pause { .. } => return Ok(Decided::Stop(not_yet(NotYet(kind)))),
+                Decision::Pause { message } if message.is_empty() => {
+                    return Ok(Decided::Pause(tr!("prepare-paused")));
+                }
+                Decision::Pause { message } => return Ok(Decided::Pause(message)),
                 Decision::Skip { .. } | Decision::Disabled => {}
             }
         }
@@ -137,49 +205,6 @@ impl Run {
             Ok(batches) => Ok(Decided::Batches(batches)),
             Err(not) => Ok(Decided::Stop(not_yet(not))),
         }
-    }
-
-    /// Every variable of `object` as it stands, with what the run measured on it since.
-    fn metrics_of(&self, object: &SceneObject, plate: &BuildPlate) -> Metrics {
-        let fits = crate::plate::bounds(object).is_some_and(|bounds| plate.fit(&bounds).fits());
-        let model = Model {
-            mesh: &object.mesh,
-            transform: &object.transform,
-            diagnostics: &object.summary.diagnostics,
-            turned: !unturned(object),
-            hollow: object.hollow.is_hollow(),
-            fits,
-        };
-        let mut metrics = measure(&model, self.wall_mm);
-        let earlier = self.measured.iter().find(|(id, _)| *id == object.id);
-        if let Some((_, earlier)) = earlier {
-            for metric in Metric::ALL {
-                if let Some(value) = earlier.get(metric) {
-                    metrics.set(metric, value);
-                }
-            }
-        }
-        metrics
-    }
-
-    /// Reckons the steps the run takes in all: those done, the one in hand, and each later
-    /// one some model would run as the plate stands now, or that reads what is not known yet.
-    fn recount(&mut self, scene: &Scene, plate: &BuildPlate) {
-        let metrics: Vec<Metrics> = scene
-            .named(&self.ids)
-            .map(|object| self.metrics_of(object, plate))
-            .collect();
-        let later = (self.next..self.plan.recipe().steps.len())
-            .filter(|index| {
-                metrics.iter().any(|metrics| {
-                    matches!(
-                        decide(&self.plan, *index, metrics),
-                        Ok(Decision::Run { .. }) | Err(_)
-                    )
-                })
-            })
-            .count();
-        self.steps = self.done + 1 + later;
     }
 
     /// Ends the batch in hand, and the step with it once it has no batch left.
@@ -231,12 +256,19 @@ impl Run {
                 prepared.landed(step, object, profile.unwrap_or_default());
             }
         }
-        if let Work::DrainAuto { .. } = batch.work {
-            for object in scene.named(&batch.ids) {
-                let trapped = object.traps.found().len() as f32;
-                self.measured_of(object.id)
-                    .set(Metric::Trapped, Value::Number(trapped));
+        if let Work::DrainAuto { .. } | Work::Scan = batch.work {
+            let found: Vec<(ObjectId, usize)> = scene
+                .named(&batch.ids)
+                .filter(|object| object.hollow.is_hollow())
+                .map(|object| (object.id, object.traps.found().len()))
+                .collect();
+            for (id, trapped) in found {
+                self.note(id, Metric::Trapped, trapped as f32);
             }
+        }
+        if let Work::DrainPoints { .. } = batch.work {
+            self.queue
+                .push_front(Batch::of(Work::Scan, batch.ids.clone()));
         }
         if let Work::Supports {
             profile,
@@ -245,27 +277,13 @@ impl Run {
         {
             self.supported.extend(&batch.ids);
             if !batch.inside.is_empty() {
-                self.queue.push_front(Batch {
-                    work: Work::Supports {
-                        profile,
-                        side: Side::Inside,
-                    },
-                    ids: batch.inside,
-                    inside: Vec::new(),
-                });
+                let inside = Work::Supports {
+                    profile,
+                    side: Side::Inside,
+                };
+                self.queue.push_front(Batch::of(inside, batch.inside));
             }
         }
-    }
-
-    fn measured_of(&mut self, id: ObjectId) -> &mut Metrics {
-        let at = match self.measured.iter().position(|(held, _)| *held == id) {
-            Some(at) => at,
-            None => {
-                self.measured.push((id, Metrics::default()));
-                self.measured.len() - 1
-            }
-        };
-        &mut self.measured[at].1
     }
 
     /// Takes off the supports an earlier supports step of this run stood `ids` on.
@@ -293,11 +311,25 @@ impl Run {
     }
 }
 
-/// The runs of step `kind`, gathered by the work each asks.
-fn batches(
-    kind: core_recipe::StepKind,
-    runs: Vec<(ObjectId, Settings)>,
-) -> Result<Vec<Batch>, NotYet> {
+/// The runs of step `kind`, gathered by the work each asks; a step on the whole plate is
+/// one batch, as its first model asks it, and a check reads the drainage first.
+fn batches(kind: StepKind, runs: Vec<(ObjectId, Settings)>) -> Result<Vec<Batch>, NotYet> {
+    let mut batches = gathered(kind, runs)?;
+    if batches
+        .first()
+        .is_some_and(|first| first.work.whole_plate())
+    {
+        let ids: Vec<ObjectId> = batches.iter().flat_map(|batch| batch.ids.clone()).collect();
+        batches.truncate(1);
+        batches[0].ids.clone_from(&ids);
+        if kind == StepKind::Check {
+            batches.insert(0, Batch::of(Work::Scan, ids));
+        }
+    }
+    Ok(batches)
+}
+
+fn gathered(kind: StepKind, runs: Vec<(ObjectId, Settings)>) -> Result<Vec<Batch>, NotYet> {
     let mut batches: Vec<Batch> = Vec::new();
     for (id, settings) in runs {
         let work = Work::of(kind, &settings)?;
@@ -319,14 +351,4 @@ fn batches(
 
 fn not_yet(NotYet(kind): NotYet) -> Status {
     Status::Error(tr!("prepare-step-not-yet", step = kind.name()))
-}
-
-/// The wall `object` is hollowed at, and the resin ADR 0393 reckons it saves there.
-fn hollowing_at(object: &SceneObject, wall_mm: f32) -> Hollowing {
-    let linear = object.transform.linear();
-    let saves_mm3 = hollowing_saves_mm3(&object.mesh, linear, wall_mm).unwrap_or_else(|| {
-        let (volume_mm3, area_mm2) = placed_volume_and_area(&object.mesh, linear);
-        raw_saving_mm3(volume_mm3, area_mm2, wall_mm).max(0.0) as f32
-    });
-    Hollowing { wall_mm, saves_mm3 }
 }

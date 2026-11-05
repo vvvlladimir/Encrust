@@ -128,8 +128,11 @@ stops the run and puts the plate back. Like `--prepare`, it turns a model you ha
 by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
 saves enough resin, drills the holes that drain it with a vent, and stands it on the
 catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
-`--rotate` keeps it. The notice and the section name the step under way over a bar;
-**Cancel** stops it and leaves the plate as it was, and one undo takes a finished run back.
+`--rotate` keeps it. A recipe's other steps run as their tools do: `check` measures the
+layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
+plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
+`pause` waits for **Continue** on the notice. The notice and the section name the step under
+way over a bar; **Cancel** stops it and leaves the plate as it was, and one undo takes a finished run back.
 While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait.
 Select then lists what was decided for the model in the card.
 

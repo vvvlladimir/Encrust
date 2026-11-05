@@ -168,7 +168,7 @@ impl OrientTool {
         status: &mut Status,
     ) -> Result<()> {
         let tasks = orient_tasks(scene, only, plan_of);
-        let asked = self.asking(tasks, self.settings.preset, machine)?;
+        let asked = self.asking(tasks, self.settings, machine)?;
         if self.found_for(&asked) {
             *status = self.step(scene, plate);
             return Ok(());
@@ -178,7 +178,7 @@ impl OrientTool {
     }
 
     /// A fresh search for the way `ids` print best by `preset`, tilted at most `max_tilt_deg`,
-    /// whatever the panel is set to and the last run found, handed back: what Prepare turns by.
+    /// the rest the engine's defaults, never the panel's, handed back: what Prepare turns by.
     pub fn start_on(
         &mut self,
         scene: &Scene,
@@ -194,22 +194,24 @@ impl OrientTool {
             .named(ids)
             .map(|object| OrientTask::of(object, plan_of(object)))
             .collect();
-        let asked = self.asking(tasks, preset, machine)?;
+        let settings = OrientSettings {
+            preset,
+            max_tilt_deg,
+            ..OrientSettings::default()
+        };
+        let asked = self.asking(tasks, settings, machine)?;
         Ok(OrientJob::spawn(OrientRequest {
             tasks: asked.tasks,
-            settings: OrientSettings {
-                max_tilt_deg,
-                ..asked.settings
-            },
+            settings: asked.settings,
             proof: asked.proof,
         }))
     }
 
-    /// What a run over `tasks` by `preset` asks, printed for `machine` where there is one.
+    /// What a run over `tasks` by `settings` asks, printed for `machine` where there is one.
     fn asking(
         &mut self,
         tasks: Vec<OrientTask>,
-        preset: OrientPreset,
+        settings: OrientSettings,
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
     ) -> Result<Asked> {
         if tasks.is_empty() {
@@ -219,14 +221,13 @@ impl OrientTool {
         Ok(Asked {
             tasks,
             settings: OrientSettings {
-                preset,
                 on_supports: true,
                 rest_on_plate: true,
                 build_volume_mm: machine.map(|(printer, _)| {
                     let volume = &printer.build_volume;
                     Vec3::new(volume.x, volume.y, volume.z)
                 }),
-                ..self.settings
+                ..settings
             },
             proof: machine.map(|(printer, material)| Proof {
                 printer: printer.clone(),

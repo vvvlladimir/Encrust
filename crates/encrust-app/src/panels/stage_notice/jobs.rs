@@ -3,7 +3,7 @@
 use super::{Stack, remembered};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::ui::job_notice;
+use crate::ui::{NoticeReply, icon, job_notice, notice_card, theme};
 
 /// One card per job that reports progress here, the latest to start nearest the foot; a
 /// job that ended fades out by `CLOSE` as it last stood.
@@ -26,17 +26,47 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "measure-walk", shown) {
         window.tools.measure_walk.cancel(&mut window.tools.measure);
     }
-    let prepare = window.tools.prepare.progress().map(|(step, share)| {
+    let paused = window.tools.prepare.paused().is_some();
+    let prepare = window.tools.prepare.progress().filter(|_| !paused);
+    let prepare = prepare.map(|(step, share)| {
         let label = tr!("notice-preparing", step = step.label());
         (label, Some(share), false)
     });
     if job_card(stack, "prepare", prepare) {
         crate::prepare::cancel(window.doc, window.tools, window.machine);
     }
+    paused_card(stack, window);
     let network = window.machine.network.job.as_ref();
     let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
     if job_card(stack, "network", shown) {
         network.inspect(|job| job.cancel());
+    }
+}
+
+/// A run waiting at a pause: what the pause says, Continue, and Cancel as its close.
+fn paused_card(stack: &mut Stack, window: &mut Window) {
+    let Some(message) = window.tools.prepare.paused().map(str::to_owned) else {
+        return;
+    };
+    let colors = theme::colors();
+    let (go_on, cancel) = (tr!("notice-prepare-continue"), tr!("common-cancel"));
+    let shown = stack.card("prepare-paused", |ui| {
+        notice_card(
+            ui,
+            icon::PAUSE,
+            colors.accent_soft,
+            &message,
+            None,
+            Some(&go_on),
+            Some(&cancel),
+        )
+    });
+    let NoticeReply { acted, closed } = shown.inner;
+    if acted {
+        window.tools.prepare.resume();
+        stack.ctx.request_repaint();
+    } else if closed {
+        crate::prepare::cancel(window.doc, window.tools, window.machine);
     }
 }
 

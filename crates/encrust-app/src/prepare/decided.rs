@@ -75,7 +75,7 @@ impl Prepared {
             Step::Supports => {
                 self.supports = (!object.supports.is_empty()).then(|| profile.to_owned());
             }
-            Step::Cavity => {}
+            Step::Cavity | Step::Scan | Step::Check | Step::Arrange | Step::Save | Step::Pause => {}
         }
     }
 

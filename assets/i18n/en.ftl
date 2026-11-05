@@ -1479,6 +1479,15 @@ prepare-step-hollow = Hollowing
 prepare-step-drain = Looking for drain holes
 prepare-step-supports = Placing supports
 prepare-step-cavity = Placing supports in the cavity
+prepare-step-scan = Checking drainage
+prepare-step-check = Checking the layers
+prepare-step-arrange = Arranging the plate
+prepare-step-save = Saving the file
+prepare-step-pause = Waiting for you
+# What a paused run says when the recipe's pause gives no message of its own.
+prepare-paused = Prepare for print is paused
+prepare-check-failed = The layers could not be checked; the plate is as it was
+prepare-save-no-printer = No printer to send the file to; the plate is as it was
 prepare-cancelled = Prepare for print cancelled; the plate is as it was
 prepare-gate-stopped = Prepare for print stopped where the recipe says to; the plate is as it was
 prepare-step-not-yet = The recipe's { $step } step cannot run here yet; the plate is as it was
@@ -1767,6 +1776,8 @@ notice-cutting-preview = Cutting the layers to preview
 notice-finding-walk = Finding the shortest way along the surface
 # $step is one of the prepare-step messages: what the run is doing now.
 notice-preparing = Preparing for print: { $step }
+# Moves a paused Prepare for print on to its next step.
+notice-prepare-continue = Continue
 notice-broken-one = { $name } is broken
 notice-broken-several = { $count } models on this plate are broken
 notice-repair = Repair

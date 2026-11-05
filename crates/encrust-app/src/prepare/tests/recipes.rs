@@ -4,7 +4,7 @@ use core_recipe::{Recipe, validate};
 
 use super::*;
 
-fn plan(steps: &str) -> Plan {
+pub(super) fn plan(steps: &str) -> Plan {
     let text = format!("name = \"test\"\n{steps}");
     validate(Recipe::from_toml(&text).expect("the fixture reads")).expect("the fixture is valid")
 }
@@ -134,9 +134,70 @@ fn supports_again_replace_the_earlier_ones() {
 fn a_step_the_window_cannot_run_yet_puts_the_plate_back() {
     let (mut bench, id) = Bench::with(large_cube());
     let before = standing(bench.object(id));
-    bench.start_by("[[step]]\ndo = \"hollow\"\n[[step]]\ndo = \"check\"\n");
+    bench.start_by("[[step]]\ndo = \"hollow\"\nset = { keep_solid_under_mm = 2.0 }\n");
     bench.run_to_end();
-    let said = Status::Error(tr!("prepare-step-not-yet", step = "check"));
+    let said = Status::Error(tr!("prepare-step-not-yet", step = "hollow"));
     assert_eq!(bench.machine.status, said);
     assert_eq!(standing(bench.object(id)), before);
+}
+
+#[test]
+fn a_drain_at_points_measures_what_stays_trapped() {
+    let (mut bench, _) = Bench::with(large_cube());
+    bench.start_by(
+        "[[step]]\ndo = \"hollow\"\n\
+         [[step]]\ndo = \"drain\"\nset = { at = \"points\", points = [[0.5, 0.5, 0.0]] }\n\
+         [[step]]\ndo = \"gate\"\nstop_if = \"trapped >= 0\"\nmessage = \"known\"\n",
+    );
+    bench.run_to_end();
+    assert_eq!(
+        bench.machine.status,
+        Status::Error("known".into()),
+        "the gate read trapped"
+    );
+}
+
+#[test]
+fn a_wall_worked_out_by_an_expression_is_the_one_saves_ml_reads() {
+    let (mut bench, _) = Bench::with(large_cube());
+    // 40³ less 6 · 40² times the 5 mm wall is 16 ml; at Hollow's 2 mm it would be 44.8 ml.
+    bench.start_by(
+        "[[step]]\ndo = \"gate\"\nstop_if = \"saves_ml < 20\"\nmessage = \"thick\"\n\
+         [[step]]\ndo = \"hollow\"\nset = { wall_mm = \"= clamp(height_mm / 8, 1, 6)\" }\n",
+    );
+    bench.run_to_end();
+    assert_eq!(bench.machine.status, Status::Error("thick".into()));
+}
+
+/// An egg lying tilted: no flat face to lay it on, so the search weighs what it samples.
+fn tilted_egg() -> Mesh {
+    let ball = core_geometry::ball(Vec3::ZERO, 10.0, 12, 24);
+    let turn = Transform {
+        rotation: Quat::from_rotation_x(1.0) * Quat::from_rotation_y(0.4),
+        scale: Vec3::new(3.0, 1.5, 1.0),
+        ..Transform::default()
+    };
+    core_geometry::transform_mesh(&ball, turn)
+}
+
+#[test]
+fn orient_takes_the_engines_settings_whatever_the_orient_panel_holds() {
+    let turned = |panel: core_plate::OrientSettings| {
+        let (mut bench, id) = Bench::with(tilted_egg());
+        bench.tools.orient.settings = panel;
+        bench.start_by("[[step]]\ndo = \"orient\"\nset = { goal = \"fewest-supports\" }\n");
+        bench.run_to_end();
+        bench.object(id).transform.rotation
+    };
+    let engine = turned(core_plate::OrientSettings::default());
+    let sampling_nothing = core_plate::OrientSettings {
+        samples: 0,
+        shortlist: 0,
+        ..core_plate::OrientSettings::default()
+    };
+    let changed = turned(sampling_nothing);
+    assert!(
+        engine.angle_between(changed) < UNTURNED_RAD,
+        "turned alike, {engine} and {changed}"
+    );
 }
