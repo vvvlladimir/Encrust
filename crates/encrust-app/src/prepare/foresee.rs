@@ -21,11 +21,24 @@ pub struct Foresight {
     seen: Option<(Key, Vec<Vec<Foreseen>>)>,
 }
 
-/// What a foresight was taken of: the plan, and each model as it stood.
+/// What a foresight was taken of: the plan, the plate, and each model as it stood.
 #[derive(Debug, Clone, PartialEq)]
 struct Key {
     plan: Plan,
-    models: Vec<(ObjectId, usize, Transform, bool, bool, bool)>,
+    plate: BuildPlate,
+    models: Vec<ModelKey>,
+}
+
+/// A model as a foresight took it, by what changes its metrics: its mesh, placing, cavity,
+/// turn and the supports it stands on, whose bounds are only read when it is measured.
+#[derive(Debug, Clone, PartialEq)]
+struct ModelKey {
+    id: ObjectId,
+    mesh: usize,
+    transform: Transform,
+    hollow: bool,
+    unturned: bool,
+    supports: Vec<usize>,
 }
 
 /// One model as a measure on another thread takes it.
@@ -80,7 +93,8 @@ impl Foresight {
         let objects: Vec<&SceneObject> = scene.named(ids).collect();
         let key = Key {
             plan: plan.clone(),
-            models: objects.iter().map(|object| key_of(object, plate)).collect(),
+            plate: plate.clone(),
+            models: objects.iter().map(|object| key_of(object)).collect(),
         };
         if self.asked.as_ref() != Some(&key) {
             let taken: Vec<Taken> = objects.iter().map(|o| Taken::of(o, plate)).collect();
@@ -99,18 +113,20 @@ impl Foresight {
     }
 }
 
-fn key_of(
-    object: &SceneObject,
-    plate: &BuildPlate,
-) -> (ObjectId, usize, Transform, bool, bool, bool) {
-    (
-        object.id,
-        Arc::as_ptr(&object.mesh) as usize,
-        object.transform,
-        object.hollow.is_hollow(),
-        unturned(object),
-        fits(object, plate),
-    )
+fn key_of(object: &SceneObject) -> ModelKey {
+    ModelKey {
+        id: object.id,
+        mesh: Arc::as_ptr(&object.mesh) as usize,
+        transform: object.transform,
+        hollow: object.hollow.is_hollow(),
+        unturned: unturned(object),
+        supports: object
+            .supports
+            .drawn()
+            .iter()
+            .map(|group| Arc::as_ptr(&group.mesh) as usize)
+            .collect(),
+    }
 }
 
 fn foresee(plan: &Plan, taken: &[Taken]) -> Vec<Vec<Foreseen>> {
