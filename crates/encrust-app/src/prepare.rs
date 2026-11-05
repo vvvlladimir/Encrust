@@ -304,27 +304,11 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
         tools.prepare.run = Some(run);
         return false;
     }
-    if let Some((batch, mut going)) = run.going.take() {
-        let Some(ended) = going.poll(doc, tools, machine) else {
-            run.going = Some((batch, going));
+    if let Some(going) = poll_going(&mut run, doc, tools, machine) {
+        if going {
             tools.prepare.run = Some(run);
-            return true;
-        };
-        match ended {
-            Ended::Landed(said) => {
-                machine.status = said;
-                if let Err(error) = run.checked(doc, tools, machine, &batch) {
-                    return stop(doc, tools, machine, Status::failed(&error));
-                }
-                run.landed(&doc.scene, batch, going.built());
-            }
-            Ended::Stopped(why) if run.skips() => {
-                machine.status = why;
-                run.queue.clear();
-            }
-            Ended::Stopped(why) => return stop(doc, tools, machine, why),
         }
-        run.batch_ended();
+        return going;
     }
     run.leave_unplugged(doc, tools, machine);
     if run.settling(doc, settled) {
@@ -342,6 +326,37 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
         Ok(Next::Stopped(why)) => stop(doc, tools, machine, why),
         Err(error) => stop(doc, tools, machine, Status::failed(&error)),
     }
+}
+
+/// Lands the step's job once it has ended. Answers whether the run still goes when the
+/// frame ends here: its job still running, or the run stopped; `None` to move it on.
+fn poll_going(
+    run: &mut Run,
+    doc: &mut Doc,
+    tools: &mut Tools,
+    machine: &mut Machine,
+) -> Option<bool> {
+    let (batch, mut going) = run.going.take()?;
+    let Some(ended) = going.poll(doc, tools, machine) else {
+        run.going = Some((batch, going));
+        return Some(true);
+    };
+    match ended {
+        Ended::Landed(said) => {
+            machine.status = said;
+            if let Err(error) = run.checked(doc, tools, machine, &batch) {
+                return Some(stop(doc, tools, machine, Status::failed(&error)));
+            }
+            run.landed(&doc.scene, batch, going.built());
+        }
+        Ended::Stopped(why) if run.skips() => {
+            machine.status = why;
+            run.queue.clear();
+        }
+        Ended::Stopped(why) => return Some(stop(doc, tools, machine, why)),
+    }
+    run.batch_ended();
+    None
 }
 
 /// Ends the run short: the plate as it was before it, and `why` said.

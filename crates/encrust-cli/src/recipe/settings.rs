@@ -5,7 +5,7 @@ use clap::ValueEnum;
 use core_recipe::{Resolved, StepKind};
 
 use super::prepared::profile_name;
-use crate::hollowing::Mode;
+use crate::hollowing::{HollowArgs, Mode};
 use crate::stage::Shaping;
 
 pub(super) type Settings = core_recipe::ResolvedSettings;
@@ -38,12 +38,6 @@ pub(super) fn typed_over(kind: StepKind, mut settings: Settings, shaping: &Shapi
     let mut set = |key: &str, value: Resolved| {
         settings.insert(key.to_owned(), value);
     };
-    let word = |name: Option<clap::builder::PossibleValue>| {
-        Resolved::Word(
-            name.map(|name| name.get_name().to_owned())
-                .unwrap_or_default(),
-        )
-    };
     let (import, hollow) = (&shaping.import, &shaping.hollow);
     match kind {
         StepKind::Orient if import.transform.orient => {
@@ -60,33 +54,8 @@ pub(super) fn typed_over(kind: StepKind, mut settings: Settings, shaping: &Shapi
                 set("method", word(method.to_possible_value()));
             }
         }
-        StepKind::Hollow => {
-            if let Some(wall_mm) = hollow.thickness_mm {
-                set("wall_mm", Resolved::Number(wall_mm));
-            }
-            if matches!(hollow.mode, Mode::External) {
-                set("mode", Resolved::Word("outside".to_owned()));
-            } else if hollow.open_floor {
-                set("mode", Resolved::Word("open-floor".to_owned()));
-            }
-            if hollow.infill.is_some() {
-                set("infill", Resolved::Bool(true));
-            }
-            if let Some(under_mm) = hollow.keep_solid.under_mm {
-                set("keep_solid_under_mm", Resolved::Number(under_mm));
-            }
-        }
-        StepKind::Drain => {
-            if hollow.no_vent {
-                set("vent", Resolved::Bool(false));
-            }
-            if hollow.auto() {
-                set("at", Resolved::Word("auto".to_owned()));
-            }
-            if hollow.plugs {
-                set("plugs", Resolved::Bool(true));
-            }
-        }
+        StepKind::Hollow => hollow_over(hollow, &mut set),
+        StepKind::Drain => drain_over(hollow, &mut set),
         StepKind::Supports => {
             if let Some(plan) = &shaping.supports {
                 set("profile", Resolved::Text(profile_name(plan)));
@@ -98,4 +67,43 @@ pub(super) fn typed_over(kind: StepKind, mut settings: Settings, shaping: &Shapi
         _ => {}
     }
     settings
+}
+
+/// A flag's value as the word a recipe names it by.
+fn word(name: Option<clap::builder::PossibleValue>) -> Resolved {
+    Resolved::Word(
+        name.map(|name| name.get_name().to_owned())
+            .unwrap_or_default(),
+    )
+}
+
+/// What the hollow flags shape of a hollow step.
+fn hollow_over(hollow: &HollowArgs, set: &mut impl FnMut(&str, Resolved)) {
+    if let Some(wall_mm) = hollow.thickness_mm {
+        set("wall_mm", Resolved::Number(wall_mm));
+    }
+    if matches!(hollow.mode, Mode::External) {
+        set("mode", Resolved::Word("outside".to_owned()));
+    } else if hollow.open_floor {
+        set("mode", Resolved::Word("open-floor".to_owned()));
+    }
+    if hollow.infill.is_some() {
+        set("infill", Resolved::Bool(true));
+    }
+    if let Some(under_mm) = hollow.keep_solid.under_mm {
+        set("keep_solid_under_mm", Resolved::Number(under_mm));
+    }
+}
+
+/// What the drain flags shape of a drain step.
+fn drain_over(hollow: &HollowArgs, set: &mut impl FnMut(&str, Resolved)) {
+    if hollow.no_vent {
+        set("vent", Resolved::Bool(false));
+    }
+    if hollow.auto() {
+        set("at", Resolved::Word("auto".to_owned()));
+    }
+    if hollow.plugs {
+        set("plugs", Resolved::Bool(true));
+    }
 }

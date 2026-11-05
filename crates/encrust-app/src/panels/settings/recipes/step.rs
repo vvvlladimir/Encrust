@@ -34,15 +34,20 @@ pub(super) fn fields(
     {
         field_error(ui, &error.to_string());
     }
-    let error = |field: Field| checked.at(&field).map(ToString::to_string);
-    condition_row(
-        ui,
-        &tr!("recipes-when"),
-        &mut step.when,
-        error(Field::When(index)).as_deref(),
-    );
+    let why = checked.at(&Field::When(index)).map(ToString::to_string);
+    condition_row(ui, &tr!("recipes-when"), &mut step.when, why.as_deref());
     on_fail(ui, &mut step.on_fail);
     settings_rows(ui, step.kind, &mut step.set, (index, None), checked);
+    own_fields(ui, step, index, checked);
+    if !step.kind.settings().is_empty() {
+        choose(ui, step.kind, &mut step.choose, index, checked);
+    }
+    asked
+}
+
+/// What a gate, a pause or a check adds to the step's fields.
+fn own_fields(ui: &mut Ui, step: &mut StepForm, index: usize, checked: &Checked) {
+    let error = |field: Field| checked.at(&field).map(ToString::to_string);
     match step.kind {
         StepKind::Gate => {
             let why = error(Field::StopIf(index));
@@ -60,10 +65,6 @@ pub(super) fn fields(
         StepKind::Check => retry(ui, &mut step.retry, error(Field::RetryWhile(index))),
         _ => {}
     }
-    if !step.kind.settings().is_empty() {
-        choose(ui, step.kind, &mut step.choose, index, checked);
-    }
-    asked
 }
 
 /// Move up, move down and remove, at the right of the step's first row.

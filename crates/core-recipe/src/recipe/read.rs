@@ -108,40 +108,16 @@ fn read_step(index: usize, item: &Value) -> Result<Step, RecipeError> {
     let Value::Table(table) = item else {
         return Err(toml_error(format!("step {index} must be a table")));
     };
-    let kind = match table.get("do") {
-        Some(Value::String(name)) => {
-            StepKind::from_name(name).ok_or_else(|| RecipeError::UnknownStep {
-                step: index,
-                name: name.clone(),
-            })?
-        }
-        Some(other) => return Err(bad(index, "do", "a step's name", other)),
-        None => return Err(toml_error(format!("step {index} has no `do`"))),
+    let kind = read_kind(index, table)?;
+    refuse_unknown_keys(index, kind, table)?;
+    let read_condition = |key: &str| {
+        table
+            .get(key)
+            .map(|value| condition(index, key, value))
+            .transpose()
     };
-    let unknown = |key: &str| RecipeError::UnknownSetting {
-        step: index,
-        kind,
-        key: key.to_owned(),
-    };
-    for key in table.keys() {
-        let taken = match key.as_str() {
-            "message" => matches!(kind, StepKind::Gate | StepKind::Pause),
-            "stop_if" => kind == StepKind::Gate,
-            "retry" => kind == StepKind::Check,
-            other => STEP_KEYS.contains(&other),
-        };
-        if !taken {
-            return Err(unknown(key));
-        }
-    }
-    let when = table
-        .get("when")
-        .map(|value| condition(index, "when", value))
-        .transpose()?;
-    let stop_if = table
-        .get("stop_if")
-        .map(|value| condition(index, "stop_if", value))
-        .transpose()?;
+    let when = read_condition("when")?;
+    let stop_if = read_condition("stop_if")?;
     if kind == StepKind::Gate && stop_if.is_none() {
         return Err(RecipeError::MissingSetting {
             step: index,
@@ -151,26 +127,66 @@ fn read_step(index: usize, item: &Value) -> Result<Step, RecipeError> {
     }
     Ok(Step {
         kind,
-        enabled: match table.get("enabled") {
-            None => true,
-            Some(Value::Boolean(on)) => *on,
-            Some(other) => return Err(bad(index, "enabled", "true or false", other)),
-        },
+        enabled: read_enabled(index, table.get("enabled"))?,
         when,
         set: read_settings(index, kind, table.get("set"))?,
         choose: read_choose(index, kind, table.get("choose"))?,
         on_fail: read_on_fail(index, table.get("on_fail"))?,
-        message: match table.get("message") {
-            None => None,
-            Some(Value::String(text)) => Some(text.clone()),
-            Some(other) => return Err(bad(index, "message", "text", other)),
-        },
+        message: read_message(index, table.get("message"))?,
         stop_if,
         retry: table
             .get("retry")
             .map(|value| read_retry(index, value))
             .transpose()?,
     })
+}
+
+/// The kind of step `index` its `do` names.
+fn read_kind(index: usize, table: &Table) -> Result<StepKind, RecipeError> {
+    match table.get("do") {
+        Some(Value::String(name)) => {
+            StepKind::from_name(name).ok_or_else(|| RecipeError::UnknownStep {
+                step: index,
+                name: name.clone(),
+            })
+        }
+        Some(other) => Err(bad(index, "do", "a step's name", other)),
+        None => Err(toml_error(format!("step {index} has no `do`"))),
+    }
+}
+
+/// Refuses a key no step takes, or one a step of `kind` does not.
+fn refuse_unknown_keys(index: usize, kind: StepKind, table: &Table) -> Result<(), RecipeError> {
+    let refused = table.keys().find(|key| match key.as_str() {
+        "message" => !matches!(kind, StepKind::Gate | StepKind::Pause),
+        "stop_if" => kind != StepKind::Gate,
+        "retry" => kind != StepKind::Check,
+        other => !STEP_KEYS.contains(&other),
+    });
+    match refused {
+        Some(key) => Err(RecipeError::UnknownSetting {
+            step: index,
+            kind,
+            key: key.clone(),
+        }),
+        None => Ok(()),
+    }
+}
+
+fn read_enabled(step: usize, value: Option<&Value>) -> Result<bool, RecipeError> {
+    match value {
+        None => Ok(true),
+        Some(Value::Boolean(on)) => Ok(*on),
+        Some(other) => Err(bad(step, "enabled", "true or false", other)),
+    }
+}
+
+fn read_message(step: usize, value: Option<&Value>) -> Result<Option<String>, RecipeError> {
+    match value {
+        None => Ok(None),
+        Some(Value::String(text)) => Ok(Some(text.clone())),
+        Some(other) => Err(bad(step, "message", "text", other)),
+    }
 }
 
 fn read_on_fail(step: usize, value: Option<&Value>) -> Result<OnFail, RecipeError> {

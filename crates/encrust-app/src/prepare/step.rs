@@ -2,10 +2,12 @@
 //! reaches it, and its outcome comes back to the run rather than through the status line.
 
 use anyhow::Result;
+use core_geometry::Scalar;
+use core_plate::OrientPreset;
 
 use super::check::Checking;
 use super::save::Saving;
-use super::work::{Batch, Work};
+use super::work::{Batch, Hollowed, Work};
 use crate::drain::DrainTool;
 use crate::i18n::tr;
 use crate::job::{
@@ -14,7 +16,7 @@ use crate::job::{
 };
 use crate::orient::stand_turned;
 use crate::repair::RepairState;
-use crate::scene::{ObjectId, Taken};
+use crate::scene::{ObjectId, Scene, Taken};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::supports::{BuiltTo, Side, SupportTool};
@@ -65,23 +67,9 @@ impl Going {
             Work::Orient {
                 preset,
                 max_tilt_deg,
-            } => {
-                let plans = tools.supports.automatic_plans(&slicing.catalogue)?;
-                let proof = slicing
-                    .printer
-                    .as_ref()
-                    .map(|printer| (printer, &slicing.material));
-                let asked = (*preset, *max_tilt_deg, plans);
-                Self::Orient(tools.orient.start_on(scene, ids, asked, proof)?)
-            }
+            } => Self::orient(ids, (*preset, *max_tilt_deg), doc, tools, machine)?,
             Work::Repair(method) => Self::repair(ids, doc, *method),
-            Work::Hollow(hollowed) => {
-                let asked: Vec<_> = scene
-                    .named(ids)
-                    .map(|object| (object.id, hollowed.settings_for(object.transform)))
-                    .collect();
-                Self::Hollow(tools.hollow.start_asked(scene, &asked)?)
-            }
+            Work::Hollow(hollowed) => Self::hollow(ids, hollowed, scene, tools)?,
             Work::DrainAuto { .. } if hollow.is_empty() => {
                 return Ok(None);
             }
@@ -92,20 +80,7 @@ impl Going {
             // Drilled where it is decided, in one frame, by `drill_points`.
             Work::DrainPoints { .. } => return Ok(None),
             Work::Supports { profile, side } => {
-                let held: Vec<ObjectId> = match side {
-                    Side::Outside => ids.clone(),
-                    Side::Inside => scene
-                        .named(ids)
-                        .filter(|object| object.supported_inside())
-                        .map(|object| object.id)
-                        .collect(),
-                };
-                if held.is_empty() {
-                    return Ok(None);
-                }
-                let built = BuiltTo::of(profile, &slicing.catalogue)?;
-                let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), *side)?;
-                Self::Supports(job, *side, Box::new(built))
+                return Self::supports(ids, (profile, *side), doc, machine);
             }
             Work::Scan if hollow.is_empty() => return Ok(None),
             Work::Scan => Self::Scan(DrainTool::scan_on(scene, &hollow, layer_mm)?),
@@ -114,6 +89,66 @@ impl Going {
             Work::Arrange { .. } => return Ok(None),
             Work::Save(saved) => Self::Save(Saving::new(saved, scene, machine)?),
         }))
+    }
+
+    /// Hollows each of `ids` to the step's settings, placed as it stands.
+    fn hollow(
+        ids: &[ObjectId],
+        hollowed: &Hollowed,
+        scene: &Scene,
+        tools: &mut Tools,
+    ) -> Result<Self> {
+        let asked: Vec<_> = scene
+            .named(ids)
+            .map(|object| (object.id, hollowed.settings_for(object.transform)))
+            .collect();
+        Ok(Self::Hollow(tools.hollow.start_asked(scene, &asked)?))
+    }
+
+    /// Turns `ids` to the orient step's preset and tilt, proved on the printer where it has one.
+    fn orient(
+        ids: &[ObjectId],
+        (preset, max_tilt_deg): (OrientPreset, Option<Scalar>),
+        doc: &Doc,
+        tools: &mut Tools,
+        machine: &Machine,
+    ) -> Result<Self> {
+        let slicing = &machine.slicing;
+        let plans = tools.supports.automatic_plans(&slicing.catalogue)?;
+        let proof = slicing
+            .printer
+            .as_ref()
+            .map(|printer| (printer, &slicing.material));
+        let asked = (preset, max_tilt_deg, plans);
+        Ok(Self::Orient(
+            tools.orient.start_on(&doc.scene, ids, asked, proof)?,
+        ))
+    }
+
+    /// Stands `ids` on supports to `profile` on `side`, `None` where none holds a cavity
+    /// to hold up inside.
+    fn supports(
+        ids: &[ObjectId],
+        (profile, side): (&str, Side),
+        doc: &Doc,
+        machine: &Machine,
+    ) -> Result<Option<Self>> {
+        let (scene, slicing) = (&doc.scene, &machine.slicing);
+        let held: Vec<ObjectId> = match side {
+            Side::Outside => ids.to_vec(),
+            Side::Inside => scene
+                .named(ids)
+                .filter(|object| object.supported_inside())
+                .map(|object| object.id)
+                .collect(),
+        };
+        if held.is_empty() {
+            return Ok(None);
+        }
+        let built = BuiltTo::of(profile, &slicing.catalogue)?;
+        let layer_mm = slicing.layer_height_mm();
+        let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), side)?;
+        Ok(Some(Self::Supports(job, side, Box::new(built))))
     }
 
     fn repair(ids: &[ObjectId], doc: &Doc, method: core_volume::RepairMethod) -> Self {
