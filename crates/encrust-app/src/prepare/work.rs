@@ -3,9 +3,9 @@
 
 use core_engine::{PREPARE_ORIENT, PREPARE_REPAIR};
 use core_geometry::{MendMethod, Scalar, Transform};
-use core_plate::{ArrangeSettings, OrientGoal, OrientPreset};
-use core_recipe::StepKind;
+use core_plate::{ArrangeSettings, OrientPreset};
 use core_recipe::resolved::{flag, number, points, text};
+use core_recipe::{StepKind, preset_of};
 use core_volume::{HoleSize, HollowMode, HollowSettings, InfillSettings, RepairMethod, plate_down};
 
 use super::Step;
@@ -213,15 +213,6 @@ fn drain_of(settings: &Settings) -> Result<Work, NotYet> {
             vent: flag(settings, "vent").unwrap_or(true),
         },
     })
-}
-
-fn preset_of(goal: &str) -> OrientPreset {
-    match goal {
-        "fewest-supports" => OrientPreset::Goal(OrientGoal::FewestSupports),
-        "least-peel" => OrientPreset::Goal(OrientGoal::LeastPeel),
-        "shortest-print" => OrientPreset::Goal(OrientGoal::ShortestPrint),
-        _ => OrientPreset::Auto,
-    }
 }
 
 fn method_of(method: &str) -> RepairMethod {

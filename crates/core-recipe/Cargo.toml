@@ -14,6 +14,7 @@ doctest = false
 [dependencies]
 core-engine.workspace = true
 core-geometry.workspace = true
+core-plate.workspace = true
 core-volume.workspace = true
 serde.workspace = true
 thiserror.workspace = true

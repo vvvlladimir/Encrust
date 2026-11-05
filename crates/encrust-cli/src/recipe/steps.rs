@@ -5,8 +5,8 @@ use anyhow::{Result, bail};
 use clap::ValueEnum;
 use core_engine::{Hollowing, PREPARE_REPAIR, SupportPlan};
 use core_geometry::{Mat3, Scalar, Transform, Vec3};
-use core_plate::{OrientGoal, OrientPreset, OrientSettings};
-use core_recipe::{Metric, StepKind};
+use core_plate::OrientSettings;
+use core_recipe::{Metric, StepKind, preset_of};
 use core_volume::HollowSettings;
 
 use super::piece::Piece;
@@ -61,15 +61,6 @@ fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     piece.prepared.oriented = true;
     read_again(&mut piece.import, &piece.mesh, ctx.chosen.printer.as_ref())?;
     Ok(Did::default())
-}
-
-fn preset_of(goal: &str) -> OrientPreset {
-    match goal {
-        "fewest-supports" => OrientGoal::FewestSupports.into(),
-        "least-peel" => OrientGoal::LeastPeel.into(),
-        "shortest-print" => OrientGoal::ShortestPrint.into(),
-        _ => OrientPreset::Auto,
-    }
 }
 
 /// `--repair` by the step's method; a shell repaired is remeshed, so its cavity is not known

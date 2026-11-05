@@ -1186,6 +1186,7 @@ version = "0.7.0"
 dependencies = [
  "core-engine",
  "core-geometry",
+ "core-plate",
  "core-volume",
  "proptest",
  "serde",
