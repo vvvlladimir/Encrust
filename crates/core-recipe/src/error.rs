@@ -66,18 +66,6 @@ pub enum RecipeError {
     },
     #[error("`{name}` is not measured yet")]
     Unmeasured { name: String },
-    #[error("step {step}: `{kind:?}` comes after `{after:?}`")]
-    OutOfOrder {
-        step: usize,
-        kind: StepKind,
-        after: StepKind,
-    },
-    #[error("step {step}: `{kind:?}` is already step {first}")]
-    Repeated {
-        step: usize,
-        kind: StepKind,
-        first: usize,
-    },
     #[error("step {step}: a retry runs at most {limit} times, not {max}")]
     RetryTooMany { step: usize, max: u8, limit: u8 },
     #[error("there is no step {step}")]

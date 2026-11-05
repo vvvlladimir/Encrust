@@ -39,6 +39,8 @@ pub enum SettingKind {
     Word(&'static [&'static str]),
     /// Free text: a folder, a name template.
     Text,
+    /// `[x, y, z]` fractions of the placed box, each from 0 to 1.
+    Points,
 }
 
 impl StepKind {
@@ -70,11 +72,6 @@ impl StepKind {
         // TODO(step-2): the Settings column of docs/design/recipes.md.
         todo!()
     }
-
-    /// Whether it changes the model, so it appears once and has a place in the order.
-    pub fn is_work(self) -> bool {
-        !matches!(self, Self::Check | Self::Gate | Self::Pause)
-    }
 }
 
 /// One setting as written: a value, or an expression after `=`.
@@ -83,6 +80,8 @@ pub enum Setting {
     Number(Scalar),
     Bool(bool),
     Word(String),
+    Text(String),
+    Points(Vec<[Scalar; 3]>),
     Expr(Condition),
 }
 

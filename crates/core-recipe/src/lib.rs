@@ -18,4 +18,4 @@ pub use recipe::{
     Choice, FORMAT, MAX_RETRY, OnFail, Recipe, Retry, Setting, SettingKind, Settings, Step,
     StepKind,
 };
-pub use validate::{Plan, validate};
+pub use validate::{Note, Plan, validate};

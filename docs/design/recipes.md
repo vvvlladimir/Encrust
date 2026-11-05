@@ -49,7 +49,7 @@ The window and the command line run every kind; what each kind sets:
 | `repair` | `method`: `repair`, `close-holes`, `wrap`, `deep` | Repair, `--repair` |
 | `orient` | `goal`: `auto`, `fewest-supports`, `least-peel`, `shortest-print`; `max_tilt_deg` | Auto-orient, `--orient` |
 | `hollow` | `wall_mm`, `mode`: `inside`, `outside`, `open-floor`; `infill`; `keep_solid_under_mm` | Hollow, `--hollow` |
-| `drain` | `diameter_mm`, `vent`, `plugs` | Drain's Auto, `--drain-at auto` |
+| `drain` | `at`: `auto` or `points`; `points`; `diameter_mm`, `depth_mm`, `vent`, `plugs` | Drain's Auto or a click, `--drain-at` |
 | `supports` | `profile` (catalogue id, `auto` the default), `cavity` | Grow, `--supports` |
 | `check` | `retry = { while, max }` | Check, the report |
 | `arrange` | `spacing_mm` | Arrange plate, `--arrange` |
@@ -61,21 +61,27 @@ The window and the command line run every kind; what each kind sets:
 (`core_volume`'s Keep solid, fitted). `check`'s retry supports every island again while
 `while` holds, at most `max` times, `max` no more than 5.
 
+`drain` with `at = "auto"` (the default) is the proven search of ADR 0401 and needs a
+cavity; with `at = "points"` it drills a hole at each of `points`, `[x, y, z]` fractions of
+the placed box (`[0.5, 0.5, 0]` the middle of the floor), moved to the nearest face as
+`--drain-at` moves one. Drilled before `hollow` such a hole is a recess with the wall kept
+around it (ADR 0346); after, it drains.
+
 ## Order
 
-A step may only follow what it works on. Each work step appears once; `gate`, `pause` and
-`check` as often as wanted. Checked when the recipe is read:
+Any order, any step as often as wanted: each step works on the model as the steps before
+it left it. A step with nothing to work on is skipped and says why, as `drain` with
+`at = "auto"` on a model with no cavity. Where a later step undoes an earlier one, the
+recipe is still read and the plan shows a note under the later step:
 
-| Step | Comes after, where present |
-|---|---|
-| `hollow` | `orient`, `repair` |
-| `drain` | `hollow` |
-| `supports` | `orient`, `hollow`, `drain` |
-| `check` | `supports` |
-| `arrange` | `supports` |
-| `save` | every work step |
-
-`repair` and `orient` take either order; nothing else is free.
+| Later step | Over an earlier | The note |
+|---|---|---|
+| `orient` | `supports` | the supports are taken off; a later `supports` grows them again |
+| `orient` | `drain` with `auto` | the holes were chosen for the earlier pose |
+| `hollow` | `supports` | the new cavity stands on nothing inside |
+| `repair` | `hollow`, `drain` | a repair remeshes the shell and may close the holes |
+| `supports` | `supports` | the later supports replace the earlier |
+| `save` | — | none; a `save` before the end writes the plate as it is then |
 
 ## Variables
 

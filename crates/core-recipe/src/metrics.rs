@@ -65,7 +65,8 @@ impl Metric {
         todo!()
     }
 
-    /// The steps after one of which it is measured; empty when it is known from the start.
+    /// The steps any one of which, earlier in the recipe, measures it; empty when it is known
+    /// from the start.
     pub fn known_after(self) -> &'static [StepKind] {
         // TODO(step-3): Trapped after Drain or Check; Islands, PeelN, SupportMl after Check.
         todo!()

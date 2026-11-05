@@ -28,17 +28,20 @@ files and runs no step. The window and the command line depend on it and run eac
 they run it today.
 
 Conditions are a small expression language parsed by `core-recipe` itself: comparisons,
-`&&`, `||`, `!`, arithmetic and four functions over numbers and booleans, no loops. A step
-follows what it works on, checked when the recipe is read; `repair` and `orient` take either
-order. The one retry, `check` supporting islands again, is bounded at five.
+`&&`, `||`, `!`, arithmetic and four functions over numbers and booleans, no loops. Steps
+take any order and may repeat: each works on the model as the steps before left it, a step
+with nothing to work on is skipped with why, and a step that undoes an earlier one is noted
+in the plan, never refused. The one retry, `check` supporting islands again, is bounded at
+five.
 
 ## Consequences
 
 Each new step kind is a variant in `core-recipe` and an executor in both front ends, in one
 change. A recipe file is a format: its `format` number moves when a key changes meaning. A
-condition reads only what is measured; a variable no step can measure is not offered. The
-order is not free: what `hollow` makes, `drain` and `supports` need, and the file says so
-when read rather than mid-run. Reopen the language if users ask for strings or loops.
+condition reads only what is measured; a variable no step can measure is not offered. A free
+order lets a recipe build something useless, supports before the turn that drops them; the
+plan's notes say so before the run, and each pair that undoes work needs its row in the
+design note. Reopen the language if users ask for strings or loops.
 
 ## Alternatives considered
 
@@ -52,10 +55,11 @@ not running a plate, and ADR 0174 keeps `core-engine` to that.
 Less code to write. Rejected: a new dependency for a grammar of a dozen rules, and a script
 can loop, read files or never end; a recipe must always end and be checked before it runs.
 
-### The order entirely free
+### An order fixed by what each step needs
 
-What a user asked for at first. Rejected: draining before hollowing or supporting before
-orienting builds nothing usable, so the only freedom left is between repair and orient.
+The first draft refused draining before hollowing and supporting before orienting. Rejected:
+a hole drilled before the cavity is a recess the user may want (ADR 0346), and what is
+useless elsewhere is better said than forbidden.
 
 ### The decision that won, and what it costs
 
