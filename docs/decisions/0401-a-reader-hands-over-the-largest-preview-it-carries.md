@@ -20,14 +20,16 @@ reader turns that error into `None` where it reads the preview. The codecs two c
 share live in `core-format` — raw two-byte pixels, the run-length RGB15 record, a PNG entry
 of an archive — and the readers' fuzz targets reach them through `open`.
 
-A preview is read as the container states it. Known `.cxdlp` version 3 and `.cxline` files
+`convert` puts the file's preview into the new job's thumbnail, so the new container's
+writer cuts its records from it as from a rendered picture; this supersedes ADR 0180's blank
+previews. A preview is read as the container states it. Known `.cxdlp` version 3 and `.cxline` files
 set the high byte of every lit word, so their pictures come back red; nothing in the file
 says what the colour was.
 
 ## Consequences
 
-`convert` can hand the picture to the new file's writer, which cuts its own sizes from it as
-it does from a rendered thumbnail, and `info` can write it out. Opening a file costs one
+A converted file shows the model on the printer's screen, and `info` can write the picture
+out. A small source picture is enlarged into a larger record and looks soft. Opening a file costs one
 extra small decode, at most `MAX_PREVIEW_PX` pixels, which a header cannot talk past. The smaller
 previews are dropped: a writer reduces from the largest anyway. Reopen if a caller needs a
 container's exact records, a lossless round trip of one format for instance.

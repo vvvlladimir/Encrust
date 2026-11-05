@@ -8,7 +8,7 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use core_format::{FormatError, LayerEntry, OpenFile, PrinterTuning, SlicedFile};
+use core_format::{FormatError, LayerEntry, OpenFile, PrinterTuning, SlicedFile, Thumbnail};
 use core_pipeline::{Converting, PipelineError, SlicedFormat, convert, convert_to, open};
 use core_raster::Run;
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -170,6 +170,31 @@ fn every_mask_and_exposure_survives_a_conversion() {
             "layer {index} is the mask it was"
         );
     }
+}
+
+#[test]
+fn the_files_preview_is_carried_into_the_converted_one() {
+    let mut source = written();
+    source.facts.preview = Some(Thumbnail::filled(8, 8, [255, 0, 0]));
+    let mut sink = Cursor::new(Vec::new());
+    let resin = MaterialProfile::default();
+    let printer = printer(WIDTH_PX);
+    convert_to(
+        &mut source,
+        &converting(&printer, &resin),
+        &mut sink,
+        &mut (),
+    )
+    .expect("the file converts")
+    .expect("nothing cancelled it");
+
+    sink.set_position(0);
+    let back = open(Path::new("converted.goo"), sink).expect("the new file reads");
+    assert_eq!(
+        back.facts().preview,
+        Some(Thumbnail::filled(290, 290, [255, 0, 0])),
+        "the picture is cut to the new container's record"
+    );
 }
 
 #[test]

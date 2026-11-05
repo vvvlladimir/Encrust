@@ -403,8 +403,8 @@ container lays the plate out otherwise (ADR 0366). The layer heights and every e
 gives the lifts, waits and price. A ramp above the bottom block is read back as the resin
 transition it is and stated again as one, so a machine that reads the header alone still
 takes the file; any other run of exposures becomes a band of height, which such a machine
-refuses. A stack of varying layer heights is refused for now, and
-the new file's previews are blank (ADR 0180).
+refuses. The file's preview goes into the new one's records (ADR 0401). A stack of varying
+layer heights is refused for now (ADR 0180).
 
 `measure MODEL --from X,Y,Z --to X,Y,Z` reads a model as its file holds it and takes each
 end to the nearest point of its surface. It prints both ends, the straight distance and its

@@ -372,7 +372,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0169](0169-the-vector-container-traces-its-polygons-out-of-the-mask.md) | Trace the `.svgx` polygons out of the mask rather than carry contours to the writer | Accepted |
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
-| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
+| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted; blank previews are superseded by 0401 |
 | [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
 | [0365](0365-write-the-ctb-the-printers-read.md) | Write the `.ctb` the printers read, and pick its revision by the panel | Accepted |
 | [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted |

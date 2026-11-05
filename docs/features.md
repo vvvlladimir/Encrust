@@ -676,8 +676,9 @@ Encrust also opens the `.pws` of the original Photon and Photon S, which it does
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
 same size in pixels. The file is taken as cut for that printer: where the new format lays
 the plate from the other edge, each layer is turned to match, so the part prints where it
-stood. A stack with varying layer heights cannot be converted yet, and the converted file's
-preview pictures are blank.
+stood. The file's own preview picture goes with it, cut to the new format's sizes; a format
+with no picture (`.cws`), or one that does not decode, leaves the new one blank. A stack with
+varying layer heights cannot be converted yet.
 
 The window offers only the machines whose format Encrust can actually write.
 
@@ -917,7 +918,7 @@ by a number of your own, or support the islands and drill the suction cups Check
 - **Orientation:** every file lays the plate out as the twenty known files checked do;
   `.sl1`, the DLP machines and nine FlashForge and Nova3D profiles have no known file.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
-- **Convert** cannot carry varying layer heights or the preview pictures.
+- **Convert** cannot carry varying layer heights.
 - **Browser build:** no network sending, no updates.
 - **Camera:** the address only, no video inside Encrust.
 - **Translations:** messages from inside the slicing engine (a file that cannot be read, a
