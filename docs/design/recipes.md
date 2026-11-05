@@ -152,7 +152,8 @@ setting it shapes in every step of its kind: `--hollow 3` is every hollow step's
 `--supports light` every supports step's `profile`, `--no-drain-vent` every drain's `vent`;
 `--rotate` makes `turned` true. `--orient`, `--repair`, `--hollow` and `--supports` also run
 every step of their kind whatever its `when` (`decide_forced`), at the step, not at import; a
-recipe with no enabled step of that kind refuses the flag, naming it.
+recipe with no enabled step of that kind refuses the flag, naming it as typed: the flag, or the
+plate file's `hollow` or `supports`.
 
 A step that fails ends the run by `on_fail`: `stop` puts the plate back as the run found it
 (the window's one undo entry, ADR 0402), `skip` goes on to the next step. Several models run

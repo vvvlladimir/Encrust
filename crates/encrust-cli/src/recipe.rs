@@ -181,14 +181,15 @@ fn refuse_pointing(shaping: &Shaping) -> Result<()> {
     Ok(())
 }
 
-/// Refuses a flag that forces a step of a kind `plan` has none of to run.
+/// Refuses a flag or a plate file's key that forces a step of a kind `plan` has none of to
+/// run, naming it as the user wrote it.
 fn refuse_unstepped(plan: &Plan, shaping: &Shaping) -> Result<()> {
     let recipe = plan.recipe();
-    for (kind, flag) in forced(shaping) {
+    for (kind, asker) in forced(shaping) {
         let mut steps = recipe.steps.iter();
         if !steps.any(|step| step.enabled && step.kind == kind) {
             bail!(
-                "{flag} runs the recipe's {} steps, and {} has no {} step",
+                "{asker} runs the recipe's {} steps, and {} has no {} step",
                 kind.name(),
                 recipe.name,
                 kind.name()

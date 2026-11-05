@@ -41,6 +41,15 @@ pub struct Shaping {
     /// Where the middle of the model's footprint goes, plate millimetres, standing on the
     /// plate; `None` leaves it where the file and the flags put it.
     pub position: Option<Vec2>,
+    /// Which of its hollow and supports a plate file's key gave rather than a flag.
+    pub keyed: Keyed,
+}
+
+/// The plate file's keys that ask a step of a recipe to run, as their flags do.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Keyed {
+    pub hollow: bool,
+    pub supports: bool,
 }
 
 impl Shaping {
@@ -51,6 +60,7 @@ impl Shaping {
             hollow: job.hollow.clone(),
             supports: job.supports.plan()?,
             position: None,
+            keyed: Keyed::default(),
         })
     }
 }

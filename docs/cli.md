@@ -383,7 +383,8 @@ of its kind: `--hollow`, `--hollow-mode`, `--hollow-open-floor`, `--infill` and
 `--no-drain-vent`, `--drain-at auto` and `--drain-plugs`; `--supports`, `--support-profile`
 and `--support-cavity`; `--orient-goal` and `--max-tilt`; `--repair=METHOD`. `--orient`,
 `--repair`, `--hollow` and `--supports` also run every step of their kind whatever its `when`,
-and are refused naming the flag where the recipe has none; under a recipe they run at its
+and are refused where the recipe has none, naming the flag, or the plate file's `hollow` or
+`supports` that stood for it; under a recipe they run at its
 steps, not at import. `--rotate` makes `turned` true. A `--drain-at` point,
 `--channel` and `--drain-support-at` point at the model as imported, which a step may turn,
 and are refused. A drain step's `plugs = true` lays a plug for each hole it drills, as

@@ -142,6 +142,7 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry, cavity: bool) -> Result<Shapi
             cavity,
             ..crate::profiles::plan_of(id)?
         });
+        shaping.keyed.supports = true;
     }
     if !shaping.hollow.wanted()
         && let Some(wall) = model.hollow
@@ -149,6 +150,7 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry, cavity: bool) -> Result<Shapi
         shaping.hollow.thickness_mm = Some(wall.wall_mm);
         shaping.hollow.mode = wall.mode;
         shaping.hollow.open_floor = wall.open_floor;
+        shaping.keyed.hollow = true;
         if let Some(under_mm) = wall.keep_solid_under_mm {
             if !under_mm.is_finite() || under_mm <= 0.0 {
                 bail!("a plate file's `keep_solid_under_mm` is a thickness, so not {under_mm}");

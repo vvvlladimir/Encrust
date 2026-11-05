@@ -445,6 +445,27 @@ fn a_plate_files_keep_solid_under_mm_keeps_a_thinner_model_solid() {
 }
 
 #[test]
+fn a_plate_files_hollow_with_no_hollow_step_in_the_recipe_is_refused_naming_the_key() {
+    let plate = plate_file(
+        "keyed-unstepped",
+        "[[model]]\npath = \"CUBE\"\nhollow = { wall_mm = 1.0 }\n",
+    );
+    let recipe = plate.with_file_name("keyed-unstepped-recipe.toml");
+    fs::write(&recipe, "name = \"Checks\"\n[[step]]\ndo = \"check\"\n").expect("write the recipe");
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--recipe",
+        recipe.to_str().unwrap(),
+    ]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    let said = stderr(&output);
+    assert!(
+        said.contains("the plate file's `hollow`") && !said.contains("--hollow"),
+        "{said}"
+    );
+}
+
+#[test]
 fn a_plate_files_keep_solid_under_mm_that_is_no_thickness_is_refused_naming_the_key() {
     let plate = plate_file(
         "kept-thin-negative",

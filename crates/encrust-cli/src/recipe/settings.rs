@@ -11,8 +11,9 @@ use crate::stage::Shaping;
 pub(super) type Settings = core_recipe::ResolvedSettings;
 
 /// The step kinds a flag typed for a model, or a plate file's key, makes run whatever their
-/// `when`, each with the flag that asks it.
+/// `when`, each with what asks it as the user wrote it: the flag, or the plate file's key.
 pub(super) fn forced(shaping: &Shaping) -> impl Iterator<Item = (StepKind, &'static str)> {
+    let keyed = shaping.keyed;
     let typed = [
         (
             StepKind::Orient,
@@ -24,12 +25,25 @@ pub(super) fn forced(shaping: &Shaping) -> impl Iterator<Item = (StepKind, &'sta
             "--repair",
             shaping.import.repair.is_some(),
         ),
-        (StepKind::Hollow, "--hollow", shaping.hollow.wanted()),
-        (StepKind::Supports, "--supports", shaping.supports.is_some()),
+        (
+            StepKind::Hollow,
+            asker(keyed.hollow, "--hollow", "the plate file's `hollow`"),
+            shaping.hollow.wanted(),
+        ),
+        (
+            StepKind::Supports,
+            asker(keyed.supports, "--supports", "the plate file's `supports`"),
+            shaping.supports.is_some(),
+        ),
     ];
     typed
         .into_iter()
-        .filter_map(|(kind, flag, typed)| typed.then_some((kind, flag)))
+        .filter_map(|(kind, asker, typed)| typed.then_some((kind, asker)))
+}
+
+/// The plate file's `key` where it gave the setting, else `flag`.
+fn asker(keyed: bool, flag: &'static str, key: &'static str) -> &'static str {
+    if keyed { key } else { flag }
 }
 
 /// `settings` of a step of `kind` with what `shaping` was given by a flag or a plate file
