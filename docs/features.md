@@ -358,7 +358,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - **Keep thin parts solid:** a switch in Keep solid, off at first, keeps the wall solid
   wherever the model is thinner than the thickness you set, so fingers, limbs and blades
   are not hollowed; a mould takes it too. On the command line, `--keep-solid-under`, and in
-  a recipe's hollow step, `keep_solid_under_mm`.
+  a plate file's `hollow` and a recipe's hollow step, `keep_solid_under_mm`.
 - With one model picked, the settings you change are that model's own and are there again
   when you come back to it; with none picked they are the plate's, which every other model
   uses. Fixed size or Fit to thickness, and the size, are the window's: whichever model is

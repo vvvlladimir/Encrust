@@ -502,6 +502,7 @@ supports = "medium"             # any support profile `profiles list` names
 [[model]]
 path = "b.stl"
 hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; open_floor = true opens a shell
+# keep_solid_under_mm = 6 in `hollow` keeps the wall solid where the model is thinner, as --keep-solid-under
 ```
 
 A project saved by the window slices its models as they were saved: the file holds its
