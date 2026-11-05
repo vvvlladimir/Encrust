@@ -3,17 +3,35 @@ use crate::job::Placement;
 use crate::scene::{ObjectId, Scene};
 use core_geometry::Vec3;
 use core_supports::SupportTree;
+use printer_profiles::SupportProfile;
 
 impl SupportTool {
     /// Stands a support at each of `found`, a model and the plate point of its underside an
     /// island hangs from, in the islands' group, and answers how many; a ring or a crescent
     /// is left to the hand.
     pub fn support_islands(&mut self, scene: &mut Scene, found: &[(ObjectId, Vec3)]) -> usize {
-        if found.is_empty() {
-            return 0;
-        }
-        let group = self.islands_group();
+        self.stand_islands(scene, found, |_| None)
+    }
+
+    /// The same, each support to the profile `profile_of` names for its model: what a
+    /// recipe's run builds islands to, not the panel's.
+    pub fn support_islands_to(
+        &mut self,
+        scene: &mut Scene,
+        found: &[(ObjectId, Vec3)],
+        profile_of: impl Fn(ObjectId) -> SupportProfile,
+    ) -> usize {
+        self.stand_islands(scene, found, |id| Some(profile_of(id)))
+    }
+
+    fn stand_islands(
+        &mut self,
+        scene: &mut Scene,
+        found: &[(ObjectId, Vec3)],
+        profile_of: impl Fn(ObjectId) -> Option<SupportProfile>,
+    ) -> usize {
         for (id, contact) in found {
+            let group = self.islands_group(profile_of(*id).as_ref());
             if let Some(object) = scene.get_mut(*id) {
                 let transform = object.transform;
                 object.supports.add(*contact, transform, group);
@@ -98,19 +116,25 @@ impl SupportTool {
         gone
     }
 
-    /// The group named for islands, made from the numbers in hand the first time.
-    pub(super) fn islands_group(&mut self) -> u16 {
-        if let Some(group) = self
-            .groups
-            .iter()
-            .position(|group| group.name == ISLANDS_GROUP)
-        {
+    /// The group named for islands: the one of `profile` when one is asked, else the panel's
+    /// numbers in hand the first time.
+    pub(super) fn islands_group(&mut self, profile: Option<&SupportProfile>) -> u16 {
+        let held = |group: &SupportGroup| {
+            group.name == ISLANDS_GROUP && profile.is_none_or(|asked| group.profile == *asked)
+        };
+        if let Some(group) = self.groups.iter().position(held) {
             return group as u16;
         }
-        self.groups[self.active as usize].profile = self.profile.clone();
+        let profile = match profile {
+            Some(asked) => asked.clone(),
+            None => {
+                self.groups[self.active as usize].profile = self.profile.clone();
+                self.profile.clone()
+            }
+        };
         self.groups.push(SupportGroup {
             name: ISLANDS_GROUP.to_owned(),
-            profile: self.profile.clone(),
+            profile,
             hidden: false,
         });
         (self.groups.len() - 1) as u16

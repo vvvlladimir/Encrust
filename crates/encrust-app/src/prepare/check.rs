@@ -8,17 +8,18 @@ use core_engine::island_floors;
 use core_raster::RasterSettings;
 use core_recipe::{Metric, retry};
 use core_slicer::LayerPlan;
+use printer_profiles::{Catalogue, SupportProfile};
 
 use super::Run;
 use super::step::Ended;
 use super::work::{Batch, Work};
-use crate::check::support_islands;
+use crate::check::{ForRun, support_islands};
 use crate::i18n::tr;
 use crate::preview::{as_seen, stack_fingerprint};
 use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
-use crate::supports::island_holds;
+use crate::supports::{BuiltTo, island_holds};
 
 /// The stack a check waits on: the plate it asked to be cut and measured as, so that a cut
 /// or a measurement that ended with nothing is a failure, not a reason to ask again.
@@ -111,13 +112,35 @@ impl Run {
         if !self.retries(&doc.scene, &doc.plate, &batch.ids, attempt)? {
             return Ok(());
         }
+        let profiles = self.island_profiles(&batch.ids, &machine.slicing.catalogue)?;
+        let run = ForRun {
+            ids: &batch.ids,
+            profiles: &profiles,
+        };
         let plate = (&mut doc.scene, &mut tools.supports);
-        machine.status = support_islands(plate, stack, &risks, Some(&batch.ids));
+        machine.status = support_islands(plate, stack, &risks, Some(run));
         let again = Work::Check {
             attempt: attempt + 1,
         };
         self.queue.push_front(Batch::of(again, batch.ids.clone()));
         Ok(())
+    }
+
+    /// The profile each of `ids` stands islands on: its latest supports step's, else `auto`.
+    fn island_profiles(
+        &self,
+        ids: &[ObjectId],
+        catalogue: &Catalogue,
+    ) -> Result<Vec<(ObjectId, SupportProfile)>> {
+        let automatic = BuiltTo::of("auto", catalogue)?;
+        Ok(ids
+            .iter()
+            .map(|id| {
+                let built = self.built.iter().rev().find(|(owner, _)| owner == id);
+                let built = built.map_or(&automatic, |(_, built)| built);
+                (*id, built.islands_profile())
+            })
+            .collect())
     }
 
     /// Whether the check in hand supports islands again for any of `ids` after `attempt`

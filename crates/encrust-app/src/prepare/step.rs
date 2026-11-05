@@ -129,10 +129,10 @@ impl Going {
         Self::Repair(jobs, count)
     }
 
-    /// The name of the profile a supports job builds to.
-    pub(super) fn profile(&self) -> Option<&str> {
+    /// What a supports job builds to.
+    pub(super) fn built(&self) -> Option<&BuiltTo> {
         match self {
-            Self::Supports(_, _, built) => Some(built.name()),
+            Self::Supports(_, _, built) => Some(built),
             _ => None,
         }
     }

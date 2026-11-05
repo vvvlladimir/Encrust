@@ -7,6 +7,7 @@ use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use egui::Color32;
+use printer_profiles::SupportProfile;
 
 use crate::highlight::{EdgeMark, Highlight, LIFT_MM, Spot, ring};
 use crate::i18n::tr;
@@ -54,22 +55,35 @@ pub fn covered_mm2(kind: &RiskKind) -> Option<f32> {
     }
 }
 
-/// Check's Support them: a support under every island of `risks`, on the models `only`
-/// names or on any, in the islands' group; says how many stood.
+/// A recipe's run asking for islands supported: the models, and the profile each stands on.
+pub struct ForRun<'a> {
+    pub ids: &'a [ObjectId],
+    pub profiles: &'a [(ObjectId, SupportProfile)],
+}
+
+/// Check's Support them: a support under every island of `risks`, in the islands' group, on
+/// the panel's profile and any model, or for a run on its models and their own profiles;
+/// says how many stood.
 pub fn support_islands(
     (scene, supports): (&mut Scene, &mut SupportTool),
     (plan, settings): (&LayerPlan, &RasterSettings),
     risks: &[Risk],
-    only: Option<&[ObjectId]>,
+    run: Option<ForRun>,
 ) -> Status {
     let layer_mm = plan.nominal_thickness();
     let floors = island_floors(risks, plan, &as_seen(settings));
     let found: Vec<(ObjectId, Vec3)> = island_holds(scene, &floors, layer_mm)
         .into_iter()
         .flatten()
-        .filter(|(id, _)| only.is_none_or(|ids| ids.contains(id)))
+        .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
         .collect();
-    let stood = supports.support_islands(scene, &found);
+    let stood = match &run {
+        None => supports.support_islands(scene, &found),
+        Some(run) => supports.support_islands_to(scene, &found, |id| {
+            let own = run.profiles.iter().find(|(owner, _)| *owner == id);
+            own.map(|(_, profile)| profile.clone()).unwrap_or_default()
+        }),
+    };
     Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
 }
 

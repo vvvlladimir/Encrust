@@ -1395,3 +1395,19 @@ fn a_line_starts_only_from_a_support_that_still_stands() {
     scene.objects_mut()[0].supports.clear();
     assert_eq!(tool.line_start(&scene, id), None);
 }
+
+#[test]
+fn a_profile_built_to_alone_stands_islands_on_itself_and_a_sizing_on_its_lightest_shape() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let heavy = catalogue
+        .support("heavy")
+        .expect("the catalogue ships heavy");
+    let alone = BuiltTo::of("heavy", &catalogue).expect("a support profile");
+    assert_eq!(alone.islands_profile(), heavy.profile);
+
+    let sized = BuiltTo::of("auto", &catalogue).expect("an automatic profile");
+    let BuiltTo::Sized(sizing) = &sized else {
+        panic!("auto is a sizing");
+    };
+    assert_eq!(sized.islands_profile(), sizing.0.placing_with(&sizing.1[0]));
+}

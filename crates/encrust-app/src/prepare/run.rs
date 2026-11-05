@@ -16,7 +16,7 @@ use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
-use crate::supports::Side;
+use crate::supports::{BuiltTo, Side};
 
 /// Where a run stands once it has moved on.
 pub(super) enum Next {
@@ -49,6 +49,7 @@ impl Run {
             step: Step::Orient,
             measured: Vec::new(),
             supported: Vec::new(),
+            built: Vec::new(),
             idle: 0,
             done: 0,
             steps: 0,
@@ -247,8 +248,15 @@ impl Run {
 
     /// Notes what the batch just landed changed on the plate, what a drain left trapped, and
     /// the supports to raise inside the cavities after those outside.
-    pub(super) fn landed(&mut self, scene: &Scene, batch: Batch, profile: Option<&str>) {
+    pub(super) fn landed(&mut self, scene: &Scene, batch: Batch, built: Option<&BuiltTo>) {
         let step = batch.work.step();
+        let profile = built.map(BuiltTo::name);
+        if let Some(built) = built {
+            for id in &batch.ids {
+                self.built.retain(|(owner, _)| owner != id);
+                self.built.push((*id, built.clone()));
+            }
+        }
         for prepared in &mut self.prepared {
             if let Some(object) = scene.get(prepared.id) {
                 prepared.landed(step, object, profile.unwrap_or_default());

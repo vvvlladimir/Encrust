@@ -114,6 +114,23 @@ fn a_retry_supports_the_islands_again_at_most_max_times() {
 }
 
 #[test]
+fn a_retry_with_no_supports_step_stands_islands_on_the_automatic_profile_not_the_panels() {
+    let (mut bench, _) = floating();
+    bench.tools.supports.profile.name = "the panel's own".to_owned();
+    bench.run("[[step]]\ndo = \"check\"\nretry = { while = \"islands >= 0\", max = 1 }\n");
+    bench.run_to_end();
+    let groups = &bench.tools.supports.groups;
+    let islands = groups
+        .iter()
+        .find(|group| group.name == crate::supports::ISLANDS_GROUP);
+    let islands = islands.expect("the island was supported in its own group");
+    assert_ne!(
+        islands.profile.name, "the panel's own",
+        "the run builds to its own profile, `auto` when no supports step ran"
+    );
+}
+
+#[test]
 fn arrange_moves_models_standing_on_each_other_apart() {
     let (mut bench, one) = Bench::with(large_cube());
     let summary = ImportSummary::made(diagnose(&large_cube()));

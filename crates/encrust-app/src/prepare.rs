@@ -12,6 +12,7 @@ use crate::job::Highest;
 use crate::scene::{ObjectId, SceneObject};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
+use crate::supports::BuiltTo;
 use crate::tool_settings::ToolSettings;
 
 mod check;
@@ -102,6 +103,8 @@ struct Run {
     measured: Vec<(ObjectId, Metrics)>,
     /// The models a supports step of this run stood on supports, which a later one replaces.
     supported: Vec<ObjectId>,
+    /// What each model's latest supports step built to, which a check's retry stands islands on.
+    built: Vec<(ObjectId, BuiltTo)>,
     /// Settled polls the plate has been unsettled with nothing building, see [`IDLE_POLLS`].
     idle: u8,
     /// Steps done, and the steps the run is reckoned to take in all.
@@ -266,7 +269,7 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
                 if let Err(error) = run.checked(doc, tools, machine, &batch) {
                     return stop(doc, tools, machine, Status::failed(&error));
                 }
-                run.landed(&doc.scene, batch, going.profile());
+                run.landed(&doc.scene, batch, going.built());
             }
             Ended::Stopped(why) if run.skips() => {
                 machine.status = why;

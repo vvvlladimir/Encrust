@@ -34,6 +34,15 @@ impl BuiltTo {
         }
     }
 
+    /// The profile islands stand to when a run builds to this: the lightest shape of a
+    /// sizing, or the profile alone.
+    pub fn islands_profile(&self) -> SupportProfile {
+        match self {
+            Self::Sized(sizing) => sizing.0.placing_with(&sizing.1[0]),
+            Self::Alone(profile) => (**profile).clone(),
+        }
+    }
+
     /// The profile's name, as the Select card says what a model stands on.
     pub fn name(&self) -> &str {
         match self {
@@ -112,10 +121,11 @@ impl SupportTool {
         (layer_height_mm, built): (Scalar, &BuiltTo),
         side: Side,
     ) -> Result<SupportJob> {
-        let (profile, sizing) = match built {
-            BuiltTo::Sized(sizing) => (sizing.0.placing_with(&sizing.1[0]), Some(&**sizing)),
-            BuiltTo::Alone(profile) => ((**profile).clone(), None),
+        let sizing = match built {
+            BuiltTo::Sized(sizing) => Some(&**sizing),
+            BuiltTo::Alone(_) => None,
         };
+        let profile = built.islands_profile();
         let tasks = scene
             .named(ids)
             .map(|object| SupportTask::of(object, profile.clone()))
