@@ -567,6 +567,12 @@ prepare-row-recipe = The recipe Prepare for print runs
 prepare-row-built-in = Built-in
 prepare-row-yours = Yours
 prepare-row-edit-recipes = Edit the recipes
+# Tooltips of the row's buttons while a run waits.
+prepare-row-continue = Go on to the next step
+prepare-row-retry = Run the failed step again and go on
+prepare-row-end = End here and keep the plate as it is
+# What a waiting run's box says: the recipe's step it waits at, and why.
+prepare-row-waits-at = Step { $number }: { $why }
 
 ## panels/plate_summary.rs
 
@@ -1659,11 +1665,12 @@ prepare-step-save = Saving the file
 prepare-step-pause = Waiting for you
 # What a paused run says when the recipe's pause gives no message of its own.
 prepare-paused = Prepare for print is paused
-prepare-check-failed = The layers could not be checked; the plate is as it was
-prepare-save-no-printer = No printer to send the file to; the plate is as it was
+prepare-check-unread = The layers could not be checked
+prepare-save-no-printer-to-send = No printer to send the file to
 prepare-cancelled = Prepare for print cancelled; the plate is as it was
-prepare-gate-stopped = Prepare for print stopped where the recipe says to; the plate is as it was
-prepare-step-not-yet = The recipe's { $step } step cannot run here yet; the plate is as it was
+prepare-ended = Prepare for print ended; the plate is kept as it is
+prepare-gate-held = The recipe stops here
+prepare-step-cannot-run-yet = The recipe's { $step } step cannot run here yet
 prepare-done =
     { $count ->
         [one] Prepared { $count } model for print

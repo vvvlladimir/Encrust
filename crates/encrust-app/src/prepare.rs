@@ -1,5 +1,6 @@
 //! Prepare for print: a recipe's steps taken on the picked models, each by starting a tool's
-//! own job and waiting for it to land, all one undo (ADR 0402, 0403).
+//! own job and waiting for it to land, one undo until it waits on the user (ADR 0402, 0403,
+//! 0407).
 
 use std::collections::VecDeque;
 
@@ -26,6 +27,7 @@ mod step;
 mod work;
 
 pub use decided::Prepared;
+
 pub use foresee::{Foresight, PlanLine, foreseen_lines, running_lines};
 pub use recipes::{Library, kind_name, note_text};
 use run::Next;
@@ -105,13 +107,25 @@ impl Default for Prepare {
     }
 }
 
+/// Why a run waits: the plate is the user's meanwhile, its undo too, until Continue takes
+/// it again or the run is ended as it stands (ADR 0407).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Wait {
+    /// What the pause says, or why the step failed.
+    pub why: String,
+    /// A step failed, which Continue tries again; else a pause, which Continue passes.
+    pub failed: bool,
+    /// The recipe's step it waits at, counted from 1.
+    pub step: usize,
+}
+
 /// One run: the models it took, the plan, the step in hand and what has been decided so far.
 #[derive(Debug)]
 struct Run {
     ids: Vec<ObjectId>,
     plan: Plan,
-    /// What a pause says while the run waits for Continue.
-    paused: Option<String>,
+    /// Why the run waits for Continue: a pause or a failed step (ADR 0407).
+    waiting: Option<Wait>,
     /// The plan step decided next, and the one in hand, by place.
     next: usize,
     index: usize,
@@ -145,6 +159,16 @@ impl Prepare {
         self.run.is_some()
     }
 
+    /// Whether a run holds the plate: one going, not one waiting for Continue.
+    pub fn is_holding(&self) -> bool {
+        self.run.as_ref().is_some_and(|run| run.waiting.is_none())
+    }
+
+    /// Why the run waits for Continue, while it does.
+    pub fn waiting(&self) -> Option<&Wait> {
+        self.run.as_ref()?.waiting.as_ref()
+    }
+
     /// The step under way and the share of the run done, counting only the steps it takes.
     pub fn progress(&self) -> Option<(Step, f32)> {
         let run = self.run.as_ref()?;
@@ -157,18 +181,6 @@ impl Prepare {
     pub fn marks(&self) -> Option<(&Plan, &[crate::ui::PlanMark])> {
         let run = self.run.as_ref()?;
         Some((&run.plan, &run.marks))
-    }
-
-    /// What the pause the run waits at says, while it waits.
-    pub fn paused(&self) -> Option<&str> {
-        self.run.as_ref()?.paused.as_deref()
-    }
-
-    /// Moves a paused run on to its next step.
-    pub fn resume(&mut self) {
-        if let Some(run) = &mut self.run {
-            run.paused = None;
-        }
     }
 
     /// The step whose job is running now.
@@ -200,7 +212,7 @@ impl Prepare {
 pub fn holding(tools: &Tools) -> Option<String> {
     tools
         .prepare
-        .is_running()
+        .is_holding()
         .then(|| tr!("prepare-running-why"))
 }
 
@@ -210,8 +222,21 @@ pub fn blocker(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
     if doc.scene.target_count() == 0 {
         return Some(tr!("prepare-nothing-visible"));
     }
-    let busy = tools.prepare.is_running()
-        || tools.orient.is_running()
+    if tools.prepare.is_running() || busy(doc, tools, machine) {
+        return Some(tr!("prepare-busy"));
+    }
+    let catalogue = &machine.slicing.catalogue;
+    let prepare = &tools.prepare;
+    prepare
+        .library
+        .plan(catalogue, &prepare.recipe)
+        .err()
+        .map(|error| format!("{error:#}"))
+}
+
+/// Whether a job that will land on the plate is running.
+fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
+    tools.orient.is_running()
         || tools.hollow.job.is_some()
         || tools.drain.job.is_some()
         || tools.drain.auto.is_some()
@@ -223,17 +248,7 @@ pub fn blocker(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
         || tools.text.is_busy()
         || doc.repairs.is_busy()
         || doc.imports.is_busy()
-        || machine.slicing.job.is_some();
-    if busy {
-        return Some(tr!("prepare-busy"));
-    }
-    let catalogue = &machine.slicing.catalogue;
-    let prepare = &tools.prepare;
-    prepare
-        .library
-        .plan(catalogue, &prepare.recipe)
-        .err()
-        .map(|error| format!("{error:#}"))
+        || machine.slicing.job.is_some()
 }
 
 /// Starts preparing what a tool would act on now, the picked models or the whole plate, by
@@ -274,8 +289,42 @@ fn start_with(plan: Plan, doc: &mut Doc, tools: &mut Tools, machine: &mut Machin
     Ok(())
 }
 
-/// Stops the run between steps and inside the one going, and puts the plate back as it was.
+/// Moves a waiting run on, on the plate as the user left it: past its pause, or trying the
+/// failed step again; a job of a tool's own still running refuses it.
+pub fn resume(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<()> {
+    if tools.prepare.waiting().is_none() {
+        return Ok(());
+    }
+    if busy(doc, tools, machine) {
+        bail!(tr!("prepare-busy"));
+    }
+    let settings = ToolSettings::of(tools, &machine.slicing);
+    let chosen = machine.slicing.chosen();
+    doc.history.hold(&doc.scene, &settings, chosen);
+    if let Some(run) = &mut tools.prepare.run {
+        run.waiting = None;
+    }
+    machine.status = Status::Idle;
+    poll(doc, tools, machine, true);
+    Ok(())
+}
+
+/// Ends a waiting run, the plate kept as it stands: what the run did before it waited is one
+/// undo.
+pub fn end_waiting(tools: &mut Tools, status: &mut Status) {
+    if tools.prepare.waiting().is_some() {
+        tools.prepare.run = None;
+        *status = Status::Info(tr!("prepare-ended"));
+    }
+}
+
+/// Stops the run between steps and inside the one going, and puts the plate back as it was
+/// when the run, or its last Continue, took it; a waiting run is ended as it stands.
 pub fn cancel(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) {
+    if tools.prepare.waiting().is_some() {
+        end_waiting(tools, &mut machine.status);
+        return;
+    }
     if tools.prepare.run.take().is_none() {
         return;
     }
@@ -295,17 +344,17 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
     let Some(mut run) = tools.prepare.run.take() else {
         return false;
     };
+    // Waiting, the plate is the user's and the history free until Continue.
+    if run.waiting.is_some() {
+        tools.prepare.run = Some(run);
+        return false;
+    }
     // Another plate or project replaced the history: there is nothing left to prepare.
     if !doc.history.is_held() {
         return false;
     }
-    // Nothing to poll while paused: the frame after Continue moves it on.
-    if run.paused.is_some() {
-        tools.prepare.run = Some(run);
-        return false;
-    }
     if let Some(going) = poll_going(&mut run, doc, tools, machine) {
-        if going {
+        if going || run.waiting.is_some() {
             tools.prepare.run = Some(run);
         }
         return going;
@@ -318,13 +367,19 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
     let next = run.advance(doc, tools, machine);
     run.leave_unplugged(doc, tools, machine);
     match next {
+        Ok(Next::Working) if run.waiting.is_some() => {
+            // A pause: what the run did so far is one edit, the plate the user's.
+            doc.history.release();
+            tools.prepare.run = Some(run);
+            false
+        }
         Ok(Next::Working) => {
             tools.prepare.run = Some(run);
             true
         }
         Ok(Next::Done) => finish(run, doc, tools, &mut machine.status),
-        Ok(Next::Stopped(why)) => stop(doc, tools, machine, why),
-        Err(error) => stop(doc, tools, machine, Status::failed(&error)),
+        Ok(Next::Stopped(why)) => halt(run, doc, tools, machine, why),
+        Err(error) => halt(run, doc, tools, machine, Status::failed(&error)),
     }
 }
 
@@ -345,7 +400,8 @@ fn poll_going(
         Ended::Landed(said) => {
             machine.status = said;
             if let Err(error) = run.checked(doc, tools, machine, &batch) {
-                return Some(stop(doc, tools, machine, Status::failed(&error)));
+                run.queue.push_front(batch);
+                return Some(halted(run, doc, machine, Status::failed(&error)));
             }
             run.landed(&doc.scene, batch, going.built());
         }
@@ -353,17 +409,36 @@ fn poll_going(
             machine.status = why;
             run.queue.clear();
         }
-        Ended::Stopped(why) => return Some(stop(doc, tools, machine, why)),
+        Ended::Stopped(why) => {
+            run.queue.push_front(batch);
+            return Some(halted(run, doc, machine, why));
+        }
     }
     run.batch_ended();
     None
 }
 
-/// Ends the run short: the plate as it was before it, and `why` said.
-fn stop(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, why: Status) -> bool {
-    doc.history
-        .abandon(&mut doc.scene, tools, &mut machine.slicing);
-    machine.status = why;
+/// Halts the run at the step that failed or the gate that holds, `why` said, and keeps it
+/// waiting.
+fn halt(
+    mut run: Run,
+    doc: &mut Doc,
+    tools: &mut Tools,
+    machine: &mut Machine,
+    why: Status,
+) -> bool {
+    halted(&mut run, doc, machine, why);
+    tools.prepare.run = Some(run);
+    false
+}
+
+/// Halts `run` where it stands: what it did so far recorded as one edit, the plate the
+/// user's until Continue tries the failed step again. `why` is said by the row, not the
+/// stage's notice. Answers that no job runs.
+fn halted(run: &mut Run, doc: &mut Doc, machine: &mut Machine, why: Status) -> bool {
+    run.halt(why.text());
+    doc.history.release();
+    machine.status = Status::Idle;
     false
 }
 

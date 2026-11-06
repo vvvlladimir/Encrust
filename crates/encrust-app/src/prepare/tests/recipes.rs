@@ -46,7 +46,7 @@ fn a_drain_before_hollow_drills_before_hollowing() {
 }
 
 #[test]
-fn a_gate_that_stops_puts_the_plate_back() {
+fn a_gate_that_stops_waits_and_ended_keeps_the_plate_one_undo_from_before() {
     let (mut bench, id) = Bench::with(large_cube());
     let before = standing(bench.object(id));
     bench.start_by(
@@ -54,12 +54,16 @@ fn a_gate_that_stops_puts_the_plate_back() {
          [[step]]\ndo = \"gate\"\nstop_if = \"hollow\"\nmessage = \"hollow, so stop\"\n",
     );
     bench.run_to_end();
-    assert_eq!(
-        bench.machine.status,
-        Status::Error("hollow, so stop".into())
-    );
+    let wait = bench.tools.prepare.waiting().expect("waits at the gate");
+    assert_eq!(wait.why, "hollow, so stop");
+    assert!(wait.failed);
+
+    end_waiting(&mut bench.tools, &mut bench.machine.status);
+    bench.run_to_end();
+    assert!(!bench.tools.prepare.is_running());
+    assert!(bench.object(id).hollow.is_hollow(), "kept as it stands");
+    assert!(bench.undo(), "the run so far is one edit");
     assert_eq!(standing(bench.object(id)), before, "as before Prepare");
-    assert!(!bench.doc.history.is_held());
 }
 
 #[test]
@@ -160,11 +164,7 @@ fn a_drain_at_points_measures_what_stays_trapped() {
          [[step]]\ndo = \"gate\"\nstop_if = \"trapped >= 0\"\nmessage = \"known\"\n",
     );
     bench.run_to_end();
-    assert_eq!(
-        bench.machine.status,
-        Status::Error("known".into()),
-        "the gate read trapped"
-    );
+    assert_eq!(bench.waits(), Some("known"), "the gate read trapped");
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn a_wall_worked_out_by_an_expression_is_the_one_saves_ml_reads() {
          [[step]]\ndo = \"hollow\"\nset = { wall_mm = \"= clamp(height_mm / 8, 1, 6)\" }\n",
     );
     bench.run_to_end();
-    assert_eq!(bench.machine.status, Status::Error("thick".into()));
+    assert_eq!(bench.waits(), Some("thick"));
 }
 
 /// An egg lying tilted: no flat face to lay it on, so the search weighs what it samples.

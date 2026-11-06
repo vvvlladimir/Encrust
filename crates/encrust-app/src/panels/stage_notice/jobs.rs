@@ -28,8 +28,8 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     }
     // The Prepare row tells the run itself wherever it stands; Preview hides it.
     let away = *window.mode == crate::workspace::Mode::Preview;
-    let paused = window.tools.prepare.paused().is_some();
-    let prepare = window.tools.prepare.progress().filter(|_| away && !paused);
+    let waiting = window.tools.prepare.waiting().is_some();
+    let prepare = window.tools.prepare.progress().filter(|_| away && !waiting);
     let prepare = prepare.map(|(step, share)| {
         let label = tr!("notice-preparing", step = step.label());
         (label, Some(share), false)
@@ -37,7 +37,9 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "prepare", prepare) {
         crate::prepare::cancel(window.doc, window.tools, window.machine);
     }
-    paused_card(stack, window);
+    if away {
+        waiting_card(stack, window);
+    }
     let network = window.machine.network.job.as_ref();
     let shown = network.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
     if job_card(stack, "network", shown) {
@@ -45,30 +47,35 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     }
 }
 
-/// A run waiting at a pause: what the pause says, Continue, and Cancel as its close.
-fn paused_card(stack: &mut Stack, window: &mut Window) {
-    let Some(message) = window.tools.prepare.paused().map(str::to_owned) else {
+/// A run waiting for Continue, in Preview where the Prepare row is not: why, Continue, and
+/// End as its close.
+fn waiting_card(stack: &mut Stack, window: &mut Window) {
+    let Some(wait) = window.tools.prepare.waiting().cloned() else {
         return;
     };
     let colors = theme::colors();
-    let (go_on, cancel) = (tr!("notice-prepare-continue"), tr!("common-cancel"));
-    let shown = stack.card("prepare-paused", |ui| {
-        notice_card(
-            ui,
-            icon::PAUSE,
-            colors.accent_soft,
-            &message,
-            None,
-            Some(&go_on),
-            Some(&cancel),
-        )
+    let (glyph, tint) = match wait.failed {
+        true => (icon::WARNING, colors.danger),
+        false => (icon::PAUSE, colors.accent_soft),
+    };
+    let (go_on, end) = (tr!("notice-prepare-continue"), tr!("prepare-row-end"));
+    let shown = stack.card("prepare-waiting", |ui| {
+        let what = tr!(
+            "prepare-row-waits-at",
+            number = wait.step,
+            why = wait.why.as_str()
+        );
+        notice_card(ui, glyph, tint, &what, None, Some(&go_on), Some(&end))
     });
     let NoticeReply { acted, closed } = shown.inner;
+    let (doc, tools, machine) = (&mut *window.doc, &mut *window.tools, &mut *window.machine);
     if acted {
-        window.tools.prepare.resume();
+        if let Err(error) = crate::prepare::resume(doc, tools, machine) {
+            machine.status = crate::status::Status::failed(&error);
+        }
         stack.ctx.request_repaint();
     } else if closed {
-        crate::prepare::cancel(window.doc, window.tools, window.machine);
+        crate::prepare::end_waiting(tools, &mut machine.status);
     }
 }
 

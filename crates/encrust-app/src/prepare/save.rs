@@ -94,7 +94,7 @@ fn send_blocker(machine: &Machine) -> Option<String> {
     let network = &machine.network;
     let target = network.target();
     if connection == Connection::None || !target.is_some_and(|target| target.speaks(connection)) {
-        return Some(tr!("prepare-save-no-printer"));
+        return Some(tr!("prepare-save-no-printer-to-send"));
     }
     network
         .blocker(machine.slicing.format)

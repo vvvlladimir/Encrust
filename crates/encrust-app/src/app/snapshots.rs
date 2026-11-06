@@ -427,6 +427,35 @@ fn an_update_found_told_and_installed() {
     results.extend(picture("update_download", downloading));
 }
 
+/// Prepare for print waiting in its row: at a pause, and at a gate that stopped it.
+#[test]
+fn prepare_for_print_waiting_in_its_row() {
+    let mut results = SnapshotResults::new();
+    let waiting = |name: &str, steps: &str| {
+        let mut app = pictured();
+        let text = format!("name = \"{name}\"\nformat = 1\n{steps}");
+        let catalogue = &mut app.machine.slicing.catalogue;
+        catalogue.save_recipe("waits", &text).expect("writable");
+        app.tools.prepare.recipe = "waits".to_owned();
+        let (doc, tools, machine) = (&mut app.doc, &mut app.tools, &mut app.machine);
+        crate::prepare::start(doc, tools, machine).expect("the cube is picked");
+        // The harness draws without polling; the run is moved on as the window's frames would.
+        for _ in 0..10 {
+            if app.tools.prepare.waiting().is_some() {
+                break;
+            }
+            let (doc, tools, machine) = (&mut app.doc, &mut app.tools, &mut app.machine);
+            crate::prepare::poll(doc, tools, machine, true);
+        }
+        app
+    };
+    let paused = "[[step]]\ndo = \"arrange\"\n\
+        [[step]]\ndo = \"pause\"\nmessage = \"Look at the wall\"\n";
+    results.extend(picture("prepare_paused", waiting("Paused", paused)));
+    let gate = "[[step]]\ndo = \"gate\"\nstop_if = \"true\"\nmessage = \"Drill a hole by hand\"\n";
+    results.extend(picture("prepare_failed", waiting("Gated", gate)));
+}
+
 /// The Recipes page: the table with a recipe of the user's picked, that recipe open in its
 /// form with a condition that does not read, and the names a condition can read listed.
 #[test]

@@ -248,16 +248,10 @@ impl Window<'_> {
         (models, plate)
     }
 
-    /// Prepare for print's row standing on `foot`, as wide as a card `width` wide: bare,
-    /// and on a card while a run goes. Answers its top.
+    /// Prepare for print's row standing on `foot`, bare and as wide as a card `width` wide.
+    /// Answers its top.
     fn prepare_row(&mut self, ctx: &egui::Context, foot: Pos2, width: f32) -> f32 {
-        let (frame, inner_w) = match self.tools.prepare.is_running() {
-            true => {
-                let margin = theme::NOTICE_MARGIN.sum().x;
-                (card().inner_margin(theme::NOTICE_MARGIN), width - margin)
-            }
-            false => (egui::Frame::new(), width + 2.0 * CARD_STROKE),
-        };
+        let (frame, inner_w) = (egui::Frame::new(), width + 2.0 * CARD_STROKE);
         let at = Floating {
             id: "prepare-row",
             corner: foot,

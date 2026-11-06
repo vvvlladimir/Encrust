@@ -78,7 +78,7 @@ fn a_check_counts_the_islands_a_gate_after_it_stops_on() {
          [[step]]\ndo = \"gate\"\nstop_if = \"islands > 0\"\nmessage = \"islands\"\n",
     );
     bench.run_to_end();
-    assert_eq!(bench.machine.status, Status::Error("islands".into()));
+    assert_eq!(bench.waits(), Some("islands"));
     assert_eq!(standing(bench.object(id)), before, "as before Prepare");
 }
 
@@ -182,13 +182,13 @@ fn save_writes_the_plate_into_the_folder_by_the_template() {
 }
 
 #[test]
-fn save_to_send_with_no_printer_to_send_to_ends_the_run_saying_why() {
+fn save_to_send_with_no_printer_to_send_to_waits_saying_why() {
     let (bench, _) = Bench::with(cuboid(Vec3::ZERO, Vec3::splat(10.0)));
     let mut bench = bench.with_printer();
     bench.run("[[step]]\ndo = \"save\"\nset = { send = true }\n");
     bench.run_to_end();
-    let said = Status::Error(tr!("prepare-save-no-printer"));
-    assert_eq!(bench.machine.status, said);
+    let said = tr!("prepare-save-no-printer-to-send");
+    assert_eq!(bench.waits(), Some(said.as_str()));
     assert!(bench.machine.slicing.job.is_none(), "nothing is sliced");
 }
 
@@ -197,33 +197,61 @@ const HOLLOW_PAUSE_DRAIN: &str = "[[step]]\ndo = \"hollow\"\n\
     [[step]]\ndo = \"drain\"\nset = { at = \"points\", points = [[0.5, 0.5, 0.0]] }\n";
 
 #[test]
-fn a_pause_waits_for_continue_and_holds_every_tool() {
+fn a_pause_waits_for_continue_with_the_plate_free() {
     let (mut bench, id) = Bench::with(large_cube());
     bench.run(HOLLOW_PAUSE_DRAIN);
     bench.run_to_end();
-    assert_eq!(bench.tools.prepare.paused(), Some("Look at the wall"));
+    let wait = bench.tools.prepare.waiting().expect("waits at the pause");
+    assert_eq!(wait.why, "Look at the wall");
+    assert!(!wait.failed);
     assert!(bench.object(id).hollow.is_hollow(), "hollowed before it");
     assert!(
         bench.object(id).hollow.drains().is_empty(),
         "not drained yet"
     );
-    assert!(holding(&bench.tools).is_some(), "no tool starts a job");
+    assert!(holding(&bench.tools).is_none(), "the tools are the user's");
 
-    bench.tools.prepare.resume();
+    bench.resume();
     bench.run_to_end();
     assert!(!bench.tools.prepare.is_running());
     assert_eq!(bench.object(id).hollow.drains().len(), 1, "drained after");
 }
 
 #[test]
-fn cancel_while_paused_puts_the_plate_back() {
+fn ending_a_pause_keeps_the_plate_as_it_stands() {
     let (mut bench, id) = Bench::with(large_cube());
-    let before = standing(bench.object(id));
     bench.run(HOLLOW_PAUSE_DRAIN);
     bench.run_to_end();
-    assert!(bench.tools.prepare.paused().is_some());
+    assert!(bench.tools.prepare.waiting().is_some());
     bench.cancel();
     bench.run_to_end();
-    assert_eq!(standing(bench.object(id)), before, "as before Prepare");
     assert!(!bench.tools.prepare.is_running());
+    assert!(bench.object(id).hollow.is_hollow(), "kept");
+    assert!(bench.object(id).hollow.drains().is_empty(), "not drained");
+}
+
+#[test]
+fn a_pause_stops_even_with_every_step_before_it_skipped() {
+    let (mut bench, _) = Bench::with(large_cube());
+    let steps = "[[step]]\ndo = \"hollow\"\nwhen = \"hollow\"\n\
+        [[step]]\ndo = \"pause\"\n\
+        [[step]]\ndo = \"drain\"\nset = { at = \"points\", points = [[0.5, 0.5, 0.0]] }\n";
+    bench.run(steps);
+    bench.run_to_end();
+    let wait = bench.tools.prepare.waiting().expect("the recipe's pause");
+    assert_eq!(
+        wait.step, 2,
+        "the hollow step skipped, the model being solid"
+    );
+    bench.resume();
+    bench.run_to_end();
+    assert!(!bench.tools.prepare.is_running());
+}
+
+#[test]
+fn an_arrange_step_names_itself_on_the_bar() {
+    let (mut bench, _) = Bench::with(large_cube());
+    bench.run("[[step]]\ndo = \"arrange\"\n[[step]]\ndo = \"hollow\"\n");
+    let (step, _) = bench.tools.prepare.progress().expect("running");
+    assert_eq!(step, Step::Arrange, "arranged in the frame it started");
 }

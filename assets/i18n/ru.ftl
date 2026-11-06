@@ -601,6 +601,10 @@ prepare-row-recipe = Рецепт, который выполняет подго�
 prepare-row-built-in = Стандартные
 prepare-row-yours = Ваши
 prepare-row-edit-recipes = Изменить рецепты
+prepare-row-continue = Перейти к следующему шагу
+prepare-row-retry = Выполнить неудачный шаг снова и продолжить
+prepare-row-end = Закончить здесь, оставив платформу как есть
+prepare-row-waits-at = Шаг { $number }: { $why }
 
 ## panels/plate_summary.rs
 
@@ -1708,11 +1712,12 @@ prepare-step-arrange = Расстановка на платформе
 prepare-step-save = Сохранение файла
 prepare-step-pause = Ожидание
 prepare-paused = Подготовка к печати приостановлена
-prepare-check-failed = Не удалось проверить слои; платформа осталась как была
-prepare-save-no-printer = Нет принтера, на который отправить файл; платформа осталась как была
+prepare-check-unread = Не удалось проверить слои
+prepare-save-no-printer-to-send = Нет принтера, на который отправить файл
 prepare-cancelled = Подготовка к печати отменена; платформа осталась как была
-prepare-gate-stopped = Подготовка к печати остановлена условием рецепта; платформа осталась как была
-prepare-step-not-yet = Шаг рецепта «{ $step }» здесь пока не выполняется; платформа осталась как была
+prepare-ended = Подготовка к печати закончена; платформа оставлена как есть
+prepare-gate-held = Рецепт останавливается здесь
+prepare-step-cannot-run-yet = Шаг рецепта «{ $step }» здесь пока не выполняется
 prepare-done =
     { $count ->
         [one] К печати подготовлена { $count } модель

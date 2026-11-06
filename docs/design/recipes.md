@@ -54,8 +54,8 @@ The window and the command line run every kind; what each kind sets:
 | `check` | `retry = { while, max }` | Check, the report |
 | `arrange` | `spacing_mm` | Arrange plate, `--arrange` |
 | `save` | `folder`, `name` (ADR 0387's tags), `send` | Slice to, `-o`, `encrust printer send` |
-| `gate` | `stop_if`, `message` | ends the run, the plate put back |
-| `pause` | `message` | the window waits for Continue; the command line says it and goes on |
+| `gate` | `stop_if`, `message` | the window waits as at a failed step; the command line ends the run |
+| `pause` | `message` | the window waits for Continue, the plate the user's; the command line says it and goes on |
 
 `check`, `arrange` and `save` work on the plate as a whole, once a step. `save` writes into
 `folder`, `~` the home (`save_folder`), named by `name`; `send` fails the step with no printer
@@ -155,9 +155,11 @@ every step of their kind whatever its `when` (`decide_forced`), at the step, not
 recipe with no enabled step of that kind refuses the flag, naming it as typed: the flag, or the
 plate file's `hollow` or `supports`.
 
-A step that fails ends the run by `on_fail`: `stop` puts the plate back as the run found it
-(the window's one undo entry, ADR 0402), `skip` goes on to the next step. Several models run
-each step together; a gate that stops on one stops the run.
+A step that fails goes by `on_fail`: `skip` goes on to the next step; `stop` ends the run on
+the command line, and in the window waits at that step with the plate the user's, Continue
+trying it again and End keeping the plate as it stands (ADR 0407). Several models run each
+step together; a gate that stops on one stops the run, and waits in the window as a failed
+step does.
 
 ## Where recipes live
 

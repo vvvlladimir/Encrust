@@ -77,10 +77,9 @@ pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: b
     cancel
 }
 
-/// A job notice's lines without its card, for a card that holds them as wide as it is:
-/// the glyph, the words, the share done and a quiet Cancel, the bar under them. Answers
-/// whether to stop.
-pub fn job_lines(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
+/// A job notice's lines inside its card: the glyph, the words, the share done and a quiet
+/// Cancel, the bar under them. Answers whether to stop.
+fn job_lines(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
     let colors = theme::colors();
     let mut cancel = false;
     ui.vertical(|ui| {
@@ -107,13 +106,18 @@ pub fn job_lines(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: bo
 
 /// A running job's glyph, turning unless motion is reduced.
 pub fn spinner(ui: &mut Ui) {
-    let ink = theme::colors().accent_soft;
     let (rect, _) = ui.allocate_exact_size(vec2(SPINNER_PT, SPINNER_PT), Sense::hover());
+    paint_spinner(ui, rect.center());
+}
+
+/// The same glyph painted turning about `center`, for a control that lays itself out.
+pub(in crate::ui::widgets) fn paint_spinner(ui: &Ui, center: egui::Pos2) {
+    let ink = theme::colors().accent_soft;
     let galley = ui
         .painter()
         .layout_no_wrap(icon::JOB.to_owned(), theme::icon(SPINNER_PT), ink);
     let turn = motion::spin(ui.ctx()).unwrap_or(0.0) * std::f32::consts::TAU;
-    let corner = rect.center() - galley.size() / 2.0;
+    let corner = center - galley.size() / 2.0;
     let shape = egui::epaint::TextShape::new(corner, galley, ink)
         .with_angle_and_anchor(turn, egui::Align2::CENTER_CENTER);
     ui.painter().add(shape);

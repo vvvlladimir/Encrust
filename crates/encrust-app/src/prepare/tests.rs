@@ -77,6 +77,16 @@ impl Bench {
         start(&mut self.doc, &mut self.tools, &mut self.machine).expect("a model to prepare");
     }
 
+    /// Why the run waits, while it does.
+    fn waits(&self) -> Option<&str> {
+        self.tools.prepare.waiting().map(|wait| wait.why.as_str())
+    }
+
+    /// Continue on a waiting run.
+    fn resume(&mut self) {
+        resume(&mut self.doc, &mut self.tools, &mut self.machine).expect("no tool's job runs");
+    }
+
     /// Frames until `step`'s job is running.
     fn run_until(&mut self, step: Step) {
         while self.tools.prepare.going() != Some(step) {
@@ -454,19 +464,34 @@ fn the_bar_starts_at_nought_where_the_first_steps_are_not_taken() {
 }
 
 #[test]
-fn a_step_that_cannot_start_puts_the_plate_back() {
+fn a_step_that_cannot_start_waits_with_the_plate_free_and_runs_again_on_continue() {
     let (mut bench, id) = Bench::with(large_cube());
-    let before = standing(bench.object(id));
     bench.start();
     bench.run_until(Step::Hollow);
-    bench.machine.slicing.catalogue = printer_profiles::Catalogue::default();
+    let catalogue = std::mem::take(&mut bench.machine.slicing.catalogue);
     bench.run_to_end();
+    let wait = bench
+        .tools
+        .prepare
+        .waiting()
+        .expect("waits at the failed step");
+    assert!(wait.failed);
+    assert!(!wait.why.is_empty(), "why is said");
     assert!(
-        matches!(bench.machine.status, Status::Error(_)),
-        "the step's error is said"
+        bench.object(id).hollow.is_hollow(),
+        "the steps before it kept"
     );
-    assert_eq!(standing(bench.object(id)), before, "as before Prepare");
-    assert!(!bench.doc.history.is_held());
+    assert!(holding(&bench.tools).is_none(), "the tools are the user's");
+    assert!(!bench.doc.history.is_held(), "and the undo");
+
+    bench.machine.slicing.catalogue = catalogue;
+    bench.resume();
+    bench.run_to_end();
+    assert!(!bench.tools.prepare.is_running());
+    assert!(
+        !bench.object(id).supports.is_empty(),
+        "the failed step ran again"
+    );
 }
 
 #[test]

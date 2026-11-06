@@ -1,22 +1,23 @@
 //! Prepare for print over the plate card: the recipe and the run, bare on the stage; while a
-//! run goes, its step, share done and Cancel on a card, as a job notice says them (ADR 0406).
+//! run goes its step and share in the picker's place and Cancel, while it waits why with
+//! Continue and End (ADR 0406, 0407).
 
 use core_recipe::{Listed, Origin};
 
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::prepare::{Step, Wait};
 use crate::settings::Section;
 use crate::ui::{
-    DropdownFace, DropdownRow, Lead, companion_square, dropdown, dropdown_menu_wide, dropdown_row,
-    group_name, hairline, icon, job_lines, picker_foot, theme,
+    DropdownFace, DropdownRow, Inline, Lead, RunState, companion_square, dropdown,
+    dropdown_menu_wide, dropdown_row, group_name, hairline, icon, inline_button, picker_foot,
+    run_box, theme,
 };
 
 /// The row, as wide as the room it is drawn in.
 pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
     if let Some((step, share)) = window.tools.prepare.progress() {
-        if job_lines(ui, &step.label(), Some(share), false) {
-            crate::prepare::cancel(window.doc, window.tools, window.machine);
-        }
+        run_row(ui, window, step, share);
         return;
     }
     let row_w = ui.available_width();
@@ -26,6 +27,68 @@ pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
         recipe(ui, window, width, row_w);
         run(ui, window);
     });
+}
+
+/// What the row's buttons asked of a run.
+enum Asked {
+    Cancel,
+    Resume,
+    End,
+}
+
+/// A run in the row: its box where the picker stood, then Cancel while it goes, or Continue
+/// and End while it waits.
+fn run_row(ui: &mut egui::Ui, window: &mut Window, step: Step, share: f32) {
+    let wait = window.tools.prepare.waiting().cloned();
+    let mut asked = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = theme::NOTE_GAP;
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            asked = buttons(ui, wait.as_ref());
+            let (state, what) = match wait {
+                None => (RunState::Going, step.label()),
+                Some(wait) => {
+                    let state = match wait.failed {
+                        true => RunState::Failed,
+                        false => RunState::Paused,
+                    };
+                    let what = tr!("prepare-row-waits-at", number = wait.step, why = wait.why);
+                    (state, what)
+                }
+            };
+            run_box(ui, &state, &what, share, ui.available_width());
+        });
+    });
+    let (doc, tools, machine) = (&mut *window.doc, &mut *window.tools, &mut *window.machine);
+    match asked {
+        Some(Asked::Cancel) => crate::prepare::cancel(doc, tools, machine),
+        Some(Asked::End) => crate::prepare::end_waiting(tools, &mut machine.status),
+        Some(Asked::Resume) => {
+            if let Err(error) = crate::prepare::resume(doc, tools, machine) {
+                machine.status = crate::status::Status::failed(&error);
+            }
+        }
+        None => {}
+    }
+}
+
+/// Cancel while the run goes; Continue and End, right to left, while it waits.
+fn buttons(ui: &mut egui::Ui, wait: Option<&Wait>) -> Option<Asked> {
+    let Some(wait) = wait else {
+        let cancel = tr!("common-cancel");
+        let pressed = inline_button(ui, Inline::new(&cancel).glyph(icon::CANCEL)).clicked();
+        return pressed.then_some(Asked::Cancel);
+    };
+    let end = tr!("prepare-row-end");
+    if companion_square(ui, icon::STOP, &end, theme::BUTTON_H, true).clicked() {
+        return Some(Asked::End);
+    }
+    let go_on = match wait.failed {
+        true => tr!("prepare-row-retry"),
+        false => tr!("prepare-row-continue"),
+    };
+    let resume = companion_square(ui, icon::PLAY, &go_on, theme::BUTTON_H, true);
+    resume.clicked().then_some(Asked::Resume)
 }
 
 /// Starts Prepare for print, and says on the stage why when it cannot.

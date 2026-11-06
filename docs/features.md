@@ -125,18 +125,23 @@ whole-surface fill is Cmd-Shift-click.
 the Edit menu, for the picked models or the whole plate, it runs the steps of the recipe
 picked — the built-in `prepare` until you pick another of the built-in ones or one of your own
 (`docs/design/recipes.md`), remembered between runs and taken back by undo — each model
-decided step by step, and a recipe's gate that holds
-stops the run and puts the plate back. Like `--prepare`, it turns a model you have not turned
+decided step by step. A gate that holds, or a step that fails and does not skip, stops the
+run at that step with the plate yours: mend it by hand, then **Continue** (the play button)
+runs the step again and goes on, or **End** (the stop button) keeps the plate as it is, what
+the run did before it one undo. Like `--prepare`, it turns a model you have not turned
 by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
 saves enough resin, drills the holes that drain it with a vent, and stands it on the
 catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
 `--rotate` keeps it. A recipe's other steps run as their tools do: `check` measures the
 layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
 plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
-`pause` waits for **Continue** on the notice. The row names the step under way, and the
-share done, over a bar, and in Preview, where the row is not shown, a notice does; **Cancel** stops it and leaves the plate as it was, and one undo takes a finished
-run back. While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and
-Grow wait. A recipe of yours that no longer reads or passes its check cannot be started, and
+`pause` waits the same way, the plate yours to change, for **Continue** or **End**, even when every
+step before it was skipped; the row names the step it waits at. The
+recipe's box in the row names the step under way and the share done, filling as it goes,
+or why the run waits; in Preview, where the row is not shown, a notice does. **Cancel**
+beside it stops a step under way and puts the plate back as the run, or its last
+**Continue**, found it, and one undo takes a finished run back. While a step runs the
+tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait. A recipe of yours that no longer reads or passes its check cannot be started, and
 its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
 first: a built-in one opens to read and **Duplicate** makes a copy of your own, and **New
 recipe** starts one of no steps; yours you rename, give variables, and change step by step —

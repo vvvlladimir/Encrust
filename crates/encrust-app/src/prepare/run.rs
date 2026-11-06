@@ -24,7 +24,7 @@ pub(super) enum Next {
     /// A job is running, or the plate is being cut for the next step.
     Working,
     Done,
-    /// A gate stopped it, or it reached a step it cannot run: the plate goes back.
+    /// A gate stopped it, or it reached a step it cannot run: it halts there.
     Stopped(Status),
 }
 
@@ -42,7 +42,7 @@ impl Run {
             marks: vec![PlanMark::ToCome; plan.recipe().steps.len()],
             prepared: ids.iter().map(|id| Prepared::new(*id)).collect(),
             ids,
-            paused: None,
+            waiting: None,
             plan,
             next: 0,
             index: 0,
@@ -94,9 +94,25 @@ impl Run {
                     self.queue.clear();
                     self.batch_ended();
                 }
-                Err(error) => return Err(error),
+                Err(error) => {
+                    self.queue.push_front(batch);
+                    return Err(error);
+                }
             }
         }
+    }
+
+    /// Waits on the step in hand, saying `why`: Continue starts again from its batch that
+    /// failed, or, where none did, decides the step again.
+    pub(super) fn halt(&mut self, why: String) {
+        if self.queue.is_empty() && self.going.is_none() {
+            self.next = self.index;
+        }
+        self.waiting = Some(super::Wait {
+            why,
+            failed: true,
+            step: self.index + 1,
+        });
     }
 
     /// Queues the batches of the next plan step, or says where the run stands instead: at
@@ -113,7 +129,11 @@ impl Run {
             Decided::Stop(why) => Some(Next::Stopped(why)),
             Decided::Pause(message) => {
                 self.step = Step::Pause;
-                self.paused = Some(message);
+                self.waiting = Some(super::Wait {
+                    why: message,
+                    failed: false,
+                    step: self.index + 1,
+                });
                 Some(Next::Working)
             }
         })
@@ -129,8 +149,12 @@ impl Run {
                 Some(Next::Working)
             }
             Work::Arrange { spacing_mm } => {
+                self.step = Step::Arrange;
                 let said = crate::arrange::arrange_plate(&mut doc.scene, &doc.plate, *spacing_mm);
                 let stopped = self.ended_by(said, &mut machine.status);
+                if stopped.is_some() {
+                    self.queue.push_front(batch.clone());
+                }
                 Some(stopped.map_or(Next::Working, Next::Stopped))
             }
             Work::Supports {
@@ -197,7 +221,7 @@ impl Run {
             match decide(&self.plan, index, &self.metrics_of(object, plate))? {
                 Decision::Run { settings, .. } => runs.push((object.id, settings)),
                 Decision::Stop { message, .. } if message.is_empty() => {
-                    return Ok(Decided::Stop(Status::Error(tr!("prepare-gate-stopped"))));
+                    return Ok(Decided::Stop(Status::Error(tr!("prepare-gate-held"))));
                 }
                 Decision::Stop { message, .. } => return Ok(Decided::Stop(Status::Error(message))),
                 Decision::Pause { message } => {
@@ -387,5 +411,5 @@ fn gathered(kind: StepKind, runs: Vec<(ObjectId, Settings)>) -> Result<Vec<Batch
 }
 
 fn not_yet(NotYet(kind): NotYet) -> Status {
-    Status::Error(tr!("prepare-step-not-yet", step = kind.name()))
+    Status::Error(tr!("prepare-step-cannot-run-yet", step = kind.name()))
 }

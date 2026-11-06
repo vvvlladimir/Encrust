@@ -72,7 +72,7 @@ impl Checking {
 fn failed(status: &Status) -> Status {
     match status {
         Status::Error(_) => status.clone(),
-        _ => Status::Error(tr!("prepare-check-failed")),
+        _ => Status::Error(tr!("prepare-check-unread")),
     }
 }
 

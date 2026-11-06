@@ -26,7 +26,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Tool row | over the stage, centred between 8 right of the inspector, shown or put away, and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
-| Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a card as tall as a job notice's lines while a run goes |
+| Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a run too |
 | Layer strip | the stage's right edge, its full height | 64 |
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
@@ -188,8 +188,12 @@ beside it, 6 apart, bare on the stage. The list, `dropdown_menu_wide` as wide as
 *Built-in* then *Yours* under `group_name`s, a recipe that cannot run led by the warning
 glyph, and under a rule *Edit the recipes* as its `picker_foot` opening Settings → Recipes.
 The square runs the recipe on what a tool would act on, its tooltip that or why it cannot,
-the square off. While a run goes the row is a `card` on the notices' margin holding `job_lines`:
-the turning glyph, the step, the share done and a quiet Cancel, the bar under them.
+the square off. While a run goes the picker's place is a `run_box`: the turning glyph, the step and the
+share done, washed in `accent_wash` to it; the square is an inline Cancel with its glyph.
+Waiting (ADR 0407) the box says *Step 3:* and why — with the pause glyph in `accent_soft`
+the pause's message (else *Prepare for print is paused*), or with the warning glyph in
+`danger` and a `danger` edge why the step failed; the share stays; then Continue, the play glyph, and End, the stop
+glyph, as 32 `companion_square`s, their tooltips what each does.
 
 ## Layer strip
 
@@ -227,10 +231,10 @@ track. With no stack it reads *No layers*.
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
   its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
-  *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown. Paused at a
-  recipe's `pause`, it is a notice instead: the pause glyph in `accent_soft`, the pause's
-  message (else *Prepare for print is paused*), *Continue* as its action and Cancel as its
-  close; the view still turns, no tool starts a job, and Select's bar says *Waiting for you*.
+  *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown.
+  Waiting there, it is a notice instead: the pause glyph in `accent_soft` or the warning
+  glyph in `danger`, what the row's box would say, *Continue* as its action and End as its
+  close.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30

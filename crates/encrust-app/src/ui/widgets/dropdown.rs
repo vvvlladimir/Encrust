@@ -258,9 +258,9 @@ pub(in crate::ui::widgets) fn cut_to(
 
 /// Room at a box's ends, the square a glyph stands in and the room after it, points; and a
 /// colour's dot.
-const PAD: f32 = 10.0;
-const GLYPH_W: f32 = 14.0;
-const GAP: f32 = 8.0;
+pub(in crate::ui::widgets) const PAD: f32 = 10.0;
+pub(in crate::ui::widgets) const GLYPH_W: f32 = 14.0;
+pub(in crate::ui::widgets) const GAP: f32 = 8.0;
 const DOT_R: f32 = 4.5;
 /// Between a box and the list that drops from it, points.
 pub const MENU_GAP: f32 = 6.0;
