@@ -224,6 +224,7 @@ fn a_model_turned_by_hand_keeps_its_turn() {
     let turned = Quat::from_rotation_y(0.3);
     let object = bench.doc.scene.get_mut(id).expect("on the plate");
     object.transform.rotation = turned;
+    object.transform.translation = INSIDE_THE_PLATE;
     bench.frame();
     bench.start();
     bench.run_to_end();
@@ -328,10 +329,14 @@ impl Bench {
     }
 }
 
+/// Where a turned plate stands well inside the build volume, its tilted corner over the plate.
+const INSIDE_THE_PLATE: Vec3 = Vec3::new(40.0, 10.0, 20.0);
+
 fn hand_turned_plate() -> (Bench, ObjectId) {
     let (mut bench, id) = Bench::with(cuboid(Vec3::ZERO, Vec3::new(60.0, 60.0, 3.0)));
     let object = bench.doc.scene.get_mut(id).expect("on the plate");
     object.transform.rotation = Quat::from_rotation_y(0.3);
+    object.transform.translation = INSIDE_THE_PLATE;
     bench.frame();
     (bench, id)
 }

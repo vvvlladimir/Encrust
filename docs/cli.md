@@ -416,12 +416,10 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
   --hollow 3 -o sliced/
 ```
 
-The built-in recipes, by id: `prepare` below; `miniatures` (orient for the least peel, tilted
-at most 45 degrees, no hollowing, Auto supports, a check that supports islands again up to
-twice, and a gate on any left); `large-solid` (repair if open, orient, hollow where it saves
-resin at a wall of a fiftieth of the height between 1.5 and 3 mm, drain, a gate on trapped
-resin, Auto supports inside and out, a check); `flat` (orient for the shortest print, no
-supports, a check and a gate on any island). Your own are the files `<id>.toml` in the
+The built-in recipes, by id: `prepare` below; `miniatures` (repair if open, orient for the
+least peel tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
+supports, a check that supports islands again up to twice, and a gate on any left). Why
+these two: ADR 0408. Your own are the files `<id>.toml` in the
 `recipes/` folder beside your profiles (where `profiles` keeps them, `ENCRUST_PROFILE_DIR`
 moves it); `--recipe <id>` takes the built-in of that id first, so a file of yours named
 like one is reached by its path. `recipes list` prints each built-in recipe and then yours,
@@ -446,8 +444,10 @@ to `out` without `-o`. In order:
    line names a saving: at least 10 ml and 40 % of the model (ADR 0393). `--hollow MM`, or a
    plate file's `hollow`, hollows it whatever the saving, at that wall.
 4. **Drain** a hollowed model as `--drain-at auto`, a vent included.
-5. **Support** with `--supports auto`, or the profile `--supports`, `--support-profile` or a
+5. **Stop** where resin stays trapped in the cavity after it, saying so.
+6. **Support** with `--supports auto`, or the profile `--supports`, `--support-profile` or a
    plate file names, holding up the cavity of a hollowed model.
+7. **Stop** where the model on its supports does not fit the build volume, saying so.
 
 A flag that shapes a step the model did not get — `--no-drain-vent`, `--infill`,
 `--hollow-open-floor` — changes nothing. `--prepare` does not imply `--strict`: the run is

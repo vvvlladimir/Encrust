@@ -191,7 +191,7 @@ mod tests {
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
-        tools.prepare.recipe = "flat".to_owned();
+        tools.prepare.recipe = "miniatures".to_owned();
         let catalogue = printer_profiles::Catalogue::bundled().expect("the bundle reads");
         tools.supports.set_automatic(true, &catalogue);
         if let Some(auto) = tools.supports.auto.as_mut() {

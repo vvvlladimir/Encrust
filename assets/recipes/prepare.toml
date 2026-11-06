@@ -1,5 +1,5 @@
 # The autopilot of ADR 0402: what --prepare and Prepare for print do with nothing tuned.
-# The layout is in docs/design/recipes.md.
+# Why: ADR 0408. The layout is in docs/design/recipes.md.
 
 name = "Prepare for print"
 format = 1
@@ -25,5 +25,15 @@ when = "hollow"
 set = { vent = true }
 
 [[step]]
+do = "gate"
+stop_if = "trapped > 0"
+message = "Resin stays trapped inside; drill a hole by hand"
+
+[[step]]
 do = "supports"
 set = { profile = "auto", cavity = "= hollow" }
+
+[[step]]
+do = "gate"
+stop_if = "!fits"
+message = "The model does not fit the build volume on its supports; scale it down or cut it"

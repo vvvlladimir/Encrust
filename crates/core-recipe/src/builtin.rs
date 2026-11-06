@@ -6,7 +6,7 @@ use crate::recipe::Recipe;
 use crate::validate::{Plan, validate};
 
 /// Each built-in recipe's id, the file stem, and text.
-pub const BUILT_IN: [(&str, &str); 4] = [
+pub const BUILT_IN: [(&str, &str); 2] = [
     (
         "prepare",
         include_str!("../../../assets/recipes/prepare.toml"),
@@ -15,11 +15,6 @@ pub const BUILT_IN: [(&str, &str); 4] = [
         "miniatures",
         include_str!("../../../assets/recipes/miniatures.toml"),
     ),
-    (
-        "large-solid",
-        include_str!("../../../assets/recipes/large-solid.toml"),
-    ),
-    ("flat", include_str!("../../../assets/recipes/flat.toml")),
 ];
 
 /// The built-in recipe `id`, read and checked.

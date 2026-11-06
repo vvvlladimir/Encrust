@@ -76,7 +76,7 @@ fn the_plan_marks_hollow_skipped_with_its_reading_on_a_model_not_worth_hollowing
     assert_eq!(hollow.mark, PlanMark::Skipped);
     let reading = hollow.reading.as_deref().unwrap_or_default();
     assert!(reading.contains("worth_hollowing false"), "{reading}");
-    assert_eq!(lines[4].mark, PlanMark::Runs, "supports run on anything");
+    assert_eq!(lines[5].mark, PlanMark::Runs, "supports run on anything");
 }
 
 #[test]
@@ -115,6 +115,6 @@ fn while_it_runs_the_plan_marks_steps_done_running_and_skipped() {
     let lines = running_lines(plan, marks);
     let marks: Vec<PlanMark> = lines.iter().map(|line| line.mark).collect();
     assert_eq!(marks[2], PlanMark::Skipped, "not worth hollowing");
-    assert_eq!(marks[4], PlanMark::Running);
+    assert_eq!(marks[5], PlanMark::Running);
     bench.run_to_end();
 }

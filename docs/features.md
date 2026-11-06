@@ -944,10 +944,11 @@ removes the half-written file.
 
 **Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
 it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
-resin, and stand it on Auto supports. Every flag you type wins over its step, and `--json` says
+resin, and stand it on Auto supports, stopping with why where the model does not fit or
+resin stays trapped. Every flag you type wins over its step, and `--json` says
 what was decided for each model. The window does the same as **Prepare for print**.
-Built-in recipes beside it, each a starting point for a kind of model: `miniatures`,
-`large-solid` and `flat`; `encrust recipes list` names them and `recipes show` prints one.
+Built-in recipe beside it, a starting point for small detailed models: `miniatures`;
+`encrust recipes list` names them and `recipes show` prints one.
 `--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
 of the plate where the recipe says; a flag you type wins over its setting in every step, and

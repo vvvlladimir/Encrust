@@ -29,22 +29,12 @@ fn the_built_in_recipes_are_listed_before_the_users_with_an_unreadable_one_marke
     let listed = json(&output);
     let recipes = listed["recipes"].as_array().expect("a list of recipes");
     let ids: Vec<&str> = recipes.iter().map(|r| r["id"].as_str().unwrap()).collect();
-    assert_eq!(
-        ids,
-        [
-            "prepare",
-            "miniatures",
-            "large-solid",
-            "flat",
-            "broken",
-            "mine"
-        ]
-    );
+    assert_eq!(ids, ["prepare", "miniatures", "broken", "mine"]);
     assert_eq!(recipes[1]["name"], "Miniatures");
     assert_eq!(recipes[1]["source"], "built-in");
-    assert_eq!(recipes[5]["source"], "user");
-    assert_eq!(recipes[5]["name"], "Mine");
-    assert!(recipes[4]["error"].is_string(), "{}", recipes[4]);
+    assert_eq!(recipes[3]["source"], "user");
+    assert_eq!(recipes[3]["name"], "Mine");
+    assert!(recipes[2]["error"].is_string(), "{}", recipes[2]);
 
     let text = stdout(&encrust_with_profiles(&dir, &["recipes", "list"]));
     assert!(
@@ -57,11 +47,11 @@ fn the_built_in_recipes_are_listed_before_the_users_with_an_unreadable_one_marke
 #[test]
 fn a_recipe_is_shown_as_the_toml_it_reads_back() {
     let dir = profile_dir("show", &[]);
-    let output = encrust_with_profiles(&dir, &["recipes", "show", "flat"]);
+    let output = encrust_with_profiles(&dir, &["recipes", "show", "miniatures"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let shown = stdout(&output);
-    assert!(shown.contains("name = \"Flat parts\""), "{shown}");
-    assert!(shown.contains("shortest-print"), "{shown}");
+    assert!(shown.contains("name = \"Miniatures\""), "{shown}");
+    assert!(shown.contains("least-peel"), "{shown}");
 
     let path = dir.join("copy.toml");
     fs::write(&path, &shown).expect("a writable file");
@@ -70,7 +60,7 @@ fn a_recipe_is_shown_as_the_toml_it_reads_back() {
 
     let as_json = json(&encrust_with_profiles(
         &dir,
-        &["recipes", "show", "flat", "--json"],
+        &["recipes", "show", "miniatures", "--json"],
     ));
     assert_eq!(as_json["toml"], shown);
     assert_eq!(as_json["source"], "built-in");
@@ -118,19 +108,23 @@ fn a_built_in_recipe_slices_a_model_by_its_id() {
     assert!(output.status.success(), "{}", stderr(&output));
     let report = json(&output);
     let steps = report["recipe"]["steps"].as_array().expect("the steps run");
-    assert_eq!(steps.len(), 4, "orient, supports, check and the gate");
+    assert_eq!(
+        steps.len(),
+        5,
+        "repair, orient, supports, check and the gate"
+    );
 }
 
 #[test]
 fn a_users_recipe_is_found_by_its_stem_and_a_built_in_one_wins_a_clash() {
-    let dir = profile_dir("by-stem", &[("mine.toml", OWN), ("flat.toml", OWN)]);
+    let dir = profile_dir("by-stem", &[("mine.toml", OWN), ("miniatures.toml", OWN)]);
     let output = slice_by(&dir, "recipes-by-stem", "mine");
     assert!(output.status.success(), "{}", stderr(&output));
     let steps = json(&output)["recipe"]["steps"].as_array().unwrap().len();
     assert_eq!(steps, 1, "the user's one-step recipe ran");
 
-    let output = slice_by(&dir, "recipes-clash", "flat");
+    let output = slice_by(&dir, "recipes-clash", "miniatures");
     assert!(output.status.success(), "{}", stderr(&output));
     let steps = json(&output)["recipe"]["steps"].as_array().unwrap().len();
-    assert_eq!(steps, 3, "the built-in flat ran, not the user's copy");
+    assert_eq!(steps, 5, "the built-in miniatures ran, not the user's copy");
 }

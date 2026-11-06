@@ -31,12 +31,12 @@ fn a_step_moved_up_then_saved_reads_back_in_that_order() {
     let mut catalogue = writable("moved");
     let mut settings = editing_a_copy(&mut catalogue);
     let draft = settings.recipe.as_mut().expect("the copy is open");
-    draft.values.shift(4, true);
+    draft.values.shift(5, true);
     let mut chosen = String::new();
     let id = save_recipe(&mut settings, &mut catalogue, &mut chosen).expect("still valid");
     let kinds: Vec<StepKind> = kept(&catalogue, &id).steps.iter().map(|s| s.kind).collect();
-    use StepKind::{Drain, Hollow, Orient, Repair, Supports};
-    assert_eq!(kinds, [Orient, Repair, Hollow, Supports, Drain]);
+    use StepKind::{Drain, Gate, Hollow, Orient, Repair, Supports};
+    assert_eq!(kinds, [Orient, Repair, Hollow, Drain, Supports, Gate, Gate]);
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn moving_the_first_step_up_or_the_last_down_leaves_the_order() {
     let mut form = RecipeForm::of(built_in("prepare").expect("ships").recipe());
     let before = form.clone();
     form.shift(0, true);
-    form.shift(4, false);
+    form.shift(6, false);
     assert_eq!(form, before);
 }
 
