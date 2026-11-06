@@ -59,6 +59,13 @@ impl Default for OrientTool {
     }
 }
 
+/// What [`OrientTool::start_on`] set going.
+pub enum Turning {
+    Search(OrientJob),
+    /// The last search's next good ways, stood by [`OrientTool::step`].
+    Step,
+}
+
 /// The models a run was asked about, and what it judged them by.
 struct Asked {
     tasks: Vec<OrientTask>,
@@ -177,8 +184,9 @@ impl OrientTool {
         Ok(())
     }
 
-    /// A fresh search for the way `ids` print best by `preset`, tilted at most `max_tilt_deg`,
-    /// the rest the engine's defaults, never the panel's, handed back: what Prepare turns by.
+    /// A search for the way `ids` print best by `preset`, tilted at most `max_tilt_deg`, the
+    /// rest the engine's defaults, never the panel's, handed back: what Prepare turns by.
+    /// Asked as the last search was, of models standing as it left them, it steps instead.
     pub fn start_on(
         &mut self,
         scene: &Scene,
@@ -189,7 +197,7 @@ impl OrientTool {
             impl Fn(&SceneObject) -> SupportPlan,
         ),
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
-    ) -> Result<OrientJob> {
+    ) -> Result<Turning> {
         let tasks = scene
             .named(ids)
             .map(|object| OrientTask::of(object, plan_of(object)))
@@ -200,11 +208,10 @@ impl OrientTool {
             ..OrientSettings::default()
         };
         let asked = self.asking(tasks, settings, machine)?;
-        Ok(OrientJob::spawn(OrientRequest {
-            tasks: asked.tasks,
-            settings: asked.settings,
-            proof: asked.proof,
-        }))
+        if self.found_for(&asked) {
+            return Ok(Turning::Step);
+        }
+        Ok(Turning::Search(self.spawn(asked)))
     }
 
     /// What a run over `tasks` by `settings` asks, printed for `machine` where there is one.
@@ -237,13 +244,32 @@ impl OrientTool {
     }
 
     fn search(&mut self, asked: Asked) {
+        self.job = Some(self.spawn(asked));
+    }
+
+    /// A search for `asked`, kept as what the next start is compared with.
+    fn spawn(&mut self, asked: Asked) -> OrientJob {
         self.offers.clear();
-        self.job = Some(OrientJob::spawn(OrientRequest {
+        let job = OrientJob::spawn(OrientRequest {
             tasks: asked.tasks.clone(),
             settings: asked.settings,
             proof: asked.proof.clone(),
-        }));
+        });
         self.asked = Some(asked);
+        job
+    }
+
+    /// Stands each model `turns` names its best way, its other good ways kept for the next
+    /// start asked the same to step through.
+    pub fn land(&mut self, scene: &mut Scene, plate: &BuildPlate, turns: Vec<Turn>) -> Status {
+        let said = stand_turned(scene, plate, &turns);
+        self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
+        said
+    }
+
+    /// What a search handed back failed: the next start searches again.
+    pub fn forget(&mut self) {
+        self.asked = None;
     }
 
     /// Whether the last run was asked `asked` and every model stands as it left it.
@@ -282,12 +308,9 @@ impl OrientTool {
 
         self.job = None;
         match outcome {
-            OrientOutcome::Turned(turns) => {
-                *status = stand_turned(scene, plate, &turns);
-                self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
-            }
+            OrientOutcome::Turned(turns) => *status = self.land(scene, plate, turns),
             OrientOutcome::Failed(message) => {
-                self.asked = None;
+                self.forget();
                 *status = Status::Error(message);
             }
         }
@@ -296,7 +319,7 @@ impl OrientTool {
 
     /// Stands every model the last run turned the next good way it found, round from the
     /// last to the first, and says what that one costs against the one before.
-    fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
+    pub fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
         let alone = self.offers.len() == 1;
         let mut stepped = 0;
         let mut said = None;

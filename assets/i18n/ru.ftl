@@ -1195,7 +1195,6 @@ recipes-does-not-run = В таком виде рецепт не выполняе
 recipes-var-value = Значение
 recipes-var-remove = Удалить переменную
 recipes-var-add = Добавить переменную
-recipes-block-add = Новый шаг
 recipes-step-add = Добавить шаг
 recipes-no-steps = В рецепте пока нет шагов.
 

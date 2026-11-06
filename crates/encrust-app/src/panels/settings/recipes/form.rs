@@ -1,5 +1,6 @@
-//! The form of the recipe open: its name and variables, a block a step, and the step to
-//! add; a built-in recipe is drawn the same, but cannot be changed.
+//! The form of the recipe open: its name and variables, then a block a step with a + before,
+//! between and after them to add one there; a built-in recipe is drawn the same, but cannot
+//! be changed.
 
 use core_recipe::StepKind;
 use egui::Ui;
@@ -12,8 +13,8 @@ use crate::prepare::kind_name;
 use crate::settings::{Checked, RecipeForm, Settings};
 use crate::ui::ConditionName;
 use crate::ui::{
-    DropdownFace, DropdownRow, Inline, dropdown, dropdown_menu, dropdown_row, hint, icon,
-    icon_button, inline_button, notice, number_field, text_box, text_row, theme,
+    DropdownRow, Inline, dropdown_menu_wide, dropdown_row, hint, icon, icon_button, inline_button,
+    notice, number_field, small_icon_button, text_box, text_row, theme,
 };
 
 /// The recipe open in the form, each block under its title.
@@ -54,18 +55,18 @@ fn fields(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked) {
         );
     }
     let names = condition_names(&recipe.vars);
+    if recipe.steps.is_empty() {
+        ui.add_space(theme::NOTE_GAP);
+        ui.vertical_centered(|ui| hint(ui, &tr!("recipes-no-steps")));
+    }
     steps(ui, recipe, checked, &names);
-    form_card(ui, &tr!("recipes-block-add"), |ui| {
-        if recipe.steps.is_empty() {
-            hint(ui, &tr!("recipes-no-steps"));
-        }
-        add_step(ui, recipe);
-    });
 }
 
-/// A block a step, each with its switch, and the move or removal its buttons asked for.
+/// A block a step, each with its switch, a + before, between and after them, and the
+/// move, removal or insertion their buttons asked for.
 fn steps(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked, names: &[ConditionName]) {
     let mut moved = None;
+    let mut inserted = add_step(ui, 0);
     let count = recipe.steps.len();
     for index in 0..count {
         let title = tr!(
@@ -84,6 +85,10 @@ fn steps(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked, names: &[Condi
             });
         });
         step.enabled = on;
+        inserted = inserted.or(add_step(ui, index + 1));
+    }
+    if let Some((at, kind)) = inserted {
+        recipe.insert_step(at, kind);
     }
     if let Some((index, asked)) = moved {
         match asked {
@@ -136,17 +141,22 @@ fn fresh_var(vars: &[(String, f32)]) -> String {
         .unwrap_or_default()
 }
 
-/// A list of every kind of step; the one chosen joins the end of the recipe.
-fn add_step(ui: &mut Ui, recipe: &mut RecipeForm) {
-    let label = tr!("recipes-step-add");
-    let face = DropdownFace::plain(icon::ADD, &label);
-    let response = dropdown(ui, &face, ui.available_width());
-    dropdown_menu(&response, |ui| {
-        for kind in StepKind::ALL {
-            let name = kind_name(kind);
-            if dropdown_row(ui, &DropdownRow::named(&name, false)).clicked() {
-                recipe.add_step(kind);
-            }
-        }
-    });
+/// A + centred on the seam, its list every kind of step; answers the one chosen to stand
+/// at `at`.
+fn add_step(ui: &mut Ui, at: usize) -> Option<(usize, StepKind)> {
+    let response = ui
+        .push_id(("recipe-step-add", at), |ui| {
+            ui.add_space(theme::NOTE_GAP);
+            ui.vertical_centered(|ui| small_icon_button(ui, icon::ADD, &tr!("recipes-step-add")))
+                .inner
+        })
+        .inner;
+    dropdown_menu_wide(&response, theme::BLOCK_TITLE_W, |ui| {
+        StepKind::ALL.into_iter().find(|kind| {
+            let name = kind_name(*kind);
+            dropdown_row(ui, &DropdownRow::named(&name, false)).clicked()
+        })
+    })
+    .flatten()
+    .map(|kind| (at, kind))
 }

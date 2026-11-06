@@ -1157,8 +1157,7 @@ recipes-does-not-run = The recipe does not run as it is
 recipes-var-value = Value
 recipes-var-remove = Remove the variable
 recipes-var-add = Add a variable
-# The block at the foot of the form that adds a step to the recipe.
-recipes-block-add = New step
+# The tooltip of the + before, between and after the steps, which adds one there.
 recipes-step-add = Add a step
 recipes-no-steps = The recipe has no steps yet.
 

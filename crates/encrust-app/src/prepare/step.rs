@@ -11,10 +11,10 @@ use super::work::{Batch, Hollowed, Work};
 use crate::drain::DrainTool;
 use crate::i18n::tr;
 use crate::job::{
-    DrainsJob, DrainsOutcome, HollowJob, HollowOutcome, OrientJob, OrientOutcome, RepairJob,
-    SupportJob, SupportOutcome, TrapJob, TrapOutcome,
+    DrainsJob, DrainsOutcome, HollowJob, HollowOutcome, OrientOutcome, RepairJob, SupportJob,
+    SupportOutcome, TrapJob, TrapOutcome,
 };
-use crate::orient::stand_turned;
+use crate::orient::Turning;
 use crate::repair::RepairState;
 use crate::scene::{ObjectId, Scene, Taken};
 use crate::state::{Doc, Machine, Tools};
@@ -23,7 +23,7 @@ use crate::supports::{BuiltTo, Side, SupportTool};
 
 /// A step's job, running.
 pub(super) enum Going {
-    Orient(OrientJob),
+    Orient(Turning),
     /// One repair a model, each with the model it took, and how many there were.
     Repair(Vec<(RepairJob, Taken)>, usize),
     Hollow(HollowJob),
@@ -175,7 +175,8 @@ impl Going {
     /// The share of the step's job done, where it counts it.
     pub(super) fn fraction(&self) -> Option<f32> {
         match self {
-            Self::Orient(job) => job.counted().map(|(_, share)| share),
+            Self::Orient(Turning::Search(job)) => job.counted().map(|(_, share)| share),
+            Self::Orient(Turning::Step) => None,
             Self::Repair(jobs, count) => {
                 let going: f32 = jobs
                     .iter()
@@ -207,11 +208,17 @@ impl Going {
         }
         let scene = &mut doc.scene;
         match self {
-            Self::Orient(job) => Some(match job.poll()? {
+            Self::Orient(Turning::Step) => {
+                Some(Ended::Landed(tools.orient.step(scene, &doc.plate)))
+            }
+            Self::Orient(Turning::Search(job)) => Some(match job.poll()? {
                 OrientOutcome::Turned(turns) => {
-                    Ended::Landed(stand_turned(scene, &doc.plate, &turns))
+                    Ended::Landed(tools.orient.land(scene, &doc.plate, turns))
                 }
-                OrientOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
+                OrientOutcome::Failed(message) => {
+                    tools.orient.forget();
+                    Ended::Stopped(Status::Error(message))
+                }
             }),
             Self::Repair(jobs, _) => Self::poll_repairs(jobs, scene),
             Self::Hollow(job) => Some(match job.poll()? {

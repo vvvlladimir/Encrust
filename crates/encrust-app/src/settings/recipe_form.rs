@@ -154,19 +154,24 @@ impl RecipeForm {
         }
     }
 
-    /// A new step of `kind` at the end, running always with the engine's defaults.
-    pub fn add_step(&mut self, kind: StepKind) {
-        self.steps.push(StepForm {
-            kind,
-            enabled: true,
-            when: String::new(),
-            on_fail: OnFail::Stop,
-            set: SettingsForm::new(),
-            choose: Vec::new(),
-            message: String::new(),
-            stop_if: String::new(),
-            retry: None,
-        });
+    /// A new step of `kind` at `at`, past the end at the end, running always with the
+    /// engine's defaults.
+    pub fn insert_step(&mut self, at: usize, kind: StepKind) {
+        let at = at.min(self.steps.len());
+        self.steps.insert(
+            at,
+            StepForm {
+                kind,
+                enabled: true,
+                when: String::new(),
+                on_fail: OnFail::Stop,
+                set: SettingsForm::new(),
+                choose: Vec::new(),
+                message: String::new(),
+                stop_if: String::new(),
+                retry: None,
+            },
+        );
     }
 }
 

@@ -49,6 +49,20 @@ fn moving_the_first_step_up_or_the_last_down_leaves_the_order() {
 }
 
 #[test]
+fn a_step_inserted_between_two_stands_between_them_and_one_past_the_end_lands_last() {
+    let mut form = RecipeForm::of(built_in("prepare").expect("ships").recipe());
+    let (first, second) = (form.steps[0].kind, form.steps[1].kind);
+    form.insert_step(1, StepKind::Pause);
+    let kinds: Vec<StepKind> = form.steps.iter().take(3).map(|step| step.kind).collect();
+    assert_eq!(kinds, [first, StepKind::Pause, second]);
+    form.insert_step(usize::MAX, StepKind::Check);
+    assert_eq!(
+        form.steps.last().map(|step| step.kind),
+        Some(StepKind::Check)
+    );
+}
+
+#[test]
 fn a_when_that_does_not_read_marks_its_field_and_blocks_saving() {
     let mut catalogue = writable("invalid");
     let mut settings = editing_a_copy(&mut catalogue);
@@ -178,7 +192,7 @@ fn a_new_recipe_opens_empty_under_a_name_none_has_and_saves_its_first_step() {
     );
     let draft = settings.recipe.as_mut().expect("the new recipe is open");
     assert!(draft.values.steps.is_empty());
-    draft.values.add_step(StepKind::Orient);
+    draft.values.insert_step(0, StepKind::Orient);
     let mut chosen = String::new();
     let id = save_recipe(&mut settings, &mut catalogue, &mut chosen).expect("one step reads");
     assert_eq!(kept(&catalogue, &id).steps.len(), 1);

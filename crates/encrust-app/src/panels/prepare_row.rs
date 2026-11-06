@@ -1,6 +1,6 @@
 //! Prepare for print over the plate card: the recipe and the run, bare on the stage; while a
 //! run goes its step and share in the picker's place and Cancel, while it waits why with
-//! Continue and End (ADR 0406, 0407).
+//! End and Continue (ADR 0406, 0407).
 
 use core_recipe::{Listed, Origin};
 
@@ -72,23 +72,23 @@ fn run_row(ui: &mut egui::Ui, window: &mut Window, step: Step, share: f32) {
     }
 }
 
-/// Cancel while the run goes; Continue and End, right to left, while it waits.
+/// Cancel while the run goes; End then Continue, drawn right to left, while it waits.
 fn buttons(ui: &mut egui::Ui, wait: Option<&Wait>) -> Option<Asked> {
     let Some(wait) = wait else {
         let cancel = tr!("common-cancel");
         let pressed = inline_button(ui, Inline::new(&cancel).glyph(icon::CANCEL)).clicked();
         return pressed.then_some(Asked::Cancel);
     };
-    let end = tr!("prepare-row-end");
-    if companion_square(ui, icon::STOP, &end, theme::BUTTON_H, true).clicked() {
-        return Some(Asked::End);
-    }
     let go_on = match wait.failed {
         true => tr!("prepare-row-retry"),
         false => tr!("prepare-row-continue"),
     };
-    let resume = companion_square(ui, icon::PLAY, &go_on, theme::BUTTON_H, true);
-    resume.clicked().then_some(Asked::Resume)
+    if companion_square(ui, icon::PLAY, &go_on, theme::BUTTON_H, true).clicked() {
+        return Some(Asked::Resume);
+    }
+    let end = tr!("prepare-row-end");
+    let ended = companion_square(ui, icon::STOP, &end, theme::BUTTON_H, true);
+    ended.clicked().then_some(Asked::End)
 }
 
 /// Starts Prepare for print, and says on the stage why when it cannot.

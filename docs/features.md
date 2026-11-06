@@ -132,7 +132,9 @@ the run did before it one undo. Like `--prepare`, it turns a model you have not 
 by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
 saves enough resin, drills the holes that drain it with a vent, and stands it on the
 catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
-`--rotate` keeps it. A recipe's other steps run as their tools do: `check` measures the
+`--rotate` keeps it. Run again with the same orient step on models still standing as the
+last run turned them, it stands each the next good way that search found instead of
+searching again, as Auto-orient pressed again does. A recipe's other steps run as their tools do: `check` measures the
 layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
 plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
 `pause` waits the same way, the plate yours to change, for **Continue** or **End**, even when every
@@ -145,7 +147,7 @@ tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait. A re
 its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
 first: a built-in one opens to read and **Duplicate** makes a copy of your own, and **New
 recipe** starts one of no steps; yours you rename, give variables, and change step by step —
-each step says what it does behind its question mark — add a step of any kind, switch it off,
+each step says what it does behind its question mark — add a step of any kind before, between or after the others, switch it off,
 move it up or down, remove it, type its condition (checked as you type, the error under the
 field, and the button beside it listing every name a condition can read, what each means and
 its unit, your variables and the functions, to put one in),

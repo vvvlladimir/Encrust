@@ -192,7 +192,7 @@ the square off. While a run goes the picker's place is a `run_box`: the turning 
 share done, washed in `accent_wash` to it; the square is an inline Cancel with its glyph.
 Waiting (ADR 0407) the box says *Step 3:* and why — with the pause glyph in `accent_soft`
 the pause's message (else *Prepare for print is paused*), or with the warning glyph in
-`danger` and a `danger` edge why the step failed; the share stays; then Continue, the play glyph, and End, the stop
+`danger` and a `danger` edge why the step failed; the share stays; then End, the stop glyph, and Continue, the play
 glyph, as 32 `companion_square`s, their tooltips what each does.
 
 ## Layer strip
@@ -296,8 +296,9 @@ and the one that applies right.
   pause's *Message*, a check's *Support the islands again* switch with *While* and *At most*
   `nested` under it, then *Choose*: each rule `nested`, its *When* and settings and *Remove
   the rule*, and *Add a rule*; why the recipe does not run as a `field_error` at the top of
-  the step it names, else a `danger` `notice` over the steps. Last, *New step*: *The recipe
-  has no steps yet.* as a `hint` while it has none, and a dropdown of every kind. Every
+  the step it names, else a `danger` `notice` over the steps. Before, between and after the
+  steps a `small_icon_button` +, centred, its list every kind, the one chosen added there;
+  *The recipe has no steps yet.* as a `hint` over the lone + while there are none. Every
   condition's list offers, under *The model*, *After a check*, *Your variables* and
   *Functions*, each name by what it means with its unit, the name at the right. Save at the bar's right is the accent only while there are unsaved edits
   that pass the check, its why on hover otherwise; leaving with unsaved edits asks as a
