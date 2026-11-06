@@ -9,8 +9,8 @@ use crate::i18n::tr;
 use crate::prepare::{kind_glyph, kind_name};
 use crate::settings::{Checked, RecipeForm, StepForm};
 use crate::ui::{
-    ChainStep, ConditionName, DropdownRow, chain_drop_mark, chain_ghost, chain_seam, chain_step,
-    dropdown_menu_wide, dropdown_row, icon, kept, theme,
+    ChainAction, ChainStep, ConditionName, DropdownRow, chain_drop_mark, chain_ghost, chain_seam,
+    chain_step, dropdown_menu_wide, dropdown_row, icon, kept, theme,
 };
 
 /// The step a grip is dragging, while one is.
@@ -131,10 +131,21 @@ fn card(
         tr!("recipes-step-down"),
         tr!("recipes-step-remove"),
     );
+    let action = |glyph, tooltip, enabled, folded| ChainAction {
+        glyph,
+        tooltip,
+        enabled,
+        folded,
+    };
     let actions = [
-        (icon::MOVE_UP, up.as_str(), index > 0),
-        (icon::MOVE_DOWN, down.as_str(), index + 1 < state.count),
-        (icon::REMOVE, remove.as_str(), true),
+        action(icon::MOVE_UP, up.as_str(), index > 0, true),
+        action(
+            icon::MOVE_DOWN,
+            down.as_str(),
+            index + 1 < state.count,
+            true,
+        ),
+        action(icon::REMOVE, remove.as_str(), true, false),
     ];
     let look = ChainStep {
         number: index + 1,

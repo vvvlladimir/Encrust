@@ -9,9 +9,8 @@ use crate::panels::Window;
 use crate::prepare::{Step, Wait};
 use crate::settings::Section;
 use crate::ui::{
-    DropdownFace, DropdownRow, Inline, Lead, RunState, companion_square, dropdown,
-    dropdown_menu_wide, dropdown_row, group_name, hairline, icon, inline_button, picker_foot,
-    run_box, theme,
+    DropdownFace, DropdownRow, Lead, RunState, companion_square, dropdown, dropdown_menu_wide,
+    dropdown_row, group_name, hairline, icon, picker_foot, run_box, theme,
 };
 
 /// The row, as wide as the room it is drawn in.
@@ -76,8 +75,8 @@ fn run_row(ui: &mut egui::Ui, window: &mut Window, step: Step, share: f32) {
 fn buttons(ui: &mut egui::Ui, wait: Option<&Wait>) -> Option<Asked> {
     let Some(wait) = wait else {
         let cancel = tr!("common-cancel");
-        let pressed = inline_button(ui, Inline::new(&cancel).glyph(icon::CANCEL)).clicked();
-        return pressed.then_some(Asked::Cancel);
+        let pressed = companion_square(ui, icon::CANCEL, &cancel, theme::BUTTON_H, true);
+        return pressed.clicked().then_some(Asked::Cancel);
     };
     let go_on = match wait.failed {
         true => tr!("prepare-row-retry"),

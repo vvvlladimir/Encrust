@@ -192,7 +192,7 @@ paints from tokens only.
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
-| `chain_step`, `ChainStep`, `chain_seam`, `chain_drop_mark`, `chain_ghost` | Steps run one after another: a folding card on a rail, its number in a disc on it, a grip, glyph, name, a one-line summary, question mark, switch, caret and, open, its actions; seams with a + on the rail; where a dragged card lands, and the card by the pointer |
+| `chain_step`, `ChainStep`, `chain_seam`, `chain_drop_mark`, `chain_ghost` | Steps run one after another: a folding card on a rail, its number in a disc on it, a grip, glyph, name, a one-line summary, question mark, switch, caret and its actions, some only while open; seams with a + on the rail; where a dragged card lands, and the card by the pointer |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
 | `found_row` | Something found that is not the user's yet: a dashed row of glyph, name, a figure and Add |
 | `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |

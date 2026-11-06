@@ -33,15 +33,23 @@ pub struct ChainStep<'a> {
     /// What the question mark reads out.
     pub help: &'a [String],
     pub grip_tooltip: &'a str,
-    /// The step's own actions at the right of its open heading, left to right: glyph,
-    /// tooltip, and whether it can be pressed.
-    pub actions: &'a [(&'a str, &'a str, bool)],
+    /// The step's own actions at the right of its heading, left to right.
+    pub actions: &'a [ChainAction<'a>],
     /// Whether the step does not read, so its disc and summary stand in `danger`.
     pub faulty: bool,
     pub open: bool,
     pub dragged: bool,
     /// Whether the step may be changed: a step of a built-in recipe folds, and nothing else.
     pub editable: bool,
+}
+
+/// An action of a step: its glyph and tooltip, whether it can be pressed, and whether it
+/// stands on the folded heading too, not only the open one.
+pub struct ChainAction<'a> {
+    pub glyph: &'a str,
+    pub tooltip: &'a str,
+    pub enabled: bool,
+    pub folded: bool,
 }
 
 /// What a card was asked: the heading pressed to fold or unfold it, an action, the grip,
@@ -181,8 +189,8 @@ fn heading(
     (rect, (fold.clicked(), action), grip)
 }
 
-/// The caret, the switch, the question mark and, while open, the step's actions, laid right
-/// to left; which action was pressed.
+/// The caret, the switch, the question mark and the step's actions shown in its fold, laid
+/// right to left; which action was pressed.
 fn controls(ui: &mut Ui, step: &ChainStep<'_>, on: &mut bool) -> Option<usize> {
     ui.spacing_mut().item_spacing.x = theme::LINE_GAP;
     let caret = if step.open {
@@ -202,13 +210,18 @@ fn controls(ui: &mut Ui, step: &ChainStep<'_>, on: &mut bool) -> Option<usize> {
     if !step.help.is_empty() {
         help_mark(ui, step.help);
     }
-    if !(step.open && step.editable) {
+    if !step.editable {
         return None;
     }
     ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
     let mut pressed = None;
-    for (at, (glyph, tooltip, enabled)) in step.actions.iter().enumerate().rev() {
-        let button = ui.add_enabled_ui(*enabled, |ui| icon_button(ui, glyph, tooltip));
+    for (at, action) in step.actions.iter().enumerate().rev() {
+        if !(step.open || action.folded) {
+            continue;
+        }
+        let button = ui.add_enabled_ui(action.enabled, |ui| {
+            icon_button(ui, action.glyph, action.tooltip)
+        });
         if button.inner.clicked() {
             pressed = Some(at);
         }
@@ -308,6 +321,8 @@ fn disc(ui: &Ui, centre: egui::Pos2, step: &ChainStep<'_>, on: bool) {
         (false, false) => colors.line,
     };
     let painter = ui.painter();
+    // The wash is translucent: the rail's ground goes under it, so the rail stops at the ring.
+    painter.circle_filled(centre, DISC_D / 2.0, colors.base);
     painter.circle(centre, DISC_D / 2.0, fill, Stroke::new(1.0, ring));
     painter.text(
         centre,

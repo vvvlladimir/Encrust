@@ -189,7 +189,7 @@ beside it, 6 apart, bare on the stage. The list, `dropdown_menu_wide` as wide as
 glyph, and under a rule *Edit the recipes* as its `picker_foot` opening Settings → Recipes.
 The square runs the recipe on what a tool would act on, its tooltip that or why it cannot,
 the square off. While a run goes the picker's place is a `run_box`: the turning glyph, the step and the
-share done, washed in `accent_wash` to it; the square is an inline Cancel with its glyph.
+share done, washed in `accent_wash` to it; the square is the cross, its tooltip *Cancel*.
 Waiting (ADR 0407) the box says *Step 3:* and why — with the pause glyph in `accent_soft`
 the pause's message (else *Prepare for print is paused*), or with the warning glyph in
 `danger` and a `danger` edge why the step failed; the share stays; then End, the stop glyph, and Continue, the play
@@ -290,9 +290,10 @@ and the one that applies right.
   folded, in `text_low` after it, *When …*, *Skipped if it fails*, *2 settings set*, *1 rule*
   (*Switched off* alone for a step off; in `danger`, the disc ringed so, while it does not
   read); at the right its question mark — what that kind of step does, how a step runs and
-  how a condition is written — its switch and the caret. A press on the heading unfolds it,
+  how a condition is written — its switch and the caret, and before the question mark move
+up and move down, each off at its end. A press on the heading unfolds it,
   every step folded at first and each fold kept; one that does not read stands open. Open,
-  the heading carries move up, move down and the bin before the question mark, the disc
+  the heading carries the bin before move up, the disc, filled over the rail so the rail stops at its ring,
   washed in `accent_wash` and ringed in `accent`; under it
   *When* as a `condition_row` (*Always* while empty), *On failure* Stop / Skip, its settings by kind — a setting left out its
   name and *Default* with a + to set it; one set its field (`number_row` with the unit its key

@@ -33,7 +33,7 @@ pub use widgets::{
     spinner, start_rename, step_bar, subheading, subheading_with_switch, summary_button, swatch,
     switch, text_box, text_row, toggle_button, tone, unit_field, vertical_hairline, zone_button,
 };
-pub use widgets::{ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
+pub use widgets::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use widgets::{ChipPart, chip_text_w, name_line, paint_chip, row_mark};
 pub use widgets::{
     ConditionName, ConditionRow, PlanMark, PlanRow, condition_row, field_error, plan_row,
