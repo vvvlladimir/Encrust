@@ -1,8 +1,10 @@
 //! The user's recipes opened, saved, copied, renamed and thrown away through the profile
 //! catalogue (ADR 0405); the picker's choice follows a rename and a deletion.
 
+use std::collections::BTreeMap;
+
 use anyhow::{Result, bail};
-use core_recipe::{Listed, is_built_in};
+use core_recipe::{Listed, Recipe, is_built_in};
 use printer_profiles::{Catalogue, Kind};
 
 use super::{Draft, RecipeForm, Settings, unique_id};
@@ -60,6 +62,33 @@ pub fn save_recipe(
     draft.id.clone_from(&id);
     draft.mark_saved();
     settings.recipe_pick = Some(id.clone());
+    Ok(id)
+}
+
+/// Keeps a new recipe of no steps among the user's, under a name no recipe in `listed` has,
+/// and opens it. Answers its id.
+pub fn new_recipe(
+    settings: &mut Settings,
+    catalogue: &mut Catalogue,
+    listed: &[Listed],
+) -> Result<String> {
+    let taken = |name: &str| listed.iter().any(|entry| entry.name() == name);
+    let name = (1..=listed.len() + 1)
+        .map(|number| match number {
+            1 => tr!("recipes-new-name"),
+            _ => tr!("recipes-new-name-numbered", number = number),
+        })
+        .find(|name| !taken(name))
+        .unwrap_or_else(|| tr!("recipes-new-name"));
+    let recipe = Recipe {
+        name,
+        vars: BTreeMap::new(),
+        steps: Vec::new(),
+    };
+    let id = catalogue.fresh_recipe_id(&recipe.name, is_built_in);
+    catalogue.save_recipe(&id, &recipe.to_toml())?;
+    settings.recipe_pick = Some(id.clone());
+    settings.recipe = Some(Draft::new(id.clone(), RecipeForm::of(&recipe)));
     Ok(id)
 }
 

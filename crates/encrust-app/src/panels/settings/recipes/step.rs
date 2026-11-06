@@ -8,8 +8,8 @@ use super::setting::settings_rows;
 use crate::i18n::tr;
 use crate::settings::{Checked, ChoiceForm, Field, SettingsForm, StepForm};
 use crate::ui::{
-    Inline, Segment, Segmented, condition_row, count_row, field_error, icon, icon_button,
-    inline_button, nested, row_name, subheading, switch, text_row,
+    ConditionName, ConditionRow, Inline, Segment, Segmented, condition_row, count_row, field_error,
+    icon, icon_button, inline_button, nested, row_name, subheading, switch, text_row,
 };
 
 /// What the step's own buttons asked of the list.
@@ -19,15 +19,18 @@ pub(super) enum Asked {
     Remove,
 }
 
-/// The fields of step `index` of `count`, and what its buttons asked.
+/// The fields of step `index` of `count`, and what its buttons asked; `names` are what its
+/// conditions can read.
 pub(super) fn fields(
     ui: &mut Ui,
     step: &mut StepForm,
-    index: usize,
-    count: usize,
+    (index, count): (usize, usize),
     checked: &Checked,
+    names: &[ConditionName],
 ) -> Option<Asked> {
+    crate::ui::describe(ui, &kind_help(step.kind));
     crate::ui::describe(ui, &tr!("recipes-step-help"));
+    crate::ui::describe(ui, &tr!("recipes-conditions-help"));
     let asked = buttons(ui, index, count);
     if let Some((Some(at), error)) = &checked.whole
         && *at == index
@@ -35,34 +38,71 @@ pub(super) fn fields(
         field_error(ui, &error.to_string());
     }
     let why = checked.at(&Field::When(index)).map(ToString::to_string);
-    condition_row(ui, &tr!("recipes-when"), &mut step.when, why.as_deref());
+    let when = ConditionRow {
+        label: &tr!("recipes-when"),
+        error: why.as_deref(),
+        empty: &tr!("recipes-when-empty"),
+        names,
+    };
+    condition_row(ui, &when, &mut step.when);
     on_fail(ui, &mut step.on_fail);
-    settings_rows(ui, step.kind, &mut step.set, (index, None), checked);
-    own_fields(ui, step, index, checked);
+    settings_rows(
+        ui,
+        step.kind,
+        &mut step.set,
+        (index, None),
+        (checked, names),
+    );
+    own_fields(ui, step, index, (checked, names));
     if !step.kind.settings().is_empty() {
-        choose(ui, step.kind, &mut step.choose, index, checked);
+        choose(ui, step.kind, &mut step.choose, index, (checked, names));
     }
     asked
 }
 
+/// What a step of `kind` does to the model, in a sentence or two.
+fn kind_help(kind: StepKind) -> String {
+    match kind {
+        StepKind::Repair => tr!("recipes-step-help-repair"),
+        StepKind::Orient => tr!("recipes-step-help-orient"),
+        StepKind::Hollow => tr!("recipes-step-help-hollow"),
+        StepKind::Drain => tr!("recipes-step-help-drain"),
+        StepKind::Supports => tr!("recipes-step-help-supports"),
+        StepKind::Check => tr!("recipes-step-help-check"),
+        StepKind::Arrange => tr!("recipes-step-help-arrange"),
+        StepKind::Save => tr!("recipes-step-help-save"),
+        StepKind::Gate => tr!("recipes-step-help-gate"),
+        StepKind::Pause => tr!("recipes-step-help-pause"),
+    }
+}
+
 /// What a gate, a pause or a check adds to the step's fields.
-fn own_fields(ui: &mut Ui, step: &mut StepForm, index: usize, checked: &Checked) {
+fn own_fields(
+    ui: &mut Ui,
+    step: &mut StepForm,
+    index: usize,
+    (checked, names): (&Checked, &[ConditionName]),
+) {
     let error = |field: Field| checked.at(&field).map(ToString::to_string);
     match step.kind {
         StepKind::Gate => {
             let why = error(Field::StopIf(index));
-            condition_row(
-                ui,
-                &tr!("recipes-stop-if"),
-                &mut step.stop_if,
-                why.as_deref(),
-            );
+            let stop_if = ConditionRow {
+                label: &tr!("recipes-stop-if"),
+                error: why.as_deref(),
+                empty: &tr!("recipes-stop-if-empty"),
+                names,
+            };
+            condition_row(ui, &stop_if, &mut step.stop_if);
             text_row(ui, &tr!("recipes-message"), &mut step.message);
         }
         StepKind::Pause => {
             text_row(ui, &tr!("recipes-message"), &mut step.message);
         }
-        StepKind::Check => retry(ui, &mut step.retry, error(Field::RetryWhile(index))),
+        StepKind::Check => {
+            let why = error(Field::RetryWhile(index));
+            retry(ui, &mut step.retry, why.as_deref(), names);
+        }
         _ => {}
     }
 }
@@ -104,14 +144,25 @@ fn on_fail(ui: &mut Ui, on_fail: &mut OnFail) {
 }
 
 /// A check's retry: supports the islands again while its condition holds, at most a few times.
-fn retry(ui: &mut Ui, retry: &mut Option<(String, u8)>, error: Option<String>) {
+fn retry(
+    ui: &mut Ui,
+    retry: &mut Option<(String, u8)>,
+    error: Option<&str>,
+    names: &[ConditionName],
+) {
     let mut on = retry.is_some();
     if switch(ui, &mut on, &tr!("recipes-retry")).changed() {
         *retry = on.then(|| ("islands > 0".to_owned(), 2));
     }
     if let Some((while_, max)) = retry {
         nested(ui, |ui| {
-            condition_row(ui, &tr!("recipes-retry-while"), while_, error.as_deref());
+            let row = ConditionRow {
+                label: &tr!("recipes-retry-while"),
+                error,
+                empty: &tr!("recipes-retry-while-empty"),
+                names,
+            };
+            condition_row(ui, &row, while_);
             let mut times = u32::from(*max);
             let at_most = tr!("recipes-retry-max");
             if count_row(ui, &at_most, &mut times, "", 0.05, 1..=u32::from(MAX_RETRY)) {
@@ -128,7 +179,7 @@ fn choose(
     kind: StepKind,
     rules: &mut Vec<ChoiceForm>,
     index: usize,
-    checked: &Checked,
+    (checked, names): (&Checked, &[ConditionName]),
 ) {
     subheading(ui, &tr!("recipes-choose"));
     let mut dropped = None;
@@ -138,8 +189,14 @@ fn choose(
                 let why = checked
                     .at(&Field::ChoiceWhen(index, at))
                     .map(ToString::to_string);
-                condition_row(ui, &tr!("recipes-when"), &mut rule.when, why.as_deref());
-                settings_rows(ui, kind, &mut rule.set, (index, Some(at)), checked);
+                let when = ConditionRow {
+                    label: &tr!("recipes-when"),
+                    error: why.as_deref(),
+                    empty: &tr!("recipes-rule-when-empty"),
+                    names,
+                };
+                condition_row(ui, &when, &mut rule.when);
+                settings_rows(ui, kind, &mut rule.set, (index, Some(at)), (checked, names));
                 let words = tr!("recipes-rule-remove");
                 let remove = Inline::new(&words).glyph(icon::REMOVE);
                 if inline_button(ui, remove).clicked() {

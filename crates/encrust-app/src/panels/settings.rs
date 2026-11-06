@@ -194,6 +194,7 @@ fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
     }
     match pressed {
         Some(Heading::Import(kind)) => ask_for_profile(window, kind),
+        Some(Heading::New) if section == Section::Recipes => recipes::new(window),
         Some(Heading::New) => supports::add(window.machine, None),
         Some(Heading::Back) => leave(window, Leaving::Back),
         Some(Heading::Reset) => supports::reset(&mut window.machine.settings),
@@ -260,12 +261,13 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
         };
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = theme::ITEM_GAP;
-            if kind == Kind::Support
-                && inline_button(
-                    ui,
-                    Inline::new(&tr!("settings-new-profile")).glyph(icon::ADD),
-                )
-                .clicked()
+            let new = match kind {
+                Kind::Support => Some(tr!("settings-new-profile")),
+                Kind::Recipe => Some(tr!("settings-new-recipe")),
+                _ => None,
+            };
+            if let Some(new) = new
+                && inline_button(ui, Inline::new(&new).glyph(icon::ADD)).clicked()
             {
                 pressed = Some(Heading::New);
             }

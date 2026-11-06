@@ -4,14 +4,16 @@
 use core_recipe::StepKind;
 use egui::Ui;
 
+use super::names::condition_names;
 use super::step;
 use crate::i18n::tr;
 use crate::panels::settings::{form_card, switched_card};
 use crate::prepare::kind_name;
 use crate::settings::{Checked, RecipeForm, Settings};
+use crate::ui::ConditionName;
 use crate::ui::{
-    DropdownFace, DropdownRow, Inline, dropdown, dropdown_menu, dropdown_row, icon, icon_button,
-    inline_button, notice, number_field, text_box, text_row, theme,
+    DropdownFace, DropdownRow, Inline, dropdown, dropdown_menu, dropdown_row, hint, icon,
+    icon_button, inline_button, notice, number_field, text_box, text_row, theme,
 };
 
 /// The recipe open in the form, each block under its title.
@@ -51,12 +53,18 @@ fn fields(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked) {
             &error.to_string(),
         );
     }
-    steps(ui, recipe, checked);
-    form_card(ui, &tr!("recipes-block-add"), |ui| add_step(ui, recipe));
+    let names = condition_names(&recipe.vars);
+    steps(ui, recipe, checked, &names);
+    form_card(ui, &tr!("recipes-block-add"), |ui| {
+        if recipe.steps.is_empty() {
+            hint(ui, &tr!("recipes-no-steps"));
+        }
+        add_step(ui, recipe);
+    });
 }
 
 /// A block a step, each with its switch, and the move or removal its buttons asked for.
-fn steps(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked) {
+fn steps(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked, names: &[ConditionName]) {
     let mut moved = None;
     let count = recipe.steps.len();
     for index in 0..count {
@@ -70,7 +78,7 @@ fn steps(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked) {
         let mut on = step.enabled;
         ui.push_id(id, |ui| {
             switched_card(ui, &title, Some(&mut on), |ui| {
-                if let Some(asked) = step::fields(ui, step, index, count, checked) {
+                if let Some(asked) = step::fields(ui, step, (index, count), checked, names) {
                     moved = Some((index, asked));
                 }
             });

@@ -2,7 +2,7 @@ use core_recipe::{Recipe, built_in};
 use printer_profiles::Catalogue;
 
 use super::*;
-use crate::settings::{Settings, delete_recipe, duplicate_recipe, save_recipe};
+use crate::settings::{Settings, delete_recipe, duplicate_recipe, new_recipe, save_recipe};
 
 /// A catalogue over a profile directory of its own, which every write lands in.
 fn writable(name: &str) -> Catalogue {
@@ -159,4 +159,27 @@ fn nothing_open_saves_nothing_and_a_recipe_that_does_not_read_is_not_copied() {
     assert!(duplicate_recipe(&mut settings, &mut catalogue, &odd).is_err());
     assert_eq!(catalogue.recipes().count(), 0);
     assert!(settings.recipe.is_none());
+}
+
+#[test]
+fn a_new_recipe_opens_empty_under_a_name_none_has_and_saves_its_first_step() {
+    let mut catalogue = writable("new");
+    let mut settings = Settings::default();
+    let first = new_recipe(&mut settings, &mut catalogue, &[]).expect("writable");
+    let listed = core_recipe::library(
+        catalogue
+            .recipes()
+            .map(|entry| (entry.id.as_str(), entry.profile.as_str())),
+    );
+    let second = new_recipe(&mut settings, &mut catalogue, &listed).expect("writable");
+    assert_ne!(
+        kept(&catalogue, &first).name,
+        kept(&catalogue, &second).name
+    );
+    let draft = settings.recipe.as_mut().expect("the new recipe is open");
+    assert!(draft.values.steps.is_empty());
+    draft.values.add_step(StepKind::Orient);
+    let mut chosen = String::new();
+    let id = save_recipe(&mut settings, &mut catalogue, &mut chosen).expect("one step reads");
+    assert_eq!(kept(&catalogue, &id).steps.len(), 1);
 }

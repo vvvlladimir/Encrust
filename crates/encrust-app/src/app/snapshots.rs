@@ -308,9 +308,10 @@ fn the_chip_opening_its_machines_and_its_resins() {
 #[test]
 fn the_recipes_of_prepare_for_print() {
     let mut app = pictured();
-    let text = core_recipe::BUILT_IN[0]
-        .1
-        .replace("Prepare for print", "Busts on heavy supports, hollowed thin");
+    let text = core_recipe::BUILT_IN[0].1.replace(
+        "Prepare for print",
+        "Busts on heavy supports, hollowed thin",
+    );
     let catalogue = &mut app.machine.slicing.catalogue;
     catalogue.save_recipe("busts", &text).expect("writable");
     let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
@@ -426,8 +427,8 @@ fn an_update_found_told_and_installed() {
     results.extend(picture("update_download", downloading));
 }
 
-/// The Recipes page: the table with a recipe of the user's picked, and that recipe open in
-/// its form with a condition that does not read.
+/// The Recipes page: the table with a recipe of the user's picked, that recipe open in its
+/// form with a condition that does not read, and the names a condition can read listed.
 #[test]
 fn the_recipes_page() {
     let mut results = SnapshotResults::new();
@@ -451,4 +452,12 @@ fn the_recipes_page() {
     let draft = form.machine.settings.recipe.as_mut().expect("open");
     draft.values.steps[0].when = "!turned &&".to_owned();
     results.extend(picture("settings_recipe_form", form));
+    let mut listing = with_mine();
+    listing.machine.settings.open_recipe(&entry);
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), listing);
+    let first = harness.get_all_by_label("Insert a name").next();
+    first.expect("the first step has a When").click();
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("settings_recipe_names");
+    results.extend(harness.take_snapshot_results());
 }

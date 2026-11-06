@@ -142,7 +142,7 @@ paints from tokens only.
 | `rename_box` | A table row's name being typed, on `sunken`, after `start_rename` on a double click |
 | `card` | The frame of anything floating over the viewport |
 | `card_foot` | The foot of a side card, on `base` and rounded to fit inside the card |
-| `step_bar` | A run that tells its step: the step above `progress_bar`, and Cancel where it can be stopped; Auto-orient, Prepare for print, Repair and Drain |
+| `step_bar` | A run that tells its step: the step above `progress_bar`, and Cancel where it can be stopped; Auto-orient, Repair and Drain |
 | `progress_bar`, `progress_bar_of` | A running job: filled to its fraction, or running on its own when the job cannot count its work; the second as tall as asked, the printer sheet's 6 |
 | `spinner` | A running job's glyph, turning: every wait in the window, never egui's own |
 | `hover_mix` | A fill easing to its hover by `FAST`, for every control painted by hand |
@@ -153,7 +153,7 @@ paints from tokens only.
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `picture_square` | A square of a picture, or an empty raised one, a caret on a dark disc saying a click opens more: the relief's picture |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
-| `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
+| `notice_card`, `job_notice`, `job_lines` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar; `job_lines` a job's alone, for a card of any width: the Prepare row's |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule; short of room, the keys alone as glyphs, what each does on hover |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped but shrunk, down to 60 %, to fit its cell, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
@@ -212,7 +212,7 @@ paints from tokens only.
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `colour_field` | A `FIELD_H` swatch of a colour over a checkerboard; a click opens a picker: a saturation and value square, a hue strip, an opacity strip over the checkerboard, and the colour as `#RRGGBBAA` beside its opacity |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
-| `condition_row`, `field_error` | A named condition typed in the code face, a `text_row`'s shape; while it does not read, ringed in `danger` with why on one line under it, cut short and read whole on hover; that line alone, for an error a form shows elsewhere |
+| `condition_row`, `ConditionRow`, `field_error` | A named condition typed in the code face, a `text_row`'s shape, what it says while empty in the box; while it does not read, ringed in `danger` with why on one line under it, cut short and read whole on hover; at its right `BRACKETS_CURLY` listing, 340 wide and scrolling past 360, the names it can read under their headings, each by its meaning with the name at the right, a press adding it to the end; `field_error` that line alone, for an error a form shows elsewhere |
 | `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
 | `page_heading` | A page's title and, smaller and quieter after it, the name it belongs under: a machine and its maker |
 | `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
@@ -292,6 +292,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
 | A plan's step skipped, decided when reached, off | `MINUS_CIRCLE`, `HOURGLASS_SIMPLE`, `PROHIBIT` |
 | Move a step up, down; work a setting out by an expression | `ARROW_UP`, `ARROW_DOWN`, `FUNCTION` |
+| Put a name into a condition | `BRACKETS_CURLY` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
 A glyph stands at one size of `theme::glyph`, named for where it stands: `HELP` 10, `CARET`

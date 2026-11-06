@@ -26,7 +26,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Tool row | over the stage, centred between 8 right of the inspector, shown or put away, and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
-| Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a card 56 tall while a run goes |
+| Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a card as tall as a job notice's lines while a run goes |
 | Layer strip | the stage's right edge, its full height | 64 |
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
@@ -188,8 +188,8 @@ beside it, 6 apart, bare on the stage. The list, `dropdown_menu_wide` as wide as
 *Built-in* then *Yours* under `group_name`s, a recipe that cannot run led by the warning
 glyph, and under a rule *Edit the recipes* as its `picker_foot` opening Settings → Recipes.
 The square runs the recipe on what a tool would act on, its tooltip that or why it cannot,
-the square off. While a run goes the row is a `card` padded 12 holding the `step_bar`: the
-step, its bar and Cancel.
+the square off. While a run goes the row is a `card` on the notices' margin holding `job_lines`:
+the turning glyph, the step, the share done and a quiet Cancel, the bar under them.
 
 ## Layer strip
 
@@ -227,7 +227,7 @@ track. With no stack it reads *No layers*.
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
   its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
-  *Preparing for print:* and its step, standing whichever tool is in hand. Paused at a
+  *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown. Paused at a
   recipe's `pause`, it is a notice instead: the pause glyph in `accent_soft`, the pause's
   message (else *Prepare for print is paused*), *Continue* as its action and Cancel as its
   close; the view still turns, no tool starts a job, and Select's bar says *Waiting for you*.
@@ -276,23 +276,26 @@ and the one that applies right.
   *Open the Hollow tool* ↗ (or Drain). The bar: Export, Delete.
 - *Recipes*: the `table` of every recipe, the built-in ones first — name, *Kept* (Built-in,
   Yours, or Does not run for one of yours that no longer reads or passes its check, why it
-  does not as a `hint` under the table once picked) and the steps it takes — Import in the
-  header. The bar: Edit (a double click too), Duplicate, Export, Delete (`confirm_button`,
+  does not as a `hint` under the table once picked) and the steps it takes — Import and
+  *New recipe*, which keeps one of no steps and opens it, in the header. The bar: Edit (a double click too), Duplicate, Export, Delete (`confirm_button`,
   off with why for a built-in one). The form, under the trail *Recipes › Busts* (*Built-in*
   after a built-in one's name): a built-in one is read under a `notice` saying to duplicate
   it, every field off. Blocks: *Recipe* (Name, the variables as a code-face name box, its
   figure and a bin a row, *Add a variable*), then a block a step titled *1. Orientation* with
-  its switch, the step's move up, move down and bin at the right of its first row, *When* as a
-  `condition_row`, *On failure* Stop / Skip, its settings by kind — a setting left out its
+  its switch, its question mark saying what that kind of step does, how a step runs and how a
+  condition is written, the step's move up, move down and bin at the right of its first row,
+  *When* as a `condition_row` (*Always* while empty), *On failure* Stop / Skip, its settings by kind — a setting left out its
   name and *Default* with a + to set it; one set its field (`number_row` with the unit its key
-  names, `switch`, a `dropdown` of its words, `text_row`, points as rows of three fields and
+  names, `switch`, a `dropdown` of its words by what each means, the file's word at the row's right, `text_row`, points as rows of three fields and
   a bin) with the reset arrow back to the default and, for a number or a switch, the
   expression glyph trading it for a `condition_row` —, a gate's *Stop if* and *Message*, a
   pause's *Message*, a check's *Support the islands again* switch with *While* and *At most*
   `nested` under it, then *Choose*: each rule `nested`, its *When* and settings and *Remove
   the rule*, and *Add a rule*; why the recipe does not run as a `field_error` at the top of
-  the step it names, else a `danger` `notice` over the steps. Last, *New step*: a dropdown
-  of every kind. Save at the bar's right is the accent only while there are unsaved edits
+  the step it names, else a `danger` `notice` over the steps. Last, *New step*: *The recipe
+  has no steps yet.* as a `hint` while it has none, and a dropdown of every kind. Every
+  condition's list offers, under *The model*, *After a check*, *Your variables* and
+  *Functions*, each name by what it means with its unit, the name at the right. Save at the bar's right is the accent only while there are unsaved edits
   that pass the check, its why on hover otherwise; leaving with unsaved edits asks as a
   profile's form does.
 - A profile's form is blocks one under another. Its header: the way back, the trail

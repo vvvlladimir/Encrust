@@ -338,6 +338,7 @@ settings-tab-network = Сеть
 settings-new-resin = Новая смола
 settings-new-printer = Новый принтер
 settings-new-profile = Новый профиль
+settings-new-recipe = Новый рецепт
 settings-copy-name = { $name } (копия)
 
 ## supports.rs
@@ -658,6 +659,10 @@ ago-weeks =
 
 field-back-to = Вернуть { $value } { $unit }
 field-printer-address = Адрес принтера
+
+## ui/widgets/field/condition.rs
+
+condition-insert = Вставить имя
 
 ## ui/widgets/layout.rs
 
@@ -1162,6 +1167,8 @@ recipes-built-in-why = Стандартный рецепт нельзя изме
 recipes-cannot-save = не удалось сохранить рецепт
 recipes-unreadable-why = рецепт не читается
 recipes-copy-name = { $name } — копия
+recipes-new-name = Новый рецепт
+recipes-new-name-numbered = Новый рецепт { $number }
 
 ## panels/settings/recipes.rs
 
@@ -1186,6 +1193,7 @@ recipes-var-remove = Удалить переменную
 recipes-var-add = Добавить переменную
 recipes-block-add = Новый шаг
 recipes-step-add = Добавить шаг
+recipes-no-steps = В рецепте пока нет шагов.
 
 ## panels/settings/recipes/step.rs
 
@@ -1205,6 +1213,21 @@ recipes-retry-max = Не больше
 recipes-choose = Выбор
 recipes-rule-remove = Удалить правило
 recipes-rule-add = Добавить правило
+recipes-when-empty = Всегда
+recipes-stop-if-empty = Никогда
+recipes-retry-while-empty = например, islands > 0
+recipes-rule-when-empty = например, height_mm > 120
+recipes-conditions-help = Условие сравнивает имена и числа знаками < <= > >= == !=, соединяет их через && (и), || (или) и ! (не) и считает с + - * / и функциями min, max, abs и clamp. Кнопка рядом с условием показывает все имена, которые оно может читать.
+recipes-step-help-repair = Починка исправляет сетку, чтобы её можно было нарезать: закрывает дыры и разворачивает грани наружу. Метод говорит, насколько глубоко.
+recipes-step-help-orient = Ориентация поворачивает модель на платформе. Цель говорит, что поворот бережёт: поддержки, усилие отрыва от плёнки или время печати; «Наклон, макс.» ограничивает, насколько модель наклонится.
+recipes-step-help-hollow = Полость опустошает модель внутри, оставляя стенку заданной толщины, чтобы сберечь смолу.
+recipes-step-help-drain = Дренажные отверстия выпускают смолу из полой модели: там, где поиск находит, что она стечёт, или в заданных точках.
+recipes-step-help-supports = Поддержки выращивают поддержки под моделью по профилю поддержек.
+recipes-step-help-check = Проверка нарезает платформу и ищет острова, запертую смолу и сильный отрыв от плёнки. Только после неё условие может читать islands, peel_n и support_ml.
+recipes-step-help-arrange = Расстановка раскладывает модели по платформе с заданным отступом.
+recipes-step-help-save = Сохранение нарезает платформу в файл в заданной папке и может отправить его на принтер.
+recipes-step-help-gate = Условие остановки завершает подготовку и возвращает платформу как была, если выполняется «Остановить, если», и показывает своё сообщение.
+recipes-step-help-pause = Пауза показывает своё сообщение и ждёт, пока вы не нажмёте «Продолжить».
 
 ## panels/settings/recipes/setting.rs
 
@@ -1233,6 +1256,49 @@ recipes-set-spacing = Отступ
 recipes-set-folder = Папка
 recipes-set-name = Имя файла
 recipes-set-send = Отправить на принтер
+recipes-expression-empty = например, height_mm / 50
+recipes-word-repair = Починка
+recipes-word-close-holes = Закрыть дыры
+recipes-word-wrap = Обернуть
+recipes-word-deep = Глубокая починка
+recipes-word-auto = Авто
+recipes-word-fewest-supports = Меньше поддержек
+recipes-word-least-peel = Слабее отрыв
+recipes-word-shortest-print = Быстрее печать
+recipes-word-inside = Внутрь
+recipes-word-outside = Наружу
+recipes-word-open-floor = Открытое дно
+recipes-word-points = В точках
+
+## panels/settings/recipes/names.rs
+
+recipes-names-model = Модель
+recipes-names-measured = После проверки
+recipes-names-yours = Ваши переменные
+recipes-names-functions = Функции
+recipes-names-your-value = Ваша переменная, { $value }
+recipes-names-min = Меньшее из двух
+recipes-names-max = Большее из двух
+recipes-names-abs = Без знака
+recipes-names-clamp = Между двумя границами
+recipes-names-height = Высота, мм
+recipes-names-width = Ширина, мм
+recipes-names-depth = Глубина, мм
+recipes-names-volume = Объём, мл
+recipes-names-surface = Площадь поверхности, см²
+recipes-names-faces = Число граней
+recipes-names-sound = В сетке нет дефектов
+recipes-names-defects = Число дефектов сетки
+recipes-names-turned = Вы повернули модель
+recipes-names-hollow = Модель полая
+recipes-names-saves-ml = Сколько смолы сбережёт полость, мл
+recipes-names-saves-share = Какую долю смолы сбережёт полость
+recipes-names-worth-hollowing = Полость того стоит
+recipes-names-fits = Модель входит в область печати
+recipes-names-trapped = Карманы запертой смолы, и после дренажа
+recipes-names-islands = Острова без поддержки
+recipes-names-peel = Самый сильный отрыв от плёнки, Н
+recipes-names-support-ml = Смола в поддержках, мл
 
 ## panels/settings/presets.rs
 

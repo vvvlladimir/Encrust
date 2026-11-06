@@ -57,8 +57,9 @@ pub use dropdown::{
 };
 pub use entry_row::{EntryRow, ModelRow, entry_row, model_row};
 pub use field::{
-    Carried, address_field, axis_label, carried_row, condition_row, count_row, field_error,
-    field_label, number_field, number_row, picker_row, row_name, text_box, text_row, unit_field,
+    Carried, ConditionName, ConditionRow, address_field, axis_label, carried_row, condition_row,
+    count_row, field_error, field_label, number_field, number_row, picker_row, row_name, text_box,
+    text_row, unit_field,
 };
 pub use figures::{Figure, details_fold, figure_grid, split_readings};
 pub use hint_bar::{hint_bar, hint_bar_names};
@@ -86,7 +87,9 @@ pub use menu::{
     popup_menu,
 };
 pub use nav::{NAV_ROW_H, NavAside, nav_row};
-pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, zoom_bar};
+pub use over_stage::{
+    NoticeReply, ZoomPress, job_lines, job_notice, notice_card, spinner, zoom_bar,
+};
 pub use picker_line::{PICKER_ICON_SQUARE, PickerLine, eye_square, picker_foot, picker_line};
 pub use print_chip::{ChipPart, chip_text_w, paint_chip};
 pub use release::{StepState, release_hero, steps};

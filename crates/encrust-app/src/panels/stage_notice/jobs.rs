@@ -26,8 +26,10 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "measure-walk", shown) {
         window.tools.measure_walk.cancel(&mut window.tools.measure);
     }
+    // The Prepare row tells the run itself wherever it stands; Preview hides it.
+    let away = *window.mode == crate::workspace::Mode::Preview;
     let paused = window.tools.prepare.paused().is_some();
-    let prepare = window.tools.prepare.progress().filter(|_| !paused);
+    let prepare = window.tools.prepare.progress().filter(|_| away && !paused);
     let prepare = prepare.map(|(step, share)| {
         let label = tr!("notice-preparing", step = step.label());
         (label, Some(share), false)

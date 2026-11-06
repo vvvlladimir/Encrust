@@ -322,6 +322,7 @@ settings-tab-network = Network
 settings-new-resin = New resin
 settings-new-printer = New printer
 settings-new-profile = New profile
+settings-new-recipe = New recipe
 settings-copy-name = { $name } copy
 
 ## supports.rs
@@ -619,6 +620,11 @@ ago-weeks =
 
 field-back-to = Back to { $value } { $unit }
 field-printer-address = Printer address
+
+## ui/widgets/field/condition.rs
+
+# The button beside a condition box that lists the names it can read.
+condition-insert = Insert a name
 
 ## ui/widgets/layout.rs
 
@@ -1119,6 +1125,9 @@ recipes-cannot-save = the recipe cannot be saved
 recipes-unreadable-why = the recipe does not read
 # The name a copy of a recipe starts with.
 recipes-copy-name = { $name } copy
+# The name a new recipe starts with; numbered when one is already called that.
+recipes-new-name = New recipe
+recipes-new-name-numbered = New recipe { $number }
 
 ## panels/settings/recipes.rs
 
@@ -1145,6 +1154,7 @@ recipes-var-add = Add a variable
 # The block at the foot of the form that adds a step to the recipe.
 recipes-block-add = New step
 recipes-step-add = Add a step
+recipes-no-steps = The recipe has no steps yet.
 
 ## panels/settings/recipes/step.rs
 
@@ -1167,6 +1177,23 @@ recipes-retry-max = At most
 recipes-choose = Choose
 recipes-rule-remove = Remove the rule
 recipes-rule-add = Add a rule
+# What an empty condition box says: the step runs always.
+recipes-when-empty = Always
+# What an empty Stop if box says: the gate never stops the run.
+recipes-stop-if-empty = Never
+recipes-retry-while-empty = such as islands > 0
+recipes-rule-when-empty = such as height_mm > 120
+recipes-conditions-help = A condition compares names and numbers with < <= > >= == !=, joins them with && (and), || (or) and ! (not), and works with + - * / and min, max, abs and clamp. The button beside a condition lists every name it can read.
+recipes-step-help-repair = Repair mends the mesh so that it slices: holes closed and faces turned outward. The method says how far it goes.
+recipes-step-help-orient = Orientation turns the model on the plate. The goal says what the turn spares: supports, the pull on the film, or print time; Most tilt limits how far it leans.
+recipes-step-help-hollow = Hollowing empties the inside of the model behind a wall of the thickness given, to save resin.
+recipes-step-help-drain = Drain holes let the resin out of a hollow model: where a search finds they drain it, or at the points given.
+recipes-step-help-supports = Supports grows supports under the model by a support profile.
+recipes-step-help-check = Check slices the plate and looks for islands, trapped resin and a hard pull on the film. Only after it can a condition read islands, peel_n and support_ml.
+recipes-step-help-arrange = Arrangement lays the models out on the plate the spacing given apart.
+recipes-step-help-save = Save slices the plate into a file in the folder given, and can send it to the printer.
+recipes-step-help-gate = A stop condition ends the run and puts the plate back while Stop if holds, and shows its message.
+recipes-step-help-pause = A pause shows its message and waits until you press Continue.
 
 ## panels/settings/recipes/setting.rs
 
@@ -1197,6 +1224,52 @@ recipes-set-spacing = Spacing
 recipes-set-folder = Folder
 recipes-set-name = File name
 recipes-set-send = Send to the printer
+# What an empty expression box says.
+recipes-expression-empty = such as height_mm / 50
+recipes-word-repair = Repair
+recipes-word-close-holes = Close holes
+recipes-word-wrap = Wrap
+recipes-word-deep = Deep repair
+recipes-word-auto = Auto
+recipes-word-fewest-supports = Fewest supports
+recipes-word-least-peel = Lightest pull
+recipes-word-shortest-print = Shortest print
+recipes-word-inside = Inside
+recipes-word-outside = Outside
+recipes-word-open-floor = Open floor
+# Drain holes drilled at the points the recipe gives.
+recipes-word-points = At the points
+
+## panels/settings/recipes/names.rs
+
+# Headings of the names a condition can read.
+recipes-names-model = The model
+recipes-names-measured = After a check
+recipes-names-yours = Your variables
+recipes-names-functions = Functions
+recipes-names-your-value = Your variable, { $value }
+recipes-names-min = The smaller of two
+recipes-names-max = The larger of two
+recipes-names-abs = Without its sign
+recipes-names-clamp = Kept between two bounds
+recipes-names-height = Height, mm
+recipes-names-width = Width, mm
+recipes-names-depth = Depth, mm
+recipes-names-volume = Volume, ml
+recipes-names-surface = Surface area, cm²
+recipes-names-faces = Number of faces
+recipes-names-sound = The mesh has no defects
+recipes-names-defects = Number of mesh defects
+recipes-names-turned = You turned the model
+recipes-names-hollow = The model is hollow
+recipes-names-saves-ml = Resin hollowing saves, ml
+recipes-names-saves-share = Share of resin hollowing saves
+recipes-names-worth-hollowing = Hollowing is worth it
+recipes-names-fits = It fits the build volume
+recipes-names-trapped = Pockets of trapped resin, after Drain too
+recipes-names-islands = Islands with no support
+recipes-names-peel = Hardest pull on the film, N
+recipes-names-support-ml = Resin in the supports, ml
 
 ## panels/settings/presets.rs
 

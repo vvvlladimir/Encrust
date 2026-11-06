@@ -22,7 +22,7 @@ pub use library::{
 pub use recipe_form::{
     Checked, ChoiceForm, Field, RecipeForm, SettingForm, SettingsForm, StepForm,
 };
-pub use recipes::{delete_recipe, duplicate_recipe, save_recipe};
+pub use recipes::{delete_recipe, duplicate_recipe, new_recipe, save_recipe};
 
 /// A page of the Settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

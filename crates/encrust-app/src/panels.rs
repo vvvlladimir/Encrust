@@ -253,8 +253,8 @@ impl Window<'_> {
     fn prepare_row(&mut self, ctx: &egui::Context, foot: Pos2, width: f32) -> f32 {
         let (frame, inner_w) = match self.tools.prepare.is_running() {
             true => {
-                let margin = theme::PANEL_MARGIN.sum().x;
-                (card().inner_margin(theme::PANEL_MARGIN), width - margin)
+                let margin = theme::NOTICE_MARGIN.sum().x;
+                (card().inner_margin(theme::NOTICE_MARGIN), width - margin)
             }
             false => (egui::Frame::new(), width + 2.0 * CARD_STROKE),
         };

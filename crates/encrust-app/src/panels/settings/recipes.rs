@@ -2,6 +2,7 @@
 //! first; the picked one opened in its form, a built-in one to read and copy (ADR 0405).
 
 mod form;
+mod names;
 mod setting;
 mod step;
 
@@ -15,7 +16,7 @@ use super::supports::Open;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::export_text;
-use crate::settings::{Settings, delete_recipe, duplicate_recipe, save_recipe};
+use crate::settings::{Settings, delete_recipe, duplicate_recipe, new_recipe, save_recipe};
 use crate::status::Status;
 use crate::ui::window_frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::ui::{Confirm, Inline, confirm_button, hint, icon, inline_button, quiet_button};
@@ -244,6 +245,24 @@ fn apply(window: &mut Window, listed: &Arc<Vec<Listed>>, action: Action) {
     };
     if let Err(error) = outcome {
         window.machine.status = Status::failed(&error);
+    }
+}
+
+/// Keeps a new recipe of no steps among the user's and opens it in the form.
+pub(super) fn new(window: &mut Window) {
+    let machine = &mut *window.machine;
+    let listed = window
+        .tools
+        .prepare
+        .library
+        .listed(&machine.slicing.catalogue);
+    let made = new_recipe(
+        &mut machine.settings,
+        &mut machine.slicing.catalogue,
+        &listed,
+    );
+    if let Err(error) = made {
+        machine.status = Status::failed(&error);
     }
 }
 

@@ -7,18 +7,19 @@ use egui::{Align, Layout, Ui};
 use crate::i18n::tr;
 use crate::settings::{Checked, Field, SettingForm, SettingsForm};
 use crate::ui::{
-    DropdownFace, DropdownRow, Inline, condition_row, dropdown, dropdown_menu, dropdown_row, hint,
-    icon, icon_button, icon_toggle, inline_button, number_row, row_name, switch, text_row, theme,
-    unit_field,
+    ConditionName, ConditionRow, DropdownFace, DropdownRow, Inline, condition_row, dropdown,
+    dropdown_menu, dropdown_row, hint, icon, icon_button, icon_toggle, inline_button, number_row,
+    row_name, switch, text_row, theme, unit_field,
 };
 
-/// The settings of a step of `kind`, or of one of its rules: `at` is the step and the rule.
+/// The settings of a step of `kind`, or of one of its rules: `at` is the step and the rule,
+/// `names` what an expression can read.
 pub(super) fn settings_rows(
     ui: &mut Ui,
     kind: StepKind,
     set: &mut SettingsForm,
     at: (usize, Option<usize>),
-    checked: &Checked,
+    (checked, names): (&Checked, &[ConditionName]),
 ) {
     for (key, setting_kind) in kind.settings() {
         let label = setting_name(key);
@@ -29,7 +30,13 @@ pub(super) fn settings_rows(
             let asked = with_buttons(ui, held, *setting_kind, |ui| match set.get_mut(*key) {
                 None => unset(ui, &label),
                 Some(setting) => {
-                    value_row(ui, &label, key, *setting_kind, setting, error.as_deref())
+                    let expression = ConditionRow {
+                        label: &label,
+                        error: error.as_deref(),
+                        empty: &tr!("recipes-expression-empty"),
+                        names,
+                    };
+                    value_row(ui, &expression, key, *setting_kind, setting);
                 }
             });
             match asked {
@@ -101,14 +108,15 @@ fn unset(ui: &mut Ui, label: &str) {
     });
 }
 
+/// A setting set: its field by what it takes, or `expression`'s row while it is worked out.
 fn value_row(
     ui: &mut Ui,
-    label: &str,
+    expression: &ConditionRow<'_>,
     key: &str,
     kind: SettingKind,
     setting: &mut SettingForm,
-    error: Option<&str>,
 ) {
+    let label = expression.label;
     match (setting, kind) {
         (SettingForm::Number(value), _) => {
             let (unit, decimals) = unit_of(key);
@@ -123,23 +131,29 @@ fn value_row(
         }
         (SettingForm::Points(points), _) => points_rows(ui, label, points),
         (SettingForm::Expr(text), _) => {
-            condition_row(ui, label, text, error);
+            condition_row(ui, expression, text);
         }
     }
 }
 
-/// One of a setting's words, from a list of them.
+/// One of a setting's words, from a list of them: each by what it means, the word the file
+/// holds at its right.
 fn word_row(ui: &mut Ui, label: &str, word: &mut String, words: &[&str]) {
     ui.horizontal(|ui| {
         row_name(ui, label);
+        let shown = word_name(word);
         let face = DropdownFace {
             lead: None,
-            ..DropdownFace::plain("", word)
+            ..DropdownFace::plain("", &shown)
         };
         let response = dropdown(ui, &face, ui.available_width());
         dropdown_menu(&response, |ui| {
             for choice in words {
-                let row = DropdownRow::named(choice, *choice == word.as_str());
+                let name = word_name(choice);
+                let row = DropdownRow {
+                    aside: Some(choice),
+                    ..DropdownRow::named(&name, *choice == word.as_str())
+                };
                 if dropdown_row(ui, &row).clicked() {
                     *word = (*choice).to_owned();
                 }
@@ -198,6 +212,25 @@ fn unit_of(key: &str) -> (String, usize) {
     }
 }
 
+/// What a setting's word means in the form, by the word in the file.
+fn word_name(word: &str) -> String {
+    match word {
+        "repair" => tr!("recipes-word-repair"),
+        "close-holes" => tr!("recipes-word-close-holes"),
+        "wrap" => tr!("recipes-word-wrap"),
+        "deep" => tr!("recipes-word-deep"),
+        "auto" => tr!("recipes-word-auto"),
+        "fewest-supports" => tr!("recipes-word-fewest-supports"),
+        "least-peel" => tr!("recipes-word-least-peel"),
+        "shortest-print" => tr!("recipes-word-shortest-print"),
+        "inside" => tr!("recipes-word-inside"),
+        "outside" => tr!("recipes-word-outside"),
+        "open-floor" => tr!("recipes-word-open-floor"),
+        "points" => tr!("recipes-word-points"),
+        other => other.to_owned(),
+    }
+}
+
 /// What a setting is called in the form, by its key in the file.
 fn setting_name(key: &str) -> String {
     match key {
@@ -221,5 +254,31 @@ fn setting_name(key: &str) -> String {
         "name" => tr!("recipes-set-name"),
         "send" => tr!("recipes-set-send"),
         other => other.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core_recipe::{SettingKind, StepKind};
+
+    use super::word_name;
+
+    #[test]
+    fn every_word_a_setting_takes_has_a_name_of_its_own() {
+        let words = StepKind::ALL
+            .into_iter()
+            .flat_map(StepKind::settings)
+            .filter_map(|(_, kind)| match kind {
+                SettingKind::Word(words) => Some(*words),
+                _ => None,
+            })
+            .flatten();
+        for word in words {
+            assert_ne!(
+                word_name(word),
+                *word,
+                "`{word}` is shown as the file's word"
+            );
+        }
     }
 }

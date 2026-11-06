@@ -1,5 +1,5 @@
 //! Prepare for print over the plate card: the recipe and the run, bare on the stage; while a
-//! run goes, its step and Cancel on a card (ADR 0406).
+//! run goes, its step, share done and Cancel on a card, as a job notice says them (ADR 0406).
 
 use core_recipe::{Listed, Origin};
 
@@ -8,13 +8,13 @@ use crate::panels::Window;
 use crate::settings::Section;
 use crate::ui::{
     DropdownFace, DropdownRow, Lead, companion_square, dropdown, dropdown_menu_wide, dropdown_row,
-    group_name, hairline, icon, picker_foot, step_bar, theme,
+    group_name, hairline, icon, job_lines, picker_foot, theme,
 };
 
 /// The row, as wide as the room it is drawn in.
 pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
     if let Some((step, share)) = window.tools.prepare.progress() {
-        if step_bar(ui, &step.label(), Some(share), true) {
+        if job_lines(ui, &step.label(), Some(share), false) {
             crate::prepare::cancel(window.doc, window.tools, window.machine);
         }
         return;

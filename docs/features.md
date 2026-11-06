@@ -133,15 +133,19 @@ catalogue's automatic supports, its cavity too. A model you turned keeps its tur
 `--rotate` keeps it. A recipe's other steps run as their tools do: `check` measures the
 layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
 plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
-`pause` waits for **Continue** on the notice. The notice and the row name the step under way
-over a bar; **Cancel** stops it and leaves the plate as it was, and one undo takes a finished
+`pause` waits for **Continue** on the notice. The row names the step under way, and the
+share done, over a bar, and in Preview, where the row is not shown, a notice does; **Cancel** stops it and leaves the plate as it was, and one undo takes a finished
 run back. While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and
 Grow wait. A recipe of yours that no longer reads or passes its check cannot be started, and
 its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
-first: a built-in one opens to read and **Duplicate** makes a copy of your own; yours you
-rename, give variables, and change step by step — add a step of any kind, switch it off, move
-it up or down, remove it, type its condition (checked as you type, the error under the field),
-choose what a failure does, set or leave out each setting, work a number or a switch out by an
+first: a built-in one opens to read and **Duplicate** makes a copy of your own, and **New
+recipe** starts one of no steps; yours you rename, give variables, and change step by step —
+each step says what it does behind its question mark — add a step of any kind, switch it off,
+move it up or down, remove it, type its condition (checked as you type, the error under the
+field, and the button beside it listing every name a condition can read, what each means and
+its unit, your variables and the functions, to put one in),
+choose what a failure does, set or leave out each setting (a word by what it means, the
+file's word beside it), work a number or a switch out by an
 expression, add rules that choose other settings, and a gate's, a pause's or a check's own
 fields. **Save** writes it only once it passes its check, under a new file name when you
 renamed it, the picker following; a draft that does not pass stays in the form. **Delete**
