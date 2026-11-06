@@ -143,9 +143,9 @@ step, not infinity. No loops, no assignment, no strings: a condition always ends
 
 `core_recipe::decide(plan, index, metrics)` answers one step: `Run` with the settings
 resolved, `Skip` with why, `Stop` with the gate's message, or `Pause`. Each carries what it
-read, which the plan before a run and the report after it show:
-`hollow — run: saves_ml 42 ≥ big_ml 30`. Before a run, a step whose condition reads
-a name not yet measured is shown as *decided when reached*.
+read, which the command line's report shows: `hollow — run: saves_ml 42 ≥ big_ml 30`.
+`core_recipe::preview` decides every step before a run, one that reads a name not yet
+measured *when reached*; the window shows no plan (ADR 0406).
 
 On the command line a flag typed for a model, or a plate file's key for it, wins over the
 setting it shapes in every step of its kind: `--hollow 3` is every hollow step's `wall_mm`,

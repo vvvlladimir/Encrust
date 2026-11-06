@@ -69,6 +69,20 @@ fn recipe_with_every_kind_and_setting_reads_back_equal() {
 }
 
 #[test]
+fn a_number_is_written_as_typed_not_as_its_widening() {
+    let recipe = Recipe::from_toml(
+        "name = \"Thin\"\n[vars]\nslim = 0.8\n\
+         [[step]]\ndo = \"hollow\"\nset = { wall_mm = 2.1, keep_solid_under_mm = 0.3 }\n",
+    )
+    .expect("the recipe reads");
+    let text = recipe.to_toml();
+    for written in ["slim = 0.8\n", "wall_mm = 2.1", "keep_solid_under_mm = 0.3"] {
+        assert!(text.contains(written), "`{written}` in:\n{text}");
+    }
+    assert_eq!(Recipe::from_toml(&text).expect("reads back"), recipe);
+}
+
+#[test]
 fn every_step_kind_is_found_by_its_name() {
     for kind in StepKind::ALL {
         assert_eq!(StepKind::from_name(kind.name()), Some(kind));
@@ -186,4 +200,21 @@ fn expression_setting_is_kept_as_an_expression() {
         panic!("cavity is not an expression");
     };
     assert_eq!(condition.kind(&|_| Some(Kind::Bool)), Ok(Kind::Bool));
+}
+
+#[test]
+fn a_steps_conditions_are_its_when_gate_retry_rules_and_expressions() {
+    let recipe = Recipe::from_toml(EVERY_KIND).expect("the fixture is a recipe");
+    let texts = |index: usize| -> Vec<&str> {
+        let step: &Step = &recipe.steps[index];
+        step.conditions().into_iter().map(Condition::text).collect()
+    };
+    assert_eq!(texts(1), ["!turned", "height_mm > 120"]);
+    assert_eq!(
+        texts(2),
+        ["saves_ml >= big_ml", "clamp(height_mm / 50, 1.5, 3)"]
+    );
+    assert_eq!(texts(5), ["islands > 0"]);
+    assert_eq!(texts(7), ["trapped > 0"]);
+    assert!(texts(8).is_empty(), "a pause holds none");
 }

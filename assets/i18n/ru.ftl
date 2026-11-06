@@ -1755,25 +1755,6 @@ recipe-kind-arrange = Расстановка
 recipe-kind-save = Сохранение
 recipe-kind-gate = Условие остановки
 recipe-kind-pause = Пауза
-recipe-note-orient-supports = Удаляет поддержки шага { $step }; следующий шаг «Поддержки» построит их заново
-recipe-note-orient-drain = Отверстия шага { $step } рассчитаны на прежнее положение модели
-recipe-note-hollow-supports = Поддержки шага { $step } не заходят в новую полость
-recipe-note-repair = Починка перестраивает поверхность и может закрыть отверстия шага { $step }
-recipe-note-supports-again = Заменяет поддержки шага { $step }
-
-## prepare/foresee.rs
-
-recipe-step-numbered = { $number }. { $step }
-recipe-plan-runs = Выполнится
-recipe-plan-runs-on = На { $count } из { $total }
-recipe-plan-skipped = Пропущен
-recipe-plan-when-reached = Решится во время выполнения
-recipe-plan-off = Выкл.
-recipe-plan-stops = Остановит подготовку
-recipe-plan-pauses = Пауза
-recipe-plan-done = Готово
-recipe-plan-running = Выполняется
-recipe-plan-to-come = Ожидает
 
 ## relief.rs
 

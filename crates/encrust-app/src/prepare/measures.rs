@@ -7,11 +7,16 @@ use super::{Run, unturned};
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
 
+/// Whether `object` fits the build volume with what stands under it.
+fn fits(object: &SceneObject, plate: &BuildPlate) -> bool {
+    crate::plate::bounds(object).is_some_and(|bounds| plate.fit(&bounds).fits())
+}
+
 impl Run {
     /// Every variable of `object` as it stands, with what the run measured on it since;
     /// `saves_ml` at the wall the plan's hollow step works out for it, where it does.
     pub(super) fn metrics_of(&self, object: &SceneObject, plate: &BuildPlate) -> Metrics {
-        let fits = super::foresee::fits(object, plate);
+        let fits = fits(object, plate);
         let model = Model {
             mesh: &object.mesh,
             transform: &object.transform,

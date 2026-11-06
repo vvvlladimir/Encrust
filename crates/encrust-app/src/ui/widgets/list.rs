@@ -9,12 +9,10 @@ use crate::ui::theme;
 
 mod found;
 mod issue;
-mod plan;
 mod tag;
 
 pub use found::{found_row, row_mark};
 pub use issue::{issue_list, issue_row};
-pub use plan::{PlanMark, PlanRow, plan_row};
 pub use tag::{bullet, tag, tag_label};
 
 /// What a click on a row of a list asked for.

@@ -109,10 +109,7 @@ impl Metrics {
     /// What `metric` measured; `trapped` is 0 on a model with no cavity, whether or not a
     /// drain or a check looked.
     pub fn get(&self, metric: Metric) -> Option<Value> {
-        let held = self
-            .values
-            .iter()
-            .find_map(|(held, value)| (*held == metric).then_some(*value));
+        let held = self.get_held(metric);
         let solid = self.get_held(Metric::Hollow) == Some(Value::Bool(false));
         match (metric, held) {
             (Metric::Trapped, None) if solid => Some(Value::Number(0.0)),

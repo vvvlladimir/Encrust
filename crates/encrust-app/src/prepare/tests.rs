@@ -161,21 +161,6 @@ fn a_large_solid_cube_is_oriented_hollowed_drained_and_supported_in_one_undo() {
     assert!(!object.hollow.drains().is_empty(), "drilled to drain");
     assert!(object.traps.found().is_empty(), "nothing left trapped");
     assert!(!object.supports.is_empty(), "stood on supports");
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(!prepared.repaired && prepared.drained);
-    let turned = object.transform.rotation.angle_between(Quat::IDENTITY) > UNTURNED_RAD;
-    assert_eq!(
-        prepared.oriented, turned,
-        "said turned only where the search turned it"
-    );
-    // 40³ less its 6 · 40² surface times the 2 mm wall, as the engine reckons it.
-    let saves_mm3 = prepared.hollowed.map(|wall| wall.saves_mm3);
-    let off_mm3 = saves_mm3.map(|saves| (saves - 44_800.0).abs());
-    assert!(
-        off_mm3.is_some_and(|off| off < 1.0),
-        "saves 44800 mm³, said {saves_mm3:?}"
-    );
-    assert!(prepared.supports.is_some(), "by the automatic profile");
     assert!(!bench.doc.history.is_held());
 
     assert!(bench.undo(), "the run is an entry");
@@ -196,10 +181,8 @@ fn an_open_cube_is_repaired_first_and_then_hollowed() {
 
     let object = bench.object(id);
     assert!(object.summary.is_sound(), "the hole was closed");
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(prepared.repaired, "its diagnosis was not sound");
     assert!(
-        prepared.hollowed.is_some(),
+        object.hollow.is_hollow(),
         "diagnosed again once repaired, it is worth hollowing"
     );
 }
@@ -213,9 +196,6 @@ fn a_thin_plate_is_supported_and_never_hollowed() {
     let object = bench.object(id);
     assert!(!object.hollow.is_hollow(), "a 3 mm plate is all wall");
     assert!(object.hollow.drains().is_empty());
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert_eq!(prepared.hollowed, None);
-    assert!(!prepared.drained);
 }
 
 #[test]
@@ -234,8 +214,6 @@ fn a_model_turned_by_hand_keeps_its_turn() {
         object.transform.rotation, turned,
         "as --rotate keeps a turn"
     );
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(!prepared.oriented);
 }
 
 #[test]
@@ -309,8 +287,6 @@ fn the_drain_panels_own_cancel_leaves_prepares_search_running() {
         !object.hollow.drains().is_empty(),
         "Prepare's own search drilled it"
     );
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(prepared.drained);
 }
 
 impl Bench {
@@ -342,7 +318,7 @@ fn hand_turned_plate() -> (Bench, ObjectId) {
 }
 
 #[test]
-fn prepared_again_a_drained_cube_is_not_said_drained() {
+fn prepared_again_a_drained_cube_gets_no_more_holes() {
     let (mut bench, id) = Bench::with(large_cube());
     bench.start();
     bench.run_to_end();
@@ -352,11 +328,6 @@ fn prepared_again_a_drained_cube_is_not_said_drained() {
 
     let object = bench.object(id);
     assert_eq!(object.hollow.drains().len(), holes, "nothing left to drain");
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(
-        !prepared.drained,
-        "a search that drilled nothing drained nothing"
-    );
 }
 
 #[test]

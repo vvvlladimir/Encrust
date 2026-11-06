@@ -35,9 +35,7 @@ pub use widgets::{
 };
 pub use widgets::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use widgets::{ChipPart, chip_text_w, name_line, paint_chip, row_mark};
-pub use widgets::{
-    ConditionName, ConditionRow, PlanMark, PlanRow, condition_row, field_error, plan_row,
-};
+pub use widgets::{ConditionName, ConditionRow, condition_row, field_error};
 pub use widgets::{Confirm, any_armed, confirm_button, is_armed, key_foot, key_row};
 pub use widgets::{
     DEVICE_OPEN_INSET, DeviceRow, device_row, print_picture, share_figure, title_line,

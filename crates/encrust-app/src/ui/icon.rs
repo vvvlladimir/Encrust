@@ -49,13 +49,11 @@ pub use egui_phosphor::regular::{
     CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE,
 };
 
-/// A recipe's plan: a step skipped, one decided when it is reached, one switched off; in
-/// its editor a step dragged or moved up or down, a stop condition, a name put into a
-/// condition, and a setting worked out by an expression.
+/// A recipe's editor: a step dragged or moved up or down, a stop condition, a name put into
+/// a condition, and a setting worked out by an expression.
 pub use egui_phosphor::regular::{
     ARROW_DOWN as MOVE_DOWN, ARROW_UP as MOVE_UP, BRACKETS_CURLY as VARIABLE,
-    DOTS_SIX_VERTICAL as GRIP, FUNCTION as EXPRESSION, HOURGLASS_SIMPLE as WHEN_REACHED,
-    MINUS_CIRCLE as SKIPPED, PROHIBIT as STEP_OFF, SIGN_OUT as GATE,
+    DOTS_SIX_VERTICAL as GRIP, FUNCTION as EXPRESSION, SIGN_OUT as GATE,
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
@@ -170,9 +168,6 @@ mod tests {
         ("ERROR", ERROR),
         ("APPEARANCE", APPEARANCE),
         ("STEP_LATER", STEP_LATER),
-        ("SKIPPED", SKIPPED),
-        ("WHEN_REACHED", WHEN_REACHED),
-        ("STEP_OFF", STEP_OFF),
         ("MOVE_UP", MOVE_UP),
         ("MOVE_DOWN", MOVE_DOWN),
         ("EXPRESSION", EXPRESSION),

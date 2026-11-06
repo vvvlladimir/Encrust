@@ -17,8 +17,6 @@ use crate::supports::BuiltTo;
 use crate::tool_settings::ToolSettings;
 
 mod check;
-mod decided;
-mod foresee;
 mod measures;
 mod recipes;
 mod run;
@@ -26,10 +24,7 @@ mod save;
 mod step;
 mod work;
 
-pub use decided::Prepared;
-
-pub use foresee::{Foresight, PlanLine, foreseen_lines, running_lines};
-pub use recipes::{Library, kind_glyph, kind_name, note_text};
+pub use recipes::{Library, kind_glyph, kind_name};
 use run::Next;
 use step::{Ended, Going};
 use work::Batch;
@@ -82,15 +77,12 @@ impl Step {
     }
 }
 
-/// The recipe picked, the run going, if any, and what the last one decided.
+/// The recipe picked and the run going, if any.
 #[derive(Debug)]
 pub struct Prepare {
     /// The recipe a run takes, by id: a built-in one or the user's (ADR 0405).
     pub recipe: String,
     run: Option<Run>,
-    prepared: Vec<Prepared>,
-    /// The plan of the picked recipe for the models in hand, before a run.
-    pub foresight: Foresight,
     /// The recipes there are to pick from.
     pub library: Library,
 }
@@ -100,8 +92,6 @@ impl Default for Prepare {
         Self {
             recipe: DEFAULT_RECIPE.to_owned(),
             run: None,
-            prepared: Vec::new(),
-            foresight: Foresight::default(),
             library: Library::default(),
         }
     }
@@ -119,7 +109,7 @@ pub struct Wait {
     pub step: usize,
 }
 
-/// One run: the models it took, the plan, the step in hand and what has been decided so far.
+/// One run: the models it took, the plan, the step in hand and what it measured so far.
 #[derive(Debug)]
 struct Run {
     ids: Vec<ObjectId>,
@@ -137,8 +127,6 @@ struct Run {
     step: Step,
     /// What the run measured on each model after a step, as `trapped` after a drain.
     measured: Vec<(ObjectId, Metrics)>,
-    /// Where each plan step stands, which the plan list shows while the run goes.
-    marks: Vec<crate::ui::PlanMark>,
     /// The models a supports step of this run stood on supports, which a later one replaces.
     supported: Vec<ObjectId>,
     /// What each model's latest supports step built to, which a check's retry stands islands on.
@@ -151,7 +139,6 @@ struct Run {
     done: usize,
     steps: usize,
     shown: Highest,
-    prepared: Vec<Prepared>,
 }
 
 impl Prepare {
@@ -177,10 +164,10 @@ impl Prepare {
         Some((run.step, run.shown.keep(share.min(1.0))))
     }
 
-    /// The plan the run takes and where each of its steps stands, while it runs.
-    pub fn marks(&self) -> Option<(&Plan, &[crate::ui::PlanMark])> {
-        let run = self.run.as_ref()?;
-        Some((&run.plan, &run.marks))
+    /// The plan the run takes, while it runs.
+    #[cfg(test)]
+    fn plan(&self) -> Option<&Plan> {
+        self.run.as_ref().map(|run| &run.plan)
     }
 
     /// The step whose job is running now.
@@ -198,13 +185,6 @@ impl Prepare {
             work::Work::Check { attempt } => Some(attempt),
             _ => None,
         }
-    }
-
-    /// What the last run decided for `object`, while it stands as that run left it.
-    pub fn prepared(&self, object: &SceneObject) -> Option<&Prepared> {
-        self.prepared
-            .iter()
-            .find(|prepared| prepared.still_on(object))
     }
 }
 
@@ -303,6 +283,7 @@ pub fn resume(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result
     doc.history.hold(&doc.scene, &settings, chosen);
     if let Some(run) = &mut tools.prepare.run {
         run.waiting = None;
+        run.measure_again();
     }
     machine.status = Status::Idle;
     poll(doc, tools, machine, true);
@@ -377,7 +358,7 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
             tools.prepare.run = Some(run);
             true
         }
-        Ok(Next::Done) => finish(run, doc, tools, &mut machine.status),
+        Ok(Next::Done) => finish(&run, doc, &mut machine.status),
         Ok(Next::Stopped(why)) => halt(run, doc, tools, machine, why),
         Err(error) => halt(run, doc, tools, machine, Status::failed(&error)),
     }
@@ -442,16 +423,10 @@ fn halted(run: &mut Run, doc: &mut Doc, machine: &mut Machine, why: Status) -> b
     false
 }
 
-/// Records the run as one edit and says what it did to the models still on the plate.
-fn finish(run: Run, doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bool {
+/// Records the run as one edit and says how many models it prepared.
+fn finish(run: &Run, doc: &mut Doc, status: &mut Status) -> bool {
     doc.history.release();
     let count = doc.scene.named(&run.ids).count();
-    tools.prepare.prepared = run.prepared;
-    for prepared in &mut tools.prepare.prepared {
-        if let Some(object) = doc.scene.get(prepared.id) {
-            prepared.left_as(object);
-        }
-    }
     *status = Status::Info(tr!("prepare-done", count = count));
     false
 }

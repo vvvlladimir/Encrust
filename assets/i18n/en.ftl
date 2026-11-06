@@ -1710,28 +1710,6 @@ recipe-kind-save = Save
 # A step that ends the run when its condition holds.
 recipe-kind-gate = Stop condition
 recipe-kind-pause = Pause
-# Under a step of a plan that undoes the earlier step numbered { $step }.
-recipe-note-orient-supports = Removes the supports from step { $step }; a later Supports step adds them again
-recipe-note-orient-drain = The holes from step { $step } were placed for the previous orientation
-recipe-note-hollow-supports = The supports from step { $step } do not reach into the new cavity
-recipe-note-repair = A repair rebuilds the surface and may close the holes of step { $step }
-recipe-note-supports-again = Replaces the supports of step { $step }
-
-## prepare/foresee.rs
-
-# A step of a plan: its place in the recipe, then its kind.
-recipe-step-numbered = { $number }. { $step }
-# What a step of the plan will do, at the right of its row.
-recipe-plan-runs = Runs
-recipe-plan-runs-on = Runs on { $count } of { $total }
-recipe-plan-skipped = Skipped
-recipe-plan-when-reached = Decided during the run
-recipe-plan-off = Off
-recipe-plan-stops = Stops the run
-recipe-plan-pauses = Pauses
-recipe-plan-done = Done
-recipe-plan-running = Running
-recipe-plan-to-come = Not started
 
 ## relief.rs
 

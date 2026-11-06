@@ -1,12 +1,12 @@
-//! The recipes Prepare for print can take, by id, and the words a plan names their steps and
-//! notes by (ADR 0405).
+//! The recipes Prepare for print can take, by id, and the words and glyphs their steps go by
+//! (ADR 0405).
 
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use core_recipe::{Listed, Note, Plan, Read, StepKind};
+use core_recipe::{Listed, Plan, Read, StepKind};
 use printer_profiles::Catalogue;
 
 use crate::i18n::tr;
@@ -96,17 +96,5 @@ pub fn kind_glyph(kind: StepKind) -> &'static str {
         StepKind::Save => icon::SLICE_TO_FILE,
         StepKind::Gate => icon::GATE,
         StepKind::Pause => icon::PAUSE,
-    }
-}
-
-/// What a plan says under a step that undoes an earlier one, which it names by number.
-pub fn note_text(note: &Note) -> String {
-    let over = note.over + 1;
-    match (note.kind, note.over_kind) {
-        (StepKind::Orient, StepKind::Drain) => tr!("recipe-note-orient-drain", step = over),
-        (StepKind::Orient, _) => tr!("recipe-note-orient-supports", step = over),
-        (StepKind::Hollow, _) => tr!("recipe-note-hollow-supports", step = over),
-        (StepKind::Repair, _) => tr!("recipe-note-repair", step = over),
-        _ => tr!("recipe-note-supports-again", step = over),
     }
 }

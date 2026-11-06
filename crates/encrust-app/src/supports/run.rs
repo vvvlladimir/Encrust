@@ -42,14 +42,6 @@ impl BuiltTo {
             Self::Alone(profile) => (**profile).clone(),
         }
     }
-
-    /// The profile's name, as the Select card says what a model stands on.
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Sized(sizing) => &sizing.0.name,
-            Self::Alone(profile) => &profile.name,
-        }
-    }
 }
 
 /// The catalogue's automatic profile, the window's Auto and `--supports auto`, and its shapes.

@@ -83,6 +83,25 @@ fn a_check_counts_the_islands_a_gate_after_it_stops_on() {
 }
 
 #[test]
+fn a_gate_held_by_islands_decides_again_on_the_plate_mended_by_hand() {
+    let (mut bench, id) = floating();
+    bench.run(
+        "[[step]]\ndo = \"check\"\n\
+         [[step]]\ndo = \"gate\"\nstop_if = \"islands > 0\"\nmessage = \"islands\"\n",
+    );
+    bench.run_to_end();
+    assert_eq!(bench.waits(), Some("islands"));
+    let object = bench.doc.scene.get_mut(id).expect("on the plate");
+    object.transform.translation.z = 0.0;
+    bench.frame();
+    bench.resume();
+    bench.run_to_end();
+    assert_eq!(bench.waits(), None, "set down on the plate, the cube hangs from nothing");
+    let said = Status::Info(tr!("prepare-done", count = 2));
+    assert_eq!(bench.machine.status, said);
+}
+
+#[test]
 fn a_check_on_a_model_standing_on_the_plate_finds_no_island() {
     let (bench, _) = Bench::with(cuboid(Vec3::ZERO, Vec3::splat(10.0)));
     let mut bench = bench.with_printer();

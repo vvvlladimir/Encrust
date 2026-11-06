@@ -149,7 +149,6 @@ paints from tokens only.
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
 | `issue_row`, `issue_list` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there. The list shows seven and scrolls the rest inside itself |
-| `plan_row`, `PlanMark` | One step of a recipe's plan, 20 a line: a glyph in the tint of where it stands, its number and kind, the verdict at the right in that tint; under them the readings that decided it in `text_low` and a note in `warn`, each one line cut short and read whole on hover. Skipped, off and to come set the name in `text_low`; running turns its glyph |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `picture_square` | A square of a picture, or an empty raised one, a caret on a dark disc saying a click opens more: the relief's picture |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
@@ -292,7 +291,6 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | New project, recent, test prints | `FILE_PLUS`, `CLOCK_COUNTER_CLOCKWISE`, `TEST_TUBE` |
 | Undo, redo, select all, move to plate | `ARROW_U_UP_LEFT`, `ARROW_U_UP_RIGHT`, `SELECTION_ALL`, `ARROW_SQUARE_RIGHT` |
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
-| A plan's step skipped, decided when reached, off | `MINUS_CIRCLE`, `HOURGLASS_SIMPLE`, `PROHIBIT` |
 | Move a step up, down, drag it; work a setting out by an expression | `ARROW_UP`, `ARROW_DOWN`, `DOTS_SIX_VERTICAL`, `FUNCTION` |
 | A recipe's stop condition | `SIGN_OUT` |
 | Put a name into a condition | `BRACKETS_CURLY` |

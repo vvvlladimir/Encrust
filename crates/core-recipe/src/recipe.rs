@@ -168,6 +168,22 @@ pub struct Step {
     pub retry: Option<Retry>,
 }
 
+impl Step {
+    /// Every condition and expression it holds: its `when`, `stop_if`, retry, rules and the
+    /// settings worked out by `=`.
+    pub fn conditions(&self) -> Vec<&Condition> {
+        let mut found: Vec<&Condition> = self.when.iter().chain(&self.stop_if).collect();
+        found.extend(self.retry.iter().map(|retry| &retry.while_));
+        found.extend(self.choose.iter().map(|choice| &choice.when));
+        let sets = std::iter::once(&self.set).chain(self.choose.iter().map(|choice| &choice.set));
+        found.extend(sets.flat_map(|set| set.values()).filter_map(|setting| match setting {
+            Setting::Expr(condition) => Some(condition),
+            _ => None,
+        }));
+        found
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Recipe {
     pub name: String,

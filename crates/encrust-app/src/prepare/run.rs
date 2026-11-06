@@ -4,12 +4,11 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
-use core_engine::Hollowing;
 use core_recipe::{Decision, Metric, OnFail, Plan, StepKind, decide};
 
 use super::step::Going;
 use super::work::{self, Batch, NotYet, Settings, Work};
-use super::{IDLE_POLLS, Prepared, Run, Step};
+use super::{IDLE_POLLS, Run, Step};
 use crate::i18n::tr;
 use crate::job::Highest;
 use crate::plate::BuildPlate;
@@ -17,7 +16,6 @@ use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 use crate::supports::{BuiltTo, Side};
-use crate::ui::PlanMark;
 
 /// Where a run stands once it has moved on.
 pub(super) enum Next {
@@ -39,8 +37,6 @@ enum Decided {
 impl Run {
     pub(super) fn new(plan: Plan, ids: Vec<ObjectId>) -> Self {
         Self {
-            marks: vec![PlanMark::ToCome; plan.recipe().steps.len()],
-            prepared: ids.iter().map(|id| Prepared::new(*id)).collect(),
             ids,
             waiting: None,
             plan,
@@ -113,6 +109,34 @@ impl Run {
             failed: true,
             step: self.index + 1,
         });
+    }
+
+    /// Before the step a failed wait decides again on the plate as the user left it, queues
+    /// again the scan or check that measured what it reads, so a hole drilled or a support
+    /// stood by hand is counted (ADR 0407).
+    pub(super) fn measure_again(&mut self) {
+        let deciding = self.queue.is_empty() && self.going.is_none() && self.next == self.index;
+        let steps = &self.plan.recipe().steps;
+        let Some(step) = steps.get(self.index).filter(|_| deciding) else {
+            return;
+        };
+        if step.kind == StepKind::Check {
+            return;
+        }
+        let conditions = step.conditions();
+        let read: Vec<Metric> = conditions
+            .iter()
+            .flat_map(|condition| condition.names())
+            .filter_map(Metric::from_name)
+            .collect();
+        let ids = self.ids.clone();
+        if read.iter().any(|metric| metric.known_after() == [StepKind::Check]) {
+            let check = Work::Check { attempt: 0 };
+            self.queue.push_back(Batch::of(Work::Scan, ids.clone()));
+            self.queue.push_back(Batch::of(check, ids));
+        } else if read.contains(&Metric::Trapped) {
+            self.queue.push_back(Batch::of(Work::Scan, ids));
+        }
     }
 
     /// Queues the batches of the next plan step, or says where the run stands instead: at
@@ -200,7 +224,6 @@ impl Run {
 
     fn begin(&mut self, batch: Batch, going: Going, doc: &Doc) {
         self.step = batch.work.step();
-        self.mark(&batch, &doc.scene);
         self.going = Some((batch, going));
         self.recount(&doc.scene, &doc.plate);
     }
@@ -210,11 +233,6 @@ impl Run {
         let index = self.next;
         self.index = index;
         self.next += 1;
-        if let Some(earlier) = index.checked_sub(1).and_then(|at| self.marks.get_mut(at))
-            && matches!(earlier, PlanMark::Running | PlanMark::Pauses)
-        {
-            *earlier = PlanMark::Done;
-        }
         let kind = self.plan.recipe().steps[index].kind;
         let mut runs: Vec<(ObjectId, Settings)> = Vec::new();
         for object in scene.named(&self.ids) {
@@ -225,7 +243,6 @@ impl Run {
                 }
                 Decision::Stop { message, .. } => return Ok(Decided::Stop(Status::Error(message))),
                 Decision::Pause { message } => {
-                    self.marks[index] = PlanMark::Pauses;
                     return Ok(Decided::Pause(match message.is_empty() {
                         true => tr!("prepare-paused"),
                         false => message,
@@ -234,11 +251,6 @@ impl Run {
                 Decision::Skip { .. } | Decision::Disabled => {}
             }
         }
-        self.marks[index] = match (self.plan.recipe().steps[index].enabled, runs.is_empty()) {
-            (false, _) => PlanMark::Disabled,
-            (true, true) => PlanMark::Skipped,
-            (true, false) => PlanMark::Running,
-        };
         match batches(kind, runs) {
             Ok(batches) => Ok(Decided::Batches(batches)),
             Err(not) => Ok(Decided::Stop(not_yet(not))),
@@ -270,36 +282,13 @@ impl Run {
         self.idle < IDLE_POLLS
     }
 
-    /// Notes the models `batch` names as its step found them.
-    fn mark(&mut self, batch: &Batch, scene: &Scene) {
-        let wall = match &batch.work {
-            Work::Hollow(hollowed) => Some(hollowed.wall_mm),
-            _ => None,
-        };
-        for id in &batch.ids {
-            let prepared = self.prepared.iter_mut().find(|prepared| prepared.id == *id);
-            if let Some((prepared, object)) = prepared.zip(scene.get(*id)) {
-                let linear = object.transform.linear();
-                let wall = wall.map(|wall_mm| Hollowing::reckoned(&object.mesh, linear, wall_mm));
-                prepared.started(batch.work.step(), object, wall);
-            }
-        }
-    }
-
-    /// Notes what the batch just landed changed on the plate, what a drain left trapped, and
+    /// Notes what the batch just landed built supports to, what a drain left trapped, and
     /// the supports to raise inside the cavities after those outside.
     pub(super) fn landed(&mut self, scene: &Scene, batch: Batch, built: Option<&BuiltTo>) {
-        let step = batch.work.step();
-        let profile = built.map(BuiltTo::name);
         if let Some(built) = built {
             for id in &batch.ids {
                 self.built.retain(|(owner, _)| owner != id);
                 self.built.push((*id, built.clone()));
-            }
-        }
-        for prepared in &mut self.prepared {
-            if let Some(object) = scene.get(prepared.id) {
-                prepared.landed(step, object, profile.unwrap_or_default());
             }
         }
         if let Work::DrainAuto { .. } | Work::Scan = batch.work {
@@ -362,7 +351,6 @@ impl Run {
             return;
         };
         self.step = Step::Drain;
-        self.mark(batch, scene);
         for id in &batch.ids {
             if let Some(object) = scene.get_mut(*id) {
                 crate::drain::drill_at_fractions(object, points, *size);

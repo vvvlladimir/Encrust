@@ -1,5 +1,6 @@
 //! A `Recipe` into the text `from_toml` reads back.
 
+use core_geometry::Scalar;
 use toml::{Table, Value};
 
 use super::{OnFail, Recipe, Setting, Settings, Step};
@@ -12,7 +13,7 @@ pub(super) fn recipe_to_toml(recipe: &Recipe) -> String {
         let vars = recipe
             .vars
             .iter()
-            .map(|(key, n)| (key.clone(), Value::Float(f64::from(*n))))
+            .map(|(key, n)| (key.clone(), float(*n)))
             .collect();
         table.insert("vars".into(), Value::Table(vars));
     }
@@ -75,17 +76,23 @@ fn settings_value(settings: &Settings) -> Value {
 
 fn setting_value(setting: &Setting) -> Value {
     match setting {
-        Setting::Number(n) => Value::Float(f64::from(*n)),
+        Setting::Number(n) => float(*n),
         Setting::Bool(on) => Value::Boolean(*on),
         Setting::Word(text) | Setting::Text(text) => Value::String(text.clone()),
         Setting::Points(points) => Value::Array(
             points
                 .iter()
                 .map(|point| {
-                    Value::Array(point.iter().map(|c| Value::Float(f64::from(*c))).collect())
+                    Value::Array(point.iter().map(|c| float(*c)).collect())
                 })
                 .collect(),
         ),
         Setting::Expr(condition) => Value::String(format!("= {}", condition.text())),
     }
+}
+
+/// `n` as the shortest decimal that reads back to it, `0.8` and not the `0.800000011920929`
+/// its widening to `f64` would write.
+fn float(n: Scalar) -> Value {
+    Value::Float(n.to_string().parse().unwrap_or(f64::from(n)))
 }
