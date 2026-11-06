@@ -168,6 +168,17 @@ fn a_drain_at_points_measures_what_stays_trapped() {
 }
 
 #[test]
+fn a_drain_searched_on_a_solid_model_measures_nothing_trapped() {
+    let (mut bench, _) = Bench::with(large_cube());
+    bench.start_by(
+        "[[step]]\ndo = \"drain\"\nset = { at = \"auto\" }\n\
+         [[step]]\ndo = \"gate\"\nstop_if = \"trapped == 0\"\nmessage = \"none\"\n",
+    );
+    bench.run_to_end();
+    assert_eq!(bench.waits(), Some("none"), "the gate read trapped as 0");
+}
+
+#[test]
 fn a_wall_worked_out_by_an_expression_is_the_one_saves_ml_reads() {
     let (mut bench, _) = Bench::with(large_cube());
     // 40³ less 6 · 40² times the 5 mm wall is 16 ml; at Hollow's 2 mm it would be 44.8 ml.

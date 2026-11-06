@@ -164,7 +164,7 @@ impl Run {
                 self.take_off_earlier(&mut doc.scene, &batch.ids);
                 None
             }
-            Work::Scan => {
+            Work::DrainAuto { .. } | Work::Scan => {
                 self.note_solid(&doc.scene, &batch.ids);
                 None
             }
