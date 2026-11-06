@@ -186,7 +186,7 @@ print until that layer is done), Cured area and Volume of the layer shown, and t
 The recipe as a `dropdown` with the prepare glyph and the play glyph as a 32 `companion_square`
 beside it, 6 apart, bare on the stage. The list, `dropdown_menu_wide` as wide as the row:
 *Built-in* then *Yours* under `group_name`s, a recipe that cannot run led by the warning
-glyph, and under a rule *Edit the recipes* as its `picker_foot` opening Settings → Recipes.
+glyph, and under a rule *Edit recipes* as its `picker_foot` opening Settings → Recipes.
 The square runs the recipe on what a tool would act on, its tooltip that or why it cannot,
 the square off. While a run goes the picker's place is a `run_box`: the turning glyph, the step and the
 share done, washed in `accent_wash` to it; the square is the cross, its tooltip *Cancel*.
@@ -278,8 +278,8 @@ and the one that applies right.
 - *Hollow* and *Drain*: the table alone, a double click turning a name into a `sunken` box
   over 60 % of its column (Enter or a click elsewhere renames), and under it at the right
   *Open the Hollow tool* ↗ (or Drain). The bar: Export, Delete.
-- *Recipes*: the `table` of every recipe, the built-in ones first — name, *Kept* (Built-in,
-  Yours, or Does not run for one of yours that no longer reads or passes its check, why it
+- *Recipes*: the `table` of every recipe, the built-in ones first — name, *Type* (Built-in,
+  Yours, or Has errors for one of yours that no longer reads or passes its check, why it
   does not as a `hint` under the table once picked) and the steps it takes — Import and
   *New recipe*, which keeps one of no steps and opens it, in the header. The bar: Edit (a double click too), Duplicate, Export, Delete (`confirm_button`,
   off with why for a built-in one). The form, under the trail *Recipes › Busts* (*Built-in*
@@ -287,7 +287,7 @@ and the one that applies right.
   it, every field off but its steps' folds. Blocks: *Recipe* (Name, the variables as a code-face name box, its
   figure and a bin a row, *Add a variable*), then the steps as a `chain_step` each on a rail:
   the number in a 22 disc on the rail, the grip, the kind's glyph, *Orientation*, and while
-  folded, in `text_low` after it, *When …*, *Skipped if it fails*, *2 settings set*, *1 rule*
+  folded, in `text_low` after it, *When …*, *Skipped if it fails*, *2 settings changed*, *1 rule*
   (*Switched off* alone for a step off; in `danger`, the disc ringed so, while it does not
   read); at the right its question mark — what that kind of step does, how a step runs and
   how a condition is written — its switch and the caret, and before the question mark move
@@ -300,8 +300,8 @@ up and move down, each off at its end. A press on the heading unfolds it,
   names, `switch`, a `dropdown` of its words by what each means, the file's word at the row's right, `text_row`, points as rows of three fields and
   a bin) with the reset arrow back to the default and, for a number or a switch, the
   expression glyph trading it for a `condition_row` —, a gate's *Stop if* and *Message*, a
-  pause's *Message*, a check's *Support the islands again* switch with *While* and *At most*
-  `nested` under it, then *Choose*: each rule `nested`, its *When* and settings and *Remove
+  pause's *Message*, a check's *Add supports to islands found* switch with *While* and *Max attempts*
+  `nested` under it, then *Rules*: each rule `nested`, its *When* and settings and *Remove
   the rule*, and *Add a rule*; why the recipe does not run as a `field_error` at the top of
   the step it names, else a `danger` `notice` over the steps. A step dragged by its grip
   stands at 35 % while a card of its glyph and name follows the pointer, the page scrolling

@@ -87,7 +87,7 @@ fn the_plan_notes_an_orient_after_supports_under_the_orient() {
     let lines = foreseen_lines(&plan, &seen);
     assert_eq!(lines[0].note, None);
     let note = lines[1].note.as_deref().unwrap_or_default();
-    assert!(note.contains("supports of step 1"), "{note}");
+    assert!(note.contains("supports from step 1"), "{note}");
 }
 
 #[test]

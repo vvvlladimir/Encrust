@@ -489,7 +489,7 @@ fn the_recipes_page() {
     let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), listing);
     crate::panels::unfold_recipe_steps(&harness.ctx, "busts", 1);
     harness.run_steps(SETTLE_FRAMES);
-    let first = harness.get_all_by_label("Insert a name").next();
+    let first = harness.get_all_by_label("Insert a value").next();
     first.expect("the first step has a When").click();
     harness.run_steps(SETTLE_FRAMES);
     harness.snapshot("settings_recipe_names");
