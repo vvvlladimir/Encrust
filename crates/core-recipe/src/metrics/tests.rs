@@ -146,10 +146,15 @@ fn every_name_reads_back_to_its_metric() {
 }
 
 #[test]
-fn what_a_step_measures_later_is_left_unset_at_the_start() {
+fn what_a_step_measures_later_is_left_unset_at_the_start_but_a_solid_model_traps_nothing() {
     let cube = cuboid(Vec3::ZERO, Vec3::splat(40.0));
     let metrics = measured(&cube, &Transform::default(), false);
-    for metric in Metric::ALL {
+    assert_eq!(
+        metrics.get(Metric::Trapped),
+        Some(Value::Number(0.0)),
+        "a solid cube traps nothing before any drain"
+    );
+    for metric in Metric::ALL.into_iter().filter(|m| *m != Metric::Trapped) {
         assert_eq!(
             metrics.get(metric).is_none(),
             !metric.known_after().is_empty(),

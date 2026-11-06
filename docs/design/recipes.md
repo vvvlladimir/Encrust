@@ -115,7 +115,7 @@ step (the last column) is refused in a condition placed before that step.
 | `saves_ml`, `saves_share` | ADR 0393's estimate at the `hollow` step's wall, 2 mm without one | — |
 | `worth_hollowing` | the estimate past `MIN_SAVED_MM3` and `MIN_SAVED_SHARE` | — |
 | `fits` | it fits the build volume with what stands under it | — |
-| `trapped` | pockets of resin with no way out, by Drain's Check drainage; 0 with no cavity | `drain` or `check` |
+| `trapped` | pockets of resin with no way out, by Drain's Check drainage | `drain` or `check`; at once 0 with no cavity |
 | `islands` | the cut stack's islands the model hangs from, and those that hang from none | `check` |
 | `peel_n`, `support_ml` | the stack's hardest pull on the film, N; the model's supports, ml | `check` |
 

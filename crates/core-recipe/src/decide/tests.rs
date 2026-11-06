@@ -164,13 +164,34 @@ fn a_step_past_the_end_is_no_such_step() {
     );
 }
 
+fn hollowed() -> Metrics {
+    let mut metrics = tall();
+    metrics.set(Metric::Hollow, Value::Bool(true));
+    metrics
+}
+
 #[test]
 fn a_name_not_measured_yet_is_unmeasured() {
     let plan = plan(&(step("drain", "") + &step("gate", "stop_if = \"trapped > 0\"")));
     assert!(matches!(
-        decide(&plan, 1, &tall()),
+        decide(&plan, 1, &hollowed()),
         Err(RecipeError::Unmeasured { name }) if name == "trapped"
     ));
+}
+
+#[test]
+fn a_model_with_no_cavity_traps_nothing_though_no_drain_ran() {
+    let plan = plan(
+        &(step("drain", "when = \"hollow\"")
+            + &step("gate", "stop_if = \"trapped > 0\"\nmessage = \"trapped\"")),
+    );
+    assert_eq!(
+        decide(&plan, 1, &tall()),
+        Ok(Decision::Skip {
+            read: vec![reading("trapped", Value::Number(0.0))]
+        }),
+        "a solid model reads trapped as 0 and the gate lets it by"
+    );
 }
 
 #[test]
@@ -220,7 +241,7 @@ fn preview_leaves_what_reads_an_unmeasured_name_until_reached() {
             + &step("drain", "")
             + &step("gate", "stop_if = \"trapped > 0\"")),
     );
-    let foreseen = preview(&plan, &tall());
+    let foreseen = preview(&plan, &hollowed());
     assert!(matches!(
         foreseen[0],
         Foreseen::Decided(Decision::Run { .. })
