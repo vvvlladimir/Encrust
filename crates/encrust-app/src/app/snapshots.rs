@@ -303,6 +303,22 @@ fn the_chip_opening_its_machines_and_its_resins() {
     }
 }
 
+/// The recipes dropped from Prepare for print's row over the plate card, one of the user's
+/// named too long for the list.
+#[test]
+fn the_recipes_of_prepare_for_print() {
+    let mut app = pictured();
+    let text = core_recipe::BUILT_IN[0]
+        .1
+        .replace("Prepare for print", "Busts on heavy supports, hollowed thin");
+    let catalogue = &mut app.machine.slicing.catalogue;
+    catalogue.save_recipe("busts", &text).expect("writable");
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
+    harness.get_by_label("Prepare for print").click();
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("prepare_recipes");
+}
+
 #[test]
 fn the_menus_of_the_bar() {
     let mut results = SnapshotResults::new();

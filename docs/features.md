@@ -121,9 +121,9 @@ whole-surface fill is Cmd-Shift-click.
   height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
   on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
-**Prepare for print:** in Select under Auto-orient, and in the Edit menu for the picked
-models or the whole plate, it runs the steps of the recipe picked over its button — the
-built-in `prepare` until you pick another of the built-in ones or one of your own
+**Prepare for print:** from its row over the plate card — the recipe and the run — and in
+the Edit menu, for the picked models or the whole plate, it runs the steps of the recipe
+picked — the built-in `prepare` until you pick another of the built-in ones or one of your own
 (`docs/design/recipes.md`), remembered between runs and taken back by undo — each model
 decided step by step, and a recipe's gate that holds
 stops the run and puts the plate back. Like `--prepare`, it turns a model you have not turned
@@ -133,15 +133,11 @@ catalogue's automatic supports, its cavity too. A model you turned keeps its tur
 `--rotate` keeps it. A recipe's other steps run as their tools do: `check` measures the
 layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
 plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
-`pause` waits for **Continue** on the notice. The notice and the section name the step under
-way over a bar; **Cancel** stops it and leaves the plate as it was, and one undo takes a finished run back.
-While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait.
-Select then lists what was decided for the model in the card. Under the button a plan
-says, before you start, what each step will do with the models in hand: run, skipped with the
-readings that decided it (`worth_hollowing false`), decided when it is reached, or off, with a
-note under a step that undoes an earlier one; while the run goes it marks each step done,
-running or skipped. A recipe of yours that no longer reads or passes its check says why under
-the picker and cannot be started. **Settings → Recipes** lists every recipe, the built-in ones
+`pause` waits for **Continue** on the notice. The notice and the row name the step under way
+over a bar; **Cancel** stops it and leaves the plate as it was, and one undo takes a finished
+run back. While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and
+Grow wait. A recipe of yours that no longer reads or passes its check cannot be started, and
+its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
 first: a built-in one opens to read and **Duplicate** makes a copy of your own; yours you
 rename, give variables, and change step by step — add a step of any kind, switch it off, move
 it up or down, remove it, type its condition (checked as you type, the error under the field),

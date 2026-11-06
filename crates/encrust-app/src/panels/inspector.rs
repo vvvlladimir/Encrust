@@ -20,7 +20,7 @@ mod text;
 
 pub(crate) use check::issue_name;
 pub use check::{badge as check_badge, go_to as go_to_risks, tint as risk_tint};
-pub(crate) use position::{auto_orient, start_prepare};
+pub(crate) use position::auto_orient;
 
 use egui::{Align, Layout, Sense, UiBuilder, vec2};
 

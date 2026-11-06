@@ -124,27 +124,45 @@ fn label(painter: &egui::Painter, room: Rect, face: &DropdownFace<'_>) {
 
 /// The list under `response`, as wide as the box, in the card every dropdown hangs in.
 pub fn dropdown_menu<R>(response: &Response, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
-    menu(response, PopupCloseBehavior::CloseOnClick, add)
+    let width = response.rect.width();
+    menu(response, PopupCloseBehavior::CloseOnClick, width, add)
+}
+
+/// A [`dropdown_menu`] `width` points wide, for a box sharing its row with a button the list
+/// may hang under too.
+pub fn dropdown_menu_wide<R>(
+    response: &Response,
+    width: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
+    menu(response, PopupCloseBehavior::CloseOnClick, width, add)
 }
 
 /// A [`dropdown_menu`] that a click inside leaves open, for a list headed by a field to
 /// type into; a row chosen closes it with `ui.close()`.
 pub fn dropdown_search_menu<R>(response: &Response, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
-    menu(response, PopupCloseBehavior::CloseOnClickOutside, add)
+    let width = response.rect.width();
+    menu(
+        response,
+        PopupCloseBehavior::CloseOnClickOutside,
+        width,
+        add,
+    )
 }
 
 fn menu<R>(
     response: &Response,
     close: PopupCloseBehavior,
+    width: f32,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
     crate::ui::popup_menu(response)
         .gap(MENU_GAP)
         .close_behavior(close)
-        .width(response.rect.width())
+        .width(width)
         .frame(chooser_frame())
         .show(|ui| {
-            ui.set_min_width(response.rect.width() - 2.0 * theme::TOOLBAR_PAD);
+            ui.set_min_width(width - 2.0 * theme::TOOLBAR_PAD);
             ui.spacing_mut().item_spacing.y = 1.0;
             add(ui)
         })
@@ -191,14 +209,21 @@ pub fn dropdown_row(ui: &mut Ui, row: &DropdownRow<'_>) -> Response {
         lead.paint(painter, pos2(lead_x, rect.center().y), GLYPH_W, DOT_R);
     }
     let name_x = lead_x + GLYPH_W / 2.0 + GAP;
-    painter.text(
-        pos2(name_x, rect.center().y),
-        Align2::LEFT_CENTER,
+    let tick_x = rect.right() - PAD - GLYPH_W / 2.0;
+    let aside = row.aside.map(|aside| {
+        let font = theme::figures(12.0);
+        painter.layout_no_wrap(aside.to_owned(), font, colors.text_low)
+    });
+    let aside_w = aside.as_ref().map_or(0.0, |galley| galley.size().x + GAP);
+    let name_right = tick_x - GLYPH_W / 2.0 - GAP - aside_w;
+    let name = cut_to(
+        painter,
         row.name,
-        theme::label(),
+        (name_right - name_x).max(0.0),
         colors.text_high,
     );
-    let tick_x = rect.right() - PAD - GLYPH_W / 2.0;
+    let name_top = rect.center().y - name.size().y / 2.0;
+    painter.galley(pos2(name_x, name_top), name, colors.text_high);
     if row.chosen {
         painter.text(
             pos2(tick_x, rect.center().y),
@@ -208,17 +233,27 @@ pub fn dropdown_row(ui: &mut Ui, row: &DropdownRow<'_>) -> Response {
             colors.accent_soft,
         );
     }
-    if let Some(aside) = row.aside {
-        painter.text(
-            pos2(tick_x - GLYPH_W, rect.center().y),
-            Align2::RIGHT_CENTER,
-            aside,
-            theme::figures(12.0),
-            colors.text_low,
+    if let Some(aside) = aside {
+        let at = pos2(
+            tick_x - GLYPH_W - aside.size().x,
+            rect.center().y - aside.size().y / 2.0,
         );
+        painter.galley(at, aside, colors.text_low);
     }
     focus_ring(ui, &response, theme::R_CONTROL);
     response
+}
+
+/// `text` in the label font and `ink`, cut with an ellipsis to `width` points.
+pub(in crate::ui::widgets) fn cut_to(
+    painter: &egui::Painter,
+    text: &str,
+    width: f32,
+    ink: Color32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), theme::label(), ink);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(width);
+    painter.layout_job(job)
 }
 
 /// Room at a box's ends, the square a glyph stands in and the room after it, points; and a

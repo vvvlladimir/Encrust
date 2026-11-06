@@ -57,21 +57,6 @@ pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
     filled_button(ui, glyph, text, size, &Skin::raised(), true)
 }
 
-/// The same, off while `why` says why it cannot be used, which its hover then reads.
-pub fn secondary_button_unless(
-    ui: &mut Ui,
-    glyph: &str,
-    text: &str,
-    why: Option<&str>,
-) -> Response {
-    let size = vec2(ui.available_width(), theme::BUTTON_H);
-    let response = filled_button(ui, glyph, text, size, &Skin::raised(), why.is_none());
-    match why {
-        Some(why) => response.on_disabled_hover_text(why),
-        None => response,
-    }
-}
-
 /// A full-width button that stays pressed: washed in the accent while `on`, so a click
 /// takes up a tool and the next one puts it down.
 pub fn toggle_button(ui: &mut Ui, glyph: &str, text: &str, on: bool) -> Response {

@@ -14,7 +14,8 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 │ │ preset      │      [hint bar]      [cube]  └──────────┘ │ layer  │                         │
 │ │ sections    │                                           │ track  │                         │
 │ │             │            viewport                       │        │                         │
-│ │ foot        │       [notices]     [view tools] ┌plate┐  │ play   │                         │
+│ │ foot        │       [notices]     [view tools] [prep]   │ play   │                         │
+│ │             │                                  ┌plate┐  │        │                         │
 │ └─────────────┘                                  └─────┘  └────────┘                         │
 ```
 
@@ -25,13 +26,14 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Tool row | over the stage, centred between 8 right of the inspector, shown or put away, and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
+| Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a card 56 tall while a run goes |
 | Layer strip | the stage's right edge, its full height | 64 |
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
 
-Everything over the stage is a `card` on `CARD_SHADOW`; nothing over the stage carries a
+Everything over the stage but the Prepare row is a `card` on `CARD_SHADOW`; nothing over the stage carries a
 stripe or a border of its own.
 
 ## Top bar
@@ -104,7 +106,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel); Prepare for print (the recipe as a full-width `dropdown` with the prepare glyph, its list *Built-in* then *Yours* under `group_name`s and, under a rule, *Edit the recipes* as its `picker_foot` opening Settings → Recipes, a recipe that cannot run led by the warning glyph and, once picked, why under the box as a `hint`; off while a run goes; Prepare for print as a `secondary_button`, the prepare glyph, what it acts on or why it cannot in its tooltip; running, `step_bar` with the step and Cancel; then *Plan* as a `subheading` over a `plan_row` a step — *1. Orientation* and its verdict at the right: Runs (or Runs on 2 of 3), Skipped with the readings that decided it under it (`worth_hollowing false`), Decided when reached, Off, Stops the run, Pauses; a note in `warn` under a step that undoes an earlier one; while the models are read, `busy` with *Reading the models…*; while a run goes, Done, Running with the glyph turning, Skipped, Off or To come; after a run, *Prepared* as a `subheading` over `readings` of the model in the card while it stands as the run left it: Oriented, Repaired, Wall and Resin saved or Hollowed no, Drained, Supports by the automatic profile's name) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ, Measure along the surface); Reading (Along the surface first when on, or why there is none) | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading, not for a mould); Keep solid (Keep thin parts solid as a `switch`, off at first, and under it while on Thinner than as a `number_row`, mm; then, not for a mould, Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
@@ -178,6 +180,16 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
 not print.* What stands past the plate or meets another model is Check's, not the card's. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
 print until that layer is done), Cured area and Volume of the layer shown, and there is no Details.
+
+## Prepare row
+
+The recipe as a `dropdown` with the prepare glyph and the play glyph as a 32 `companion_square`
+beside it, 6 apart, bare on the stage. The list, `dropdown_menu_wide` as wide as the row:
+*Built-in* then *Yours* under `group_name`s, a recipe that cannot run led by the warning
+glyph, and under a rule *Edit the recipes* as its `picker_foot` opening Settings → Recipes.
+The square runs the recipe on what a tool would act on, its tooltip that or why it cannot,
+the square off. While a run goes the row is a `card` padded 12 holding the `step_bar`: the
+step, its bar and Cancel.
 
 ## Layer strip
 

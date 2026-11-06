@@ -6,6 +6,7 @@ mod inspector;
 mod mask_pane;
 mod plate_strip;
 mod plate_summary;
+mod prepare_row;
 mod printer_card;
 mod report;
 mod scene_panel;
@@ -209,7 +210,8 @@ impl Window<'_> {
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
-    /// stage's foot under them, both `width` wide; in Preview the plate's alone.
+    /// stage's foot under them with Prepare for print's row over it, all `width` wide; in
+    /// Preview the plate's alone.
     /// Answers the two cards.
     fn plate_cards(
         &mut self,
@@ -234,12 +236,39 @@ impl Window<'_> {
         if *self.mode == Mode::Preview {
             return (plate, plate);
         }
-        let max_h = (plate.top() - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);
+        let above = match self.doc.scene.is_empty() {
+            true => plate.top(),
+            false => self.prepare_row(ctx, pos2(corner.x, plate.top() - gap), width),
+        };
+        let max_h = (above - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);
         let models = card_at(ctx, "models", corner, Align2::RIGHT_TOP, max_h, |ui| {
             ui.set_width(width);
             scene_panel::ui(ui, self, max_h);
         });
         (models, plate)
+    }
+
+    /// Prepare for print's row standing on `foot`, as wide as a card `width` wide: bare,
+    /// and on a card while a run goes. Answers its top.
+    fn prepare_row(&mut self, ctx: &egui::Context, foot: Pos2, width: f32) -> f32 {
+        let (frame, inner_w) = match self.tools.prepare.is_running() {
+            true => {
+                let margin = theme::PANEL_MARGIN.sum().x;
+                (card().inner_margin(theme::PANEL_MARGIN), width - margin)
+            }
+            false => (egui::Frame::new(), width + 2.0 * CARD_STROKE),
+        };
+        let at = Floating {
+            id: "prepare-row",
+            corner: foot,
+            pivot: Align2::RIGHT_BOTTOM,
+            max_h: f32::INFINITY,
+        };
+        let row = float_at(ctx, &at, frame, |ui| {
+            ui.set_width(inner_w.max(0.0));
+            prepare_row::ui(ui, self);
+        });
+        row.top()
     }
 }
 
@@ -304,18 +333,43 @@ fn card_at(
     max_h: f32,
     add: impl FnOnce(&mut egui::Ui),
 ) -> Rect {
-    let mut drawn_at = corner;
-    let shown = egui::Area::new(Id::new(id))
+    let at = Floating {
+        id,
+        corner,
+        pivot,
+        max_h,
+    };
+    float_at(ctx, &at, card().inner_margin(0), add)
+}
+
+/// Where a floating part of the stage stands: its `pivot` corner at `corner`, no taller than
+/// `max_h` points.
+struct Floating<'a> {
+    id: &'a str,
+    corner: Pos2,
+    pivot: Align2,
+    max_h: f32,
+}
+
+/// What [`card_at`] draws, in `frame` rather than on a card.
+fn float_at(
+    ctx: &egui::Context,
+    at: &Floating<'_>,
+    frame: egui::Frame,
+    add: impl FnOnce(&mut egui::Ui),
+) -> Rect {
+    let mut drawn_at = at.corner;
+    let shown = egui::Area::new(Id::new(at.id))
         .order(egui::Order::Middle)
-        .fixed_pos(corner)
-        .pivot(pivot)
+        .fixed_pos(at.corner)
+        .pivot(at.pivot)
         .show(ctx, |ui| {
             drawn_at = ui.max_rect().min;
             // Clipped to the window before the shift below, what it grew past the edge would
             // be cut off until it stopped growing.
             ui.set_clip_rect(Rect::EVERYTHING);
-            card().inner_margin(0).show(ui, |ui| {
-                ui.set_max_height(max_h);
+            frame.show(ui, |ui| {
+                ui.set_max_height(at.max_h);
                 ui.spacing_mut().item_spacing.y = 0.0;
                 add(ui);
             });

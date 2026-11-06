@@ -593,6 +593,14 @@ check-removed =
        *[many] { $count } островов удалено из файла
     }
 
+## panels/prepare_row.rs
+
+prepare-row-tooltip = Готовит к печати { $scope }.
+prepare-row-recipe = Рецепт, который выполняет подготовка к печати
+prepare-row-built-in = Стандартные
+prepare-row-yours = Ваши
+prepare-row-edit-recipes = Изменить рецепты
+
 ## panels/plate_summary.rs
 
 summary-layer = Слой
@@ -1738,32 +1746,6 @@ orient-preset-auto-hint = Баланс поддержек, отрыва и вр�
 position-mirror-across = Отразить по { $axis }
 position-mirror-copy = Отражать копию
 position-place-about = «На платформе» ставит модель на платформу; «По центру» переносит её к середине платформы; «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете; «Отразить» переворачивает выбранные модели или их копии, поставленные рядом.
-
-## panels/inspector/position/prepare.rs
-
-position-prepare = Подготовка к печати
-# The button of the Prepare for print section.
-position-prepare-run = Подготовить к печати
-position-prepare-help-wall = Делает за один раз то, что сделали бы другие инструменты: модель, которую никто не поворачивал, ставит так, как она лучше печатается; сломанную чинит; сплошную делает полой со стенкой { $wall }, если это сберегает достаточно смолы; сверлит отверстия для слива и ставит её на автоматические поддержки, в том числе внутри полости. Всё сделанное отменяется одним действием «Отменить», а кнопка «Отмена» во время работы оставляет платформу как была.
-position-prepare-tooltip = Готовит к печати { $scope }.
-position-prepare-help-plan = Подготовка к печати выполняет выбранный рецепт: сначала идут стандартные, затем ваши из настроек. Под ним план показывает, что каждый шаг сделает с выбранными моделями: выполнится; будет пропущен — с показаниями, по которым это решено; решится по ходу, если читает то, что измеряет более ранний шаг; или выключен. Заметка под шагом говорит, что он отменяет сделанное раньше. Во время работы план отмечает шаги готовыми, идущими или пропущенными.
-position-prepare-recipe = Рецепт, который выполняет подготовка к печати
-position-prepare-built-in = Стандартные
-position-prepare-yours = Ваши
-position-prepare-plan = План
-position-prepare-measuring = Чтение моделей…
-position-prepare-edit-recipes = Изменить рецепты
-position-prepared = Подготовлено
-position-prepared-oriented = Ориентация
-position-prepared-repaired = Починка
-position-prepared-hollowed = Полость
-position-prepared-wall = Стенка
-position-prepared-saved = Сбережено смолы
-position-prepared-drained = Дренаж
-position-prepared-supports = Поддержки
-position-prepared-yes = Да
-position-prepared-no = Нет
-position-prepared-none = Нет
 
 ## panels/inspector/paint.rs
 

@@ -42,8 +42,8 @@ pub use button::{
     Inline, RailButton, SquareLook, bar_pill, blocked_hover, compact_button, companion_button,
     companion_square, filter_chip, focus_ring, hover_mix, icon_button, icon_toggle, inline_button,
     numbered_square, picture_square, primary_button, primary_with_companion, quiet_button,
-    quiet_square, rail_button, secondary_button, secondary_button_unless, small_icon_button,
-    summary_button, swatch, toggle_button, zone_button,
+    quiet_square, rail_button, secondary_button, small_icon_button, summary_button, swatch,
+    toggle_button, zone_button,
 };
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
@@ -52,7 +52,7 @@ pub use colour::colour_field;
 pub use confirm::{Confirm, any_armed, confirm_button, is_armed};
 pub use device_row::{DEVICE_OPEN_INSET, DeviceRow, device_row, print_picture};
 pub use dropdown::{
-    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
+    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_menu_wide, dropdown_row,
     dropdown_search_menu,
 };
 pub use entry_row::{EntryRow, ModelRow, entry_row, model_row};

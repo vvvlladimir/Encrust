@@ -100,7 +100,7 @@ fn plate_items(ui: &mut egui::Ui, window: &mut Window) {
     let prepare = tr!("menu-prepare");
     let prepare = MenuRow::new(Some(icon::PREPARE), &prepare).unless(blocked.as_deref());
     if clicked(ui, &prepare) {
-        crate::panels::inspector::start_prepare(window);
+        crate::panels::prepare_row::start(window);
     }
 }
 

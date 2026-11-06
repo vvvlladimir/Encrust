@@ -558,6 +558,15 @@ check-removed =
        *[other] { $count } islands taken out of the file
     }
 
+## panels/prepare_row.rs
+
+prepare-row-tooltip = Prepares { $scope } for print.
+prepare-row-recipe = The recipe Prepare for print runs
+# Group names in the list of recipes.
+prepare-row-built-in = Built-in
+prepare-row-yours = Yours
+prepare-row-edit-recipes = Edit the recipes
+
 ## panels/plate_summary.rs
 
 summary-layer = Layer
@@ -1684,37 +1693,6 @@ orient-preset-auto-hint = Supports, pull and print time balanced: none gives up 
 position-mirror-across = Mirror across { $axis }
 position-mirror-copy = Mirror a copy
 position-place-about = On the plate stands the model on the plate; Centre moves it over the middle of the plate; Lay on face turns the face you click down onto the plate; Mirror flips the picked models, or copies of them stood beside them.
-
-## panels/inspector/position/prepare.rs
-
-position-prepare = Prepare for print
-# The button of the Prepare for print section.
-position-prepare-run = Prepare for print
-# $wall is the wall Hollow builds by default, with its unit.
-position-prepare-help-wall = Does in one go what the other tools would: turns a model nobody has turned the way it prints best, repairs a broken one, hollows a solid one to a wall of { $wall } where that saves enough resin, drills the holes that drain it and stands it on automatic supports, its cavity too. One undo takes all of it back, and Cancel leaves the plate as it was.
-position-prepare-tooltip = Prepares { $scope } for print.
-# What the recipe picker and the plan under it are; read from the section's question mark.
-position-prepare-help-plan = The recipe picked is the one Prepare for print runs: the built-in ones first, then yours from Settings. Under it the plan says what each step will do with the models in hand: run, be skipped with the readings that decided it, be decided when reached where it reads what an earlier step measures, or stay off. A note under a step says where it undoes an earlier one. While the run goes, the plan marks each step done, running or skipped.
-position-prepare-recipe = The recipe Prepare for print runs
-# Group names in the list of recipes.
-position-prepare-built-in = Built-in
-position-prepare-yours = Yours
-position-prepare-plan = Plan
-position-prepare-measuring = Reading the models…
-position-prepare-edit-recipes = Edit the recipes
-# Over what the last Prepare for print did to the model in the card.
-position-prepared = Prepared
-position-prepared-oriented = Oriented
-position-prepared-repaired = Repaired
-position-prepared-hollowed = Hollowed
-position-prepared-wall = Wall
-position-prepared-saved = Resin saved
-position-prepared-drained = Drained
-position-prepared-supports = Supports
-position-prepared-yes = Yes
-position-prepared-no = No
-# No supports were placed.
-position-prepared-none = None
 
 ## panels/inspector/paint.rs
 

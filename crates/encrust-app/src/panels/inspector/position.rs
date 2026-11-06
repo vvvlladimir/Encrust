@@ -1,5 +1,4 @@
 mod place;
-mod prepare;
 
 use core_geometry::glam::EulerRot;
 use core_geometry::{Mat3, Quat, Transform, Vec3};
@@ -49,10 +48,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     scale(ui, &mut window.doc.scene, &window.doc.plate, id, axes);
     place::place(ui, window, id);
     place::auto_orient_section(ui, window, id);
-    prepare::prepare_section(ui, window, id);
 }
-
-pub(crate) use prepare::start as start_prepare;
 
 /// Whether the handles, the turn buttons and the sizes follow the plate's axes or the
 /// model's own. Where the model stands and how it is turned are read on the plate's either way.

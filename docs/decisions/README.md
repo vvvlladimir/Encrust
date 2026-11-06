@@ -303,6 +303,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |
 | [0404](0404-keep-thin-parts-solid-by-opening-the-model.md) | Keep thin parts solid by opening the model with a ball | Proposed |
 | [0405](0405-a-users-recipe-is-kept-in-the-profile-store.md) | Keep a user's recipe in the profile store, and look recipes up in core-recipe | Proposed |
+| [0406](0406-prepare-for-print-stands-over-the-plate-card.md) | Stand Prepare for print over the plate card as a recipe and a run | Proposed |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
