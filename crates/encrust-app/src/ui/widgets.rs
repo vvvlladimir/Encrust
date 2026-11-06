@@ -5,6 +5,7 @@ use crate::i18n::tr;
 mod bin;
 mod binding;
 mod button;
+mod chain;
 mod chooser;
 mod colour;
 mod confirm;
@@ -46,6 +47,7 @@ pub use button::{
     quiet_square, rail_button, secondary_button, small_icon_button, summary_button, swatch,
     toggle_button, zone_button,
 };
+pub use chain::{ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
 };

@@ -11,6 +11,8 @@ mod presets;
 mod printer;
 mod profile_files;
 mod recipes;
+#[cfg(all(test, feature = "snapshots"))]
+pub(crate) use recipes::unfold as unfold_recipe_steps;
 mod resin;
 mod supports;
 mod unsaved;

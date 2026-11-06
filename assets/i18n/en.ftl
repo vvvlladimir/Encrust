@@ -1161,6 +1161,23 @@ recipes-var-add = Add a variable
 recipes-step-add = Add a step
 recipes-no-steps = The recipe has no steps yet.
 
+## panels/settings/recipes/chain.rs
+
+# The tooltip of the grip a step is dragged by to another place in the list.
+recipes-step-drag = Drag to move the step
+# What a folded step says of itself, each its own part of one line.
+recipes-summary-off = Switched off
+recipes-summary-when = When { $condition }
+recipes-summary-skips = Skipped if it fails
+recipes-summary-set = { $count ->
+    [one] One setting set
+   *[other] { $count } settings set
+}
+recipes-summary-rules = { $count ->
+    [one] One rule
+   *[other] { $count } rules
+}
+
 ## panels/settings/recipes/step.rs
 
 recipes-step-help = A step runs in its place in the list, on the model as the steps before it left it. When is a condition on the model, such as saves_ml >= 30; left empty, the step always runs. On failure says whether a failed step stops the run and puts the plate back, or is skipped. A setting left out takes the engine's default; a number or a switch can be worked out by an expression instead. Choose lays other settings over these where its condition holds, the first that holds taken.

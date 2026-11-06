@@ -1,6 +1,9 @@
 //! The Recipes page: every recipe Prepare for print can run as a table, the built-in ones
 //! first; the picked one opened in its form, a built-in one to read and copy (ADR 0405).
 
+mod chain;
+#[cfg(all(test, feature = "snapshots"))]
+pub(crate) use chain::unfold;
 mod form;
 mod names;
 mod setting;

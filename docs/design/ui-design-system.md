@@ -192,6 +192,7 @@ paints from tokens only.
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
+| `chain_step`, `ChainStep`, `chain_seam`, `chain_drop_mark`, `chain_ghost` | Steps run one after another: a folding card on a rail, its number in a disc on it, a grip, glyph, name, a one-line summary, question mark, switch, caret and, open, its actions; seams with a + on the rail; where a dragged card lands, and the card by the pointer |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
 | `found_row` | Something found that is not the user's yet: a dashed row of glyph, name, a figure and Add |
 | `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |
@@ -292,7 +293,8 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Undo, redo, select all, move to plate | `ARROW_U_UP_LEFT`, `ARROW_U_UP_RIGHT`, `SELECTION_ALL`, `ARROW_SQUARE_RIGHT` |
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
 | A plan's step skipped, decided when reached, off | `MINUS_CIRCLE`, `HOURGLASS_SIMPLE`, `PROHIBIT` |
-| Move a step up, down; work a setting out by an expression | `ARROW_UP`, `ARROW_DOWN`, `FUNCTION` |
+| Move a step up, down, drag it; work a setting out by an expression | `ARROW_UP`, `ARROW_DOWN`, `DOTS_SIX_VERTICAL`, `FUNCTION` |
+| A recipe's stop condition | `SIGN_OUT` |
 | Put a name into a condition | `BRACKETS_CURLY` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 

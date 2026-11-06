@@ -29,7 +29,7 @@ mod work;
 pub use decided::Prepared;
 
 pub use foresee::{Foresight, PlanLine, foreseen_lines, running_lines};
-pub use recipes::{Library, kind_name, note_text};
+pub use recipes::{Library, kind_glyph, kind_name, note_text};
 use run::Next;
 use step::{Ended, Going};
 use work::Batch;

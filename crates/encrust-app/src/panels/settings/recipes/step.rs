@@ -1,4 +1,4 @@
-//! One step of the recipe in the form: where it stands, its condition, what a failure does,
+//! One step of the recipe in the form: its condition, what a failure does,
 //! its settings and the rules that choose others, and what a gate, a pause or a check adds.
 
 use core_recipe::{MAX_RETRY, OnFail, StepKind};
@@ -9,29 +9,17 @@ use crate::i18n::tr;
 use crate::settings::{Checked, ChoiceForm, Field, SettingsForm, StepForm};
 use crate::ui::{
     ConditionName, ConditionRow, Inline, Segment, Segmented, condition_row, count_row, field_error,
-    icon, icon_button, inline_button, nested, row_name, subheading, switch, text_row,
+    icon, inline_button, nested, row_name, subheading, switch, text_row,
 };
 
-/// What the step's own buttons asked of the list.
-pub(super) enum Asked {
-    Up,
-    Down,
-    Remove,
-}
-
-/// The fields of step `index` of `count`, and what its buttons asked; `names` are what its
-/// conditions can read.
+/// The fields of step `index`; `names` are what its conditions can read.
 pub(super) fn fields(
     ui: &mut Ui,
     step: &mut StepForm,
-    (index, count): (usize, usize),
+    index: usize,
     checked: &Checked,
     names: &[ConditionName],
-) -> Option<Asked> {
-    crate::ui::describe(ui, &kind_help(step.kind));
-    crate::ui::describe(ui, &tr!("recipes-step-help"));
-    crate::ui::describe(ui, &tr!("recipes-conditions-help"));
-    let asked = buttons(ui, index, count);
+) {
     if let Some((Some(at), error)) = &checked.whole
         && *at == index
     {
@@ -57,7 +45,16 @@ pub(super) fn fields(
     if !step.kind.settings().is_empty() {
         choose(ui, step.kind, &mut step.choose, index, (checked, names));
     }
-    asked
+}
+
+/// What the question mark of a step of `kind` reads out: what it does, how a step runs and
+/// how a condition is written.
+pub(super) fn help(kind: StepKind) -> Vec<String> {
+    vec![
+        kind_help(kind),
+        tr!("recipes-step-help"),
+        tr!("recipes-conditions-help"),
+    ]
 }
 
 /// What a step of `kind` does to the model, in a sentence or two.
@@ -105,29 +102,6 @@ fn own_fields(
         }
         _ => {}
     }
-}
-
-/// Move up, move down and remove, at the right of the step's first row.
-fn buttons(ui: &mut Ui, index: usize, count: usize) -> Option<Asked> {
-    let mut asked = None;
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if icon_button(ui, icon::REMOVE, &tr!("recipes-step-remove")).clicked() {
-            asked = Some(Asked::Remove);
-        }
-        let down = ui.add_enabled_ui(index + 1 < count, |ui| {
-            icon_button(ui, icon::MOVE_DOWN, &tr!("recipes-step-down"))
-        });
-        if down.inner.clicked() {
-            asked = Some(Asked::Down);
-        }
-        let up = ui.add_enabled_ui(index > 0, |ui| {
-            icon_button(ui, icon::MOVE_UP, &tr!("recipes-step-up"))
-        });
-        if up.inner.clicked() {
-            asked = Some(Asked::Up);
-        }
-    });
-    asked
 }
 
 fn on_fail(ui: &mut Ui, on_fail: &mut OnFail) {

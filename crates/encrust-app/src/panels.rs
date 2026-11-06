@@ -12,6 +12,8 @@ mod report;
 mod scene_panel;
 pub(crate) mod section;
 mod settings;
+#[cfg(all(test, feature = "snapshots"))]
+pub(crate) use settings::unfold_recipe_steps;
 mod shortcuts_sheet;
 mod slice;
 mod stage;

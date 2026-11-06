@@ -456,8 +456,8 @@ fn prepare_for_print_waiting_in_its_row() {
     results.extend(picture("prepare_failed", waiting("Gated", gate)));
 }
 
-/// The Recipes page: the table with a recipe of the user's picked, that recipe open in its
-/// form with a condition that does not read, and the names a condition can read listed.
+/// The Recipes page: the table with a recipe of the user's picked, that recipe open with its
+/// steps folded, then with a condition that does not read, and the names a condition can read.
 #[test]
 fn the_recipes_page() {
     let mut results = SnapshotResults::new();
@@ -481,9 +481,14 @@ fn the_recipes_page() {
     let draft = form.machine.settings.recipe.as_mut().expect("open");
     draft.values.steps[0].when = "!turned &&".to_owned();
     results.extend(picture("settings_recipe_form", form));
+    let mut folded = with_mine();
+    folded.machine.settings.open_recipe(&entry);
+    results.extend(picture("settings_recipe_chain", folded));
     let mut listing = with_mine();
     listing.machine.settings.open_recipe(&entry);
     let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), listing);
+    crate::panels::unfold_recipe_steps(&harness.ctx, "busts", 1);
+    harness.run_steps(SETTLE_FRAMES);
     let first = harness.get_all_by_label("Insert a name").next();
     first.expect("the first step has a When").click();
     harness.run_steps(SETTLE_FRAMES);

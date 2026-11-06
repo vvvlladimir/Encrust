@@ -88,7 +88,26 @@ pub struct Checked {
     pub whole: Option<(Option<usize>, RecipeError)>,
 }
 
+impl Field {
+    /// The step the field stands in.
+    pub fn step(&self) -> usize {
+        match self {
+            Self::When(step)
+            | Self::StopIf(step)
+            | Self::RetryWhile(step)
+            | Self::ChoiceWhen(step, _)
+            | Self::Setting(step, _, _) => *step,
+        }
+    }
+}
+
 impl Checked {
+    /// Whether anything stands wrong in step `index`: a field of it, or the recipe's error.
+    pub fn in_step(&self, index: usize) -> bool {
+        self.fields.iter().any(|(field, _)| field.step() == index)
+            || matches!(&self.whole, Some((Some(at), _)) if *at == index)
+    }
+
     /// Why the condition typed at `field` does not read, if it does not.
     pub fn at(&self, field: &Field) -> Option<&RecipeError> {
         self.fields
@@ -152,6 +171,17 @@ impl RecipeForm {
         if let Some(to) = to.filter(|to| *to < self.steps.len()) {
             self.steps.swap(index, to);
         }
+    }
+
+    /// Step `from` taken out and put back before what stood at `to`; `to` past the end puts
+    /// it last.
+    pub fn move_step(&mut self, from: usize, to: usize) {
+        if from >= self.steps.len() {
+            return;
+        }
+        let step = self.steps.remove(from);
+        let at = if to > from { to - 1 } else { to };
+        self.steps.insert(at.min(self.steps.len()), step);
     }
 
     /// A new step of `kind` at `at`, past the end at the end, running always with the

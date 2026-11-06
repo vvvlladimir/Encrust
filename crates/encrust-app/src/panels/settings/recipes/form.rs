@@ -1,20 +1,15 @@
-//! The form of the recipe open: its name and variables, then a block a step with a + before,
-//! between and after them to add one there; a built-in recipe is drawn the same, but cannot
-//! be changed.
+//! The form of the recipe open: its name and variables, then its steps as a chain; a
+//! built-in recipe is drawn the same, but only folds.
 
-use core_recipe::StepKind;
 use egui::Ui;
 
+use super::chain;
 use super::names::condition_names;
-use super::step;
 use crate::i18n::tr;
-use crate::panels::settings::{form_card, switched_card};
-use crate::prepare::kind_name;
+use crate::panels::settings::form_card;
 use crate::settings::{Checked, RecipeForm, Settings};
-use crate::ui::ConditionName;
 use crate::ui::{
-    DropdownRow, Inline, dropdown_menu_wide, dropdown_row, hint, icon, icon_button, inline_button,
-    notice, number_field, small_icon_button, text_box, text_row, theme,
+    Inline, hint, icon, icon_button, inline_button, notice, number_field, text_box, text_row, theme,
 };
 
 /// The recipe open in the form, each block under its title.
@@ -35,14 +30,22 @@ pub(super) fn form(ui: &mut Ui, settings: &mut Settings) {
             &tr!("recipes-built-in-how"),
         );
     }
-    ui.add_enabled_ui(!built_in, |ui| fields(ui, &mut draft.values, &checked));
+    let folds = chain::folds(&draft.id);
+    fields(ui, &mut draft.values, &checked, (folds, !built_in));
 }
 
-fn fields(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked) {
-    form_card(ui, &tr!("recipes-block-recipe"), |ui| {
-        crate::ui::describe(ui, &tr!("recipes-block-recipe-help"));
-        text_row(ui, &tr!("settings-name"), &mut recipe.name);
-        variables(ui, &mut recipe.vars);
+fn fields(
+    ui: &mut Ui,
+    recipe: &mut RecipeForm,
+    checked: &Checked,
+    (folds, editable): (egui::Id, bool),
+) {
+    ui.add_enabled_ui(editable, |ui| {
+        form_card(ui, &tr!("recipes-block-recipe"), |ui| {
+            crate::ui::describe(ui, &tr!("recipes-block-recipe-help"));
+            text_row(ui, &tr!("settings-name"), &mut recipe.name);
+            variables(ui, &mut recipe.vars);
+        });
     });
     if let Some((None, error)) = &checked.whole {
         let tint = theme::colors().danger;
@@ -59,46 +62,8 @@ fn fields(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked) {
         ui.add_space(theme::NOTE_GAP);
         ui.vertical_centered(|ui| hint(ui, &tr!("recipes-no-steps")));
     }
-    steps(ui, recipe, checked, &names);
-}
-
-/// A block a step, each with its switch, a + before, between and after them, and the
-/// move, removal or insertion their buttons asked for.
-fn steps(ui: &mut Ui, recipe: &mut RecipeForm, checked: &Checked, names: &[ConditionName]) {
-    let mut moved = None;
-    let mut inserted = add_step(ui, 0);
-    let count = recipe.steps.len();
-    for index in 0..count {
-        let title = tr!(
-            "recipe-step-numbered",
-            number = index + 1,
-            step = kind_name(recipe.steps[index].kind)
-        );
-        let id = ui.id().with(("recipe-step", index));
-        let step = &mut recipe.steps[index];
-        let mut on = step.enabled;
-        ui.push_id(id, |ui| {
-            switched_card(ui, &title, Some(&mut on), |ui| {
-                if let Some(asked) = step::fields(ui, step, (index, count), checked, names) {
-                    moved = Some((index, asked));
-                }
-            });
-        });
-        step.enabled = on;
-        inserted = inserted.or(add_step(ui, index + 1));
-    }
-    if let Some((at, kind)) = inserted {
-        recipe.insert_step(at, kind);
-    }
-    if let Some((index, asked)) = moved {
-        match asked {
-            step::Asked::Up => recipe.shift(index, true),
-            step::Asked::Down => recipe.shift(index, false),
-            step::Asked::Remove => {
-                recipe.steps.remove(index);
-            }
-        }
-    }
+    ui.add_space(theme::NOTE_GAP);
+    chain::chain(ui, recipe, (checked, &names), folds, editable);
 }
 
 /// The recipe's own numbers: a name and a figure a row, a bin to drop one, and a row to
@@ -139,24 +104,4 @@ fn fresh_var(vars: &[(String, f32)]) -> String {
         .map(|n| format!("var_{n}"))
         .find(|name| vars.iter().all(|(taken, _)| taken != name))
         .unwrap_or_default()
-}
-
-/// A + centred on the seam, its list every kind of step; answers the one chosen to stand
-/// at `at`.
-fn add_step(ui: &mut Ui, at: usize) -> Option<(usize, StepKind)> {
-    let response = ui
-        .push_id(("recipe-step-add", at), |ui| {
-            ui.add_space(theme::NOTE_GAP);
-            ui.vertical_centered(|ui| small_icon_button(ui, icon::ADD, &tr!("recipes-step-add")))
-                .inner
-        })
-        .inner;
-    dropdown_menu_wide(&response, theme::BLOCK_TITLE_W, |ui| {
-        StepKind::ALL.into_iter().find(|kind| {
-            let name = kind_name(*kind);
-            dropdown_row(ui, &DropdownRow::named(&name, false)).clicked()
-        })
-    })
-    .flatten()
-    .map(|kind| (at, kind))
 }

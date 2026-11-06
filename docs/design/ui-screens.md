@@ -284,10 +284,16 @@ and the one that applies right.
   *New recipe*, which keeps one of no steps and opens it, in the header. The bar: Edit (a double click too), Duplicate, Export, Delete (`confirm_button`,
   off with why for a built-in one). The form, under the trail *Recipes › Busts* (*Built-in*
   after a built-in one's name): a built-in one is read under a `notice` saying to duplicate
-  it, every field off. Blocks: *Recipe* (Name, the variables as a code-face name box, its
-  figure and a bin a row, *Add a variable*), then a block a step titled *1. Orientation* with
-  its switch, its question mark saying what that kind of step does, how a step runs and how a
-  condition is written, the step's move up, move down and bin at the right of its first row,
+  it, every field off but its steps' folds. Blocks: *Recipe* (Name, the variables as a code-face name box, its
+  figure and a bin a row, *Add a variable*), then the steps as a `chain_step` each on a rail:
+  the number in a 22 disc on the rail, the grip, the kind's glyph, *Orientation*, and while
+  folded, in `text_low` after it, *When …*, *Skipped if it fails*, *2 settings set*, *1 rule*
+  (*Switched off* alone for a step off; in `danger`, the disc ringed so, while it does not
+  read); at the right its question mark — what that kind of step does, how a step runs and
+  how a condition is written — its switch and the caret. A press on the heading unfolds it,
+  every step folded at first and each fold kept; one that does not read stands open. Open,
+  the heading carries move up, move down and the bin before the question mark, the disc
+  washed in `accent_wash` and ringed in `accent`; under it
   *When* as a `condition_row` (*Always* while empty), *On failure* Stop / Skip, its settings by kind — a setting left out its
   name and *Default* with a + to set it; one set its field (`number_row` with the unit its key
   names, `switch`, a `dropdown` of its words by what each means, the file's word at the row's right, `text_row`, points as rows of three fields and
@@ -296,8 +302,11 @@ and the one that applies right.
   pause's *Message*, a check's *Support the islands again* switch with *While* and *At most*
   `nested` under it, then *Choose*: each rule `nested`, its *When* and settings and *Remove
   the rule*, and *Add a rule*; why the recipe does not run as a `field_error` at the top of
-  the step it names, else a `danger` `notice` over the steps. Before, between and after the
-  steps a `small_icon_button` +, centred, its list every kind, the one chosen added there;
+  the step it names, else a `danger` `notice` over the steps. A step dragged by its grip
+  stands at 35 % while a card of its glyph and name follows the pointer, the page scrolling
+  near its edges, and the seam it would land at is an accent line from the rail with a dot
+  on it. Before, between and after the steps a `chain_seam`, 30 tall, a + on the rail, its
+  list every kind, the one chosen added there and open; none while a step is dragged.
   *The recipe has no steps yet.* as a `hint` over the lone + while there are none. Every
   condition's list offers, under *The model*, *After a check*, *Your variables* and
   *Functions*, each name by what it means with its unit, the name at the right. Save at the bar's right is the accent only while there are unsaved edits

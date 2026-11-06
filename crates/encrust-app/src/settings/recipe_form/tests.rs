@@ -49,6 +49,29 @@ fn moving_the_first_step_up_or_the_last_down_leaves_the_order() {
 }
 
 #[test]
+fn a_step_dragged_down_lands_before_the_seam_it_was_dropped_on_and_up_after() {
+    let mut form = RecipeForm::of(built_in("prepare").expect("ships").recipe());
+    let kinds = |form: &RecipeForm| form.steps.iter().map(|step| step.kind).collect::<Vec<_>>();
+    let before = kinds(&form);
+    form.move_step(0, 3);
+    assert_eq!(
+        kinds(&form)[..3],
+        [before[1], before[2], before[0]],
+        "dropped on the seam over the fourth, the first stands third"
+    );
+    form.move_step(2, 0);
+    assert_eq!(
+        kinds(&form),
+        before,
+        "dropped on the top seam, it is first again"
+    );
+    form.move_step(1, 2);
+    assert_eq!(kinds(&form), before, "its own seams leave the order");
+    form.move_step(0, usize::MAX);
+    assert_eq!(form.steps.last().map(|step| step.kind), Some(before[0]));
+}
+
+#[test]
 fn a_step_inserted_between_two_stands_between_them_and_one_past_the_end_lands_last() {
     let mut form = RecipeForm::of(built_in("prepare").expect("ships").recipe());
     let (first, second) = (form.steps[0].kind, form.steps[1].kind);

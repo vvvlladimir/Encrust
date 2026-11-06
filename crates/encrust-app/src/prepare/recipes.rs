@@ -10,6 +10,7 @@ use core_recipe::{Listed, Note, Plan, Read, StepKind};
 use printer_profiles::Catalogue;
 
 use crate::i18n::tr;
+use crate::ui::icon;
 
 /// The recipes the picker offers, read again only once the user's texts change.
 #[derive(Debug, Default)]
@@ -79,6 +80,22 @@ pub fn kind_name(kind: StepKind) -> String {
         StepKind::Save => tr!("recipe-kind-save"),
         StepKind::Gate => tr!("recipe-kind-gate"),
         StepKind::Pause => tr!("recipe-kind-pause"),
+    }
+}
+
+/// The glyph a step of `kind` goes by in the editor: its tool's where it has one.
+pub fn kind_glyph(kind: StepKind) -> &'static str {
+    match kind {
+        StepKind::Repair => icon::REPAIR,
+        StepKind::Orient => icon::AUTO_ORIENT,
+        StepKind::Hollow => icon::HOLLOW,
+        StepKind::Drain => icon::DRAIN,
+        StepKind::Supports => icon::SUPPORTS,
+        StepKind::Check => icon::CHECK,
+        StepKind::Arrange => icon::ARRANGE,
+        StepKind::Save => icon::SLICE_TO_FILE,
+        StepKind::Gate => icon::GATE,
+        StepKind::Pause => icon::PAUSE,
     }
 }
 

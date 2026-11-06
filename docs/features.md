@@ -147,8 +147,10 @@ tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait. A re
 its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
 first: a built-in one opens to read and **Duplicate** makes a copy of your own, and **New
 recipe** starts one of no steps; yours you rename, give variables, and change step by step —
-each step says what it does behind its question mark — add a step of any kind before, between or after the others, switch it off,
-move it up or down, remove it, type its condition (checked as you type, the error under the
+the steps a chain of folded cards, each saying in one line when it runs and what it sets,
+unfolded by a press and remembered so, and saying what it does behind its question mark —
+add a step of any kind before, between or after the others, switch it off,
+drag it by its grip to another place or move it up or down, remove it, type its condition (checked as you type, the error under the
 field, and the button beside it listing every name a condition can read, what each means and
 its unit, your variables and the functions, to put one in),
 choose what a failure does, set or leave out each setting (a word by what it means, the
