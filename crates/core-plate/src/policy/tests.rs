@@ -1,9 +1,9 @@
 use super::*;
 
 const SLACK: Noise = [0.0; OrientGoal::ALL.len()];
-/// A twentieth of a millilitre of support, half a newton of pull and 0.3 mm of stack, as
-/// a proof reads.
-const PROVEN: Noise = [0.05, 0.5, 0.3];
+/// A twentieth of a millilitre of support, half a newton of pull, 0.3 mm of stack and half
+/// a contact on show, as a proof reads.
+const PROVEN: Noise = [0.05, 0.5, 0.3, 0.5];
 /// A goal ranked with its bands, read past enough pull to have nothing to fall back on.
 const GOAL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
 const SHORTEST: OrientPreset = OrientPreset::Goal(OrientGoal::ShortestPrint);
@@ -136,7 +136,7 @@ fn a_turn_has_to_win_more_than_the_noise_of_its_unit() {
     let mut now = reading(0.0, None, 12.0, 1.0);
     now.standing = true;
     let turned = reading(0.0, None, 11.0, 0.0);
-    let coarse = [0.05, 2.0, 0.3];
+    let coarse = [0.05, 2.0, 0.3, 0.5];
     assert_eq!(
         rank(&[turned, now], GOAL, &coarse)[0],
         1,
@@ -423,4 +423,43 @@ fn auto_stays_where_the_model_stands_good_on_every_goal() {
     );
     let clearly = weighing(0.3, 5.0, 80.0);
     assert_eq!(rank(&[clearly, now], AUTO, &PROVEN)[0], 0);
+}
+
+const CLEAN: OrientPreset = OrientPreset::Goal(OrientGoal::CleanSurface);
+const SEEN: usize = OrientGoal::CleanSurface.index();
+
+fn showing(seen: f64, support: f64) -> Readings {
+    let mut r = weighing(support, 5.0, 50.0);
+    r.goals[SEEN] = seen;
+    r
+}
+
+#[test]
+fn a_clean_surface_takes_the_fewest_contacts_on_show_whatever_their_support() {
+    let readings = [showing(9.0, 0.5), showing(3.0, 2.0)];
+    assert_eq!(
+        rank(&readings, CLEAN, &PROVEN)[0],
+        1,
+        "3 on show beat 9, at four times the resin"
+    );
+}
+
+#[test]
+fn a_clean_surface_with_a_contact_on_show_or_fewer_takes_the_fewest_supports() {
+    let readings = [showing(0.2, 2.0), showing(0.9, 0.5)];
+    assert_eq!(
+        rank(&readings, CLEAN, &PROVEN)[0],
+        1,
+        "both under enough: the resin decides"
+    );
+}
+
+#[test]
+fn auto_weighs_nothing_of_what_shows() {
+    let readings = [showing(9.0, 1.0), showing(0.0, 1.0)];
+    assert_eq!(
+        rank(&readings, AUTO, &PROVEN),
+        [0, 1],
+        "alike on every balanced goal, the order stands whatever shows"
+    );
 }

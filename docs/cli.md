@@ -331,7 +331,8 @@ encrust slice model.stl \
 
 Turn the model the way it prints best, at its `--scale` and before anything else, reported as the
 `--rotate` that repeats the turn — `--orient-goal` searches for `fewest-supports` (the
-default), `least-peel`, `shortest-print` or `auto`, which balances the three, and
+default), `least-peel`, `shortest-print`, `clean-surface`, the fewest contacts where the
+model shows (ADR 0409), or `auto`, which balances the first three, and
 `--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds

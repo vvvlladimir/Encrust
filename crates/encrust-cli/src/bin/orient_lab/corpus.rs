@@ -51,6 +51,7 @@ pub struct Expectations {
     pub fewest_supports: Option<Expect>,
     pub least_peel: Option<Expect>,
     pub shortest_print: Option<Expect>,
+    pub clean_surface: Option<Expect>,
     pub auto: Option<Expect>,
 }
 
@@ -61,6 +62,7 @@ impl Expectations {
             OrientPreset::Goal(OrientGoal::FewestSupports) => self.fewest_supports,
             OrientPreset::Goal(OrientGoal::LeastPeel) => self.least_peel,
             OrientPreset::Goal(OrientGoal::ShortestPrint) => self.shortest_print,
+            OrientPreset::Goal(OrientGoal::CleanSurface) => self.clean_surface,
             OrientPreset::Auto => self.auto,
         }
         .unwrap_or_default();

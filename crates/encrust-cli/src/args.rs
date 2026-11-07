@@ -235,6 +235,8 @@ pub enum Goal {
     LeastPeel,
     /// The shortest stack.
     ShortestPrint,
+    /// The fewest contacts where the model shows, open and detailed.
+    CleanSurface,
     /// Every goal at once, each giving up as even a share of its best as it can.
     Auto,
 }
@@ -245,6 +247,7 @@ impl From<Goal> for OrientPreset {
             Goal::FewestSupports => OrientGoal::FewestSupports.into(),
             Goal::LeastPeel => OrientGoal::LeastPeel.into(),
             Goal::ShortestPrint => OrientGoal::ShortestPrint.into(),
+            Goal::CleanSurface => OrientGoal::CleanSurface.into(),
             Goal::Auto => Self::Auto,
         }
     }

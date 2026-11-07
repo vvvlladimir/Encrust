@@ -1,5 +1,5 @@
 use core_analysis::{disc_pull_n, equivalent_disc_mm};
-use core_geometry::{Mesh, Scalar, Vec3};
+use core_geometry::{Mesh, Prominence, Scalar, Vec3};
 use rayon::prelude::*;
 
 use crate::cut::Cut;
@@ -28,6 +28,9 @@ pub struct Score {
     pub under_mm2: Scalar,
     /// The same area times how high each face stands over the plate, cubic millimetres.
     pub under_mm3: Scalar,
+    /// The same area weighted by how much each face shows, square millimetres: where the
+    /// scars land. Zero where the preset does not read it.
+    pub seen_mm2: Scalar,
     /// Area lying on the plate, square millimetres, and zero for a model on supports.
     pub bottom_mm2: Scalar,
     pub height_mm: Scalar,
@@ -66,10 +69,21 @@ pub enum OrientGoal {
     LeastPeel,
     /// The shortest stack, model and lift, which sets the layers and the time.
     ShortestPrint,
+    /// The fewest contacts on surface that shows, open and detailed (ADR 0409).
+    CleanSurface,
 }
 
 impl OrientGoal {
-    pub const ALL: [Self; 3] = [Self::FewestSupports, Self::LeastPeel, Self::ShortestPrint];
+    pub const ALL: [Self; 4] = [
+        Self::FewestSupports,
+        Self::LeastPeel,
+        Self::ShortestPrint,
+        Self::CleanSurface,
+    ];
+
+    /// The goals auto weighs against each other, the first of [`Self::ALL`]: a clean
+    /// surface is asked for on its own (ADR 0409).
+    pub const BALANCED: [Self; 3] = [Self::FewestSupports, Self::LeastPeel, Self::ShortestPrint];
 
     /// Where this goal's reading sits among every goal's, the order of [`Self::ALL`].
     pub const fn index(self) -> usize {
@@ -81,6 +95,7 @@ impl OrientGoal {
             Self::FewestSupports => "Fewest supports",
             Self::LeastPeel => "Least peel force",
             Self::ShortestPrint => "Shortest print",
+            Self::CleanSurface => "Clean surface",
         }
     }
 
@@ -93,6 +108,7 @@ impl OrientGoal {
             peel: 0.6,
             height: 0.05,
             bottom: 0.3,
+            seen: 0.0,
         };
         match self {
             Self::FewestSupports => Weights {
@@ -110,6 +126,14 @@ impl OrientGoal {
                 support: 0.3,
                 peel: 0.0,
                 height: 1.5,
+                ..base
+            },
+            // What shows first; the resin then decides between poses that hide as well.
+            Self::CleanSurface => Weights {
+                support: 0.0,
+                volume: 0.2,
+                peel: 0.0,
+                seen: 1.0,
                 ..base
             },
         }
@@ -155,13 +179,13 @@ impl OrientPreset {
         }
     }
 
-    /// The search's weights: the goal's own, or the mean of every goal's.
+    /// The search's weights: the goal's own, or the mean of every balanced goal's.
     fn weights(self) -> Weights {
         match self {
             Self::Goal(goal) => goal.weights(),
             Self::Auto => {
-                let count = OrientGoal::ALL.len() as Scalar;
-                let sum = OrientGoal::ALL
+                let count = OrientGoal::BALANCED.len() as Scalar;
+                let sum = OrientGoal::BALANCED
                     .map(OrientGoal::weights)
                     .into_iter()
                     .fold(Weights::default(), Weights::plus);
@@ -171,9 +195,8 @@ impl OrientPreset {
     }
 }
 
-/// How much each term of [`Score`] weighs for one goal, set by eye and checked on
-/// `orient-lab`. `support` weighs everything a support is put under: the overhang, the
-/// tips and the height they stand at.
+/// How much each term of [`Score`] weighs for one goal, set by eye and checked on `orient-lab`.
+/// `support` weighs what a support is put under: the overhang, the tips, their height.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Weights {
     support: Scalar,
@@ -181,6 +204,7 @@ struct Weights {
     peel: Scalar,
     height: Scalar,
     bottom: Scalar,
+    seen: Scalar,
 }
 
 impl Weights {
@@ -191,6 +215,7 @@ impl Weights {
             peel: self.peel + other.peel,
             height: self.height + other.height,
             bottom: self.bottom + other.bottom,
+            seen: self.seen + other.seen,
         }
     }
 
@@ -201,6 +226,7 @@ impl Weights {
             peel: self.peel * factor,
             height: self.height * factor,
             bottom: self.bottom * factor,
+            seen: self.seen * factor,
         }
     }
 }
@@ -222,9 +248,13 @@ pub const LOOKS_UP: Scalar = 0.5;
 /// candidates: areas and normals do not turn with the mesh.
 pub struct Faces<'a> {
     mesh: &'a Mesh,
+    /// Each kept face's index in the mesh: a degenerate face is left out.
+    indices: Vec<u32>,
     normals: Vec<Vec3>,
     areas: Vec<Scalar>,
     centroids: Vec<Vec3>,
+    /// How much each kept face shows, 0 to 1, read only for a preset that weighs it.
+    shows: Option<Vec<Scalar>>,
     low_points: LowPoints,
     pub total_area_mm2: Scalar,
     /// The model's own scale, from the cube root of the box it fills: what the height and
@@ -245,16 +275,20 @@ pub struct Faces<'a> {
 
 impl<'a> Faces<'a> {
     pub fn of(mesh: &'a Mesh) -> Option<Self> {
+        let mut indices = Vec::with_capacity(mesh.faces.len());
         let mut normals = Vec::with_capacity(mesh.faces.len());
         let mut areas = Vec::with_capacity(mesh.faces.len());
         let mut centroids = Vec::with_capacity(mesh.faces.len());
 
-        for triangle in mesh.triangles() {
+        for (index, triangle) in
+            (0..mesh.faces.len()).filter_map(|face| Some((face as u32, mesh.triangle(face)?)))
+        {
             let scaled = triangle.normal_unnormalized();
             let area = scaled.length() / 2.0;
             if area <= Scalar::EPSILON {
                 continue;
             }
+            indices.push(index);
             normals.push(scaled / (area * 2.0));
             areas.push(area);
             centroids.push((triangle.a + triangle.b + triangle.c) / 3.0);
@@ -267,9 +301,11 @@ impl<'a> Faces<'a> {
 
         let faces = (!areas.is_empty()).then(|| Self {
             mesh,
+            indices,
             normals,
             areas,
             centroids,
+            shows: None,
             low_points: LowPoints::of(mesh),
             total_area_mm2,
             length_mm,
@@ -286,7 +322,16 @@ impl<'a> Faces<'a> {
     /// The same faces, ranked for the goal of `settings` and held the way it says: on
     /// supports or on the plate, past its overhang angle, by contacts its spacing apart.
     pub fn for_settings(self, settings: &OrientSettings) -> Self {
+        let shows = self.shows.or_else(|| {
+            let weighs = settings.preset.weights().seen > 0.0;
+            weighs.then(|| {
+                let prominence = Prominence::of(self.mesh);
+                let shown = |index: &u32| prominence.face(*index as usize);
+                self.indices.iter().map(shown).collect()
+            })
+        });
         Self {
+            shows,
             weights: settings.preset.weights(),
             on_supports: settings.on_supports,
             lean: settings.max_overhang_deg.to_radians().sin(),
@@ -326,10 +371,11 @@ impl<'a> Faces<'a> {
             under_mm3,
             bottom_mm2,
             shadow_mm2,
+            seen_mm2,
         ] = (0..self.areas.len())
             .into_par_iter()
             .map(|face| self.face_terms(face, down, floor, on_supports))
-            .reduce(|| [0.0; 6], |a, b| std::array::from_fn(|at| a[at] + b[at]));
+            .reduce(|| [0.0; 7], |a, b| std::array::from_fn(|at| a[at] + b[at]));
 
         let plate = (!on_supports).then_some(floor);
         let mut score = Score {
@@ -338,6 +384,7 @@ impl<'a> Faces<'a> {
             support_mm3,
             under_mm2,
             under_mm3,
+            seen_mm2,
             bottom_mm2,
             height_mm: self.extent(down),
             shadow_mm2,
@@ -357,8 +404,8 @@ impl<'a> Faces<'a> {
     }
 
     /// One face's share of overhang, support volume, area under supports and its volume,
-    /// footprint and shadow.
-    fn face_terms(&self, face: usize, down: Vec3, floor: Scalar, on_supports: bool) -> [Scalar; 6] {
+    /// footprint, shadow, and area under supports as much as it shows.
+    fn face_terms(&self, face: usize, down: Vec3, floor: Scalar, on_supports: bool) -> [Scalar; 7] {
         let lean = self.lean;
         let facing = self.normals[face].dot(down);
         let area = self.areas[face];
@@ -382,6 +429,7 @@ impl<'a> Faces<'a> {
             // Half the area a model's faces project onto the plate is its silhouette,
             // which is the cross-section for anything convex.
             area * facing.abs() / 2.0,
+            self.shows.as_ref().map_or(0.0, |shows| under * shows[face]),
         ]
     }
 
@@ -416,14 +464,15 @@ impl<'a> Faces<'a> {
         high - low
     }
 
-    /// What `goal` is searched for, whichever goal these faces are ranked for: its term
-    /// unweighted, and as the proof reads them the pull, newtons, and the stack, millimetres.
+    /// What `goal` is searched for, whatever these faces rank for: its term unweighted, or as
+    /// the proof reads it, newtons of pull, millimetres of stack, contacts on show.
     pub fn reading(&self, goal: OrientGoal, score: &Score) -> Scalar {
         let terms = self.terms(score);
         match goal {
             OrientGoal::FewestSupports => terms.volume,
             OrientGoal::LeastPeel => peak_pull_n(score),
             OrientGoal::ShortestPrint => score.stack_mm(),
+            OrientGoal::CleanSurface => score.seen_mm2 / self.patch_mm2.max(Scalar::EPSILON),
         }
     }
 
@@ -443,6 +492,7 @@ impl<'a> Faces<'a> {
             + w.peel * terms.peel
             + w.height * terms.height
             - w.bottom * terms.bottom
+            + w.seen * terms.seen
     }
 
     /// Every term made dimensionless. The peel is the area of the disc pulling as hard.
@@ -461,6 +511,7 @@ impl<'a> Faces<'a> {
             peel: pulled / (length * length),
             height: score.stack_mm() / length,
             bottom: score.bottom_mm2 / area,
+            seen: score.seen_mm2 / area,
         }
     }
 }
@@ -490,6 +541,7 @@ struct Terms {
     peel: Scalar,
     height: Scalar,
     bottom: Scalar,
+    seen: Scalar,
 }
 
 /// A face whose normal is within a few degrees of straight down is lying on the plate

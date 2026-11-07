@@ -387,3 +387,31 @@ fn a_mesh_with_no_faces_cannot_be_oriented() {
         .expect_err("an empty mesh has no orientation");
     assert!(matches!(error, PlateError::NothingToOrient));
 }
+
+/// A 20 mm ball with forty bumps of detail over the side facing +X: a face on a head.
+fn head_facing_x() -> Mesh {
+    let mut mesh = core_geometry::ball(Vec3::ZERO, 10.0, 48, 96);
+    for at in 0..40 {
+        let around = at as f32 * 2.4;
+        let out = 0.55 + 0.4 * (at as f32 / 40.0);
+        let ring = (1.0 - out * out).sqrt();
+        let on = Vec3::new(out, ring * around.cos(), ring * around.sin()) * 10.0;
+        mesh.append(&core_geometry::ball(on, 0.8, 12, 24));
+    }
+    mesh
+}
+
+#[test]
+fn a_clean_surface_turns_the_detailed_side_away_from_the_supports() {
+    let settings = OrientSettings {
+        preset: OrientGoal::CleanSurface.into(),
+        on_supports: true,
+        ..OrientSettings::default()
+    };
+    let found = orient(&head_facing_x(), &settings).expect("a head can be oriented");
+    let face = placed(found.rotation, Vec3::X);
+    assert!(
+        face.z > 0.5,
+        "the detailed side looks up, away from the supports, got {face}"
+    );
+}

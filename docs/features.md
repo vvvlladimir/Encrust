@@ -161,14 +161,21 @@ renamed it, the picker following; a draft that does not pass stays in the form. 
 asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 **Auto-orient:**
-- Searches for the best angle for one of four presets: **fewest supports**, **least
-  peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
+- Searches for the best angle for one of five presets: **fewest supports**, **least
+  peel**, **shortest print**, **clean surface** or **auto**, picked in Position beside
+  **Auto-orient**; the
   plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
   the window reopens.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
   then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
   as they stand.
-- **Auto** balances the other three for each model. It never lets one of supports, pull
+- **Clean surface** puts the fewest supports where the model shows: open surface with
+  fine detail, such as a face, stays clean, while folds, the underside and smooth areas take
+  the contacts. Once about one contact or less lands where it shows, it takes the pose with
+  the least resin. It finds what shows from the shape alone. You cannot yet mark it by
+  hand, and support placement does not yet avoid it within a pose.
+- **Auto** balances supports, pull and print time for each model, and leaves the clean
+  surface out. It never lets one of supports, pull
   or print time go far worse for the sake of the others. Where some pose is about as good
   as the best on all three, it takes that one. Otherwise it takes the pose where each
   gives up the smallest, most even share of its best. Like least peel, it never takes a

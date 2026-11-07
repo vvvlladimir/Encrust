@@ -182,6 +182,7 @@ fn label(preset: OrientPreset) -> String {
         OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports"),
         OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel"),
         OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest"),
+        OrientPreset::Goal(OrientGoal::CleanSurface) => tr!("orient-preset-surface"),
         OrientPreset::Auto => tr!("orient-preset-auto"),
     }
 }
@@ -191,6 +192,7 @@ fn hint(preset: OrientPreset) -> String {
         OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports-hint"),
         OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel-hint"),
         OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest-hint"),
+        OrientPreset::Goal(OrientGoal::CleanSurface) => tr!("orient-preset-surface-hint"),
         OrientPreset::Auto => tr!("orient-preset-auto-hint"),
     }
 }

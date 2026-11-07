@@ -17,6 +17,7 @@ fn candidate(down: Vec3, overhang_mm2: f32, total: f32, cup_mm2: f32) -> Candida
             support_mm3: overhang_mm2 * 10.0,
             under_mm2: overhang_mm2,
             under_mm3: overhang_mm2 * 10.0,
+            seen_mm2: 0.0,
             bottom_mm2: 0.0,
             height_mm: 10.0,
             shadow_mm2: 100.0,

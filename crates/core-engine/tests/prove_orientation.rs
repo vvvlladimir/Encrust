@@ -479,3 +479,33 @@ fn a_proof_stopped_part_way_ends_without_a_choice() {
     .expect_err("the watcher gave up on the proof");
     assert!(matches!(error, EngineError::Orient(PlateError::Cancelled)));
 }
+
+/// A 20 mm ball with forty bumps of detail over the side facing +X: a face on a head.
+fn head_facing_x() -> Mesh {
+    let mut mesh = core_geometry::ball(Vec3::splat(15.0), 10.0, 48, 96);
+    for at in 0..40 {
+        let around = at as f32 * 2.4;
+        let out = 0.55 + 0.4 * (at as f32 / 40.0);
+        let ring = (1.0 - out * out).sqrt();
+        let on = Vec3::new(out, ring * around.cos(), ring * around.sin()) * 10.0;
+        mesh.append(&core_geometry::ball(Vec3::splat(15.0) + on, 0.8, 12, 24));
+    }
+    mesh
+}
+
+#[test]
+fn a_clean_surface_prints_the_detailed_side_up_and_its_contacts_on_the_smooth_one() {
+    let bench = Bench::new();
+    let settings = bench.settings(OrientGoal::CleanSurface);
+    let (chosen, printout) = best(&head_facing_x(), &settings, &bench.trial());
+    let face = chosen.oriented.rotation * Vec3::X;
+    assert!(face.z > 0.5, "the detailed side looks up, got {face}");
+    // A contact on the smooth side of a ball counts a third: open, and no detail.
+    let contacts = printout.contacts as f64;
+    assert!(
+        printout.seen_contacts > 0.0 && printout.seen_contacts < 0.5 * contacts,
+        "{} contacts count {} on show, expected near a third of them",
+        printout.contacts,
+        printout.seen_contacts
+    );
+}

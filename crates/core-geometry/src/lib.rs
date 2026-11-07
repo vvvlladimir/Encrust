@@ -4,6 +4,7 @@ mod buckets;
 mod bvh;
 mod clip;
 mod closest;
+mod directions;
 mod faults;
 #[cfg(test)]
 mod fixtures;
@@ -14,6 +15,7 @@ mod mend;
 mod mesh;
 mod orient;
 mod primitives;
+mod prominence;
 mod ray;
 mod region;
 mod repair;
@@ -34,6 +36,7 @@ pub use buckets::{Buckets, cell_of_point, cells_around};
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
+pub use directions::sphere_directions;
 pub use faults::{Faults, faults};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
@@ -44,6 +47,7 @@ pub use orient::{Orientation, orient_outward};
 pub use primitives::{
     ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for, turns,
 };
+pub use prominence::Prominence;
 pub use ray::{
     PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
 };

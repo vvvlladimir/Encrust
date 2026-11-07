@@ -16,6 +16,7 @@ miniature and a bust are scored on the same scale:
 | peel | the area of the disc pulling as hard as the hardest section, over the model's own square length |
 | height | how tall the stack stands, the model and the lift under it, over the model's own length |
 | bottom | area flat on the plate, over the surface area; zero on supports |
+| seen | the plan area under supports, each face weighed by how much it shows, over the surface area |
 
 The support term adds three things a support is put under:
 
@@ -38,12 +39,19 @@ in the units of the shadow it replaces. A disc pulls the most an area can, so a 
 or two pieces apart score less than their area, and a shadow scored as a disc never less
 than a cut.
 
-| Preset | support | volume | peel | height | bottom |
-|---|---|---|---|---|---|
-| Fewest supports | — | 1.0 | — | 0.05 | 0.3 |
-| Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 |
-| Shortest print | 0.3 | — | — | 1.5 | 0.3 |
-| Auto, the goals' mean | 0.27 | 0.33 | 0.67 | 0.53 | 0.3 |
+| Preset | support | volume | peel | height | bottom | seen |
+|---|---|---|---|---|---|---|
+| Fewest supports | — | 1.0 | — | 0.05 | 0.3 | — |
+| Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 | — |
+| Shortest print | 0.3 | — | — | 1.5 | 0.3 | — |
+| Clean surface | — | 0.2 | — | 0.05 | 0.3 | 1.0 |
+| Auto, the first three's mean | 0.27 | 0.33 | 0.67 | 0.53 | 0.3 | — |
+
+How much a face shows is its `Prominence` (`docs/design/prominence.md`), read once a model
+and only for the clean surface. The search reads that goal as the contacts placement would
+set there, the seen area over a contact's patch; the proof reads it off the contacts it
+placed, each weighed by the prominence of the face under it. Both count one contact on
+open detail as one (ADR 0409).
 
 The model's length is the cube root of its bounding box, which does not turn with it, so
 dividing by it changes no ranking — it only stops the weights meaning different things at
@@ -194,6 +202,10 @@ the layers and the time follow, since a layer takes as long whatever its area. I
 is a fiftieth of the shortest and a millimetre, some four minutes on a 100 mm figure, and
 it weighs no support. A pull past the limit fails no pose for it: the limit is an estimate
 good to a factor of three, and the goal is the fewest layers that hold (ADR 0283).
+
+The clean surface has enough at one contact on show, a scar a brush stroke covers, and
+falls back on the fewest supports, as the least peel does. Auto weighs only the first
+three goals, `OrientGoal::BALANCED`: what shows is the user's to ask for (ADR 0409).
 
 The fewest supports skips steps 2 and 3: past what fails the print, the least support
 volume wins outright, and any turn that needs less is worth making. Islands, contacts with

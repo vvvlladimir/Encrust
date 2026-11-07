@@ -31,7 +31,7 @@ pub fn ranked(
     let mut order = rank(&readings, settings.preset, &NOISE);
     if settings.preset == OrientPreset::Auto && !order.is_empty() {
         let mut ends = vec![order[0]];
-        for goal in OrientGoal::ALL {
+        for goal in OrientGoal::BALANCED {
             let own = readings_for(goal.into());
             let best = rank(&own, goal.into(), &NOISE).first().copied();
             ends.extend(best.filter(|at| !ends.contains(at)));
@@ -75,9 +75,9 @@ fn readings(
         .collect()
 }
 
-/// What of each goal's search reading is noise: half a newton of pull and a tenth of a
-/// millimetre of stack, as the proof reads them, and a sliver of every dimensionless term.
-const NOISE: Noise = [SLIVER, 0.5, 0.1];
+/// What of each goal's search reading is noise: a sliver of a dimensionless term, then half a
+/// newton, a tenth of a millimetre and half a contact on show, as the proof reads them.
+const NOISE: Noise = [SLIVER, 0.5, 0.1, 0.5];
 
 /// What orders candidates the goal's own rules leave alike: the total, but for the shortest
 /// print its stack to the noise it is read to first, support not being weighed (ADR 0283).

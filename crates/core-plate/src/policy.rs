@@ -161,6 +161,13 @@ impl Policy {
                 floor_noises: STACK_FLOOR_NOISES,
                 ..Self::banded(goal, primary_slack)
             },
+            // Past a contact's worth on show nothing is left to hide: then the resin decides.
+            OrientGoal::CleanSurface => Self {
+                enough: ENOUGH_SEEN,
+                fallback: Some(OrientGoal::FewestSupports),
+                fallback_noise: noise[OrientGoal::FewestSupports.index()],
+                ..Self::banded(goal, primary_slack)
+            },
         }
     }
 
@@ -223,6 +230,9 @@ const SUPPORT_FLOOR_NOISES: f64 = 10.0;
 /// Five noises of stack, 1.5 mm as a proof reads it, is about what the bottom layers add
 /// to any print whatever its height.
 const STACK_FLOOR_NOISES: f64 = 5.0;
+/// One contact on surface that shows in full, or a few half in a fold, is a clean surface:
+/// a scar a brush stroke covers (ADR 0409).
+const ENOUGH_SEEN: f64 = 1.0;
 
 /// The rankings' common ground: the fewest fatal readings, the fewest unheld among them,
 /// and the best primary among those.
@@ -301,11 +311,11 @@ struct Balance {
     /// What fails the print and what hangs, weighed as strictly as any goal weighs them.
     hazards: Policy,
     bests: Bests,
-    goals: [Policy; OrientGoal::ALL.len()],
+    goals: [Policy; OrientGoal::BALANCED.len()],
     noise: Noise,
     /// Each goal's best reading among the sound, and the floor under every reading of it.
-    best: [f64; OrientGoal::ALL.len()],
-    floor: [f64; OrientGoal::ALL.len()],
+    best: [f64; OrientGoal::BALANCED.len()],
+    floor: [f64; OrientGoal::BALANCED.len()],
 }
 
 /// A share no reading falls under, so that a goal at zero at best still divides.
@@ -315,7 +325,7 @@ impl Balance {
     fn of(readings: &[Readings], noise: &Noise) -> Option<Self> {
         let hazards = Policy::banded(OrientGoal::ALL[0], 0.0);
         let bests = Bests::of(readings, &hazards)?;
-        let goals = OrientGoal::ALL.map(|goal| Policy::of(goal, noise));
+        let goals = OrientGoal::BALANCED.map(|goal| Policy::of(goal, noise));
         let best = goals.map(|policy| {
             readings
                 .iter()
@@ -336,7 +346,7 @@ impl Balance {
     }
 
     /// The natural logarithm of each goal's reading as a share of its best.
-    fn shares(&self, r: &Readings) -> [f64; OrientGoal::ALL.len()] {
+    fn shares(&self, r: &Readings) -> [f64; OrientGoal::BALANCED.len()] {
         std::array::from_fn(|at| {
             let over = |reading: f64| (reading + self.floor[at]).max(TINY);
             (over(self.goals[at].primary(r)) / over(self.best[at])).ln()
@@ -350,7 +360,7 @@ impl Balance {
 
     /// What the noise of every goal's reading moves the cost by at most.
     fn cost_noise(&self) -> f64 {
-        (0..self.noise.len())
+        (0..self.goals.len())
             .map(|at| (1.0 + self.noise[at] / (self.best[at] + self.floor[at]).max(TINY)).ln())
             .sum()
     }

@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use core_engine::{Printout, Trial, Tried, print_out, prove};
-use core_geometry::{Mesh, Quat, Vec3};
+use core_geometry::{Mesh, Quat, Vec3, sphere_directions};
 use core_plate::{
     OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Ruling, Watch, finalists,
     flat_faces, rotation_for,
@@ -169,7 +169,7 @@ impl Bench<'_> {
                 poses.push(self.measure(&printed, name, Source::Known, *rotation, *on_plate)?);
             }
         }
-        for (at, down) in spread(oracle).into_iter().enumerate() {
+        for (at, down) in sphere_directions(oracle).into_iter().enumerate() {
             let name = format!("oracle {at}");
             let rotation = rotation_for(down);
             poses.push(self.measure(&printed, name, Source::Oracle, rotation, false)?);
@@ -298,19 +298,6 @@ pub fn tilt_deg(rotation: Quat) -> f32 {
     (rotation * Vec3::Z).z.clamp(-1.0, 1.0).acos().to_degrees()
 }
 
-/// `count` directions spread evenly over the sphere, by the golden angle.
-fn spread(count: usize) -> Vec<Vec3> {
-    let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
-    (0..count)
-        .map(|at| {
-            let z = 1.0 - 2.0 * (at as f32 + 0.5) / count as f32;
-            let ring = (1.0 - z * z).max(0.0).sqrt();
-            let around = golden * at as f32;
-            Vec3::new(ring * around.cos(), ring * around.sin(), z)
-        })
-        .collect()
-}
-
 /// A face this near straight down and this near the lowest point lies on the plate, as
 /// the search reads a footprint.
 const FLAT: f32 = 0.996;
@@ -363,14 +350,6 @@ mod tests {
         let over = Quat::from_rotation_x(std::f32::consts::PI);
         assert!((tilt_deg(over) - 180.0).abs() < 1e-3);
         assert!(tilt_deg(Quat::IDENTITY).abs() < 1e-3);
-    }
-
-    #[test]
-    fn the_spread_is_unit_directions_covering_both_poles() {
-        let directions = spread(64);
-        assert!(directions.iter().all(|d| (d.length() - 1.0).abs() < 1e-4));
-        assert!(directions.iter().any(|d| d.z > 0.9));
-        assert!(directions.iter().any(|d| d.z < -0.9));
     }
 
     #[test]

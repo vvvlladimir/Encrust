@@ -29,6 +29,7 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [parts.md](parts.md) | How a model is split into parts: shells by edges, nesting, scraps, narrow joins |
 | [joints.md](joints.md) | Where a cut's pins, dowels, magnets and key go, how big they are, and the pillars under them |
 | [supports.md](supports.md) | Where a column can stand, the shape it is meshed as, placing one by hand |
+| [prominence.md](prominence.md) | How much each face of a model shows: its exposure to the open and its detail |
 | [analysis.md](analysis.md) | A layer's pieces from its runs, the pull on the film, islands and levers |
 | [hostile-files.md](hostile-files.md) | What a reader believes of a header, and the three guards under every count |
 | [updates.md](updates.md) | The release feed, what an archive passes before it is unpacked, and the swap |

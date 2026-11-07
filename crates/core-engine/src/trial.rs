@@ -2,6 +2,7 @@
 //! way a finished plate is. See `docs/design/orientation.md`.
 
 mod islands;
+mod shows;
 
 use std::sync::Arc;
 
@@ -25,6 +26,7 @@ use crate::plate::{Model, Plate};
 use crate::run::Run;
 use crate::stand::{SupportPlan, ToStand, stand_seated, stand_under};
 use crate::trial::islands::islands_born;
+use crate::trial::shows::Shows;
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
 /// of a million faces, more for a lighter one, which prints as many in the same time, but
@@ -93,6 +95,9 @@ pub struct Printout {
     pub hanging: usize,
     /// Contacts on faces that look up in the model's own file.
     pub top_contacts: usize,
+    /// Contacts each weighed by how much the model shows under it, one on open detail
+    /// counting one; zero where a proof's preset does not read it.
+    pub seen_contacts: f64,
     pub layers: usize,
     /// How tall the stack stands, model and supports, millimetres: what the time follows.
     pub stack_mm: f32,
@@ -123,15 +128,16 @@ impl Printout {
             OrientGoal::FewestSupports => f64::from(self.supports_ml),
             OrientGoal::LeastPeel => self.pull_n,
             OrientGoal::ShortestPrint => f64::from(self.stack_mm),
+            OrientGoal::CleanSurface => self.seen_contacts,
         }
     }
 
     /// What of `goal`'s [`Printout::reading`] is noise: a strut's resin, millilitres, half
-    /// a newton, and two of a trial's thickest layers.
+    /// a newton, two of a trial's thickest layers, and half a contact on show.
     pub fn noise(goal: OrientGoal) -> f64 {
         match goal {
             OrientGoal::FewestSupports => 0.05,
-            OrientGoal::LeastPeel => 0.5,
+            OrientGoal::LeastPeel | OrientGoal::CleanSurface => 0.5,
             OrientGoal::ShortestPrint => 2.0 * f64::from(TRIAL_LAYER_MM),
         }
     }
@@ -221,6 +227,8 @@ pub fn prove(
         is_standing,
     );
     let steps = Pieces::start(watch, Phase::Proving, poses.len() * PRINT_STEPS)?;
+    let shows = (settings.preset == OrientGoal::CleanSurface.into())
+        .then(|| Shows::of(printed.shell.unwrap_or(printed.outer)));
     let tried = poses
         .into_par_iter()
         .map(|pose| {
@@ -230,7 +238,7 @@ pub fn prove(
                 pose.rotation,
                 pose.on_plate,
                 trial,
-                (Some(print), steps),
+                (Some(print), steps, shows.as_ref()),
             )
             .map(|printout| Proven {
                 oriented: *pose,
@@ -307,27 +315,32 @@ fn judged(
         .collect()
 }
 
-/// Stands the model the way `rotation` turns it in the middle of the plate, lifted onto
-/// supports, or `on_plate` with supports only under what hangs over it, and reads the stack
-/// it and its supports cure.
+/// Stands the model as `rotation` turns it mid-plate, lifted or `on_plate` with supports only
+/// under what hangs, and reads its stack and how much shows where its supports touch it.
 pub fn print_out(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
 ) -> Result<Printout, EngineError> {
-    print_held(printed, rotation, on_plate, trial, (None, None))
+    let shows = Shows::of(printed.shell.unwrap_or(printed.outer));
+    print_held(
+        printed,
+        rotation,
+        on_plate,
+        trial,
+        (None, None, Some(&shows)),
+    )
 }
 
-/// The same cured as coarse as `trial`, for a `print` finer than it: supports are placed on
-/// the print's own layer, and its islands counted at its own pixel and layer. `steps` is told
-/// as each of the [`PRINT_STEPS`] ends.
+/// The same cured as coarse as `trial`, supports placed and islands counted as `print` prints;
+/// `steps` is told as each of the [`PRINT_STEPS`] ends, `shows` reads where contacts land.
 fn print_held(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
-    (print, steps): (Option<&Trial>, Option<&Pieces<'_>>),
+    (print, steps, shows): (Option<&Trial>, Option<&Pieces<'_>>, Option<&Shows>),
 ) -> Result<Printout, EngineError> {
     let told = || steps.map_or(Ok(()), Pieces::finish);
     let turn = Transform {
@@ -355,11 +368,16 @@ fn print_held(
     };
     let stood = stand(model, trial.support, layer_mm)?;
     told()?;
+    let moved = placed.vertices.first().zip(turned.vertices.first());
+    let seen_contacts = shows.zip(moved).map_or(0.0, |(shows, (now, then))| {
+        shows.under(&stood.contacts, rotation, *now - *then)
+    });
     let mut held = Held {
         contacts: stood.contacts.len(),
         supports_mm3: signed_volume(&stood.supports).abs(),
         hanging: stood.contacts.len().saturating_sub(stood.standing),
         top_contacts: looking_up(&stood.facing, rotation),
+        seen_contacts,
         supports: (!stood.supports.faces.is_empty())
             .then(|| Arc::new(stood.supports))
             .into_iter()
@@ -416,6 +434,7 @@ struct Held {
     supports_mm3: Scalar,
     hanging: usize,
     top_contacts: usize,
+    seen_contacts: f64,
     supports: Vec<Arc<Mesh>>,
 }
 
@@ -466,6 +485,7 @@ fn printout(held: &Held, measured: &Measured, layer_mm: Scalar) -> Printout {
         supports_ml: held.supports_mm3 / 1000.0,
         hanging: held.hanging,
         top_contacts: held.top_contacts,
+        seen_contacts: held.seen_contacts,
         layers: measured.layer_count(),
         stack_mm: measured.layer_count() as Scalar * layer_mm,
         pull_n: measured
@@ -497,6 +517,7 @@ mod tests {
                     support_mm3: 0.0,
                     under_mm2: 0.0,
                     under_mm3: 0.0,
+                    seen_mm2: 0.0,
                     bottom_mm2: 0.0,
                     height_mm: 0.0,
                     shadow_mm2: 0.0,
@@ -532,6 +553,18 @@ mod tests {
         };
         assert!(!first(OrientPreset::Goal(OrientGoal::LeastPeel)));
         assert!(first(OrientPreset::Goal(OrientGoal::FewestSupports)));
+    }
+
+    #[test]
+    fn a_clean_surface_is_judged_on_the_contacts_printed_where_they_show() {
+        let mut poses = [tried(false, 0.5, 0), tried(false, 1.5, 0)];
+        poses[0].printout.seen_contacts = 6.0;
+        poses[1].printout.seen_contacts = 2.0;
+        let first = judged(&poses, OrientGoal::CleanSurface.into(), |_| false)[0];
+        assert_eq!(
+            first.proven.printout.supports_ml, 1.5,
+            "2 on show beat 6, at three times the resin"
+        );
     }
 
     #[test]

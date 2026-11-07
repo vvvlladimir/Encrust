@@ -238,7 +238,9 @@ fn measure(
 fn apart_deg(preset: OrientPreset) -> Scalar {
     match preset {
         OrientPreset::Goal(OrientGoal::FewestSupports) => 20.0,
-        OrientPreset::Goal(OrientGoal::LeastPeel | OrientGoal::ShortestPrint)
+        OrientPreset::Goal(
+            OrientGoal::LeastPeel | OrientGoal::ShortestPrint | OrientGoal::CleanSurface,
+        )
         | OrientPreset::Auto => 10.0,
     }
 }

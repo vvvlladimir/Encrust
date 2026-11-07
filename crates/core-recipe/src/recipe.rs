@@ -91,7 +91,13 @@ impl StepKind {
             Self::Orient => &[
                 (
                     "goal",
-                    Word(&["auto", "fewest-supports", "least-peel", "shortest-print"]),
+                    Word(&[
+                        "auto",
+                        "fewest-supports",
+                        "least-peel",
+                        "shortest-print",
+                        "clean-surface",
+                    ]),
                 ),
                 ("max_tilt_deg", Number),
             ],
@@ -176,10 +182,13 @@ impl Step {
         found.extend(self.retry.iter().map(|retry| &retry.while_));
         found.extend(self.choose.iter().map(|choice| &choice.when));
         let sets = std::iter::once(&self.set).chain(self.choose.iter().map(|choice| &choice.set));
-        found.extend(sets.flat_map(|set| set.values()).filter_map(|setting| match setting {
-            Setting::Expr(condition) => Some(condition),
-            _ => None,
-        }));
+        found.extend(
+            sets.flat_map(|set| set.values())
+                .filter_map(|setting| match setting {
+                    Setting::Expr(condition) => Some(condition),
+                    _ => None,
+                }),
+        );
         found
     }
 }

@@ -1,6 +1,6 @@
 # 0284. Auto-orient balances every goal by the product of its shares, and the clean top goes
 
-- **Status:** Accepted
+- **Status:** Accepted; which goals auto weighs is narrowed by 0409
 - **Date:** 2026-10-15
 
 ## Context

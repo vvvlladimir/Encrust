@@ -223,6 +223,7 @@ fn word_name(word: &str) -> String {
         "fewest-supports" => tr!("recipes-word-fewest-supports"),
         "least-peel" => tr!("recipes-word-least-peel"),
         "shortest-print" => tr!("recipes-word-shortest-print"),
+        "clean-surface" => tr!("recipes-word-clean-surface"),
         "inside" => tr!("recipes-word-inside"),
         "outside" => tr!("recipes-word-outside"),
         "open-floor" => tr!("recipes-word-open-floor"),
