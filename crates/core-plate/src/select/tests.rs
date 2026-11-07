@@ -59,16 +59,20 @@ fn place_for(
 }
 
 #[test]
-fn a_suction_cup_loses_whatever_it_scores_but_for_the_fewest_supports() {
+fn a_suction_cup_loses_whatever_it_scores_for_auto_alone() {
     let cupping = candidate(Vec3::X, 0.0, 0.1, 400.0);
     let clean = candidate(Vec3::Y, 50.0, 9.0, 0.0);
-    let peel = OrientGoal::LeastPeel;
-    assert_eq!(place_for(peel, &[cupping, clean], 1, Vec3::NEG_Z), 0);
     assert_eq!(
-        place(&[cupping, clean], 0, Vec3::NEG_Z),
-        0,
-        "a cup is a drain hole's to fix, not more support's"
+        place_for(OrientPreset::Auto, &[cupping, clean], 1, Vec3::NEG_Z),
+        0
     );
+    for goal in OrientGoal::ALL {
+        assert_eq!(
+            place_for(goal, &[cupping, clean], 0, Vec3::NEG_Z),
+            0,
+            "{goal:?}: a cup is a drain hole's to fix"
+        );
+    }
 }
 
 #[test]

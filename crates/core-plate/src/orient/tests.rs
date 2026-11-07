@@ -34,8 +34,8 @@ fn a_slab_pulling_past_the_limit_is_turned_off_its_face_for_the_least_peel() {
 }
 
 #[test]
-fn a_slab_pulling_little_enough_stays_flat_for_the_least_peel() {
-    // A 40 mm square pulls some 8 N, under a third of the limit: nothing to win.
+fn a_slab_pulling_little_is_still_stood_up_for_the_least_peel() {
+    // A 40 mm square pulls some 8 N flat, under a third of the limit, and less on edge.
     let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
     let settings = OrientSettings {
         preset: OrientGoal::LeastPeel.into(),
@@ -43,7 +43,10 @@ fn a_slab_pulling_little_enough_stays_flat_for_the_least_peel() {
     };
     let found = orient(&mesh, &settings).expect("a slab can be oriented");
     let thin = placed(found.rotation, Vec3::Z);
-    assert!(thin.z.abs() > 0.95, "the slab still lies flat, got {thin}");
+    assert!(
+        thin.z.abs() < 0.95,
+        "the slab no longer lies flat, got {thin}"
+    );
 }
 
 #[test]

@@ -171,8 +171,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   as they stand.
 - **Clean surface** puts the fewest supports where the model shows: open surface with
   fine detail, such as a face, stays clean, while folds, the underside and smooth areas take
-  the contacts. Once about one contact or less lands where it shows, it takes the pose with
-  the least resin. It finds what shows from the shape alone. You cannot yet mark it by
+  the contacts, however much resin that takes. It finds what shows from the shape alone. You cannot yet mark it by
   hand, and support placement does not yet avoid it within a pose.
 - **Auto** balances supports, pull and print time for each model, and leaves the clean
   surface out. It never lets one of supports, pull
@@ -199,22 +198,20 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - With a printer chosen, it tries its best few poses with their supports and counts the
   islands each would leave at the printer's own pixel and layer, down to specks a tenth of
   a millimetre across. A pose standing on the plate with something hanging off it is
-  turned down by every preset but fewest supports.
+  turned down by auto.
+- Every preset but auto minimises its one problem alone. It takes the pose that reads
+  least on it, however small the saving, and ignores suction cups, pulls past the
+  warning, islands and supports with no room to stand; it only never picks a pose that
+  would not fit the printer or that would balance on a point. Use **auto** to have those
+  avoided, or fix them with the tools that do: **Drain** for a cup, Check for the rest.
 - **Fewest supports** picks the pose with the least resin in its supports, raft included,
-  whichever way up that is — strictly the least, however small the saving. It ignores
-  suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and
-  islands, takes supports with no room to stand as they come, and never picks a pose that
-  would not fit the printer or that would balance on a point.
-- **Least peel** keeps the hardest layer's pull on the film low, without suction cups or
-  anything left hanging. Once every layer pulls under 10 N — a third of the 30 N warning —
-  it has nothing more to win, and takes the pose with the least support among those, so
-  a small model is not tilted or flipped for a fraction of a newton. The newtons are an
-  estimate good to about a factor of three, not a measurement of your printer.
+  whichever way up that is.
+- **Least peel** takes the pose whose hardest layer pulls least on the film, whatever
+  support it takes. The newtons are an estimate good to about a factor of three, not a
+  measurement of your printer.
 - **Shortest print** takes the pose with the fewest layers — the model's height plus its
-  lift onto supports, since a layer takes as long whatever its area — that seals no cup and
-  leaves nothing hanging. It ignores the peel warning and the support it takes: a flat
-  part lies flat, a figure on its side. Poses within 2 % and a millimetre of the shortest
-  count as just as fast, so a model is not turned for less.
+  lift onto supports, since a layer takes as long whatever its area — whatever support
+  it takes: a flat part lies flat, a figure on its side.
 - It either leaves a model standing on the plate, with supports only under what hangs
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.

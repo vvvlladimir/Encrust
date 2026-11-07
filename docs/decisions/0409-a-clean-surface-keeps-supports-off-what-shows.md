@@ -1,6 +1,6 @@
 # 0409. Orient for a clean surface: supports off what shows, read from the shape
 
-- **Status:** Proposed
+- **Status:** Proposed; its policy is superseded by 0410
 - **Date:** 2026-11-06
 
 ## Context

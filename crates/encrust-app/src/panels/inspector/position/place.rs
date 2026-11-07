@@ -190,9 +190,9 @@ fn label(preset: OrientPreset) -> String {
 fn hint(preset: OrientPreset) -> String {
     match preset {
         OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports-hint"),
-        OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel-hint"),
-        OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest-hint"),
-        OrientPreset::Goal(OrientGoal::CleanSurface) => tr!("orient-preset-surface-hint"),
+        OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel-only-hint"),
+        OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest-only-hint"),
+        OrientPreset::Goal(OrientGoal::CleanSurface) => tr!("orient-preset-surface-only-hint"),
         OrientPreset::Auto => tr!("orient-preset-auto-hint"),
     }
 }

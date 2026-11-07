@@ -1764,9 +1764,9 @@ orient-preset-auto = Auto
 # The clean surface preset, as short as the other segments.
 orient-preset-surface = Surface
 orient-preset-supports-hint = The least resin in supports, whichever way up.
-orient-preset-peel-hint = The lightest pull on the film, no cups; under 10 N, the fewest supports.
-orient-preset-shortest-hint = The fewest layers that still print.
-orient-preset-surface-hint = The fewest contacts where the model shows: open, detailed faces stay clean; past that, the least resin.
+orient-preset-peel-only-hint = The lightest pull on the film; cups and islands are not weighed.
+orient-preset-shortest-only-hint = The fewest layers; cups and islands are not weighed.
+orient-preset-surface-only-hint = The fewest contacts where the model shows: open, detailed faces stay clean.
 orient-preset-auto-hint = Supports, pull and print time balanced: none gives up much for the others.
 position-mirror-across = Mirror across { $axis }
 position-mirror-copy = Mirror a copy

@@ -1,5 +1,5 @@
 //! The one rule an orientation is chosen by, whatever the stage and the preset: each goal
-//! ranks by its own [`Policy`], and the auto preset by the [`Balance`] of them all. See
+//! ranks by its own reading alone, and the auto preset by the [`Balance`] of them all. See
 //! `docs/design/orientation.md`.
 
 use core_analysis::PEEL_LIMIT_N;
@@ -13,18 +13,16 @@ pub struct Readings {
     /// pose past the build volume, or balanced on the plate on a point.
     pub fatal: f64,
     /// Suction cups, and a model set on the plate with something left hanging off it,
-    /// weighted the same way: fatal to a goal whose policy weighs hazards.
+    /// weighted the same way: fatal to the auto preset, nothing to a single goal.
     pub suction: f64,
-    /// Pulls past what the film lets go of, weighted the same way: fatal to a goal whose
-    /// policy weighs hazards and tearing.
+    /// Pulls past what the film lets go of, weighted the same way: fatal to the auto preset.
     pub tearing: f64,
     /// Islands left with nothing under them, where the stage measured them.
     pub unheld: Option<f64>,
     /// Contacts placement wanted and found no room for a column under, counted with the
     /// islands as left hanging.
     pub roomless: f64,
-    /// Every goal's own reading, in the order of [`OrientGoal::ALL`]: what a policy takes
-    /// its goal's reading and its fallback's from.
+    /// Every goal's own reading, in the order of [`OrientGoal::ALL`].
     pub goals: [f64; OrientGoal::ALL.len()],
     /// What decides between candidates the goal reads alike, compared first to last.
     pub tiebreak: [f64; 2],
@@ -56,26 +54,17 @@ const EXACT: Band = Band {
     slack: 0.0,
 };
 
-/// How candidates are ranked for one goal.
+/// How candidates are read for one goal: alone, or as the balance weighs it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Policy {
     goal: OrientGoal,
-    /// Whether suction counts as failing the print, islands and contacts with no room as
-    /// hanging, and the goal's reading within a band; without, the least reading wins.
+    /// Whether suction and tearing pulls fail the print and islands and contacts with no
+    /// room hang: the balance's, never a single goal's (ADR 0410).
     weighs_hazards: bool,
-    /// Whether, weighing hazards, a pull past the limit fails the print too.
-    weighs_tearing: bool,
     unheld: Band,
     primary: Band,
-    /// The goal's reading at or under which every candidate reads alike, having nothing
-    /// left to win.
+    /// The goal's reading at or under which the balance reads every candidate alike.
     enough: f64,
-    /// The goal whose reading decides between candidates that have enough, and what of that
-    /// reading is noise.
-    fallback: Option<OrientGoal>,
-    fallback_noise: f64,
-    /// The share of its own reading a turn has to win over standing still.
-    stay_gain: f64,
     /// How many of its noise the goal's reading is held to at least where the balance
     /// weighs it as a share of the best: less spares nothing worth another goal's share.
     floor_noises: f64,
@@ -87,23 +76,26 @@ impl Policy {
         r.goals[self.goal.index()].max(self.enough)
     }
 
-    /// The fallback's reading where the goal has enough, ahead of anything that has not.
-    fn fallback(&self, r: &Readings) -> f64 {
-        match self.fallback {
-            Some(goal) if self.primary(r) <= self.enough => r.goals[goal.index()],
-            Some(_) => f64::INFINITY,
-            None => 0.0,
-        }
-    }
-
     fn fatal(&self, r: &Readings) -> f64 {
-        let tearing = if self.weighs_tearing { r.tearing } else { 0.0 };
         r.fatal
             + if self.weighs_hazards {
-                r.suction + tearing
+                r.suction + r.tearing
             } else {
                 0.0
             }
+    }
+
+    /// The order key: fatal, then the least reading, then the tie-break.
+    fn key(&self, r: &Readings) -> Key {
+        (
+            self.fatal(r),
+            false,
+            false,
+            0.0,
+            self.primary(r),
+            0.0,
+            r.tiebreak,
+        )
     }
 
     /// What is left hanging, where the stage measured it and the goal weighs it.
@@ -111,16 +103,6 @@ impl Policy {
         r.unheld
             .filter(|_| self.weighs_hazards)
             .map(|islands| islands + r.roomless)
-    }
-
-    /// The goal's own reading where it ranks ahead of what is left hanging and the
-    /// tie-break, which is where it has no band.
-    fn least(&self, r: &Readings) -> f64 {
-        if self.weighs_hazards {
-            0.0
-        } else {
-            self.primary(r)
-        }
     }
 
     /// How far over the best the goal reads as good as the best beside the other goals: its
@@ -136,24 +118,32 @@ impl Policy {
         }
     }
 
-    /// Each goal's own policy: a goal is ranked by nothing another goal sets.
-    fn of(goal: OrientGoal, noise: &Noise) -> Self {
+    /// A single goal's policy: strictly its least reading past what fails every goal, and
+    /// any turn that lowers it; nothing another goal reads (ADR 0279, 0410).
+    fn alone(goal: OrientGoal) -> Self {
+        Self {
+            goal,
+            weighs_hazards: false,
+            unheld: EXACT,
+            primary: EXACT,
+            enough: f64::NEG_INFINITY,
+            floor_noises: 0.0,
+        }
+    }
+
+    /// How the balance weighs `goal`: its band, enough and floor.
+    fn balanced(goal: OrientGoal, noise: &Noise) -> Self {
         let primary_slack = noise[goal.index()];
         match goal {
-            // The least support volume, whatever else it reads (ADR 0279).
             OrientGoal::FewestSupports => Self {
                 floor_noises: SUPPORT_FLOOR_NOISES,
-                ..Self::strictly_least(goal)
+                ..Self::alone(goal)
             },
             OrientGoal::LeastPeel => Self {
                 enough: ENOUGH_PULL_N,
-                fallback: Some(OrientGoal::FewestSupports),
-                fallback_noise: noise[OrientGoal::FewestSupports.index()],
                 ..Self::banded(goal, primary_slack)
             },
-            // The fastest that holds, whatever it pulls: the limit is an estimate (ADR 0283).
             OrientGoal::ShortestPrint => Self {
-                weighs_tearing: false,
                 primary: Band {
                     share: STACK_SHARE,
                     slack: primary_slack.max(STACK_SLACK_MM),
@@ -161,47 +151,22 @@ impl Policy {
                 floor_noises: STACK_FLOOR_NOISES,
                 ..Self::banded(goal, primary_slack)
             },
-            // Past a contact's worth on show nothing is left to hide: then the resin decides.
-            OrientGoal::CleanSurface => Self {
-                enough: ENOUGH_SEEN,
-                fallback: Some(OrientGoal::FewestSupports),
-                fallback_noise: noise[OrientGoal::FewestSupports.index()],
-                ..Self::banded(goal, primary_slack)
-            },
+            // Not in `OrientGoal::BALANCED`: what shows is the user's to ask for (ADR 0409).
+            OrientGoal::CleanSurface => Self::banded(goal, primary_slack),
         }
     }
 
-    /// Strictly the least reading past what fails every goal, and any turn that lowers it.
-    fn strictly_least(goal: OrientGoal) -> Self {
-        Self {
-            goal,
-            weighs_hazards: false,
-            weighs_tearing: false,
-            unheld: EXACT,
-            primary: EXACT,
-            enough: f64::NEG_INFINITY,
-            fallback: None,
-            fallback_noise: 0.0,
-            stay_gain: 0.0,
-            floor_noises: 0.0,
-        }
-    }
-
-    /// Nothing failing or hanging, the reading within a band, and a turn worth its gain.
+    /// Nothing failing or hanging, and the reading within a band.
     fn banded(goal: OrientGoal, primary_slack: f64) -> Self {
         Self {
             goal,
             weighs_hazards: true,
-            weighs_tearing: true,
             unheld: UNHELD,
             primary: Band {
                 share: PRIMARY_SHARE,
                 slack: primary_slack,
             },
             enough: f64::NEG_INFINITY,
-            fallback: None,
-            fallback_noise: 0.0,
-            stay_gain: STAY_GAIN,
             floor_noises: 0.0,
         }
     }
@@ -215,9 +180,9 @@ const UNHELD: Band = Band {
 };
 /// The goal's own reading within a tenth of the best is as good as the best.
 const PRIMARY_SHARE: f64 = 0.10;
-/// A turn has to win a twentieth of the goal's own reading over standing still.
+/// A turn has to win a twentieth of the balance's cost over standing still.
 const STAY_GAIN: f64 = 0.05;
-/// A pull under a third of the limit is no longer worth a turn or a support: the scale of
+/// A pull under a third of the limit is no longer worth another goal's share: the scale of
 /// the pull is known to about a factor of three (`docs/design/analysis.md`).
 const ENOUGH_PULL_N: f64 = PEEL_LIMIT_N / 3.0;
 /// A stack within a fiftieth and a millimetre of the shortest prints as fast: some four
@@ -230,9 +195,6 @@ const SUPPORT_FLOOR_NOISES: f64 = 10.0;
 /// Five noises of stack, 1.5 mm as a proof reads it, is about what the bottom layers add
 /// to any print whatever its height.
 const STACK_FLOOR_NOISES: f64 = 5.0;
-/// One contact on surface that shows in full, or a few half in a fold, is a clean surface:
-/// a scar a brush stroke covers (ADR 0409).
-const ENOUGH_SEEN: f64 = 1.0;
 
 /// The rankings' common ground: the fewest fatal readings, the fewest unheld among them,
 /// and the best primary among those.
@@ -289,20 +251,6 @@ impl Bests {
             .partial_cmp(&(policy.fatal(other), !self.held(other, policy)))
             .is_some_and(std::cmp::Ordering::is_lt)
     }
-
-    /// The order key: fatal, then held, then in band, then the fewest unheld, then the
-    /// least reading where the goal has no band, then the fallback, then the tie-break.
-    fn key(&self, r: &Readings, policy: &Policy) -> Key {
-        (
-            policy.fatal(r),
-            !self.held(r, policy),
-            !self.in_band(r, policy),
-            policy.left(r).unwrap_or(0.0),
-            policy.least(r),
-            policy.fallback(r),
-            r.tiebreak,
-        )
-    }
 }
 
 /// How the auto preset weighs every goal at once: the product of each reading's share of
@@ -325,7 +273,7 @@ impl Balance {
     fn of(readings: &[Readings], noise: &Noise) -> Option<Self> {
         let hazards = Policy::banded(OrientGoal::ALL[0], 0.0);
         let bests = Bests::of(readings, &hazards)?;
-        let goals = OrientGoal::BALANCED.map(|goal| Policy::of(goal, noise));
+        let goals = OrientGoal::BALANCED.map(|goal| Policy::balanced(goal, noise));
         let best = goals.map(|policy| {
             readings
                 .iter()
@@ -521,7 +469,7 @@ impl Rule {
     fn of(readings: &[Readings], preset: OrientPreset, noise: &Noise) -> Option<Self> {
         Some(match preset {
             OrientPreset::Goal(goal) => {
-                let policy = Policy::of(goal, noise);
+                let policy = Policy::alone(goal);
                 let bests = Bests::of(readings, &policy)?;
                 Self::Goal { policy, bests }
             }
@@ -538,14 +486,16 @@ impl Rule {
 
     fn key(&self, readings: &[Readings], at: usize) -> Key {
         match self {
-            Self::Goal { policy, bests } => bests.key(&readings[at], policy),
+            Self::Goal { policy, .. } => policy.key(&readings[at]),
             Self::Balance { balance, dominated } => balance.key(&readings[at], dominated[at]),
         }
     }
 
     fn worth_turning(&self, turned: &Readings, now: &Readings) -> bool {
         match self {
-            Self::Goal { policy, bests } => worth_turning(bests, policy, turned, now),
+            Self::Goal { policy, bests } => {
+                bests.fails_less(turned, now, policy) || !bests.in_band(now, policy)
+            }
             Self::Balance { balance, .. } => balance.worth_turning(turned, now),
         }
     }
@@ -628,19 +578,6 @@ impl Ranking {
             _ => self.rule.lost_on(readings, at),
         }
     }
-}
-
-/// Whether `turned`, ranked ahead of `now`, is worth leaving the way the model stands for. It fails
-/// less, stands out of the band, or wins `stay_gain` of the goal's reading beyond the unit's noise.
-fn worth_turning(bests: &Bests, policy: &Policy, turned: &Readings, now: &Readings) -> bool {
-    let fails_less = bests.fails_less(turned, now, policy);
-    let gain = policy.primary(now) - policy.primary(turned);
-    let worth = (policy.stay_gain * policy.primary(now).abs()).max(policy.primary.slack);
-    let both_enough = policy.primary(now).max(policy.primary(turned)) <= policy.enough;
-    let spared = policy.fallback(now) - policy.fallback(turned);
-    let spared_worth = both_enough
-        && spared > (policy.stay_gain * policy.fallback(now).abs()).max(policy.fallback_noise);
-    fails_less || !bests.in_band(now, policy) || gain > worth || spared_worth
 }
 
 #[cfg(test)]

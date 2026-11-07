@@ -543,7 +543,7 @@ mod tests {
     }
 
     #[test]
-    fn a_seat_with_something_hanging_fails_like_a_cup_but_not_the_fewest_supports() {
+    fn a_seat_with_something_hanging_fails_like_a_cup_for_auto_alone() {
         let poses = [tried(true, 0.5, 1), tried(false, 2.0, 0)];
         let first = |preset| {
             judged(&poses, preset, |_| false)[0]
@@ -551,8 +551,10 @@ mod tests {
                 .oriented
                 .on_plate
         };
-        assert!(!first(OrientPreset::Goal(OrientGoal::LeastPeel)));
-        assert!(first(OrientPreset::Goal(OrientGoal::FewestSupports)));
+        assert!(!first(OrientPreset::Auto));
+        for goal in OrientGoal::ALL {
+            assert!(first(OrientPreset::Goal(goal)), "{goal:?}");
+        }
     }
 
     #[test]
