@@ -28,6 +28,7 @@ fn edited() -> Tools {
     tools.orient.set_state(OrientState {
         clean_surface: true,
         brush_radius_mm: 4.5,
+        max_tilt_deg: Some(30.0),
     });
     let catalogue = printer_profiles::Catalogue::bundled().expect("the bundle reads");
     tools.supports.set_automatic(true, &catalogue);
@@ -56,6 +57,7 @@ fn every_tool_value_comes_back() {
         tools.orient.settings.clean_surface,
         "a clean surface comes back on"
     );
+    assert_eq!(tools.orient.settings.max_tilt_deg, Some(30.0));
     assert_eq!(
         tools.supports.auto.map(|auto| auto.density),
         Some(1.75),

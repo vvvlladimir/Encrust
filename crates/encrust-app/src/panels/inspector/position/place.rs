@@ -11,12 +11,16 @@ use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene};
 use crate::ui::{
-    Segment, Segmented, describe, icon, kept, number_row, secondary_button, section, step_bar,
-    switch, switch_with_toggle,
+    Segment, Segmented, describe, icon, kept, nested, number_row, secondary_button, section,
+    step_bar, switch, switch_with_toggle,
 };
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
 const COPY_GAP_MM: f32 = 5.0;
+
+/// The tilt a limit starts at, and the most it takes, degrees: 180 is any way at all.
+const TILT_DEG: f32 = 30.0;
+const MAX_TILT_DEG: f32 = 180.0;
 
 /// Standing on the plate, centring over it, laying a face down, mirroring, and the lift off it.
 pub(super) fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
@@ -158,7 +162,10 @@ pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: Ob
             Segmented::new(&segments).width(width).show(ui, preset);
         });
         describe(ui, &hint(*preset));
-        ui.add_enabled_ui(!running, |ui| clean_surface(ui, window));
+        ui.add_enabled_ui(!running, |ui| {
+            tilt(ui, window);
+            clean_surface(ui, window);
+        });
         if let Some(job) = &window.tools.orient.job {
             let (what, share) = match job.counted() {
                 Some((what, share)) => (what, Some(share)),
@@ -178,6 +185,29 @@ pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: Ob
             super::auto_orient(window, Some(id));
         }
     });
+}
+
+/// Whether the turn is held within a tilt of the way the model stands, and how far.
+fn tilt(ui: &mut egui::Ui, window: &mut Window) {
+    let max_tilt = &mut window.tools.orient.settings.max_tilt_deg;
+    let mut on = max_tilt.is_some();
+    if switch(ui, &mut on, &tr!("position-limit-tilt")).changed() {
+        *max_tilt = on.then_some(TILT_DEG);
+    }
+    describe(ui, &tr!("position-limit-tilt-note"));
+    if let Some(max_deg) = max_tilt {
+        nested(ui, |ui| {
+            number_row(
+                ui,
+                &tr!("position-max-tilt"),
+                max_deg,
+                &tr!("unit-deg"),
+                1.0,
+                0.0..=MAX_TILT_DEG,
+                0,
+            );
+        });
+    }
 }
 
 /// The switch that holds the preset to a clean surface, and the brush that paints where the

@@ -218,14 +218,15 @@ fn the_preview_of_a_cut_cube() {
     picture("preview", app);
 }
 
-/// Position keeping a clean surface with its brush in hand, in a window tall enough to
-/// reach the Auto-orient section, a side of the cube painted as what shows.
+/// Position keeping a clean surface with its brush in hand and the tilt limited, in a window
+/// tall enough to reach the Auto-orient section, a side of the cube painted as what shows.
 #[test]
 fn the_position_tool_painting_what_shows() {
     let mut app = pictured();
     app.tool = Tool::Position;
     app.tools.orient.settings.clean_surface = true;
     app.tools.orient.shown_brush.brushing = true;
+    app.tools.orient.settings.max_tilt_deg = Some(30.0);
     if let Some(cube) = app.doc.scene.objects_mut().first_mut() {
         cube.shown_painted = [0, 1].into_iter().collect();
     }

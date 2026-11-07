@@ -40,7 +40,8 @@ read what shows off the shape alone; ADR 0409 left painting it by hand as step 2
   read 1 and the rest 0 (`Prominence::shown`, `Printed::shown`); otherwise what shows is
   read off the shape. The proof reads it on the outer surface the region numbers.
 - **The command line** has `--clean-surface` and a recipe's orient step `clean_surface`.
-  Painting is the window's, as the relief's is (ADR 0318).
+  Painting is the window's, as the relief's is (ADR 0318). The built-in `miniatures`
+  orients with it: a miniature's face is what its least peel must not scar.
 
 ## Consequences
 

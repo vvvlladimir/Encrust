@@ -1,6 +1,6 @@
-# Small detailed models: mended if open, tilted for the least peel, never hollowed, on the
-# automatic supports, and stopped if an island is still hanging after two more tries.
-# Why: ADR 0408. The layout is in docs/design/recipes.md.
+# Small detailed models: mended if open, tilted for the least peel off what shows, never
+# hollowed, on the automatic supports, and stopped if an island is still hanging after two
+# more tries. Why: ADR 0408, 0410. The layout is in docs/design/recipes.md.
 
 name = "Miniatures"
 format = 1
@@ -15,7 +15,7 @@ when = "!sound"
 [[step]]
 do = "orient"
 when = "!turned"
-set = { goal = "least-peel", max_tilt_deg = "= max_tilt" }
+set = { goal = "least-peel", max_tilt_deg = "= max_tilt", clean_surface = true }
 
 [[step]]
 do = "supports"

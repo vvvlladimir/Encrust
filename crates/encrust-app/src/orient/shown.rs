@@ -7,12 +7,14 @@ use serde::{Deserialize, Serialize};
 use super::OrientTool;
 
 /// What Auto-orient keeps between runs beside its preset: whether it holds to a clean
-/// surface, and how wide the brush that paints what shows is.
+/// surface, how wide the brush that paints what shows is, and how far a model may tilt.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OrientState {
     pub clean_surface: bool,
     pub brush_radius_mm: f32,
+    /// Degrees from the way the model stands, or `None` for any way at all.
+    pub max_tilt_deg: Option<f32>,
 }
 
 impl Default for OrientState {
@@ -20,6 +22,7 @@ impl Default for OrientState {
         Self {
             clean_surface: false,
             brush_radius_mm: 2.0,
+            max_tilt_deg: None,
         }
     }
 }
@@ -56,6 +59,7 @@ impl OrientTool {
         OrientState {
             clean_surface: self.settings.clean_surface,
             brush_radius_mm: self.shown_brush.radius_mm,
+            max_tilt_deg: self.settings.max_tilt_deg,
         }
     }
 
@@ -63,6 +67,7 @@ impl OrientTool {
     pub fn set_state(&mut self, state: OrientState) {
         self.settings.clean_surface = state.clean_surface;
         self.shown_brush.radius_mm = state.brush_radius_mm;
+        self.settings.max_tilt_deg = state.max_tilt_deg;
         self.shown_brush.brushing &= state.clean_surface;
     }
 }

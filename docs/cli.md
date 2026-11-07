@@ -419,7 +419,7 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
 ```
 
 The built-in recipes, by id: `prepare` below; `miniatures` (repair if open, orient for the
-least peel tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
+least peel with a clean surface, tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
 supports, a check that supports islands again up to twice, and a gate on any left). Why
 these two: ADR 0408. Your own are the files `<id>.toml` in the
 `recipes/` folder beside your profiles (where `profiles` keeps them, `ENCRUST_PROFILE_DIR`

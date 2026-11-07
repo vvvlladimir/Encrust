@@ -194,8 +194,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   where one is chosen), green where it beats the pose before and red where it loses. Auto offers every
   trade that no other pose beats on all three; a single goal offers the poses it reads as
   just as good.
-- You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
-  leaves the model as it is.
+- You can cap the tilt with **Limit tilt** under the presets, off at first (for example "no
+  more than 30° from how it stands now"). A cap of 0 leaves the model as it is. It is
+  remembered and undone with the other tool settings.
 - It never picks an angle worse than the current one.
 - With a printer chosen, it only picks a pose that fits the build volume, supports and
   all, if any pose does. It turns a part about the vertical, even across the plate's
