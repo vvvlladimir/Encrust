@@ -149,7 +149,8 @@ fn supports(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
 /// Stands `piece` on supports by `plan`, from where it stands with none under it.
 fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<()> {
     let mut cuts = piece.cuts()?;
-    let model = (&mut piece.mesh, piece.cavity.clone(), &mut cuts);
+    let printed = piece.printed();
+    let model = (&mut piece.mesh, printed, &mut cuts);
     let seated = piece.seated;
     let stood = stand_under(model, &plan, ctx.layer_height_mm, seated)?;
     piece.plan = Some(plan);
@@ -170,7 +171,8 @@ fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<()> {
 /// A support by `plan` under each of `contacts`, plate mm, added to those `piece` stands on.
 pub(super) fn hold_up(piece: &mut Piece, plan: &SupportPlan, contacts: &[Vec3]) -> Result<()> {
     let mut cuts = piece.cuts()?;
-    let model = (&mut piece.mesh, piece.cavity.clone(), &mut cuts);
+    let printed = piece.printed();
+    let model = (&mut piece.mesh, printed, &mut cuts);
     let (report, mesh) = stand_at(model, plan, contacts)?;
     match &mut piece.supports {
         Some((standing, under)) => {

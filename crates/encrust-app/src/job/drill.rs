@@ -1,9 +1,10 @@
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use core_geometry::{Bvh, Mesh, Transform, transform_mesh};
 use core_supports::{Shaded, shaded};
-use core_volume::{Drilled, drilled_reached};
+use core_volume::{Cancel, Drilled, ModelRead, Progress, drilled_reached};
 use rayon::prelude::*;
 
 use crate::i18n::tr;
@@ -12,6 +13,8 @@ use crate::job::{Worker, pooled};
 /// One model's cuts to take out of it exactly: what it prints from, its cavity's faces once
 /// hollowed, and the cuts as `drill` laid them.
 pub struct DrillRequest {
+    /// The model read once for its drill and its plugs; `source` is it or its shell.
+    pub read: Arc<ModelRead>,
     pub source: Arc<Mesh>,
     pub cavity: Option<Range<usize>>,
     pub cuts: Arc<Mesh>,
@@ -27,14 +30,17 @@ pub type DrillJob = Worker<DrillOutcome>;
 /// Starts the cut. The thread is detached: it ends on its own.
 pub fn spawn_drill(request: DrillRequest) -> DrillJob {
     Worker::spawn(
-        // The engine cannot be given up on part way.
-        move |_, _| pooled(|| drill(&request), Err),
+        // Given up between its steps: a read or a boolean under way ends first.
+        move |stop, progress| pooled(|| drill(&request, stop, progress), Err),
         || Err(tr!("job-thread-stopped-drill")),
     )
 }
 
-fn drill(request: &DrillRequest) -> DrillOutcome {
-    Drilled::of(&request.source, request.cavity.clone(), &request.cuts)
+fn drill(request: &DrillRequest, stop: &AtomicBool, progress: &Progress) -> DrillOutcome {
+    let asked = || stop.load(Relaxed);
+    let cancel = Cancel::when(&asked).reporting(progress);
+    let (read, cavity) = (&request.read, request.cavity.clone());
+    Drilled::of_read(read, &request.source, cavity, &request.cuts, cancel)
         .map_err(|error| error.to_string())
 }
 

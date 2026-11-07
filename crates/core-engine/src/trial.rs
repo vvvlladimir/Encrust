@@ -377,6 +377,7 @@ fn print_held(
     let model = ToStand {
         mesh: &mut placed,
         cavity: None,
+        on_its_model: false,
         cuts: &mut cuts,
         drill_exactly: false,
     };

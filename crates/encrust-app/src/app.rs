@@ -319,9 +319,13 @@ impl SlicerApp {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();
         let asked_by = self.doc.history.next_edit();
-        self.tools
-            .drain
-            .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled, asked_by);
+        self.tools.drain.lay_plugs(
+            &mut self.doc.scene,
+            drift_mm,
+            frame.settled,
+            asked_by,
+            &mut self.doc.drilling.reads,
+        );
         self.doc.drilling.start(&self.doc.scene, frame.settled);
         self.doc.meeting.start(&self.doc.scene, frame.settled);
         self.doc.history.observe(
@@ -339,7 +343,7 @@ impl SlicerApp {
     fn land_plugs(&mut self) -> bool {
         let status = &mut self.machine.status;
         let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
-        for ended in self.tools.drain.poll_plugs() {
+        for ended in self.tools.drain.plugs_to_land(&self.doc.drilling) {
             self.doc
                 .history
                 .land(&mut self.doc.scene, ended.asked_by(), |scene| {

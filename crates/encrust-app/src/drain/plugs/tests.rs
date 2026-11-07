@@ -3,6 +3,7 @@ use std::sync::Arc;
 use core_geometry::{Transform, Vec3, cuboid, diagnose};
 
 use super::*;
+use crate::drilling::{Drilling, ModelReads};
 use crate::scene::{ImportSummary, Imported};
 
 fn a_block_with_holes(at: &[Scalar]) -> (Scene, ObjectId, DrainTool) {
@@ -37,7 +38,7 @@ fn drill(scene: &mut Scene, id: ObjectId, tool: &DrainTool, at: &[Scalar]) {
 /// Runs frames until no plug is due or being cut, as the frames after an edit do.
 fn lay(tool: &mut DrainTool, scene: &mut Scene, status: &mut Status) {
     for _ in 0..10_000 {
-        tool.lay_plugs(scene, 0.0, true, 0);
+        tool.lay_plugs(scene, 0.0, true, 0, &mut ModelReads::default());
         if !tool.laying_plugs() {
             return;
         }
@@ -116,7 +117,7 @@ fn plugs_follow_the_holes_and_are_left_alone_while_nothing_moves() {
 fn plugs_cut_for_holes_taken_back_before_they_land_are_let_go() {
     let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
     let mut status = Status::default();
-    tool.lay_plugs(&mut scene, 0.0, true, 0);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
     assert!(tool.laying_plugs(), "the plug is being cut");
 
     // An undo puts the block back as it was before the hole.
@@ -130,7 +131,7 @@ fn plugs_cut_for_holes_taken_back_before_they_land_are_let_go() {
 #[test]
 fn plugs_cut_from_a_mesh_replaced_before_they_land_are_cut_again() {
     let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
-    tool.lay_plugs(&mut scene, 0.0, true, 0);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
     let object = scene.get_mut(id).expect("the block is on the plate");
     object.mesh = Arc::new((*object.mesh).clone());
 
@@ -207,7 +208,7 @@ fn a_model_at_the_edge_of_the_plate_gets_its_plug_on_the_plate() {
 fn a_plug_with_no_room_on_the_plate_is_said_to_have_none() {
     let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
     let mut status = Status::default();
-    tool.lay_plugs(&mut scene, 0.0, true, 0);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
     while tool.laying_plugs() {
         for ended in tool.poll_plugs() {
             // A plate no wider than the block leaves no room beside it.
@@ -238,13 +239,13 @@ fn a_plug_is_numbered_after_its_hole_when_an_earlier_one_has_none() {
 #[test]
 fn plugs_started_again_after_a_stale_cut_land_in_the_edit_that_asked_for_them() {
     let (mut scene, _, mut tool) = a_block_with_holes(&[5.0]);
-    tool.lay_plugs(&mut scene, 0.0, true, 0);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
     tool.state.plug_gap_mm = 0.5;
-    tool.lay_plugs(&mut scene, 0.0, true, 1);
+    tool.lay_plugs(&mut scene, 0.0, true, 1, &mut ModelReads::default());
 
     let mut landed = Vec::new();
     for frame in 2..10_000 {
-        tool.lay_plugs(&mut scene, 0.0, true, frame);
+        tool.lay_plugs(&mut scene, 0.0, true, frame, &mut ModelReads::default());
         if !tool.laying_plugs() {
             break;
         }
@@ -269,7 +270,7 @@ fn plugs_started_again_after_a_stale_cut_land_in_the_edit_that_asked_for_them() 
 #[test]
 fn no_plug_is_cut_in_the_middle_of_a_drag() {
     let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
-    tool.lay_plugs(&mut scene, 0.0, false, 0);
+    tool.lay_plugs(&mut scene, 0.0, false, 0, &mut ModelReads::default());
     assert!(
         !tool.laying_plugs(),
         "nothing starts while the pointer is down"
@@ -286,9 +287,9 @@ fn no_plug_is_cut_in_the_middle_of_a_drag() {
 #[test]
 fn a_gap_changed_while_plugs_are_cut_waits_for_them_and_reads_the_model_once() {
     let (mut scene, id, mut tool) = a_block_with_holes(&[5.0]);
-    tool.lay_plugs(&mut scene, 0.0, true, 0);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
     tool.state.plug_gap_mm = 0.5;
-    tool.lay_plugs(&mut scene, 0.0, true, 0);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
     assert_eq!(tool.laying.len(), 1, "one cut a model at a time");
 
     lay(&mut tool, &mut scene, &mut Status::default());
@@ -397,4 +398,116 @@ fn a_copied_plate_keeps_its_plugs_apart_from_the_original() {
         1,
         "and leaves the copy's alone"
     );
+}
+
+/// A block's plug cut while the drill of its hole stands, and held for that drill.
+fn a_plug_held_for_its_drill() -> (Scene, ObjectId, DrainTool, Drilling) {
+    let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
+    let mut drilling = Drilling::default();
+    drilling.start(&scene, true);
+    assert!(drilling.drills(id), "the block's hole is being taken out");
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut drilling.reads);
+    for _ in 0..10_000 {
+        // Not polled, the drill run stands however long the cut took.
+        assert!(tool.plugs_to_land(&drilling).is_empty(), "the plug waits");
+        if !tool.held.is_empty() {
+            return (scene, id, tool, drilling);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    panic!("the plug was still being cut after ten seconds");
+}
+
+#[test]
+fn plugs_wait_for_their_model_s_holes_to_be_taken_out() {
+    let (mut scene, _, mut tool, mut drilling) = a_plug_held_for_its_drill();
+    assert!(tool.laying_plugs(), "and is still under way");
+
+    drilling.give_up(&mut scene);
+    assert_eq!(
+        tool.plugs_to_land(&drilling).len(),
+        1,
+        "it lands once the drill is done"
+    );
+}
+
+#[test]
+fn a_plug_held_for_its_drill_is_not_cut_again() {
+    let (mut scene, _, mut tool, mut drilling) = a_plug_held_for_its_drill();
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut drilling.reads);
+    assert!(
+        tool.laying.is_empty(),
+        "the frame after starts no second cut"
+    );
+    assert_eq!(tool.held.len(), 1, "the one cut is still held");
+}
+
+#[test]
+fn a_plug_held_for_holes_taken_back_does_not_land() {
+    let (mut scene, id, mut tool, mut drilling) = a_plug_held_for_its_drill();
+    let object = scene.get_mut(id).expect("the block is on the plate");
+    object.hollow.clear_drains();
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut drilling.reads);
+    assert!(tool.held.is_empty(), "the holes it closes are gone");
+}
+
+#[test]
+fn a_plug_held_from_a_mesh_replaced_is_cut_again() {
+    let (mut scene, id, mut tool, mut drilling) = a_plug_held_for_its_drill();
+    let object = scene.get_mut(id).expect("the block is on the plate");
+    object.mesh = Arc::new((*object.mesh).clone());
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut drilling.reads);
+    assert!(tool.held.is_empty(), "the old mesh's plug is thrown away");
+    assert_eq!(tool.laying.len(), 1, "and cut from the mesh it has now");
+}
+
+#[test]
+fn a_plug_held_and_given_up_does_not_land_and_is_not_cut_again() {
+    let (mut scene, id, mut tool, mut drilling) = a_plug_held_for_its_drill();
+    tool.give_up_plugs(&mut scene);
+    drilling.give_up(&mut scene);
+    assert!(tool.plugs_to_land(&drilling).is_empty(), "nothing lands");
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut drilling.reads);
+    assert!(!tool.laying_plugs(), "and nothing starts");
+    assert!(plugs_of(&scene, id).is_empty(), "the block has no plug");
+}
+
+#[test]
+fn plugs_waiting_for_a_cut_given_up_are_not_started() {
+    let (mut scene, _, mut tool) = a_block_with_holes(&[5.0]);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+    tool.state.plug_gap_mm = 0.5;
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+    assert_eq!(tool.waiting.len(), 1, "the new gap waits for the cut");
+
+    tool.give_up_plugs(&mut scene);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+    assert!(!tool.laying_plugs(), "the new gap gets no plug either");
+}
+
+#[test]
+fn a_cut_for_holes_taken_back_and_given_up_is_not_recorded_as_laid() {
+    let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+    let object = scene.get_mut(id).expect("the block is on the plate");
+    object.hollow.clear_drains();
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+
+    tool.give_up_plugs(&mut scene);
+    let laid = scene.get(id).and_then(|object| object.plugs_laid.as_ref());
+    let laid = laid.expect("the block was laid for no hole");
+    assert!(laid.holes.is_empty(), "as it stands, not as the cut asked");
+}
+
+#[test]
+fn plugs_given_up_are_not_cut_again_for_the_same_holes() {
+    let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+    assert!(tool.laying_plugs(), "the plug is being cut");
+
+    tool.give_up_plugs(&mut scene);
+    assert!(!tool.laying_plugs(), "the cut is let go");
+    tool.lay_plugs(&mut scene, 0.0, true, 0, &mut ModelReads::default());
+    assert!(!tool.laying_plugs(), "and not started again");
+    assert!(plugs_of(&scene, id).is_empty(), "nothing is laid");
 }

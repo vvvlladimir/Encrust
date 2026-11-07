@@ -1974,6 +1974,13 @@ notice-delete-profiles = Delete them
 
 notice-cutting-preview = Cutting the layers to preview
 notice-finding-walk = Finding the shortest way along the surface
+notice-drain-reading = Reading the model for its holes and plugs
+notice-drain-drilling = Drilling the holes
+notice-drain-plugs = { $count ->
+    [one] Cutting the plug
+   *[other] Cutting { $count } plugs
+}
+notice-drain-stopped = Stopped: the holes stay, cut approximately, and the new ones get no plug.
 # $step is one of the prepare-step messages: what the run is doing now.
 notice-preparing = Preparing for print: { $step }
 # Moves a paused Prepare for print on to its next step.

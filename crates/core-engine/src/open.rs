@@ -5,7 +5,7 @@ use core_format::ExposurePlan;
 use core_geometry::{Bvh, Mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_slicer::{ONE_SAMPLE, WINDOW_LAYERS};
-use core_volume::{Drilled, ModelHollow};
+use core_volume::{Cancel, Drilled, ModelHollow, ModelRead};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Raft, SupportProfile};
 
 use crate::project::{Manifest, ModelMeshes, ObjectState, Project, hollow_of, supports_of};
@@ -118,7 +118,9 @@ fn support_table(manifest: &Manifest) -> Vec<SupportProfile> {
 /// out, or `None` without cuts or where that fails and the winding rule takes them out.
 fn drilled_of(hollow: &ModelHollow, meshes: &ModelMeshes) -> Option<Arc<Mesh>> {
     let cuts = hollow.cut_bodies()?;
-    let drilled = Drilled::of(meshes.printed(), hollow.cavity_faces(), cuts).ok()?;
+    let read = ModelRead::new(Arc::clone(&meshes.source));
+    let cavity = hollow.cavity_faces();
+    let drilled = Drilled::of_read(&read, meshes.printed(), cavity, cuts, Cancel::never()).ok()?;
     Some(drilled.mesh)
 }
 

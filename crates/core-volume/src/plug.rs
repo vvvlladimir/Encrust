@@ -2,11 +2,12 @@ use core_csg::Solid;
 use core_geometry::{Aabb, Bvh, Mesh, Quat, Ray, Scalar, Transform, Vec3, cuboid, transform_mesh};
 use rayon::prelude::*;
 
+use crate::cancel::{Cancel, Step};
 use crate::drain::{DrainHole, HoleKind, MOUTH_LIFT_MM, Section, body_of};
 use crate::drilled::meets;
 use crate::error::VolumeError;
 use crate::hollow::HollowMode;
-use crate::mend::readable;
+use crate::model_read::ModelRead;
 
 /// Rings the outer face of a plug is sampled on between its middle and its rim. Four on a
 /// twenty-millimetre hole is a sample every two and a half millimetres, where a surface
@@ -37,17 +38,24 @@ pub struct PlugSource {
     /// The boxes, one a hole, the solid holds the model in; `None`, all of it, where the
     /// crop failed or would keep the whole.
     regions: Option<Vec<Aabb>>,
+    /// The plugs are cut from the whole model as its [`ModelRead`] holds it, not from a crop.
+    whole: bool,
 }
 
 impl PlugSource {
-    /// `model` as the engine reads it, mended first where it refuses it as it stands, and
-    /// kept only round what `holes` cut through a wall of `wall_mm`. A model it refuses even
-    /// mended holds nothing, and its plugs are sampled.
-    fn read(model: &Mesh, holes: &[DrainHole], wall_mm: Option<Scalar>) -> Self {
-        let Ok(whole) = readable(model) else {
+    /// `whole`, `model` as the engine read it, kept only round what `holes` cut through a
+    /// wall of `wall_mm`. A model it refused even mended holds nothing, and its plugs are sampled.
+    fn read(
+        whole: Option<&Solid>,
+        model: &Mesh,
+        holes: &[DrainHole],
+        wall_mm: Option<Scalar>,
+    ) -> Self {
+        let Some(whole) = whole else {
             return Self {
                 solid: None,
                 regions: None,
+                whole: false,
             };
         };
         let margin = Vec3::splat(CROP_MARGIN_MM);
@@ -57,14 +65,16 @@ impl PlugSource {
         let crops = model
             .aabb()
             .is_some_and(|bounds| !regions.iter().any(|region| contains(region, &bounds)));
-        match crops.then(|| cropped(&whole, &regions)).flatten() {
+        match crops.then(|| cropped(whole, &regions)).flatten() {
             Some(solid) => Self {
                 solid: Some(solid),
                 regions: Some(regions),
+                whole: false,
             },
             None => Self {
-                solid: Some(whole),
+                solid: None,
                 regions: None,
+                whole: true,
             },
         }
     }
@@ -79,7 +89,7 @@ impl PlugSource {
 
     /// Whether it holds the whole model read, which is too big to keep for the next cut.
     fn is_whole(&self) -> bool {
-        self.solid.is_some() && self.regions.is_none()
+        self.whole
     }
 
     /// The solid plugs are cut from, where the model was read as one with an inside.
@@ -135,12 +145,14 @@ pub fn plug_wall_mm(mode: HollowMode, thickness_mm: Scalar) -> Option<Scalar> {
 /// the hole's depth without one or for a walled hole. `source` is the model as last read.
 pub fn plugs(
     source: &mut Option<PlugSource>,
-    model: &Mesh,
+    read: &ModelRead,
     bvh: &Bvh,
     holes: &[DrainHole],
     wall_mm: Option<Scalar>,
     gap_mm: Scalar,
+    cancel: Cancel<'_>,
 ) -> Result<Plugs, VolumeError> {
+    let model = &**read.model();
     let bodies: Vec<Option<Body>> = holes
         .iter()
         .enumerate()
@@ -162,10 +174,25 @@ pub fn plugs(
         .as_ref()
         .is_some_and(|read| read.covers(holes, wall_mm))
     {
-        *source = Some(PlugSource::read(model, holes, wall_mm));
+        let whole = read.solid(cancel);
+        // Given up, the read is no refusal to remember.
+        if cancel.asked() {
+            return Err(VolumeError::Cancelled);
+        }
+        *source = Some(PlugSource::read(whole.ok(), model, holes, wall_mm));
     }
-    let solid = source.as_ref().and_then(PlugSource::readable);
-    let cut = cut_each(solid, model, bvh, holes, &bodies);
+    let solid = match source.as_ref() {
+        Some(kept) if kept.is_whole() => read.solid(cancel).ok(),
+        kept => kept.and_then(PlugSource::readable),
+    };
+    if cancel.asked() {
+        return Err(VolumeError::Cancelled);
+    }
+    cancel.begin(Step::Combining, bodies.len());
+    let cut = cut_each(solid, model, bvh, holes, &bodies, cancel);
+    if cancel.asked() {
+        return Err(VolumeError::Cancelled);
+    }
     let sampled = cut.iter().filter(|(_, sampled)| *sampled).count();
     let meshes = cut.into_iter().map(|(mesh, _)| mesh).collect();
     if source.as_ref().is_some_and(PlugSource::is_whole) {
@@ -186,19 +213,26 @@ fn cut_each(
     bvh: &Bvh,
     holes: &[DrainHole],
     bodies: &[Option<Body>],
+    cancel: Cancel<'_>,
 ) -> Vec<(Mesh, bool)> {
     bodies
         .par_iter()
         .enumerate()
         .map(|(index, body)| {
+            // A cut given up leaves the rest uncut; `plugs` answers it as given up.
+            let body = body.as_ref().filter(|_| !cancel.asked());
             let (hole, Some(body)) = (&holes[index], body) else {
+                cancel.advance(1);
                 return (Mesh::default(), false);
             };
-            match solid.map(|solid| intersected(solid, &body.mesh(hole), &holes[..index])) {
+            let cut = match solid.map(|solid| intersected(solid, &body.mesh(hole), &holes[..index]))
+            {
                 Some(Ok(mesh)) => (mesh, false),
                 // The engine failing on a model it read is met as one it could not read.
                 None | Some(Err(_)) => (sampled(model, bvh, hole, body), true),
-            }
+            };
+            cancel.advance(1);
+            cut
         })
         .collect()
 }

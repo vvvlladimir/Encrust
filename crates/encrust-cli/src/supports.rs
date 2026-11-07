@@ -3,10 +3,14 @@
 
 use std::fmt;
 use std::ops::Range;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use core_engine::SupportPlan;
 use core_geometry::{Mesh, Scalar, Vec3};
+use core_volume::Drilled;
+
+use crate::hollowing::HollowReport;
 
 /// What automatic placement put under one model.
 pub struct SupportReport {
@@ -46,10 +50,37 @@ impl fmt::Display for SupportReport {
     }
 }
 
+/// Which faces of a model bound its cavity, and how its cuts are taken out of it.
+#[derive(Debug, Clone, Default)]
+pub struct Printed {
+    pub cavity: Option<Range<usize>>,
+    /// Whether the faces before the cavity are the model byte for byte (ADR 0412).
+    pub on_its_model: bool,
+}
+
+impl Printed {
+    /// As `hollow` left the model, or as it came without one.
+    pub fn of(cavity: Option<Range<usize>>, hollow: Option<&HollowReport>) -> Self {
+        Self {
+            cavity,
+            on_its_model: hollow.is_some_and(HollowReport::on_its_model),
+        }
+    }
+
+    /// `mesh` as it prints with `cuts` taken out exactly, as the window takes them out; `None`
+    /// without cuts or where the engine refuses them, left to the winding rule.
+    pub fn drilled(&self, mesh: &Mesh, cuts: Option<&Mesh>) -> Option<Arc<Mesh>> {
+        let cavity = self.cavity.clone();
+        Drilled::of_printed(mesh, cavity, self.on_its_model, cuts?)
+            .ok()
+            .map(|drilled| drilled.mesh)
+    }
+}
+
 /// Supports under `mesh`, plate coordinates, by `stand_under`, or `stand_seated` for a model
 /// left on the plate, with what it found laid out for a terminal.
 pub fn stand_under(
-    (mesh, cavity, cuts): (&mut Mesh, Option<Range<usize>>, &mut Option<Mesh>),
+    (mesh, cavity, cuts): (&mut Mesh, Printed, &mut Option<Mesh>),
     plan: &SupportPlan,
     layer_height_mm: Scalar,
     seated: bool,
@@ -61,7 +92,8 @@ pub fn stand_under(
     };
     let model = core_engine::ToStand {
         mesh,
-        cavity,
+        cavity: cavity.cavity,
+        on_its_model: cavity.on_its_model,
         cuts,
         drill_exactly: true,
     };
@@ -72,13 +104,14 @@ pub fn stand_under(
 
 /// A support under each of `contacts` alone, plate mm, by `core_engine::stand_at`.
 pub fn stand_at(
-    (mesh, cavity, cuts): (&mut Mesh, Option<Range<usize>>, &mut Option<Mesh>),
+    (mesh, cavity, cuts): (&mut Mesh, Printed, &mut Option<Mesh>),
     plan: &SupportPlan,
     contacts: &[Vec3],
 ) -> Result<(SupportReport, Mesh)> {
     let model = core_engine::ToStand {
         mesh,
-        cavity,
+        cavity: cavity.cavity,
+        on_its_model: cavity.on_its_model,
         cuts,
         drill_exactly: true,
     };
@@ -160,8 +193,13 @@ mod tests {
     #[test]
     fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let (report, supports) = stand_under((&mut mesh, None, &mut None), &medium(), 0.05, false)
-            .expect("a slab slices and supports");
+        let (report, supports) = stand_under(
+            (&mut mesh, Printed::default(), &mut None),
+            &medium(),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(!report.contacts.is_empty(), "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
@@ -208,7 +246,7 @@ mod tests {
         let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
 
         let (report, _) = stand_under(
-            (&mut mesh, None, &mut None),
+            (&mut mesh, Printed::default(), &mut None),
             &SupportPlan::of(profile.clone()),
             0.05,
             false,
@@ -237,8 +275,13 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let (report, _) = stand_under((&mut mesh, None, &mut None), &medium(), 0.05, false)
-            .expect("a slab slices and supports");
+        let (report, _) = stand_under(
+            (&mut mesh, Printed::default(), &mut None),
+            &medium(),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(
             report.lifted_mm.abs() < 1e-6,

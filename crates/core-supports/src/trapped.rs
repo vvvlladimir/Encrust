@@ -1,11 +1,14 @@
 use core_geometry::{Aabb, FastMap, Scalar, Vec2, Vec3};
 use core_slicer::Layer;
 
-use crate::config::GRID_PITCH_MM;
 use crate::field::{Field, Grid, Span};
 
 /// A pocket smaller than this is a droplet the wash takes out, not a print failure.
 const MIN_TRAPPED_MM3: Scalar = 5.0;
+
+/// Cell size the stack is read on, mm: the material is grown a cell before its air is read, so
+/// a wall a sampled cell misses still closes, and the air reads a cell short of each wall.
+const PITCH_MM: Scalar = 0.05;
 
 /// Resin that cannot get out: a pocket of air the stack closes over without it ever
 /// reaching the outside of the model.
@@ -80,7 +83,7 @@ impl TrapScan {
     /// A scan over a model whose footprint spans `min`..`max` in plate millimetres.
     pub fn new(min: Vec2, max: Vec2, layer_height_mm: Scalar) -> Self {
         Self {
-            grid: Grid::covering(min, max, GRID_PITCH_MM),
+            grid: Grid::covering(min, max, PITCH_MM),
             layer_height_mm,
             pockets: Vec::new(),
             free: Vec::new(),
@@ -92,7 +95,9 @@ impl TrapScan {
 
     /// Reads the next layer up. Layers must arrive in print order, bottom first.
     pub fn push(&mut self, layer: &Layer) {
-        let field = Field::of_layer(layer, &self.grid);
+        // A wall thinner than two cells reads with a gap a cell wide where the outline crosses
+        // between cell centres, and the cavity would drain through it.
+        let field = Field::of_layer(layer, &self.grid).grown(1);
         let (air, rows) = self.air_of(&field);
         let mut runs = Runs::of(&air, &rows);
 

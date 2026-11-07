@@ -232,6 +232,10 @@ track. With no stack it reads *No layers*.
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
   its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
   *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown.
+  Drain holes taken out and plugs cut are one card: *Reading the model for its holes and
+  plugs*, then *Cutting N plugs*, then *Drilling the holes*, at the share of whichever is least
+  far along. Its Cancel leaves the holes cut approximately and the new ones without plugs, and
+  says so; a model's plugs land, and say where, only once its holes are out.
   Waiting there, it is a notice instead: the pause glyph in `accent_soft` or the warning
   glyph in `danger`, what the row's box would say, *Continue* as its action and End as its
   close.

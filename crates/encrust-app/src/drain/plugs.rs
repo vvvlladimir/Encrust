@@ -2,9 +2,12 @@ use std::sync::{Arc, Weak};
 
 use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec2, transform_mesh};
 use core_plate::{ArrangeSettings, Rect, nearest_free};
-use core_volume::{DrainHole, PLUG_SPACING_MM, PlugSource, Plugs, laid_beside, plug_wall_mm};
+use core_volume::{
+    DrainHole, ModelRead, PLUG_SPACING_MM, PlugSource, Plugs, Step, laid_beside, plug_wall_mm,
+};
 
 use super::DrainTool;
+use crate::drilling::{ModelReads, least_along};
 use crate::i18n::tr;
 use crate::job::{PlugsJob, PlugsRequest, spawn_plugs};
 use crate::landing::place;
@@ -32,6 +35,8 @@ pub struct Laying {
     stale: bool,
     /// The number of the edit that asked for them, `History::next_edit` when they started.
     asked_by: u64,
+    /// The model read the cut waits on while it reads, shared with the model's drill.
+    read: Arc<ModelRead>,
     job: PlugsJob,
 }
 
@@ -47,6 +52,8 @@ pub struct Waiting {
 #[derive(Debug)]
 pub struct Ended {
     model: ObjectId,
+    /// The mesh they were cut from, as in [`Laying`], so held ones go stale with it.
+    mesh: Weak<Mesh>,
     wanted: PlugsLaid,
     asked_by: u64,
     made: Result<Plugs, String>,
@@ -69,13 +76,16 @@ pub struct ReadModel {
 }
 
 impl DrainTool {
-    /// Starts cutting again the plugs of every model whose holes, wall or plug gap moved
-    /// since they were last laid; they land on a later frame through [`Self::land_plugs`].
-    /// `drift_mm` is what the resin leaves a fit wider by (`Compensation::fit_drift_mm`). A
-    /// model read back from a project has no record and takes its plugs as they stand, the
-    /// ones deleted before it was saved too. No cut starts while `settled` is false, in the
-    /// middle of a drag: the plugs follow once it ends. `asked_by` is `History::next_edit`.
-    pub fn lay_plugs(&mut self, scene: &mut Scene, drift_mm: Scalar, settled: bool, asked_by: u64) {
+    /// Starts cutting the plugs of every model whose holes, wall or gap moved since last laid,
+    /// once `settled`; a model read back from a project keeps its plugs as they stand (ADR 0313).
+    pub fn lay_plugs(
+        &mut self,
+        scene: &mut Scene,
+        drift_mm: Scalar,
+        settled: bool,
+        asked_by: u64,
+        reads: &mut ModelReads,
+    ) {
         let due: Vec<(ObjectId, PlugsLaid, bool)> = scene
             .objects()
             .iter()
@@ -90,22 +100,7 @@ impl DrainTool {
                 Some((object.id, wanted, kept))
             })
             .collect();
-        // A cut for what a model no longer asks for, as after an undo, or from a mesh since
-        // replaced, is not laid.
-        for laying in &mut self.laying {
-            let same_mesh = scene
-                .get(laying.model)
-                .is_some_and(|object| laying.mesh.as_ptr() == Arc::as_ptr(&object.mesh));
-            laying.stale = !same_mesh
-                || !due
-                    .iter()
-                    .any(|(id, wanted, _)| *id == laying.model && *wanted == laying.wanted);
-        }
-
-        self.waiting.retain(|waiting| {
-            due.iter()
-                .any(|(id, wanted, _)| *id == waiting.model && *wanted == waiting.wanted)
-        });
+        self.drop_what_no_model_asks(scene, &due);
 
         for (id, wanted, kept) in due {
             if kept || wanted.holes.is_empty() {
@@ -115,10 +110,31 @@ impl DrainTool {
                 if let Some(object) = scene.get_mut(id) {
                     object.plugs_laid = Some(wanted);
                 }
-            } else {
-                self.ask(scene, id, wanted, settled, asked_by);
+            } else if !self.held.iter().any(|held| held.model == id) {
+                self.ask(scene, id, wanted, settled, asked_by, reads);
             }
         }
+    }
+
+    /// Marks stale a cut, and drops a cut held or waiting, for what its model no longer asks, as
+    /// after an undo, or from a mesh since replaced: none of them is laid.
+    fn drop_what_no_model_asks(&mut self, scene: &Scene, due: &[(ObjectId, PlugsLaid, bool)]) {
+        let asked = |model: ObjectId, wanted: &PlugsLaid| {
+            due.iter().any(|(id, due, _)| *id == model && due == wanted)
+        };
+        let stands = |model: ObjectId, mesh: &Weak<Mesh>, wanted: &PlugsLaid| {
+            let same_mesh = scene
+                .get(model)
+                .is_some_and(|object| mesh.as_ptr() == Arc::as_ptr(&object.mesh));
+            same_mesh && asked(model, wanted)
+        };
+        for laying in &mut self.laying {
+            laying.stale = !stands(laying.model, &laying.mesh, &laying.wanted);
+        }
+        self.held
+            .retain(|held| stands(held.model, &held.mesh, &held.wanted));
+        self.waiting
+            .retain(|waiting| asked(waiting.model, &waiting.wanted));
     }
 
     /// Starts cutting the plugs `wanted` for model `id` where nothing holds them back, else
@@ -130,6 +146,7 @@ impl DrainTool {
         wanted: PlugsLaid,
         settled: bool,
         asked_by: u64,
+        reads: &mut ModelReads,
     ) {
         let asked_by = self
             .waiting
@@ -138,7 +155,7 @@ impl DrainTool {
             .map_or(asked_by, |waiting| waiting.asked_by);
         self.waiting.retain(|waiting| waiting.model != id);
         if settled && !self.laying.iter().any(|laying| laying.model == id) {
-            self.start_plugs(scene, id, wanted, asked_by);
+            self.start_plugs(scene, id, wanted, asked_by, reads);
         } else {
             self.waiting.push(Waiting {
                 model: id,
@@ -150,7 +167,14 @@ impl DrainTool {
 
     /// Starts cutting the plugs `wanted` for model `id`, handing the cut the model as last
     /// read where it is still the same mesh.
-    fn start_plugs(&mut self, scene: &Scene, id: ObjectId, wanted: PlugsLaid, asked_by: u64) {
+    fn start_plugs(
+        &mut self,
+        scene: &Scene,
+        id: ObjectId,
+        wanted: PlugsLaid,
+        asked_by: u64,
+        reads: &mut ModelReads,
+    ) {
         let Some(object) = scene.get(id) else {
             return;
         };
@@ -158,8 +182,9 @@ impl DrainTool {
             .read
             .take_if(|read| read.model == id && read.mesh.as_ptr() == Arc::as_ptr(&object.mesh))
             .map(|read| read.source);
+        let read = reads.of(&object.mesh);
         let job = spawn_plugs(PlugsRequest {
-            mesh: Arc::clone(&object.mesh),
+            read: Arc::clone(&read),
             bvh: Arc::clone(&object.bvh),
             source,
             holes: wanted.holes.clone(),
@@ -172,6 +197,7 @@ impl DrainTool {
             wanted,
             stale: false,
             asked_by,
+            read,
             job,
         });
     }
@@ -190,13 +216,14 @@ impl DrainTool {
             if let Some(source) = source.filter(|_| laying.mesh.strong_count() > 0) {
                 self.read = Some(ReadModel {
                     model: laying.model,
-                    mesh: laying.mesh,
+                    mesh: laying.mesh.clone(),
                     source,
                 });
             }
             if !laying.stale {
                 ended.push(Ended {
                     model: laying.model,
+                    mesh: laying.mesh,
                     wanted: laying.wanted,
                     asked_by: laying.asked_by,
                     made,
@@ -241,7 +268,23 @@ impl DrainTool {
 
     /// Whether plugs are being cut.
     pub fn laying_plugs(&self) -> bool {
-        !self.laying.is_empty()
+        !self.laying.is_empty() || !self.held.is_empty()
+    }
+
+    /// How many plugs are being cut, one a hole of every model whose cut is under way, and
+    /// the step and share of the cut least far along; `None` while none is.
+    pub fn plugs_progress(&self) -> Option<(usize, Step, f32)> {
+        let (step, share) = least_along(
+            self.laying
+                .iter()
+                .map(|laying| (laying.job.counted(), &*laying.read)),
+        )?;
+        let count = self
+            .laying
+            .iter()
+            .map(|laying| laying.wanted.holes.len())
+            .sum();
+        Some((count, step, share))
     }
 
     /// Lets go of the piece of a model kept read for its plugs once they are no longer being
@@ -378,6 +421,8 @@ fn covered(scene: &Scene, plate: u32) -> Vec<Rect> {
         .map(rect)
         .collect()
 }
+
+mod ready;
 
 #[cfg(test)]
 mod tests;

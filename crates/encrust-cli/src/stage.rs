@@ -22,7 +22,7 @@ use crate::profiles::{self, Chosen};
 use crate::recipe::{self, Prepared, RecipeRun, Saved};
 use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
-use crate::supports::{SupportReport, stand_under};
+use crate::supports::{Printed, SupportReport, stand_under};
 use crate::{meeting, plate_file, project};
 
 mod ground;
@@ -436,7 +436,8 @@ fn put_down(
         ground,
         watch,
     )?;
-    let (hollow, cavity, mut cuts) = (shelled.report, shelled.cavity, shelled.cuts);
+    let printed = Printed::of(shelled.cavity, shelled.report.as_ref());
+    let (hollow, mut cuts) = (shelled.report, shelled.cuts);
     let drains = shelled.drains;
     let plugs = shelled
         .plugs
@@ -454,7 +455,7 @@ fn put_down(
         .supports
         .as_ref()
         .map(|plan| {
-            let model = (&mut mesh, cavity.clone(), &mut cuts);
+            let model = (&mut mesh, printed.clone(), &mut cuts);
             stand_under(model, plan, layer_height, seated)
         })
         .transpose()?
@@ -478,11 +479,12 @@ fn put_down(
         print!("{report}");
     }
     watch.stop.check()?;
+    let drilled = printed.drilled(&mesh, cuts.as_ref());
     let model = Model {
         mesh: Arc::new(mesh),
         transform: Transform::default(),
         cuts: cuts.map(Arc::new),
-        drilled: None,
+        drilled,
         supports: columns,
     };
     Ok(PutDown {

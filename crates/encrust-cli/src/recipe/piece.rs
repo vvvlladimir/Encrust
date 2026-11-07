@@ -20,7 +20,7 @@ use crate::hollowing::{HollowReport, pierced};
 use crate::pipeline::OrientSummary;
 use crate::report::{FitCheck, ImportReport};
 use crate::stage::{Found, Part, Shaping, standing_of};
-use crate::supports::SupportReport;
+use crate::supports::{Printed, SupportReport};
 
 /// One model on its way through a recipe, in plate coordinates throughout.
 pub(super) struct Piece {
@@ -125,13 +125,19 @@ impl Piece {
         drill(&holes, &[]).map(Some).context("drilling the drains")
     }
 
+    /// Which faces bound its cavity, and how its cuts are taken out.
+    pub(super) fn printed(&self) -> Printed {
+        Printed::of(self.cavity.clone(), self.hollow.as_ref())
+    }
+
     /// The model as a run cuts it, its supports under it.
     pub(super) fn model(&self) -> Result<Model> {
+        let cuts = self.cuts()?;
         Ok(Model {
             mesh: Arc::new(self.mesh.clone()),
             transform: Transform::default(),
-            cuts: self.cuts()?.map(Arc::new),
-            drilled: None,
+            drilled: self.printed().drilled(&self.mesh, cuts.as_ref()),
+            cuts: cuts.map(Arc::new),
             supports: self
                 .supports
                 .iter()

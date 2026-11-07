@@ -332,8 +332,7 @@ impl Field {
     }
 
     /// This field grown by `radius` cells as a disc, not a square, whose corner overreaches along
-    /// a diagonal; tests only, placement uses [`Field::uncarried_by`].
-    #[cfg(test)]
+    /// a diagonal.
     pub fn grown(&self, radius: i32) -> Self {
         if radius <= 0 || self.is_empty() {
             return self.clone();

@@ -1,8 +1,11 @@
 //! The cards of the jobs that report their progress at the stage's foot (ADR 0263).
 
+use core_volume::Step;
+
 use super::{Stack, remembered};
 use crate::i18n::tr;
 use crate::panels::Window;
+use crate::status::Status;
 use crate::ui::{NoticeReply, icon, job_notice, notice_card, theme};
 
 /// One card per job that reports progress here, the latest to start nearest the foot; a
@@ -20,6 +23,11 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     let shown = slicing.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
     if job_card(stack, "slicing", shown) {
         slicing.inspect(|job| job.cancel());
+    }
+    if job_card(stack, "drain-cuts", drain_cuts(window)) {
+        window.doc.drilling.give_up(&mut window.doc.scene);
+        window.tools.drain.give_up_plugs(&mut window.doc.scene);
+        window.machine.status = Status::Info(tr!("notice-drain-stopped"));
     }
     let walk = window.tools.measure_walk.notice();
     let shown = walk.map(|share| (tr!("notice-finding-walk"), Some(share), false));
@@ -45,6 +53,27 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "network", shown) {
         network.inspect(|job| job.cancel());
     }
+}
+
+/// The holes being taken out and the plugs being cut, as the one least far along stands.
+fn drain_cuts(window: &Window) -> Option<(String, Option<f32>, bool)> {
+    let drill = window.doc.drilling.progress();
+    let plugs = window.tools.drain.plugs_progress();
+    let share = [
+        drill.map(|(_, share)| share),
+        plugs.map(|(_, _, share)| share),
+    ]
+    .into_iter()
+    .flatten()
+    .min_by(f32::total_cmp)?;
+    let reading = drill.is_some_and(|(step, _)| step == Step::Reading)
+        || plugs.is_some_and(|(_, step, _)| step == Step::Reading);
+    let label = match plugs {
+        _ if reading => tr!("notice-drain-reading"),
+        Some((count, _, _)) => tr!("notice-drain-plugs", count = count),
+        None => tr!("notice-drain-drilling"),
+    };
+    Some((label, Some(share), false))
 }
 
 /// A run waiting for Continue, in Preview where the Prepare row is not: why, Continue, and

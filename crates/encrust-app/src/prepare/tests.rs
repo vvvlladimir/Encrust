@@ -60,7 +60,10 @@ impl Bench {
         let drift_mm = machine.slicing.material.compensation.fit_drift_mm();
         let asked_by = doc.history.next_edit();
         let (scene, settled) = (&mut doc.scene, self.settled);
-        tools.drain.lay_plugs(scene, drift_mm, settled, asked_by);
+        let reads = &mut doc.drilling.reads;
+        tools
+            .drain
+            .lay_plugs(scene, drift_mm, settled, asked_by, reads);
         crate::growth::refresh_supports(doc, &mut tools.supports, !self.settled);
         doc.drilling.start(&doc.scene, self.settled);
         let settings = ToolSettings::of(tools, &machine.slicing);
@@ -125,7 +128,7 @@ impl Bench {
 /// answers whether any is still being cut.
 fn land_plugs(doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bool {
     let plate_mm = core_geometry::Vec2::new(doc.plate.x_mm, doc.plate.y_mm);
-    for ended in tools.drain.poll_plugs() {
+    for ended in tools.drain.plugs_to_land(&doc.drilling) {
         doc.history.land(&mut doc.scene, ended.asked_by(), |scene| {
             crate::drain::DrainTool::land_plugs(scene, &ended, plate_mm, status);
         });

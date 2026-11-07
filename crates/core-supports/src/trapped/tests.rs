@@ -169,3 +169,53 @@ fn a_pocket_of_a_few_cells_is_not_worth_a_hole() {
         "a pocket smaller than a drop of resin is not reported"
     );
 }
+
+/// A square of half-diagonal `r` standing on its corner round (20, 20).
+fn diamond(r: Scalar, winding: Winding) -> Contour {
+    let corners = vec![
+        Vec2::new(20.0, 20.0 - r),
+        Vec2::new(20.0 + r, 20.0),
+        Vec2::new(20.0, 20.0 + r),
+        Vec2::new(20.0 - r, 20.0),
+    ];
+    let corners = match winding {
+        Winding::Outer => corners,
+        Winding::Inner => corners.into_iter().rev().collect(),
+    };
+    Contour::new(corners, winding)
+}
+
+#[test]
+fn a_slanted_wall_thinner_than_a_cell_still_holds_the_resin_in() {
+    // 0.04 mm across, so a row of cells reads it as one cell and the next row's cell sits
+    // diagonally beside it: the air on either side touches across that corner.
+    let outer = 8.0;
+    let inner = outer - 0.04 * std::f32::consts::SQRT_2;
+    let solid = || Layer::new(0.0, vec![diamond(outer, Winding::Outer)]);
+    let ring = || {
+        Layer::new(
+            0.0,
+            vec![
+                diamond(outer, Winding::Outer),
+                diamond(inner, Winding::Inner),
+            ],
+        )
+    };
+    let mut scan = TrapScan::new(Vec2::splat(10.0), Vec2::splat(30.0), LAYER_MM);
+    let stack = [solid(), ring(), ring(), ring(), ring(), solid()];
+    for (index, layer) in stack.into_iter().enumerate() {
+        scan.push(&Layer {
+            z: index as Scalar * LAYER_MM + LAYER_MM / 2.0,
+            ..layer
+        });
+    }
+
+    let found = scan.finish();
+    assert_eq!(found.len(), 1, "the cavity is sealed, got {found:?}");
+    let expected = 2.0 * inner * inner * 4.0 * LAYER_MM;
+    assert!(
+        (found[0].volume_mm3 - expected).abs() < 0.05 * expected,
+        "a diamond of half-diagonal {inner} mm over four 0.5 mm layers is {expected} mm3, got {}",
+        found[0].volume_mm3
+    );
+}

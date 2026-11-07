@@ -364,9 +364,12 @@ See ADR 0201 for what the alternatives cost.
 ## Trapped resin
 
 A cavity with no way out prints full of uncured resin. `core-supports` finds those pockets
-on the stack rather than in a field: `TrapScan` takes layers in print order, reads the air
-between the material runs of each one, and joins the runs that touch across a row or across
-a layer. A pocket that reaches the edge of the grid, the first layer or the top of the
+on the stack rather than in a field: `TrapScan` takes layers in print order on a 0.05 mm grid,
+grows each one's material by a cell, reads the air between its runs, and joins the runs that
+touch across a row or across a layer. A cell is material where the layer covers its middle, so
+a wall thinner than two cells reads in steps that meet only at their corners; grown, they
+close, and the air reads a cell short of each wall, a pocket about 1.3 % small on a 2 mm
+shell (ADR 0411). A pocket that reaches the edge of the grid, the first layer or the top of the
 stack has somewhere to drain; one that closes without ever doing so is trapped, and its
 lowest layer is where a hole goes. Each one carries what it holds, where its hole goes and
 the box it fills. See ADR 0072 for why it lives there and what the grid
@@ -432,7 +435,7 @@ prints at.
 - The shell is kept in model space but measured on the plate, at the scale the model
   stood at (ADR 0185). A model scaled after hollowing has a wall scaled with it; the window
   notices and asks to be run again.
-- A channel narrower than a tenth of a millimetre drains in life and reads as closed to the
+- A channel narrower than three cells, 0.15 mm, drains in life and reads as closed to the
   scan, so the pocket behind it is reported. The error is a hole nobody needed.
 - A torn model's open floor is drawn closed: the engine refuses it, so its floor stays in
   the mesh and only the layers show it gone. A floor on the plate seals the cavity until

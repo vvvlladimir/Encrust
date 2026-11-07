@@ -213,7 +213,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted; the tip shapes are superseded by 0243 |
 | [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted; supports passing through the raft superseded by 0266 |
 | [0044](0044-joints-are-balls-and-every-foot-is-bevelled.md) | A joint is covered by a ball, every foot is bevelled, braces cross | Accepted; the ball over a joint is superseded by 0238 |
-| [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted |
+| [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted; its grid is superseded by 0411 |
+| [0411](0411-the-trap-scan-grows-the-material-a-cell-on-a-finer-grid.md) | Grow the material a cell before reading the air, on a 0.05 mm grid | Proposed |
 | [0077](0077-a-support-body-is-checked-as-a-beam.md) | A support body is checked as a beam, not as its axis | Accepted; the sampling by rays alone is superseded by 0337 |
 | [0078](0078-a-blocked-tip-leans-until-it-finds-room.md) | A blocked tip leans until it finds room | Accepted; the three reaches are superseded by 0338, with a further search for ground |
 | [0079](0079-a-standing-support-holds-a-ball.md) | A standing support holds a ball, not a column of air | Accepted |
@@ -296,6 +297,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0396](0396-a-blocker-reaches-past-the-wall-and-can-fit-the-model.md) | A blocker reaches past the wall, can fit the model, and runs on as a rod | Proposed |
 | [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity |
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
+| [0412](0412-a-model-is-read-once-for-its-drill-and-its-plugs.md) | Read a model into the engine once for its drill and its plugs, and build its shell on that read | Proposed |
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
 | [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |

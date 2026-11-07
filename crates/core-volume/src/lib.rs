@@ -20,6 +20,7 @@ mod infill;
 mod keep_solid;
 mod mend;
 mod model;
+mod model_read;
 mod parts;
 mod plug;
 mod relief;
@@ -53,6 +54,7 @@ pub use keep_solid::{
     BLOCKER_REACH_MM, BlockerSize, across_mm, blocker_under, fitted_blocker, rod_on, walled_by,
 };
 pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, blocker_markers, markers};
+pub use model_read::ModelRead;
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
 pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, PlugSource, Plugs, laid_beside, plug_wall_mm, plugs};
 pub use relief::{

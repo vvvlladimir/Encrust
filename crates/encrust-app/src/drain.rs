@@ -46,6 +46,8 @@ pub struct DrainTool {
     laying: Vec<plugs::Laying>,
     /// Plugs asked for that wait for a cut under way, or a drag, to end.
     waiting: Vec<plugs::Waiting>,
+    /// Plugs cut that wait for their model's holes to be taken out, to land with them.
+    held: Vec<plugs::Ended>,
     read: Option<plugs::ReadModel>,
 }
 
@@ -65,6 +67,7 @@ impl Default for DrainTool {
             checked: false,
             laying: Vec::new(),
             waiting: Vec::new(),
+            held: Vec::new(),
             read: None,
         }
     }

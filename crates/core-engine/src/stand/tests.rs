@@ -9,6 +9,7 @@ fn solid<'a>(mesh: &'a mut Mesh, cuts: &'a mut Option<Mesh>) -> ToStand<'a> {
     ToStand {
         mesh,
         cavity: None,
+        on_its_model: false,
         cuts,
         drill_exactly: true,
     }
@@ -216,4 +217,43 @@ fn contacts_alone_stand_a_column_each_and_lift_nothing() {
     assert_eq!(stood.lifted_mm, 0.0, "the model stays where it stands");
     assert_eq!(stood.contacts, vec![island], "the island alone");
     assert_eq!(stood.standing, 1, "a column under it: {stood:?}");
+}
+
+#[test]
+fn a_shell_on_its_model_prints_drilled_with_its_cavity() {
+    let model = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(20.0));
+    let void = core_geometry::cuboid(Vec3::splat(5.0), Vec3::splat(15.0));
+    let offset = model.vertices.len() as u32;
+    let mut shell = model.clone();
+    shell.vertices.extend(&void.vertices);
+    shell.faces.extend(
+        void.faces
+            .iter()
+            .map(|[a, b, c]| [a + offset, c + offset, b + offset]),
+    );
+    let cavity = model.faces.len()..shell.faces.len();
+    let hole = core_volume::DrainHole {
+        at: Vec3::new(10.0, 10.0, 20.0),
+        axis: Vec3::NEG_Z,
+        diameter_mm: 2.0 * std::f32::consts::SQRT_2,
+        depth_mm: 8.0,
+        taper: 1.0,
+        lift_mm: 0.0,
+        shape: core_volume::HoleShape::Polygon { sides: 4 },
+        turn_deg: 45.0,
+        kind: core_volume::HoleKind::Drain,
+    };
+    let cuts = core_volume::drill(&[hole], &[]).expect("the hole drills");
+
+    let (surface, inner) = printed(&shell, (Some(cavity), true), Some(&cuts), true);
+    // 8000 mm3 less the 1000 mm3 cavity and the 2 x 2 x 5 mm bore through its wall.
+    let volume = core_geometry::signed_volume(&surface);
+    assert!(
+        (volume - 6980.0).abs() < 1e-2,
+        "expected 6980 mm3, got {volume}"
+    );
+    assert!(
+        inner.is_some_and(|inner| !inner.is_empty()),
+        "a cavity stays"
+    );
 }

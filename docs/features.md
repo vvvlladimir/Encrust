@@ -419,8 +419,10 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   plug the gap narrows to nothing before its end stops there; a hole whose mouth the gap
   closes gets no plug, the window says so, and the other holes keep theirs. A model
   with flaws in its surface is mended for this first; one that cannot be mended gets plugs that follow its surface only
-  approximately, and the window says so. The plugs are cut in the background, so a dense
-  model keeps its old plugs for a moment after you change the holes or the gap; while you
+  approximately, and the window says so. The plugs are cut in the background, the model read
+  once for them and for its holes, with a notice at the foot of the view saying how far it has
+  got and a Cancel that leaves the holes cut approximately and the new ones without plugs;
+  the plugs appear once the holes are out, so a dense model keeps its old plugs for a moment after you change the holes or the gap; while you
   drag the gap, they follow when you let go. If the resin's tolerance compensation is off,
   its offsets are allowed for so the fit prints as set. Plugs are models like any other; a project opens with the plugs it was saved with,
   and a copied model gets plugs of its own.
@@ -429,7 +431,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - The hole's size, depth, taper and outline are the window's, kept after a restart, for
   whichever model you click; one picked model keeps its own plug gap, as in **Hollow**.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
-  of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
+  of resin with no way out, with a bar and Cancel, behind a wall as thin as a few hundredths
+  of a millimetre. Pockets are painted in the view, and
   you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
 - **Auto**, beside Check drainage, finds the holes itself in the picked models as they stand,

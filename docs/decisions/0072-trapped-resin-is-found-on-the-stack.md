@@ -1,6 +1,6 @@
 # 0072. Find trapped resin on the slice stack, in `core-supports`
 
-- **Status:** Accepted
+- **Status:** Accepted; its grid is superseded by 0411
 - **Date:** 2026-09-23
 
 ## Context

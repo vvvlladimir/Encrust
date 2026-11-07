@@ -1,13 +1,14 @@
 use std::fmt;
 use std::ops::Range;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
     Blocker, Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
-    InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside,
-    pierce, plug_wall_mm, plugs, sleeves, walled_by,
+    InfillPattern, InfillSettings, ModelRead, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow,
+    laid_beside, pierce, plug_wall_mm, plugs, sleeves, walled_by,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -451,7 +452,9 @@ pub(crate) fn cut_plugs(
     wall_mm: Option<Scalar>,
     gap_mm: Scalar,
 ) -> Result<Vec<Mesh>> {
-    let made = plugs(&mut None, mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
+    let read = ModelRead::new(Arc::new(mesh.clone()));
+    let (bvh, cancel) = (Bvh::build(mesh), Cancel::never());
+    let made = plugs(&mut None, &read, &bvh, holes, wall_mm, gap_mm, cancel)
         .context("cutting the plugs for the drain holes")?;
     if made.sampled > 0 {
         tracing::warn!(
@@ -558,6 +561,11 @@ impl HollowReport {
     /// How long a plug for a hole through this wall is, millimetres: `plug_wall_mm`'s.
     pub fn plug_wall_mm(&self) -> Option<Scalar> {
         plug_wall_mm(self.settings.mode, self.settings.thickness_mm)
+    }
+
+    /// Whether the shell begins with the model byte for byte: a mould and an opened floor do not.
+    pub fn on_its_model(&self) -> bool {
+        self.settings.mode == HollowMode::Internal && self.settings.open_toward.is_none()
     }
 
     /// True when the wall left room for a cavity at all.

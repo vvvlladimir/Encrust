@@ -125,6 +125,8 @@ pub struct Stood {
 pub struct ToStand<'a> {
     pub mesh: &'a mut Mesh,
     pub cavity: Option<Range<usize>>,
+    /// Whether the faces before its cavity are the model byte for byte (ADR 0412).
+    pub on_its_model: bool,
     pub cuts: &'a mut Option<Mesh>,
     /// Whether the cuts are taken out exactly, as the window takes them out, or left to the
     /// winding rule: a search over poses cannot afford the engine on every one.
@@ -177,12 +179,14 @@ pub fn stand_seated(
     let ToStand {
         mesh,
         cavity,
+        on_its_model,
         cuts,
         drill_exactly,
     } = model;
     let seated = ToStand {
         mesh: &mut *mesh,
         cavity,
+        on_its_model,
         cuts: &mut *cuts,
         drill_exactly,
     };
@@ -214,7 +218,8 @@ fn touched(
 ) -> Result<(Scalar, Mesh, Option<Range<usize>>), EngineError> {
     let lifted_mm = lift(model.mesh, model.cuts, lift_mm)?;
     let cuts = model.cuts.as_ref();
-    let (surface, inner) = printed(model.mesh, model.cavity, cuts, model.drill_exactly);
+    let cavity = (model.cavity, model.on_its_model);
+    let (surface, inner) = printed(model.mesh, cavity, cuts, model.drill_exactly);
     Ok((lifted_mm, surface, inner))
 }
 
@@ -223,7 +228,7 @@ fn touched(
 /// (ADR 0322); and its faces on the cavity and the lattice in it.
 fn printed(
     mesh: &Mesh,
-    cavity: Option<Range<usize>>,
+    (cavity, on_its_model): (Option<Range<usize>>, bool),
     cuts: Option<&Mesh>,
     exactly: bool,
 ) -> (Mesh, Option<Range<usize>>) {
@@ -234,7 +239,8 @@ fn printed(
             cavity.map(|cavity| inside(mesh.faces.len(), cavity)),
         );
     };
-    if let Some(Ok(drilled)) = exactly.then(|| Drilled::of(mesh, cavity.clone(), cuts)) {
+    let drill = || Drilled::of_printed(mesh, cavity.clone(), on_its_model, cuts);
+    if let Some(Ok(drilled)) = exactly.then(drill) {
         let surface = Arc::unwrap_or_clone(drilled.mesh);
         let inner = drilled
             .cavity

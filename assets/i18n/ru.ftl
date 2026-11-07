@@ -2026,6 +2026,14 @@ notice-delete-profiles = Удалить их
 
 notice-cutting-preview = Нарезка слоёв для предпросмотра
 notice-finding-walk = Поиск кратчайшего пути по поверхности
+notice-drain-reading = Чтение модели для отверстий и пробок
+notice-drain-drilling = Сверление отверстий
+notice-drain-plugs = { $count ->
+    [one] Вырезание { $count } пробки
+    [few] Вырезание { $count } пробок
+   *[other] Вырезание { $count } пробок
+}
+notice-drain-stopped = Остановлено: отверстия остаются, вырезанные приближённо, а новые остаются без пробок.
 notice-preparing = Подготовка к печати: { $step }
 notice-prepare-continue = Продолжить
 notice-broken-one = { $name } повреждена
