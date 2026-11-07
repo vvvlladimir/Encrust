@@ -1,4 +1,5 @@
 use super::*;
+use core_geometry::Region;
 
 /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
 fn cuboid(size: Vec3) -> Mesh {
@@ -407,14 +408,50 @@ fn head_facing_x() -> Mesh {
 #[test]
 fn a_clean_surface_turns_the_detailed_side_away_from_the_supports() {
     let settings = OrientSettings {
-        preset: OrientGoal::CleanSurface.into(),
+        clean_surface: true,
         on_supports: true,
         ..OrientSettings::default()
     };
     let found = orient(&head_facing_x(), &settings).expect("a head can be oriented");
     let face = placed(found.rotation, Vec3::X);
     assert!(
-        face.z > 0.5,
-        "the detailed side looks up, away from the supports, got {face}"
+        face.z > 0.0,
+        "the detailed side looks away from the supports, got {face}"
+    );
+    let unasked = OrientSettings {
+        clean_surface: false,
+        ..settings
+    };
+    let found = orient(&head_facing_x(), &unasked).expect("a head can be oriented");
+    let face = placed(found.rotation, Vec3::X);
+    assert!(
+        face.z < 0.0,
+        "unasked, the face takes the supports, got {face}"
+    );
+}
+
+#[test]
+fn a_clean_surface_turns_the_painted_side_away_from_the_supports_whatever_the_detail() {
+    let mesh = head_facing_x();
+    let painted: Region = (0..mesh.faces.len())
+        .filter(|face| {
+            mesh.triangle(*face)
+                .is_some_and(|t| (t.a.x + t.b.x + t.c.x) / 3.0 < -5.0)
+        })
+        .collect();
+    let printed = Printed {
+        shown: Some(&painted),
+        ..Printed::solid(&mesh)
+    };
+    let settings = OrientSettings {
+        clean_surface: true,
+        on_supports: true,
+        ..OrientSettings::default()
+    };
+    let found = orient_printed(&printed, &settings).expect("a head can be oriented");
+    let painted_side = placed(found.rotation, Vec3::NEG_X);
+    assert!(
+        painted_side.z > 0.5,
+        "the painted side looks up, away from the supports, got {painted_side}"
     );
 }

@@ -69,6 +69,7 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         own_raft: None,
         plug_of: None,
         relief_painted: Region::default(),
+        shown_painted: Region::default(),
     }
 }
 

@@ -364,6 +364,24 @@ fn an_orient_goal_without_orient_is_an_argument_error() {
 }
 
 #[test]
+fn a_clean_surface_without_orient_is_an_argument_error_and_with_it_reaches_the_search() {
+    let path = write_leaning_box_stl("clean-surface", 10.0, 8.0, 12, 0);
+    let alone = slice(&[path.to_str().unwrap(), "--clean-surface"]);
+    assert_eq!(alone.status.code(), Some(2), "{}", stderr(&alone));
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--orient",
+        "--clean-surface",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        json(&output)["oriented"]["degrees"].as_f64().is_some(),
+        "an oriented run reports its turn"
+    );
+}
+
+#[test]
 fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
     // A cube ties on every goal and stays; a leaning box does not.
     let path = write_leaning_box_stl("no-tilt", 10.0, 8.0, 12, 0);

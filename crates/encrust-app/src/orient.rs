@@ -33,6 +33,8 @@ pub struct OrientTool {
     pub picking_face: bool,
     /// The flat face under the cursor while one is being picked.
     pub facet: Option<Facet>,
+    /// The brush that paints where the model shows, for a clean surface.
+    pub shown_brush: ShownBrush,
     /// The edges of the last mesh pointed at, which finding a face walks. Built once per
     /// mesh, since a mesh of a million faces takes a moment.
     adjacency: Option<(usize, Arc<Adjacency>)>,
@@ -52,9 +54,31 @@ impl Default for OrientTool {
             job: None,
             picking_face: false,
             facet: None,
+            shown_brush: ShownBrush::default(),
             adjacency: None,
             offers: Vec::new(),
             asked: None,
+        }
+    }
+}
+
+/// The brush that paints the faces of a model that show, which a clean surface keeps
+/// supports off (ADR 0410), and the stroke it has going.
+#[derive(Debug, Clone, Copy)]
+pub struct ShownBrush {
+    pub brushing: bool,
+    pub radius_mm: f32,
+    pub stroke: bool,
+    pub last_daub: Option<Vec2>,
+}
+
+impl Default for ShownBrush {
+    fn default() -> Self {
+        Self {
+            brushing: false,
+            radius_mm: 2.0,
+            stroke: false,
+            last_daub: None,
         }
     }
 }
@@ -122,6 +146,11 @@ impl OrientTool {
         self.job.is_some()
     }
 
+    /// Whether a drag over a model paints where it shows.
+    pub fn paints_shown(&self) -> bool {
+        self.settings.clean_surface && self.shown_brush.brushing && !self.is_running()
+    }
+
     /// Points at triangle `seed` of `object`, and keeps the flat face it belongs to as
     /// `facet`. Walks the face again only when the pointer has left the last one.
     pub fn point_at(&mut self, object: &SceneObject, seed: usize) {
@@ -184,15 +213,15 @@ impl OrientTool {
         Ok(())
     }
 
-    /// A search for the way `ids` print best by `preset`, tilted at most `max_tilt_deg`, the
+    /// A search for the way `ids` print best as `wanted`, tilted at most `max_tilt_deg`, the
     /// rest the engine's defaults, never the panel's, handed back: what Prepare turns by.
     /// Asked as the last search was, of models standing as it left them, it steps instead.
     pub fn start_on(
         &mut self,
         scene: &Scene,
         ids: &[ObjectId],
-        (preset, max_tilt_deg, plan_of): (
-            OrientPreset,
+        (wanted, max_tilt_deg, plan_of): (
+            core_plate::Asked,
             Option<Scalar>,
             impl Fn(&SceneObject) -> SupportPlan,
         ),
@@ -203,7 +232,8 @@ impl OrientTool {
             .map(|object| OrientTask::of(object, plan_of(object)))
             .collect();
         let settings = OrientSettings {
-            preset,
+            preset: wanted.preset,
+            clean_surface: wanted.clean_surface,
             max_tilt_deg,
             ..OrientSettings::default()
         };

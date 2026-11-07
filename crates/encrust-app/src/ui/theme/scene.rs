@@ -36,6 +36,9 @@ pub struct Scene {
     /// The patch painted to keep supports off. Violet, not red: an overhang is already
     /// washed red, and what is closed to supports has to read apart from what hangs.
     pub blocked: Color32,
+    /// The patch painted as what shows, which a clean surface keeps supports off. Rose,
+    /// apart from the teal of supports wanted and the violet of supports refused.
+    pub shown: Color32,
     /// What the Repair tool marks on a model: an open edge, a face without area, drawn
     /// twice or crossing another. Acid yellow-green, apart from every other mark and pick.
     pub fault: Color32,
@@ -111,6 +114,7 @@ pub(super) const DARK: Scene = Scene {
     reference: Color32::from_rgb(0x9a, 0x9d, 0xa3),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
     blocked: Color32::from_rgb(0xa7, 0x64, 0xd6),
+    shown: Color32::from_rgb(0xf2, 0x8a, 0xae),
     fault: Color32::from_rgb(0xc8, 0xf0, 0x3c),
     fault_rest: Color32::from_rgb(0x7d, 0x92, 0x2c),
     fault_picked: Color32::from_rgb(0xff, 0x4f, 0xc8),
@@ -156,6 +160,7 @@ pub(super) const LIGHT: Scene = Scene {
     unsound: Color32::from_rgb(0xb8, 0x11, 0x3f),
     painted: Color32::from_rgb(0x3f, 0x9e, 0x7c),
     blocked: Color32::from_rgb(0x96, 0x58, 0xc8),
+    shown: Color32::from_rgb(0xd0, 0x5a, 0x86),
     fault: Color32::from_rgb(0x6e, 0x9a, 0x00),
     fault_rest: Color32::from_rgb(0xa9, 0xbd, 0x63),
     fault_picked: Color32::from_rgb(0xe0, 0x3a, 0xae),

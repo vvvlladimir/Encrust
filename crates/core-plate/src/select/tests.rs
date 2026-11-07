@@ -207,3 +207,31 @@ fn ranked_for(preset: OrientPreset, measured: &[Candidate]) -> Vec<(usize, Rulin
         .for_settings(&settings);
     ranked(&faces, &settings, measured, Vec3::NEG_Z)
 }
+
+#[test]
+fn a_trade_away_from_a_clean_surface_is_offered_right_behind_the_first() {
+    let showing = |down, overhang_mm2, seen_mm2| {
+        let mut shown = candidate(down, overhang_mm2, 0.0, 0.0);
+        shown.score.seen_mm2 = seen_mm2;
+        shown
+    };
+    let measured = [
+        showing(Vec3::X, 50.0, 0.0),
+        showing(Vec3::Y, 52.0, 0.0),
+        showing(Vec3::Z, 5.0, 96.0),
+    ];
+    let settings = OrientSettings {
+        clean_surface: true,
+        ..OrientSettings::default()
+    };
+    let mesh = cube();
+    let faces = Faces::of(&mesh)
+        .expect("a cube has faces")
+        .for_settings(&settings);
+    let order = ranked(&faces, &settings, &measured, Vec3::NEG_Z);
+    assert_eq!(
+        order[..2],
+        [(0, Ruling::Chosen), (2, Ruling::Traded)],
+        "six contacts on show for a tenth of the support"
+    );
+}

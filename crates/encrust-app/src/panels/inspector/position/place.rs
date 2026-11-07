@@ -4,6 +4,7 @@
 use core_geometry::{Vec3, center_over_plate};
 use core_plate::{OrientGoal, OrientPreset};
 
+use super::super::paint::{COARSE_STEP, MAX_BRUSH_MM, MIN_BRUSH_MM};
 use super::{MAX_LIFT_MM, POSITION_DRAG};
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -11,7 +12,7 @@ use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene};
 use crate::ui::{
     Segment, Segmented, describe, icon, kept, number_row, secondary_button, section, step_bar,
-    switch,
+    switch, toggle_button,
 };
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
@@ -60,6 +61,7 @@ fn lay_on_face(ui: &mut egui::Ui, window: &mut Window) {
         orient.stop_picking();
     } else if laid {
         orient.picking_face = true;
+        orient.shown_brush.brushing = false;
     }
 }
 
@@ -140,8 +142,8 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// What Auto-orient searches for, and the button that runs it; pressed again with nothing
-/// changed it stands the model the next good way it found.
+/// What Auto-orient searches for, whether it keeps a clean surface, and the button that runs
+/// it; pressed again with nothing changed it stands the model the next good way it found.
 pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, &tr!("position-auto-orient"), None, |ui| {
         let running = window.tools.orient.is_running() || window.tools.prepare.is_running();
@@ -156,6 +158,7 @@ pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: Ob
             Segmented::new(&segments).width(width).show(ui, preset);
         });
         describe(ui, &hint(*preset));
+        ui.add_enabled_ui(!running, |ui| clean_surface(ui, window));
         if let Some(job) = &window.tools.orient.job {
             let (what, share) = match job.counted() {
                 Some((what, share)) => (what, Some(share)),
@@ -177,12 +180,53 @@ pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: Ob
     });
 }
 
+/// The switch that holds the preset to a clean surface, and the brush that paints where the
+/// model shows, which is read off its shape where nothing is painted.
+fn clean_surface(ui: &mut egui::Ui, window: &mut Window) {
+    let orient = &mut window.tools.orient;
+    switch(
+        ui,
+        &mut orient.settings.clean_surface,
+        &tr!("position-clean-surface"),
+    );
+    if !orient.settings.clean_surface {
+        orient.shown_brush.brushing = false;
+        return;
+    }
+    describe(ui, &tr!("position-clean-surface-about"));
+    let label = tr!("position-paint-shown");
+    if toggle_button(ui, icon::PAINT, &label, orient.shown_brush.brushing).clicked() {
+        orient.shown_brush.brushing = !orient.shown_brush.brushing;
+        orient.stop_picking();
+    }
+    let brush = &mut orient.shown_brush;
+    if brush.brushing {
+        number_row(
+            ui,
+            &tr!("paint-brush"),
+            &mut brush.radius_mm,
+            &tr!("unit-mm"),
+            COARSE_STEP,
+            MIN_BRUSH_MM..=MAX_BRUSH_MM,
+            2,
+        );
+    }
+    let scene = &mut window.doc.scene;
+    let painted = scene
+        .targets()
+        .any(|object| !object.shown_painted.is_empty());
+    if painted && secondary_button(ui, icon::REMOVE, &tr!("position-paint-shown-clear")).clicked() {
+        for object in scene.targets_mut() {
+            object.shown_painted.clear();
+        }
+    }
+}
+
 fn label(preset: OrientPreset) -> String {
     match preset {
         OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports"),
         OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel"),
         OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest"),
-        OrientPreset::Goal(OrientGoal::CleanSurface) => tr!("orient-preset-surface"),
         OrientPreset::Auto => tr!("orient-preset-auto"),
     }
 }
@@ -192,7 +236,6 @@ fn hint(preset: OrientPreset) -> String {
         OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports-hint"),
         OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel-only-hint"),
         OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest-only-hint"),
-        OrientPreset::Goal(OrientGoal::CleanSurface) => tr!("orient-preset-surface-only-hint"),
         OrientPreset::Auto => tr!("orient-preset-auto-hint"),
     }
 }

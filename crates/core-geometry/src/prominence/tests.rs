@@ -117,12 +117,46 @@ fn one_sharp_needle_does_not_flatten_the_detail_everywhere_else() {
         mesh.append(&ball(on, 0.8, 12, 24));
     }
     let bumps = mesh.faces.len();
-    mesh.append(&cylinder(Vec3::new(-9.9, 0.0, 0.0), Vec3::new(-14.0, 0.0, 0.0), 0.05, 6));
+    mesh.append(&cylinder(
+        Vec3::new(-9.9, 0.0, 0.0),
+        Vec3::new(-14.0, 0.0, 0.0),
+        0.05,
+        6,
+    ));
     let prominence = Prominence::of(&mesh);
     let shown: Vec<Scalar> = (body..bumps)
         .filter(|&face| centroid(&mesh, face).length() > 10.3)
         .map(|face| prominence.face(face))
         .collect();
     let mean = shown.iter().sum::<Scalar>() / shown.len().max(1) as Scalar;
-    assert!(mean > 0.6, "the bumps show {mean} on average beside a needle, expected near 1");
+    assert!(
+        mean > 0.6,
+        "the bumps show {mean} on average beside a needle, expected near 1"
+    );
+}
+
+#[test]
+fn painted_faces_show_in_full_and_the_rest_not_at_all() {
+    let mesh = ball(Vec3::ZERO, 10.0, 12, 24);
+    let painted: Region = [3, 5].into_iter().collect();
+    let prominence = Prominence::shown(&mesh, Some(&painted));
+    assert!(
+        (prominence.face(3) - 1.0).abs() < 1e-6,
+        "a painted face shows 1"
+    );
+    assert!(prominence.face(4).abs() < 1e-6, "an unpainted face shows 0");
+}
+
+#[test]
+fn with_nothing_painted_what_shows_is_read_off_the_shape() {
+    let mesh = ball(Vec3::ZERO, 10.0, 12, 24);
+    let unpainted = Prominence::shown(&mesh, Some(&Region::default()));
+    let read = Prominence::of(&mesh);
+    for face in 0..mesh.faces.len() {
+        let (got, want) = (unpainted.face(face), read.face(face));
+        assert!(
+            (got - want).abs() < 0.05,
+            "face {face} shows {got}, read {want}"
+        );
+    }
 }

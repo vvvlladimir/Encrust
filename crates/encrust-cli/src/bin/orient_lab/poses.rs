@@ -136,6 +136,8 @@ fn ruling(ruling: Ruling) -> &'static str {
         Ruling::TieBreak => "lost the tie-break",
         Ruling::Dominated => "beaten on every goal",
         Ruling::Alternative => "a trade the user may prefer",
+        Ruling::Shows => "shows more than a clean surface keeps to",
+        Ruling::Traded => "a trade off a clean surface the user may prefer",
     }
 }
 

@@ -70,6 +70,13 @@ impl Draws {
             draws.model(object, &shown, colour, mark, texture, drilled);
             draws.hollowing(object, &shown, colour, drilled);
             draws.supports(object, hidden, resin);
+            if let Some(patch) = object.shown_patch.mesh() {
+                draws.flat(
+                    Arc::clone(patch),
+                    Transform::default(),
+                    theme::scene().shown,
+                );
+            }
         }
         // Last, so that the resin inside one model is still seen when another stands in
         // front of it: nothing hides anything under the x-ray, but what is drawn later

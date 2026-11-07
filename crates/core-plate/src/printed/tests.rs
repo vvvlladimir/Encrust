@@ -151,6 +151,7 @@ fn a_hollow_ball_is_stood_on_its_drain_hole() {
         shell: Some(&shell),
         cuts: Some(&drilled),
         vents: &[Vec3::X],
+        shown: None,
     };
     let settings = OrientSettings {
         on_supports: true,

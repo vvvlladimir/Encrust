@@ -47,7 +47,7 @@ The window and the command line run every kind; what each kind sets:
 | `do` | Settings | Runs as |
 |---|---|---|
 | `repair` | `method`: `repair`, `close-holes`, `wrap`, `deep` | Repair, `--repair` |
-| `orient` | `goal`: `auto`, `fewest-supports`, `least-peel`, `shortest-print`, `clean-surface`; `max_tilt_deg` | Auto-orient, `--orient` |
+| `orient` | `goal`: `auto`, `fewest-supports`, `least-peel`, `shortest-print`; `max_tilt_deg`; `clean_surface` | Auto-orient, `--orient` |
 | `hollow` | `wall_mm`, `mode`: `inside`, `outside`, `open-floor`; `infill`; `keep_solid_under_mm` | Hollow, `--hollow` |
 | `drain` | `at`: `auto` or `points`; `points`; `diameter_mm`, `depth_mm`, `vent`, `plugs` | Drain's Auto or a click, `--drain-at` |
 | `supports` | `profile` (catalogue id, `auto` the default), `cavity` | Grow, `--supports` |

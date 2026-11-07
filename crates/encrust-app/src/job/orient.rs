@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use core_engine::{SupportPlan, Trial, orient_for_print};
-use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
+use core_geometry::{Mesh, Quat, Region, Transform, Vec3, transform_mesh};
 use core_plate::{OrientSettings, Phase, Printed, Watch};
 use core_volume::ModelHollow;
 #[cfg(test)]
@@ -41,6 +41,8 @@ pub struct OrientTask {
     /// What this model's supports are built to, as a run in the window builds them: the
     /// search counts overhangs and contacts by its placing profile, and a proof prints it.
     pub support: SupportPlan,
+    /// The faces of `mesh` painted as what shows, which a clean surface keeps supports off.
+    pub shown: Region,
 }
 
 impl OrientTask {
@@ -58,6 +60,7 @@ impl OrientTask {
             support: SupportPlan::of(
                 SupportProfile::shipped("medium").expect("the medium preset ships"),
             ),
+            shown: Region::default(),
         }
     }
 
@@ -74,6 +77,7 @@ impl OrientTask {
             && self.vents == other.vents
             && self.sizing == other.sizing
             && self.support == other.support
+            && self.shown == other.shown
     }
 
     /// `mesh` as it measures on the plate. A model nobody resized is not copied.
@@ -203,6 +207,7 @@ impl OrientTask {
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
             support: lifted(plan, object.lift_mm),
+            shown: object.shown_painted.clone(),
         }
     }
 }
@@ -315,6 +320,7 @@ fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Resu
         shell: shell.as_deref(),
         cuts: cuts.as_deref(),
         vents: &vents,
+        shown: Some(&task.shown),
     };
     let poses = choose(
         &printed,
@@ -409,6 +415,19 @@ mod tests {
         });
         let judged = tasks[0].shell.as_ref().expect("the task carries the shell");
         assert!(Arc::ptr_eq(judged, &shell));
+    }
+
+    #[test]
+    fn a_model_painted_otherwise_is_not_asked_the_same() {
+        let mesh = Arc::new(cuboid(Vec3::splat(10.0)));
+        let plain = OrientTask::solid(ObjectId::for_test(1), Arc::clone(&mesh));
+        let mut painted = OrientTask::solid(ObjectId::for_test(1), mesh);
+        painted.shown.set(0, true);
+        assert!(plain.asks_as(&plain), "the same task asks the same");
+        assert!(
+            !plain.asks_as(&painted),
+            "paint changes what a clean surface avoids"
+        );
     }
 
     #[test]

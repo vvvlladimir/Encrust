@@ -335,8 +335,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted; what the picker lists is superseded by 0284, its default by 0291 |
 | [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted; its band and its cups are superseded by 0410 |
 | [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted; which goals auto weighs is narrowed by 0409 |
-| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; its policy is superseded by 0410 |
-| [0410](0410-a-single-goal-minimises-its-own-reading-alone.md) | A single goal minimises its own reading alone | Proposed |
+| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410 |
+| [0410](0410-a-single-goal-minimises-its-own-reading-alone.md) | A single goal minimises its own reading alone, and a clean surface is asked beside any preset | Proposed |
 | [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
 | [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |
 | [0290](0290-the-window-and-the-command-line-orient-through-one-entry-point.md) | The window and the command line orient through one entry point | Accepted |

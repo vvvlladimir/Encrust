@@ -119,7 +119,6 @@ pub fn slug(preset: OrientPreset) -> &'static str {
         OrientPreset::Goal(OrientGoal::FewestSupports) => "fewest-supports",
         OrientPreset::Goal(OrientGoal::LeastPeel) => "least-peel",
         OrientPreset::Goal(OrientGoal::ShortestPrint) => "shortest-print",
-        OrientPreset::Goal(OrientGoal::CleanSurface) => "clean-surface",
         OrientPreset::Auto => "auto",
     }
 }

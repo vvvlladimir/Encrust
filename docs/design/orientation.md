@@ -44,14 +44,15 @@ than a cut.
 | Fewest supports | — | 1.0 | — | 0.05 | 0.3 | — |
 | Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 | — |
 | Shortest print | 0.3 | — | — | 1.5 | 0.3 | — |
-| Clean surface | — | 0.2 | — | 0.05 | 0.3 | 1.0 |
-| Auto, the first three's mean | 0.27 | 0.33 | 0.67 | 0.53 | 0.3 | — |
+| Auto, the three's mean | 0.27 | 0.33 | 0.67 | 0.53 | 0.3 | — |
 
-How much a face shows is its `Prominence` (`docs/design/prominence.md`), read once a model
-and only for the clean surface. The search reads that goal as the contacts placement would
-set there, the seen area over a contact's patch; the proof reads it off the contacts it
-placed, each weighed by the prominence of the face under it. Both count one contact on
-open detail as one (ADR 0409).
+A clean surface adds 1.0 on seen to whichever preset is asked, and the shortlist keeps the
+two candidates that show least. How much a face shows is the faces the user painted, 1 each
+and every other face 0, or where nothing is painted its `Prominence`
+(`docs/design/prominence.md`); either is read once a model, and only for a clean surface.
+The search reads it as the contacts placement would set there, the seen area over a
+contact's patch; the proof reads it off the contacts it placed, each weighed by the face
+under it. Both count one contact on open detail, or on paint, as one (ADR 0409, 0410).
 
 The model's length is the cube root of its bounding box, which does not turn with it, so
 dividing by it changes no ranking — it only stops the weights meaning different things at
@@ -189,8 +190,19 @@ changed.
 
 The shortest print reads the stack — the model and the lift under it, millimetres — which
 the layers and the time follow, since a layer takes as long whatever its area (ADR 0283).
-The clean surface reads the contacts on show. Auto weighs only the first three goals,
-`OrientGoal::BALANCED`: what shows is the user's to ask for (ADR 0409).
+### A clean surface
+
+Asked beside any preset, a clean surface comes after what fails the print and what hangs,
+and before everything else the preset ranks by (ADR 0410). It keeps the poses within a
+tenth and one contact of the fewest on show among the sound, the slack no less than the
+noise of the reading; the preset then ranks those as it would rank them all. A turn that
+brings the model back within the band is always worth making.
+
+A pose past the band is offered as `Ruling::Traded` when it wins at least a quarter of the
+preset's reading over the chosen and more than its noise — for auto, a quarter of the
+product of shares — and no sound pose shows less and wins as much. The rest past the band
+are `Ruling::Shows`. Every trade is ranked right behind the first, after auto's own goals,
+so the proof prints it and the window steps to it.
 
 ### Balancing every goal
 

@@ -1,6 +1,6 @@
 use super::import_summary::{ImportSummary, Mapped};
 use super::support_surface::SupportShell;
-use super::{ObjectId, Scene, Shaped};
+use super::{ObjectId, Scene, Shaped, ShownPatch};
 use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
@@ -47,6 +47,10 @@ pub struct SceneObject {
     pub mapped: Option<Arc<Mapped>>,
     /// The faces the Relief brush painted: while any are, only they take the texture.
     pub relief_painted: Region,
+    /// The faces painted as what shows, which a clean surface keeps supports off (ADR 0410).
+    pub shown_painted: Region,
+    /// The same drawn over the model while the brush that paints it is in reach.
+    pub shown_patch: ShownPatch,
     /// The tool settings this model keeps instead of the plate's.
     pub own: OwnSettings,
     /// How high over its raft the user stood the model, millimetres: what auto-orient
@@ -267,6 +271,7 @@ impl SceneObject {
         self.traps.clear();
         self.mapped = None;
         self.relief_painted.clear();
+        self.shown_painted.clear();
         self.mesh = mesh;
     }
 

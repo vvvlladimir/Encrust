@@ -161,24 +161,29 @@ renamed it, the picker following; a draft that does not pass stays in the form. 
 asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 **Auto-orient:**
-- Searches for the best angle for one of five presets: **fewest supports**, **least
-  peel**, **shortest print**, **clean surface** or **auto**, picked in Position beside
-  **Auto-orient**; the
-  plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
-  the window reopens.
+- Searches for the best angle for one of four presets: **fewest supports**, **least
+  peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
+  plate-wide **Auto-orient plate** uses the same preset. The preset and **Clean surface**
+  reset when the window reopens.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
   then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
   as they stand.
-- **Clean surface** puts the fewest supports where the model shows: open surface with
-  fine detail, such as a face, stays clean, while folds, the underside and smooth areas take
-  the contacts, however much resin that takes. It finds what shows from the shape alone. You cannot yet mark it by
-  hand, and support placement does not yet avoid it within a pose.
-- **Auto** balances supports, pull and print time for each model, and leaves the clean
-  surface out. It never lets one of supports, pull
-  or print time go far worse for the sake of the others. Where some pose is about as good
-  as the best on all three, it takes that one. Otherwise it takes the pose where each
-  gives up the smallest, most even share of its best. Like least peel, it never takes a
-  suction cup or a pull past the warning.
+- **Clean surface**, a switch under the presets, works with any of them: of the poses that
+  put the fewest contacts where the model shows — within about one contact — the preset
+  takes its best. A pose with a few more contacts on show is offered beside the choice
+  when it wins at least a quarter more of the preset, such as a quarter less resin.
+- **Paint what shows**, under the switch, paints the faces that must stay clean, such as a
+  face, with a brush: alt to erase, **Clear what shows** to start again. Painted faces are
+  drawn in rose while the switch is on. Once a model has any face painted, only the painted
+  faces count as showing; with none, what shows is found from the shape: open surface with
+  fine detail, while folds, the underside and smooth areas take the contacts. Painting is
+  saved with the project and cleared when the model is reshaped. Support placement does not
+  yet avoid it within a pose.
+- **Auto** balances supports, pull and print time for each model. It never lets one of
+  supports, pull or print time go far worse for the sake of the others. Where some pose is
+  about as good as the best on all three, it takes that one. Otherwise it takes the pose
+  where each gives up the smallest, most even share of its best. Unlike the single
+  presets, it never takes a suction cup or a pull past the warning.
 - When there are other good poses, pressing **Auto-orient** again with nothing changed
   stands the model the next of them, round to the first, without searching again. A
   change to the model, its supports, its lift, the preset, the printer or the resin

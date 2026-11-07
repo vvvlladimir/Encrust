@@ -337,7 +337,12 @@ fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
     let plate = BuildPlate::default();
 
     let Turning::Search(mut job) = tool
-        .start_on(&scene, &[slab], (OrientPreset::Auto, None, plans), None)
+        .start_on(
+            &scene,
+            &[slab],
+            (OrientPreset::Auto.into(), None, plans),
+            None,
+        )
         .expect("a named slab can be oriented")
     else {
         panic!("nothing was searched before, so it searches");
@@ -360,7 +365,12 @@ fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
 
     let first = scene.get(slab).expect("on the plate").transform.rotation;
     let again = tool
-        .start_on(&scene, &[slab], (OrientPreset::Auto, None, plans), None)
+        .start_on(
+            &scene,
+            &[slab],
+            (OrientPreset::Auto.into(), None, plans),
+            None,
+        )
         .expect("a named slab can be oriented");
     assert!(matches!(again, Turning::Step), "asked the same, it steps");
     tool.step(&mut scene, &plate);

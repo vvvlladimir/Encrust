@@ -151,6 +151,7 @@ fn object(index: usize) -> ObjectState {
         own_raft: None,
         plug_of: None,
         relief_painted: marked(&[0]),
+        shown_painted: marked(&[1, 2]),
     }
 }
 
@@ -189,6 +190,10 @@ fn a_plate_comes_back_as_it_was_saved() {
     assert_eq!(
         object.relief_painted,
         saved.manifest.objects[0].relief_painted
+    );
+    assert_eq!(
+        object.shown_painted,
+        saved.manifest.objects[0].shown_painted
     );
     assert_eq!(
         object.hollow.channels,

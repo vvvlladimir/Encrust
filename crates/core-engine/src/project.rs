@@ -361,6 +361,10 @@ pub struct ObjectState {
     /// any are (ADR 0318). A file without it reads as a model with none.
     #[serde(default, skip_serializing_if = "Region::is_empty")]
     pub relief_painted: Region,
+    /// The faces painted as what shows, which a clean surface keeps supports off instead of
+    /// what it reads off the shape (ADR 0410). A file without it reads as a model with none.
+    #[serde(default, skip_serializing_if = "Region::is_empty")]
+    pub shown_painted: Region,
 }
 
 impl ObjectState {

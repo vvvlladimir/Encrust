@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::ValueEnum;
 use core_engine::{Hollowing, PREPARE_REPAIR, SupportPlan};
 use core_geometry::{Mat3, Scalar, Transform, Vec3};
-use core_plate::OrientSettings;
+use core_plate::{Asked, OrientSettings};
 use core_recipe::{Metric, StepKind, preset_of};
 use core_volume::HollowSettings;
 
@@ -46,8 +46,11 @@ pub(super) fn run(
 /// The search `--orient` runs, judged on the supports the recipe stands it on; supports
 /// already under it are taken off.
 fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    let preset = text(settings, "goal").map_or(OrientSettings::default().preset, preset_of);
-    let asked = (preset, number(settings, "max_tilt_deg"));
+    let asked = Asked {
+        preset: text(settings, "goal").map_or(OrientSettings::default().preset, preset_of),
+        clean_surface: flag(settings, "clean_surface").unwrap_or(false),
+    };
+    let asked = (asked, number(settings, "max_tilt_deg"));
     piece.take_off_supports();
     let judged = ctx.support_plan(piece)?;
     let found = orientation(&piece.mesh, asked, judged.as_ref(), ctx.chosen, ctx.watch)?;

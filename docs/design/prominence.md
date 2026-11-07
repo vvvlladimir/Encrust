@@ -2,8 +2,8 @@
 
 How much each face of a model shows on the finished print, from 0 for a face hidden in a
 fold to 1 for open surface with fine detail: where a support's scar costs the most.
-`core_geometry::Prominence` reads it once a model. The clean surface goal weighs supports by
-it (`orientation.md`, ADR 0409).
+`core_geometry::Prominence` reads it once a model. A clean surface weighs supports by it
+where the user painted nothing (`orientation.md`, ADR 0409, 0410).
 
 It follows Zhang et al., *Perceptual models of preference in 3D printing direction*
 (SIGGRAPH Asia 2015). They score a print direction on the supports' area, the visual
@@ -71,5 +71,5 @@ search, once in the proof, and once a pose in `print_out`.
 
 Which way the model is looked at. Zhang et al. learn preferred viewpoints. A model's file
 does not say which way is up, and ADR 0284 dropped the file's +Z as a stand-in. So exposure
-treats every open direction alike. Painting a face to keep clean would answer what geometry
-cannot: `TODO(step-2)` of ADR 0409.
+treats every open direction alike. Painting what shows answers what geometry cannot:
+`Prominence::shown` reads the painted faces as 1 and the rest as 0 (ADR 0410).

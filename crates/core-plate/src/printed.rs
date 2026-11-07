@@ -1,4 +1,4 @@
-use core_geometry::{Mesh, Vec3};
+use core_geometry::{Mesh, Region, Vec3};
 
 /// A model as it prints, in its own space: what an orientation is judged on once the
 /// model has been hollowed or drilled.
@@ -13,6 +13,8 @@ pub struct Printed<'a> {
     /// The way out of each drain hole. A hole lets air into a cavity from the first layer
     /// only when it points at the plate, so each of these is tried as the way down.
     pub vents: &'a [Vec3],
+    /// The faces of `outer` the user painted as what shows, where any are painted.
+    pub shown: Option<&'a Region>,
 }
 
 impl<'a> Printed<'a> {
@@ -23,6 +25,7 @@ impl<'a> Printed<'a> {
             shell: None,
             cuts: None,
             vents: &[],
+            shown: None,
         }
     }
 }

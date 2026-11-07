@@ -145,6 +145,7 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
             .and_then(|model| scene.objects().iter().position(|other| other.id == model))
             .and_then(|index| u32::try_from(index).ok()),
         relief_painted: object.relief_painted.clone(),
+        shown_painted: object.shown_painted.clone(),
         own_supports: object
             .own
             .supports
@@ -330,6 +331,7 @@ fn restore_objects(
             &with_own(table.to_vec(), &own, plate_raft),
         );
         object.relief_painted = state.relief_painted;
+        object.shown_painted = state.shown_painted;
         object.own = own;
     }
     // A plug names its model by its place in the file, which is known once all are in.

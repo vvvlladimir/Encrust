@@ -3,7 +3,7 @@
 
 use core_engine::{PREPARE_ORIENT, PREPARE_REPAIR};
 use core_geometry::{MendMethod, Scalar, Transform};
-use core_plate::{ArrangeSettings, OrientPreset};
+use core_plate::{ArrangeSettings, Asked};
 use core_recipe::resolved::{flag, number, points, text};
 use core_recipe::{StepKind, preset_of};
 use core_volume::{HoleSize, HollowMode, HollowSettings, InfillSettings, RepairMethod, plate_down};
@@ -18,7 +18,7 @@ pub(super) type Settings = core_recipe::ResolvedSettings;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Work {
     Orient {
-        preset: OrientPreset,
+        wanted: Asked,
         max_tilt_deg: Option<Scalar>,
     },
     Repair(RepairMethod),
@@ -100,7 +100,10 @@ impl Work {
     pub(super) fn of(kind: StepKind, settings: &Settings) -> Result<Self, NotYet> {
         Ok(match kind {
             StepKind::Orient => Self::Orient {
-                preset: text(settings, "goal").map_or(PREPARE_ORIENT, preset_of),
+                wanted: Asked {
+                    preset: text(settings, "goal").map_or(PREPARE_ORIENT, preset_of),
+                    clean_surface: flag(settings, "clean_surface").unwrap_or(false),
+                },
                 max_tilt_deg: number(settings, "max_tilt_deg"),
             },
             StepKind::Repair => {

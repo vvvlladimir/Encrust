@@ -202,6 +202,8 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             let alt = ui.input(|input| input.modifiers.alt);
             measure_under_cursor(window, rect, cursor, alt);
         }
+        // A brush stroke has already painted whatever the click landed on.
+        Tool::Position if window.tools.orient.paints_shown() => {}
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
@@ -254,6 +256,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
         || (*window.tool == Tool::Relief && window.tools.relief.paints())
         || paint::picks_faces(window)
+        || (*window.tool == Tool::Position && window.tools.orient.paints_shown())
     {
         draw_brush(ui, window, rect);
     }

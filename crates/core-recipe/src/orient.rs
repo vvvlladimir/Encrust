@@ -8,7 +8,6 @@ pub fn preset_of(goal: &str) -> OrientPreset {
         "fewest-supports" => OrientGoal::FewestSupports.into(),
         "least-peel" => OrientGoal::LeastPeel.into(),
         "shortest-print" => OrientGoal::ShortestPrint.into(),
-        "clean-surface" => OrientGoal::CleanSurface.into(),
         _ => OrientPreset::Auto,
     }
 }
@@ -20,7 +19,6 @@ mod tests {
     #[test]
     fn a_goal_word_names_its_goal_and_an_unknown_one_is_auto() {
         assert_eq!(preset_of("least-peel"), OrientGoal::LeastPeel.into());
-        assert_eq!(preset_of("clean-surface"), OrientGoal::CleanSurface.into());
         assert_eq!(preset_of("whatever"), OrientPreset::Auto);
     }
 }

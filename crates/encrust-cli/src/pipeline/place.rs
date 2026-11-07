@@ -9,7 +9,9 @@ use core_geometry::{
     Aabb, Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, glam::EulerRot,
     transform_mesh,
 };
-use core_plate::{OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch};
+use core_plate::{
+    Asked, OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch,
+};
 use printer_profiles::{PrinterProfile, SupportProfile};
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
@@ -82,7 +84,11 @@ pub(super) fn place(
         None => mesh,
     };
     let (mesh, mut oriented) = if let Some(preset) = orient_preset(args) {
-        let asked = (preset, transform.max_tilt);
+        let asked = Asked {
+            preset,
+            clean_surface: transform.clean_surface,
+        };
+        let asked = (asked, transform.max_tilt);
         let summary = orientation(&mesh, asked, supports, chosen, watch)?;
         let turn = turn_in_place(&mesh, summary.rotation)?;
         (transform_mesh(&mesh, turn), Some(summary))
@@ -124,18 +130,19 @@ fn orient_preset(args: &ImportArgs) -> Option<OrientPreset> {
     transform.orient.then(|| transform.orient_goal.into())
 }
 
-/// The turn the search for `preset` finds within `max_tilt_deg`, its best printed to choose
+/// The turn the search `asked` finds within `max_tilt_deg`, its best printed to choose
 /// between where a printer and supports to print on are known, as the window does.
 pub(crate) fn orientation(
     mesh: &Mesh,
-    (preset, max_tilt_deg): (OrientPreset, Option<Scalar>),
+    (asked, max_tilt_deg): (Asked, Option<Scalar>),
     supports: Option<&SupportPlan>,
     chosen: &Chosen,
     watch: &Watch,
 ) -> Result<OrientSummary> {
     let profile = chosen.printer.as_ref();
     let settings = OrientSettings {
-        preset,
+        preset: asked.preset,
+        clean_surface: asked.clean_surface,
         max_tilt_deg,
         build_volume_mm: profile
             .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),

@@ -57,14 +57,11 @@ fn reading(goal: OrientGoal, pose: &Pose) -> f64 {
 const PEEL_ENOUGH_N: f64 = 10.0;
 const SPARE_BAND: f64 = 1.25;
 const SPARE_SLACK_ML: f64 = 0.05;
-/// The contacts on show a clean surface has enough at, as the search counts them.
-const SEEN_ENOUGH: f64 = 1.0;
 
 /// What `goal` counts as enough, past which the fewest supports decides, if it has one.
 fn enough(goal: OrientGoal) -> Option<f64> {
     match goal {
         OrientGoal::LeastPeel => Some(PEEL_ENOUGH_N),
-        OrientGoal::CleanSurface => Some(SEEN_ENOUGH),
         OrientGoal::FewestSupports | OrientGoal::ShortestPrint => None,
     }
 }
@@ -382,17 +379,17 @@ const AUTO_BAND: f64 = 0.10;
 const AUTO_MOST: f64 = 3.0;
 /// What the judge adds under each goal's reading before it is taken as a multiple: half a
 /// millilitre of support, nothing past the enough pull, and thirty layers.
-const AUTO_FLOOR: [f64; OrientGoal::BALANCED.len()] = [0.5, 0.0, 30.0];
+const AUTO_FLOOR: [f64; OrientGoal::ALL.len()] = [0.5, 0.0, 30.0];
 
 /// Every goal's reading of `pose` as the judge counts them, enough pull and all.
-fn readings(pose: &Pose) -> [f64; OrientGoal::BALANCED.len()] {
-    OrientGoal::BALANCED.map(|goal| effective(goal, pose))
+fn readings(pose: &Pose) -> [f64; OrientGoal::ALL.len()] {
+    OrientGoal::ALL.map(|goal| effective(goal, pose))
 }
 
 /// What the auto preset is weighed against: the best reading of every goal among `sound`.
 struct Balance<'a> {
     sound: Vec<&'a Pose>,
-    best: [f64; OrientGoal::BALANCED.len()],
+    best: [f64; OrientGoal::ALL.len()],
 }
 
 impl<'a> Balance<'a> {
@@ -406,7 +403,7 @@ impl<'a> Balance<'a> {
     }
 
     /// Each goal's reading of `pose` as a multiple of its best, floors added.
-    fn multiples(&self, pose: &Pose) -> [f64; OrientGoal::BALANCED.len()] {
+    fn multiples(&self, pose: &Pose) -> [f64; OrientGoal::ALL.len()] {
         let own = readings(pose);
         std::array::from_fn(|at| {
             (own[at] + AUTO_FLOOR[at]) / (self.best[at] + AUTO_FLOOR[at]).max(f64::EPSILON)
@@ -419,7 +416,7 @@ impl<'a> Balance<'a> {
 
     fn in_every_band(&self, pose: &Pose) -> bool {
         let own = readings(pose);
-        OrientGoal::BALANCED
+        OrientGoal::ALL
             .iter()
             .enumerate()
             .all(|(at, goal)| own[at] <= self.best[at] * (1.0 + AUTO_BAND) + noise(*goal))
@@ -431,7 +428,7 @@ impl<'a> Balance<'a> {
         self.sound.iter().copied().find(|other| {
             let theirs = readings(other);
             let mut better = false;
-            for (at, goal) in OrientGoal::BALANCED.iter().enumerate() {
+            for (at, goal) in OrientGoal::ALL.iter().enumerate() {
                 if theirs[at] > own[at] {
                     return false;
                 }
@@ -528,7 +525,7 @@ fn stays_auto(chosen: &Pose, poses: &[Pose], floor: &Floor, balance: &Balance) -
     let passed = match drawn {
         Some(drawn) if chosen.tilt_deg >= SETTLED_DEG => {
             let (own, theirs) = (readings(chosen), readings(drawn));
-            let goals = OrientGoal::BALANCED.iter().enumerate();
+            let goals = OrientGoal::ALL.iter().enumerate();
             let won = goals
                 .clone()
                 .any(|(at, goal)| own[at] < theirs[at] - turn_cost(*goal, theirs[at]));

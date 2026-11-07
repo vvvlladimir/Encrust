@@ -91,15 +91,10 @@ impl StepKind {
             Self::Orient => &[
                 (
                     "goal",
-                    Word(&[
-                        "auto",
-                        "fewest-supports",
-                        "least-peel",
-                        "shortest-print",
-                        "clean-surface",
-                    ]),
+                    Word(&["auto", "fewest-supports", "least-peel", "shortest-print"]),
                 ),
                 ("max_tilt_deg", Number),
+                ("clean_surface", Bool),
             ],
             Self::Hollow => &[
                 ("wall_mm", Number),

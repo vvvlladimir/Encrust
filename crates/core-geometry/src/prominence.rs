@@ -6,7 +6,7 @@ mod tests;
 
 use rayon::prelude::*;
 
-use crate::{Bvh, Mesh, Scalar};
+use crate::{Bvh, Mesh, Region, Scalar};
 use cells::{Grid, Sample, samples};
 use exposure::exposure;
 use saliency::saliency;
@@ -21,7 +21,6 @@ const EXPOSURE_LEVEL: usize = 1;
 /// How much an open face shows with no detail at all: a scar on a smooth face still shows.
 const SMOOTH_SHOWS: Scalar = 1.0 / 3.0;
 
-// TODO(step-2): read a face the user painted to keep clean, a `Region`, as 1 (ADR 0409).
 // TODO(step-3): `core-supports` placement moves contacts off prominent faces (ADR 0409).
 
 /// How much each face of a mesh shows on the finished model, from 0 hidden in a fold to 1
@@ -32,6 +31,19 @@ pub struct Prominence {
 }
 
 impl Prominence {
+    /// What the user painted as showing, read as 1 and every other face as 0; read off the
+    /// shape where nothing is painted (ADR 0410).
+    pub fn shown(mesh: &Mesh, painted: Option<&Region>) -> Self {
+        match painted.filter(|painted| !painted.is_empty()) {
+            Some(painted) => Self {
+                per_face: (0..mesh.faces.len())
+                    .map(|face| if painted.contains(face) { 1.0 } else { 0.0 })
+                    .collect(),
+            },
+            None => Self::of(mesh),
+        }
+    }
+
     pub fn of(mesh: &Mesh) -> Self {
         let Some(bounds) = mesh.aabb() else {
             return Self::default();

@@ -17,7 +17,7 @@ set = { method = "wrap" }
 [[step]]
 do = "orient"
 when = "!turned"
-set = { goal = "least-peel", max_tilt_deg = 30 }
+set = { goal = "least-peel", max_tilt_deg = 30, clean_surface = true }
 choose = [{ when = "height_mm > 120", set = { goal = "shortest-print" } }]
 
 [[step]]

@@ -1,24 +1,38 @@
 use super::*;
 
-const SLACK: Noise = [0.0; OrientGoal::ALL.len()];
+const SLACK: Noise = Noise {
+    goals: [0.0; OrientGoal::ALL.len()],
+    seen: 0.0,
+};
 /// A twentieth of a millilitre of support, half a newton of pull, 0.3 mm of stack and half
 /// a contact on show, as a proof reads.
-const PROVEN: Noise = [0.05, 0.5, 0.3, 0.5];
+const PROVEN: Noise = Noise {
+    goals: [0.05, 0.5, 0.3],
+    seen: 0.5,
+};
 const GOAL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
 const SHORTEST: OrientPreset = OrientPreset::Goal(OrientGoal::ShortestPrint);
 const PEEL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
-const CLEAN: OrientPreset = OrientPreset::Goal(OrientGoal::CleanSurface);
+const FEWEST: OrientPreset = OrientPreset::Goal(OrientGoal::FewestSupports);
 const AUTO: OrientPreset = OrientPreset::Auto;
 const SUPPORT: usize = OrientGoal::FewestSupports.index();
 const PULL: usize = OrientGoal::LeastPeel.index();
 const STACK: usize = OrientGoal::ShortestPrint.index();
-const SEEN: usize = OrientGoal::CleanSurface.index();
+
+/// `preset` held to a clean surface.
+fn clean(preset: OrientPreset) -> Asked {
+    Asked {
+        preset,
+        clean_surface: true,
+    }
+}
 
 fn reading(fatal: f64, unheld: Option<f64>, primary: f64, tiebreak: f64) -> Readings {
     Readings {
         fatal,
         unheld,
         goals: [primary; OrientGoal::ALL.len()],
+        seen: 0.0,
         suction: 0.0,
         tearing: 0.0,
         roomless: 0.0,
@@ -195,18 +209,6 @@ fn the_shortest_print_takes_the_shortest_stack_whatever_its_support() {
     assert_eq!(rank(&readings, SHORTEST, &PROVEN)[0], 0);
 }
 
-#[test]
-fn a_clean_surface_takes_the_fewest_contacts_on_show_however_few_and_whatever_their_support() {
-    let readings = [spending(SEEN, 9.0, 0.5), spending(SEEN, 3.0, 2.0)];
-    assert_eq!(rank(&readings, CLEAN, &PROVEN)[0], 1, "3 on show beat 9");
-    let readings = [spending(SEEN, 0.2, 2.0), spending(SEEN, 0.9, 0.5)];
-    assert_eq!(
-        rank(&readings, CLEAN, &PROVEN)[0],
-        0,
-        "0.2 on show beat 0.9"
-    );
-}
-
 /// A sound candidate reading `support` ml, `pull` newtons and `stack` millimetres.
 fn weighing(support: f64, pull: f64, stack: f64) -> Readings {
     let mut r = reading(0.0, Some(0.0), 0.0, 0.0);
@@ -241,7 +243,7 @@ fn auto_weighs_shares_not_units() {
         r
     };
     let mut noise = PROVEN;
-    noise[SUPPORT] *= 1000.0;
+    noise.goals[SUPPORT] *= 1000.0;
     assert_eq!(
         rank(&[in_microlitres(face), in_microlitres(edge)], AUTO, &noise)[0],
         1,
@@ -305,18 +307,66 @@ fn auto_stays_where_the_model_stands_good_on_every_goal() {
     assert_eq!(rank(&[clearly, now], AUTO, &PROVEN)[0], 0);
 }
 
+/// A sound candidate with `seen` contacts on show and `support` ml of support.
 fn showing(seen: f64, support: f64) -> Readings {
-    let mut r = weighing(support, 5.0, 50.0);
-    r.goals[SEEN] = seen;
-    r
+    Readings {
+        seen,
+        ..weighing(support, 5.0, 50.0)
+    }
 }
 
 #[test]
-fn auto_weighs_nothing_of_what_shows() {
+fn unasked_what_shows_weighs_nothing() {
     let readings = [showing(9.0, 1.0), showing(0.0, 1.0)];
+    for preset in OrientPreset::all() {
+        assert_eq!(rank(&readings, preset, &PROVEN), [0, 1], "{preset:?}");
+    }
+}
+
+#[test]
+fn a_clean_surface_holds_the_preset_to_the_fewest_on_show_and_a_contact_over() {
+    let readings = [showing(9.0, 0.5), showing(3.0, 2.0), showing(4.2, 1.5)];
     assert_eq!(
-        rank(&readings, AUTO, &PROVEN),
-        [0, 1],
-        "alike on every balanced goal, the order stands whatever shows"
+        rank(&readings, clean(FEWEST), &PROVEN)[0],
+        2,
+        "4.2 on show is within 3 * 1.1 + 1, and takes less resin than 3"
     );
+    assert_eq!(rank(&readings, clean(AUTO), &PROVEN)[0], 2);
+}
+
+#[test]
+fn a_pose_showing_more_is_offered_only_for_far_more_of_what_the_preset_wins() {
+    let readings = [showing(0.0, 4.0), showing(6.0, 1.0), showing(6.0, 3.8)];
+    assert_eq!(
+        rulings(&readings, clean(FEWEST), &PROVEN),
+        [Ruling::Chosen, Ruling::Traded, Ruling::Shows],
+        "a quarter of the 4 ml is worth six contacts on show; 0.2 ml is not"
+    );
+    assert_eq!(
+        rulings(&readings, clean(AUTO), &PROVEN),
+        [Ruling::Chosen, Ruling::Traded, Ruling::Shows]
+    );
+}
+
+#[test]
+fn a_trade_another_trade_beats_on_both_is_not_offered() {
+    let readings = [showing(0.0, 4.0), showing(6.0, 1.0), showing(8.0, 1.2)];
+    assert_eq!(
+        rulings(&readings, clean(FEWEST), &PROVEN),
+        [Ruling::Chosen, Ruling::Traded, Ruling::Shows]
+    );
+}
+
+#[test]
+fn a_turn_off_what_shows_is_always_worth_it() {
+    let mut now = showing(6.0, 1.0);
+    now.standing = true;
+    let hidden = showing(0.0, 1.5);
+    for preset in OrientPreset::all() {
+        assert_eq!(
+            rank(&[now, hidden], clean(preset), &PROVEN)[0],
+            1,
+            "{preset:?}"
+        );
+    }
 }

@@ -1,5 +1,5 @@
 use core_analysis::{disc_pull_n, equivalent_disc_mm};
-use core_geometry::{Mesh, Prominence, Scalar, Vec3};
+use core_geometry::{Mesh, Prominence, Region, Scalar, Vec3};
 use rayon::prelude::*;
 
 use crate::cut::Cut;
@@ -29,7 +29,7 @@ pub struct Score {
     /// The same area times how high each face stands over the plate, cubic millimetres.
     pub under_mm3: Scalar,
     /// The same area weighted by how much each face shows, square millimetres: where the
-    /// scars land. Zero where the preset does not read it.
+    /// scars land. Zero unless a clean surface is asked for.
     pub seen_mm2: Scalar,
     /// Area lying on the plate, square millimetres, and zero for a model on supports.
     pub bottom_mm2: Scalar,
@@ -69,21 +69,10 @@ pub enum OrientGoal {
     LeastPeel,
     /// The shortest stack, model and lift, which sets the layers and the time.
     ShortestPrint,
-    /// The fewest contacts on surface that shows, open and detailed (ADR 0409).
-    CleanSurface,
 }
 
 impl OrientGoal {
-    pub const ALL: [Self; 4] = [
-        Self::FewestSupports,
-        Self::LeastPeel,
-        Self::ShortestPrint,
-        Self::CleanSurface,
-    ];
-
-    /// The goals auto weighs against each other, the first of [`Self::ALL`]: a clean
-    /// surface is asked for on its own (ADR 0409).
-    pub const BALANCED: [Self; 3] = [Self::FewestSupports, Self::LeastPeel, Self::ShortestPrint];
+    pub const ALL: [Self; 3] = [Self::FewestSupports, Self::LeastPeel, Self::ShortestPrint];
 
     /// Where this goal's reading sits among every goal's, the order of [`Self::ALL`].
     pub const fn index(self) -> usize {
@@ -95,7 +84,6 @@ impl OrientGoal {
             Self::FewestSupports => "Fewest supports",
             Self::LeastPeel => "Least peel force",
             Self::ShortestPrint => "Shortest print",
-            Self::CleanSurface => "Clean surface",
         }
     }
 
@@ -126,14 +114,6 @@ impl OrientGoal {
                 support: 0.3,
                 peel: 0.0,
                 height: 1.5,
-                ..base
-            },
-            // What shows first; the resin then decides between poses that hide as well.
-            Self::CleanSurface => Weights {
-                support: 0.0,
-                volume: 0.2,
-                peel: 0.0,
-                seen: 1.0,
                 ..base
             },
         }
@@ -179,13 +159,13 @@ impl OrientPreset {
         }
     }
 
-    /// The search's weights: the goal's own, or the mean of every balanced goal's.
+    /// The search's weights: the goal's own, or the mean of every goal's.
     fn weights(self) -> Weights {
         match self {
             Self::Goal(goal) => goal.weights(),
             Self::Auto => {
-                let count = OrientGoal::BALANCED.len() as Scalar;
-                let sum = OrientGoal::BALANCED
+                let count = OrientGoal::ALL.len() as Scalar;
+                let sum = OrientGoal::ALL
                     .map(OrientGoal::weights)
                     .into_iter()
                     .fold(Weights::default(), Weights::plus);
@@ -231,6 +211,10 @@ impl Weights {
     }
 }
 
+/// What showing weighs in the search beside any preset's own terms, asked a clean surface:
+/// as much as the fewest supports weighs its resin.
+const SEEN_WEIGHT: Scalar = 1.0;
+
 /// What a tip costs, in flat patches one contact holds: the whole model can hang off it,
 /// and `orient-lab` found the search leaning on tips at any less (ADR 0275).
 const TIP_PATCHES: Scalar = 3.0;
@@ -253,7 +237,7 @@ pub struct Faces<'a> {
     normals: Vec<Vec3>,
     areas: Vec<Scalar>,
     centroids: Vec<Vec3>,
-    /// How much each kept face shows, 0 to 1, read only for a preset that weighs it.
+    /// How much each kept face shows, 0 to 1, read only where a clean surface is asked for.
     shows: Option<Vec<Scalar>>,
     low_points: LowPoints,
     pub total_area_mm2: Scalar,
@@ -322,17 +306,30 @@ impl<'a> Faces<'a> {
     /// The same faces, ranked for the goal of `settings` and held the way it says: on
     /// supports or on the plate, past its overhang angle, by contacts its spacing apart.
     pub fn for_settings(self, settings: &OrientSettings) -> Self {
+        self.for_shown(settings, None)
+    }
+
+    /// The same, what shows read off `painted` where the user painted any, and off the
+    /// shape where not.
+    pub fn for_shown(self, settings: &OrientSettings, painted: Option<&Region>) -> Self {
         let shows = self.shows.or_else(|| {
-            let weighs = settings.preset.weights().seen > 0.0;
-            weighs.then(|| {
-                let prominence = Prominence::of(self.mesh);
+            settings.clean_surface.then(|| {
+                let prominence = Prominence::shown(self.mesh, painted);
                 let shown = |index: &u32| prominence.face(*index as usize);
                 self.indices.iter().map(shown).collect()
             })
         });
+        let seen = if settings.clean_surface {
+            SEEN_WEIGHT
+        } else {
+            0.0
+        };
         Self {
             shows,
-            weights: settings.preset.weights(),
+            weights: Weights {
+                seen,
+                ..settings.preset.weights()
+            },
             on_supports: settings.on_supports,
             lean: settings.max_overhang_deg.to_radians().sin(),
             held_from: (settings.max_overhang_deg - AT_THE_ANGLE_DEG)
@@ -465,24 +462,34 @@ impl<'a> Faces<'a> {
     }
 
     /// What `goal` is searched for, whatever these faces rank for: its term unweighted, or as
-    /// the proof reads it, newtons of pull, millimetres of stack, contacts on show.
+    /// the proof reads it, newtons of pull, millimetres of stack.
     pub fn reading(&self, goal: OrientGoal, score: &Score) -> Scalar {
         let terms = self.terms(score);
         match goal {
             OrientGoal::FewestSupports => terms.volume,
             OrientGoal::LeastPeel => peak_pull_n(score),
             OrientGoal::ShortestPrint => score.stack_mm(),
-            OrientGoal::CleanSurface => score.seen_mm2 / self.patch_mm2.max(Scalar::EPSILON),
         }
+    }
+
+    /// How many contacts land where the model shows, as the area under supports over one
+    /// contact's patch, each face weighed by how much it shows.
+    pub fn seen_contacts(&self, score: &Score) -> Scalar {
+        score.seen_mm2 / self.patch_mm2.max(Scalar::EPSILON)
     }
 
     fn total(&self, score: &Score) -> Scalar {
         self.weighed(self.weights, score)
     }
 
-    /// What `score` would total ranked for `preset`, whichever preset these faces weigh.
+    /// What `score` would total ranked for `preset`, whichever preset these faces weigh,
+    /// what shows weighed as they weigh it.
     pub(crate) fn total_for(&self, preset: OrientPreset, score: &Score) -> Scalar {
-        self.weighed(preset.weights(), score)
+        let weights = Weights {
+            seen: self.weights.seen,
+            ..preset.weights()
+        };
+        self.weighed(weights, score)
     }
 
     fn weighed(&self, w: Weights, score: &Score) -> Scalar {

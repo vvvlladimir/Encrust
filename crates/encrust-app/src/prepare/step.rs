@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use core_geometry::Scalar;
-use core_plate::OrientPreset;
+use core_plate::Asked;
 
 use super::check::Checking;
 use super::save::Saving;
@@ -65,9 +65,9 @@ impl Going {
             .collect();
         Ok(Some(match &batch.work {
             Work::Orient {
-                preset,
+                wanted,
                 max_tilt_deg,
-            } => Self::orient(ids, (*preset, *max_tilt_deg), doc, tools, machine)?,
+            } => Self::orient(ids, (*wanted, *max_tilt_deg), doc, tools, machine)?,
             Work::Repair(method) => Self::repair(ids, doc, *method),
             Work::Hollow(hollowed) => Self::hollow(ids, hollowed, scene, tools)?,
             Work::DrainAuto { .. } if hollow.is_empty() => {
@@ -108,7 +108,7 @@ impl Going {
     /// Turns `ids` to the orient step's preset and tilt, proved on the printer where it has one.
     fn orient(
         ids: &[ObjectId],
-        (preset, max_tilt_deg): (OrientPreset, Option<Scalar>),
+        (wanted, max_tilt_deg): (Asked, Option<Scalar>),
         doc: &Doc,
         tools: &mut Tools,
         machine: &Machine,
@@ -119,7 +119,7 @@ impl Going {
             .printer
             .as_ref()
             .map(|printer| (printer, &slicing.material));
-        let asked = (preset, max_tilt_deg, plans);
+        let asked = (wanted, max_tilt_deg, plans);
         Ok(Self::Orient(
             tools.orient.start_on(&doc.scene, ids, asked, proof)?,
         ))

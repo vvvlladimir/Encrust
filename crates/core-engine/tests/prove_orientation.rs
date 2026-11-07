@@ -494,12 +494,19 @@ fn head_facing_x() -> Mesh {
 }
 
 #[test]
-fn a_clean_surface_prints_the_detailed_side_up_and_its_contacts_on_the_smooth_one() {
+fn a_clean_surface_prints_the_detailed_side_away_from_the_supports_and_its_contacts_on_the_smooth_one()
+ {
     let bench = Bench::new();
-    let settings = bench.settings(OrientGoal::CleanSurface);
+    let settings = OrientSettings {
+        clean_surface: true,
+        ..bench.settings(OrientGoal::FewestSupports)
+    };
     let (chosen, printout) = best(&head_facing_x(), &settings, &bench.trial());
     let face = chosen.oriented.rotation * Vec3::X;
-    assert!(face.z > 0.5, "the detailed side looks up, got {face}");
+    assert!(
+        face.z > -0.1,
+        "the detailed side does not look down at the supports, got {face}"
+    );
     // A contact on the smooth side of a ball counts a third: open, and no detail.
     let contacts = printout.contacts as f64;
     assert!(

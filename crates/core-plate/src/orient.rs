@@ -48,6 +48,9 @@ pub struct OrientSettings {
     pub sections: usize,
     /// What the orientation is searched for: one goal, or all of them balanced.
     pub preset: OrientPreset,
+    /// Whether the preset is held to the poses with the fewest contacts where the model
+    /// shows, beside whatever it is searched for (ADR 0410).
+    pub clean_surface: bool,
     /// How far the model may turn from the way it stands, degrees, or `None` for any
     /// way at all.
     pub max_tilt_deg: Option<Scalar>,
@@ -73,6 +76,7 @@ impl Default for OrientSettings {
             shortlist: 8,
             sections: 24,
             preset: OrientPreset::default(),
+            clean_surface: false,
             max_tilt_deg: None,
             down_now: Vec3::NEG_Z,
             build_volume_mm: None,
@@ -130,7 +134,7 @@ pub fn finalists(
     let mesh = printed.outer;
     let faces = Faces::of(mesh)
         .ok_or(PlateError::NothingToOrient)?
-        .for_settings(settings);
+        .for_shown(settings, printed.shown);
     let now = settings.down_now.try_normalize().unwrap_or(Vec3::NEG_Z);
     let kept = kept_poses(printed, settings, now);
     let envelope = settings
@@ -141,7 +145,7 @@ pub fn finalists(
     let mut candidates = within_tilt(directions(mesh, settings.samples), now, settings);
     candidates.extend(&kept[1..]);
     let ranked = first_pass(&faces, settings, &candidates, envelope);
-    let shortlisted = shortlist(&ranked, settings.shortlist, kept);
+    let shortlisted = shortlist(&ranked, settings, kept);
     let cuts = Pieces::start(watch, Phase::Looking, shortlisted.len())?;
     let mut measured = measure(printed, &faces, settings, shortlisted, (envelope, &cuts))?;
     measured.extend(seated(printed, &faces, settings, now, envelope)?);
@@ -238,9 +242,7 @@ fn measure(
 fn apart_deg(preset: OrientPreset) -> Scalar {
     match preset {
         OrientPreset::Goal(OrientGoal::FewestSupports) => 20.0,
-        OrientPreset::Goal(
-            OrientGoal::LeastPeel | OrientGoal::ShortestPrint | OrientGoal::CleanSurface,
-        )
+        OrientPreset::Goal(OrientGoal::LeastPeel | OrientGoal::ShortestPrint)
         | OrientPreset::Auto => 10.0,
     }
 }
@@ -358,14 +360,17 @@ type Reading = fn(&Score) -> Scalar;
 const BEST_OF_EACH: usize = 2;
 
 /// The candidates the second pass cuts: `kept` — the way the model stands, which a turn
-/// has to beat, its drain holes pointed down and its leans — then the best `count` by
-/// total and the best few on each reading alone, any that fit the build volume first.
-fn shortlist(ranked: &[First], count: usize, kept: Vec<Vec3>) -> Vec<Vec3> {
-    let readings: [(Reading, usize); 4] = [
-        (|score| score.total, count.max(1)),
+/// has to beat, its drain holes pointed down and its leans — then the best of the
+/// shortlist by total and the best few on each reading alone, any that fit the build
+/// volume first; what shows is one of them where a clean surface is asked for.
+fn shortlist(ranked: &[First], settings: &OrientSettings, kept: Vec<Vec3>) -> Vec<Vec3> {
+    let seen = usize::from(settings.clean_surface) * BEST_OF_EACH;
+    let readings: [(Reading, usize); 5] = [
+        (|score| score.total, settings.shortlist.max(1)),
         (|score| score.overhang_mm2, BEST_OF_EACH),
         (|score| score.shadow_mm2, BEST_OF_EACH),
         (|score| score.stack_mm(), BEST_OF_EACH),
+        (|score| score.seen_mm2, seen),
     ];
     let mut chosen = kept;
     for (reading, take) in readings {

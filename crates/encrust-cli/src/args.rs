@@ -191,6 +191,11 @@ pub struct TransformArgs {
     #[arg(long, value_enum, default_value_t = Goal::FewestSupports, requires = "orient")]
     pub orient_goal: Goal,
 
+    /// Hold --orient to the poses with the fewest contacts where the model shows, read off
+    /// its shape.
+    #[arg(long, requires = "orient")]
+    pub clean_surface: bool,
+
     /// How far --orient may turn the model from the way its file stands it, degrees.
     #[arg(long, value_name = "DEG", requires = "orient")]
     pub max_tilt: Option<Scalar>,
@@ -235,8 +240,6 @@ pub enum Goal {
     LeastPeel,
     /// The shortest stack.
     ShortestPrint,
-    /// The fewest contacts where the model shows, open and detailed.
-    CleanSurface,
     /// Every goal at once, each giving up as even a share of its best as it can.
     Auto,
 }
@@ -247,7 +250,6 @@ impl From<Goal> for OrientPreset {
             Goal::FewestSupports => OrientGoal::FewestSupports.into(),
             Goal::LeastPeel => OrientGoal::LeastPeel.into(),
             Goal::ShortestPrint => OrientGoal::ShortestPrint.into(),
-            Goal::CleanSurface => OrientGoal::CleanSurface.into(),
             Goal::Auto => Self::Auto,
         }
     }
