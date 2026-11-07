@@ -1,4 +1,6 @@
-use core_geometry::{Mesh, Region, Vec3};
+use std::borrow::Cow;
+
+use core_geometry::{Mesh, Prominence, Region, Vec3};
 
 /// A model as it prints, in its own space: what an orientation is judged on once the
 /// model has been hollowed or drilled.
@@ -15,6 +17,9 @@ pub struct Printed<'a> {
     pub vents: &'a [Vec3],
     /// The faces of `outer` the user painted as what shows, where any are painted.
     pub shown: Option<&'a Region>,
+    /// How much each face of `outer` shows, where it is read already off `shown` and the
+    /// shape: the search and the proof then take it from here rather than read it again.
+    pub shows: Option<&'a Prominence>,
 }
 
 impl<'a> Printed<'a> {
@@ -26,7 +31,17 @@ impl<'a> Printed<'a> {
             cuts: None,
             vents: &[],
             shown: None,
+            shows: None,
         }
+    }
+
+    /// How much each face of `outer` shows: [`Self::shows`] where it is given, and read now
+    /// off what is painted and the shape where not.
+    pub fn prominence(&self) -> Cow<'a, Prominence> {
+        self.shows.map_or_else(
+            || Cow::Owned(Prominence::shown(self.outer, self.shown)),
+            Cow::Borrowed,
+        )
     }
 }
 

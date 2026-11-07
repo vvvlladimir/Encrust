@@ -321,6 +321,7 @@ fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Resu
         cuts: cuts.as_deref(),
         vents: &vents,
         shown: Some(&task.shown),
+        shows: None,
     };
     let poses = choose(
         &printed,

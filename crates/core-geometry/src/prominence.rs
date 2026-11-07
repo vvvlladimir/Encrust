@@ -44,6 +44,7 @@ impl Prominence {
         }
     }
 
+    /// What shows of `mesh` read off its shape alone: how open each face is times how detailed.
     pub fn of(mesh: &Mesh) -> Self {
         let Some(bounds) = mesh.aabb() else {
             return Self::default();

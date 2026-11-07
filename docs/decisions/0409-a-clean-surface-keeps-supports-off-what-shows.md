@@ -61,8 +61,8 @@ back, under folds and on smooth areas. Clean surface keeps the face up on the 20
 fixture, where the fewest supports lays it face down. Every other preset, auto included,
 is unchanged.
 
-The prominence costs about 0.3 s a million triangles, once for the search and once for
-the proof. In `orient-lab` it costs that again for every pose.
+The prominence costs about 0.3 s a million triangles, read once a run and carried on
+`Printed` to the search and the proof; a hollow model's proof reads its shell's again.
 
 The weights, the third, and the enough of one contact are set by eye, not by a corpus.
 They are `orient-lab`'s to tune on figures. Reopen if a figure on the corpus keeps

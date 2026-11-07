@@ -82,9 +82,7 @@ fn setting_value(setting: &Setting) -> Value {
         Setting::Points(points) => Value::Array(
             points
                 .iter()
-                .map(|point| {
-                    Value::Array(point.iter().map(|c| float(*c)).collect())
-                })
+                .map(|point| Value::Array(point.iter().map(|c| float(*c)).collect()))
                 .collect(),
         ),
         Setting::Expr(condition) => Value::String(format!("= {}", condition.text())),

@@ -4,6 +4,8 @@
 mod islands;
 mod shows;
 
+pub use shows::Shows;
+
 use std::sync::Arc;
 
 use core_analysis::{Measured, RiskKind};
@@ -26,7 +28,6 @@ use crate::plate::{Model, Plate};
 use crate::run::Run;
 use crate::stand::{SupportPlan, ToStand, stand_seated, stand_under};
 use crate::trial::islands::islands_born;
-use crate::trial::shows::Shows;
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
 /// of a million faces, more for a lighter one, which prints as many in the same time, but
@@ -96,7 +97,7 @@ pub struct Printout {
     /// Contacts on faces that look up in the model's own file.
     pub top_contacts: usize,
     /// Contacts each weighed by how much the model shows under it, one on open detail
-    /// counting one; zero where a proof is not asked for a clean surface.
+    /// counting one; zero where neither a clean surface nor [`print_out`] asks what shows.
     pub seen_contacts: f64,
     pub layers: usize,
     /// How tall the stack stands, model and supports, millimetres: what the time follows.
@@ -177,6 +178,13 @@ pub fn orient_for_print(
     trial: Option<&Trial>,
     watch: Watch<'_>,
 ) -> Result<Vec<Choice>, EngineError> {
+    // Read once here, what shows serves the search and the proof alike.
+    let read = (settings.clean_surface && printed.shows.is_none())
+        .then(|| printed.prominence().into_owned());
+    let printed = &Printed {
+        shows: printed.shows.or(read.as_ref()),
+        ..*printed
+    };
     let found = finalists(printed, settings, usize::MAX, watch)?;
     let Some(trial) = trial else {
         return Ok(found
@@ -328,21 +336,15 @@ fn judged(
 }
 
 /// Stands the model as `rotation` turns it mid-plate, lifted or `on_plate` with supports only
-/// under what hangs, and reads its stack and how much shows where its supports touch it.
+/// under what hangs, and reads its stack and, given `shows`, how much shows under its contacts.
 pub fn print_out(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
+    shows: Option<&Shows>,
 ) -> Result<Printout, EngineError> {
-    let shows = Shows::of(printed);
-    print_held(
-        printed,
-        rotation,
-        on_plate,
-        trial,
-        (None, None, Some(&shows)),
-    )
+    print_held(printed, rotation, on_plate, trial, (None, None, shows))
 }
 
 /// The same cured as coarse as `trial`, supports placed and islands counted as `print` prints;

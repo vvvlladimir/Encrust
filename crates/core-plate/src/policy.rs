@@ -643,6 +643,10 @@ impl Ranking {
                 compare(&keys[turned], &keys[now]).is_ge()
                     || !rule.worth_turning(&readings[turned], &readings[now])
             });
+        if let (true, Some(position)) = (stayed, standing) {
+            let now = order.remove(position);
+            order.insert(0, now);
+        }
         let traded = rule.ground().1.clean.as_ref().map_or_else(
             || vec![false; readings.len()],
             |clean| {
@@ -657,10 +661,6 @@ impl Ranking {
                 )
             },
         );
-        if let (true, Some(position)) = (stayed, standing) {
-            let now = order.remove(position);
-            order.insert(0, now);
-        }
         Some(Self {
             rule,
             order,

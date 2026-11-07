@@ -132,9 +132,10 @@ pub fn finalists(
     watch: Watch<'_>,
 ) -> Result<Vec<Oriented>, PlateError> {
     let mesh = printed.outer;
+    let shows = settings.clean_surface.then(|| printed.prominence());
     let faces = Faces::of(mesh)
         .ok_or(PlateError::NothingToOrient)?
-        .for_shown(settings, printed.shown);
+        .for_shown(settings, shows.as_deref());
     let now = settings.down_now.try_normalize().unwrap_or(Vec3::NEG_Z);
     let kept = kept_poses(printed, settings, now);
     let envelope = settings

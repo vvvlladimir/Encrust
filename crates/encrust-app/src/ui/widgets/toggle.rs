@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use egui::{Align2, Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
+use egui::{Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 
 use super::focus_ring;
 use crate::ui::theme;
@@ -14,26 +14,15 @@ const KNOB: f32 = 12.0;
 /// A labelled switch filling one row: what it turns on, and the state it is in. A
 /// disabled one still shows its state, dimmed, rather than disappearing.
 pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
-    let colors = theme::colors();
     let size = vec2(ui.available_width(), theme::ROW_H);
     let (rect, response) = flip(ui, size, on, label);
-    let ink = if ui.is_enabled() {
-        colors.text_mid
-    } else {
-        colors.text_low
-    };
-    ui.painter().text(
-        pos2(rect.left(), rect.center().y),
-        Align2::LEFT_CENTER,
-        label,
-        theme::label(),
-        ink,
-    );
     let track = Rect::from_min_size(
         pos2(rect.right() - TRACK.x, rect.center().y - TRACK.y / 2.0),
         TRACK,
     );
     paint_track(ui, &response, track, *on);
+    let room = rect.with_max_x(track.left() - theme::ITEM_GAP);
+    paint_label(ui, &response, room, label);
     response
 }
 
@@ -45,12 +34,6 @@ pub fn switch_with_toggle(
     label: &str,
     (glyph, tooltip, toggled): (&str, &str, bool),
 ) -> bool {
-    let colors = theme::colors();
-    let ink = if ui.is_enabled() {
-        colors.text_mid
-    } else {
-        colors.text_low
-    };
     let size = vec2(ui.available_width(), theme::ROW_H);
     ui.allocate_ui_with_layout(
         size,
@@ -62,18 +45,45 @@ pub fn switch_with_toggle(
                 ui.add_space(theme::ITEM_GAP);
                 super::icon_toggle(ui, glyph, tooltip, toggled).clicked()
             };
-            let rest = ui.available_rect_before_wrap();
-            ui.painter().text(
-                pos2(rest.left(), rest.center().y),
-                Align2::LEFT_CENTER,
-                label,
-                theme::label(),
-                ink,
-            );
+            let room = ui
+                .available_rect_before_wrap()
+                .with_max_x(ui.cursor().right() - theme::ITEM_GAP);
+            let hover = ui.interact(room, response.id.with("label"), Sense::hover());
+            paint_label(ui, &hover, room, label);
             clicked
         },
     )
     .inner
+}
+
+/// A switch's label in `room`, cut with an ellipsis where a language runs it longer, and
+/// then read whole on `response`'s tooltip.
+fn paint_label(ui: &Ui, response: &Response, room: Rect, label: &str) {
+    let colors = theme::colors();
+    let ink = if ui.is_enabled() {
+        colors.text_mid
+    } else {
+        colors.text_low
+    };
+    let galley = fitted(ui.painter(), label, room.width(), ink);
+    let elided = galley.elided;
+    let at = pos2(room.left(), room.center().y - galley.size().y / 2.0);
+    ui.painter().galley(at, galley, ink);
+    if elided {
+        response.clone().on_hover_text(label);
+    }
+}
+
+/// `label` on one line, cut with an ellipsis to `width_px`.
+fn fitted(
+    painter: &egui::Painter,
+    label: &str,
+    width_px: f32,
+    ink: egui::Color32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(label.to_owned(), theme::label(), ink);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(width_px.max(0.0));
+    painter.layout_job(job)
 }
 
 /// The track alone, for a heading that already names what it turns on.
@@ -262,4 +272,28 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
 /// A label in a tone of the palette, for a note that is not a control.
 pub fn tone(ui: &mut Ui, text: &str, color: egui::Color32) {
     ui.label(RichText::new(text).font(theme::small()).color(color));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_switch_label_longer_than_its_room_is_cut_and_a_short_one_kept_whole() {
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            theme::apply(ui.ctx());
+            let ink = theme::colors().text_mid;
+            let long = fitted(ui.painter(), "Чистая поверхность без опор", 60.0, ink);
+            assert!(long.elided, "a label past 60 px is cut");
+            assert!(
+                long.size().x <= 60.0 + 0.5,
+                "the cut label fits, got {}",
+                long.size().x
+            );
+            let short = fitted(ui.painter(), "On", 60.0, ink);
+            assert!(!short.elided, "a label inside its room is kept whole");
+        });
+        output.textures_delta.clear();
+    }
 }

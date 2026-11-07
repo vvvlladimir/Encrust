@@ -1,5 +1,5 @@
 use super::*;
-use core_geometry::Region;
+use core_geometry::{Prominence, Region};
 
 /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
 fn cuboid(size: Vec3) -> Mesh {
@@ -453,5 +453,32 @@ fn a_clean_surface_turns_the_painted_side_away_from_the_supports_whatever_the_de
     assert!(
         painted_side.z > 0.5,
         "the painted side looks up, away from the supports, got {painted_side}"
+    );
+}
+
+#[test]
+fn a_clean_surface_takes_what_shows_from_the_printed_model_where_it_is_read_already() {
+    let mesh = head_facing_x();
+    let painted: Region = (0..mesh.faces.len())
+        .filter(|face| {
+            mesh.triangle(*face)
+                .is_some_and(|t| (t.a.x + t.b.x + t.c.x) / 3.0 < -5.0)
+        })
+        .collect();
+    let shows = Prominence::shown(&mesh, Some(&painted));
+    let printed = Printed {
+        shows: Some(&shows),
+        ..Printed::solid(&mesh)
+    };
+    let settings = OrientSettings {
+        clean_surface: true,
+        on_supports: true,
+        ..OrientSettings::default()
+    };
+    let found = orient_printed(&printed, &settings).expect("a head can be oriented");
+    let read_side = placed(found.rotation, Vec3::NEG_X);
+    assert!(
+        read_side.z > 0.5,
+        "the side read as showing looks up, not the detailed one, got {read_side}"
     );
 }

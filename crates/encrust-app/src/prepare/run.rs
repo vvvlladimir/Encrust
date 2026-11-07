@@ -130,7 +130,10 @@ impl Run {
             .filter_map(Metric::from_name)
             .collect();
         let ids = self.ids.clone();
-        if read.iter().any(|metric| metric.known_after() == [StepKind::Check]) {
+        if read
+            .iter()
+            .any(|metric| metric.known_after() == [StepKind::Check])
+        {
             let check = Work::Check { attempt: 0 };
             self.queue.push_back(Batch::of(Work::Scan, ids.clone()));
             self.queue.push_back(Batch::of(check, ids));
@@ -188,10 +191,6 @@ impl Run {
                 self.take_off_earlier(&mut doc.scene, &batch.ids);
                 None
             }
-            Work::DrainAuto { .. } | Work::Scan => {
-                self.note_solid(&doc.scene, &batch.ids);
-                None
-            }
             _ => None,
         }
     }
@@ -208,18 +207,6 @@ impl Run {
         *status = said;
         self.batch_ended();
         None
-    }
-
-    /// No pocket to trap resin in a model with no cavity: `trapped` is nought.
-    fn note_solid(&mut self, scene: &Scene, ids: &[ObjectId]) {
-        let solid: Vec<ObjectId> = scene
-            .named(ids)
-            .filter(|object| !object.hollow.is_hollow())
-            .map(|object| object.id)
-            .collect();
-        for id in solid {
-            self.note(id, Metric::Trapped, 0.0);
-        }
     }
 
     fn begin(&mut self, batch: Batch, going: Going, doc: &Doc) {

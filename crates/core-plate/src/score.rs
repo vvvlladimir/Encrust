@@ -1,5 +1,7 @@
+use std::borrow::Cow;
+
 use core_analysis::{disc_pull_n, equivalent_disc_mm};
-use core_geometry::{Mesh, Prominence, Region, Scalar, Vec3};
+use core_geometry::{Mesh, Prominence, Scalar, Vec3};
 use rayon::prelude::*;
 
 use crate::cut::Cut;
@@ -309,15 +311,14 @@ impl<'a> Faces<'a> {
         self.for_shown(settings, None)
     }
 
-    /// The same, what shows read off `painted` where the user painted any, and off the
-    /// shape where not.
-    pub fn for_shown(self, settings: &OrientSettings, painted: Option<&Region>) -> Self {
-        let shows = self.shows.or_else(|| {
-            settings.clean_surface.then(|| {
-                let prominence = Prominence::shown(self.mesh, painted);
-                let shown = |index: &u32| prominence.face(*index as usize);
-                self.indices.iter().map(shown).collect()
-            })
+    /// The same, how much each face shows taken from `shows` where it is read already, and
+    /// read off the shape where not.
+    pub fn for_shown(self, settings: &OrientSettings, shows: Option<&Prominence>) -> Self {
+        let shows = settings.clean_surface.then(|| {
+            let prominence =
+                shows.map_or_else(|| Cow::Owned(Prominence::of(self.mesh)), Cow::Borrowed);
+            let shown = |index: &u32| prominence.face(*index as usize);
+            self.indices.iter().map(shown).collect()
         });
         let seen = if settings.clean_surface {
             SEEN_WEIGHT

@@ -158,7 +158,8 @@ fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
     let mesh = boxes(&[(Vec3::ZERO, Vec3::new(10.0, 10.0, 5.0))]);
     let printed = Printed::solid(&mesh);
 
-    let bare = print_out(&printed, Quat::IDENTITY, true, &bench.trial()).expect("a box prints");
+    let bare =
+        print_out(&printed, Quat::IDENTITY, true, &bench.trial(), None).expect("a box prints");
     assert_eq!((bare.contacts, bare.hanging, bare.islands), (0, 0, 0));
     // 5 mm at the default resin's 0.05 mm a layer.
     assert_eq!(bare.layers, 100);
@@ -168,7 +169,8 @@ fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
         bare.stack_mm
     );
 
-    let lifted = print_out(&printed, Quat::IDENTITY, false, &bench.trial()).expect("a box prints");
+    let lifted =
+        print_out(&printed, Quat::IDENTITY, false, &bench.trial(), None).expect("a box prints");
     assert!(
         lifted.contacts > 0,
         "lifted off the plate, its underside is held"
@@ -187,8 +189,14 @@ fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
 fn a_cap_hanging_over_its_stem_on_the_plate_is_held_from_the_plate() {
     let bench = Bench::new();
     let mesh = mushroom();
-    let as_drawn = print_out(&Printed::solid(&mesh), Quat::IDENTITY, true, &bench.trial())
-        .expect("a mushroom prints");
+    let as_drawn = print_out(
+        &Printed::solid(&mesh),
+        Quat::IDENTITY,
+        true,
+        &bench.trial(),
+        None,
+    )
+    .expect("a mushroom prints");
     assert!(as_drawn.contacts > 0, "the cap's underside is held");
     assert_eq!(
         as_drawn.hanging, 0,
@@ -259,8 +267,9 @@ fn a_table_stays_on_the_plate_held_only_under_its_top() {
     let printed = Printed::solid(&mesh);
 
     let lifted =
-        print_out(&printed, Quat::IDENTITY, false, &bench.trial()).expect("a table prints");
-    let seated = print_out(&printed, Quat::IDENTITY, true, &bench.trial()).expect("a table prints");
+        print_out(&printed, Quat::IDENTITY, false, &bench.trial(), None).expect("a table prints");
+    let seated =
+        print_out(&printed, Quat::IDENTITY, true, &bench.trial(), None).expect("a table prints");
     assert!(seated.contacts > 0, "the top hangs round the leg");
     assert!(
         seated.supports_ml < lifted.supports_ml,
@@ -339,8 +348,14 @@ fn a_trial_stands_the_contacts_and_supports_the_print_does() {
         .map(|tried| tried.proven)
         .filter(|pose| !pose.oriented.on_plate)
     {
-        let print = print_out(&printed, pose.oriented.rotation, false, &bench.trial())
-            .expect("a ball prints");
+        let print = print_out(
+            &printed,
+            pose.oriented.rotation,
+            false,
+            &bench.trial(),
+            None,
+        )
+        .expect("a ball prints");
         assert_eq!(
             (pose.printout.contacts, pose.printout.hanging),
             (print.contacts, print.hanging),
@@ -377,7 +392,7 @@ fn a_trial_builds_each_support_to_the_shape_an_automatic_profile_sizes_it_to() {
             support,
             ..bench.trial()
         };
-        print_out(&printed, Quat::IDENTITY, false, &trial).expect("a mushroom prints")
+        print_out(&printed, Quat::IDENTITY, false, &trial, None).expect("a mushroom prints")
     };
 
     let (sized, lightest) = (print(&sized), print(&lightest));

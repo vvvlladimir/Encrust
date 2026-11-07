@@ -54,7 +54,7 @@ fn smoothed_at(level: &Grid, at: Vec3) -> Scalar {
     curvature_mm / area_mm2.max(Scalar::EPSILON)
 }
 
-/// One level's differences over what its top hundredth reach, or over `faint` where that is
+/// One level's differences over what its top twentieth reach, or over `faint` where that is
 /// larger, so that a smooth model's noise is not stretched to full detail.
 fn normalised(difference: &[Scalar], faint: Scalar) -> Vec<Scalar> {
     let full = top_share(difference).max(faint);

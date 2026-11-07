@@ -4,8 +4,8 @@
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use core_engine::{Printout, Trial, Tried, print_out, prove};
-use core_geometry::{Mesh, Quat, Vec3, sphere_directions};
+use core_engine::{Printout, Shows, Trial, Tried, print_out, prove};
+use core_geometry::{Mesh, Prominence, Quat, Vec3, sphere_directions};
 use core_plate::{
     OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Ruling, Watch, finalists,
     flat_faces, rotation_for,
@@ -154,13 +154,19 @@ impl Bench<'_> {
     /// Every pose of `mesh`: by hand, each preset's choice, `known` from runs before, then
     /// `oracle` directions spread evenly over the sphere.
     pub fn poses(&self, mesh: &Mesh, oracle: usize, known: &[Known]) -> Result<Vec<Pose>> {
-        let printed = Printed::solid(mesh);
+        let prominence = Prominence::of(mesh);
+        let printed = Printed {
+            shows: Some(&prominence),
+            ..Printed::solid(mesh)
+        };
+        let shows = Shows::of(&printed);
+        let model = (&printed, &shows);
         let mut poses = Vec::new();
         for (name, rotation, on_plate) in by_hand(mesh) {
-            poses.push(self.measure(&printed, name, Source::Hand, rotation, on_plate)?);
+            poses.push(self.measure(model, name, Source::Hand, rotation, on_plate)?);
         }
         for preset in OrientPreset::all() {
-            poses.push(self.chosen(&printed, preset)?);
+            poses.push(self.chosen(model, preset)?);
         }
         for (name, rotation, on_plate) in known {
             let measured = |pose: &Pose| {
@@ -168,20 +174,20 @@ impl Bench<'_> {
             };
             if !poses.iter().any(measured) {
                 let name = format!("known: {name}");
-                poses.push(self.measure(&printed, name, Source::Known, *rotation, *on_plate)?);
+                poses.push(self.measure(model, name, Source::Known, *rotation, *on_plate)?);
             }
         }
         for (at, down) in sphere_directions(oracle).into_iter().enumerate() {
             let name = format!("oracle {at}");
             let rotation = rotation_for(down);
-            poses.push(self.measure(&printed, name, Source::Oracle, rotation, false)?);
+            poses.push(self.measure(model, name, Source::Oracle, rotation, false)?);
         }
         Ok(poses)
     }
 
     /// What `preset` chooses, the way the window asks it, judged on the stack it prints at
     /// full resolution: the proof itself ranks on a coarse one.
-    fn chosen(&self, printed: &Printed, preset: OrientPreset) -> Result<Pose> {
+    fn chosen(&self, (printed, shows): (&Printed, &Shows), preset: OrientPreset) -> Result<Pose> {
         let settings = OrientSettings {
             preset,
             build_volume_mm: Some({
@@ -202,7 +208,7 @@ impl Bench<'_> {
             .oriented;
         let name = format!("goal: {}", preset.label());
         let mut pose = self.measure(
-            printed,
+            (printed, shows),
             name,
             Source::Goal(preset),
             chosen.rotation,
@@ -214,7 +220,7 @@ impl Bench<'_> {
             proof_s: seconds - search_s,
             finalists: tried
                 .iter()
-                .map(|tried| self.finalist(printed, tried, preset, &found))
+                .map(|tried| self.finalist((printed, shows), tried, preset, &found))
                 .collect::<Result<_>>()?,
         };
         Ok(pose)
@@ -222,7 +228,7 @@ impl Bench<'_> {
 
     fn finalist(
         &self,
-        printed: &Printed,
+        (printed, shows): (&Printed, &Shows),
         tried: &Tried,
         preset: OrientPreset,
         found: &[Oriented],
@@ -237,7 +243,13 @@ impl Bench<'_> {
             .unwrap_or(usize::MAX);
         if self.full_finalists == Some(preset) {
             let oriented = tried.proven.oriented;
-            let printout = print_out(printed, oriented.rotation, oriented.on_plate, &self.trial)?;
+            let printout = print_out(
+                printed,
+                oriented.rotation,
+                oriented.on_plate,
+                &self.trial,
+                Some(shows),
+            )?;
             finalist.full = Some(Full::of(&printout, preset));
         }
         Ok(finalist)
@@ -245,14 +257,14 @@ impl Bench<'_> {
 
     fn measure(
         &self,
-        printed: &Printed,
+        (printed, shows): (&Printed, &Shows),
         name: impl Into<String>,
         source: Source,
         rotation: Quat,
         on_plate: bool,
     ) -> Result<Pose> {
         let started = Instant::now();
-        let printout = print_out(printed, rotation, on_plate, &self.trial)?;
+        let printout = print_out(printed, rotation, on_plate, &self.trial, Some(shows))?;
         let lift_mm = if on_plate {
             0.0
         } else {

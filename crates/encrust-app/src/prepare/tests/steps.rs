@@ -96,7 +96,11 @@ fn a_gate_held_by_islands_decides_again_on_the_plate_mended_by_hand() {
     bench.frame();
     bench.resume();
     bench.run_to_end();
-    assert_eq!(bench.waits(), None, "set down on the plate, the cube hangs from nothing");
+    assert_eq!(
+        bench.waits(),
+        None,
+        "set down on the plate, the cube hangs from nothing"
+    );
     let said = Status::Info(tr!("prepare-done", count = 2));
     assert_eq!(bench.machine.status, said);
 }

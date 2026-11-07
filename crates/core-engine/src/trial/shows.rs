@@ -1,25 +1,29 @@
+use std::borrow::Cow;
+
 use core_geometry::{Bvh, Prominence, Quat, Vec3};
 use core_plate::Printed;
 
 /// How much a model shows where a support touches it, read once on the model as its file
 /// has it and asked of every pose printed (ADR 0409, 0410).
-pub(super) struct Shows {
+pub struct Shows<'a> {
     bvh: Bvh,
-    prominence: Prominence,
+    prominence: Cow<'a, Prominence>,
 }
 
-impl Shows {
+impl<'a> Shows<'a> {
     /// What the user painted on the outer surface, where any is painted; otherwise read off
     /// the surface the supports touch, the shell's where it is hollowed.
-    pub fn of(printed: &Printed) -> Self {
-        let painted = printed.shown.filter(|painted| !painted.is_empty());
-        let model = match painted {
-            Some(_) => printed.outer,
-            None => printed.shell.unwrap_or(printed.outer),
-        };
-        Self {
-            bvh: Bvh::build(model),
-            prominence: Prominence::shown(model, painted),
+    pub fn of(printed: &Printed<'a>) -> Self {
+        let painted = printed.shown.is_some_and(|painted| !painted.is_empty());
+        match printed.shell.filter(|_| !painted) {
+            Some(shell) => Self {
+                bvh: Bvh::build(shell),
+                prominence: Cow::Owned(Prominence::of(shell)),
+            },
+            None => Self {
+                bvh: Bvh::build(printed.outer),
+                prominence: printed.prominence(),
+            },
         }
     }
 

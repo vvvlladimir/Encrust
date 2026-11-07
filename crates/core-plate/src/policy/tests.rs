@@ -370,3 +370,16 @@ fn a_turn_off_what_shows_is_always_worth_it() {
         );
     }
 }
+
+#[test]
+fn a_trade_is_weighed_against_the_pose_kept_where_the_model_stays() {
+    // Standing at 1.09 ml is in the band over 1.0 ml, so it stays; 0.66 ml costs
+    // ln(1.16 / 1.59) = -0.32 against it, past ln(4 / 3), but only -0.26 against 1.0 ml.
+    let mut now = showing(0.0, 1.09);
+    now.standing = true;
+    let readings = [showing(0.0, 1.0), now, showing(6.0, 0.66)];
+    assert_eq!(
+        rulings(&readings, clean(AUTO), &PROVEN),
+        [Ruling::NotWorthTurning, Ruling::Stayed, Ruling::Traded]
+    );
+}
