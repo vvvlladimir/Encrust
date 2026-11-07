@@ -2,6 +2,9 @@
 //! way a finished plate is. See `docs/design/orientation.md`.
 
 mod islands;
+mod shows;
+
+pub use shows::Shows;
 
 use std::sync::Arc;
 
@@ -13,8 +16,8 @@ use core_geometry::{
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{
-    LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Phase, Pieces, Printed, Readings,
-    Ruling, Watch, finalists, rank, rulings,
+    Asked, LOOKS_UP, Noise, OrientGoal, OrientPreset, OrientSettings, Oriented, Phase, Pieces,
+    Printed, Readings, Ruling, Watch, finalists, rank, rulings,
 };
 use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
@@ -93,6 +96,9 @@ pub struct Printout {
     pub hanging: usize,
     /// Contacts on faces that look up in the model's own file.
     pub top_contacts: usize,
+    /// Contacts each weighed by how much the model shows under it, one on open detail
+    /// counting one; zero where neither a clean surface nor [`print_out`] asks what shows.
+    pub seen_contacts: f64,
     pub layers: usize,
     /// How tall the stack stands, model and supports, millimetres: what the time follows.
     pub stack_mm: f32,
@@ -135,6 +141,9 @@ impl Printout {
             OrientGoal::ShortestPrint => 2.0 * f64::from(TRIAL_LAYER_MM),
         }
     }
+
+    /// What of [`Printout::seen_contacts`] is noise: half a contact on show.
+    pub const SEEN_NOISE: f64 = 0.5;
 }
 
 /// An orientation chosen by printing the search's best few, and what it prints.
@@ -169,6 +178,13 @@ pub fn orient_for_print(
     trial: Option<&Trial>,
     watch: Watch<'_>,
 ) -> Result<Vec<Choice>, EngineError> {
+    // Read once here, what shows serves the search and the proof alike.
+    let read = (settings.clean_surface && printed.shows.is_none())
+        .then(|| printed.prominence().into_owned());
+    let printed = &Printed {
+        shows: printed.shows.or(read.as_ref()),
+        ..*printed
+    };
     let found = finalists(printed, settings, usize::MAX, watch)?;
     let Some(trial) = trial else {
         return Ok(found
@@ -221,6 +237,7 @@ pub fn prove(
         is_standing,
     );
     let steps = Pieces::start(watch, Phase::Proving, poses.len() * PRINT_STEPS)?;
+    let shows = settings.clean_surface.then(|| Shows::of(printed));
     let tried = poses
         .into_par_iter()
         .map(|pose| {
@@ -230,7 +247,7 @@ pub fn prove(
                 pose.rotation,
                 pose.on_plate,
                 trial,
-                (Some(print), steps),
+                (Some(print), steps, shows.as_ref()),
             )
             .map(|printout| Proven {
                 oriented: *pose,
@@ -238,7 +255,11 @@ pub fn prove(
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
-    Ok(judged(&tried, settings.preset, is_standing))
+    let asked = Asked {
+        preset: settings.preset,
+        clean_surface: settings.clean_surface,
+    };
+    Ok(judged(&tried, asked, is_standing))
 }
 
 /// The first `finalists` of `found`, the way the model stands and the best pose set on the
@@ -268,15 +289,21 @@ fn to_print(
     poses
 }
 
-/// `tried` ranked for `preset` on what each printed, best first, with what decided its place.
+/// `tried` ranked as `asked` on what each printed, best first, with what decided its place.
 fn judged(
     tried: &[Proven],
-    preset: OrientPreset,
+    asked: impl Into<Asked>,
     is_standing: impl Fn(&Oriented) -> bool,
 ) -> Vec<Tried> {
-    let noise = OrientGoal::ALL.map(Printout::noise);
-    let to_noise = |pose: &Proven| match preset {
-        OrientPreset::Goal(goal) => (pose.printout.reading(goal) / noise[goal.index()]).round(),
+    let asked = asked.into();
+    let noise = Noise {
+        goals: OrientGoal::ALL.map(Printout::noise),
+        seen: Printout::SEEN_NOISE,
+    };
+    let to_noise = |pose: &Proven| match asked.preset {
+        OrientPreset::Goal(goal) => {
+            (pose.printout.reading(goal) / noise.goals[goal.index()]).round()
+        }
         OrientPreset::Auto => 0.0,
     };
     let readings: Vec<Readings> = tried
@@ -292,13 +319,14 @@ fn judged(
             unheld: Some(pose.printout.islands as f64),
             roomless: pose.printout.hanging as f64,
             goals: OrientGoal::ALL.map(|each| pose.printout.reading(each)),
+            seen: pose.printout.seen_contacts,
             // The goal's reading to the noise of its unit, then the search's own order.
             tiebreak: [to_noise(pose), at as f64],
             standing: is_standing(&pose.oriented),
         })
         .collect();
-    let rulings = rulings(&readings, preset, &noise);
-    rank(&readings, preset, &noise)
+    let rulings = rulings(&readings, asked, &noise);
+    rank(&readings, asked, &noise)
         .into_iter()
         .map(|at| Tried {
             proven: tried[at],
@@ -307,27 +335,26 @@ fn judged(
         .collect()
 }
 
-/// Stands the model the way `rotation` turns it in the middle of the plate, lifted onto
-/// supports, or `on_plate` with supports only under what hangs over it, and reads the stack
-/// it and its supports cure.
+/// Stands the model as `rotation` turns it mid-plate, lifted or `on_plate` with supports only
+/// under what hangs, and reads its stack and, given `shows`, how much shows under its contacts.
 pub fn print_out(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
+    shows: Option<&Shows>,
 ) -> Result<Printout, EngineError> {
-    print_held(printed, rotation, on_plate, trial, (None, None))
+    print_held(printed, rotation, on_plate, trial, (None, None, shows))
 }
 
-/// The same cured as coarse as `trial`, for a `print` finer than it: supports are placed on
-/// the print's own layer, and its islands counted at its own pixel and layer. `steps` is told
-/// as each of the [`PRINT_STEPS`] ends.
+/// The same cured as coarse as `trial`, supports placed and islands counted as `print` prints;
+/// `steps` is told as each of the [`PRINT_STEPS`] ends, `shows` reads where contacts land.
 fn print_held(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
-    (print, steps): (Option<&Trial>, Option<&Pieces<'_>>),
+    (print, steps, shows): (Option<&Trial>, Option<&Pieces<'_>>, Option<&Shows>),
 ) -> Result<Printout, EngineError> {
     let told = || steps.map_or(Ok(()), Pieces::finish);
     let turn = Transform {
@@ -355,11 +382,16 @@ fn print_held(
     };
     let stood = stand(model, trial.support, layer_mm)?;
     told()?;
+    let moved = placed.vertices.first().zip(turned.vertices.first());
+    let seen_contacts = shows.zip(moved).map_or(0.0, |(shows, (now, then))| {
+        shows.under(&stood.contacts, rotation, *now - *then)
+    });
     let mut held = Held {
         contacts: stood.contacts.len(),
         supports_mm3: signed_volume(&stood.supports).abs(),
         hanging: stood.contacts.len().saturating_sub(stood.standing),
         top_contacts: looking_up(&stood.facing, rotation),
+        seen_contacts,
         supports: (!stood.supports.faces.is_empty())
             .then(|| Arc::new(stood.supports))
             .into_iter()
@@ -416,6 +448,7 @@ struct Held {
     supports_mm3: Scalar,
     hanging: usize,
     top_contacts: usize,
+    seen_contacts: f64,
     supports: Vec<Arc<Mesh>>,
 }
 
@@ -466,6 +499,7 @@ fn printout(held: &Held, measured: &Measured, layer_mm: Scalar) -> Printout {
         supports_ml: held.supports_mm3 / 1000.0,
         hanging: held.hanging,
         top_contacts: held.top_contacts,
+        seen_contacts: held.seen_contacts,
         layers: measured.layer_count(),
         stack_mm: measured.layer_count() as Scalar * layer_mm,
         pull_n: measured
@@ -497,6 +531,7 @@ mod tests {
                     support_mm3: 0.0,
                     under_mm2: 0.0,
                     under_mm3: 0.0,
+                    seen_mm2: 0.0,
                     bottom_mm2: 0.0,
                     height_mm: 0.0,
                     shadow_mm2: 0.0,
@@ -522,7 +557,7 @@ mod tests {
     }
 
     #[test]
-    fn a_seat_with_something_hanging_fails_like_a_cup_but_not_the_fewest_supports() {
+    fn a_seat_with_something_hanging_fails_like_a_cup_for_auto_alone() {
         let poses = [tried(true, 0.5, 1), tried(false, 2.0, 0)];
         let first = |preset| {
             judged(&poses, preset, |_| false)[0]
@@ -530,8 +565,26 @@ mod tests {
                 .oriented
                 .on_plate
         };
-        assert!(!first(OrientPreset::Goal(OrientGoal::LeastPeel)));
-        assert!(first(OrientPreset::Goal(OrientGoal::FewestSupports)));
+        assert!(!first(OrientPreset::Auto));
+        for goal in OrientGoal::ALL {
+            assert!(first(OrientPreset::Goal(goal)), "{goal:?}");
+        }
+    }
+
+    #[test]
+    fn a_clean_surface_is_judged_on_the_contacts_printed_where_they_show() {
+        let mut poses = [tried(false, 0.5, 0), tried(false, 1.5, 0)];
+        poses[0].printout.seen_contacts = 6.0;
+        poses[1].printout.seen_contacts = 2.0;
+        let asked = Asked {
+            preset: OrientGoal::FewestSupports.into(),
+            clean_surface: true,
+        };
+        let first = judged(&poses, asked, |_| false)[0];
+        assert_eq!(
+            first.proven.printout.supports_ml, 1.5,
+            "2 on show beat 6, at three times the resin"
+        );
     }
 
     #[test]

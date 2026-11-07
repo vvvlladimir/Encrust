@@ -145,6 +145,7 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
             .and_then(|model| scene.objects().iter().position(|other| other.id == model))
             .and_then(|index| u32::try_from(index).ok()),
         relief_painted: object.relief_painted.clone(),
+        shown_painted: object.shown_painted.clone(),
         own_supports: object
             .own
             .supports
@@ -204,14 +205,16 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
             ..tools.drain.state.clone()
         },
         cut: manifest.cut,
-        // The manifest has no entry for the Relief, Text, Combine or Repair tools, nor for how
-        // the next blocker is sized, so they keep what they are set to.
+        // The manifest has no entry for the Relief, Text, Combine, Repair or Auto-orient
+        // tools, how the next blocker is sized or the recipe picked, so they keep theirs.
         relief: tools.relief.state,
         array: manifest.array,
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
         repair: tools.repair.state,
         keep_solid: tools.hollow.blocker,
+        orient: tools.orient.state(),
+        recipe: tools.prepare.recipe.clone(),
         print: None,
     }
     .apply(tools, slicing);
@@ -329,6 +332,7 @@ fn restore_objects(
             &with_own(table.to_vec(), &own, plate_raft),
         );
         object.relief_painted = state.relief_painted;
+        object.shown_painted = state.shown_painted;
         object.own = own;
     }
     // A plug names its model by its place in the file, which is known once all are in.

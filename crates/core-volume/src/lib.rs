@@ -12,6 +12,8 @@ mod drain;
 mod drilled;
 mod error;
 mod extract;
+#[cfg(test)]
+mod fixtures;
 mod grid;
 mod hollow;
 mod infill;
@@ -35,8 +37,8 @@ pub use build::{FieldSettings, build};
 pub use cancel::{Cancel, Progress, Step};
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
-    CUT_WEIGHT, Channel, DrainHole, HoleKind, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM,
-    channel_under, drill, hole_at, lift_for, pierce, turn_in_model,
+    CUT_WEIGHT, Channel, DrainHole, HoleKind, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, Toward,
+    channel_under, drill, hole_at, holes_out, lift_for, pierce, turn_in_model,
 };
 pub use drilled::{Drilled, drilled, drilled_pieces, drilled_reached};
 pub use error::VolumeError;
@@ -58,7 +60,10 @@ pub use relief::{
     press_painted_tiled, press_reusing, press_tiled, press_tiled_reusing,
 };
 pub use repair::{RepairMethod, RepairSettings, Repaired, repair, wrap};
-pub use resin::{MIN_SAVED_MM3, MIN_SAVED_SHARE, holds_resin, hollowing_saves_mm3};
+pub use resin::{
+    MIN_SAVED_MM3, MIN_SAVED_SHARE, holds_resin, hollowing_saves_mm3, placed_volume_and_area,
+    raw_saving_mm3,
+};
 pub use sdf::Sdf;
 pub use sign::SignMode;
 pub use stack::{Panel, StackField};

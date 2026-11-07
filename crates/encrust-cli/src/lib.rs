@@ -18,6 +18,7 @@ mod png_stack;
 mod progress;
 mod project;
 mod raster_report;
+mod recipe;
 mod slice_report;
 mod sliced_file;
 mod sliced_read;

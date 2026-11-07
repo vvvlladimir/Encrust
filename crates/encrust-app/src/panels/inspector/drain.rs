@@ -11,8 +11,8 @@ use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
     Inline, Segment, Segmented, count_row, describe, figure_line, hint, icon, inline_button, inset,
-    notice, number_row, primary_button, secondary_button, section, status_dot, step_bar, theme,
-    tone,
+    notice, number_row, primary_button, primary_with_companion, secondary_button, section,
+    status_dot, step_bar, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -109,28 +109,64 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         }
         return;
     }
-    if let Some(job) = &window.tools.drain.job {
-        if step_bar(ui, &tr!("hollow-looking"), job.fraction(), true) {
-            window.tools.drain.cancel(&mut window.machine.status);
-        }
-        return;
+    if !running(ui, window) {
+        check_and_auto(ui, window);
     }
+}
+
+/// The bar and Cancel of the check or the search going; answers whether one is.
+fn running(ui: &mut egui::Ui, window: &mut Window) -> bool {
+    let drain = &mut window.tools.drain;
+    let status = &mut window.machine.status;
+    if let Some(job) = &drain.job {
+        if step_bar(ui, &tr!("hollow-looking"), job.fraction(), true) {
+            drain.cancel(status);
+        }
+        return true;
+    }
+    if let Some(job) = &drain.auto {
+        if step_bar(ui, &tr!("drain-auto-looking"), Some(job.fraction()), true) {
+            drain.cancel_auto(status);
+        }
+        return true;
+    }
+    false
+}
+
+/// Check drainage, and Auto beside it; off with nothing on the plate or while Prepare runs.
+fn check_and_auto(ui: &mut egui::Ui, window: &mut Window) {
     let layer_height_mm = window.machine.slicing.layer_height_mm();
     let label = if window.tools.drain.checked {
         tr!("drain-check-again")
     } else {
         tr!("drain-check")
     };
-    let what = tr!("drain-check-tooltip");
-    if primary_button(ui, &label, !window.doc.scene.is_empty())
-        .on_hover_text(what)
-        .clicked()
-    {
+    let held = crate::prepare::holding(window.tools);
+    let enabled = !window.doc.scene.is_empty() && held.is_none();
+    let (check, auto) = primary_with_companion(
+        ui,
+        (&label, enabled),
+        (icon::AUTO_DRAIN, &tr!("drain-auto"), enabled),
+    );
+    let why = held.unwrap_or_default();
+    let check = check.on_hover_text(tr!("drain-check-tooltip"));
+    if check.on_disabled_hover_text(why.clone()).clicked() {
         let started = window.tools.drain.start(&window.doc.scene, layer_height_mm);
         window
             .machine
             .status
             .report(&tr!("drain-checking"), started);
+    }
+    let auto = auto.on_hover_text(tr!("drain-auto-tooltip"));
+    if auto.on_disabled_hover_text(why).clicked() {
+        let started = window
+            .tools
+            .drain
+            .start_auto(&window.doc.scene, layer_height_mm);
+        window
+            .machine
+            .status
+            .report(&tr!("drain-auto-looking"), started);
     }
 }
 

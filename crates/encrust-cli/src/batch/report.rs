@@ -11,14 +11,19 @@ use serde::Serialize;
 
 use crate::estimate::Estimate;
 use crate::pipeline::Outcome;
+use crate::recipe::{Prepared, RecipeRun};
 use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
 use crate::stage::Part;
 
+mod drains;
 mod import;
+mod located;
 
+use drains::AutoDrains;
 pub use import::{Fit, Model, Repair};
 use import::{fit_of, model_of, repair_of};
+use located::{Frame, RiskAt, TrappedAt};
 
 /// One model's run, from its file to what came out.
 #[derive(Debug, Serialize)]
@@ -100,7 +105,13 @@ impl EstimateReport {
                 weight_g: print.weight_g(),
                 cost: print.cost(),
                 currency: print.job.material.details.currency.clone(),
-                cured: Cured::of(&print.measured),
+                cured: Cured::of(
+                    &print.measured,
+                    Frame {
+                        panel: &print.panel,
+                        plan: estimate.slice.plan(),
+                    },
+                ),
             }),
         }
     }
@@ -121,10 +132,18 @@ pub struct PartReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hollow: Option<Hollow>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_drains: Option<AutoDrains>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub supports: Option<Supports>,
     /// The inputs of the other models it or its supports meet on the plate.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub meets: Vec<String>,
+    /// What `--prepare` decided for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared: Option<Prepared>,
+    /// What each step of `--recipe` decided for it, and read to decide.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<RecipeRun>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -161,6 +180,8 @@ pub struct Supports {
     pub standing: usize,
     pub trunks: usize,
     pub no_room_for: usize,
+    /// Where each of those touches the model, plate millimetres.
+    pub no_room_at_mm: Vec<[Scalar; 3]>,
 }
 
 #[derive(Debug, Serialize)]
@@ -170,6 +191,8 @@ pub struct Slicing {
     /// Pockets the drainage scan found with no way out, and what they hold.
     pub trapped_pockets: usize,
     pub trapped_mm3: Scalar,
+    /// Each of those pockets, located.
+    pub trapped: Vec<TrappedAt>,
     pub open_contours: usize,
 }
 
@@ -199,10 +222,12 @@ pub struct Cured {
     /// The layer the print most likely fails on: the first island, or the worst lever.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub likely_fails_layer: Option<usize>,
+    /// Every risk counted above, located, in print order.
+    pub risks: Vec<RiskAt>,
 }
 
 impl Cured {
-    pub fn of(measured: &Measured) -> Self {
+    pub fn of(measured: &Measured, frame: Frame<'_>) -> Self {
         let pull = measured.hardest_pull();
         let step = measured.largest_growth();
         let risks = measured.risks();
@@ -224,6 +249,7 @@ impl Cured {
             islands_removed: measured.removed_islands(),
             islands_removed_layers: measured.removed_layers(),
             likely_fails_layer: measured.worst().map(|risk| risk.layer + 1),
+            risks: frame.risks(measured),
         }
     }
 }
@@ -246,18 +272,25 @@ impl PartReport {
                 wall_mm: report.wall().0,
                 cavity_mm3: report.cavity_mm3(),
             }),
+            auto_drains: part.drains.as_ref().map(|drained| {
+                let lifted_mm = part.supports.as_ref().map_or(0.0, |found| found.lifted_mm);
+                AutoDrains::of(drained, lifted_mm)
+            }),
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
                 contacts: report.contacts.len(),
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
+                no_room_at_mm: report.unheld.iter().map(|at| at.to_array()).collect(),
             }),
             meets: part
                 .meets
                 .iter()
                 .map(|input| input.display().to_string())
                 .collect(),
+            prepared: part.prepared.clone(),
+            recipe: part.recipe.clone(),
         }
     }
 
@@ -269,8 +302,11 @@ impl PartReport {
             fit: None,
             oriented: None,
             hollow: None,
+            auto_drains: None,
             supports: None,
             meets: Vec::new(),
+            prepared: None,
+            recipe: None,
         }
     }
 }
@@ -287,9 +323,21 @@ impl Slicing {
                 .map(|pocket| pocket.volume_mm3)
                 .sum::<Scalar>()
                 .max(0.0),
+            trapped: slice.trapped().iter().map(TrappedAt::from).collect(),
             open_contours: slice.open_contours(),
         }
     }
+}
+
+/// What the masks of a written stack cure, absent without a panel to draw them on.
+fn cured_of(outcome: &Outcome) -> Option<Cured> {
+    outcome.raster.as_ref().map(|raster| {
+        let frame = Frame {
+            panel: &raster.settings,
+            plan: outcome.slice.plan(),
+        };
+        Cured::of(&raster.measured, frame)
+    })
 }
 
 fn status_of(clean: bool) -> Status {
@@ -308,10 +356,7 @@ impl PlateReport {
             seconds: took.as_secs_f64(),
             models: outcome.parts.iter().map(PartReport::of).collect(),
             slicing: Slicing::of(&outcome.slice),
-            cured: outcome
-                .raster
-                .as_ref()
-                .map(|raster| Cured::of(&raster.measured)),
+            cured: cured_of(outcome),
         }
     }
 }
@@ -329,10 +374,7 @@ impl ModelReport {
             error: None,
             seconds: took.as_secs_f64(),
             slicing: Some(Slicing::of(&outcome.slice)),
-            cured: outcome
-                .raster
-                .as_ref()
-                .map(|raster| Cured::of(&raster.measured)),
+            cured: cured_of(outcome),
         }
     }
 
@@ -491,6 +533,7 @@ mod tests {
                 layer_height_mm: 0.05,
                 trapped_pockets: 0,
                 trapped_mm3: 0.0,
+                trapped: Vec::new(),
                 open_contours: 0,
             }),
             cured: Some(Cured {
@@ -507,6 +550,7 @@ mod tests {
                 islands_removed: 0,
                 islands_removed_layers: 0,
                 likely_fails_layer: None,
+                risks: Vec::new(),
             }),
         }
     }
@@ -539,7 +583,8 @@ mod tests {
     #[test]
     fn a_part_left_floating_over_a_removed_island_is_counted_as_one() {
         use core_analysis::cure;
-        use core_raster::{LayerRuns, PixelPitch};
+        use core_raster::{Grey, LayerRuns, PixelPitch, RasterSettings, Shading};
+        use core_slicer::LayerPlan;
 
         let pitch = PixelPitch { x: 1.0, y: 1.0 };
         let speck = || {
@@ -555,7 +600,24 @@ mod tests {
         let _ = measured.push(speck(), 0.05);
         let _ = measured.push(speck(), 0.05);
 
-        let cured = Cured::of(&measured);
+        let panel = RasterSettings {
+            width_px: 100,
+            height_px: 100,
+            pitch,
+            mirror_x: false,
+            mirror_y: false,
+            shading: Shading::default(),
+            grey: Grey::default(),
+            blur_px: 0,
+        };
+        let plan = LayerPlan::of_count(0.05, 3);
+        let cured = Cured::of(
+            &measured,
+            Frame {
+                panel: &panel,
+                plan: &plan,
+            },
+        );
         assert_eq!(cured.islands_removed, 1, "the speck over nothing goes");
         assert_eq!(
             cured.islands, 1,

@@ -15,9 +15,10 @@ pub use egui_phosphor::regular::{
     FLASK as RESIN, FLOPPY_DISK as SAVE, FOLDER_OPEN as OPEN, FRAME_CORNERS as FRAME,
     GEAR as SETTINGS, GRID_FOUR as GRID, GRID_NINE as ARRAY, HAND_POINTING as LAY_ON_FACE,
     HOUSE as HOME, KEYBOARD, KNIFE as CUT, LIST_CHECKS as CHECK, MAGIC_WAND as AUTO_ORIENT,
-    MAGNIFYING_GLASS as FIND, MAGNIFYING_GLASS_MINUS as ZOOM_OUT, MAGNIFYING_GLASS_PLUS as ZOOM_IN,
-    PAINT_BRUSH as PAINT, PAUSE, PENCIL_SIMPLE as EDIT, PERSPECTIVE, PLAY, PLUS as ADD, PRINTER,
-    QUESTION as ARMED, QUESTION_MARK as HELP, RULER as MEASURE, SELECTION_INVERSE as INVERT,
+    MAGIC_WAND as AUTO_DRAIN, MAGNIFYING_GLASS as FIND, MAGNIFYING_GLASS_MINUS as ZOOM_OUT,
+    MAGNIFYING_GLASS_PLUS as ZOOM_IN, PAINT_BRUSH as PAINT, PAUSE, PENCIL_SIMPLE as EDIT,
+    PERSPECTIVE, PLAY, PLUS as ADD, PRINTER, QUESTION as ARMED, QUESTION_MARK as HELP,
+    RULER as MEASURE, SEAL_CHECK as PREPARE, SELECTION_INVERSE as INVERT,
     SELECTION_PLUS as PICK_SMALL, SLIDERS as GENERAL, SLIDERS_HORIZONTAL as PARAMETERS,
     SPARKLE as RENDER, SPLIT_HORIZONTAL as SPLIT, SQUARE_HALF as MASK, STACK as SLICE,
     STAMP as RELIEF, STOP, SWAP as FLIP, TEXT_T as TEXT, TRASH as REMOVE,
@@ -46,6 +47,13 @@ pub use egui_phosphor::regular::{
 /// reached.
 pub use egui_phosphor::regular::{
     CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE,
+};
+
+/// A recipe's editor: a step dragged or moved up or down, a stop condition, a name put into
+/// a condition, and a setting worked out by an expression.
+pub use egui_phosphor::regular::{
+    ARROW_DOWN as MOVE_DOWN, ARROW_UP as MOVE_UP, BRACKETS_CURLY as VARIABLE,
+    DOTS_SIX_VERTICAL as GRIP, FUNCTION as EXPRESSION, SIGN_OUT as GATE,
 };
 
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
@@ -116,6 +124,7 @@ mod tests {
         ("PAUSE", PAUSE),
         ("EDIT", EDIT),
         ("AUTO_ORIENT", AUTO_ORIENT),
+        ("PREPARE", PREPARE),
         ("PERSPECTIVE", PERSPECTIVE),
         ("PLAY", PLAY),
         ("ADD", ADD),
@@ -159,6 +168,10 @@ mod tests {
         ("ERROR", ERROR),
         ("APPEARANCE", APPEARANCE),
         ("STEP_LATER", STEP_LATER),
+        ("MOVE_UP", MOVE_UP),
+        ("MOVE_DOWN", MOVE_DOWN),
+        ("EXPRESSION", EXPRESSION),
+        ("VARIABLE", VARIABLE),
         ("CHANGES", CHANGES),
         ("MOVE_TO_PLATE", MOVE_TO_PLATE),
         ("UNDO", UNDO),

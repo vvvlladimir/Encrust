@@ -7,6 +7,7 @@ use crate::batch::EstimateReport;
 use crate::commands::GlobalArgs;
 use crate::commands::slice::PlateArgs;
 use crate::exit::{Exit, Stop};
+use crate::pipeline::Watch;
 use crate::{estimate, json, stage};
 
 #[derive(clap::Args, Debug)]
@@ -22,7 +23,10 @@ impl EstimateCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
         self.plate.check()?;
         let started = Instant::now();
-        let watch = global.watch(stop);
+        let watch = Watch {
+            writes: false,
+            ..global.watch(stop)
+        };
         let mut staged = stage::stage(
             &self.plate.inputs,
             self.plate.arrange,

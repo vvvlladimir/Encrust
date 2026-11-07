@@ -50,6 +50,10 @@ pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
             settings.pick_support(catalogue, &id);
         }
         (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
+        (Kind::Recipe, _) => {
+            settings.recipe = None;
+            settings.recipe_pick = Some(id);
+        }
         (Kind::Resin, None) | (Kind::Auto, _) => {}
     }
     // A plate with no resin takes the first one its machine now has.
@@ -80,8 +84,13 @@ pub(in crate::panels) fn export_profile(machine: &mut Machine, kind: Kind, id: &
     let Some(text) = report(&mut machine.status, &tr!("settings-cannot-export"), text) else {
         return;
     };
+    export_text(machine, kind, id, &text);
+}
+
+/// Writes `text`, the profile of `kind` under `id`, out to a file the user names.
+pub(in crate::panels) fn export_text(machine: &mut Machine, kind: Kind, id: &str, text: &str) {
     let name = crate::exchange::file_name(id);
-    match files::save_text(&name, Wanted::Profile(kind), &text) {
+    match files::save_text(&name, Wanted::Profile(kind), text) {
         Ok(Some(path)) => {
             machine.status =
                 Status::Info(tr!("status-exported", path = path.display().to_string()));

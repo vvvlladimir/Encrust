@@ -5,9 +5,12 @@ use serde::{Deserialize, Serialize};
 use crate::error::VolumeError;
 use channel::tunnel;
 
+mod carried;
 mod channel;
+mod reach;
 
 pub use channel::Leg;
+pub use reach::{Toward, holes_out};
 
 /// Sides of a hole's tube. A three millimetre hole is then within thirteen micrometres of
 /// round, which is under half a pixel on any panel the workspace writes for.
@@ -72,6 +75,15 @@ pub struct HoleSize {
     pub shape: HoleShape,
     /// How far a polygon is turned about the axis, degrees.
     pub turn_deg: Scalar,
+}
+
+impl Default for HoleSize {
+    /// The hole drilled where nothing names a size, in the window and on the command line.
+    fn default() -> Self {
+        // Three millimetres is what a resin slicer offers by default, and drains a cavity of
+        // any size the machine can print.
+        Self::round(3.0, 3.0, 1.0)
+    }
 }
 
 impl HoleSize {
@@ -227,7 +239,7 @@ pub fn pierce(holes: &[DrainHole], thickness_mm: Scalar, voxel_mm: Scalar) -> Ve
 }
 
 /// The same surface turned the other way round, which is what makes it subtract.
-fn inward(mesh: &Mesh) -> Mesh {
+pub(crate) fn inward(mesh: &Mesh) -> Mesh {
     Mesh::new(
         mesh.vertices.clone(),
         mesh.faces.iter().map(|[a, b, c]| [*a, *c, *b]).collect(),

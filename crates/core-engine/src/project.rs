@@ -261,6 +261,10 @@ pub struct HollowState {
     /// closed one (ADR 0313).
     #[serde(default)]
     pub open_floor: bool,
+    /// The wall stays solid wherever the model is thinner than this, millimetres; off in a
+    /// file from before ADR 0404.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solid_under_mm: Option<Scalar>,
 }
 
 /// What the next drain hole is drilled to. The holes standing carry their own sizes.
@@ -357,6 +361,10 @@ pub struct ObjectState {
     /// any are (ADR 0318). A file without it reads as a model with none.
     #[serde(default, skip_serializing_if = "Region::is_empty")]
     pub relief_painted: Region,
+    /// The faces painted as what shows, which a clean surface keeps supports off instead of
+    /// what it reads off the shape (ADR 0410). A file without it reads as a model with none.
+    #[serde(default, skip_serializing_if = "Region::is_empty")]
+    pub shown_painted: Region,
 }
 
 impl ObjectState {
@@ -495,6 +503,9 @@ pub struct Cavity {
     /// a file from before ADR 0313.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_toward: Option<Vec3>,
+    /// Where the wall was kept solid under, millimetres; absent before ADR 0404.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solid_under_mm: Option<Scalar>,
 }
 
 impl Cavity {
@@ -506,6 +517,7 @@ impl Cavity {
             precision: asked.precision,
             infill: asked.infill,
             open_toward: asked.open_toward,
+            solid_under_mm: asked.solid_under_mm,
         }
     }
 
@@ -518,6 +530,7 @@ impl Cavity {
             precision: self.precision,
             infill: self.infill,
             open_toward: self.open_toward,
+            solid_under_mm: self.solid_under_mm,
             ..HollowSettings::default()
         }
     }

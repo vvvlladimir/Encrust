@@ -1,6 +1,7 @@
 use crate::i18n::tr;
 mod boolean;
 mod cut;
+mod drains;
 mod drill;
 mod edit;
 mod format;
@@ -24,6 +25,7 @@ mod trapped;
 pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest, Method};
 pub use core_pipeline::SlicedFormat;
 pub use cut::{CutJob, CutOutcome, CutRequest, spawn_cut};
+pub use drains::{DrainsJob, DrainsOutcome, DrainsRequest, DrainsTask, Proposed};
 pub use drill::{
     DrillJob, DrillRequest, PrintedSupportsJob, PrintedSupportsRequest, spawn_drill,
     spawn_printed_supports,
@@ -36,7 +38,7 @@ pub use format::dialog_filters;
 pub use format::label_of;
 pub use highest::Highest;
 pub use hollow::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks,
+    HollowJob, HollowOutcome, HollowRequest, HollowTask, SharedFields, again_tasks, hollow_tasks,
     lock as lock_fields, rebuild_tasks,
 };
 pub use import::{ImportJob, ImportOutcome, ImportStage};
@@ -48,7 +50,7 @@ pub use orient::{
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::run_into;
 pub use pipeline::{SliceRequest, worker_threads};
-pub use place::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
+pub use place::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask, tasks_of};
 pub use plate::models_of;
 pub use plugs::{PlugsJob, PlugsRequest, spawn_plugs};
 pub use preview::{PreviewJob, PreviewOutcome};
@@ -59,7 +61,7 @@ pub use relief::{
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use split::{SplitJob, SplitOutcome, SplitRequest, spawn_split};
-pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
+pub use trapped::{Pockets, TrapJob, TrapOutcome, TrapRequest, TrapTask, trap_tasks};
 
 use std::path::PathBuf;
 use std::sync::Arc;

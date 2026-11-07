@@ -1,11 +1,13 @@
 use super::import_summary::{ImportSummary, Mapped};
 use super::support_surface::SupportShell;
-use super::{ObjectId, Scene, Shaped};
+use super::{ObjectId, Scene, Shaped, ShownPatch};
 use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
 use core_engine::project::HollowState;
-use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb};
+use core_geometry::{
+    Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb, signed_volume,
+};
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
@@ -45,6 +47,10 @@ pub struct SceneObject {
     pub mapped: Option<Arc<Mapped>>,
     /// The faces the Relief brush painted: while any are, only they take the texture.
     pub relief_painted: Region,
+    /// The faces painted as what shows, which a clean surface keeps supports off (ADR 0410).
+    pub shown_painted: Region,
+    /// The same drawn over the model while the brush that paints it is in reach.
+    pub shown_patch: ShownPatch,
     /// The tool settings this model keeps instead of the plate's.
     pub own: OwnSettings,
     /// How high over its raft the user stood the model, millimetres: what auto-orient
@@ -204,6 +210,12 @@ impl SceneObject {
         self.printed_supports.built(self.supports_under())
     }
 
+    /// The resin its supports as last built come to, mm³; none until they are built.
+    pub fn supports_mm3(&self) -> Scalar {
+        let meshes = self.supports.meshes().unwrap_or_default();
+        meshes.iter().map(|mesh| signed_volume(mesh).abs()).sum()
+    }
+
     /// The mesh the model prints as: its cuts taken out exactly where they have been, its
     /// shell or its own mesh while they are cut by the winding rule.
     pub fn printed(&self) -> &Arc<Mesh> {
@@ -259,6 +271,7 @@ impl SceneObject {
         self.traps.clear();
         self.mapped = None;
         self.relief_painted.clear();
+        self.shown_painted.clear();
         self.mesh = mesh;
     }
 

@@ -27,7 +27,7 @@ pub use error::PlateError;
 pub use mask::Footprint;
 pub use orient::{OrientSettings, Oriented, finalists, orient, orient_printed, rotation_for};
 pub use plate_fit::PlateFit;
-pub use policy::{Noise, Readings, Ruling, rank, rulings};
+pub use policy::{Asked, Noise, Readings, Ruling, rank, rulings};
 pub use printed::Printed;
 pub use score::{LOOKS_UP, OrientGoal, OrientPreset, Score};
 pub use spot::{Rect, nearest_free};

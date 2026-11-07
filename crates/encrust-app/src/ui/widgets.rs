@@ -5,6 +5,7 @@ use crate::i18n::tr;
 mod bin;
 mod binding;
 mod button;
+mod chain;
 mod chooser;
 mod colour;
 mod confirm;
@@ -28,6 +29,7 @@ mod over_stage;
 mod picker_line;
 mod print_chip;
 mod release;
+mod run_box;
 mod search;
 mod section;
 mod start_page;
@@ -45,6 +47,7 @@ pub use button::{
     quiet_square, rail_button, secondary_button, small_icon_button, summary_button, swatch,
     toggle_button, zone_button,
 };
+pub use chain::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use chooser::{
     Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
 };
@@ -52,13 +55,14 @@ pub use colour::colour_field;
 pub use confirm::{Confirm, any_armed, confirm_button, is_armed};
 pub use device_row::{DEVICE_OPEN_INSET, DeviceRow, device_row, print_picture};
 pub use dropdown::{
-    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
+    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_menu_wide, dropdown_row,
     dropdown_search_menu,
 };
 pub use entry_row::{EntryRow, ModelRow, entry_row, model_row};
 pub use field::{
-    Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
-    number_row, picker_row, row_name, text_box, text_row, unit_field,
+    Carried, ConditionName, ConditionRow, address_field, axis_label, carried_row, condition_row,
+    count_row, field_error, field_label, number_field, number_row, picker_row, row_name, text_box,
+    text_row, unit_field,
 };
 pub use figures::{Figure, details_fold, figure_grid, split_readings};
 pub use hint_bar::{hint_bar, hint_bar_names};
@@ -90,6 +94,7 @@ pub use over_stage::{NoticeReply, ZoomPress, job_notice, notice_card, spinner, z
 pub use picker_line::{PICKER_ICON_SQUARE, PickerLine, eye_square, picker_foot, picker_line};
 pub use print_chip::{ChipPart, chip_text_w, paint_chip};
 pub use release::{StepState, release_hero, steps};
+pub use run_box::{RunState, run_box};
 pub use search::{find_line, palette_field, palette_row, search_button};
 pub use section::{section, section_with_action, section_with_actions, section_with_switch};
 pub use start_page::ZONE_INSET;
@@ -97,7 +102,7 @@ pub use start_page::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
 pub use theme_card::{CardLook, theme_card};
-pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, switch, tone};
+pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, switch, switch_with_toggle, tone};
 
 /// `6h36m39s`, as a printer's own screen states it.
 ///

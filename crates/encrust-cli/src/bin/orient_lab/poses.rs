@@ -4,8 +4,8 @@
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use core_engine::{Printout, Trial, Tried, print_out, prove};
-use core_geometry::{Mesh, Quat, Vec3};
+use core_engine::{Printout, Shows, Trial, Tried, print_out, prove};
+use core_geometry::{Mesh, Prominence, Quat, Vec3, sphere_directions};
 use core_plate::{
     OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Ruling, Watch, finalists,
     flat_faces, rotation_for,
@@ -136,6 +136,8 @@ fn ruling(ruling: Ruling) -> &'static str {
         Ruling::TieBreak => "lost the tie-break",
         Ruling::Dominated => "beaten on every goal",
         Ruling::Alternative => "a trade the user may prefer",
+        Ruling::Shows => "shows more than a clean surface keeps to",
+        Ruling::Traded => "a trade off a clean surface the user may prefer",
     }
 }
 
@@ -152,13 +154,19 @@ impl Bench<'_> {
     /// Every pose of `mesh`: by hand, each preset's choice, `known` from runs before, then
     /// `oracle` directions spread evenly over the sphere.
     pub fn poses(&self, mesh: &Mesh, oracle: usize, known: &[Known]) -> Result<Vec<Pose>> {
-        let printed = Printed::solid(mesh);
+        let prominence = Prominence::of(mesh);
+        let printed = Printed {
+            shows: Some(&prominence),
+            ..Printed::solid(mesh)
+        };
+        let shows = Shows::of(&printed);
+        let model = (&printed, &shows);
         let mut poses = Vec::new();
         for (name, rotation, on_plate) in by_hand(mesh) {
-            poses.push(self.measure(&printed, name, Source::Hand, rotation, on_plate)?);
+            poses.push(self.measure(model, name, Source::Hand, rotation, on_plate)?);
         }
         for preset in OrientPreset::all() {
-            poses.push(self.chosen(&printed, preset)?);
+            poses.push(self.chosen(model, preset)?);
         }
         for (name, rotation, on_plate) in known {
             let measured = |pose: &Pose| {
@@ -166,20 +174,20 @@ impl Bench<'_> {
             };
             if !poses.iter().any(measured) {
                 let name = format!("known: {name}");
-                poses.push(self.measure(&printed, name, Source::Known, *rotation, *on_plate)?);
+                poses.push(self.measure(model, name, Source::Known, *rotation, *on_plate)?);
             }
         }
-        for (at, down) in spread(oracle).into_iter().enumerate() {
+        for (at, down) in sphere_directions(oracle).into_iter().enumerate() {
             let name = format!("oracle {at}");
             let rotation = rotation_for(down);
-            poses.push(self.measure(&printed, name, Source::Oracle, rotation, false)?);
+            poses.push(self.measure(model, name, Source::Oracle, rotation, false)?);
         }
         Ok(poses)
     }
 
     /// What `preset` chooses, the way the window asks it, judged on the stack it prints at
     /// full resolution: the proof itself ranks on a coarse one.
-    fn chosen(&self, printed: &Printed, preset: OrientPreset) -> Result<Pose> {
+    fn chosen(&self, (printed, shows): (&Printed, &Shows), preset: OrientPreset) -> Result<Pose> {
         let settings = OrientSettings {
             preset,
             build_volume_mm: Some({
@@ -200,7 +208,7 @@ impl Bench<'_> {
             .oriented;
         let name = format!("goal: {}", preset.label());
         let mut pose = self.measure(
-            printed,
+            (printed, shows),
             name,
             Source::Goal(preset),
             chosen.rotation,
@@ -212,7 +220,7 @@ impl Bench<'_> {
             proof_s: seconds - search_s,
             finalists: tried
                 .iter()
-                .map(|tried| self.finalist(printed, tried, preset, &found))
+                .map(|tried| self.finalist((printed, shows), tried, preset, &found))
                 .collect::<Result<_>>()?,
         };
         Ok(pose)
@@ -220,7 +228,7 @@ impl Bench<'_> {
 
     fn finalist(
         &self,
-        printed: &Printed,
+        (printed, shows): (&Printed, &Shows),
         tried: &Tried,
         preset: OrientPreset,
         found: &[Oriented],
@@ -235,7 +243,13 @@ impl Bench<'_> {
             .unwrap_or(usize::MAX);
         if self.full_finalists == Some(preset) {
             let oriented = tried.proven.oriented;
-            let printout = print_out(printed, oriented.rotation, oriented.on_plate, &self.trial)?;
+            let printout = print_out(
+                printed,
+                oriented.rotation,
+                oriented.on_plate,
+                &self.trial,
+                Some(shows),
+            )?;
             finalist.full = Some(Full::of(&printout, preset));
         }
         Ok(finalist)
@@ -243,14 +257,14 @@ impl Bench<'_> {
 
     fn measure(
         &self,
-        printed: &Printed,
+        (printed, shows): (&Printed, &Shows),
         name: impl Into<String>,
         source: Source,
         rotation: Quat,
         on_plate: bool,
     ) -> Result<Pose> {
         let started = Instant::now();
-        let printout = print_out(printed, rotation, on_plate, &self.trial)?;
+        let printout = print_out(printed, rotation, on_plate, &self.trial, Some(shows))?;
         let lift_mm = if on_plate {
             0.0
         } else {
@@ -296,19 +310,6 @@ fn by_hand(mesh: &Mesh) -> [(&'static str, Quat, bool); 4] {
 /// How far `rotation` leans the model's own up away from the plate's, degrees.
 pub fn tilt_deg(rotation: Quat) -> f32 {
     (rotation * Vec3::Z).z.clamp(-1.0, 1.0).acos().to_degrees()
-}
-
-/// `count` directions spread evenly over the sphere, by the golden angle.
-fn spread(count: usize) -> Vec<Vec3> {
-    let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
-    (0..count)
-        .map(|at| {
-            let z = 1.0 - 2.0 * (at as f32 + 0.5) / count as f32;
-            let ring = (1.0 - z * z).max(0.0).sqrt();
-            let around = golden * at as f32;
-            Vec3::new(ring * around.cos(), ring * around.sin(), z)
-        })
-        .collect()
 }
 
 /// A face this near straight down and this near the lowest point lies on the plate, as
@@ -363,14 +364,6 @@ mod tests {
         let over = Quat::from_rotation_x(std::f32::consts::PI);
         assert!((tilt_deg(over) - 180.0).abs() < 1e-3);
         assert!(tilt_deg(Quat::IDENTITY).abs() < 1e-3);
-    }
-
-    #[test]
-    fn the_spread_is_unit_directions_covering_both_poles() {
-        let directions = spread(64);
-        assert!(directions.iter().all(|d| (d.length() - 1.0).abs() < 1e-4));
-        assert!(directions.iter().any(|d| d.z > 0.9));
-        assert!(directions.iter().any(|d| d.z < -0.9));
     }
 
     #[test]

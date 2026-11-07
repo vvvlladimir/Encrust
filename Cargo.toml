@@ -26,6 +26,7 @@ core-text = { path = "crates/core-text" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
 core-engine = { path = "crates/core-engine" }
+core-recipe = { path = "crates/core-recipe" }
 encrust-cli = { path = "crates/encrust-cli" }
 encrust-app = { path = "crates/encrust-app" }
 core-format = { path = "crates/core-format" }

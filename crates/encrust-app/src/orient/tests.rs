@@ -319,3 +319,64 @@ fn pointing_at_one_triangle_of_a_cube_side_finds_the_whole_side() {
         facet.normal
     );
 }
+
+#[test]
+fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
+    let mut scene = scene_with(cuboid(Vec3::new(40.0, 20.0, 4.0)));
+    let slab = scene.objects()[0].id;
+    let mut tool = OrientTool::default();
+    let post = cuboid(Vec3::new(4.0, 4.0, 30.0));
+    let summary = ImportSummary::made(diagnose(&post));
+    let post = scene.insert(Imported::new(
+        "post".to_owned(),
+        Arc::new(post),
+        Transform::default(),
+        summary,
+    ));
+    let plans = |_: &SceneObject| medium();
+    let plate = BuildPlate::default();
+
+    let Turning::Search(mut job) = tool
+        .start_on(
+            &scene,
+            &[slab],
+            (OrientPreset::Auto.into(), None, plans),
+            None,
+        )
+        .expect("a named slab can be oriented")
+    else {
+        panic!("nothing was searched before, so it searches");
+    };
+    let turns = loop {
+        match job.poll() {
+            Some(crate::job::OrientOutcome::Turned(turns)) => break turns,
+            Some(other) => panic!("the search ended {other:?}"),
+            None => std::thread::yield_now(),
+        }
+    };
+    tool.land(&mut scene, &plate, turns);
+    assert!(!tool.is_running(), "the tool's own run is left alone");
+    let standing = scene.get(post).expect("on the plate").transform;
+    assert_eq!(
+        standing,
+        Transform::default(),
+        "the post was not named, so it stands as it was put down"
+    );
+
+    let first = scene.get(slab).expect("on the plate").transform.rotation;
+    let again = tool
+        .start_on(
+            &scene,
+            &[slab],
+            (OrientPreset::Auto.into(), None, plans),
+            None,
+        )
+        .expect("a named slab can be oriented");
+    assert!(matches!(again, Turning::Step), "asked the same, it steps");
+    tool.step(&mut scene, &plate);
+    let second = scene.get(slab).expect("on the plate").transform.rotation;
+    assert!(
+        !first.abs_diff_eq(second, 1e-4),
+        "the slab stands its next good way, not {first:?} again"
+    );
+}

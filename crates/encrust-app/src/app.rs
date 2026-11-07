@@ -14,7 +14,6 @@ use crate::scene::SceneObject;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
-use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use crate::ui::theme;
 use crate::undo::Frame;
@@ -350,33 +349,9 @@ impl SlicerApp {
         self.tools.drain.laying_plugs()
     }
 
-    /// Rebuilds the columns and the painted patches of every object whose placement,
-    /// points, paint or profile moved under them, so that what the viewport draws is what
-    /// would be sliced. A profile still being dragged is grown to once it is let go.
+    /// The supports drawn as they would be sliced: see [`crate::growth::refresh_supports`].
     fn refresh_supports(&mut self, held: bool) {
-        self.tools.supports.settle_on_raft(&mut self.doc.scene);
-        let plate = self.tools.supports.table();
-        let raft = self.tools.supports.raft;
-        self.doc.surfaces.start(&mut self.doc.scene);
-        for object in self.doc.scene.objects_mut() {
-            let untouched = object.supports.is_empty()
-                && object.supports.meshes().is_none()
-                && object.supports.drawn().is_empty()
-                && object.supports.painted().is_empty()
-                && object.supports.blocked().is_empty();
-            if untouched {
-                continue;
-            }
-            let table = with_own(plate.clone(), &object.own, raft);
-            let retuned = held && object.supports.retuned(object.transform, &table);
-            if object.supports.outgrown(object.transform, &table) {
-                if !retuned {
-                    self.doc.growth.start(object, &table);
-                }
-                continue;
-            }
-            object.refresh_supports(&table);
-        }
+        crate::growth::refresh_supports(&mut self.doc, &mut self.tools.supports, held);
     }
 }
 
@@ -447,9 +422,10 @@ impl SlicerApp {
         working |= tools
             .measure_walk
             .poll(&mut tools.measure, &mut tools.measure_edges, scene);
+        working |= tools.orient.poll(scene, &doc.plate, status);
         working |= self.land_plugs();
-        let (scene, status) = (&mut self.doc.scene, &mut self.machine.status);
-        working |= self.tools.orient.poll(scene, &self.doc.plate, status);
+        let (doc, settled) = (&mut self.doc, ctx.input(|input| !input.pointer.any_down()));
+        working |= crate::prepare::poll(doc, &mut self.tools, &mut self.machine, settled);
         working | crate::panels::animate_preview(ctx, &mut self.machine.preview)
     }
 
@@ -547,6 +523,8 @@ impl eframe::App for SlicerApp {
 
 #[cfg(test)]
 mod plate_card;
+#[cfg(test)]
+mod recipe_page;
 #[cfg(test)]
 mod sheet_keys;
 #[cfg(all(test, feature = "showcase"))]

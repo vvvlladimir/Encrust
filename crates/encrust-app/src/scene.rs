@@ -16,11 +16,13 @@ mod import_summary;
 mod object;
 mod plates;
 mod selection;
+mod shown_patch;
 mod support_surface;
 pub use import_summary::{ImportSummary, Imported, Mapped};
 pub use object::{OwnSettings, SceneObject, Taken};
 use object::{PlacedBounds, flip, onto_plate};
 use plates::plate_name;
+pub use shown_patch::ShownPatch;
 
 /// A mesh with what the window keeps beside it: its hierarchy, its centre of mass and what
 /// is wrong with it. Built where the mesh is made, on a worker, since on a million faces it
@@ -222,6 +224,8 @@ impl Scene {
             traps: Traps::default(),
             mapped: imported.mapped,
             relief_painted: Region::default(),
+            shown_painted: Region::default(),
+            shown_patch: ShownPatch::default(),
             own: OwnSettings::default(),
             lift_mm: None,
             plug_of: None,

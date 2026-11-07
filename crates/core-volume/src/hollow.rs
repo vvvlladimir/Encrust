@@ -21,6 +21,7 @@ use crate::shells::outer_shells;
 use crate::sign::SignMode;
 
 mod floor;
+mod opening;
 
 /// How far past its own surface a hollowing field reaches.
 ///
@@ -216,6 +217,9 @@ pub struct HollowSettings {
     pub infill: Option<InfillSettings>,
     /// Where the wall stays solid.
     pub blockers: Vec<Blocker>,
+    /// The wall stays solid wherever the model is thinner than this, millimetres on the
+    /// plate; `None` hollows every part the wall leaves room in (ADR 0404).
+    pub solid_under_mm: Option<Scalar>,
     /// Which way the plate lies, in the space the wall is measured in ([`plate_down`]),
     /// where the cavity is to open through the floor the model stands on; `None` keeps it
     /// closed. Only a shell has a floor to open (ADR 0313).
@@ -250,6 +254,7 @@ impl Default for HollowSettings {
             sign: SignMode::default(),
             infill: None,
             blockers: Vec::new(),
+            solid_under_mm: None,
             open_toward: None,
             budget_bytes: DEFAULT_BUDGET_BYTES,
         }
@@ -283,6 +288,8 @@ pub struct Hollowed {
 #[derive(Debug, Clone)]
 pub struct CavityField {
     offset: Sdf,
+    /// A mould's void where its thin parts are kept solid: the model opened (ADR 0404).
+    void: Option<Sdf>,
     shape: Mat3,
     mode: HollowMode,
     voxel_mm: Scalar,
@@ -294,7 +301,7 @@ pub struct CavityField {
 impl CavityField {
     /// What holding this field costs, in bytes.
     pub fn bytes(&self) -> usize {
-        self.offset.bytes()
+        self.offset.bytes() + self.void.as_ref().map_or(0, Sdf::bytes)
     }
 }
 
@@ -341,7 +348,8 @@ pub fn plate_down(transform: Transform) -> Vec3 {
 }
 
 /// The field [`hollow_at_scale`] cuts its cavity from, on the finest lattice that fits the
-/// budget. The settings' blockers, infill and open floor play no part in it.
+/// budget, kept off what is thinner than `solid_under_mm`. The settings' blockers, infill
+/// and open floor play no part in it.
 pub fn cavity_field(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -350,16 +358,21 @@ pub fn cavity_field(
     cancel: Cancel<'_>,
 ) -> Result<CavityField, VolumeError> {
     let placed = placed(mesh, shape)?;
-    let placed_bvh = match &placed {
-        Cow::Owned(placed) => Cow::Owned(Bvh::build(placed)),
-        Cow::Borrowed(_) => Cow::Borrowed(bvh),
+    let shells = outer_shells(&placed);
+    let (surface, surface_bvh) = match &shells {
+        Some(surface) => (surface, Cow::Owned(Bvh::build(surface))),
+        None if shape == Mat3::IDENTITY => (&*placed, Cow::Borrowed(bvh)),
+        None => (&*placed, Cow::Owned(Bvh::build(&placed))),
     };
-    let (offset, voxel_mm, coarsened) = match outer_shells(&placed) {
-        Some(surface) => field_to_budget(&surface, &Bvh::build(&surface), settings, cancel)?,
-        None => field_to_budget(&placed, &placed_bvh, settings, cancel)?,
+    let (offset, voxel_mm, coarsened) = field_to_budget(surface, &surface_bvh, settings, cancel)?;
+    let opened = opening::opened(surface, &surface_bvh, settings, voxel_mm, cancel)?;
+    let (offset, void) = match settings.mode {
+        HollowMode::Internal => (opening::kept_inside(offset, opened.as_ref())?, None),
+        HollowMode::External => (offset, opened),
     };
     Ok(CavityField {
         offset,
+        void,
         shape,
         mode: settings.mode,
         voxel_mm,
@@ -568,17 +581,19 @@ fn shelled(
 /// becomes the cavity.
 fn mould(mesh: &Mesh, field: &CavityField, cancel: Cancel<'_>) -> Result<Hollowed, VolumeError> {
     let mut whole = extract(&field.offset, cancel);
+    let opened = field.void.as_ref().map(|void| extract(void, cancel));
     cancel.begin(Step::Shaping, 0);
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
     // The void of a mould is the model it was taken off, so that is what holds the resin.
-    let cavity = whole.faces.len()..whole.faces.len() + mesh.faces.len();
-    append(&mut whole, &flipped(mesh));
+    let void = opened.as_ref().unwrap_or(mesh);
+    let cavity = whole.faces.len()..whole.faces.len() + void.faces.len();
+    append(&mut whole, &flipped(void));
     Ok(Hollowed {
         mesh: whole,
         cavity,
-        cavity_mm3: volume_of(mesh),
+        cavity_mm3: volume_of(void),
         voxel_mm: field.voxel_mm,
         coarsened: false,
     })

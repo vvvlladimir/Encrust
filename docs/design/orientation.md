@@ -16,6 +16,7 @@ miniature and a bust are scored on the same scale:
 | peel | the area of the disc pulling as hard as the hardest section, over the model's own square length |
 | height | how tall the stack stands, the model and the lift under it, over the model's own length |
 | bottom | area flat on the plate, over the surface area; zero on supports |
+| seen | the plan area under supports, each face weighed by how much it shows, over the surface area |
 
 The support term adds three things a support is put under:
 
@@ -38,12 +39,20 @@ in the units of the shadow it replaces. A disc pulls the most an area can, so a 
 or two pieces apart score less than their area, and a shadow scored as a disc never less
 than a cut.
 
-| Preset | support | volume | peel | height | bottom |
-|---|---|---|---|---|---|
-| Fewest supports | — | 1.0 | — | 0.05 | 0.3 |
-| Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 |
-| Shortest print | 0.3 | — | — | 1.5 | 0.3 |
-| Auto, the goals' mean | 0.27 | 0.33 | 0.67 | 0.53 | 0.3 |
+| Preset | support | volume | peel | height | bottom | seen |
+|---|---|---|---|---|---|---|
+| Fewest supports | — | 1.0 | — | 0.05 | 0.3 | — |
+| Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 | — |
+| Shortest print | 0.3 | — | — | 1.5 | 0.3 | — |
+| Auto, the three's mean | 0.27 | 0.33 | 0.67 | 0.53 | 0.3 | — |
+
+A clean surface adds 1.0 on seen to whichever preset is asked, and the shortlist keeps the
+two candidates that show least. How much a face shows is the faces the user painted, 1 each
+and every other face 0, or where nothing is painted its `Prominence`
+(`docs/design/prominence.md`); either is read once a model, and only for a clean surface.
+The search reads it as the contacts placement would set there, the seen area over a
+contact's patch; the proof reads it off the contacts it placed, each weighed by the face
+under it. Both count one contact on open detail, or on paint, as one (ADR 0409, 0410).
 
 The model's length is the cube root of its bounding box, which does not turn with it, so
 dividing by it changes no ranking — it only stops the weights meaning different things at
@@ -159,45 +168,41 @@ its own, and is always among those cut.
 
 ## Choosing
 
-Every stage ranks by one rule, `core_plate::rank` (ADR 0275, 0278, 0279): the search on what
-it predicts, the proof on what it printed. In order:
+Every stage ranks by one rule, `core_plate::rank` (ADR 0275, 0278, 0279, 0410): the search
+on what it predicts, the proof on what it printed. A single goal ranks, in order:
 
-1. what fails the print, compared exactly: a model set on the plate with no face flat on
+1. what fails every goal, compared exactly: a model set on the plate with no face flat on
    it; a pose past the build volume however it is turned, by its envelope in the search,
-   and printed with its supports in the proof. For every goal but the
-   fewest supports, suction cups and pulls past the 30 N `core-analysis` names fail it too;
-   the fewest supports leaves a cup to a drain hole, the shortest print takes the pull;
-2. islands and contacts left hanging, within a quarter and two of the fewest, where a
-   stage reads them;
-3. the goal's own reading, within a tenth of the best and the noise of its unit: a
-   sliver of the dimensionless term, half a newton or 0.1 mm of stack in the search;
-   0.05 ml of support, half a newton or 0.3 mm of stack once printed;
-4. within that band, the fewest islands and hanging, then the tie-break: the total in
-   the search; in the proof, the goal's reading to the noise of its unit and then the
-   search's own order.
+   and printed with its supports in the proof;
+2. the goal's own reading, strictly the least, with no band;
+3. the tie-break: the total in the search; in the proof, the goal's reading to the noise
+   of its unit and then the search's own order.
 
-The model stays as it stands unless a turn fails less, standing is out of the band, or
-the turn wins 5 % of the goal's own reading and more than the noise of its unit; the
-turn is weighed against the best ranked way of standing, on the plate or on supports. No
-goal weighs which way is up: the file does not say.
+Suction cups, pulls past the 30 N `core-analysis` names, islands and contacts with no room
+count for auto alone: a single goal minimises its one problem and leaves the rest to the
+tools that fix them. The model stays as it stands unless a turn fails less or lowers the
+goal's reading at all; the turn is weighed against the best ranked way of standing, on the
+plate or on supports. No goal weighs which way is up: the file does not say.
 
-A goal may have **enough**: a reading at or under which every candidate reads alike, and a
-**fallback** goal whose reading then decides, ahead of the tie-break (ADR 0281). The least
-peel has enough at 10 N, a third of the 30 N warning, and falls back on the fewest
-supports: under 10 N a model is turned only to save support, and a turn between two that
-both have enough has to save 5 % of it and more than its noise. Every stage hands the rule
-every goal's reading of a candidate and the noise of each in its own unit, so a policy
-that weighs several goals is one more `Policy`, with no stage changed.
+Every stage hands the rule every goal's reading of a candidate and the noise of each in
+its own unit, so a policy that weighs several goals is one more `Policy`, with no stage
+changed.
 
 The shortest print reads the stack — the model and the lift under it, millimetres — which
-the layers and the time follow, since a layer takes as long whatever its area. Its band
-is a fiftieth of the shortest and a millimetre, some four minutes on a 100 mm figure, and
-it weighs no support. A pull past the limit fails no pose for it: the limit is an estimate
-good to a factor of three, and the goal is the fewest layers that hold (ADR 0283).
+the layers and the time follow, since a layer takes as long whatever its area (ADR 0283).
+### A clean surface
 
-The fewest supports skips steps 2 and 3: past what fails the print, the least support
-volume wins outright, and any turn that needs less is worth making. Islands, contacts with
-no room and cups are its user's to settle with the tools that fix them.
+Asked beside any preset, a clean surface comes after what fails the print and what hangs,
+and before everything else the preset ranks by (ADR 0410). It keeps the poses within a
+tenth and one contact of the fewest on show among the sound, the slack no less than the
+noise of the reading; the preset then ranks those as it would rank them all. A turn that
+brings the model back within the band is always worth making.
+
+A pose past the band is offered as `Ruling::Traded` when it wins at least a quarter of the
+preset's reading over the chosen and more than its noise — for auto, a quarter of the
+product of shares — and no sound pose shows less and wins as much. The rest past the band
+are `Ruling::Shows`. Every trade is ranked right behind the first, after auto's own goals,
+so the proof prints it and the window steps to it.
 
 ### Balancing every goal
 
@@ -209,15 +214,16 @@ it takes the pose with the smallest product of shares:
 cost = Σ ln((r_i + floor_i) / (best_i + floor_i))
 ```
 
-A reading past enough counts as enough, so the least peel's reading is never under 10 N.
+A pull under 10 N, a third of the 30 N warning, counts as 10 N (ADR 0281).
 The floor is what no longer matters: ten struts of support, and five noises of stack,
 which at 1.5 mm printed is about what the bottom layers add to any print. The product does
 not depend on the unit a goal is read in. A goal on which every pose reads alike adds
 nothing. A pose twice the support and half the stack ties with the one it trades against.
 
-In order: what fails the print, with cups and tearing pulls fatal as for the least peel;
-islands and contacts left hanging, as for every banded goal; poses inside every goal's own
-band at once, with the fewest supports given a tenth and its noise; poses that no sound pose
+In order: what fails the print, with cups and tearing pulls fatal; islands and contacts
+left hanging, within a quarter and two of the fewest, where a stage reads them; poses
+inside every goal's own band at once: a tenth of the best and the noise of its unit, the
+stack a fiftieth and a millimetre, with the fewest supports given a tenth and its noise; poses that no sound pose
 beats on every goal past its noise; then the cost; then the largest single share; then the
 tie-break. The model stays as it stands if that is inside every band. Otherwise it turns
 to a pose inside every band, or for a twentieth less cost and more than the noise of every
@@ -236,10 +242,10 @@ choice.
 A goal is ranked by nothing another goal sets. What is its own is an exhaustive `match` on
 `OrientGoal`, so a new goal is forced through every one: its weights (`OrientGoal::weights`),
 its reading off the mesh (`Faces::reading`) and once printed (`Printout::reading`) with the
-noise of its unit (`Printout::noise`), its policy with its band, enough and floor
-(`Policy::of`), and its finalists' spacing (`apart_deg`). Auto weighs it with the rest from
+noise of its unit (`Printout::noise`), how auto weighs it, its band, enough and floor
+(`Policy::balanced`), and its finalists' spacing (`apart_deg`). Auto weighs it with the rest from
 there, with no change of its own. Both readings take the goal as an argument, so every
-goal's reading of one candidate is at hand to a goal that weighs several. What every goal shares — steps 1 to 4,
+goal's reading of one candidate is at hand to a goal that weighs several. What every goal shares — step 1,
 the build volume, supports placed on the print's layer — moves every goal when it changes,
 and is measured on all of them in `orient-lab`.
 
@@ -277,7 +283,7 @@ under it, since a wall reaching in from outside can hold up what the window drew
 
 A pose set on the plate gets supports only under what hangs over it, the raft with them
 where the profile has one, and none where nothing hangs. If a contact there finds no room
-for a column, the pose fails every goal that weighs cups, as a cup would. All are ranked
+for a column, the pose fails auto, as a cup would. All are ranked
 by the rule above on what they printed — support resin, newtons, millimetres of stack —
 and `prove` answers every finalist with what decided its place, `core_plate::rulings`.
 

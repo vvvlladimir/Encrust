@@ -91,6 +91,45 @@ fn a_small_island_is_held_by_the_lightest_shape_in_the_empty_group() {
 }
 
 #[test]
+fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut scene = one_cube();
+    let floating = scene.objects()[0].id;
+    scene.objects_mut()[0].transform.translation.z = 10.0;
+    let mut tool = SupportTool::default();
+    assert!(tool.auto.is_none(), "the panel builds to the group in hand");
+
+    let built = BuiltTo::of("auto", &catalogue).expect("the catalogue ships an automatic profile");
+    let mut job = SupportTool::start_built_on(&scene, &[floating], (0.05, &built), Side::Outside)
+        .expect("a model to place under");
+    let placements = loop {
+        match job.poll() {
+            Some(crate::job::SupportOutcome::Placed(placements)) => break placements,
+            Some(_) => panic!("the run did not place"),
+            None => std::thread::yield_now(),
+        }
+    };
+    tool.land_built(&mut scene, placements, Side::Outside, built);
+    let auto = catalogue.autos().next().expect("the catalogue ships one");
+    let shapes = auto.profile.shapes_in(&catalogue).expect("its shapes ship");
+    let named: Vec<&str> = tool
+        .groups
+        .iter()
+        .map(|group| group.name.as_str())
+        .collect();
+    assert!(
+        shapes
+            .iter()
+            .any(|shape| named.contains(&shape.name.as_str())),
+        "the supports stand in a group of an automatic shape, found {named:?}"
+    );
+    assert!(
+        tool.auto.is_none(),
+        "and the panel's choice is left as it was"
+    );
+}
+
+#[test]
 fn a_plate_nothing_was_chosen_for_starts_sized_and_one_chosen_for_is_left_alone() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut fresh = SupportTool::default();
@@ -902,13 +941,22 @@ fn floating_cube() -> Scene {
     scene
 }
 
+/// The undersides `floors` hang from, a layer of 0.05 mm deep.
+fn held(scene: &Scene, floors: &[Vec3]) -> Vec<(crate::scene::ObjectId, Vec3)> {
+    island_holds(scene, floors, 0.05)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
 #[test]
 fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
     let mut scene = floating_cube();
     let mut tool = SupportTool::default();
     let floor = Vec3::new(0.5, 0.5, 5.0);
 
-    assert_eq!(tool.support_islands(&mut scene, &[floor], 0.05), 1);
+    let found = held(&scene, &[floor]);
+    assert_eq!(tool.support_islands(&mut scene, &found), 1);
     assert_eq!(tool.groups.len(), 2);
     assert_eq!(tool.groups[1].name, ISLANDS_GROUP);
     assert_eq!(tool.active, 0, "the group in hand stays in hand");
@@ -923,7 +971,8 @@ fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
         "the cube's bottom face is straight over the floor, got {contact}"
     );
 
-    tool.support_islands(&mut scene, &[floor], 0.05);
+    let found = held(&scene, &[floor]);
+    tool.support_islands(&mut scene, &found);
     assert_eq!(tool.groups.len(), 2, "a second press joins the same group");
 }
 
@@ -934,10 +983,8 @@ fn an_island_with_nothing_over_its_centre_stands_nothing_and_adds_no_group() {
     let beside = Vec3::new(3.0, 0.5, 5.0);
     let far_under = Vec3::new(0.5, 0.5, 2.0);
 
-    assert_eq!(
-        tool.support_islands(&mut scene, &[beside, far_under], 0.05),
-        0
-    );
+    let found = held(&scene, &[beside, far_under]);
+    assert_eq!(tool.support_islands(&mut scene, &found), 0);
     assert_eq!(tool.groups.len(), 1);
 }
 /// The cube 20 mm a side, 5 mm over the plate, hollowed to a cavity 12 mm a side in its
@@ -1007,19 +1054,14 @@ fn needs_at(placements: &[Placement]) -> Vec<Scalar> {
 #[test]
 fn a_run_keeps_only_the_contacts_on_its_side_of_the_wall() {
     let scene = hollow_cube();
-    let tool = SupportTool {
-        side: Side::Inside,
-        ..SupportTool::default()
-    };
-    let inside = tool.on_its_side(inside_and_out(&scene), &scene);
+    let inside = SupportTool::on_its_side(inside_and_out(&scene), &scene, Side::Inside);
     assert_eq!(
         needs_at(&inside),
         [20.95],
         "only the cavity's ceiling is held from inside"
     );
 
-    let tool = SupportTool::default();
-    let outside = tool.on_its_side(inside_and_out(&scene), &scene);
+    let outside = SupportTool::on_its_side(inside_and_out(&scene), &scene, Side::Outside);
     assert_eq!(
         needs_at(&outside),
         [4.95],
@@ -1189,7 +1231,6 @@ fn a_cavity_run_cancelled_leaves_what_stood_inside_it() {
 #[test]
 fn a_solid_model_has_nothing_inside() {
     let scene = one_cube();
-    let tool = SupportTool::default();
     let object = &scene.objects()[0];
     let placements = vec![Placement {
         id: object.id,
@@ -1200,7 +1241,7 @@ fn a_solid_model_has_nothing_inside() {
         }],
     }];
     assert!(!object.supported_inside());
-    let outside = tool.on_its_side(placements, &scene);
+    let outside = SupportTool::on_its_side(placements, &scene, Side::Outside);
     assert_eq!(
         outside[0].needs.len(),
         1,
@@ -1353,4 +1394,20 @@ fn a_line_starts_only_from_a_support_that_still_stands() {
     // As an undo, or a new scene whose first model reuses the id, leaves it.
     scene.objects_mut()[0].supports.clear();
     assert_eq!(tool.line_start(&scene, id), None);
+}
+
+#[test]
+fn a_profile_built_to_alone_stands_islands_on_itself_and_a_sizing_on_its_lightest_shape() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let heavy = catalogue
+        .support("heavy")
+        .expect("the catalogue ships heavy");
+    let alone = BuiltTo::of("heavy", &catalogue).expect("a support profile");
+    assert_eq!(alone.islands_profile(), heavy.profile);
+
+    let sized = BuiltTo::of("auto", &catalogue).expect("an automatic profile");
+    let BuiltTo::Sized(sizing) = &sized else {
+        panic!("auto is a sizing");
+    };
+    assert_eq!(sized.islands_profile(), sizing.0.placing_with(&sizing.1[0]));
 }

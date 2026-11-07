@@ -497,6 +497,11 @@ impl Slicing {
         self.start_queued(scene, status)
     }
 
+    /// Where the last job wrote, until the file is taken.
+    pub fn wrote(&self) -> Option<&Path> {
+        self.written.as_ref().map(|written| written.path.as_path())
+    }
+
     /// Takes the file the last job wrote, once.
     pub fn take_written(&mut self) -> Option<Written> {
         self.written.take()

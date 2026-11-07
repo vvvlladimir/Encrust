@@ -44,7 +44,7 @@ fn file_name(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
                 *template = core_engine::DEFAULT_TEMPLATE.to_owned();
             }
         });
-        let name = crate::panels::slice::file_name(scene, &machine.slicing, template);
+        let name = crate::file_name::file_name(scene, &machine.slicing, template);
         hint(ui, &tr!("general-file-name-example", name = name));
         let unknown = core_engine::unknown_tags(template);
         if !unknown.is_empty() {

@@ -6,13 +6,16 @@ use core_volume::HoleSize;
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
-use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
+use crate::job::{DrainsJob, Pockets, TrapJob, TrapOutcome, TrapRequest, TrapTask, trap_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
+mod auto;
 mod plugs;
+mod points;
 
 pub use plugs::PlugsLaid;
+pub use points::drill_at_fractions;
 
 /// What a click in the viewport puts down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -34,6 +37,8 @@ pub struct DrainTool {
     pub state: DrainState,
     pub placing: Placing,
     pub job: Option<TrapJob>,
+    /// The search for holes that drain the picked models, going.
+    pub auto: Option<DrainsJob>,
     /// Whether a check has finished since the plate last changed under it. A check is
     /// asked for by hand and never follows a run; see ADR 0198.
     pub checked: bool,
@@ -44,14 +49,19 @@ pub struct DrainTool {
     read: Option<plugs::ReadModel>,
 }
 
+/// The panel's numbers before the user sets any: the engine's own hole.
+fn default_state() -> DrainState {
+    let hole = HoleSize::default();
+    DrainState::round(hole.diameter_mm, hole.depth_mm, hole.taper)
+}
+
 impl Default for DrainTool {
     fn default() -> Self {
         Self {
-            // Three millimetres is what a resin slicer offers by default, and drains a
-            // cavity of any size the machine can print.
-            state: DrainState::round(3.0, 3.0, 1.0),
+            state: default_state(),
             placing: Placing::default(),
             job: None,
+            auto: None,
             checked: false,
             laying: Vec::new(),
             waiting: Vec::new(),
@@ -81,6 +91,19 @@ impl DrainTool {
         Ok(())
     }
 
+    /// The same check of `ids` alone, whatever is picked, handed back: what Prepare reads
+    /// `trapped` off.
+    pub fn scan_on(scene: &Scene, ids: &[ObjectId], layer_height_mm: Scalar) -> Result<TrapJob> {
+        let tasks: Vec<TrapTask> = scene.named(ids).map(TrapTask::of).collect();
+        if tasks.is_empty() {
+            bail!(tr!("drain-nothing-visible"));
+        }
+        Ok(TrapJob::spawn(TrapRequest {
+            tasks,
+            layer_height_mm,
+        }))
+    }
+
     /// Gives up on the check going, which leaves what the last one found.
     pub fn cancel(&mut self, status: &mut Status) {
         if self.job.take().is_some() {
@@ -94,9 +117,13 @@ impl DrainTool {
         self.checked = false;
     }
 
-    /// Drains a running check into the scene and the stage notice. Returns whether one is
-    /// still going, which is what tells the window to keep repainting.
+    /// Drains a running check or drain search into the scene and the stage notice. Returns
+    /// whether one is still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
+        self.poll_check(scene, status) | self.poll_auto(scene, status)
+    }
+
+    fn poll_check(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
             return false;
         };
@@ -107,12 +134,7 @@ impl DrainTool {
         self.job = None;
         match outcome {
             TrapOutcome::Checked(models) => {
-                let found: usize = models.iter().map(|model| model.trapped.len()).sum();
-                for model in models {
-                    if let Some(object) = scene.get_mut(model.id) {
-                        object.traps.set(model.trapped);
-                    }
-                }
+                let found = land_checked(scene, models);
                 self.checked = true;
                 *status = Status::Info(tr!("drain-found", count = found));
             }
@@ -202,6 +224,17 @@ fn size_of(state: &DrainState) -> HoleSize {
         shape: state.shape,
         turn_deg: state.turn_deg,
     }
+}
+
+/// Marks on each model checked the pockets the check found in it; answers how many in all.
+pub fn land_checked(scene: &mut Scene, models: Vec<Pockets>) -> usize {
+    let found = models.iter().map(|model| model.trapped.len()).sum();
+    for model in models {
+        if let Some(object) = scene.get_mut(model.id) {
+            object.traps.set(model.trapped);
+        }
+    }
+    found
 }
 
 /// The pockets of resin the last drainage check found in one model, in its own space.

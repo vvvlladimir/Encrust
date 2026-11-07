@@ -3,7 +3,9 @@
 
 mod batch;
 mod containers;
+mod drains;
 mod editing;
+mod findings;
 mod hollowing;
 mod import;
 mod keep_solid;
@@ -11,7 +13,10 @@ mod measure;
 mod modelling;
 mod plate;
 mod png_stack;
+mod prepare;
 mod profiles;
+mod recipe;
+mod recipes;
 mod slicing;
 mod support;
 mod talking;

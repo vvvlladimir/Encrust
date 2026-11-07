@@ -2,6 +2,7 @@ use core_pipeline::PipelineError;
 use core_plate::PlateError;
 use core_raster::RasterError;
 use core_slicer::SliceError;
+use core_volume::VolumeError;
 
 /// What can stop a plate on its way to a printable file.
 #[derive(Debug, thiserror::Error)]
@@ -20,6 +21,9 @@ pub enum EngineError {
 
     #[error("cannot slice the model to work out where it needs supports")]
     Supports(#[source] SliceError),
+
+    #[error("cannot drill the drain holes a search tried")]
+    Drill(#[source] VolumeError),
 
     #[error("cannot find an orientation for the model")]
     Orient(#[from] PlateError),

@@ -39,6 +39,7 @@ core-engine.workspace = true
 jiff.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
+core-recipe.workspace = true
 core-slicer.workspace = true
 core-raster.workspace = true
 core-supports.workspace = true

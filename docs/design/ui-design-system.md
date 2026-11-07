@@ -57,7 +57,7 @@ on `accent`.
 `theme::Scene` is the other half of the tokens: the cool resin of the model (`object`), the
 warm grey `support` and a `support_tint` per group after it, `selected`, `unsound`,
 the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
-with, `painted` and `blocked`, the `fault` the Repair tool marks the finding in view with and the darker `fault_rest` the others, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
+with, `painted` and `blocked`, the rose `shown` a clean surface keeps supports off, the `fault` the Repair tool marks the finding in view with and the darker `fault_rest` the others, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
 volume, the full red `meets` of the seam where models meet, the `gizmo` handles, the plate's `grid_minor` and `grid_major`, the translucent
 `plate_border` and `volume`, the `plate` the plate is filled with, the dashed `section_frame`, the three `plate_axis` arrows, the
@@ -153,10 +153,11 @@ paints from tokens only.
 | `picture_square` | A square of a picture, or an empty raised one, a caret on a dark disc saying a click opens more: the relief's picture |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
 | `notice_card`, `job_notice` | A notice over the stage's foot, 40 tall and at most 440 wide: the glyph alone coloured, the words with an optional small line under them, one action washed in the accent and a close; a job's turning glyph, share done, quiet Cancel and bar |
+| `run_box`, `RunState` | A run in the place of the picker that started it, a dropdown's box and padding: washed in `accent_wash` to the share done, the turning glyph, the pause glyph in `accent_soft` or the warning glyph in `danger` with a `danger` edge, the words cut to fit and read whole on hover, the percent at the right |
 | `hint_bar` | How to work the viewport with the tool in hand: a pill over the stage under the tool row, a key in `text_high` then what it does, pairs split by a rule; short of room, the keys alone as glyphs, what each does on hover |
 | `figure_grid` | Two by two figures in one bordered box: each name over its figure, the name cut with an ellipsis, the figure never wrapped but shrunk, down to 60 %, to fit its cell, the letters in it (`m`, `s`) set small as its units |
 | `details_fold` | A *Details* row under a `figure_grid`, caret turning; what it opens stands between the grid and the row, so a card standing on the stage's foot grows upward |
-| `dropdown`, `dropdown_menu`, `dropdown_row` | Every list that drops from a box, one look: the box on `raised` with a hairline, `FIELD_H` tall — a glyph or a colour's dot, what is chosen, `· edited` in `warn`, a count, the caret — none, and no press, over a list holding nothing; the list in the chooser card 6 under the box, each row as tall with its lead, name, a figure at its right and, when chosen, a wash and a tick. The supports' list is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
+| `dropdown`, `dropdown_menu`, `dropdown_menu_wide`, `dropdown_row` | Every list that drops from a box, one look: the box on `raised` with a hairline, `FIELD_H` tall — a glyph or a colour's dot, what is chosen, `· edited` in `warn`, a count, the caret — none, and no press, over a list holding nothing; the list in the chooser card 6 under the box, as wide as the box or, `wide`, as the row the box shares with a button; each row as tall with its lead, name cut with an ellipsis before its figure, a figure at its right and, when chosen, a wash and a tick. The supports' list is the groups on the plate — colour, count, hide, remove, Auto's shapes set in under it — over the profiles holding nothing |
 | `MenuRow`, `menu_row`, `menu_sub`, `menu_rule`, `menu_style` | A row of the File, Edit and View menus, 28 tall: glyph, or a tick in `accent_soft` for what is on; name; keys or a figure at the right, or a caret that opens a submenu on hover; off, in `text_low` with why under it. A hairline between groups; the menu on `raised` ringed in `line` |
 | `popup_menu`, `context_menu`, `menu_button` | Every menu egui opens, laid out top down and never justified, so a wrapped line keeps its letters' own spacing; `clippy.toml` bans egui's own |
 | `theme_card` | A choice of how the window looks, 140 × 124: a picture of the window in that palette (both halved for System), then a radio, the name and a line under it; chosen, ringed in the accent |
@@ -190,6 +191,7 @@ paints from tokens only.
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
 | `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
+| `chain_step`, `ChainStep`, `chain_seam`, `chain_drop_mark`, `chain_ghost` | Steps run one after another: a folding card on a rail, its number in a disc on it, a grip, glyph, name, a one-line summary, question mark, switch, caret and its actions, some only while open; seams with a + on the rail; where a dragged card lands, and the card by the pointer |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
 | `found_row` | Something found that is not the user's yet: a dashed row of glyph, name, a figure and Add |
 | `zoom_bar` | Zoom out, the zoom in percent, zoom in and show the whole, small squares in a row for a card over a picture |
@@ -201,7 +203,8 @@ paints from tokens only.
 | `rail_button` | A tool in the tool row, a glyph over its name, washed in the accent when it is the tool in use, with a dot while the tool needs attention and its key's digit while the pointer is on the row |
 | `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
 | `Segmented` | Mutually exclusive choices sunk in one bordered track, the chosen one a pill raised in the accent's wash and ringed in `line` |
-| `switch` | A labelled toggle with an animated knob |
+| `switch` | A labelled toggle with an animated knob, its label cut to the row and read whole on hover |
+| `switch_with_toggle` | A `switch` with an `icon_toggle` before its track while on: a tool for what it turns on |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |
@@ -211,6 +214,7 @@ paints from tokens only.
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |
 | `colour_field` | A `FIELD_H` swatch of a colour over a checkerboard; a click opens a picker: a saturation and value square, a hue strip, an opacity strip over the checkerboard, and the colour as `#RRGGBBAA` beside its opacity |
 | `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
+| `condition_row`, `ConditionRow`, `field_error` | A named condition typed in the code face, a `text_row`'s shape, what it says while empty in the box; while it does not read, ringed in `danger` with why on one line under it, cut short and read whole on hover; at its right `BRACKETS_CURLY` listing, 340 wide and scrolling past 360, the names it can read under their headings, each by its meaning with the name at the right, a press adding it to the end; `field_error` that line alone, for an error a form shows elsewhere |
 | `page_title`, `block_title`, `tool_title` | A page's title with a quieter aside in its face; a form block's title in `text_mid`; a tool card's glyph in the accent and its name |
 | `page_heading` | A page's title and, smaller and quieter after it, the name it belongs under: a machine and its maker |
 | `page_trail` | A form's title after the page it was opened from, which takes the way back, and a caret |
@@ -272,7 +276,9 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Import, export | `DOWNLOAD_SIMPLE`, `UPLOAD_SIMPLE` |
 | Reset, look again or rescan | `ARROW_COUNTER_CLOCKWISE`, `ARROWS_CLOCKWISE` |
 | Drop to the plate, lay on face, centre | `ALIGN_BOTTOM`, `HAND_POINTING`, `CROSSHAIR` |
-| Mirror, mirror a copy, auto-orient, fit | `FLIP_HORIZONTAL`, `COPY_SIMPLE`, `MAGIC_WAND`, `ARROWS_OUT` |
+| Mirror, mirror a copy, auto-orient and auto drains, fit | `FLIP_HORIZONTAL`, `COPY_SIMPLE`, `MAGIC_WAND`, `ARROWS_OUT` |
+| Prepare for print | `SEAL_CHECK` |
+| Pause | `PAUSE` |
 | Points, planes | `LINE_SEGMENT`, `PARALLELOGRAM` |
 | Pick, place, paint, shape | `CURSOR`, `PLUS`, `PAINT_BRUSH`, `WRENCH` |
 | Texture, text, combine | `CHECKERBOARD`, `TEXT_T`, `UNITE` |
@@ -286,6 +292,9 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | New project, recent, test prints | `FILE_PLUS`, `CLOCK_COUNTER_CLOCKWISE`, `TEST_TUBE` |
 | Undo, redo, select all, move to plate | `ARROW_U_UP_LEFT`, `ARROW_U_UP_RIGHT`, `SELECTION_ALL`, `ARROW_SQUARE_RIGHT` |
 | Appearance, a release's changes, a step not reached | `PALETTE`, `LIST_BULLETS`, `CIRCLE` |
+| Move a step up, down, drag it; work a setting out by an expression | `ARROW_UP`, `ARROW_DOWN`, `DOTS_SIX_VERTICAL`, `FUNCTION` |
+| A recipe's stop condition | `SIGN_OUT` |
+| Put a name into a condition | `BRACKETS_CURLY` |
 | Click, drag, Shift, Option, Command | `MOUSE_LEFT_CLICK`, `HAND_GRABBING`, `ARROW_FAT_UP`, `OPTION`, `COMMAND` |
 
 A glyph stands at one size of `theme::glyph`, named for where it stands: `HELP` 10, `CARET`

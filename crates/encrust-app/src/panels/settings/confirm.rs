@@ -132,6 +132,7 @@ fn profile_name(catalogue: &Catalogue, kind: Kind, id: &str) -> String {
             .presets(kind)
             .find(|entry| entry.id == id)
             .map(|entry| &entry.profile.name),
+        Kind::Recipe => None,
     };
     name.map_or_else(|| id.to_owned(), Clone::clone)
 }

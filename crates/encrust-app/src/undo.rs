@@ -72,6 +72,8 @@ pub struct History {
     tools: Option<Box<ToolSettings>>,
     /// How many printers and resins had been chosen when those values were read.
     chosen: u64,
+    /// Every change since the hold began waits to be one entry, see [`Self::hold`].
+    held: bool,
 }
 
 impl Default for History {
@@ -85,6 +87,7 @@ impl Default for History {
             last,
             tools: None,
             chosen: 0,
+            held: false,
         }
     }
 }
@@ -98,7 +101,7 @@ impl History {
     /// brings with it are the profile's, not an edit, so they are taken as the baseline
     /// instead of recorded.
     pub fn observe(&mut self, scene: &Scene, tools: &ToolSettings, chosen: u64, frame: Frame) {
-        if !frame.settled || frame.typing {
+        if !frame.settled || frame.typing || self.held {
             return;
         }
         let now = fingerprint(scene);
@@ -153,14 +156,17 @@ impl History {
     /// [`Self::next_edit`] when it started, as part of that edit, so one undo takes back both.
     ///
     /// The plates held for the edits recorded since get it too, so undoing one of those keeps
-    /// it; with `asked_by` not recorded yet, it joins the edit under way, as in a drag.
-    /// Answers with what `change` does to `scene`.
+    /// it; with `asked_by` not recorded yet, it joins the edit under way, as in a drag; under
+    /// a hold, the hold's entry. Answers with what `change` does to `scene`.
     pub fn land<T>(
         &mut self,
         scene: &mut Scene,
         asked_by: u64,
         mut change: impl FnMut(&mut Scene) -> T,
     ) -> T {
+        if self.held {
+            return change(scene);
+        }
         let caught_up = fingerprint(scene) == self.fingerprint;
         if let Some(index) = self.past.iter().position(|(id, _)| *id == asked_by) {
             self.carry_since(index, caught_up, &mut change);
@@ -204,15 +210,18 @@ impl History {
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.past.is_empty()
+        !self.held && !self.past.is_empty()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.future.is_empty()
+        !self.held && !self.future.is_empty()
     }
 
     /// Takes back the last edit, of the plate or of a tool.
     pub fn undo(&mut self, scene: &mut Scene, tools: &mut Tools, slicing: &mut Slicing) -> bool {
+        if self.held {
+            return false;
+        }
         let Some((id, previous)) = self.past.pop_back() else {
             return false;
         };
@@ -224,6 +233,9 @@ impl History {
 
     /// Puts back the edit the last undo took away.
     pub fn redo(&mut self, scene: &mut Scene, tools: &mut Tools, slicing: &mut Slicing) -> bool {
+        if self.held {
+            return false;
+        }
         let Some((id, next)) = self.future.pop() else {
             return false;
         };
@@ -338,7 +350,7 @@ fn fingerprint(scene: &Scene) -> u64 {
             value.to_bits().hash(&mut hasher);
         }
 
-        object.relief_painted.hash(&mut hasher);
+        (&object.relief_painted, &object.shown_painted).hash(&mut hasher);
         object.supports.painted().hash(&mut hasher);
         object.supports.blocked().hash(&mut hasher);
         for tree in object.supports.frozen() {
@@ -399,5 +411,6 @@ fn fingerprint(scene: &Scene) -> u64 {
     hasher.finish()
 }
 
+mod hold;
 #[cfg(test)]
 mod tests;

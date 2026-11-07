@@ -100,6 +100,7 @@ fn bench() -> Bench {
     );
     object.supports.set_raft_lift_mm(0.5);
     object.relief_painted.set(7, true);
+    object.shown_painted.set(3, true);
     object.hollow = ModelHollow::restored(
         vec![Blocker::ball(Vec3::splat(0.5), 0.2)],
         Vec::new(),
@@ -255,6 +256,7 @@ fn a_saved_plate_opens_as_the_plate_that_was_saved() {
     assert_eq!(after.supports.points(), before.supports.points());
     assert_eq!(after.supports.painted(), before.supports.painted());
     assert_eq!(after.relief_painted, before.relief_painted);
+    assert_eq!(after.shown_painted, before.shown_painted);
     assert_eq!(after.supports.blocked(), before.supports.blocked());
     assert!(
         (after.supports.raft_lift_mm() - 0.5).abs() < f32::EPSILON,

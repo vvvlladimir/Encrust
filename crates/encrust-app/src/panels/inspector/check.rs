@@ -1,15 +1,12 @@
 use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
-use core_geometry::Vec3;
 use egui::Color32;
 
 use crate::check::{Place, Stage};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::section::{cut_height, height_range};
-use crate::preview::{on_plate, plate_fingerprint};
+use crate::preview::plate_fingerprint;
 use crate::state::Machine;
-use crate::status::Status;
-use crate::supports::ISLANDS_GROUP;
 use crate::ui::verdict_card;
 use crate::ui::{
     describe, hint, icon, readings, secondary_button, section, section_with_actions, theme,
@@ -82,20 +79,9 @@ fn support_islands(window: &mut Window, risks: &[Risk]) {
     let Some(plan) = window.machine.preview.plan() else {
         return;
     };
-    let floors: Vec<Vec3> = risks
-        .iter()
-        .filter(|risk| Filter::Islands.admits(&risk.kind))
-        .filter_map(|risk| {
-            let floor_mm = plan.top_of(risk.layer.checked_sub(1)?)?;
-            Some(on_plate(&settings, risk.at_mm).extend(floor_mm))
-        })
-        .collect();
-    let layer_mm = plan.nominal_thickness();
-    let stood = window
-        .tools
-        .supports
-        .support_islands(&mut window.doc.scene, &floors, layer_mm);
-    window.machine.status = Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP));
+    let plate = (&mut window.doc.scene, &mut window.tools.supports);
+    let stood = crate::check::support_islands(plate, (plan, &settings), risks, None);
+    window.machine.status = stood;
 }
 
 /// What the check has found so far, the plate's own issues with the layers', for the

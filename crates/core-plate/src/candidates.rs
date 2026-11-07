@@ -1,4 +1,4 @@
-use core_geometry::{FastMap, Mesh, Scalar, Vec3};
+use core_geometry::{FastMap, Mesh, Scalar, Vec3, sphere_directions};
 
 /// How near two directions have to be before they are the same candidate, in degrees.
 /// Under this, two orientations differ by less than the wall of one layer.
@@ -17,7 +17,7 @@ const FLATS: usize = 24;
 /// The sphere covers models with no flat face; see `docs/design/orientation.md`.
 pub fn directions(mesh: &Mesh, samples: usize) -> Vec<Vec3> {
     let mut chosen: Vec<Vec3> = Vec::with_capacity(FLATS + samples);
-    for direction in flats(mesh).into_iter().chain(sphere(samples)) {
+    for direction in flats(mesh).into_iter().chain(sphere_directions(samples)) {
         if chosen.iter().all(|kept| !is_same(*kept, direction)) {
             chosen.push(direction);
         }
@@ -80,20 +80,6 @@ pub fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
     ranked
 }
 
-/// `count` directions spread evenly over the sphere by the Fibonacci lattice, which needs
-/// no triangulation and has no pole to clump around.
-pub(crate) fn sphere(count: usize) -> Vec<Vec3> {
-    let golden = std::f32::consts::PI * (3.0 - (5.0 as Scalar).sqrt());
-    (0..count)
-        .map(|index| {
-            let z = 1.0 - 2.0 * (index as Scalar + 0.5) / count as Scalar;
-            let radius = (1.0 - z * z).max(0.0).sqrt();
-            let angle = golden * index as Scalar;
-            Vec3::new(radius * angle.cos(), radius * angle.sin(), z)
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,22 +124,6 @@ mod tests {
                 flats.iter().any(|normal| normal.abs_diff_eq(axis, 1e-5)),
                 "the {axis} face is missing"
             );
-        }
-    }
-
-    #[test]
-    fn the_sphere_is_spread_and_on_the_unit_sphere() {
-        let directions = sphere(200);
-        assert_eq!(directions.len(), 200);
-        for direction in &directions {
-            assert!((direction.length() - 1.0).abs() < 1e-4);
-        }
-
-        // No two samples of a 200-point lattice land within 4 degrees of each other.
-        for (index, direction) in directions.iter().enumerate() {
-            for other in &directions[index + 1..] {
-                assert!(!is_same(*direction, *other), "{direction} and {other}");
-            }
         }
     }
 

@@ -81,6 +81,33 @@ model of a batch share one report shape; `slice` of a plate prints one entry per
 `models` beside the stack they make, and `estimate` adds `print` — layers, height, time,
 resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
+Every finding the report counts it also locates, in plate millimetres from the plate's front
+left corner as the model prints, after placement and the lift its supports give it — the frame
+`--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0400).
+`cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
+`at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
+`stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
+`slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
+lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
+`supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model.
+No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
+`auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
+`drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,
+`at_mm` the middle of its mouth, `axis` the unit direction it is drilled in, `diameter_mm`
+and `depth_mm`; and `scans`, the times the model was cut to choose them:
+
+```json
+"auto_drains": {
+  "pockets": [{"at_mm": [8.0, 8.0, 2.25], "volume_mm3": 1724.1,
+               "bounds_mm": {"min": [2.0, 2.0, 2.0], "max": [14.0, 14.0, 14.0]}, "drained": true}],
+  "holes": [{"pocket": 0, "role": "drain", "at_mm": [16.0, 8.0, 3.75], "axis": [-1.0, 0.0, 0.0],
+             "diameter_mm": 3.0, "depth_mm": 5.0},
+            {"pocket": 0, "role": "vent", "at_mm": [8.0, 8.0, 16.0], "axis": [0.0, 0.0, -1.0],
+             "diameter_mm": 3.0, "depth_mm": 5.0}],
+  "scans": 4
+}
+```
+
 Resin is counted from the masks and nowhere else — `cured volume` in the text, `cured` in
 the JSON — so a run without a printer reports layers and no resin at all (ADR 0206). The
 `volume` an `inspect` of a model with several shells prints is their sum, and says so where
@@ -167,6 +194,15 @@ encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
   --keep-solid 40,20,15:40,20,45 --keep-solid 60,30,70 --keep-solid-size 3 -o figure.goo
 ```
 
+`--keep-solid-under MM` keeps the wall solid wherever the model is thinner than `MM`, in
+any `--hollow-mode`, as the Hollow tool's Keep thin parts solid does (ADR 0404): a figure's
+fingers and a sword's blade stay solid while its body is hollowed.
+
+```sh
+encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 --keep-solid-under 6 \
+  -o figure.goo
+```
+
 Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
 supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
 a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
@@ -189,12 +225,30 @@ encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
 point is in plate millimetres from the plate's front left corner, after `--center` and the
-rest of the placement; `encrust inspect model.stl --center --printer …` prints the bounds to
-pick it out of:
+rest of the placement and after the lift `--supports` gives the model, which is worked out
+before the hole is placed: the frame the report gives `slicing.trapped` in, so a pocket's
+`at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …` prints the
+bounds to pick it out of. A model its supports stand otherwise than planned — a mould, whose
+wall grows under it — refuses a point:
 
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --drain 4 --drain-at 30,30,60 -o model.goo
+```
+
+`--drain-at auto` drills, after hollowing and before supports, the holes the engine proves
+empty every pocket still trapped: for each, a drain as low as it goes, on a face looking down
+where it can, and a vent as high, both `--drain` across, each kept only once a scan of the
+model with it drilled finds its pocket gone (ADR 0396). A hole stops half a millimetre short of
+the cavity's far side, and a cavity too thin to stop in is not drilled across. A model resting on
+the plate or its raft — on no supports, set on the plate by `--orient`, or by a profile with no
+`z_lift_mm` — gets no mouth within a millimetre of it. `--no-drain-vent` leaves the vents out; `auto` goes beside
+points, which are drilled first. A pocket no hole drains stays in `slicing.trapped`, and the
+run is unclean:
+
+```sh
+encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --hollow 2 --drain-at auto --supports auto --strict -o model.goo
 ```
 
 A point off an edge or a corner of the model, rather than over a face, is refused: the hole
@@ -277,7 +331,9 @@ encrust slice model.stl \
 
 Turn the model the way it prints best, at its `--scale` and before anything else, reported as the
 `--rotate` that repeats the turn — `--orient-goal` searches for `fewest-supports` (the
-default), `least-peel`, `shortest-print` or `auto`, which balances the three, and
+default), `least-peel`, `shortest-print` or `auto`, which balances the three;
+`--clean-surface` holds any of them to the fewest contacts where the model shows, read off
+its shape, as painting what shows is done in the window (ADR 0410); and
 `--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
@@ -308,11 +364,122 @@ thickness on top when it has one, before anything is put under it, the way the w
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
+`--recipe ID|PATH` on `slice`, `estimate` and `batch` takes each model through a recipe step
+by step (`docs/design/recipes.md`, ADR 0403): a built-in one by id, one of yours by file
+stem, or a recipe file by its path. Each step
+is decided on the model as the steps before left it and run by the call its flag makes:
+`orient` as `--orient`, `repair` as `--repair`, `hollow` as `--hollow`, `drain` as
+`--drain-at auto`, or a hole at each of `points`, fractions of the box the model stands in,
+snapped onto the surface as `--drain-at` snaps one, and `supports` as `--supports`. `check`
+cuts and measures the plate as the report does, `arrange` is `--arrange`, and `save` writes the
+plate there and then into its `folder` under its `name` template, the home and the default
+name without them, and with `send = true` sends it to the first printer the profile lists, as
+`encrust printer send` does; a send with no printer to go to is refused before anything is
+cut. A gate that holds ends the run with its message and exit code 1, writing nothing; a pause
+says its message and goes on; `estimate` saves nothing. A file that does not read or check is
+refused with what is wrong in it.
+
+A flag typed for a model, or a plate file's key, wins over the setting it shapes in every step
+of its kind: `--hollow`, `--hollow-mode`, `--hollow-open-floor`, `--infill` and
+`--keep-solid-under`;
+`--no-drain-vent`, `--drain-at auto` and `--drain-plugs`; `--supports`, `--support-profile`
+and `--support-cavity`; `--orient-goal` and `--max-tilt`; `--repair=METHOD`. `--orient`,
+`--repair`, `--hollow` and `--supports` also run every step of their kind whatever its `when`,
+and are refused where the recipe has none, naming the flag, or the plate file's `hollow` or
+`supports` that stood for it; under a recipe they run at its
+steps, not at import. `--rotate` makes `turned` true. A `--drain-at` point,
+`--channel` and `--drain-support-at` point at the model as imported, which a step may turn,
+and are refused. A drain step's `plugs = true` lays a plug for each hole it drills, as
+`--drain-plugs` does; left out, it lays none.
+
+`-o` writes the plate as the recipe leaves it. Without it a recipe must save the plate itself,
+and the report is of the last file it saved; with neither nothing would be written, and the run
+is refused. `--json` gives each model `recipe`, what each step decided, on what, and with which
+settings:
+
+```json
+"recipe": {"name": "Busts", "steps": [
+  {"index": 0, "kind": "hollow", "decision": "run",
+   "read": {"saves_ml": 42.0, "big_ml": 30.0}, "settings": {"wall_mm": 2.0}},
+  {"index": 1, "kind": "drain", "decision": "run", "read": {"hollow": true},
+   "settings": {"vent": true}, "holes": 2},
+  {"index": 2, "kind": "check", "decision": "run", "read": {}, "settings": {}, "retries": 1},
+  {"index": 3, "kind": "save", "decision": "run", "read": {}, "settings": {"folder": "~/prints"},
+   "saved": "/home/me/prints/bust.goo"}]}
+```
+
+`decision` is `run`, `skip`, `stop`, `pause` or `disabled`; `note` says why a step that ran did
+nothing, why it failed where `on_fail = "skip"` let the run go on, or what a gate or pause said.
+
+```sh
+encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
+  --recipe busts.toml --json
+encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe busts.toml \
+  --hollow 3 -o sliced/
+```
+
+The built-in recipes, by id: `prepare` below; `miniatures` (repair if open, orient for the
+least peel with a clean surface, tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
+supports, a check that supports islands again up to twice, and a gate on any left). Why
+these two: ADR 0408. Your own are the files `<id>.toml` in the
+`recipes/` folder beside your profiles (where `profiles` keeps them, `ENCRUST_PROFILE_DIR`
+moves it); `--recipe <id>` takes the built-in of that id first, so a file of yours named
+like one is reached by its path. `recipes list` prints each built-in recipe and then yours,
+one that would not read with its error, and `recipes show <ID|PATH>` prints a recipe as the
+TOML it reads back, comments aside, to copy and edit; `--json` for both:
+
+```sh
+encrust recipes list
+encrust recipes show miniatures > my-minis.toml
+encrust slice figure.stl --printer elegoo-mars-4-ultra --resin my-grey --recipe miniatures
+```
+
+`--prepare` is `--recipe prepare`, the autopilot of ADR 0402 with nothing tuned, and writes
+to `out` without `-o`. In order:
+
+1. **Orient** as `--orient --orient-goal auto`, judged on the automatic supports, unless
+   `--rotate` was given or a plate file turns the model; `--orient` runs it to its goal.
+2. **Repair** as `--repair` does, only when import finds a defect: a hole, a face without area
+   or one drawn twice. `--repair=METHOD` picks the method and always runs; `--no-validate`
+   skips it.
+3. **Hollow** at Hollow's default 2 mm wall, with no infill, only where `inspect`'s `solid`
+   line names a saving: at least 10 ml and 40 % of the model (ADR 0393). `--hollow MM`, or a
+   plate file's `hollow`, hollows it whatever the saving, at that wall.
+4. **Drain** a hollowed model as `--drain-at auto`, a vent included.
+5. **Stop** where resin stays trapped in the cavity after it, saying so.
+6. **Support** with `--supports auto`, or the profile `--supports`, `--support-profile` or a
+   plate file names, holding up the cavity of a hollowed model.
+7. **Stop** where the model on its supports does not fit the build volume, saying so.
+
+A flag that shapes a step the model did not get — `--no-drain-vent`, `--infill`,
+`--hollow-open-floor` — changes nothing. `--prepare` does not imply `--strict`: the run is
+judged as ever, and `--strict` decides what is kept. A project carries its own steps and
+refuses it, and `--recipe`. The text report says what was decided under `Prepared`, and
+`--json` as `prepared` beside each model's other fields, for `--recipe prepare` too:
+
+```json
+"prepared": {"repaired": false, "oriented": true,
+             "hollowed": {"wall_mm": 2.0, "saves_mm3": 44800.0},
+             "drained": true, "supports": "Auto"}
+```
+
+`repaired` says the model was repaired, `oriented` that a search turned it, `hollowed` the
+wall, or `null` for a model printed solid, with `saves_mm3` the saving reckoned before
+hollowing, `null` for a wall `--hollow` gave; `drained` that the proven search ran, and
+`supports` the name of the profile the supports are built to.
+
+```sh
+encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
+  --prepare --json -o model.goo
+encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
+  --prepare --hollow 3 --supports light -o model.goo
+```
+
 ## Plates: several models, a plate file, a project
 
 Several models go on one plate. `--arrange` spreads them, biggest first; without it each
-stands where its file put it. `--center` and `--drain-at` point at one model, so they are
-refused for several:
+stands where its file put it. `--center` and a `--drain-at` point aim at one model, so they
+are refused for several; `--drain-at auto` drains each model on its own:
 
 ```sh
 encrust slice a.stl b.stl c.stl \
@@ -338,6 +505,7 @@ supports = "medium"             # any support profile `profiles list` names
 [[model]]
 path = "b.stl"
 hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; open_floor = true opens a shell
+# keep_solid_under_mm = 6 in `hollow` keeps the wall solid where the model is thinner, as --keep-solid-under
 ```
 
 A project saved by the window slices its models as they were saved: the file holds its
