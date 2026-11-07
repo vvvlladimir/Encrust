@@ -12,7 +12,7 @@ use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene};
 use crate::ui::{
     Segment, Segmented, describe, icon, kept, number_row, secondary_button, section, step_bar,
-    switch, toggle_button,
+    switch, switch_with_toggle,
 };
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
@@ -184,21 +184,23 @@ pub(super) fn auto_orient_section(ui: &mut egui::Ui, window: &mut Window, id: Ob
 /// model shows, which is read off its shape where nothing is painted.
 fn clean_surface(ui: &mut egui::Ui, window: &mut Window) {
     let orient = &mut window.tools.orient;
-    switch(
+    let paint = tr!("position-paint-shown");
+    let brushing = orient.shown_brush.brushing;
+    let toggled = switch_with_toggle(
         ui,
         &mut orient.settings.clean_surface,
         &tr!("position-clean-surface"),
+        (icon::PAINT, &paint, brushing),
     );
     if !orient.settings.clean_surface {
         orient.shown_brush.brushing = false;
         return;
     }
-    describe(ui, &tr!("position-clean-surface-about"));
-    let label = tr!("position-paint-shown");
-    if toggle_button(ui, icon::PAINT, &label, orient.shown_brush.brushing).clicked() {
-        orient.shown_brush.brushing = !orient.shown_brush.brushing;
+    if toggled {
+        orient.shown_brush.brushing = !brushing;
         orient.stop_picking();
     }
+    describe(ui, &tr!("position-clean-surface-about"));
     let brush = &mut orient.shown_brush;
     if brush.brushing {
         number_row(

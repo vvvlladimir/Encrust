@@ -329,10 +329,16 @@ fn over_the_model(
 /// them. While a face is being picked the click is for the model, not for a handle over it.
 pub(crate) fn moves_by_hand(window: &Window) -> bool {
     match *window.tool {
-        Tool::Position => !window.tools.orient.picking_face,
+        Tool::Position => handles_out(&window.tools.orient),
         Tool::Relief => window.tools.relief.mode == ReliefMode::Combine,
         _ => false,
     }
+}
+
+/// Whether Position has its handles out: not while a click lays a face or the brush
+/// paints what shows, which would take the press meant for the model.
+fn handles_out(orient: &crate::orient::OrientTool) -> bool {
+    !orient.picking_face && !orient.paints_shown()
 }
 
 /// Whether the handles are out this frame: the tool moves by hand and no modal covers them.
@@ -390,6 +396,18 @@ mod tests {
         assert!(reads_shift_click(Tool::Paint, &tools), "a line of supports");
         assert!(reads_shift_click(Tool::Hollow, &tools), "a rod of blockers");
         assert!(!reads_shift_click(Tool::Position, &tools), "shift pans");
+    }
+
+    #[test]
+    fn the_handles_are_put_away_while_the_brush_paints_what_shows() {
+        let mut orient = crate::orient::OrientTool::default();
+        assert!(handles_out(&orient));
+        orient.settings.clean_surface = true;
+        orient.shown_brush.brushing = true;
+        assert!(
+            !handles_out(&orient),
+            "a press on the handles paints instead"
+        );
     }
 
     #[test]

@@ -14,6 +14,10 @@ use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::{Reading, Status};
 
+mod shown;
+
+pub use shown::{OrientState, ShownBrush};
+
 /// A turn this small is the model already standing the way it should.
 const SETTLED_DEG: f32 = 0.5;
 
@@ -58,27 +62,6 @@ impl Default for OrientTool {
             adjacency: None,
             offers: Vec::new(),
             asked: None,
-        }
-    }
-}
-
-/// The brush that paints the faces of a model that show, which a clean surface keeps
-/// supports off (ADR 0410), and the stroke it has going.
-#[derive(Debug, Clone, Copy)]
-pub struct ShownBrush {
-    pub brushing: bool,
-    pub radius_mm: f32,
-    pub stroke: bool,
-    pub last_daub: Option<Vec2>,
-}
-
-impl Default for ShownBrush {
-    fn default() -> Self {
-        Self {
-            brushing: false,
-            radius_mm: 2.0,
-            stroke: false,
-            last_daub: None,
         }
     }
 }
@@ -144,11 +127,6 @@ impl Facet {
 impl OrientTool {
     pub fn is_running(&self) -> bool {
         self.job.is_some()
-    }
-
-    /// Whether a drag over a model paints where it shows.
-    pub fn paints_shown(&self) -> bool {
-        self.settings.clean_surface && self.shown_brush.brushing && !self.is_running()
     }
 
     /// Points at triangle `seed` of `object`, and keeps the flat face it belongs to as

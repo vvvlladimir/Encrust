@@ -204,6 +204,7 @@ paints from tokens only.
 | `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
 | `Segmented` | Mutually exclusive choices sunk in one bordered track, the chosen one a pill raised in the accent's wash and ringed in `line` |
 | `switch` | A labelled toggle with an animated knob |
+| `switch_with_toggle` | A `switch` with an `icon_toggle` before its track while on: a tool for what it turns on |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |

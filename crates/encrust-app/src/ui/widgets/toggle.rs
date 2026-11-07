@@ -37,6 +37,45 @@ pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     response
 }
 
+/// A labelled switch with an icon toggle standing before its track while it is on: a tool
+/// that works on what the switch turns on. Answers whether the toggle was clicked.
+pub fn switch_with_toggle(
+    ui: &mut Ui,
+    on: &mut bool,
+    label: &str,
+    (glyph, tooltip, toggled): (&str, &str, bool),
+) -> bool {
+    let colors = theme::colors();
+    let ink = if ui.is_enabled() {
+        colors.text_mid
+    } else {
+        colors.text_low
+    };
+    let size = vec2(ui.available_width(), theme::ROW_H);
+    ui.allocate_ui_with_layout(
+        size,
+        egui::Layout::right_to_left(egui::Align::Center),
+        |ui| {
+            let (track, response) = flip(ui, TRACK, on, label);
+            paint_track(ui, &response, track, *on);
+            let clicked = *on && {
+                ui.add_space(theme::ITEM_GAP);
+                super::icon_toggle(ui, glyph, tooltip, toggled).clicked()
+            };
+            let rest = ui.available_rect_before_wrap();
+            ui.painter().text(
+                pos2(rest.left(), rest.center().y),
+                Align2::LEFT_CENTER,
+                label,
+                theme::label(),
+                ink,
+            );
+            clicked
+        },
+    )
+    .inner
+}
+
 /// The track alone, for a heading that already names what it turns on.
 pub fn bare_switch(ui: &mut Ui, on: &mut bool, name: &str) -> Response {
     let (track, response) = flip(ui, TRACK, on, name);

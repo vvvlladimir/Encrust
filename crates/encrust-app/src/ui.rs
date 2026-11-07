@@ -31,7 +31,7 @@ pub use widgets::{
     quiet_button, quiet_square, rail_button, readings, rename_box, row_name, search_button,
     secondary_button, section, section_with_action, section_with_actions, section_with_switch,
     spinner, start_rename, step_bar, subheading, subheading_with_switch, summary_button, swatch,
-    switch, text_box, text_row, toggle_button, tone, unit_field, vertical_hairline, zone_button,
+    switch, switch_with_toggle, text_box, text_row, toggle_button, tone, unit_field, vertical_hairline, zone_button,
 };
 pub use widgets::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use widgets::{ChipPart, chip_text_w, name_line, paint_chip, row_mark};

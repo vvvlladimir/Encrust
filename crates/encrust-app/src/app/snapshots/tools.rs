@@ -217,3 +217,21 @@ fn the_preview_of_a_cut_cube() {
     app.machine.preview.set_layer(211);
     picture("preview", app);
 }
+
+/// Position keeping a clean surface with its brush in hand, in a window tall enough to
+/// reach the Auto-orient section, a side of the cube painted as what shows.
+#[test]
+fn the_position_tool_painting_what_shows() {
+    let mut app = pictured();
+    app.tool = Tool::Position;
+    app.tools.orient.settings.clean_surface = true;
+    app.tools.orient.shown_brush.brushing = true;
+    if let Some(cube) = app.doc.scene.objects_mut().first_mut() {
+        cube.shown_painted = [0, 1].into_iter().collect();
+    }
+    let tall = egui::vec2(WINDOW.x, 1500.0);
+    let mut harness = drawn(Harness::builder().with_size(tall).wgpu(), app);
+    harness.snapshot("tool_position_clean_surface");
+    let mut results = SnapshotResults::new();
+    results.extend(harness.take_snapshot_results());
+}

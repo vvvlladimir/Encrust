@@ -163,8 +163,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 **Auto-orient:**
 - Searches for the best angle for one of four presets: **fewest supports**, **least
   peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
-  plate-wide **Auto-orient plate** uses the same preset. The preset and **Clean surface**
-  reset when the window reopens.
+  plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
+  the window reopens; **Clean surface** and the brush size are remembered and undone with
+  the other tool settings.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
   then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
   as they stand.
@@ -172,8 +173,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   put the fewest contacts where the model shows — within about one contact — the preset
   takes its best. A pose with a few more contacts on show is offered beside the choice
   when it wins at least a quarter more of the preset, such as a quarter less resin.
-- **Paint what shows**, under the switch, paints the faces that must stay clean, such as a
-  face, with a brush: alt to erase, **Clear what shows** to start again. Painted faces are
+- The brush in the **Clean surface** row paints the faces that must stay clean, such as a
+  face: alt to erase, **Clear what shows** to start again. While it paints, the move and
+  turn handles are put away, so a stroke over them paints the model. Painted faces are
   drawn in rose while the switch is on. Once a model has any face painted, only the painted
   faces count as showing; with none, what shows is found from the shape: open surface with
   fine detail, while folds, the underside and smooth areas take the contacts. Painting is

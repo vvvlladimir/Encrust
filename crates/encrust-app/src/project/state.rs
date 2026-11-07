@@ -205,14 +205,15 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
             ..tools.drain.state.clone()
         },
         cut: manifest.cut,
-        // The manifest has no entry for the Relief, Text, Combine or Repair tools, how the
-        // next blocker is sized or the recipe picked, so they keep what they are set to.
+        // The manifest has no entry for the Relief, Text, Combine, Repair or Auto-orient
+        // tools, how the next blocker is sized or the recipe picked, so they keep theirs.
         relief: tools.relief.state,
         array: manifest.array,
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
         repair: tools.repair.state,
         keep_solid: tools.hollow.blocker,
+        orient: tools.orient.state(),
         recipe: tools.prepare.recipe.clone(),
         print: None,
     }
