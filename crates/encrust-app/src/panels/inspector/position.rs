@@ -43,15 +43,15 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     };
     axes(ui, &mut window.view.gizmo.axes);
     let axes = window.view.gizmo.axes;
-    position(ui, &mut window.doc.scene, &window.doc.plate, id);
+    position(ui, &mut window.doc.scene, &window.doc.plate, id, axes);
     rotation(ui, window, id, axes);
     scale(ui, &mut window.doc.scene, &window.doc.plate, id, axes);
     place::place(ui, window, id);
     place::auto_orient_section(ui, window, id);
 }
 
-/// Whether the handles, the turn buttons and the sizes follow the plate's axes or the
-/// model's own. Where the model stands and how it is turned are read on the plate's either way.
+/// Whether the handles and the fields follow the plate's axes or the model's own. On its own
+/// axes Move and Rotate read zero and take a step from where the model stands.
 fn axes(ui: &mut egui::Ui, axes: &mut Axes) {
     egui::Frame::new()
         .inner_margin(theme::PANEL_MARGIN)
@@ -67,7 +67,7 @@ fn axes(ui: &mut egui::Ui, axes: &mut Axes) {
     hairline(ui);
 }
 
-fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
+fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId, axes: Axes) {
     let actions = [
         (icon::RESET, tr!("position-move-reset")),
         (icon::DROP_TO_PLATE, tr!("position-on-plate")),
@@ -80,13 +80,19 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
         let Some(object) = scene.get_mut(id) else {
             return;
         };
-        let mut pivot = object.pivot();
+        let pivot = object.pivot();
+        let step_id = ui.id().with("move-step");
+        let mut shown = match axes {
+            Axes::Global => pivot.translation,
+            Axes::Local => held_step(ui, step_id),
+        };
+        let before = shown;
         let mut changed = false;
         for (axis, axis_name) in AXIS_NAMES.iter().enumerate() {
             ui.horizontal(|ui| {
                 label_column(ui, axis);
                 let width = ui.available_width();
-                let value = &mut pivot.translation[axis];
+                let value = &mut shown[axis];
                 let name = tr!("position-move-along", axis = *axis_name);
                 let mm = tr!("unit-mm");
                 changed |= unit_field(ui, &name, value, &mm, POSITION_DRAG, ANY, Some(2), width);
@@ -95,13 +101,32 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
         // Written back only on a frame the user changed a number: settling every frame
         // would let the round trip through the centre of mass accumulate.
         if changed {
-            object.settle(pivot);
+            keep_step(ui, step_id, shown);
+            let asked = if axes == Axes::Local {
+                shown - before
+            } else {
+                shown
+            };
+            let translation = moved_to(pivot, asked, axes);
+            object.settle(Transform {
+                translation,
+                ..pivot
+            });
         }
     });
     match pressed {
         Some(0) => recentre(scene, plate, id),
         Some(_) => place::stand_on_plate(scene, id),
         None => {}
+    }
+}
+
+/// Where the Move fields put the model: at `typed` on the plate, or `typed` along its own axes
+/// from where it stands.
+fn moved_to(pivot: Transform, typed: Vec3, axes: Axes) -> Vec3 {
+    match axes {
+        Axes::Global => typed,
+        Axes::Local => pivot.translation + pivot.rotation * typed,
     }
 }
 
@@ -129,13 +154,20 @@ fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
     }
 }
 
-/// The angles the model is turned to, and the buttons that turn it further, about the
-/// plate's axes, so a stretch the model carries turns with it.
+/// The angles the model is turned to on the plate, or zero on its own axes, and the buttons
+/// that turn it further. Answers the turn about the plate's axes, so a stretch turns with it.
 fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> {
-    let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
-    // Rounded to what the field shows, plus zero, so float dust never reads as "-0.0".
-    let shown = |radians: f32| (radians.to_degrees() * 10.0).round() / 10.0 + 0.0;
-    let mut degrees = Vec3::new(shown(x), shown(y), shown(z));
+    let step_id = ui.id().with("turn-step");
+    let mut degrees = match axes {
+        Axes::Global => {
+            let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
+            // Rounded to what the field shows, plus zero, so float dust never reads as "-0.0".
+            let shown = |radians: f32| (radians.to_degrees() * 10.0).round() / 10.0 + 0.0;
+            Vec3::new(shown(x), shown(y), shown(z))
+        }
+        Axes::Local => held_step(ui, step_id),
+    };
+    let before = degrees;
     let mut typed = false;
     let mut turn = Quat::IDENTITY;
     for axis in 0..3 {
@@ -159,15 +191,41 @@ fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> 
         });
     }
     if typed {
-        let wanted = Quat::from_euler(
-            EulerRot::XYZ,
-            degrees.x.to_radians(),
-            degrees.y.to_radians(),
-            degrees.z.to_radians(),
-        );
-        return Some(wanted * rotation.inverse());
+        keep_step(ui, step_id, degrees);
+        let asked = if axes == Axes::Local {
+            degrees - before
+        } else {
+            degrees
+        };
+        return Some(typed_turn(rotation, asked, axes));
     }
     (turn != Quat::IDENTITY).then(|| about_plate(rotation, turn, axes))
+}
+
+/// What the Local fields at `id` have been stepped by since the button went down: shown while
+/// dragged, each frame applying only its own part, and zero once the button is let go.
+fn held_step(ui: &egui::Ui, id: egui::Id) -> Vec3 {
+    if ui.input(|input| input.pointer.primary_down()) {
+        ui.data(|data| data.get_temp(id)).unwrap_or(Vec3::ZERO)
+    } else {
+        ui.data_mut(|data| data.remove::<Vec3>(id));
+        Vec3::ZERO
+    }
+}
+
+fn keep_step(ui: &egui::Ui, id: egui::Id, step: Vec3) {
+    ui.data_mut(|data| data.insert_temp(id, step));
+}
+
+/// The turn about the plate's axes the Rotate fields ask for: to `degrees` on the plate, or by
+/// `degrees` about the model's own axes.
+fn typed_turn(rotation: Quat, degrees: Vec3, axes: Axes) -> Quat {
+    let radians = degrees * std::f32::consts::PI / 180.0;
+    let asked = Quat::from_euler(EulerRot::XYZ, radians.x, radians.y, radians.z);
+    match axes {
+        Axes::Global => asked * rotation.inverse(),
+        Axes::Local => about_plate(rotation, asked, axes),
+    }
 }
 
 /// `turn`, asked about the plate's axes or about the model's own, as a turn about the
@@ -457,6 +515,80 @@ mod tests {
         assert!(
             plate.abs_diff_eq(Vec3::X, 1e-5),
             "a turn about the plate's Z swings -Y round to X, got {plate:?}"
+        );
+    }
+
+    #[test]
+    fn a_local_move_steps_along_the_models_own_axes() {
+        let pivot = Transform::from_scale_rotation_translation(
+            Vec3::ONE,
+            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            Vec3::new(10.0, 20.0, 5.0),
+        );
+        let typed = Vec3::new(10.0, 0.0, 0.0);
+        assert_eq!(moved_to(pivot, typed, Axes::Global), typed);
+        let local = moved_to(pivot, typed, Axes::Local);
+        assert!(
+            local.abs_diff_eq(Vec3::new(10.0, 30.0, 5.0), 1e-4),
+            "turned a quarter about Z, its own X is the plate's Y: 10 mm on from (10, 20, 5), got {local:?}"
+        );
+    }
+
+    #[test]
+    fn a_local_rotation_turns_by_the_angle_about_the_models_own_axis() {
+        let lying = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let turn = typed_turn(lying, Vec3::new(0.0, 0.0, 90.0), Axes::Local);
+        let own_z = turn * lying * Vec3::Z;
+        assert!(
+            own_z.abs_diff_eq(lying * Vec3::Z, 1e-5),
+            "a turn about its own Z leaves that axis where it was, got {own_z:?}"
+        );
+        let own_x = turn * lying * Vec3::X;
+        assert!(
+            own_x.abs_diff_eq(lying * Vec3::Y, 1e-5),
+            "90 degrees about its own Z swings its X onto its Y, got {own_x:?}"
+        );
+        let global = typed_turn(lying, Vec3::new(0.0, 0.0, 90.0), Axes::Global) * lying;
+        assert!(
+            global.abs_diff_eq(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2), 1e-5),
+            "on the plate the fields set the angles outright, got {global:?}"
+        );
+    }
+
+    fn frame_with_button(ctx: &egui::Context, pressed: bool, run: impl FnMut(&mut egui::Ui)) {
+        let events = vec![egui::Event::PointerButton {
+            pos: egui::pos2(10.0, 10.0),
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }];
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        let mut run = run;
+        ctx.run_ui(input, |ui| run(ui)).textures_delta.clear();
+    }
+
+    #[test]
+    fn a_local_step_shows_while_held_and_falls_back_to_zero_on_release() {
+        let ctx = egui::Context::default();
+        let id = egui::Id::new("step");
+        let step = Vec3::new(2.5, 0.0, 0.0);
+        frame_with_button(&ctx, true, |ui| keep_step(ui, id, step));
+        let mut held = Vec3::ZERO;
+        frame_with_button(&ctx, true, |ui| held = held_step(ui, id));
+        assert_eq!(
+            held, step,
+            "the dragged figure stays in the field while the button is down"
+        );
+        frame_with_button(&ctx, false, |ui| held = held_step(ui, id));
+        assert_eq!(held, Vec3::ZERO, "let go, the field reads zero again");
+        frame_with_button(&ctx, true, |ui| held = held_step(ui, id));
+        assert_eq!(
+            held,
+            Vec3::ZERO,
+            "the next press starts from zero, not the last step"
         );
     }
 
