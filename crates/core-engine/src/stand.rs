@@ -1,16 +1,21 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, lift_over_plate, transform_mesh};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, SupportPoint, WallSide, columns, generate_supports, grow,
-    low_points, mesh_trees,
+    Blocked, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns, generate_supports,
+    grow, low_points, mesh_trees,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
+
+mod lift;
+
+use lift::lift_of;
+pub use lift::{Lift, planned_lift};
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -107,6 +112,8 @@ pub struct Stood {
     pub sized: Vec<usize>,
     /// Contacts a column was stood under.
     pub standing: usize,
+    /// Indices into `contacts` of those no column could stand under.
+    pub unheld: Vec<usize>,
     pub trees: usize,
     /// The supports themselves, in plate coordinates.
     pub supports: Mesh,
@@ -135,6 +142,26 @@ pub fn stand_under(
     let (lifted_mm, surface, inner) = touched(model, lift_mm)?;
     let bvh = Arc::new(Bvh::build(&surface));
     let needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    grown(lifted_mm, &surface, &bvh, &needs, plan)
+}
+
+/// A support under each of `contacts` alone, plate mm on the model where it stands, nothing
+/// lifted and nothing else placed: Check's Support every island, added beside what stands.
+pub fn stand_at(
+    model: ToStand<'_>,
+    plan: &SupportPlan,
+    contacts: &[Vec3],
+) -> Result<Stood, EngineError> {
+    let (lifted_mm, surface, _) = touched(model, 0.0)?;
+    let bvh = Arc::new(Bvh::build(&surface));
+    // An island of no area, which an automatic profile builds to its lightest shape.
+    let needs: Vec<Need> = contacts
+        .iter()
+        .map(|contact| Need {
+            contact: *contact,
+            reason: Reason::Island { area_mm2: 0.0 },
+        })
+        .collect();
     grown(lifted_mm, &surface, &bvh, &needs, plan)
 }
 
@@ -252,6 +279,12 @@ fn grown(
     let columns = columns(&points, &placed, profiles);
     let trees = grow(&columns, &placed, profiles);
     let facing = facing(surface, bvh, &contacts);
+    let mut held = vec![false; contacts.len()];
+    for point in trees.iter().flat_map(core_supports::SupportTree::points) {
+        if let Some(slot) = held.get_mut(point) {
+            *slot = true;
+        }
+    }
     Ok(Stood {
         lifted_mm,
         contacts,
@@ -261,6 +294,11 @@ fn grown(
             .iter()
             .map(core_supports::SupportTree::tip_count)
             .sum(),
+        unheld: held
+            .iter()
+            .enumerate()
+            .filter_map(|(point, &held)| (!held).then_some(point))
+            .collect(),
         trees: trees.len(),
         supports: mesh_trees(&trees, &placed, profiles),
     })
@@ -354,20 +392,19 @@ impl Run<'_> {
 }
 
 /// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how
-/// far they moved. A model already standing at least that high is left where it is: the
-/// lift makes room under a part, it does not place it.
+/// far they moved, by [`lift_of`].
 fn lift(mesh: &mut Mesh, cuts: &mut Option<Mesh>, lift_mm: Scalar) -> Result<Scalar, EngineError> {
     let bounds = mesh.aabb().ok_or(EngineError::EmptyPlate)?;
-    if bounds.mins.z >= lift_mm {
+    let up = lift_of(&bounds, lift_mm);
+    if up <= 0.0 {
         return Ok(0.0);
     }
-    let offset = lift_over_plate(&bounds, lift_mm);
-    let moved = Transform::from_translation(offset);
+    let moved = Transform::from_translation(Vec3::Z * up);
     *mesh = transform_mesh(mesh, moved);
     if let Some(cuts) = cuts.as_mut() {
         *cuts = transform_mesh(cuts, moved);
     }
-    Ok(offset.z)
+    Ok(up)
 }
 
 /// Adds `other`'s geometry to `mesh`, keeping each face pointing at its own vertices.
@@ -383,126 +420,4 @@ fn append(mesh: &mut Mesh, other: &Mesh) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn medium() -> SupportPlan {
-        SupportPlan::of(SupportProfile::shipped("medium").expect("the medium preset ships"))
-    }
-
-    /// `mesh` with no cavity, and `cuts` taken out of it.
-    fn solid<'a>(mesh: &'a mut Mesh, cuts: &'a mut Option<Mesh>) -> ToStand<'a> {
-        ToStand {
-            mesh,
-            cavity: None,
-            cuts,
-            drill_exactly: true,
-        }
-    }
-
-    #[test]
-    fn a_model_with_no_vertices_has_nothing_to_stand_under() {
-        let error = stand_under(solid(&mut Mesh::default(), &mut None), &medium(), 0.05)
-            .expect_err("an empty mesh cannot be supported");
-        assert!(matches!(error, EngineError::EmptyPlate));
-    }
-
-    #[test]
-    fn a_layer_of_no_height_cannot_be_cut_for_contacts() {
-        let mut slab = Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, 10.0),
-                Vec3::new(10.0, 0.0, 10.0),
-                Vec3::new(0.0, 10.0, 10.0),
-                Vec3::new(0.0, 0.0, 12.0),
-            ],
-            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
-        );
-        let error = stand_under(solid(&mut slab, &mut None), &medium(), 0.0)
-            .expect_err("no layer height, no stack");
-        assert!(matches!(error, EngineError::Supports(_)));
-    }
-
-    /// Axis-aligned box from `low` to `high`, wound outward.
-    fn cuboid(mesh: &mut Mesh, low: Vec3, high: Vec3) {
-        let corner = |at: usize| {
-            Vec3::new(
-                if at & 1 == 0 { low.x } else { high.x },
-                if at & 2 == 0 { low.y } else { high.y },
-                if at & 4 == 0 { low.z } else { high.z },
-            )
-        };
-        let box_mesh = Mesh::new(
-            (0..8).map(corner).collect(),
-            vec![
-                [0, 2, 1],
-                [1, 2, 3],
-                [4, 5, 6],
-                [5, 7, 6],
-                [0, 1, 4],
-                [1, 5, 4],
-                [2, 6, 3],
-                [3, 6, 7],
-                [0, 4, 2],
-                [2, 4, 6],
-                [1, 3, 5],
-                [3, 7, 5],
-            ],
-        );
-        append(mesh, &box_mesh);
-    }
-
-    /// A 10 mm slab on a 2 mm stem standing on the plate: its underside hangs.
-    fn mushroom() -> Mesh {
-        let mut mesh = Mesh::default();
-        cuboid(
-            &mut mesh,
-            Vec3::new(4.0, 4.0, 0.0),
-            Vec3::new(6.0, 6.0, 11.0),
-        );
-        cuboid(
-            &mut mesh,
-            Vec3::new(0.0, 0.0, 10.0),
-            Vec3::new(10.0, 10.0, 12.0),
-        );
-        mesh
-    }
-
-    #[test]
-    fn a_seated_model_with_supports_stands_on_its_rafts_top() {
-        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
-        profile.raft.enabled = true;
-        let mut mesh = mushroom();
-        let stood = stand_seated(
-            solid(&mut mesh, &mut None),
-            &SupportPlan::of(profile.clone()),
-            0.05,
-        )
-        .expect("a mushroom on the plate can be supported");
-        let low_mm = mesh.aabb().expect("the mushroom has bounds").mins.z;
-
-        assert!(!stood.contacts.is_empty(), "the slab's underside hangs");
-        assert!(
-            (low_mm - profile.raft.thickness_mm).abs() < 1e-4,
-            "the raft is not printed into the stem, got {low_mm}"
-        );
-        assert!((stood.lifted_mm - profile.raft.thickness_mm).abs() < 1e-4);
-    }
-
-    #[test]
-    fn a_seated_model_needing_no_supports_stays_on_the_plate_over_a_raft() {
-        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
-        profile.raft.enabled = true;
-        let mut mesh = Mesh::default();
-        cuboid(&mut mesh, Vec3::ZERO, Vec3::splat(10.0));
-        let stood = stand_seated(
-            solid(&mut mesh, &mut None),
-            &SupportPlan::of(profile.clone()),
-            0.05,
-        )
-        .expect("a cube on the plate can be supported");
-
-        assert!(stood.contacts.is_empty(), "nothing on a cube hangs");
-        assert!(stood.lifted_mm.abs() < 1e-6, "no raft is built, so no lift");
-    }
-}
+mod tests;

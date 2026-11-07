@@ -250,6 +250,15 @@ impl DrainTool {
         self.read = None;
     }
 
+    /// Lays no plug for model `id`'s holes as they are cut now, keeping those laid already:
+    /// what a recipe's drain step with `plugs = false` asks.
+    pub fn leave_unplugged(&self, scene: &mut Scene, id: ObjectId, drift_mm: Scalar) {
+        let wanted = scene.get(id).map(|object| self.plugs_for(object, drift_mm));
+        if let Some((object, wanted)) = scene.get_mut(id).zip(wanted) {
+            object.plugs_laid = Some(wanted);
+        }
+    }
+
     /// The plugs `object` asks for now: one a hole as it is cut, through the wall.
     fn plugs_for(&self, object: &SceneObject, drift_mm: Scalar) -> PlugsLaid {
         let least = object.transform.least_scale();

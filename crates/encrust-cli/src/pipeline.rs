@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, SupportPlan, bake, cut};
+use core_engine::{Cutting, Drained, SupportPlan, bake, cut};
 use core_geometry::{Mesh, Scalar, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
@@ -15,7 +15,7 @@ use printer_profiles::{Compensation, EdgeSmoothing, MaterialProfile, PrinterProf
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
-use crate::hollowing::{self, HollowArgs, HollowReport};
+use crate::hollowing::{self, AutoReport, Ground, HollowArgs, HollowReport, Placed, auto_drains};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
@@ -30,10 +30,12 @@ mod place;
 mod relief;
 
 use checked::checked;
+pub(crate) use checked::{read_again, repaired_later};
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
 pub use place::{OrientSummary, orient_settings};
 use place::{centred, place};
+pub(crate) use place::{orientation, turn_in_place};
 use relief::press_relief;
 
 /// How a run talks while it works, and what can stop it.
@@ -44,6 +46,8 @@ pub struct Watch<'a> {
     /// Draw a bar over the layers as they are written.
     pub progress: bool,
     pub stop: &'a Stop,
+    /// Whether a recipe's save steps write their file, which `estimate` turns off.
+    pub writes: bool,
 }
 
 impl<'a> Watch<'a> {
@@ -53,6 +57,7 @@ impl<'a> Watch<'a> {
             talk: false,
             progress: false,
             stop,
+            writes: true,
         }
     }
 }
@@ -147,6 +152,8 @@ pub struct Shelled {
     pub cuts: Option<Mesh>,
     /// A plug for each hole, laid on the plate beside the model (ADR 0313).
     pub plugs: Vec<Mesh>,
+    /// What `--drain-at auto` found and drilled (ADR 0401).
+    pub drains: Option<Drained>,
 }
 
 /// Shells the model when asked, then meshes the bodies its holes and channels cut, and the plugs.
@@ -154,25 +161,26 @@ pub struct Shelled {
 pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
-    precision: Scalar,
-    drift_mm: Scalar,
+    (precision, drift_mm): (Scalar, Scalar),
+    ground: Ground,
     watch: &Watch,
 ) -> Result<Shelled> {
     let talk = watch.talk;
     args.check_flags()?;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
-    let placed = args
+    let mut placed = args
         .cutting()
-        .then(|| hollowing::placed(mesh, args))
+        .then(|| hollowing::placed(mesh, args, ground.lifted_mm))
         .transpose()?;
 
     let mut hollow = None;
     let mut shell = None;
     let mut cavity = None;
     if args.wanted() {
-        let holes = placed.as_ref().map_or(&[][..], |(holes, _)| holes);
-        let (shelled, faces, report) = hollowing::run(mesh, holes, args, precision, watch.stop)?;
+        let uncut = Placed::default();
+        let cut = placed.as_ref().unwrap_or(&uncut);
+        let (shelled, faces, report) = hollowing::run(mesh, cut, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }
@@ -181,6 +189,9 @@ pub fn hollow_and_cut(
         hollow = Some(report);
     }
     let wall = hollow.as_ref().map(HollowReport::wall);
+    let printed = shell.as_ref().unwrap_or(&*mesh);
+    let drains = drill_auto(printed, placed.as_mut(), args, (wall, ground), talk)?;
+    watch.stop.check()?;
     // A plug is the solid a hole takes out as it is cut, so it is read off the model before
     // the model is the shell.
     let plugs = match &placed {
@@ -213,7 +224,28 @@ pub fn hollow_and_cut(
         cavity,
         cuts: bodies,
         plugs,
+        drains,
     })
+}
+
+/// `--drain-at auto` over the model as it prints, its holes added to those `placed` cuts;
+/// `None` when it was not asked for.
+fn drill_auto(
+    printed: &Mesh,
+    placed: Option<&mut Placed>,
+    args: &HollowArgs,
+    (wall, ground): (Option<(Scalar, Scalar)>, Ground),
+    talk: bool,
+) -> Result<Option<Drained>> {
+    let Some((holes, channels)) = placed.filter(|_| args.auto()) else {
+        return Ok(None);
+    };
+    let drained = auto_drains(printed, (holes, channels), args, wall, ground)?;
+    holes.extend(drained.drain_holes());
+    if talk {
+        print!("{}", AutoReport(&drained, ground.lifted_mm));
+    }
+    Ok(Some(drained))
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.

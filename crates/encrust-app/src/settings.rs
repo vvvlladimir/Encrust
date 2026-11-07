@@ -10,6 +10,8 @@ use crate::undo::Frame;
 mod drafts;
 mod leaving;
 mod library;
+mod recipe_form;
+mod recipes;
 pub use drafts::{Draft, ResinDraft};
 pub use leaving::Leaving;
 pub use library::{
@@ -17,6 +19,10 @@ pub use library::{
     is_thrown_away_with_the_printer, keep_support, new_printer, new_resin, new_support,
     other_printers, pool_for, rename_resin, resins_of, take_resin_off,
 };
+pub use recipe_form::{
+    Checked, ChoiceForm, Field, RecipeForm, SettingForm, SettingsForm, StepForm,
+};
+pub use recipes::{delete_recipe, duplicate_recipe, new_recipe, save_recipe};
 
 /// A page of the Settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,6 +33,8 @@ pub enum Section {
     Hollow,
     /// The Drain tool's named settings.
     Drain,
+    /// The recipes Prepare for print runs, the user's edited here (ADR 0405).
+    Recipes,
     /// How the window looks: light or dark, its language, whether it moves.
     Appearance,
     /// How the window itself behaves: where it starts, how it zooms, where files go.
@@ -37,7 +45,7 @@ pub enum Section {
 
 impl Section {
     /// The pages that list profiles, over the ones that hold the window's own settings.
-    pub const PROFILES: [Self; 3] = [Self::Supports, Self::Hollow, Self::Drain];
+    pub const PROFILES: [Self; 4] = [Self::Supports, Self::Hollow, Self::Drain, Self::Recipes];
 
     #[cfg(not(target_arch = "wasm32"))]
     pub const OWN: [Self; 3] = [Self::Appearance, Self::General, Self::Updates];
@@ -51,6 +59,7 @@ impl Section {
             Self::Supports => tr!("settings-page-supports"),
             Self::Hollow => tr!("settings-page-hollow"),
             Self::Drain => tr!("settings-page-drain"),
+            Self::Recipes => tr!("settings-page-recipes"),
             Self::Appearance => tr!("settings-page-appearance"),
             Self::General => tr!("settings-page-general"),
             Self::Updates => tr!("settings-page-updates"),
@@ -63,6 +72,7 @@ impl Section {
             Self::Supports => Some(Kind::Support),
             Self::Hollow => Some(Kind::Hollow),
             Self::Drain => Some(Kind::Drain),
+            Self::Recipes => Some(Kind::Recipe),
             Self::Appearance | Self::General | Self::Updates => None,
         }
     }
@@ -181,6 +191,7 @@ enum Form {
     Resin,
     Support,
     Auto,
+    Recipe,
 }
 
 /// What the Settings window and the Machine and resin window are showing.
@@ -212,6 +223,10 @@ pub struct Settings {
     pub support: Option<Draft<SupportProfile>>,
     /// The automatic profile picked on the Supports page, in the support profile's place.
     pub auto: Option<Draft<AutoProfile>>,
+    /// The recipe picked in the Recipes table, by id.
+    pub recipe_pick: Option<String>,
+    /// The recipe open in its form, while one is; a built-in one only to read.
+    pub recipe: Option<Draft<RecipeForm>>,
     pub calculators: Calculators,
     /// Whether the question over the profiles that would not read is waiting for an answer.
     pub reset_unreadable: bool,
@@ -291,6 +306,8 @@ impl Settings {
         self.section = section;
         self.editing_support = false;
         self.preset = None;
+        self.recipe_pick = None;
+        self.recipe = None;
     }
 
     /// The form in view in whichever of the two windows is open, if one is.
@@ -301,6 +318,9 @@ impl Settings {
                 Tab::Resins => self.editing_resin.then_some(Form::Resin),
                 Tab::Machine | Tab::Network => Some(Form::Printer),
             };
+        }
+        if self.open && self.section == Section::Recipes && self.recipe.is_some() {
+            return Some(Form::Recipe);
         }
         let form = match self.auto {
             Some(_) => Form::Auto,
@@ -316,6 +336,7 @@ impl Settings {
             Some(Form::Resin) => self.resin.as_mut().map(|resin| resin.draft.observe(frame)),
             Some(Form::Support) => self.support.as_mut().map(|draft| draft.observe(frame)),
             Some(Form::Auto) => self.auto.as_mut().map(|draft| draft.observe(frame)),
+            Some(Form::Recipe) => self.recipe.as_mut().map(|draft| draft.observe(frame)),
             None => None,
         };
     }
@@ -327,6 +348,7 @@ impl Settings {
             Some(Form::Resin) => self.resin.as_mut().is_some_and(ResinDraft::undo),
             Some(Form::Support) => self.support.as_mut().is_some_and(Draft::undo),
             Some(Form::Auto) => self.auto.as_mut().is_some_and(Draft::undo),
+            Some(Form::Recipe) => self.recipe.as_mut().is_some_and(Draft::undo),
             None => false,
         }
     }
@@ -338,6 +360,7 @@ impl Settings {
             Some(Form::Resin) => self.resin.as_mut().is_some_and(ResinDraft::redo),
             Some(Form::Support) => self.support.as_mut().is_some_and(Draft::redo),
             Some(Form::Auto) => self.auto.as_mut().is_some_and(Draft::redo),
+            Some(Form::Recipe) => self.recipe.as_mut().is_some_and(Draft::redo),
             None => false,
         }
     }
@@ -351,6 +374,7 @@ impl Settings {
     fn shut(&mut self) {
         self.open = false;
         self.editing_support = false;
+        self.recipe = None;
         self.reset_unreadable = false;
     }
 

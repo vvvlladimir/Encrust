@@ -9,8 +9,8 @@ use core_volume::{
 
 use crate::i18n::tr;
 use crate::job::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks, lock_fields,
-    rebuild_tasks,
+    HollowJob, HollowOutcome, HollowRequest, HollowTask, SharedFields, again_tasks, hollow_tasks,
+    lock_fields, rebuild_tasks,
 };
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
@@ -46,6 +46,7 @@ impl Default for HollowTool {
                 infill_on: false,
                 infill: InfillSettings::default(),
                 open_floor: false,
+                solid_under_mm: asked.solid_under_mm,
             },
             blocker: BlockerSize::default(),
             job: None,
@@ -94,15 +95,35 @@ impl HollowTool {
     /// Starts a run over everything visible on the plate.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
         let tasks = hollow_tasks(scene, |object| self.settings_for(object));
+        self.job = Some(self.spawn(tasks)?);
+        Ok(())
+    }
+
+    /// A run over `models` alone, each with the settings beside it, handed back rather than
+    /// kept: what Prepare hollows.
+    pub fn start_asked(
+        &self,
+        scene: &Scene,
+        models: &[(ObjectId, HollowSettings)],
+    ) -> Result<HollowJob> {
+        let tasks = models
+            .iter()
+            .filter_map(|(id, settings)| {
+                let object = scene.named(std::slice::from_ref(id)).next()?;
+                Some(HollowTask::of(object, settings))
+            })
+            .collect();
+        self.spawn(tasks)
+    }
+
+    fn spawn(&self, tasks: Vec<HollowTask>) -> Result<HollowJob> {
         if tasks.is_empty() {
             bail!(tr!("hollow-nothing-visible-error"));
         }
-
-        self.job = Some(HollowJob::spawn(HollowRequest {
+        Ok(HollowJob::spawn(HollowRequest {
             tasks,
             fields: Arc::clone(&self.fields),
-        }));
-        Ok(())
+        }))
     }
 
     /// Builds again every hollow model whose cuts moved under its shell, at the numbers it
@@ -158,6 +179,12 @@ impl HollowTool {
         };
 
         self.job = None;
+        *status = self.land(scene, outcome);
+        false
+    }
+
+    /// Puts what a run ended with into the scene, and says what it did.
+    pub fn land(&mut self, scene: &mut Scene, outcome: HollowOutcome) -> Status {
         let saved = outcome.saved_mm3();
         match outcome {
             HollowOutcome::Hollowed(shells) => {
@@ -168,16 +195,15 @@ impl HollowTool {
                         object.hollow.take(shell.shell);
                     }
                 }
-                *status = Status::Info(tr!(
+                Status::Info(tr!(
                     "hollow-done",
                     count = models,
                     saved = format!("{:.1}", saved / 1000.0)
-                ));
+                ))
             }
-            HollowOutcome::Cancelled => *status = Status::Info(tr!("hollow-cancelled")),
-            HollowOutcome::Failed(message) => *status = Status::Error(message),
+            HollowOutcome::Cancelled => Status::Info(tr!("hollow-cancelled")),
+            HollowOutcome::Failed(message) => Status::Error(message),
         }
-        false
     }
 }
 
@@ -191,6 +217,7 @@ fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
         precision: state.precision,
         infill: state.infill_on.then_some(state.infill),
         open_toward: opens.then(|| plate_down(transform)),
+        solid_under_mm: state.solid_under_mm,
         ..HollowSettings::default()
     }
 }

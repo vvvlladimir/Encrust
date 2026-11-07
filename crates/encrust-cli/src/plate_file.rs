@@ -61,6 +61,9 @@ pub struct Wall {
     /// Opens the shell through the floor it stands on, as `--hollow-open-floor` does.
     #[serde(default)]
     pub open_floor: bool,
+    /// Keeps the wall solid wherever the model is thinner than this, mm, as
+    /// `--keep-solid-under` does.
+    pub keep_solid_under_mm: Option<Scalar>,
 }
 
 /// Reads a plate file.
@@ -111,7 +114,10 @@ pub fn stage(path: &Path, arrange: bool, job: &JobArgs, watch: &Watch) -> Result
         })
         .collect::<Result<_>>()?;
     let held_inside = |shaping: &Shaping| shaping.hollow.wanted() && shaping.supports.is_some();
-    if job.supports.support_cavity && !entries.iter().any(|(_, shaping)| held_inside(shaping)) {
+    if job.supports.support_cavity
+        && job.recipe_asked().is_none()
+        && !entries.iter().any(|(_, shaping)| held_inside(shaping))
+    {
         bail!(
             "--support-cavity holds up a hollowed model's cavity, and no model is both hollowed and supported"
         );
@@ -136,6 +142,7 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry, cavity: bool) -> Result<Shapi
             cavity,
             ..crate::profiles::plan_of(id)?
         });
+        shaping.keyed.supports = true;
     }
     if !shaping.hollow.wanted()
         && let Some(wall) = model.hollow
@@ -143,6 +150,14 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry, cavity: bool) -> Result<Shapi
         shaping.hollow.thickness_mm = Some(wall.wall_mm);
         shaping.hollow.mode = wall.mode;
         shaping.hollow.open_floor = wall.open_floor;
+        shaping.keyed.hollow = true;
+        if let Some(under_mm) = wall.keep_solid_under_mm {
+            if !under_mm.is_finite() || under_mm <= 0.0 {
+                bail!("a plate file's `keep_solid_under_mm` is a thickness, so not {under_mm}");
+            }
+            let kept = &mut shaping.hollow.keep_solid.under_mm;
+            *kept = kept.or(Some(under_mm));
+        }
     }
     shaping.position = model.position.map(Vec2::from_array);
     Ok(shaping)
@@ -171,7 +186,7 @@ mod tests {
             hollow = { wall_mm = 2.0, mode = "internal", open_floor = true }
             [[model]]
             path = "c.stl"
-            hollow = { wall_mm = 1.0, mode = "external" }
+            hollow = { wall_mm = 1.0, mode = "external", keep_solid_under_mm = 6 }
             "#,
         )
         .expect("the documented example parses");
@@ -191,6 +206,7 @@ mod tests {
             plate.models[2].hollow,
             Some(Wall {
                 mode: Mode::External,
+                keep_solid_under_mm: Some(6.0),
                 ..
             })
         ));

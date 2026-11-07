@@ -5,6 +5,7 @@ mod report;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use core_geometry::Scalar;
 use core_pipeline::SlicedFormat;
 use rayon::prelude::*;
 
@@ -152,32 +153,44 @@ fn outputs_for(models: &[PathBuf], batch: &Batch, chosen: &Chosen) -> Result<Vec
     Ok(outputs)
 }
 
-/// A run with no printer writes a PNG stack, which is a directory, so it gets no extension.
 fn output_for(model: &Path, batch: &Batch, chosen: &Chosen, when: jiff::civil::DateTime) -> Named {
+    let layer_height_mm = batch
+        .job
+        .slicing
+        .layer_height
+        .unwrap_or(chosen.material.layer_height_mm);
+    let (stem, file) = sliced_name(batch.name, model, (chosen, layer_height_mm), when);
+    Named {
+        file: batch.output.join(file),
+        report: batch.output.join(format!("{stem}.json")),
+    }
+}
+
+/// The stem `template` makes of `model` sliced for `chosen` at `layer_height_mm`, and its file:
+/// with the printer's extension, or none for a PNG stack, a directory, with no printer.
+pub(crate) fn sliced_name(
+    template: &str,
+    model: &Path,
+    (chosen, layer_height_mm): (&Chosen, Scalar),
+    when: jiff::civil::DateTime,
+) -> (String, String) {
     let printer = chosen.printer.as_ref();
     let fields = core_engine::NameFields {
         model: &model.file_stem().unwrap_or_default().to_string_lossy(),
         model_ext: &model.extension().unwrap_or_default().to_string_lossy(),
         printer: printer.map_or("", |printer| &printer.name),
         resin: &chosen.material.name,
-        layer_height_mm: batch
-            .job
-            .slicing
-            .layer_height
-            .unwrap_or(chosen.material.layer_height_mm),
+        layer_height_mm,
         plate: 1,
         when,
     };
-    let stem = core_engine::file_stem(batch.name, &fields);
+    let stem = core_engine::file_stem(template, &fields);
     // Not `with_extension`, which would cut a stem holding a dot at it.
     let file = match printer.map(|printer| printer.output) {
         Some(format) => format!("{stem}.{}", SlicedFormat::from(format).extension()),
         None => stem.clone(),
     };
-    Named {
-        file: batch.output.join(file),
-        report: batch.output.join(format!("{stem}.json")),
-    }
+    (stem, file)
 }
 
 /// Every model in `input`, sorted by name so two runs over one directory report in the

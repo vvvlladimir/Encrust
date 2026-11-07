@@ -51,3 +51,12 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
     });
     changed
 }
+
+/// Why what was typed is refused: one line in `danger`, cut short and read whole on hover.
+pub fn field_error(ui: &mut Ui, error: &str) {
+    let line = egui::RichText::new(error)
+        .font(theme::small())
+        .color(theme::colors().danger);
+    ui.add(egui::Label::new(line).truncate())
+        .on_hover_text(error);
+}

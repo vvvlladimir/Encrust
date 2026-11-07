@@ -76,7 +76,7 @@ fn standing_out(bounds: &Aabb, (low, high): (Vec3, Vec3)) -> Option<Aabb> {
 }
 
 /// The box `object` stands in with the supports and raft last drawn under it.
-fn bounds(object: &SceneObject) -> Option<Aabb> {
+pub fn bounds(object: &SceneObject) -> Option<Aabb> {
     let supports = object.supports.drawn().iter();
     object
         .world_bounds()

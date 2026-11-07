@@ -1,7 +1,7 @@
 use super::*;
 use crate::cut::cut;
 use crate::orient::{OrientSettings, orient_printed};
-use crate::score::OrientGoal;
+use crate::score::OrientPreset;
 use core_geometry::Scalar;
 use std::f32::consts::{PI, TAU};
 
@@ -151,10 +151,11 @@ fn a_hollow_ball_is_stood_on_its_drain_hole() {
         shell: Some(&shell),
         cuts: Some(&drilled),
         vents: &[Vec3::X],
+        shown: None,
     };
     let settings = OrientSettings {
         on_supports: true,
-        preset: OrientGoal::LeastPeel.into(),
+        preset: OrientPreset::Auto,
         ..OrientSettings::default()
     };
 

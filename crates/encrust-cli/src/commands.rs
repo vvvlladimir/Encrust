@@ -7,8 +7,9 @@ mod estimate;
 mod info;
 mod inspect;
 mod measure;
-mod printer;
+pub(crate) mod printer;
 mod profiles;
+mod recipes;
 pub mod slice;
 
 use std::io::IsTerminal;
@@ -29,6 +30,7 @@ pub use inspect::InspectCommand;
 pub use measure::MeasureCommand;
 pub use printer::PrinterCommand;
 pub use profiles::ProfilesCommand;
+pub use recipes::RecipesCommand;
 pub use slice::SliceCommand;
 
 /// Slice meshes for MSLA resin printers.
@@ -83,6 +85,7 @@ impl GlobalArgs {
             talk: self.talks(),
             progress: self.shows_progress(),
             stop,
+            writes: true,
         }
     }
 
@@ -118,6 +121,9 @@ pub enum Command {
     /// The printers and resins in the catalogue.
     #[command(subcommand)]
     Profiles(ProfilesCommand),
+    /// The recipes Prepare runs, the built-in ones and yours.
+    #[command(subcommand)]
+    Recipes(RecipesCommand),
     /// Find printers on the network, ask one what it is doing, send it a file.
     #[command(subcommand)]
     Printer(PrinterCommand),
@@ -136,6 +142,7 @@ impl Command {
             | Self::Measure(_)
             | Self::Info(_)
             | Self::Profiles(_)
+            | Self::Recipes(_)
             | Self::Completions(_) => false,
         }
     }
@@ -166,6 +173,7 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Info(command) => command.run(global),
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
+        Command::Recipes(command) => command.run(global),
         Command::Printer(command) => command.run(global, stop),
         Command::Completions(command) => command.run(),
     }

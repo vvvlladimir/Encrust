@@ -131,25 +131,18 @@ impl Repairs {
     /// The mesh is replaced by the repaired one, so supports, a cavity and a texture
     /// placed on the model before this go with the mesh they were made for.
     pub fn start(&mut self, scene: &Scene, id: ObjectId, state: RepairState, status: &mut Status) {
-        let Some(object) = scene.get(id) else {
-            return;
-        };
         if self.jobs.iter().any(|(job, _)| job.id() == id) {
             return;
         }
-        let job = RepairJob::spawn(RepairRequest {
-            id,
-            name: object.name.clone(),
-            mesh: Arc::clone(&object.mesh),
-            method: state.method,
-            settings: state.settings,
-        });
+        let Some((job, taken)) = spawn(scene, id, state) else {
+            return;
+        };
         *status = Status::Info(job.label());
         if self.jobs.is_empty() {
             self.started = 0;
         }
         self.started += 1;
-        self.jobs.push((job, Taken::of(object)));
+        self.jobs.push((job, taken));
     }
 
     pub fn is_busy(&self) -> bool {
@@ -198,14 +191,7 @@ impl Repairs {
 
         for (taken, outcome) in done {
             let id = taken.id;
-            let replaced = scene.get(id).is_some_and(|object| !taken.is_model(object));
-            *status = match outcome {
-                RepairOutcome::Done(_) if replaced => {
-                    Status::Error(tr!("job-model-changed", name = taken.name))
-                }
-                RepairOutcome::Done(repaired) => apply(scene, &repaired),
-                RepairOutcome::Failed(message) => Status::Error(message),
-            };
+            *status = land(scene, taken, outcome);
             // A repair that could not mend it is not offered again; the button still is.
             if scene
                 .get(id)
@@ -215,6 +201,35 @@ impl Repairs {
             }
         }
         self.is_busy() || working
+    }
+}
+
+/// A repair of model `id` as `state` asks, with the model it took, handed back rather than
+/// kept: what Prepare mends.
+pub fn spawn(scene: &Scene, id: ObjectId, state: RepairState) -> Option<(RepairJob, Taken)> {
+    let object = scene.get(id)?;
+    let job = RepairJob::spawn(RepairRequest {
+        id,
+        name: object.name.clone(),
+        mesh: Arc::clone(&object.mesh),
+        method: state.method,
+        settings: state.settings,
+    });
+    Some((job, Taken::of(object)))
+}
+
+/// Puts what a repair of `taken` ended with into the scene, unless the model was replaced
+/// meanwhile, and says what it did.
+pub fn land(scene: &mut Scene, taken: Taken, outcome: RepairOutcome) -> Status {
+    let replaced = scene
+        .get(taken.id)
+        .is_some_and(|object| !taken.is_model(object));
+    match outcome {
+        RepairOutcome::Done(_) if replaced => {
+            Status::Error(tr!("job-model-changed", name = taken.name))
+        }
+        RepairOutcome::Done(repaired) => apply(scene, &repaired),
+        RepairOutcome::Failed(message) => Status::Error(message),
     }
 }
 

@@ -1,6 +1,9 @@
 use std::num::NonZeroU8;
 
+use glam::Vec2;
+
 use crate::RasterError;
+use crate::pixels::PixelSpace;
 
 /// Physical size of one LCD pixel, millimetres.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -119,6 +122,12 @@ impl RasterSettings {
         } else {
             self.blur_px
         }
+    }
+
+    /// Where on the plate a point of a mask drawn for this panel stands, `panel_mm`
+    /// millimetres from its first pixel: the panel's mirroring undone.
+    pub fn plate_mm(&self, panel_mm: [f32; 2]) -> Vec2 {
+        PixelSpace::new(self).plate_mm(Vec2::from_array(panel_mm))
     }
 
     /// Rejects a request that cannot produce a usable mask.

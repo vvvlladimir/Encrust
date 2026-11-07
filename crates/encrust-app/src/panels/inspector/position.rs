@@ -410,6 +410,10 @@ fn recentre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
 
 /// Starts Auto-orient on `only`, or on the whole plate, and says so on the stage if it cannot.
 pub(crate) fn auto_orient(window: &mut Window, only: Option<ObjectId>) {
+    if let Some(why) = crate::prepare::holding(window.tools) {
+        window.machine.status = crate::status::Status::Info(why);
+        return;
+    }
     let machine = window
         .machine
         .slicing

@@ -10,7 +10,9 @@ use printer_profiles::SupportProfile;
 use crate::i18n::tr;
 use crate::job::{Worker, pooled};
 use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::state::Doc;
 use crate::status::Status;
+use crate::supports::{SupportTool, with_own};
 
 /// The trees being grown, one run a model at most, and the runs that failed.
 #[derive(Debug, Default)]
@@ -104,6 +106,35 @@ impl SupportGrowth {
                 .is_some_and(|object| object.supports.revision() == asked.revision)
         });
         !self.runs.is_empty()
+    }
+}
+
+/// Rebuilds the columns and the painted patches of every object whose placement,
+/// points, paint or profile moved under them, so that what the viewport draws is what
+/// would be sliced. A profile still being dragged is grown to once it is let go.
+pub fn refresh_supports(doc: &mut Doc, supports: &mut SupportTool, held: bool) {
+    supports.settle_on_raft(&mut doc.scene);
+    let plate = supports.table();
+    let raft = supports.raft;
+    doc.surfaces.start(&mut doc.scene);
+    for object in doc.scene.objects_mut() {
+        let untouched = object.supports.is_empty()
+            && object.supports.meshes().is_none()
+            && object.supports.drawn().is_empty()
+            && object.supports.painted().is_empty()
+            && object.supports.blocked().is_empty();
+        if untouched {
+            continue;
+        }
+        let table = with_own(plate.clone(), &object.own, raft);
+        let retuned = held && object.supports.retuned(object.transform, &table);
+        if object.supports.outgrown(object.transform, &table) {
+            if !retuned {
+                doc.growth.start(object, &table);
+            }
+            continue;
+        }
+        object.refresh_supports(&table);
     }
 }
 

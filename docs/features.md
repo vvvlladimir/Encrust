@@ -121,19 +121,71 @@ whole-surface fill is Cmd-Shift-click.
   height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
   on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
+**Prepare for print:** from its row over the plate card — the recipe and the run — and in
+the Edit menu, for the picked models or the whole plate, it runs the steps of the recipe
+picked — the built-in `prepare` until you pick another of the built-in ones or one of your own
+(`docs/design/recipes.md`), remembered between runs and taken back by undo — each model
+decided step by step. A gate that holds, or a step that fails and does not skip, stops the
+run at that step with the plate yours: mend it by hand, then **Continue** (the play button)
+runs the step again and goes on, or **End** (the stop button) keeps the plate as it is, what
+the run did before it one undo. Like `--prepare`, it turns a model you have not turned
+by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
+saves enough resin, drills the holes that drain it with a vent, and stands it on the
+catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
+`--rotate` keeps it. Run again with the same orient step on models still standing as the
+last run turned them, it stands each the next good way that search found instead of
+searching again, as Auto-orient pressed again does. A recipe's other steps run as their tools do: `check` measures the
+layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
+plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
+`pause` waits the same way, the plate yours to change, for **Continue** or **End**, even when every
+step before it was skipped; the row names the step it waits at. The
+recipe's box in the row names the step under way and the share done, filling as it goes,
+or why the run waits; in Preview, where the row is not shown, a notice does. **Cancel**
+beside it stops a step under way and puts the plate back as the run, or its last
+**Continue**, found it, and one undo takes a finished run back. While a step runs the
+tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait. A recipe of yours that no longer reads or passes its check cannot be started, and
+its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
+first: a built-in one opens to read and **Duplicate** makes a copy of your own, and **New
+recipe** starts one of no steps; yours you rename, give variables, and change step by step —
+the steps a chain of folded cards, each saying in one line when it runs and what it sets,
+unfolded by a press and remembered so, and saying what it does behind its question mark —
+add a step of any kind before, between or after the others, switch it off,
+drag it by its grip to another place or move it up or down, remove it, type its condition (checked as you type, the error under the
+field, and the button beside it listing every name a condition can read, what each means and
+its unit, your variables and the functions, to put one in),
+choose what a failure does, set or leave out each setting (a word by what it means, the
+file's word beside it), work a number or a switch out by an
+expression, add rules that choose other settings, and a gate's, a pause's or a check's own
+fields. **Save** writes it only once it passes its check, under a new file name when you
+renamed it, the picker following; a draft that does not pass stays in the form. **Delete**
+asks by a second press; **Import** and **Export** carry a recipe as its file.
+
 **Auto-orient:**
 - Searches for the best angle for one of four presets: **fewest supports**, **least
   peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
   plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
-  the window reopens.
+  the window reopens; **Clean surface** and the brush size are remembered and undone with
+  the other tool settings.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
   then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
   as they stand.
-- **Auto** balances the other three for each model. It never lets one of supports, pull
-  or print time go far worse for the sake of the others. Where some pose is about as good
-  as the best on all three, it takes that one. Otherwise it takes the pose where each
-  gives up the smallest, most even share of its best. Like least peel, it never takes a
-  suction cup or a pull past the warning.
+- **Clean surface**, a switch under the presets, works with any of them: of the poses that
+  put the fewest contacts where the model shows — within about one contact — the preset
+  takes its best. A pose with a few more contacts on show is offered beside the choice
+  when it wins at least a quarter more of the preset, such as a quarter less resin.
+- The brush in the **Clean surface** row paints the faces that must stay clean, such as a
+  face: alt to erase, **Clear what shows** to start again. While it paints, the move and
+  turn handles are put away, so a stroke over them paints the model. Painted faces are
+  drawn in rose while the switch is on. Once a model has any face painted, only the painted
+  faces count as showing; with none, what shows is found from the shape: open surface with
+  fine detail, while folds, the underside and smooth areas take the contacts. Painting is
+  saved with the project and cleared when the model is reshaped. Support placement does not
+  yet avoid it within a pose.
+- **Auto** balances supports, pull and print time for each model. It never lets one of
+  supports, pull or print time go far worse for the sake of the others. Where some pose is
+  about as good as the best on all three, it takes that one. Otherwise it takes the pose
+  where each gives up the smallest, most even share of its best. Unlike the single
+  presets, it never takes a suction cup or a pull past the warning.
 - When there are other good poses, pressing **Auto-orient** again with nothing changed
   stands the model the next of them, round to the first, without searching again. A
   change to the model, its supports, its lift, the preset, the printer or the resin
@@ -142,8 +194,9 @@ whole-surface fill is Cmd-Shift-click.
   where one is chosen), green where it beats the pose before and red where it loses. Auto offers every
   trade that no other pose beats on all three; a single goal offers the poses it reads as
   just as good.
-- You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
-  leaves the model as it is.
+- You can cap the tilt with **Limit tilt** under the presets, off at first (for example "no
+  more than 30° from how it stands now"). A cap of 0 leaves the model as it is. It is
+  remembered and undone with the other tool settings.
 - It never picks an angle worse than the current one.
 - With a printer chosen, it only picks a pose that fits the build volume, supports and
   all, if any pose does. It turns a part about the vertical, even across the plate's
@@ -153,22 +206,20 @@ whole-surface fill is Cmd-Shift-click.
 - With a printer chosen, it tries its best few poses with their supports and counts the
   islands each would leave at the printer's own pixel and layer, down to specks a tenth of
   a millimetre across. A pose standing on the plate with something hanging off it is
-  turned down by every preset but fewest supports.
+  turned down by auto.
+- Every preset but auto minimises its one problem alone. It takes the pose that reads
+  least on it, however small the saving, and ignores suction cups, pulls past the
+  warning, islands and supports with no room to stand; it only never picks a pose that
+  would not fit the printer or that would balance on a point. Use **auto** to have those
+  avoided, or fix them with the tools that do: **Drain** for a cup, Check for the rest.
 - **Fewest supports** picks the pose with the least resin in its supports, raft included,
-  whichever way up that is — strictly the least, however small the saving. It ignores
-  suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and
-  islands, takes supports with no room to stand as they come, and never picks a pose that
-  would not fit the printer or that would balance on a point.
-- **Least peel** keeps the hardest layer's pull on the film low, without suction cups or
-  anything left hanging. Once every layer pulls under 10 N — a third of the 30 N warning —
-  it has nothing more to win, and takes the pose with the least support among those, so
-  a small model is not tilted or flipped for a fraction of a newton. The newtons are an
-  estimate good to about a factor of three, not a measurement of your printer.
+  whichever way up that is.
+- **Least peel** takes the pose whose hardest layer pulls least on the film, whatever
+  support it takes. The newtons are an estimate good to about a factor of three, not a
+  measurement of your printer.
 - **Shortest print** takes the pose with the fewest layers — the model's height plus its
-  lift onto supports, since a layer takes as long whatever its area — that seals no cup and
-  leaves nothing hanging. It ignores the peel warning and the support it takes: a flat
-  part lies flat, a figure on its side. Poses within 2 % and a millimetre of the shortest
-  count as just as fast, so a model is not turned for less.
+  lift onto supports, since a layer takes as long whatever its area — whatever support
+  it takes: a flat part lies flat, a figure on its side.
 - It either leaves a model standing on the plate, with supports only under what hangs
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.
@@ -325,6 +376,10 @@ whole-surface fill is Cmd-Shift-click.
   blocker fits the thickness of the model where you click, or takes a size you set, which
   is how far it reaches past the wall into the cavity. Shift-click runs a rod on from the
   last blocker, to keep a whole limb solid. On the command line, `--keep-solid`.
+- **Keep thin parts solid:** a switch in Keep solid, off at first, keeps the wall solid
+  wherever the model is thinner than the thickness you set, so fingers, limbs and blades
+  are not hollowed; a mould takes it too. On the command line, `--keep-solid-under`, and in
+  a plate file's `hollow` and a recipe's hollow step, `keep_solid_under_mm`.
 - With one model picked, the settings you change are that model's own and are there again
   when you come back to it; with none picked they are the plate's, which every other model
   uses. Fixed size or Fit to thickness, and the size, are the window's: whichever model is
@@ -376,6 +431,11 @@ whole-surface fill is Cmd-Shift-click.
   of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
   you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
+- **Auto**, beside Check drainage, finds the holes itself in the picked models as they stand,
+  hollowed, turned and lifted: a drain low on each pocket of trapped resin and a vent high on
+  it, each kept only once a fresh scan shows the pocket empty, as `--drain-at auto` does. It
+  runs with a bar and Cancel; the holes are drilled as clicks drill them, with their plugs,
+  one undo takes them all back, and a pocket no hole can drain stays painted red.
 - Drain settings can be saved as presets too.
 
 ---
@@ -885,13 +945,29 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
+| `recipes` | List the built-in and your own recipes, and show one as TOML to copy and edit. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
-**For scripts:** `--json` output with a fixed schema, clear exit codes, `--strict` (fail
+**For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
+
+**Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
+it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
+resin, and stand it on Auto supports, stopping with why where the model does not fit or
+resin stays trapped. Every flag you type wins over its step, and `--json` says
+what was decided for each model. The window does the same as **Prepare for print**.
+Built-in recipe beside it, a starting point for small detailed models: `miniatures`;
+`encrust recipes list` names them and `recipes show` prints one.
+`--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
+conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
+of the plate where the recipe says; a flag you type wins over its setting in every step, and
+`--orient`, `--repair`, `--hollow` or `--supports` runs every step of its kind. A hollow
+step keeps the wall solid where the model is thin (`keep_solid_under_mm`), and a drain step
+with `plugs = true` lays a plug beside the model for each hole it drills; without it, none,
+in the window's Prepare for print too.
 
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
@@ -901,7 +977,11 @@ does (`--supports auto`), and hold up a hollowed model's cavity as well as its o
 (`--support-cavity`).
 
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
-print a plug for each beside the model, with the gap you choose. A run whose plugs have no
+print a plug for each beside the model, with the gap you choose. A hole's point is where the
+model prints, supports' lift included, so a point `--json` reports can be drilled as it stands. `--drain-at auto` finds the
+holes itself: a drain low on each pocket of trapped resin and a vent high on it, each kept only
+once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no hole can drain is
+still reported; the window's Drain tool does the same with Auto. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.
 
 **You cannot** (from the command line): paint supports or where a relief goes, place supports

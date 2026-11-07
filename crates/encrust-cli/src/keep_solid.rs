@@ -16,6 +16,10 @@ pub struct KeepSolidArgs {
     /// each fills the model where it lands.
     #[arg(long = "keep-solid-size", value_name = "MM")]
     pub reach_mm: Option<Scalar>,
+
+    /// Keep the wall solid wherever the model is thinner than this many millimetres.
+    #[arg(long = "keep-solid-under", value_name = "MM")]
+    pub under_mm: Option<Scalar>,
 }
 
 impl KeepSolidArgs {
@@ -23,6 +27,15 @@ impl KeepSolidArgs {
     pub(crate) fn check_flags(&self, hollowed: bool) -> Result<()> {
         if !self.runs.is_empty() && !hollowed {
             bail!("--keep-solid keeps a shell's wall solid, and --hollow was not given");
+        }
+        match self.under_mm {
+            Some(_) if !hollowed => {
+                bail!("--keep-solid-under keeps a shell's wall solid, and --hollow was not given")
+            }
+            Some(under_mm) if !under_mm.is_finite() || under_mm <= 0.0 => {
+                bail!("--keep-solid-under is a thickness, so not {under_mm}")
+            }
+            _ => {}
         }
         match self.reach_mm {
             Some(_) if self.runs.is_empty() => {

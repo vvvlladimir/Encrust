@@ -31,15 +31,17 @@ pub use widgets::{
     quiet_button, quiet_square, rail_button, readings, rename_box, row_name, search_button,
     secondary_button, section, section_with_action, section_with_actions, section_with_switch,
     spinner, start_rename, step_bar, subheading, subheading_with_switch, summary_button, swatch,
-    switch, text_box, text_row, toggle_button, tone, unit_field, vertical_hairline, zone_button,
+    switch, switch_with_toggle, text_box, text_row, toggle_button, tone, unit_field, vertical_hairline, zone_button,
 };
+pub use widgets::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use widgets::{ChipPart, chip_text_w, name_line, paint_chip, row_mark};
+pub use widgets::{ConditionName, ConditionRow, condition_row, field_error};
 pub use widgets::{Confirm, any_armed, confirm_button, is_armed, key_foot, key_row};
 pub use widgets::{
     DEVICE_OPEN_INSET, DeviceRow, device_row, print_picture, share_figure, title_line,
 };
 pub use widgets::{
-    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_row,
+    DropdownFace, DropdownRow, MENU_GAP, dropdown, dropdown_menu, dropdown_menu_wide, dropdown_row,
     dropdown_search_menu,
 };
 pub use widgets::{EntryRow, ModelRow, entry_row, model_row};
@@ -61,6 +63,7 @@ pub use widgets::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
 pub use widgets::{ReadoutWords, layer_readout};
+pub use widgets::{RunState, run_box};
 pub use widgets::{ZONE_INSET, inline_button_w};
 pub use widgets::{
     address_label, block_title_in, figure_line, file_line, page_heading, page_title, state_word,

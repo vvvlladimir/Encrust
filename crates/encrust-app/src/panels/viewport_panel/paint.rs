@@ -1,10 +1,11 @@
 //! The brush: where it is drawn, and the faces a stroke marks or clears.
 
-use core_geometry::{Adjacency, Scalar, Vec2};
+use core_geometry::{Adjacency, Region, Scalar, Vec2};
 use core_supports::Placed;
 
 use crate::panels::Window;
 use crate::repair::{Picking, RepairMode};
+use crate::scene::SceneObject;
 use crate::supports::Placing;
 use crate::ui::theme;
 use crate::viewport_input::Pointer;
@@ -64,6 +65,9 @@ fn brush(ui: &egui::Ui, window: &Window) -> (Scalar, egui::Color32) {
     if *window.tool == Tool::Repair {
         return (window.tools.repair.state.brush_radius_mm, erasing(alt));
     }
+    if *window.tool == Tool::Position {
+        return (window.tools.orient.shown_brush.radius_mm, erasing(alt));
+    }
     let colour = match window.tools.supports.placing {
         Placing::Block => colors.danger,
         Placing::Erase => colors.text_mid,
@@ -80,11 +84,15 @@ pub(super) fn paint_stroke(
     viewport: egui::Rect,
     pointer: &Pointer,
 ) -> bool {
+    refresh_shown(window);
     if *window.tool == Tool::Relief {
         return relief_stroke(ui, window, viewport, pointer);
     }
     if *window.tool == Tool::Repair {
         return repair_stroke(ui, window, viewport, pointer);
+    }
+    if *window.tool == Tool::Position {
+        return shown_stroke(ui, window, viewport, pointer);
     }
     let out = *window.tool == Tool::Paint && window.tools.supports.placing.paints();
     let Some(position) = pointer.position.filter(|_| {
@@ -147,44 +155,118 @@ fn relief_stroke(
     viewport: egui::Rect,
     pointer: &Pointer,
 ) -> bool {
-    let out = window.tools.relief.paints();
+    let relief = &window.tools.relief;
+    let brush = RegionBrush {
+        out: relief.paints(),
+        radius_mm: relief.state.brush_radius_mm,
+        held: (relief.stroke, relief.last_daub),
+        region: |object| &mut object.relief_painted,
+    };
+    let (taken, (stroke, last_daub)) = region_stroke(ui, window, viewport, pointer, &brush);
+    (window.tools.relief.stroke, window.tools.relief.last_daub) = (stroke, last_daub);
+    taken
+}
+
+/// The brush that paints where a model shows for a clean surface, as the Relief brush
+/// paints.
+fn shown_stroke(
+    ui: &egui::Ui,
+    window: &mut Window,
+    viewport: egui::Rect,
+    pointer: &Pointer,
+) -> bool {
+    let orient = &window.tools.orient;
+    let shown = orient.shown_brush;
+    let brush = RegionBrush {
+        out: orient.paints_shown(),
+        radius_mm: shown.radius_mm,
+        held: (shown.stroke, shown.last_daub),
+        region: |object| &mut object.shown_painted,
+    };
+    let (taken, (stroke, last_daub)) = region_stroke(ui, window, viewport, pointer, &brush);
+    let held = &mut window.tools.orient.shown_brush;
+    (held.stroke, held.last_daub) = (stroke, last_daub);
+    taken
+}
+
+/// Draws what is painted as showing while a clean surface is asked for in Position, and
+/// puts it away elsewhere; cheap while nothing changed.
+fn refresh_shown(window: &mut Window) {
+    let drawn = *window.tool == Tool::Position && window.tools.orient.settings.clean_surface;
+    for object in window.doc.scene.here_mut() {
+        if drawn {
+            let mesh = std::sync::Arc::clone(&object.mesh);
+            object
+                .shown_patch
+                .refresh(&object.shown_painted, &mesh, object.transform);
+        } else {
+            object.shown_patch.put_away();
+        }
+    }
+}
+
+/// A brush over one region of each model: whether it is in hand, how wide, the stroke it
+/// had going and where it last went down, and which region of a model it paints.
+struct RegionBrush {
+    out: bool,
+    radius_mm: Scalar,
+    held: (bool, Option<Vec2>),
+    region: fn(&mut SceneObject) -> &mut Region,
+}
+
+/// Runs `brush` for this frame, painting and taking off under alt, and answers whether it
+/// has the pointer and the stroke and last daub to keep. Decided on the press.
+fn region_stroke(
+    ui: &egui::Ui,
+    window: &mut Window,
+    viewport: egui::Rect,
+    pointer: &Pointer,
+    brush: &RegionBrush,
+) -> (bool, (bool, Option<Vec2>)) {
     let Some(position) = pointer.position.filter(|_| {
-        out && pointer.primary_down
+        brush.out
+            && pointer.primary_down
             && pointer.over_viewport
             && !pointer.shift
             && !pointer.command
             && !window.view.gizmo.is_focused()
     }) else {
-        window.tools.relief.stroke = false;
-        window.tools.relief.last_daub = None;
-        return false;
+        return (false, (false, None));
     };
 
     let cursor = egui::Pos2::new(position.x, position.y);
-    if pointer.pressed {
-        window.tools.relief.stroke = surface_under(window, viewport, cursor).is_some();
-        window.tools.relief.last_daub = None;
-    }
-    if !window.tools.relief.stroke {
-        return false;
+    let (mut stroke, last_daub) = brush.held;
+    let last_daub = if pointer.pressed {
+        stroke = surface_under(window, viewport, cursor).is_some();
+        None
+    } else {
+        last_daub
+    };
+    if !stroke {
+        return (false, (false, last_daub));
     }
 
     let marked = !ui.input(|input| input.modifiers.alt);
-    let radius_mm = window.tools.relief.state.brush_radius_mm;
-    let from = window.tools.relief.last_daub.unwrap_or(position);
+    let from = last_daub.unwrap_or(position);
     for along in daubs(from, position) {
         let Some((id, hit)) = surface_under(window, viewport, along) else {
             continue;
         };
         if let Some(object) = window.doc.scene.get_mut(id) {
-            let model = (&*object.mesh, &*object.bvh, object.transform);
-            object
-                .relief_painted
-                .brush(model, hit.point, radius_mm, marked);
+            let model = (
+                std::sync::Arc::clone(&object.mesh),
+                std::sync::Arc::clone(&object.bvh),
+            );
+            let transform = object.transform;
+            (brush.region)(object).brush(
+                (&*model.0, &*model.1, transform),
+                hit.point,
+                brush.radius_mm,
+                marked,
+            );
         }
     }
-    window.tools.relief.last_daub = Some(position);
-    true
+    (true, (true, Some(position)))
 }
 
 /// Whether the Repair tool's brush is in hand: the Faces mode picking faces.

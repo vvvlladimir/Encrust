@@ -624,18 +624,14 @@ fn in_model(
     size: HoleSize,
     transform: Transform,
 ) -> Option<(Vec3, Vec3, HoleSize)> {
-    let inverse = transform.inverse_matrix()?;
-    let axis = inverse.transform_vector3(-normal).try_normalize()?;
-    // A hole is measured on the plate, like a blocker, and kept in the model's own space,
-    // so both its numbers come back through the scale the model stands at.
-    let smallest = transform.least_scale();
+    let hole = DrainHole::sized(point, -normal, size, 0.0).into_model(transform)?;
     let size = HoleSize {
-        diameter_mm: size.diameter_mm / smallest,
-        depth_mm: size.depth_mm / smallest,
-        turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
+        diameter_mm: hole.diameter_mm,
+        depth_mm: hole.depth_mm,
+        turn_deg: hole.turn_deg,
         ..size
     };
-    Some((inverse.transform_point3(point), axis, size))
+    Some((hole.at, hole.axis, size))
 }
 
 /// Balls of the given radii about the given centres, in one mesh, or `None` for none: how

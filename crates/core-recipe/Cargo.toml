@@ -1,0 +1,28 @@
+[package]
+name = "core-recipe"
+description = "The steps Prepare for print runs, their order and conditions, read from a recipe file."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-engine.workspace = true
+core-geometry.workspace = true
+core-plate.workspace = true
+core-volume.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

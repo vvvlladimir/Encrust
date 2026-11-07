@@ -1,9 +1,9 @@
-use super::{FIRST_GROUP, ISLANDS_GROUP, SupportGroup, SupportTool};
+use super::{FIRST_GROUP, ISLANDS_GROUP, SHAPES, SupportGroup, SupportTool};
 use crate::scene::{OwnSettings, Scene, SceneObject};
 use anyhow::Result;
 use core_engine::project::own_table;
 use core_engine::{SupportPlan, SupportShapes};
-use printer_profiles::{Catalogue, Raft, SupportProfile};
+use printer_profiles::{AutoProfile, Catalogue, Raft, SupportProfile};
 
 /// The raft the first picked model keeps of its own, which only a project can give it.
 pub fn own_raft_shown(scene: &Scene) -> Option<Raft> {
@@ -76,8 +76,23 @@ impl SupportTool {
         &'a self,
         catalogue: &Catalogue,
     ) -> Result<impl Fn(&SceneObject) -> SupportPlan + 'a> {
-        let sized = self.sized(catalogue)?;
-        Ok(move |object: &SceneObject| {
+        Ok(self.plans_by(self.sized(catalogue)?))
+    }
+
+    /// The same, sized by the catalogue's automatic profile whatever is chosen: the supports
+    /// Prepare will build, as `--prepare` judges a turn on them.
+    pub fn automatic_plans<'a>(
+        &'a self,
+        catalogue: &Catalogue,
+    ) -> Result<impl Fn(&SceneObject) -> SupportPlan + 'a> {
+        Ok(self.plans_by(Some(super::run::catalogue_auto(catalogue)?)))
+    }
+
+    fn plans_by<'a>(
+        &'a self,
+        sized: Option<(AutoProfile, [SupportProfile; SHAPES])>,
+    ) -> impl Fn(&SceneObject) -> SupportPlan + 'a {
+        move |object: &SceneObject| {
             let mut plan = match &sized {
                 Some((auto, shapes)) => SupportPlan {
                     shapes: SupportShapes::Sized {
@@ -93,7 +108,7 @@ impl SupportTool {
                 profile.raft = raft;
             }
             plan
-        })
+        }
     }
 
     /// The active group's profile as `object` is built to.

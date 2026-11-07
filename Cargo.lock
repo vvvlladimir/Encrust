@@ -1181,6 +1181,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-recipe"
+version = "0.7.0"
+dependencies = [
+ "core-engine",
+ "core-geometry",
+ "core-plate",
+ "core-volume",
+ "proptest",
+ "serde",
+ "thiserror 2.0.21",
+ "toml",
+ "workspace-hack",
+]
+
+[[package]]
 name = "core-slicer"
 version = "0.7.0"
 dependencies = [
@@ -1761,6 +1776,7 @@ dependencies = [
  "core-pipeline",
  "core-plate",
  "core-raster",
+ "core-recipe",
  "core-slicer",
  "core-supports",
  "core-text",
@@ -1827,6 +1843,7 @@ dependencies = [
  "core-pipeline",
  "core-plate",
  "core-raster",
+ "core-recipe",
  "core-slicer",
  "core-supports",
  "core-text",

@@ -61,6 +61,10 @@ impl SupportSurfaces {
         }
     }
 
+    pub fn is_running(&self) -> bool {
+        !self.runs.is_empty()
+    }
+
     /// Keeps each built hierarchy whose model still prints as its surface, tells `status` of
     /// a failed run, and answers whether any is still going.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {

@@ -1,4 +1,5 @@
 use super::*;
+use core_geometry::Region;
 
 /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
 fn cuboid(size: Vec3) -> Mesh {
@@ -34,8 +35,8 @@ fn a_slab_pulling_past_the_limit_is_turned_off_its_face_for_the_least_peel() {
 }
 
 #[test]
-fn a_slab_pulling_little_enough_stays_flat_for_the_least_peel() {
-    // A 40 mm square pulls some 8 N, under a third of the limit: nothing to win.
+fn a_slab_pulling_little_is_still_stood_up_for_the_least_peel() {
+    // A 40 mm square pulls some 8 N flat, under a third of the limit, and less on edge.
     let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
     let settings = OrientSettings {
         preset: OrientGoal::LeastPeel.into(),
@@ -43,7 +44,10 @@ fn a_slab_pulling_little_enough_stays_flat_for_the_least_peel() {
     };
     let found = orient(&mesh, &settings).expect("a slab can be oriented");
     let thin = placed(found.rotation, Vec3::Z);
-    assert!(thin.z.abs() > 0.95, "the slab still lies flat, got {thin}");
+    assert!(
+        thin.z.abs() < 0.95,
+        "the slab no longer lies flat, got {thin}"
+    );
 }
 
 #[test]
@@ -386,4 +390,68 @@ fn a_mesh_with_no_faces_cannot_be_oriented() {
     let error = orient(&Mesh::default(), &OrientSettings::default())
         .expect_err("an empty mesh has no orientation");
     assert!(matches!(error, PlateError::NothingToOrient));
+}
+
+/// A 20 mm ball with forty bumps of detail over the side facing +X: a face on a head.
+fn head_facing_x() -> Mesh {
+    let mut mesh = core_geometry::ball(Vec3::ZERO, 10.0, 48, 96);
+    for at in 0..40 {
+        let around = at as f32 * 2.4;
+        let out = 0.55 + 0.4 * (at as f32 / 40.0);
+        let ring = (1.0 - out * out).sqrt();
+        let on = Vec3::new(out, ring * around.cos(), ring * around.sin()) * 10.0;
+        mesh.append(&core_geometry::ball(on, 0.8, 12, 24));
+    }
+    mesh
+}
+
+#[test]
+fn a_clean_surface_turns_the_detailed_side_away_from_the_supports() {
+    let settings = OrientSettings {
+        clean_surface: true,
+        on_supports: true,
+        ..OrientSettings::default()
+    };
+    let found = orient(&head_facing_x(), &settings).expect("a head can be oriented");
+    let face = placed(found.rotation, Vec3::X);
+    assert!(
+        face.z > 0.0,
+        "the detailed side looks away from the supports, got {face}"
+    );
+    let unasked = OrientSettings {
+        clean_surface: false,
+        ..settings
+    };
+    let found = orient(&head_facing_x(), &unasked).expect("a head can be oriented");
+    let face = placed(found.rotation, Vec3::X);
+    assert!(
+        face.z < 0.0,
+        "unasked, the face takes the supports, got {face}"
+    );
+}
+
+#[test]
+fn a_clean_surface_turns_the_painted_side_away_from_the_supports_whatever_the_detail() {
+    let mesh = head_facing_x();
+    let painted: Region = (0..mesh.faces.len())
+        .filter(|face| {
+            mesh.triangle(*face)
+                .is_some_and(|t| (t.a.x + t.b.x + t.c.x) / 3.0 < -5.0)
+        })
+        .collect();
+    let printed = Printed {
+        shown: Some(&painted),
+        ..Printed::solid(&mesh)
+    };
+    let settings = OrientSettings {
+        clean_surface: true,
+        on_supports: true,
+        ..OrientSettings::default()
+    };
+    let found = orient_printed(&printed, &settings).expect("a head can be oriented");
+    let painted_side = placed(found.rotation, Vec3::NEG_X);
+    assert!(
+        painted_side.z > 0.5,
+        "the painted side looks up, away from the supports, got {painted_side}"
+    );
 }

@@ -96,6 +96,11 @@ impl SliceReport {
         self.open_contours
     }
 
+    /// Where every layer of the stack starts and stops.
+    pub fn plan(&self) -> &LayerPlan {
+        &self.plan
+    }
+
     /// The pockets the drainage scan found with no way out, empty when none was asked for.
     pub fn trapped(&self) -> &[Trapped] {
         &self.trapped

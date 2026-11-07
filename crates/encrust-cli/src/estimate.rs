@@ -5,8 +5,9 @@ use std::fmt;
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Run, bake, cut};
+use core_engine::{Plate, Run, bake, cut};
 use core_format::PrintJob;
+use core_raster::RasterSettings;
 
 use crate::exit::Cancelled;
 use crate::pipeline::{Watch, raster_window, report_of};
@@ -26,6 +27,8 @@ pub struct Print {
     /// The header the file would carry, its resin volume taken from the masks.
     pub job: PrintJob,
     pub measured: Measured,
+    /// The panel the masks were drawn for, which places what they show on the plate.
+    pub panel: RasterSettings,
 }
 
 impl Print {
@@ -50,21 +53,10 @@ pub fn estimate(
 ) -> Result<Estimate> {
     let mut estimate = match staged.take_plate(None, raster_window(raster)) {
         Some(plate) => {
-            let run = Run::of(&plate)?;
-            drop(plate);
-            let mut slice = report_of(run.solid(), run.windows(), staged.drainage);
-            let mut watching = Watching {
-                report: &mut slice,
-                bar: watch.progress.then(|| bar("layers")),
-                stop: watch.stop,
-            };
-            let measured = run.measure(&mut watching)?.ok_or(Cancelled)?;
-            drop(watching);
-            let mut job = run.job().clone();
-            job.volume_mm3 = measured.volume_mm3();
+            let (slice, print) = measure_plate(plate, staged.drainage, watch)?;
             Estimate {
                 slice,
-                print: Some(Print { job, measured }),
+                print: Some(print),
             }
         }
         None => {
@@ -86,6 +78,33 @@ pub fn estimate(
     };
     estimate.slice.finish_drainage();
     Ok(estimate)
+}
+
+/// The stack `plate` cuts and the print its masks make, watched for trapped resin where
+/// `drainage` asks; the plate is dropped once cut.
+pub(crate) fn measure_plate(
+    plate: Plate,
+    drainage: bool,
+    watch: &Watch,
+) -> Result<(SliceReport, Print)> {
+    let run = Run::of(&plate)?;
+    drop(plate);
+    let mut slice = report_of(run.solid(), run.windows(), drainage);
+    let mut watching = Watching {
+        report: &mut slice,
+        bar: watch.progress.then(|| bar("layers")),
+        stop: watch.stop,
+    };
+    let measured = run.measure(&mut watching)?.ok_or(Cancelled)?;
+    drop(watching);
+    let mut job = run.job().clone();
+    job.volume_mm3 = measured.volume_mm3();
+    let print = Print {
+        job,
+        measured,
+        panel: *run.panel(),
+    };
+    Ok((slice, print))
 }
 
 impl Estimate {

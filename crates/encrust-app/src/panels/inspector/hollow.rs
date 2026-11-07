@@ -11,7 +11,7 @@ use crate::state::{Doc, Tools};
 use crate::ui::{
     Segment, Segmented, blocked_hover, describe, hint, icon, inset, nested, notice, number_row,
     primary_button, progress_bar, readings, secondary_button, section, section_with_switch,
-    step_bar, subheading, theme, tone,
+    step_bar, subheading, switch, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -32,6 +32,11 @@ const MAX_CELL_MM: f32 = 40.0;
 /// and past half it is a solid with a texture rather than an infill.
 const MIN_DENSITY: f32 = 0.05;
 const MAX_DENSITY: f32 = 0.5;
+
+/// What a part is kept solid under when the switch is first turned on, and at most, mm: a
+/// finger is a few millimetres across, and past fifty nothing on a plate is hollowed.
+const THIN_UNDER_MM: f32 = 6.0;
+const MAX_THIN_UNDER_MM: f32 = 50.0;
 
 /// A wall or strut thinner than this, mm, is finer than the field can carry.
 const THIN_INFILL_MM: f32 = 0.5;
@@ -70,22 +75,49 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
         modes(ui, window.tools);
         wall(ui, window);
     });
-    // A mould's void is the model itself: nothing stands in it and no wall is kept solid
+    // A mould's void is the model itself: nothing stands in it and no blocker keeps it
     // (docs/design/hollowing.md).
-    if window.tools.hollow.state.mode == HollowMode::External {
-        return;
+    let mould = window.tools.hollow.state.mode == HollowMode::External;
+    if !mould {
+        // The body reads the switch as it stood before this frame's click; the knob's slide
+        // draws the frame after, which catches it up.
+        let mut on = window.tools.hollow.state.infill_on;
+        section_with_switch(ui, &tr!("hollow-infill"), &mut on, |ui| {
+            infill(ui, window.tools);
+        });
+        window.tools.hollow.state.infill_on = on;
     }
-    // The body reads the switch as it stood before this frame's click; the knob's slide
-    // draws the frame after, which catches it up.
-    let mut on = window.tools.hollow.state.infill_on;
-    section_with_switch(ui, &tr!("hollow-infill"), &mut on, |ui| {
-        infill(ui, window.tools);
-    });
-    window.tools.hollow.state.infill_on = on;
     section(ui, &tr!("hollow-keep-solid"), None, |ui| {
-        describe(ui, &tr!("hollow-keep-solid-clicks"));
-        blockers(ui, window);
+        thin(ui, window.tools);
+        if !mould {
+            ui.add_space(theme::NOTE_GAP);
+            describe(ui, &tr!("hollow-keep-solid-clicks"));
+            blockers(ui, window);
+        }
     });
+}
+
+/// Whether the wall stays solid wherever the model is thinner than a thickness, and which.
+fn thin(ui: &mut egui::Ui, tools: &mut Tools) {
+    let under = &mut tools.hollow.state.solid_under_mm;
+    let mut on = under.is_some();
+    if switch(ui, &mut on, &tr!("hollow-keep-thin")).changed() {
+        *under = on.then_some(THIN_UNDER_MM);
+    }
+    describe(ui, &tr!("hollow-keep-thin-note"));
+    if let Some(under_mm) = under {
+        nested(ui, |ui| {
+            number_row(
+                ui,
+                &tr!("hollow-thinner-than"),
+                under_mm,
+                &tr!("unit-mm"),
+                COARSE_STEP,
+                MIN_WALL_MM..=MAX_THIN_UNDER_MM,
+                1,
+            );
+        });
+    }
 }
 
 /// What the last drainage check found, where the cavity it was found in is. The check
@@ -337,7 +369,8 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 fn start(ui: &mut egui::Ui, window: &mut Window) {
-    let blocked = window.tools.hollow.blocker(&window.doc.scene);
+    let blocked = (window.tools.hollow.blocker(&window.doc.scene))
+        .or_else(|| crate::prepare::holding(window.tools));
     let button = primary_button(ui, &tr!("hollow-hollow"), blocked.is_none());
     if blocked_hover(button, blocked).clicked() {
         let started = window.tools.hollow.start(&window.doc.scene);

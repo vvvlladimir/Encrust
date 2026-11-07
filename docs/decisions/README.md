@@ -59,6 +59,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
+| [0400](0400-the-report-locates-every-finding-on-the-plate.md) | Locate every finding of the JSON report in plate millimetres, in schema 1 | Proposed |
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
 | [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
@@ -297,6 +298,14 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
+| [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
+| [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Superseded by 0403 (the command line's resolution of the flags only) |
+| [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |
+| [0404](0404-keep-thin-parts-solid-by-opening-the-model.md) | Keep thin parts solid by opening the model with a ball | Proposed |
+| [0405](0405-a-users-recipe-is-kept-in-the-profile-store.md) | Keep a user's recipe in the profile store, and look recipes up in core-recipe | Proposed |
+| [0406](0406-prepare-for-print-stands-over-the-plate-card.md) | Stand Prepare for print over the plate card as a recipe and a run | Proposed |
+| [0407](0407-a-failed-or-paused-recipe-waits-with-the-plate-free.md) | Wait at a recipe's pause or failed step with the plate given back to the user | Proposed |
+| [0408](0408-ship-two-built-in-recipes-prepare-and-miniatures.md) | Ship two built-in recipes: prepare and miniatures | Proposed; miniatures orients with a clean surface by 0410 |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
@@ -322,10 +331,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0278](0278-one-rule-ranks-every-stage-and-a-proof-stands-its-supports.md) | Rank the search and the proof by one rule, and prove a pose with its supports | Accepted; the band over islands, the proof's tie-break, the coarse layer it places supports on, what the fewest supports reads and the count a bare pose is checked by are superseded by 0279 |
 | [0279](0279-the-fewest-supports-is-support-volume-proven-on-the-prints-layer.md) | Choose the fewest supports by support volume, proven on the print's layer | Accepted; the band over islands and the proof's island count are superseded by 0285, the lift a pose is judged at in the window by 0291 |
 | [0280](0280-a-seat-is-ranked-with-the-lifted-poses-by-one-rule.md) | Rank a pose set on the plate with the lifted ones, by one rule | Accepted |
-| [0281](0281-a-section-pulls-by-its-area-and-reach-and-the-least-peel-stops-at-enough.md) | A section pulls by its area and reach, and the least peel stops at enough | Accepted |
+| [0281](0281-a-section-pulls-by-its-area-and-reach-and-the-least-peel-stops-at-enough.md) | A section pulls by its area and reach, and the least peel stops at enough | Accepted; the least peel's enough is superseded by 0410 |
 | [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted; what the picker lists is superseded by 0284, its default by 0291 |
-| [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted |
-| [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted |
+| [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted; its band and its cups are superseded by 0410 |
+| [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted; which goals auto weighs is narrowed by 0409 |
+| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410 |
+| [0410](0410-a-single-goal-minimises-its-own-reading-alone.md) | A single goal minimises its own reading alone, and a clean surface is asked beside any preset | Proposed |
 | [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
 | [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |
 | [0290](0290-the-window-and-the-command-line-orient-through-one-entry-point.md) | The window and the command line orient through one entry point | Accepted |

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::SupportPlan;
-use core_geometry::{Adjacency, Mesh, Region, Vec2, Vec3};
+use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec2, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -13,6 +13,10 @@ use crate::job::{
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::{Reading, Status};
+
+mod shown;
+
+pub use shown::{OrientState, ShownBrush};
 
 /// A turn this small is the model already standing the way it should.
 const SETTLED_DEG: f32 = 0.5;
@@ -33,6 +37,8 @@ pub struct OrientTool {
     pub picking_face: bool,
     /// The flat face under the cursor while one is being picked.
     pub facet: Option<Facet>,
+    /// The brush that paints where the model shows, for a clean surface.
+    pub shown_brush: ShownBrush,
     /// The edges of the last mesh pointed at, which finding a face walks. Built once per
     /// mesh, since a mesh of a million faces takes a moment.
     adjacency: Option<(usize, Arc<Adjacency>)>,
@@ -52,11 +58,19 @@ impl Default for OrientTool {
             job: None,
             picking_face: false,
             facet: None,
+            shown_brush: ShownBrush::default(),
             adjacency: None,
             offers: Vec::new(),
             asked: None,
         }
     }
+}
+
+/// What [`OrientTool::start_on`] set going.
+pub enum Turning {
+    Search(OrientJob),
+    /// The last search's next good ways, stood by [`OrientTool::step`].
+    Step,
 }
 
 /// The models a run was asked about, and what it judged them by.
@@ -168,12 +182,58 @@ impl OrientTool {
         status: &mut Status,
     ) -> Result<()> {
         let tasks = orient_tasks(scene, only, plan_of);
+        let asked = self.asking(tasks, self.settings, machine)?;
+        if self.found_for(&asked) {
+            *status = self.step(scene, plate);
+            return Ok(());
+        }
+        self.search(asked);
+        Ok(())
+    }
+
+    /// A search for the way `ids` print best as `wanted`, tilted at most `max_tilt_deg`, the
+    /// rest the engine's defaults, never the panel's, handed back: what Prepare turns by.
+    /// Asked as the last search was, of models standing as it left them, it steps instead.
+    pub fn start_on(
+        &mut self,
+        scene: &Scene,
+        ids: &[ObjectId],
+        (wanted, max_tilt_deg, plan_of): (
+            core_plate::Asked,
+            Option<Scalar>,
+            impl Fn(&SceneObject) -> SupportPlan,
+        ),
+        machine: Option<(&PrinterProfile, &MaterialProfile)>,
+    ) -> Result<Turning> {
+        let tasks = scene
+            .named(ids)
+            .map(|object| OrientTask::of(object, plan_of(object)))
+            .collect();
+        let settings = OrientSettings {
+            preset: wanted.preset,
+            clean_surface: wanted.clean_surface,
+            max_tilt_deg,
+            ..OrientSettings::default()
+        };
+        let asked = self.asking(tasks, settings, machine)?;
+        if self.found_for(&asked) {
+            return Ok(Turning::Step);
+        }
+        Ok(Turning::Search(self.spawn(asked)))
+    }
+
+    /// What a run over `tasks` by `settings` asks, printed for `machine` where there is one.
+    fn asking(
+        &mut self,
+        tasks: Vec<OrientTask>,
+        settings: OrientSettings,
+        machine: Option<(&PrinterProfile, &MaterialProfile)>,
+    ) -> Result<Asked> {
         if tasks.is_empty() {
             bail!(tr!("orient-nothing-visible-error"));
         }
-
         self.stop_picking();
-        let asked = Asked {
+        Ok(Asked {
             tasks,
             settings: OrientSettings {
                 on_supports: true,
@@ -182,26 +242,42 @@ impl OrientTool {
                     let volume = &printer.build_volume;
                     Vec3::new(volume.x, volume.y, volume.z)
                 }),
-                ..self.settings
+                ..settings
             },
             proof: machine.map(|(printer, material)| Proof {
                 printer: printer.clone(),
                 material: material.clone(),
             }),
-        };
-        if self.found_for(&asked) {
-            *status = self.step(scene, plate);
-            return Ok(());
-        }
+        })
+    }
 
+    fn search(&mut self, asked: Asked) {
+        self.job = Some(self.spawn(asked));
+    }
+
+    /// A search for `asked`, kept as what the next start is compared with.
+    fn spawn(&mut self, asked: Asked) -> OrientJob {
         self.offers.clear();
-        self.job = Some(OrientJob::spawn(OrientRequest {
+        let job = OrientJob::spawn(OrientRequest {
             tasks: asked.tasks.clone(),
             settings: asked.settings,
             proof: asked.proof.clone(),
-        }));
+        });
         self.asked = Some(asked);
-        Ok(())
+        job
+    }
+
+    /// Stands each model `turns` names its best way, its other good ways kept for the next
+    /// start asked the same to step through.
+    pub fn land(&mut self, scene: &mut Scene, plate: &BuildPlate, turns: Vec<Turn>) -> Status {
+        let said = stand_turned(scene, plate, &turns);
+        self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
+        said
+    }
+
+    /// What a search handed back failed: the next start searches again.
+    pub fn forget(&mut self) {
+        self.asked = None;
     }
 
     /// Whether the last run was asked `asked` and every model stands as it left it.
@@ -240,18 +316,9 @@ impl OrientTool {
 
         self.job = None;
         match outcome {
-            OrientOutcome::Turned(turns) => {
-                let mut moved = 0;
-                for turn in &turns {
-                    if let Some(object) = scene.get_mut(turn.id) {
-                        moved += usize::from(stand(object, turn.poses[0], turn.lift_mm, plate));
-                    }
-                }
-                *status = turned(&turns, moved);
-                self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
-            }
+            OrientOutcome::Turned(turns) => *status = self.land(scene, plate, turns),
             OrientOutcome::Failed(message) => {
-                self.asked = None;
+                self.forget();
                 *status = Status::Error(message);
             }
         }
@@ -260,7 +327,7 @@ impl OrientTool {
 
     /// Stands every model the last run turned the next good way it found, round from the
     /// last to the first, and says what that one costs against the one before.
-    fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
+    pub fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
         let alone = self.offers.len() == 1;
         let mut stepped = 0;
         let mut said = None;
@@ -286,6 +353,17 @@ impl OrientTool {
             (None, stepped) => Status::Info(tr!("orient-stepped", count = stepped)),
         }
     }
+}
+
+/// Stands each model `turns` names its best way on `plate`, and says what that did.
+pub fn stand_turned(scene: &mut Scene, plate: &BuildPlate, turns: &[Turn]) -> Status {
+    let mut moved = 0;
+    for turn in turns {
+        if let Some(object) = scene.get_mut(turn.id) {
+            moved += usize::from(stand(object, turn.poses[0], turn.lift_mm, plate));
+        }
+    }
+    turned(turns, moved)
 }
 
 /// What a run did: how many models it turned, how many stand on the plate, how many other

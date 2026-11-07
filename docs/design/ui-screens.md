@@ -14,7 +14,8 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 │ │ preset      │      [hint bar]      [cube]  └──────────┘ │ layer  │                         │
 │ │ sections    │                                           │ track  │                         │
 │ │             │            viewport                       │        │                         │
-│ │ foot        │       [notices]     [view tools] ┌plate┐  │ play   │                         │
+│ │ foot        │       [notices]     [view tools] [prep]   │ play   │                         │
+│ │             │                                  ┌plate┐  │        │                         │
 │ └─────────────┘                                  └─────┘  └────────┘                         │
 ```
 
@@ -25,13 +26,14 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Tool row | over the stage, centred between 8 right of the inspector, shown or put away, and 8 left of the models card | as wide as its tools, at most that room; 58 tall |
 | Models card | 8 left of the layer strip, from the stage's top | 272 until dragged |
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
+| Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a run too |
 | Layer strip | the stage's right edge, its full height | 64 |
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
 | Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
 
-Everything over the stage is a `card` on `CARD_SHADOW`; nothing over the stage carries a
+Everything over the stage but the Prepare row is a `card` on `CARD_SHADOW`; nothing over the stage carries a
 stripe or a border of its own.
 
 ## Top bar
@@ -49,7 +51,7 @@ Test prints ▸ (Crustling with Download, its percentage or STL as keys, then th
 in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
 (Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
-(the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate · Find. View:
+(the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate, Prepare for print (why when off) · Find. View:
 Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,
 See through models, Show as printed, Depth of field when shown as printed, ticked when on ·
 Keyboard shortcuts.
@@ -104,11 +106,11 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time, Auto-orient; running, `step_bar` with the step and Cancel) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset); Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time; Limit tilt as a `switch`, off at first, and under it while on Max tilt as a `number_row`, °; Clean surface as a `switch_with_toggle`, its brush the toggle while it is on, and under it Brush as a `number_row` while it paints, Clear what shows once any is painted; the handles are put away while the brush paints; Auto-orient; running, `step_bar` with the step and Cancel) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ, Measure along the surface); Reading (Along the surface first when on, or why there is none) | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
-| Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading); Keep solid (Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
-| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon, the window's whichever model is picked); Plugs | Check drainage; running, `step_bar` with Looking for trapped resin and Cancel |
+| Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading, not for a mould); Keep solid (Keep thin parts solid as a `switch`, off at first, and under it while on Thinner than as a `number_row`, mm; then, not for a mould, Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
+| Drain | whether checked | yes | Trapped resin (a `notice`-style verdict); Opening (Hole / Channel, size, depth, taper, Round / Polygon); Plugs | Check drainage, companion Auto (`companion_button`, the auto glyph), always with a vent as the command line's default; running, `step_bar` with Looking for trapped resin or Looking for drain holes and Cancel |
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
@@ -179,6 +181,20 @@ A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced fro
 not print.* What stands past the plate or meets another model is Check's, not the card's. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
 print until that layer is done), Cured area and Volume of the layer shown, and there is no Details.
 
+## Prepare row
+
+The recipe as a `dropdown` with the prepare glyph and the play glyph as a 32 `companion_square`
+beside it, 6 apart, bare on the stage. The list, `dropdown_menu_wide` as wide as the row:
+*Built-in* then *Yours* under `group_name`s, a recipe that cannot run led by the warning
+glyph, and under a rule *Edit recipes* as its `picker_foot` opening Settings → Recipes.
+The square runs the recipe on what a tool would act on, its tooltip that or why it cannot,
+the square off. While a run goes the picker's place is a `run_box`: the turning glyph, the step and the
+share done, washed in `accent_wash` to it; the square is the cross, its tooltip *Cancel*.
+Waiting (ADR 0407) the box says *Step 3:* and why — with the pause glyph in `accent_soft`
+the pause's message (else *Prepare for print is paused*), or with the warning glyph in
+`danger` and a `danger` edge why the step failed; the share stays; then End, the stop glyph, and Continue, the play
+glyph, as 32 `companion_square`s, their tooltips what each does.
+
 ## Layer strip
 
 Top to bottom, centred in its 64: the three views — model, model beside layer, layer — as
@@ -214,7 +230,11 @@ track. With no stack it reads *No layers*.
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
-  its card only once it has run 0.3 s, so a short one does not flash.
+  its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
+  *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown.
+  Waiting there, it is a notice instead: the pause glyph in `accent_soft` or the warning
+  glyph in `danger`, what the row's box would say, *Continue* as its action and End as its
+  close.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30
@@ -240,7 +260,7 @@ right), the page, and a bar 56 tall on `base` along its foot with the row's acti
 and the one that applies right.
 
 - *Settings* lists, under *Find a setting* (`⌘F`, narrowing the pages by name and by the
-  settings they hold), Tool profiles (Supports, Hollow, Drain, each with its count),
+  settings they hold), Tool profiles (Supports, Hollow, Drain, Recipes, each with its count),
   Application (Appearance, General, Updates, an accent `1` while a release waits) and Help
   (Keyboard shortcuts ↗) under 10.5 capital group names, and Machine and resin ↗ at the foot.
 - *Appearance*: Theme as three `theme_card`s, System (both halves, *Now light* or *Now
@@ -258,6 +278,41 @@ and the one that applies right.
 - *Hollow* and *Drain*: the table alone, a double click turning a name into a `sunken` box
   over 60 % of its column (Enter or a click elsewhere renames), and under it at the right
   *Open the Hollow tool* ↗ (or Drain). The bar: Export, Delete.
+- *Recipes*: the `table` of every recipe, the built-in ones first — name, *Type* (Built-in,
+  Yours, or Has errors for one of yours that no longer reads or passes its check, why it
+  does not as a `hint` under the table once picked) and the steps it takes — Import and
+  *New recipe*, which keeps one of no steps and opens it, in the header. The bar: Edit (a double click too), Duplicate, Export, Delete (`confirm_button`,
+  off with why for a built-in one). The form, under the trail *Recipes › Busts* (*Built-in*
+  after a built-in one's name): a built-in one is read under a `notice` saying to duplicate
+  it, every field off but its steps' folds. Blocks: *Recipe* (Name, the variables as a code-face name box, its
+  figure and a bin a row, *Add a variable*), then the steps as a `chain_step` each on a rail:
+  the number in a 22 disc on the rail, the grip, the kind's glyph, *Orientation*, and while
+  folded, in `text_low` after it, *When …*, *Skipped if it fails*, *2 settings changed*, *1 rule*
+  (*Switched off* alone for a step off; in `danger`, the disc ringed so, while it does not
+  read); at the right its question mark — what that kind of step does, how a step runs and
+  how a condition is written — its switch and the caret, and before the question mark move
+up and move down, each off at its end. A press on the heading unfolds it,
+  every step folded at first and each fold kept; one that does not read stands open. Open,
+  the heading carries the bin before move up, the disc, filled over the rail so the rail stops at its ring,
+  washed in `accent_wash` and ringed in `accent`; under it
+  *When* as a `condition_row` (*Always* while empty), *On failure* Stop / Skip, its settings by kind — a setting left out its
+  name and *Default* with a + to set it; one set its field (`number_row` with the unit its key
+  names, `switch`, a `dropdown` of its words by what each means, the file's word at the row's right, `text_row`, points as rows of three fields and
+  a bin) with the reset arrow back to the default and, for a number or a switch, the
+  expression glyph trading it for a `condition_row` —, a gate's *Stop if* and *Message*, a
+  pause's *Message*, a check's *Add supports to islands found* switch with *While* and *Max attempts*
+  `nested` under it, then *Rules*: each rule `nested`, its *When* and settings and *Remove
+  the rule*, and *Add a rule*; why the recipe does not run as a `field_error` at the top of
+  the step it names, else a `danger` `notice` over the steps. A step dragged by its grip
+  stands at 35 % while a card of its glyph and name follows the pointer, the page scrolling
+  near its edges, and the seam it would land at is an accent line from the rail with a dot
+  on it. Before, between and after the steps a `chain_seam`, 30 tall, a + on the rail, its
+  list every kind, the one chosen added there and open; none while a step is dragged.
+  *The recipe has no steps yet.* as a `hint` over the lone + while there are none. Every
+  condition's list offers, under *The model*, *After a check*, *Your variables* and
+  *Functions*, each name by what it means with its unit, the name at the right. Save at the bar's right is the accent only while there are unsaved edits
+  that pass the check, its why on hover otherwise; leaving with unsaved edits asks as a
+  profile's form does.
 - A profile's form is blocks one under another. Its header: the way back, the trail
   *Supports › Heavy* (an automatic profile's kind, *Automatic sizing*, after the name),
   Reset to defaults at the right; Save at the bar's right, in the accent while anything is

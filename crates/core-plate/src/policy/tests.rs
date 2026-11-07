@@ -1,10 +1,15 @@
 use super::*;
 
-const SLACK: Noise = [0.0; OrientGoal::ALL.len()];
-/// A twentieth of a millilitre of support, half a newton of pull and 0.3 mm of stack, as
-/// a proof reads.
-const PROVEN: Noise = [0.05, 0.5, 0.3];
-/// A goal ranked with its bands, read past enough pull to have nothing to fall back on.
+const SLACK: Noise = Noise {
+    goals: [0.0; OrientGoal::ALL.len()],
+    seen: 0.0,
+};
+/// A twentieth of a millilitre of support, half a newton of pull, 0.3 mm of stack and half
+/// a contact on show, as a proof reads.
+const PROVEN: Noise = Noise {
+    goals: [0.05, 0.5, 0.3],
+    seen: 0.5,
+};
 const GOAL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
 const SHORTEST: OrientPreset = OrientPreset::Goal(OrientGoal::ShortestPrint);
 const PEEL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
@@ -14,11 +19,20 @@ const SUPPORT: usize = OrientGoal::FewestSupports.index();
 const PULL: usize = OrientGoal::LeastPeel.index();
 const STACK: usize = OrientGoal::ShortestPrint.index();
 
+/// `preset` held to a clean surface.
+fn clean(preset: OrientPreset) -> Asked {
+    Asked {
+        preset,
+        clean_surface: true,
+    }
+}
+
 fn reading(fatal: f64, unheld: Option<f64>, primary: f64, tiebreak: f64) -> Readings {
     Readings {
         fatal,
         unheld,
         goals: [primary; OrientGoal::ALL.len()],
+        seen: 0.0,
         suction: 0.0,
         tearing: 0.0,
         roomless: 0.0,
@@ -27,43 +41,17 @@ fn reading(fatal: f64, unheld: Option<f64>, primary: f64, tiebreak: f64) -> Read
     }
 }
 
+/// Every single-goal preset.
+fn every_goal() -> impl Iterator<Item = OrientPreset> {
+    OrientGoal::ALL.into_iter().map(OrientPreset::Goal)
+}
+
 #[test]
 fn what_fails_the_print_loses_whatever_it_reads() {
     let readings = [reading(1.0, None, 1.0, 0.0), reading(0.0, None, 100.0, 1.0)];
-    assert_eq!(rank(&readings, GOAL, &SLACK)[0], 1);
-    assert_eq!(rank(&readings, FEWEST, &SLACK)[0], 1);
-}
-
-#[test]
-fn what_is_left_hanging_past_the_band_loses_to_what_is_held() {
-    let readings = [
-        reading(0.0, Some(12.0), 10.0, 0.0),
-        reading(0.0, Some(3.0), 50.0, 1.0),
-    ];
-    assert_eq!(
-        rank(&readings, GOAL, &SLACK)[0],
-        1,
-        "3 * 1.25 + 2 is under 12"
-    );
-}
-
-#[test]
-fn within_the_band_the_tiebreak_decides() {
-    let readings = [
-        reading(0.0, None, 100.0, 5.0),
-        reading(0.0, None, 105.0, 1.0),
-        reading(0.0, None, 120.0, 0.0),
-    ];
-    assert_eq!(rank(&readings, GOAL, &SLACK), [1, 0, 2]);
-}
-
-#[test]
-fn within_the_band_the_fewest_left_hanging_come_first() {
-    let readings = [
-        reading(0.0, Some(3.0), 100.0, 0.0),
-        reading(0.0, Some(1.0), 105.0, 1.0),
-    ];
-    assert_eq!(rank(&readings, GOAL, &SLACK)[0], 1);
+    for preset in every_goal() {
+        assert_eq!(rank(&readings, preset, &SLACK)[0], 1, "{preset:?}");
+    }
 }
 
 fn sucking(primary: f64) -> Readings {
@@ -73,89 +61,74 @@ fn sucking(primary: f64) -> Readings {
     }
 }
 
-#[test]
-fn the_fewest_supports_take_the_least_support_whatever_it_cups() {
-    let sound = reading(0.0, None, 90.0, 1.0);
-    assert_eq!(rank(&[sucking(60.0), sound], FEWEST, &SLACK)[0], 0);
+fn tearing(primary: f64) -> Readings {
+    Readings {
+        tearing: 1.0,
+        ..reading(0.0, None, primary, 0.0)
+    }
 }
 
 #[test]
-fn contacts_with_no_room_hang_for_every_goal_but_the_fewest_supports() {
+fn a_single_goal_takes_its_least_reading_whatever_it_cups_or_tears() {
+    let sound = reading(0.0, None, 90.0, 1.0);
+    for preset in every_goal() {
+        assert_eq!(
+            rank(&[sucking(60.0), sound], preset, &SLACK)[0],
+            0,
+            "{preset:?}"
+        );
+        assert_eq!(
+            rank(&[tearing(60.0), sound], preset, &SLACK)[0],
+            0,
+            "{preset:?}"
+        );
+    }
+}
+
+#[test]
+fn a_single_goal_takes_its_least_reading_whatever_is_left_hanging() {
+    let loose = reading(0.0, Some(12.0), 10.0, 1.0);
     let roomless = Readings {
         roomless: 40.0,
-        ..reading(0.0, Some(0.0), 60.0, 0.0)
+        ..reading(0.0, Some(0.0), 10.0, 1.0)
     };
-    let roomy = reading(0.0, Some(0.0), 90.0, 1.0);
-    assert_eq!(rank(&[roomless, roomy], FEWEST, &SLACK)[0], 0);
-    assert_eq!(rank(&[roomless, roomy], PEEL, &SLACK)[0], 1);
-}
-
-#[test]
-fn other_goals_refuse_a_cup_whatever_it_saves() {
-    let sound = reading(0.0, None, 90.0, 1.0);
-    assert_eq!(rank(&[sucking(60.0), sound], PEEL, &SLACK)[0], 1);
-    assert_eq!(
-        rulings(&[sucking(60.0), sound], PEEL, &SLACK),
-        [Ruling::Fatal, Ruling::Chosen]
-    );
-}
-
-#[test]
-fn the_fewest_supports_take_the_least_support_whatever_is_left_hanging() {
-    let loose = reading(0.0, Some(12.0), 10.0, 1.0);
     let held = reading(0.0, Some(0.0), 11.0, 0.0);
-    assert_eq!(rank(&[loose, held], FEWEST, &SLACK)[0], 0);
+    for preset in every_goal() {
+        assert_eq!(rank(&[loose, held], preset, &SLACK)[0], 0, "{preset:?}");
+        assert_eq!(rank(&[roomless, held], preset, &SLACK)[0], 0, "{preset:?}");
+    }
 }
 
 #[test]
-fn the_fewest_supports_have_no_band_over_the_least() {
+fn a_single_goal_has_no_band_over_its_least() {
     let readings = [
         reading(0.0, None, 105.0, 0.0),
         reading(0.0, None, 100.0, 1.0),
         reading(0.0, None, 101.0, 2.0),
     ];
-    assert_eq!(rank(&readings, FEWEST, &PROVEN), [1, 2, 0]);
+    for preset in every_goal() {
+        assert_eq!(rank(&readings, preset, &PROVEN), [1, 2, 0], "{preset:?}");
+    }
 }
 
 #[test]
-fn the_fewest_supports_turn_for_any_less_support() {
+fn a_single_goal_turns_for_any_less_of_its_reading() {
     let mut now = reading(0.0, None, 100.0, 1.0);
     now.standing = true;
     let slightly = reading(0.0, None, 99.0, 0.0);
-    assert_eq!(
-        rank(&[slightly, now], FEWEST, &PROVEN)[0],
-        0,
-        "1 % less is less"
-    );
     let same = reading(0.0, None, 100.0, 0.0);
-    assert_eq!(rank(&[same, now], FEWEST, &PROVEN)[0], 1, "as little stays");
-}
-
-#[test]
-fn a_turn_has_to_win_more_than_the_noise_of_its_unit() {
-    let mut now = reading(0.0, None, 12.0, 1.0);
-    now.standing = true;
-    let turned = reading(0.0, None, 11.0, 0.0);
-    let coarse = [0.05, 2.0, 0.3];
-    assert_eq!(
-        rank(&[turned, now], GOAL, &coarse)[0],
-        1,
-        "a twelfth of the reading is past the share, but not past two newtons of noise"
-    );
-}
-
-#[test]
-fn standing_still_wins_over_a_turn_that_gains_too_little() {
-    let mut now = reading(0.0, None, 100.0, 1.0);
-    now.standing = true;
-    let slightly = reading(0.0, None, 98.0, 0.0);
-    assert_eq!(
-        rank(&[slightly, now], GOAL, &SLACK)[0],
-        1,
-        "2 % is not worth a turn"
-    );
-    let clearly = reading(0.0, None, 80.0, 0.0);
-    assert_eq!(rank(&[clearly, now], GOAL, &SLACK)[0], 0, "20 % is");
+    for preset in every_goal() {
+        assert_eq!(
+            rank(&[slightly, now], preset, &PROVEN)[0],
+            0,
+            "{preset:?}: 1 % less is less"
+        );
+        assert_eq!(
+            rank(&[same, now], preset, &PROVEN)[0],
+            1,
+            "{preset:?}: as little stays"
+        );
+    }
 }
 
 #[test]
@@ -190,7 +163,6 @@ fn nothing_to_rank_ranks_nothing() {
 fn each_place_is_ruled_by_the_first_thing_it_lost_on() {
     let readings = [
         reading(1.0, Some(0.0), 10.0, 0.0),
-        reading(0.0, Some(20.0), 10.0, 1.0),
         reading(0.0, Some(0.0), 50.0, 2.0),
         reading(0.0, Some(0.0), 10.0, 4.0),
         reading(0.0, Some(0.0), 10.0, 3.0),
@@ -199,7 +171,6 @@ fn each_place_is_ruled_by_the_first_thing_it_lost_on() {
         rulings(&readings, GOAL, &SLACK),
         [
             Ruling::Fatal,
-            Ruling::Unheld,
             Ruling::OutOfBand,
             Ruling::TieBreak,
             Ruling::Chosen
@@ -211,120 +182,31 @@ fn each_place_is_ruled_by_the_first_thing_it_lost_on() {
 fn standing_still_is_ruled_stayed_and_the_turn_it_beat_not_worth_it() {
     let mut now = reading(0.0, None, 100.0, 1.0);
     now.standing = true;
-    let slightly = reading(0.0, None, 98.0, 0.0);
+    let alike = reading(0.0, None, 100.0, 0.0);
     assert_eq!(
-        rulings(&[slightly, now], GOAL, &SLACK),
+        rulings(&[alike, now], GOAL, &SLACK),
         [Ruling::NotWorthTurning, Ruling::Stayed]
     );
 }
 
-/// A candidate pulling `pull` newtons that the fewest supports reads as `supports`,
-/// tie-broken as a proof does, on the pull to its noise.
-fn pulling(pull: f64, supports: f64) -> Readings {
-    let mut r = reading(0.0, Some(0.0), pull, (pull / 0.5).round());
+/// A candidate reading `primary` on its goal and `supports` on the fewest supports.
+fn spending(goal: usize, primary: f64, supports: f64) -> Readings {
+    let mut r = reading(0.0, Some(0.0), 0.0, 0.0);
+    r.goals[goal] = primary;
     r.goals[SUPPORT] = supports;
     r
 }
 
 #[test]
-fn under_enough_pull_the_least_peel_takes_the_least_support() {
-    let readings = [pulling(1.0, 9.0), pulling(6.0, 3.0), pulling(14.0, 1.0)];
-    assert_eq!(
-        rank(&readings, PEEL, &PROVEN),
-        [1, 0, 2],
-        "14 N is past 10 N and its band"
-    );
-}
-
-#[test]
-fn past_enough_the_least_peel_takes_the_least_pull_out_of_its_band() {
-    let readings = [pulling(25.0, 1.0), pulling(15.0, 9.0)];
+fn the_least_peel_takes_the_least_pull_however_little_and_whatever_its_support() {
+    let readings = [spending(PULL, 1.5, 9.0), spending(PULL, 1.0, 30.0)];
     assert_eq!(rank(&readings, PEEL, &PROVEN)[0], 1);
 }
 
 #[test]
-fn a_model_pulling_little_enough_turns_only_to_spare_support() {
-    let mut now = pulling(4.0, 10.0);
-    now.standing = true;
-    let lighter = pulling(1.0, 9.8);
-    assert_eq!(
-        rank(&[lighter, now], PEEL, &PROVEN)[0],
-        1,
-        "3 N less of a pull already under enough wins nothing"
-    );
-    let spare = pulling(1.0, 5.0);
-    assert_eq!(
-        rank(&[spare, now], PEEL, &PROVEN)[0],
-        0,
-        "half the support is worth it"
-    );
-}
-
-#[test]
-fn a_turn_to_spare_support_has_to_spare_more_than_its_noise() {
-    let mut now = pulling(2.9, 0.58);
-    now.standing = true;
-    let turned = pulling(2.9, 0.54);
-    assert_eq!(
-        rank(&[turned, now], PEEL, &PROVEN)[0],
-        1,
-        "0.04 ml is under the 0.05 ml a support reading is good to"
-    );
-}
-
-#[test]
-fn past_enough_the_least_peel_takes_less_pull_over_less_support() {
-    let readings = [pulling(28.4, 3.4), pulling(26.2, 5.1)];
-    assert_eq!(
-        rank(&readings, PEEL, &PROVEN)[0],
-        1,
-        "both in the band over 26.2 N, neither with enough: the pull decides"
-    );
-}
-
-/// A candidate standing `stack_mm` tall that the fewest supports reads as `supports`,
-/// tie-broken as a proof does, on the stack to its noise.
-fn stacking(stack_mm: f64, supports: f64) -> Readings {
-    let noise = PROVEN[STACK];
-    let mut r = reading(0.0, Some(0.0), stack_mm, (stack_mm / noise).round());
-    r.goals[SUPPORT] = supports;
-    r
-}
-
-#[test]
 fn the_shortest_print_takes_the_shortest_stack_whatever_its_support() {
-    let readings = [stacking(100.0, 20.0), stacking(101.0, 1.0)];
+    let readings = [spending(STACK, 100.0, 20.0), spending(STACK, 100.5, 1.0)];
     assert_eq!(rank(&readings, SHORTEST, &PROVEN)[0], 0);
-}
-
-#[test]
-fn the_shortest_print_counts_a_pull_past_the_limit_for_nothing_and_a_cup_as_fatal() {
-    let tearing = Readings {
-        tearing: 1.0,
-        ..stacking(80.0, 5.0)
-    };
-    let sound = stacking(100.0, 5.0);
-    assert_eq!(rank(&[sound, tearing], SHORTEST, &PROVEN)[0], 1);
-    assert_eq!(rank(&[sound, tearing], GOAL, &PROVEN)[0], 0);
-    let cupped = Readings {
-        suction: 1.0,
-        ..stacking(80.0, 5.0)
-    };
-    assert_eq!(rank(&[sound, cupped], SHORTEST, &PROVEN)[0], 0);
-}
-
-#[test]
-fn as_fast_within_a_fiftieth_and_a_millimetre_the_shortest_print_stays() {
-    let mut now = stacking(102.0, 5.0);
-    now.standing = true;
-    let faster = stacking(100.0, 5.0);
-    assert_eq!(rank(&[faster, now], SHORTEST, &PROVEN)[0], 1);
-    let past = stacking(95.0, 5.0);
-    assert_eq!(
-        rank(&[past, now], SHORTEST, &PROVEN)[0],
-        0,
-        "102 mm is past 95 * 1.02 + 1"
-    );
 }
 
 /// A sound candidate reading `support` ml, `pull` newtons and `stack` millimetres.
@@ -361,7 +243,7 @@ fn auto_weighs_shares_not_units() {
         r
     };
     let mut noise = PROVEN;
-    noise[SUPPORT] *= 1000.0;
+    noise.goals[SUPPORT] *= 1000.0;
     assert_eq!(
         rank(&[in_microlitres(face), in_microlitres(edge)], AUTO, &noise)[0],
         1,
@@ -423,4 +305,68 @@ fn auto_stays_where_the_model_stands_good_on_every_goal() {
     );
     let clearly = weighing(0.3, 5.0, 80.0);
     assert_eq!(rank(&[clearly, now], AUTO, &PROVEN)[0], 0);
+}
+
+/// A sound candidate with `seen` contacts on show and `support` ml of support.
+fn showing(seen: f64, support: f64) -> Readings {
+    Readings {
+        seen,
+        ..weighing(support, 5.0, 50.0)
+    }
+}
+
+#[test]
+fn unasked_what_shows_weighs_nothing() {
+    let readings = [showing(9.0, 1.0), showing(0.0, 1.0)];
+    for preset in OrientPreset::all() {
+        assert_eq!(rank(&readings, preset, &PROVEN), [0, 1], "{preset:?}");
+    }
+}
+
+#[test]
+fn a_clean_surface_holds_the_preset_to_the_fewest_on_show_and_a_contact_over() {
+    let readings = [showing(9.0, 0.5), showing(3.0, 2.0), showing(4.2, 1.5)];
+    assert_eq!(
+        rank(&readings, clean(FEWEST), &PROVEN)[0],
+        2,
+        "4.2 on show is within 3 * 1.1 + 1, and takes less resin than 3"
+    );
+    assert_eq!(rank(&readings, clean(AUTO), &PROVEN)[0], 2);
+}
+
+#[test]
+fn a_pose_showing_more_is_offered_only_for_far_more_of_what_the_preset_wins() {
+    let readings = [showing(0.0, 4.0), showing(6.0, 1.0), showing(6.0, 3.8)];
+    assert_eq!(
+        rulings(&readings, clean(FEWEST), &PROVEN),
+        [Ruling::Chosen, Ruling::Traded, Ruling::Shows],
+        "a quarter of the 4 ml is worth six contacts on show; 0.2 ml is not"
+    );
+    assert_eq!(
+        rulings(&readings, clean(AUTO), &PROVEN),
+        [Ruling::Chosen, Ruling::Traded, Ruling::Shows]
+    );
+}
+
+#[test]
+fn a_trade_another_trade_beats_on_both_is_not_offered() {
+    let readings = [showing(0.0, 4.0), showing(6.0, 1.0), showing(8.0, 1.2)];
+    assert_eq!(
+        rulings(&readings, clean(FEWEST), &PROVEN),
+        [Ruling::Chosen, Ruling::Traded, Ruling::Shows]
+    );
+}
+
+#[test]
+fn a_turn_off_what_shows_is_always_worth_it() {
+    let mut now = showing(6.0, 1.0);
+    now.standing = true;
+    let hidden = showing(0.0, 1.5);
+    for preset in OrientPreset::all() {
+        assert_eq!(
+            rank(&[now, hidden], clean(preset), &PROVEN)[0],
+            1,
+            "{preset:?}"
+        );
+    }
 }

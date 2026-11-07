@@ -313,6 +313,7 @@ binding-reset = Back to the keys it came with
 settings-page-supports = Supports
 settings-page-hollow = Hollow
 settings-page-drain = Drain
+settings-page-recipes = Recipes
 settings-page-general = General
 settings-page-updates = Updates
 settings-tab-resins = Resins
@@ -321,6 +322,7 @@ settings-tab-network = Network
 settings-new-resin = New resin
 settings-new-printer = New printer
 settings-new-profile = New profile
+settings-new-recipe = New recipe
 settings-copy-name = { $name } copy
 
 ## supports.rs
@@ -344,6 +346,8 @@ supports-placed-sized =
        *[other] Placed { $count } supports: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
     }
 supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
+supports-no-automatic = The catalogue has no automatic support profile
+supports-no-profile = The catalogue has no support profile { $id }
 supports-group-name = Group { $index }
 supports-cannot-grow = The supports could not be built: { $reason }
 supports-growth-stopped = Building the supports stopped without an answer
@@ -555,6 +559,21 @@ check-removed =
        *[other] { $count } islands taken out of the file
     }
 
+## panels/prepare_row.rs
+
+prepare-row-tooltip = Prepares { $scope } for print.
+prepare-row-recipe = The recipe that Prepare for print uses
+# Group names in the list of recipes.
+prepare-row-built-in = Built-in
+prepare-row-yours = Yours
+prepare-row-edit-recipes = Edit recipes
+# Tooltips of the row's buttons while a run waits.
+prepare-row-continue = Continue to the next step
+prepare-row-retry = Retry the failed step and continue
+prepare-row-end = Stop here and keep the plate as it is now
+# What a waiting run's box says: the recipe's step it waits at, and why.
+prepare-row-waits-at = Step { $number }: { $why }
+
 ## panels/plate_summary.rs
 
 summary-layer = Layer
@@ -607,6 +626,11 @@ ago-weeks =
 
 field-back-to = Back to { $value } { $unit }
 field-printer-address = Printer address
+
+## ui/widgets/field/condition.rs
+
+# The button beside a condition box that lists the names it can read.
+condition-insert = Insert a value
 
 ## ui/widgets/layout.rs
 
@@ -661,6 +685,9 @@ measure-not-parallel = Not parallel, so there is no one gap between them.
 hollow-shell = Shell
 hollow-infill = Infill
 hollow-keep-solid = Keep solid
+hollow-keep-thin = Keep thin parts solid
+hollow-keep-thin-note = Where the model is thinner than this, it stays solid, so thin parts such as fingers and blades are not hollowed.
+hollow-thinner-than = Thinner than
 hollow-keep-solid-clicks = Click the model to keep its wall solid there, shift-click to run a rod on from the last blocker, alt-click a blocker to take it away.
 hollow-drainage = Drainage
 hollow-looking = Looking for trapped resin
@@ -936,6 +963,7 @@ menu-quit = Quit Encrust
 menu-nothing-recent = Nothing opened yet
 menu-arrange-plate = Arrange plate
 menu-auto-orient-plate = Auto-orient plate
+menu-prepare = Prepare for print
 menu-move-to-plate = Move to plate
 menu-frame-view = Frame view
 menu-plate-grid = Plate grid
@@ -1094,6 +1122,177 @@ diagram-brace-top = top
 diagram-max = max { $value }
 diagram-model = model
 diagram-plate = plate
+
+## settings/recipes.rs
+
+recipes-nothing-open = no recipe is open
+recipes-built-in-why = A built-in recipe cannot be changed or deleted; duplicate it to make one of your own.
+recipes-cannot-save = the recipe cannot be saved
+recipes-unreadable-why = the recipe file has errors
+# The name a copy of a recipe starts with.
+recipes-copy-name = { $name } copy
+# The name a new recipe starts with; numbered when one is already called that.
+recipes-new-name = New recipe
+recipes-new-name-numbered = New recipe { $number }
+
+## panels/settings/recipes.rs
+
+recipes-table-recipe = Recipe
+# Where a recipe is kept: one of the built-in ones, or the user's.
+recipes-table-kept = Type
+recipes-table-steps = Steps
+recipes-kept-built-in = Built-in
+recipes-kept-yours = Yours
+recipes-kept-broken = Has errors
+recipes-fix-first = Fix what is marked in red before saving.
+recipes-saved = Saved the recipe { $recipe }
+
+## panels/settings/recipes/form.rs
+
+recipes-built-in = Built-in recipe
+recipes-built-in-how = Duplicate it to get your own copy that you can change.
+recipes-block-recipe = Recipe
+recipes-block-recipe-help = The name is shown in the Prepare for print list. Variables are your own numbers that step conditions and settings can use, for example how much resin hollowing must save before a model is hollowed.
+recipes-does-not-run = The recipe cannot run until it is fixed
+recipes-var-value = Value
+recipes-var-remove = Remove the variable
+recipes-var-add = Add a variable
+# The tooltip of the + before, between and after the steps, which adds one there.
+recipes-step-add = Add a step
+recipes-no-steps = The recipe has no steps yet.
+
+## panels/settings/recipes/chain.rs
+
+# The tooltip of the grip a step is dragged by to another place in the list.
+recipes-step-drag = Drag to move the step
+# What a folded step says of itself, each its own part of one line.
+recipes-summary-off = Switched off
+recipes-summary-when = When { $condition }
+recipes-summary-skips = Skipped if it fails
+recipes-summary-set = { $count ->
+    [one] { $count } setting changed
+   *[other] { $count } settings changed
+}
+recipes-summary-rules = { $count ->
+    [one] { $count } rule
+   *[other] { $count } rules
+}
+
+## panels/settings/recipes/step.rs
+
+recipes-step-help = Steps run in list order, each on the model as the steps before it left it. When is a condition on the model, such as saves_ml >= 30; leave it empty to always run the step. On failure decides whether a failed step stops the run or is skipped. A setting you leave out uses its default; a number or a switch can also be calculated by an expression. Rules change settings when their condition is true; the first matching rule is used.
+recipes-step-up = Move the step up
+recipes-step-down = Move the step down
+recipes-step-remove = Remove the step
+# A condition: the step runs when it holds.
+recipes-when = When
+recipes-stop-if = Stop if
+recipes-message = Message
+recipes-on-fail = On failure
+recipes-on-fail-stop = Stop
+recipes-on-fail-skip = Skip
+recipes-retry = Add supports to islands found
+# A condition: the islands are supported again while it holds.
+recipes-retry-while = While
+recipes-retry-max = Max attempts
+# Rules that choose other settings for the step.
+recipes-choose = Rules
+recipes-rule-remove = Remove the rule
+recipes-rule-add = Add a rule
+# What an empty condition box says: the step runs always.
+recipes-when-empty = Always
+# What an empty Stop if box says: the gate never stops the run.
+recipes-stop-if-empty = Never
+recipes-retry-while-empty = for example islands > 0
+recipes-rule-when-empty = for example height_mm > 120
+recipes-conditions-help = A condition compares values and numbers with < <= > >= == !=, combines them with && (and), || (or) and ! (not), and can calculate with + - * / and min, max, abs and clamp. The button beside a condition lists every value you can use.
+recipes-step-help-repair = Repair fixes the mesh so that it can be sliced: it closes holes and turns faces outward. Method sets how thorough it is.
+recipes-step-help-orient = Orientation rotates the model on the plate. Goal sets what to keep low: supports, the pull on the film, or print time. Max tilt limits how far the model can lean.
+recipes-step-help-hollow = Hollowing removes the inside of the model and leaves a wall of the given thickness, to save resin.
+recipes-step-help-drain = Drain holes let resin flow out of a hollow model: where a search finds they work, or at the points you give.
+recipes-step-help-supports = Supports adds supports under the model using a support profile.
+recipes-step-help-check = Check slices the plate and looks for islands, trapped resin and a strong pull on the film. Conditions can use islands, peel_n and support_ml only after a check.
+recipes-step-help-arrange = Arrangement lays out the models on the plate with the given spacing.
+recipes-step-help-save = Save slices the plate into a file in the given folder and can send it to the printer.
+recipes-step-help-gate = A stop condition stops the run and shows its message when Stop if is true.
+recipes-step-help-pause = A pause shows its message and waits until you press Continue.
+
+## panels/settings/recipes/setting.rs
+
+recipes-setting-set = Set
+recipes-setting-default = Reset to default
+recipes-setting-expression = Calculate with an expression
+# Said of a setting left out of a step: the engine's default stands.
+recipes-setting-left-out = Default
+recipes-point-remove = Remove the point
+recipes-point-add = Add a point
+recipes-set-method = Method
+recipes-set-goal = Goal
+recipes-set-max-tilt = Max tilt
+recipes-set-clean-surface = Clean surface
+recipes-set-wall = Wall
+recipes-set-mode = Mode
+recipes-set-infill = Infill
+recipes-set-keep-solid = Keep solid if thinner than
+# Where the drain holes go: found by the search, or at the points given.
+recipes-set-at = Placement
+recipes-set-points = Points
+recipes-set-diameter = Diameter
+recipes-set-depth = Depth
+recipes-set-vent = Vent
+recipes-set-plugs = Plugs
+recipes-set-profile = Support profile
+recipes-set-cavity = Supports in the cavity
+recipes-set-spacing = Spacing
+recipes-set-folder = Folder
+recipes-set-name = File name
+recipes-set-send = Send to the printer
+# What an empty expression box says.
+recipes-expression-empty = for example height_mm / 50
+recipes-word-repair = Repair
+recipes-word-close-holes = Close holes
+recipes-word-wrap = Wrap
+recipes-word-deep = Deep repair
+recipes-word-auto = Auto
+recipes-word-fewest-supports = Fewest supports
+recipes-word-least-peel = Least pull
+recipes-word-shortest-print = Shortest print
+recipes-word-inside = Inside
+recipes-word-outside = Outside
+recipes-word-open-floor = Open floor
+# Drain holes drilled at the points the recipe gives.
+recipes-word-points = At the points
+
+## panels/settings/recipes/names.rs
+
+# Headings of the names a condition can read.
+recipes-names-model = The model
+recipes-names-measured = After a check
+recipes-names-yours = Your variables
+recipes-names-functions = Functions
+recipes-names-your-value = Your variable, { $value }
+recipes-names-min = The smaller of two
+recipes-names-max = The larger of two
+recipes-names-abs = Absolute value
+recipes-names-clamp = Limited to a range
+recipes-names-height = Height, mm
+recipes-names-width = Width, mm
+recipes-names-depth = Depth, mm
+recipes-names-volume = Volume, ml
+recipes-names-surface = Surface area, cm²
+recipes-names-faces = Number of faces
+recipes-names-sound = The mesh has no defects
+recipes-names-defects = Number of mesh defects
+recipes-names-turned = Turned by hand
+recipes-names-hollow = The model is hollow
+recipes-names-saves-ml = Resin saved by hollowing, ml
+recipes-names-saves-share = Share of resin saved by hollowing
+recipes-names-worth-hollowing = Hollowing is worth it
+recipes-names-fits = Fits the build volume
+recipes-names-trapped = Pockets of trapped resin, counting drain holes
+recipes-names-islands = Islands with no support
+recipes-names-peel = Strongest pull on the film, N
+recipes-names-support-ml = Resin in the supports, ml
 
 ## panels/settings/presets.rs
 
@@ -1465,6 +1664,54 @@ orient-supports-ml = { $value } ml of supports
 orient-pull = { $value } N of pull
 orient-tall = { $value } mm tall
 
+## prepare.rs
+
+prepare-nothing-visible = Nothing visible on the plate to prepare.
+prepare-busy = Wait until the current task on the plate finishes.
+prepare-running-why = Wait for Prepare for print to end.
+prepare-step-orient = Orienting
+prepare-step-repair = Repairing
+prepare-step-hollow = Hollowing
+prepare-step-drain = Looking for drain holes
+prepare-step-supports = Placing supports
+prepare-step-cavity = Placing supports in the cavity
+prepare-step-scan = Checking drainage
+prepare-step-check = Checking the layers
+prepare-step-arrange = Arranging the plate
+prepare-step-save = Saving the file
+prepare-step-pause = Waiting for you
+# What a paused run says when the recipe's pause gives no message of its own.
+prepare-paused = Prepare for print is paused
+prepare-check-unread = The layers could not be checked
+prepare-save-no-printer-to-send = No printer to send the file to
+prepare-cancelled = Prepare for print cancelled; the plate is back as it was
+prepare-ended = Prepare for print stopped; the changes made so far are kept
+prepare-gate-held = The recipe stopped at this step
+prepare-step-cannot-run-yet = The { $step } step does not work here yet
+prepare-done =
+    { $count ->
+        [one] Prepared { $count } model for print
+       *[other] Prepared { $count } models for print
+    }
+
+## prepare/recipes.rs
+
+prepare-recipe-missing = there is no recipe { $recipe }
+# The window's line over the recipe's own error, which stays in English.
+prepare-recipe-cannot-run = the recipe { $recipe } cannot run
+# The kind of a recipe's step, a noun naming what the step does.
+recipe-kind-repair = Repair
+recipe-kind-orient = Orientation
+recipe-kind-hollow = Hollowing
+recipe-kind-drain = Drain holes
+recipe-kind-supports = Supports
+recipe-kind-check = Check
+recipe-kind-arrange = Arrangement
+recipe-kind-save = Save
+# A step that ends the run when its condition holds.
+recipe-kind-gate = Stop condition
+recipe-kind-pause = Pause
+
 ## relief.rs
 
 relief-nothing-visible = Nothing visible on the plate to press a texture into.
@@ -1507,6 +1754,13 @@ position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
 position-auto-orient = Auto-orient
+position-limit-tilt = Limit tilt
+position-limit-tilt-note = Keeps the turn within this many degrees of the way the model stands now; 0 leaves it as it is.
+position-max-tilt = Max tilt
+position-clean-surface = Clean surface
+position-clean-surface-about = Keeps supports off where the model shows, then searches for the preset among those poses. A pose that shows a few more contacts for far more of the preset is offered beside the choice. Where nothing is painted, what shows is read off the shape: open, detailed faces.
+position-paint-shown = Paint
+position-paint-shown-clear = Clear
 orient-looking = Scoring the ways to stand
 orient-proving = Printing the best ones to compare
 orient-cancelled = Auto-orient cancelled
@@ -1515,8 +1769,8 @@ orient-preset-peel = Peel
 orient-preset-shortest = Time
 orient-preset-auto = Auto
 orient-preset-supports-hint = The least resin in supports, whichever way up.
-orient-preset-peel-hint = The lightest pull on the film, no cups; under 10 N, the fewest supports.
-orient-preset-shortest-hint = The fewest layers that still print.
+orient-preset-peel-only-hint = The lightest pull on the film; cups and islands are not weighed.
+orient-preset-shortest-only-hint = The fewest layers; cups and islands are not weighed.
 orient-preset-auto-hint = Supports, pull and print time balanced: none gives up much for the others.
 position-mirror-across = Mirror across { $axis }
 position-mirror-copy = Mirror a copy
@@ -1578,6 +1832,10 @@ drain-check = Check drainage
 drain-check-tooltip = Cuts the plate and follows the air through it, looking for resin with no way out.
 drain-checking = Checking drainage
 drain-cancelled = Drainage check cancelled
+# A word in the tight companion button beside Check drainage: drills the holes found for you.
+drain-auto = Auto
+drain-auto-tooltip = Looks for a drain hole and a vent for each pocket of trapped resin in the selected models, and drills those that a new check confirms let the resin out.
+drain-auto-looking = Looking for drain holes
 drain-hole = Hole
 drain-channel = Channel
 drain-channel-note = Each click adds a point; the channel takes the hole's width and outline and runs under all of them, open at its two ends alone.
@@ -1716,6 +1974,10 @@ notice-delete-profiles = Delete them
 
 notice-cutting-preview = Cutting the layers to preview
 notice-finding-walk = Finding the shortest way along the surface
+# $step is one of the prepare-step messages: what the run is doing now.
+notice-preparing = Preparing for print: { $step }
+# Moves a paused Prepare for print on to its next step.
+notice-prepare-continue = Continue
 notice-broken-one = { $name } is broken
 notice-broken-several = { $count } models on this plate are broken
 notice-repair = Repair
@@ -2166,6 +2428,10 @@ job-thread-stopped-network = the network thread stopped without finishing
 job-send-starting = Starting { $printer }
 job-send-connecting = Connecting to { $printer }
 
+## job/drains.rs
+
+job-thread-stopped-drain-search = the drain hole search thread stopped without finishing
+
 ## job/trapped.rs
 
 job-thread-stopped-drainage = the drainage thread stopped without finishing
@@ -2194,6 +2460,26 @@ drain-found =
         [0] No trapped resin: everything can drain
         [one] { $count } pocket of trapped resin
        *[other] { $count } pockets of trapped resin
+    }
+
+## drain/auto.rs
+
+drain-auto-cancelled = Drain hole search cancelled
+drain-auto-drilled =
+    { $count ->
+        [0] No hole drilled
+        [one] { $count } hole drilled
+       *[other] { $count } holes drilled
+    }
+drain-auto-trapped = 
+    { $count ->
+        [one] { $count } pocket could not be drained and stays red.
+       *[other] { $count } pockets could not be drained and stay red.
+    }
+drain-auto-moved = 
+    { $count ->
+        [one] { $count } model changed during the search and got no holes.
+       *[other] { $count } models changed during the search and got no holes.
     }
 
 ## exchange.rs
@@ -2306,6 +2592,7 @@ hint-modifier-drag = { $key } drag
 hint-clear = clear
 hint-remove = remove
 hint-paint = paint
+hint-paint-shown = paint what shows
 hint-erase = erase
 hint-measure-two-points = two points
 hint-measure-second-point = the second point

@@ -124,6 +124,7 @@ pub struct Tools {
     pub boolean: crate::boolean::BooleanTool,
     pub text: crate::text::TextTool,
     pub orient: OrientTool,
+    pub prepare: crate::prepare::Prepare,
     pub measure: Measure,
     pub measure_edges: crate::measure::EdgeCache,
     pub measure_walk: crate::measure::Walking,

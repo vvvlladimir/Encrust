@@ -303,6 +303,23 @@ fn the_chip_opening_its_machines_and_its_resins() {
     }
 }
 
+/// The recipes dropped from Prepare for print's row over the plate card, one of the user's
+/// named too long for the list.
+#[test]
+fn the_recipes_of_prepare_for_print() {
+    let mut app = pictured();
+    let text = core_recipe::BUILT_IN[0].1.replace(
+        "Prepare for print",
+        "Busts on heavy supports, hollowed thin",
+    );
+    let catalogue = &mut app.machine.slicing.catalogue;
+    catalogue.save_recipe("busts", &text).expect("writable");
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
+    harness.get_by_label("Prepare for print").click();
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("prepare_recipes");
+}
+
 #[test]
 fn the_menus_of_the_bar() {
     let mut results = SnapshotResults::new();
@@ -408,4 +425,73 @@ fn an_update_found_told_and_installed() {
     };
     downloading.machine.updates.sheet = true;
     results.extend(picture("update_download", downloading));
+}
+
+/// Prepare for print waiting in its row: at a pause, and at a gate that stopped it.
+#[test]
+fn prepare_for_print_waiting_in_its_row() {
+    let mut results = SnapshotResults::new();
+    let waiting = |name: &str, steps: &str| {
+        let mut app = pictured();
+        let text = format!("name = \"{name}\"\nformat = 1\n{steps}");
+        let catalogue = &mut app.machine.slicing.catalogue;
+        catalogue.save_recipe("waits", &text).expect("writable");
+        app.tools.prepare.recipe = "waits".to_owned();
+        let (doc, tools, machine) = (&mut app.doc, &mut app.tools, &mut app.machine);
+        crate::prepare::start(doc, tools, machine).expect("the cube is picked");
+        // The harness draws without polling; the run is moved on as the window's frames would.
+        for _ in 0..10 {
+            if app.tools.prepare.waiting().is_some() {
+                break;
+            }
+            let (doc, tools, machine) = (&mut app.doc, &mut app.tools, &mut app.machine);
+            crate::prepare::poll(doc, tools, machine, true);
+        }
+        app
+    };
+    let paused = "[[step]]\ndo = \"arrange\"\n\
+        [[step]]\ndo = \"pause\"\nmessage = \"Look at the wall\"\n";
+    results.extend(picture("prepare_paused", waiting("Paused", paused)));
+    let gate = "[[step]]\ndo = \"gate\"\nstop_if = \"true\"\nmessage = \"Drill a hole by hand\"\n";
+    results.extend(picture("prepare_failed", waiting("Gated", gate)));
+}
+
+/// The Recipes page: the table with a recipe of the user's picked, that recipe open with its
+/// steps folded, then with a condition that does not read, and the names a condition can read.
+#[test]
+fn the_recipes_page() {
+    let mut results = SnapshotResults::new();
+    let text = core_recipe::BUILT_IN[0]
+        .1
+        .replace("Prepare for print", "Busts");
+    let with_mine = || {
+        let mut app = with_settings();
+        let catalogue = &mut app.machine.slicing.catalogue;
+        catalogue.save_recipe("busts", &text).expect("writable");
+        app.machine
+            .settings
+            .turn_to(crate::settings::Section::Recipes);
+        app.machine.settings.recipe_pick = Some("busts".to_owned());
+        app
+    };
+    results.extend(picture("settings_recipes", with_mine()));
+    let mut form = with_mine();
+    let entry = core_recipe::find("busts", [("busts", text.as_str())]).expect("kept");
+    form.machine.settings.open_recipe(&entry);
+    let draft = form.machine.settings.recipe.as_mut().expect("open");
+    draft.values.steps[0].when = "!turned &&".to_owned();
+    results.extend(picture("settings_recipe_form", form));
+    let mut folded = with_mine();
+    folded.machine.settings.open_recipe(&entry);
+    results.extend(picture("settings_recipe_chain", folded));
+    let mut listing = with_mine();
+    listing.machine.settings.open_recipe(&entry);
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), listing);
+    crate::panels::unfold_recipe_steps(&harness.ctx, "busts", 1);
+    harness.run_steps(SETTLE_FRAMES);
+    let first = harness.get_all_by_label("Insert a value").next();
+    first.expect("the first step has a When").click();
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("settings_recipe_names");
+    results.extend(harness.take_snapshot_results());
 }

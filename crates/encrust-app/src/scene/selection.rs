@@ -39,6 +39,14 @@ impl Scene {
         })
     }
 
+    /// The models `ids` names still on the plate with a mesh, in that order: what a run
+    /// started on named models works on.
+    pub fn named<'a>(&'a self, ids: &'a [ObjectId]) -> impl Iterator<Item = &'a SceneObject> {
+        ids.iter()
+            .filter_map(|id| self.get(*id))
+            .filter(|object| !object.mesh.is_empty())
+    }
+
     /// How many models a tool would act on.
     pub fn target_count(&self) -> usize {
         self.targets().count()

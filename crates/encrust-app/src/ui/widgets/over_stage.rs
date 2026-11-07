@@ -1,6 +1,6 @@
 //! The notices stacked over the stage's foot. See `docs/design/ui-screens.md`, Over the stage.
 
-use egui::{Align, Layout, Margin, Response, RichText, Sense, Ui, vec2};
+use egui::{Align, Layout, Response, RichText, Sense, Ui, vec2};
 
 use super::button::{Skin, filled_button};
 use super::{card, icon_button, progress_bar, quiet_button, small_icon_button};
@@ -52,7 +52,7 @@ pub fn notice_card(
                 if detail.is_some() {
                     used += 1.0 + line(theme::small()).size().y;
                 }
-                let inner_h = NOTICE_H - NOTICE_MARGIN.sum().y;
+                let inner_h = NOTICE_H - theme::NOTICE_MARGIN.sum().y;
                 ui.add_space(((inner_h - used) / 2.0).max(0.0));
                 words(ui, text);
                 if let Some(detail) = detail {
@@ -70,41 +70,54 @@ pub fn notice_card(
 /// A running job over the stage's foot: its glyph, what it is doing, the share done and a
 /// quiet Cancel, its bar under them. Answers whether to stop.
 pub fn job_notice(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
-    let colors = theme::colors();
     let mut cancel = false;
     notice_frame(ui, JOB_MIN_W, |ui| {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = theme::NOTE_GAP;
-            ui.horizontal(|ui| {
-                spinner(ui);
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let cancel_text = tr!("common-cancel");
-                    cancel = quiet_button(ui, "", &cancel_text, false, !cancelling).clicked();
-                    if let Some(fraction) = fraction {
-                        let share =
-                            tr!("value-percent", value = format!("{:.0}", fraction * 100.0));
-                        let share = RichText::new(share).font(theme::figures(11.5));
-                        ui.label(share.color(colors.text_mid));
-                    }
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| words(ui, label));
-                });
+        cancel = job_lines(ui, label, fraction, cancelling);
+    });
+    cancel
+}
+
+/// A job notice's lines inside its card: the glyph, the words, the share done and a quiet
+/// Cancel, the bar under them. Answers whether to stop.
+fn job_lines(ui: &mut Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
+    let colors = theme::colors();
+    let mut cancel = false;
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = theme::NOTE_GAP;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = NOTICE_GAP;
+            spinner(ui);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let cancel_text = tr!("common-cancel");
+                cancel = quiet_button(ui, "", &cancel_text, false, !cancelling).clicked();
+                if let Some(fraction) = fraction {
+                    let share = tr!("value-percent", value = format!("{:.0}", fraction * 100.0));
+                    let share = RichText::new(share).font(theme::figures(11.5));
+                    ui.label(share.color(colors.text_mid));
+                }
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| words(ui, label));
             });
-            // A job that cannot count its work runs its bar rather than lie.
-            progress_bar(ui, fraction);
         });
+        // A job that cannot count its work runs its bar rather than lie.
+        progress_bar(ui, fraction);
     });
     cancel
 }
 
 /// A running job's glyph, turning unless motion is reduced.
 pub fn spinner(ui: &mut Ui) {
-    let ink = theme::colors().accent_soft;
     let (rect, _) = ui.allocate_exact_size(vec2(SPINNER_PT, SPINNER_PT), Sense::hover());
+    paint_spinner(ui, rect.center());
+}
+
+/// The same glyph painted turning about `center`, for a control that lays itself out.
+pub(in crate::ui::widgets) fn paint_spinner(ui: &Ui, center: egui::Pos2) {
+    let ink = theme::colors().accent_soft;
     let galley = ui
         .painter()
         .layout_no_wrap(icon::JOB.to_owned(), theme::icon(SPINNER_PT), ink);
     let turn = motion::spin(ui.ctx()).unwrap_or(0.0) * std::f32::consts::TAU;
-    let corner = rect.center() - galley.size() / 2.0;
+    let corner = center - galley.size() / 2.0;
     let shape = egui::epaint::TextShape::new(corner, galley, ink)
         .with_angle_and_anchor(turn, egui::Align2::CENTER_CENTER);
     ui.painter().add(shape);
@@ -114,12 +127,12 @@ pub fn spinner(ui: &mut Ui) {
 const SPINNER_PT: f32 = theme::glyph::BUTTON;
 
 fn notice_frame(ui: &mut Ui, min_w: f32, add: impl FnOnce(&mut Ui)) {
-    card().inner_margin(NOTICE_MARGIN).show(ui, |ui| {
+    card().inner_margin(theme::NOTICE_MARGIN).show(ui, |ui| {
         // The card's margin and stroke stand outside what is set here.
-        let inner_max = NOTICE_MAX_W - NOTICE_MARGIN.sum().x - 2.0;
+        let inner_max = NOTICE_MAX_W - theme::NOTICE_MARGIN.sum().x - 2.0;
         let width = ui.available_width().clamp(min_w.min(inner_max), inner_max);
         ui.set_width(width);
-        ui.set_min_height(NOTICE_H - NOTICE_MARGIN.sum().y);
+        ui.set_min_height(NOTICE_H - theme::NOTICE_MARGIN.sum().y);
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = NOTICE_GAP;
             add(ui);
@@ -159,12 +172,6 @@ const NOTICE_MAX_W: f32 = 440.0;
 const NOTICE_MIN_W: f32 = 200.0;
 const JOB_MIN_W: f32 = 340.0;
 const NOTICE_GAP: f32 = 10.0;
-const NOTICE_MARGIN: Margin = Margin {
-    left: 12,
-    right: 6,
-    top: 6,
-    bottom: 6,
-};
 
 /// What was pressed on a [`zoom_bar`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

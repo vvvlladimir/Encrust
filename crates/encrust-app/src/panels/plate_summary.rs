@@ -300,9 +300,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
         tally.vertices += mesh.vertices.len();
         tally.triangles += mesh.faces.len();
         tally.model_mm3 += signed_volume(mesh).abs() * grows;
-        for supports in object.supports.meshes().unwrap_or_default() {
-            tally.supports_mm3 += signed_volume(supports).abs();
-        }
+        tally.supports_mm3 += object.supports_mm3();
     }
     ctx.data_mut(|data| data.insert_temp(id, (fingerprint, tally)));
     tally

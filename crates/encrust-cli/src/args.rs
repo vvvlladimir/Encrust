@@ -191,6 +191,11 @@ pub struct TransformArgs {
     #[arg(long, value_enum, default_value_t = Goal::FewestSupports, requires = "orient")]
     pub orient_goal: Goal,
 
+    /// Hold --orient to the poses with the fewest contacts where the model shows, read off
+    /// its shape.
+    #[arg(long, requires = "orient")]
+    pub clean_surface: bool,
+
     /// How far --orient may turn the model from the way its file stands it, degrees.
     #[arg(long, value_name = "DEG", requires = "orient")]
     pub max_tilt: Option<Scalar>,
@@ -407,7 +412,29 @@ pub struct JobArgs {
     #[command(flatten)]
     pub raster: RasterArgs,
 
+    /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
+    /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on
+    /// automatic supports. The same as `--recipe prepare`, writing to `out` without -o.
+    #[arg(long, conflicts_with = "recipe")]
+    pub prepare: bool,
+
+    /// Prepare each model step by step by a recipe: the id of a built-in one (`prepare`), one
+    /// of yours by file stem, or a recipe file. A flag given wins over what it sets in every
+    /// step of its kind.
+    #[arg(long, value_name = "ID|PATH")]
+    pub recipe: Option<String>,
+
     /// Exit with code 3 when the model has defects or does not fit.
     #[arg(long)]
     pub strict: bool,
+}
+
+impl JobArgs {
+    /// The recipe each model is prepared by, by id or path: `--recipe`, or `prepare` for
+    /// `--prepare`.
+    pub fn recipe_asked(&self) -> Option<&str> {
+        self.recipe
+            .as_deref()
+            .or(self.prepare.then_some(crate::recipe::PREPARE))
+    }
 }

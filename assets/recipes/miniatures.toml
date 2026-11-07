@@ -1,0 +1,31 @@
+# Small detailed models: mended if open, tilted for the least peel off what shows, never
+# hollowed, on the automatic supports, and stopped if an island is still hanging after two
+# more tries. Why: ADR 0408, 0410. The layout is in docs/design/recipes.md.
+
+name = "Miniatures"
+format = 1
+
+[vars]
+max_tilt = 45
+
+[[step]]
+do = "repair"
+when = "!sound"
+
+[[step]]
+do = "orient"
+when = "!turned"
+set = { goal = "least-peel", max_tilt_deg = "= max_tilt", clean_surface = true }
+
+[[step]]
+do = "supports"
+set = { profile = "auto" }
+
+[[step]]
+do = "check"
+retry = { while = "islands > 0", max = 2 }
+
+[[step]]
+do = "gate"
+stop_if = "islands > 0"
+message = "Islands still unsupported"
