@@ -669,7 +669,8 @@ smoothing, not the original model.
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
 Resin is counted from what is actually cured. Before slicing, the plate's card states
-them from the meshes, and the time from the plate's height: time, resin, weight
+them from the meshes, and the time from the plate up to the top of what stands on it,
+lift included: time, resin, weight
 and price in view, the models' and the supports' share, vertices and triangles under
 *Details*, which stays open or shut between runs. In Preview the card states the layer
 shown: its exposure, the print time until it is done, the area it cures and the resin that comes to.

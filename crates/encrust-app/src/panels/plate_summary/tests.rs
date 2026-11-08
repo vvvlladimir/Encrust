@@ -3,6 +3,10 @@ use crate::scene::ImportSummary;
 use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
 
 fn scene_with_a_model(height_mm: Scalar) -> Scene {
+    scene_with_a_model_lifted(height_mm, 0.0)
+}
+
+fn scene_with_a_model_lifted(height_mm: Scalar, lift_mm: Scalar) -> Scene {
     let mesh = Mesh::new(
         vec![
             Vec3::new(0.0, 0.0, 0.0),
@@ -16,7 +20,10 @@ fn scene_with_a_model(height_mm: Scalar) -> Scene {
     scene.insert(crate::scene::Imported::new(
         "tetra".to_owned(),
         Arc::new(mesh.clone()),
-        Transform::default(),
+        Transform {
+            translation: Vec3::new(0.0, 0.0, lift_mm),
+            ..Transform::default()
+        },
         ImportSummary {
             vertices_merged: 0,
             faces_removed: 0,
@@ -93,6 +100,19 @@ fn the_estimate_counts_the_layers_the_model_needs() {
     let (height_mm, layers) = stack(&scene_with_a_model(1.0), &slicing);
     assert!((height_mm - 1.0).abs() < 1e-6);
     assert_eq!(layers, (20, None));
+}
+
+#[test]
+fn the_estimate_counts_the_lift_under_the_model_from_the_plate_up() {
+    let mut slicing = Slicing::default();
+    slicing.set_layer_height(0.05);
+    // One millimetre of model two millimetres up: three from the plate, sixty layers.
+    let (height_mm, layers) = stack(&scene_with_a_model_lifted(1.0, 2.0), &slicing);
+    assert!(
+        (height_mm - 3.0).abs() < 1e-6,
+        "expected 3 mm, got {height_mm}"
+    );
+    assert_eq!(layers, (60, None));
 }
 
 #[test]
