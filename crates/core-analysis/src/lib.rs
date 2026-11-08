@@ -7,7 +7,7 @@ mod layer;
 mod pull;
 mod stack;
 
-pub use contact::{MIN_ISLAND_MM2, island_runs, islands};
+pub use contact::{MIN_ISLAND_MM2, island_runs, islands, standing_on};
 pub use cups::{MIN_CUP_MM2, MIN_CUP_MM3};
 pub use layer::{Cured, LayerMeasure, Piece, Stretch, cure, erase, measure};
 pub use pull::{

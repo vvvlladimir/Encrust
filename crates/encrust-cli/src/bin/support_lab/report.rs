@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::cure::Cured;
 use crate::shape::{Kind, Limits, Shape};
+use crate::tips::{self, Tips};
 
-const SCHEMA: u32 = 2;
+const SCHEMA: u32 = 3;
 /// Growth in contacts or resin a run may show over its baseline before it is a regression:
 /// placement moves a little with any change, and a few percent is not a decision.
 const GROWTH: f32 = 1.15;
@@ -38,6 +39,8 @@ pub struct Row {
     pub skipped: Option<String>,
     pub shape: Shape,
     pub cure: CureRow,
+    /// Each support on its own, and the weakest of them.
+    pub tips: Tips,
     /// Densities tried below and above the profile's, as a share of it.
     pub sweep: Vec<SweepRow>,
     /// Limits the corpus sets for this model that the run broke.
@@ -284,6 +287,7 @@ pub fn print_row(row: &Row) {
         "- stack: {} layers, hardest pull {:.1} N, peels {}, cups {}, thin runs {}",
         cure.layers, cure.hardest_pull_n, cure.peels, cure.cups, cure.thins,
     );
+    tips::print(&row.tips);
     print_sweep(row);
     for broken in &row.broken {
         println!("- EXPECTED: {broken}");
@@ -396,13 +400,13 @@ fn value_of(kind: Kind, value: f32) -> String {
 /// The summary table over every row.
 pub fn print_table(report: &Report) {
     println!(
-        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | rim mm | bare mm² | visible | thin | specks | knee |"
+        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | margin | <×1.5 | rim mm | bare mm² | visible | thin | specks | knee |"
     );
-    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
     for row in report.rows.iter().filter(|row| row.skipped.is_none()) {
         let shape = &row.shape;
         println!(
-            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {:.0} | {:.0} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {} | {} | {:.0} | {:.0} | {} | {} | {} | {} |",
             row.model,
             row.profile,
             if row.held() { "yes" } else { "**no**" },
@@ -412,6 +416,10 @@ pub fn print_table(report: &Report) {
             row.per_cm2(),
             shape.use_p90,
             shape.overloaded,
+            row.tips
+                .weakest_margin
+                .map_or("-".to_owned(), |margin| format!("×{margin:.1}")),
+            row.tips.under_wanted,
             shape.rim_bare_mm,
             shape.bare_mm2,
             shape.visible,

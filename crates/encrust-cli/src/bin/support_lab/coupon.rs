@@ -283,6 +283,7 @@ fn supported(profile: &SupportProfile, body: Mesh, points: Vec<Vec3>) -> Result<
     Ok(Supported {
         model: body,
         groups: vec![0; points.len()],
+        reasons: Vec::new(),
         contacts: points,
         profiles: vec![profile.clone()],
         trees,

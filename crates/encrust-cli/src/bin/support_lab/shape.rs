@@ -6,6 +6,7 @@ use core_geometry::{
     diagnose, signed_volume,
 };
 use core_plate::LOOKS_UP;
+use core_supports::SupportTree;
 use printer_profiles::{ContactShape, SupportProfile};
 use serde::{Deserialize, Serialize};
 
@@ -175,7 +176,7 @@ pub fn surface_radius_mm(profile: &SupportProfile) -> Scalar {
 }
 
 /// Indices of the contacts some tree carries.
-fn standing(supported: &Supported) -> Vec<usize> {
+pub fn standing(supported: &Supported) -> Vec<usize> {
     let mut held: Vec<usize> = supported
         .trees
         .iter()
@@ -449,24 +450,30 @@ fn pieces(triangle: &Triangle) -> Vec<(Vec3, Scalar)> {
 fn tips_on_surface(shape: &mut Shape, model: &Mesh, bvh: &Bvh, tips: &[Vec3], upright: Quat) {
     let back = upright.inverse();
     for tip in tips {
-        let Some(closest) = bvh.closest(*tip) else {
+        let Some((normal, behind)) = surface_at(model, bvh, *tip) else {
             continue;
         };
-        let Some(triangle) = model.triangle(closest.face) else {
-            continue;
-        };
-        let normal = triangle.normal_unnormalized().normalize_or_zero();
         if (back * normal).z > LOOKS_UP {
             shape.visible += 1;
             shape.findings.push(finding(Kind::Visible, *tip, 0.0));
         }
-        if let Some(thickness) = thickness(bvh, closest.point, normal)
+        if let Some(thickness) = behind
             && thickness < THIN_DETAIL_MM
         {
             shape.thin_tips += 1;
             shape.findings.push(finding(Kind::ThinTip, *tip, thickness));
         }
     }
+}
+
+/// The way the surface nearest `tip` faces and the material behind it there.
+pub fn surface_at(model: &Mesh, bvh: &Bvh, tip: Vec3) -> Option<(Vec3, Option<Scalar>)> {
+    let closest = bvh.closest(tip)?;
+    let normal = model
+        .triangle(closest.face)?
+        .normal_unnormalized()
+        .normalize_or_zero();
+    Some((normal, thickness(bvh, closest.point, normal)))
 }
 
 /// How much material stands behind `surface` along `-normal`, millimetres, or `None` where
@@ -491,6 +498,17 @@ fn crowding(shape: &mut Shape, tips: &[Vec3], spacing: Scalar) {
     }
 }
 
+/// How tall `tree` stands off what it lands on, millimetres, and that over its root's width.
+pub fn trunk(tree: &SupportTree) -> (Scalar, Scalar) {
+    let top = tree
+        .nodes()
+        .iter()
+        .map(|node| node.position.z)
+        .fold(Scalar::MIN, Scalar::max);
+    let height = top - tree.landing().base.z;
+    (height, height / (2.0 * tree.root().radius_mm).max(1e-3))
+}
+
 fn trees(shape: &mut Shape, supported: &Supported, profile: &SupportProfile) {
     let roots: Vec<Vec3> = supported
         .trees
@@ -505,13 +523,7 @@ fn trees(shape: &mut Shape, supported: &Supported, profile: &SupportProfile) {
                 .findings
                 .push(finding(Kind::OnModel, landing.base, 0.0));
         }
-        let top = tree
-            .nodes()
-            .iter()
-            .map(|node| node.position.z)
-            .fold(Scalar::MIN, Scalar::max);
-        let width = 2.0 * tree.root().radius_mm;
-        let ratio = (top - landing.base.z) / width.max(1e-3);
+        let (_, ratio) = trunk(tree);
         let braced = profile.bracing.enabled
             && roots.iter().enumerate().any(|(other, root)| {
                 other != at

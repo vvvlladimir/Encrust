@@ -74,6 +74,26 @@ the risks are read this way: ADR 0164.
 The first island is where a print fails, since nothing cured over nothing comes up with
 the plate; failing that, the most stressed neck, then the hardest peel.
 
+## What each tip carries
+
+`support-lab` reads the model alone up the stack, joining pieces that touch into parts, so
+a part is held only by the tips under it so far. A tip seats on the piece within 0.15 mm of
+it, on its own layer or within a millimetre above. A part on the plate is the plate's.
+
+Each layer's pull on a part goes through its tips read as **one section of separate discs**,
+area `A = Σ a_i`, second moments `I = Σ (a_i d_i d_iᵀ + a_i r_i² / 4)` about their centre. The
+highest stress in tip `i` is
+
+`F / A + κ·d_i + |κ| r_i + F ℓ (|I⁻¹ d_i| + r_i λ_max(I⁻¹))`, with `κ = I⁻¹ M`
+
+`M` the pull's moment about that centre, `ℓ` half the piece's radius of gyration as for a neck,
+taken the way worst for that tip. One tip is exactly a neck's `F / A + F L / (π r³ / 4)`.
+Margin is the strength over this stress. It is rigid-body sharing: a thin arm is not softer
+than the body, and the film is not followed as it peels. `ℓ` comes from the polar gyration, so a
+long strip is levered across its width as if along its length: a first row under a leaning
+plate reads weaker than it is. The law, like `NECK_LIMIT_MPA`, is
+unmeasured, so margins rank tips before a coupon calibrates them.
+
 ## Removing islands
 
 A fold that removes islands takes every piece touching nothing below out of its layer,

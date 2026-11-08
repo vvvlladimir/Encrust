@@ -117,6 +117,31 @@ impl Cured {
         self.pitch
     }
 
+    /// The piece with a pixel nearest `at_mm`, panel millimetres, no further than `reach_mm`.
+    pub fn piece_near(&self, at_mm: [f32; 2], reach_mm: f32) -> Option<u32> {
+        let [x_mm, y_mm] = at_mm;
+        let (pitch_x, pitch_y) = (self.pitch.x, self.pitch.y);
+        let first_row = ((y_mm - reach_mm) / pitch_y).floor().max(0.0) as u32;
+        let last_row = ((y_mm + reach_mm) / pitch_y).ceil().max(0.0) as u32;
+        let first = self.spans.partition_point(|span| span.row < first_row);
+        let mut nearest: Option<(f32, u32)> = None;
+        for span in self.spans[first..]
+            .iter()
+            .take_while(|span| span.row <= last_row)
+        {
+            let (left, right) = (
+                (span.x0 as f32 + 0.5) * pitch_x,
+                (span.x1 as f32 - 0.5) * pitch_x,
+            );
+            let across = (left - x_mm).max(x_mm - right).max(0.0);
+            let distance = across.hypot((span.row as f32 + 0.5) * pitch_y - y_mm);
+            if distance <= reach_mm && nearest.is_none_or(|(best, _)| distance < best) {
+                nearest = Some((distance, span.piece));
+            }
+        }
+        nearest.map(|(_, piece)| piece)
+    }
+
     pub(crate) fn spans(&self) -> &[Span] {
         &self.spans
     }

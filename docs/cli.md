@@ -790,7 +790,10 @@ what is more or less than needed — how much of what it holds each tip carries,
 underside and leaning underside each against its own limit, the rim of flat underside left
 far from every tip, underside no tip reaches and no layer below carries, crowded tips and
 tall trunks with nothing to brace them to. A model holds when nothing falls, and has
-enough when it holds and no tip carries more than it holds.
+enough when it holds and no tip carries more than it holds. Each row of the run also lists
+every standing tip: why it stands, its group, the pull on it at its worst height and its
+margin (`docs/design/analysis.md`), the material behind it, its trunk's height and slenderness;
+the block and table give the weakest margin and how many tips keep under ×1.5.
 
 `--profile` names the support profiles to bench, repeated for several, Light when none is
 given. `--auto` names automatic profiles to bench the same way, each support sized by what

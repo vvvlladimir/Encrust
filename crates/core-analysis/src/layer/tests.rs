@@ -187,3 +187,22 @@ fn the_runs_of_a_piece_are_its_own_pixels() {
     let expected: Vec<bool> = (0..12).map(|i| i % 6 >= 3).collect();
     assert_eq!(lit, expected);
 }
+
+#[test]
+fn a_point_finds_the_nearest_piece_within_its_reach_and_no_further() {
+    let cured = cure(
+        &paint(12, 3, |x, _| u8::from(!(3..8).contains(&x)) * 255),
+        UNIT,
+    );
+    assert_eq!(
+        cured.piece_near([1.5, 1.5], 0.5),
+        Some(0),
+        "inside the first"
+    );
+    assert_eq!(
+        cured.piece_near([6.0, 1.5], 3.0),
+        Some(1),
+        "2.5 from the second, 3.5 from the first"
+    );
+    assert_eq!(cured.piece_near([5.5, 1.5], 1.0), None, "3 from either");
+}

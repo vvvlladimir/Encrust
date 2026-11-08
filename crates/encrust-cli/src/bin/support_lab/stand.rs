@@ -14,7 +14,7 @@ use core_geometry::{
 };
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, SupportPoint, SupportTree, WallSide, columns,
+    Blocked, Need, Placed, Profiles, Reason, SupportPoint, SupportTree, WallSide, columns,
     generate_supports, grow, low_points, mesh_trees,
 };
 use core_volume::{Cancel, HollowSettings, hollow};
@@ -42,6 +42,8 @@ pub struct Supported {
     pub contacts: Vec<Vec3>,
     /// The group of `profiles` each of `contacts` is built to.
     pub groups: Vec<u16>,
+    /// Why placement asked for each of `contacts`; empty where a coupon set them by hand.
+    pub reasons: Vec<Reason>,
     pub profiles: Vec<SupportProfile>,
     pub trees: Vec<SupportTree>,
     /// The supports as one mesh, plate coordinates.
@@ -143,6 +145,7 @@ pub fn supported(
         model,
         contacts: points.iter().map(|point| point.contact).collect(),
         groups: points.iter().map(|point| point.group).collect(),
+        reasons: needs.iter().map(|need| need.reason).collect(),
         profiles: table,
         trees,
         supports,

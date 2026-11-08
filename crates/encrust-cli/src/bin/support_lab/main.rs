@@ -5,9 +5,11 @@ mod corpus;
 mod coupon;
 mod cure;
 mod export;
+mod load;
 mod report;
 mod shape;
 mod stand;
+mod tips;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -234,6 +236,7 @@ fn bench(entry: &Entry, id: &str, asked: &SupportPlan, setup: &Setup, args: &Arg
         skipped: entry.skip.clone(),
         shape: shape::Shape::default(),
         cure: CureRow::default(),
+        tips: tips::Tips::default(),
         sweep: Vec::new(),
         broken: Vec::new(),
         seconds: 0.0,
@@ -264,6 +267,7 @@ fn measure(
     }
     let (supported, shape, cured) = run(&posed, asked, leant, setup)?;
     row.cure = CureRow::of(&cured, setup.neck_mpa);
+    row.tips = tips::read(&supported, &setup.printer, &setup.material, setup.neck_mpa)?;
     row.stages_s = [supported.place_s, supported.grow_s, cured.seconds];
     row.broken = broken(&entry.expect, &shape);
     if let Some(dir) = &args.export {
