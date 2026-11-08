@@ -391,7 +391,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted; blank previews are superseded by 0401 |
 | [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
 | [0365](0365-write-the-ctb-the-printers-read.md) | Write the `.ctb` the printers read, and pick its revision by the panel | Accepted |
-| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted |
+| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted; the codec for every machine is superseded by 0413 |
+| [0413](0413-a-cxdlpv4-layer-takes-the-codec-its-machine-reads.md) | A `.cxdlpv4` layer takes the codec its machine reads | Accepted |
 
 ### Printer and material profiles
 

@@ -726,7 +726,7 @@ Output in its settings, so the save dialog lists each extension once.
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Zortrax, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
-| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the HALOT X1 Max reads it. |
+| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`); 3, 6 or 7 bits by machine (`.cxdlpv4`) | Each `.cxdlpv4` machine gets its own layer codec; only the HALOT X1 Max's is checked against a known file, the others are not yet printed from. The 3-bit machines (HALOT-X1, HALOT-SKY 2025, PioNext Ultra) light a row in pairs of pixels, halving its resolution. |
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D, Carima | full 8 bits | Only the plain variant is written. |

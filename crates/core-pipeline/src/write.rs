@@ -9,7 +9,10 @@ use core_raster::RasterSettings;
 use core_slicer::{Sliced, Source, Windows};
 use format_anycubic::{AnycubicWriter, PhotonsWriter, PwszWriter};
 use format_chitu::{CbddlpWriter, CtbWriter, FdgWriter, PhzWriter};
-use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter, CxlineWriter};
+use format_creality::{
+    CxdlpV4Writer, CxdlpVersion, CxdlpWriter, CxlineWriter, LayerCodec, PairedRowRuns,
+    SevenBitRowRuns, SixBitRowRuns, WholeImageRuns,
+};
 use format_ctb_encrypted::CtbEncryptedWriter;
 use format_cws::CwsWriter;
 use format_gcode_zip::GcodeZipWriter;
@@ -140,9 +143,7 @@ impl Destination<'_> {
                 self.with(&GcodeZipWriter, sink, feed, observer)
             }
             SlicedFormat::Cxdlp(CxdlpVersion::V3) => self.with(&CxdlpWriter, sink, feed, observer),
-            SlicedFormat::Cxdlp(CxdlpVersion::V4) => {
-                self.with(&CxdlpV4Writer, sink, feed, observer)
-            }
+            SlicedFormat::Cxdlp(CxdlpVersion::V4) => self.cxdlp_v4(sink, feed, observer),
             SlicedFormat::Svgx => self.with(&SvgxWriter, sink, feed, observer),
             SlicedFormat::Cws => self.with(&CwsWriter, sink, feed, observer),
             SlicedFormat::Fdg => self.with(&FdgWriter, sink, feed, observer),
@@ -152,6 +153,41 @@ impl Destination<'_> {
             SlicedFormat::Pwsz(flavour) => {
                 self.with(&PwszWriter::new(flavour), sink, feed, observer)
             }
+        }
+    }
+
+    /// Writes a `.cxdlpv4` in the layer codec its machine reads.
+    fn cxdlp_v4<F: Feed>(
+        &self,
+        sink: &mut dyn ReadWriteSeek,
+        feed: &mut F,
+        observer: &mut dyn Observer,
+    ) -> Result<Option<F::Done>, PipelineError> {
+        match LayerCodec::of_machine(self.job.printer.machine_name()) {
+            LayerCodec::WholeImage => self.with(
+                &CxdlpV4Writer::<WholeImageRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
+            LayerCodec::PairedRows => self.with(
+                &CxdlpV4Writer::<PairedRowRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
+            LayerCodec::SixBitRows => self.with(
+                &CxdlpV4Writer::<SixBitRowRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
+            LayerCodec::SevenBitRows => self.with(
+                &CxdlpV4Writer::<SevenBitRowRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
         }
     }
 

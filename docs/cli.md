@@ -152,7 +152,7 @@ Each container pays for grey differently. A `.cbddlp` carries it in eight one-bi
 it is eight times the layer data of the others (ADR 0146). An Anycubic file carries four bits
 of it in one pass, which costs nothing but loses an edge dimmer than 16 (ADR 0147). An `.sl1`
 carries all eight bits and loses nothing, because its layers are PNGs, and so do a `.zip` and
-a `.cws`. A `.cxdlp` carries eight bits, a `.cxdlpv4` six and a `.goo` 5.1 three. An `.svgx` carries
+a `.cws`. A `.cxdlp` carries eight bits, a `.cxdlpv4` three, six or seven by machine and a `.goo` 5.1 three. An `.svgx` carries
 none at all: its layers are polygons, and a pixel is lit or dark at half coverage (ADR 0169).
 Those two cost by the panel rather than by the model, so a run writing one for a panel larger
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above
