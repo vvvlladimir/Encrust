@@ -433,7 +433,7 @@ do = "check"
 set = { drill_cups = true, hold_levers = true }
 ```
 
-The built-in recipes, by id: `prepare` below; `fix-issues`, what Check's Fix issues runs: the models in the way moved clear, drain holes where resin stays trapped, then cups drilled, weak necks and islands supported; `miniatures` (repair if open, orient for the
+The built-in recipes, by id: `prepare` below; `fix-issues`, what Check's Fix all runs: the models in the way moved clear, drain holes where resin stays trapped, then cups drilled, weak necks and islands supported; `miniatures` (repair if open, orient for the
 least peel with a clean surface, tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
 supports, a check that supports islands again up to twice, and a gate on any left). Why
 these two: ADR 0408. Your own are the files `<id>.toml` in the

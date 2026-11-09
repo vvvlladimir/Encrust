@@ -557,11 +557,7 @@ check-card-layers = layers { $first }–{ $last }
 check-thin-no-fix = No automatic fix: thicken it in the model.
 check-fact-fixing = fixing
 check-undo-fix = Undo this fix
-check-fix-issues =
-    { $count ->
-        [one] Fix { $count } issue
-       *[other] Fix { $count } issues
-    }
+check-fix-all = Fix all
 check-fix-issues-tip = Moves models clear, drills drains and cups, then stands supports, in that order. One undo takes it all back.
 check-move-clear-tip = Moves only the models in the way, each to the nearest clear place.
 check-arrange-tip = Lays out every model on the plate again.

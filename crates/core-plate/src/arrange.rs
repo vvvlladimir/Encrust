@@ -60,6 +60,24 @@ pub struct Arranged {
 
 /// Footprints are bitmaps so concave models nest without a polygon boolean (ADR 0088).
 pub fn arrange(footprints: &[Footprint], area: PlateArea, settings: &ArrangeSettings) -> Arranged {
+    let arranged = pack(footprints, area, settings);
+    if arranged.left_out.is_empty() || settings.margin_mm <= 0.0 {
+        return arranged;
+    }
+    let flush = ArrangeSettings {
+        margin_mm: 0.0,
+        ..*settings
+    };
+    let packed_flush = pack(footprints, area, &flush);
+    if packed_flush.left_out.len() < arranged.left_out.len() {
+        packed_flush
+    } else {
+        arranged
+    }
+}
+
+/// [`arrange`] at the margin `settings` asks, whatever that leaves out.
+fn pack(footprints: &[Footprint], area: PlateArea, settings: &ArrangeSettings) -> Arranged {
     let cell_mm = settings.cell_mm.max(Scalar::EPSILON);
     let margin = (settings.margin_mm / cell_mm).ceil().max(0.0) as usize;
     let size_mm = area.high_mm - area.low_mm;

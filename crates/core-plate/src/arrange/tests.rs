@@ -135,8 +135,8 @@ fn a_model_wider_than_the_plate_is_left_where_it_is() {
 }
 
 #[test]
-fn a_plate_smaller_than_its_own_margin_takes_nothing() {
-    let footprints = heap(1, Vec3::splat(2.0), 1.0);
+fn a_part_wider_than_the_plate_is_left_out() {
+    let footprints = heap(1, Vec3::splat(4.0), 1.0);
     let arranged = arrange(
         &footprints,
         PlateArea::whole(Vec2::new(3.0, 3.0)),
@@ -184,4 +184,32 @@ fn nothing_lands_in_a_printers_inset() {
             "the area starts at (30, 5) mm and its margin is 2 mm, got {min}"
         );
     }
+}
+
+#[test]
+fn a_part_too_wide_for_the_margin_is_packed_flush_rather_than_left_out() {
+    let settings = ArrangeSettings::default();
+    let footprints = heap(1, Vec3::new(40.0, 118.0, 10.0), settings.cell_mm);
+    let area = PlateArea {
+        low_mm: Vec2::ZERO,
+        high_mm: Vec2::new(200.0, 120.0),
+    };
+    let arranged = arrange(&footprints, area, &settings);
+    assert!(arranged.left_out.is_empty(), "118 mm goes across 120 mm");
+}
+
+#[test]
+fn the_margin_is_kept_when_everything_fits_inside_it() {
+    let settings = ArrangeSettings::default();
+    let footprints = heap(1, Vec3::new(40.0, 40.0, 10.0), settings.cell_mm);
+    let area = PlateArea {
+        low_mm: Vec2::ZERO,
+        high_mm: Vec2::new(200.0, 120.0),
+    };
+    let arranged = arrange(&footprints, area, &settings);
+    let (min, _) = rect(&footprints[0], arranged.placed[0].offset_mm);
+    assert!(
+        min.min_element() >= settings.margin_mm - 1e-3,
+        "stands at {min}"
+    );
 }

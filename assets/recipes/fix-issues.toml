@@ -1,4 +1,4 @@
-# What Check's Fix issues does: every automatic answer, each as its own button gives it (ADR 0416).
+# What Check's Fix all does: every automatic answer, each as its own button gives it (ADR 0416).
 
 name = "Fix what Check found"
 format = 1

@@ -26,7 +26,7 @@ pub(super) const LAYER_KINDS: [IssueKind; 5] = [
 pub(super) struct Card {
     pub kind: IssueKind,
     pub count: usize,
-    /// How many of `count` Fix issues takes on.
+    /// How many of `count` Fix all takes on.
     pub fixable: usize,
     pub tint: Color32,
 }
@@ -86,11 +86,9 @@ impl Board {
         self.answers.iter().rev().find(|answer| answer.kind == kind)
     }
 
-    /// How many issues Fix issues takes on, and how many it leaves to the hand.
-    pub(super) fn tally(&self) -> (usize, usize) {
-        let fixable: usize = self.cards.iter().map(|card| card.fixable).sum();
-        let count: usize = self.cards.iter().map(|card| card.count).sum();
-        (fixable, count - fixable)
+    /// How many issues Fix all takes on.
+    pub(super) fn fixable(&self) -> usize {
+        self.cards.iter().map(|card| card.fixable).sum()
     }
 
     fn aside(&self, kind: IssueKind) -> String {

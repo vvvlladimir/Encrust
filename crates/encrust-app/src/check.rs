@@ -187,6 +187,19 @@ fn told(said: String, left: usize) -> Status {
     }
 }
 
+/// One place the arrows of Check stop at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stop {
+    /// A row of the plate: its two models, the same one twice for a row of one.
+    Plate([ObjectId; 2]),
+    /// A row of the layers; `hanging` tells what stood on an island taken out from an island.
+    Layer {
+        layer: usize,
+        kind: IssueKind,
+        hanging: bool,
+    },
+}
+
 /// What the rings were laid in: the plate's `preview::plate_fingerprint` and the height
 /// the view cut at, mm, or `None` for no cut.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -207,8 +220,8 @@ struct Visited {
 pub struct Visit {
     visited: Option<Visited>,
     flight: Option<Spot>,
-    /// The two models of the plate's row gone to, the same one twice for a row of one.
-    row: Option<[ObjectId; 2]>,
+    /// The issue gone to last, which the arrows step on from.
+    stop: Option<Stop>,
     /// The kind whose card is to open, once.
     reveal: Option<IssueKind>,
     pub answers: Answers,
@@ -236,9 +249,9 @@ impl Visit {
         self.flight = Some(spot);
     }
 
-    /// Marks the plate's row of `models` as the one gone to.
-    pub fn mark_row(&mut self, models: [ObjectId; 2]) {
-        self.row = Some(models);
+    /// Notes `stop` as the issue gone to.
+    pub fn arrive(&mut self, stop: Stop) {
+        self.stop = Some(stop);
     }
 
     /// Asks for the card of `kind` to open.
@@ -251,14 +264,14 @@ impl Visit {
         self.reveal.take()
     }
 
-    /// The plate's row gone to last.
-    pub fn marked_row(&self) -> Option<[ObjectId; 2]> {
-        self.row
+    /// The issue gone to last.
+    pub fn stop(&self) -> Option<Stop> {
+        self.stop
     }
 
     /// Forgets the issues gone to; what the fixes did stands.
     pub fn clear(&mut self) {
-        (self.visited, self.flight, self.row) = (None, None, None);
+        (self.visited, self.flight, self.stop) = (None, None, None);
     }
 
     /// Where the camera is to go, once.

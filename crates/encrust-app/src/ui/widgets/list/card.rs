@@ -50,27 +50,31 @@ pub fn issue_card<R>(
 ) -> (bool, Option<R>) {
     let id = ui.id().with(("issue-card", head.name));
     let shown = card_frame().show(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        let pressed = heading(ui, head, open).clicked();
-        let how_open = motion::fold(ui.ctx(), id.with("fold"), open);
-        let inner = (how_open > 0.0).then(|| {
-            unfold(ui, id, how_open, Grows::Down, |ui| {
-                let margin = egui::Margin {
-                    left: BODY_PAD,
-                    right: BODY_PAD,
-                    top: 0,
-                    bottom: BODY_PAD,
-                };
-                Frame::new()
-                    .inner_margin(margin)
-                    .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = theme::ROW_GAP;
-                        body(ui)
-                    })
-                    .inner
-            })
-        });
-        (pressed, inner)
+        // Scoped by the card, as two are open at once while one folds and the other unfolds.
+        ui.push_id(head.name, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let pressed = heading(ui, head, open).clicked();
+            let how_open = motion::fold(ui.ctx(), id.with("fold"), open);
+            let inner = (how_open > 0.0).then(|| {
+                unfold(ui, id, how_open, Grows::Down, |ui| {
+                    let margin = egui::Margin {
+                        left: BODY_PAD,
+                        right: BODY_PAD,
+                        top: 0,
+                        bottom: BODY_PAD,
+                    };
+                    Frame::new()
+                        .inner_margin(margin)
+                        .show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = theme::ROW_GAP;
+                            body(ui)
+                        })
+                        .inner
+                })
+            });
+            (pressed, inner)
+        })
+        .inner
     });
     shown.inner
 }
@@ -252,4 +256,31 @@ pub fn answered_row(ui: &mut Ui, name: &str, said: &str, undo: Option<&str>) -> 
         ui.put(place, |ui: &mut Ui| small_icon_button(ui, icon::UNDO, tip))
             .clicked()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::widgets::fixtures::clashes;
+
+    #[test]
+    fn two_open_cards_listing_under_one_name_never_share_an_id() {
+        let two_cards = |ui: &mut Ui| {
+            for name in ["Islands", "Suction cups"] {
+                let head = IssueHead {
+                    glyph: icon::WARNING,
+                    tint: Color32::RED,
+                    name,
+                    aside: "",
+                    count: 1,
+                };
+                issue_card(ui, &head, true, |ui| {
+                    issue_lines(ui, "layers", |ui| {
+                        issue_line(ui, "Layer 1", ("an island", Color32::GRAY), false);
+                    });
+                });
+            }
+        };
+        assert!(!clashes(two_cards), "egui warns of an id used twice");
+    }
 }

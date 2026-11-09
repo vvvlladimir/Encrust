@@ -1,7 +1,7 @@
 # What Check's buttons do
 
 Each button runs a call the command line runs too: a recipe's `check` and `arrange` settings,
-`docs/design/recipes.md`. Why these answers: ADR 0415. Fix issues takes the first answer of every
+`docs/design/recipes.md`. Why these answers: ADR 0415. Fix all takes the first answer of every
 kind but peel and thin as `assets/recipes/fix-issues.toml` lays them out: ADR 0416.
 
 | Issue | Buttons | Call |
@@ -38,3 +38,6 @@ Every model past the usable area moves, and of each meeting pair the smaller unl
 is already moving. They go largest first to the nearest place clear of the rest by
 `nearest_free`, on their bounding boxes: exact, without a grid, at the cost of never nesting
 one model into another's concave side, which Arrange all does.
+
+A model the plate's 2 mm margin leaves no room for is placed flush with the edge rather than
+left where it stands, by Move clear and Arrange alike; the inset is never crossed (ADR 0415).

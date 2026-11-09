@@ -106,7 +106,7 @@ pub fn move_clear(
 }
 
 /// How far a part covering `part` moves to the nearest place in `area` clear of every one of
-/// `taken`, or `None` where it has no room there.
+/// `taken`, flush to the edge where the margin leaves it no room, or `None` where it has none.
 fn clear_of(
     part: Rect,
     taken: &[Rect],
@@ -121,7 +121,12 @@ fn clear_of(
     let centre = (part.min + part.max) / 2.0 - area.low_mm;
     let size_mm = part.max - part.min;
     let plate_mm = area.high_mm - area.low_mm;
-    let at = nearest_free(size_mm, &taken, centre, plate_mm, settings)?;
+    let flush = ArrangeSettings {
+        margin_mm: 0.0,
+        ..*settings
+    };
+    let at = nearest_free(size_mm, &taken, centre, plate_mm, settings)
+        .or_else(|| nearest_free(size_mm, &taken, centre, plate_mm, &flush))?;
     Some(at - centre)
 }
 

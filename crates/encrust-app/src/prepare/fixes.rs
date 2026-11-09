@@ -1,4 +1,4 @@
-//! Check's Fix issues: the built-in recipe every automatic answer is a step of, run on the
+//! Check's Fix all: the built-in recipe every automatic answer is a step of, run on the
 //! whole plate whatever is picked (ADR 0416).
 
 use anyhow::Result;
@@ -11,7 +11,7 @@ use crate::scene::ObjectId;
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
 
-/// The built-in recipe Fix issues takes.
+/// The built-in recipe Fix all takes.
 const FIX_RECIPE: &str = "fix-issues";
 
 /// Starts every automatic answer on the models of the plate being edited.

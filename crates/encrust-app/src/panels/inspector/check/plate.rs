@@ -4,7 +4,7 @@
 use super::cards::{self, Board, Card};
 use super::fixes::{Offer, offer, report};
 use crate::arrange::{arrange_plate, clear_the_way};
-use crate::check::IssueKind;
+use crate::check::{IssueKind, Stop};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::inspector::position::fit_the_volume;
@@ -93,7 +93,7 @@ fn rows(
     kind: IssueKind,
 ) -> Option<PlateIssue> {
     let scene = &window.doc.scene;
-    let marked = window.tools.check.marked_row();
+    let marked = window.tools.check.stop();
     let name = format!("check-plate-{kind:?}");
     issue_lines(ui, &name, |ui| {
         let mut picked = None;
@@ -104,7 +104,7 @@ fn rows(
             } else {
                 theme::colors().text_mid
             };
-            let selected = marked.is_some() && marked == models_of(issue);
+            let selected = marked == Some(stop_of(issue));
             if issue_line(ui, &place, (&detail, ink), selected).clicked() {
                 picked = Some(*issue);
             }
@@ -113,12 +113,30 @@ fn rows(
     })
 }
 
-/// Goes where a pressed row names.
+/// Goes where a pressed row names, opening the tool a model keeping resin wants.
 fn go(window: &mut Window, picked: PlateIssue) {
-    if let Some(models) = models_of(&picked) {
-        window.tools.check.mark_row(models);
-    }
+    window.tools.check.arrive(stop_of(&picked));
     match picked {
+        PlateIssue::Kept(KeptResin::Sealed(id)) => open_on(window, id, Tool::Drain),
+        PlateIssue::Kept(KeptResin::Solid(id)) => open_on(window, id, Tool::Hollow),
+        issue => show(window, issue),
+    }
+}
+
+/// The arrows' stop at `models`: its card opened and the camera sent there, staying in Check.
+pub(super) fn arrive(window: &mut Window, board: &Board, models: [ObjectId; 2]) {
+    let Some(issue) = board.plate.iter().find(|issue| models_of(issue) == models) else {
+        return;
+    };
+    window.tools.check.clear();
+    window.tools.check.arrive(stop_of(issue));
+    window.tools.check.reveal(kind_of(issue));
+    show(window, *issue);
+}
+
+/// Sends the camera to `issue`, or for a model keeping resin picks it.
+fn show(window: &mut Window, issue: PlateIssue) {
+    match issue {
         PlateIssue::Astray(astray) => {
             if let Some(spot) = astray.spot {
                 window.tools.check.fly(spot);
@@ -128,17 +146,23 @@ fn go(window: &mut Window, picked: PlateIssue) {
             let doc = &mut *window.doc;
             doc.meeting.fly_to(&doc.scene, |ids| ids == pair);
         }
-        PlateIssue::Kept(KeptResin::Sealed(id)) => open_on(window, id, Tool::Drain),
-        PlateIssue::Kept(KeptResin::Solid(id)) => open_on(window, id, Tool::Hollow),
+        PlateIssue::Kept(KeptResin::Sealed(id) | KeptResin::Solid(id)) => {
+            window.doc.scene.select(Some(id));
+        }
     }
 }
 
-/// The models a row of the plate is about, where going to it stays in Check.
-fn models_of(issue: &PlateIssue) -> Option<[ObjectId; 2]> {
+/// The stop of the row of `issue`.
+pub(super) fn stop_of(issue: &PlateIssue) -> Stop {
+    Stop::Plate(models_of(issue))
+}
+
+/// The models a row of the plate is about, the same one twice for a row of one.
+fn models_of(issue: &PlateIssue) -> [ObjectId; 2] {
     match *issue {
-        PlateIssue::Astray(Astray { id, .. }) => Some([id, id]),
-        PlateIssue::Meeting(pair) => Some(pair),
-        PlateIssue::Kept(_) => None,
+        PlateIssue::Astray(Astray { id, .. }) => [id, id],
+        PlateIssue::Meeting(pair) => pair,
+        PlateIssue::Kept(KeptResin::Sealed(id) | KeptResin::Solid(id)) => [id, id],
     }
 }
 

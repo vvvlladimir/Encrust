@@ -253,3 +253,22 @@ fn a_part_with_no_room_is_left_out_and_still_counts_as_standing() {
     );
     assert_eq!(cleared.left_out.len(), 1);
 }
+
+#[test]
+fn a_part_too_wide_for_the_margin_stands_flush_rather_than_being_left_out() {
+    let part = Rect {
+        min: Vec2::new(10.0, 5.0),
+        max: Vec2::new(50.0, 124.0),
+    };
+    let area = PlateArea {
+        low_mm: Vec2::ZERO,
+        high_mm: Vec2::new(200.0, 120.0),
+    };
+    let cleared = move_clear(&[part], &[0], &[], area, &ArrangeSettings::default());
+    assert!(cleared.left_out.is_empty(), "119 mm goes across 120 mm");
+    let offset = cleared.moved[0].offset_mm;
+    assert!(
+        part.min.y + offset.y >= 0.0 && part.max.y + offset.y <= 120.0,
+        "moved by {offset}, it stands inside 0..120 mm"
+    );
+}

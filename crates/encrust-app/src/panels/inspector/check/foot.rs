@@ -1,16 +1,15 @@
-//! The foot of Check: Fix issues, or the run going with its way to stop.
+//! The foot of Check: Fix all, or the run going with its way to stop.
 
 use super::cards::Board;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::prepare;
 use crate::status::Status;
-use crate::ui::{blocked_hover, hint, primary_button, step_bar};
+use crate::ui::{blocked_hover, primary_button, step_bar};
 
 /// Whether the foot has anything to say.
 pub(in crate::panels::inspector) fn wanted(ctx: &egui::Context, window: &mut Window) -> bool {
-    let (fixable, left) = Board::read(ctx, window).tally();
-    window.tools.prepare.is_holding() || fixable + left > 0
+    window.tools.prepare.is_holding() || Board::read(ctx, window).fixable() > 0
 }
 
 pub(in crate::panels::inspector) fn ui(ui: &mut egui::Ui, window: &mut Window) {
@@ -18,20 +17,11 @@ pub(in crate::panels::inspector) fn ui(ui: &mut egui::Ui, window: &mut Window) {
         running(ui, window);
         return;
     }
-    let (fixable, left) = Board::read(ui.ctx(), window).tally();
-    if fixable > 0 {
-        let blocker = prepare::held_up(window.doc, window.tools, window.machine);
-        let words = tr!("check-fix-issues", count = fixable);
-        let button = primary_button(ui, &words, blocker.is_none());
-        let tip = blocker
-            .clone()
-            .or_else(|| Some(tr!("check-fix-issues-tip")));
-        if blocked_hover(button, tip).clicked() {
-            start(window);
-        }
-    }
-    if left > 0 {
-        hint(ui, &tr!("check-left-to-you", count = left));
+    let blocker = prepare::held_up(window.doc, window.tools, window.machine);
+    let button = primary_button(ui, &tr!("check-fix-all"), blocker.is_none());
+    let tip = blocker.or_else(|| Some(tr!("check-fix-issues-tip")));
+    if blocked_hover(button, tip).clicked() {
+        start(window);
     }
 }
 

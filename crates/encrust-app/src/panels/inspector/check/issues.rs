@@ -2,7 +2,7 @@
 
 use core_analysis::{Risk, RiskKind};
 
-use crate::check::{IssueKind, covered_mm2};
+use crate::check::{IssueKind, Stop, covered_mm2};
 use crate::i18n::tr;
 use crate::ui::{hint, issue_line, issue_lines};
 
@@ -109,7 +109,7 @@ pub(super) fn listing(
         .filter(|row| row.kind == kind)
         .collect();
     let ink = crate::ui::theme::colors().text_mid;
-    let picked = issue_lines(ui, "check-layers", |ui| {
+    let picked = issue_lines(ui, "layers", |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
             let place = tr!("check-layer", layer = row.layer + 1);
@@ -127,15 +127,55 @@ pub(super) fn listing(
     picked
 }
 
-/// The issues of the row on the next layer past `shown`, or the one before it when not
-/// `forward`.
-pub(super) fn neighbour(risks: &[Risk], shown: usize, forward: bool) -> Option<Vec<Risk>> {
+/// The stops of the layers, in the order the arrows take them.
+pub(super) fn layer_stops(risks: &[Risk]) -> Vec<Stop> {
+    let stop = |row: Row| Stop::Layer {
+        layer: row.layer,
+        kind: row.kind,
+        hanging: row.hanging,
+    };
+    rows(risks).into_iter().map(stop).collect()
+}
+
+/// The issues of the row `stop` names.
+pub(super) fn issues_at(risks: &[Risk], stop: Stop) -> Vec<Risk> {
+    let at = |row: &Row| {
+        matches!(stop, Stop::Layer { layer, kind, hanging }
+            if row.layer == layer && row.kind == kind && row.hanging == hanging)
+    };
     let rows = rows(risks);
-    let row = match forward {
-        true => rows.iter().find(|row| row.layer > shown),
-        false => rows.iter().rev().find(|row| row.layer < shown),
-    }?;
-    Some(row.issues(risks))
+    rows.iter()
+        .find(|row| at(row))
+        .map_or_else(Vec::new, |row| row.issues(risks))
+}
+
+/// The stop after `at` or, not `forward`, before it, going round; from nowhere, the first
+/// layer past `shown` or the last before it, so a slider moved by hand is where they start.
+pub(super) fn next_stop(
+    stops: &[Stop],
+    at: Option<Stop>,
+    shown: usize,
+    forward: bool,
+) -> Option<Stop> {
+    let last = stops.len().checked_sub(1)?;
+    let here = at.and_then(|at| stops.iter().position(|stop| *stop == at));
+    let layer_of = |stop: &Stop| match stop {
+        Stop::Layer { layer, .. } => Some(*layer),
+        Stop::Plate(_) => None,
+    };
+    let index = match (here, forward) {
+        (Some(index), true) => (index + 1) % stops.len(),
+        (Some(index), false) => index.checked_sub(1).unwrap_or(last),
+        (None, true) => stops
+            .iter()
+            .position(|stop| layer_of(stop).is_some_and(|layer| layer > shown))
+            .unwrap_or(0),
+        (None, false) => stops
+            .iter()
+            .rposition(|stop| layer_of(stop).is_some_and(|layer| layer < shown))
+            .unwrap_or(last),
+    };
+    stops.get(index).copied()
 }
 
 /// What one row holds, short enough for the right of it.

@@ -1,7 +1,7 @@
 use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use egui::Color32;
 
-use crate::check::{IssueKind, Place, Stage};
+use crate::check::{IssueKind, Place, Stage, Stop};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::section::{cut_height, height_range};
@@ -18,7 +18,7 @@ mod plate;
 
 use cards::{Board, LAYER_KINDS, Layers};
 pub(crate) use issues::issue_name;
-use issues::{kind_of, listing, neighbour};
+use issues::{kind_of, listing};
 
 pub(super) use foot::{ui as action, wanted as wants_foot};
 
@@ -35,9 +35,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 
 /// The section of what a read of the stack found, or the read still to come.
 fn layers(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
-    let shown = window.machine.preview.layer();
     let found = board.layers.as_ref();
-    let any = found.is_some_and(|layers| !layers.risks.is_empty());
+    let risks = found.map_or(&[][..], |layers| &layers.risks);
+    let stops = stops(board, risks);
     let arrows = [
         (icon::LAYER_UP, tr!("check-previous")),
         (icon::LAYER_DOWN, tr!("check-next")),
@@ -45,7 +45,7 @@ fn layers(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
     let arrows = arrows
         .each_ref()
         .map(|(glyph, name)| (*glyph, name.as_str()));
-    let heading: &[(&str, &str)] = if any { &arrows } else { &[] };
+    let heading: &[(&str, &str)] = if stops.is_empty() { &[] } else { &arrows };
     let title = tr!("check-layers");
     let (arrow, _) = section_with_actions(ui, &title, heading, |ui| {
         describe(ui, &tr!("check-issues-help"));
@@ -68,10 +68,28 @@ fn layers(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
             Some(_) => {}
         }
     });
-    let risks = found.map_or(&[][..], |layers| &layers.risks);
-    let stepped = arrow.and_then(|index| neighbour(risks, shown, index == 1));
-    if let Some(stepped) = stepped {
-        go_to(window, &stepped);
+    if let Some(forward) = arrow.map(|index| index == 1) {
+        step(window, board, (&stops, risks), forward);
+    }
+}
+
+/// Every issue the arrows stop at: the plate's, then the layers'.
+fn stops(board: &Board, risks: &[Risk]) -> Vec<Stop> {
+    let plate = board.plate.iter().map(plate::stop_of);
+    plate.chain(issues::layer_stops(risks)).collect()
+}
+
+/// Goes to the issue after the one last gone to, or before it.
+fn step(window: &mut Window, board: &Board, (stops, risks): (&[Stop], &[Risk]), forward: bool) {
+    let shown = window.machine.preview.layer();
+    let at = window.tools.check.stop().filter(|stop| match stop {
+        Stop::Layer { layer, .. } => *layer == shown,
+        Stop::Plate(_) => true,
+    });
+    match issues::next_stop(stops, at, shown, forward) {
+        Some(Stop::Plate(models)) => plate::arrive(window, board, models),
+        Some(stop) => go_to(window, &issues::issues_at(risks, stop)),
+        None => {}
     }
 }
 
@@ -252,6 +270,11 @@ pub fn go_to(window: &mut Window, risks: &[Risk]) {
     };
     window.tools.check.clear();
     window.tools.check.reveal(kind_of(&first.kind));
+    window.tools.check.arrive(Stop::Layer {
+        layer: first.layer,
+        kind: kind_of(&first.kind),
+        hanging: matches!(first.kind, RiskKind::Floating { .. }),
+    });
     let preview = &mut window.machine.preview;
     preview.set_layer(first.layer);
     preview.set_playing(false);
