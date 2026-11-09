@@ -22,11 +22,17 @@ fn square(x0: u32, y0: u32, side: u32) -> Cured {
     layer(move |x, y| (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y))
 }
 
-/// A 20 by 20 pixel square with a 10 by 10 hole in its middle, at 0.5 mm a pixel.
+/// A 30 by 30 pixel square with a 20 by 20 hole in its middle, at 0.5 mm a pixel.
 fn ring() -> Cured {
-    layer(|x, y| {
-        let outer = (10..30).contains(&x) && (10..30).contains(&y);
-        let hole = (15..25).contains(&x) && (15..25).contains(&y);
+    ring_around(20)
+}
+
+/// A 30 by 30 pixel square with a hole `side` pixels across in its middle.
+fn ring_around(side: u32) -> Cured {
+    let from = 25 - side / 2;
+    layer(move |x, y| {
+        let outer = (10..40).contains(&x) && (10..40).contains(&y);
+        let hole = (from..from + side).contains(&x) && (from..from + side).contains(&y);
         outer && !hole
     })
 }
@@ -56,33 +62,28 @@ fn a_ring_on_the_plate_is_one_suction_cup() {
     else {
         unreachable!("filtered to cups");
     };
-    // The hole is 10 px of 0.5 mm a side, 25 mm2, twenty layers of 0.05 mm.
-    assert!((area_mm2 - 25.0).abs() < 1e-3, "got {area_mm2}");
-    assert!((volume_mm3 - 25.0).abs() < 1e-3, "got {volume_mm3}");
+    // The hole is 20 px of 0.5 mm a side, 100 mm2, twenty layers of 0.05 mm.
+    assert!((area_mm2 - 100.0).abs() < 1e-3, "got {area_mm2}");
+    assert!((volume_mm3 - 100.0).abs() < 1e-3, "got {volume_mm3}");
 }
 
 #[test]
 fn a_shallow_cup_is_too_little_resin_to_name() {
-    // 25 mm2 three layers deep is under 4 mm3.
+    // 100 mm2 three layers deep is 15 mm3.
     assert!(cups(&fold(0, &rings(3))).is_empty());
 }
 
 #[test]
 fn a_narrow_cup_is_too_little_pull_to_name() {
-    let narrow = layer(|x, y| {
-        let outer = (10..30).contains(&x) && (10..30).contains(&y);
-        let hole = (18..22).contains(&x) && (18..22).contains(&y);
-        outer && !hole
-    });
-    // 4 mm2 however deep: the counter of a letter.
-    assert!(cups(&fold(0, &vec![narrow; 200])).is_empty());
+    // 25 mm2 however deep: a full vacuum in it pulls some 2.5 N, a quarter of the limit.
+    assert!(cups(&fold(0, &vec![ring_around(10); 200])).is_empty());
 }
 
 #[test]
 fn a_ring_on_posts_lets_the_air_in_from_below() {
     let posts = layer(|x, y| {
         let corner = |at: u32| (at..at + 3).contains(&x);
-        (corner(10) || corner(27)) && ((10..13).contains(&y) || (27..30).contains(&y))
+        (corner(10) || corner(37)) && ((10..13).contains(&y) || (37..40).contains(&y))
     });
     let measured = fold(0, &[&[posts][..], &rings(20)].concat());
     assert!(cups(&measured).is_empty(), "air runs in between the posts");

@@ -524,19 +524,24 @@ check-arrange = Arrange all
 check-fit-volume = Fit the volume
 check-combine = Combine
 check-drill-drains = Drill drain holes
-check-cups-help = Drill them puts a hole through the floor of each cup, so air can reach it. A cup that stands on the plate has no floor to drill. Auto-orient looks for a pose with no cups.
-check-levers-help = Support them stands a support under the part that pulls on each neck. Auto-orient looks for a pose that keeps the pull down.
+check-cups-vent-help = Drill them puts a hole through the thinnest wall at the bottom of each cup, so air can reach it. A cup on the plate with walls too thick is lifted onto supports or turned. Auto-orient looks for a pose with no cups.
+check-necks-held-help = Support them stands as many supports under the part that pulls on each neck as bring it under its limit. Auto-orient looks for a pose that keeps the pull down.
 check-stood-levers =
     { $count ->
         [0] No weak neck had an underside to stand a support on
         [one] Stood { $count } support in { $group }
        *[other] Stood { $count } supports in { $group }
     }
-check-drilled-cups =
+check-vented-cups =
     { $count ->
-        [0] No suction cup had a floor to drill
-        [one] Drilled { $count } hole into a suction cup
-       *[other] Drilled { $count } holes into suction cups
+        [0] No suction cup had a wall thin enough to drill
+        [one] Drilled { $count } vent into a suction cup
+       *[other] Drilled { $count } vents into suction cups
+    }
+check-cups-on-the-plate =
+    { $count ->
+        [one] { $count } stands on the plate: lift the model onto supports or turn it
+       *[other] { $count } stand on the plate: lift the model onto supports or turn it
     }
 check-left-to-you =
     { $count ->

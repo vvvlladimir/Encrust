@@ -675,11 +675,14 @@ smoothing, not the original model.
 - Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
   on the cut, and the camera flies to it past the models and supports in the way.
 - **Support every island** in one press.
-- **Fix the rest from the same panel:** drill a suction cup through its floor, hold a weak neck
+- **Fix the rest from the same panel:** vent a suction cup through the thinnest wall at its
+  bottom, a notch along the plate for one that stands on it, hold a weak neck
   with as many supports, 0.6 mm across at least, as bring it under its limit (in their own
   **Weak necks** group), or Auto-orient for a pose without them; turn for the least peel, or open
-  the lift settings on a printer that leaves them to the file. A cup that stands on the plate,
-  and a neck with no underside to stand on, are left to you, and the notice says how many. Thin
+  the lift settings on a printer that leaves them to the file. A cup on the plate with walls too
+  thick to drill is left for you to lift onto supports or turn, and the notice says so; a cup
+  with no wall thin enough and a neck with no underside to stand on are left to you, counted.
+  A cup is only named when a full vacuum in it would pull 10 N or more. Thin
   sections have no fix here: nothing thickens a model.
 - **Fix the plate:** Move clear moves only the models in the way, Arrange all packs the plate,
   Fit the volume scales a model too large for it, Combine opens on two models that meet, and

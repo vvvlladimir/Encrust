@@ -9,6 +9,10 @@ use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use printer_profiles::SupportProfile;
 
+mod vent;
+
+pub use vent::{CupVent, Unvented, cup_vents};
+
 /// How many layers over an island's floor its underside may first be found.
 const UNDERSIDE_LAYERS: Scalar = 2.0;
 
@@ -28,7 +32,16 @@ fn placed<'a>(models: &[Hanging<'a>]) -> Vec<(usize, Placed<'a>)> {
 
 /// The nearest surface of `placed` straight below `from`, and the index of its model.
 fn first_below(placed: &[(usize, Placed)], from: Vec3) -> Option<(usize, PlacedHit)> {
-    let ray = Ray::new(from, -Vec3::Z);
+    first_along(placed, from, -Vec3::Z)
+}
+
+/// The nearest surface of `placed` from `from` along `direction`, and the index of its model.
+fn first_along(
+    placed: &[(usize, Placed)],
+    from: Vec3,
+    direction: Vec3,
+) -> Option<(usize, PlacedHit)> {
+    let ray = Ray::new(from, direction);
     placed
         .iter()
         .filter_map(|(id, (mesh, bvh, matrix, inverse))| {
@@ -55,12 +68,6 @@ pub fn island_floors(risks: &[Risk], plan: &LayerPlan, panel: &RasterSettings) -
         })
         .collect()
 }
-
-/// How far under a face a ray starts so as not to meet that face again, mm.
-const THROUGH_FACE_MM: Scalar = 1e-3;
-/// How far past a cup's floor a vent's tip reaches, mm: enough to be open whatever the floor's
-/// facets do under its mouth.
-const VENT_PAST_FLOOR_MM: Scalar = 1.0;
 
 /// A model an island may hang from: its mesh, that mesh's bvh and where it is placed.
 pub type Hanging<'a> = (&'a Mesh, &'a Bvh, Transform);
@@ -89,47 +96,6 @@ pub fn island_holds(
                 .map(|(id, hit)| (id, hit.point))
         })
         .collect()
-}
-
-/// A way for the air into a suction cup: a hole up through the floor that seals it, in plate
-/// millimetres.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CupVent {
-    /// Index into the models given to [`cup_vents`].
-    pub model: usize,
-    pub mouth_mm: Vec3,
-    /// Outward, of the surface the mouth is on.
-    pub normal: Vec3,
-    pub depth_mm: Scalar,
-}
-
-/// For each suction cup of `risks`, the hole through its floor; `None` for one whose floor
-/// is the plate, or whose middle stands over no floor.
-pub fn cup_vents(
-    risks: &[Risk],
-    plan: &LayerPlan,
-    panel: &RasterSettings,
-    models: &[Hanging],
-) -> Vec<Option<CupVent>> {
-    let placed = placed(models);
-    let layer_mm = plan.nominal_thickness();
-    let cups = risks
-        .iter()
-        .filter(|risk| matches!(risk.kind, RiskKind::SuctionCup { .. }));
-    cups.map(|risk| {
-        let in_cup = panel.plate_mm(risk.at_mm).extend(plan.top_of(risk.layer)?);
-        let (model, floor) = first_below(&placed, in_cup).filter(|(_, hit)| hit.normal.z > 0.0)?;
-        let under_floor = floor.point - Vec3::Z * THROUGH_FACE_MM;
-        let own = placed.iter().position(|(id, _)| *id == model)?;
-        let (_, exit) = first_below(&placed[own..=own], under_floor)?;
-        (exit.normal.z < 0.0 && exit.point.z >= layer_mm).then_some(CupVent {
-            model,
-            mouth_mm: exit.point,
-            normal: exit.normal,
-            depth_mm: floor.point.z - exit.point.z + VENT_PAST_FLOOR_MM,
-        })
-    })
-    .collect()
 }
 
 /// The fewest supports a weak neck's tip is drawn at, mm across, whatever the profile: a

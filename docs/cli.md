@@ -419,8 +419,9 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
   --hollow 3 -o sliced/
 ```
 
-A recipe's `check` step takes `drill_cups` and `hold_levers`, which drill every suction cup through
-its floor and stand a support under every weak neck once before its `retry`, and `arrange` takes
+A recipe's `check` step takes `drill_cups` and `hold_levers`, which vent every suction cup by the
+shortest way into its lowest point and hold every weak neck with as many supports as bring it
+under its limit, once before its `retry`, and `arrange` takes
 `only_in_the_way`, which moves only the models past the plate's usable area or meeting another:
 
 ```toml

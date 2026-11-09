@@ -469,6 +469,36 @@ fn a_check_asked_to_drill_cups_leaves_none_to_report() {
     );
 }
 
+/// Walls 2 mm thick and 8 mm tall round a 12 mm square on the plate, which seals it.
+fn cup_on_the_plate(name: &str) -> PathBuf {
+    write_boxes_stl(
+        name,
+        &[
+            ([0.0, 0.0, 0.0], [16.0, 2.0, 8.0]),
+            ([0.0, 14.0, 0.0], [16.0, 16.0, 8.0]),
+            ([0.0, 2.0, 0.0], [2.0, 14.0, 8.0]),
+            ([14.0, 2.0, 0.0], [16.0, 14.0, 8.0]),
+        ],
+    )
+}
+
+#[test]
+fn a_check_drills_a_cup_on_the_plate_through_its_wall() {
+    let model = cup_on_the_plate("recipe-plate-cup");
+    let plain = "name = \"Plain\"\n[[step]]\ndo = \"check\"\n";
+    let before = cup_report("recipe-plate-cup-plain", &model, plain);
+    assert_eq!(
+        before["cured"]["suction_cups"], 1,
+        "the plate seals the walls"
+    );
+    let drilling = "name = \"Drill\"\n[[step]]\ndo = \"check\"\nset = { drill_cups = true }\n";
+    let after = cup_report("recipe-plate-cup-drill", &model, drilling);
+    assert_eq!(
+        after["cured"]["suction_cups"], 0,
+        "a vent through the wall by the plate lets the air in"
+    );
+}
+
 /// A slab 16 mm long at 6 to 10 mm, held by one 1.5 mm column at its end.
 fn slab_on_a_neck(name: &str) -> PathBuf {
     write_boxes_stl(

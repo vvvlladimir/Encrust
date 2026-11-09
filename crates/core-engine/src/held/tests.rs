@@ -86,35 +86,98 @@ const LEVER: RiskKind = RiskKind::Lever {
     gyration_mm: 3.0,
 };
 
-#[test]
-fn a_cup_is_vented_through_the_floor_that_seals_it() {
-    let floor = cuboid(Vec3::new(0.0, 0.0, 3.0), Vec3::new(10.0, 10.0, 5.0));
-    let bvh = Bvh::build(&floor);
+/// A 2 mm hole, what the cup tests drill.
+const HOLE_MM: Scalar = 2.0;
+
+fn vent_of(meshes: &Mesh, at_mm: [f32; 2]) -> Result<CupVent, Unvented> {
+    let bvh = Bvh::build(meshes);
     let (plan, panel) = stack(10.0);
-    let risks = [risk_of(CUP)];
-    let models = [(&floor, &bvh, Transform::default())];
-    let vent =
-        cup_vents(&risks, &plan, &panel, &models)[0].expect("the floor stands off the plate");
+    let risks = [Risk {
+        at_mm,
+        ..risk_of(CUP)
+    }];
+    let models = [(meshes, &bvh, Transform::default())];
+    cup_vents(&risks, &plan, &panel, &models, HOLE_MM)[0]
+}
+
+/// Walls `thick_mm` thick round a 6 mm cavity on the plate, 1 mm thinner at x = 0, 10 mm
+/// tall; and the cavity's middle.
+fn walls(thick_mm: Scalar) -> (Mesh, [f32; 2]) {
+    let span = 2.0 * thick_mm + 5.0;
+    let mut mesh = cuboid(Vec3::ZERO, Vec3::new(thick_mm - 1.0, span, 10.0));
+    for (from, to) in [
+        (
+            Vec3::new(span - thick_mm, 0.0, 0.0),
+            Vec3::new(span, span, 10.0),
+        ),
+        (Vec3::ZERO, Vec3::new(span, thick_mm, 10.0)),
+        (
+            Vec3::new(0.0, span - thick_mm, 0.0),
+            Vec3::new(span, span, 10.0),
+        ),
+    ] {
+        mesh.append(&cuboid(from, to));
+    }
+    let middle = (thick_mm - 1.0 + span - thick_mm) / 2.0;
+    (mesh, [middle, span / 2.0])
+}
+
+#[test]
+fn a_cup_is_vented_down_through_a_floor_off_the_plate() {
+    let floor = cuboid(Vec3::new(0.0, 0.0, 3.0), Vec3::new(10.0, 10.0, 5.0));
+    let vent = vent_of(&floor, [5.0, 5.0]).expect("the floor stands off the plate");
     assert_eq!(vent.model, 0);
     assert!(
-        (vent.mouth_mm.z - 3.0).abs() < 1e-3 && vent.normal.z < 0.0,
-        "the mouth is on the underside at 3 mm, got {vent:?}"
+        (vent.mouth_mm.z - 3.0).abs() < 1e-3 && vent.outward == -Vec3::Z,
+        "the mouth is on the underside at 3 mm, drilled straight up, got {vent:?}"
     );
     assert!(
-        (vent.depth_mm - (2.0 + VENT_PAST_FLOOR_MM)).abs() < 1e-2,
-        "through 2 mm of floor and {VENT_PAST_FLOOR_MM} mm past it, got {}",
+        (vent.depth_mm - 3.0).abs() < 1e-2,
+        "through 2 mm of floor and 1 mm past it, got {}",
         vent.depth_mm
     );
 }
 
 #[test]
-fn a_cup_sealed_by_the_plate_has_no_vent() {
+fn a_cup_on_the_plate_is_vented_level_through_its_thinnest_wall() {
+    let (mesh, middle) = walls(2.0);
+    let vent = vent_of(&mesh, middle).expect("a 1 mm wall at x = 0");
+    assert!(
+        vent.outward.abs_diff_eq(-Vec3::X, 1e-5) && vent.mouth_mm.x.abs() < 1e-3,
+        "out through the 1 mm wall at x = 0, got {vent:?}"
+    );
+    assert!(
+        (vent.depth_mm - 2.0).abs() < 1e-2,
+        "through 1 mm of wall and 1 mm past it, got {}",
+        vent.depth_mm
+    );
+    assert!(
+        (vent.mouth_mm.z - HOLE_MM / 4.0).abs() < 1e-3,
+        "a notch along the plate, half the hole under it, got {}",
+        vent.mouth_mm.z
+    );
+}
+
+#[test]
+fn a_cup_on_the_plate_in_walls_too_thick_to_drill_is_lifted_or_turned() {
+    let (mesh, middle) = walls(17.0);
+    assert_eq!(
+        vent_of(&mesh, middle),
+        Err(Unvented::OnThePlate),
+        "16 mm at the thinnest"
+    );
+}
+
+#[test]
+fn a_cup_over_a_floor_lying_on_the_plate_is_lifted_or_turned() {
     let on_plate = cuboid(Vec3::ZERO, Vec3::new(10.0, 10.0, 2.0));
-    let bvh = Bvh::build(&on_plate);
-    let (plan, panel) = stack(10.0);
-    let risks = [risk_of(CUP)];
-    let models = [(&on_plate, &bvh, Transform::default())];
-    assert_eq!(cup_vents(&risks, &plan, &panel, &models), vec![None]);
+    assert_eq!(vent_of(&on_plate, [5.0, 5.0]), Err(Unvented::OnThePlate));
+}
+
+#[test]
+fn a_cup_whose_middle_lies_in_the_material_is_left_to_the_hand() {
+    let solid = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    assert_eq!(vent_of(&solid, [5.0, 5.0]), Err(Unvented::TooDeep));
 }
 
 #[test]

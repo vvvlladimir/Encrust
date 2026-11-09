@@ -17,13 +17,22 @@ kind but peel and thin as `assets/recipes/fix-issues.toml` lays them out: ADR 04
 
 ## Where a vent goes
 
-A ray goes straight down from the cup at the height it is widest. It must meet a face looking
-up: the cup's floor. A second ray from just under that face finds where the floor ends. The
-hole opens there, drills up through the floor and goes on `VENT_PAST_FLOOR_MM` into the cup.
+A ray goes straight down from the cup at the height it is widest to its floor: a face looking
+up, or the plate where it meets none. The vent starts at the cup's lowest point, a quarter of
+the hole's width over the floor, so half the hole sinks into it and leaves no cup under its
+rim. From there 17 rays go out, straight down, down at 45° and level, eight ways round each.
+Each one enters a wall and leaves it once it has left every shell it entered, at most
+`MOST_CROSSINGS` faces on. The thinnest wall wins, up to `LONGEST_VENT_MM` (15 mm). The hole is
+drilled along that ray from where it leaves, and goes on `VENT_PAST_WALL_MM` into the cup
+(ADR 0417).
 
-There is no vent where the first ray meets no such face, which is a ring-shaped cup whose
-centre lies in solid material, or where the floor's underside is within a layer of the plate,
-since the plate would seal the hole again.
+A level vent out of a cup on the plate runs along it as a notch, as a channel in a base is
+cut by hand. A vent
+going down is refused where the plate lies under its rim, which would seal it again.
+
+There is no vent where the first ray meets a face looking down: the centre of a ring-shaped
+cup lies in the material. Nor where every wall is thicker than the limit; when the cup's floor
+is the plate, or stands on it, Check says to lift the model onto supports or turn it.
 
 ## Where a neck's support goes
 

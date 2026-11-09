@@ -2,7 +2,7 @@
 //! layer while the view stays as it was left, and the camera sent to them once.
 
 use core_analysis::{Risk, RiskKind};
-use core_engine::{CupVent, cup_vents, island_floors, lever_holds, neck_profile};
+use core_engine::{CupVent, Unvented, cup_vents, island_floors, lever_holds, neck_profile};
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
@@ -123,24 +123,38 @@ fn neck_sizing(supports: &SupportTool, run: Option<&ForRun>) -> SupportProfile {
     neck_profile(asked.unwrap_or(&supports.profile))
 }
 
-/// Check's Drill them: a hole through the floor of every suction cup of `risks`, on `only` if
-/// named; says how many went in and how many have no floor to drill.
+/// Check's Drill them: a hole by the shortest way into the lowest point of every suction cup
+/// of `risks`, on `only` if named; says how many went in, how many stand on the plate and how
+/// many are left to the hand.
 pub fn drill_cups(
     (scene, drain): (&mut Scene, &mut DrainTool),
     stack: (&LayerPlan, &RasterSettings),
     risks: &[Risk],
     only: Option<&[ObjectId]>,
 ) -> Status {
-    let vents = cup_owners(scene, stack, risks);
+    let vents = cup_owners(scene, stack, risks, drain.size().diameter_mm);
     let found: Vec<(ObjectId, CupVent)> = vents
         .iter()
         .flatten()
         .filter(|(id, _)| only.is_none_or(|ids| ids.contains(id)))
         .copied()
         .collect();
-    let left = vents.iter().filter(|vent| vent.is_none()).count();
+    let unvented = |why: Unvented| vents.iter().filter(|vent| **vent == Err(why)).count();
     let drilled = drain.drill_vents(scene, &found);
-    told(tr!("check-drilled-cups", count = drilled), left)
+    let said = tr!("check-vented-cups", count = drilled);
+    let mut notes = Vec::new();
+    match unvented(Unvented::OnThePlate) {
+        0 => {}
+        count => notes.push(tr!("check-cups-on-the-plate", count = count)),
+    }
+    match unvented(Unvented::TooDeep) {
+        0 => {}
+        count => notes.push(tr!("check-left-to-you", count = count)),
+    }
+    match notes.is_empty() {
+        true => Status::Info(said),
+        false => Status::Noted(said, notes),
+    }
 }
 
 /// The one model all of `owners` name, or `None` where they name several or cannot tell: what
@@ -151,14 +165,16 @@ pub fn only_owner(owners: impl IntoIterator<Item = Option<ObjectId>>) -> Option<
     owners.all(|owner| owner == Some(first)).then_some(first)
 }
 
-/// For each suction cup of `risks`, the model it is in and the hole that vents it.
+/// For each suction cup of `risks`, the model it is in and the hole of `hole_mm` across that
+/// vents it, or why there is none.
 pub fn cup_owners(
     scene: &Scene,
     (plan, settings): (&LayerPlan, &RasterSettings),
     risks: &[Risk],
-) -> Vec<Option<(ObjectId, CupVent)>> {
+    hole_mm: Scalar,
+) -> Vec<Result<(ObjectId, CupVent), Unvented>> {
     let (objects, models) = hanging_models(scene);
-    cup_vents(risks, plan, &as_seen(settings), &models)
+    cup_vents(risks, plan, &as_seen(settings), &models, hole_mm)
         .into_iter()
         .map(|vent| vent.map(|vent| (objects[vent.model].id, vent)))
         .collect()

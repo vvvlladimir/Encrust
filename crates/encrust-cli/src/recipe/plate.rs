@@ -5,13 +5,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use core_engine::{
-    DEFAULT_TEMPLATE, Hanging, SupportPlan, SupportShapes, cup_vents, island_floors, island_holds,
-    lever_holds, neck_profile,
+    CupVent, DEFAULT_TEMPLATE, Hanging, SupportPlan, SupportShapes, Unvented, cup_vents,
+    island_floors, island_holds, lever_holds, neck_profile,
 };
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
 use core_recipe::{Metric, retry, save_folder};
-use core_volume::{HoleKind, HoleSize};
+use core_volume::{DrainHole, HoleKind, HoleSize, ModelHollow};
 
 use super::piece::Piece;
 use super::settings::Settings;
@@ -20,7 +20,6 @@ use super::{Ctx, Did, Run, Saved};
 use crate::batch::sliced_name;
 use crate::commands::printer::{machine_of, send_to};
 use crate::estimate::{Print, measure_plate};
-use crate::hollowing::hole_near;
 use crate::pipeline::{Watch, raster_window, slice_staged};
 use crate::profiles::{AUTO, plan_of};
 use crate::slice_report::SliceReport;
@@ -120,9 +119,12 @@ impl Run<'_> {
         let risks = print.measured.risks();
         let bvhs = self.bvhs();
         let models = self.hanging(&bvhs);
-        let vents = match cups {
-            true => cup_vents(&risks, slice.plan(), &print.panel, &models),
-            false => Vec::new(),
+        let vents = match (cups, ids.first()) {
+            (true, Some(&first)) => {
+                let hole_mm = self.pieces[first].shaping.hollow.hole_size().diameter_mm;
+                cup_vents(&risks, slice.plan(), &print.panel, &models, hole_mm)
+            }
+            _ => Vec::new(),
         };
         let necks = match (levers, ids.first()) {
             (true, Some(&first)) => {
@@ -133,32 +135,42 @@ impl Run<'_> {
             }
             _ => None,
         };
-        for vent in vents
-            .into_iter()
-            .flatten()
-            .filter(|vent| ids.contains(&vent.model))
-        {
-            let size = HoleSize {
-                depth_mm: vent.depth_mm,
-                ..self.pieces[vent.model].shaping.hollow.hole_size()
-            };
-            let piece = &mut self.pieces[vent.model];
-            let bvh = &bvhs[vent.model];
-            let kind = match piece.cavity {
-                Some(_) => HoleKind::AtDepth,
-                None => HoleKind::Walled,
-            };
-            match hole_near(&piece.mesh, bvh, (vent.mouth_mm, Vec3::ZERO), size, kind) {
-                Ok(hole) => piece.holes.push(hole),
-                Err(why) => tracing::warn!(
-                    "{}: a cup was left undrilled: {why:#}",
-                    piece.input.display()
+        for vent in vents {
+            match vent {
+                Ok(vent) if ids.contains(&vent.model) => self.vent(&bvhs, vent),
+                Ok(_) => {}
+                Err(Unvented::OnThePlate) => tracing::warn!(
+                    "a suction cup stands on the plate: lift the model onto supports or turn it"
                 ),
+                Err(Unvented::TooDeep) => {
+                    tracing::warn!("a suction cup has no wall thin enough to drill a vent through");
+                }
             }
         }
         match necks {
             Some((plan, holds)) => self.hold_necks(ids, &plan, &holds),
             None => Ok(()),
+        }
+    }
+
+    /// Drills `vent` into its piece along its own axis, walled on a solid one.
+    fn vent(&mut self, bvhs: &[Bvh], vent: CupVent) {
+        let piece = &mut self.pieces[vent.model];
+        let size = HoleSize {
+            depth_mm: vent.depth_mm,
+            ..piece.shaping.hollow.hole_size()
+        };
+        let bvh = &bvhs[vent.model];
+        let at = (vent.mouth_mm, vent.outward);
+        match ModelHollow::drain_at(&piece.mesh, bvh, at.0, at.1, size, Transform::default()) {
+            Some(hole) => piece.holes.push(DrainHole {
+                kind: match piece.cavity {
+                    Some(_) => HoleKind::AtDepth,
+                    None => HoleKind::Walled,
+                },
+                ..hole
+            }),
+            None => tracing::warn!("{}: a cup was left undrilled", piece.input.display()),
         }
     }
 

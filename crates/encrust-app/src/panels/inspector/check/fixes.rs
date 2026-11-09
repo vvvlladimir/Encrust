@@ -73,9 +73,9 @@ fn turn(window: &mut Window, preset: OrientPreset, only: Option<ObjectId>) {
     crate::panels::auto_orient(window, only);
 }
 
-/// A hole through each cup's floor, or a pose that leaves none.
+/// A vent into each cup by its thinnest wall, or a pose that leaves none.
 pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_had: bool) {
-    let help = tr!("check-cups-help");
+    let help = tr!("check-cups-vent-help");
     let offers = [
         Offer::new(icon::DRAIN, tr!("check-drill-cups"), help.clone()),
         Offer::new(icon::AUTO_ORIENT, tr!("check-auto-orient"), help),
@@ -95,15 +95,16 @@ pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_
         let said = drill_cups(plate, stack, risks, None);
         report(window, IssueKind::Cups, said);
     } else {
-        let owners = cup_owners(&window.doc.scene, stack, risks);
-        let only = only_owner(owners.iter().map(|owner| owner.map(|(id, _)| id)));
+        let hole_mm = window.tools.drain.size().diameter_mm;
+        let owners = cup_owners(&window.doc.scene, stack, risks, hole_mm);
+        let only = only_owner(owners.iter().map(|owner| owner.ok().map(|(id, _)| id)));
         turn(window, OrientPreset::Auto, only);
     }
 }
 
 /// A support under each weak neck, or a pose that leaves none.
 pub(super) fn necks(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_had: bool) {
-    let help = tr!("check-levers-help");
+    let help = tr!("check-necks-held-help");
     let offers = [
         Offer::new(icon::SUPPORTS, tr!("check-support-levers"), help.clone()),
         Offer::new(icon::AUTO_ORIENT, tr!("check-auto-orient"), help),

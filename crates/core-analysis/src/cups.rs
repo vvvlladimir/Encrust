@@ -1,8 +1,13 @@
 use crate::layer::{Cured, Span};
 
-/// A sealed hole narrower than this at its widest pulls too little to name, mm^2: a disc
-/// some 5.6 mm across, which a full vacuum holds with about 2.5 N.
-pub const MIN_CUP_MM2: f32 = 25.0;
+/// What a full vacuum pulls on a square millimetre, N/mm^2: one atmosphere.
+const VACUUM_N_PER_MM2: f32 = 0.101;
+/// A cup whose full vacuum pulls less than this is not named, newtons: a third of
+/// `PEEL_LIMIT_N`, the share that starts to decide whether the lift tears a layer.
+pub const CUP_LIMIT_N: f32 = 10.0;
+/// A sealed hole narrower than this at its widest pulls too little to name, mm^2: what
+/// [`CUP_LIMIT_N`] comes to, a disc some 11 mm across.
+pub const MIN_CUP_MM2: f32 = CUP_LIMIT_N / VACUUM_N_PER_MM2;
 /// A sealed hole holding less resin than this is too shallow to name, mm^3: 0.02 ml, the
 /// pocket under a letter's counter or a pin's socket.
 pub const MIN_CUP_MM3: f32 = 20.0;
