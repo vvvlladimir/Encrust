@@ -13,14 +13,15 @@ use crate::ui::{
 };
 use crate::workspace::Mode;
 
+mod fixes;
 mod issues;
 mod plate;
 
 pub(crate) use issues::issue_name;
 use issues::{Filter, filter, listing, neighbour};
 
-/// What the stack will fail on: a way to take the islands out, the verdict, every issue a
-/// click away from its layer, and what pulls hardest on the film.
+/// What the stack will fail on: a way to answer each kind of issue, the verdict, every issue
+/// a click away from its layer, and what pulls hardest on the film.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     plate::ui(ui, window);
     let Some((risks, removed)) = window
@@ -39,6 +40,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             }
         });
     }
+    fixes::cups(ui, window, &risks);
+    fixes::levers(ui, window, &risks);
     if risks.is_empty() {
         section(ui, &tr!("check-issues"), None, verdict);
     } else {
@@ -157,6 +160,7 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
     if measured.is_none() && !window.machine.preview.is_measuring() {
         return;
     }
+    let risks = measured.map(Measured::risks).unwrap_or_default();
     let waiting = || tr!("check-measuring");
     let hardest = measured.and_then(Measured::hardest_pull);
     let widest = measured.and_then(Measured::largest_growth);
@@ -190,6 +194,7 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("check-peel"), None, |ui| {
         describe(ui, &tr!("check-peel-help"));
         readings(ui, &rows);
+        fixes::peel(ui, window, &risks);
     });
 }
 

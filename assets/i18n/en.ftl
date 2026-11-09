@@ -519,6 +519,37 @@ check-remove-next-note = Takes one layer more off each part left hanging, the on
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
 check-more-layers = and { $count } more layers
+check-section-cups = Suction cups
+check-section-levers = Weak necks
+check-drill-cups = Drill them
+check-support-levers = Support them
+check-auto-orient = Auto-orient
+check-least-peel = Least peel
+check-lift-settings = Lift settings
+check-move-clear = Move clear
+check-arrange = Arrange all
+check-fit-volume = Fit the volume
+check-combine = Combine
+check-drill-drains = Drill drain holes
+check-cups-help = Drill them puts a hole through the floor of each cup, so air can reach it. A cup that stands on the plate has no floor to drill. Auto-orient looks for a pose with no cups.
+check-levers-help = Support them stands a support under the part that pulls on each neck. Auto-orient looks for a pose that keeps the pull down.
+check-stood-levers =
+    { $count ->
+        [0] No weak neck had an underside to stand a support on
+        [one] Stood { $count } support in { $group }
+       *[other] Stood { $count } supports in { $group }
+    }
+check-drilled-cups =
+    { $count ->
+        [0] No suction cup had a floor to drill
+        [one] Drilled { $count } hole into a suction cup
+       *[other] Drilled { $count } holes into suction cups
+    }
+check-left-to-you =
+    { $count ->
+        [one] { $count } is left for you to fix by hand
+       *[other] { $count } are left for you to fix by hand
+    }
 check-plate = On the plate
 check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
 # Beside a model's name, where it, its supports or its raft stand.
@@ -1244,6 +1275,9 @@ recipes-set-plugs = Plugs
 recipes-set-profile = Support profile
 recipes-set-cavity = Supports in the cavity
 recipes-set-spacing = Spacing
+recipes-set-only-in-the-way = Move only what is in the way
+recipes-set-drill-cups = Drill suction cups
+recipes-set-hold-levers = Support weak necks
 recipes-set-folder = Folder
 recipes-set-name = File name
 recipes-set-send = Send to the printer
@@ -2453,6 +2487,16 @@ job-repairing = Repairing { $name }
 arrange-no-footprint = a model on the plate has no footprint to arrange
 arrange-nothing = Nothing visible on the plate to arrange
 arrange-done = Arranged { $count } models
+arrange-cleared =
+    { $count ->
+        [one] Moved { $count } model clear
+       *[other] Moved { $count } models clear
+    }
+arrange-cleared-short =
+    { $count ->
+        [one] { $count } model found no room
+       *[other] { $count } models found no room
+    }
 arrange-short =
     { $count ->
         [one] Arranged the plate; { $count } model found no room

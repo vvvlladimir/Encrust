@@ -8,7 +8,7 @@ mod fill;
 mod groups;
 mod inside;
 mod run;
-pub use fill::island_holds;
+pub use fill::{hanging_models, island_holds};
 pub use groups::{own_raft_shown, with_own};
 pub use run::BuiltTo;
 

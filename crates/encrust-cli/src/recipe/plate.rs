@@ -4,10 +4,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::{DEFAULT_TEMPLATE, Hanging, island_floors, island_holds};
+use core_engine::{DEFAULT_TEMPLATE, Hanging, cup_vents, island_floors, island_holds, lever_holds};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
 use core_recipe::{Metric, retry, save_folder};
+use core_volume::{HoleKind, HoleSize};
 
 use super::piece::Piece;
 use super::settings::Settings;
@@ -16,10 +17,11 @@ use super::{Ctx, Did, Run, Saved};
 use crate::batch::sliced_name;
 use crate::commands::printer::{machine_of, send_to};
 use crate::estimate::{Print, measure_plate};
+use crate::hollowing::hole_near;
 use crate::pipeline::{Watch, raster_window, slice_staged};
 use crate::profiles::{AUTO, plan_of};
 use crate::slice_report::SliceReport;
-use crate::stage::{Staged, arranged, staged};
+use crate::stage::{Staged, arranged, cleared, staged};
 use core_recipe::resolved::{flag, number, text};
 
 impl Run<'_> {
@@ -40,10 +42,11 @@ impl Run<'_> {
         Ok(staged((Vec::new(), models), drainage, machine, false))
     }
 
-    /// Measures the plate and notes what it found on each of `ids`, then supports their
-    /// islands and measures again while step `index`'s retry holds for any; answers how many
-    /// times it went again.
-    pub(super) fn check(&mut self, index: usize, ids: &[usize]) -> Result<u8> {
+    /// Answers the cups and necks `settings` ask for, then measures the plate and notes what
+    /// it found on each of `ids`, supports their islands and measures again while step
+    /// `index`'s retry holds for any; answers how many times it went again.
+    pub(super) fn check(&mut self, index: usize, ids: &[usize], settings: &Settings) -> Result<u8> {
+        self.fix_found(ids, settings)?;
         let mut attempt = 0;
         loop {
             let (slice, print) = self.measured()?;
@@ -82,18 +85,69 @@ impl Run<'_> {
     /// The piece each island of `floors` hangs from and the point a support there touches,
     /// or `None` for one hanging from none.
     fn owners(&self, floors: &[Vec3], layer_mm: Scalar) -> Vec<Option<(usize, Vec3)>> {
-        let bvhs: Vec<Bvh> = self
-            .pieces
+        let bvhs = self.bvhs();
+        island_holds(floors, layer_mm, &self.hanging(&bvhs))
+    }
+
+    fn bvhs(&self) -> Vec<Bvh> {
+        self.pieces
             .iter()
             .map(|piece| Bvh::build(&piece.mesh))
-            .collect();
-        let models: Vec<Hanging> = self
-            .pieces
+            .collect()
+    }
+
+    fn hanging<'a>(&'a self, bvhs: &'a [Bvh]) -> Vec<Hanging<'a>> {
+        self.pieces
             .iter()
-            .zip(&bvhs)
+            .zip(bvhs)
             .map(|(piece, bvh)| (&piece.mesh, bvh, Transform::default()))
-            .collect();
-        island_holds(floors, layer_mm, &models)
+            .collect()
+    }
+
+    /// Drills the suction cups and stands supports under the weak necks of `ids` where
+    /// `settings` ask for it; a cup or neck with nothing to answer it is left as it is.
+    fn fix_found(&mut self, ids: &[usize], settings: &Settings) -> Result<()> {
+        let cups = flag(settings, "drill_cups").unwrap_or(false);
+        let levers = flag(settings, "hold_levers").unwrap_or(false);
+        if !cups && !levers {
+            return Ok(());
+        }
+        let (slice, print) = self.measured()?;
+        let risks = print.measured.risks();
+        let bvhs = self.bvhs();
+        let models = self.hanging(&bvhs);
+        let vents = match cups {
+            true => cup_vents(&risks, slice.plan(), &print.panel, &models),
+            false => Vec::new(),
+        };
+        let holds = match levers {
+            true => lever_holds(&risks, slice.plan(), &print.panel, &models),
+            false => Vec::new(),
+        };
+        for vent in vents
+            .into_iter()
+            .flatten()
+            .filter(|vent| ids.contains(&vent.model))
+        {
+            let size = HoleSize {
+                depth_mm: vent.depth_mm,
+                ..self.pieces[vent.model].shaping.hollow.hole_size()
+            };
+            let piece = &mut self.pieces[vent.model];
+            let bvh = &bvhs[vent.model];
+            let kind = match piece.cavity {
+                Some(_) => HoleKind::AtDepth,
+                None => HoleKind::Walled,
+            };
+            match hole_near(&piece.mesh, bvh, (vent.mouth_mm, Vec3::ZERO), size, kind) {
+                Ok(hole) => piece.holes.push(hole),
+                Err(why) => tracing::warn!(
+                    "{}: a cup was left undrilled: {why:#}",
+                    piece.input.display()
+                ),
+            }
+        }
+        self.hold_islands(ids, &holds)
     }
 
     fn retries(&self, index: usize, ids: &[usize], attempt: u8) -> Result<bool> {
@@ -143,7 +197,10 @@ impl Run<'_> {
             .map(|(mesh, piece)| (mesh, piece.input.as_path()))
             .collect();
         let printer = self.ctx.chosen.printer.as_ref();
-        let offsets = arranged(&footprints, printer, &asked)?;
+        let offsets = match flag(settings, "only_in_the_way").unwrap_or(false) {
+            true => cleared(&footprints, printer, &asked)?,
+            false => arranged(&footprints, printer, &asked)?,
+        };
         for (piece, offset) in self.pieces.iter_mut().zip(offsets) {
             piece.moved(Transform::from_translation(offset));
         }

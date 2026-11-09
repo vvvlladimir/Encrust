@@ -182,7 +182,7 @@ impl Prepare {
     fn attempt(&self) -> Option<u8> {
         let run = self.run.as_ref()?;
         match run.going.as_ref()?.0.work {
-            work::Work::Check { attempt } => Some(attempt),
+            work::Work::Check { attempt, .. } => Some(attempt),
             _ => None,
         }
     }

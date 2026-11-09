@@ -546,6 +546,40 @@ check-more-layers =
         [few] и ещё { $count } слоя
        *[many] и ещё { $count } слоёв
     }
+check-section-cups = Присоски
+check-section-levers = Слабые перемычки
+check-drill-cups = Просверлить
+check-support-levers = Поддержать
+check-auto-orient = Автоориентация
+check-least-peel = Меньше отрыв
+check-lift-settings = Подъём
+check-move-clear = Отодвинуть
+check-arrange = Расставить всё
+check-fit-volume = Вписать в область печати
+check-combine = Объединить
+check-drill-drains = Просверлить отверстия
+check-cups-help = «Просверлить» делает отверстие в дне каждой присоски, чтобы к ней проходил воздух. У присоски на платформе нет дна, которое можно просверлить. Автоориентация ищет положение без присосок.
+check-levers-help = «Поддержать» ставит поддержку под часть, которая тянет каждую перемычку. Автоориентация ищет положение с меньшей нагрузкой.
+check-stood-levers =
+    { $count ->
+        [0] Ни у одной слабой перемычки не нашлось нижней стороны для поддержки
+        [one] Поставлена { $count } поддержка в группе { $group }
+        [few] Поставлены { $count } поддержки в группе { $group }
+       *[many] Поставлено { $count } поддержек в группе { $group }
+    }
+check-drilled-cups =
+    { $count ->
+        [0] Ни у одной присоски нет дна, которое можно просверлить
+        [one] Просверлено { $count } отверстие в присоске
+        [few] Просверлено { $count } отверстия в присосках
+       *[many] Просверлено { $count } отверстий в присосках
+    }
+check-left-to-you =
+    { $count ->
+        [one] Осталась { $count }, исправьте вручную
+        [few] Осталось { $count }, исправьте вручную
+       *[many] Осталось { $count }, исправьте вручную
+    }
 check-plate = На платформе
 check-plate-help = Находится сразу, как только модели перестают двигаться, ещё до чтения слоёв. Нажмите строку, чтобы перейти к месту.
 check-row-past = за областью печати
@@ -1274,6 +1308,9 @@ recipes-set-plugs = Пробки
 recipes-set-profile = Профиль поддержек
 recipes-set-cavity = Поддержки в полости
 recipes-set-spacing = Расстояние
+recipes-set-only-in-the-way = Двигать только мешающие
+recipes-set-drill-cups = Сверлить присоски
+recipes-set-hold-levers = Поддерживать слабые перемычки
 recipes-set-folder = Папка
 recipes-set-name = Имя файла
 recipes-set-send = Отправить на принтер
@@ -2532,6 +2569,18 @@ arrange-done =
         [one] Расставлена { $count } модель
         [few] Расставлено { $count } модели
        *[many] Расставлено { $count } моделей
+    }
+arrange-cleared =
+    { $count ->
+        [one] Отодвинута { $count } модель
+        [few] Отодвинуты { $count } модели
+       *[many] Отодвинуто { $count } моделей
+    }
+arrange-cleared-short =
+    { $count ->
+        [one] Для { $count } модели не нашлось места
+        [few] Для { $count } моделей не нашлось места
+       *[many] Для { $count } моделей не нашлось места
     }
 arrange-short =
     { $count ->

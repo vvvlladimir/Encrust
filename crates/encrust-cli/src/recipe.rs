@@ -323,7 +323,7 @@ impl Run<'_> {
         let ids: Vec<usize> = runs.iter().map(|(id, _)| *id).collect();
         let did = match self.asked.plan.recipe().steps[index].kind {
             StepKind::Check => Did {
-                retries: Some(self.check(index, &ids)?),
+                retries: Some(self.check(index, &ids, settings)?),
                 ..Did::default()
             },
             StepKind::Arrange => {

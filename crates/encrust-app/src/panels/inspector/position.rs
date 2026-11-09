@@ -258,10 +258,7 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId,
         return;
     };
     match asked.or(reset.then_some(Resize::Imported)) {
-        Some(Resize::Fit) => {
-            fit(object, plate);
-            recentre(scene, plate, id);
-        }
+        Some(Resize::Fit) => fit_the_volume(scene, plate, id),
         Some(Resize::Imported) => {
             let pivot = object.pivot();
             object.settle(Transform {
@@ -436,6 +433,14 @@ fn label_column(ui: &mut egui::Ui, axis: usize) {
             axis_label(ui, axis, "");
         },
     );
+}
+
+/// Scales `id` evenly to the build volume and centres it on the plate.
+pub(super) fn fit_the_volume(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
+    if let Some(object) = scene.get_mut(id) {
+        fit(object, plate);
+    }
+    recentre(scene, plate, id);
 }
 
 /// Stretches the model evenly until its bounds meet the build volume on the tightest side.

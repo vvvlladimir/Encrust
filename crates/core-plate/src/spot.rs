@@ -1,6 +1,6 @@
 use core_geometry::{Scalar, Vec2};
 
-use crate::arrange::ArrangeSettings;
+use crate::arrange::{ArrangeSettings, Placed, PlateArea};
 
 /// A box across the plate, millimetres: what a model, its supports or its raft cover.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,6 +46,83 @@ pub fn nearest_free(
     let within = columns.map_or(Scalar::INFINITY, |at| at.distance_squared(toward));
     let rows = nearest_on_columns(swapped(toward), &room.turned(), &turned, within);
     rows.map(swapped).or(columns)
+}
+
+/// What moving only the models in the way came to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Cleared {
+    pub moved: Vec<Placed>,
+    /// Those of them that found no room, left where they were.
+    pub left_out: Vec<usize>,
+}
+
+/// Moves only what is in the way, largest first, each to the nearest place in `area` clear of
+/// the rest: every one of `astray`, and the smaller of each of `meeting` whose other stays.
+pub fn move_clear(
+    parts: &[Rect],
+    astray: &[usize],
+    meeting: &[[usize; 2]],
+    area: PlateArea,
+    settings: &ArrangeSettings,
+) -> Cleared {
+    let cover = |index: usize| {
+        let size = parts[index].max - parts[index].min;
+        size.x * size.y
+    };
+    let mut moves = vec![false; parts.len()];
+    for &index in astray {
+        moves[index] = true;
+    }
+    for &[one, other] in meeting {
+        if !moves[one] && !moves[other] {
+            moves[if cover(one) <= cover(other) {
+                one
+            } else {
+                other
+            }] = true;
+        }
+    }
+    let mut moving: Vec<usize> = (0..parts.len()).filter(|&index| moves[index]).collect();
+    moving.sort_by(|a, b| cover(*b).total_cmp(&cover(*a)));
+    let mut taken: Vec<Rect> = (0..parts.len())
+        .filter(|&index| !moves[index])
+        .map(|index| parts[index])
+        .collect();
+    let mut cleared = Cleared::default();
+    for index in moving {
+        let part = parts[index];
+        if let Some(offset_mm) = clear_of(part, &taken, area, settings) {
+            taken.push(Rect {
+                min: part.min + offset_mm,
+                max: part.max + offset_mm,
+            });
+            cleared.moved.push(Placed { index, offset_mm });
+        } else {
+            taken.push(part);
+            cleared.left_out.push(index);
+        }
+    }
+    cleared
+}
+
+/// How far a part covering `part` moves to the nearest place in `area` clear of every one of
+/// `taken`, or `None` where it has no room there.
+fn clear_of(
+    part: Rect,
+    taken: &[Rect],
+    area: PlateArea,
+    settings: &ArrangeSettings,
+) -> Option<Vec2> {
+    let in_area = |rect: &Rect| Rect {
+        min: rect.min - area.low_mm,
+        max: rect.max - area.low_mm,
+    };
+    let taken: Vec<Rect> = taken.iter().map(in_area).collect();
+    let centre = (part.min + part.max) / 2.0 - area.low_mm;
+    let size_mm = part.max - part.min;
+    let plate_mm = area.high_mm - area.low_mm;
+    let at = nearest_free(size_mm, &taken, centre, plate_mm, settings)?;
+    Some(at - centre)
 }
 
 impl Rect {

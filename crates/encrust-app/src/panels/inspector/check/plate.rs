@@ -1,11 +1,15 @@
 //! What Check lists before any layer is read: models off the plate or in its inset, models
 //! that meet, and resin a model keeps (ADR 0392, 0393).
 
+use super::fixes::{button_row, free};
+use crate::arrange::{arrange_plate, clear_the_way};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::plate::{Astray, KeptResin, astray, kept_resin};
+use crate::panels::inspector::position::fit_the_volume;
+use crate::plate::{Astray, BuildPlate, KeptResin, astray, bounds, kept_resin};
+use crate::relief::ReliefMode;
 use crate::scene::{ObjectId, Scene};
-use crate::ui::{describe, issue_list, issue_row, section, theme};
+use crate::ui::{describe, icon, issue_list, issue_row, section, theme};
 use crate::workspace::Tool;
 
 /// One issue of the plate as it stands.
@@ -61,10 +65,10 @@ pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
     if issues.is_empty() {
         return;
     }
-    let scene = &window.doc.scene;
     let picked = section(ui, &tr!("check-plate"), None, |ui| {
         describe(ui, &tr!("check-plate-help"));
-        issue_list(ui, "check-plate", |ui| {
+        let scene = &window.doc.scene;
+        let picked = issue_list(ui, "check-plate", |ui| {
             let mut picked = None;
             for issue in &issues {
                 let (tint, place, detail) = words(scene, issue);
@@ -73,7 +77,9 @@ pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 }
             }
             picked
-        })
+        });
+        fixes(ui, window, &issues);
+        picked
     })
     .flatten();
     match picked {
@@ -90,6 +96,100 @@ pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
         Some(PlateIssue::Kept(KeptResin::Solid(id))) => open_on(window, id, Tool::Hollow),
         None => {}
     }
+}
+
+/// The buttons that answer the plate's issues, those with something to answer.
+fn fixes(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue]) {
+    let enabled = free(window);
+    let in_the_way = issues
+        .iter()
+        .any(|issue| matches!(issue, PlateIssue::Astray(_) | PlateIssue::Meeting(_)));
+    if in_the_way {
+        let buttons = [
+            (icon::SELECT, tr!("check-move-clear")),
+            (icon::ARRANGE, tr!("check-arrange")),
+        ];
+        match button_row(ui, enabled, &buttons) {
+            Some(0) => {
+                let doc = &mut *window.doc;
+                let pairs = doc.meeting.pairs(&doc.scene);
+                let gap_mm = window.tools.array.gap_mm;
+                window.machine.status = clear_the_way(&mut doc.scene, &doc.plate, &pairs, gap_mm);
+            }
+            Some(_) => {
+                let doc = &mut *window.doc;
+                let gap_mm = window.tools.array.gap_mm;
+                window.machine.status = arrange_plate(&mut doc.scene, &doc.plate, gap_mm);
+            }
+            None => {}
+        }
+    }
+    let too_big = too_big(&window.doc.scene, &window.doc.plate, issues);
+    if !too_big.is_empty()
+        && button_row(ui, enabled, &[(icon::FIT, tr!("check-fit-volume"))]).is_some()
+    {
+        for id in too_big {
+            fit_the_volume(&mut window.doc.scene, &window.doc.plate, id);
+        }
+    }
+    let meeting = issues.iter().find_map(|issue| match issue {
+        PlateIssue::Meeting(pair) => Some(*pair),
+        _ => None,
+    });
+    if let Some(pair) = meeting
+        && button_row(ui, enabled, &[(icon::COMBINE, tr!("check-combine"))]).is_some()
+    {
+        window.doc.scene.select_many(&pair);
+        window.tools.relief.mode = ReliefMode::Combine;
+        *window.tool = Tool::Relief;
+        window.view.options.inspector = true;
+    }
+    let sealed: Vec<ObjectId> = issues
+        .iter()
+        .filter_map(|issue| match issue {
+            PlateIssue::Kept(KeptResin::Sealed(id)) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    if !sealed.is_empty()
+        && button_row(
+            ui,
+            enabled,
+            &[(icon::AUTO_DRAIN, tr!("check-drill-drains"))],
+        )
+        .is_some()
+    {
+        window.doc.scene.select_many(&sealed);
+        *window.tool = Tool::Drain;
+        window.view.options.inspector = true;
+        let layer_height_mm = window.machine.slicing.layer_height_mm();
+        let started = window
+            .tools
+            .drain
+            .start_auto(&window.doc.scene, layer_height_mm);
+        window
+            .machine
+            .status
+            .report(&tr!("drain-auto-looking"), started);
+    }
+}
+
+/// The models past the plate that are larger than its build volume, which no move can fix.
+fn too_big(scene: &Scene, plate: &BuildPlate, issues: &[PlateIssue]) -> Vec<ObjectId> {
+    let room = core_geometry::Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm);
+    issues
+        .iter()
+        .filter_map(|issue| match issue {
+            PlateIssue::Astray(Astray { id, past: true, .. }) => Some(*id),
+            _ => None,
+        })
+        .filter(|&id| {
+            scene
+                .get(id)
+                .and_then(bounds)
+                .is_some_and(|box_of| (box_of.maxs - box_of.mins).cmpgt(room).any())
+        })
+        .collect()
 }
 
 /// Picks the model keeping resin and opens `tool` on it, its card open.

@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use core_engine::CupVent;
 use core_engine::project::DrainState;
 use core_geometry::Scalar;
 use core_supports::Trapped;
@@ -177,6 +178,29 @@ impl DrainTool {
                 .hollow
                 .drill_into(&object.mesh, &object.bvh, target, size, object.transform);
         object.traps.remove(index);
+        drilled
+    }
+
+    /// Drills each of `vents` to its own depth, and says how many it put in.
+    pub fn drill_vents(&mut self, scene: &mut Scene, vents: &[(ObjectId, CupVent)]) -> usize {
+        self.stale();
+        let size = self.size();
+        let mut drilled = 0;
+        for (id, vent) in vents {
+            let Some(object) = scene.get_mut(*id) else {
+                continue;
+            };
+            let size = HoleSize {
+                depth_mm: vent.depth_mm,
+                ..size
+            };
+            let (mesh, bvh, transform) = (&object.mesh, &object.bvh, object.transform);
+            let (mouth, normal) = (vent.mouth_mm, vent.normal);
+            object
+                .hollow
+                .add_drain(mesh, bvh, mouth, normal, size, transform);
+            drilled += 1;
+        }
         drilled
     }
 

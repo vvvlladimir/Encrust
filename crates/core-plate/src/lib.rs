@@ -20,7 +20,7 @@ mod select;
 mod spot;
 mod watch;
 
-pub use arrange::{ArrangeSettings, Arranged, Placed, arrange};
+pub use arrange::{ArrangeSettings, Arranged, Placed, PlateArea, arrange};
 pub use candidates::{FlatFace, flat_faces};
 pub use crossings::{Body, BodyKind, Meeting, crossings};
 pub use error::PlateError;
@@ -30,5 +30,5 @@ pub use plate_fit::PlateFit;
 pub use policy::{Asked, Noise, Readings, Ruling, rank, rulings};
 pub use printed::Printed;
 pub use score::{LOOKS_UP, OrientGoal, OrientPreset, Score};
-pub use spot::{Rect, nearest_free};
+pub use spot::{Cleared, Rect, move_clear, nearest_free};
 pub use watch::{Phase, Pieces, Watch};

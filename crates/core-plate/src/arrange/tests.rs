@@ -36,7 +36,7 @@ fn six_copies_are_spread_over_the_plate_without_touching() {
     let footprints = heap(6, Vec3::new(20.0, 20.0, 10.0), 1.0);
     let arranged = arrange(
         &footprints,
-        Vec2::new(150.0, 80.0),
+        PlateArea::whole(Vec2::new(150.0, 80.0)),
         &ArrangeSettings::default(),
     );
 
@@ -60,7 +60,11 @@ fn six_copies_are_spread_over_the_plate_without_touching() {
 fn everything_lands_inside_the_plate_and_its_margin() {
     let footprints = heap(4, Vec3::new(30.0, 25.0, 10.0), 1.0);
     let settings = ArrangeSettings::default();
-    let arranged = arrange(&footprints, Vec2::new(150.0, 80.0), &settings);
+    let arranged = arrange(
+        &footprints,
+        PlateArea::whole(Vec2::new(150.0, 80.0)),
+        &settings,
+    );
 
     for placed in &arranged.placed {
         let (min, max) = rect(&footprints[placed.index], placed.offset_mm);
@@ -82,7 +86,11 @@ fn the_clearance_is_kept_between_neighbours() {
         ..ArrangeSettings::default()
     };
     let footprints = heap(2, Vec3::new(20.0, 20.0, 10.0), 1.0);
-    let arranged = arrange(&footprints, Vec2::new(150.0, 80.0), &settings);
+    let arranged = arrange(
+        &footprints,
+        PlateArea::whole(Vec2::new(150.0, 80.0)),
+        &settings,
+    );
     assert_eq!(arranged.placed.len(), 2);
 
     let a = rect(&footprints[0], arranged.placed[0].offset_mm);
@@ -102,7 +110,7 @@ fn what_does_not_fit_is_named_rather_than_stacked() {
     let footprints = heap(3, Vec3::new(60.0, 60.0, 10.0), 1.0);
     let arranged = arrange(
         &footprints,
-        Vec2::new(150.0, 80.0),
+        PlateArea::whole(Vec2::new(150.0, 80.0)),
         &ArrangeSettings::default(),
     );
 
@@ -119,7 +127,7 @@ fn a_model_wider_than_the_plate_is_left_where_it_is() {
     let footprints = heap(1, Vec3::new(200.0, 20.0, 10.0), 1.0);
     let arranged = arrange(
         &footprints,
-        Vec2::new(150.0, 80.0),
+        PlateArea::whole(Vec2::new(150.0, 80.0)),
         &ArrangeSettings::default(),
     );
     assert!(arranged.placed.is_empty());
@@ -131,7 +139,7 @@ fn a_plate_smaller_than_its_own_margin_takes_nothing() {
     let footprints = heap(1, Vec3::splat(2.0), 1.0);
     let arranged = arrange(
         &footprints,
-        Vec2::new(3.0, 3.0),
+        PlateArea::whole(Vec2::new(3.0, 3.0)),
         &ArrangeSettings::default(),
     );
     assert_eq!(arranged.left_out, vec![0]);
@@ -142,7 +150,7 @@ fn a_single_model_lands_in_the_middle() {
     let footprints = heap(1, Vec3::new(20.0, 20.0, 10.0), 1.0);
     let arranged = arrange(
         &footprints,
-        Vec2::new(150.0, 80.0),
+        PlateArea::whole(Vec2::new(150.0, 80.0)),
         &ArrangeSettings::default(),
     );
 
@@ -152,4 +160,28 @@ fn a_single_model_lands_in_the_middle() {
         (centre - Vec2::new(75.0, 40.0)).length() < 2.0,
         "expected the middle of the plate, got {centre}"
     );
+}
+
+#[test]
+fn nothing_lands_in_a_printers_inset() {
+    let footprints = heap(4, Vec3::new(20.0, 20.0, 10.0), 1.0);
+    let settings = ArrangeSettings::default();
+    let area = PlateArea {
+        low_mm: Vec2::new(30.0, 5.0),
+        high_mm: Vec2::new(150.0, 80.0),
+    };
+    let arranged = arrange(&footprints, area, &settings);
+
+    assert_eq!(
+        arranged.placed.len(),
+        4,
+        "four 20 mm boxes fit 120 by 75 mm"
+    );
+    for placed in &arranged.placed {
+        let (min, _) = rect(&footprints[placed.index], placed.offset_mm);
+        assert!(
+            min.x >= 30.0 + settings.margin_mm - 1e-3 && min.y >= 5.0 + settings.margin_mm - 1e-3,
+            "the area starts at (30, 5) mm and its margin is 2 mm, got {min}"
+        );
+    }
 }

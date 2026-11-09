@@ -2,19 +2,20 @@
 //! layer while the view stays as it was left, and the camera sent to them once.
 
 use core_analysis::{Risk, RiskKind};
-use core_engine::island_floors;
+use core_engine::{CupVent, cup_vents, island_floors, lever_holds};
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use egui::Color32;
 use printer_profiles::SupportProfile;
 
+use crate::drain::DrainTool;
 use crate::highlight::{EdgeMark, Highlight, LIFT_MM, Spot, ring};
 use crate::i18n::tr;
 use crate::preview::{as_seen, on_plate};
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
-use crate::supports::{ISLANDS_GROUP, SupportTool, island_holds};
+use crate::supports::{ISLANDS_GROUP, SupportTool, hanging_models, island_holds};
 
 /// The least radius an issue is ringed at, mm: an island of a few pixels still shows, and
 /// an issue with no area of its own is ringed at this.
@@ -77,14 +78,109 @@ pub fn support_islands(
         .flatten()
         .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
         .collect();
-    let stood = match &run {
-        None => supports.support_islands(scene, &found),
-        Some(run) => supports.support_islands_to(scene, &found, |id| {
+    let stood = stand(scene, supports, &found, run.as_ref());
+    Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
+}
+
+/// Check's Support them for weak necks: a support under the piece pulling on each, as
+/// [`support_islands`] stands them; says how many stood and how many had nowhere to.
+pub fn support_levers(
+    (scene, supports): (&mut Scene, &mut SupportTool),
+    stack: (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+    run: Option<ForRun>,
+) -> Status {
+    let holds = lever_owners(scene, stack, risks);
+    let found: Vec<(ObjectId, Vec3)> = holds
+        .iter()
+        .flatten()
+        .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
+        .copied()
+        .collect();
+    let left = holds.iter().filter(|hold| hold.is_none()).count();
+    let stood = stand(scene, supports, &found, run.as_ref());
+    told(
+        tr!("check-stood-levers", count = stood, group = ISLANDS_GROUP),
+        left,
+    )
+}
+
+/// Check's Drill them: a hole through the floor of every suction cup of `risks`, on `only` if
+/// named; says how many went in and how many have no floor to drill.
+pub fn drill_cups(
+    (scene, drain): (&mut Scene, &mut DrainTool),
+    stack: (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+    only: Option<&[ObjectId]>,
+) -> Status {
+    let vents = cup_owners(scene, stack, risks);
+    let found: Vec<(ObjectId, CupVent)> = vents
+        .iter()
+        .flatten()
+        .filter(|(id, _)| only.is_none_or(|ids| ids.contains(id)))
+        .copied()
+        .collect();
+    let left = vents.iter().filter(|vent| vent.is_none()).count();
+    let drilled = drain.drill_vents(scene, &found);
+    told(tr!("check-drilled-cups", count = drilled), left)
+}
+
+/// The one model all of `owners` name, or `None` where they name several or cannot tell: what
+/// Auto-orient is asked to turn.
+pub fn only_owner(owners: impl IntoIterator<Item = Option<ObjectId>>) -> Option<ObjectId> {
+    let mut owners = owners.into_iter();
+    let first = owners.next()??;
+    owners.all(|owner| owner == Some(first)).then_some(first)
+}
+
+/// For each suction cup of `risks`, the model it is in and the hole that vents it.
+pub fn cup_owners(
+    scene: &Scene,
+    (plan, settings): (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+) -> Vec<Option<(ObjectId, CupVent)>> {
+    let (objects, models) = hanging_models(scene);
+    cup_vents(risks, plan, &as_seen(settings), &models)
+        .into_iter()
+        .map(|vent| vent.map(|vent| (objects[vent.model].id, vent)))
+        .collect()
+}
+
+/// For each weak neck of `risks`, the model it is in and where a support holds it.
+pub fn lever_owners(
+    scene: &Scene,
+    (plan, settings): (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+) -> Vec<Option<(ObjectId, Vec3)>> {
+    let (objects, models) = hanging_models(scene);
+    lever_holds(risks, plan, &as_seen(settings), &models)
+        .into_iter()
+        .map(|hold| hold.map(|(at, contact)| (objects[at].id, contact)))
+        .collect()
+}
+
+/// Stands a support at each of `found`, on a run's profiles where there is one.
+fn stand(
+    scene: &mut Scene,
+    supports: &mut SupportTool,
+    found: &[(ObjectId, Vec3)],
+    run: Option<&ForRun>,
+) -> usize {
+    match run {
+        None => supports.support_islands(scene, found),
+        Some(run) => supports.support_islands_to(scene, found, |id| {
             let own = run.profiles.iter().find(|(owner, _)| *owner == id);
             own.map(|(_, profile)| profile.clone()).unwrap_or_default()
         }),
-    };
-    Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
+    }
+}
+
+/// `said`, with how many of the issues had nowhere to be fixed where any had none.
+fn told(said: String, left: usize) -> Status {
+    match left {
+        0 => Status::Info(said),
+        left => Status::Noted(said, vec![tr!("check-left-to-you", count = left)]),
+    }
 }
 
 /// What the rings were laid in: the plate's `preview::plate_fingerprint` and the height
@@ -174,6 +270,17 @@ mod tests {
             at_mm: Vec2::new(x, 0.0),
             area_mm2: Some(area_mm2),
         }
+    }
+
+    #[test]
+    fn auto_orient_is_aimed_at_a_model_only_when_every_issue_is_on_it() {
+        let unit = (Vec3::ZERO, Vec3::ONE);
+        let scene = crate::scene::fixtures::scene_of_boxes(&[unit, unit]);
+        let (one, other) = (scene.objects()[0].id, scene.objects()[1].id);
+        assert_eq!(only_owner([Some(one), Some(one)]), Some(one));
+        assert_eq!(only_owner([Some(one), Some(other)]), None);
+        assert_eq!(only_owner([Some(one), None]), None);
+        assert_eq!(only_owner([]), None);
     }
 
     #[test]

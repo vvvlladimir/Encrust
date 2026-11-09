@@ -12,8 +12,8 @@ use printer_profiles::{Catalogue, SupportProfile};
 
 use super::Run;
 use super::step::Ended;
-use super::work::{Batch, Work};
-use crate::check::{ForRun, support_islands};
+use super::work::{Batch, CheckFixes, Work};
+use crate::check::{ForRun, drill_cups, support_islands, support_levers};
 use crate::i18n::tr;
 use crate::preview::{as_seen, stack_fingerprint};
 use crate::scene::{ObjectId, Scene};
@@ -86,7 +86,7 @@ impl Run {
         machine: &mut Machine,
         batch: &Batch,
     ) -> Result<()> {
-        let Work::Check { attempt } = batch.work else {
+        let Work::Check { attempt, fixes } = batch.work else {
             return Ok(());
         };
         let slicing = &machine.slicing;
@@ -100,6 +100,27 @@ impl Run {
         let risks = measured.risks();
         let peel_n = measured.hardest_pull().map_or(0.0, |peak| peak.value);
         let stack = (plan, &settings);
+        if fixes != CheckFixes::default() {
+            let profiles = self.island_profiles(&batch.ids, &machine.slicing.catalogue)?;
+            let run = ForRun {
+                ids: &batch.ids,
+                profiles: &profiles,
+            };
+            if fixes.levers {
+                let plate = (&mut doc.scene, &mut tools.supports);
+                machine.status = support_levers(plate, stack, &risks, Some(run));
+            }
+            if fixes.cups {
+                let plate = (&mut doc.scene, &mut tools.drain);
+                machine.status = drill_cups(plate, stack, &risks, Some(&batch.ids));
+            }
+            let again = Work::Check {
+                attempt,
+                fixes: CheckFixes::default(),
+            };
+            self.queue.push_front(Batch::of(again, batch.ids.clone()));
+            return Ok(());
+        }
         for (id, islands) in islands_of(&doc.scene, &batch.ids, &risks, stack) {
             let support_mm3 = doc
                 .scene
@@ -121,6 +142,7 @@ impl Run {
         machine.status = support_islands(plate, stack, &risks, Some(run));
         let again = Work::Check {
             attempt: attempt + 1,
+            fixes: CheckFixes::default(),
         };
         self.queue.push_front(Batch::of(again, batch.ids.clone()));
         Ok(())

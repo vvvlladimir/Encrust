@@ -419,6 +419,20 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
   --hollow 3 -o sliced/
 ```
 
+A recipe's `check` step takes `drill_cups` and `hold_levers`, which drill every suction cup through
+its floor and stand a support under every weak neck once before its `retry`, and `arrange` takes
+`only_in_the_way`, which moves only the models past the plate's usable area or meeting another:
+
+```toml
+[[step]]
+do = "arrange"
+set = { only_in_the_way = true }
+
+[[step]]
+do = "check"
+set = { drill_cups = true, hold_levers = true }
+```
+
 The built-in recipes, by id: `prepare` below; `miniatures` (repair if open, orient for the
 least peel with a clean surface, tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
 supports, a check that supports islands again up to twice, and a gate on any left). Why

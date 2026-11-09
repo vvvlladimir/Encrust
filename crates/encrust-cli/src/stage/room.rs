@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use core_engine::Model;
 use core_geometry::{Mesh, Transform, Vec2, Vec3, transform_mesh};
-use core_plate::{ArrangeSettings, Footprint, arrange};
+use core_plate::{
+    ArrangeSettings, Body, BodyKind, Footprint, PlateArea, Rect, arrange, crossings, move_clear,
+};
 use printer_profiles::PrinterProfile;
 
 use super::{Shaping, bounds};
@@ -87,6 +89,70 @@ fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -
     Ok(())
 }
 
+/// What of `printer`'s plate its inset leaves.
+fn plate_area(printer: &PrinterProfile) -> PlateArea {
+    let inset = printer.plate_inset.unwrap_or_default();
+    let [low, high] = inset.area_mm(printer.build_volume.x, printer.build_volume.y);
+    PlateArea {
+        low_mm: Vec2::from_array(low),
+        high_mm: Vec2::from_array(high),
+    }
+}
+
+/// How far each of `placed`, standing where it prints, moves so that only what is past the
+/// plate's usable area or meets another moves, the rest left where they are; models that
+/// found no room stay, and are named in the warning.
+pub(crate) fn cleared(
+    placed: &[(&Mesh, &Path)],
+    printer: Option<&PrinterProfile>,
+    settings: &ArrangeSettings,
+) -> Result<Vec<Vec3>> {
+    let printer = printer.context("moving models clear needs a printer to know the plate")?;
+    let area = plate_area(printer);
+    let parts = placed
+        .iter()
+        .map(|(mesh, path)| {
+            let bounds = mesh
+                .aabb()
+                .with_context(|| format!("{} has no vertices", path.display()))?;
+            Ok(Rect {
+                min: bounds.mins.truncate(),
+                max: bounds.maxs.truncate(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let astray: Vec<usize> = (0..parts.len())
+        .filter(|&index| {
+            let part = parts[index];
+            part.min.cmplt(area.low_mm).any() || part.max.cmpgt(area.high_mm).any()
+        })
+        .collect();
+    let bodies: Vec<Body<'_>> = placed
+        .iter()
+        .enumerate()
+        .map(|(owner, (mesh, _))| Body {
+            owner,
+            kind: BodyKind::Model,
+            mesh,
+            bvh: None,
+            transform: Transform::default(),
+        })
+        .collect();
+    let meeting: Vec<[usize; 2]> = crossings(&bodies)
+        .iter()
+        .map(|meeting| meeting.owners)
+        .collect();
+    let cleared = move_clear(&parts, &astray, &meeting, area, settings);
+    for &index in &cleared.left_out {
+        tracing::warn!("{} found no room on the plate", placed[index].1.display());
+    }
+    let mut offsets = vec![Vec3::ZERO; placed.len()];
+    for spot in &cleared.moved {
+        offsets[spot.index] = spot.offset_mm.extend(0.0);
+    }
+    Ok(offsets)
+}
+
 /// How far each of `placed`, a mesh standing where it prints and the file it came from, moves
 /// to pack the plate biggest first by `settings`; refuses a plate they do not fit.
 pub(crate) fn arranged(
@@ -102,8 +168,7 @@ pub(crate) fn arranged(
                 .with_context(|| format!("{} has no footprint", path.display()))
         })
         .collect::<Result<Vec<_>>>()?;
-    let plate = Vec2::new(printer.build_volume.x, printer.build_volume.y);
-    let arranged = arrange(&footprints, plate, settings);
+    let arranged = arrange(&footprints, plate_area(printer), settings);
     if let Some(&first) = arranged.left_out.first() {
         bail!(
             "{} of {} models found no room on the plate, {} among them",
