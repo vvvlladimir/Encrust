@@ -139,6 +139,9 @@ pub enum HoleKind {
     /// Lets the resin out of a cavity: carried on through the wall, closed by a plug.
     #[default]
     Drain,
+    /// Set by hand into a hollow model: stops at its depth, opening the cavity only if that
+    /// reaches it (ADR 0414).
+    AtDepth,
     /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
     /// keeps a wall around it and it keeps its depth and its plug.
     Walled,
@@ -159,6 +162,16 @@ impl DrainHole {
             shape: size.shape,
             turn_deg: size.turn_deg,
             kind: HoleKind::Drain,
+        }
+    }
+
+    /// Whether it opens the cavity behind a wall of `thickness_mm`: a drain is carried through
+    /// by [`pierce`], a hole set at a depth only if that passes the wall (ADR 0414).
+    pub(crate) fn opens_wall(&self, thickness_mm: Scalar) -> bool {
+        match self.kind {
+            HoleKind::Drain => true,
+            HoleKind::AtDepth => self.depth_mm - self.lift_mm > thickness_mm,
+            HoleKind::Walled | HoleKind::Support => false,
         }
     }
 

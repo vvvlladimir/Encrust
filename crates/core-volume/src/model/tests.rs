@@ -377,7 +377,7 @@ fn a_hole_is_cut_the_moment_it_is_placed() {
 }
 
 #[test]
-fn a_hole_drilled_before_the_cavity_keeps_its_depth_and_one_after_goes_through_the_wall() {
+fn a_hole_clicked_into_a_shell_keeps_the_depth_asked_as_one_drilled_before_the_cavity_does() {
     let (mesh, size) = (lid(), drain_tool(3.0, 0.5));
     let bvh = Bvh::build(&mesh);
     let mut hollow = ModelHollow::default();
@@ -398,9 +398,27 @@ fn a_hole_drilled_before_the_cavity_keeps_its_depth_and_one_after_goes_through_t
         before.depth_mm
     );
     assert!(
-        after.depth_mm >= 2.0,
-        "a hole drilled into the shell is re-cut through the 2 mm wall, got {}",
+        (after.depth_mm - 0.5).abs() < 1e-6,
+        "a click on the shell stops at the 0.5 mm asked, short of the 2 mm wall, got {}",
         after.depth_mm
+    );
+}
+
+#[test]
+fn a_hole_a_search_chose_is_carried_through_the_wall_of_the_shell() {
+    let mesh = lid();
+    let bvh = Bvh::build(&mesh);
+    let mut hollow = ModelHollow::default();
+    hollow.take(shell(
+        Mat3::IDENTITY,
+        hollow.asking(&HollowSettings::default()),
+    ));
+    let found = hole_at(&mesh, &bvh, Vec3::ZERO, drain_tool(3.0, 0.5)).expect("the lid has faces");
+    hollow.add_hole(found);
+    assert!(
+        hollow.cut().0[0].depth_mm >= 2.0,
+        "a drain has to open the cavity behind the 2 mm wall, got {}",
+        hollow.cut().0[0].depth_mm
     );
 }
 
@@ -453,7 +471,7 @@ fn the_hole_a_click_would_drill_is_the_hole_it_cuts() {
     assert_eq!(
         hollow.as_cut(would),
         hollow.cut().0[0],
-        "what the cursor shows is what the click cuts, through the wall"
+        "what the cursor shows is what the click cuts"
     );
 }
 

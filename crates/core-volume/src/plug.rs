@@ -139,10 +139,7 @@ pub fn plug_wall_mm(mode: HollowMode, thickness_mm: Scalar) -> Option<Scalar> {
 }
 
 /// A plug for each of `holes` as they are cut, after [`crate::pierce`], in the model's own
-/// space: what the hole took out of the wall, `gap_mm` narrower all round (ADR 0321).
-///
-/// Its outer face is the very surface the hole took, its inner end flat, `wall_mm` in, or at
-/// the hole's depth without one or for a walled hole. `source` is the model as last read.
+/// space: what the hole took out of the wall, `gap_mm` narrower all round (ADR 0321, 0414).
 pub fn plugs(
     source: &mut Option<PlugSource>,
     read: &ModelRead,
@@ -334,8 +331,12 @@ impl Body {
         if hole.kind == HoleKind::Support {
             return Ok(None);
         }
-        let wall_mm = wall_mm.filter(|_| hole.kind == HoleKind::Drain);
-        let body = Self::of(hole, axis, wall_mm.unwrap_or(hole.depth_mm), gap_mm);
+        let length_mm = match (hole.kind, wall_mm) {
+            (HoleKind::Drain, Some(wall_mm)) => wall_mm,
+            (HoleKind::AtDepth, Some(wall_mm)) => wall_mm.min(hole.depth_mm),
+            _ => hole.depth_mm,
+        };
+        let body = Self::of(hole, axis, length_mm, gap_mm);
         Ok((body.outer_mm.min(body.lifted_mm) > THINNEST_MM).then_some(body))
     }
 

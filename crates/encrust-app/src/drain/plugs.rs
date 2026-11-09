@@ -302,7 +302,7 @@ impl DrainTool {
         }
     }
 
-    /// The plugs `object` asks for now: one a hole as it is cut, through the wall.
+    /// The plugs `object` asks for now: one a hole as it is cut.
     fn plugs_for(&self, object: &SceneObject, drift_mm: Scalar) -> PlugsLaid {
         let least = object.transform.least_scale();
         PlugsLaid {

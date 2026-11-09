@@ -116,7 +116,7 @@ impl Piece {
         self.moved(down);
     }
 
-    /// The bodies its holes cut, deepened through the wall where it has one.
+    /// The bodies its holes cut, drains deepened through the wall where it has one.
     pub(super) fn cuts(&self) -> Result<Option<Mesh>> {
         if self.holes.is_empty() {
             return Ok(None);

@@ -4,7 +4,7 @@
 use core_geometry::{Mat3, Mesh, Scalar, signed_volume};
 use rayon::prelude::*;
 
-use crate::drain::{DrainHole, HoleKind};
+use crate::drain::DrainHole;
 use crate::hollow::{HollowMode, HollowSettings};
 
 /// Least resin hollowing must save for Check to suggest it, mm³: 10 ml.
@@ -13,11 +13,13 @@ pub const MIN_SAVED_MM3: Scalar = 10_000.0;
 pub const MIN_SAVED_SHARE: Scalar = 0.4;
 
 /// Whether a cavity built by `settings` keeps its resin: grown inward, its floor closed, and
-/// none of `holes` a drain through the wall. A walled or support hole drains nothing.
+/// none of `holes` through the wall. A walled or support hole drains nothing.
 pub fn holds_resin(settings: &HollowSettings, holes: &[DrainHole]) -> bool {
     settings.mode == HollowMode::Internal
         && settings.open_toward.is_none()
-        && !holes.iter().any(|hole| hole.kind == HoleKind::Drain)
+        && !holes
+            .iter()
+            .any(|hole| hole.opens_wall(settings.thickness_mm))
 }
 
 /// Resin a wall of `wall_mm` would save in the solid `mesh` placed by `linear`, mm³, when it
@@ -57,7 +59,7 @@ mod tests {
     use core_geometry::{Vec3, cuboid};
 
     use super::*;
-    use crate::drain::HoleSize;
+    use crate::drain::{HoleKind, HoleSize};
 
     fn hole(kind: HoleKind) -> DrainHole {
         DrainHole {
@@ -74,6 +76,31 @@ mod tests {
         let undrained = [hole(HoleKind::Walled), hole(HoleKind::Support)];
         assert!(holds_resin(&closed, &undrained));
         assert!(!holds_resin(&closed, &[hole(HoleKind::Drain)]));
+    }
+
+    #[test]
+    fn a_hole_set_at_a_depth_drains_the_cavity_only_past_the_wall() {
+        let two_mm_wall = HollowSettings {
+            thickness_mm: 2.0,
+            ..HollowSettings::default()
+        };
+        let at_depth = |depth_mm, lift_mm| DrainHole {
+            depth_mm,
+            lift_mm,
+            ..hole(HoleKind::AtDepth)
+        };
+        assert!(
+            !holds_resin(&two_mm_wall, &[at_depth(3.0, 0.0)]),
+            "3 mm is past the 2 mm wall"
+        );
+        assert!(
+            holds_resin(&two_mm_wall, &[at_depth(1.0, 0.0)]),
+            "1 mm stops inside the 2 mm wall"
+        );
+        assert!(
+            holds_resin(&two_mm_wall, &[at_depth(3.0, 1.5)]),
+            "a mouth lifted 1.5 mm leaves 1.5 mm of reach, short of the 2 mm wall"
+        );
     }
 
     #[test]

@@ -266,10 +266,11 @@ material along the hole's axis at twelve points around it — so no film is left
 mouth. A ray that meets air first counts nothing, so another part of the model standing over
 the hole is never cut; nor does one rising further than the hole is deep, so a mouth in a fold
 is not lifted through the lobe folded against it.
-And `pierce` deepens a hole standing on a hollowed model until it is through the wall,
-`thickness + 2 voxels`, whatever depth was asked for: a hole shorter than its wall is a
-dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
-model there is no wall to cross and the depth is what was typed.
+And `pierce` deepens a `HoleKind::Drain` on a hollowed model until it is through the wall,
+`thickness + 2 voxels`: what a search chose, or was drilled into a trapped pocket, has to
+open it. A hole a user sets at a point is `HoleKind::AtDepth` (ADR 0414) and stops at the
+depth typed; short of the wall it is a dimple, which the drainage check reports, and its
+plug is no longer than the hole. On a solid model the depth is what was typed.
 
 A hole drilled into a model that is still solid is `HoleKind::Walled` (ADR 0346): part of
 the shape, not a drain. `sleeves` keeps the cavity a wall off it, from its mouth to its tip,

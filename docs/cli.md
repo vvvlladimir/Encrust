@@ -256,8 +256,9 @@ would be centred on the edge, half off the model, and reach no cavity. `--drain-
 far past the surface a hole reaches and `--drain-taper` its far end's share of its mouth, 1 a
 cylinder. A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
 diameter, turned `--drain-turn` degrees from the level; a `--channel` takes the same
-outline, `--channel-size` millimetres across. Once the model is hollow a hole is carried on through the wall into the cavity;
-`--drain-walled` drills it before hollowing instead, a recess at its depth with the wall
+outline, `--channel-size` millimetres across. A hole at a point stops at that depth, opening
+a cavity only if it reaches past the wall (ADR 0414), while `--drain-at auto` always goes
+through; `--drain-walled` drills it before hollowing instead, a recess at its depth with the wall
 kept around it, which drains nothing (ADR 0346). `--drain-support-at X,Y,Z` drills into the
 supports or raft nearest the point once they stand, sized as `--drain`, with no plug (ADR 0347).
 `--drain-plugs` prints a plug for each hole, standing on the plate past the model's

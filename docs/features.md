@@ -404,9 +404,11 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.
-- Once the model is hollow, a hole is carried on through the wall into the cavity, however
-  shallow you set it. A hole drilled before hollowing is part of the model's shape: it keeps
-  its depth and its plug, the cavity keeps a wall around it, and it does not drain.
+- A hole you click into a hollow model stops at the depth you set: it opens the cavity only
+  if that depth reaches past the wall, and **Check drainage** says if it does not. Holes that
+  **Auto** chooses, and those a trapped pocket's button drills, always go through into the
+  cavity. A hole drilled before hollowing is part of the model's shape: it keeps its depth
+  and its plug, the cavity keeps a wall around it, and it does not drain.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
   cut, at the nearest spot clear of every model, support and raft, and on the plate wherever
   there is room left on it; where there is none, it stays beside its model and the window

@@ -42,7 +42,7 @@ pub(super) fn drain(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result
 }
 
 /// A plug for each hole from the `drilled`th on, cut out of the model as `--drain-plugs`
-/// cuts one: through the wall where there is one, narrower by the gap less the resin's drift.
+/// cuts one: what it took out of the wall, narrower by the gap less the resin's drift.
 fn plug(piece: &mut Piece, drilled: usize, ctx: &Ctx) -> Result<()> {
     let holes = pierced(&piece.holes[drilled..], piece.wall);
     let wall_mm = piece.hollow.as_ref().and_then(HollowReport::plug_wall_mm);
@@ -54,12 +54,12 @@ fn plug(piece: &mut Piece, drilled: usize, ctx: &Ctx) -> Result<()> {
 }
 
 /// A hole on the surface nearest each of `points`, fractions of the box the model stands in:
-/// a recess with the wall kept round it on a model not hollowed yet, a drain on a shell.
+/// a recess with the wall kept round it on a model not hollowed yet, at its depth on a shell.
 fn at_points(piece: &mut Piece, points: &[[Scalar; 3]], size: HoleSize, ctx: &Ctx) -> Result<Did> {
     let bounds = piece.mesh.aabb().context("mesh has no vertices")?;
     let bvh = Bvh::build(&piece.mesh);
     let kind = match piece.cavity {
-        Some(_) => HoleKind::Drain,
+        Some(_) => HoleKind::AtDepth,
         None => HoleKind::Walled,
     };
     for point in points {

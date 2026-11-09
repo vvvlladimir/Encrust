@@ -87,6 +87,32 @@ fn points_drilled_before_the_hollow_are_a_recess_that_drains_nothing() {
 }
 
 #[test]
+fn points_set_into_a_shell_stop_at_their_depth_and_leave_the_cavity_shut() {
+    let report = sliced(
+        "recipe-shallow-point",
+        r#"
+        name = "Shallow"
+        [[step]]
+        do = "hollow"
+        set = { wall_mm = 2 }
+        [[step]]
+        do = "drain"
+        set = { at = "points", points = [[0.5, 0.5, 1.0]], depth_mm = 0.5 }
+        "#,
+        &[],
+    );
+    assert_eq!(
+        step(&report, 1)["holes"],
+        1,
+        "one hole on the top: {report}"
+    );
+    assert!(
+        report["slicing"]["trapped_pockets"].as_u64() >= Some(1),
+        "0.5 mm stops inside the 2 mm wall: {report}"
+    );
+}
+
+#[test]
 fn a_gate_on_resin_left_trapped_stops_the_run_and_writes_nothing() {
     let name = "recipe-gate";
     let out = output_dir(name);

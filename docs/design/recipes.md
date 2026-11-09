@@ -82,7 +82,8 @@ Support every island adds it, nothing standing grown again.
 cavity; with `at = "points"` it drills a hole at each of `points`, `[x, y, z]` fractions of
 the placed box (`[0.5, 0.5, 0]` the middle of the floor), moved to the nearest face as
 `--drain-at` moves one. Drilled before `hollow` such a hole is a recess with the wall kept
-around it (ADR 0346); after, it drains.
+around it (ADR 0346); after, it stops at its depth and drains only if that passes the wall
+(ADR 0414).
 
 ## Order
 
