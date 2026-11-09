@@ -245,6 +245,13 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
+- Check keeps each kind of issue on a card of its own, with its rows and the buttons that
+  answer it: **In the way**, **Keeps resin**, then in the layers **Islands**, **Suction cups**,
+  **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
+  card to what it did, with Undo on the latest, and opens the next. What a fix could not reach
+  stays on the card with the reason. **Fix N issues** at the foot takes every automatic answer on
+  the whole plate in a safe order, as one undo and with Cancel, and says how many it leaves to
+  you; `--recipe fix-issues` does the same on the command line.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first, clear of a printer's plate inset.
@@ -974,7 +981,7 @@ it if it has defects, orient it, hollow, drain and hold up its cavity where a wa
 resin, and stand it on Auto supports, stopping with why where the model does not fit or
 resin stays trapped. Every flag you type wins over its step, and `--json` says
 what was decided for each model. The window does the same as **Prepare for print**.
-Built-in recipe beside it, a starting point for small detailed models: `miniatures`;
+Built-in recipes beside it: `fix-issues`, what Check's **Fix N issues** runs, and `miniatures`, a starting point for small detailed models;
 `encrust recipes list` names them and `recipes show` prints one.
 `--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)

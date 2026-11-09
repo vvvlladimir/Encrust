@@ -478,6 +478,30 @@ fn a_plate_files_keep_solid_under_mm_that_is_no_thickness_is_refused_naming_the_
 }
 
 #[test]
+fn the_fix_issues_recipe_parts_a_meeting_as_checks_button_does() {
+    let body = "layer_height_mm = 1\n[[model]]\npath = \"CUBE\"\nposition = [15, 15]\n[[model]]\npath = \"CUBE\"\nposition = [18, 15]\n";
+    let plate = plate_file("fix-issues", body);
+    let panel = test_panel();
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--recipe",
+        "fix-issues",
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
+    assert!(
+        !json(&output).to_string().contains("\"meets\""),
+        "one cube moved off the other"
+    );
+}
+
+#[test]
 fn an_arrange_step_for_only_what_is_in_the_way_parts_a_meeting() {
     let body = "layer_height_mm = 1\n[[model]]\npath = \"CUBE\"\nposition = [15, 15]\n[[model]]\npath = \"CUBE\"\nposition = [18, 15]\n";
     let plate = plate_file("in-the-way", body);

@@ -17,6 +17,10 @@ use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 use crate::supports::{ISLANDS_GROUP, SupportTool, hanging_models, island_holds};
 
+mod answers;
+
+pub use answers::{Answer, Answers, IssueKind};
+
 /// The least radius an issue is ringed at, mm: an island of a few pixels still shows, and
 /// an issue with no area of its own is ringed at this.
 const LEAST_RING_MM: f32 = 0.5;
@@ -198,11 +202,16 @@ struct Visited {
     colour: Color32,
 }
 
-/// The issues gone to, and where the camera is still to fly.
+/// The issues gone to, where the camera is still to fly, and what the fixes did.
 #[derive(Debug, Default)]
 pub struct Visit {
     visited: Option<Visited>,
     flight: Option<Spot>,
+    /// The two models of the plate's row gone to, the same one twice for a row of one.
+    row: Option<[ObjectId; 2]>,
+    /// The kind whose card is to open, once.
+    reveal: Option<IssueKind>,
+    pub answers: Answers,
 }
 
 impl Visit {
@@ -227,9 +236,29 @@ impl Visit {
         self.flight = Some(spot);
     }
 
-    /// Forgets the issues gone to.
+    /// Marks the plate's row of `models` as the one gone to.
+    pub fn mark_row(&mut self, models: [ObjectId; 2]) {
+        self.row = Some(models);
+    }
+
+    /// Asks for the card of `kind` to open.
+    pub fn reveal(&mut self, kind: IssueKind) {
+        self.reveal = Some(kind);
+    }
+
+    /// The kind whose card is to open, once.
+    pub fn take_reveal(&mut self) -> Option<IssueKind> {
+        self.reveal.take()
+    }
+
+    /// The plate's row gone to last.
+    pub fn marked_row(&self) -> Option<[ObjectId; 2]> {
+        self.row
+    }
+
+    /// Forgets the issues gone to; what the fixes did stands.
     pub fn clear(&mut self) {
-        *self = Self::default();
+        (self.visited, self.flight, self.row) = (None, None, None);
     }
 
     /// Where the camera is to go, once.

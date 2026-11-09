@@ -411,6 +411,7 @@ fn fingerprint(scene: &Scene) -> u64 {
     hasher.finish()
 }
 
+mod edits;
 mod hold;
 #[cfg(test)]
 mod tests;

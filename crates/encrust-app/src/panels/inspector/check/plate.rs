@@ -1,20 +1,22 @@
 //! What Check lists before any layer is read: models off the plate or in its inset, models
 //! that meet, and resin a model keeps (ADR 0392, 0393).
 
-use super::fixes::{button_row, free};
+use super::cards::{self, Board, Card};
+use super::fixes::{Offer, offer, report};
 use crate::arrange::{arrange_plate, clear_the_way};
+use crate::check::IssueKind;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::inspector::position::fit_the_volume;
 use crate::plate::{Astray, BuildPlate, KeptResin, astray, bounds, kept_resin};
 use crate::relief::ReliefMode;
 use crate::scene::{ObjectId, Scene};
-use crate::ui::{describe, icon, issue_list, issue_row, section, theme};
+use crate::ui::{describe, icon, issue_line, issue_lines, section, theme};
 use crate::workspace::Tool;
 
 /// One issue of the plate as it stands.
 #[derive(Debug, Clone, Copy)]
-enum PlateIssue {
+pub(super) enum PlateIssue {
     Astray(Astray),
     Meeting([ObjectId; 2]),
     Kept(KeptResin),
@@ -22,7 +24,7 @@ enum PlateIssue {
 
 /// The plate's issues, found as soon as the models stand still; none of its bounds without
 /// a printer, as the plate is a stand-in until then.
-fn issues(ctx: &egui::Context, window: &Window) -> Vec<PlateIssue> {
+pub(super) fn issues(ctx: &egui::Context, window: &Window) -> Vec<PlateIssue> {
     let (scene, plate) = (&window.doc.scene, &window.doc.plate);
     let astray = match plate.name {
         Some(_) => astray(ctx, scene, plate),
@@ -60,90 +62,206 @@ fn tint(issue: &PlateIssue) -> egui::Color32 {
 
 /// The plate's issues in a section of their own, whatever the layers say; a row's press
 /// flies the camera to it, or opens Hollow or Drain on a model keeping resin.
-pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    let issues = issues(ui.ctx(), window);
-    if issues.is_empty() {
+pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
+    let kinds = [IssueKind::InTheWay, IssueKind::KeepsResin];
+    let shows = |kind| board.has(kind) || board.answer(kind).is_some();
+    if !kinds.into_iter().any(shows) {
         return;
     }
-    let picked = section(ui, &tr!("check-plate"), None, |ui| {
+    section(ui, &tr!("check-plate"), None, |ui| {
         describe(ui, &tr!("check-plate-help"));
-        let scene = &window.doc.scene;
-        let picked = issue_list(ui, "check-plate", |ui| {
-            let mut picked = None;
-            for issue in &issues {
-                let (tint, place, detail) = words(scene, issue);
-                if issue_row(ui, tint, (&place, None), &detail, false).clicked() {
-                    picked = Some(*issue);
+        for kind in kinds {
+            cards::draw(ui, window, board, kind, |ui, window, turn_had| {
+                let picked = rows(ui, window, &board.plate, kind);
+                if let Some(picked) = picked {
+                    go(window, picked);
                 }
+                match kind {
+                    IssueKind::InTheWay => in_the_way(ui, window, &board.plate, turn_had),
+                    _ => keeps_resin(ui, window, &board.plate, turn_had),
+                }
+            });
+        }
+    });
+}
+
+/// The rows of `kind`. Answers the issue of the row pressed.
+fn rows(
+    ui: &mut egui::Ui,
+    window: &Window,
+    issues: &[PlateIssue],
+    kind: IssueKind,
+) -> Option<PlateIssue> {
+    let scene = &window.doc.scene;
+    let marked = window.tools.check.marked_row();
+    let name = format!("check-plate-{kind:?}");
+    issue_lines(ui, &name, |ui| {
+        let mut picked = None;
+        for issue in issues.iter().filter(|issue| kind_of(issue) == kind) {
+            let (ink, place, detail) = words(scene, issue);
+            let ink = if kind == IssueKind::InTheWay {
+                ink
+            } else {
+                theme::colors().text_mid
+            };
+            let selected = marked.is_some() && marked == models_of(issue);
+            if issue_line(ui, &place, (&detail, ink), selected).clicked() {
+                picked = Some(*issue);
             }
-            picked
-        });
-        fixes(ui, window, &issues);
+        }
         picked
     })
-    .flatten();
+}
+
+/// Goes where a pressed row names.
+fn go(window: &mut Window, picked: PlateIssue) {
+    if let Some(models) = models_of(&picked) {
+        window.tools.check.mark_row(models);
+    }
     match picked {
-        Some(PlateIssue::Astray(astray)) => {
+        PlateIssue::Astray(astray) => {
             if let Some(spot) = astray.spot {
                 window.tools.check.fly(spot);
             }
         }
-        Some(PlateIssue::Meeting(pair)) => {
+        PlateIssue::Meeting(pair) => {
             let doc = &mut *window.doc;
             doc.meeting.fly_to(&doc.scene, |ids| ids == pair);
         }
-        Some(PlateIssue::Kept(KeptResin::Sealed(id))) => open_on(window, id, Tool::Drain),
-        Some(PlateIssue::Kept(KeptResin::Solid(id))) => open_on(window, id, Tool::Hollow),
-        None => {}
+        PlateIssue::Kept(KeptResin::Sealed(id)) => open_on(window, id, Tool::Drain),
+        PlateIssue::Kept(KeptResin::Solid(id)) => open_on(window, id, Tool::Hollow),
     }
 }
 
-/// The buttons that answer the plate's issues, those with something to answer.
-fn fixes(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue]) {
-    let enabled = free(window);
-    let in_the_way = issues
-        .iter()
-        .any(|issue| matches!(issue, PlateIssue::Astray(_) | PlateIssue::Meeting(_)));
-    if in_the_way {
-        let buttons = [
-            (icon::SELECT, tr!("check-move-clear")),
-            (icon::ARRANGE, tr!("check-arrange")),
-        ];
-        match button_row(ui, enabled, &buttons) {
-            Some(0) => {
-                let doc = &mut *window.doc;
-                let pairs = doc.meeting.pairs(&doc.scene);
-                let gap_mm = window.tools.array.gap_mm;
-                window.machine.status = clear_the_way(&mut doc.scene, &doc.plate, &pairs, gap_mm);
-            }
-            Some(_) => {
-                let doc = &mut *window.doc;
-                let gap_mm = window.tools.array.gap_mm;
-                window.machine.status = arrange_plate(&mut doc.scene, &doc.plate, gap_mm);
-            }
-            None => {}
-        }
+/// The models a row of the plate is about, where going to it stays in Check.
+fn models_of(issue: &PlateIssue) -> Option<[ObjectId; 2]> {
+    match *issue {
+        PlateIssue::Astray(Astray { id, .. }) => Some([id, id]),
+        PlateIssue::Meeting(pair) => Some(pair),
+        PlateIssue::Kept(_) => None,
     }
+}
+
+/// The card `issue` stands on.
+fn kind_of(issue: &PlateIssue) -> IssueKind {
+    match issue {
+        PlateIssue::Astray(_) | PlateIssue::Meeting(_) => IssueKind::InTheWay,
+        PlateIssue::Kept(_) => IssueKind::KeepsResin,
+    }
+}
+
+/// The plate's cards, each `answered` kind left to the hand as its fix has had its turn; a
+/// solid model is a word of advice, and a model too big for the plate no move can place.
+pub(super) fn cards(window: &Window, issues: &[PlateIssue], answered: &[IssueKind]) -> Vec<Card> {
     let too_big = too_big(&window.doc.scene, &window.doc.plate, issues);
-    if !too_big.is_empty()
-        && button_row(ui, enabled, &[(icon::FIT, tr!("check-fit-volume"))]).is_some()
-    {
-        for id in too_big {
-            fit_the_volume(&mut window.doc.scene, &window.doc.plate, id);
-        }
-    }
+    let fixable = |issue: &PlateIssue| match issue {
+        PlateIssue::Astray(astray) => !too_big.contains(&astray.id),
+        PlateIssue::Meeting(_) | PlateIssue::Kept(KeptResin::Sealed(_)) => true,
+        PlateIssue::Kept(KeptResin::Solid(_)) => false,
+    };
+    [IssueKind::InTheWay, IssueKind::KeepsResin]
+        .into_iter()
+        .filter_map(|kind| {
+            let of_kind: Vec<&PlateIssue> = issues
+                .iter()
+                .filter(|issue| kind_of(issue) == kind)
+                .collect();
+            let danger = theme::colors().danger;
+            Some(Card {
+                kind,
+                count: of_kind.len(),
+                fixable: if answered.contains(&kind) {
+                    0
+                } else {
+                    of_kind.iter().filter(|issue| fixable(issue)).count()
+                },
+                tint: of_kind
+                    .iter()
+                    .map(|issue| tint(issue))
+                    .max_by_key(|colour| *colour == danger)?,
+            })
+        })
+        .collect()
+}
+
+/// What the in-the-way card can do.
+#[derive(Clone, Copy)]
+enum WayFix {
+    MoveClear,
+    Arrange,
+    Fit,
+    Combine,
+}
+
+/// The buttons that answer models in the way, those with something to answer.
+fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], turn_had: bool) {
+    let too_big = too_big(&window.doc.scene, &window.doc.plate, issues);
     let meeting = issues.iter().find_map(|issue| match issue {
         PlateIssue::Meeting(pair) => Some(*pair),
         _ => None,
     });
-    if let Some(pair) = meeting
-        && button_row(ui, enabled, &[(icon::COMBINE, tr!("check-combine"))]).is_some()
-    {
-        window.doc.scene.select_many(&pair);
-        window.tools.relief.mode = ReliefMode::Combine;
-        *window.tool = Tool::Relief;
-        window.view.options.inspector = true;
+    let mut fixes = vec![WayFix::MoveClear, WayFix::Arrange];
+    let mut offers = vec![
+        Offer::new(
+            icon::SELECT,
+            tr!("check-move-clear"),
+            tr!("check-move-clear-tip"),
+        ),
+        Offer::new(
+            icon::ARRANGE,
+            tr!("check-arrange"),
+            tr!("check-arrange-tip"),
+        ),
+    ];
+    if !too_big.is_empty() {
+        fixes.push(WayFix::Fit);
+        offers.push(Offer::new(
+            icon::FIT,
+            tr!("check-fit-volume"),
+            tr!("check-fit-volume-tip"),
+        ));
     }
+    if meeting.is_some() {
+        fixes.push(WayFix::Combine);
+        offers.push(Offer::new(
+            icon::COMBINE,
+            tr!("check-combine"),
+            tr!("check-combine-tip"),
+        ));
+    }
+    let Some(pressed) = offer(ui, window, turn_had, &offers) else {
+        return;
+    };
+    let doc = &mut *window.doc;
+    let gap_mm = window.tools.array.gap_mm;
+    match fixes[pressed] {
+        WayFix::MoveClear => {
+            let pairs = doc.meeting.pairs(&doc.scene);
+            let said = clear_the_way(&mut doc.scene, &doc.plate, &pairs, gap_mm);
+            report(window, IssueKind::InTheWay, said);
+        }
+        WayFix::Arrange => {
+            let said = arrange_plate(&mut doc.scene, &doc.plate, gap_mm);
+            report(window, IssueKind::InTheWay, said);
+        }
+        WayFix::Fit => {
+            for id in too_big {
+                fit_the_volume(&mut doc.scene, &doc.plate, id);
+            }
+        }
+        WayFix::Combine => {
+            if let Some(pair) = meeting {
+                doc.scene.select_many(&pair);
+                window.tools.relief.mode = ReliefMode::Combine;
+                *window.tool = Tool::Relief;
+                window.view.options.inspector = true;
+            }
+        }
+    }
+}
+
+/// A search for drain holes on every sealed model, the job's progress and word on the stage.
+fn keeps_resin(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], turn_had: bool) {
     let sealed: Vec<ObjectId> = issues
         .iter()
         .filter_map(|issue| match issue {
@@ -151,22 +269,21 @@ fn fixes(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue]) {
             _ => None,
         })
         .collect();
-    if !sealed.is_empty()
-        && button_row(
-            ui,
-            enabled,
-            &[(icon::AUTO_DRAIN, tr!("check-drill-drains"))],
-        )
-        .is_some()
-    {
-        window.doc.scene.select_many(&sealed);
-        *window.tool = Tool::Drain;
-        window.view.options.inspector = true;
+    if sealed.is_empty() {
+        return;
+    }
+    let offers = [Offer::new(
+        icon::AUTO_DRAIN,
+        tr!("check-drill-drains"),
+        tr!("check-drill-drains-tip"),
+    )];
+    if offer(ui, window, turn_had, &offers).is_some() {
         let layer_height_mm = window.machine.slicing.layer_height_mm();
+        let scene = &window.doc.scene;
         let started = window
             .tools
             .drain
-            .start_auto(&window.doc.scene, layer_height_mm);
+            .start_auto_on(scene, &sealed, layer_height_mm);
         window
             .machine
             .status

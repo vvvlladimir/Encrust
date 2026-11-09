@@ -302,6 +302,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
 | [0414](0414-a-hole-set-by-hand-stops-at-its-depth.md) | A hole set by hand stops at its depth | Accepted |
 | [0415](0415-checks-buttons-answer-what-it-finds.md) | Check's buttons answer what it finds, through the calls the command line makes | Accepted |
+| [0416](0416-check-lays-out-its-issues-as-cards-and-fixes-them-by-a-recipe.md) | Check lays out its issues as cards and fixes them all by a built-in recipe | Accepted |
 | [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
 | [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Superseded by 0403 (the command line's resolution of the flags only) |
 | [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |

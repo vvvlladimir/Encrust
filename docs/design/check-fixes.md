@@ -1,7 +1,8 @@
 # What Check's buttons do
 
 Each button runs a call the command line runs too: a recipe's `check` and `arrange` settings,
-`docs/design/recipes.md`. Why these answers: ADR 0415.
+`docs/design/recipes.md`. Why these answers: ADR 0415. Fix issues takes the first answer of every
+kind but peel and thin as `assets/recipes/fix-issues.toml` lays them out: ADR 0416.
 
 | Issue | Buttons | Call |
 |---|---|---|

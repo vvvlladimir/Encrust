@@ -10,6 +10,7 @@ use super::step::Going;
 use super::work::{self, Batch, CheckFixes, NotYet, Settings, Work};
 use super::{IDLE_POLLS, Run, Step};
 use crate::arrange::{arrange_plate, clear_the_way};
+use crate::check::IssueKind;
 use crate::i18n::tr;
 use crate::job::Highest;
 use crate::plate::BuildPlate;
@@ -50,6 +51,7 @@ impl Run {
             supported: Vec::new(),
             built: Vec::new(),
             unplugged: Vec::new(),
+            answers: Vec::new(),
             idle: 0,
             done: 0,
             steps: 0,
@@ -191,6 +193,9 @@ impl Run {
                     }
                     false => arrange_plate(&mut doc.scene, &doc.plate, *spacing_mm),
                 };
+                if *only_in_the_way {
+                    self.answered(IssueKind::InTheWay, &said);
+                }
                 let stopped = self.ended_by(said, &mut machine.status);
                 if stopped.is_some() {
                     self.queue.push_front(batch.clone());

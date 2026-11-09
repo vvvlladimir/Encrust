@@ -482,14 +482,8 @@ machines-cannot-delete-resin = не удалось удалить смолу
 
 ## panels/inspector/check.rs
 
-check-filter-all = Все
 check-filter-islands = Острова
-check-filter-levers = Рычаги
-check-filter-peel = Отрыв
-check-filter-cups = Присоски
-check-filter-thin = Тонкие
 check-support-islands = Поддержать
-check-issues = Найдено
 check-previous = Предыдущая проблема
 check-next = Следующая проблема
 check-stood =
@@ -507,7 +501,6 @@ check-fact-issues =
         [few] { $count } проблемы
        *[many] { $count } проблем
     }
-check-checking = Проверка
 check-reading = Чтение всех слоёв…
 check-reads-layers = Проверка читает слои. Они нарезаются, как только на платформе появляется модель и принтер, для которого её можно нарезать.
 check-measuring = измерение
@@ -580,6 +573,31 @@ check-left-to-you =
         [few] Осталось { $count }, исправьте вручную
        *[many] Осталось { $count }, исправьте вручную
     }
+check-layers = В слоях
+check-card-way = Мешают
+check-card-resin = Держит смолу
+check-card-thin = Тонкие участки
+check-card-by-hand = вручную
+check-card-layers = слои { $first }–{ $last }
+check-thin-no-fix = Автоисправления нет: утолщите участок в модели.
+check-fact-fixing = исправление
+check-undo-fix = Отменить исправление
+check-fix-issues =
+    { $count ->
+        [one] Исправить { $count } проблему
+        [few] Исправить { $count } проблемы
+       *[many] Исправить { $count } проблем
+    }
+check-fix-issues-tip = Отодвигает модели, сверлит дренаж и присоски, затем ставит поддержки — именно в таком порядке. Всё отменяется одним действием.
+check-move-clear-tip = Сдвигает только мешающие модели, каждую на ближайшее свободное место.
+check-arrange-tip = Заново расставляет все модели на платформе.
+check-fit-volume-tip = Уменьшает слишком большую модель до размеров области печати.
+check-combine-tip = Открывает рельеф на двух касающихся моделях, чтобы объединить их.
+check-drill-drains-tip = Ищет дренажные отверстия, которые опустошат каждую запечатанную модель.
+check-support-islands-tip = Ставит поддержку под каждый остров, отдельной группой.
+check-put-islands-back-tip = Снова записывает острова в файл.
+check-least-peel-tip = Поворачивает платформу в положение с наименьшим отрывом от плёнки.
+check-lift-settings-tip = Открывает настройки подъёма.
 check-plate = На платформе
 check-plate-help = Находится сразу, как только модели перестают двигаться, ещё до чтения слоёв. Нажмите строку, чтобы перейти к месту.
 check-row-past = за областью печати
@@ -594,14 +612,14 @@ check-row-islands =
         [few] { $count } острова · { $area } мм²
        *[many] { $count } островов · { $area } мм²
     }
-check-row-lever = рычаг · { $lever } мм · { $stress } МПа
+check-row-lever = { $lever } мм · { $stress } МПа
 check-row-levers =
     { $count ->
         [one] { $count } рычаг · { $stress } МПа
         [few] { $count } рычага · { $stress } МПа
        *[many] { $count } рычагов · { $stress } МПа
     }
-check-row-cup = присоска · { $area } мм²
+check-row-cup = { $area } мм²
 check-row-cups =
     { $count ->
         [one] { $count } присоска · { $area } мм²
@@ -610,11 +628,11 @@ check-row-cups =
     }
 check-row-thin =
     { $count ->
-        [one] тонкий участок · { $width } мм
+        [one] { $width } мм
         [few] { $count } тонких участка · { $width } мм
        *[many] { $count } тонких участков · { $width } мм
     }
-check-row-peel = отрыв · { $force } Н
+check-row-peel = { $force } Н
 check-issue-island = Остров без поддержки
 check-issue-hanging = Повисшая часть
 check-issue-lever = Слабая перемычка

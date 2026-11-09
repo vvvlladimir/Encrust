@@ -464,14 +464,8 @@ machines-cannot-delete-resin = cannot delete the resin
 
 ## panels/inspector/check.rs
 
-check-filter-all = All
 check-filter-islands = Islands
-check-filter-levers = Levers
-check-filter-peel = Peel
-check-filter-cups = Cups
-check-filter-thin = Thin
 check-support-islands = Support them
-check-issues = Found
 check-previous = Previous issue
 check-next = Next issue
 check-stood =
@@ -487,7 +481,6 @@ check-fact-issues =
         [one] { $count } issue
        *[other] { $count } issues
     }
-check-checking = Checking
 check-reading = Reading every layer of the stack...
 check-reads-layers = The check reads the layers, which are cut as soon as there is a model on the plate and a machine to cut it for.
 check-measuring = measuring
@@ -550,6 +543,35 @@ check-left-to-you =
         [one] { $count } is left for you to fix by hand
        *[other] { $count } are left for you to fix by hand
     }
+# A section of Check's panel: what reading the layers of the stack found.
+check-layers = In the layers
+# A card of Check: models past the plate, in its inset, or meeting another.
+check-card-way = In the way
+# A card of Check: models that hold resin they should not.
+check-card-resin = Keeps resin
+check-card-thin = Thin sections
+# Beside a kind of issue that has no automatic fix.
+check-card-by-hand = by hand
+# Beside a kind of issue found on several layers.
+check-card-layers = layers { $first }–{ $last }
+check-thin-no-fix = No automatic fix: thicken it in the model.
+check-fact-fixing = fixing
+check-undo-fix = Undo this fix
+check-fix-issues =
+    { $count ->
+        [one] Fix { $count } issue
+       *[other] Fix { $count } issues
+    }
+check-fix-issues-tip = Moves models clear, drills drains and cups, then stands supports, in that order. One undo takes it all back.
+check-move-clear-tip = Moves only the models in the way, each to the nearest clear place.
+check-arrange-tip = Lays out every model on the plate again.
+check-fit-volume-tip = Scales a model too big for the plate down to fit it.
+check-combine-tip = Opens Relief on the two models that meet, to join them.
+check-drill-drains-tip = Looks for drain holes that empty each sealed model.
+check-support-islands-tip = Stands a support under every island, in a group of their own.
+check-put-islands-back-tip = Writes the islands into the file again.
+check-least-peel-tip = Turns the plate to the pose that pulls least on the film.
+check-lift-settings-tip = Opens the lift settings.
 check-plate = On the plate
 check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
 # Beside a model's name, where it, its supports or its raft stand.
@@ -568,16 +590,16 @@ check-row-islands =
         [one] island · { $area } mm²
        *[other] { $count } islands · { $area } mm²
     }
-check-row-lever = lever · { $lever } mm · { $stress } MPa
+check-row-lever = { $lever } mm · { $stress } MPa
 check-row-levers = { $count } levers · { $stress } MPa
-check-row-cup = suction cup · { $area } mm²
+check-row-cup = { $area } mm²
 check-row-cups = { $count } suction cups · { $area } mm²
 check-row-thin =
     { $count ->
-        [one] thin · { $width } mm
+        [one] { $width } mm
        *[other] { $count } thin · { $width } mm
     }
-check-row-peel = peel · { $force } N
+check-row-peel = { $force } N
 check-issue-island = Island
 check-issue-hanging = Part left hanging
 check-issue-lever = Weak neck
