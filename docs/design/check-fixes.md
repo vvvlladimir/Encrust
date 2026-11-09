@@ -27,10 +27,17 @@ since the plate would seal the hole again.
 
 ## Where a neck's support goes
 
-A ray goes straight down from the middle of the piece that pulls, at the height of its layer.
-A face looking down is the piece's underside, and takes the support. A face looking up means
-the middle of the piece lies outside it, and an underside within a layer of the plate has no
-room for a support; both are left to the hand.
+Each support joins the neck as the analysis reads it: its tip's area adds to the neck's, and
+the neck's centre moves towards the piece's. `core_analysis::holds_for_lever` counts the
+fewest supports that bring the stress under 0.8 of `NECK_LIMIT_MPA`, at most
+`MOST_NECK_HOLDS` (16); the margin covers a tip curing a little under its drawn size. The
+supports are drawn at least 0.6 mm across, tip and small pillar alike: a thinner one adds
+next to nothing to a neck, and Check's re-measure would find it weak again.
+
+Rays go straight down from the middle of the piece and from rings around it at its radius of
+gyration and half of it, at the height of its layer. A face looking down is the piece's
+underside and takes a support, one tip's width from the others; a face looking up is outside
+the piece. A neck with no underside clear of the plate is left to the hand.
 
 ## Moving only what is in the way
 

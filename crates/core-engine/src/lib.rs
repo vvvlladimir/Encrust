@@ -25,7 +25,9 @@ pub use drains::{
 };
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
-pub use held::{CupVent, Hanging, cup_vents, island_floors, island_holds, lever_holds};
+pub use held::{
+    CupVent, Hanging, cup_vents, island_floors, island_holds, lever_holds, neck_profile,
+};
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};

@@ -1,12 +1,13 @@
 //! What a measured stack shows, answered: where a support stands under an island or a weak
 //! neck, and where a hole lets the air into a suction cup. See `docs/design/check-fixes.md`.
 
-use core_analysis::{Risk, RiskKind};
+use core_analysis::{Risk, RiskKind, holds_for_lever};
 use core_geometry::{
     Bvh, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Vec3, raycast_placed_within,
 };
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
+use printer_profiles::SupportProfile;
 
 /// How many layers over an island's floor its underside may first be found.
 const UNDERSIDE_LAYERS: Scalar = 2.0;
@@ -131,168 +132,112 @@ pub fn cup_vents(
     .collect()
 }
 
-/// For each weak neck of `risks`, its model and the underside straight below the piece that
-/// pulls on it; `None` for a piece over no underside, or whose underside lies on the plate.
+/// The fewest supports a weak neck's tip is drawn at, mm across, whatever the profile: a
+/// tip of 0.3 mm, as Auto draws, adds next to nothing to a neck.
+const NECK_TIP_MM: f32 = 0.6;
+
+/// `profile` as a support holding a weak neck stands to, its tip and any small pillar in its
+/// place thick enough to carry part of the pull.
+pub fn neck_profile(profile: &SupportProfile) -> SupportProfile {
+    let mut sturdy = profile.clone();
+    sturdy.tip.contact_diameter_mm = sturdy.tip.contact_diameter_mm.max(NECK_TIP_MM);
+    sturdy.small_pillar.diameter_mm = sturdy.small_pillar.diameter_mm.max(NECK_TIP_MM);
+    sturdy
+}
+
+/// The section `profile` adds to a neck per support, mm²: the narrower of a tip and a small
+/// pillar, whichever it stands as.
+fn neck_tip_mm2(profile: &SupportProfile) -> f32 {
+    let across = profile
+        .tip
+        .contact_diameter_mm
+        .min(profile.small_pillar.diameter_mm);
+    std::f32::consts::PI * (across / 2.0).powi(2)
+}
+
+/// Around a piece's centre, in units of its radius of gyration: the centre, then opposite
+/// points first, so that a few supports already stand balanced.
+const NECK_RINGS: [(f32, f32); 17] = {
+    const R: f32 = 1.0;
+    const H: f32 = 0.5;
+    const D: f32 = 0.707;
+    [
+        (0.0, 0.0),
+        (R, 0.0),
+        (-R, 0.0),
+        (0.0, R),
+        (0.0, -R),
+        (D, D),
+        (-D, -D),
+        (D, -D),
+        (-D, D),
+        (H, 0.0),
+        (-H, 0.0),
+        (0.0, H),
+        (0.0, -H),
+        (0.354, 0.354),
+        (-0.354, -0.354),
+        (0.354, -0.354),
+        (-0.354, 0.354),
+    ]
+};
+
+/// For each weak neck of `risks`, as many underside points of the piece that pulls on it as
+/// [`holds_for_lever`] asks of `profile`'s tips, each with its model; none for a piece over
+/// no underside, or whose underside lies on the plate.
 pub fn lever_holds(
     risks: &[Risk],
     plan: &LayerPlan,
     panel: &RasterSettings,
     models: &[Hanging],
-) -> Vec<Option<(usize, Vec3)>> {
+    profile: &SupportProfile,
+) -> Vec<Vec<(usize, Vec3)>> {
     let placed = placed(models);
     let layer_mm = plan.nominal_thickness();
+    let tip_mm2 = neck_tip_mm2(profile);
+    let spacing_mm = 2.0 * profile.contact_radius_mm().max(NECK_TIP_MM / 2.0);
     let levers = risks
         .iter()
         .filter(|risk| matches!(risk.kind, RiskKind::Lever { .. }));
     levers
         .map(|risk| {
-            let floor_mm = plan.top_of(risk.layer.checked_sub(1)?)?;
-            let in_piece = panel.plate_mm(risk.at_mm).extend(floor_mm + layer_mm / 2.0);
-            let (model, under) = first_below(&placed, in_piece)?;
+            let Some(floor_mm) = risk.layer.checked_sub(1).and_then(|at| plan.top_of(at)) else {
+                return Vec::new();
+            };
+            let centre = panel.plate_mm(risk.at_mm).extend(floor_mm + layer_mm / 2.0);
+            let RiskKind::Lever { gyration_mm, .. } = risk.kind else {
+                return Vec::new();
+            };
+            let wanted = holds_for_lever(&risk.kind, tip_mm2);
+            undersides(&placed, centre, gyration_mm, layer_mm)
+                .into_iter()
+                .fold(Vec::new(), |mut held: Vec<(usize, Vec3)>, hit| {
+                    let clear = held.iter().all(|(_, at)| at.distance(hit.1) >= spacing_mm);
+                    if clear && held.len() < wanted {
+                        held.push(hit);
+                    }
+                    held
+                })
+        })
+        .collect()
+}
+
+/// The undersides straight below `centre` and the points of [`NECK_RINGS`] around it.
+fn undersides(
+    placed: &[(usize, Placed)],
+    centre: Vec3,
+    gyration_mm: Scalar,
+    layer_mm: Scalar,
+) -> Vec<(usize, Vec3)> {
+    NECK_RINGS
+        .iter()
+        .filter_map(|(x, y)| {
+            let from = centre + Vec3::new(x * gyration_mm, y * gyration_mm, 0.0);
+            let (model, under) = first_below(placed, from)?;
             (under.normal.z < 0.0 && under.point.z >= layer_mm).then_some((model, under.point))
         })
         .collect()
 }
 
 #[cfg(test)]
-mod tests {
-    use core_geometry::cuboid;
-
-    use super::*;
-
-    fn held_by(meshes: &[Mesh], floor: Vec3) -> Option<(usize, Vec3)> {
-        let bvhs: Vec<Bvh> = meshes.iter().map(Bvh::build).collect();
-        let models: Vec<Hanging> = meshes
-            .iter()
-            .zip(&bvhs)
-            .map(|(mesh, bvh)| (mesh, bvh, Transform::default()))
-            .collect();
-        island_holds(&[floor], 0.05, &models)[0]
-    }
-
-    #[test]
-    fn an_island_a_layer_over_its_floor_is_held_by_the_nearest_underside() {
-        let below = cuboid(Vec3::new(0.0, 0.0, 5.08), Vec3::new(10.0, 10.0, 10.0));
-        let floating = cuboid(Vec3::new(0.0, 0.0, 5.03), Vec3::new(10.0, 10.0, 10.0));
-        let (owner, at) = held_by(&[below, floating], Vec3::new(5.0, 5.0, 5.0))
-            .expect("the box's floor is inside the layer over the floor");
-        assert_eq!(owner, 1, "the lower underside holds the island");
-        assert!(
-            (at.z - 5.03).abs() < 1e-4,
-            "the box's floor at 5.03 mm, found {at}"
-        );
-    }
-
-    #[test]
-    fn an_island_is_found_on_a_placed_model() {
-        let unit = cuboid(Vec3::ZERO, Vec3::splat(10.0));
-        let bvh = Bvh::build(&unit);
-        let up = Transform::from_translation(Vec3::new(0.0, 0.0, 5.03));
-        let found = island_holds(&[Vec3::new(5.0, 5.0, 5.0)], 0.05, &[(&unit, &bvh, up)]);
-        let (_, at) = found[0].expect("the placed box's floor is 0.08 mm up");
-        assert!((at.z - 5.03).abs() < 1e-4, "placed at 5.03 mm, found {at}");
-    }
-
-    #[test]
-    fn a_surface_more_than_two_layers_up_holds_no_island_there() {
-        let floating = cuboid(Vec3::new(0.0, 0.0, 6.0), Vec3::new(10.0, 10.0, 10.0));
-        assert_eq!(
-            held_by(&[floating], Vec3::new(5.0, 5.0, 5.0)),
-            None,
-            "1 mm up is another part's floor, not this island's"
-        );
-    }
-
-    /// A plan of 0.05 mm layers to `top_mm`, and an unmirrored panel of 0.05 mm pixels, on
-    /// which a point's panel millimetres are its plate millimetres.
-    fn stack(top_mm: Scalar) -> (LayerPlan, RasterSettings) {
-        let slice = core_slicer::SliceSettings {
-            layer_height: 0.05,
-            ..core_slicer::SliceSettings::default()
-        };
-        let panel = RasterSettings {
-            width_px: 2000,
-            height_px: 2000,
-            pitch: core_raster::PixelPitch { x: 0.05, y: 0.05 },
-            mirror_x: false,
-            mirror_y: false,
-            shading: core_raster::Shading::default(),
-            grey: core_raster::Grey::default(),
-            blur_px: 0,
-        };
-        (LayerPlan::uniform(&slice, 0.0, top_mm), panel)
-    }
-
-    /// `kind` at the middle of a 10 mm box, on the layer at 8 mm.
-    fn risk_of(kind: RiskKind) -> Risk {
-        Risk {
-            layer: 160,
-            at_mm: [5.0, 5.0],
-            kind,
-        }
-    }
-
-    const CUP: RiskKind = RiskKind::SuctionCup {
-        area_mm2: 30.0,
-        volume_mm3: 30.0,
-    };
-    const LEVER: RiskKind = RiskKind::Lever {
-        stress_mpa: 9.0,
-        lever_mm: 4.0,
-        neck_mm2: 1.0,
-    };
-
-    #[test]
-    fn a_cup_is_vented_through_the_floor_that_seals_it() {
-        let floor = cuboid(Vec3::new(0.0, 0.0, 3.0), Vec3::new(10.0, 10.0, 5.0));
-        let bvh = Bvh::build(&floor);
-        let (plan, panel) = stack(10.0);
-        let risks = [risk_of(CUP)];
-        let models = [(&floor, &bvh, Transform::default())];
-        let vent =
-            cup_vents(&risks, &plan, &panel, &models)[0].expect("the floor stands off the plate");
-        assert_eq!(vent.model, 0);
-        assert!(
-            (vent.mouth_mm.z - 3.0).abs() < 1e-3 && vent.normal.z < 0.0,
-            "the mouth is on the underside at 3 mm, got {vent:?}"
-        );
-        assert!(
-            (vent.depth_mm - (2.0 + VENT_PAST_FLOOR_MM)).abs() < 1e-2,
-            "through 2 mm of floor and {VENT_PAST_FLOOR_MM} mm past it, got {}",
-            vent.depth_mm
-        );
-    }
-
-    #[test]
-    fn a_cup_sealed_by_the_plate_has_no_vent() {
-        let on_plate = cuboid(Vec3::ZERO, Vec3::new(10.0, 10.0, 2.0));
-        let bvh = Bvh::build(&on_plate);
-        let (plan, panel) = stack(10.0);
-        let risks = [risk_of(CUP)];
-        let models = [(&on_plate, &bvh, Transform::default())];
-        assert_eq!(cup_vents(&risks, &plan, &panel, &models), vec![None]);
-    }
-
-    #[test]
-    fn a_weak_neck_is_held_at_the_underside_below_the_piece_pulling_on_it() {
-        let arm = cuboid(Vec3::new(0.0, 0.0, 4.0), Vec3::new(10.0, 10.0, 9.0));
-        let bvh = Bvh::build(&arm);
-        let (plan, panel) = stack(10.0);
-        let risks = [risk_of(LEVER)];
-        let models = [(&arm, &bvh, Transform::default())];
-        let (model, at) =
-            lever_holds(&risks, &plan, &panel, &models)[0].expect("an underside at 4 mm");
-        assert_eq!(model, 0);
-        assert!((at.z - 4.0).abs() < 1e-3, "the underside at 4 mm, got {at}");
-    }
-
-    #[test]
-    fn a_piece_whose_underside_lies_on_the_plate_is_not_held() {
-        let on_plate = cuboid(Vec3::ZERO, Vec3::new(10.0, 10.0, 9.0));
-        let bvh = Bvh::build(&on_plate);
-        let (plan, panel) = stack(10.0);
-        let risks = [risk_of(LEVER)];
-        let models = [(&on_plate, &bvh, Transform::default())];
-        assert_eq!(lever_holds(&risks, &plan, &panel, &models), vec![None]);
-    }
-}
+mod tests;

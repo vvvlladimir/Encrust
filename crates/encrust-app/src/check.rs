@@ -2,7 +2,7 @@
 //! layer while the view stays as it was left, and the camera sent to them once.
 
 use core_analysis::{Risk, RiskKind};
-use core_engine::{CupVent, cup_vents, island_floors, lever_holds};
+use core_engine::{CupVent, cup_vents, island_floors, lever_holds, neck_profile};
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
@@ -15,7 +15,7 @@ use crate::i18n::tr;
 use crate::preview::{as_seen, on_plate};
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
-use crate::supports::{ISLANDS_GROUP, SupportTool, hanging_models, island_holds};
+use crate::supports::{ISLANDS_GROUP, NECKS_GROUP, SupportTool, hanging_models, island_holds};
 
 mod answers;
 
@@ -86,27 +86,41 @@ pub fn support_islands(
     Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
 }
 
-/// Check's Support them for weak necks: a support under the piece pulling on each, as
-/// [`support_islands`] stands them; says how many stood and how many had nowhere to.
+/// Check's Support them for weak necks: as many supports under the piece pulling on each,
+/// and as thick, as bring the neck under its limit; says how many stood and how many necks
+/// had nowhere to stand one.
 pub fn support_levers(
     (scene, supports): (&mut Scene, &mut SupportTool),
     stack: (&LayerPlan, &RasterSettings),
     risks: &[Risk],
     run: Option<ForRun>,
 ) -> Status {
-    let holds = lever_owners(scene, stack, risks);
+    let holds = lever_owners(scene, stack, risks, &neck_sizing(supports, run.as_ref()));
     let found: Vec<(ObjectId, Vec3)> = holds
         .iter()
         .flatten()
         .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
         .copied()
         .collect();
-    let left = holds.iter().filter(|hold| hold.is_none()).count();
-    let stood = stand(scene, supports, &found, run.as_ref());
+    let left = holds.iter().filter(|hold| hold.is_empty()).count();
+    let stood = supports.support_necks(scene, &found, |id| {
+        let of_run = run.as_ref()?;
+        let own = of_run.profiles.iter().find(|(owner, _)| *owner == id);
+        Some(own.map(|(_, profile)| profile.clone()).unwrap_or_default())
+    });
     told(
-        tr!("check-stood-levers", count = stood, group = ISLANDS_GROUP),
+        tr!("check-stood-levers", count = stood, group = NECKS_GROUP),
         left,
     )
+}
+
+/// The profile a neck's supports are counted by: a run's first, or the panel's, made thick
+/// enough.
+fn neck_sizing(supports: &SupportTool, run: Option<&ForRun>) -> SupportProfile {
+    let asked = run
+        .and_then(|run| run.profiles.first())
+        .map(|(_, profile)| profile);
+    neck_profile(asked.unwrap_or(&supports.profile))
 }
 
 /// Check's Drill them: a hole through the floor of every suction cup of `risks`, on `only` if
@@ -150,16 +164,22 @@ pub fn cup_owners(
         .collect()
 }
 
-/// For each weak neck of `risks`, the model it is in and where a support holds it.
+/// For each weak neck of `risks`, the places supports of `profile` hold it, with their model.
 pub fn lever_owners(
     scene: &Scene,
     (plan, settings): (&LayerPlan, &RasterSettings),
     risks: &[Risk],
-) -> Vec<Option<(ObjectId, Vec3)>> {
+    profile: &SupportProfile,
+) -> Vec<Vec<(ObjectId, Vec3)>> {
     let (objects, models) = hanging_models(scene);
-    lever_holds(risks, plan, &as_seen(settings), &models)
+    lever_holds(risks, plan, &as_seen(settings), &models, profile)
         .into_iter()
-        .map(|hold| hold.map(|(at, contact)| (objects[at].id, contact)))
+        .map(|holds| {
+            let owned = holds
+                .into_iter()
+                .map(|(at, contact)| (objects[at].id, contact));
+            owned.collect()
+        })
         .collect()
 }
 

@@ -13,4 +13,7 @@ pub use layer::{Cured, LayerMeasure, Piece, Stretch, cure, erase, measure};
 pub use pull::{
     PEEL_LIMIT_N, PULL_N_PER_MM2, PULL_N_PER_MM3, disc_pull_n, equivalent_disc_mm, pull_n,
 };
-pub use stack::{MIN_THIN_RUN_MM, Measured, NECK_LIMIT_MPA, Peak, Risk, RiskKind, THIN_MM};
+pub use stack::{
+    MIN_THIN_RUN_MM, MOST_NECK_HOLDS, Measured, NECK_LIMIT_MPA, Peak, Risk, RiskKind, THIN_MM,
+    holds_for_lever,
+};

@@ -9,6 +9,10 @@ use crate::pull::PEEL_LIMIT_N;
 /// Stress a neck of green resin is taken to fail at, megapascals. Not measured: a warning
 /// level.
 pub const NECK_LIMIT_MPA: f64 = 5.0;
+/// The share of the limit a held neck is brought to: tips cure a little under their drawn area.
+const NECK_MARGIN: f64 = 0.8;
+/// The most supports a single neck is given.
+pub const MOST_NECK_HOLDS: usize = 16;
 /// A piece narrower than this across, millimetres, as a disc of its area: thinner than the
 /// finest support tip, so a tip is never named, and too thin to survive the peel.
 pub const THIN_MM: f32 = 0.15;
@@ -49,6 +53,10 @@ pub enum RiskKind {
         /// How far off the neck the pull acts, millimetres.
         lever_mm: f32,
         neck_mm2: f32,
+        /// The pull on the piece, newtons.
+        force_n: f32,
+        /// The radius the piece gyrates at about its own centre, millimetres.
+        gyration_mm: f32,
     },
     /// A layer whose suction on the film is past `PEEL_LIMIT_N`; a run of them is named
     /// once, at its hardest.
@@ -512,14 +520,12 @@ impl Measured {
     /// and the bending of the pull held off to one side. See `docs/design/analysis.md`.
     fn weigh(&mut self, index: usize, piece: &Piece, neck: Neck) {
         let force_n = f64::from(piece.pull_n);
-        let radius_mm = (neck.area_mm2 / PI).sqrt();
         let [cx, cy] = piece.centre_mm.map(f64::from);
         let offset_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
         // The film lets go from one edge, so at the worst moment the pull is carried by
         // what is still stuck: half the piece, off its own centre by its gyration.
         let lever_mm = offset_mm + f64::from(piece.gyration_mm) / 2.0;
-        let section_modulus = PI * radius_mm.powi(3) / 4.0;
-        let stress_mpa = force_n / neck.area_mm2 + force_n * lever_mm / section_modulus;
+        let stress_mpa = neck_stress_mpa(force_n, lever_mm, neck.area_mm2);
         if stress_mpa < NECK_LIMIT_MPA {
             return;
         }
@@ -530,6 +536,8 @@ impl Measured {
                 stress_mpa: stress_mpa as f32,
                 lever_mm: lever_mm as f32,
                 neck_mm2: neck.area_mm2 as f32,
+                force_n: piece.pull_n,
+                gyration_mm: piece.gyration_mm,
             },
         };
         let worse = |held: &Risk| severity(&risk) > severity(held);
@@ -546,6 +554,41 @@ impl Measured {
             id: self.necks,
         }
     }
+}
+
+/// The stress a pull of `force_n` puts on a round neck of `neck_mm2`, acting `lever_mm` off it,
+/// megapascals: tension, and bending. See `docs/design/analysis.md`.
+fn neck_stress_mpa(force_n: f64, lever_mm: f64, neck_mm2: f64) -> f64 {
+    let radius_mm = (neck_mm2 / PI).sqrt();
+    let section_modulus = PI * radius_mm.powi(3) / 4.0;
+    force_n / neck_mm2 + force_n * lever_mm / section_modulus
+}
+
+/// How many supports of tip `tip_mm2` around the piece of `lever` bring its neck under the
+/// limit with [`NECK_MARGIN`] to spare, at most [`MOST_NECK_HOLDS`]; none for another kind.
+pub fn holds_for_lever(lever: &RiskKind, tip_mm2: f32) -> usize {
+    let RiskKind::Lever {
+        lever_mm,
+        neck_mm2,
+        force_n,
+        gyration_mm,
+        ..
+    } = *lever
+    else {
+        return 0;
+    };
+    let (force_n, neck_mm2) = (f64::from(force_n), f64::from(neck_mm2));
+    let swing_mm = f64::from(gyration_mm) / 2.0;
+    let offset_mm = (f64::from(lever_mm) - swing_mm).max(0.0);
+    let holds_it = |count: &usize| {
+        let area_mm2 = neck_mm2 + *count as f64 * f64::from(tip_mm2);
+        // Supports stand around the piece's centre, drawing the neck's centre to it.
+        let lever_mm = offset_mm * neck_mm2 / area_mm2 + swing_mm;
+        neck_stress_mpa(force_n, lever_mm, area_mm2) < NECK_LIMIT_MPA * NECK_MARGIN
+    };
+    (1..=MOST_NECK_HOLDS)
+        .find(holds_it)
+        .unwrap_or(MOST_NECK_HOLDS)
 }
 
 /// How bad a risk is against others of its kind.

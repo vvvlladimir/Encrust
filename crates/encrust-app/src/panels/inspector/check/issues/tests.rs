@@ -84,6 +84,8 @@ fn lever(layer: usize) -> Risk {
             stress_mpa: 14.0,
             lever_mm: 6.0,
             neck_mm2: 1.0,
+            force_n: 3.0,
+            gyration_mm: 3.0,
         },
     }
 }

@@ -1,4 +1,4 @@
-use super::{ISLANDS_GROUP, SHAPES, Side, Sizing, SupportGroup, SupportTool};
+use super::{SHAPES, Side, Sizing, SupportGroup, SupportTool};
 use crate::i18n::tr;
 use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask, tasks_of};
 use crate::scene::{ObjectId, Scene};
@@ -272,7 +272,7 @@ impl SupportTool {
     ) -> u16 {
         let empty = (0..self.groups.len() as u16).find(|group| {
             !taken.contains(group)
-                && self.groups[*group as usize].name != ISLANDS_GROUP
+                && !self.groups[*group as usize].answers_check()
                 && self.group_holds(*group, scene) == 0
         });
         if let Some(group) = empty {

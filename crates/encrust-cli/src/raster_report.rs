@@ -104,6 +104,7 @@ fn describe_risk(risk: &Risk) -> String {
             stress_mpa,
             lever_mm,
             neck_mm2,
+            ..
         } => {
             format!("{stress_mpa:.0} MPa on a neck of {neck_mm2:.2} mm^2, {lever_mm:.1} mm off it")
         }

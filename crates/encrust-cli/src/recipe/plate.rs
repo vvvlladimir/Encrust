@@ -4,7 +4,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::{DEFAULT_TEMPLATE, Hanging, cup_vents, island_floors, island_holds, lever_holds};
+use core_engine::{
+    DEFAULT_TEMPLATE, Hanging, SupportPlan, SupportShapes, cup_vents, island_floors, island_holds,
+    lever_holds, neck_profile,
+};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
 use core_recipe::{Metric, retry, save_folder};
@@ -23,6 +26,7 @@ use crate::profiles::{AUTO, plan_of};
 use crate::slice_report::SliceReport;
 use crate::stage::{Staged, arranged, cleared, staged};
 use core_recipe::resolved::{flag, number, text};
+use printer_profiles::SupportProfile;
 
 impl Run<'_> {
     /// The plate as the pieces stand now, staged to be cut.
@@ -120,9 +124,14 @@ impl Run<'_> {
             true => cup_vents(&risks, slice.plan(), &print.panel, &models),
             false => Vec::new(),
         };
-        let holds = match levers {
-            true => lever_holds(&risks, slice.plan(), &print.panel, &models),
-            false => Vec::new(),
+        let necks = match (levers, ids.first()) {
+            (true, Some(&first)) => {
+                let plan = self.neck_plan(first)?;
+                let sizing = placing_profile(&plan);
+                let holds = lever_holds(&risks, slice.plan(), &print.panel, &models, &sizing);
+                Some((plan, holds.into_iter().flatten().collect::<Vec<_>>()))
+            }
+            _ => None,
         };
         for vent in vents
             .into_iter()
@@ -147,7 +156,40 @@ impl Run<'_> {
                 ),
             }
         }
-        self.hold_islands(ids, &holds)
+        match necks {
+            Some((plan, holds)) => self.hold_necks(ids, &plan, &holds),
+            None => Ok(()),
+        }
+    }
+
+    /// What the supports under a weak neck of `id` stand to: its own, made thick enough.
+    fn neck_plan(&self, id: usize) -> Result<SupportPlan> {
+        let piece = &self.pieces[id];
+        let plan = match piece.plan.clone().or(piece.shaping.supports.clone()) {
+            Some(plan) => plan,
+            None => plan_of(AUTO)?,
+        };
+        Ok(SupportPlan::of(neck_profile(&placing_profile(&plan))))
+    }
+
+    /// The supports `holds` names on each of `ids`, to `plan`.
+    fn hold_necks(
+        &mut self,
+        ids: &[usize],
+        plan: &SupportPlan,
+        holds: &[(usize, Vec3)],
+    ) -> Result<()> {
+        for &id in ids {
+            let found: Vec<Vec3> = holds
+                .iter()
+                .filter(|(owner, _)| *owner == id)
+                .map(|(_, at)| *at)
+                .collect();
+            if !found.is_empty() {
+                hold_up(&mut self.pieces[id], plan, &found)?;
+            }
+        }
+        Ok(())
     }
 
     fn retries(&self, index: usize, ids: &[usize], attempt: u8) -> Result<bool> {
@@ -269,5 +311,13 @@ fn folder_of(asked: Option<&str>) -> Result<PathBuf> {
         (Some(folder), home) => Ok(save_folder(folder, home.as_deref())),
         (None, Some(home)) => Ok(home),
         (None, None) => bail!("a save step with no folder saves into the home, and there is none"),
+    }
+}
+
+/// The profile single supports of `plan` are placed to.
+fn placing_profile(plan: &SupportPlan) -> SupportProfile {
+    match &plan.shapes {
+        SupportShapes::One(profile) => (**profile).clone(),
+        SupportShapes::Sized { auto, shapes } => auto.placing_with(&shapes[0]),
     }
 }

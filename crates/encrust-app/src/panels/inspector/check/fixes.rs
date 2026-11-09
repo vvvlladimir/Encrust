@@ -123,8 +123,9 @@ pub(super) fn necks(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn
         let said = support_levers(plate, stack, risks, None);
         report(window, IssueKind::Necks, said);
     } else {
-        let owners = lever_owners(&window.doc.scene, stack, risks);
-        let only = only_owner(owners.iter().map(|owner| owner.map(|(id, _)| id)));
+        let sizing = &window.tools.supports.profile;
+        let owners = lever_owners(&window.doc.scene, stack, risks, sizing);
+        let only = only_owner(owners.iter().map(|holds| holds.first().map(|(id, _)| *id)));
         turn(window, OrientPreset::Auto, only);
     }
 }

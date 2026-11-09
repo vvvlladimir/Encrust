@@ -31,6 +31,8 @@ const FIRST_GROUP: &str = "Default";
 
 /// The group the Check tool stands island supports in, apart from the ones built by hand.
 pub const ISLANDS_GROUP: &str = "Islands";
+/// The group Check stands the supports of a weak neck in.
+pub const NECKS_GROUP: &str = "Weak necks";
 
 /// Whether a tree a hand has frozen stands inside the model's cavity: every tip of it does.
 fn frozen_inside(object: &SceneObject, tree: &SupportTree) -> bool {
@@ -88,6 +90,13 @@ pub struct SupportGroup {
     /// Left out of the view, though not out of the print: a way to see past one kind of
     /// support to another.
     pub hidden: bool,
+}
+
+impl SupportGroup {
+    /// Whether Check made it to answer an issue, so a run building supports leaves it be.
+    pub(crate) fn answers_check(&self) -> bool {
+        self.name == ISLANDS_GROUP || self.name == NECKS_GROUP
+    }
 }
 
 /// One piece of one frozen support: what the Edit mode selects, shows picked and carries.

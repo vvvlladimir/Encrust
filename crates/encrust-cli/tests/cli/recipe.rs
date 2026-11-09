@@ -498,8 +498,8 @@ fn a_check_asked_to_hold_weak_necks_stands_a_support_under_the_piece() {
     let left = after["cured"]["levers"]
         .as_u64()
         .expect("the report counts levers");
-    assert!(
-        left < levers,
-        "a support under the slab takes the pull off the neck: {levers} before, {left} after"
+    assert_eq!(
+        left, 0,
+        "supports under the slab take the pull off the neck: {levers} before, {left} after"
     );
 }
