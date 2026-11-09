@@ -55,7 +55,7 @@ i_overlay = "9.0"
 boolmesh = { git = "https://github.com/vvvlladimir/boolmesh", rev = "27c23f2e3c37a37d5a8fcd5a01412edf1b73274a", default-features = false, features = ["rayon"] }
 # Glyph outlines for a label, and the faces a machine has to offer; see docs/decisions/0305.
 ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout", "apple-layout", "variable-fonts", "glyph-names"] }
-fontdb = { version = "0.23", default-features = false, features = ["std", "fs", "fontconfig"] }
+fontdb = { version = "0.24", default-features = false, features = ["std", "fs", "fontconfig"] }
 rayon = "1.12"
 thiserror = "2.0"
 anyhow = "1.0"
@@ -104,7 +104,7 @@ tar = { version = "0.4", default-features = false }
 
 stl_io = "0.11"
 tobj = { version = "4.0", default-features = false }
-quick-xml = "0.41"
+quick-xml = "0.42"
 png = "0.18"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga"] }
 eframe = "0.36"
