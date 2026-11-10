@@ -882,8 +882,8 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   and send in one press from the button over it: a bar shows the slicing and the upload,
   then the same button starts the print, Slice to a file the square beside it; Cancel
   stops the slice or the upload. The card names the printer and what it is doing; a press
-  on it lists the others and scans again. A printer busy printing gets no file: the card
-  says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
+  on it lists the others and scans again. A printer busy printing gets no file: Slice
+  saves it instead, its tooltip says why. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
 - A sliced file carries a picture of the plate for the printer's screen: the models and
   their supports in the viewport's resin and support colours, shaded smooth, darker in

@@ -15,7 +15,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
     if *window.mode == Mode::Preview && window.view.options.mask_only {
         ui.painter().rect_filled(stage, 0.0, theme::colors().sunken);
         mask(ui, window, stage, to_strip(stage, clear, clear.left()));
-        stage_notice::ui(ui, window, clear);
+        stage_notice::ui(ui, window, clear, middle(stage));
         return;
     }
 
@@ -36,6 +36,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
             viewport_panel::ui(ui, window)
         })
         .inner;
+    // The view tools and the notices keep to the whole room, the mask's half too.
+    let room = clear;
     let clear = clear.intersect(viewport);
     let cube = view_cube::ui(ui, window, cube_corner(clear, row), clear);
     // Centred under the tool row, so it keeps clear of the cube on both sides.
@@ -48,9 +50,19 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
         row,
         beside_mask,
     );
-    let column = view_column::ui(ui, window, clear);
-    let beside = clear.with_max_x((column.left() - theme::FLOAT_GAP).max(clear.left()));
-    stage_notice::ui(ui, window, beside);
+    let column = view_column::ui(ui, window, room);
+    let beside = room.with_max_x((column.left() - theme::FLOAT_GAP).max(room.left()));
+    stage_notice::ui(ui, window, beside, middle(stage));
+}
+
+/// The middle of the stage the user sees, the layer strip left out: where notices centre.
+fn middle(stage: Rect) -> f32 {
+    (stage.left() + strip_left(stage)) / 2.0
+}
+
+/// Where the layer strip's card begins, a gap clear of it.
+fn strip_left(stage: Rect) -> f32 {
+    stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W
 }
 
 /// Where the view cube's top right stands: centred on the tool row's height while it fits
@@ -68,8 +80,7 @@ fn cube_corner(clear: Rect, row: Option<Rect>) -> Pos2 {
 /// The mask's room over the stage from `left`: the plate's card stands on the foot, so over
 /// it the room runs to the layer strip.
 fn to_strip(stage: Rect, clear: Rect, left: f32) -> Rect {
-    let strip = stage.right() - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
-    Rect::from_x_y_ranges(left..=strip, clear.y_range())
+    Rect::from_x_y_ranges(left..=strip_left(stage), clear.y_range())
 }
 
 /// The exposure mask, drawn in `rect`, its caption kept to `clear`.
@@ -151,6 +162,16 @@ mod tests {
         );
         assert_eq!(cube_corner(clear, row(fits + 1.0)), pos2(800.0, 70.0));
         assert_eq!(cube_corner(clear, None), pos2(800.0, 70.0));
+    }
+
+    #[test]
+    fn notices_centre_on_the_stage_the_layer_strip_leaves() {
+        let strip = 1000.0 - 2.0 * theme::FLOAT_GAP - theme::LAYER_STRIP_W;
+        assert_eq!(
+            middle(stage()),
+            strip / 2.0,
+            "halfway to the strip at {strip}"
+        );
     }
 
     #[test]

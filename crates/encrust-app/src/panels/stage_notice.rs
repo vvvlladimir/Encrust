@@ -16,9 +16,9 @@ const INFO_LINGER_S: f64 = 4.0;
 /// Where egui keeps when the message was last seen changing.
 const SEEN: &str = "stage-notice-seen";
 
-/// Every notice, centred at the foot of `stage`, from what is running to what happened last,
-/// nearest the edge. See `docs/decisions/0217` and `0263`.
-pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
+/// Every notice at the foot of `room`, centred on `middle` as far as the room allows, from
+/// what is running to what happened last, nearest the edge. See `docs/decisions/0217`, `0263`.
+pub fn ui(ui: &egui::Ui, window: &mut Window, room: Rect, middle: f32) {
     let machine = &window.machine;
     let running = machine.network.job.is_some()
         || machine.slicing.job.is_some()
@@ -26,10 +26,11 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
         || window.tools.prepare.is_running();
     let mut stack = Stack {
         ctx: ui.ctx().clone(),
-        room: stage,
-        bottom: stage.bottom() - FOOT_RISE,
+        room,
+        middle,
+        bottom: room.bottom() - FOOT_RISE,
     };
-    let width = (stage.width() - theme::CARD_MARGIN.sum().x).clamp(0.0, MESSAGE_W);
+    let width = (room.width() - theme::CARD_MARGIN.sum().x).clamp(0.0, MESSAGE_W);
     message(&mut stack, &mut window.machine.status, running, width);
     unready(&mut stack, window);
     release(&mut stack, window);
@@ -39,10 +40,11 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
 }
 
 /// The notices stacked up from the foot of `room`, each in an area of its own centred on
-/// the room, so cards of different widths share one middle.
+/// `middle`, so cards of different widths share it; a card the room cuts is moved inside.
 struct Stack {
     ctx: egui::Context,
     room: Rect,
+    middle: f32,
     bottom: f32,
 }
 
@@ -68,9 +70,7 @@ impl Stack {
         let came_in = motion::appear(&self.ctx, id) * left;
         let shown = egui::Area::new(id)
             .order(egui::Order::Middle)
-            .fixed_pos(
-                pos2(self.room.center().x, self.bottom) + vec2(0.0, (1.0 - came_in) * COME_IN),
-            )
+            .fixed_pos(pos2(self.middle, self.bottom) + vec2(0.0, (1.0 - came_in) * COME_IN))
             .pivot(Align2::CENTER_BOTTOM)
             .constrain_to(self.room)
             .show(&self.ctx, |ui| {

@@ -127,9 +127,11 @@ pub(in crate::ui::widgets) fn paint_spinner(ui: &Ui, center: egui::Pos2) {
 const SPINNER_PT: f32 = theme::glyph::BUTTON;
 
 fn notice_frame(ui: &mut Ui, min_w: f32, add: impl FnOnce(&mut Ui)) {
+    // A stage notice clips to its room, the half of a split stage too: never wider than that.
+    let max_w = NOTICE_MAX_W.min(ui.clip_rect().width());
     card().inner_margin(theme::NOTICE_MARGIN).show(ui, |ui| {
         // The card's margin and stroke stand outside what is set here.
-        let inner_max = NOTICE_MAX_W - theme::NOTICE_MARGIN.sum().x - 2.0;
+        let inner_max = (max_w - theme::NOTICE_MARGIN.sum().x - 2.0).max(0.0);
         let width = ui.available_width().clamp(min_w.min(inner_max), inner_max);
         ui.set_width(width);
         ui.set_min_height(NOTICE_H - theme::NOTICE_MARGIN.sum().y);
@@ -241,5 +243,18 @@ mod tests {
             width <= NOTICE_MAX_W + 1.0,
             "at most {NOTICE_MAX_W} wide, got {width}"
         );
+    }
+
+    #[test]
+    fn a_job_notice_keeps_inside_a_room_narrower_than_its_least_width() {
+        let room_w = JOB_MIN_W - 60.0;
+        let mut width = 0.0;
+        run(|ui| {
+            let room = egui::Rect::from_min_size(ui.max_rect().min, vec2(room_w, 200.0));
+            ui.set_clip_rect(room);
+            let shown = ui.scope(|ui| job_notice(ui, "Connecting to the printer", None, false));
+            width = shown.response.rect.width();
+        });
+        assert!(width <= room_w, "at most the room's {room_w}, got {width}");
     }
 }

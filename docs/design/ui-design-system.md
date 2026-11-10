@@ -322,8 +322,8 @@ What a block `describe`s is read from the ringed question mark beside its title
 (`help_mark`), on hover and in a popup a click holds open; nothing describing a block is
 printed in it. A block or a group turned on by one switch carries that switch in its
 heading (`section_with_switch`, `subheading_with_switch`) rather than naming it twice. A
-tool's action stands at the card's foot with no caption: what it does is its tooltip, and
-only the reason it cannot run is written under it (ADR 0230).
+tool's action stands at the card's foot with no caption and nothing under it: what it
+does, or why it cannot run, is its tooltip (ADR 0230, 0421).
 
 ## Layout
 

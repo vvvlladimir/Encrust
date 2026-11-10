@@ -31,7 +31,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
-| Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
+| Notices | centred on the stage left of the layer strip, moved in to stay between the inspector and the view tools, 16 above the foot; in Preview the same, over both halves | at most 440 wide each and never wider than that room, 6 apart, newest nearest the foot |
 
 Everything over the stage but the Prepare row is a `card` on `CARD_SHADOW`; nothing over the stage carries a
 stripe or a border of its own.
@@ -100,7 +100,7 @@ One tool's card, in this order; any part a tool lacks is not drawn.
 | Heading | glyph in `accent_soft`, name, `help_mark`; at the right either the modes as `icon_toggle`s in one sunken group, or one fact in `text_mid` cut with an ellipsis | 48 |
 | Preset | `dropdown` showing the preset (and `· edited` in `warn` once a value differs), Save and Delete as 32 squares | 32, padded 10 × 12 |
 | Sections | `section`s, ordered what it acts on → how → rarely changed | heading 36, body padded 0 12 12, rows 6 apart |
-| Foot | on `base`: one `primary_button`, at most one companion; the reason it cannot run under it | primary 40, padded 10 × 12 |
+| Foot | on `base`: one `primary_button`, at most one companion; nothing under it, the reason it cannot run its tooltip | primary 40, padded 10 × 12 |
 
 The body scrolls; the heading, preset and foot do not. What each tool holds:
 
@@ -155,7 +155,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 | Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
 | Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell in a long language), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
 | Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
-| Foot | the printer row, then the action row | on `base` |
+| Foot | the printer row, then the action row, nothing printed under it | on `base` |
 
 The printer row is 34 tall on `raised`: printer glyph, name, a status dot and word (`ok`
 Ready, `accent` breathing Printing n %, `text_low` Not answering), caret, and the open-sheet
@@ -174,8 +174,8 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 | Choosing | the printer row opens a list of printers, each with its state, and *Scan again* last |
 | Sending | the slice then the upload named over its bar, its percent under it, Cancel under that |
 | The file landed | Start print primary, the 40 square beside it |
-| The printer busy | Slice to .goo primary; under it *Bench A is printing a.goo; the file is saved instead.* |
-| Nothing to slice | Slice to .goo disabled, and why under it |
+| The printer busy | Slice to .goo primary, its tooltip *Bench A is printing a.goo; the file will be saved instead.* |
+| Nothing to slice | Slice to .goo disabled, why in its tooltip |
 
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
 not print.* What stands past the plate or meets another model is Check's, not the card's. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
@@ -250,7 +250,7 @@ The stage splits at its middle (ADR 0103): the model cut at the layer on the lef
 on black on the right, a pixel grid under it. At the mask's top right, 8 left of the layer
 strip and level with its top, over the side cards too, zoom out, the zoom in percent, zoom in and *show the whole
 mask* in one card, and under it, flush with its right, a tag for the panel's pixels. The models card gives way, the plate card staying
-on the stage's foot. Beside the mask the hint bar shows the keys alone.
+on the stage's foot, the view tools 8 left of it over the mask as in Prepare. Beside the mask the hint bar shows the keys alone.
 
 ## Windows over the plate
 

@@ -504,7 +504,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |
 | [0221](0221-the-columns-float-over-a-stage-the-width-of-the-window.md) | Float the side columns over a stage the width of the window | Accepted; the plate column's fold is superseded by 0230 |
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
-| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
+| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted; the reason under an action is superseded by 0421 |
+| [0421](0421-nothing-is-written-under-a-primary-button.md) | Write nothing under a primary button | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
 | [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382 |
 | [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Accepted |
