@@ -135,7 +135,8 @@ pub fn prepare(
     stage: &mut dyn FnMut(ImportStage),
 ) -> Result<Imported> {
     let path = file.path();
-    let name = file_name(path);
+    // With its extension: one cube from an STL, an OBJ and a 3MF is otherwise one name thrice.
+    let name = files::file_name(path);
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -184,16 +185,6 @@ pub fn prepare(
             summary,
         )
     })
-}
-
-/// The file's own name, extension and all: three copies of one cube opened from an STL, an
-/// OBJ and a 3MF are otherwise one name three times over. It is also what a failure is
-/// reported under, since a reader's own error already carries the whole path.
-fn file_name(path: &std::path::Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    )
 }
 
 /// The file's textures, over the mesh as the repair left it: welding's dropped faces, then

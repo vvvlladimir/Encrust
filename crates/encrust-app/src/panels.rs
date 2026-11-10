@@ -13,6 +13,8 @@ mod printer_card;
 mod report;
 mod scene_panel;
 pub(crate) mod section;
+#[cfg(not(target_arch = "wasm32"))]
+mod send_file;
 mod settings;
 #[cfg(all(test, feature = "snapshots"))]
 pub(crate) use settings::unfold_recipe_steps;

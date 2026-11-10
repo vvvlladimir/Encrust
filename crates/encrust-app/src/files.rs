@@ -203,6 +203,15 @@ pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
         })
 }
 
+/// The file's own name, extension and all, as a message names it; the whole path when it
+/// has none.
+pub fn file_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
 /// What a mesh refers to and is read with: an `.obj`'s materials and its textures.
 #[cfg_attr(
     not(target_arch = "wasm32"),

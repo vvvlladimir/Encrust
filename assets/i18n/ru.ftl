@@ -1064,6 +1064,8 @@ menu-orthographic = Ортогональный вид
 menu-import = Импорт
 menu-clear-recent = Очистить список
 menu-slicing-already = Платформа уже нарезается
+menu-send-file = Отправить нарезанный файл…
+menu-send-file-to = Файл уйдёт на { $name } без изменений.
 menu-pick-first = Сначала выберите модель
 menu-plate-empty = Платформа пуста
 menu-camera = Камера
@@ -1616,6 +1618,7 @@ network-printing = { $printer } печатает { $file }
 network-busy = { $name } занят: { $state }
 network-prusa-sl1 = Принтеры Prusa печатают .sl1; выберите его в поле «Формат файла» этого принтера.
 network-sending = Отправка на { $name }
+network-not-answering = { $name } не отвечает
 network-starting = Запуск { $file } на { $name }
 network-sent = { $file } передан на { $printer }
 network-cancelled = Передача отменена
@@ -2774,3 +2777,7 @@ hint-supports-place = по модели, чтобы поставить подд�
 hint-supports-line = поставить их линией
 hint-cut-part = по части, чтобы отметить её
 hint-gizmo-steps = за ручку шагами по 1 мм и 15°
+
+## panels/send_file.rs
+
+send-file-not-sliced = { $file } нельзя отправить: это не нарезанный файл
