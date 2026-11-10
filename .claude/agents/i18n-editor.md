@@ -57,6 +57,5 @@ of `docs/design/ui-standards.md`, and for each language its `<code>-style.md` an
 1. `cargo test -p encrust-app --lib i18n` and `cargo xtask i18n <code>` for each language.
 2. If any label on screen changed: `cargo test -p encrust-app --features snapshots --lib
    snapshots`; on mismatch retake with `UPDATE_SNAPSHOTS=1` and look at the changed pictures.
-3. `.claude/hooks/i18n-pass.sh mark`.
-4. Report: a table per language — key, before, after, why in a few words — then the labels
+3. Report: a table per language — key, before, after, why in a few words — then the labels
    whose Russian should be looked at in the window for width, then the check results.
