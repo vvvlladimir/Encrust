@@ -120,9 +120,9 @@ parts spread over a plate the order-bound fold fell from 672 ms to 35 ms
 over open air in the layer under it, or over a hole that was; the first layer lies on the
 plate, so its holes are sealed. A sealed hole carries its cup up the stack while it stays
 sealed, adding its area times the layer's thickness; the cup is named once, at the layer it
-is widest, when that is at least `MIN_CUP_MM2` (25 mm², some 2.5 N at a full vacuum) and it
-holds at least `MIN_CUP_MM3` (0.02 ml). Anything less is a letter's counter or a pin's socket,
-which pulls too little to matter. A model standing on supports has open air
+is widest, when a full vacuum there pulls at least `CUP_LIMIT_N` (10 N, a third of the peel
+limit: `MIN_CUP_MM2`, some 99 mm²) and it holds at least `MIN_CUP_MM3` (0.02 ml). Anything
+less pulls too little beside the lift to matter (ADR 0417). A model standing on supports has open air
 between them, so its cavities start vented; one lying on the plate or on its own floor does
 not.
 

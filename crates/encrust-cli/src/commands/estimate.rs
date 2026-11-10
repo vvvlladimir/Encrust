@@ -17,6 +17,11 @@ pub struct EstimateCommand {
 
     #[command(flatten)]
     pub job: JobArgs,
+
+    /// Read the panel in squares of two by two pixels, as the window's background check does:
+    /// quicker, but blind to islands near the smallest one named.
+    #[arg(long)]
+    pub quick_check: bool,
 }
 
 impl EstimateCommand {
@@ -34,7 +39,7 @@ impl EstimateCommand {
             &self.job,
             &watch,
         )?;
-        let estimate = estimate::estimate(&mut staged, &self.job.raster, &watch)?;
+        let estimate = estimate::estimate(&mut staged, &self.job.raster, self.quick_check, &watch)?;
         if global.json {
             json::print(&EstimateReport::of(
                 &self.plate.inputs,

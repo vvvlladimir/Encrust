@@ -2,7 +2,7 @@ mod resin;
 mod standing;
 
 pub use resin::{KeptResin, kept_resin};
-pub use standing::{Astray, astray, bounds};
+pub use standing::{Astray, astray, astray_now, bounds};
 
 use crate::i18n::tr;
 use core_geometry::{Aabb, Quat, Vec2, Vec3};
@@ -78,6 +78,12 @@ impl BuildPlate {
     pub fn usable_area(&self) -> (Vec2, Vec2) {
         let [low, high] = self.inset.area_mm(self.x_mm, self.y_mm);
         (Vec2::from_array(low), Vec2::from_array(high))
+    }
+
+    /// The same corners as what packing a plate works in.
+    pub fn plate_area(&self) -> core_plate::PlateArea {
+        let (low_mm, high_mm) = self.usable_area();
+        core_plate::PlateArea { low_mm, high_mm }
     }
 
     /// How `bounds`, plate millimetres, sit in the build volume and against the inset.

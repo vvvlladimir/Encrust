@@ -42,14 +42,24 @@ pub(super) enum Work {
     },
     /// Drain's Check drainage, which `trapped` is read off.
     Scan,
-    /// The stack measured as Check measures it, after `attempt` supportings of its islands.
+    /// The stack measured as Check measures it, after `attempt` supportings of its islands;
+    /// `fixes` are still to be answered once it is read.
     Check {
         attempt: u8,
+        fixes: CheckFixes,
     },
     Arrange {
         spacing_mm: Scalar,
+        only_in_the_way: bool,
     },
     Save(Saved),
+}
+
+/// What a check answers once, before its retry: its suction cups, its weak necks.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct CheckFixes {
+    pub cups: bool,
+    pub levers: bool,
 }
 
 /// A save step's settings; a name or folder left out is the window's.
@@ -115,10 +125,17 @@ impl Work {
                 profile: text(settings, "profile").unwrap_or("auto").to_owned(),
                 side: Side::Outside,
             },
-            StepKind::Check => Self::Check { attempt: 0 },
+            StepKind::Check => Self::Check {
+                attempt: 0,
+                fixes: CheckFixes {
+                    cups: flag(settings, "drill_cups").unwrap_or(false),
+                    levers: flag(settings, "hold_levers").unwrap_or(false),
+                },
+            },
             StepKind::Arrange => Self::Arrange {
                 spacing_mm: number(settings, "spacing_mm")
                     .unwrap_or(ArrangeSettings::default().clearance_mm),
+                only_in_the_way: flag(settings, "only_in_the_way").unwrap_or(false),
             },
             StepKind::Save => Self::Save(Saved {
                 folder: text(settings, "folder").map(str::to_owned),

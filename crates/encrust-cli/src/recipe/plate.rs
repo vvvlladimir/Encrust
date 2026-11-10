@@ -4,10 +4,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::{DEFAULT_TEMPLATE, Hanging, island_floors, island_holds};
+use core_engine::{
+    CupVent, DEFAULT_TEMPLATE, Hanging, SupportPlan, Unvented, cup_vents, island_floors,
+    island_holds, lever_holds, neck_profile,
+};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
 use core_recipe::{Metric, retry, save_folder};
+use core_volume::{DrainHole, HoleKind, HoleSize, ModelHollow};
 
 use super::piece::Piece;
 use super::settings::Settings;
@@ -19,7 +23,7 @@ use crate::estimate::{Print, measure_plate};
 use crate::pipeline::{Watch, raster_window, slice_staged};
 use crate::profiles::{AUTO, plan_of};
 use crate::slice_report::SliceReport;
-use crate::stage::{Staged, arranged, staged};
+use crate::stage::{Staged, arranged, cleared, staged};
 use core_recipe::resolved::{flag, number, text};
 
 impl Run<'_> {
@@ -40,13 +44,16 @@ impl Run<'_> {
         Ok(staged((Vec::new(), models), drainage, machine, false))
     }
 
-    /// Measures the plate and notes what it found on each of `ids`, then supports their
-    /// islands and measures again while step `index`'s retry holds for any; answers how many
-    /// times it went again.
-    pub(super) fn check(&mut self, index: usize, ids: &[usize]) -> Result<u8> {
+    /// Answers the cups and necks `settings` ask for, then measures, notes and supports the
+    /// islands of `ids` while step `index`'s retry holds; says how many times it went again.
+    pub(super) fn check(&mut self, index: usize, ids: &[usize], settings: &Settings) -> Result<u8> {
+        let mut unchanged = self.fix_found(ids, settings)?;
         let mut attempt = 0;
         loop {
-            let (slice, print) = self.measured()?;
+            let (slice, print) = match unchanged.take() {
+                Some(measured) => measured,
+                None => self.measured()?,
+            };
             let floors = island_floors(&print.measured.risks(), slice.plan(), &print.panel);
             let layer_mm = slice.plan().nominal_thickness();
             let owners = self.owners(&floors, layer_mm);
@@ -76,24 +83,145 @@ impl Run<'_> {
             "a check cuts and measures the plate, which needs a printer: name it with \
              --printer or --profile",
         )?;
-        measure_plate(plate, staged.drainage, &quiet(self.ctx))
+        measure_plate(plate, staged.drainage, None, &quiet(self.ctx))
     }
 
     /// The piece each island of `floors` hangs from and the point a support there touches,
     /// or `None` for one hanging from none.
     fn owners(&self, floors: &[Vec3], layer_mm: Scalar) -> Vec<Option<(usize, Vec3)>> {
-        let bvhs: Vec<Bvh> = self
-            .pieces
+        let bvhs = self.bvhs();
+        island_holds(floors, layer_mm, &self.hanging(&bvhs))
+    }
+
+    fn bvhs(&self) -> Vec<Bvh> {
+        self.pieces
             .iter()
             .map(|piece| Bvh::build(&piece.mesh))
-            .collect();
-        let models: Vec<Hanging> = self
-            .pieces
+            .collect()
+    }
+
+    fn hanging<'a>(&'a self, bvhs: &'a [Bvh]) -> Vec<Hanging<'a>> {
+        self.pieces
             .iter()
-            .zip(&bvhs)
+            .zip(bvhs)
             .map(|(piece, bvh)| (&piece.mesh, bvh, Transform::default()))
-            .collect();
-        island_holds(floors, layer_mm, &models)
+            .collect()
+    }
+
+    /// Drills the suction cups and stands supports under the weak necks of `ids` where
+    /// `settings` ask for it; hands back its measure when that changed nothing.
+    fn fix_found(
+        &mut self,
+        ids: &[usize],
+        settings: &Settings,
+    ) -> Result<Option<(SliceReport, Print)>> {
+        let cups = flag(settings, "drill_cups").unwrap_or(false);
+        let levers = flag(settings, "hold_levers").unwrap_or(false);
+        if !cups && !levers {
+            return Ok(None);
+        }
+        let (slice, print) = self.measured()?;
+        let risks = print.measured.risks();
+        let bvhs = self.bvhs();
+        let models = self.hanging(&bvhs);
+        let widest_hole_mm = ids
+            .iter()
+            .map(|&id| self.pieces[id].shaping.hollow.hole_size().diameter_mm)
+            .reduce(Scalar::max);
+        let vents = match (cups, widest_hole_mm) {
+            (true, Some(hole_mm)) => {
+                cup_vents(&risks, slice.plan(), &print.panel, &models, hole_mm)
+            }
+            _ => Vec::new(),
+        };
+        let necks = match (levers, ids.first()) {
+            (true, Some(&first)) => {
+                let sizing = self.neck_plan(first)?.placing();
+                let holds = lever_holds(&risks, slice.plan(), &print.panel, &models, &sizing);
+                Some(holds.into_iter().flatten().collect::<Vec<_>>())
+            }
+            _ => None,
+        };
+        let mut changed = false;
+        for vent in vents {
+            match vent {
+                Ok(vent) if ids.contains(&vent.model) => changed |= self.vent(&bvhs, vent),
+                Ok(_) => {}
+                Err(Unvented::OnThePlate) => tracing::warn!(
+                    "a suction cup stands on the plate: lift the model onto supports or turn it"
+                ),
+                Err(Unvented::TooDeep) => {
+                    tracing::warn!("a suction cup has no wall thin enough to drill a vent through");
+                }
+            }
+        }
+        if let Some(holds) = necks {
+            changed |= self.hold_necks(ids, &holds)?;
+        }
+        Ok((!changed).then_some((slice, print)))
+    }
+
+    /// Drills `vent` into its piece along its own axis, walled on a solid one; says whether it
+    /// drilled one.
+    fn vent(&mut self, bvhs: &[Bvh], vent: CupVent) -> bool {
+        let piece = &mut self.pieces[vent.model];
+        let size = HoleSize {
+            depth_mm: vent.depth_mm,
+            ..piece.shaping.hollow.hole_size()
+        };
+        let bvh = &bvhs[vent.model];
+        let at = (vent.mouth_mm, vent.outward);
+        let hole = ModelHollow::drain_at(&piece.mesh, bvh, at.0, at.1, size, Transform::default());
+        match hole.filter(|hole| !hole.lies_within(&piece.holes)) {
+            Some(hole) => {
+                piece.holes.push(DrainHole {
+                    kind: match piece.cavity {
+                        Some(_) => HoleKind::AtDepth,
+                        None => HoleKind::Walled,
+                    },
+                    ..hole
+                });
+                true
+            }
+            None => {
+                tracing::warn!("{}: a cup was left undrilled", piece.input.display());
+                false
+            }
+        }
+    }
+
+    /// What the supports of `id` stand to: its latest supports step's plan, else `auto`.
+    fn own_plan(&self, id: usize) -> Result<SupportPlan> {
+        let piece = &self.pieces[id];
+        match piece.plan.clone().or(piece.shaping.supports.clone()) {
+            Some(plan) => Ok(plan),
+            None => plan_of(AUTO),
+        }
+    }
+
+    /// What the supports under a weak neck of `id` stand to: its own, made thick enough.
+    fn neck_plan(&self, id: usize) -> Result<SupportPlan> {
+        let plan = self.own_plan(id)?;
+        Ok(SupportPlan::of(neck_profile(&plan.placing())))
+    }
+
+    /// The supports `holds` names on each of `ids`, to that piece's own plan made thick enough;
+    /// says whether it stood any.
+    fn hold_necks(&mut self, ids: &[usize], holds: &[(usize, Vec3)]) -> Result<bool> {
+        let mut stood = false;
+        for &id in ids {
+            let found: Vec<Vec3> = holds
+                .iter()
+                .filter(|(owner, _)| *owner == id)
+                .map(|(_, at)| *at)
+                .collect();
+            if !found.is_empty() {
+                let plan = self.neck_plan(id)?;
+                hold_up(&mut self.pieces[id], &plan, &found)?;
+                stood = true;
+            }
+        }
+        Ok(stood)
     }
 
     fn retries(&self, index: usize, ids: &[usize], attempt: u8) -> Result<bool> {
@@ -119,12 +247,8 @@ impl Run<'_> {
             if found.is_empty() {
                 continue;
             }
-            let piece = &mut self.pieces[id];
-            let plan = match piece.plan.clone().or(piece.shaping.supports.clone()) {
-                Some(plan) => plan,
-                None => plan_of(AUTO)?,
-            };
-            hold_up(piece, &plan, &found)?;
+            let plan = self.own_plan(id)?;
+            hold_up(&mut self.pieces[id], &plan, &found)?;
         }
         Ok(())
     }
@@ -143,9 +267,12 @@ impl Run<'_> {
             .map(|(mesh, piece)| (mesh, piece.input.as_path()))
             .collect();
         let printer = self.ctx.chosen.printer.as_ref();
-        let offsets = arranged(&footprints, printer, &asked)?;
-        for (piece, offset) in self.pieces.iter_mut().zip(offsets) {
-            piece.moved(Transform::from_translation(offset));
+        let moves = match flag(settings, "only_in_the_way").unwrap_or(false) {
+            true => cleared(&footprints, printer, &asked)?,
+            false => arranged(&footprints, printer, &asked)?,
+        };
+        for (piece, moved) in self.pieces.iter_mut().zip(moves) {
+            piece.moved(moved);
         }
         Ok(())
     }

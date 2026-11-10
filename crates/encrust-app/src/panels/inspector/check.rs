@@ -1,56 +1,55 @@
 use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use egui::Color32;
 
-use crate::check::{Place, Stage};
+use crate::check::{IssueKind, Place, Stage, Stop};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::section::{cut_height, height_range};
 use crate::preview::plate_fingerprint;
-use crate::state::Machine;
 use crate::ui::verdict_card;
-use crate::ui::{
-    describe, hint, icon, readings, secondary_button, section, section_with_actions, theme,
-};
+use crate::ui::{describe, hint, icon, readings, section, section_with_actions, theme};
 use crate::workspace::Mode;
 
+mod cards;
+mod fixes;
+mod foot;
 mod issues;
 mod plate;
 
+use cards::{Board, LAYER_KINDS, Layers};
 pub(crate) use issues::issue_name;
-use issues::{Filter, filter, listing, neighbour};
+use issues::{kind_of, listing};
 
-/// What the stack will fail on: a way to take the islands out, the verdict, every issue a
-/// click away from its layer, and what pulls hardest on the film.
+pub(super) use foot::{ui as action, wanted as wants_foot};
+
+/// What the stack will fail on: the plate's issues, then the layers', a card to each kind
+/// with its rows and what answers them, and what pulls hardest on the film (ADR 0416).
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    plate::ui(ui, window);
-    let Some((risks, removed)) = window
-        .measured()
-        .map(|measured| (measured.risks(), measured.removed_islands()))
-    else {
-        waiting(ui, window);
-        return;
-    };
-
-    let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
-    if islands || removed > 0 {
-        section(ui, &tr!("check-filter-islands"), None, |ui| {
-            if islands_action(ui, window.machine, &risks, removed) {
-                support_islands(window, &risks);
-            }
-        });
+    let board = Board::read(ui.ctx(), window);
+    plate::ui(ui, window, &board);
+    layers(ui, window, &board);
+    if !board.has(IssueKind::Peel) {
+        pull(ui, window);
     }
-    if risks.is_empty() {
-        section(ui, &tr!("check-issues"), None, verdict);
-    } else {
-        found(ui, window, &risks);
-    }
-    pull(ui, window);
 }
 
-/// Every issue a click away from its layer, narrowed to one kind, and the heading's
-/// arrows to the issues either side of the layer in view.
-fn found(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
-    let shown = window.machine.preview.layer();
+/// What Check shows of the stack: the full check once it has read the plate as it is, else
+/// the quick one from the background, flagged `true` as preliminary (ADR 0419).
+pub(crate) fn found<'a>(window: &'a Window) -> Option<(&'a Measured, bool)> {
+    if let Some(measured) = window.measured() {
+        return Some((measured, false));
+    }
+    let settings = window.machine.slicing.raster_settings()?;
+    let fold = window.machine.slicing.fold();
+    let quick = window.machine.preview.quick_measured(&settings, fold)?;
+    Some((quick, true))
+}
+
+/// The section of what a read of the stack found, or the read still to come.
+fn layers(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
+    let found = board.layers.as_ref();
+    let risks = found.map_or(&[][..], |layers| &layers.risks);
+    let stops = stops(board, risks);
     let arrows = [
         (icon::LAYER_UP, tr!("check-previous")),
         (icon::LAYER_DOWN, tr!("check-next")),
@@ -58,39 +57,100 @@ fn found(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
     let arrows = arrows
         .each_ref()
         .map(|(glyph, name)| (*glyph, name.as_str()));
-    let (arrow, listed) = section_with_actions(ui, &tr!("check-issues"), &arrows, |ui| {
+    let heading: &[(&str, &str)] = if stops.is_empty() { &[] } else { &arrows };
+    let title = tr!("check-layers");
+    let (arrow, _) = section_with_actions(ui, &title, heading, |ui| {
         describe(ui, &tr!("check-issues-help"));
-        let filter = filter(ui, risks);
-        (filter, listing(ui, shown, risks, filter))
+        if board.has(IssueKind::Peel) {
+            describe(ui, &tr!("check-peel-help"));
+        }
+        for kind in LAYER_KINDS {
+            card(ui, window, board, kind);
+        }
+        match found {
+            None => waiting(ui, window),
+            Some(layers) if layers.preliminary => refining(ui),
+            Some(_)
+                if board
+                    .cards
+                    .iter()
+                    .all(|one| !LAYER_KINDS.contains(&one.kind)) =>
+            {
+                verdict(ui);
+            }
+            Some(_) => {}
+        }
     });
-    let (filter, picked) = listed.unwrap_or_default();
-    let stepped = arrow.and_then(|index| neighbour(risks, filter, shown, index == 1));
-    if let Some(picked) = picked.or(stepped) {
-        go_to(window, &picked);
+    if let Some(forward) = arrow.map(|index| index == 1) {
+        step(window, board, (&stops, risks), forward);
     }
 }
 
-/// Stands a support under every island the check found, in a group of their own built
-/// to the support numbers in hand, and says how many stood.
-fn support_islands(window: &mut Window, risks: &[Risk]) {
-    let Some(settings) = window.machine.slicing.raster_settings() else {
-        return;
+/// Every issue the arrows stop at: the plate's, then the layers'.
+fn stops(board: &Board, risks: &[Risk]) -> Vec<Stop> {
+    let plate = board.plate.iter().map(plate::stop_of);
+    plate.chain(issues::layer_stops(risks)).collect()
+}
+
+/// Goes to the issue after the one last gone to, or before it.
+fn step(window: &mut Window, board: &Board, (stops, risks): (&[Stop], &[Risk]), forward: bool) {
+    let shown = window.machine.preview.layer();
+    let at = window.tools.check.stop().filter(|stop| match stop {
+        Stop::Layer { layer, .. } => *layer == shown,
+        Stop::Plate(_) => true,
+    });
+    match issues::next_stop(stops, at, shown, forward) {
+        Some(Stop::Plate(models)) => plate::arrive(window, board, models),
+        Some(stop) => go_to(window, &issues::issues_at(risks, stop)),
+        None => {}
+    }
+}
+
+/// The card of one kind the layers show, its rows a click away from their layer.
+fn card(ui: &mut egui::Ui, window: &mut Window, board: &Board, kind: IssueKind) {
+    let empty = Layers {
+        risks: Vec::new(),
+        removed: 0,
+        preliminary: false,
     };
-    let Some(plan) = window.machine.preview.plan() else {
-        return;
-    };
-    let plate = (&mut window.doc.scene, &mut window.tools.supports);
-    let stood = crate::check::support_islands(plate, (plan, &settings), risks, None);
-    window.machine.status = stood;
+    let layers = board.layers.as_ref().unwrap_or(&empty);
+    let risks: Vec<Risk> = layers
+        .risks
+        .iter()
+        .filter(|risk| kind_of(&risk.kind) == kind)
+        .copied()
+        .collect();
+    let shown = window.machine.preview.layer();
+    cards::draw(ui, window, board, kind, |ui, window| {
+        if let Some(picked) = listing(ui, shown, &layers.risks, kind) {
+            go_to(window, &picked);
+        }
+        match kind {
+            IssueKind::Islands => {
+                fixes::islands(ui, window, (&risks, layers.removed));
+            }
+            IssueKind::Cups => fixes::cups(ui, window, &risks),
+            IssueKind::Necks => fixes::necks(ui, window, &risks),
+            IssueKind::Peel => {
+                let rows = pull_rows(window);
+                readings(ui, &rows);
+                fixes::peel(ui, window);
+            }
+            _ => hint(ui, &tr!("check-thin-no-fix")),
+        }
+    });
 }
 
 /// What the check has found so far, the plate's own issues with the layers', for the
 /// inspector's heading, and its colour.
 pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
     let colors = theme::colors();
+    if window.tools.prepare.is_holding() {
+        return Some((tr!("check-fact-fixing"), colors.text_low));
+    }
     let on_plate = plate::tally(ctx, window);
     let issues = |count: usize, colour| Some((tr!("check-fact-issues", count = count), colour));
-    let Some(measured) = window.measured() else {
+    let Some((measured, _)) = found(window) else {
         if let Some((count, colour)) = on_plate {
             return issues(count, colour);
         }
@@ -114,9 +174,8 @@ pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
 /// The dot the rail's Check carries: the colour of the gravest issue, the plate's found
 /// without Check open, the layers' once read.
 pub fn badge(ctx: &egui::Context, window: &Window) -> Option<Color32> {
-    let layers = window
-        .measured()
-        .and_then(Measured::worst)
+    let layers = found(window)
+        .and_then(|(measured, _)| measured.worst())
         .map(|worst| tint(&worst));
     let on_plate = plate::tally(ctx, window).map(|(_, colour)| colour);
     match (layers, on_plate) {
@@ -137,30 +196,44 @@ fn gravest(one: Color32, other: Color32) -> Color32 {
 /// Before there is anything to read: the stack being read, or the way to have it cut.
 fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.preview.is_measuring() || window.machine.preview.is_building() {
-        section(ui, &tr!("check-checking"), None, |ui| {
-            ui.horizontal(|ui| {
-                crate::ui::spinner(ui);
-                hint(ui, &tr!("check-reading"));
-            });
+        ui.horizontal(|ui| {
+            crate::ui::spinner(ui);
+            hint(ui, &tr!("check-reading"));
         });
         return;
     }
-    section(ui, &tr!("check-checking"), None, |ui| {
-        hint(ui, &tr!("check-reads-layers"));
+    hint(ui, &tr!("check-reads-layers"));
+}
+
+/// What the quick check found while the full one reads every pixel.
+fn refining(ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        crate::ui::spinner(ui);
+        hint(ui, &tr!("check-quick-found"));
     });
 }
 
-/// Which layers pull hardest on the film as the plate lifts, above the bottom block.
-/// Every row is listed, peak known or not: a setting edited meanwhile is measured again.
+/// Which layers pull hardest on the film as the plate lifts, above the bottom block, where
+/// no layer pulls too hard to have a card of its own.
 fn pull(ui: &mut egui::Ui, window: &mut Window) {
-    let measured = window.measured();
-    if measured.is_none() && !window.machine.preview.is_measuring() {
+    if found(window).is_none() && !window.machine.preview.is_measuring() {
         return;
     }
+    let rows = pull_rows(window);
+    section(ui, &tr!("check-peel"), None, |ui| {
+        describe(ui, &tr!("check-peel-help"));
+        readings(ui, &rows);
+    });
+}
+
+/// The readings of the pull, each `measuring` until it is known: a setting edited meanwhile
+/// is measured again.
+fn pull_rows(window: &Window) -> Vec<(String, String)> {
+    let measured = found(window).map(|(measured, _)| measured);
     let waiting = || tr!("check-measuring");
     let hardest = measured.and_then(Measured::hardest_pull);
     let widest = measured.and_then(Measured::largest_growth);
-    let rows = vec![
+    vec![
         (
             tr!("check-hardest-pull"),
             hardest.map_or_else(waiting, |peak| {
@@ -186,11 +259,7 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
                 tr!("value-mm2", value = format!("{:.0}", peak.value))
             }),
         ),
-    ];
-    section(ui, &tr!("check-peel"), None, |ui| {
-        describe(ui, &tr!("check-peel-help"));
-        readings(ui, &rows);
-    });
+    ]
 }
 
 /// The colour an issue is drawn in: islands in the colour the mask paints them, the rest
@@ -214,84 +283,6 @@ fn verdict(ui: &mut egui::Ui) {
     verdict_card(ui, icon::CLEAR, (colors.ok, colors.ok_wash), &title, &why);
 }
 
-/// Supporting the islands or taking them out of the written file, side by side, or once
-/// taken out, putting them back. Answers whether Support was pressed.
-fn islands_action(
-    ui: &mut egui::Ui,
-    machine: &mut Machine,
-    risks: &[Risk],
-    removed: usize,
-) -> bool {
-    let slicing = &mut machine.slicing;
-    let islands = risks
-        .iter()
-        .any(|risk| matches!(risk.kind, RiskKind::Island { .. }));
-    if slicing.remove_islands {
-        removed_block(ui, removed);
-        hanging_action(ui, slicing, risks);
-        if secondary_button(ui, icon::RESET, &tr!("check-put-islands-back")).clicked() {
-            slicing.remove_islands = false;
-            slicing.hanging_passes = 0;
-        }
-        return islands
-            && secondary_button(ui, icon::SUPPORTS, &tr!("check-support-islands")).clicked();
-    }
-    if !islands {
-        return false;
-    }
-    let mut support = false;
-    ui.columns(2, |columns| {
-        support = secondary_button(
-            &mut columns[0],
-            icon::SUPPORTS,
-            &tr!("check-support-islands"),
-        )
-        .clicked();
-        if secondary_button(&mut columns[1], icon::ERASE, &tr!("check-remove-islands")).clicked() {
-            slicing.remove_islands = true;
-        }
-    });
-    describe(ui, &tr!("check-remove-islands-note"));
-    support
-}
-
-/// Taking out the next layer of what the islands already taken out left hanging, one
-/// layer a click, as though each were an island in turn.
-fn hanging_action(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing, risks: &[Risk]) {
-    let hanging = risks
-        .iter()
-        .filter(|risk| matches!(risk.kind, RiskKind::Floating { .. }))
-        .count();
-    if slicing.hanging_passes > 0 {
-        hint(
-            ui,
-            &tr!("check-hanging-passes", count = slicing.hanging_passes),
-        );
-    }
-    if hanging == 0 {
-        return;
-    }
-    let label = tr!("check-remove-next", count = hanging);
-    if secondary_button(ui, icon::ERASE, &label).clicked() {
-        slicing.hanging_passes += 1;
-    }
-    describe(ui, &tr!("check-remove-next-note"));
-}
-
-/// What taking the islands out came to, on a quiet card of its own.
-fn removed_block(ui: &mut egui::Ui, removed: usize) {
-    let colors = theme::colors();
-    let title = removed_note(removed).unwrap_or_else(|| tr!("check-no-islands-to-take"));
-    let note = tr!("check-erased-note");
-    verdict_card(
-        ui,
-        icon::ERASE,
-        (colors.text_mid, colors.raised),
-        &title,
-        &note,
-    );
-}
-
 /// Goes to the layer `risks` lie on: the slider there, the view cut at it, and the camera
 /// flown to them ringed on the cut.
 pub fn go_to(window: &mut Window, risks: &[Risk]) {
@@ -299,6 +290,12 @@ pub fn go_to(window: &mut Window, risks: &[Risk]) {
         return;
     };
     window.tools.check.clear();
+    window.tools.check.reveal(kind_of(&first.kind));
+    window.tools.check.arrive(Stop::Layer {
+        layer: first.layer,
+        kind: kind_of(&first.kind),
+        hanging: matches!(first.kind, RiskKind::Floating { .. }),
+    });
     let preview = &mut window.machine.preview;
     preview.set_layer(first.layer);
     preview.set_playing(false);
@@ -326,6 +323,5 @@ pub fn go_to(window: &mut Window, risks: &[Risk]) {
     window.tools.check.go(&places, layer_mm, stage, tint(first));
 }
 
-fn removed_note(removed: usize) -> Option<String> {
-    (removed > 0).then(|| tr!("check-removed", count = removed))
-}
+#[cfg(test)]
+mod tests;

@@ -139,6 +139,9 @@ pub enum HoleKind {
     /// Lets the resin out of a cavity: carried on through the wall, closed by a plug.
     #[default]
     Drain,
+    /// Set by hand into a hollow model: stops at its depth, opening the cavity only if that
+    /// reaches it (ADR 0414).
+    AtDepth,
     /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
     /// keeps a wall around it and it keeps its depth and its plug.
     Walled,
@@ -160,6 +163,34 @@ impl DrainHole {
             turn_deg: size.turn_deg,
             kind: HoleKind::Drain,
         }
+    }
+
+    /// Whether it opens the cavity behind a wall of `thickness_mm`: a drain is carried through
+    /// by [`pierce`], a hole set at a depth only if that passes the wall (ADR 0414).
+    pub(crate) fn opens_wall(&self, thickness_mm: Scalar) -> bool {
+        match self.kind {
+            HoleKind::Drain => true,
+            HoleKind::AtDepth => self.depth_mm - self.lift_mm > thickness_mm,
+            HoleKind::Walled | HoleKind::Support => false,
+        }
+    }
+
+    /// Whether it lies wholly inside one of `drilled` at least as wide, all in one model's
+    /// space: drilling it again adds nothing.
+    pub fn lies_within(&self, drilled: &[DrainHole]) -> bool {
+        let tip = self.at + self.axis.normalize_or_zero() * self.depth_mm;
+        drilled
+            .iter()
+            .any(|old| old.holds(self.at) && old.holds(tip) && self.diameter_mm <= old.diameter_mm)
+    }
+
+    /// Whether `point` is inside the tube it cuts, in the model's own space.
+    pub(crate) fn holds(&self, point: Vec3) -> bool {
+        let axis = self.axis.normalize_or_zero();
+        let along = (point - self.at).dot(axis);
+        let radius = self.diameter_mm / 2.0;
+        (-radius..=self.depth_mm).contains(&along)
+            && (point - self.at - axis * along).length() <= radius
     }
 
     /// The unit offset from the axis to the outline's first corner, in the model's own

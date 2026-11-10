@@ -17,8 +17,12 @@ use crate::scene::Scene;
 
 mod job;
 mod picture;
+mod quick;
 
 pub use picture::{MaskView, PixelRect, as_seen, on_plate};
+use quick::Quick;
+#[cfg(test)]
+pub(crate) use quick::SETTLE;
 
 /// The sliced stack the preview panel is showing, and the build that produces it.
 #[derive(Default)]
@@ -44,6 +48,8 @@ pub struct Preview {
     /// What the stack cures on the panel it was measured for, and the pass measuring it.
     measured: Option<(MeasureKey, Measured)>,
     measuring: Option<(MeasureKey, MeasureJob)>,
+    /// The quick check run in the background, and the plate it waits on.
+    quick: Quick,
     /// How the stack was last asked to be folded, which is what the picture follows.
     fold: Fold,
 }
@@ -100,6 +106,8 @@ struct Stack {
 struct Build {
     job: PreviewJob,
     fingerprint: u64,
+    /// Started for the quick check, so it shows no notice and says nothing if it fails.
+    quiet: bool,
 }
 
 /// What a cached picture was drawn from. Anything here changing means drawing it again.
@@ -225,9 +233,10 @@ impl Preview {
         Some(self.layer_z().filter(|_| self.layer + 1 < count))
     }
 
-    /// Whether a stack is being cut or measured, either of which slices the whole plate.
+    /// Whether a stack is being cut or measured for the user, either of which slices the
+    /// whole plate; the quick check in the background is not counted.
     pub fn is_slicing(&self) -> bool {
-        self.job.is_some() || self.measuring.is_some()
+        self.is_cutting_in_view() || self.measuring.is_some()
     }
 
     pub fn is_playing(&self) -> bool {

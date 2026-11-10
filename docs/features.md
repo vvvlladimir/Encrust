@@ -245,9 +245,26 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
+- Check reads the plate in the background once it has stood still for a moment, on half the
+  cores and at half the panel's resolution, so the dot on the Check tool and its first list
+  are there before Check is opened. Opening Check reads every pixel; until that is in, the
+  quick list is marked and its fixes wait. An island near the smallest one named can be missed
+  or wrongly named by the quick read, never by the full one. While Fix all or another recipe
+  runs, Check reads nothing of its own: it reads again once the run ends or pauses.
+- Check keeps each kind of issue on a card of its own, with its rows and the buttons that
+  answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
+  **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
+  card to what it did, with Undo on the latest, and opens the next. What a fix could not reach
+  stays on the card with the reason and with every button, the fix just made among them, so
+  issues a later step brought back can still be answered. **Fix all** at the foot takes every automatic answer on
+  the whole plate in a safe order, as one undo and with Cancel; `--recipe fix-issues` does the
+  same on the command line. The arrows step through every issue, of the plate and of the layers
+  alike, and go round. Move to free space and Arrange keep 2 mm from the plate's edge, and stand
+  a model flush with it where that is all the room there is.
 
 **Many models:**
-- **Arrange the plate** automatically, largest model first.
+- **Arrange the plate** automatically, largest model first, clear of a printer's plate inset;
+  a model longer than the plate is turned about the vertical by the least that fits it.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.
   A copy is cut and hollowed once, not once per copy.
 - **Several plates in one project.** Move models between plates, duplicate a plate, slice
@@ -404,9 +421,11 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.
-- Once the model is hollow, a hole is carried on through the wall into the cavity, however
-  shallow you set it. A hole drilled before hollowing is part of the model's shape: it keeps
-  its depth and its plug, the cavity keeps a wall around it, and it does not drain.
+- A hole you click into a hollow model stops at the depth you set: it opens the cavity only
+  if that depth reaches past the wall, and **Check drainage** says if it does not. Holes that
+  **Auto** chooses, and those a trapped pocket's button drills, always go through into the
+  cavity. A hole drilled before hollowing is part of the model's shape: it keeps its depth
+  and its plug, the cavity keeps a wall around it, and it does not drain.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
   cut, at the nearest spot clear of every model, support and raft, and on the plate wherever
   there is room left on it; where there is none, it stays beside its model and the window
@@ -664,6 +683,19 @@ smoothing, not the original model.
 - Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
   on the cut, and the camera flies to it past the models and supports in the way.
 - **Support every island** in one press.
+- **Fix the rest from the same panel:** vent a suction cup through the thinnest wall at its
+  bottom, a notch along the plate for one that stands on it, hold a weak neck
+  with as many supports, 0.6 mm across at least, as bring it under its limit (in their own
+  **Weak necks** group), or Auto-orient for a pose without them; turn for the least peel, or open
+  the lift settings on a printer that leaves them to the file. A cup on the plate with walls too
+  thick to drill is left for you to lift onto supports or turn, and the notice says so; a cup
+  with no wall thin enough and a neck with no underside to stand on are left to you, counted.
+  A cup is only named when a full vacuum in it would pull 10 N or more. Thin
+  sections have no fix here: nothing thickens a model.
+- **Fix the plate:** Move to free space moves only the models in the way, turns one longer
+  than the plate about the vertical by the least that fits it, and packs the whole plate when
+  no clear place is left; Scale to fit scales a model too large for it, Combine opens on two models that meet, and
+  Drill drain holes runs Drain's Auto on a hollow model with no way out.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
 
@@ -686,6 +718,9 @@ shown: its exposure, the print time until it is done, the area it cures and the 
   by edge, in its form.
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
+- **Zoom to the cursor:** the wheel zooms in towards the model or the plate under the cursor,
+  so a small model beside a large one is reached without panning; over empty space it zooms
+  on the middle of the view. Zooming out keeps the centre of rotation where it is.
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Show as printed:** the printer put away and the models in a light studio, standing on a
   cutting mat with real things round them at their real size: a pen, a ruler, a one-euro
@@ -726,7 +761,7 @@ Output in its settings, so the save dialog lists each extension once.
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Zortrax, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
-| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the HALOT X1 Max reads it. |
+| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`); 3, 6 or 7 bits by machine (`.cxdlpv4`) | Each `.cxdlpv4` machine gets its own layer codec; only the HALOT X1 Max's is checked against a known file, the others are not yet printed from. The 3-bit machines (HALOT-X1, HALOT-SKY 2025, PioNext Ultra) light a row in pairs of pixels, halving its resolution. |
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D, Carima | full 8 bits | Only the plain variant is written. |
@@ -847,8 +882,8 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   and send in one press from the button over it: a bar shows the slicing and the upload,
   then the same button starts the print, Slice to a file the square beside it; Cancel
   stops the slice or the upload. The card names the printer and what it is doing; a press
-  on it lists the others and scans again. A printer busy printing gets no file: the card
-  says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
+  on it lists the others and scans again. A printer busy printing gets no file: Slice
+  saves it instead, its tooltip says why. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
 - A sliced file carries a picture of the plate for the printer's screen: the models and
   their supports in the viewport's resin and support colours, shaded smooth, darker in
@@ -917,9 +952,9 @@ address in a video player).
   icons, at the tool row's left, each saying what it does under the pointer.
 - With nothing on the plate the models card says so and offers Open a model; the stage
   stays clear.
-- **Check:** Previous and Next step through the layers with issues; the islands and the
-  suction cups each have their own section with what fixes them; the plate card gives the
-  plate's time, resin, weight and price.
+- **Check:** Previous and Next step through every issue, the plate's first, and go round; each
+  kind of issue has its own card with what fixes it; the plate card gives the plate's time,
+  resin, weight and price.
 - The support group picker lists what stands on the plate, then the profiles holding
   nothing, then *Edit the profiles*.
 - Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
@@ -964,7 +999,7 @@ it if it has defects, orient it, hollow, drain and hold up its cavity where a wa
 resin, and stand it on Auto supports, stopping with why where the model does not fit or
 resin stays trapped. Every flag you type wins over its step, and `--json` says
 what was decided for each model. The window does the same as **Prepare for print**.
-Built-in recipe beside it, a starting point for small detailed models: `miniatures`;
+Built-in recipes beside it: `fix-issues`, what Check's **Fix all** runs, and `miniatures`, a starting point for small detailed models;
 `encrust recipes list` names them and `recipes show` prints one.
 `--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
@@ -993,8 +1028,9 @@ room beside their model stops rather than printing them on a neighbour.
 by hand, set blockers, take the pieces of a cut or a split out as meshes, or hollow or support
 a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
 Nor can you open a sliced file as a model, use a saved Hollow or Drain preset, press one of
-the built-in textures, pick an edge-smoothing look by name, set a model's lift off the plate
-by a number of your own, or support the islands and drill the suction cups Check finds.
+the built-in textures, pick an edge-smoothing look by name, or set a model's lift off the plate
+by a number of your own. Supporting the islands and weak necks and drilling the suction cups Check finds
+is a recipe's `check` step (`retry`, `hold_levers`, `drill_cups`).
 
 ---
 

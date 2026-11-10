@@ -7,8 +7,10 @@ use anyhow::Result;
 use core_recipe::{Decision, Metric, OnFail, Plan, StepKind, decide};
 
 use super::step::Going;
-use super::work::{self, Batch, NotYet, Settings, Work};
+use super::work::{self, Batch, CheckFixes, NotYet, Settings, Work};
 use super::{IDLE_POLLS, Run, Step};
+use crate::arrange::{arrange_plate, clear_the_way};
+use crate::check::IssueKind;
 use crate::i18n::tr;
 use crate::job::Highest;
 use crate::plate::BuildPlate;
@@ -49,6 +51,7 @@ impl Run {
             supported: Vec::new(),
             built: Vec::new(),
             unplugged: Vec::new(),
+            answers: Vec::new(),
             idle: 0,
             done: 0,
             steps: 0,
@@ -134,7 +137,10 @@ impl Run {
             .iter()
             .any(|metric| metric.known_after() == [StepKind::Check])
         {
-            let check = Work::Check { attempt: 0 };
+            let check = Work::Check {
+                attempt: 0,
+                fixes: CheckFixes::default(),
+            };
             self.queue.push_back(Batch::of(Work::Scan, ids.clone()));
             self.queue.push_back(Batch::of(check, ids));
         } else if read.contains(&Metric::Trapped) {
@@ -175,9 +181,21 @@ impl Run {
                 self.batch_ended();
                 Some(Next::Working)
             }
-            Work::Arrange { spacing_mm } => {
+            Work::Arrange {
+                spacing_mm,
+                only_in_the_way,
+            } => {
                 self.step = Step::Arrange;
-                let said = crate::arrange::arrange_plate(&mut doc.scene, &doc.plate, *spacing_mm);
+                let said = match only_in_the_way {
+                    true => {
+                        let pairs = doc.meeting.pairs(&doc.scene);
+                        clear_the_way(&mut doc.scene, &doc.plate, &pairs, *spacing_mm)
+                    }
+                    false => arrange_plate(&mut doc.scene, &doc.plate, *spacing_mm),
+                };
+                if *only_in_the_way {
+                    self.answered(IssueKind::InTheWay, &said);
+                }
                 let stopped = self.ended_by(said, &mut machine.status);
                 if stopped.is_some() {
                     self.queue.push_front(batch.clone());

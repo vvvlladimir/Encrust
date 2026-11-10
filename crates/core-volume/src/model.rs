@@ -35,9 +35,8 @@ pub struct ModelHollow {
     /// The blockers and the points of the channel being laid out as balls, meshed for a
     /// viewport. Kept so that a renderer's cache is not churned when nothing moved.
     markers: Option<Arc<Mesh>>,
-    /// The holes and channels as they are actually cut, and the bodies they cut with:
-    /// deepened through the wall once the model is hollow, and in the model's own space.
-    /// A cut is its own operation and does not wait for a cavity; see ADR 0075.
+    /// The holes and channels as they are cut, in the model's own space, and the bodies they
+    /// cut with: drains deepened through the wall once the model is hollow (ADR 0075, 0414).
     deepened: Vec<DrainHole>,
     cuts: Option<Arc<Mesh>>,
     built: Option<Shell>,
@@ -112,8 +111,8 @@ impl ModelHollow {
         &self.drains
     }
 
-    /// The holes and channels as they are cut: the holes reach further than the depth
-    /// they were asked at wherever they have a wall to go through.
+    /// The holes and channels as they are cut: a drain reaches further than the depth it
+    /// was asked at wherever it has a wall to go through.
     pub fn cut(&self) -> (&[DrainHole], &[Channel]) {
         (&self.deepened, &self.channels)
     }
@@ -334,9 +333,8 @@ impl ModelHollow {
         self.remesh_markers();
     }
 
-    /// Drills a hole where the model was clicked, straight into the surface it was
-    /// clicked on, unless one already drilled there takes it in; walled on a solid model
-    /// (ADR 0346). `point` and `normal` are in plate coordinates.
+    /// Drills a hole into the face of `normal` clicked at `point`, plate coordinates, unless one
+    /// drilled takes it in, walled on a solid model (ADR 0346); says whether it drilled one.
     pub fn add_drain(
         &mut self,
         mesh: &Mesh,
@@ -345,30 +343,27 @@ impl ModelHollow {
         normal: Vec3,
         size: HoleSize,
         transform: Transform,
-    ) {
-        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
-            self.add_hole(hole);
-        }
+    ) -> bool {
+        Self::drain_at(mesh, bvh, point, normal, size, transform)
+            .is_some_and(|hole| self.add_hole(hole))
     }
 
-    /// Drills `hole`, in the model's own space, as a click would — walled on a solid model —
-    /// unless one already drilled takes it in: what [`Self::drain_at`] or
-    /// [`Self::support_drain_at`] placed.
-    pub fn add_hole(&mut self, hole: DrainHole) {
+    /// Drills `hole` of [`Self::drain_at`], model space, as a click would, unless one drilled
+    /// takes it in; says whether it drilled one.
+    pub fn add_hole(&mut self, hole: DrainHole) -> bool {
         let hole = self.placed(hole);
-        if !self.has_hole_over(&hole) {
+        let new = !self.has_hole_over(&hole);
+        if new {
             self.drains.push(hole);
             self.recut();
         }
+        new
     }
 
     /// Whether `hole`, in the model's own space, would lie wholly inside one already drilled
     /// at least as wide: a click on a hole adds nothing, one reaching past it is drilled.
     pub fn has_hole_over(&self, hole: &DrainHole) -> bool {
-        let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
-        self.drains.iter().any(|old| {
-            within(old, hole.at) && within(old, tip) && hole.diameter_mm <= old.diameter_mm
-        })
+        hole.lies_within(&self.drains)
     }
 
     /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
@@ -383,7 +378,10 @@ impl ModelHollow {
     ) -> Option<DrainHole> {
         let (at, axis, size) = in_model(point, normal, size, transform)?;
         let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm, size.depth_mm);
-        Some(DrainHole::sized(at, axis, size, lift_mm))
+        Some(DrainHole {
+            kind: HoleKind::AtDepth,
+            ..DrainHole::sized(at, axis, size, lift_mm)
+        })
     }
 
     /// The hole a click at `point` on a face of `normal` of the supports `mesh`, all in
@@ -405,7 +403,7 @@ impl ModelHollow {
         })
     }
 
-    /// `hole` as it would be cut here: through the wall, once the model is hollow.
+    /// `hole` as it would be cut here: a drain through the wall, once the model is hollow.
     pub fn as_cut(&self, hole: DrainHole) -> DrainHole {
         let hole = self.placed(hole);
         self.pierced(std::slice::from_ref(&hole))
@@ -413,12 +411,12 @@ impl ModelHollow {
             .unwrap_or(hole)
     }
 
-    /// `hole` as a click drills it here: into a model, walled while it is solid (ADR 0346).
+    /// `hole` as it is drilled here: into a model, walled while it is solid (ADR 0346).
     fn placed(&self, hole: DrainHole) -> DrainHole {
         DrainHole {
             kind: match hole.kind {
                 HoleKind::Support => HoleKind::Support,
-                _ if self.is_hollow() => HoleKind::Drain,
+                kind if self.is_hollow() => kind,
                 _ => HoleKind::Walled,
             },
             ..hole
@@ -432,7 +430,7 @@ impl ModelHollow {
         };
         let local = inverse.transform_point3(point);
 
-        let hit = self.drains.iter().position(|hole| within(hole, local));
+        let hit = self.drains.iter().position(|hole| hole.holds(local));
         if let Some(index) = hit {
             self.drains.remove(index);
             self.recut();
@@ -518,8 +516,8 @@ impl ModelHollow {
         self.markers = blocker_markers(self.blockers.iter().copied().chain(points)).map(Arc::new);
     }
 
-    /// Re-cuts what is placed. A hole is drilled to the depth it was asked for, and once
-    /// there is a cavity behind it, through the wall the cavity left; see ADR 0075.
+    /// Re-cuts what is placed. A hole is drilled to the depth it was asked for, and a drain,
+    /// once there is a cavity behind it, through the wall the cavity left (ADR 0075, 0414).
     fn recut(&mut self) {
         self.deepened = self.pierced(&self.drains);
         // A hole is placed on a surface and a channel dug between points, so the only body
@@ -605,15 +603,6 @@ impl ModelHollow {
         carried.recut();
         carried
     }
-}
-
-/// Whether `point` is inside the tube `hole` cuts, in the model's own space.
-fn within(hole: &DrainHole, point: Vec3) -> bool {
-    let axis = hole.axis.normalize_or_zero();
-    let along = (point - hole.at).dot(axis);
-    let radius = hole.diameter_mm / 2.0;
-    (-radius..=hole.depth_mm).contains(&along)
-        && (point - hole.at - axis * along).length() <= radius
 }
 
 /// Where a click at `point` on a face of `normal`, in plate coordinates, drills in the model's

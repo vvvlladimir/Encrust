@@ -1,65 +1,23 @@
-//! The list of issues the check found: a row per kind and layer, filtered by kind.
+//! The issues a card of the check lists: a row per kind and layer.
 
 use core_analysis::{Risk, RiskKind};
-use egui::Color32;
 
-use crate::check::covered_mm2;
+use crate::check::{IssueKind, Stop, covered_mm2};
 use crate::i18n::tr;
-use crate::ui::{Segment, Segmented, hint, issue_list, issue_row, kept};
-
-use super::tint;
+use crate::ui::{hint, issue_line, issue_lines};
 
 /// Rows listed before the rest are only counted: a stack with hundreds of islands needs
 /// supports, not scrolling.
 const LISTED: usize = 200;
 
-/// Which kind of issue the list shows.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub(super) enum Filter {
-    #[default]
-    All,
-    Islands,
-    Levers,
-    Peel,
-    Cups,
-    Thin,
-}
-
-impl Filter {
-    pub(super) fn of(kind: &RiskKind) -> Self {
-        match kind {
-            RiskKind::Island { .. } | RiskKind::Floating { .. } => Self::Islands,
-            RiskKind::Lever { .. } => Self::Levers,
-            RiskKind::Peel { .. } => Self::Peel,
-            RiskKind::SuctionCup { .. } => Self::Cups,
-            RiskKind::Thin { .. } => Self::Thin,
-        }
-    }
-
-    pub(super) fn name(self) -> String {
-        match self {
-            Self::All => tr!("check-filter-all"),
-            Self::Islands => tr!("check-filter-islands"),
-            Self::Levers => tr!("check-filter-levers"),
-            Self::Peel => tr!("check-filter-peel"),
-            Self::Cups => tr!("check-filter-cups"),
-            Self::Thin => tr!("check-filter-thin"),
-        }
-    }
-
-    pub(super) fn admits(self, kind: &RiskKind) -> bool {
-        matches!(
-            (self, kind),
-            (Self::All, _)
-                | (
-                    Self::Islands,
-                    RiskKind::Island { .. } | RiskKind::Floating { .. }
-                )
-                | (Self::Levers, RiskKind::Lever { .. })
-                | (Self::Peel, RiskKind::Peel { .. })
-                | (Self::Cups, RiskKind::SuctionCup { .. })
-                | (Self::Thin, RiskKind::Thin { .. })
-        )
+/// The card `kind` of issue stands on.
+pub(super) fn kind_of(kind: &RiskKind) -> IssueKind {
+    match kind {
+        RiskKind::Island { .. } | RiskKind::Floating { .. } => IssueKind::Islands,
+        RiskKind::Lever { .. } => IssueKind::Necks,
+        RiskKind::Peel { .. } => IssueKind::Peel,
+        RiskKind::SuctionCup { .. } => IssueKind::Cups,
+        RiskKind::Thin { .. } => IssueKind::Thin,
     }
 }
 
@@ -67,10 +25,9 @@ impl Filter {
 pub(super) struct Row {
     pub(super) layer: usize,
     pub(super) name: String,
-    pub(super) filter: Filter,
+    pub(super) kind: IssueKind,
     /// What stood on an island taken out, rather than an island itself.
     pub(super) hanging: bool,
-    pub(super) tint: Color32,
     pub(super) count: usize,
     pub(super) area_mm2: f32,
     /// The worst reading among them: stress for a lever, force for a peel, resin held
@@ -81,10 +38,19 @@ pub(super) struct Row {
 }
 
 impl Row {
+    /// The issues folded into this row.
+    fn issues(&self, risks: &[Risk]) -> Vec<Risk> {
+        risks
+            .iter()
+            .filter(|risk| self.holds(risk))
+            .copied()
+            .collect()
+    }
+
     /// Whether `risk` is one of the issues folded into this row.
     fn holds(&self, risk: &Risk) -> bool {
         risk.layer == self.layer
-            && Filter::of(&risk.kind) == self.filter
+            && kind_of(&risk.kind) == self.kind
             && matches!(risk.kind, RiskKind::Floating { .. }) == self.hanging
     }
 }
@@ -93,7 +59,7 @@ impl Row {
 pub(super) fn rows(risks: &[Risk]) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
     for risk in risks {
-        let filter = Filter::of(&risk.kind);
+        let kind = kind_of(&risk.kind);
         let hanging = matches!(risk.kind, RiskKind::Floating { .. });
         let area_mm2 = covered_mm2(&risk.kind).unwrap_or(0.0);
         let (worst, lever_mm, width_mm) = match risk.kind {
@@ -118,9 +84,8 @@ pub(super) fn rows(risks: &[Risk]) -> Vec<Row> {
             _ => rows.push(Row {
                 layer: risk.layer,
                 name: issue_name(risk),
-                filter,
+                kind,
                 hanging,
-                tint: tint(risk),
                 count: 1,
                 area_mm2,
                 worst,
@@ -132,78 +97,26 @@ pub(super) fn rows(risks: &[Risk]) -> Vec<Row> {
     rows
 }
 
-/// The chips that narrow the list to one kind, shown only when there is more than one
-/// kind to choose between.
-pub(super) fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
-    let id = ui.id().with("issue-filter");
-    let tally = |filter: Filter| {
-        risks
-            .iter()
-            .filter(|risk| filter.admits(&risk.kind))
-            .count()
-    };
-    let kinds = [
-        Filter::Islands,
-        Filter::Levers,
-        Filter::Peel,
-        Filter::Cups,
-        Filter::Thin,
-    ];
-    let present: Vec<(Filter, usize)> = kinds
-        .into_iter()
-        .map(|filter| (filter, tally(filter)))
-        .filter(|(_, count)| *count > 0)
-        .collect();
-    let mut chosen = kept::get::<Filter>(ui.ctx(), id)
-        .filter(|chosen| present.iter().any(|(filter, _)| filter == chosen))
-        .unwrap_or_default();
-    if present.len() < 2 {
-        return Filter::All;
-    }
-
-    let labels: Vec<(Filter, String)> = std::iter::once((Filter::All, Filter::All.name()))
-        .chain(
-            present
-                .iter()
-                .map(|(filter, count)| (*filter, format!("{} {count}", filter.name()))),
-        )
-        .collect();
-    let segments: Vec<Segment<'_, Filter>> = labels
-        .iter()
-        .map(|(filter, label)| Segment::new(*filter, label.as_str()))
-        .collect();
-    Segmented::new(&segments)
-        .width(ui.available_width())
-        .show(ui, &mut chosen);
-    kept::set(ui.ctx(), id, &chosen);
-    chosen
-}
-
-/// The rows `filter` admits. Answers the issues of the row clicked.
+/// The rows of `kind`. Answers the issues of the row clicked.
 pub(super) fn listing(
     ui: &mut egui::Ui,
     shown: usize,
     risks: &[Risk],
-    filter: Filter,
+    kind: IssueKind,
 ) -> Option<Vec<Risk>> {
     let rows: Vec<Row> = rows(risks)
         .into_iter()
-        .filter(|row| filter == Filter::All || row.filter == filter)
+        .filter(|row| row.kind == kind)
         .collect();
-    let picked = issue_list(ui, "check-layers", |ui| {
+    let ink = crate::ui::theme::colors().text_mid;
+    let picked = issue_lines(ui, "layers", |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
             let place = tr!("check-layer", layer = row.layer + 1);
             let selected = row.layer == shown;
-            let response = issue_row(ui, row.tint, (&place, None), &detail(row), selected);
+            let response = issue_line(ui, &place, (&detail(row), ink), selected);
             if response.on_hover_text(&row.name).clicked() {
-                picked = Some(
-                    risks
-                        .iter()
-                        .filter(|risk| row.holds(risk))
-                        .copied()
-                        .collect(),
-                );
+                picked = Some(row.issues(risks));
             }
         }
         picked
@@ -214,29 +127,55 @@ pub(super) fn listing(
     picked
 }
 
-/// The issues of the row `filter` admits on the next layer past `shown`, or the one
-/// before it when not `forward`.
-pub(super) fn neighbour(
-    risks: &[Risk],
-    filter: Filter,
+/// The stops of the layers, in the order the arrows take them.
+pub(super) fn layer_stops(risks: &[Risk]) -> Vec<Stop> {
+    let stop = |row: Row| Stop::Layer {
+        layer: row.layer,
+        kind: row.kind,
+        hanging: row.hanging,
+    };
+    rows(risks).into_iter().map(stop).collect()
+}
+
+/// The issues of the row `stop` names.
+pub(super) fn issues_at(risks: &[Risk], stop: Stop) -> Vec<Risk> {
+    let at = |row: &Row| {
+        matches!(stop, Stop::Layer { layer, kind, hanging }
+            if row.layer == layer && row.kind == kind && row.hanging == hanging)
+    };
+    let rows = rows(risks);
+    rows.iter()
+        .find(|row| at(row))
+        .map_or_else(Vec::new, |row| row.issues(risks))
+}
+
+/// The stop after `at` or, not `forward`, before it, going round; from nowhere, the first
+/// layer past `shown` or the last before it, so a slider moved by hand is where they start.
+pub(super) fn next_stop(
+    stops: &[Stop],
+    at: Option<Stop>,
     shown: usize,
     forward: bool,
-) -> Option<Vec<Risk>> {
-    let rows: Vec<Row> = rows(risks)
-        .into_iter()
-        .filter(|row| filter == Filter::All || row.filter == filter)
-        .collect();
-    let row = match forward {
-        true => rows.iter().find(|row| row.layer > shown),
-        false => rows.iter().rev().find(|row| row.layer < shown),
-    }?;
-    Some(
-        risks
+) -> Option<Stop> {
+    let last = stops.len().checked_sub(1)?;
+    let here = at.and_then(|at| stops.iter().position(|stop| *stop == at));
+    let layer_of = |stop: &Stop| match stop {
+        Stop::Layer { layer, .. } => Some(*layer),
+        Stop::Plate(_) => None,
+    };
+    let index = match (here, forward) {
+        (Some(index), true) => (index + 1) % stops.len(),
+        (Some(index), false) => index.checked_sub(1).unwrap_or(last),
+        (None, true) => stops
             .iter()
-            .filter(|risk| row.holds(risk))
-            .copied()
-            .collect(),
-    )
+            .position(|stop| layer_of(stop).is_some_and(|layer| layer > shown))
+            .unwrap_or(0),
+        (None, false) => stops
+            .iter()
+            .rposition(|stop| layer_of(stop).is_some_and(|layer| layer < shown))
+            .unwrap_or(last),
+    };
+    stops.get(index).copied()
 }
 
 /// What one row holds, short enough for the right of it.
@@ -246,29 +185,29 @@ fn detail(row: &Row) -> String {
         return tr!("check-row-hanging", area = area);
     }
     let count = row.count;
-    match (row.filter, count) {
-        (Filter::Islands, _) => tr!(
+    match (row.kind, count) {
+        (IssueKind::Islands, _) => tr!(
             "check-row-islands",
             count = count,
             area = format!("{:.2}", row.area_mm2)
         ),
-        (Filter::Levers, 1) => tr!(
+        (IssueKind::Necks, 1) => tr!(
             "check-row-lever",
             lever = format!("{:.1}", row.lever_mm),
             stress = format!("{:.0}", row.worst)
         ),
-        (Filter::Levers, _) => tr!(
+        (IssueKind::Necks, _) => tr!(
             "check-row-levers",
             count = count,
             stress = format!("{:.0}", row.worst)
         ),
-        (Filter::Cups, 1) => tr!("check-row-cup", area = format!("{:.0}", row.area_mm2)),
-        (Filter::Cups, _) => tr!(
+        (IssueKind::Cups, 1) => tr!("check-row-cup", area = format!("{:.0}", row.area_mm2)),
+        (IssueKind::Cups, _) => tr!(
             "check-row-cups",
             count = count,
             area = format!("{:.1}", row.area_mm2)
         ),
-        (Filter::Thin, _) => tr!(
+        (IssueKind::Thin, _) => tr!(
             "check-row-thin",
             count = count,
             width = format!("{:.2}", row.width_mm)

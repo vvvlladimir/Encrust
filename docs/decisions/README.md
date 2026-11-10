@@ -84,7 +84,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0053](0053-nearest-surface-queries-live-beside-the-ray-ones.md) | Nearest-surface queries live beside the ray ones, in `core-geometry` | Accepted |
 | [0054](0054-inside-is-decided-by-the-generalised-winding-number.md) | Inside is decided by the generalised winding number | Accepted |
 | [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted |
-| [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity |
+| [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one set by hand |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
 | [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted; the triangulator and the question on import superseded by 0270 |
@@ -295,11 +295,18 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0320](0320-an-infill-is-a-cell-and-a-density.md) | State an infill by its cell and its density, and derive its walls and holes | Accepted |
 | [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted; the plug's shape superseded by 0321 |
 | [0396](0396-a-blocker-reaches-past-the-wall-and-can-fit-the-model.md) | A blocker reaches past the wall, can fit the model, and runs on as a rod | Proposed |
-| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity |
+| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one stopping short of the wall |
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
 | [0412](0412-a-model-is-read-once-for-its-drill-and-its-plugs.md) | Read a model into the engine once for its drill and its plugs, and build its shell on that read | Proposed |
-| [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
+| [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted; a hole clicked into a hollow model keeps its depth since 0414 |
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
+| [0414](0414-a-hole-set-by-hand-stops-at-its-depth.md) | A hole set by hand stops at its depth | Accepted |
+| [0415](0415-checks-buttons-answer-what-it-finds.md) | Check's buttons answer what it finds, through the calls the command line makes | Accepted |
+| [0416](0416-check-lays-out-its-issues-as-cards-and-fixes-them-by-a-recipe.md) | Check lays out its issues as cards and fixes them all by a built-in recipe | Accepted |
+| [0417](0417-check-vents-a-cup-by-its-thinnest-wall-and-holds-a-neck-by-its-stress.md) | Vent a cup through its thinnest wall, hold a neck by its stress, name a cup by its pull | Accepted |
+| [0418](0418-a-model-in-the-way-slides-then-turns-about-the-vertical.md) | Move a model onto the plate by a slide, then by the least turn about the vertical | Accepted |
+| [0419](0419-a-quick-check-runs-in-the-background-and-the-full-one-refines-it.md) | Check the plate quickly in the background, and let the full check refine it | Proposed |
+| [0420](0420-a-fix-that-had-its-turn-keeps-its-button.md) | Keep a fix's button on its card after the fix has had its turn | Proposed |
 | [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
 | [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Superseded by 0403 (the command line's resolution of the flags only) |
 | [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |
@@ -347,7 +354,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0392](0392-models-meeting-on-the-plate.md) | Warn of models that meet on the plate, by their faces and by winding, and of supports past it | Proposed |
-| [0393](0393-check-warns-of-a-sealed-cavity-and-a-solid-model-worth-hollowing.md) | Warn of a cavity with no drain hole and of a solid model worth hollowing | Proposed |
+| [0393](0393-check-warns-of-a-sealed-cavity-and-a-solid-model-worth-hollowing.md) | Warn of a cavity with no drain hole and of a solid model worth hollowing | Proposed; a hole set at a depth counts as a way out past the wall by 0414 |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
 | [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319; the next click's sizes superseded by 0397 |
@@ -391,7 +398,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted; blank previews are superseded by 0401 |
 | [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
 | [0365](0365-write-the-ctb-the-printers-read.md) | Write the `.ctb` the printers read, and pick its revision by the panel | Accepted |
-| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted |
+| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted; the codec for every machine is superseded by 0413 |
+| [0413](0413-a-cxdlpv4-layer-takes-the-codec-its-machine-reads.md) | A `.cxdlpv4` layer takes the codec its machine reads | Accepted |
 
 ### Printer and material profiles
 
@@ -496,7 +504,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |
 | [0221](0221-the-columns-float-over-a-stage-the-width-of-the-window.md) | Float the side columns over a stage the width of the window | Accepted; the plate column's fold is superseded by 0230 |
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
-| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
+| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted; the reason under an action is superseded by 0421 |
+| [0421](0421-nothing-is-written-under-a-primary-button.md) | Write nothing under a primary button | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
 | [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382 |
 | [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Accepted |

@@ -1,6 +1,6 @@
 # 0367. Write the `.cxdlpv4` the printers read, with its own codec and model codes
 
-- **Status:** Accepted
+- **Status:** Accepted; the codec for every machine is superseded by 0413
 - **Date:** 2026-10-27
 
 ## Context

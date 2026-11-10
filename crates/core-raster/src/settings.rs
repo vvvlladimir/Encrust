@@ -124,6 +124,24 @@ impl RasterSettings {
         }
     }
 
+    /// The same panel read in squares of `bin` by `bin` pixels: a coarser, quicker measure of
+    /// what a stack cures, its positions in the same millimetres; see `docs/decisions/0419`.
+    #[must_use]
+    pub fn binned(self, bin: NonZeroU8) -> Self {
+        let bin = bin.get();
+        let scale = f32::from(bin);
+        Self {
+            width_px: self.width_px.div_ceil(u32::from(bin)),
+            height_px: self.height_px.div_ceil(u32::from(bin)),
+            pitch: PixelPitch {
+                x: self.pitch.x * scale,
+                y: self.pitch.y * scale,
+            },
+            blur_px: self.blur_px / bin,
+            ..self
+        }
+    }
+
     /// Where on the plate a point of a mask drawn for this panel stands, `panel_mm`
     /// millimetres from its first pixel: the panel's mirroring undone.
     pub fn plate_mm(&self, panel_mm: [f32; 2]) -> Vec2 {
@@ -174,6 +192,22 @@ mod tests {
             grey: Grey::default(),
             blur_px: 0,
         }
+    }
+
+    #[test]
+    fn a_binned_panel_places_a_point_where_the_full_one_does() {
+        let full = RasterSettings {
+            mirror_x: true,
+            ..settings()
+        };
+        let bin = NonZeroU8::new(2).expect("two is not zero");
+        let binned = full.binned(bin);
+        assert_eq!((binned.width_px, binned.height_px), (32, 16));
+        let (at_full, at_binned) = (full.plate_mm([1.3, 0.7]), binned.plate_mm([1.3, 0.7]));
+        assert!(
+            at_full.distance(at_binned) < 1e-5,
+            "the same point of the plate, {at_full}; got {at_binned}"
+        );
     }
 
     #[test]

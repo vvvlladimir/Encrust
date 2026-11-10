@@ -57,13 +57,17 @@ on `accent`.
 `theme::Scene` is the other half of the tokens: the cool resin of the model (`object`), the
 warm grey `support` and a `support_tint` per group after it, `selected`, `unsound`,
 the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
-with, `painted` and `blocked`, the rose `shown` a clean surface keeps supports off, the `fault` the Repair tool marks the finding in view with and the darker `fault_rest` the others, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
+with, `painted` and `blocked`, the rose `shown` a clean surface keeps supports off, the `fault` the Repair tool marks the finding in view with and the `fault_rest` the others, nearer the plate than it, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
 volume, the full red `meets` of the seam where models meet, the `gizmo` handles, the plate's `grid_minor` and `grid_major`, the translucent
 `plate_border` and `volume`, the `plate` the plate is filled with, the dashed `section_frame`, the three `plate_axis` arrows, the
 `shadow` the models cast, and the `light` they are lit by: a sky and a ground, a key and a
 fill, with the directions the two lights travel. It is separate from the `Palette` because
 none of it is window chrome and the luminance ladder above does not apply.
+
+The light `Scene` keeps each dark token's OKLCH hue at a lower lightness. A model, picked or
+unsound, stands 3:1 off the light plate (tested); every mark parts from the model, lit as
+the shader lights it, about as far as under the dark one.
 
 Two numbers stand beside them: `SEEN_THROUGH`, how much of itself a surface keeps at most
 when the viewport is drawing the models through, which is the x-ray view in `viewport.md`;
@@ -149,6 +153,9 @@ paints from tokens only.
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
 | `issue_row`, `issue_list` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there. The list shows seven and scrolls the rest inside itself |
+| `issue_card`, `IssueHead` | A kind of issue on `raised`, `BUTTON_H` heading: a glyph in its colour, the name cut to fit, an aside small at the right cut first and gone while open, the count, a caret; a press folds it, its body unfolds under it 6 in |
+| `issue_lines`, `issue_line` | A card's rows on `sunken`, 30 tall, one apart, five shown and the rest scrolling: where it is, and a reading at the right in the ink given; hovered in `hover`, in hand washed and ringed in the accent |
+| `answered_row` | A kind already answered: a tick in `ok`, its name in `text_mid`, what was done small at the right cut to fit and read whole on hover, a small Undo where it is the latest edit |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `picture_square` | A square of a picture, or an empty raised one, a caret on a dark disc saying a click opens more: the relief's picture |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
@@ -170,6 +177,7 @@ paints from tokens only.
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
 | `secondary_button` | The ordinary full-width button |
+| `flow_buttons`, `FlowButton` | Buttons sharing rows by the width of their words, each row filling its width, wrapping past it; the lead edged in the accent with its words in `accent_soft`; every one says on hover what it does |
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
@@ -314,8 +322,8 @@ What a block `describe`s is read from the ringed question mark beside its title
 (`help_mark`), on hover and in a popup a click holds open; nothing describing a block is
 printed in it. A block or a group turned on by one switch carries that switch in its
 heading (`section_with_switch`, `subheading_with_switch`) rather than naming it twice. A
-tool's action stands at the card's foot with no caption: what it does is its tooltip, and
-only the reason it cannot run is written under it (ADR 0230).
+tool's action stands at the card's foot with no caption and nothing under it: what it
+does, or why it cannot run, is its tooltip (ADR 0230, 0421).
 
 ## Layout
 

@@ -6,8 +6,9 @@ use std::collections::VecDeque;
 
 use anyhow::{Result, bail};
 use core_geometry::Quat;
-use core_recipe::{Metrics, Plan, StepKind};
+use core_recipe::{Metrics, Plan};
 
+use crate::check::IssueKind;
 use crate::i18n::tr;
 use crate::job::Highest;
 use crate::scene::{ObjectId, SceneObject};
@@ -17,15 +18,22 @@ use crate::supports::BuiltTo;
 use crate::tool_settings::ToolSettings;
 
 mod check;
+mod fixes;
 mod measures;
 mod recipes;
 mod run;
 mod save;
+mod start;
 mod step;
 mod work;
 
+pub use fixes::start_fixes;
 pub use recipes::{Library, kind_glyph, kind_name};
 use run::Next;
+#[cfg(test)]
+use start::start_with;
+pub use start::{blocker, held_up, start};
+use start::{busy, start_on};
 use step::{Ended, Going};
 use work::Batch;
 
@@ -133,6 +141,8 @@ struct Run {
     built: Vec<(ObjectId, BuiltTo)>,
     /// The models whose latest drain step left their holes with no plug.
     unplugged: Vec<ObjectId>,
+    /// What the run's steps said of each kind of issue Check names.
+    answers: Vec<(IssueKind, Status)>,
     /// Settled polls the plate has been unsettled with nothing building, see [`IDLE_POLLS`].
     idle: u8,
     /// Steps done, and the steps the run is reckoned to take in all.
@@ -182,7 +192,7 @@ impl Prepare {
     fn attempt(&self) -> Option<u8> {
         let run = self.run.as_ref()?;
         match run.going.as_ref()?.0.work {
-            work::Work::Check { attempt } => Some(attempt),
+            work::Work::Check { attempt, .. } => Some(attempt),
             _ => None,
         }
     }
@@ -194,79 +204,6 @@ pub fn holding(tools: &Tools) -> Option<String> {
         .prepare
         .is_holding()
         .then(|| tr!("prepare-running-why"))
-}
-
-/// Why Prepare cannot start on the plate as it is, or `None` when it can: nothing to prepare,
-/// or a job that will land on the plate still running.
-pub fn blocker(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
-    if doc.scene.target_count() == 0 {
-        return Some(tr!("prepare-nothing-visible"));
-    }
-    if tools.prepare.is_running() || busy(doc, tools, machine) {
-        return Some(tr!("prepare-busy"));
-    }
-    let catalogue = &machine.slicing.catalogue;
-    let prepare = &tools.prepare;
-    prepare
-        .library
-        .plan(catalogue, &prepare.recipe)
-        .err()
-        .map(|error| format!("{error:#}"))
-}
-
-/// Whether a job that will land on the plate is running.
-fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
-    tools.orient.is_running()
-        || tools.hollow.job.is_some()
-        || tools.drain.job.is_some()
-        || tools.drain.auto.is_some()
-        || tools.drain.laying_plugs()
-        || tools.supports.job.is_some()
-        || tools.boolean.is_busy()
-        || tools.cut.is_busy()
-        || tools.relief.is_busy()
-        || tools.text.is_busy()
-        || doc.repairs.is_busy()
-        || doc.imports.is_busy()
-        || machine.slicing.job.is_some()
-}
-
-/// Starts preparing what a tool would act on now, the picked models or the whole plate, by
-/// the recipe picked.
-pub fn start(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<()> {
-    let catalogue = &machine.slicing.catalogue;
-    let plan = tools
-        .prepare
-        .library
-        .plan(catalogue, &tools.prepare.recipe)?;
-    start_with(plan, doc, tools, machine)
-}
-
-/// The same by `plan`.
-fn start_with(plan: Plan, doc: &mut Doc, tools: &mut Tools, machine: &mut Machine) -> Result<()> {
-    if let Some(why) = blocker(doc, tools, machine) {
-        bail!(why);
-    }
-    let ids: Vec<ObjectId> = doc
-        .scene
-        .targets()
-        .filter(|object| !object.mesh.is_empty())
-        .map(|object| object.id)
-        .collect();
-    if ids.is_empty() {
-        bail!(tr!("prepare-nothing-visible"));
-    }
-    let mut steps = plan.recipe().steps.iter();
-    let supports = steps.any(|step| step.enabled && step.kind == StepKind::Supports);
-    if supports && machine.slicing.catalogue.autos().next().is_none() {
-        bail!(tr!("supports-no-automatic"));
-    }
-    let settings = ToolSettings::of(tools, &machine.slicing);
-    let chosen = machine.slicing.chosen();
-    doc.history.hold(&doc.scene, &settings, chosen);
-    tools.prepare.run = Some(Run::new(plan, ids));
-    poll(doc, tools, machine, true);
-    Ok(())
 }
 
 /// Moves a waiting run on, on the plate as the user left it: past its pause, or trying the
@@ -358,7 +295,7 @@ pub fn poll(doc: &mut Doc, tools: &mut Tools, machine: &mut Machine, settled: bo
             tools.prepare.run = Some(run);
             true
         }
-        Ok(Next::Done) => finish(&run, doc, &mut machine.status),
+        Ok(Next::Done) => finish(&run, doc, tools, &mut machine.status),
         Ok(Next::Stopped(why)) => halt(run, doc, tools, machine, why),
         Err(error) => halt(run, doc, tools, machine, Status::failed(&error)),
     }
@@ -379,6 +316,7 @@ fn poll_going(
     };
     match ended {
         Ended::Landed(said) => {
+            run.note_landing(&batch, &said);
             machine.status = said;
             if let Err(error) = run.checked(doc, tools, machine, &batch) {
                 run.queue.push_front(batch);
@@ -424,7 +362,8 @@ fn halted(run: &mut Run, doc: &mut Doc, machine: &mut Machine, why: Status) -> b
 }
 
 /// Records the run as one edit and says how many models it prepared.
-fn finish(run: &Run, doc: &mut Doc, status: &mut Status) -> bool {
+fn finish(run: &Run, doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bool {
+    run.hand_over_answers(doc, tools);
     doc.history.release();
     let count = doc.scene.named(&run.ids).count();
     *status = Status::Info(tr!("prepare-done", count = count));

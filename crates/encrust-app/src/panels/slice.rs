@@ -13,7 +13,7 @@ use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{busy, companion_square, hint, icon, primary_button, theme};
+use crate::ui::{busy, companion_square, icon, primary_button, theme};
 
 /// What the keyboard shortcut and the File menu do: this plate into a file, refused for the
 /// same reasons the press is greyed out.
@@ -59,8 +59,16 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         "slice-to",
         extension = window.machine.slicing.format.extension()
     );
+    let saved_instead = bound
+        .as_ref()
+        .filter(|_| slot.is_none())
+        .and_then(|bound| bound.blocker.as_ref())
+        .map(|why| tr!("slice-saved-instead", why = why.clone()));
     let tooltip = tr!("slice-tooltip");
-    let file_tip = blocker.as_deref().unwrap_or(&tooltip);
+    let file_tip = blocker
+        .as_deref()
+        .or(saved_instead.as_deref())
+        .unwrap_or(&tooltip);
     let press = match &slot {
         Some(SendSlot {
             step: SendStep::Running(fraction),
@@ -91,17 +99,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .network
             .start_print(&mut window.machine.status),
         None => {}
-    }
-    let saved_instead = bound
-        .filter(|_| slot.is_none() && blocker.is_none())
-        .and_then(|bound| bound.blocker)
-        .map(|why| tr!("slice-saved-instead", why = why));
-    // An empty plate is said so in the models card; the button's tooltip still tells why.
-    let scene = &window.doc.scene;
-    let printable = scene.has_printable(scene.active_plate());
-    if let Some(why) = blocker.filter(|_| printable).or(saved_instead) {
-        ui.add_space(theme::NOTE_GAP);
-        hint(ui, &why);
     }
 }
 

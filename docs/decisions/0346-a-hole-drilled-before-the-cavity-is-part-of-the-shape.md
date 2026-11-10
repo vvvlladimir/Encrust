@@ -1,6 +1,6 @@
 # 0346. A hole drilled before the cavity is part of the shape
 
-- **Status:** Accepted
+- **Status:** Accepted; a hole clicked into a hollow model keeps its depth since 0414
 - **Date:** 2026-10-25
 
 ## Context

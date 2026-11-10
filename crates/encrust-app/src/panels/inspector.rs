@@ -18,8 +18,8 @@ mod support_picker;
 mod supports;
 mod text;
 
-pub(crate) use check::issue_name;
 pub use check::{badge as check_badge, go_to as go_to_risks, tint as risk_tint};
+pub(crate) use check::{found as found_risks, issue_name};
 pub(crate) use position::auto_orient;
 
 use egui::{Align, Layout, Sense, UiBuilder, vec2};
@@ -48,7 +48,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
         window,
         |ui, window| body(ui, window, tool),
         |ui, window| {
-            if has_action(tool) {
+            if has_action(tool) && (tool != Tool::Check || check::wants_foot(ui.ctx(), window)) {
                 card_foot().show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.spacing_mut().item_spacing.y = theme::ROW_GAP;
@@ -85,6 +85,7 @@ fn has_action(tool: Tool) -> bool {
             | Tool::Cut
             | Tool::Relief
             | Tool::Supports
+            | Tool::Check
             | Tool::PrintSettings
     )
 }
@@ -97,6 +98,7 @@ fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         Tool::Cut => cut::action(ui, window),
         Tool::Relief => relief::action(ui, window),
         Tool::Supports => supports::action(ui, window),
+        Tool::Check => check::action(ui, window),
         Tool::PrintSettings => print_settings::action(ui, window.machine),
         _ => {}
     }

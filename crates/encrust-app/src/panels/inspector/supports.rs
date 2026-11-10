@@ -13,8 +13,9 @@ use crate::state::Doc;
 use crate::status::Status;
 use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
-    SquareLook, bin_button, compact_button, companion_button, describe, icon, icon_toggle,
-    number_row, primary_button, progress_bar, readings, secondary_button, section, theme, tone,
+    SquareLook, bin_button, blocked_hover, compact_button, companion_button, describe, icon,
+    icon_toggle, number_row, primary_button, progress_bar, readings, secondary_button, section,
+    theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -212,9 +213,8 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
         let width = ui.available_width() - theme::PRIMARY_H - theme::BUTTON_GAP;
         let grow = ui
             .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
-                primary_button(ui, &label, blocker.is_none())
-                    .on_hover_text(what)
-                    .on_disabled_hover_text(blocker.clone().unwrap_or_default())
+                let button = primary_button(ui, &label, blocker.is_none());
+                blocked_hover(button, blocker.or(Some(what)))
             })
             .inner;
         if grow.clicked() {
@@ -228,9 +228,6 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
             object.supports.clear();
         }
         window.tools.supports.picked.clear();
-    }
-    if let Some(reason) = blocker {
-        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
 }
 
@@ -439,3 +436,6 @@ fn running(ui: &mut egui::Ui, job: &SupportJob) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests;

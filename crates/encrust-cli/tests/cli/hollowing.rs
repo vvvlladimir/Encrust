@@ -377,7 +377,7 @@ fn a_solid_model_is_not_checked_for_drainage_unless_it_is_asked_for() {
 }
 
 #[test]
-fn a_hole_shallower_than_the_wall_still_goes_through_it() {
+fn a_hole_at_a_point_shallower_than_the_wall_stops_at_its_depth() {
     let path = write_box_stl("shallow-drain", 20.0, 12, 0);
     let out = output_dir("shallow-drain");
     let panel = test_panel();
@@ -409,8 +409,8 @@ fn a_hole_shallower_than_the_wall_still_goes_through_it() {
     let wall: Vec<u8> = pixels[start..start + 30].to_vec();
 
     assert!(
-        wall.iter().all(|pixel| *pixel == 0),
-        "the hole clears the whole 2 mm wall in front of it, got {wall:?}"
+        wall[..5].iter().all(|pixel| *pixel == 0) && wall[6..19].iter().all(|pixel| *pixel > 0),
+        "the hole takes its 0.5 mm of the 2 mm wall, 5 pixels, and leaves the rest, got {wall:?}"
     );
 }
 

@@ -1,14 +1,11 @@
 use std::collections::BTreeMap;
-use std::f64::consts::PI;
 
 use crate::contact::{Contact, MIN_ISLAND_MM2, contacts};
 use crate::cups::Cups;
 use crate::layer::{Cured, LayerMeasure, Piece, Stretch};
+use crate::neck::{NECK_LIMIT_MPA, neck_stress_mpa};
 use crate::pull::PEEL_LIMIT_N;
 
-/// Stress a neck of green resin is taken to fail at, megapascals. Not measured: a warning
-/// level.
-pub const NECK_LIMIT_MPA: f64 = 5.0;
 /// A piece narrower than this across, millimetres, as a disc of its area: thinner than the
 /// finest support tip, so a tip is never named, and too thin to survive the peel.
 pub const THIN_MM: f32 = 0.15;
@@ -49,6 +46,10 @@ pub enum RiskKind {
         /// How far off the neck the pull acts, millimetres.
         lever_mm: f32,
         neck_mm2: f32,
+        /// The pull on the piece, newtons.
+        force_n: f32,
+        /// The radius the piece gyrates at about its own centre, millimetres.
+        gyration_mm: f32,
     },
     /// A layer whose suction on the film is past `PEEL_LIMIT_N`; a run of them is named
     /// once, at its hardest.
@@ -512,14 +513,12 @@ impl Measured {
     /// and the bending of the pull held off to one side. See `docs/design/analysis.md`.
     fn weigh(&mut self, index: usize, piece: &Piece, neck: Neck) {
         let force_n = f64::from(piece.pull_n);
-        let radius_mm = (neck.area_mm2 / PI).sqrt();
         let [cx, cy] = piece.centre_mm.map(f64::from);
         let offset_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
         // The film lets go from one edge, so at the worst moment the pull is carried by
         // what is still stuck: half the piece, off its own centre by its gyration.
         let lever_mm = offset_mm + f64::from(piece.gyration_mm) / 2.0;
-        let section_modulus = PI * radius_mm.powi(3) / 4.0;
-        let stress_mpa = force_n / neck.area_mm2 + force_n * lever_mm / section_modulus;
+        let stress_mpa = neck_stress_mpa(force_n, lever_mm, neck.area_mm2);
         if stress_mpa < NECK_LIMIT_MPA {
             return;
         }
@@ -530,6 +529,8 @@ impl Measured {
                 stress_mpa: stress_mpa as f32,
                 lever_mm: lever_mm as f32,
                 neck_mm2: neck.area_mm2 as f32,
+                force_n: piece.pull_n,
+                gyration_mm: piece.gyration_mm,
             },
         };
         let worse = |held: &Risk| severity(&risk) > severity(held);

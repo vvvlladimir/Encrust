@@ -4,12 +4,13 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
+use std::io::Cursor;
 use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use core_analysis::Measured;
-use core_format::{ExposurePlan, PrintJob};
+use core_format::{ExposurePlan, OpenFile, PrintJob, SlicedFileReader};
 use core_geometry::{Mesh, Vec3};
 use core_pipeline::{
     Observer, PanelOverrides, SlicedFormat, Tolerance, Writing, raster_settings,
@@ -18,6 +19,7 @@ use core_pipeline::{
 use core_raster::{GreyRange, RasterSettings, Shading};
 use core_slicer::{ONE_SAMPLE, SliceSettings, Windows};
 use format_chitu::CtbVersion;
+use format_creality::{CxdlpV4Reader, CxdlpVersion};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 /// Panel of 64 x 32 pixels at a 0.2 mm pitch: 12.8 x 6.4 mm of build area.
@@ -193,6 +195,66 @@ fn a_box_reaches_the_file_as_the_layers_it_cures() {
         "the run wrote bytes"
     );
     std::fs::remove_file(&path).expect("the test wrote the file");
+}
+
+/// What a `.cxdlpv4` written for `machine` reads back as: its levels of grey, then the pixels
+/// its second layer covers and the brightest of them.
+fn cxdlp4_read_back(machine: &str) -> (u16, u32, u8) {
+    let path = temp(&machine.replace(' ', "-"), "cxdlpv4");
+    let mesh = on_the_plate();
+    let raster = panel();
+    let windows = windows_of(&mesh, 1024);
+    let mut job = job(windows.plan().clone(), raster);
+    job.printer = PrinterProfile::from_toml_str(
+        &PROFILE.replace(
+            r#"name = "Test panel""#,
+            &format!("name = \"Test panel\"\nmachine_name = \"{machine}\""),
+        ),
+        Path::new("inline.toml"),
+    )
+    .expect("the inline profile is valid");
+    write_stack(
+        &Writing {
+            format: SlicedFormat::Cxdlp(CxdlpVersion::V4),
+            name: &name_of(&path),
+            job: &job,
+            source: &mesh,
+            windows: &windows,
+            settings: &raster,
+            window: 2,
+            fold: Measured::new(0),
+        },
+        &path,
+        &mut (),
+    )
+    .expect("the box writes");
+    let file = std::fs::read(&path).expect("the file is on disk");
+    std::fs::remove_file(&path).expect("the test wrote the file");
+    let mut opened = CxdlpV4Reader
+        .open(Cursor::new(file))
+        .expect("what we wrote is one of these");
+    let grey_steps = opened.facts().grey_steps;
+    let runs = opened.layer(1).expect("the layer reads back");
+    let covered_px = runs.iter().map(|run| run.length).sum();
+    let brightest = runs.iter().map(|run| run.value).max().unwrap_or(0);
+    (grey_steps, covered_px, brightest)
+}
+
+#[test]
+fn a_cxdlpv4_is_written_in_the_codec_its_machine_reads() {
+    let cases = [
+        ("HALOT-MAGE PRO", 128),
+        ("HALOT-X1", 8),
+        ("HALOT-X1 Max", 64),
+        ("HALOT-X1 Neo", 128),
+    ];
+    for (machine, grey_steps) in cases {
+        assert_eq!(
+            cxdlp4_read_back(machine),
+            (grey_steps, 64 * 32, 255),
+            "{machine}: a layer in another codec misses the panel or the full level"
+        );
+    }
 }
 
 #[test]

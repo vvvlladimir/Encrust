@@ -98,6 +98,7 @@ fn key(object: &SceneObject, hollow: &HollowTool) -> u64 {
         .hash(&mut hasher);
     for hole in object.hollow.drains() {
         hole.at.to_array().map(f32::to_bits).hash(&mut hasher);
+        hole.depth_mm.to_bits().hash(&mut hasher);
         (hole.kind as u8).hash(&mut hasher);
     }
     hasher.finish()
@@ -106,6 +107,7 @@ fn key(object: &SceneObject, hollow: &HollowTool) -> u64 {
 #[cfg(test)]
 mod tests {
     use core_geometry::Vec3;
+    use core_volume::{DrainHole, HoleSize, ModelHollow};
 
     use super::*;
     use crate::scene::fixtures::scene_of_boxes;
@@ -136,6 +138,26 @@ mod tests {
                 .refresh(&scene, &HollowTool::default(), true)
                 .is_empty(),
             "an open mesh encloses nothing, though its box would save 44.8 ml"
+        );
+    }
+
+    #[test]
+    fn a_hole_of_another_depth_at_the_same_point_is_measured_again() {
+        let mut scene = scene_of_boxes(&[(Vec3::ZERO, Vec3::splat(20.0))]);
+        let id = scene.objects()[0].id;
+        let hollow = HollowTool::default();
+        let mut key_with_hole_of = |depth_mm| {
+            let object = scene.get_mut(id).expect("the cube is on the plate");
+            object.hollow = ModelHollow::default();
+            let size = HoleSize::round(3.0, depth_mm, 1.0);
+            let hole = DrainHole::sized(Vec3::ZERO, Vec3::Z, size, 0.0);
+            object.hollow.add_hole(hole);
+            key(object, &hollow)
+        };
+        assert_ne!(
+            key_with_hole_of(1.0),
+            key_with_hole_of(3.0),
+            "whether a hole opens the cavity follows its depth"
         );
     }
 

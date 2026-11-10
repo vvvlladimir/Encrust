@@ -1,9 +1,8 @@
 # The Creality `.cxdlp`
 
 What the Halot line reads: two containers, `.cxdlp` and `.cxdlpv4`. Version 3 holds a layer as
-a list of vertical lines and is big-endian throughout; version 4 holds it as six-bit runs along
-each row and is little-endian behind its magic. Twelve machines
-in the shipped catalogue carry `output = "cxdlp3"` and two `output = "cxdlp4"`.
+a list of vertical lines and is big-endian throughout; version 4 holds it in one of four run
+codecs, by machine, and is little-endian behind its magic.
 
 Both are headed by `CXSW3DV2\0` and end with a checksum, which is the only thing they have
 in common; the field behind the magic is what a reader picks on (ADR 0168).
@@ -14,6 +13,7 @@ in common; the field behind the magic is what a reader picks on (ADR 0168).
 |---|---|
 | An open-source reader and writer of both revisions | Every offset and field name below, and the packing of a line |
 | The same reader's checksum routine | That it is a reflected CRC-32 with neither an inverted register nor a final xor |
+| Static reading of the machines' own software | Which model codes take which version 4 layer codec, and every codec but the X1 Max's, unproven until such a machine prints (ADR 0413) |
 
 Three things worth stating before the tables:
 
@@ -116,10 +116,24 @@ and the data together**, which is the opposite of the `.ctb` convention.
 
 ### A version 4 layer
 
-Runs along each row, restarting at every row. A run opens with `0x80 | g`, `g` its grey in six
-bits (`0x3F` fully lit, read back as `g << 2 | g >> 4`), then its length less one in seven-bit
-groups, most significant first; a run of one pixel has no group. A dark row of the X1 Max's
+The header's model code says which codec the layers are in; the firmware does not say, so a
+layer in another machine's codec is read as noise.
+
+| Model codes | Codec |
+|---|---|
+| any other | whole image: the seven-bit runs of `docs/formats/chitu.md`, over the entire layer with no restart at a row |
+| `R012` | rows, six bits |
+| `R013`, `R018` | rows, seven bits |
+| `R009`, `R026`, `R027` | paired rows, eight levels |
+
+In the row codecs a run opens with `0x80 | g`, `g` the grey's top six or seven bits
+(`0x3F` or `0x7F` fully lit), then its length less one in seven-bit groups, most significant
+first; a run of one pixel has no group, and every row restarts. A dark row of the X1 Max's
 15120 pixels is `80 76 0F`.
+
+Paired rows are the same bytes with the length counted in units of two pixels. A unit split
+between two runs takes the grey of the second, an odd pixel at a row's end is dropped, and the
+head states the grey's top three bits twice, `0x80 | l << 3 | l`.
 
 A file ends with the same four-byte checksum.
 

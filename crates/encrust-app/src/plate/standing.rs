@@ -30,12 +30,13 @@ pub fn astray(ctx: &egui::Context, scene: &Scene, plate: &BuildPlate) -> Vec<Ast
     {
         return astray;
     }
-    let astray = measured(scene, plate);
+    let astray = astray_now(scene, plate);
     ctx.data_mut(|data| data.insert_temp(id, (fingerprint, astray.clone())));
     astray
 }
 
-fn measured(scene: &Scene, plate: &BuildPlate) -> Vec<Astray> {
+/// The models standing past `plate` or in its inset as the plate stands now, read afresh.
+pub fn astray_now(scene: &Scene, plate: &BuildPlate) -> Vec<Astray> {
     let (usable_low, usable_high) = plate.usable_area();
     let volume = Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm);
     let usable = (usable_low.extend(0.0), usable_high.extend(plate.z_mm));
@@ -119,7 +120,7 @@ mod tests {
             (Vec3::new(2.0, 20.0, 0.0), Vec3::new(12.0, 30.0, 10.0)),
         ]);
         let ids: Vec<ObjectId> = scene.objects().iter().map(|object| object.id).collect();
-        let astray = measured(&scene, &plate());
+        let astray = astray_now(&scene, &plate());
         let listed: Vec<(ObjectId, bool)> = astray.iter().map(|one| (one.id, one.past)).collect();
         assert_eq!(
             listed,

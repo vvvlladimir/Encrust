@@ -265,36 +265,51 @@ struct Raw {
 /// The lit stretches of each row in reading order. An anti-aliased edge is a run a pixel,
 /// so runs are merged here rather than joined as pieces later.
 fn spans(layer: &LayerRuns, pitch: PixelPitch) -> Vec<Raw> {
-    let width = u64::from(layer.width());
+    let width = layer.width();
     let mut spans: Vec<Raw> = Vec::new();
-    let mut at = 0u64;
+    if width == 0 {
+        return spans;
+    }
+    // Where the next run starts, kept as row and column so a short run needs no division.
+    let (mut row, mut x) = (0u32, 0u32);
     for run in layer.runs() {
-        let end = at + u64::from(run.length);
-        if run.value > 0 && width > 0 {
-            let weight = f64::from(run.value) / 255.0;
-            let mut start = at;
-            while start < end {
-                let row = (start / width) as u32;
-                let x0 = (start % width) as u32;
-                let x1 = (u64::from(x0) + end - start).min(width) as u32;
-                match spans.last_mut() {
-                    Some(last) if last.row == row && last.x1 == x0 => last.x1 = x1,
-                    _ => spans.push(Raw {
-                        row,
-                        x0,
-                        x1,
-                        moments: Moments::default(),
-                    }),
-                }
-                if let Some(last) = spans.last_mut() {
-                    last.moments.add(row, x0..x1, weight, pitch);
-                }
-                start += u64::from(x1 - x0);
-            }
+        if run.value == 0 {
+            (row, x) = advanced(row, x, run.length, width);
+            continue;
         }
-        at = end;
+        let weight = f64::from(run.value) / 255.0;
+        let mut left = run.length;
+        while left > 0 {
+            let x1 = x + left.min(width - x);
+            match spans.last_mut() {
+                Some(last) if last.row == row && last.x1 == x => last.x1 = x1,
+                _ => spans.push(Raw {
+                    row,
+                    x0: x,
+                    x1,
+                    moments: Moments::default(),
+                }),
+            }
+            if let Some(last) = spans.last_mut() {
+                last.moments.add(row, x..x1, weight, pitch);
+            }
+            left -= x1 - x;
+            (row, x) = advanced(row, x, x1 - x, width);
+        }
     }
     spans
+}
+
+/// The pixel `length` past column `x` of `row`, on a panel `width` wide.
+fn advanced(row: u32, x: u32, length: u32, width: u32) -> (u32, u32) {
+    match x.checked_add(length) {
+        Some(end) if end < width => (row, end),
+        _ => {
+            let end = u64::from(x) + u64::from(length);
+            let width = u64::from(width);
+            (row + (end / width) as u32, (end % width) as u32)
+        }
+    }
 }
 
 /// Unites spans overlapping the row above.

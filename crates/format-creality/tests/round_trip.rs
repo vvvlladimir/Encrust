@@ -15,12 +15,15 @@ use core_format::{
 };
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
 use format_creality::{
-    CxdlpReader, CxdlpSink, CxdlpV4Reader, CxdlpV4Sink, CxdlpV4Writer, CxdlpWriter,
+    CxdlpReader, CxdlpSink, CxdlpV4Reader, CxdlpV4Sink, CxdlpV4Writer, CxdlpWriter, WholeImageRuns,
 };
 use printer_profiles::{Buffer, MaterialProfile, PrinterProfile};
 
 const WIDTH_PX: u32 = 24;
 const HEIGHT_PX: u32 = 12;
+
+type V4Writer = CxdlpV4Writer<WholeImageRuns>;
+type V4Sink<'w> = CxdlpV4Sink<'w, WholeImageRuns>;
 
 fn printer() -> PrinterProfile {
     PrinterProfile::from_toml_str(
@@ -216,11 +219,11 @@ fn every_shipped_machine_that_reads_this_container_has_a_model_code_in_its_name(
 fn write_v4(job: &PrintJob, layers: &[LayerRuns], volume_mm3: f32) -> Vec<u8> {
     let mut file = Cursor::new(Vec::new());
     {
-        let mut sink = CxdlpV4Writer
+        let mut sink = V4Writer::default()
             .begin(job, &mut file)
             .expect("the job matches the panel");
         for layer in layers {
-            sink.push(CxdlpV4Sink::encode(layer))
+            sink.push(V4Sink::encode(layer))
                 .expect("a layer is written");
         }
         sink.finish(volume_mm3)
@@ -374,4 +377,31 @@ fn the_two_revisions_are_told_apart_by_the_field_behind_the_magic() {
 
     assert!(CxdlpV4Reader.open(&mut Cursor::new(three)).is_err());
     assert!(CxdlpReader.open(&mut Cursor::new(four)).is_err());
+}
+
+#[test]
+fn a_cl_103_layer_is_one_stream_of_runs_across_its_rows() {
+    let mut named = job(1);
+    named.printer.machine_name = Some("HALOT-MAGE PRO".to_owned());
+    let lit = {
+        let mut builder = LayerRuns::builder(WIDTH_PX, HEIGHT_PX);
+        builder.push(WIDTH_PX * HEIGHT_PX, 255);
+        builder.finish()
+    };
+    let file = write_v4(&named, std::slice::from_ref(&lit), 1.0);
+
+    let mut source = Cursor::new(file);
+    let mut opened = CxdlpV4Reader.open(&mut source).expect("what we wrote");
+    assert_eq!(opened.facts().machine.as_deref(), Some("CL-103"));
+    assert_eq!(opened.facts().grey_steps, 128);
+    let entry = opened.facts().layers[0];
+    assert_eq!(
+        entry.size,
+        3,
+        "one run of {} px is a head and two length bytes, not one run per row",
+        WIDTH_PX * HEIGHT_PX
+    );
+    let runs = opened.layer(0).expect("the layer reads back");
+    assert_eq!(runs.len(), 1);
+    assert_eq!((runs[0].length, runs[0].value), (WIDTH_PX * HEIGHT_PX, 255));
 }

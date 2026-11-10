@@ -7,6 +7,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::status::Status;
 use crate::ui::{NoticeReply, icon, job_notice, notice_card, theme};
+use crate::workspace::Tool;
 
 /// One card per job that reports progress here, the latest to start nearest the foot; a
 /// job that ended fades out by `CLOSE` as it last stood.
@@ -14,7 +15,7 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     let preview = window
         .machine
         .preview
-        .is_building()
+        .is_cutting_in_view()
         .then(|| (tr!("notice-cutting-preview"), None, false));
     if job_card(stack, "preview", preview) {
         window.machine.preview.cancel();
@@ -33,6 +34,12 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     let shown = walk.map(|share| (tr!("notice-finding-walk"), Some(share), false));
     if job_card(stack, "measure-walk", shown) {
         window.tools.measure_walk.cancel(&mut window.tools.measure);
+    }
+    if job_card(stack, "orient", orient(window)) {
+        window.tools.orient.cancel(&mut window.machine.status);
+    }
+    if job_card(stack, "drain-auto", drain_auto(window)) {
+        window.tools.drain.cancel_auto(&mut window.machine.status);
     }
     // The Prepare row tells the run itself wherever it stands; Preview hides it.
     let away = *window.mode == crate::workspace::Mode::Preview;
@@ -53,6 +60,25 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "network", shown) {
         network.inspect(|job| job.cancel());
     }
+}
+
+/// Auto-orient at its work, where the Position tool does not show it in its own panel.
+fn orient(window: &Window) -> Option<(String, Option<f32>, bool)> {
+    let job = window.tools.orient.job.as_ref()?;
+    if window.tool.card() == Tool::Position {
+        return None;
+    }
+    Some(match job.counted() {
+        Some((what, share)) => (what, Some(share), false),
+        None => (tr!("orient-looking"), None, false),
+    })
+}
+
+/// Drain's search for holes, where the Drain tool does not show it in its own panel.
+fn drain_auto(window: &Window) -> Option<(String, Option<f32>, bool)> {
+    let job = window.tools.drain.auto.as_ref()?;
+    let shown = window.tool.card() != Tool::Drain;
+    shown.then(|| (tr!("drain-auto-looking"), Some(job.fraction()), false))
 }
 
 /// The holes being taken out and the plugs being cut, as the one least far along stands.

@@ -329,7 +329,7 @@ impl HollowArgs {
         let kind = if self.walled {
             HoleKind::Walled
         } else {
-            HoleKind::Drain
+            HoleKind::AtDepth
         };
         self.points()
             .map(|near| hole_near(mesh, bvh, (near, up), self.hole_size(), kind))
@@ -473,8 +473,8 @@ pub(crate) fn cut_plugs(
     Ok(made.meshes)
 }
 
-/// `holes` as a model hollowed to `wall` cuts them: deepened through the wall, where there
-/// is one, so none stops inside it.
+/// `holes` as a model hollowed to `wall` cuts them: the drains deepened through the wall,
+/// where there is one, so none stops inside it.
 pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<DrainHole> {
     match wall {
         Some((thickness_mm, voxel_mm)) => pierce(holes, thickness_mm, voxel_mm),
@@ -483,7 +483,7 @@ pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<Drain
 }
 
 /// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
-/// Wound inward so they subtract wherever appended (ADR 0071, 0075); `wall` deepens shallow holes.
+/// Wound inward so they subtract wherever appended (ADR 0071, 0075); `wall` deepens shallow drains.
 pub fn cut(
     placed: (Vec<DrainHole>, Vec<Channel>),
     wall: Option<(Scalar, Scalar)>,

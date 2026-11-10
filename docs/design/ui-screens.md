@@ -31,7 +31,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
-| Notices | centred between the inspector and the view tools, 16 above the foot | at most 440 wide each, 6 apart, newest nearest the foot |
+| Notices | centred on the stage left of the layer strip, moved in to stay between the inspector and the view tools, 16 above the foot; in Preview the same, over both halves | at most 440 wide each and never wider than that room, 6 apart, newest nearest the foot |
 
 Everything over the stage but the Prepare row is a `card` on `CARD_SHADOW`; nothing over the stage carries a
 stripe or a border of its own.
@@ -100,13 +100,13 @@ One tool's card, in this order; any part a tool lacks is not drawn.
 | Heading | glyph in `accent_soft`, name, `help_mark`; at the right either the modes as `icon_toggle`s in one sunken group, or one fact in `text_mid` cut with an ellipsis | 48 |
 | Preset | `dropdown` showing the preset (and `· edited` in `warn` once a value differs), Save and Delete as 32 squares | 32, padded 10 × 12 |
 | Sections | `section`s, ordered what it acts on → how → rarely changed | heading 36, body padded 0 12 12, rows 6 apart |
-| Foot | on `base`: one `primary_button`, at most one companion; the reason it cannot run under it | primary 40, padded 10 × 12 |
+| Foot | on `base`: one `primary_button`, at most one companion; nothing under it, the reason it cannot run its tooltip | primary 40, padded 10 × 12 |
 
 The body scrolls; the heading, preset and foot do not. What each tool holds:
 
 | Tool | Heading right | Preset | Sections | Foot |
 |---|---|---|---|---|
-| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset), both at zero under Local, a typed or dragged figure a step along the model's own axis that falls back to zero; Scale (Size and Ratio columns, Keep proportions, Fit the volume); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time; Limit tilt as a `switch`, off at first, and under it while on Max tilt as a `number_row`, °; Clean surface as a `switch_with_toggle`, its brush the toggle while it is on, and under it Brush as a `number_row` while it paints, Clear what shows once any is painted; the handles are put away while the brush paints; Auto-orient; running, `step_bar` with the step and Cancel) | — |
+| Select | the picked model's name | — | Global / Local; Move (X Y Z, reset, drop to the plate); Rotate (X Y Z with −45° +45°, reset), both at zero under Local, a typed or dragged figure a step along the model's own axis that falls back to zero; Scale (Size and Ratio columns, Keep proportions, Scale to fit); Place (On the plate · Centre side by side, Lay on face, Mirror, Mirror a copy, Lift off the plate as a `number_row`); Auto-orient (Auto / Supports / Peel / Time; Limit tilt as a `switch`, off at first, and under it while on Max tilt as a `number_row`, °; Clean surface as a `switch_with_toggle`, its brush the toggle while it is on, and under it Brush as a `number_row` while it paints, Clear what shows once any is painted; the handles are put away while the brush paints; Auto-orient; running, `step_bar` with the step and Cancel) | — |
 | Measure | modes Points, Planes | — | Snap to (Corner / Edge / Free, Show dX dY dZ, Measure along the surface); Reading (Along the surface first when on, or why there is none) | — |
 | Repair | modes Whole model, Paint | — | Found (`issue_row`s with counts, readings, look again); Method; Settings; Shells | Repair; running, `step_bar` with the step and Cancel |
 | Hollow | the wall | yes | Shell (Inside / Outside / Bottom open, Wall, Precision); Infill (switch in heading, not for a mould); Keep solid (Keep thin parts solid as a `switch`, off at first, and under it while on Thinner than as a `number_row`, mm; then, not for a mould, Fixed size / Fit to thickness, Past the wall under Fixed size, the window's whichever model is picked; a click places one, a shift-click a rod on from the last); Already done | Hollow |
@@ -114,7 +114,7 @@ The body scrolls; the heading, preset and foot do not. What each tool holds:
 | Cut | the plane and its height | — | Plane (X / Y / Z, Height); Afterwards (Keep both / Lower / Upper, Lay the halves flat, Join the halves → `nested` joint kind and its rows); Parts | Cut, companion Split |
 | Relief | modes Texture, Text, Combine | — | per mode: Where, Image, Depth, Leave flat — or Text, Lettering | Press it in, or the reason |
 | Supports | modes Pick, Place, Paint where, Shape | the group picker | Picked; Where — or in Shape, Part with its diagram | Grow the supports, companion bin (every support) |
-| Check | the number of issues, the plate's with the layers' | — | On the plate, first and before any layer is read (`issue_row`s: the model, and at its right past the build volume in `danger`, in the plate inset in `warn`, or meets and the other model in `danger`, hollow with no drain hole or worth hollowing in `warn`; a press flies the camera there, on a meeting to its next place, and on a model keeping resin picks it and opens Drain or Hollow); Islands (Support them · Remove them side by side); Found (`issue_row`s: the layer, and at its right the kind with its reading — N, mm and MPa, mm² — the kind's name on hover, seven shown and the rest scrolling inside the list; previous / next as arrows in its heading; the all-clear verdict when there is nothing); Peel | — (the check runs by itself) |
+| Check | the number of issues, the plate's with the layers', `fixing` while a run holds the plate | — | On the plate, before any layer is read: Placement (`issue_line`s: the model, and at its right outside the build volume in `danger`, in the plate inset in `warn`, or meets and the other model in `danger`; a press flies the camera there, on a meeting to its next place) with Move to free space and, each only with something to answer, Scale to fit, Combine; Hollow and drain (hollow with no drain hole, worth hollowing; a press picks the model and opens Drain or Hollow) with Drill drain holes, which stays in Check. In the layers, previous / next as arrows in its heading, stepping through every issue of the panel, the plate's first, and going round; a card a kind: Islands (Support them · Remove them; once removed a quiet `verdict_card`, then Support them · Remove next · Put the islands back), Suction cups (Drill them · Auto-orient), Weak necks (Support them · Auto-orient), Hard peel (its readings; Reduce peel, Lift settings on a printer that leaves the lift to the file), Thin sections (no fix, why in a `hint`); each row the layer and its reading in N, mm and MPa, mm², the kind's name on hover. Every kind is an `issue_card`, the one open chosen and remembered, the next opening when it is answered; its rows are `issue_lines`, five shown and the rest scrolling; its buttons `flow_buttons`, the first the suggested one. A kind with a fix made and nothing left is an `answered_row`, Undo on the latest edit alone; with something left, the card with what the fix said over all its buttons, the fix that had its turn among them (ADR 0420). While the stack is not read, the spinner and *Reading every layer* or how to have it cut; while only the quick check from the background is in, its issues on their cards, their buttons off, under them the spinner and *Found by a quick check. Reading every pixel* (ADR 0419); nothing found by the full check, the all-clear verdict. Peel, its readings as a section of their own where no layer pulls too hard | Fix all; running, `step_bar` with the step and Cancel. No foot with nothing it can answer |
 | Print settings | `layer height · exposure` | — | Layers; Exposure; By height; Edge smoothing with its state at the right; Motion and waits | Use the profiles' settings |
 
 Print settings is opened from the chip, not the row; the row lights no tool meanwhile.
@@ -155,7 +155,7 @@ group in hand with its supports; the foot's bin every support; both ask twice.
 | Verdict | a `warn` `notice` when a model on the plate is broken, 8 over the figures | as tall as its text |
 | Figures | `figure_grid`: Time (`17m26s`, shrunk to fit its cell in a long language), Resin (ml), Weight (g), Price (the currency; `—` when the resin has none), each unit 6 after its figure | two rows of 46 |
 | Details | `details_fold`, 8 under the figures: a `split_readings` table of Model / Supports for resin, weight and price, then Vertices and Triangles as `readings`; its caret points up closed and down open; open, its row stays washed in `raised` | 26 closed |
-| Foot | the printer row, then the action row | on `base` |
+| Foot | the printer row, then the action row, nothing printed under it | on `base` |
 
 The printer row is 34 tall on `raised`: printer glyph, name, a status dot and word (`ok`
 Ready, `accent` breathing Printing n %, `text_low` Not answering), caret, and the open-sheet
@@ -174,8 +174,8 @@ the whole frame, and a frame may take three passes (`panels::card_at`, `theme::m
 | Choosing | the printer row opens a list of printers, each with its state, and *Scan again* last |
 | Sending | the slice then the upload named over its bar, its percent under it, Cancel under that |
 | The file landed | Start print primary, the 40 square beside it |
-| The printer busy | Slice to .goo primary; under it *Bench A is printing a.goo; the file is saved instead.* |
-| Nothing to slice | Slice to .goo disabled, and why under it |
+| The printer busy | Slice to .goo primary, its tooltip *Bench A is printing a.goo; the file will be saved instead.* |
+| Nothing to slice | Slice to .goo disabled, why in its tooltip |
 
 A broken model's verdict is a `notice`: *1 model is broken*, *What is sliced from it may
 not print.* What stands past the plate or meets another model is Check's, not the card's. In Preview the heading is *Layer*, the figures are Exposure, Time to here (the
@@ -250,7 +250,7 @@ The stage splits at its middle (ADR 0103): the model cut at the layer on the lef
 on black on the right, a pixel grid under it. At the mask's top right, 8 left of the layer
 strip and level with its top, over the side cards too, zoom out, the zoom in percent, zoom in and *show the whole
 mask* in one card, and under it, flush with its right, a tag for the panel's pixels. The models card gives way, the plate card staying
-on the stage's foot. Beside the mask the hint bar shows the keys alone.
+on the stage's foot, the view tools 8 left of it over the mask as in Prepare. Beside the mask the hint bar shows the keys alone.
 
 ## Windows over the plate
 

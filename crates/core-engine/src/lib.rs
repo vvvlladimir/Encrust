@@ -25,12 +25,14 @@ pub use drains::{
 };
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
-pub use held::{Hanging, island_floors, island_holds};
+pub use held::{
+    CupVent, Hanging, Unvented, cup_vents, island_floors, island_holds, lever_holds, neck_profile,
+};
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_repair};
-pub use run::Run;
+pub use run::{QUICK_CHECK_BIN, Run};
 pub use stand::{
     Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_at, stand_seated,
     stand_under,

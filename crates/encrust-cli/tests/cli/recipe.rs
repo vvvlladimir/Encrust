@@ -87,6 +87,32 @@ fn points_drilled_before_the_hollow_are_a_recess_that_drains_nothing() {
 }
 
 #[test]
+fn points_set_into_a_shell_stop_at_their_depth_and_leave_the_cavity_shut() {
+    let report = sliced(
+        "recipe-shallow-point",
+        r#"
+        name = "Shallow"
+        [[step]]
+        do = "hollow"
+        set = { wall_mm = 2 }
+        [[step]]
+        do = "drain"
+        set = { at = "points", points = [[0.5, 0.5, 1.0]], depth_mm = 0.5 }
+        "#,
+        &[],
+    );
+    assert_eq!(
+        step(&report, 1)["holes"],
+        1,
+        "one hole on the top: {report}"
+    );
+    assert!(
+        report["slicing"]["trapped_pockets"].as_u64() >= Some(1),
+        "0.5 mm stops inside the 2 mm wall: {report}"
+    );
+}
+
+#[test]
 fn a_gate_on_resin_left_trapped_stops_the_run_and_writes_nothing() {
     let name = "recipe-gate";
     let out = output_dir(name);
@@ -382,4 +408,128 @@ fn a_drain_step_with_plugs_lays_a_plug_per_hole_and_without_none() {
             "the cube alone, about 6 400 pixels, got {bare} with `{plugs}`"
         );
     }
+}
+
+/// A cup open at the top, 16 mm across with 2 mm walls, whose floor at 5 to 7 mm stands on
+/// four legs clear of the plate.
+fn cup_on_legs(name: &str) -> PathBuf {
+    let leg = |x: f32, y: f32| ([x, y, 0.0], [x + 3.0, y + 3.0, 5.0]);
+    write_boxes_stl(
+        name,
+        &[
+            leg(0.0, 0.0),
+            leg(13.0, 0.0),
+            leg(0.0, 13.0),
+            leg(13.0, 13.0),
+            ([0.0, 0.0, 5.0], [16.0, 16.0, 7.0]),
+            ([0.0, 0.0, 7.0], [16.0, 2.0, 15.0]),
+            ([0.0, 14.0, 7.0], [16.0, 16.0, 15.0]),
+            ([0.0, 2.0, 7.0], [2.0, 14.0, 15.0]),
+            ([14.0, 2.0, 7.0], [16.0, 14.0, 15.0]),
+        ],
+    )
+}
+
+/// The report of `model` sliced through `recipe`, on the tests' panel at 0.25 mm layers.
+fn cup_report(name: &str, model: &Path, recipe: &str) -> Value {
+    let out = output_dir(name);
+    let (recipe, panel) = (recipe_file(name, recipe), test_panel());
+    let output = encrust(&[
+        "slice",
+        model.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "0.25",
+        "--recipe",
+        recipe.to_str().unwrap(),
+        "--json",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
+    json(&output)
+}
+
+#[test]
+fn a_check_asked_to_drill_cups_leaves_none_to_report() {
+    let model = cup_on_legs("recipe-cup");
+    let plain = "name = \"Plain\"\n[[step]]\ndo = \"check\"\n";
+    let before = cup_report("recipe-cup-plain", &model, plain);
+    assert_eq!(before["cured"]["suction_cups"], 1, "the walls seal one cup");
+    let drilling = "name = \"Drill\"\n[[step]]\ndo = \"check\"\nset = { drill_cups = true }\n";
+    let after = cup_report("recipe-cup-drill", &model, drilling);
+    assert_eq!(
+        after["cured"]["suction_cups"], 0,
+        "the hole lets the air in"
+    );
+}
+
+/// Walls 2 mm thick and 8 mm tall round a 12 mm square on the plate, which seals it.
+fn cup_on_the_plate(name: &str) -> PathBuf {
+    write_boxes_stl(
+        name,
+        &[
+            ([0.0, 0.0, 0.0], [16.0, 2.0, 8.0]),
+            ([0.0, 14.0, 0.0], [16.0, 16.0, 8.0]),
+            ([0.0, 2.0, 0.0], [2.0, 14.0, 8.0]),
+            ([14.0, 2.0, 0.0], [16.0, 14.0, 8.0]),
+        ],
+    )
+}
+
+#[test]
+fn a_check_drills_a_cup_on_the_plate_through_its_wall() {
+    let model = cup_on_the_plate("recipe-plate-cup");
+    let plain = "name = \"Plain\"\n[[step]]\ndo = \"check\"\n";
+    let before = cup_report("recipe-plate-cup-plain", &model, plain);
+    assert_eq!(
+        before["cured"]["suction_cups"], 1,
+        "the plate seals the walls"
+    );
+    let drilling = "name = \"Drill\"\n[[step]]\ndo = \"check\"\nset = { drill_cups = true }\n";
+    let after = cup_report("recipe-plate-cup-drill", &model, drilling);
+    assert_eq!(
+        after["cured"]["suction_cups"], 0,
+        "a vent through the wall by the plate lets the air in"
+    );
+}
+
+/// A slab 16 mm long at 6 to 10 mm, held by one 1.5 mm column at its end.
+fn slab_on_a_neck(name: &str) -> PathBuf {
+    write_boxes_stl(
+        name,
+        &[
+            ([0.0, 0.0, 0.0], [1.5, 1.5, 6.0]),
+            ([0.0, 0.0, 6.0], [16.0, 6.0, 10.0]),
+        ],
+    )
+}
+
+#[test]
+fn a_check_asked_to_hold_weak_necks_stands_a_support_under_the_piece() {
+    let model = slab_on_a_neck("recipe-neck");
+    let plain = "name = \"Plain\"\n[[step]]\ndo = \"check\"\n";
+    let before = cup_report("recipe-neck-plain", &model, plain);
+    let levers = before["cured"]["levers"]
+        .as_u64()
+        .expect("the report counts levers");
+    assert!(
+        levers > 0,
+        "a 16 mm slab on a 1.5 mm column is a lever: {:#}",
+        before["cured"]
+    );
+    let holding = "name = \"Hold\"\n[[step]]\ndo = \"check\"\nset = { hold_levers = true }\n";
+    let after = cup_report("recipe-neck-hold", &model, holding);
+    let left = after["cured"]["levers"]
+        .as_u64()
+        .expect("the report counts levers");
+    assert_eq!(
+        left, 0,
+        "supports under the slab take the pull off the neck: {levers} before, {left} after"
+    );
 }

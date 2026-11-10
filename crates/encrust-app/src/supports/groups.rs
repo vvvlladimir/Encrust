@@ -1,4 +1,4 @@
-use super::{FIRST_GROUP, ISLANDS_GROUP, SHAPES, SupportGroup, SupportTool};
+use super::{FIRST_GROUP, SHAPES, SupportGroup, SupportTool};
 use crate::scene::{OwnSettings, Scene, SceneObject};
 use anyhow::Result;
 use core_engine::project::own_table;
@@ -195,7 +195,7 @@ impl SupportTool {
         }
 
         let active = self.active as usize;
-        if self.group_holds(self.active, scene) == 0 && self.groups[active].name != ISLANDS_GROUP {
+        if self.group_holds(self.active, scene) == 0 && !self.groups[active].answers_check() {
             // Named for its profile, or still the name it was born with: follow the new one.
             let named_for_it = [self.profile.name.as_str(), FIRST_GROUP]
                 .contains(&self.groups[active].name.as_str());

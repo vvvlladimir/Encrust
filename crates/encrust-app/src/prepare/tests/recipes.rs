@@ -260,3 +260,20 @@ fn a_drain_step_without_plugs_lays_none() {
     assert_eq!(plugs_after_drain(", plugs = false"), 0, "plugs = false");
     assert_eq!(plugs_after_drain(""), 0, "plugs left out");
 }
+
+#[test]
+fn fix_issues_takes_the_whole_plate_whatever_is_picked_and_is_one_undo() {
+    let (mut bench, id) = Bench::with(large_cube());
+    let other = bench.doc.scene.duplicate(id, Vec3::new(1.0, 0.0, 0.0));
+    bench.doc.scene.select(Some(id));
+    bench.frame();
+    let started = start_fixes(&mut bench.doc, &mut bench.tools, &mut bench.machine);
+    started.expect("two models to fix");
+    let run = bench.tools.prepare.run.as_ref().expect("the run started");
+    assert_eq!(
+        run.ids.len(),
+        2,
+        "picked {id:?}, and {other:?} is fixed too"
+    );
+    assert!(!bench.doc.history.can_undo(), "undo waits while it runs");
+}

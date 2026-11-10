@@ -434,6 +434,37 @@ fn a_plug_is_flush_with_the_surface_it_closes() {
 }
 
 #[test]
+fn a_hole_stopping_inside_the_wall_takes_a_plug_no_deeper_than_itself() {
+    let shallow = DrainHole {
+        depth_mm: 1.0,
+        kind: HoleKind::AtDepth,
+        ..hole_in_the_top()
+    };
+    let bounds = the_plug(shallow, Some(2.0), 0.1)
+        .aabb()
+        .expect("a plug has vertices");
+    assert!(
+        (bounds.mins.z - 9.0).abs() < 1e-4,
+        "the plug fills the hole's 1 mm, not the 2 mm wall, floor at 9, got {bounds:?}"
+    );
+}
+
+#[test]
+fn a_hole_set_past_the_wall_takes_a_plug_as_long_as_the_wall() {
+    let deep = DrainHole {
+        kind: HoleKind::AtDepth,
+        ..hole_in_the_top()
+    };
+    let bounds = the_plug(deep, Some(2.0), 0.1)
+        .aabb()
+        .expect("a plug has vertices");
+    assert!(
+        (bounds.mins.z - 8.0).abs() < 1e-4,
+        "the plug stops at the 2 mm wall, floor at 8, got {bounds:?}"
+    );
+}
+
+#[test]
 fn a_walled_hole_takes_a_plug_as_deep_as_itself_through_any_wall() {
     let walled = DrainHole {
         kind: HoleKind::Walled,

@@ -124,6 +124,17 @@ impl OrbitCamera {
         self.distance_mm = (self.distance_mm * factor).max(MIN_DISTANCE_MM);
     }
 
+    /// Zooms in as [`Self::zoom`] does, towards `anchor` rather than the target, keeping it where
+    /// it stands on screen; zooming out stays about the target, so it never drifts off the plate.
+    pub fn zoom_at(&mut self, factor: f32, anchor: Vec3) {
+        let before_mm = self.distance_mm;
+        self.zoom(factor);
+        if factor >= 1.0 {
+            return;
+        }
+        self.target = anchor + (self.target - anchor) * (self.distance_mm / before_mm);
+    }
+
     /// Points the camera at `bounds` from the current angle, far enough back that the
     /// whole box is inside the vertical field of view.
     pub fn frame(&mut self, bounds: &Aabb) {

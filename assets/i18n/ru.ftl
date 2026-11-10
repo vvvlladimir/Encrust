@@ -482,14 +482,8 @@ machines-cannot-delete-resin = не удалось удалить смолу
 
 ## panels/inspector/check.rs
 
-check-filter-all = Все
 check-filter-islands = Острова
-check-filter-levers = Рычаги
-check-filter-peel = Отрыв
-check-filter-cups = Присоски
-check-filter-thin = Тонкие
 check-support-islands = Поддержать
-check-issues = Найдено
 check-previous = Предыдущая проблема
 check-next = Следующая проблема
 check-stood =
@@ -507,8 +501,8 @@ check-fact-issues =
         [few] { $count } проблемы
        *[many] { $count } проблем
     }
-check-checking = Проверка
 check-reading = Чтение всех слоёв…
+check-quick-found = Найдено быстрой проверкой. Чтение каждого пикселя…
 check-reads-layers = Проверка читает слои. Они нарезаются, как только на платформе появляется модель и принтер, для которого её можно нарезать.
 check-measuring = измерение
 check-hardest-pull = Наибольшее усилие
@@ -546,9 +540,62 @@ check-more-layers =
         [few] и ещё { $count } слоя
        *[many] и ещё { $count } слоёв
     }
+check-section-cups = Присоски
+check-section-levers = Слабые перемычки
+check-drill-cups = Просверлить
+check-support-levers = Поддержать
+check-auto-orient = Автоориентация
+check-least-peel = Уменьшить отрыв
+check-lift-settings = Настройки подъёма
+check-place = Переместить на свободное место
+check-fit-volume = Подогнать по размеру
+check-combine = Объединить
+check-drill-drains = Просверлить дренаж
+check-cups-vent-help = «Просверлить» делает вентиляционное отверстие в самой тонкой стенке у основания каждой присоски: внутрь попадает воздух, и присоска отпускает плёнку. Если присоска стоит на платформе или её стенки слишком толстые, поднимите модель на поддержки или поверните её. Автоориентация ищет положение без присосок.
+check-necks-held-help = «Поддержать» ставит поддержки под часть, которую держит каждая слабая перемычка, — столько, сколько нужно, чтобы перемычка выдержала нагрузку. Автоориентация ищет положение, в котором нагрузка на перемычки меньше.
+check-stood-levers =
+    { $count ->
+        [0] Ни у одной слабой перемычки не нашлось нижней стороны для поддержки
+        [one] Поставлена { $count } поддержка в группе «{ $group }»
+        [few] Поставлены { $count } поддержки в группе «{ $group }»
+       *[many] Поставлено { $count } поддержек в группе «{ $group }»
+    }
+check-vented-cups =
+    { $count ->
+        [0] Ни одну присоску не удалось просверлить: стенки слишком толстые
+        [one] Просверлена { $count } присоска
+        [few] Просверлены { $count } присоски
+       *[many] Просверлено { $count } присосок
+    }
+check-cups-on-the-plate =
+    { $count ->
+        [one] { $count } присоска стоит на платформе: поднимите модель на поддержки или поверните её
+        [few] { $count } присоски стоят на платформе: поднимите модели на поддержки или поверните их
+       *[many] { $count } присосок стоят на платформе: поднимите модели на поддержки или поверните их
+    }
+check-left-to-you = Осталось исправить вручную: { $count }
+check-layers = В слоях
+check-card-way = Размещение
+check-card-resin = Полость и дренаж
+check-card-thin = Тонкие участки
+check-card-by-hand = вручную
+check-card-layers = слои { $first }–{ $last }
+check-thin-no-fix = Автоматически не исправить: утолщите эти участки в модели.
+check-fact-fixing = исправление
+check-undo-fix = Отменить исправление
+check-fix-all = Исправить всё
+check-fix-issues-tip = Отодвигает мешающие модели, сверлит дренажные отверстия и присоски, затем ставит поддержки — именно в таком порядке. Всё отменяется одним шагом.
+check-place-tip = Сдвигает только мешающие модели, каждую на ближайшее свободное место; модель, которая иначе не помещается, поворачивает. Если места не осталось, заново расставляет всю платформу.
+check-fit-volume-tip = Уменьшает модель, которая не помещается в область печати, до подходящего размера.
+check-combine-tip = Открывает «Рельеф» с двумя касающимися моделями, чтобы объединить их в одну.
+check-drill-drains-tip = Подбирает дренажные отверстия, через которые смола вытечет из каждой замкнутой модели.
+check-support-islands-tip = Ставит поддержку под каждый остров — в отдельную группу.
+check-put-islands-back-tip = Возвращает удалённые острова в файл.
+check-least-peel-tip = Поворачивает модели так, чтобы усилие отрыва от плёнки было наименьшим.
+check-lift-settings-tip = Открывает настройки подъёма.
 check-plate = На платформе
 check-plate-help = Находится сразу, как только модели перестают двигаться, ещё до чтения слоёв. Нажмите строку, чтобы перейти к месту.
-check-row-past = за областью печати
+check-row-past = вне области печати
 check-row-inset = в отступе от краёв
 check-row-meets = касается { $name }
 check-row-sealed = полая, без дренажного отверстия
@@ -556,18 +603,19 @@ check-row-solid = стоит сделать полой
 check-row-hanging = нависает над пустотой · { $area } мм²
 check-row-islands =
     { $count ->
-        [one] остров · { $area } мм²
+        [1] { $area } мм²
+        [one] { $count } остров · { $area } мм²
         [few] { $count } острова · { $area } мм²
        *[many] { $count } островов · { $area } мм²
     }
-check-row-lever = рычаг · { $lever } мм · { $stress } МПа
+check-row-lever = { $lever } мм · { $stress } МПа
 check-row-levers =
     { $count ->
         [one] { $count } рычаг · { $stress } МПа
         [few] { $count } рычага · { $stress } МПа
        *[many] { $count } рычагов · { $stress } МПа
     }
-check-row-cup = присоска · { $area } мм²
+check-row-cup = { $area } мм²
 check-row-cups =
     { $count ->
         [one] { $count } присоска · { $area } мм²
@@ -576,11 +624,12 @@ check-row-cups =
     }
 check-row-thin =
     { $count ->
-        [one] тонкий участок · { $width } мм
+        [1] { $width } мм
+        [one] { $count } тонкий участок · { $width } мм
         [few] { $count } тонких участка · { $width } мм
        *[many] { $count } тонких участков · { $width } мм
     }
-check-row-peel = отрыв · { $force } Н
+check-row-peel = { $force } Н
 check-issue-island = Остров без поддержки
 check-issue-hanging = Повисшая часть
 check-issue-lever = Слабая перемычка
@@ -1274,6 +1323,9 @@ recipes-set-plugs = Пробки
 recipes-set-profile = Профиль поддержек
 recipes-set-cavity = Поддержки в полости
 recipes-set-spacing = Расстояние
+recipes-set-only-in-the-way = Двигать только мешающие модели
+recipes-set-drill-cups = Сверлить присоски
+recipes-set-hold-levers = Поддерживать слабые перемычки
 recipes-set-folder = Папка
 recipes-set-name = Имя файла
 recipes-set-send = Отправить на принтер
@@ -1540,15 +1592,15 @@ printer-grey-range-full = Оттенки серого на краях запис
 printer-grey-range-spread = Серый на краю поднимается до самого тёмного и растягивается до самого светлого; чёрный и чистый белый не меняются.
 printer-pitch = { $x } × { $y } мкм на пиксель
 printer-mirror = Отражение
-printer-mirror-normal = Обычное
-printer-mirror-lcd = Отражение для LCD
+printer-mirror-normal = Без отражения
+printer-mirror-lcd = Отражение по X (LCD)
 printer-mirror-dlp = Без отражения (DLP)
 printer-mirror-note = Большинство LCD-принтеров ждут маски, отражённые по X; какое отражение нужно, указано в настройках производителя.
 printer-inset = Отступ от краёв платформы
-printer-inset-min-x = Отступ у −X
-printer-inset-max-x = Отступ у +X
-printer-inset-min-y = Отступ у −Y
-printer-inset-max-y = Отступ у +Y
+printer-inset-min-x = Отступ с края −X
+printer-inset-max-x = Отступ с края +X
+printer-inset-min-y = Отступ с края −Y
+printer-inset-max-y = Отступ с края +Y
 printer-inset-note = Модель в полосе отступа помечается, но нарезается целиком.
 printer-per-layer-on = Экспозиция и движение читаются из каждого слоя; в .goo это называют расширенным режимом.
 printer-per-layer-off = Каждый слой печатается по значениям из заголовка, а переход нижних слоёв принтер выполняет сам.
@@ -1629,7 +1681,7 @@ slice-all = Нарезать все платформы ({ $count }) в .{ $exten
 slice-send = Нарезать и отправить
 slice-start-tooltip = Начать печать файла, загруженного на { $name }
 slice-start-print = Начать печать
-slice-saved-instead = { $why }; вместо этого файл сохранён на диск.
+slice-saved-instead = { $why }; вместо отправки файл будет сохранён на диск.
 slice-cannot-send = не удалось нарезать набор слоёв для отправки
 slice-slicing = Нарезка
 slice-all-started = Нарезка платформ ({ $count }) рядом с { $path }
@@ -1796,7 +1848,7 @@ position-axis-ratio = Коэффициент по { $axis }
 position-place = Размещение
 position-on-plate = На платформе
 position-centre = По центру
-position-scale-to-fit = Вписать в область печати
+position-scale-to-fit = Подогнать по размеру
 position-lift = Поднять над платформой
 position-click-face = Щёлкните по грани
 position-lay-on-face = Положить на грань
@@ -2532,6 +2584,18 @@ arrange-done =
         [one] Расставлена { $count } модель
         [few] Расставлено { $count } модели
        *[many] Расставлено { $count } моделей
+    }
+arrange-cleared =
+    { $count ->
+        [one] Отодвинута { $count } модель
+        [few] Отодвинуты { $count } модели
+       *[many] Отодвинуто { $count } моделей
+    }
+arrange-turned =
+    { $count ->
+        [one] Повёрнута { $count } модель, чтобы она поместилась на платформе
+        [few] Повёрнуты { $count } модели, чтобы они поместились на платформе
+       *[many] Повёрнуто { $count } моделей, чтобы они поместились на платформе
     }
 arrange-short =
     { $count ->

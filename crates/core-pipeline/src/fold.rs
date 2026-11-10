@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use core_analysis::{Measured, Stretch, cure};
-use core_raster::{LayerRuns, RasterSettings, Rasterizer, ScanlineRasterizer};
+use core_analysis::{Cured, Measured, Stretch, cure};
+use core_raster::{LayerRuns, RasterSettings, Rastered, Rasterizer, ScanlineRasterizer};
 use core_slicer::{Layer, LayerPlan, offset_contours};
 use printer_profiles::{Compensation, MaterialProfile};
 use rayon::prelude::*;
@@ -71,6 +71,12 @@ impl Folded {
     }
 }
 
+/// One layer rasterised and cured, waiting for its turn in the fold.
+pub(crate) struct Rasterised {
+    rastered: Rastered,
+    cured: Cured,
+}
+
 /// Rasterises `layers` in parallel and folds them into `measured` in print order, where islands go.
 /// The fold is serial: what a layer stands on is known once the one under it is folded.
 pub fn fold_group(
@@ -81,8 +87,18 @@ pub fn fold_group(
     measured: &mut Measured,
 ) -> Result<Vec<Folded>, PipelineError> {
     // The group is the next layers in print order, so their indices follow the fold's.
-    let first = measured.layer_count();
-    let rastered: Vec<_> = layers
+    let rasterised = rasterise_group(layers, measured.layer_count(), settings, tolerance)?;
+    Ok(fold_rasterised(rasterised, plan, measured))
+}
+
+/// Rasterises and cures `layers` in parallel, the first being layer `first` of the stack.
+pub(crate) fn rasterise_group(
+    layers: &[Layer],
+    first: usize,
+    settings: &RasterSettings,
+    tolerance: &Tolerance,
+) -> Result<Vec<Rasterised>, PipelineError> {
+    layers
         .par_iter()
         .enumerate()
         .map(|(step, layer)| {
@@ -91,13 +107,20 @@ pub fn fold_group(
                 .rasterize(offset.as_ref(), settings)
                 .map_err(|source| PipelineError::Raster { z: layer.z, source })?;
             let cured = cure(&rastered.runs, settings.pitch);
-            Ok((rastered, cured))
+            Ok(Rasterised { rastered, cured })
         })
-        .collect::<Result<_, PipelineError>>()?;
+        .collect()
+}
 
-    Ok(rastered
+/// Folds layers rasterised in print order into `measured`, the first being its next layer.
+pub(crate) fn fold_rasterised(
+    rasterised: Vec<Rasterised>,
+    plan: &LayerPlan,
+    measured: &mut Measured,
+) -> Vec<Folded> {
+    rasterised
         .into_iter()
-        .map(|(rastered, cured)| {
+        .map(|Rasterised { rastered, cured }| {
             let thickness_mm = plan.thickness_of(measured.layer_count()).unwrap_or(0.0);
             let taken = measured.push(cured, thickness_mm);
             Folded {
@@ -106,7 +129,7 @@ pub fn fold_group(
                 overflow_px: rastered.overflow_px,
             }
         })
-        .collect())
+        .collect()
 }
 
 #[cfg(test)]

@@ -6,9 +6,11 @@ use egui::{
 use crate::ui::theme;
 use crate::ui::theme::motion;
 
+mod flow;
 mod square;
 mod tile;
 
+pub use flow::{FlowButton, flow_buttons};
 pub(in crate::ui::widgets) use square::paint_square;
 pub use square::{
     RailButton, SquareLook, companion_square, icon_button, icon_toggle, numbered_square,

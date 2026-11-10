@@ -152,7 +152,7 @@ Each container pays for grey differently. A `.cbddlp` carries it in eight one-bi
 it is eight times the layer data of the others (ADR 0146). An Anycubic file carries four bits
 of it in one pass, which costs nothing but loses an edge dimmer than 16 (ADR 0147). An `.sl1`
 carries all eight bits and loses nothing, because its layers are PNGs, and so do a `.zip` and
-a `.cws`. A `.cxdlp` carries eight bits, a `.cxdlpv4` six and a `.goo` 5.1 three. An `.svgx` carries
+a `.cws`. A `.cxdlp` carries eight bits, a `.cxdlpv4` three, six or seven by machine and a `.goo` 5.1 three. An `.svgx` carries
 none at all: its layers are polygons, and a pixel is lit or dark at half coverage (ADR 0169).
 Those two cost by the panel rather than by the model, so a run writing one for a panel larger
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above
@@ -256,8 +256,9 @@ would be centred on the edge, half off the model, and reach no cavity. `--drain-
 far past the surface a hole reaches and `--drain-taper` its far end's share of its mouth, 1 a
 cylinder. A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
 diameter, turned `--drain-turn` degrees from the level; a `--channel` takes the same
-outline, `--channel-size` millimetres across. Once the model is hollow a hole is carried on through the wall into the cavity;
-`--drain-walled` drills it before hollowing instead, a recess at its depth with the wall
+outline, `--channel-size` millimetres across. A hole at a point stops at that depth, opening
+a cavity only if it reaches past the wall (ADR 0414), while `--drain-at auto` always goes
+through; `--drain-walled` drills it before hollowing instead, a recess at its depth with the wall
 kept around it, which drains nothing (ADR 0346). `--drain-support-at X,Y,Z` drills into the
 supports or raft nearest the point once they stand, sized as `--drain`, with no plug (ADR 0347).
 `--drain-plugs` prints a plug for each hole, standing on the plate past the model's
@@ -418,7 +419,22 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
   --hollow 3 -o sliced/
 ```
 
-The built-in recipes, by id: `prepare` below; `miniatures` (repair if open, orient for the
+A recipe's `check` step takes `drill_cups` and `hold_levers`, which vent every suction cup by the
+shortest way into its lowest point and hold every weak neck with as many supports as bring it
+under its limit, once before its `retry`, and `arrange` takes
+`only_in_the_way`, which moves only the models past the plate's usable area or meeting another:
+
+```toml
+[[step]]
+do = "arrange"
+set = { only_in_the_way = true }
+
+[[step]]
+do = "check"
+set = { drill_cups = true, hold_levers = true }
+```
+
+The built-in recipes, by id: `prepare` below; `fix-issues`, what Check's Fix all runs: the models in the way moved clear, drain holes where resin stays trapped, then cups drilled, weak necks and islands supported; `miniatures` (repair if open, orient for the
 least peel with a clean surface, tilted at most `max_tilt` degrees, 45 in its `[vars]`, never hollowed, Auto
 supports, a check that supports islands again up to twice, and a gate on any left). Why
 these two: ADR 0408. Your own are the files `<id>.toml` in the
@@ -477,7 +493,8 @@ encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
 
 ## Plates: several models, a plate file, a project
 
-Several models go on one plate. `--arrange` spreads them, biggest first; without it each
+Several models go on one plate. `--arrange` spreads them, biggest first, and turns one longer
+than the plate about the vertical by the least that fits it (ADR 0418); without it each
 stands where its file put it. `--center` and a `--drain-at` point aim at one model, so they
 are refused for several; `--drain-at auto` drains each model on its own:
 
@@ -537,7 +554,9 @@ A flag wins over the plate file or project, which wins over the profiles' own nu
 
 `estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,
 with a printer, what the print takes: time, resin by volume and weight, price where the
-resin has one, and the layers likely to fail. `--strict` fails it on the same defects. The
+resin has one, and the layers likely to fail. `--strict` fails it on the same defects.
+`--quick-check` reads the panel in squares of two by two pixels, as the window's background
+check does: quicker, but blind to an island near the smallest one named (ADR 0419). The
 `fits` line answers for the model where it stands, not only for its size: one small enough
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the
