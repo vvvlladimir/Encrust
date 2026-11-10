@@ -17,7 +17,7 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::sync::mpsc::{self};
 
-fn a_printer(id: &str) -> Printer {
+pub(super) fn a_printer(id: &str) -> Printer {
     Printer {
         name: format!("Saturn {id}"),
         model: "Saturn 4 Ultra".into(),
@@ -40,7 +40,11 @@ fn at(last: u8, printer: Printer) -> Printer {
 
 /// Stands `network` under a profile `saturn` speaking `speaks` and listing `machines`
 /// as `(address, board)`.
-fn listing(network: &mut Network, speaks: Connection, machines: &[(&str, Option<&str>)]) {
+pub(super) fn listing(
+    network: &mut Network,
+    speaks: Connection,
+    machines: &[(&str, Option<&str>)],
+) {
     let profile = PrinterProfile {
         connection: speaks,
         machines: machines
@@ -362,11 +366,11 @@ fn only_a_file_the_window_wrote_for_itself_is_temporary() {
 #[test]
 fn sending_without_a_destination_starts_nothing() {
     let mut network = Network::default();
-    network.send(temporary_path("model.goo"), &mut Status::default());
+    network.send(temporary_path("model.goo"), true, &mut Status::default());
     assert!(network.job.is_none());
 }
 
-fn printing(file: &str) -> State {
+pub(super) fn printing(file: &str) -> State {
     State {
         state: "printing".to_owned(),
         busy: true,

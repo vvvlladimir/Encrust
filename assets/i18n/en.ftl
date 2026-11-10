@@ -1025,6 +1025,10 @@ menu-orthographic = Orthographic view
 menu-import = Import
 menu-clear-recent = Clear the list
 menu-slicing-already = A plate is slicing already
+# File menu: a file sliced earlier, by Encrust or another program, sent unchanged to the plate's printer.
+menu-send-file = Send a sliced file...
+# Tooltip of menu-send-file: the plate's printer, named; the file is picked after the click.
+menu-send-file-to = The file goes to { $name } unchanged.
 menu-pick-first = Pick a model first
 menu-plate-empty = The plate is empty
 menu-camera = Camera
@@ -1580,6 +1584,7 @@ network-printing = { $printer } is printing { $file }
 network-busy = { $name } is busy: { $state }
 network-prusa-sl1 = A Prusa machine prints .sl1; set that as this printer's output.
 network-sending = Sending to { $name }
+network-not-answering = { $name } is not answering
 network-starting = Starting { $file } on { $name }
 network-sent = { $file } is on { $printer }
 network-cancelled = Transfer cancelled
@@ -2688,3 +2693,7 @@ hint-supports-place = the model to place a support
 hint-supports-line = a line of them
 hint-cut-part = the part to mark
 hint-gizmo-steps = a handle in 1 mm and 15° steps
+
+## panels/send_file.rs
+
+send-file-not-sliced = { $file } is not a sliced file Encrust can send

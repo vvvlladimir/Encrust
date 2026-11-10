@@ -886,6 +886,10 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   on it lists the others and scans again. A printer busy printing gets no file: Slice
   saves it instead, its tooltip says why. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
+- **File > Send a sliced file** sends a file sliced earlier, by Encrust or another program,
+  as it is: pick it, watch the bar on the plate's card, then Start print there. It goes to the printer the plate's card names, once it answers and is free; a Prusa
+  machine is offered only `.sl1` and `.sl1s`. `encrust printer send FILE HOST --start` does
+  the same from the command line.
 - A sliced file carries a picture of the plate for the printer's screen: the models and
   their supports in the viewport's resin and support colours, shaded smooth, darker in
   folds, with a line where one part passes in front of another, cropped to fill each preview the format holds, on that preview's own background.

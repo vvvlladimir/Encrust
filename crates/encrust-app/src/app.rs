@@ -182,9 +182,10 @@ impl SlicerApp {
             return;
         };
         if written.to_send {
+            let temporary = crate::network::is_temporary(&written.path);
             self.machine
                 .network
-                .send(written.path, &mut self.machine.status);
+                .send(written.path, temporary, &mut self.machine.status);
         }
     }
 

@@ -48,7 +48,9 @@ on `hover`. Rows 28, glyph column 18, keys right in `text_low`; a hairline betwe
 row that cannot run is `text_low`, the first of its group with why under it. File: New plate,
 New project · Open project, Add model, Open recent ▸ (files with their age, Clear the list),
 Test prints ▸ (Crustling with Download, its percentage or STL as keys, then the four drawn
-in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice all N plates · Import ▸
+in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice
+all N plates, Send a sliced file (where the printer in hand sends over a network; its name
+in the tooltip, why when off) · Import ▸
 (Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate, Prepare for print (why when off) · Find. View:
