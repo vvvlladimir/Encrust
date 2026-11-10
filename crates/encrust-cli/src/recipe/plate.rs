@@ -80,7 +80,7 @@ impl Run<'_> {
             "a check cuts and measures the plate, which needs a printer: name it with \
              --printer or --profile",
         )?;
-        measure_plate(plate, staged.drainage, &quiet(self.ctx))
+        measure_plate(plate, staged.drainage, None, &quiet(self.ctx))
     }
 
     /// The piece each island of `floors` hangs from and the point a support there touches,

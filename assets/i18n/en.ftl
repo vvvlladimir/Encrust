@@ -482,6 +482,8 @@ check-fact-issues =
        *[other] { $count } issues
     }
 check-reading = Reading every layer of the stack...
+# Shown under the issues a quick background check found, while the full check runs.
+check-quick-found = Found by a quick check. Reading every pixel...
 check-reads-layers = The check reads the layers, which are cut as soon as there is a model on the plate and a machine to cut it for.
 check-measuring = measuring
 check-hardest-pull = Hardest pull

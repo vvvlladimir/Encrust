@@ -1,3 +1,4 @@
+use std::num::NonZeroU8;
 use std::path::Path;
 
 use core_analysis::Measured;
@@ -11,6 +12,10 @@ use crate::bake::{bake, parts};
 use crate::cut::cut;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
+
+/// The squares of pixels a quick check reads the panel in, two by two: a quarter of the
+/// pixels, blind only to islands near the smallest named; see `docs/decisions/0419`.
+pub const QUICK_CHECK_BIN: NonZeroU8 = NonZeroU8::MIN.saturating_add(1);
 
 /// A plate ready to be written: baked, with the layers it will be cut in and the header its file
 /// carries. Built once, written or measured often; no stack is ever held whole (ADR 0010, 0068).
@@ -135,10 +140,28 @@ impl Run {
     /// Measures what the stack cures without writing it anywhere, so a caller can say
     /// what the print takes before committing to a file.
     pub fn measure(&self, observer: &mut dyn Observer) -> Result<Option<Measured>, EngineError> {
+        self.measure_on(&self.panel, observer)
+    }
+
+    /// The same on the panel read in squares of `bin` pixels: quicker, blind to what is
+    /// smaller than a square; its risks are placed by `panel().binned(bin)`.
+    pub fn measure_binned(
+        &self,
+        bin: NonZeroU8,
+        observer: &mut dyn Observer,
+    ) -> Result<Option<Measured>, EngineError> {
+        self.measure_on(&self.panel.binned(bin), observer)
+    }
+
+    fn measure_on(
+        &self,
+        panel: &RasterSettings,
+        observer: &mut dyn Observer,
+    ) -> Result<Option<Measured>, EngineError> {
         Ok(core_pipeline::measure(
             &self.solid,
             &self.windows,
-            &self.panel,
+            panel,
             &Tolerance::of(&self.job.material),
             self.fold.clone(),
             observer,

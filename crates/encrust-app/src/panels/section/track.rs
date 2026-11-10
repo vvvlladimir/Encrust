@@ -161,7 +161,7 @@ pub(super) fn marked<'a>(
     window: &'a Window,
     span: egui::Rangef,
 ) -> Option<(&'a core_analysis::Measured, egui::Rangef)> {
-    let measured = window.measured()?;
+    let (measured, _) = crate::panels::inspector::found_risks(window)?;
     if *window.mode == Mode::Preview {
         return Some((measured, span));
     }
@@ -192,7 +192,8 @@ fn risk_bar(
     let response = ui
         .interact(bar.expand2(vec2(0.0, LAYER_RISK_REACH)), id, Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
-    let Some(risks) = window.measured().map(|measured| {
+    let found = crate::panels::inspector::found_risks(window);
+    let Some(risks) = found.map(|(measured, _)| {
         let mut here = measured.risks();
         here.retain(|risk| risk.layer == mark.layer);
         here

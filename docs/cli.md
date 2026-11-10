@@ -554,7 +554,9 @@ A flag wins over the plate file or project, which wins over the profiles' own nu
 
 `estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,
 with a printer, what the print takes: time, resin by volume and weight, price where the
-resin has one, and the layers likely to fail. `--strict` fails it on the same defects. The
+resin has one, and the layers likely to fail. `--strict` fails it on the same defects.
+`--quick-check` reads the panel in squares of two by two pixels, as the window's background
+check does: quicker, but blind to an island near the smallest one named (ADR 0419). The
 `fits` line answers for the model where it stands, not only for its size: one small enough
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the

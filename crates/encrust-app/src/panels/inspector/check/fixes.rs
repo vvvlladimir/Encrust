@@ -35,6 +35,22 @@ pub(super) fn offer(
     turn_had: bool,
     offers: &[Offer],
 ) -> Option<usize> {
+    buttons(ui, free(window), turn_had, offers)
+}
+
+/// `offer` for what the layers show, pressable once the full check is in: a quick check's
+/// issues are only shown, never fixed (ADR 0419).
+fn layer_offer(
+    ui: &mut egui::Ui,
+    window: &Window,
+    turn_had: bool,
+    offers: &[Offer],
+) -> Option<usize> {
+    let enabled = free(window) && window.measured().is_some();
+    buttons(ui, enabled, turn_had, offers)
+}
+
+fn buttons(ui: &mut egui::Ui, enabled: bool, turn_had: bool, offers: &[Offer]) -> Option<usize> {
     let skipped = usize::from(turn_had);
     let buttons: Vec<FlowButton<'_>> = offers
         .iter()
@@ -47,7 +63,7 @@ pub(super) fn offer(
             lead: index == 0,
         })
         .collect();
-    flow_buttons(ui, free(window), &buttons).map(|index| index + skipped)
+    flow_buttons(ui, enabled, &buttons).map(|index| index + skipped)
 }
 
 /// Whether a fix may start: no recipe running, and no Auto-orient already going.
@@ -80,7 +96,7 @@ pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_
         Offer::new(icon::DRAIN, tr!("check-drill-cups"), help.clone()),
         Offer::new(icon::AUTO_ORIENT, tr!("check-auto-orient"), help),
     ];
-    let Some(pressed) = offer(ui, window, turn_had, &offers) else {
+    let Some(pressed) = layer_offer(ui, window, turn_had, &offers) else {
         return;
     };
     let (Some(settings), Some(plan)) = (
@@ -109,7 +125,7 @@ pub(super) fn necks(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn
         Offer::new(icon::SUPPORTS, tr!("check-support-levers"), help.clone()),
         Offer::new(icon::AUTO_ORIENT, tr!("check-auto-orient"), help),
     ];
-    let Some(pressed) = offer(ui, window, turn_had, &offers) else {
+    let Some(pressed) = layer_offer(ui, window, turn_had, &offers) else {
         return;
     };
     let (Some(settings), Some(plan)) = (
@@ -151,7 +167,7 @@ pub(super) fn peel(ui: &mut egui::Ui, window: &mut Window) {
             tr!("check-lift-settings-tip"),
         ));
     }
-    match offer(ui, window, false, &offers) {
+    match layer_offer(ui, window, false, &offers) {
         Some(0) => {
             let least_peel = OrientPreset::Goal(OrientGoal::LeastPeel);
             turn(window, least_peel, None);
@@ -190,7 +206,7 @@ pub(super) fn islands(
         }
     }
     let (fixes, offers) = island_offers(risks, removing);
-    if let Some(pressed) = offer(ui, window, turn_had && !fixes.is_empty(), &offers) {
+    if let Some(pressed) = layer_offer(ui, window, turn_had && !fixes.is_empty(), &offers) {
         match fixes[pressed] {
             IslandFix::Support => stand_on_islands(window, risks),
             IslandFix::Remove => window.machine.slicing.remove_islands = true,

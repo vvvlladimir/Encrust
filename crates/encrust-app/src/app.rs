@@ -7,7 +7,6 @@ use crate::files::{Arrived, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::prefs::Preferences;
-use crate::preview::stack_fingerprint;
 use crate::project;
 use crate::render;
 use crate::scene::SceneObject;
@@ -186,45 +185,6 @@ impl SlicerApp {
             self.machine
                 .network
                 .send(written.path, &mut self.machine.status);
-        }
-    }
-
-    /// The preview shows the plate as it is, so entering the mode with a stale stack, or
-    /// none, cuts one; so does opening Check, which reads its figures off the stack. Nothing
-    /// to cut, or nothing to cut it for, and it stays empty: the transport says which.
-    fn refresh_preview(&mut self) {
-        let reads_the_stack = self.mode == Mode::Preview || self.tool == Tool::Check;
-        if !reads_the_stack || self.machine.preview.is_building() {
-            return;
-        }
-        // A stack cut before the supports land would be cut without them.
-        let plate = self.doc.scene.active_plate();
-        if self.doc.scene.supports_pending(plate) {
-            return;
-        }
-        let fingerprint = stack_fingerprint(&self.doc.scene, self.machine.slicing.cutting());
-        let wanted =
-            self.machine.preview.layer_count() == 0 || self.machine.preview.is_stale(fingerprint);
-        let Some(settings) = self.machine.slicing.raster_settings() else {
-            return;
-        };
-        if !wanted {
-            // Preview says what the print takes, so the stack is measured as it is written.
-            self.machine
-                .preview
-                .measure(&settings, self.machine.slicing.fold());
-            return;
-        }
-        if !self.doc.scene.has_printable(self.doc.scene.active_plate()) {
-            return;
-        }
-
-        let started = self
-            .machine
-            .preview
-            .build(&self.doc.scene, self.machine.slicing.cutting());
-        if let Err(error) = started {
-            self.machine.status = Status::failed(&error.context(tr!("app-cannot-build-preview")));
         }
     }
 
@@ -506,6 +466,9 @@ impl eframe::App for SlicerApp {
         }
         self.hand_written_file_to_the_network();
         self.refresh_preview();
+        if let Some(wait) = self.check_in_background(web_time::Instant::now()) {
+            ui.ctx().request_repaint_after(wait);
+        }
         self.carry_height();
         self.refresh_supports(ui.ctx().input(|input| input.pointer.any_down()));
         self.take_shortcuts();
@@ -537,6 +500,7 @@ mod showcase;
 mod small_window;
 #[cfg(all(test, feature = "snapshots"))]
 mod snapshots;
+mod stack;
 #[cfg(test)]
 mod states;
 #[cfg(test)]

@@ -33,6 +33,18 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
+/// What Check shows of the stack: the full check once it has read the plate as it is, else
+/// the quick one from the background, flagged `true` as preliminary (ADR 0419).
+pub(crate) fn found<'a>(window: &'a Window) -> Option<(&'a Measured, bool)> {
+    if let Some(measured) = window.measured() {
+        return Some((measured, false));
+    }
+    let settings = window.machine.slicing.raster_settings()?;
+    let fold = window.machine.slicing.fold();
+    let quick = window.machine.preview.quick_measured(&settings, fold)?;
+    Some((quick, true))
+}
+
 /// The section of what a read of the stack found, or the read still to come.
 fn layers(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
     let found = board.layers.as_ref();
@@ -57,6 +69,7 @@ fn layers(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
         }
         match found {
             None => waiting(ui, window),
+            Some(layers) if layers.preliminary => refining(ui),
             Some(_)
                 if board
                     .cards
@@ -98,6 +111,7 @@ fn card(ui: &mut egui::Ui, window: &mut Window, board: &Board, kind: IssueKind) 
     let empty = Layers {
         risks: Vec::new(),
         removed: 0,
+        preliminary: false,
     };
     let layers = board.layers.as_ref().unwrap_or(&empty);
     let risks: Vec<Risk> = layers
@@ -136,7 +150,7 @@ pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
     }
     let on_plate = plate::tally(ctx, window);
     let issues = |count: usize, colour| Some((tr!("check-fact-issues", count = count), colour));
-    let Some(measured) = window.measured() else {
+    let Some((measured, _)) = found(window) else {
         if let Some((count, colour)) = on_plate {
             return issues(count, colour);
         }
@@ -160,9 +174,8 @@ pub fn fact(ctx: &egui::Context, window: &Window) -> Option<(String, Color32)> {
 /// The dot the rail's Check carries: the colour of the gravest issue, the plate's found
 /// without Check open, the layers' once read.
 pub fn badge(ctx: &egui::Context, window: &Window) -> Option<Color32> {
-    let layers = window
-        .measured()
-        .and_then(Measured::worst)
+    let layers = found(window)
+        .and_then(|(measured, _)| measured.worst())
         .map(|worst| tint(&worst));
     let on_plate = plate::tally(ctx, window).map(|(_, colour)| colour);
     match (layers, on_plate) {
@@ -192,10 +205,18 @@ fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     hint(ui, &tr!("check-reads-layers"));
 }
 
+/// What the quick check found while the full one reads every pixel.
+fn refining(ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        crate::ui::spinner(ui);
+        hint(ui, &tr!("check-quick-found"));
+    });
+}
+
 /// Which layers pull hardest on the film as the plate lifts, above the bottom block, where
 /// no layer pulls too hard to have a card of its own.
 fn pull(ui: &mut egui::Ui, window: &mut Window) {
-    if window.measured().is_none() && !window.machine.preview.is_measuring() {
+    if found(window).is_none() && !window.machine.preview.is_measuring() {
         return;
     }
     let rows = pull_rows(window);
@@ -208,7 +229,7 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
 /// The readings of the pull, each `measuring` until it is known: a setting edited meanwhile
 /// is measured again.
 fn pull_rows(window: &Window) -> Vec<(String, String)> {
-    let measured = window.measured();
+    let measured = found(window).map(|(measured, _)| measured);
     let waiting = || tr!("check-measuring");
     let hardest = measured.and_then(Measured::hardest_pull);
     let widest = measured.and_then(Measured::largest_growth);

@@ -15,7 +15,7 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     let preview = window
         .machine
         .preview
-        .is_building()
+        .is_cutting_in_view()
         .then(|| (tr!("notice-cutting-preview"), None, false));
     if job_card(stack, "preview", preview) {
         window.machine.preview.cancel();

@@ -35,6 +35,8 @@ pub(super) struct Card {
 pub(super) struct Layers {
     pub risks: Vec<Risk>,
     pub removed: usize,
+    /// Read by the quick check, while the full one is still to land.
+    pub preliminary: bool,
 }
 
 /// All Check shows this frame.
@@ -49,9 +51,10 @@ pub(super) struct Board {
 impl Board {
     pub(super) fn read(ctx: &egui::Context, window: &mut Window) -> Self {
         let plate = plate::issues(ctx, window);
-        let layers = window.measured().map(|measured| Layers {
+        let layers = super::found(window).map(|(measured, preliminary)| Layers {
             risks: measured.risks(),
             removed: measured.removed_islands(),
+            preliminary,
         });
         let history = &window.doc.history;
         let answers = window.tools.check.answers.standing(history);

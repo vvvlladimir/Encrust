@@ -376,8 +376,8 @@ mod tests {
             Arc::new(mesh.into()),
             windows,
             as_seen(&settings),
-            Tolerance::default(),
-            Measured::new(1),
+            (Tolerance::default(), Measured::new(1)),
+            2,
         );
         let measured = loop {
             match job.poll() {

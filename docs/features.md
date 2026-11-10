@@ -245,6 +245,11 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
+- Check reads the plate in the background once it has stood still for a moment, on half the
+  cores and at half the panel's resolution, so the dot on the Check tool and its first list
+  are there before Check is opened. Opening Check reads every pixel; until that is in, the
+  quick list is marked and its fixes wait. An island near the smallest one named can be missed
+  or wrongly named by the quick read, never by the full one.
 - Check keeps each kind of issue on a card of its own, with its rows and the buttons that
   answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
   **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
