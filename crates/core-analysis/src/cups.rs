@@ -150,9 +150,12 @@ impl Holes {
     /// reading order and grouped into holes, leaving out open air reaching the panel's edge.
     pub(crate) fn of(spans: &[Span], height: u32) -> Self {
         let gaps = gaps_between(spans);
-        let rows = height.max(spans.last().map_or(0, |span| span.row + 1));
-        let lit = row_starts(spans.iter().map(|span| span.row), rows);
-        let dark = row_starts(gaps.iter().map(|gap| gap.row), rows);
+        let rows = match (spans.first(), spans.last()) {
+            (Some(first), Some(last)) => first.row..last.row + 1,
+            _ => 0..0,
+        };
+        let lit = RowStarts::of(spans.iter().map(|span| span.row), rows.clone());
+        let dark = RowStarts::of(gaps.iter().map(|gap| gap.row), rows);
         let outside = gaps.len();
         let mut parent: Vec<usize> = (0..=outside).collect();
         for (index, gap) in gaps.iter().enumerate() {
@@ -161,7 +164,7 @@ impl Holes {
                     join(&mut parent, index, outside);
                     continue;
                 };
-                let lit = row_of(&lit, next);
+                let lit = lit.row(next);
                 if lit.is_empty() {
                     join(&mut parent, index, outside);
                     continue;
@@ -170,7 +173,7 @@ impl Holes {
                 if gap.x0 < spans[lit.start].x0 || gap.x1 > spans[lit.end - 1].x1 {
                     join(&mut parent, index, outside);
                 }
-                for other in row_of(&dark, next) {
+                for other in dark.row(next) {
                     if gaps[other].x0 < gap.x1 && gap.x0 < gaps[other].x1 {
                         join(&mut parent, index, other);
                     }
@@ -194,21 +197,38 @@ fn gaps_between(spans: &[Span]) -> Vec<Gap> {
         .collect()
 }
 
-/// Where each row's entries start in a list ordered by row, and where the last one ends:
-/// row `r` is `starts[r]..starts[r + 1]`.
-fn row_starts(rows: impl Iterator<Item = u32>, height: u32) -> Vec<usize> {
-    let mut starts = vec![0; height as usize + 1];
-    for row in rows {
-        starts[row as usize + 1] += 1;
-    }
-    for row in 1..starts.len() {
-        starts[row] += starts[row - 1];
-    }
-    starts
+/// Where each row's entries start in a list ordered by row, over the rows `first..` it
+/// holds: row `r` is `starts[r - first]..starts[r - first + 1]`.
+struct RowStarts {
+    first: u32,
+    starts: Vec<usize>,
 }
 
-fn row_of(starts: &[usize], row: u32) -> std::ops::Range<usize> {
-    starts[row as usize]..starts[row as usize + 1]
+impl RowStarts {
+    fn of(rows: impl Iterator<Item = u32>, held: std::ops::Range<u32>) -> Self {
+        let mut starts = vec![0; held.len() + 1];
+        for row in rows {
+            starts[(row - held.start) as usize + 1] += 1;
+        }
+        for row in 1..starts.len() {
+            starts[row] += starts[row - 1];
+        }
+        Self {
+            first: held.start,
+            starts,
+        }
+    }
+
+    /// The entries on `row`, none for a row outside those held.
+    fn row(&self, row: u32) -> std::ops::Range<usize> {
+        let Some(at) = row.checked_sub(self.first).map(|at| at as usize) else {
+            return 0..0;
+        };
+        match (self.starts.get(at), self.starts.get(at + 1)) {
+            (Some(&start), Some(&end)) => start..end,
+            _ => 0..0,
+        }
+    }
 }
 
 /// The gaps not joined to the outside, each with the number of the hole it is part of,
