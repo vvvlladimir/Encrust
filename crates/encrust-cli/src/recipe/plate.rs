@@ -47,10 +47,13 @@ impl Run<'_> {
     /// Answers the cups and necks `settings` ask for, then measures, notes and supports the
     /// islands of `ids` while step `index`'s retry holds; says how many times it went again.
     pub(super) fn check(&mut self, index: usize, ids: &[usize], settings: &Settings) -> Result<u8> {
-        self.fix_found(ids, settings)?;
+        let mut unchanged = self.fix_found(ids, settings)?;
         let mut attempt = 0;
         loop {
-            let (slice, print) = self.measured()?;
+            let (slice, print) = match unchanged.take() {
+                Some(measured) => measured,
+                None => self.measured()?,
+            };
             let floors = island_floors(&print.measured.risks(), slice.plan(), &print.panel);
             let layer_mm = slice.plan().nominal_thickness();
             let owners = self.owners(&floors, layer_mm);
@@ -106,12 +109,16 @@ impl Run<'_> {
     }
 
     /// Drills the suction cups and stands supports under the weak necks of `ids` where
-    /// `settings` ask for it; a cup or neck with nothing to answer it is left as it is.
-    fn fix_found(&mut self, ids: &[usize], settings: &Settings) -> Result<()> {
+    /// `settings` ask for it; hands back its measure when that changed nothing.
+    fn fix_found(
+        &mut self,
+        ids: &[usize],
+        settings: &Settings,
+    ) -> Result<Option<(SliceReport, Print)>> {
         let cups = flag(settings, "drill_cups").unwrap_or(false);
         let levers = flag(settings, "hold_levers").unwrap_or(false);
         if !cups && !levers {
-            return Ok(());
+            return Ok(None);
         }
         let (slice, print) = self.measured()?;
         let risks = print.measured.risks();
@@ -135,9 +142,10 @@ impl Run<'_> {
             }
             _ => None,
         };
+        let mut changed = false;
         for vent in vents {
             match vent {
-                Ok(vent) if ids.contains(&vent.model) => self.vent(&bvhs, vent),
+                Ok(vent) if ids.contains(&vent.model) => changed |= self.vent(&bvhs, vent),
                 Ok(_) => {}
                 Err(Unvented::OnThePlate) => tracing::warn!(
                     "a suction cup stands on the plate: lift the model onto supports or turn it"
@@ -147,14 +155,15 @@ impl Run<'_> {
                 }
             }
         }
-        match necks {
-            Some(holds) => self.hold_necks(ids, &holds),
-            None => Ok(()),
+        if let Some(holds) = necks {
+            changed |= self.hold_necks(ids, &holds)?;
         }
+        Ok((!changed).then_some((slice, print)))
     }
 
-    /// Drills `vent` into its piece along its own axis, walled on a solid one.
-    fn vent(&mut self, bvhs: &[Bvh], vent: CupVent) {
+    /// Drills `vent` into its piece along its own axis, walled on a solid one; says whether it
+    /// drilled one.
+    fn vent(&mut self, bvhs: &[Bvh], vent: CupVent) -> bool {
         let piece = &mut self.pieces[vent.model];
         let size = HoleSize {
             depth_mm: vent.depth_mm,
@@ -164,29 +173,42 @@ impl Run<'_> {
         let at = (vent.mouth_mm, vent.outward);
         let hole = ModelHollow::drain_at(&piece.mesh, bvh, at.0, at.1, size, Transform::default());
         match hole.filter(|hole| !hole.lies_within(&piece.holes)) {
-            Some(hole) => piece.holes.push(DrainHole {
-                kind: match piece.cavity {
-                    Some(_) => HoleKind::AtDepth,
-                    None => HoleKind::Walled,
-                },
-                ..hole
-            }),
-            None => tracing::warn!("{}: a cup was left undrilled", piece.input.display()),
+            Some(hole) => {
+                piece.holes.push(DrainHole {
+                    kind: match piece.cavity {
+                        Some(_) => HoleKind::AtDepth,
+                        None => HoleKind::Walled,
+                    },
+                    ..hole
+                });
+                true
+            }
+            None => {
+                tracing::warn!("{}: a cup was left undrilled", piece.input.display());
+                false
+            }
+        }
+    }
+
+    /// What the supports of `id` stand to: its latest supports step's plan, else `auto`.
+    fn own_plan(&self, id: usize) -> Result<SupportPlan> {
+        let piece = &self.pieces[id];
+        match piece.plan.clone().or(piece.shaping.supports.clone()) {
+            Some(plan) => Ok(plan),
+            None => plan_of(AUTO),
         }
     }
 
     /// What the supports under a weak neck of `id` stand to: its own, made thick enough.
     fn neck_plan(&self, id: usize) -> Result<SupportPlan> {
-        let piece = &self.pieces[id];
-        let plan = match piece.plan.clone().or(piece.shaping.supports.clone()) {
-            Some(plan) => plan,
-            None => plan_of(AUTO)?,
-        };
+        let plan = self.own_plan(id)?;
         Ok(SupportPlan::of(neck_profile(&plan.placing())))
     }
 
-    /// The supports `holds` names on each of `ids`, to that piece's own plan made thick enough.
-    fn hold_necks(&mut self, ids: &[usize], holds: &[(usize, Vec3)]) -> Result<()> {
+    /// The supports `holds` names on each of `ids`, to that piece's own plan made thick enough;
+    /// says whether it stood any.
+    fn hold_necks(&mut self, ids: &[usize], holds: &[(usize, Vec3)]) -> Result<bool> {
+        let mut stood = false;
         for &id in ids {
             let found: Vec<Vec3> = holds
                 .iter()
@@ -196,9 +218,10 @@ impl Run<'_> {
             if !found.is_empty() {
                 let plan = self.neck_plan(id)?;
                 hold_up(&mut self.pieces[id], &plan, &found)?;
+                stood = true;
             }
         }
-        Ok(())
+        Ok(stood)
     }
 
     fn retries(&self, index: usize, ids: &[usize], attempt: u8) -> Result<bool> {
@@ -224,12 +247,8 @@ impl Run<'_> {
             if found.is_empty() {
                 continue;
             }
-            let piece = &mut self.pieces[id];
-            let plan = match piece.plan.clone().or(piece.shaping.supports.clone()) {
-                Some(plan) => plan,
-                None => plan_of(AUTO)?,
-            };
-            hold_up(piece, &plan, &found)?;
+            let plan = self.own_plan(id)?;
+            hold_up(&mut self.pieces[id], &plan, &found)?;
         }
         Ok(())
     }

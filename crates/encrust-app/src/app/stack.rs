@@ -15,9 +15,8 @@ use crate::workspace::{Mode, Tool};
 const QUICK_POLL: Duration = Duration::from_millis(250);
 
 impl SlicerApp {
-    /// The preview shows the plate as it is, so entering the mode with a stale stack, or
-    /// none, cuts one; so does opening Check, which reads its figures off the stack. Nothing
-    /// to cut, or nothing to cut it for, and it stays empty: the transport says which.
+    /// Cuts the plate as it is for Preview or Check when the stack is stale or missing, else
+    /// measures it; with nothing to cut it stays empty and the transport says why.
     pub(super) fn refresh_preview(&mut self) {
         let reads_the_stack = self.mode == Mode::Preview || self.tool == Tool::Check;
         if !reads_the_stack {
@@ -58,9 +57,8 @@ impl SlicerApp {
         }
     }
 
-    /// Cuts and quickly checks the plate once it has stood still for `quick::SETTLE`,
-    /// whatever is open, so Check's dot and first answer are there before it is opened.
-    /// Answers how long to wait before looking again, or `None` for no need.
+    /// Cuts and quickly checks the plate once it has stood still for `quick::SETTLE`, whatever
+    /// is open (ADR 0419); answers how long until it looks again, `None` for no need.
     pub(super) fn check_in_background(&mut self, now: Instant) -> Option<Duration> {
         let polling = self.machine.preview.poll_quick().then_some(QUICK_POLL);
         let scene = &self.doc.scene;

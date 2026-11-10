@@ -49,6 +49,21 @@ fn a_cut_is_tried_once_for_each_plate() {
 }
 
 #[test]
+fn a_plate_come_back_to_after_another_was_cut_is_cut_again() {
+    let mut preview = Preview::default();
+    let at = Instant::now();
+    preview.note_plate(1, at);
+    assert!(preview.try_cut_for(1));
+    // The other plate cut for Preview, not the quick check, then undone back to the first.
+    preview.note_plate(2, at);
+    preview.note_plate(1, at);
+    assert!(
+        preview.try_cut_for(1),
+        "the stack held is the other plate's, so this one is cut again"
+    );
+}
+
+#[test]
 fn a_quick_check_reads_every_layer_on_the_coarser_panel() {
     let mut preview = preview_with_stack(4);
     let fold = Fold::default();

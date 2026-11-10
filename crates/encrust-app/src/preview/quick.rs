@@ -28,13 +28,14 @@ pub(super) struct Quick {
 
 impl Preview {
     /// Notes the plate standing as `fingerprint` at `now`. A change stops the quick check
-    /// under way, and a cut started for one.
+    /// under way and a cut started for one, and lets a plate come back to be cut again.
     pub fn note_plate(&mut self, fingerprint: u64, now: Instant) {
         if self.quick.seen.is_some_and(|(seen, _)| seen == fingerprint) {
             return;
         }
         self.quick.seen = Some((fingerprint, now));
         self.quick.measuring = None;
+        self.quick.cut_for = None;
         if self.job.as_ref().is_some_and(|build| build.quiet) {
             self.job = None;
         }
@@ -48,7 +49,7 @@ impl Preview {
     }
 
     /// Whether a cut for the quick check of the plate `fingerprint` may start: none has
-    /// been tried for it yet. Notes it as tried.
+    /// been tried for it since it was noted. Notes it as tried.
     pub fn try_cut_for(&mut self, fingerprint: u64) -> bool {
         let first = self.quick.cut_for != Some(fingerprint);
         self.quick.cut_for = Some(fingerprint);

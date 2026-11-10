@@ -55,7 +55,6 @@ pub(super) enum Work {
     Save(Saved),
 }
 
-/// A save step's settings; a name or folder left out is the window's.
 /// What a check answers once, before its retry: its suction cups, its weak necks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct CheckFixes {
@@ -63,6 +62,7 @@ pub(super) struct CheckFixes {
     pub levers: bool,
 }
 
+/// A save step's settings; a name or folder left out is the window's.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Saved {
     pub folder: Option<String>,
