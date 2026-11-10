@@ -149,6 +149,9 @@ paints from tokens only.
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
 | `issue_row`, `issue_list` | One finding: a dot in its colour, what it is, a quieter aside (its layer), a count or figure at the right; the row goes there. The list shows seven and scrolls the rest inside itself |
+| `issue_card`, `IssueHead` | A kind of issue on `raised`, `BUTTON_H` heading: a glyph in its colour, the name cut to fit, an aside small at the right cut first and gone while open, the count, a caret; a press folds it, its body unfolds under it 6 in |
+| `issue_lines`, `issue_line` | A card's rows on `sunken`, 30 tall, one apart, five shown and the rest scrolling: where it is, and a reading at the right in the ink given; hovered in `hover`, in hand washed and ringed in the accent |
+| `answered_row` | A kind already answered: a tick in `ok`, its name in `text_mid`, what was done small at the right cut to fit and read whole on hover, a small Undo where it is the latest edit |
 | `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `picture_square` | A square of a picture, or an empty raised one, a caret on a dark disc saying a click opens more: the relief's picture |
 | `notice` | A verdict in a block: a glyph in its colour, the verdict in plain ink, what to do under it; no stripe |
@@ -170,6 +173,7 @@ paints from tokens only.
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
 | `secondary_button` | The ordinary full-width button |
+| `flow_buttons`, `FlowButton` | Buttons sharing rows by the width of their words, each row filling its width, wrapping past it; the lead edged in the accent with its words in `accent_soft`; every one says on hover what it does |
 | `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |

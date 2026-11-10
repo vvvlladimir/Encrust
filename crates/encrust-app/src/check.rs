@@ -2,19 +2,24 @@
 //! layer while the view stays as it was left, and the camera sent to them once.
 
 use core_analysis::{Risk, RiskKind};
-use core_engine::island_floors;
+use core_engine::{CupVent, Unvented, cup_vents, island_floors, lever_holds, neck_profile};
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use egui::Color32;
 use printer_profiles::SupportProfile;
 
+use crate::drain::DrainTool;
 use crate::highlight::{EdgeMark, Highlight, LIFT_MM, Spot, ring};
 use crate::i18n::tr;
 use crate::preview::{as_seen, on_plate};
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
-use crate::supports::{ISLANDS_GROUP, SupportTool, island_holds};
+use crate::supports::{ISLANDS_GROUP, NECKS_GROUP, SupportTool, hanging_models, island_holds};
+
+mod answers;
+
+pub use answers::{Answer, Answers, IssueKind};
 
 /// The least radius an issue is ringed at, mm: an island of a few pixels still shows, and
 /// an issue with no area of its own is ringed at this.
@@ -77,14 +82,157 @@ pub fn support_islands(
         .flatten()
         .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
         .collect();
-    let stood = match &run {
-        None => supports.support_islands(scene, &found),
-        Some(run) => supports.support_islands_to(scene, &found, |id| {
-            let own = run.profiles.iter().find(|(owner, _)| *owner == id);
-            own.map(|(_, profile)| profile.clone()).unwrap_or_default()
-        }),
-    };
+    let stood = stand(scene, supports, &found, run.as_ref());
     Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
+}
+
+/// Check's Support them for weak necks: as many and as thick supports under each pulling piece
+/// as bring its neck under the limit; says how many stood and how many necks had none.
+pub fn support_levers(
+    (scene, supports): (&mut Scene, &mut SupportTool),
+    stack: (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+    run: Option<ForRun>,
+) -> Status {
+    let holds = lever_owners(scene, stack, risks, &neck_sizing(supports, run.as_ref()));
+    let found: Vec<(ObjectId, Vec3)> = holds
+        .iter()
+        .flatten()
+        .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
+        .copied()
+        .collect();
+    let left = holds.iter().filter(|hold| hold.is_empty()).count();
+    let stood = supports.support_necks(scene, &found, |id| {
+        run.as_ref().map(|run| profile_of(run, id))
+    });
+    told(
+        tr!("check-stood-levers", count = stood, group = NECKS_GROUP),
+        left,
+    )
+}
+
+/// The profile a neck's supports are counted by: a run's first, or the panel's, made thick
+/// enough.
+fn neck_sizing(supports: &SupportTool, run: Option<&ForRun>) -> SupportProfile {
+    let asked = run
+        .and_then(|run| run.profiles.first())
+        .map(|(_, profile)| profile);
+    neck_profile(asked.unwrap_or(&supports.profile))
+}
+
+/// Check's Drill them: the shortest hole into the lowest point of each suction cup of `risks`,
+/// on `only` if named; says how many went in, stand on the plate and are left to the hand.
+pub fn drill_cups(
+    (scene, drain): (&mut Scene, &mut DrainTool),
+    stack: (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+    only: Option<&[ObjectId]>,
+) -> Status {
+    let vents = cup_owners(scene, stack, risks, drain.size().diameter_mm);
+    let found: Vec<(ObjectId, CupVent)> = vents
+        .iter()
+        .flatten()
+        .filter(|(id, _)| only.is_none_or(|ids| ids.contains(id)))
+        .copied()
+        .collect();
+    let unvented = |why: Unvented| vents.iter().filter(|vent| **vent == Err(why)).count();
+    let drilled = drain.drill_vents(scene, &found);
+    let said = tr!("check-vented-cups", count = drilled);
+    let mut notes = Vec::new();
+    match unvented(Unvented::OnThePlate) {
+        0 => {}
+        count => notes.push(tr!("check-cups-on-the-plate", count = count)),
+    }
+    match unvented(Unvented::TooDeep) {
+        0 => {}
+        count => notes.push(tr!("check-left-to-you", count = count)),
+    }
+    match notes.is_empty() {
+        true => Status::Info(said),
+        false => Status::Noted(said, notes),
+    }
+}
+
+/// The one model all of `owners` name, or `None` where they name several or cannot tell: what
+/// Auto-orient is asked to turn.
+pub fn only_owner(owners: impl IntoIterator<Item = Option<ObjectId>>) -> Option<ObjectId> {
+    let mut owners = owners.into_iter();
+    let first = owners.next()??;
+    owners.all(|owner| owner == Some(first)).then_some(first)
+}
+
+/// For each suction cup of `risks`, the model it is in and the hole of `hole_mm` across that
+/// vents it, or why there is none.
+pub fn cup_owners(
+    scene: &Scene,
+    (plan, settings): (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+    hole_mm: Scalar,
+) -> Vec<Result<(ObjectId, CupVent), Unvented>> {
+    let (objects, models) = hanging_models(scene);
+    cup_vents(risks, plan, &as_seen(settings), &models, hole_mm)
+        .into_iter()
+        .map(|vent| vent.map(|vent| (objects[vent.model].id, vent)))
+        .collect()
+}
+
+/// For each weak neck of `risks`, the places supports of `profile` hold it, with their model.
+pub fn lever_owners(
+    scene: &Scene,
+    (plan, settings): (&LayerPlan, &RasterSettings),
+    risks: &[Risk],
+    profile: &SupportProfile,
+) -> Vec<Vec<(ObjectId, Vec3)>> {
+    let (objects, models) = hanging_models(scene);
+    lever_holds(risks, plan, &as_seen(settings), &models, profile)
+        .into_iter()
+        .map(|holds| {
+            let owned = holds
+                .into_iter()
+                .map(|(at, contact)| (objects[at].id, contact));
+            owned.collect()
+        })
+        .collect()
+}
+
+/// Stands a support at each of `found`, on a run's profiles where there is one.
+fn stand(
+    scene: &mut Scene,
+    supports: &mut SupportTool,
+    found: &[(ObjectId, Vec3)],
+    run: Option<&ForRun>,
+) -> usize {
+    match run {
+        None => supports.support_islands(scene, found),
+        Some(run) => supports.support_islands_to(scene, found, |id| profile_of(run, id)),
+    }
+}
+
+/// The profile `run` stands `id`'s supports to.
+fn profile_of(run: &ForRun, id: ObjectId) -> SupportProfile {
+    let own = run.profiles.iter().find(|(owner, _)| *owner == id);
+    own.map(|(_, profile)| profile.clone()).unwrap_or_default()
+}
+
+/// `said`, with how many of the issues had nowhere to be fixed where any had none.
+fn told(said: String, left: usize) -> Status {
+    match left {
+        0 => Status::Info(said),
+        left => Status::Noted(said, vec![tr!("check-left-to-you", count = left)]),
+    }
+}
+
+/// One place the arrows of Check stop at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stop {
+    /// A row of the plate: its two models, the same one twice for a row of one.
+    Plate([ObjectId; 2]),
+    /// A row of the layers; `hanging` tells what stood on an island taken out from an island.
+    Layer {
+        layer: usize,
+        kind: IssueKind,
+        hanging: bool,
+    },
 }
 
 /// What the rings were laid in: the plate's `preview::plate_fingerprint` and the height
@@ -102,11 +250,16 @@ struct Visited {
     colour: Color32,
 }
 
-/// The issues gone to, and where the camera is still to fly.
+/// The issues gone to, where the camera is still to fly, and what the fixes did.
 #[derive(Debug, Default)]
 pub struct Visit {
     visited: Option<Visited>,
     flight: Option<Spot>,
+    /// The issue gone to last, which the arrows step on from.
+    stop: Option<Stop>,
+    /// The kind whose card is to open, once.
+    reveal: Option<IssueKind>,
+    pub answers: Answers,
 }
 
 impl Visit {
@@ -131,9 +284,29 @@ impl Visit {
         self.flight = Some(spot);
     }
 
-    /// Forgets the issues gone to.
+    /// Notes `stop` as the issue gone to.
+    pub fn arrive(&mut self, stop: Stop) {
+        self.stop = Some(stop);
+    }
+
+    /// Asks for the card of `kind` to open.
+    pub fn reveal(&mut self, kind: IssueKind) {
+        self.reveal = Some(kind);
+    }
+
+    /// The kind whose card is to open, once.
+    pub fn take_reveal(&mut self) -> Option<IssueKind> {
+        self.reveal.take()
+    }
+
+    /// The issue gone to last.
+    pub fn stop(&self) -> Option<Stop> {
+        self.stop
+    }
+
+    /// Forgets the issues gone to; what the fixes did stands.
     pub fn clear(&mut self) {
-        *self = Self::default();
+        (self.visited, self.flight, self.stop) = (None, None, None);
     }
 
     /// Where the camera is to go, once.
@@ -174,6 +347,17 @@ mod tests {
             at_mm: Vec2::new(x, 0.0),
             area_mm2: Some(area_mm2),
         }
+    }
+
+    #[test]
+    fn auto_orient_is_aimed_at_a_model_only_when_every_issue_is_on_it() {
+        let unit = (Vec3::ZERO, Vec3::ONE);
+        let scene = crate::scene::fixtures::scene_of_boxes(&[unit, unit]);
+        let (one, other) = (scene.objects()[0].id, scene.objects()[1].id);
+        assert_eq!(only_owner([Some(one), Some(one)]), Some(one));
+        assert_eq!(only_owner([Some(one), Some(other)]), None);
+        assert_eq!(only_owner([Some(one), None]), None);
+        assert_eq!(only_owner([]), None);
     }
 
     #[test]

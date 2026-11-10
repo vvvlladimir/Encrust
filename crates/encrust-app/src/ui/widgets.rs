@@ -41,11 +41,11 @@ pub use bin::{bin_button, confirm_bin};
 pub use binding::{BindingPress, BindingRow, Recording, binding_row};
 pub use button::inline_button_w;
 pub use button::{
-    Inline, RailButton, SquareLook, bar_pill, blocked_hover, compact_button, companion_button,
-    companion_square, filter_chip, focus_ring, hover_mix, icon_button, icon_toggle, inline_button,
-    numbered_square, picture_square, primary_button, primary_with_companion, quiet_button,
-    quiet_square, rail_button, secondary_button, small_icon_button, summary_button, swatch,
-    toggle_button, zone_button,
+    FlowButton, Inline, RailButton, SquareLook, bar_pill, blocked_hover, compact_button,
+    companion_button, companion_square, filter_chip, flow_buttons, focus_ring, hover_mix,
+    icon_button, icon_toggle, inline_button, numbered_square, picture_square, primary_button,
+    primary_with_companion, quiet_button, quiet_square, rail_button, secondary_button,
+    small_icon_button, summary_button, swatch, toggle_button, zone_button,
 };
 pub use chain::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use chooser::{
@@ -82,8 +82,9 @@ pub use layout::{
 };
 pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
-    ListRow, bullet, found_row, is_renaming, issue_list, issue_row, list, list_row, rename_box,
-    row_mark, start_rename, tag, tag_label, two_lines,
+    IssueHead, ListRow, answered_row, bullet, found_row, is_renaming, issue_card, issue_line,
+    issue_lines, issue_list, issue_row, list, list_row, rename_box, row_mark, start_rename, tag,
+    tag_label, two_lines,
 };
 pub use menu::{
     MENU_W, MenuRow, context_menu, menu_button, menu_row, menu_rule, menu_style, menu_sub,

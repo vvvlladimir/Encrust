@@ -29,7 +29,7 @@ mod ground;
 mod room;
 
 use ground::{check_lift, ground_of};
-pub(crate) use room::arranged;
+pub(crate) use room::{arranged, cleared};
 use room::{check_plugs_clear, spread_pieces, stood_at};
 
 /// What is done to one model on its way onto the plate.

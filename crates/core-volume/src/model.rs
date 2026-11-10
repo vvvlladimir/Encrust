@@ -333,9 +333,8 @@ impl ModelHollow {
         self.remesh_markers();
     }
 
-    /// Drills a hole where the model was clicked, straight into the surface it was
-    /// clicked on, unless one already drilled there takes it in; walled on a solid model
-    /// (ADR 0346). `point` and `normal` are in plate coordinates.
+    /// Drills a hole into the face of `normal` clicked at `point`, plate coordinates, unless one
+    /// drilled takes it in, walled on a solid model (ADR 0346); says whether it drilled one.
     pub fn add_drain(
         &mut self,
         mesh: &Mesh,
@@ -344,30 +343,27 @@ impl ModelHollow {
         normal: Vec3,
         size: HoleSize,
         transform: Transform,
-    ) {
-        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
-            self.add_hole(hole);
-        }
+    ) -> bool {
+        Self::drain_at(mesh, bvh, point, normal, size, transform)
+            .is_some_and(|hole| self.add_hole(hole))
     }
 
-    /// Drills `hole`, in the model's own space, as a click would — walled on a solid model —
-    /// unless one already drilled takes it in: what [`Self::drain_at`] or
-    /// [`Self::support_drain_at`] placed.
-    pub fn add_hole(&mut self, hole: DrainHole) {
+    /// Drills `hole` of [`Self::drain_at`], model space, as a click would, unless one drilled
+    /// takes it in; says whether it drilled one.
+    pub fn add_hole(&mut self, hole: DrainHole) -> bool {
         let hole = self.placed(hole);
-        if !self.has_hole_over(&hole) {
+        let new = !self.has_hole_over(&hole);
+        if new {
             self.drains.push(hole);
             self.recut();
         }
+        new
     }
 
     /// Whether `hole`, in the model's own space, would lie wholly inside one already drilled
     /// at least as wide: a click on a hole adds nothing, one reaching past it is drilled.
     pub fn has_hole_over(&self, hole: &DrainHole) -> bool {
-        let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
-        self.drains.iter().any(|old| {
-            within(old, hole.at) && within(old, tip) && hole.diameter_mm <= old.diameter_mm
-        })
+        hole.lies_within(&self.drains)
     }
 
     /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
@@ -434,7 +430,7 @@ impl ModelHollow {
         };
         let local = inverse.transform_point3(point);
 
-        let hit = self.drains.iter().position(|hole| within(hole, local));
+        let hit = self.drains.iter().position(|hole| hole.holds(local));
         if let Some(index) = hit {
             self.drains.remove(index);
             self.recut();
@@ -607,15 +603,6 @@ impl ModelHollow {
         carried.recut();
         carried
     }
-}
-
-/// Whether `point` is inside the tube `hole` cuts, in the model's own space.
-fn within(hole: &DrainHole, point: Vec3) -> bool {
-    let axis = hole.axis.normalize_or_zero();
-    let along = (point - hole.at).dot(axis);
-    let radius = hole.diameter_mm / 2.0;
-    (-radius..=hole.depth_mm).contains(&along)
-        && (point - hole.at - axis * along).length() <= radius
 }
 
 /// Where a click at `point` on a face of `normal`, in plate coordinates, drills in the model's

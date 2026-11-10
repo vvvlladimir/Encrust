@@ -23,6 +23,24 @@ impl Default for ArrangeSettings {
     }
 }
 
+/// What of the plate models may stand on, millimetres in plate axes: all of it, or what a
+/// printer's inset leaves of it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlateArea {
+    pub low_mm: Vec2,
+    pub high_mm: Vec2,
+}
+
+impl PlateArea {
+    /// The whole of a plate `plate_mm` wide and deep.
+    pub fn whole(plate_mm: Vec2) -> Self {
+        Self {
+            low_mm: Vec2::ZERO,
+            high_mm: plate_mm,
+        }
+    }
+}
+
 /// Where one model ends up.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Placed {
@@ -41,11 +59,30 @@ pub struct Arranged {
 }
 
 /// Footprints are bitmaps so concave models nest without a polygon boolean (ADR 0088).
-pub fn arrange(footprints: &[Footprint], plate_mm: Vec2, settings: &ArrangeSettings) -> Arranged {
+pub fn arrange(footprints: &[Footprint], area: PlateArea, settings: &ArrangeSettings) -> Arranged {
+    let arranged = pack(footprints, area, settings);
+    if arranged.left_out.is_empty() || settings.margin_mm <= 0.0 {
+        return arranged;
+    }
+    let flush = ArrangeSettings {
+        margin_mm: 0.0,
+        ..*settings
+    };
+    let packed_flush = pack(footprints, area, &flush);
+    if packed_flush.left_out.len() < arranged.left_out.len() {
+        packed_flush
+    } else {
+        arranged
+    }
+}
+
+/// [`arrange`] at the margin `settings` asks, whatever that leaves out.
+fn pack(footprints: &[Footprint], area: PlateArea, settings: &ArrangeSettings) -> Arranged {
     let cell_mm = settings.cell_mm.max(Scalar::EPSILON);
     let margin = (settings.margin_mm / cell_mm).ceil().max(0.0) as usize;
-    let width = (plate_mm.x / cell_mm).floor().max(0.0) as usize;
-    let height = (plate_mm.y / cell_mm).floor().max(0.0) as usize;
+    let size_mm = area.high_mm - area.low_mm;
+    let width = (size_mm.x / cell_mm).floor().max(0.0) as usize;
+    let height = (size_mm.y / cell_mm).floor().max(0.0) as usize;
     if width <= 2 * margin || height <= 2 * margin {
         return Arranged {
             left_out: (0..footprints.len()).collect(),
@@ -80,10 +117,11 @@ pub fn arrange(footprints: &[Footprint], plate_mm: Vec2, settings: &ArrangeSetti
         placed: packed
             .into_iter()
             .map(|(index, x, y)| {
-                let corner = Vec2::new(
-                    ((x + margin + shift.0) as Scalar) * cell_mm,
-                    ((y + margin + shift.1) as Scalar) * cell_mm,
-                );
+                let corner = area.low_mm
+                    + Vec2::new(
+                        ((x + margin + shift.0) as Scalar) * cell_mm,
+                        ((y + margin + shift.1) as Scalar) * cell_mm,
+                    );
                 Placed {
                     index,
                     offset_mm: corner - footprints[index].corner_mm,

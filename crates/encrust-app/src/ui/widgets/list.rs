@@ -7,10 +7,12 @@ use super::{focus_ring, hover_mix};
 use crate::i18n::tr;
 use crate::ui::theme;
 
+mod card;
 mod found;
 mod issue;
 mod tag;
 
+pub use card::{IssueHead, answered_row, issue_card, issue_line, issue_lines};
 pub use found::{found_row, row_mark};
 pub use issue::{issue_list, issue_row};
 pub use tag::{bullet, tag, tag_label};

@@ -1,0 +1,22 @@
+# What Check's Fix all does: every automatic answer, each as its own button gives it (ADR 0416).
+
+name = "Fix what Check found"
+format = 1
+
+[[step]]
+do = "arrange"
+set = { only_in_the_way = true }
+
+[[step]]
+do = "check"
+
+[[step]]
+do = "drain"
+when = "hollow && trapped > 0"
+on_fail = "skip"
+set = { vent = true }
+
+[[step]]
+do = "check"
+set = { drill_cups = true, hold_levers = true }
+retry = { while = "islands > 0", max = 3 }

@@ -245,9 +245,26 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
+- Check reads the plate in the background once it has stood still for a moment, on half the
+  cores and at half the panel's resolution, so the dot on the Check tool and its first list
+  are there before Check is opened. Opening Check reads every pixel; until that is in, the
+  quick list is marked and its fixes wait. An island near the smallest one named can be missed
+  or wrongly named by the quick read, never by the full one. While Fix all or another recipe
+  runs, Check reads nothing of its own: it reads again once the run ends or pauses.
+- Check keeps each kind of issue on a card of its own, with its rows and the buttons that
+  answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
+  **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
+  card to what it did, with Undo on the latest, and opens the next. What a fix could not reach
+  stays on the card with the reason and with every button, the fix just made among them, so
+  issues a later step brought back can still be answered. **Fix all** at the foot takes every automatic answer on
+  the whole plate in a safe order, as one undo and with Cancel; `--recipe fix-issues` does the
+  same on the command line. The arrows step through every issue, of the plate and of the layers
+  alike, and go round. Move to free space and Arrange keep 2 mm from the plate's edge, and stand
+  a model flush with it where that is all the room there is.
 
 **Many models:**
-- **Arrange the plate** automatically, largest model first.
+- **Arrange the plate** automatically, largest model first, clear of a printer's plate inset;
+  a model longer than the plate is turned about the vertical by the least that fits it.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.
   A copy is cut and hollowed once, not once per copy.
 - **Several plates in one project.** Move models between plates, duplicate a plate, slice
@@ -666,6 +683,19 @@ smoothing, not the original model.
 - Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
   on the cut, and the camera flies to it past the models and supports in the way.
 - **Support every island** in one press.
+- **Fix the rest from the same panel:** vent a suction cup through the thinnest wall at its
+  bottom, a notch along the plate for one that stands on it, hold a weak neck
+  with as many supports, 0.6 mm across at least, as bring it under its limit (in their own
+  **Weak necks** group), or Auto-orient for a pose without them; turn for the least peel, or open
+  the lift settings on a printer that leaves them to the file. A cup on the plate with walls too
+  thick to drill is left for you to lift onto supports or turn, and the notice says so; a cup
+  with no wall thin enough and a neck with no underside to stand on are left to you, counted.
+  A cup is only named when a full vacuum in it would pull 10 N or more. Thin
+  sections have no fix here: nothing thickens a model.
+- **Fix the plate:** Move to free space moves only the models in the way, turns one longer
+  than the plate about the vertical by the least that fits it, and packs the whole plate when
+  no clear place is left; Scale to fit scales a model too large for it, Combine opens on two models that meet, and
+  Drill drain holes runs Drain's Auto on a hollow model with no way out.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
 
@@ -919,9 +949,9 @@ address in a video player).
   icons, at the tool row's left, each saying what it does under the pointer.
 - With nothing on the plate the models card says so and offers Open a model; the stage
   stays clear.
-- **Check:** Previous and Next step through the layers with issues; the islands and the
-  suction cups each have their own section with what fixes them; the plate card gives the
-  plate's time, resin, weight and price.
+- **Check:** Previous and Next step through every issue, the plate's first, and go round; each
+  kind of issue has its own card with what fixes it; the plate card gives the plate's time,
+  resin, weight and price.
 - The support group picker lists what stands on the plate, then the profiles holding
   nothing, then *Edit the profiles*.
 - Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
@@ -966,7 +996,7 @@ it if it has defects, orient it, hollow, drain and hold up its cavity where a wa
 resin, and stand it on Auto supports, stopping with why where the model does not fit or
 resin stays trapped. Every flag you type wins over its step, and `--json` says
 what was decided for each model. The window does the same as **Prepare for print**.
-Built-in recipe beside it, a starting point for small detailed models: `miniatures`;
+Built-in recipes beside it: `fix-issues`, what Check's **Fix all** runs, and `miniatures`, a starting point for small detailed models;
 `encrust recipes list` names them and `recipes show` prints one.
 `--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
 conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
@@ -995,8 +1025,9 @@ room beside their model stops rather than printing them on a neighbour.
 by hand, set blockers, take the pieces of a cut or a split out as meshes, or hollow or support
 a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
 Nor can you open a sliced file as a model, use a saved Hollow or Drain preset, press one of
-the built-in textures, pick an edge-smoothing look by name, set a model's lift off the plate
-by a number of your own, or support the islands and drill the suction cups Check finds.
+the built-in textures, pick an edge-smoothing look by name, or set a model's lift off the plate
+by a number of your own. Supporting the islands and weak necks and drilling the suction cups Check finds
+is a recipe's `check` step (`retry`, `hold_levers`, `drill_cups`).
 
 ---
 

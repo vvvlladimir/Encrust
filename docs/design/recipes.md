@@ -51,8 +51,8 @@ The window and the command line run every kind; what each kind sets:
 | `hollow` | `wall_mm`, `mode`: `inside`, `outside`, `open-floor`; `infill`; `keep_solid_under_mm` | Hollow, `--hollow` |
 | `drain` | `at`: `auto` or `points`; `points`; `diameter_mm`, `depth_mm`, `vent`, `plugs` | Drain's Auto or a click, `--drain-at` |
 | `supports` | `profile` (catalogue id, `auto` the default), `cavity` | Grow, `--supports` |
-| `check` | `retry = { while, max }` | Check, the report |
-| `arrange` | `spacing_mm` | Arrange plate, `--arrange` |
+| `check` | `retry = { while, max }`; `drill_cups`, `hold_levers`, answered once before the retry | Check, the report |
+| `arrange` | `spacing_mm`; `only_in_the_way`, moving only what is past the plate or meets another, the whole plate where no clear place is left | Arrange plate or Check's Move to free space, `--arrange` |
 | `save` | `folder`, `name` (ADR 0387's tags), `send` | Slice to, `-o`, `encrust printer send` |
 | `gate` | `stop_if`, `message` | the window waits as at a failed step; the command line ends the run |
 | `pause` | `message` | the window waits for Continue, the plate the user's; the command line says it and goes on |

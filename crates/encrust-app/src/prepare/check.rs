@@ -12,8 +12,8 @@ use printer_profiles::{Catalogue, SupportProfile};
 
 use super::Run;
 use super::step::Ended;
-use super::work::{Batch, Work};
-use crate::check::{ForRun, support_islands};
+use super::work::{Batch, CheckFixes, Work};
+use crate::check::{ForRun, IssueKind, drill_cups, support_islands, support_levers};
 use crate::i18n::tr;
 use crate::preview::{as_seen, stack_fingerprint};
 use crate::scene::{ObjectId, Scene};
@@ -86,7 +86,7 @@ impl Run {
         machine: &mut Machine,
         batch: &Batch,
     ) -> Result<()> {
-        let Work::Check { attempt } = batch.work else {
+        let Work::Check { attempt, fixes } = batch.work else {
             return Ok(());
         };
         let slicing = &machine.slicing;
@@ -100,6 +100,17 @@ impl Run {
         let risks = measured.risks();
         let peel_n = measured.hardest_pull().map_or(0.0, |peak| peak.value);
         let stack = (plan, &settings);
+        if fixes != CheckFixes::default() {
+            let profiles = self.island_profiles(&batch.ids, &machine.slicing.catalogue)?;
+            let run = ForRun {
+                ids: &batch.ids,
+                profiles: &profiles,
+            };
+            let plate = (doc, tools, &mut machine.status);
+            self.answer_fixes(plate, fixes, run, (&risks, stack));
+            self.check_again(batch, attempt);
+            return Ok(());
+        }
         for (id, islands) in islands_of(&doc.scene, &batch.ids, &risks, stack) {
             let support_mm3 = doc
                 .scene
@@ -119,11 +130,39 @@ impl Run {
         };
         let plate = (&mut doc.scene, &mut tools.supports);
         machine.status = support_islands(plate, stack, &risks, Some(run));
+        self.answered(IssueKind::Islands, &machine.status);
+        self.check_again(batch, attempt + 1);
+        Ok(())
+    }
+
+    /// Answers the necks and cups `fixes` asks for on `run`'s models, before they are noted.
+    fn answer_fixes(
+        &mut self,
+        (doc, tools, status): (&mut Doc, &mut Tools, &mut Status),
+        fixes: CheckFixes,
+        run: ForRun,
+        (risks, stack): (&[Risk], (&LayerPlan, &RasterSettings)),
+    ) {
+        let ids = run.ids;
+        if fixes.levers {
+            let plate = (&mut doc.scene, &mut tools.supports);
+            *status = support_levers(plate, stack, risks, Some(run));
+            self.answered(IssueKind::Necks, status);
+        }
+        if fixes.cups {
+            let plate = (&mut doc.scene, &mut tools.drain);
+            *status = drill_cups(plate, stack, risks, Some(ids));
+            self.answered(IssueKind::Cups, status);
+        }
+    }
+
+    /// Checks `batch`'s models again, as `attempt`, before anything else queued.
+    fn check_again(&mut self, batch: &Batch, attempt: u8) {
         let again = Work::Check {
-            attempt: attempt + 1,
+            attempt,
+            fixes: CheckFixes::default(),
         };
         self.queue.push_front(Batch::of(again, batch.ids.clone()));
-        Ok(())
     }
 
     /// The profile each of `ids` stands islands on: its latest supports step's, else `auto`.

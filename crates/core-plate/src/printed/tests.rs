@@ -166,6 +166,14 @@ fn a_hollow_ball_is_stood_on_its_drain_hole() {
         Some(0.0),
         "the way it stands seals nothing"
     );
+    // A tilt leaves a cap of the cavity under the hole's rim, its widest 2 pi R d: too
+    // small to name until d reaches core_analysis::MIN_CUP_MM2 over 2 pi R.
+    let deepest_mm = core_analysis::MIN_CUP_MM2 / (TAU * CAVITY_MM);
+    let tilt = (1.0 - deepest_mm / CAVITY_MM).acos() + (1.5 / CAVITY_MM).asin();
     let mouth = found.rotation * Vec3::X;
-    assert!(mouth.z < -0.99, "the hole points at the plate, got {mouth}");
+    assert!(
+        mouth.z < -tilt.cos(),
+        "the hole points at the plate within {} degrees, got {mouth}",
+        tilt.to_degrees()
+    );
 }

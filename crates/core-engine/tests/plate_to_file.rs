@@ -8,7 +8,7 @@ use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 
-use core_engine::{Baked, Cutting, Model, Plate, Run, bake, cut, parts};
+use core_engine::{Baked, Cutting, Model, Plate, QUICK_CHECK_BIN, Run, bake, cut, parts};
 use core_format::ExposurePlan;
 use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec3, signed_volume};
 use core_pipeline::{Observer, PanelOverrides, SlicedFormat};
@@ -446,6 +446,21 @@ fn measuring_a_run_cures_what_writing_it_does() {
     assert!(
         (measured.volume_mm3() - written.measured.volume_mm3()).abs() < 1e-3,
         "measuring and writing fold the same stack"
+    );
+}
+
+#[test]
+fn a_quick_check_cures_the_box_the_full_one_does() {
+    let run = Run::of(&plate(SlicedFormat::Goo)).expect("the box is a run");
+    let quick = run
+        .measure_binned(QUICK_CHECK_BIN, &mut ())
+        .expect("the stack measures")
+        .expect("nothing cancelled it");
+    // 4 x 4 x 2 mm; its walls cut a 0.4 mm square in half, its grey rounded to 8 bits.
+    assert!(
+        (quick.volume_mm3() - 32.0).abs() < 0.1,
+        "the box holds 32 mm³; got {}",
+        quick.volume_mm3()
     );
 }
 

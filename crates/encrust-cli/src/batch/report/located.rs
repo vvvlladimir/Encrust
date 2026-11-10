@@ -55,6 +55,7 @@ impl From<RiskKind> for Kind {
                 stress_mpa,
                 lever_mm,
                 neck_mm2,
+                ..
             } => Self::Lever {
                 stress_mpa,
                 lever_mm,

@@ -29,12 +29,15 @@ fn the_built_in_recipes_are_listed_before_the_users_with_an_unreadable_one_marke
     let listed = json(&output);
     let recipes = listed["recipes"].as_array().expect("a list of recipes");
     let ids: Vec<&str> = recipes.iter().map(|r| r["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["prepare", "miniatures", "broken", "mine"]);
-    assert_eq!(recipes[1]["name"], "Miniatures");
-    assert_eq!(recipes[1]["source"], "built-in");
-    assert_eq!(recipes[3]["source"], "user");
-    assert_eq!(recipes[3]["name"], "Mine");
-    assert!(recipes[2]["error"].is_string(), "{}", recipes[2]);
+    assert_eq!(
+        ids,
+        ["prepare", "fix-issues", "miniatures", "broken", "mine"]
+    );
+    assert_eq!(recipes[2]["name"], "Miniatures");
+    assert_eq!(recipes[2]["source"], "built-in");
+    assert_eq!(recipes[4]["source"], "user");
+    assert_eq!(recipes[4]["name"], "Mine");
+    assert!(recipes[3]["error"].is_string(), "{}", recipes[3]);
 
     let text = stdout(&encrust_with_profiles(&dir, &["recipes", "list"]));
     assert!(

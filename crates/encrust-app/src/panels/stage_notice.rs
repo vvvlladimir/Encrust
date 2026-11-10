@@ -22,7 +22,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     let machine = &window.machine;
     let running = machine.network.job.is_some()
         || machine.slicing.job.is_some()
-        || machine.preview.is_building()
+        || machine.preview.is_cutting_in_view()
         || window.tools.prepare.is_running();
     let mut stack = Stack {
         ctx: ui.ctx().clone(),

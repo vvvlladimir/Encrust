@@ -476,3 +476,82 @@ fn a_plate_files_keep_solid_under_mm_that_is_no_thickness_is_refused_naming_the_
     let said = stderr(&output);
     assert!(said.contains("`keep_solid_under_mm`"), "{said}");
 }
+
+#[test]
+fn the_fix_issues_recipe_parts_a_meeting_as_checks_button_does() {
+    let body = "layer_height_mm = 1\n[[model]]\npath = \"CUBE\"\nposition = [15, 15]\n[[model]]\npath = \"CUBE\"\nposition = [18, 15]\n";
+    let plate = plate_file("fix-issues", body);
+    let panel = test_panel();
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--recipe",
+        "fix-issues",
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
+    assert!(
+        !json(&output).to_string().contains("\"meets\""),
+        "one cube moved off the other"
+    );
+}
+
+#[test]
+fn an_arrange_step_for_only_what_is_in_the_way_parts_a_meeting() {
+    let body = "layer_height_mm = 1\n[[model]]\npath = \"CUBE\"\nposition = [15, 15]\n[[model]]\npath = \"CUBE\"\nposition = [18, 15]\n";
+    let plate = plate_file("in-the-way", body);
+    let panel = test_panel();
+    let meets_after = |recipe_text: &str, name: &str| {
+        let recipe = plate.with_file_name(format!("{name}.toml"));
+        fs::write(&recipe, recipe_text).expect("write the recipe");
+        let output = estimate(&[
+            plate.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--recipe",
+            recipe.to_str().unwrap(),
+            "--json",
+        ]);
+        assert!(
+            output.status.success(),
+            "the run failed:\n{}",
+            stderr(&output)
+        );
+        json(&output).to_string().contains("\"meets\"")
+    };
+    assert!(
+        meets_after(
+            "name = \"Still\"\n[[step]]\ndo = \"check\"\n",
+            "in-the-way-still"
+        ),
+        "two 10 mm cubes 3 mm apart meet"
+    );
+    let clearing =
+        "name = \"Clear\"\n[[step]]\ndo = \"arrange\"\nset = { only_in_the_way = true }\n";
+    assert!(
+        !meets_after(clearing, "in-the-way-clear"),
+        "one cube moved off the other"
+    );
+}
+
+#[test]
+fn a_model_longer_than_the_plate_is_turned_onto_it_by_arrange() {
+    // 48 mm long on the 40 mm square test panel: no slide fits it, a slant does.
+    let bar = write_boxes_stl("turned-bar", &[([0.0, 0.0, 0.0], [6.0, 48.0, 5.0])]);
+    let panel = test_panel();
+    let output = estimate(&[
+        bar.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--arrange",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}

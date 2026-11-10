@@ -301,6 +301,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted; a hole clicked into a hollow model keeps its depth since 0414 |
 | [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
 | [0414](0414-a-hole-set-by-hand-stops-at-its-depth.md) | A hole set by hand stops at its depth | Accepted |
+| [0415](0415-checks-buttons-answer-what-it-finds.md) | Check's buttons answer what it finds, through the calls the command line makes | Accepted |
+| [0416](0416-check-lays-out-its-issues-as-cards-and-fixes-them-by-a-recipe.md) | Check lays out its issues as cards and fixes them all by a built-in recipe | Accepted |
+| [0417](0417-check-vents-a-cup-by-its-thinnest-wall-and-holds-a-neck-by-its-stress.md) | Vent a cup through its thinnest wall, hold a neck by its stress, name a cup by its pull | Accepted |
+| [0418](0418-a-model-in-the-way-slides-then-turns-about-the-vertical.md) | Move a model onto the plate by a slide, then by the least turn about the vertical | Accepted |
+| [0419](0419-a-quick-check-runs-in-the-background-and-the-full-one-refines-it.md) | Check the plate quickly in the background, and let the full check refine it | Proposed |
+| [0420](0420-a-fix-that-had-its-turn-keeps-its-button.md) | Keep a fix's button on its card after the fix has had its turn | Proposed |
 | [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
 | [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Superseded by 0403 (the command line's resolution of the flags only) |
 | [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |

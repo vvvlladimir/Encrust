@@ -111,9 +111,10 @@ impl StepKind {
                 ("plugs", Bool),
             ],
             Self::Supports => &[("profile", Text), ("cavity", Bool)],
-            Self::Arrange => &[("spacing_mm", Number)],
+            Self::Arrange => &[("spacing_mm", Number), ("only_in_the_way", Bool)],
             Self::Save => &[("folder", Text), ("name", Text), ("send", Bool)],
-            Self::Check | Self::Gate | Self::Pause => &[],
+            Self::Check => &[("drill_cups", Bool), ("hold_levers", Bool)],
+            Self::Gate | Self::Pause => &[],
         }
     }
 }

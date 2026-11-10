@@ -464,14 +464,8 @@ machines-cannot-delete-resin = cannot delete the resin
 
 ## panels/inspector/check.rs
 
-check-filter-all = All
 check-filter-islands = Islands
-check-filter-levers = Levers
-check-filter-peel = Peel
-check-filter-cups = Cups
-check-filter-thin = Thin
 check-support-islands = Support them
-check-issues = Found
 check-previous = Previous issue
 check-next = Next issue
 check-stood =
@@ -487,8 +481,9 @@ check-fact-issues =
         [one] { $count } issue
        *[other] { $count } issues
     }
-check-checking = Checking
 check-reading = Reading every layer of the stack...
+# Shown under the issues a quick background check found, while the full check runs.
+check-quick-found = Found by a quick check. Reading every pixel...
 check-reads-layers = The check reads the layers, which are cut as soon as there is a model on the plate and a machine to cut it for.
 check-measuring = measuring
 check-hardest-pull = Hardest pull
@@ -519,10 +514,66 @@ check-remove-next-note = Takes one layer more off each part left hanging, the on
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
 check-more-layers = and { $count } more layers
+check-section-cups = Suction cups
+check-section-levers = Weak necks
+check-drill-cups = Drill them
+check-support-levers = Support them
+check-auto-orient = Auto-orient
+check-least-peel = Reduce peel
+check-lift-settings = Lift settings
+check-place = Move to free space
+check-fit-volume = Scale to fit
+check-combine = Combine
+check-drill-drains = Drill drain holes
+check-cups-vent-help = Drill them makes a vent through the thinnest wall at the bottom of each suction cup, so air gets in and the cup lets go. A cup that stands on the plate or whose walls are too thick is left to you: lift the model onto supports or turn it. Auto-orient looks for a pose with no suction cups.
+check-necks-held-help = Support them stands supports under the part each weak neck carries, as many as it takes for the neck to bear the load. Auto-orient looks for a pose that puts less load on the necks.
+check-stood-levers =
+    { $count ->
+        [0] No weak neck had an underside to stand a support on
+        [one] Stood { $count } support in { $group }
+       *[other] Stood { $count } supports in { $group }
+    }
+check-vented-cups =
+    { $count ->
+        [0] No suction cup had a wall thin enough to drill
+        [one] Drilled { $count } vent into a suction cup
+       *[other] Drilled { $count } vents into suction cups
+    }
+check-cups-on-the-plate =
+    { $count ->
+        [one] { $count } suction cup stands on the plate: lift the model onto supports or turn it
+       *[other] { $count } suction cups stand on the plate: lift the models onto supports or turn them
+    }
+# Set after a fix's result: how many issues it could not fix.
+check-left-to-you = { $count } left to fix by hand
+# A section of Check's panel: what reading the layers of the stack found.
+check-layers = In the layers
+# A card of Check: models past the plate, in its inset, or meeting another.
+check-card-way = Placement
+# A card of Check: models that hold resin they should not.
+check-card-resin = Hollow and drain
+check-card-thin = Thin sections
+# Beside a kind of issue that has no automatic fix.
+check-card-by-hand = by hand
+# Beside a kind of issue found on several layers.
+check-card-layers = layers { $first }–{ $last }
+check-thin-no-fix = No automatic fix: thicken these sections in the model.
+check-fact-fixing = fixing
+check-undo-fix = Undo this fix
+check-fix-all = Fix all
+check-fix-issues-tip = Moves models out of the way, drills drain holes and suction cup vents, then stands supports, in that order. A single undo reverts it all.
+check-place-tip = Moves only the models in the way, each to the nearest free spot, and turns a model that fits no other way. When there is no room left, arranges the whole plate again.
+check-fit-volume-tip = Scales down a model too big for the build volume until it fits.
+check-combine-tip = Opens Relief with the two touching models, to join them into one.
+check-drill-drains-tip = Finds drain holes that let each sealed model empty.
+check-support-islands-tip = Stands a support under every island, in a separate group.
+check-put-islands-back-tip = Puts the removed islands back into the file.
+check-least-peel-tip = Turns the models to the pose with the least peel force on the film.
+check-lift-settings-tip = Opens the lift settings.
 check-plate = On the plate
 check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
 # Beside a model's name, where it, its supports or its raft stand.
-check-row-past = past the build volume
+check-row-past = outside the build volume
 # Beside a model's name, where it, its supports or its raft stand.
 check-row-inset = in the plate inset
 # The other model's name.
@@ -534,19 +585,19 @@ check-row-solid = worth hollowing
 check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->
-        [one] island · { $area } mm²
+        [one] { $area } mm²
        *[other] { $count } islands · { $area } mm²
     }
-check-row-lever = lever · { $lever } mm · { $stress } MPa
+check-row-lever = { $lever } mm · { $stress } MPa
 check-row-levers = { $count } levers · { $stress } MPa
-check-row-cup = suction cup · { $area } mm²
+check-row-cup = { $area } mm²
 check-row-cups = { $count } suction cups · { $area } mm²
 check-row-thin =
     { $count ->
-        [one] thin · { $width } mm
+        [one] { $width } mm
        *[other] { $count } thin · { $width } mm
     }
-check-row-peel = peel · { $force } N
+check-row-peel = { $force } N
 check-issue-island = Island
 check-issue-hanging = Part left hanging
 check-issue-lever = Weak neck
@@ -1244,6 +1295,9 @@ recipes-set-plugs = Plugs
 recipes-set-profile = Support profile
 recipes-set-cavity = Supports in the cavity
 recipes-set-spacing = Spacing
+recipes-set-only-in-the-way = Move only what is in the way
+recipes-set-drill-cups = Drill suction cups
+recipes-set-hold-levers = Support weak necks
 recipes-set-folder = Folder
 recipes-set-name = File name
 recipes-set-send = Send to the printer
@@ -1507,10 +1561,10 @@ printer-mirror-lcd = LCD mirror
 printer-mirror-dlp = DLP normal
 printer-mirror-note = Most LCD machines take their masks mirrored along X; the maker's settings say which.
 printer-inset = Plate inset
-printer-inset-min-x = Inset at −X
-printer-inset-max-x = Inset at +X
-printer-inset-min-y = Inset at −Y
-printer-inset-max-y = Inset at +Y
+printer-inset-min-x = Inset at the −X edge
+printer-inset-max-x = Inset at the +X edge
+printer-inset-min-y = Inset at the −Y edge
+printer-inset-max-y = Inset at the +Y edge
 printer-inset-note = A model standing in the band is marked, and still slices whole.
 printer-per-layer-on = Exposure and motion are read from each layer; .goo calls this advance mode.
 printer-per-layer-off = Every layer prints at the header's numbers, and the machine ramps the bottom block itself.
@@ -1749,7 +1803,7 @@ position-axis-ratio = { $axis } ratio
 position-place = Place
 position-on-plate = On the plate
 position-centre = Centre
-position-scale-to-fit = Fit the volume
+position-scale-to-fit = Scale to fit
 position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
@@ -2453,6 +2507,16 @@ job-repairing = Repairing { $name }
 arrange-no-footprint = a model on the plate has no footprint to arrange
 arrange-nothing = Nothing visible on the plate to arrange
 arrange-done = Arranged { $count } models
+arrange-cleared =
+    { $count ->
+        [one] Moved { $count } model out of the way
+       *[other] Moved { $count } models out of the way
+    }
+arrange-turned =
+    { $count ->
+        [one] Turned { $count } model to fit the plate
+       *[other] Turned { $count } models to fit the plate
+    }
 arrange-short =
     { $count ->
         [one] Arranged the plate; { $count } model found no room

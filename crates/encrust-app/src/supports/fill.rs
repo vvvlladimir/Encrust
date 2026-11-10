@@ -5,6 +5,16 @@ use core_geometry::{Adjacency, Scalar, Vec3};
 use core_supports::{Placed, Projected, project};
 use printer_profiles::Catalogue;
 
+/// The printable models of the plate in hand, as the engine's answers to a check read them.
+pub fn hanging_models(scene: &Scene) -> (Vec<&SceneObject>, Vec<Hanging<'_>>) {
+    let objects: Vec<&SceneObject> = scene.printable(scene.active_plate()).collect();
+    let models = objects
+        .iter()
+        .map(|object| (&*object.mesh, &*object.bvh, object.transform))
+        .collect();
+    (objects, models)
+}
+
 /// For each of `floors`, the printable model of the plate in hand its island hangs from and
 /// where a support there touches it, by `core_engine::island_holds`.
 pub fn island_holds(
@@ -12,11 +22,7 @@ pub fn island_holds(
     floors: &[Vec3],
     layer_mm: Scalar,
 ) -> Vec<Option<(ObjectId, Vec3)>> {
-    let objects: Vec<&SceneObject> = scene.printable(scene.active_plate()).collect();
-    let models: Vec<Hanging> = objects
-        .iter()
-        .map(|object| (&*object.mesh, &*object.bvh, object.transform))
-        .collect();
+    let (objects, models) = hanging_models(scene);
     core_engine::island_holds(floors, layer_mm, &models)
         .into_iter()
         .map(|held| held.map(|(at, contact)| (objects[at].id, contact)))

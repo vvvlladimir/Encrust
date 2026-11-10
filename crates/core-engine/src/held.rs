@@ -1,13 +1,50 @@
-//! The islands a measured stack shows, held up: where each stands a support and the surface
-//! that support touches, as Check's Support every island stands one under each.
+//! What a measured stack shows, answered: where a support stands under an island or a weak
+//! neck, and where a hole lets the air into a suction cup. See `docs/design/check-fixes.md`.
 
-use core_analysis::{Risk, RiskKind};
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Transform, Vec3, raycast_placed_within};
+use core_analysis::{Risk, RiskKind, holds_for_lever};
+use core_geometry::{
+    Bvh, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Vec3, raycast_placed_within,
+};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
+use printer_profiles::SupportProfile;
+
+mod vent;
+
+pub use vent::{CupVent, Unvented, cup_vents};
 
 /// How many layers over an island's floor its underside may first be found.
 const UNDERSIDE_LAYERS: Scalar = 2.0;
+
+/// A model with its placement as a matrix and that matrix's inverse.
+type Placed<'a> = (&'a Mesh, &'a Bvh, Mat4, Mat4);
+
+fn placed<'a>(models: &[Hanging<'a>]) -> Vec<(usize, Placed<'a>)> {
+    models
+        .iter()
+        .enumerate()
+        .filter_map(|(id, (mesh, bvh, transform))| {
+            let inverse = transform.inverse_matrix()?;
+            Some((id, (*mesh, *bvh, transform.to_matrix(), inverse)))
+        })
+        .collect()
+}
+
+/// The nearest surface of `placed` from `from` along `direction`, and the index of its model.
+fn first_along(
+    placed: &[(usize, Placed)],
+    from: Vec3,
+    direction: Vec3,
+) -> Option<(usize, PlacedHit)> {
+    let ray = Ray::new(from, direction);
+    placed
+        .iter()
+        .filter_map(|(id, (mesh, bvh, matrix, inverse))| {
+            let hit = raycast_placed_within(mesh, bvh, *matrix, *inverse, &ray, Scalar::INFINITY)?;
+            Some((*id, hit))
+        })
+        .min_by(|(_, one), (_, other)| one.distance.total_cmp(&other.distance))
+}
 
 /// Where each island of `risks` stands a support: on the plate under it, at the top of the
 /// layer below, mm. The stack was measured on `panel` and cut by `plan`.
@@ -38,14 +75,7 @@ pub fn island_holds(
     layer_mm: Scalar,
     models: &[Hanging],
 ) -> Vec<Option<(usize, Vec3)>> {
-    let placed: Vec<_> = models
-        .iter()
-        .filter_map(|(mesh, bvh, transform)| {
-            let inverse = transform.inverse_matrix()?;
-            Some((*mesh, *bvh, transform.to_matrix(), inverse))
-        })
-        .enumerate()
-        .collect();
+    let placed = placed(models);
     floors
         .iter()
         .map(|floor| {
@@ -63,52 +93,110 @@ pub fn island_holds(
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use core_geometry::cuboid;
+/// The narrowest tip a support under a weak neck is drawn with, mm across: a 0.3 mm tip, as
+/// Auto draws, adds next to nothing to a neck.
+const NECK_TIP_MM: f32 = 0.6;
 
-    use super::*;
-
-    fn held_by(meshes: &[Mesh], floor: Vec3) -> Option<(usize, Vec3)> {
-        let bvhs: Vec<Bvh> = meshes.iter().map(Bvh::build).collect();
-        let models: Vec<Hanging> = meshes
-            .iter()
-            .zip(&bvhs)
-            .map(|(mesh, bvh)| (mesh, bvh, Transform::default()))
-            .collect();
-        island_holds(&[floor], 0.05, &models)[0]
-    }
-
-    #[test]
-    fn an_island_a_layer_over_its_floor_is_held_by_the_nearest_underside() {
-        let below = cuboid(Vec3::new(0.0, 0.0, 5.08), Vec3::new(10.0, 10.0, 10.0));
-        let floating = cuboid(Vec3::new(0.0, 0.0, 5.03), Vec3::new(10.0, 10.0, 10.0));
-        let (owner, at) = held_by(&[below, floating], Vec3::new(5.0, 5.0, 5.0))
-            .expect("the box's floor is inside the layer over the floor");
-        assert_eq!(owner, 1, "the lower underside holds the island");
-        assert!(
-            (at.z - 5.03).abs() < 1e-4,
-            "the box's floor at 5.03 mm, found {at}"
-        );
-    }
-
-    #[test]
-    fn an_island_is_found_on_a_placed_model() {
-        let unit = cuboid(Vec3::ZERO, Vec3::splat(10.0));
-        let bvh = Bvh::build(&unit);
-        let up = Transform::from_translation(Vec3::new(0.0, 0.0, 5.03));
-        let found = island_holds(&[Vec3::new(5.0, 5.0, 5.0)], 0.05, &[(&unit, &bvh, up)]);
-        let (_, at) = found[0].expect("the placed box's floor is 0.08 mm up");
-        assert!((at.z - 5.03).abs() < 1e-4, "placed at 5.03 mm, found {at}");
-    }
-
-    #[test]
-    fn a_surface_more_than_two_layers_up_holds_no_island_there() {
-        let floating = cuboid(Vec3::new(0.0, 0.0, 6.0), Vec3::new(10.0, 10.0, 10.0));
-        assert_eq!(
-            held_by(&[floating], Vec3::new(5.0, 5.0, 5.0)),
-            None,
-            "1 mm up is another part's floor, not this island's"
-        );
-    }
+/// `profile` as a support holding a weak neck stands to, its tip and any small pillar in its
+/// place thick enough to carry part of the pull.
+pub fn neck_profile(profile: &SupportProfile) -> SupportProfile {
+    let mut sturdy = profile.clone();
+    sturdy.tip.contact_diameter_mm = sturdy.tip.contact_diameter_mm.max(NECK_TIP_MM);
+    sturdy.small_pillar.diameter_mm = sturdy.small_pillar.diameter_mm.max(NECK_TIP_MM);
+    sturdy
 }
+
+/// The section `profile` adds to a neck per support, mm²: the narrower of a tip and a small
+/// pillar, whichever it stands as.
+fn neck_tip_mm2(profile: &SupportProfile) -> f32 {
+    let across = profile
+        .tip
+        .contact_diameter_mm
+        .min(profile.small_pillar.diameter_mm);
+    std::f32::consts::PI * (across / 2.0).powi(2)
+}
+
+/// Around a piece's centre, in units of its radius of gyration: the centre, then opposite
+/// points first, so that a few supports already stand balanced.
+const NECK_RINGS: [(f32, f32); 17] = {
+    const R: f32 = 1.0;
+    const H: f32 = 0.5;
+    const D: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    const DH: f32 = D * H;
+    [
+        (0.0, 0.0),
+        (R, 0.0),
+        (-R, 0.0),
+        (0.0, R),
+        (0.0, -R),
+        (D, D),
+        (-D, -D),
+        (D, -D),
+        (-D, D),
+        (H, 0.0),
+        (-H, 0.0),
+        (0.0, H),
+        (0.0, -H),
+        (DH, DH),
+        (-DH, -DH),
+        (DH, -DH),
+        (-DH, DH),
+    ]
+};
+
+/// For each weak neck of `risks`, up to [`holds_for_lever`] underside points of its piece for
+/// `profile`'s tips, with their model; none where no underside stands clear of the plate.
+pub fn lever_holds(
+    risks: &[Risk],
+    plan: &LayerPlan,
+    panel: &RasterSettings,
+    models: &[Hanging],
+    profile: &SupportProfile,
+) -> Vec<Vec<(usize, Vec3)>> {
+    let placed = placed(models);
+    let layer_mm = plan.nominal_thickness();
+    let tip_mm2 = neck_tip_mm2(profile);
+    let spacing_mm = 2.0 * profile.contact_radius_mm().max(NECK_TIP_MM / 2.0);
+    let levers = risks.iter().filter_map(|risk| match risk.kind {
+        RiskKind::Lever { gyration_mm, .. } => Some((risk, gyration_mm)),
+        _ => None,
+    });
+    levers
+        .map(|(risk, gyration_mm)| {
+            let Some(floor_mm) = risk.layer.checked_sub(1).and_then(|at| plan.top_of(at)) else {
+                return Vec::new();
+            };
+            let centre = panel.plate_mm(risk.at_mm).extend(floor_mm + layer_mm / 2.0);
+            let wanted = holds_for_lever(&risk.kind, tip_mm2);
+            undersides(&placed, centre, gyration_mm, layer_mm)
+                .into_iter()
+                .fold(Vec::new(), |mut held: Vec<(usize, Vec3)>, hit| {
+                    let clear = held.iter().all(|(_, at)| at.distance(hit.1) >= spacing_mm);
+                    if clear && held.len() < wanted {
+                        held.push(hit);
+                    }
+                    held
+                })
+        })
+        .collect()
+}
+
+/// The undersides straight below `centre` and the points of [`NECK_RINGS`] around it.
+fn undersides(
+    placed: &[(usize, Placed)],
+    centre: Vec3,
+    gyration_mm: Scalar,
+    layer_mm: Scalar,
+) -> Vec<(usize, Vec3)> {
+    NECK_RINGS
+        .iter()
+        .filter_map(|(x, y)| {
+            let from = centre + Vec3::new(x * gyration_mm, y * gyration_mm, 0.0);
+            let (model, under) = first_along(placed, from, -Vec3::Z)?;
+            (under.normal.z < 0.0 && under.point.z >= layer_mm).then_some((model, under.point))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;

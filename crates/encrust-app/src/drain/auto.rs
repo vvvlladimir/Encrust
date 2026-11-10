@@ -32,6 +32,19 @@ impl DrainTool {
         Ok(())
     }
 
+    /// Starts the same search on `ids` alone, whatever is picked: what Check's Drill drain
+    /// holes looks for.
+    pub fn start_auto_on(
+        &mut self,
+        scene: &Scene,
+        ids: &[ObjectId],
+        layer_height_mm: Scalar,
+    ) -> Result<()> {
+        let asked = (self.size(), true);
+        self.auto = Some(Self::search_on(scene, ids, layer_height_mm, asked)?);
+        Ok(())
+    }
+
     /// The same search on `ids` alone, whatever is picked, with holes of `size` and a vent
     /// where `vents`, handed back rather than kept: what Prepare drains.
     pub fn search_on(

@@ -1,6 +1,7 @@
-use super::{ISLANDS_GROUP, Side, SupportGroup, SupportTool, frozen_inside};
+use super::{ISLANDS_GROUP, NECKS_GROUP, Side, SupportGroup, SupportTool, frozen_inside};
 use crate::job::Placement;
 use crate::scene::{ObjectId, Scene};
+use core_engine::neck_profile;
 use core_geometry::Vec3;
 use core_supports::SupportTree;
 use printer_profiles::SupportProfile;
@@ -24,6 +25,25 @@ impl SupportTool {
         self.stand_islands(scene, found, |id| Some(profile_of(id)))
     }
 
+    /// Stands a support at each of `found`, under a weak neck, in the necks' group: each to
+    /// `profile_of`'s for its model, or the panel's, made thick enough to carry the pull.
+    pub fn support_necks(
+        &mut self,
+        scene: &mut Scene,
+        found: &[(ObjectId, Vec3)],
+        profile_of: impl Fn(ObjectId) -> Option<SupportProfile>,
+    ) -> usize {
+        for (id, contact) in found {
+            let base = profile_of(*id).unwrap_or_else(|| self.profile.clone());
+            let group = self.answer_group(NECKS_GROUP, Some(&neck_profile(&base)));
+            if let Some(object) = scene.get_mut(*id) {
+                let transform = object.transform;
+                object.supports.add(*contact, transform, group);
+            }
+        }
+        found.len()
+    }
+
     fn stand_islands(
         &mut self,
         scene: &mut Scene,
@@ -31,7 +51,7 @@ impl SupportTool {
         profile_of: impl Fn(ObjectId) -> Option<SupportProfile>,
     ) -> usize {
         for (id, contact) in found {
-            let group = self.islands_group(profile_of(*id).as_ref());
+            let group = self.answer_group(ISLANDS_GROUP, profile_of(*id).as_ref());
             if let Some(object) = scene.get_mut(*id) {
                 let transform = object.transform;
                 object.supports.add(*contact, transform, group);
@@ -116,11 +136,11 @@ impl SupportTool {
         gone
     }
 
-    /// The group named for islands: the one of `profile` when one is asked, else the panel's
-    /// numbers in hand the first time.
-    pub(super) fn islands_group(&mut self, profile: Option<&SupportProfile>) -> u16 {
+    /// The group named `name` for what Check answers: the one of `profile` when one is asked,
+    /// else the panel's numbers in hand the first time.
+    pub(super) fn answer_group(&mut self, name: &str, profile: Option<&SupportProfile>) -> u16 {
         let held = |group: &SupportGroup| {
-            group.name == ISLANDS_GROUP && profile.is_none_or(|asked| group.profile == *asked)
+            group.name == name && profile.is_none_or(|asked| group.profile == *asked)
         };
         if let Some(group) = self.groups.iter().position(held) {
             return group as u16;
@@ -133,7 +153,7 @@ impl SupportTool {
             }
         };
         self.groups.push(SupportGroup {
-            name: ISLANDS_GROUP.to_owned(),
+            name: name.to_owned(),
             profile,
             hidden: false,
         });
