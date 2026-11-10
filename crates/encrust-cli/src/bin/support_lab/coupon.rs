@@ -32,6 +32,10 @@ const BUMP_MM: f32 = 1.0;
 const BUMP_PITCH_MM: f32 = 1.6;
 /// A block's number stands past its corner in bumps twice as tall as a row's.
 const BLOCK_BUMP_MM: f32 = 2.0;
+/// How far a raft reaches past the outermost pad or rail, millimetres.
+const RAFT_MARGIN_MM: f32 = 2.0;
+/// Each bar of a raft's lattice, millimetres: wide enough to carry the pads that meet it.
+const RAFT_BAR_MM: f32 = 3.0;
 
 /// A coupon as its spec file states it.
 #[derive(Debug, Clone, Deserialize)]
@@ -41,6 +45,10 @@ pub struct Spec {
     pub shapes: Vec<TipShape>,
     #[serde(rename = "block")]
     pub blocks: Vec<Block>,
+    /// Whether each block stands on its own lattice as thick as the rails, so it leaves the
+    /// plate whole and each specimen keeps its place.
+    #[serde(default)]
+    pub raft: bool,
 }
 
 /// One way of making a tip: a row of every block that names it.
@@ -200,19 +208,63 @@ pub fn build(
 pub fn coupon(spec: &Spec, built: &[Built], centre: Vec2) -> Result<Mesh> {
     let specimens = layout(spec, centre);
     let mut whole = Mesh::default();
-    for built in built {
-        append(&mut whole, &built.supported.model);
-        append(&mut whole, &built.supported.supports);
-    }
     for (index, block) in spec.blocks.iter().enumerate() {
+        let mut part = Mesh::default();
+        for (_, built) in specimens
+            .iter()
+            .zip(built)
+            .filter(|(specimen, _)| specimen.block == index)
+        {
+            append(&mut part, &built.supported.model);
+            append(&mut part, &built.supported.supports);
+        }
         let first = specimens
             .iter()
             .find(|specimen| specimen.block == index)
             .context("every block has a specimen")?;
         let size = (spec.rows(block).len(), block.holders.len());
-        append(&mut whole, &rulers(first.at, size, index + 1));
+        append(&mut part, &rulers(first.at, size, index + 1));
+        if spec.raft {
+            let bounds = part.aabb().context("a block has rails")?;
+            let middles: Vec<Vec2> = specimens
+                .iter()
+                .filter(|specimen| specimen.block == index)
+                .map(|specimen| specimen.at)
+                .collect();
+            for [low, high] in raft_bars(bounds.mins.truncate(), bounds.maxs.truncate(), &middles) {
+                append(&mut part, &cuboid(low.extend(0.0), high.extend(RULER_MM)));
+            }
+        }
+        append(&mut whole, &part);
     }
     Ok(whole)
+}
+
+/// The bars of a raft over `low`..`high`, each its corners on the plate: a frame round it
+/// and a bar along every row and column of `middles`, so a blade gets under it between them.
+fn raft_bars(low: Vec2, high: Vec2, middles: &[Vec2]) -> Vec<[Vec2; 2]> {
+    let half = RAFT_BAR_MM / 2.0;
+    let (low, high) = (
+        low - Vec2::splat(RAFT_MARGIN_MM),
+        high + Vec2::splat(RAFT_MARGIN_MM),
+    );
+    let across = |y: f32| [Vec2::new(low.x, y - half), Vec2::new(high.x, y + half)];
+    let along = |x: f32| [Vec2::new(x - half, low.y), Vec2::new(x + half, high.y)];
+    let mut bars = vec![
+        across(low.y + half),
+        across(high.y - half),
+        along(low.x + half),
+        along(high.x - half),
+    ];
+    let mut rows: Vec<f32> = middles.iter().map(|at| at.y).collect();
+    let mut columns: Vec<f32> = middles.iter().map(|at| at.x).collect();
+    for lines in [&mut rows, &mut columns] {
+        lines.sort_by(f32::total_cmp);
+        lines.dedup_by(|a, b| (*a - *b).abs() < RAFT_BAR_MM);
+    }
+    bars.extend(rows.into_iter().map(across));
+    bars.extend(columns.into_iter().map(along));
+    bars
 }
 
 /// `base` with its tip made to `shape`, and nothing that would tie two specimens together.
@@ -455,6 +507,33 @@ mod tests {
                 "{holders} tips must hold the edge that cures first"
             );
         }
+    }
+
+    #[test]
+    fn a_raft_holds_every_specimen_and_leaves_the_plate_open_between_them() {
+        let middles = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(PITCH_MM, 0.0),
+            Vec2::new(0.0, PITCH_MM),
+            Vec2::new(PITCH_MM, PITCH_MM),
+        ];
+        let bars = raft_bars(Vec2::splat(-10.0), Vec2::splat(PITCH_MM + 10.0), &middles);
+        let covered = |at: Vec2| {
+            bars.iter()
+                .any(|[low, high]| at.cmpge(*low).all() && at.cmple(*high).all())
+        };
+        assert!(
+            middles.iter().all(|&at| covered(at)),
+            "a bar must run under each specimen's middle"
+        );
+        assert!(
+            !covered(Vec2::splat(PITCH_MM / 2.0)) && !covered(Vec2::splat(-5.0)),
+            "the plate must stay open between the specimens and between them and the frame"
+        );
+        assert!(
+            covered(Vec2::splat(-11.5)),
+            "the frame must run 2 mm past the block's bounds"
+        );
     }
 
     #[test]

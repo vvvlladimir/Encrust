@@ -822,8 +822,8 @@ thick and stands its supports against the shell from outside. `--sweep` also sup
 model at shares of the profile's density and reports the least that is enough. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
-printed in them — balls, flat plates and leant plates on so many tips — with what the bench
-expects of each specimen. `--corpus FILE` reads a
+printed in them — balls, flat plates and leant plates on so many tips, each block on its
+own lattice raft when it sets `raft = true` — with what the bench expects of each specimen. `--corpus FILE` reads a
 TOML list of models with how each stands — the axis that points up, the height it prints
 at, its lean — and what a person expects of it. `--export DIR` writes each supported model
 and markers at every place the run names; `--json FILE` keeps the run, and `--baseline
