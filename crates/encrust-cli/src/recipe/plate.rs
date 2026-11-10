@@ -251,12 +251,12 @@ impl Run<'_> {
             .map(|(mesh, piece)| (mesh, piece.input.as_path()))
             .collect();
         let printer = self.ctx.chosen.printer.as_ref();
-        let offsets = match flag(settings, "only_in_the_way").unwrap_or(false) {
+        let moves = match flag(settings, "only_in_the_way").unwrap_or(false) {
             true => cleared(&footprints, printer, &asked)?,
             false => arranged(&footprints, printer, &asked)?,
         };
-        for (piece, offset) in self.pieces.iter_mut().zip(offsets) {
-            piece.moved(Transform::from_translation(offset));
+        for (piece, moved) in self.pieces.iter_mut().zip(moves) {
+            piece.moved(moved);
         }
         Ok(())
     }

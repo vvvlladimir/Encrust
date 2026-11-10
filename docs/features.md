@@ -252,11 +252,12 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   stays on the card with the reason. **Fix all** at the foot takes every automatic answer on
   the whole plate in a safe order, as one undo and with Cancel; `--recipe fix-issues` does the
   same on the command line. The arrows step through every issue, of the plate and of the layers
-  alike, and go round. Move clear and Arrange keep 2 mm from the plate's edge, and stand a model
-  flush with it where that is all the room there is.
+  alike, and go round. Place on the plate and Arrange keep 2 mm from the plate's edge, and stand
+  a model flush with it where that is all the room there is.
 
 **Many models:**
-- **Arrange the plate** automatically, largest model first, clear of a printer's plate inset.
+- **Arrange the plate** automatically, largest model first, clear of a printer's plate inset;
+  a model longer than the plate is turned about the vertical by the least that fits it.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.
   A copy is cut and hollowed once, not once per copy.
 - **Several plates in one project.** Move models between plates, duplicate a plate, slice
@@ -684,8 +685,9 @@ smoothing, not the original model.
   with no wall thin enough and a neck with no underside to stand on are left to you, counted.
   A cup is only named when a full vacuum in it would pull 10 N or more. Thin
   sections have no fix here: nothing thickens a model.
-- **Fix the plate:** Move clear moves only the models in the way, Arrange all packs the plate,
-  Fit the volume scales a model too large for it, Combine opens on two models that meet, and
+- **Fix the plate:** Place on the plate moves only the models in the way, turns one longer
+  than the plate about the vertical by the least that fits it, and packs the whole plate when
+  no clear place is left; Fit the volume scales a model too large for it, Combine opens on two models that meet, and
   Drill drain holes runs Drain's Auto on a hollow model with no way out.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.

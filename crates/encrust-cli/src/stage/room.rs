@@ -1,14 +1,16 @@
 //! Where the models of a plate made here stand: spread over it, put at a spot, and the plugs
 //! for their holes kept clear of the plate's edge and of each other.
 
+use std::borrow::Cow;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use core_engine::Model;
-use core_geometry::{Mesh, Transform, Vec2, Vec3, transform_mesh};
+use core_geometry::{Mesh, Transform, Vec2, transform_mesh};
 use core_plate::{
     ArrangeSettings, Body, BodyKind, Footprint, PlateArea, Rect, arrange, crossings, move_clear,
+    turned_onto,
 };
 use printer_profiles::PrinterProfile;
 
@@ -82,9 +84,9 @@ pub(super) fn stood_at(mesh: &Mesh, position: Vec2) -> Result<Mesh> {
 fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -> Result<()> {
     let footprints: Vec<(&Mesh, &Path)> =
         placed.iter().map(|(mesh, path)| (&**mesh, *path)).collect();
-    let offsets = arranged(&footprints, printer, &ArrangeSettings::default())?;
-    for ((mesh, _), offset) in placed.iter_mut().zip(offsets) {
-        **mesh = transform_mesh(mesh, Transform::from_translation(offset));
+    let moves = arranged(&footprints, printer, &ArrangeSettings::default())?;
+    for ((mesh, _), moved) in placed.iter_mut().zip(moves) {
+        **mesh = transform_mesh(mesh, moved);
     }
     Ok(())
 }
@@ -99,19 +101,34 @@ fn plate_area(printer: &PrinterProfile) -> PlateArea {
     }
 }
 
-/// How far each of `placed`, standing where it prints, moves so that only what is past the
-/// plate's usable area or meets another moves, the rest left where they are; models that
-/// found no room stay, and are named in the warning.
+/// How each of `placed`, standing where it prints, moves so that only what is past the
+/// plate's usable area or meets another moves, the least it takes, the rest left where they
+/// are: a model no slide fits is turned the least that does, and with no room left for one the
+/// whole plate is packed as by [`arranged`].
 pub(crate) fn cleared(
     placed: &[(&Mesh, &Path)],
     printer: Option<&PrinterProfile>,
     settings: &ArrangeSettings,
-) -> Result<Vec<Vec3>> {
+) -> Result<Vec<Transform>> {
     let printer = printer.context("moving models clear needs a printer to know the plate")?;
     let area = plate_area(printer);
-    let parts = placed
+    let astray: Vec<usize> = placed
         .iter()
-        .map(|(mesh, path)| {
+        .enumerate()
+        .filter(|(_, (mesh, _))| {
+            mesh.aabb().is_some_and(|bounds| {
+                bounds.mins.truncate().cmplt(area.low_mm).any()
+                    || bounds.maxs.truncate().cmpgt(area.high_mm).any()
+            })
+        })
+        .map(|(index, _)| index)
+        .collect();
+    let turns = turns_onto(placed, area, settings, &astray);
+    let turned = turned_meshes(placed, &turns);
+    let parts = turned
+        .iter()
+        .zip(placed)
+        .map(|(mesh, (_, path))| {
             let bounds = mesh
                 .aabb()
                 .with_context(|| format!("{} has no vertices", path.display()))?;
@@ -121,16 +138,10 @@ pub(crate) fn cleared(
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    let astray: Vec<usize> = (0..parts.len())
-        .filter(|&index| {
-            let part = parts[index];
-            part.min.cmplt(area.low_mm).any() || part.max.cmpgt(area.high_mm).any()
-        })
-        .collect();
-    let bodies: Vec<Body<'_>> = placed
+    let bodies: Vec<Body<'_>> = turned
         .iter()
         .enumerate()
-        .map(|(owner, (mesh, _))| Body {
+        .map(|(owner, mesh)| Body {
             owner,
             kind: BodyKind::Model,
             mesh,
@@ -143,32 +154,37 @@ pub(crate) fn cleared(
         .map(|meeting| meeting.owners)
         .collect();
     let cleared = move_clear(&parts, &astray, &meeting, area, settings);
-    for &index in &cleared.left_out {
-        tracing::warn!("{} found no room on the plate", placed[index].1.display());
+    if !cleared.left_out.is_empty() {
+        return arranged(placed, Some(printer), settings);
     }
-    let mut offsets = vec![Vec3::ZERO; placed.len()];
+    let mut moves = turns;
     for spot in &cleared.moved {
-        offsets[spot.index] = spot.offset_mm.extend(0.0);
+        moves[spot.index].translation += spot.offset_mm.extend(0.0);
     }
-    Ok(offsets)
+    Ok(moves)
 }
 
-/// How far each of `placed`, a mesh standing where it prints and the file it came from, moves
-/// to pack the plate biggest first by `settings`; refuses a plate they do not fit.
+/// How each of `placed`, a mesh standing where it prints and the file it came from, moves
+/// to pack the plate biggest first by `settings`, a model no slide fits turned the least that
+/// does; refuses a plate they do not fit.
 pub(crate) fn arranged(
     placed: &[(&Mesh, &Path)],
     printer: Option<&PrinterProfile>,
     settings: &ArrangeSettings,
-) -> Result<Vec<Vec3>> {
+) -> Result<Vec<Transform>> {
     let printer = printer.context("--arrange needs a printer to know the plate")?;
+    let area = plate_area(printer);
+    let every: Vec<usize> = (0..placed.len()).collect();
+    let turns = turns_onto(placed, area, settings, &every);
     let footprints = placed
         .iter()
-        .map(|(mesh, path)| {
-            Footprint::of(mesh, Transform::default(), settings.cell_mm)
+        .zip(&turns)
+        .map(|((mesh, path), turn)| {
+            Footprint::of(mesh, *turn, settings.cell_mm)
                 .with_context(|| format!("{} has no footprint", path.display()))
         })
         .collect::<Result<Vec<_>>>()?;
-    let arranged = arrange(&footprints, plate_area(printer), settings);
+    let arranged = arrange(&footprints, area, settings);
     if let Some(&first) = arranged.left_out.first() {
         bail!(
             "{} of {} models found no room on the plate, {} among them",
@@ -177,9 +193,52 @@ pub(crate) fn arranged(
             placed[first].1.display()
         );
     }
-    let mut offsets = vec![Vec3::ZERO; placed.len()];
+    let mut moves = turns;
     for spot in &arranged.placed {
-        offsets[spot.index] = spot.offset_mm.extend(0.0);
+        moves[spot.index].translation += spot.offset_mm.extend(0.0);
     }
-    Ok(offsets)
+    Ok(moves)
+}
+
+/// The turn about the vertical through its middle that brings each of `placed` named in
+/// `only` onto `area` where no slide does, the least that does (ADR 0418); none for the rest.
+fn turns_onto(
+    placed: &[(&Mesh, &Path)],
+    area: PlateArea,
+    settings: &ArrangeSettings,
+    only: &[usize],
+) -> Vec<Transform> {
+    let mut turns = vec![Transform::default(); placed.len()];
+    for &index in only {
+        let mesh = placed[index].0;
+        let Some(bounds) = mesh.aabb() else {
+            continue;
+        };
+        let rect = Rect {
+            min: bounds.mins.truncate(),
+            max: bounds.maxs.truncate(),
+        };
+        let outline = || {
+            mesh.vertices
+                .iter()
+                .map(|vertex| vertex.truncate())
+                .collect()
+        };
+        if let Some(moved) = turned_onto(rect, outline, area, settings) {
+            turns[index] = moved;
+        }
+    }
+    turns
+}
+
+/// Each of `placed` as `turns` leaves it, borrowed where it was not turned.
+fn turned_meshes<'a>(placed: &[(&'a Mesh, &Path)], turns: &[Transform]) -> Vec<Cow<'a, Mesh>> {
+    placed
+        .iter()
+        .zip(turns)
+        .map(|((mesh, _), turn)| match *turn == Transform::default() {
+            true => Cow::Borrowed(*mesh),
+            false => Cow::Owned(transform_mesh(mesh, *turn)),
+        })
+        .collect()
 }

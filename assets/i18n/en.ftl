@@ -519,8 +519,7 @@ check-support-levers = Support them
 check-auto-orient = Auto-orient
 check-least-peel = Least peel
 check-lift-settings = Lift settings
-check-move-clear = Move clear
-check-arrange = Arrange all
+check-place = Place on the plate
 check-fit-volume = Fit the volume
 check-combine = Combine
 check-drill-drains = Drill drain holes
@@ -564,8 +563,7 @@ check-fact-fixing = fixing
 check-undo-fix = Undo this fix
 check-fix-all = Fix all
 check-fix-issues-tip = Moves models clear, drills drains and cups, then stands supports, in that order. One undo takes it all back.
-check-move-clear-tip = Moves only the models in the way, each to the nearest clear place.
-check-arrange-tip = Lays out every model on the plate again.
+check-place-tip = Moves only the models in the way, each to the nearest clear place, and turns one that fits no other way. With no room left, lays out the whole plate again.
 check-fit-volume-tip = Scales a model too big for the plate down to fit it.
 check-combine-tip = Opens Relief on the two models that meet, to join them.
 check-drill-drains-tip = Looks for drain holes that empty each sealed model.
@@ -2515,10 +2513,10 @@ arrange-cleared =
         [one] Moved { $count } model clear
        *[other] Moved { $count } models clear
     }
-arrange-cleared-short =
+arrange-turned =
     { $count ->
-        [one] { $count } model found no room
-       *[other] { $count } models found no room
+        [one] Turned { $count } model to fit the plate
+       *[other] Turned { $count } models to fit the plate
     }
 arrange-short =
     { $count ->

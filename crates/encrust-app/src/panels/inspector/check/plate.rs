@@ -3,7 +3,7 @@
 
 use super::cards::{self, Board, Card};
 use super::fixes::{Offer, offer, report};
-use crate::arrange::{arrange_plate, clear_the_way};
+use crate::arrange::clear_the_way;
 use crate::check::{IssueKind, Stop};
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -211,8 +211,7 @@ pub(super) fn cards(window: &Window, issues: &[PlateIssue], answered: &[IssueKin
 /// What the in-the-way card can do.
 #[derive(Clone, Copy)]
 enum WayFix {
-    MoveClear,
-    Arrange,
+    Place,
     Fit,
     Combine,
 }
@@ -224,19 +223,12 @@ fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], tur
         PlateIssue::Meeting(pair) => Some(*pair),
         _ => None,
     });
-    let mut fixes = vec![WayFix::MoveClear, WayFix::Arrange];
-    let mut offers = vec![
-        Offer::new(
-            icon::SELECT,
-            tr!("check-move-clear"),
-            tr!("check-move-clear-tip"),
-        ),
-        Offer::new(
-            icon::ARRANGE,
-            tr!("check-arrange"),
-            tr!("check-arrange-tip"),
-        ),
-    ];
+    let mut fixes = vec![WayFix::Place];
+    let mut offers = vec![Offer::new(
+        icon::ARRANGE,
+        tr!("check-place"),
+        tr!("check-place-tip"),
+    )];
     if !too_big.is_empty() {
         fixes.push(WayFix::Fit);
         offers.push(Offer::new(
@@ -259,13 +251,9 @@ fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], tur
     let doc = &mut *window.doc;
     let gap_mm = window.tools.array.gap_mm;
     match fixes[pressed] {
-        WayFix::MoveClear => {
+        WayFix::Place => {
             let pairs = doc.meeting.pairs(&doc.scene);
             let said = clear_the_way(&mut doc.scene, &doc.plate, &pairs, gap_mm);
-            report(window, IssueKind::InTheWay, said);
-        }
-        WayFix::Arrange => {
-            let said = arrange_plate(&mut doc.scene, &doc.plate, gap_mm);
             report(window, IssueKind::InTheWay, said);
         }
         WayFix::Fit => {

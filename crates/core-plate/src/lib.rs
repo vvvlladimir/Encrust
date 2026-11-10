@@ -18,6 +18,7 @@ mod score;
 mod section;
 mod select;
 mod spot;
+mod turn;
 mod watch;
 
 pub use arrange::{ArrangeSettings, Arranged, Placed, PlateArea, arrange};
@@ -31,4 +32,5 @@ pub use policy::{Asked, Noise, Readings, Ruling, rank, rulings};
 pub use printed::Printed;
 pub use score::{LOOKS_UP, OrientGoal, OrientPreset, Score};
 pub use spot::{Cleared, Rect, move_clear, nearest_free};
+pub use turn::turned_onto;
 pub use watch::{Phase, Pieces, Watch};

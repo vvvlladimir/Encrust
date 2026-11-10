@@ -538,3 +538,20 @@ fn an_arrange_step_for_only_what_is_in_the_way_parts_a_meeting() {
         "one cube moved off the other"
     );
 }
+
+#[test]
+fn a_model_longer_than_the_plate_is_turned_onto_it_by_arrange() {
+    // 48 mm long on the 40 mm square test panel: no slide fits it, a slant does.
+    let bar = write_boxes_stl("turned-bar", &[([0.0, 0.0, 0.0], [6.0, 48.0, 5.0])]);
+    let panel = test_panel();
+    let output = estimate(&[
+        bar.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--arrange",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}

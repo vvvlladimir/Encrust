@@ -493,7 +493,8 @@ encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
 
 ## Plates: several models, a plate file, a project
 
-Several models go on one plate. `--arrange` spreads them, biggest first; without it each
+Several models go on one plate. `--arrange` spreads them, biggest first, and turns one longer
+than the plate about the vertical by the least that fits it (ADR 0418); without it each
 stands where its file put it. `--center` and a `--drain-at` point aim at one model, so they
 are refused for several; `--drain-at auto` drains each model on its own:
 

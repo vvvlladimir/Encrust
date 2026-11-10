@@ -6,7 +6,7 @@ kind but peel and thin as `assets/recipes/fix-issues.toml` lays them out: ADR 04
 
 | Issue | Buttons | Call |
 |---|---|---|
-| Past the build volume, in the inset, meeting | Move clear, Arrange all | `core_plate::move_clear`, `arrange` |
+| Past the build volume, in the inset, meeting | Place on the plate | `core_plate::turned_onto`, `move_clear`, then `arrange` where no clear place is left |
 | Larger than the build volume | Fit the volume | the Position tool's |
 | Meeting | Combine | opens Combine on the pair listed first |
 | Hollow with no drain hole | Drill drain holes | Drain's Auto on those models |
@@ -53,7 +53,11 @@ the piece. A neck with no underside clear of the plate is left to the hand.
 Every model past the usable area moves, and of each meeting pair the smaller unless the other
 is already moving. They go largest first to the nearest place clear of the rest by
 `nearest_free`, on their bounding boxes: exact, without a grid, at the cost of never nesting
-one model into another's concave side, which Arrange all does.
+one model into another's concave side, which packing the plate does.
+
+A model no slide fits is first turned about the vertical by the least turn that does; one with
+no clear place left has the whole plate packed instead (ADR 0418).
 
 A model the plate's 2 mm margin leaves no room for is placed flush with the edge rather than
-left where it stands, by Move clear and Arrange alike; the inset is never crossed (ADR 0415).
+left where it stands, by Place on the plate and Arrange alike; the inset is never crossed
+(ADR 0415).
