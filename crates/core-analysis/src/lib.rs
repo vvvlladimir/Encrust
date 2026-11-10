@@ -1,6 +1,7 @@
 //! Reading the stack as it is written: what each layer cures, how hard it pulls on the
 //! film as the plate lifts it, and where a print is likely to fail.
 
+mod carry;
 mod contact;
 mod cups;
 mod layer;
@@ -8,6 +9,7 @@ mod neck;
 mod pull;
 mod stack;
 
+pub use carry::{Load, Tip, TipLoads};
 pub use contact::{MIN_ISLAND_MM2, island_runs, islands, standing_on};
 pub use cups::{CUP_LIMIT_N, MIN_CUP_MM2, MIN_CUP_MM3};
 pub use layer::{Cured, LayerMeasure, Piece, Stretch, cure, erase, measure};

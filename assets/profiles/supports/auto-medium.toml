@@ -29,7 +29,7 @@ steep_contact_spacing_mm = 3.3
 [tip]
 # sphere or plane.
 shape = "plane"
-contact_diameter_mm = 0.3
+contact_diameter_mm = 0.35
 contact_depth_mm = 0.0
 
 [top]
@@ -52,7 +52,7 @@ lower_diameter_mm = 3.0
 # than down to the plate. Both of its ends meet a surface.
 [small_pillar]
 enabled = true
-diameter_mm = 0.3
+diameter_mm = 0.35
 upper_depth_mm = 0.0
 lower_depth_mm = 0.0
 # The longest it runs before it keeps the regular pillar's width instead.

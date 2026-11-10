@@ -7,7 +7,7 @@ use core_geometry::{
 };
 use core_plate::LOOKS_UP;
 use core_supports::SupportTree;
-use printer_profiles::{ContactShape, SupportProfile};
+use printer_profiles::SupportProfile;
 use serde::{Deserialize, Serialize};
 
 use crate::stand::Supported;
@@ -126,11 +126,11 @@ pub fn read(
     limits: &Limits,
     upright: Quat,
 ) -> Shape {
-    let spacing = spacing_mm(profile);
+    let spacing = profile.spacing_mm();
     let standing = standing(supported);
     let tips: Vec<Vec3> = standing.iter().map(|&at| supported.contacts[at]).collect();
     let section =
-        |profile: &SupportProfile| std::f32::consts::PI * surface_radius_mm(profile).powi(2);
+        |profile: &SupportProfile| std::f32::consts::PI * profile.surface_radius_mm().powi(2);
     let sections: Vec<Scalar> = standing
         .iter()
         .map(|&at| section(supported.profile_of(at)))
@@ -159,25 +159,6 @@ pub fn read(
     crowding(&mut shape, &tips, spacing);
     trees(&mut shape, supported, profile);
     shape
-}
-
-/// How wide a tip is where it crosses the part's surface, mm: the surface cuts a plane tip wider
-/// than its contact disc (ADR 0243); that section is what the peel pulls through.
-pub fn surface_radius_mm(profile: &SupportProfile) -> Scalar {
-    let contact = profile.contact_radius_mm();
-    match profile.tip.shape {
-        ContactShape::Plane => {
-            let top = profile.top.length_mm.max(1e-3);
-            let bite = profile.tip.contact_depth_mm.min(top);
-            contact + (profile.pillar_radius_mm() - contact) * bite / top
-        }
-        ContactShape::Sphere => contact,
-    }
-}
-
-/// How far apart `profile` stands supports on a flat underside, millimetres.
-pub fn spacing_mm(profile: &SupportProfile) -> Scalar {
-    profile.contact_spacing_mm / profile.density.max(1e-3).sqrt()
 }
 
 /// Indices of the contacts some tree carries.
@@ -547,22 +528,6 @@ fn trees(shape: &mut Shape, supported: &Supported, profile: &SupportProfile) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_plane_tip_crosses_the_surface_wider_than_its_contact() {
-        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
-        profile.tip.shape = ContactShape::Plane;
-        profile.tip.contact_diameter_mm = 0.4;
-        profile.tip.contact_depth_mm = 0.5;
-        profile.top.length_mm = 2.0;
-        profile.middle.diameter_mm = 1.2;
-        let radius = surface_radius_mm(&profile);
-        // The cone runs 0.2 to 0.6 mm over 2 mm and is sunk a quarter of that.
-        assert!(
-            (radius - 0.3).abs() < 1e-6,
-            "a quarter of the way up the cone is 0.3 mm, got {radius}"
-        );
-    }
 
     #[test]
     fn a_face_cut_into_pieces_keeps_its_area() {

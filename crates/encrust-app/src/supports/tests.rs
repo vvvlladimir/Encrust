@@ -1032,10 +1032,7 @@ fn hollow_cube() -> Scene {
 /// 21 mm up, and one under the cube's own underside at 5 mm.
 fn inside_and_out(scene: &Scene) -> Vec<Placement> {
     let object = &scene.objects()[0];
-    let need = |z: Scalar| Need {
-        contact: Vec3::new(10.0, 10.0, z),
-        reason: Reason::Steady,
-    };
+    let need = |z: Scalar| Need::new(Vec3::new(10.0, 10.0, z), Reason::Steady);
     vec![Placement {
         id: object.id,
         transform: object.transform,
@@ -1235,10 +1232,7 @@ fn a_solid_model_has_nothing_inside() {
     let placements = vec![Placement {
         id: object.id,
         transform: object.transform,
-        needs: vec![Need {
-            contact: Vec3::new(0.5, 0.5, 0.5),
-            reason: Reason::Steady,
-        }],
+        needs: vec![Need::new(Vec3::new(0.5, 0.5, 0.5), Reason::Steady)],
     }];
     assert!(!object.supported_inside());
     let outside = SupportTool::on_its_side(placements, &scene, Side::Outside);

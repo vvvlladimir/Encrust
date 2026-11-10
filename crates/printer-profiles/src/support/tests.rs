@@ -440,3 +440,19 @@ fn an_id_nothing_ships_under_is_unknown() {
         Err(ProfileError::Unknown { .. })
     ));
 }
+
+#[test]
+fn a_plane_tip_crosses_the_surface_wider_than_its_contact() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.tip.shape = ContactShape::Plane;
+    profile.tip.contact_diameter_mm = 0.4;
+    profile.tip.contact_depth_mm = 0.5;
+    profile.top.length_mm = 2.0;
+    profile.middle.diameter_mm = 1.2;
+    let radius = profile.surface_radius_mm();
+    // The cone runs 0.2 to 0.6 mm over 2 mm and is sunk a quarter of that.
+    assert!(
+        (radius - 0.3).abs() < 1e-6,
+        "a quarter of the way up the cone is 0.3 mm, got {radius}"
+    );
+}

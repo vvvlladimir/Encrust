@@ -1,18 +1,16 @@
 //! Each support on its own line: why it stands, what the film pulls on it, what is behind it
 //! and what it stands on; and the model's weakest of them.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use core_analysis::{Load, Tip};
+use core_engine::{WANTED_MARGIN, carried};
 use core_geometry::Bvh;
+use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::Reason;
-use printer_profiles::{MaterialProfile, PrinterProfile};
 use serde::{Deserialize, Serialize};
 
-use crate::load::{self, Load, Tip};
 use crate::shape;
 use crate::stand::Supported;
-
-/// The margin a tip is wanted to keep over what pulls on it.
-pub const WANTED_MARGIN: f32 = 1.5;
 
 /// One model's supports, tip by tip.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -68,17 +66,13 @@ impl From<Reason> for Why {
     }
 }
 
-/// Reads every standing tip of `supported`, a section's strength taken at `neck_mpa`.
-pub fn read(
-    supported: &Supported,
-    printer: &PrinterProfile,
-    material: &MaterialProfile,
-    neck_mpa: f32,
-) -> Result<Tips> {
+/// Reads every standing tip of `supported`, cut `layer_mm` thick, a section's strength taken
+/// at `neck_mpa`.
+pub fn read(supported: &Supported, layer_mm: f32, neck_mpa: f32) -> Result<Tips> {
     let standing = shape::standing(supported);
     let radii: Vec<f32> = standing
         .iter()
-        .map(|&at| shape::surface_radius_mm(supported.profile_of(at)))
+        .map(|&at| supported.profile_of(at).surface_radius_mm())
         .collect();
     let seats: Vec<Tip> = standing
         .iter()
@@ -92,7 +86,14 @@ pub fn read(
             }
         })
         .collect();
-    let loads = load::loads(&supported.model, &seats, printer, material)?;
+    let settings = SliceSettings {
+        layer_height: layer_mm,
+        ..SliceSettings::default()
+    };
+    let stack = PlaneSliceEngine
+        .slice(&supported.model, &settings)
+        .context("the model cannot be cut for its tips")?;
+    let loads = carried(&stack, &supported.model, layer_mm, &seats)?;
     let bvh = Bvh::build(&supported.model);
     let trunks = trunks(supported);
     let tips: Vec<TipRow> = standing
@@ -148,7 +149,9 @@ fn summed(tips: Vec<TipRow>, loads: &[Load]) -> Tips {
     let margins = || tips.iter().filter_map(|tip| tip.margin);
     Tips {
         weakest_margin: margins().reduce(f32::min),
-        under_wanted: margins().filter(|margin| *margin < WANTED_MARGIN).count(),
+        under_wanted: margins()
+            .filter(|margin| f64::from(*margin) < WANTED_MARGIN)
+            .count(),
         unseated: loads.iter().filter(|load| !load.seated).count(),
         tips,
     }

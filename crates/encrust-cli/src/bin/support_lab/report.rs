@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::cure::Cured;
 use crate::shape::{Kind, Limits, Shape};
-use crate::strengthen::Strengthened;
 use crate::tips::{self, Tips};
 
 const SCHEMA: u32 = 3;
@@ -44,7 +43,7 @@ pub struct Row {
     pub tips: Tips,
     /// Densities tried below and above the profile's, as a share of it.
     pub sweep: Vec<SweepRow>,
-    /// What `--strengthen` changed, when asked.
+    /// What strengthening changed, unless `--no-strengthen` left it out.
     #[serde(default)]
     pub strengthened: Option<Strengthened>,
     /// Limits the corpus sets for this model that the run broke.
@@ -52,6 +51,24 @@ pub struct Row {
     pub seconds: f64,
     /// Placement, growing and curing, seconds.
     pub stages_s: [f64; 3],
+}
+
+/// What strengthening changed under one model.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Strengthened {
+    pub rounds: usize,
+    pub thickened: usize,
+    pub added: usize,
+}
+
+impl From<core_engine::Strengthened> for Strengthened {
+    fn from(done: core_engine::Strengthened) -> Self {
+        Self {
+            rounds: done.rounds,
+            thickened: done.thickened,
+            added: done.added,
+        }
+    }
 }
 
 /// What the cured stack named.

@@ -492,6 +492,11 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
   one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
   added.
+- Every placement then reads what the film pulls on each tip, layer by layer, and
+  strengthens a tip left with less than half again what it holds: Auto builds it one size
+  heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
+  underside, low enough to share the load before it peaks. Supports you placed are never
+  changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.30 mm.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps

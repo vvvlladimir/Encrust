@@ -14,6 +14,7 @@ mod prepare;
 pub mod project;
 mod run;
 mod stand;
+mod strengthen;
 mod trapped;
 mod trial;
 
@@ -37,6 +38,7 @@ pub use stand::{
     Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_at, stand_seated,
     stand_under,
 };
+pub use strengthen::{Strengthened, Underside, WANTED_MARGIN, carried, strengthen};
 pub use trapped::trapped_in;
 pub use trial::{
     Choice, Printout, Proven, Shows, Trial, Tried, orient_for_print, print_out, prove,

@@ -11,6 +11,7 @@ use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
+use crate::strengthen::{Underside, strengthen};
 
 mod lift;
 
@@ -143,7 +144,7 @@ pub fn stand_under(
     let lift_mm = plan.placing().lift_mm();
     let (lifted_mm, surface, inner) = touched(model, lift_mm)?;
     let bvh = Arc::new(Bvh::build(&surface));
-    let needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    let needs = needs_under(&surface, &bvh, inner, plan, (layer_height_mm, true))?;
     grown(lifted_mm, &surface, &bvh, &needs, plan)
 }
 
@@ -159,10 +160,7 @@ pub fn stand_at(
     // An island of no area, which an automatic profile builds to its lightest shape.
     let needs: Vec<Need> = contacts
         .iter()
-        .map(|contact| Need {
-            contact: *contact,
-            reason: Reason::Island { area_mm2: 0.0 },
-        })
+        .map(|contact| Need::new(*contact, Reason::Island { area_mm2: 0.0 }))
         .collect();
     grown(lifted_mm, &surface, &bvh, &needs, plan)
 }
@@ -192,7 +190,7 @@ pub fn stand_seated(
     };
     let (mut lifted_mm, mut surface, inner) = touched(seated, 0.0)?;
     let mut bvh = Arc::new(Bvh::build(&surface));
-    let mut needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    let mut needs = needs_under(&surface, &bvh, inner, plan, (layer_height_mm, true))?;
     if raft.enabled && !needs.is_empty() {
         let up = Vec3::Z * raft.thickness_mm;
         let moved = Transform::from_translation(up);
@@ -327,13 +325,13 @@ fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
 
 /// Where `surface`, standing where it is, needs holding up: what automatic placement would
 /// touch from outside its wall, then inside its cavity where the plan asks, each contact
-/// with what it holds.
+/// with what it holds, strengthened where `strengthening` asks.
 fn needs_under(
     surface: &Mesh,
     bvh: &Arc<Bvh>,
     inner: Option<Range<usize>>,
     plan: &SupportPlan,
-    layer_height_mm: Scalar,
+    (layer_height_mm, strengthening): (Scalar, bool),
 ) -> Result<Vec<Need>, EngineError> {
     let stack = PlaneSliceEngine
         .slice(
@@ -346,10 +344,12 @@ fn needs_under(
         .map_err(EngineError::Supports)?;
     let run = Run {
         stack: &stack,
+        surface,
+        bvh,
         layer_height_mm,
-        placing: plan.placing(),
-        sizing: plan.sizing(),
+        plan,
         lows: low_points(surface, Transform::default()),
+        strengthening,
     };
     let inner = inner.filter(|inner| !inner.is_empty());
     let side = |inside| {
@@ -360,9 +360,9 @@ fn needs_under(
             inside,
         })
     };
-    let mut needs = run.place(side(false));
+    let mut needs = run.place(side(false))?;
     if plan.cavity && inner.is_some() {
-        needs.extend(run.place(side(true)));
+        needs.extend(run.place(side(true))?);
     }
     Ok(needs)
 }
@@ -370,21 +370,24 @@ fn needs_under(
 /// One cut stack and what placement on it is asked with.
 struct Run<'a> {
     stack: &'a Sliced,
+    surface: &'a Mesh,
+    bvh: &'a Bvh,
     layer_height_mm: Scalar,
-    placing: SupportProfile,
-    sizing: Option<&'a AutoProfile>,
+    plan: &'a SupportPlan,
     lows: Vec<Vec3>,
+    /// Whether weak tips are strengthened: not for a probe asking only whether any is wanted.
+    strengthening: bool,
 }
 
 impl Run<'_> {
     /// What automatic placement touches, kept to `side` of the wall where there is one.
-    fn place(&self, side: Option<WallSide>) -> Vec<Need> {
+    fn place(&self, side: Option<WallSide>) -> Result<Vec<Need>, EngineError> {
         let blocked = Blocked::keeping(None, side.clone());
         let mut needs = generate_supports(
             self.stack,
             self.layer_height_mm,
-            &self.placing,
-            self.sizing,
+            &self.plan.placing(),
+            self.plan.sizing(),
             &[],
             &self.lows,
             blocked.as_ref(),
@@ -393,7 +396,17 @@ impl Run<'_> {
         if let Some(side) = side {
             needs.retain(|need| side.keeps(need.contact));
         }
-        needs
+        if self.strengthening {
+            let underside = Underside {
+                stack: self.stack,
+                layer_mm: self.layer_height_mm,
+                surface: self.surface,
+                bvh: self.bvh,
+                blocked: blocked.as_ref(),
+            };
+            strengthen(underside, &mut needs, &[], self.plan, &mut || true)?;
+        }
+        Ok(needs)
     }
 }
 

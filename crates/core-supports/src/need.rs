@@ -6,18 +6,30 @@ use printer_profiles::{AUTO_SIZES, AutoProfile};
 pub struct Need {
     pub contact: Vec3,
     pub reason: Reason,
+    /// Sizes heavier than its reason asks, where what it carries proved too much for that.
+    pub heavier: u8,
 }
 
 impl Need {
+    /// A contact at `contact` wanted for `reason`, sized by it alone.
+    pub fn new(contact: Vec3, reason: Reason) -> Self {
+        Self {
+            contact,
+            reason,
+            heavier: 0,
+        }
+    }
+
     /// Which of `auto`'s shapes a support here is built to, lightest first, with
     /// [`AUTO_SIZES`] for its steadying one.
     pub fn size_in(&self, auto: &AutoProfile) -> usize {
-        match self.reason {
+        let asked = match self.reason {
             Reason::Island { area_mm2 } => auto.island_size(area_mm2),
             Reason::Overhang { carried_mm3 } => auto.overhang_size(carried_mm3),
             Reason::Step { new_mm3 } => auto.step_size(new_mm3).unwrap_or(0),
-            Reason::Steady => AUTO_SIZES,
-        }
+            Reason::Steady => return AUTO_SIZES,
+        };
+        (asked + usize::from(self.heavier)).min(AUTO_SIZES - 1)
     }
 }
 
@@ -52,15 +64,41 @@ mod tests {
             Path::new("auto/default.toml"),
         )
         .expect("the shipped profile reads");
-        let need = |reason| Need {
-            contact: Vec3::ZERO,
-            reason,
-        };
+        let need = |reason| Need::new(Vec3::ZERO, reason);
         assert_eq!(
             need(Reason::Island { area_mm2: 3.2 }).size_in(&auto),
             2,
             "an island of 3.2 mm² reaches the shipped heaviest threshold"
         );
         assert_eq!(need(Reason::Steady).size_in(&auto), AUTO_SIZES);
+    }
+
+    #[test]
+    fn a_need_made_heavier_takes_a_heavier_size_but_never_the_steadying_one() {
+        let auto = AutoProfile::from_toml_str(
+            include_str!("../../../assets/profiles/auto/default.toml"),
+            Path::new("auto/default.toml"),
+        )
+        .expect("the shipped profile reads");
+        let heavier = |reason, heavier| Need {
+            heavier,
+            ..Need::new(Vec3::ZERO, reason)
+        };
+        let point = Reason::Island { area_mm2: 0.0 };
+        assert_eq!(
+            heavier(point, 1).size_in(&auto),
+            1,
+            "one size up from the lightest"
+        );
+        assert_eq!(
+            heavier(point, 9).size_in(&auto),
+            AUTO_SIZES - 1,
+            "no further than the heaviest"
+        );
+        assert_eq!(
+            heavier(Reason::Steady, 1).size_in(&auto),
+            AUTO_SIZES,
+            "steadying stays so"
+        );
     }
 }

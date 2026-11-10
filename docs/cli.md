@@ -338,7 +338,8 @@ its shape, as painting what shows is done in the window (ADR 0410); and
 `--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
-into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), and
+into the automatic profile's shapes, as the window's **Auto** does (ADR 0325); either way a
+tip carrying too much is strengthened as the window's Grow does (ADR 0422); and
 `--support-cavity` holds up the cavity `--hollow`, or a plate file's `hollow`, leaves as well
 as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
@@ -819,10 +820,9 @@ given. `--auto` names automatic profiles to bench the same way, each support siz
 it holds as Generate does with Automatic on, and each tip read against the shape it was
 built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
 thick and stands its supports against the shell from outside. `--sweep` also supports each
-model at shares of the profile's density and reports the least that is enough. `--strengthen`
-mends every tip under ×1.5 in up to three rounds, each a full read: a sized tip is built to the
-next heavier size, and one at the heaviest, or under one profile, gets a neighbour half a
-spacing away on the underside, seated no higher than where the tip is worst. `--tip-floor-mm`
+model at shares of the profile's density and reports the least that is enough. Every
+row is strengthened as Generate strengthens it; `--no-strengthen` reads placement as it
+put the tips. `--tip-floor-mm`
 builds every tip at least that wide, as a print that keeps to what holds would. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks

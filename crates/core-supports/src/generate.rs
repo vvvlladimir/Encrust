@@ -202,16 +202,16 @@ fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
     let totals = load.totals();
     placed
         .into_iter()
-        .map(|(contact, why)| Need {
-            contact,
-            reason: match why {
+        .map(|(contact, why)| {
+            let reason = match why {
                 Why::Island { area_mm2 } => Reason::Island { area_mm2 },
                 Why::Overhang(mark) => Reason::Overhang {
                     carried_mm3: mark.map_or(0.0, |mark| mark.above_mm3(&totals)),
                 },
                 Why::Step { new_mm3 } => Reason::Step { new_mm3 },
                 Why::Steady => Reason::Steady,
-            },
+            };
+            Need::new(contact, reason)
         })
         .collect()
 }

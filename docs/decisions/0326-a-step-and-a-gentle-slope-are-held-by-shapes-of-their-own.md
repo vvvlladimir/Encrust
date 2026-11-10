@@ -1,6 +1,6 @@
 # 0326. Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes
 
-- **Status:** Accepted
+- **Status:** Accepted; the steadying shape's 0.18 mm contact is superseded by 0422
 - **Date:** 2026-10-22
 
 ## Context

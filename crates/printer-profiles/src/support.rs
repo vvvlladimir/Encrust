@@ -169,6 +169,25 @@ impl SupportProfile {
         self.middle.diameter_mm / 2.0
     }
 
+    /// How far apart supports stand on a flat underside, millimetres, density taken in.
+    pub fn spacing_mm(&self) -> f32 {
+        self.contact_spacing_mm / self.density.max(1e-3).sqrt()
+    }
+
+    /// The tip's radius where it crosses the model's surface, millimetres: what the peel
+    /// pulls through, wider than the contact where a plane tip bites in (ADR 0243).
+    pub fn surface_radius_mm(&self) -> f32 {
+        let contact = self.contact_radius_mm();
+        match self.tip.shape {
+            ContactShape::Plane => {
+                let top = self.top.length_mm.max(1e-3);
+                let bite = self.tip.contact_depth_mm.min(top);
+                contact + (self.pillar_radius_mm() - contact) * bite / top
+            }
+            ContactShape::Sphere => contact,
+        }
+    }
+
     pub fn base_radius_mm(&self) -> f32 {
         self.bottom.platform_diameter_mm / 2.0
     }

@@ -76,7 +76,7 @@ the plate; failing that, the most stressed neck, then the hardest peel.
 
 ## What each tip carries
 
-`support-lab` reads the model alone up the stack, joining pieces that touch into parts, so
+`TipLoads` reads the model alone up the stack, joining pieces that touch into parts, so
 a part is held only by the tips under it so far. A tip seats on the piece within 0.15 mm of
 it, on its own layer or within a millimetre above. A part on the plate is the plate's.
 
@@ -94,9 +94,9 @@ exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this 
 rigid-body sharing: a thin arm is not softer than the body, and the film is not followed as
 it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below.
 
-`--strengthen` mends what it reads: a tip under ×1.5 is built to the next heavier size, since
-the thinnest that print are already near the 0.4 mm floor; at the heaviest it gets a
-neighbour, which helps only if it seats before the tip's worst layer. Three rounds at most.
+Placement mends what it reads (ADR 0422): a tip under ×1.5 is built one size heavier where
+its plan has a wider tip; at the widest it gets a neighbour, which helps only if it seats
+before the tip's worst layer. Three rounds at most, read on 0.05 mm pixels.
 
 ## Calibration
 

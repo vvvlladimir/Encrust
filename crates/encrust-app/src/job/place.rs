@@ -2,14 +2,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
+use core_engine::{SupportPlan, SupportShapes, Underside, strengthen};
 use core_geometry::Region;
-use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_supports::{Blocked, Need, WallSide, generate_supports, low_points};
-use printer_profiles::{AutoProfile, SupportProfile};
+use printer_profiles::SupportProfile;
 
 use crate::i18n::tr;
 use crate::job::pipeline::{slice_mesh, thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::supports::Sizing;
 
 /// How much of the run has to pass before the worker says so again. A layer is a
 /// microsecond and a frame is sixteen thousand of them, so a message a layer would only
@@ -41,8 +43,8 @@ pub struct SupportRequest {
     pub tasks: Vec<SupportTask>,
     pub layer_height_mm: Scalar,
     /// The automatic profile the run sizes its supports by, which holds steps apart from
-    /// overhangs; `None` for a run built to the group in hand.
-    pub sizing: Option<AutoProfile>,
+    /// overhangs, and its shapes; `None` for a run built to the group in hand.
+    pub sizing: Option<Sizing>,
 }
 
 /// Where the run wants supports under one model, in the plate coordinates that model
@@ -212,14 +214,9 @@ fn place(
         if cancel.load(Ordering::Relaxed) {
             return SupportOutcome::Cancelled;
         }
-
-        let placed = if task.transform == Transform::default() {
-            task.surface.as_ref().clone()
-        } else {
-            transform_mesh(&task.surface, task.transform)
-        };
-        let stack = match slice_mesh(&placed, request.layer_height_mm) {
-            Ok(stack) => stack,
+        let share = (index as f32 / models, 1.0 / models);
+        let needs = match needs_of(task, request, share, cancel, report) {
+            Ok(needs) => needs,
             Err(error) => {
                 return SupportOutcome::Failed(
                     error
@@ -230,40 +227,6 @@ fn place(
                 );
             }
         };
-
-        let layers = stack.layers.len().max(1) as f32;
-        let done = index as f32 / models;
-        let mut last = done;
-        let painted = Blocked::new(&task.mesh, &task.blocked, task.transform);
-        let blocked = Blocked::keeping(painted, task.side.clone());
-        // A support on the far side of the wall holds up nothing on this one.
-        let seeds: Vec<Vec3> = match &task.side {
-            Some(side) => task
-                .seeds
-                .iter()
-                .copied()
-                .filter(|seed| side.keeps(*seed))
-                .collect(),
-            None => task.seeds.clone(),
-        };
-        let needs = generate_supports(
-            &stack,
-            request.layer_height_mm,
-            &task.profile,
-            request.sizing.as_ref(),
-            &seeds,
-            &low_points(&task.surface, task.transform),
-            blocked.as_ref(),
-            &mut |layer| {
-                let fraction = done + layer as f32 / layers / models;
-                if fraction - last >= REPORT_STEP {
-                    last = fraction;
-                    report(fraction);
-                }
-                !cancel.load(Ordering::Relaxed)
-            },
-        );
-
         if cancel.load(Ordering::Relaxed) {
             return SupportOutcome::Cancelled;
         }
@@ -276,6 +239,80 @@ fn place(
 
     report(1.0);
     SupportOutcome::Placed(placements)
+}
+
+/// Where `task`'s model needs holding up, strengthened where a tip carries too much; its
+/// layers reported as the `(done, of)` share of the run they are.
+fn needs_of(
+    task: &SupportTask,
+    request: &SupportRequest,
+    (done, of): (f32, f32),
+    cancel: &AtomicBool,
+    report: &mut (dyn FnMut(f32) + Send),
+) -> anyhow::Result<Vec<Need>> {
+    let placed = if task.transform == Transform::default() {
+        task.surface.as_ref().clone()
+    } else {
+        transform_mesh(&task.surface, task.transform)
+    };
+    let stack = slice_mesh(&placed, request.layer_height_mm)?;
+    let layers = stack.layers.len().max(1) as f32;
+    let mut last = done;
+    let painted = Blocked::new(&task.mesh, &task.blocked, task.transform);
+    let blocked = Blocked::keeping(painted, task.side.clone());
+    // A support on the far side of the wall holds up nothing on this one.
+    let seeds: Vec<Vec3> = match &task.side {
+        Some(side) => task
+            .seeds
+            .iter()
+            .copied()
+            .filter(|seed| side.keeps(*seed))
+            .collect(),
+        None => task.seeds.clone(),
+    };
+    let plan = plan_of(task, request.sizing.as_ref());
+    let mut needs = generate_supports(
+        &stack,
+        request.layer_height_mm,
+        &task.profile,
+        plan.sizing(),
+        &seeds,
+        &low_points(&task.surface, task.transform),
+        blocked.as_ref(),
+        &mut |layer| {
+            let fraction = done + layer as f32 / layers * of;
+            if fraction - last >= REPORT_STEP {
+                last = fraction;
+                report(fraction);
+            }
+            !cancel.load(Ordering::Relaxed)
+        },
+    );
+    let underside = Underside {
+        stack: &stack,
+        layer_mm: request.layer_height_mm,
+        surface: &placed,
+        bvh: &Bvh::build(&placed),
+        blocked: blocked.as_ref(),
+    };
+    strengthen(underside, &mut needs, &seeds, &plan, &mut || {
+        !cancel.load(Ordering::Relaxed)
+    })?;
+    Ok(needs)
+}
+
+/// What `task`'s supports are built to: `sizing`'s shapes, or its own profile.
+fn plan_of(task: &SupportTask, sizing: Option<&Sizing>) -> SupportPlan {
+    match sizing {
+        Some((auto, shapes)) => SupportPlan {
+            shapes: SupportShapes::Sized {
+                auto: Box::new(auto.clone()),
+                shapes: Box::new(shapes.clone()),
+            },
+            cavity: false,
+        },
+        None => SupportPlan::of(task.profile.clone()),
+    }
 }
 
 #[cfg(test)]

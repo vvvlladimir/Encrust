@@ -315,7 +315,7 @@ fn spawn(
     Ok(SupportJob::spawn(SupportRequest {
         tasks,
         layer_height_mm,
-        sizing: sizing.map(|(auto, _)| auto.clone()),
+        sizing: sizing.cloned(),
     }))
 }
 

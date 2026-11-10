@@ -7,7 +7,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use std::sync::Arc;
 
-use core_engine::{SupportPlan, SupportShapes};
+use core_engine::{Strengthened, SupportPlan, SupportShapes, Underside, strengthen};
 use core_geometry::{
     Bvh, Mat4, Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate,
     lift_over_plate, orient_outward, transform_mesh, weld,
@@ -19,10 +19,9 @@ use core_supports::{
 };
 use core_volume::{Cancel, HollowSettings, hollow};
 use encrust_cli::pipeline;
-use printer_profiles::{AutoProfile, BuildVolume, SupportProfile};
+use printer_profiles::{BuildVolume, SupportProfile};
 
 use crate::corpus::{Pose, Up};
-use crate::strengthen::Strengthened;
 
 /// `plan` with `share` of its density, for a sweep of how densely it places.
 pub fn thinned(plan: &SupportPlan, share: f32) -> SupportPlan {
@@ -51,7 +50,7 @@ pub struct Supported {
     pub supports: Mesh,
     pub place_s: f64,
     pub grow_s: f64,
-    /// What `--strengthen` changed, when asked.
+    /// What strengthening changed, unless `--no-strengthen` left it out.
     pub strengthened: Option<Strengthened>,
 }
 
@@ -133,12 +132,13 @@ fn rotation(rotation: Quat) -> Transform {
 }
 
 /// `model` lifted by the placing profile's lift, hollowed to `wall_mm` where given, and supported
-/// from outside as Generate does with nothing painted, blocked or placed by hand.
+/// from outside as Generate does with nothing painted, blocked or placed by hand; strengthened
+/// as Generate does it when `strengthening`.
 pub fn supported(
     mut model: Mesh,
     asked: &SupportPlan,
     wall_mm: Option<Scalar>,
-    layer_mm: Scalar,
+    (layer_mm, strengthening): (Scalar, bool),
 ) -> Result<Supported> {
     let placing = asked.placing();
     let bounds = model.aabb().context("the model has no vertices")?;
@@ -148,7 +148,8 @@ pub fn supported(
     }
     let (model, side) = printed(model, wall_mm)?;
     let started = Instant::now();
-    let needs = needs_under(&model, &placing, asked.sizing(), side.as_ref(), layer_mm)?;
+    let (needs, strengthened) =
+        needs_under(&model, asked, side.as_ref(), (layer_mm, strengthening))?;
     let place_s = started.elapsed().as_secs_f64();
 
     let mut supported = Supported {
@@ -161,7 +162,7 @@ pub fn supported(
         supports: Mesh::default(),
         place_s,
         grow_s: 0.0,
-        strengthened: None,
+        strengthened,
     };
     supported.regrow()?;
     Ok(supported)
@@ -192,14 +193,14 @@ fn printed(model: Mesh, wall_mm: Option<Scalar>) -> Result<(Mesh, Option<WallSid
 }
 
 /// Where `model` needs holding up and what each contact holds, as automatic placement
-/// reads it off its own stack, kept to the outside of `side`'s wall.
+/// reads it off its own stack, kept to the outside of `side`'s wall, and what strengthening
+/// changed where asked.
 fn needs_under(
     model: &Mesh,
-    profile: &SupportProfile,
-    sizing: Option<&AutoProfile>,
+    plan: &SupportPlan,
     side: Option<&WallSide>,
-    layer_mm: Scalar,
-) -> Result<Vec<Need>> {
+    (layer_mm, strengthening): (Scalar, bool),
+) -> Result<(Vec<Need>, Option<Strengthened>)> {
     if layer_mm <= 0.0 {
         bail!("a layer of {layer_mm} mm cannot be cut");
     }
@@ -217,8 +218,8 @@ fn needs_under(
     let mut needs = generate_supports(
         &stack,
         layer_mm,
-        profile,
-        sizing,
+        &plan.placing(),
+        plan.sizing(),
         &[],
         &lows,
         blocked.as_ref(),
@@ -227,5 +228,17 @@ fn needs_under(
     if let Some(side) = side {
         needs.retain(|need| side.keeps(need.contact));
     }
-    Ok(needs)
+    if !strengthening {
+        return Ok((needs, None));
+    }
+    let underside = Underside {
+        stack: &stack,
+        layer_mm,
+        surface: model,
+        bvh: &Bvh::build(model),
+        blocked: blocked.as_ref(),
+    };
+    let done = strengthen(underside, &mut needs, &[], plan, &mut || true)
+        .context("the model cannot be read for what its tips carry")?;
+    Ok((needs, Some(done)))
 }
