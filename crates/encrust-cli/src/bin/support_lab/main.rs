@@ -72,15 +72,15 @@ struct Args {
     #[arg(long)]
     baseline: Option<PathBuf>,
     /// Flat underside a tip holds per square millimetre of its section, as the coupons
-    /// measured it.
-    #[arg(long, default_value_t = 50.0)]
+    /// measured it (docs/design/analysis.md, "Calibration").
+    #[arg(long, default_value_t = 120.0)]
     flat_ratio: f32,
     /// The same for underside that leans.
     #[arg(long, default_value_t = 150.0)]
     slope_ratio: f32,
     /// The thinnest tip that holds at all, millimetres: a property of the resin and its
     /// exposure.
-    #[arg(long, default_value_t = 0.3)]
+    #[arg(long, default_value_t = 0.4)]
     min_tip_mm: f32,
     /// The furthest a flat rim may stand from every tip, millimetres.
     #[arg(long, default_value_t = 1.5)]

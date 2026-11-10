@@ -91,8 +91,21 @@ taken the way worst for that tip. One tip is exactly a neck's `F / A + F L / (π
 Margin is the strength over this stress. It is rigid-body sharing: a thin arm is not softer
 than the body, and the film is not followed as it peels. `ℓ` comes from the polar gyration, so a
 long strip is levered across its width as if along its length: a first row under a leaning
-plate reads weaker than it is. The law, like `NECK_LIMIT_MPA`, is
-unmeasured, so margins rank tips before a coupon calibrates them.
+plate reads weaker than it is. Margins are read against `NECK_LIMIT_MPA` as calibrated below.
+
+## Calibration
+
+One print of a `support-lab --coupon` set the numbers: flat 8 × 8 × 1.2 mm plates on 1, 2, 4,
+9 or 16 tips of 0.30 to 0.80 mm, pillars 1.6 mm flaring to 3.2 mm so only tips tear, in
+Anycubic ABS-Like Pro 2 at 0.05 mm and 2.5 s on a tilting vat. Every plate read past the
+old 5 MPa that held stood at 13.0 MPa or under, every one that tore at 17.1 or over; one at
+27.7 held loose. `NECK_LIMIT_MPA` is the most that held, 13 MPa. The pull law is unchanged:
+with one resin only the limit over the pull is measured, so the limit carries it.
+
+The bench's area rule agrees once a tip holds 120 mm² of flat plate per mm² of its section
+(`--flat-ratio`), and only from two tips up: a plate on one tip tears sooner, which the
+lever reads. A 0.30 mm tip prints but breaks in the wash, so `--min-tip-mm` is 0.4.
+Reopen with a second resin, another layer height or a straight-pulling vat.
 
 ## Removing islands
 

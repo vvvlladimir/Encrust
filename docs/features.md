@@ -675,7 +675,8 @@ smoothing, not the original model.
 **It finds:**
 - **Islands:** parts that start in mid-air with nothing under them.
 - **Suction cups:** closed hollows that pull on the film.
-- **Thin sections and weak necks:** places too thin to hold.
+- **Thin sections and weak necks:** places too thin to hold. A neck is weak past the stress
+  printed support tips were measured to tear at.
 - **Hard peel:** the layers that pull the film hardest, the widest step and the levers. A
   section's pull follows its area, less for a thin strip than for a disc of the same area.
 

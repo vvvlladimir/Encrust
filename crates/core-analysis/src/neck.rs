@@ -5,9 +5,9 @@ use std::f64::consts::PI;
 
 use crate::stack::RiskKind;
 
-/// Stress a neck of green resin is taken to fail at, megapascals. Not measured: a warning
-/// level.
-pub const NECK_LIMIT_MPA: f64 = 5.0;
+/// Stress a neck of green resin fails at, megapascals: the most a printed tip held, one resin
+/// at 0.05 mm (see docs/design/analysis.md, "Calibration").
+pub const NECK_LIMIT_MPA: f64 = 13.0;
 /// The share of the limit a held neck is brought to: tips cure a little under their drawn area.
 const NECK_MARGIN: f64 = 0.8;
 /// The most supports a single neck is given.
