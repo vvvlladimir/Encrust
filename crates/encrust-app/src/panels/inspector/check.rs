@@ -121,16 +121,16 @@ fn card(ui: &mut egui::Ui, window: &mut Window, board: &Board, kind: IssueKind) 
         .copied()
         .collect();
     let shown = window.machine.preview.layer();
-    cards::draw(ui, window, board, kind, |ui, window, turn_had| {
+    cards::draw(ui, window, board, kind, |ui, window| {
         if let Some(picked) = listing(ui, shown, &layers.risks, kind) {
             go_to(window, &picked);
         }
         match kind {
             IssueKind::Islands => {
-                fixes::islands(ui, window, (&risks, layers.removed), turn_had);
+                fixes::islands(ui, window, (&risks, layers.removed));
             }
-            IssueKind::Cups => fixes::cups(ui, window, &risks, turn_had),
-            IssueKind::Necks => fixes::necks(ui, window, &risks, turn_had),
+            IssueKind::Cups => fixes::cups(ui, window, &risks),
+            IssueKind::Necks => fixes::necks(ui, window, &risks),
             IssueKind::Peel => {
                 let rows = pull_rows(window);
                 readings(ui, &rows);
@@ -322,3 +322,6 @@ pub fn go_to(window: &mut Window, risks: &[Risk]) {
     };
     window.tools.check.go(&places, layer_mm, stage, tint(first));
 }
+
+#[cfg(test)]
+mod tests;

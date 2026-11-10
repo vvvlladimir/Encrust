@@ -34,6 +34,9 @@ such a detail off.
   every pixel the quick one did. Until the full check lands, the quick issues are shown with
   a note under them and their fix buttons are off; Fix all and recipes run their own full
   check.
+- **Neither check runs while a recipe holds the plate.** Fix all and every recipe cut and
+  measure for their own steps; the quick check under way and its cut stop when a run starts.
+  Both checks start again once the run ends or waits at a pause.
 
 ## Consequences
 
@@ -43,6 +46,8 @@ such a detail off.
   quick answer is already there.
 - The background check uses CPU and battery after each finished change: about one quick check,
   a few seconds on a heavy plate, on half the cores.
+- While a recipe runs, the dot on the Check tool and Check's cards keep what was found before
+  it, until the run ends or pauses.
 - A quick check can miss an island near 0.01 mm². It can also name a false island where a
   bridge one or two pixels wide disappears in a square. The full check corrects both.
 - On a panel an odd number of pixels across, the quick panel is one pixel wider, so its

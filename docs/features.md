@@ -249,12 +249,14 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   cores and at half the panel's resolution, so the dot on the Check tool and its first list
   are there before Check is opened. Opening Check reads every pixel; until that is in, the
   quick list is marked and its fixes wait. An island near the smallest one named can be missed
-  or wrongly named by the quick read, never by the full one.
+  or wrongly named by the quick read, never by the full one. While Fix all or another recipe
+  runs, Check reads nothing of its own: it reads again once the run ends or pauses.
 - Check keeps each kind of issue on a card of its own, with its rows and the buttons that
   answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
   **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
   card to what it did, with Undo on the latest, and opens the next. What a fix could not reach
-  stays on the card with the reason. **Fix all** at the foot takes every automatic answer on
+  stays on the card with the reason and with every button, the fix just made among them, so
+  issues a later step brought back can still be answered. **Fix all** at the foot takes every automatic answer on
   the whole plate in a safe order, as one undo and with Cancel; `--recipe fix-issues` does the
   same on the command line. The arrows step through every issue, of the plate and of the layers
   alike, and go round. Move to free space and Arrange keep 2 mm from the plate's edge, and stand

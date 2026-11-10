@@ -306,6 +306,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0417](0417-check-vents-a-cup-by-its-thinnest-wall-and-holds-a-neck-by-its-stress.md) | Vent a cup through its thinnest wall, hold a neck by its stress, name a cup by its pull | Accepted |
 | [0418](0418-a-model-in-the-way-slides-then-turns-about-the-vertical.md) | Move a model onto the plate by a slide, then by the least turn about the vertical | Accepted |
 | [0419](0419-a-quick-check-runs-in-the-background-and-the-full-one-refines-it.md) | Check the plate quickly in the background, and let the full check refine it | Proposed |
+| [0420](0420-a-fix-that-had-its-turn-keeps-its-button.md) | Keep a fix's button on its card after the fix has had its turn | Proposed |
 | [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
 | [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Superseded by 0403 (the command line's resolution of the flags only) |
 | [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |

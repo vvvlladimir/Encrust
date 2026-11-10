@@ -3,32 +3,10 @@ use std::sync::Arc;
 use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
 
 use super::*;
+use crate::panels::fixtures::Parts;
 use crate::scene::{ImportSummary, Imported};
-use crate::state::{Doc, Machine, View};
-use crate::workspace::{Mode, Tool};
-
-/// What a window is drawn over, owned by the test.
-struct Parts {
-    mode: Mode,
-    tool: Tool,
-    doc: Doc,
-    view: View,
-    tools: Tools,
-    machine: Machine,
-}
-
-impl Parts {
-    fn window(&mut self) -> Window<'_> {
-        Window {
-            mode: &mut self.mode,
-            tool: &mut self.tool,
-            doc: &mut self.doc,
-            view: &mut self.view,
-            tools: &mut self.tools,
-            machine: &mut self.machine,
-        }
-    }
-}
+use crate::state::Doc;
+use crate::workspace::Tool;
 
 fn hollow() -> Scoped<core_engine::project::HollowState> {
     Scoped {
@@ -61,15 +39,7 @@ fn tetrahedron() -> Imported {
 }
 
 fn with_a_model() -> (Parts, ObjectId) {
-    let doc = Doc::default();
-    let mut parts = Parts {
-        mode: Mode::default(),
-        tool: Tool::Hollow,
-        view: View::framing(&doc.plate),
-        doc,
-        tools: Tools::default(),
-        machine: Machine::default(),
-    };
+    let mut parts = Parts::of(Doc::default(), Tool::Hollow);
     let id = parts.doc.scene.insert(tetrahedron());
     (parts, id)
 }

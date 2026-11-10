@@ -176,14 +176,13 @@ fn name_of(kind: IssueKind) -> String {
     }
 }
 
-/// Draws `kind`: its card with what `body` adds, told whether a fix has had its turn, or the
-/// line of what answered it, or nothing.
+/// Draws `kind`: its card with what `body` adds, or the line of what answered it, or nothing.
 pub(super) fn draw(
     ui: &mut egui::Ui,
     window: &mut Window,
     board: &Board,
     kind: IssueKind,
-    body: impl FnOnce(&mut egui::Ui, &mut Window, bool),
+    body: impl FnOnce(&mut egui::Ui, &mut Window),
 ) {
     let answer = board.answer(kind);
     let name = name_of(kind);
@@ -211,7 +210,7 @@ pub(super) fn draw(
         if let Some(answer) = answer {
             said(ui, answer);
         }
-        body(ui, window, answer.is_some());
+        body(ui, window);
     });
     if pressed {
         kept::set(ui.ctx(), open_id(), &(!open).then_some(kind));

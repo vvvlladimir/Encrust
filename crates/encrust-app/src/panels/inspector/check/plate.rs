@@ -71,14 +71,14 @@ pub(super) fn ui(ui: &mut egui::Ui, window: &mut Window, board: &Board) {
     section(ui, &tr!("check-plate"), None, |ui| {
         describe(ui, &tr!("check-plate-help"));
         for kind in kinds {
-            cards::draw(ui, window, board, kind, |ui, window, turn_had| {
+            cards::draw(ui, window, board, kind, |ui, window| {
                 let picked = rows(ui, window, &board.plate, kind);
                 if let Some(picked) = picked {
                     go(window, picked);
                 }
                 match kind {
-                    IssueKind::InTheWay => in_the_way(ui, window, &board.plate, turn_had),
-                    _ => keeps_resin(ui, window, &board.plate, turn_had),
+                    IssueKind::InTheWay => in_the_way(ui, window, &board.plate),
+                    _ => keeps_resin(ui, window, &board.plate),
                 }
             });
         }
@@ -235,7 +235,7 @@ impl WayFix {
 }
 
 /// The buttons that answer models in the way, those with something to answer.
-fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], turn_had: bool) {
+fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue]) {
     let too_big = too_big(&window.doc.scene, &window.doc.plate, issues);
     let meeting = issues.iter().find_map(|issue| match issue {
         PlateIssue::Meeting(pair) => Some(*pair),
@@ -250,7 +250,7 @@ fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], tur
     .flatten()
     .collect();
     let offers: Vec<Offer> = fixes.iter().map(|fix| fix.offer()).collect();
-    let Some(pressed) = offer(ui, window, turn_had, &offers) else {
+    let Some(pressed) = offer(ui, window, &offers) else {
         return;
     };
     let doc = &mut *window.doc;
@@ -278,7 +278,7 @@ fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], tur
 }
 
 /// A search for drain holes on every sealed model, the job's progress and word on the stage.
-fn keeps_resin(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], turn_had: bool) {
+fn keeps_resin(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue]) {
     let sealed: Vec<ObjectId> = issues
         .iter()
         .filter_map(|issue| match issue {
@@ -294,7 +294,7 @@ fn keeps_resin(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], tu
         tr!("check-drill-drains"),
         tr!("check-drill-drains-tip"),
     )];
-    if offer(ui, window, turn_had, &offers).is_some() {
+    if offer(ui, window, &offers).is_some() {
         let layer_height_mm = window.machine.slicing.layer_height_mm();
         let scene = &window.doc.scene;
         let started = window

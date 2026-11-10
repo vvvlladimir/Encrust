@@ -27,34 +27,22 @@ impl Offer {
     }
 }
 
-/// `offers` as buttons, the first the one suggested. Where a fix has had its turn the first
-/// has done what it could and is left out. Answers the place in `offers` of the one pressed.
-pub(super) fn offer(
-    ui: &mut egui::Ui,
-    window: &Window,
-    turn_had: bool,
-    offers: &[Offer],
-) -> Option<usize> {
-    buttons(ui, free(window), turn_had, offers)
+/// `offers` as buttons, the first the one suggested, each kept after a fix has had its turn
+/// as a later edit may undo what it did. Answers the place in `offers` of the one pressed.
+pub(super) fn offer(ui: &mut egui::Ui, window: &Window, offers: &[Offer]) -> Option<usize> {
+    buttons(ui, free(window), offers)
 }
 
 /// `offer` for what the layers show, pressable once the full check is in: a quick check's
 /// issues are only shown, never fixed (ADR 0419).
-fn layer_offer(
-    ui: &mut egui::Ui,
-    window: &Window,
-    turn_had: bool,
-    offers: &[Offer],
-) -> Option<usize> {
+fn layer_offer(ui: &mut egui::Ui, window: &Window, offers: &[Offer]) -> Option<usize> {
     let enabled = free(window) && window.measured().is_some();
-    buttons(ui, enabled, turn_had, offers)
+    buttons(ui, enabled, offers)
 }
 
-fn buttons(ui: &mut egui::Ui, enabled: bool, turn_had: bool, offers: &[Offer]) -> Option<usize> {
-    let skipped = usize::from(turn_had);
+fn buttons(ui: &mut egui::Ui, enabled: bool, offers: &[Offer]) -> Option<usize> {
     let buttons: Vec<FlowButton<'_>> = offers
         .iter()
-        .skip(skipped)
         .enumerate()
         .map(|(index, offer)| FlowButton {
             glyph: offer.glyph,
@@ -63,7 +51,7 @@ fn buttons(ui: &mut egui::Ui, enabled: bool, turn_had: bool, offers: &[Offer]) -
             lead: index == 0,
         })
         .collect();
-    flow_buttons(ui, enabled, &buttons).map(|index| index + skipped)
+    flow_buttons(ui, enabled, &buttons)
 }
 
 /// Whether a fix may start: no recipe running, and no Auto-orient already going.
@@ -90,13 +78,13 @@ fn turn(window: &mut Window, preset: OrientPreset, only: Option<ObjectId>) {
 }
 
 /// A vent into each cup by its thinnest wall, or a pose that leaves none.
-pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_had: bool) {
+pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
     let help = tr!("check-cups-vent-help");
     let offers = [
         Offer::new(icon::DRAIN, tr!("check-drill-cups"), help.clone()),
         Offer::new(icon::AUTO_ORIENT, tr!("check-auto-orient"), help),
     ];
-    let Some(pressed) = layer_offer(ui, window, turn_had, &offers) else {
+    let Some(pressed) = layer_offer(ui, window, &offers) else {
         return;
     };
     let (Some(settings), Some(plan)) = (
@@ -119,13 +107,13 @@ pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_
 }
 
 /// A support under each weak neck, or a pose that leaves none.
-pub(super) fn necks(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk], turn_had: bool) {
+pub(super) fn necks(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
     let help = tr!("check-necks-held-help");
     let offers = [
         Offer::new(icon::SUPPORTS, tr!("check-support-levers"), help.clone()),
         Offer::new(icon::AUTO_ORIENT, tr!("check-auto-orient"), help),
     ];
-    let Some(pressed) = layer_offer(ui, window, turn_had, &offers) else {
+    let Some(pressed) = layer_offer(ui, window, &offers) else {
         return;
     };
     let (Some(settings), Some(plan)) = (
@@ -167,7 +155,7 @@ pub(super) fn peel(ui: &mut egui::Ui, window: &mut Window) {
             tr!("check-lift-settings-tip"),
         ));
     }
-    match layer_offer(ui, window, false, &offers) {
+    match layer_offer(ui, window, &offers) {
         Some(0) => {
             let least_peel = OrientPreset::Goal(OrientGoal::LeastPeel);
             turn(window, least_peel, None);
@@ -188,12 +176,7 @@ enum IslandFix {
 
 /// The ways to answer the islands: support or remove them, or once removed, support what is
 /// left hanging, take the next layer of it, or put them back.
-pub(super) fn islands(
-    ui: &mut egui::Ui,
-    window: &mut Window,
-    (risks, removed): (&[Risk], usize),
-    turn_had: bool,
-) {
+pub(super) fn islands(ui: &mut egui::Ui, window: &mut Window, (risks, removed): (&[Risk], usize)) {
     let slicing = &window.machine.slicing;
     let removing = slicing.remove_islands;
     if removing {
@@ -206,7 +189,7 @@ pub(super) fn islands(
         }
     }
     let (fixes, offers) = island_offers(risks, removing);
-    if let Some(pressed) = layer_offer(ui, window, turn_had && !fixes.is_empty(), &offers) {
+    if let Some(pressed) = layer_offer(ui, window, &offers) {
         match fixes[pressed] {
             IslandFix::Support => stand_on_islands(window, risks),
             IslandFix::Remove => window.machine.slicing.remove_islands = true,

@@ -51,3 +51,41 @@ fn a_plate_left_still_is_cut_and_checked_quickly_without_a_word() {
     assert!(app.machine.preview.measured(&settings, fold).is_none());
     assert_eq!(app.mode, Mode::Prepare, "the view stays on the model");
 }
+
+/// While Fix all holds the plate, neither the quick check nor Check's own read starts a cut.
+#[test]
+fn a_recipe_holding_the_plate_is_left_to_cut_and_measure_alone() {
+    let mut app = app_with_a_cube();
+    let (doc, tools, machine) = (&mut app.doc, &mut app.tools, &mut app.machine);
+    crate::prepare::start_fixes(doc, tools, machine).expect("the cube is on the plate");
+    assert!(app.tools.prepare.is_holding());
+    app.tool = Tool::Check;
+
+    let at = Instant::now();
+    assert_eq!(
+        app.check_in_background(at),
+        None,
+        "no quick check is waited for"
+    );
+    assert_eq!(app.check_in_background(at + SETTLE), None);
+    app.refresh_preview();
+    assert!(!app.machine.preview.is_building(), "nothing is cut");
+}
+
+/// A quick check under way when a recipe takes the plate is stopped.
+#[test]
+fn a_quick_check_under_way_stops_when_a_recipe_takes_the_plate() {
+    let mut app = app_with_a_cube();
+    let at = Instant::now();
+    app.check_in_background(at);
+    app.check_in_background(at + SETTLE);
+    assert!(
+        app.machine.preview.is_building(),
+        "the quick check's cut started"
+    );
+
+    let (doc, tools, machine) = (&mut app.doc, &mut app.tools, &mut app.machine);
+    crate::prepare::start_fixes(doc, tools, machine).expect("the cube is on the plate");
+    app.check_in_background(at + SETTLE);
+    assert!(!app.machine.preview.is_building(), "its cut is let go");
+}

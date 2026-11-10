@@ -33,7 +33,14 @@ impl Preview {
         if self.quick.seen.is_some_and(|(seen, _)| seen == fingerprint) {
             return;
         }
+        self.stop_quick();
         self.quick.seen = Some((fingerprint, now));
+    }
+
+    /// Stops the quick check under way and a cut started for it, and forgets the plate, so
+    /// that the next one waits for it to settle again.
+    pub fn stop_quick(&mut self) {
+        self.quick.seen = None;
         self.quick.measuring = None;
         self.quick.cut_for = None;
         if self.job.as_ref().is_some_and(|build| build.quiet) {

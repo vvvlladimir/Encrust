@@ -26,6 +26,10 @@ impl SlicerApp {
             self.machine.preview.show_build();
             return;
         }
+        // A recipe holding the plate cuts and measures for its own steps (ADR 0419).
+        if self.tools.prepare.is_holding() {
+            return;
+        }
         // A stack cut before the supports land would be cut without them.
         let plate = self.doc.scene.active_plate();
         if self.doc.scene.supports_pending(plate) {
@@ -57,9 +61,13 @@ impl SlicerApp {
         }
     }
 
-    /// Cuts and quickly checks the plate once it has stood still for `quick::SETTLE`, whatever
-    /// is open (ADR 0419); answers how long until it looks again, `None` for no need.
+    /// Cuts and quickly checks the plate once it has stood still for `quick::SETTLE` and no
+    /// recipe holds it (ADR 0419); answers how long until it looks again, `None` for no need.
     pub(super) fn check_in_background(&mut self, now: Instant) -> Option<Duration> {
+        if self.tools.prepare.is_holding() {
+            self.machine.preview.stop_quick();
+            return None;
+        }
         let polling = self.machine.preview.poll_quick().then_some(QUICK_POLL);
         let scene = &self.doc.scene;
         let plate = scene.active_plate();

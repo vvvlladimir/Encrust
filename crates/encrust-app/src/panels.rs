@@ -1,6 +1,8 @@
 mod destination;
 mod edge_fields;
 mod find;
+#[cfg(test)]
+pub(crate) mod fixtures;
 mod hint_bar;
 mod inspector;
 mod mask_pane;
