@@ -88,9 +88,12 @@ fn weak(
         .collect())
 }
 
-/// Whether `plan` has a heavier shape than `group` that is still a size, not its steadying one.
+/// Whether `plan` has a size after `group` with a wider tip, its steadying shape not counted.
 fn heavier(plan: &SupportPlan, group: u16) -> bool {
-    plan.sizing().is_some() && usize::from(group) + 1 < AUTO_SIZES
+    let next = usize::from(group) + 1;
+    let table = plan.table();
+    let tip_mm = |at: usize| table.get(at).map(|profile| profile.tip.contact_diameter_mm);
+    plan.sizing().is_some() && next < AUTO_SIZES && tip_mm(next) > tip_mm(next - 1)
 }
 
 /// The lowest underside `reach_mm` around `tip` that seats no higher than `worst_z_mm`: a
@@ -179,5 +182,21 @@ mod tests {
             !heavier(&SupportPlan::of(light), 0),
             "one profile has nothing heavier"
         );
+    }
+
+    #[test]
+    fn a_size_no_wider_than_the_last_is_not_heavier() {
+        let catalogue = Catalogue::bundled().expect("the bundled profiles load");
+        let auto = catalogue
+            .autos()
+            .next()
+            .expect("an automatic profile ships")
+            .profile
+            .clone();
+        let mut sized = SupportPlan::sized(auto, &catalogue).expect("its shapes ship");
+        for profile in sized.profiles_mut() {
+            profile.tip.contact_diameter_mm = 0.4;
+        }
+        assert!(!heavier(&sized, 0), "every size has the same 0.4 mm tip");
     }
 }

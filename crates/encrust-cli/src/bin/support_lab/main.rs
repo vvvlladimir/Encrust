@@ -90,6 +90,10 @@ struct Args {
     /// The furthest a flat rim may stand from every tip, millimetres.
     #[arg(long, default_value_t = 1.5)]
     rim_gap_mm: f32,
+    /// Build every tip at least this wide, millimetres, as a print would that keeps to what
+    /// holds; the profiles as shipped when not given.
+    #[arg(long)]
+    tip_floor_mm: Option<f32>,
     /// The stress a neck of green resin tears at, megapascals, once the coupon has measured
     /// it; no lower than the stack's own warning level, which it never names below.
     #[arg(long, default_value_t = NECK_LIMIT_MPA as f32)]
@@ -198,6 +202,13 @@ fn asked(args: &Args, catalogue: &Catalogue) -> Result<Vec<(String, SupportPlan)
             .profile
             .clone();
         asked.push((format!("auto:{id}"), SupportPlan::sized(auto, catalogue)?));
+    }
+    if let Some(floor_mm) = args.tip_floor_mm {
+        for (_, plan) in &mut asked {
+            for profile in plan.profiles_mut() {
+                profile.tip.contact_diameter_mm = profile.tip.contact_diameter_mm.max(floor_mm);
+            }
+        }
     }
     Ok(asked)
 }

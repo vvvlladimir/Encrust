@@ -822,7 +822,8 @@ thick and stands its supports against the shell from outside. `--sweep` also sup
 model at shares of the profile's density and reports the least that is enough. `--strengthen`
 mends every tip under ×1.5 in up to three rounds, each a full read: a sized tip is built to the
 next heavier size, and one at the heaviest, or under one profile, gets a neighbour half a
-spacing away on the underside, seated no higher than where the tip is worst. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
+spacing away on the underside, seated no higher than where the tip is worst. `--tip-floor-mm`
+builds every tip at least that wide, as a print that keeps to what holds would. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
 printed in them — balls, flat plates and leant plates on so many tips, each block tied
