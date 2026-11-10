@@ -22,9 +22,12 @@ use format_svgx::SvgxWriter;
 use rayon::prelude::*;
 
 use crate::error::PipelineError;
-use crate::fold::{Tolerance, fold_group};
+use crate::fold::{Tolerance, fold_group, fold_rasterised, rasterise_group};
 use crate::format::SlicedFormat;
 use crate::panel::file_panel;
+
+/// Layers a thread a measured group holds: enough that one slow layer does not idle the rest.
+const MEASURE_GROUP_PER_THREAD: usize = 4;
 
 /// What a front end wants to hear about a run while it is happening.
 ///
@@ -274,8 +277,11 @@ pub fn measure(
     mut fold: Measured,
     observer: &mut dyn Observer,
 ) -> Result<Option<Measured>, PipelineError> {
-    let group = rayon::current_num_threads().max(1);
+    let group = rayon::current_num_threads().max(1) * MEASURE_GROUP_PER_THREAD;
+    let plan = windows.plan();
     let mut cancelled = false;
+    let mut waiting = Vec::new();
+    let mut next = fold.layer_count();
 
     windows.stream(source, |sliced: &Sliced| -> Result<(), PipelineError> {
         observer.window(sliced);
@@ -284,12 +290,22 @@ pub fn measure(
                 cancelled = true;
                 return Ok(());
             }
-            fold_group(layers, settings, windows.plan(), tolerance, &mut fold)?;
+            // The serial fold of one group runs while the next is rasterised.
+            let folding = std::mem::take(&mut waiting);
+            let (rasterised, _) = rayon::join(
+                || rasterise_group(layers, next, settings, tolerance),
+                || fold_rasterised(folding, plan, &mut fold),
+            );
+            waiting = rasterised?;
+            next += layers.len();
         }
         Ok(())
     })?;
-
-    Ok((!cancelled).then(|| fold.finish()))
+    if cancelled {
+        return Ok(None);
+    }
+    fold_rasterised(waiting, plan, &mut fold);
+    Ok(Some(fold.finish()))
 }
 
 /// Cuts, rasterises and pushes the stack a window at a time, in order.
