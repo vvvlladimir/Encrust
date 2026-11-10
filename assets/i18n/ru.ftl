@@ -602,9 +602,10 @@ check-row-solid = стоит сделать полой
 check-row-hanging = нависает над пустотой · { $area } мм²
 check-row-islands =
     { $count ->
-        [one] { $area } мм²
-        [few] { $count } острова · { $area } мм²
-       *[many] { $count } островов · { $area } мм²
+        [1] { $area } мм²
+        [one] { $count } остров · { $area } мм²
+        [few] { $count } острова · { $area } мм²
+       *[many] { $count } островов · { $area } мм²
     }
 check-row-lever = { $lever } мм · { $stress } МПа
 check-row-levers =
@@ -622,7 +623,8 @@ check-row-cups =
     }
 check-row-thin =
     { $count ->
-        [one] { $width } мм
+        [1] { $width } мм
+        [one] { $count } тонкий участок · { $width } мм
         [few] { $count } тонких участка · { $width } мм
        *[many] { $count } тонких участков · { $width } мм
     }

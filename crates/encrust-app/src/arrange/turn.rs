@@ -58,10 +58,7 @@ pub(super) fn standing_rect(object: &SceneObject, moved: Transform) -> Option<Re
         .into_iter()
         .chain(supports.filter_map(|group| placed_aabb(&group.mesh, moved)))
         .reduce(|a, b| a.merged(&b))?;
-    Some(Rect {
-        min: bounds.mins.truncate(),
-        max: bounds.maxs.truncate(),
-    })
+    Some(Rect::under(&bounds))
 }
 
 /// Every point of the model and its supports as they stand, seen from above.

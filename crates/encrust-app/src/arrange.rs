@@ -69,9 +69,8 @@ fn pack(
     }
 }
 
-/// Moves only the models in the way, the least it takes, the others left where they stand:
-/// every one past the plate or in its inset, and one of each pair of `meeting`. One no slide
-/// fits is turned the least that does; with no room left for one, the whole plate is packed.
+/// Moves only the models past the usable area and one of each pair of `meeting`, the least it
+/// takes, turned where no slide fits; with no room left, packs the plate (ADR 0418).
 pub fn clear_the_way(
     scene: &mut Scene,
     plate: &BuildPlate,

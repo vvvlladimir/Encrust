@@ -106,21 +106,9 @@ impl Run {
                 ids: &batch.ids,
                 profiles: &profiles,
             };
-            if fixes.levers {
-                let plate = (&mut doc.scene, &mut tools.supports);
-                machine.status = support_levers(plate, stack, &risks, Some(run));
-                self.answered(IssueKind::Necks, &machine.status);
-            }
-            if fixes.cups {
-                let plate = (&mut doc.scene, &mut tools.drain);
-                machine.status = drill_cups(plate, stack, &risks, Some(&batch.ids));
-                self.answered(IssueKind::Cups, &machine.status);
-            }
-            let again = Work::Check {
-                attempt,
-                fixes: CheckFixes::default(),
-            };
-            self.queue.push_front(Batch::of(again, batch.ids.clone()));
+            let plate = (doc, tools, &mut machine.status);
+            self.answer_fixes(plate, fixes, run, (&risks, stack));
+            self.check_again(batch, attempt);
             return Ok(());
         }
         for (id, islands) in islands_of(&doc.scene, &batch.ids, &risks, stack) {
@@ -143,12 +131,38 @@ impl Run {
         let plate = (&mut doc.scene, &mut tools.supports);
         machine.status = support_islands(plate, stack, &risks, Some(run));
         self.answered(IssueKind::Islands, &machine.status);
+        self.check_again(batch, attempt + 1);
+        Ok(())
+    }
+
+    /// Answers the necks and cups `fixes` asks for on `run`'s models, before they are noted.
+    fn answer_fixes(
+        &mut self,
+        (doc, tools, status): (&mut Doc, &mut Tools, &mut Status),
+        fixes: CheckFixes,
+        run: ForRun,
+        (risks, stack): (&[Risk], (&LayerPlan, &RasterSettings)),
+    ) {
+        let ids = run.ids;
+        if fixes.levers {
+            let plate = (&mut doc.scene, &mut tools.supports);
+            *status = support_levers(plate, stack, risks, Some(run));
+            self.answered(IssueKind::Necks, status);
+        }
+        if fixes.cups {
+            let plate = (&mut doc.scene, &mut tools.drain);
+            *status = drill_cups(plate, stack, risks, Some(ids));
+            self.answered(IssueKind::Cups, status);
+        }
+    }
+
+    /// Checks `batch`'s models again, as `attempt`, before anything else queued.
+    fn check_again(&mut self, batch: &Batch, attempt: u8) {
         let again = Work::Check {
-            attempt: attempt + 1,
+            attempt,
             fixes: CheckFixes::default(),
         };
         self.queue.push_front(Batch::of(again, batch.ids.clone()));
-        Ok(())
     }
 
     /// The profile each of `ids` stands islands on: its latest supports step's, else `auto`.

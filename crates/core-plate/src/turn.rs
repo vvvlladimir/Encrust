@@ -3,9 +3,8 @@ use core_geometry::{Quat, Scalar, Transform, Vec2, Vec3, convex_hull, fitting_tu
 use crate::arrange::{ArrangeSettings, PlateArea};
 use crate::spot::Rect;
 
-/// How a part standing in `rect` is turned about the vertical through its middle to fit onto
-/// `area` where no slide does, the least turn that does; `None` where it needs none or none
-/// fits. `outline`, its points seen from above, is only read once a slide is ruled out.
+/// The least turn about the vertical through its middle fitting a part in `rect` onto `area`
+/// where no slide does; `None` if none needed or none fits. `outline` is read only then.
 pub fn turned_onto(
     rect: Rect,
     outline: impl FnOnce() -> Vec<Vec2>,
@@ -28,9 +27,8 @@ pub fn turned_onto(
     ))
 }
 
-/// The least turn about the vertical, radians counter-clockwise, that brings an `outline`
-/// (plate mm) onto `area`: none where it fits as it stands, then clear of `settings.margin_mm`,
-/// then flush to the edge; `None` where no turn does (ADR 0418).
+/// The least turn about the vertical, radians counter-clockwise, bringing `outline` (plate mm)
+/// onto `area`, clear of the margin before flush to the edge; `None` where none does (ADR 0418).
 fn turn_onto(outline: &[Vec2], area: PlateArea, settings: &ArrangeSettings) -> Option<Scalar> {
     let hull = convex_hull(outline);
     let whole = area.high_mm - area.low_mm;

@@ -1,6 +1,6 @@
 # 0415. Check's buttons answer what it finds, through the calls the command line makes
 
-- **Status:** Accepted
+- **Status:** Accepted; its cups left to the hand superseded by 0417, its arrange by 0418
 - **Date:** 2026-11-09
 
 ## Context

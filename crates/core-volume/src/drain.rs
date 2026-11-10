@@ -175,6 +175,24 @@ impl DrainHole {
         }
     }
 
+    /// Whether it lies wholly inside one of `drilled` at least as wide, all in one model's
+    /// space: drilling it again adds nothing.
+    pub fn lies_within(&self, drilled: &[DrainHole]) -> bool {
+        let tip = self.at + self.axis.normalize_or_zero() * self.depth_mm;
+        drilled
+            .iter()
+            .any(|old| old.holds(self.at) && old.holds(tip) && self.diameter_mm <= old.diameter_mm)
+    }
+
+    /// Whether `point` is inside the tube it cuts, in the model's own space.
+    pub(crate) fn holds(&self, point: Vec3) -> bool {
+        let axis = self.axis.normalize_or_zero();
+        let along = (point - self.at).dot(axis);
+        let radius = self.diameter_mm / 2.0;
+        (-radius..=self.depth_mm).contains(&along)
+            && (point - self.at - axis * along).length() <= radius
+    }
+
     /// The unit offset from the axis to the outline's first corner, in the model's own
     /// space, and how many corners there are; `None` for a round hole or no axis.
     pub fn corner(&self) -> Option<(Vec3, usize)> {

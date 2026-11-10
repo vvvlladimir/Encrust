@@ -30,11 +30,6 @@ fn placed<'a>(models: &[Hanging<'a>]) -> Vec<(usize, Placed<'a>)> {
         .collect()
 }
 
-/// The nearest surface of `placed` straight below `from`, and the index of its model.
-fn first_below(placed: &[(usize, Placed)], from: Vec3) -> Option<(usize, PlacedHit)> {
-    first_along(placed, from, -Vec3::Z)
-}
-
 /// The nearest surface of `placed` from `from` along `direction`, and the index of its model.
 fn first_along(
     placed: &[(usize, Placed)],
@@ -98,8 +93,8 @@ pub fn island_holds(
         .collect()
 }
 
-/// The fewest supports a weak neck's tip is drawn at, mm across, whatever the profile: a
-/// tip of 0.3 mm, as Auto draws, adds next to nothing to a neck.
+/// The narrowest tip a support under a weak neck is drawn with, mm across: a 0.3 mm tip, as
+/// Auto draws, adds next to nothing to a neck.
 const NECK_TIP_MM: f32 = 0.6;
 
 /// `profile` as a support holding a weak neck stands to, its tip and any small pillar in its
@@ -126,7 +121,8 @@ fn neck_tip_mm2(profile: &SupportProfile) -> f32 {
 const NECK_RINGS: [(f32, f32); 17] = {
     const R: f32 = 1.0;
     const H: f32 = 0.5;
-    const D: f32 = 0.707;
+    const D: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    const DH: f32 = D * H;
     [
         (0.0, 0.0),
         (R, 0.0),
@@ -141,16 +137,15 @@ const NECK_RINGS: [(f32, f32); 17] = {
         (-H, 0.0),
         (0.0, H),
         (0.0, -H),
-        (0.354, 0.354),
-        (-0.354, -0.354),
-        (0.354, -0.354),
-        (-0.354, 0.354),
+        (DH, DH),
+        (-DH, -DH),
+        (DH, -DH),
+        (-DH, DH),
     ]
 };
 
-/// For each weak neck of `risks`, as many underside points of the piece that pulls on it as
-/// [`holds_for_lever`] asks of `profile`'s tips, each with its model; none for a piece over
-/// no underside, or whose underside lies on the plate.
+/// For each weak neck of `risks`, up to [`holds_for_lever`] underside points of its piece for
+/// `profile`'s tips, with their model; none where no underside stands clear of the plate.
 pub fn lever_holds(
     risks: &[Risk],
     plan: &LayerPlan,
@@ -162,18 +157,16 @@ pub fn lever_holds(
     let layer_mm = plan.nominal_thickness();
     let tip_mm2 = neck_tip_mm2(profile);
     let spacing_mm = 2.0 * profile.contact_radius_mm().max(NECK_TIP_MM / 2.0);
-    let levers = risks
-        .iter()
-        .filter(|risk| matches!(risk.kind, RiskKind::Lever { .. }));
+    let levers = risks.iter().filter_map(|risk| match risk.kind {
+        RiskKind::Lever { gyration_mm, .. } => Some((risk, gyration_mm)),
+        _ => None,
+    });
     levers
-        .map(|risk| {
+        .map(|(risk, gyration_mm)| {
             let Some(floor_mm) = risk.layer.checked_sub(1).and_then(|at| plan.top_of(at)) else {
                 return Vec::new();
             };
             let centre = panel.plate_mm(risk.at_mm).extend(floor_mm + layer_mm / 2.0);
-            let RiskKind::Lever { gyration_mm, .. } = risk.kind else {
-                return Vec::new();
-            };
             let wanted = holds_for_lever(&risk.kind, tip_mm2);
             undersides(&placed, centre, gyration_mm, layer_mm)
                 .into_iter()
@@ -199,7 +192,7 @@ fn undersides(
         .iter()
         .filter_map(|(x, y)| {
             let from = centre + Vec3::new(x * gyration_mm, y * gyration_mm, 0.0);
-            let (model, under) = first_below(placed, from)?;
+            let (model, under) = first_along(placed, from, -Vec3::Z)?;
             (under.normal.z < 0.0 && under.point.z >= layer_mm).then_some((model, under.point))
         })
         .collect()

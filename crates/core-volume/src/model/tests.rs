@@ -191,17 +191,38 @@ fn a_click_on_a_hole_drills_nothing_more_but_a_wider_one_over_it_is_drilled() {
     let (mesh, bvh) = (lid(), Bvh::build(&lid()));
     let mut click = |at: Vec3, diameter_mm: Scalar| {
         let size = drain_tool(diameter_mm, 5.0);
-        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default())
     };
-    click(Vec3::ZERO, 3.0);
-    click(Vec3::new(0.5, 0.0, 0.0), 3.0);
-    click(Vec3::ZERO, 2.0);
-    click(Vec3::ZERO, 10.0);
+    let drilled = [
+        click(Vec3::ZERO, 3.0),
+        click(Vec3::new(0.5, 0.0, 0.0), 3.0),
+        click(Vec3::ZERO, 2.0),
+        click(Vec3::ZERO, 10.0),
+    ];
     assert_eq!(
-        hollow.drains().len(),
-        2,
-        "the same and a narrower hole land in the 3 mm one, the 10 mm one is drilled"
+        drilled,
+        [true, false, false, true],
+        "the same and a narrower hole land in the 3 mm one and say so, the 10 mm one is drilled"
     );
+    assert_eq!(hollow.drains().len(), 2);
+}
+
+#[test]
+fn a_hole_inside_one_drilled_lies_within_it_and_one_reaching_past_it_does_not() {
+    let drilled = DrainHole::sized(Vec3::ZERO, Vec3::NEG_Z, drain_tool(4.0, 5.0), 0.0);
+    let inside = DrainHole::sized(
+        Vec3::new(0.5, 0.0, 0.0),
+        Vec3::NEG_Z,
+        drain_tool(2.0, 3.0),
+        0.0,
+    );
+    let deeper = DrainHole::sized(Vec3::ZERO, Vec3::NEG_Z, drain_tool(2.0, 8.0), 0.0);
+    assert!(inside.lies_within(&[drilled]));
+    assert!(
+        !deeper.lies_within(&[drilled]),
+        "its tip is 3 mm past the floor"
+    );
+    assert!(!inside.lies_within(&[]));
 }
 
 #[test]

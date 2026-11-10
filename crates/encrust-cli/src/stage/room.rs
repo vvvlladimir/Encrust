@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use core_engine::Model;
-use core_geometry::{Mesh, Transform, Vec2, transform_mesh};
+use core_geometry::{Aabb, Mesh, Transform, Vec2, transform_mesh};
 use core_plate::{
     ArrangeSettings, Body, BodyKind, Footprint, PlateArea, Rect, arrange, crossings, move_clear,
     turned_onto,
@@ -101,10 +101,8 @@ fn plate_area(printer: &PrinterProfile) -> PlateArea {
     }
 }
 
-/// How each of `placed`, standing where it prints, moves so that only what is past the
-/// plate's usable area or meets another moves, the least it takes, the rest left where they
-/// are: a model no slide fits is turned the least that does, and with no room left for one the
-/// whole plate is packed as by [`arranged`].
+/// How each of `placed`, standing where it prints, moves so that only what is past the usable
+/// area or meets another moves, the least it takes, else as [`arranged`] packs it (ADR 0418).
 pub(crate) fn cleared(
     placed: &[(&Mesh, &Path)],
     printer: Option<&PrinterProfile>,
@@ -112,17 +110,7 @@ pub(crate) fn cleared(
 ) -> Result<Vec<Transform>> {
     let printer = printer.context("moving models clear needs a printer to know the plate")?;
     let area = plate_area(printer);
-    let astray: Vec<usize> = placed
-        .iter()
-        .enumerate()
-        .filter(|(_, (mesh, _))| {
-            mesh.aabb().is_some_and(|bounds| {
-                bounds.mins.truncate().cmplt(area.low_mm).any()
-                    || bounds.maxs.truncate().cmpgt(area.high_mm).any()
-            })
-        })
-        .map(|(index, _)| index)
-        .collect();
+    let astray = astray_of(placed, area);
     let turns = turns_onto(placed, area, settings, &astray);
     let turned = turned_meshes(placed, &turns);
     let parts = turned
@@ -132,28 +120,10 @@ pub(crate) fn cleared(
             let bounds = mesh
                 .aabb()
                 .with_context(|| format!("{} has no vertices", path.display()))?;
-            Ok(Rect {
-                min: bounds.mins.truncate(),
-                max: bounds.maxs.truncate(),
-            })
+            Ok(Rect::under(&bounds))
         })
         .collect::<Result<Vec<_>>>()?;
-    let bodies: Vec<Body<'_>> = turned
-        .iter()
-        .enumerate()
-        .map(|(owner, mesh)| Body {
-            owner,
-            kind: BodyKind::Model,
-            mesh,
-            bvh: None,
-            transform: Transform::default(),
-        })
-        .collect();
-    let meeting: Vec<[usize; 2]> = crossings(&bodies)
-        .iter()
-        .map(|meeting| meeting.owners)
-        .collect();
-    let cleared = move_clear(&parts, &astray, &meeting, area, settings);
+    let cleared = move_clear(&parts, &astray, &meeting_of(&turned), area, settings);
     if !cleared.left_out.is_empty() {
         return arranged(placed, Some(printer), settings);
     }
@@ -164,9 +134,41 @@ pub(crate) fn cleared(
     Ok(moves)
 }
 
+/// The indices of `placed` reaching past `area`.
+fn astray_of(placed: &[(&Mesh, &Path)], area: PlateArea) -> Vec<usize> {
+    let past = |bounds: Aabb| {
+        bounds.mins.truncate().cmplt(area.low_mm).any()
+            || bounds.maxs.truncate().cmpgt(area.high_mm).any()
+    };
+    placed
+        .iter()
+        .enumerate()
+        .filter(|(_, (mesh, _))| mesh.aabb().is_some_and(past))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+/// Each pair of `meshes`, by index, that meet.
+fn meeting_of(meshes: &[Cow<'_, Mesh>]) -> Vec<[usize; 2]> {
+    let bodies: Vec<Body<'_>> = meshes
+        .iter()
+        .enumerate()
+        .map(|(owner, mesh)| Body {
+            owner,
+            kind: BodyKind::Model,
+            mesh,
+            bvh: None,
+            transform: Transform::default(),
+        })
+        .collect();
+    crossings(&bodies)
+        .iter()
+        .map(|meeting| meeting.owners)
+        .collect()
+}
+
 /// How each of `placed`, a mesh standing where it prints and the file it came from, moves
-/// to pack the plate biggest first by `settings`, a model no slide fits turned the least that
-/// does; refuses a plate they do not fit.
+/// to pack the plate biggest first, a model no slide fits turned; refuses one that does not fit.
 pub(crate) fn arranged(
     placed: &[(&Mesh, &Path)],
     printer: Option<&PrinterProfile>,
@@ -214,10 +216,7 @@ fn turns_onto(
         let Some(bounds) = mesh.aabb() else {
             continue;
         };
-        let rect = Rect {
-            min: bounds.mins.truncate(),
-            max: bounds.maxs.truncate(),
-        };
+        let rect = Rect::under(&bounds);
         let outline = || {
             mesh.vertices
                 .iter()

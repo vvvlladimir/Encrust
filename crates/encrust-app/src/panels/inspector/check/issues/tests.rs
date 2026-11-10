@@ -48,7 +48,8 @@ fn what_hangs_over_a_removed_island_is_its_own_row_and_asks_for_supports() {
     let described: Vec<String> = rows.iter().map(detail).collect();
     assert_eq!(
         described,
-        ["island · 1.00 mm²", "hangs over nothing · 3.50 mm²"]
+        ["1.00 mm²", "hangs over nothing · 3.50 mm²"],
+        "a lone island's card names its kind, its row only the area"
     );
     assert!(
         kind_of(&hanging.kind) == IssueKind::Islands,

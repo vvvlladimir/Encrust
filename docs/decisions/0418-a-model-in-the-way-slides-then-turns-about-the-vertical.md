@@ -7,7 +7,7 @@
 
 Check's In the way card offered Move clear and Arrange all. Both only slide a model across the
 plate, so a model longer than the plate is deep, but short enough to fit across its diagonal,
-stayed past the build volume. The only button that helped was Fit the volume, which scales the
+stayed past the build volume. The only button that helped was Scale to fit, which scales the
 model down. Two buttons for one issue also made the user choose between a small move and a
 whole new layout before seeing either.
 
@@ -25,7 +25,7 @@ Arranging tries these moves in order, and stops at the first that fits:
    hull with rotating calipers and takes the turn of smallest size. `core_plate::turned_onto`
    asks first with the plate's margin, then flush to its edge.
 
-A model is never tilted to fit. Check's card has one button, Place on the plate
+A model is never tilted to fit. Check's card has one button, Move to free space
 (`clear_the_way`): it slides only what is in the way, turns what no slide fits, and packs the
 whole plate when no clear place is left for one. Arrange the plate turns the same models
 before it packs. The command line's `--arrange` and the recipe's `arrange` step, with or
@@ -33,7 +33,7 @@ without `only_in_the_way`, do the same.
 
 ## Consequences
 
-- A long model that fits across the plate no longer needs to be scaled down. Fit the volume is
+- A long model that fits across the plate no longer needs to be scaled down. Scale to fit is
   still offered while the model's box is larger than the volume, even where a turn would fit
   it.
 - The least turn often leaves a model at a slant rather than a quarter turn. That is the
@@ -56,5 +56,5 @@ when it has to, makes the choice for the user. Arrange the plate stays in the Mo
 
 ### The option that won, and what it costs
 
-A model whose box is too tall, or too wide for any turn, is still left to Fit the volume or
+A model whose box is too tall, or too wide for any turn, is still left to Scale to fit or
 Auto-orient. A slant placement can block a corner that a quarter turn would have left free.

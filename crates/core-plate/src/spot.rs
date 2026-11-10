@@ -1,4 +1,4 @@
-use core_geometry::{Scalar, Vec2};
+use core_geometry::{Aabb, Scalar, Vec2};
 
 use crate::arrange::{ArrangeSettings, Placed, PlateArea};
 
@@ -7,6 +7,16 @@ use crate::arrange::{ArrangeSettings, Placed, PlateArea};
 pub struct Rect {
     pub min: Vec2,
     pub max: Vec2,
+}
+
+impl Rect {
+    /// What `bounds`, plate millimetres, cover of the plate seen from above.
+    pub fn under(bounds: &Aabb) -> Self {
+        Self {
+            min: bounds.mins.truncate(),
+            max: bounds.maxs.truncate(),
+        }
+    }
 }
 
 /// The centre nearest `toward` for a part `size_mm` across on a plate `plate_mm` across,

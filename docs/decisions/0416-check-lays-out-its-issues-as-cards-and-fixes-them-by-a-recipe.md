@@ -13,14 +13,14 @@ stood, or a hole drilled after the layers were read, leaves the next answer stal
 ## Decision
 
 Check has one card per kind of issue, holding its rows and its buttons, one card open at a
-time. Fix issues is `assets/recipes/fix-issues.toml`, a built-in recipe run on the whole plate
+time. Fix all is `assets/recipes/fix-issues.toml`, a built-in recipe run on the whole plate
 by Prepare's machinery: clear the way, read, drain what stays trapped, then drill cups, hold
 necks and support islands. What a fix did is noted by the kind and the undo edit that holds
 it (`check::Answers`), said on the card until a later edit that is no fix replaces it.
 
 ## Consequences
 
-Fix issues is one undo, cancels by putting the plate back, and is `--recipe fix-issues` on the
+Fix all is one undo, cancels by putting the plate back, and is `--recipe fix-issues` on the
 command line with no second orchestration. It reads the layers twice, so it costs one slice and
 measure more than the sum of its buttons. It lists among the recipes Prepare for print offers.
 Undo on a card stands only on the newest answer, as the history is linear. A kind whose fix has

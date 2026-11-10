@@ -175,6 +175,29 @@ fn a_cup_over_a_floor_lying_on_the_plate_is_lifted_or_turned() {
 }
 
 #[test]
+fn a_cup_off_the_plate_in_walls_and_floor_too_thick_to_drill_is_left_to_the_hand() {
+    let (mut mesh, middle) = walls(17.0);
+    let span = 2.0 * 17.0 + 5.0;
+    for vertex in &mut mesh.vertices {
+        vertex.z += 20.0;
+    }
+    mesh.append(&cuboid(Vec3::Z, Vec3::new(span, span, 20.0)));
+    let bvh = Bvh::build(&mesh);
+    let (plan, panel) = stack(35.0);
+    let risks = [Risk {
+        layer: 500,
+        at_mm: middle,
+        kind: CUP,
+    }];
+    let models = [(&mesh, &bvh, Transform::default())];
+    assert_eq!(
+        cup_vents(&risks, &plan, &panel, &models, HOLE_MM)[0],
+        Err(Unvented::TooDeep),
+        "16 mm of wall and 19 mm of floor at the thinnest, past the 15 mm longest vent"
+    );
+}
+
+#[test]
 fn a_cup_whose_middle_lies_in_the_material_is_left_to_the_hand() {
     let solid = cuboid(Vec3::ZERO, Vec3::splat(10.0));
     assert_eq!(vent_of(&solid, [5.0, 5.0]), Err(Unvented::TooDeep));

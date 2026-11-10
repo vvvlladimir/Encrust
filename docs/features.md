@@ -942,9 +942,9 @@ address in a video player).
   icons, at the tool row's left, each saying what it does under the pointer.
 - With nothing on the plate the models card says so and offers Open a model; the stage
   stays clear.
-- **Check:** Previous and Next step through the layers with issues; the islands, the weak necks and
-  the suction cups each have their own section with what fixes them; the plate card gives the
-  plate's time, resin, weight and price.
+- **Check:** Previous and Next step through every issue, the plate's first, and go round; each
+  kind of issue has its own card with what fixes it; the plate card gives the plate's time,
+  resin, weight and price.
 - The support group picker lists what stands on the plate, then the profiles holding
   nothing, then *Edit the profiles*.
 - Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,

@@ -86,9 +86,8 @@ pub fn support_islands(
     Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
 }
 
-/// Check's Support them for weak necks: as many supports under the piece pulling on each,
-/// and as thick, as bring the neck under its limit; says how many stood and how many necks
-/// had nowhere to stand one.
+/// Check's Support them for weak necks: as many and as thick supports under each pulling piece
+/// as bring its neck under the limit; says how many stood and how many necks had none.
 pub fn support_levers(
     (scene, supports): (&mut Scene, &mut SupportTool),
     stack: (&LayerPlan, &RasterSettings),
@@ -104,9 +103,7 @@ pub fn support_levers(
         .collect();
     let left = holds.iter().filter(|hold| hold.is_empty()).count();
     let stood = supports.support_necks(scene, &found, |id| {
-        let of_run = run.as_ref()?;
-        let own = of_run.profiles.iter().find(|(owner, _)| *owner == id);
-        Some(own.map(|(_, profile)| profile.clone()).unwrap_or_default())
+        run.as_ref().map(|run| profile_of(run, id))
     });
     told(
         tr!("check-stood-levers", count = stood, group = NECKS_GROUP),
@@ -123,9 +120,8 @@ fn neck_sizing(supports: &SupportTool, run: Option<&ForRun>) -> SupportProfile {
     neck_profile(asked.unwrap_or(&supports.profile))
 }
 
-/// Check's Drill them: a hole by the shortest way into the lowest point of every suction cup
-/// of `risks`, on `only` if named; says how many went in, how many stand on the plate and how
-/// many are left to the hand.
+/// Check's Drill them: the shortest hole into the lowest point of each suction cup of `risks`,
+/// on `only` if named; says how many went in, stand on the plate and are left to the hand.
 pub fn drill_cups(
     (scene, drain): (&mut Scene, &mut DrainTool),
     stack: (&LayerPlan, &RasterSettings),
@@ -208,11 +204,14 @@ fn stand(
 ) -> usize {
     match run {
         None => supports.support_islands(scene, found),
-        Some(run) => supports.support_islands_to(scene, found, |id| {
-            let own = run.profiles.iter().find(|(owner, _)| *owner == id);
-            own.map(|(_, profile)| profile.clone()).unwrap_or_default()
-        }),
+        Some(run) => supports.support_islands_to(scene, found, |id| profile_of(run, id)),
     }
+}
+
+/// The profile `run` stands `id`'s supports to.
+fn profile_of(run: &ForRun, id: ObjectId) -> SupportProfile {
+    let own = run.profiles.iter().find(|(owner, _)| *owner == id);
+    own.map(|(_, profile)| profile.clone()).unwrap_or_default()
 }
 
 /// `said`, with how many of the issues had nowhere to be fixed where any had none.

@@ -6,7 +6,7 @@ use core_geometry::{PlacedHit, Scalar, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 
-use super::{Hanging, Placed, first_along, first_below, placed};
+use super::{Hanging, Placed, first_along, placed};
 
 /// How far past a face a ray starts so as not to meet that face again, mm.
 const THROUGH_FACE_MM: Scalar = 1e-3;
@@ -36,7 +36,8 @@ pub enum Unvented {
     /// Its floor is the plate, or stands on it, and no wall beside it is thin enough: the
     /// model is lifted onto supports, which let the air in from below, or turned.
     OnThePlate,
-    /// No wall around its lowest point is thinner than `LONGEST_VENT_MM`.
+    /// No wall around its lowest point is thinner than `LONGEST_VENT_MM`, or no floor under
+    /// the cup's middle was found to drill from, as in a ring.
     TooDeep,
 }
 
@@ -57,7 +58,7 @@ pub fn cup_vents(
     cups.map(|risk| {
         let top_mm = plan.top_of(risk.layer).ok_or(Unvented::TooDeep)?;
         let in_cup = panel.plate_mm(risk.at_mm).extend(top_mm);
-        let floor = first_below(&placed, in_cup);
+        let floor = first_along(&placed, in_cup, -Vec3::Z);
         if floor.is_some_and(|(_, hit)| hit.normal.z <= 0.0) {
             // The middle of a ring-shaped cup lies in the material around it.
             return Err(Unvented::TooDeep);

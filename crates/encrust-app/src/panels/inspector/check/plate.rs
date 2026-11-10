@@ -216,6 +216,24 @@ enum WayFix {
     Combine,
 }
 
+impl WayFix {
+    fn offer(self) -> Offer {
+        match self {
+            Self::Place => Offer::new(icon::ARRANGE, tr!("check-place"), tr!("check-place-tip")),
+            Self::Fit => Offer::new(
+                icon::FIT,
+                tr!("check-fit-volume"),
+                tr!("check-fit-volume-tip"),
+            ),
+            Self::Combine => Offer::new(
+                icon::COMBINE,
+                tr!("check-combine"),
+                tr!("check-combine-tip"),
+            ),
+        }
+    }
+}
+
 /// The buttons that answer models in the way, those with something to answer.
 fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], turn_had: bool) {
     let too_big = too_big(&window.doc.scene, &window.doc.plate, issues);
@@ -223,28 +241,15 @@ fn in_the_way(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue], tur
         PlateIssue::Meeting(pair) => Some(*pair),
         _ => None,
     });
-    let mut fixes = vec![WayFix::Place];
-    let mut offers = vec![Offer::new(
-        icon::ARRANGE,
-        tr!("check-place"),
-        tr!("check-place-tip"),
-    )];
-    if !too_big.is_empty() {
-        fixes.push(WayFix::Fit);
-        offers.push(Offer::new(
-            icon::FIT,
-            tr!("check-fit-volume"),
-            tr!("check-fit-volume-tip"),
-        ));
-    }
-    if meeting.is_some() {
-        fixes.push(WayFix::Combine);
-        offers.push(Offer::new(
-            icon::COMBINE,
-            tr!("check-combine"),
-            tr!("check-combine-tip"),
-        ));
-    }
+    let fixes: Vec<WayFix> = [
+        Some(WayFix::Place),
+        (!too_big.is_empty()).then_some(WayFix::Fit),
+        meeting.map(|_| WayFix::Combine),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let offers: Vec<Offer> = fixes.iter().map(|fix| fix.offer()).collect();
     let Some(pressed) = offer(ui, window, turn_had, &offers) else {
         return;
     };

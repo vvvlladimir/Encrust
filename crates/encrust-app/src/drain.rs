@@ -196,10 +196,12 @@ impl DrainTool {
             };
             let (mesh, bvh, transform) = (&object.mesh, &object.bvh, object.transform);
             let (mouth, outward) = (vent.mouth_mm, vent.outward);
-            object
+            if object
                 .hollow
-                .add_drain(mesh, bvh, mouth, outward, size, transform);
-            drilled += 1;
+                .add_drain(mesh, bvh, mouth, outward, size, transform)
+            {
+                drilled += 1;
+            }
         }
         drilled
     }
