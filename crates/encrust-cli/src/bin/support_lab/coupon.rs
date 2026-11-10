@@ -32,10 +32,8 @@ const BUMP_MM: f32 = 1.0;
 const BUMP_PITCH_MM: f32 = 1.6;
 /// A block's number stands past its corner in bumps twice as tall as a row's.
 const BLOCK_BUMP_MM: f32 = 2.0;
-/// How far a raft reaches past the outermost pad or rail, millimetres.
-const RAFT_MARGIN_MM: f32 = 2.0;
-/// Each bar of a raft's lattice, millimetres: wide enough to carry the pads that meet it.
-const RAFT_BAR_MM: f32 = 3.0;
+/// Each tie along a row, millimetres: wide enough to meet every pad of the row.
+const TIE_MM: f32 = 3.0;
 
 /// A coupon as its spec file states it.
 #[derive(Debug, Clone, Deserialize)]
@@ -45,10 +43,10 @@ pub struct Spec {
     pub shapes: Vec<TipShape>,
     #[serde(rename = "block")]
     pub blocks: Vec<Block>,
-    /// Whether each block stands on its own lattice as thick as the rails, so it leaves the
-    /// plate whole and each specimen keeps its place.
+    /// Whether each row's pads are tied to its block's rail by a bar as thin as a pad, so the
+    /// block leaves the plate whole and each specimen keeps its place.
     #[serde(default)]
-    pub raft: bool,
+    pub tied: bool,
 }
 
 /// One way of making a tip: a row of every block that names it.
@@ -224,15 +222,19 @@ pub fn coupon(spec: &Spec, built: &[Built], centre: Vec2) -> Result<Mesh> {
             .context("every block has a specimen")?;
         let size = (spec.rows(block).len(), block.holders.len());
         append(&mut part, &rulers(first.at, size, index + 1));
-        if spec.raft {
-            let bounds = part.aabb().context("a block has rails")?;
-            let middles: Vec<Vec2> = specimens
-                .iter()
-                .filter(|specimen| specimen.block == index)
-                .map(|specimen| specimen.at)
+        if spec.tied {
+            let pad_mm = built
+                .first()
+                .context("a block has a specimen")?
+                .profile
+                .bottom
+                .platform_thickness_mm;
+            let rows: Vec<f32> = (0..size.0)
+                .map(|row| first.at.y + row as f32 * PITCH_MM)
                 .collect();
-            for [low, high] in raft_bars(bounds.mins.truncate(), bounds.maxs.truncate(), &middles) {
-                append(&mut part, &cuboid(low.extend(0.0), high.extend(RULER_MM)));
+            let last = first.at.x + PITCH_MM * (size.1 as f32 - 1.0);
+            for [low, high] in ties(first.at.x - RULER_OFFSET_MM, last, &rows) {
+                append(&mut part, &cuboid(low.extend(0.0), high.extend(pad_mm)));
             }
         }
         append(&mut whole, &part);
@@ -240,31 +242,19 @@ pub fn coupon(spec: &Spec, built: &[Built], centre: Vec2) -> Result<Mesh> {
     Ok(whole)
 }
 
-/// The bars of a raft over `low`..`high`, each its corners on the plate: a frame round it
-/// and a bar along every row and column of `middles`, so a blade gets under it between them.
-fn raft_bars(low: Vec2, high: Vec2, middles: &[Vec2]) -> Vec<[Vec2; 2]> {
-    let half = RAFT_BAR_MM / 2.0;
-    let (low, high) = (
-        low - Vec2::splat(RAFT_MARGIN_MM),
-        high + Vec2::splat(RAFT_MARGIN_MM),
-    );
-    let across = |y: f32| [Vec2::new(low.x, y - half), Vec2::new(high.x, y + half)];
-    let along = |x: f32| [Vec2::new(x - half, low.y), Vec2::new(x + half, high.y)];
-    let mut bars = vec![
-        across(low.y + half),
-        across(high.y - half),
-        along(low.x + half),
-        along(high.x - half),
-    ];
-    let mut rows: Vec<f32> = middles.iter().map(|at| at.y).collect();
-    let mut columns: Vec<f32> = middles.iter().map(|at| at.x).collect();
-    for lines in [&mut rows, &mut columns] {
-        lines.sort_by(f32::total_cmp);
-        lines.dedup_by(|a, b| (*a - *b).abs() < RAFT_BAR_MM);
-    }
-    bars.extend(rows.into_iter().map(across));
-    bars.extend(columns.into_iter().map(along));
-    bars
+/// The ties of a block on the plate, each its corners: one along every row from the rail at
+/// `rail_x` to its last specimen at `last_x`. Nothing joins two rows, so no ring cures on the
+/// plate to hold the film like a cup.
+fn ties(rail_x: f32, last_x: f32, rows: &[f32]) -> Vec<[Vec2; 2]> {
+    let half = TIE_MM / 2.0;
+    rows.iter()
+        .map(|&y| {
+            [
+                Vec2::new(rail_x, y - half),
+                Vec2::new(last_x + half, y + half),
+            ]
+        })
+        .collect()
 }
 
 /// `base` with its tip made to `shape`, and nothing that would tie two specimens together.
@@ -277,7 +267,7 @@ fn profile_for(base: &SupportProfile, shape: &TipShape) -> SupportProfile {
     profile.tip.contact_depth_mm = shape.bite_mm;
     profile.top.length_mm = shape.cone_mm;
     profile.middle.diameter_mm = shape.join_mm;
-    profile.bottom.lower_diameter_mm = profile.bottom.lower_diameter_mm.max(shape.join_mm);
+    profile.bottom.lower_diameter_mm = profile.bottom.lower_diameter_mm.max(2.0 * shape.join_mm);
     profile
 }
 
@@ -510,29 +500,63 @@ mod tests {
     }
 
     #[test]
-    fn a_raft_holds_every_specimen_and_leaves_the_plate_open_between_them() {
-        let middles = [
-            Vec2::new(0.0, 0.0),
-            Vec2::new(PITCH_MM, 0.0),
-            Vec2::new(0.0, PITCH_MM),
-            Vec2::new(PITCH_MM, PITCH_MM),
-        ];
-        let bars = raft_bars(Vec2::splat(-10.0), Vec2::splat(PITCH_MM + 10.0), &middles);
+    fn ties_reach_every_specimen_and_never_join_two_rows() {
+        let rows = [0.0, PITCH_MM];
+        let bars = ties(-RULER_OFFSET_MM, PITCH_MM, &rows);
         let covered = |at: Vec2| {
             bars.iter()
                 .any(|[low, high]| at.cmpge(*low).all() && at.cmple(*high).all())
         };
+        let middles = [0.0, PITCH_MM].map(|x| rows.map(|y| Vec2::new(x, y)));
         assert!(
-            middles.iter().all(|&at| covered(at)),
-            "a bar must run under each specimen's middle"
+            middles.iter().flatten().all(|&at| covered(at)),
+            "a tie must run under each specimen's middle"
         );
         assert!(
-            !covered(Vec2::splat(PITCH_MM / 2.0)) && !covered(Vec2::splat(-5.0)),
-            "the plate must stay open between the specimens and between them and the frame"
+            covered(Vec2::new(-RULER_OFFSET_MM, 0.0)),
+            "each tie must start on the rail"
         );
         assert!(
-            covered(Vec2::splat(-11.5)),
-            "the frame must run 2 mm past the block's bounds"
+            !covered(Vec2::new(0.0, PITCH_MM / 2.0))
+                && !covered(Vec2::new(PITCH_MM, PITCH_MM / 2.0)),
+            "nothing may join two rows, or the ties close a ring on the plate"
+        );
+    }
+
+    #[test]
+    fn tied_specimens_stand_on_the_plate_as_untied_ones_do() {
+        let ball = "[[shape]]\nname = \"t\"\ntip_mm = 0.4\njoin_mm = 1.0\ncone_mm = 2.0\nbite_mm = 0.0\n\
+            [[block]]\nname = \"b\"\nbody = \"ball\"\nholders = [1]\n";
+        let bounds = |tied: bool| {
+            let mut spec: Spec = toml::from_str(ball).expect("the spec is well formed");
+            spec.tied = tied;
+            let built = build(&spec, &SupportProfile::default(), 0.05, Vec2::splat(50.0))
+                .expect("a ball on one tip always stands");
+            let mesh = coupon(&spec, &built, Vec2::splat(50.0)).expect("one block has rails");
+            let bounds = mesh.aabb().expect("a coupon has parts");
+            (bounds.mins.z, bounds.maxs.z)
+        };
+        assert_eq!(
+            bounds(true),
+            bounds(false),
+            "ties must lie on the plate under the pads, lifting nothing"
+        );
+    }
+
+    #[test]
+    fn a_coupon_pillar_flares_to_twice_its_width_at_the_foot() {
+        let shape = TipShape {
+            name: "t".to_owned(),
+            tip_mm: 0.6,
+            join_mm: 1.6,
+            cone_mm: 2.0,
+            bite_mm: 0.0,
+        };
+        let profile = profile_for(&SupportProfile::default(), &shape);
+        assert!(
+            profile.bottom.lower_diameter_mm >= 3.2,
+            "a 1.6 mm pillar must flare to 3.2 mm, so it breaks at the tip, not the foot; got {}",
+            profile.bottom.lower_diameter_mm
         );
     }
 
