@@ -57,13 +57,17 @@ on `accent`.
 `theme::Scene` is the other half of the tokens: the cool resin of the model (`object`), the
 warm grey `support` and a `support_tint` per group after it, `selected`, `unsound`,
 the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
-with, `painted` and `blocked`, the rose `shown` a clean surface keeps supports off, the `fault` the Repair tool marks the finding in view with and the darker `fault_rest` the others, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
+with, `painted` and `blocked`, the rose `shown` a clean surface keeps supports off, the `fault` the Repair tool marks the finding in view with and the `fault_rest` the others, nearer the plate than it, the magenta `fault_picked` of an open edge picked to be bridged, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
 volume, the full red `meets` of the seam where models meet, the `gizmo` handles, the plate's `grid_minor` and `grid_major`, the translucent
 `plate_border` and `volume`, the `plate` the plate is filled with, the dashed `section_frame`, the three `plate_axis` arrows, the
 `shadow` the models cast, and the `light` they are lit by: a sky and a ground, a key and a
 fill, with the directions the two lights travel. It is separate from the `Palette` because
 none of it is window chrome and the luminance ladder above does not apply.
+
+The light `Scene` keeps each dark token's OKLCH hue at a lower lightness. A model, picked or
+unsound, stands 3:1 off the light plate (tested); every mark parts from the model, lit as
+the shader lights it, about as far as under the dark one.
 
 Two numbers stand beside them: `SEEN_THROUGH`, how much of itself a surface keeps at most
 when the viewport is drawing the models through, which is the x-ray view in `viewport.md`;

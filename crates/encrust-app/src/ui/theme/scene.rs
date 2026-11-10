@@ -16,7 +16,8 @@ pub struct Scene {
     pub support: Color32,
     /// A model or a support in the selection.
     pub selected: Color32,
-    /// A mesh that could not be oriented outward.
+    /// A mesh that could not be oriented outward: raspberry, apart from the reds of an
+    /// overhang and of what stands past the build volume.
     pub unsound: Color32,
     /// A hollowing blocker: a marker the user placed, not geometry that is printed.
     /// Translucent and apart from every colour a model is drawn in, so it never reads as
@@ -47,7 +48,8 @@ pub struct Scene {
     /// An open edge picked by hand to be bridged: magenta, opposite the fault's
     /// yellow-green, so a pick reads apart from the edges it was picked among.
     pub fault_picked: Color32,
-    /// The face a cut leaves behind, flat-lit. See `docs/decisions/0062`.
+    /// The face a cut leaves behind, flat-lit: cream, apart from the amber of a picked
+    /// model and the violet of a blocker under it. See `docs/decisions/0062`.
     pub section_cap: Color32,
     /// What the inside of a model shows as, through a cut or a drain hole.
     pub section_wash: Color32,
@@ -76,7 +78,8 @@ pub struct Scene {
     pub label: Color32,
     /// The brackets on the corners of a picked model's bounds.
     pub bounds: Color32,
-    /// The flat face Orient to Face would lay on the plate, over the model.
+    /// The flat face Orient to Face would lay on the plate, over the model: apart from the
+    /// amber of the picked model it is usually laid over.
     pub facet: Color32,
     /// Where the Cut tool's plane crosses the model: darker than the selection it is
     /// traced over, and apart from the red that marks a model past the build volume.
@@ -108,17 +111,17 @@ pub(super) const DARK: Scene = Scene {
     object: from_rgb(core_thumbnail::RESIN),
     support: from_rgb(core_thumbnail::SUPPORT),
     selected: Color32::from_rgb(0xff, 0xc1, 0x5a),
-    unsound: Color32::from_rgb(0xe0, 0x44, 0x62),
+    unsound: Color32::from_rgb(0xb5, 0x46, 0x9a),
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
     trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     reference: Color32::from_rgb(0x9a, 0x9d, 0xa3),
-    painted: Color32::from_rgb(0x59, 0xb8, 0x94),
+    painted: Color32::from_rgb(0x6f, 0xd3, 0x9a),
     blocked: Color32::from_rgb(0xa7, 0x64, 0xd6),
     shown: Color32::from_rgb(0xf2, 0x8a, 0xae),
     fault: Color32::from_rgb(0xc8, 0xf0, 0x3c),
     fault_rest: Color32::from_rgb(0x7d, 0x92, 0x2c),
     fault_picked: Color32::from_rgb(0xff, 0x4f, 0xc8),
-    section_cap: Color32::from_rgb(0xff, 0xb1, 0x84),
+    section_cap: Color32::from_rgb(0xf2, 0xe6, 0xd0),
     section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
     overhang: Color32::from_rgb(0xf0, 0x61, 0x40),
     outside: Color32::from_rgb(0xe0, 0x2f, 0x2f),
@@ -140,7 +143,7 @@ pub(super) const DARK: Scene = Scene {
     },
     label: Color32::from_rgba_premultiplied(0x96, 0x9b, 0xa6, 0xc8),
     bounds: Color32::from_rgb(0xf2, 0xf2, 0xf2),
-    facet: Color32::from_rgba_premultiplied(0xd9, 0x6b, 0x33, 0xd9),
+    facet: Color32::from_rgba_premultiplied(0xce, 0xce, 0xce, 0xd9),
     cut_line: Color32::from_rgb(0xa8, 0x3a, 0x12),
     plate_axis: super::palette::DARK.axis,
     gizmo: [
@@ -148,24 +151,24 @@ pub(super) const DARK: Scene = Scene {
         Color32::from_rgb(0x5f, 0xe0, 0x5f),
         Color32::from_rgb(0x4f, 0xa3, 0xff),
     ],
-    gizmo_hot: Color32::from_rgb(0xff, 0xe0, 0x66),
+    gizmo_hot: Color32::from_rgb(0xff, 0xff, 0xff),
 };
 
-/// The viewport under the light palette: the same resin and marks, a pale plate, darker
-/// lines and handles so they still read on it.
+/// The viewport under the light palette: each mark keeps its dark hue, darker so it reads
+/// on the pale plate, and a model, picked or unsound, stays 3:1 off it.
 pub(super) const LIGHT: Scene = Scene {
-    object: Color32::from_rgb(0x2f, 0x7e, 0xa3),
-    support: Color32::from_rgb(0xa2, 0xa8, 0xb0),
-    selected: Color32::from_rgb(0xc4, 0x6c, 0x00),
-    unsound: Color32::from_rgb(0xb8, 0x11, 0x3f),
-    painted: Color32::from_rgb(0x3f, 0x9e, 0x7c),
-    blocked: Color32::from_rgb(0x96, 0x58, 0xc8),
-    shown: Color32::from_rgb(0xd0, 0x5a, 0x86),
-    fault: Color32::from_rgb(0x6e, 0x9a, 0x00),
-    fault_rest: Color32::from_rgb(0xa9, 0xbd, 0x63),
-    fault_picked: Color32::from_rgb(0xe0, 0x3a, 0xae),
-    overhang: Color32::from_rgb(0xd9, 0x48, 0x1f),
-    outside: Color32::from_rgb(0xd4, 0x2a, 0x2a),
+    object: Color32::from_rgb(0x33, 0x70, 0x8c),
+    support: Color32::from_rgb(0xa9, 0x9c, 0x88),
+    selected: Color32::from_rgb(0xb0, 0x7a, 0x12),
+    unsound: Color32::from_rgb(0x7e, 0x1f, 0x5c),
+    painted: Color32::from_rgb(0x2f, 0xc4, 0xa0),
+    blocked: Color32::from_rgb(0x7a, 0x2f, 0xc0),
+    shown: Color32::from_rgb(0xc9, 0x41, 0x6a),
+    fault: Color32::from_rgb(0x78, 0xb8, 0x14),
+    fault_rest: Color32::from_rgb(0xdf, 0xe2, 0xb8),
+    fault_picked: Color32::from_rgb(0xe8, 0x3a, 0xd8),
+    overhang: Color32::from_rgb(0xf0, 0x4a, 0x1e),
+    outside: Color32::from_rgb(0xb0, 0x10, 0x30),
     meets: Color32::from_rgb(0xe0, 0x10, 0x10),
     grid_minor: Color32::from_rgb(0xd6, 0xdc, 0xe3),
     grid_major: Color32::from_rgb(0xb3, 0xbc, 0xc7),
@@ -176,6 +179,8 @@ pub(super) const LIGHT: Scene = Scene {
     shadow: Color32::from_black_alpha(0x40),
     label: Color32::from_rgba_premultiplied(0x4a, 0x51, 0x5b, 0xc8),
     bounds: Color32::from_rgb(0x44, 0x4c, 0x57),
+    facet: Color32::from_rgba_premultiplied(0xca, 0x4c, 0x24, 0xd9),
+    cut_line: Color32::from_rgb(0x5a, 0x0f, 0x08),
     plate_axis: super::palette::LIGHT.axis,
     gizmo: [
         Color32::from_rgb(0xe0, 0x3a, 0x3a),
