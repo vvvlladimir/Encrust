@@ -6,13 +6,13 @@ kind but peel and thin as `assets/recipes/fix-issues.toml` lays them out: ADR 04
 
 | Issue | Buttons | Call |
 |---|---|---|
-| Past the build volume, in the inset, meeting | Place on the plate | `core_plate::turned_onto`, `move_clear`, then `arrange` where no clear place is left |
-| Larger than the build volume | Fit the volume | the Position tool's |
+| Past the build volume, in the inset, meeting | Move to free space | `core_plate::turned_onto`, `move_clear`, then `arrange` where no clear place is left |
+| Larger than the build volume | Scale to fit | the Position tool's |
 | Meeting | Combine | opens Combine on the pair listed first |
 | Hollow with no drain hole | Drill drain holes | Drain's Auto on those models |
 | Suction cup | Drill them, Auto-orient | `core_engine::cup_vents`, the `auto` preset |
 | Weak neck | Support them, Auto-orient | `core_engine::lever_holds`, the `auto` preset |
-| Hard peel | Least peel, Lift settings | the least-peel preset; opens Print settings where the printer leaves the lift to the file |
+| Hard peel | Reduce peel, Lift settings | the least-peel preset; opens Print settings where the printer leaves the lift to the file |
 | Thin section | none | no operation thickens a model |
 
 ## Where a vent goes
@@ -59,5 +59,5 @@ A model no slide fits is first turned about the vertical by the least turn that 
 no clear place left has the whole plate packed instead (ADR 0418).
 
 A model the plate's 2 mm margin leaves no room for is placed flush with the edge rather than
-left where it stands, by Place on the plate and Arrange alike; the inset is never crossed
+left where it stands, by Move to free space and Arrange alike; the inset is never crossed
 (ADR 0415).

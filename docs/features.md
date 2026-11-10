@@ -246,13 +246,13 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
 - Check keeps each kind of issue on a card of its own, with its rows and the buttons that
-  answer it: **In the way**, **Keeps resin**, then in the layers **Islands**, **Suction cups**,
+  answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
   **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
   card to what it did, with Undo on the latest, and opens the next. What a fix could not reach
   stays on the card with the reason. **Fix all** at the foot takes every automatic answer on
   the whole plate in a safe order, as one undo and with Cancel; `--recipe fix-issues` does the
   same on the command line. The arrows step through every issue, of the plate and of the layers
-  alike, and go round. Place on the plate and Arrange keep 2 mm from the plate's edge, and stand
+  alike, and go round. Move to free space and Arrange keep 2 mm from the plate's edge, and stand
   a model flush with it where that is all the room there is.
 
 **Many models:**
@@ -685,9 +685,9 @@ smoothing, not the original model.
   with no wall thin enough and a neck with no underside to stand on are left to you, counted.
   A cup is only named when a full vacuum in it would pull 10 N or more. Thin
   sections have no fix here: nothing thickens a model.
-- **Fix the plate:** Place on the plate moves only the models in the way, turns one longer
+- **Fix the plate:** Move to free space moves only the models in the way, turns one longer
   than the plate about the vertical by the least that fits it, and packs the whole plate when
-  no clear place is left; Fit the volume scales a model too large for it, Combine opens on two models that meet, and
+  no clear place is left; Scale to fit scales a model too large for it, Combine opens on two models that meet, and
   Drill drain holes runs Drain's Auto on a hollow model with no way out.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
