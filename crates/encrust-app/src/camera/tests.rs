@@ -51,6 +51,54 @@ fn zooming_in_never_reaches_the_target() {
     assert!(camera.distance_mm >= MIN_DISTANCE_MM);
 }
 
+fn on_screen(camera: &OrbitCamera, point: Vec3) -> Vec2 {
+    camera.view_projection(1.5).project_point3(point).truncate()
+}
+
+#[test]
+fn zooming_at_a_point_holds_it_where_it_stands_on_screen() {
+    let anchor = Vec3::new(40.0, -25.0, 12.0);
+    for orthographic in [false, true] {
+        let mut camera = OrbitCamera {
+            orthographic,
+            ..OrbitCamera::default()
+        };
+        let before = on_screen(&camera, anchor);
+        camera.zoom_at(0.5, anchor);
+        let after = on_screen(&camera, anchor);
+        assert!(
+            before.abs_diff_eq(after, 1e-4),
+            "orthographic {orthographic}: {anchor} stays at {before}, got {after}"
+        );
+        assert!((camera.distance_mm - 150.0).abs() < 1e-3, "half of 300 mm");
+    }
+}
+
+#[test]
+fn zooming_at_a_point_stops_where_zoom_does_and_moves_the_target_as_far() {
+    let anchor = Vec3::new(10.0, 0.0, 0.0);
+    let mut camera = OrbitCamera {
+        distance_mm: 2.0,
+        ..OrbitCamera::default()
+    };
+    camera.zoom_at(0.1, anchor);
+    assert_eq!(camera.distance_mm, MIN_DISTANCE_MM);
+    assert!(
+        camera.target.abs_diff_eq(Vec3::new(5.0, 0.0, 0.0), 1e-5),
+        "halfway to the anchor, as the distance halved; got {}",
+        camera.target
+    );
+}
+
+#[test]
+fn zooming_out_at_a_point_keeps_the_target() {
+    let mut camera = OrbitCamera::default();
+    let target = camera.target;
+    camera.zoom_at(2.0, Vec3::new(40.0, -25.0, 12.0));
+    assert_eq!(camera.target, target, "zooming out scales about the target");
+    assert!((camera.distance_mm - 600.0).abs() < 1e-3, "twice 300 mm");
+}
+
 #[test]
 fn panning_moves_the_target_across_the_view_plane() {
     let mut camera = OrbitCamera::default();

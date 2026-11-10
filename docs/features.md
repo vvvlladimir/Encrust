@@ -718,6 +718,9 @@ shown: its exposure, the print time until it is done, the area it cures and the 
   by edge, in its form.
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
+- **Zoom to the cursor:** the wheel zooms in towards the model or the plate under the cursor,
+  so a small model beside a large one is reached without panning; over empty space it zooms
+  on the middle of the view. Zooming out keeps the centre of rotation where it is.
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Show as printed:** the printer put away and the models in a light studio, standing on a
   cutting mat with real things round them at their real size: a pen, a ruler, a one-euro

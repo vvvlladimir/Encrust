@@ -1,5 +1,5 @@
 use crate::relief::ReliefMode;
-use core_geometry::Vec2;
+use core_geometry::{Vec2, Vec3};
 use drawing::{ghost, paint_plate};
 use egui::{PointerButton, Sense};
 
@@ -37,7 +37,7 @@ use overlays::{draw_aimed, draw_cut_plane, draw_facet, draw_measure, draw_part_m
 use paint::{draw_brush, paint_stroke};
 use picking::{
     lay_face_under_cursor, mark_part_under_cursor, measure_under_cursor, point_at_face,
-    select_under_cursor, takes_the_pick,
+    select_under_cursor, takes_the_pick, zoom_anchor,
 };
 use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
 
@@ -85,7 +85,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     fly_to_marked(ui, window, rect);
     follow_turn(ui, window.view);
     let invert = window.machine.general.invert_zoom;
-    steer_camera(window.view, rect, &pointer, drag, painting, invert);
+    let anchor = pointer
+        .position
+        .filter(|_| pointer.zooms())
+        .and_then(|at| zoom_anchor(window, rect, egui::Pos2::new(at.x, at.y)));
+    steer_camera(window.view, rect, &pointer, drag, painting, invert, anchor);
     if gesture.clicked
         && let Some(position) = pointer.position
     {
@@ -123,8 +127,8 @@ fn follow_turn(ui: &egui::Ui, view: &mut View) {
     }
 }
 
-/// Orbits, pans and zooms the camera, the wheel the other way round when `invert`. Taking
-/// hold of it ends any swing still under way.
+/// Orbits, pans and zooms the camera, towards `anchor` when there is one and the wheel the
+/// other way round when `invert`. Taking hold of it ends any swing still under way.
 fn steer_camera(
     view: &mut View,
     rect: egui::Rect,
@@ -132,8 +136,9 @@ fn steer_camera(
     drag: Drag,
     painting: bool,
     invert: bool,
+    anchor: Option<Vec3>,
 ) {
-    let scrolled = pointer.over_viewport && pointer.scroll != 0.0;
+    let scrolled = pointer.zooms();
     if scrolled || (drag != Drag::None && !painting) {
         view.turn = None;
     }
@@ -153,7 +158,11 @@ fn steer_camera(
         } else {
             -pointer.scroll
         };
-        view.camera.zoom((scroll * ZOOM_PER_SCROLL_POINT).exp());
+        let factor = (scroll * ZOOM_PER_SCROLL_POINT).exp();
+        match anchor {
+            Some(anchor) => view.camera.zoom_at(factor, anchor),
+            None => view.camera.zoom(factor),
+        }
     }
 }
 

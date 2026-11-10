@@ -48,6 +48,11 @@ impl Pointer {
         }
     }
 
+    /// Whether the wheel turned over the view this frame, which zooms it.
+    pub fn zooms(&self) -> bool {
+        self.over_viewport && self.scroll != 0.0
+    }
+
     fn any_button_down(&self) -> bool {
         self.primary_down || self.pan_button_down
     }

@@ -3,7 +3,7 @@
 
 use core_supports::{Grab, Profiles, SupportTree, grab_along};
 
-use core_geometry::{PlacedHit, Ray, Vec3};
+use core_geometry::{Aabb, PlacedHit, Ray, Vec3, ray_aabb};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
@@ -53,6 +53,22 @@ pub(super) fn material_under(
 ) -> Option<(ObjectId, PlacedHit)> {
     let (scene, camera) = (&window.doc.scene, &window.view.camera);
     pick_material(scene, camera, viewport, cursor, section::shown(window))
+}
+
+/// The point a scroll zooms towards: the drawn face or cut cap under the cursor, else where
+/// its line of sight meets the plate, else `None`, and the zoom closes on the target.
+pub(super) fn zoom_anchor(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) -> Option<Vec3> {
+    if let Some((_, hit)) = material_under(window, viewport, cursor) {
+        return Some(hit.point);
+    }
+    let ray = ray_through(&window.view.camera, viewport, cursor)?;
+    let plate = &window.doc.plate;
+    let footprint = Aabb::new(Vec3::ZERO, Vec3::new(plate.x_mm, plate.y_mm, 0.0));
+    ray_aabb(&ray, &footprint).map(|t| ray.at(t))
 }
 
 /// Takes the flat face the click landed on, or the point, snapped the way the tool is set
@@ -306,6 +322,27 @@ mod tests {
         assert_eq!(group_met(&[false, false]), Some(0), "the nearer one");
         assert_eq!(group_met(&[true, false]), Some(1), "the one behind it");
         assert_eq!(group_met(&[true, true]), None);
+    }
+
+    /// BUG: the cap was no surface, so the zoom closed on the plate under it and a notch
+    /// carried the eye through the cap the cursor was on.
+    #[test]
+    fn a_scroll_over_a_cut_zooms_towards_its_cap() {
+        let mut doc = crate::state::Doc::default();
+        let (low, high) = (Vec3::new(50.0, 20.0, 0.0), Vec3::new(100.0, 60.0, 20.0));
+        doc.scene = crate::scene::fixtures::scene_of_boxes(&[(low, high)]);
+        let mut parts = crate::panels::fixtures::Parts::of(doc, crate::workspace::Tool::Position);
+        parts.view.section.height_mm = Some(10.0);
+        parts.view.camera.target = Vec3::new(75.0, 40.0, 10.0);
+        parts.view.camera.distance_mm = 200.0;
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+
+        let anchor = zoom_anchor(&parts.window(), viewport, viewport.center())
+            .expect("the middle of the view is on the cut box");
+        assert!(
+            anchor.abs_diff_eq(Vec3::new(75.0, 40.0, 10.0), 1e-2),
+            "the cap at 10 mm where the camera looks, got {anchor}"
+        );
     }
 
     #[test]
