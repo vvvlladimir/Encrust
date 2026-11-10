@@ -22,7 +22,7 @@ pub(crate) fn neck_stress_mpa(force_n: f64, lever_mm: f64, neck_mm2: f64) -> f64
 }
 
 /// How many supports of tip `tip_mm2` around the piece of `lever` bring its neck under the
-/// limit with [`NECK_MARGIN`] to spare, at most [`MOST_NECK_HOLDS`]; none for another kind.
+/// limit with a margin to spare, at most [`MOST_NECK_HOLDS`]; none for another kind.
 pub fn holds_for_lever(lever: &RiskKind, tip_mm2: f32) -> usize {
     let RiskKind::Lever {
         lever_mm,
