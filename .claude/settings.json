@@ -58,6 +58,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/i18n-pass.sh check",
+            "timeout": 10,
+            "statusMessage": "Checking the strings had their language pass"
+          }
+        ]
+      }
     ]
   }
 }
