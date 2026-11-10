@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cure::Cured;
 use crate::shape::{Kind, Limits, Shape};
+use crate::strengthen::Strengthened;
 use crate::tips::{self, Tips};
 
 const SCHEMA: u32 = 3;
@@ -43,6 +44,9 @@ pub struct Row {
     pub tips: Tips,
     /// Densities tried below and above the profile's, as a share of it.
     pub sweep: Vec<SweepRow>,
+    /// What `--strengthen` changed, when asked.
+    #[serde(default)]
+    pub strengthened: Option<Strengthened>,
     /// Limits the corpus sets for this model that the run broke.
     pub broken: Vec<String>,
     pub seconds: f64,
@@ -288,6 +292,12 @@ pub fn print_row(row: &Row) {
         cure.layers, cure.hardest_pull_n, cure.peels, cure.cups, cure.thins,
     );
     tips::print(&row.tips);
+    if let Some(done) = row.strengthened {
+        println!(
+            "- strengthened: {} rounds, {} tips thickened, {} added",
+            done.rounds, done.thickened, done.added
+        );
+    }
     print_sweep(row);
     for broken in &row.broken {
         println!("- EXPECTED: {broken}");

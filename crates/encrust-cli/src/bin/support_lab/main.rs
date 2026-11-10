@@ -9,6 +9,7 @@ mod load;
 mod report;
 mod shape;
 mod stand;
+mod strengthen;
 mod tips;
 
 use std::path::{Path, PathBuf};
@@ -62,6 +63,10 @@ struct Args {
     /// holds. Slow: a full cure each.
     #[arg(long)]
     sweep: bool,
+    /// Strengthen each tip under the wanted margin, in a few rounds: a heavier shape, or a
+    /// neighbour once it is the heaviest.
+    #[arg(long)]
+    strengthen: bool,
     /// Write each supported model and markers at what the bench names into this folder.
     #[arg(long)]
     export: Option<PathBuf>,
@@ -105,6 +110,7 @@ struct Setup {
     limits: shape::Limits,
     neck_mpa: f32,
     wall_mm: Option<f32>,
+    strengthen: bool,
 }
 
 fn main() -> Result<ExitCode> {
@@ -125,6 +131,7 @@ fn main() -> Result<ExitCode> {
         },
         neck_mpa: args.neck_mpa.max(NECK_LIMIT_MPA as f32),
         wall_mm: args.hollow_wall_mm,
+        strengthen: args.strengthen,
     };
     let asked = asked(&args, &catalogue)?;
     if let (Some(path), Some(spec)) = (&args.coupon, &args.coupon_spec) {
@@ -238,6 +245,7 @@ fn bench(entry: &Entry, id: &str, asked: &SupportPlan, setup: &Setup, args: &Arg
         cure: CureRow::default(),
         tips: tips::Tips::default(),
         sweep: Vec::new(),
+        strengthened: None,
         broken: Vec::new(),
         seconds: 0.0,
         stages_s: [0.0; 3],
@@ -269,6 +277,7 @@ fn measure(
     row.cure = CureRow::of(&cured, setup.neck_mpa);
     row.tips = tips::read(&supported, &setup.printer, &setup.material, setup.neck_mpa)?;
     row.stages_s = [supported.place_s, supported.grow_s, cured.seconds];
+    row.strengthened = supported.strengthened;
     row.broken = broken(&entry.expect, &shape);
     if let Some(dir) = &args.export {
         let stem = format!("{}-{}", row.model, row.profile);
@@ -296,7 +305,16 @@ fn run(
     setup: &Setup,
 ) -> Result<(stand::Supported, shape::Shape, cure::Cured)> {
     let layer_mm = setup.material.layer_height_mm;
-    let supported = stand::supported(posed.clone(), asked, setup.wall_mm, layer_mm)?;
+    let mut supported = stand::supported(posed.clone(), asked, setup.wall_mm, layer_mm)?;
+    if setup.strengthen {
+        supported.strengthened = Some(strengthen::strengthen(
+            &mut supported,
+            asked,
+            &setup.printer,
+            &setup.material,
+            setup.neck_mpa,
+        )?);
+    }
     let shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
     let cured = cure::cure(
         &supported.model,

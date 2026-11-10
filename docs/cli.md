@@ -819,7 +819,10 @@ given. `--auto` names automatic profiles to bench the same way, each support siz
 it holds as Generate does with Automatic on, and each tip read against the shape it was
 built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
 thick and stands its supports against the shell from outside. `--sweep` also supports each
-model at shares of the profile's density and reports the least that is enough. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
+model at shares of the profile's density and reports the least that is enough. `--strengthen`
+mends every tip under ×1.5 in up to three rounds, each a full read: a sized tip is built to the
+next heavier size, and one at the heaviest, or under one profile, gets a neighbour half a
+spacing away on the underside, seated no higher than where the tip is worst. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
 printed in them — balls, flat plates and leant plates on so many tips, each block tied

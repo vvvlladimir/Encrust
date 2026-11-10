@@ -84,14 +84,19 @@ Each layer's pull on a part goes through its tips read as **one section of separ
 area `A = Σ a_i`, second moments `I = Σ (a_i d_i d_iᵀ + a_i r_i² / 4)` about their centre. The
 highest stress in tip `i` is
 
-`F / A + κ·d_i + |κ| r_i + F ℓ (|I⁻¹ d_i| + r_i λ_max(I⁻¹))`, with `κ = I⁻¹ M`
+`F / A + κ·d_i + |κ| r_i + |P I⁻¹ d_i| + r_i σ_max(I⁻¹ P)`, with `κ = I⁻¹ M`
 
-`M` the pull's moment about that centre, `ℓ` half the piece's radius of gyration as for a neck,
-taken the way worst for that tip. One tip is exactly a neck's `F / A + F L / (π r³ / 4)`.
-Margin is the strength over this stress. It is rigid-body sharing: a thin arm is not softer
-than the body, and the film is not followed as it peels. `ℓ` comes from the polar gyration, so a
-long strip is levered across its width as if along its length: a first row under a leaning
-plate reads weaker than it is. Margins are read against `NECK_LIMIT_MPA` as calibrated below.
+`M` the pull's moment about that centre and `P = Σ F_p (J_p / 2)^½` the peel lever of each
+piece `p`, `J_p` its second moments about its own centre over its area: the film's last grip
+lies on that ellipse, far along a strip and near across it, at half the polar gyration on a
+disc or a square, as for a neck. The peel is taken the way worst for that tip. One tip is
+exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this stress. It is
+rigid-body sharing: a thin arm is not softer than the body, and the film is not followed as
+it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below.
+
+`--strengthen` mends what it reads: a tip under ×1.5 is built to the next heavier size, since
+the thinnest that print are already near the 0.4 mm floor; at the heaviest it gets a
+neighbour, which helps only if it seats before the tip's worst layer. Three rounds at most.
 
 ## Calibration
 

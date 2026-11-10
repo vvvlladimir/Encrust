@@ -12,7 +12,7 @@ use crate::shape;
 use crate::stand::Supported;
 
 /// The margin a tip is wanted to keep over what pulls on it.
-const WANTED_MARGIN: f32 = 1.5;
+pub const WANTED_MARGIN: f32 = 1.5;
 
 /// One model's supports, tip by tip.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

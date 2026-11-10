@@ -22,6 +22,7 @@ use encrust_cli::pipeline;
 use printer_profiles::{AutoProfile, BuildVolume, SupportProfile};
 
 use crate::corpus::{Pose, Up};
+use crate::strengthen::Strengthened;
 
 /// `plan` with `share` of its density, for a sweep of how densely it places.
 pub fn thinned(plan: &SupportPlan, share: f32) -> SupportPlan {
@@ -50,9 +51,33 @@ pub struct Supported {
     pub supports: Mesh,
     pub place_s: f64,
     pub grow_s: f64,
+    /// What `--strengthen` changed, when asked.
+    pub strengthened: Option<Strengthened>,
 }
 
 impl Supported {
+    /// Grows the trees again over `contacts` as they stand now, each to its group.
+    pub fn regrow(&mut self) -> Result<()> {
+        let started = Instant::now();
+        let bvh = Bvh::build(&self.model);
+        let placed = Placed::new(&self.model, &bvh, Transform::default());
+        let profiles =
+            Profiles::new(&self.profiles).context("a table of profiles is never empty")?;
+        let points: Vec<SupportPoint> = self
+            .contacts
+            .iter()
+            .zip(&self.groups)
+            .map(|(&contact, &group)| SupportPoint {
+                group,
+                ..SupportPoint::new(contact)
+            })
+            .collect();
+        self.trees = grow(&columns(&points, &placed, profiles), &placed, profiles);
+        self.supports = mesh_trees(&self.trees, &placed, profiles);
+        self.grow_s += started.elapsed().as_secs_f64();
+        Ok(())
+    }
+
     /// The profile the support at `contact`, an index into `contacts`, is built to.
     pub fn profile_of(&self, contact: usize) -> &SupportProfile {
         let group = self.groups.get(contact).copied().unwrap_or(0);
@@ -122,36 +147,24 @@ pub fn supported(
         model = transform_mesh(&model, Transform::from_translation(offset));
     }
     let (model, side) = printed(model, wall_mm)?;
-    let bvh = Bvh::build(&model);
     let started = Instant::now();
     let needs = needs_under(&model, &placing, asked.sizing(), side.as_ref(), layer_mm)?;
     let place_s = started.elapsed().as_secs_f64();
 
-    let started = Instant::now();
-    let placed = Placed::new(&model, &bvh, Transform::default());
-    let table = asked.table();
-    let profiles = Profiles::new(&table).context("a table of profiles is never empty")?;
-    let points: Vec<SupportPoint> = needs
-        .iter()
-        .map(|need| SupportPoint {
-            group: asked.group_of(need),
-            ..SupportPoint::new(need.contact)
-        })
-        .collect();
-    let trees = grow(&columns(&points, &placed, profiles), &placed, profiles);
-    let supports = mesh_trees(&trees, &placed, profiles);
-    let grow_s = started.elapsed().as_secs_f64();
-    Ok(Supported {
+    let mut supported = Supported {
         model,
-        contacts: points.iter().map(|point| point.contact).collect(),
-        groups: points.iter().map(|point| point.group).collect(),
+        contacts: needs.iter().map(|need| need.contact).collect(),
+        groups: needs.iter().map(|need| asked.group_of(need)).collect(),
         reasons: needs.iter().map(|need| need.reason).collect(),
-        profiles: table,
-        trees,
-        supports,
+        profiles: asked.table(),
+        trees: Vec::new(),
+        supports: Mesh::default(),
         place_s,
-        grow_s,
-    })
+        grow_s: 0.0,
+        strengthened: None,
+    };
+    supported.regrow()?;
+    Ok(supported)
 }
 
 /// `model` as it prints: its shell with a wall of `wall_mm`, cavity and infill counted

@@ -27,7 +27,7 @@ fn one_tip_reads_as_the_necks_tension_and_bending() {
         force_n: 2.0,
         moment_x: 2.0 * 4.0,
         moment_y: 2.0 * 2.0,
-        peel: 2.0 * 0.5,
+        peel: [2.0 * 0.5, 0.0, 2.0 * 0.5],
     };
     let area = PI * 0.04;
     let modulus = PI * 0.2f64.powi(3) / 4.0;
@@ -50,7 +50,7 @@ fn four_tips_under_a_centred_pull_share_it_equally() {
         force_n: 1.0,
         moment_x: 2.0,
         moment_y: 2.0,
-        peel: 0.0,
+        peel: [0.0; 3],
     };
     for tip in &tips {
         close(section.stress_mpa(tip, &pull), 1.0 / (4.0 * PI * 0.01));
@@ -123,6 +123,45 @@ fn a_slab_on_one_centred_tip_is_loaded_by_its_whole_section() {
         "a {side} mm square centred over one tip is {want} MPa, got {}",
         got.stress_mpa
     );
+}
+
+#[test]
+fn a_strip_on_a_row_of_tips_is_levered_across_by_its_width() {
+    // A 12 x 1 mm strip on a tip at each end. The row is weak across, but the film's last
+    // grip across a 1 mm strip is only w / sqrt(24) off its centre; along, L / sqrt(24).
+    let (length, width) = (12.0_f64, 1.0_f64);
+    let strip = at(
+        &cuboid(Vec3::ZERO, Vec3::new(length as f32, width as f32, 1.0)),
+        50.0,
+        50.0,
+        2.0,
+    );
+    let radius = 0.2_f64;
+    let seats = [51.0, 61.0].map(|x| Tip {
+        at_mm: [x, 50.5],
+        z_mm: 2.0,
+        radius_mm: radius,
+    });
+    let got = slab_loads(&strip, &seats);
+
+    let area = length * width;
+    let force = core_analysis::pull_n(area, area * (length * length + width * width) / 12.0);
+    let disc = PI * radius * radius;
+    let (along_mm4, across_mm4) = (
+        2.0 * disc * (25.0 + radius * radius / 4.0),
+        2.0 * disc * radius * radius / 4.0,
+    );
+    let (lever_along, lever_across) = (length / 24.0_f64.sqrt(), width / 24.0_f64.sqrt());
+    let bend = (lever_along / along_mm4).max(lever_across / across_mm4);
+    let want = force / (2.0 * disc) + force * (lever_along * 5.0 / along_mm4 + radius * bend);
+    for load in got {
+        assert!(load.seated, "both tips stand under the strip");
+        assert!(
+            (load.stress_mpa - want).abs() < 0.03 * want,
+            "each end of the strip is {want} MPa, got {}",
+            load.stress_mpa
+        );
+    }
 }
 
 #[test]

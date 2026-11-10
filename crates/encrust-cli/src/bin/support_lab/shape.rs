@@ -126,7 +126,7 @@ pub fn read(
     limits: &Limits,
     upright: Quat,
 ) -> Shape {
-    let spacing = profile.contact_spacing_mm / profile.density.max(1e-3).sqrt();
+    let spacing = spacing_mm(profile);
     let standing = standing(supported);
     let tips: Vec<Vec3> = standing.iter().map(|&at| supported.contacts[at]).collect();
     let section =
@@ -173,6 +173,11 @@ pub fn surface_radius_mm(profile: &SupportProfile) -> Scalar {
         }
         ContactShape::Sphere => contact,
     }
+}
+
+/// How far apart `profile` stands supports on a flat underside, millimetres.
+pub fn spacing_mm(profile: &SupportProfile) -> Scalar {
+    profile.contact_spacing_mm / profile.density.max(1e-3).sqrt()
 }
 
 /// Indices of the contacts some tree carries.

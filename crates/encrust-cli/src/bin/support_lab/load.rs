@@ -229,8 +229,9 @@ struct Pull {
     force_n: f64,
     moment_x: f64,
     moment_y: f64,
-    /// Force times how far off its centre the film's last grip puts it.
-    peel: f64,
+    /// Force times the ellipse its peel lever may point to, `[xx, xy, yy]`, N·mm: the film's
+    /// last grip off each piece's centre, far along its length and near across its width.
+    peel: [f64; 3],
 }
 
 impl Pull {
@@ -239,8 +240,22 @@ impl Pull {
         self.force_n += force;
         self.moment_x += force * f64::from(piece.centre_mm[0]);
         self.moment_y += force * f64::from(piece.centre_mm[1]);
-        self.peel += force * f64::from(piece.gyration_mm) / 2.0;
+        // Half the spread keeps a disc's lever at half its polar gyration, as calibrated.
+        let lever = root(piece.spread_mm2.map(|moment| f64::from(moment) / 2.0));
+        for (peel, lever) in self.peel.iter_mut().zip(lever) {
+            *peel += force * lever;
+        }
     }
+}
+
+/// The square root of a symmetric `[xx, xy, yy]` with no negative eigenvalue, in closed form.
+fn root([xx, xy, yy]: [f64; 3]) -> [f64; 3] {
+    let det = (xx * yy - xy * xy).max(0.0).sqrt();
+    let scale = (xx + yy + 2.0 * det).sqrt();
+    if scale <= 0.0 {
+        return [0.0; 3];
+    }
+    [(xx + det) / scale, xy / scale, (yy + det) / scale]
 }
 
 /// The tips under a part read as one section of separate discs.
@@ -250,8 +265,6 @@ struct Section {
     centre_mm: [f64; 2],
     /// The inverse of its second moments, `[xx, xy, yy]`, per mm^4.
     inverse: [f64; 3],
-    /// The inverse's largest eigenvalue, per mm^4: its weakest way to bend.
-    weakest: f64,
 }
 
 impl Section {
@@ -275,12 +288,10 @@ impl Section {
             yy += a * dy * dy + own;
         }
         let det = xx * yy - xy * xy;
-        let softest = (xx + yy) / 2.0 - ((xx - yy) / 2.0).hypot(xy);
         Self {
             area_mm2,
             centre_mm,
             inverse: [yy / det, -xy / det, xx / det],
-            weakest: 1.0 / softest,
         }
     }
 
@@ -303,10 +314,24 @@ impl Section {
         let (gx, gy) = self.turned(mx, my);
         let (dx, dy) = off(tip, self.centre_mm);
         let (tx, ty) = self.turned(dx, dy);
-        let peel = pull.peel * (tx.hypot(ty) + tip.radius_mm * self.weakest);
+        let [pxx, pxy, pyy] = pull.peel;
+        let toward = (pxx * tx + pxy * ty).hypot(pxy * tx + pyy * ty);
+        let [ixx, ixy, iyy] = self.inverse;
+        let bent = [
+            [ixx * pxx + ixy * pxy, ixx * pxy + ixy * pyy],
+            [ixy * pxx + iyy * pxy, ixy * pxy + iyy * pyy],
+        ];
+        let peel = toward + tip.radius_mm * largest_stretch(bent);
         (pull.force_n / self.area_mm2 + gx * dx + gy * dy + gx.hypot(gy) * tip.radius_mm + peel)
             .max(0.0)
     }
+}
+
+/// The most `matrix` lengthens a unit vector: its largest singular value, in closed form.
+fn largest_stretch([[a, b], [c, d]]: [[f64; 2]; 2]) -> f64 {
+    let sum = a * a + b * b + c * c + d * d;
+    let det = a * d - b * c;
+    ((sum + (sum * sum - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt()
 }
 
 fn off(tip: &Tip, centre_mm: [f64; 2]) -> (f64, f64) {

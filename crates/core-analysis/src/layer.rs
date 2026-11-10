@@ -24,9 +24,18 @@ pub struct Piece {
     pub centre_mm: [f32; 2],
     /// What the piece pulls on the film, newtons. See `docs/design/analysis.md`.
     pub pull_n: f32,
+    /// Second moments of the cured area about its centre over that area, `[xx, xy, yy]`,
+    /// mm²: how far it reaches each way.
+    pub spread_mm2: [f32; 3],
+}
+
+impl Piece {
     /// Radius of gyration of the cured area about its centre, millimetres: how far off
     /// that centre the pull acts while the film still holds half the piece.
-    pub gyration_mm: f32,
+    pub fn gyration_mm(&self) -> f32 {
+        let [xx, _, yy] = self.spread_mm2;
+        (xx + yy).max(0.0).sqrt()
+    }
 }
 
 /// A layer's lit pixels grouped into pieces: what the stack is read from.
@@ -377,6 +386,7 @@ struct Moments {
     x: f64,
     y: f64,
     xx: f64,
+    xy: f64,
     yy: f64,
 }
 
@@ -394,6 +404,7 @@ impl Moments {
         self.xx += down * (x1.powi(3) - x0.powi(3)) / 3.0;
         self.y += across * (y1 * y1 - y0 * y0) / 2.0;
         self.yy += across * (y1.powi(3) - y0.powi(3)) / 3.0;
+        self.xy += weight * (x1 * x1 - x0 * x0) * (y1 * y1 - y0 * y0) / 4.0;
     }
 
     fn merge(&mut self, other: &Self) {
@@ -401,23 +412,28 @@ impl Moments {
         self.x += other.x;
         self.y += other.y;
         self.xx += other.xx;
+        self.xy += other.xy;
         self.yy += other.yy;
     }
 
     fn piece(&self) -> Piece {
-        let polar = self.polar();
+        let [xx, xy, yy] = self.central();
+        let polar = (xx + yy).max(0.0);
         Piece {
             area_mm2: self.area as f32,
             centre_mm: [(self.x / self.area) as f32, (self.y / self.area) as f32],
             pull_n: pull_n(self.area, polar) as f32,
-            gyration_mm: (polar / self.area).sqrt() as f32,
+            spread_mm2: [xx, xy, yy].map(|moment| (moment / self.area) as f32),
         }
     }
 
-    /// Second moment of the area about its own centre, mm^4.
-    fn polar(&self) -> f64 {
-        let polar = self.xx + self.yy - (self.x * self.x + self.y * self.y) / self.area;
-        polar.max(0.0)
+    /// Second moments of the area about its own centre, `[xx, xy, yy]`, mm^4.
+    fn central(&self) -> [f64; 3] {
+        [
+            self.xx - self.x * self.x / self.area,
+            self.xy - self.x * self.y / self.area,
+            self.yy - self.y * self.y / self.area,
+        ]
     }
 }
 
