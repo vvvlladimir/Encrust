@@ -1,6 +1,6 @@
 # 0323. Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface
 
-- **Status:** Accepted
+- **Status:** Accepted; Auto's spacing and angle are superseded by 0425
 - **Date:** 2026-10-24
 
 ## Context

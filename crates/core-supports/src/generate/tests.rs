@@ -346,14 +346,20 @@ fn steps(step: Scalar, rise: Scalar) -> Mesh {
     merged(&lower, &upper)
 }
 
-/// What a run sized by the shipped automatic profile wants under `mesh`.
-fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
+/// The automatic profile that ships.
+fn shipped_auto() -> printer_profiles::AutoProfile {
     let catalogue = printer_profiles::Catalogue::bundled().expect("the shipped catalogue");
-    let auto = &catalogue
+    catalogue
         .autos()
         .next()
         .expect("an automatic profile ships")
-        .profile;
+        .profile
+        .clone()
+}
+
+/// What a run sized by the shipped automatic profile wants under `mesh`.
+fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
+    let auto = &shipped_auto();
     super::generate_supports(
         &slice(mesh),
         LAYER_HEIGHT_MM,
@@ -382,11 +388,16 @@ fn shelf_under_a_lean(shelf: bool) -> Mesh {
     merged(&merged(&base, &slab), &lean)
 }
 
-/// The contacts under the leaning face, above the shelf's edge, with why each is there.
+/// The contacts under the leaning face, above the shelf's edge and within the shipped reach
+/// of its step of some 11 mm³ as measured, with why each is there.
 fn under_the_lean(needs: &[Need]) -> Vec<Reason> {
+    let auto = &shipped_auto();
+    let size = auto.step_size(11.0).expect("the shelf is held as a step");
+    let reach_mm = auto.step_height_mm[size];
     needs
         .iter()
         .filter(|need| need.contact.y < -12.3 && need.contact.z > 6.2)
+        .filter(|need| need.contact.z - 5.0 <= reach_mm)
         .map(|need| need.reason)
         .collect()
 }
@@ -414,7 +425,7 @@ fn a_face_leaning_past_a_steps_angle_is_held_where_the_step_reaches_it() {
     let held = under_the_lean(&sized_needs_for(&shelf_under_a_lean(true)));
     assert!(
         !held.is_empty(),
-        "the 30 degree face over the shelf is held"
+        "the 30 degree face over the shelf is held within the step's reach"
     );
     assert!(
         held.iter()

@@ -231,7 +231,7 @@ mod tests {
         let mut auto = shipped();
         let mut placing =
             auto.placing_with(&SupportProfile::shipped("heavy").expect("the heavy preset ships"));
-        assert_eq!(placing.contact_spacing_mm, 1.8);
+        assert_eq!(placing.contact_spacing_mm, 3.3);
         assert_eq!(
             placing.middle,
             SupportProfile::shipped("heavy")
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn an_overhang_past_a_right_angle_is_refused() {
-        let source = SHIPPED.replace("max_overhang_deg = 40.0", "max_overhang_deg = 120.0");
+        let source = SHIPPED.replace("max_overhang_deg = 45.0", "max_overhang_deg = 120.0");
         assert!(matches!(
             AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml")),
             Err(ProfileError::OutOfOrder { .. })
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn a_spacing_of_zero_is_refused() {
-        let source = SHIPPED.replace("contact_spacing_mm = 1.8", "contact_spacing_mm = 0.0");
+        let source = SHIPPED.replace("contact_spacing_mm = 3.3", "contact_spacing_mm = 0.0");
         assert!(matches!(
             AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml")),
             Err(ProfileError::NonPositive { .. })

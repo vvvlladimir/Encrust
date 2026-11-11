@@ -36,7 +36,7 @@ contact_depth_mm = 0.0
 length_mm = 2.0
 
 [middle]
-diameter_mm = 1.2
+diameter_mm = 1.0
 
 [bottom]
 # cylinder, cone, prism or cube.

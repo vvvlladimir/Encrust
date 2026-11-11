@@ -482,7 +482,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   sizes every support by what it holds: the model above an island or overhang shared among
   the supports holding it, each one's share from 100 mm³ taking **Auto Medium**, from
   500 mm³ **Auto Heavy**, anything less **Auto Light**; so a few supports under much of a
-  heavy part are heavy, and the many under a wide base stay light. Each shape is a group of its own, tuned like any
+  heavy part are heavy, and the many under a wide base stay light. Auto places contacts
+  3.3 mm apart under a face looking straight down and 5.5 mm under a steep one, holds faces
+  leaning past 45°, and stands them on 1.0 mm pillars. Each shape is a group of its own, tuned like any
   other, and the notice says how many of each were placed. A shelf put out in one layer
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
