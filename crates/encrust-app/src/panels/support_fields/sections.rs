@@ -46,17 +46,16 @@ pub(super) fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option
     );
 }
 
-/// The thinnest a strut or trunk is built, the widest it grows, and the air it keeps from the
-/// model; between the two, what it carries and how tall it stands decide (ADR 0424).
+/// The column itself, the widest its trunk grows, and the air it keeps from the model.
 pub(super) fn main(
     ui: &mut egui::Ui,
     profile: &mut SupportProfile,
     saved: Option<&SupportProfile>,
 ) {
-    describe(ui, &tr!("support-pillar-help"));
+    describe(ui, &tr!("support-body-help"));
     mm(
         ui,
-        &tr!("support-least-diameter"),
+        &tr!("support-diameter"),
         was(saved, |p| p.middle.diameter_mm),
         &mut profile.middle.diameter_mm,
         COARSE_STEP,
@@ -198,7 +197,7 @@ pub(super) fn branching(
         return;
     }
     nested(ui, |ui| {
-        describe(ui, &tr!("support-merging-help"));
+        describe(ui, &tr!("support-branching-help"));
         branching_fields(ui, branching, saved);
     });
 }
@@ -228,6 +227,26 @@ pub(super) fn branching_fields(
         1.0..=40.0,
         1,
     );
+    mm(
+        ui,
+        &tr!("support-longest-strut"),
+        was(saved, |p| p.branching.max_strut_length_mm),
+        &mut branching.max_strut_length_mm,
+        COARSE_STEP,
+        1.0..=40.0,
+    );
+    let mut tips = branching.max_tips_per_trunk as f32;
+    number(
+        ui,
+        &tr!("support-tips-per-trunk"),
+        was(saved, |p| p.branching.max_tips_per_trunk as f32),
+        &mut tips,
+        "",
+        0.05,
+        1.0..=MAX_TIPS_PER_TRUNK as f32,
+        0,
+    );
+    branching.max_tips_per_trunk = tips.round() as u32;
 }
 
 /// The square grid trunks stand on, in place of where the tips merge; see
@@ -323,3 +342,7 @@ pub(super) fn raft_fields(ui: &mut egui::Ui, raft: &mut Raft, saved: Option<&Sup
         0.0..=75.0,
     );
 }
+
+/// The most tips the field lets one trunk carry; past this a profile merges without a
+/// limit in all but name.
+pub(super) const MAX_TIPS_PER_TRUNK: u32 = 64;

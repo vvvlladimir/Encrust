@@ -1,6 +1,6 @@
 # 0338. Keep a tree near its tips, and search far for ground before a front is given up
 
-- **Status:** Accepted; `max_strut_length_mm` and `max_tips_per_trunk` are superseded by 0424
+- **Status:** Accepted
 - **Date:** 2026-10-24
 
 ## Context

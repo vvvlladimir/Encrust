@@ -381,7 +381,7 @@ fn sized_plan() -> SupportPlan {
 }
 
 #[test]
-fn a_trial_builds_supports_that_carry_little_to_an_automatic_profiles_lightest_shape() {
+fn a_trial_builds_each_support_to_the_shape_an_automatic_profile_sizes_it_to() {
     let bench = Bench::new();
     let sized = sized_plan();
     let lightest = SupportPlan::of(sized.placing());
@@ -400,9 +400,11 @@ fn a_trial_builds_supports_that_carry_little_to_an_automatic_profiles_lightest_s
         sized.contacts, lightest.contacts,
         "sizing changes what a support is built to, not where it goes"
     );
-    assert_eq!(
-        sized.supports_ml, lightest.supports_ml,
-        "the cap's weight alone sizes no support past the lightest shape"
+    assert!(
+        sized.supports_ml > lightest.supports_ml,
+        "the cap's weight sizes some supports past the lightest shape: {} ml against {} ml",
+        sized.supports_ml,
+        lightest.supports_ml
     );
 }
 

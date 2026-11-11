@@ -99,6 +99,48 @@ impl Load {
         }
         total
     }
+
+    /// What each of `marks` carries, cubic millimetres: the model above it shared with every
+    /// contact at or above it on its node and on what grew out of it, split as
+    /// [`Load::totals`] splits resin (ADR 0424).
+    pub(crate) fn shares(&self, marks: &[Mark]) -> Vec<Scalar> {
+        let totals = self.totals();
+        let mut on_node: Vec<Vec<f64>> = vec![Vec::new(); self.nodes.len()];
+        for mark in marks {
+            on_node[mark.node as usize].push(mark.under_mm3);
+        }
+        for unders in &mut on_node {
+            unders.sort_by(f64::total_cmp);
+        }
+        let beyond = self.held_beyond(&on_node);
+        marks
+            .iter()
+            .map(|mark| {
+                let unders = &on_node[mark.node as usize];
+                let level = unders.partition_point(|under| *under < mark.under_mm3);
+                let holding = (unders.len() - level) as f64 + beyond[mark.node as usize];
+                mark.above_mm3(&totals) / holding.max(1.0) as Scalar
+            })
+            .collect()
+    }
+
+    /// How many contacts stand on what grew out of each node, each shared out as resin is.
+    fn held_beyond(&self, on_node: &[Vec<f64>]) -> Vec<f64> {
+        let mut held: Vec<f64> = on_node.iter().map(|unders| unders.len() as f64).collect();
+        for (index, node) in self.nodes.iter().enumerate().rev() {
+            if node.parents.is_empty() {
+                continue;
+            }
+            let share = held[index] / node.parents.len() as f64;
+            for parent in &node.parents {
+                held[*parent as usize] += share;
+            }
+        }
+        held.iter()
+            .zip(on_node)
+            .map(|(held, own)| held - own.len() as f64)
+            .collect()
+    }
 }
 
 impl Mark {
@@ -145,6 +187,44 @@ mod tests {
             "both arms above the second layer"
         );
         assert_eq!(left.above_mm3(&totals), 3.0, "the left arm's last layer");
+    }
+
+    #[test]
+    fn a_contact_shares_what_stands_above_it_with_every_contact_over_it() {
+        // A column of ten layers of 4: contacts on the first, fifth and ninth layers.
+        let mut load = begun(&[4]);
+        let mut marks = vec![load.mark(0).expect("one piece")];
+        for layer in 1..10 {
+            load.climb(Some(&[vec![0]]), &[4]);
+            if layer == 4 || layer == 8 {
+                marks.push(load.mark(0).expect("one piece"));
+            }
+        }
+        let shares = load.shares(&marks);
+        assert_eq!(
+            shares,
+            [12.0, 10.0, 4.0],
+            "36 mm³ over three, 20 over two, 4 over one"
+        );
+    }
+
+    #[test]
+    fn contacts_on_an_arm_share_the_load_of_the_body_under_it() {
+        // A body of 8 split into arms of 2 and 6; one contact on the body, one on each arm.
+        let mut load = begun(&[8]);
+        let body = load.mark(0).expect("one piece");
+        load.climb(Some(&[vec![0], vec![0]]), &[2, 6]);
+        let marks = [
+            body,
+            load.mark(0).expect("left"),
+            load.mark(1).expect("right"),
+        ];
+        let shares = load.shares(&marks);
+        assert_eq!(
+            shares[0],
+            8.0 / 3.0,
+            "the arms' 8 mm³ over the body's contact and both arms'"
+        );
     }
 
     #[test]

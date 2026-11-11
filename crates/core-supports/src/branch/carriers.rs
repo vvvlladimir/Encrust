@@ -49,7 +49,10 @@ impl Carriers {
             let profile = profiles.of(tree.group());
             let small = is_small(tree, profile);
             let index = self.trunks.len();
-            self.trunks.push((tree.tip_count(), profile.most_tips()));
+            self.trunks.push((
+                tree.tip_count(),
+                profile.branching.max_tips_per_trunk as usize,
+            ));
             let widest_mm = if small {
                 profile.small_pillar.radius_mm()
             } else {
@@ -102,14 +105,9 @@ impl Carriers {
 /// puts the point within a thousandth of a millimetre on any strut that is printed.
 pub(super) const MEETING_HALVINGS: u32 = 16;
 
-/// The highest point on `carrier` a strut from `from` carrying `tips` reaches within `profile`'s
-/// branch lean, or `None` when out of reach or it would come in under what the carrier stands on.
-pub(super) fn meeting_on(
-    from: Vec3,
-    tips: usize,
-    carrier: &Carrier,
-    profile: &SupportProfile,
-) -> Option<Vec3> {
+/// The highest point on `carrier` a strut from `from` reaches within `profile`'s branch lean, or
+/// `None` when out of reach or it would come in under what the carrier stands on.
+pub(super) fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option<Vec3> {
     let (top, bottom) = (carrier.top, carrier.bottom);
 
     // How much steeper than it has to be the strut to a point of the carrier comes in:
@@ -146,6 +144,6 @@ pub(super) fn meeting_on(
     let on_it = meet.z - bottom.z >= carrier.floor_mm;
     let strut_mm = (from - meet).length();
     let long_enough = strut_mm >= MIN_PILLAR_HEIGHT_MM;
-    let short_enough = profile.can_strut(strut_mm, tips);
+    let short_enough = strut_mm <= profile.branching.max_strut_length_mm;
     (leans_within && in_reach && on_it && long_enough && short_enough).then_some(meet)
 }

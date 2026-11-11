@@ -110,19 +110,6 @@ fn default_steep_contact_spacing_mm() -> f32 {
     3.3
 }
 
-/// How many times its tips' own section a strut or trunk carrying them is built to, so a tip
-/// tears at the part before anything under it breaks (`docs/decisions/0424`).
-pub const CARRYING_MARGIN: f32 = 1.5;
-
-/// How many times its own width a leaning strut may run: 6 mm at 1.2 mm, the longest strut
-/// shipped since fans of longer ones swayed (`docs/decisions/0338`, `0424`).
-pub const STRUT_SLENDERNESS: f32 = 5.0;
-
-/// The radius a body `length_mm` long needs to be no slenderer than `slenderness`, mm.
-fn slender_radius_mm(length_mm: f32, slenderness: f32) -> f32 {
-    length_mm.max(0.0) / slenderness / 2.0
-}
-
 /// A ceiling, in the degrees-from-vertical the overhang angle is measured in.
 const RIGHT_ANGLE_DEG: f32 = 90.0;
 
@@ -225,60 +212,18 @@ impl SupportProfile {
         }
     }
 
-    /// Radius a trunk `height_mm` tall carrying `tips` widens to at its base, mm.
+    /// Radius a trunk `height_mm` tall carrying `tips` widens to at its base, mm: as height
+    /// and load ask, within the cap and pillar width (`docs/decisions/0242`).
     pub fn trunk_base_radius_mm(&self, height_mm: f32, tips: usize) -> f32 {
-        self.carrying_radius_mm(height_mm, tips)
-    }
-
-    /// Radius a trunk `height_mm` tall carrying `tips` of this profile's tips is built to, mm:
-    /// so the tip tears first, no slenderer than a column may stand, within the pillar and
-    /// the widest trunk (`docs/decisions/0424`).
-    pub fn carrying_radius_mm(&self, height_mm: f32, tips: usize) -> f32 {
-        self.within(
-            self.strong_radius_mm(tips)
-                .max(slender_radius_mm(height_mm, TRUNK_SLENDERNESS)),
-        )
-    }
-
-    /// Radius a leaning strut `length_mm` long carrying `tips` is built to, mm: as a trunk,
-    /// but no slenderer than a strut that does not sway on the peel (`docs/decisions/0424`).
-    pub fn strut_radius_mm(&self, length_mm: f32, tips: usize) -> f32 {
-        self.within(self.strut_needs_mm(length_mm, tips))
-    }
-
-    /// Whether a leaning strut `length_mm` long carrying `tips` needs no more than the widest
-    /// trunk: one that would is better stood on a trunk of its own.
-    pub fn can_strut(&self, length_mm: f32, tips: usize) -> bool {
-        self.strut_needs_mm(length_mm, tips) <= self.widest_radius_mm()
-    }
-
-    /// The most tips one trunk carries before it would outgrow the widest trunk.
-    pub fn most_tips(&self) -> usize {
-        let contact = self.contact_radius_mm().max(1e-3);
-        let most = (self.widest_radius_mm() / contact).powi(2) / CARRYING_MARGIN;
-        (most.floor() as usize).max(1)
-    }
-
-    /// The widest a trunk or strut is built, mm: the cap, never under the pillar.
-    pub fn widest_radius_mm(&self) -> f32 {
-        (self.branching.max_trunk_diameter_mm / 2.0).max(self.pillar_radius_mm())
-    }
-
-    /// The section `tips` ask for on their own: half again theirs, mm of radius.
-    fn strong_radius_mm(&self, tips: usize) -> f32 {
-        self.contact_radius_mm() * (CARRYING_MARGIN * tips as f32).sqrt()
-    }
-
-    fn strut_needs_mm(&self, length_mm: f32, tips: usize) -> f32 {
-        self.strong_radius_mm(tips)
-            .max(slender_radius_mm(length_mm, STRUT_SLENDERNESS))
-    }
-
-    /// `radius_mm` no thinner than the pillar and no wider than the widest trunk.
-    fn within(&self, radius_mm: f32) -> f32 {
-        radius_mm
-            .max(self.pillar_radius_mm())
-            .min(self.widest_radius_mm())
+        let pillar = self.pillar_radius_mm();
+        let carried = (1..tips).fold(pillar, |radius, _| {
+            self.branching.merged_radius_mm(radius, pillar)
+        });
+        let slender = height_mm.max(0.0) / TRUNK_SLENDERNESS / 2.0;
+        carried
+            .max(slender)
+            .min(self.branching.max_trunk_diameter_mm / 2.0)
+            .max(pillar)
     }
 
     pub fn flare_lower_radius_mm(&self) -> f32 {

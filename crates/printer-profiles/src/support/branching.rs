@@ -22,9 +22,27 @@ pub struct Branching {
     pub max_angle_deg: f32,
     /// How far apart two tips may be and still be worth merging, millimetres.
     pub max_merge_distance_mm: f32,
-    /// The widest a trunk or strut grows, however tall it stands or much it carries,
-    /// millimetres: what bounds the tips one trunk takes. See `docs/decisions/0242`, `0424`.
+    /// How a trunk's base widens with its branches: radii combine as the root of the sum of their
+    /// powers. Two conserves cross-section, three volume.
+    pub trunk_exponent: f32,
+    /// The widest a trunk's base grows, however tall it stands or much it carries,
+    /// millimetres. See `docs/decisions/0242`.
     pub max_trunk_diameter_mm: f32,
+    /// The longest a leaning strut of a merge runs, millimetres: a longer one sways on the
+    /// peel, so its tips stand on trunks of their own. See `docs/decisions/0338`.
+    #[serde(default = "default_max_strut_length_mm")]
+    pub max_strut_length_mm: f32,
+    /// The most tips one trunk carries before its neighbours get trunks of their own.
+    #[serde(default = "default_max_tips_per_trunk")]
+    pub max_tips_per_trunk: u32,
+}
+
+pub(super) fn default_max_strut_length_mm() -> f32 {
+    6.0
+}
+
+pub(super) fn default_max_tips_per_trunk() -> u32 {
+    6
 }
 
 impl Default for Branching {
@@ -33,7 +51,10 @@ impl Default for Branching {
             enabled: true,
             max_angle_deg: 45.0,
             max_merge_distance_mm: 12.0,
+            trunk_exponent: 2.5,
             max_trunk_diameter_mm: 3.0,
+            max_strut_length_mm: default_max_strut_length_mm(),
+            max_tips_per_trunk: default_max_tips_per_trunk(),
         }
     }
 }
@@ -49,5 +70,15 @@ impl Branching {
     /// How much ground a strut covers per millimetre it descends.
     pub fn reach_per_drop(&self) -> f32 {
         self.max_angle_rad().tan()
+    }
+
+    /// Radius of a trunk that takes on `a` and `b`, millimetres.
+    pub fn merged_radius_mm(&self, a: f32, b: f32) -> f32 {
+        let power = self.trunk_exponent.max(1.0);
+        let merged = a.powf(power) + b.powf(power);
+        merged
+            .powf(1.0 / power)
+            .min(self.max_trunk_diameter_mm / 2.0)
+            .max(a.max(b))
     }
 }

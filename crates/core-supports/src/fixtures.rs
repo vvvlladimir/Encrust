@@ -89,7 +89,12 @@ pub fn profile() -> SupportProfile {
         },
         land_on_model: true,
         small_pillar: SmallPillar::default(),
-        branching: Branching::default(),
+        // Struts as long as the merge distance lets them run, so a test of how tips
+        // merge is not one of the limit on a strut.
+        branching: Branching {
+            max_strut_length_mm: 10.0,
+            ..Branching::default()
+        },
         raft: Raft::default(),
         bracing: Bracing::default(),
         z_lift_mm: 5.0,

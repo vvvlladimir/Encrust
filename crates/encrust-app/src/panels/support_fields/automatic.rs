@@ -84,29 +84,59 @@ pub fn islands(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&AutoP
     );
 }
 
-/// Where a step grows a size by the resin it puts out, how far above a step of each size its
-/// neighbourhood is held, and how far a face there may lean first; see `docs/decisions/0326`.
-pub fn steps(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&AutoProfile>) {
-    describe(ui, &tr!("support-steps-help"));
-    let sizes: [String; AUTO_SIZES] = std::array::from_fn(|at| (at + 1).to_string());
+/// Where an automatic profile moves between shapes (`shapes`, lightest first) against its
+/// shipped profile; a heavier shape never starts below a lighter one. See ADR 0325, 0424.
+pub fn sizes(
+    ui: &mut egui::Ui,
+    auto: &mut AutoProfile,
+    shipped: Option<&AutoProfile>,
+    shapes: &[String; AUTO_SIZES],
+) {
+    describe(ui, &tr!("support-sizes-help"));
+    let heavier = &shapes[1..];
+    let load = Measure {
+        label: |shape| tr!("support-size-share", shape = shape),
+        unit: tr!("unit-mm3"),
+        step: LOAD_STEP,
+        max: MAX_LOAD_MM3,
+        decimals: 0,
+    };
+    load.show(
+        ui,
+        heavier,
+        0.0,
+        &mut auto.share_mm3,
+        shipped.map(|auto| &auto.share_mm3[..]),
+    );
     // The first is the least step held as one at all, which stays in the profile's file.
     let step = Measure {
-        label: |size| tr!("support-step-size", size = size),
+        label: |shape| tr!("support-size-step", shape = shape),
         unit: tr!("unit-mm3"),
         step: COARSE_STEP,
         max: MAX_STEP_MM3,
         decimals: 1,
     };
-    let [least_step, larger_steps @ ..] = &mut auto.step_volume_mm3;
+    let [least_step, heavier_steps @ ..] = &mut auto.step_volume_mm3;
     step.show(
         ui,
-        &sizes[1..],
+        heavier,
         *least_step,
-        larger_steps,
+        heavier_steps,
         shipped.map(|auto| &auto.step_volume_mm3[1..]),
     );
+}
+
+/// How far above a step of each size its neighbourhood is held, and how far a face there
+/// may lean first; see `docs/decisions/0326`.
+pub fn steps(
+    ui: &mut egui::Ui,
+    auto: &mut AutoProfile,
+    shipped: Option<&AutoProfile>,
+    shapes: &[String; AUTO_SIZES],
+) {
+    describe(ui, &tr!("support-steps-help"));
     let height = Measure {
-        label: |size| tr!("support-step-reach", size = size),
+        label: |shape| tr!("support-step-height", shape = shape),
         unit: tr!("unit-mm"),
         step: COARSE_STEP,
         max: MAX_STEP_HEIGHT_MM,
@@ -114,7 +144,7 @@ pub fn steps(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&AutoPro
     };
     height.show(
         ui,
-        &sizes,
+        shapes,
         0.0,
         &mut auto.step_height_mm,
         shipped.map(|auto| &auto.step_height_mm[..]),
@@ -160,9 +190,10 @@ pub fn steadying(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&Aut
     );
 }
 
-/// One measure an automatic profile steps by, shown as the least of it each step up takes.
+/// One measure an automatic profile sizes by, shown as the least of it each heavier shape
+/// takes.
 pub(super) struct Measure {
-    /// The row's label, from the name of its step.
+    /// The row's label, naming the shape.
     pub(super) label: fn(String) -> String,
     pub(super) unit: String,
     pub(super) step: f64,
@@ -171,21 +202,21 @@ pub(super) struct Measure {
 }
 
 impl Measure {
-    /// A row per step of `steps`, each over `least` of it and none under `floor`, against
-    /// `shipped`. A step never starts below the one before.
+    /// A row per shape of `shapes`, each over `least` of it and none under `floor`, against
+    /// `shipped`. A heavier shape never starts below a lighter one.
     pub(super) fn show(
         &self,
         ui: &mut egui::Ui,
-        steps: &[String],
+        shapes: &[String],
         floor: f32,
         least: &mut [f32],
         shipped: Option<&[f32]>,
     ) {
-        for (at, name) in steps.iter().enumerate().take(least.len()) {
+        for (at, shape) in shapes.iter().enumerate().take(least.len()) {
             let floor = if at == 0 { floor } else { least[at - 1] };
             number(
                 ui,
-                &(self.label)(name.clone()),
+                &(self.label)(shape.clone()),
                 shipped.and_then(|shipped| shipped.get(at).copied()),
                 &mut least[at],
                 &self.unit,
@@ -202,14 +233,18 @@ impl Measure {
     }
 }
 
-/// Bounds on where an automatic profile steps up: an island as large as a thumbnail and a
-/// shelf as large as a plate.
+/// Bounds and step on where an automatic profile moves to a heavier shape: an island as
+/// large as a thumbnail, a part as heavy as a bust, and a shelf as large as a plate.
 pub(super) const MAX_ISLAND_MM2: f32 = 100.0;
+
+pub(super) const MAX_LOAD_MM3: f32 = 100_000.0;
 
 pub(super) const MAX_STEP_MM3: f32 = 1_000.0;
 
 /// How far above a step its neighbourhood may be held: past a model's own tip, nothing.
 pub(super) const MAX_STEP_HEIGHT_MM: f32 = 20.0;
+
+pub(super) const LOAD_STEP: f64 = 10.0;
 
 /// How far apart steadying supports may stand: a plate's width holds only a few.
 const MAX_STEADY_SPACING_MM: f32 = 40.0;

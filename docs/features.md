@@ -479,13 +479,16 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.
 - **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
-  builds every support as **Auto Light**, and as **Auto Medium** or **Auto Heavy** only
-  where what it carries asks for it (below). Each shape is a group of its own, tuned like
-  any other, and the notice says how many of each were placed. Faces leaning past 20° just
-  above a shelf put out in one layer are held with it, higher above a larger shelf — from
-  7 mm³ of resin, then 12 mm³. A gentle slope too shallow to sag — past 10° from vertical
+  sizes every support by what it holds: the model above an island or overhang shared among
+  the supports holding it, each one's share from 100 mm³ taking **Auto Medium**, from
+  500 mm³ **Auto Heavy**, anything less **Auto Light**; so a few supports under much of a
+  heavy part are heavy, and the many under a wide base stay light. Each shape is a group of its own, tuned like any
+  other, and the notice says how many of each were placed. A shelf put out in one layer
+  is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
+  above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
   — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
-  rock on the peel. A merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
+  rock on the peel. **Sizes**, at the foot of the shape mode, sets where each heavier shape
+  starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
   **Heavy** or a preset of your own instead, and supports are built to it. The preset in
   hand, the automatic profile and its edited numbers are saved with the project and
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
@@ -493,18 +496,17 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   added.
 - Every placement then reads what the film pulls on each tip, layer by layer, and
   strengthens a tip left with less than half again what it holds: Auto builds it one size
-  heavier, the only way a tip of its leaves the lightest shape, and at its heaviest, or under one preset, puts a second tip beside it on the same
+  heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
   underside, low enough to share the load before it peaks. Supports you placed are never
   changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.30 mm.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps
-  the least it can, a millimetre at a time. Tips merge only where one shared trunk takes
-  less resin than a column and a foot each. Every branch and trunk is built as wide as the
-  tips it carries need, half again their own section, a trunk no taller than 15 times its
-  width and a leaning branch no longer than 5, from **Least diameter** (0.6 mm in Auto's shapes) up to **Trunk cap**; a trunk takes
-  as many tips as the cap carries, 18 of Auto's 0.30 mm tips, so a tip breaks at the part
-  before anything under it does. Nothing carrying a load leans more than 45°. A tip's head meets its face square on wherever that is within 45° of straight
+  the least it can, a millimetre at a time. No strut of a merge runs
+  longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
+  per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
+  Trunks are cones sized by their height and load, and nothing carrying a load leans more
+  than 45°. A tip's head meets its face square on wherever that is within 45° of straight
   down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under
   a wall no longer runs out level. What is under it leans and bends.
 - The trunks are built in the background after every change, so the window keeps
@@ -583,8 +585,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 ### What a profile lets you shape
 - **Tip:** a plane or a sphere contact, with its diameter, contact spacing, how deep it
   bites into the part (nought centres the tip's rounded end on the surface), and clearance.
-- **Body:** least diameter, trunk cap, overhang angle, branch angle, branching on or off,
-  merge distance, maximum length, standing on the model on or off.
+- **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
+  longest strut, tips per trunk, maximum length, standing on the model on or off.
 - **Small pillar:** a separate thin shape for short supports from the part to the part.
   Tips that could each stand as one are not merged into a full support on the part. Each
   end is rounded and meets the part square on, leaving a round mark of the pillar's

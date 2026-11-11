@@ -208,7 +208,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0032](0032-layer-areas-are-read-as-grid-spans.md) | Layer areas are read as spans on a raster grid, not as polygons | Accepted |
 | [0033](0033-placement-reads-layers-in-parallel-blocks.md) | Placement reads and examines layers in parallel blocks | Accepted |
 | [0034](0034-overhangs-are-shaded-in-the-viewport.md) | Overhangs are shaded in the viewport shader, by face angle | Accepted |
-| [0040](0040-nearby-tips-merge-into-shared-trunks.md) | Nearby tips merge into shared trunks, greedily, highest meeting point first | Superseded by 0242 (the width of a merged trunk only); merging is held to a strut length and a tip count by 0338, to a strut's slenderness, the trunk cap and a saving of resin by 0424 |
+| [0040](0040-nearby-tips-merge-into-shared-trunks.md) | Nearby tips merge into shared trunks, greedily, highest meeting point first | Superseded by 0242 (the width of a merged trunk only); merging is held to a strut length and a tip count by 0338 |
 | [0041](0041-a-support-is-a-set-of-overlapping-tubes.md) | A support is meshed as overlapping closed tubes, not one welded solid | Accepted |
 | [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted; the tip shapes are superseded by 0243 |
 | [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted; supports passing through the raft superseded by 0266 |
@@ -235,18 +235,18 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
-| [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted; the load as a tip count through `trunk_exponent` is superseded by 0424 |
+| [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0339 |
 | [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0335 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
-| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0423 |
+| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0424 |
 | [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted; the steadying shape's 0.18 mm contact is superseded by 0422 |
 | [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted |
-| [0423](0423-an-automatic-tip-starts-lightest-and-is-sized-by-what-it-carries.md) | Build every automatic tip lightest, and size it by what it carries | Accepted |
-| [0424](0424-a-support-carries-its-tips-half-again-and-merges-where-it-saves-resin.md) | Size every strut and trunk by the tips it carries, and merge where it saves resin | Accepted |
+| [0423](0423-an-automatic-tip-starts-lightest-and-is-sized-by-what-it-carries.md) | Build every automatic tip lightest, and size it by what it carries | Superseded by 0424 |
+| [0424](0424-an-automatic-support-is-sized-by-its-share-of-what-it-holds.md) | Size each automatic support by its share of the model it holds | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
@@ -259,7 +259,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0335](0335-a-shipped-preset-lives-only-in-its-file.md) | Keep a shipped support preset only in its file | Accepted |
 | [0336](0336-one-card-makes-the-supports.md) | Make the supports in one card, its click modes in its heading | Accepted |
 | [0337](0337-a-support-is-checked-as-it-is-drawn.md) | Check a support as it is drawn, fill a beam with balls, and leave out what still meets the part | Accepted |
-| [0338](0338-a-tree-is-held-near-its-tips-and-searches-far-for-ground.md) | Keep a tree near its tips, and search far for ground before a front is given up | Accepted; `max_strut_length_mm` and `max_tips_per_trunk` are superseded by 0424 |
+| [0338](0338-a-tree-is-held-near-its-tips-and-searches-far-for-ground.md) | Keep a tree near its tips, and search far for ground before a front is given up | Accepted |
 | [0339](0339-only-a-tip-meets-the-model-square-on-and-seated.md) | Let only a tip meet the model: a half ball seated on its face, its head square on or behind a pin | Accepted |
 | [0340](0340-a-contact-a-head-cannot-reach-is-held-by-a-small-pillar.md) | Hold a contact a head cannot reach, and a short run between faces, by a small pillar square on both | Accepted |
 | [0341](0341-supports-are-drawn-round-filleted-and-shaded-smooth.md) | Draw supports round and filleted on twelve sides, end a buried strut flat, and shade them smooth | Accepted |

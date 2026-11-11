@@ -179,7 +179,7 @@ impl SupportTool {
     ) -> Status {
         let placements = self.cleared_for(scene, placements, side);
         match sizing {
-            Some((_, shapes)) => self.place_sized(placements, shapes, scene),
+            Some((auto, shapes)) => self.place_sized(placements, &auto, shapes, scene),
             None => {
                 let count = add_needs(scene, placements, |_| self.active);
                 Status::Info(tr!("supports-placed", count = count))
@@ -204,17 +204,18 @@ impl SupportTool {
         Self::on_its_side(placements, scene, side)
     }
 
-    /// Puts each need of `placements` in the group of the shape it is sized to, making
+    /// Puts each need of `placements` in the group of the shape `auto` sizes it to, making
     /// groups only for the shapes that hold something.
     fn place_sized(
         &mut self,
         placements: Vec<Placement>,
+        auto: &AutoProfile,
         shapes: [SupportProfile; SHAPES],
         scene: &mut Scene,
     ) -> Status {
         let mut sized = [0usize; SHAPES];
         for need in placements.iter().flat_map(|placement| &placement.needs) {
-            sized[need.size()] += 1;
+            sized[need.size_in(auto)] += 1;
         }
         let mut wanted = shapes.map(Some);
         for (shape, count) in wanted.iter_mut().zip(sized) {
@@ -223,7 +224,7 @@ impl SupportTool {
             }
         }
         let groups = self.groups_for(wanted, scene);
-        let count = add_needs(scene, placements, |need| groups[need.size()]);
+        let count = add_needs(scene, placements, |need| groups[need.size_in(auto)]);
         Status::Info(tr!(
             "supports-placed-sized",
             count = count,

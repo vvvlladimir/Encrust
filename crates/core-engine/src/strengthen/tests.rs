@@ -170,7 +170,7 @@ impl Slab {
         let middle = (bounds.mins + bounds.maxs) / 2.0;
         vec![Need::new(
             Vec3::new(middle.x, middle.y, bounds.mins.z),
-            Reason::Island { area_mm2: 0.0 },
+            Reason::POINT,
         )]
     }
 }
@@ -271,7 +271,7 @@ fn sizes_thicken_up_to_the_widest_and_never_a_steadying_support() {
         heavier,
         ..Need::new(Vec3::ZERO, reason)
     };
-    let point = Reason::Island { area_mm2: 0.0 };
+    let point = Reason::POINT;
     assert!(
         heavier(&plan, &need(point, 0)),
         "the lightest size has a wider one"

@@ -94,10 +94,8 @@ impl SupportPlan {
 
     /// The group of [`Self::table`] a support holding `need` is built to.
     pub fn group_of(&self, need: &Need) -> u16 {
-        match self.sizing() {
-            Some(_) => u16::try_from(need.size()).unwrap_or(0),
-            None => 0,
-        }
+        self.sizing()
+            .map_or(0, |auto| u16::try_from(need.size_in(auto)).unwrap_or(0))
     }
 }
 
@@ -162,7 +160,7 @@ pub fn stand_at(
     // An island of no area, which an automatic profile builds to its lightest shape.
     let needs: Vec<Need> = contacts
         .iter()
-        .map(|contact| Need::new(*contact, Reason::Island { area_mm2: 0.0 }))
+        .map(|contact| Need::new(*contact, Reason::POINT))
         .collect();
     grown(lifted_mm, &surface, &bvh, &needs, plan)
 }

@@ -49,8 +49,8 @@ pub struct TipRow {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Why {
-    Island { area_mm2: f32 },
-    Overhang { carried_mm3: f32 },
+    Island { area_mm2: f32, share_mm3: f32 },
+    Overhang { share_mm3: f32 },
     Step { new_mm3: f32 },
     Steady,
 }
@@ -58,8 +58,14 @@ pub enum Why {
 impl From<Reason> for Why {
     fn from(reason: Reason) -> Self {
         match reason {
-            Reason::Island { area_mm2 } => Self::Island { area_mm2 },
-            Reason::Overhang { carried_mm3 } => Self::Overhang { carried_mm3 },
+            Reason::Island {
+                area_mm2,
+                share_mm3,
+            } => Self::Island {
+                area_mm2,
+                share_mm3,
+            },
+            Reason::Overhang { share_mm3 } => Self::Overhang { share_mm3 },
             Reason::Step { new_mm3 } => Self::Step { new_mm3 },
             Reason::Steady => Self::Steady,
         }

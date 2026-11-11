@@ -813,18 +813,17 @@ tall trunks with nothing to brace them to. A model holds when nothing falls, and
 enough when it holds and no tip carries more than it holds. Each row of the run also lists
 every standing tip: why it stands, its group, the pull on it at its worst height and its
 margin (`docs/design/analysis.md`), the material behind it, its trunk's height and slenderness;
-the block and table give the weakest margin and how many tips keep under ×1.5. The block
-splits the supports' resin into heads, branches, trunks, feet, braces and raft, each body
-counted whole, and counts the trees standing on a foot of their own.
+the block and table give the weakest margin and how many tips keep under ×1.5.
 
 `--profile` names the support profiles to bench, repeated for several, Light when none is
 given. `--auto` names automatic profiles to bench the same way, each support sized by what
-it carries as Generate does with Automatic on, and each tip read against the shape it was
+it holds as Generate does with Automatic on, and each tip read against the shape it was
 built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
 thick and stands its supports against the shell from outside. `--sweep` also supports each
 model at shares of the profile's density and reports the least that is enough. Every
 row is strengthened as Generate strengthens it; `--no-strengthen` reads placement as it
-put the tips. `--tip-floor-mm`
+put the tips. `--lightest-first` builds every tip of an automatic profile to its lightest
+shape and leaves its size to strengthening, by what it carries. `--tip-floor-mm`
 builds every tip at least that wide, as a print that keeps to what holds would. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks

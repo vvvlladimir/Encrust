@@ -146,10 +146,13 @@ fn weak(load: &Load) -> Option<f32> {
 /// Whether `plan` sizes `need` and has a size after its own with a wider tip; a
 /// steadying support has none.
 fn heavier(plan: &SupportPlan, need: &Need) -> bool {
-    if plan.sizing().is_none() || need.reason == Reason::Steady {
+    let Some(auto) = plan.sizing() else {
+        return false;
+    };
+    if need.reason == Reason::Steady {
         return false;
     }
-    let size = need.size();
+    let size = need.size_in(auto);
     let table = plan.table();
     let tip_mm = |at: usize| table.get(at).map(|profile| profile.tip.contact_diameter_mm);
     size + 1 < AUTO_SIZES && tip_mm(size + 1) > tip_mm(size)

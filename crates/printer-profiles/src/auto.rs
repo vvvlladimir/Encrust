@@ -7,8 +7,8 @@ use crate::{Catalogue, IslandSpacing, ProfileError, SupportProfile};
 /// How many shapes an automatic profile sizes supports into.
 pub const AUTO_SIZES: usize = 3;
 
-/// Automatic placement that sizes each support by what it carries: where supports go, and the
-/// support profiles each one is built to, lightest first. See `docs/decisions/0325` and `0423`.
+/// Automatic placement that sizes each support by what it holds: where supports go, and
+/// which of a few support profiles each one is built to. See `docs/decisions/0325`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AutoProfile {
     pub name: String,
@@ -22,8 +22,12 @@ pub struct AutoProfile {
     /// The least island, mm² on the layer it begins on, spaced at the second share of
     /// [`IslandSpacing`] and at the third.
     pub island_area_mm2: [f32; AUTO_SIZES - 1],
+    /// The least share of the model above it one island or overhang contact holds, mm³, held
+    /// by the second shape and by the third. See `docs/decisions/0424`.
+    #[serde(default = "default_share_mm3")]
+    pub share_mm3: [f32; AUTO_SIZES - 1],
     /// The least resin a step puts out in its one layer, mm³, to be held as a step at
-    /// all, then as a step of the second size and of the third. See `docs/decisions/0326`.
+    /// all, then by the second shape and by the third. See `docs/decisions/0326`.
     pub step_volume_mm3: [f32; AUTO_SIZES],
     /// How far above a step of each size the faces near it are held as part of it, mm.
     pub step_height_mm: [f32; AUTO_SIZES],
@@ -48,14 +52,16 @@ impl AutoProfile {
         crate::catalogue::shipped_auto(id)
     }
 
-    /// The size of a step that puts out `new_mm3` in its layer, an index into
-    /// `step_height_mm`, or `None` for one too small to be held as a step.
+    /// Which shape holds a contact holding `share_mm3` of the model above it, as an index into
+    /// `shapes`.
+    pub fn share_size(&self, share_mm3: f32) -> usize {
+        size_of(&self.share_mm3, share_mm3)
+    }
+
+    /// Which shape holds a step that puts out `new_mm3` in its layer, or `None` for one too
+    /// small to be held as a step.
     pub fn step_size(&self, new_mm3: f32) -> Option<usize> {
-        let reached = self
-            .step_volume_mm3
-            .iter()
-            .take_while(|least| new_mm3 >= **least)
-            .count();
+        let reached = size_of(&self.step_volume_mm3, new_mm3);
         reached.checked_sub(1)
     }
 
@@ -133,10 +139,24 @@ impl AutoProfile {
         }
         crate::support::overhang_within_right_angle(self.max_overhang_deg)?;
         ascending("island_area_mm2", &self.island_area_mm2)?;
+        ascending("share_mm3", &self.share_mm3)?;
         ascending("steady_area_mm2", &[self.steady_area_mm2])?;
         ascending("step_volume_mm3", &self.step_volume_mm3)?;
         ascending("step_height_mm", &self.step_height_mm)
     }
+}
+
+/// What a profile saved before contacts were sized by their share reads with.
+fn default_share_mm3() -> [f32; AUTO_SIZES - 1] {
+    [SHARE_MM3[0], SHARE_MM3[1]]
+}
+
+/// Auto's shares as shipped, until a print sets them (ADR 0424).
+const SHARE_MM3: [f32; AUTO_SIZES - 1] = [100.0, 500.0];
+
+/// How many of `least` a measure of `value` reaches, which is the shape it is held by.
+fn size_of(least: &[f32], value: f32) -> usize {
+    least.iter().take_while(|least| value >= **least).count()
 }
 
 /// Thresholds that are not negative and do not fall.
@@ -185,6 +205,28 @@ mod tests {
     }
 
     #[test]
+    fn a_share_is_held_by_the_last_shape_it_reaches() {
+        let auto = shipped();
+        let sizes: Vec<usize> = [0.0, 99.0, 100.0, 499.0, 500.0, 5000.0]
+            .into_iter()
+            .map(|share| auto.share_size(share))
+            .collect();
+        assert_eq!(
+            sizes,
+            [0, 0, 1, 1, 2, 2],
+            "thresholds 100 and 500 mm³ as shipped"
+        );
+    }
+
+    #[test]
+    fn a_profile_saved_before_shares_reads_the_shipped_ones() {
+        let source = SHIPPED.replace("share_mm3 = [100.0, 500.0]", "");
+        let auto = AutoProfile::from_toml_str(&source, Path::new("auto/old.toml"))
+            .expect("a field it lacks is read as shipped");
+        assert_eq!(auto.share_mm3, shipped().share_mm3);
+    }
+
+    #[test]
     fn placing_numbers_go_onto_a_shape_and_come_back() {
         let mut auto = shipped();
         let mut placing =
@@ -203,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn a_step_too_small_is_no_step_and_a_larger_one_reaches_further() {
+    fn a_step_too_small_is_no_step_and_a_larger_one_takes_a_heavier_shape() {
         let auto = shipped();
         let sizes: Vec<Option<usize>> = [0.05, 0.1, 6.9, 7.0, 12.0, 50.0]
             .into_iter()

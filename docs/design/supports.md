@@ -384,17 +384,18 @@ sample asks nine buckets, and a point more than its own radius below the layer b
 dropped as the run climbs — which is what keeps the run's memory to the supports that can
 still hold something.
 
-**What each contact holds.** Every contact comes back with its `Reason`, which the bench
-reports and nothing sizes by — an automatic tip starts lightest and only strengthening makes
-it heavier (ADR 0423): an island with its area on the layer it begins
-on — a part that begins at a point has none — an overhang with the model above its layer,
-or a support that steadies a part. The model above is known only at the top of the stack,
+**What each contact holds.** Every contact comes back with its `Reason`, which an
+automatic profile sizes it by (ADR 0325, 0424): an island with its area on the layer it
+begins on — a part that begins at a point has none — and an island or overhang with its
+share of the model above its layer, or a support that steadies a part. The model above is known only at the top of the stack,
 so the climb keeps a graph of pieces beside it (`load.rs`): a piece that is the only child
 of its only parent stays on its parent's node, any other starts a node whose parents are
 the nodes of what it grew out of. A node is made after its parents, so one walk down the
 list adds each node's total into its parents, split evenly where it has several so a
 joined piece is not counted twice. A contact remembers its node and how much of it lay at
-or under its layer; the model above it is the node's total less that.
+or under its layer; the model above it is the node's total less that. Its share divides
+that among the contacts holding it: those on its node at or above its layer, itself
+included, and those on every node grown out of it, counted down the list as resin is.
 
 **Steps, when sized.** A run handed an automatic profile asks `unsupported` for the shelf
 put out over the layer below apart from the lean over the rise, and for the faces leaning
@@ -436,24 +437,20 @@ the case where one front reaches the other's column outright.
 
 Candidates sit in a max-heap on `z`, so the highest meeting point — the merge that saves
 most — is taken first, and only when the two are within
-`branching.max_merge_distance_mm`, together carry no more than the widest trunk holds,
-neither strut runs longer than 5 widths of the widest trunk, the merge saves resin, each strut's
-body clears the model, and the meeting point can land. The saving (`branch/cost.rs`) is the
-two trunks and feet left out — cones to the plate and the pad's cylinder — less the two
-struts and the shared trunk and foot, all in closed form (ADR 0424). Where the higher front reaches the lower one's column at
+`branching.max_merge_distance_mm`, together carry no more than `max_tips_per_trunk` tips,
+neither strut is longer than `max_strut_length_mm`, each strut's body clears the model,
+and the meeting point can land. Where the higher front reaches the lower one's column at
 or above it, the meeting point is the lower front itself and only the higher one leans:
 it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
 at its own height further off (ADR 0338). A pair refused for its bodies or its
 landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
 first, then twice as far each time, until the meeting point reaches the plate: what blocks a strut is
 mostly the part right beside the tips, and dropping past it is how two columns under a
-crowded part still share a trunk (ADR 0338). Every strut,
-joint and trunk is as wide as it carries (ADR 0424): `min(cap, max(pillar, r_c √(1.5 n),
-length / s / 2))` for `n` tips of contact radius `r_c` over a strut or trunk that long, `s`
-15 for a trunk and 5 for a leaning strut, so
-its section is half again its tips' and a tip tears before anything under it; the pillar
-is the thinnest, the cap the widest, and a joint is never narrower than a strut coming
-into it. The trunk under the root is a cone from the joint's width to that base (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
+crowded part still share a trunk (ADR 0338). The joint
+keeps the branches' own width; only the trunk under the root widens, as a cone from that
+width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `carried` folds
+`(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
+cross-section, 3 volume, the presets ship 2.5 (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
 Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Survivors drop
 a vertical trunk to their landing. A merged front that stands on the model is split again
 where every tip under it stands on the model as a small pillar of its own — from its neck,
@@ -571,8 +568,7 @@ Under Auto the list shows the shapes it built; in the Shape mode it shows every 
 builds to, since each is edited there like any support profile. Sizing automatically, the
 card's placement and size fields edit the automatic profile's own numbers, which Save
 writes over the shipped one (ADR 0325), and a run is placed by them on its lightest shape;
-each contact then goes into the group built to its size — the lightest, or as many sizes
-up as strengthening made it (ADR 0423) — a
+each contact then goes into the group built to the shape its `Reason` sizes it into — a
 group of that profile's name, else one nothing stands in, retuned, else a new one — and a
 shape nothing is sized into gets no group (ADR 0325).
 

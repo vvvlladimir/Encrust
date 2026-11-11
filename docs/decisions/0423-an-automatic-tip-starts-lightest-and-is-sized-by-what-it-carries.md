@@ -1,6 +1,6 @@
 # 0423. Build every automatic tip lightest, and size it by what it carries
 
-- **Status:** Accepted
+- **Status:** Superseded by 0424
 - **Date:** 2026-11-11
 
 ## Context

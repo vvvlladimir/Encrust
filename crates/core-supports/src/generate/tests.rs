@@ -163,12 +163,12 @@ fn shelf(tower_mm: Scalar) -> Mesh {
     )
 }
 
-/// The model above every overhang contact under `mesh`, mm³.
+/// Each overhang contact's share of the model above it under `mesh`, mm³.
 fn carried(mesh: &Mesh) -> Vec<Scalar> {
     needs_for(mesh)
         .into_iter()
         .filter_map(|need| match need.reason {
-            Reason::Overhang { carried_mm3 } => Some(carried_mm3),
+            Reason::Overhang { share_mm3 } => Some(share_mm3),
             Reason::Island { .. } | Reason::Step { .. } | Reason::Steady => None,
         })
         .collect()
@@ -181,7 +181,7 @@ fn a_floating_slab_is_held_as_an_island_of_its_own_area() {
     let islands: Vec<Scalar> = needs
         .iter()
         .filter_map(|need| match need.reason {
-            Reason::Island { area_mm2 } => Some(area_mm2),
+            Reason::Island { area_mm2, .. } => Some(area_mm2),
             Reason::Overhang { .. } | Reason::Step { .. } | Reason::Steady => None,
         })
         .collect();
@@ -199,21 +199,24 @@ fn a_floating_slab_is_held_as_an_island_of_its_own_area() {
 }
 
 #[test]
-fn an_overhang_carries_the_model_above_it() {
+fn an_overhang_shares_the_model_above_it_among_its_contacts() {
     let alone = carried(&shelf(0.0));
     let under_tower = carried(&shelf(20.0));
     assert!(!alone.is_empty() && !under_tower.is_empty());
     // The slab is 100 mm³ less its post and the layer the contacts are cut under; the
-    // tower adds 2000 mm³ more.
+    // tower adds 2000 mm³ more. Its contacts all sit on one layer, so they share it evenly.
+    let total = |shares: &[Scalar]| shares.iter().sum::<Scalar>();
     assert!(
-        alone.iter().all(|mm3| (90.0..=100.0).contains(mm3)),
-        "a bare shelf carries itself, got {alone:?}"
+        (90.0..=100.0).contains(&total(&alone)),
+        "a bare shelf's contacts carry the shelf between them, got {alone:?}"
     );
     assert!(
-        under_tower
-            .iter()
-            .all(|mm3| (2090.0..=2100.0).contains(mm3)),
+        (2090.0..=2100.0).contains(&total(&under_tower)),
         "a shelf under a 20 mm tower carries the tower too, got {under_tower:?}"
+    );
+    assert!(
+        alone.iter().all(|share| (share - alone[0]).abs() < 1e-3),
+        "contacts of one layer share alike, got {alone:?}"
     );
 }
 

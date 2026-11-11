@@ -12,7 +12,7 @@ mod automatic;
 mod bracing;
 mod sections;
 use automatic::automatic;
-pub use automatic::{held_up, islands, steadying, steps};
+pub use automatic::{held_up, islands, sizes, steadying, steps};
 use bracing::{bracing, bracing_fields};
 use sections::{
     bottom, branching, branching_fields, grid, grid_fields, main, raft, raft_fields, small_pillar,
@@ -84,7 +84,7 @@ impl Group {
     /// What a group with a switch does, and what stands in its place while it is off.
     fn help_and_off(self) -> Option<(String, String)> {
         match self {
-            Self::Branching => Some((tr!("support-merging-help"), tr!("support-no-branching"))),
+            Self::Branching => Some((tr!("support-branching-help"), tr!("support-no-branching"))),
             Self::Grid => Some((tr!("support-grid-help"), tr!("support-no-grid"))),
             Self::Raft => Some((tr!("support-raft-help"), tr!("support-no-raft"))),
             Self::Bracing => Some((tr!("support-bracing-help"), tr!("support-no-bracing"))),

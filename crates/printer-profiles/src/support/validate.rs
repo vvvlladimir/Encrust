@@ -70,6 +70,11 @@ impl SupportProfile {
                 "max_merge_distance_mm",
                 self.branching.max_merge_distance_mm,
             ),
+            ("max_strut_length_mm", self.branching.max_strut_length_mm),
+            (
+                "max_tips_per_trunk",
+                self.branching.max_tips_per_trunk as f32,
+            ),
         ];
         let shares = self.islands.share.map(|share| ("islands share", share));
         let positive = positive.into_iter().chain(shares);

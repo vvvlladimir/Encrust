@@ -131,14 +131,24 @@ fn rotation(rotation: Quat) -> Transform {
     }
 }
 
+/// How a run sizes the tips placement asks for.
+#[derive(Debug, Clone, Copy)]
+pub struct Sizing {
+    /// Strengthen tips under the wanted margin, as Generate does.
+    pub strengthening: bool,
+    /// Build every tip an automatic profile sizes to its lightest shape first, leaving its size
+    /// to what strengthening finds it carries.
+    pub lightest_first: bool,
+}
+
 /// `model` lifted by the placing profile's lift, hollowed to `wall_mm` where given, and supported
-/// from outside as Generate does with nothing painted, blocked or placed by hand; strengthened
-/// as Generate does it when `strengthening`.
+/// from outside as Generate does with nothing painted, blocked or placed by hand, sized as
+/// `sizing` says.
 pub fn supported(
     mut model: Mesh,
     asked: &SupportPlan,
     wall_mm: Option<Scalar>,
-    (layer_mm, strengthening): (Scalar, bool),
+    (layer_mm, sizing): (Scalar, Sizing),
 ) -> Result<Supported> {
     let placing = asked.placing();
     let bounds = model.aabb().context("the model has no vertices")?;
@@ -148,15 +158,15 @@ pub fn supported(
     }
     let (model, side) = printed(model, wall_mm)?;
     let started = Instant::now();
-    let (needs, strengthened) =
-        needs_under(&model, asked, side.as_ref(), (layer_mm, strengthening))?;
+    let (needs, reasons, strengthened) =
+        needs_under(&model, asked, side.as_ref(), (layer_mm, sizing))?;
     let place_s = started.elapsed().as_secs_f64();
 
     let mut supported = Supported {
         model,
         contacts: needs.iter().map(|need| need.contact).collect(),
         groups: needs.iter().map(|need| asked.group_of(need)).collect(),
-        reasons: needs.iter().map(|need| need.reason).collect(),
+        reasons,
         profiles: asked.table(),
         trees: Vec::new(),
         supports: Mesh::default(),
@@ -192,15 +202,15 @@ fn printed(model: Mesh, wall_mm: Option<Scalar>) -> Result<(Mesh, Option<WallSid
     Ok((shell, Some(side)))
 }
 
-/// Where `model` needs holding up and what each contact holds, as automatic placement
-/// reads it off its own stack, kept to the outside of `side`'s wall, and what strengthening
-/// changed where asked.
+/// Where `model` needs holding up, as automatic placement reads it off its own stack, kept to
+/// the outside of `side`'s wall and sized as `sizing` says; why placement asked for each
+/// contact, and what strengthening changed where asked.
 fn needs_under(
     model: &Mesh,
     plan: &SupportPlan,
     side: Option<&WallSide>,
-    (layer_mm, strengthening): (Scalar, bool),
-) -> Result<(Vec<Need>, Option<Strengthened>)> {
+    (layer_mm, sizing): (Scalar, Sizing),
+) -> Result<(Vec<Need>, Vec<Reason>, Option<Strengthened>)> {
     if layer_mm <= 0.0 {
         bail!("a layer of {layer_mm} mm cannot be cut");
     }
@@ -228,8 +238,14 @@ fn needs_under(
     if let Some(side) = side {
         needs.retain(|need| side.keeps(need.contact));
     }
-    if !strengthening {
-        return Ok((needs, None));
+    let asked: Vec<Reason> = needs.iter().map(|need| need.reason).collect();
+    if sizing.lightest_first {
+        for need in &mut needs {
+            need.reason = lightest(need.reason);
+        }
+    }
+    if !sizing.strengthening {
+        return Ok((needs, asked, None));
     }
     let underside = Underside {
         stack: &stack,
@@ -240,5 +256,17 @@ fn needs_under(
     };
     let done = strengthen(underside, &mut needs, &[], plan, &mut || true)
         .context("the model cannot be read for what its tips carry")?;
-    Ok((needs, Some(done)))
+    let added = needs.iter().skip(asked.len()).map(|need| need.reason);
+    let reasons = asked.iter().copied().chain(added).collect();
+    Ok((needs, reasons, Some(done)))
+}
+
+/// `reason` with nothing to hold, which an automatic profile builds to its lightest shape.
+fn lightest(reason: Reason) -> Reason {
+    match reason {
+        Reason::Island { .. } => Reason::POINT,
+        Reason::Overhang { .. } => Reason::Overhang { share_mm3: 0.0 },
+        Reason::Step { .. } => Reason::Step { new_mm3: 0.0 },
+        Reason::Steady => Reason::Steady,
+    }
 }

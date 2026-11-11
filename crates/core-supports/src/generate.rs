@@ -190,23 +190,34 @@ impl Run {
         for ((contact, _), moved) in self.placed.iter_mut().zip(contacts) {
             *contact = moved;
         }
-        let islands = added
-            .into_iter()
-            .map(|(at, area_mm2)| (at, Why::Island { area_mm2 }));
+        let islands = added.into_iter().map(|(at, area_mm2)| {
+            (
+                at,
+                Why::Island {
+                    area_mm2,
+                    mark: None,
+                },
+            )
+        });
         self.placed.extend(islands);
     }
 }
 
-/// What was placed, with the model above each overhang contact now that all of it is known.
+/// What was placed, with each overhang contact's share of the model above it now that all of
+/// it is known.
 fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
-    let totals = load.totals();
+    let marks: Vec<Mark> = placed.iter().filter_map(|(_, why)| why.mark()).collect();
+    let mut shares = load.shares(&marks).into_iter();
     placed
         .into_iter()
         .map(|(contact, why)| {
             let reason = match why {
-                Why::Island { area_mm2 } => Reason::Island { area_mm2 },
+                Why::Island { area_mm2, mark } => Reason::Island {
+                    area_mm2,
+                    share_mm3: mark.and_then(|_| shares.next()).unwrap_or(0.0),
+                },
                 Why::Overhang(mark) => Reason::Overhang {
-                    carried_mm3: mark.map_or(0.0, |mark| mark.above_mm3(&totals)),
+                    share_mm3: mark.and_then(|_| shares.next()).unwrap_or(0.0),
                 },
                 Why::Step { new_mm3 } => Reason::Step { new_mm3 },
                 Why::Steady => Reason::Steady,
@@ -219,10 +230,25 @@ fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
 /// Why a contact was put down, while what stands above it is still being read.
 #[derive(Debug, Clone, Copy)]
 enum Why {
-    Island { area_mm2: Scalar },
+    Island {
+        area_mm2: Scalar,
+        mark: Option<Mark>,
+    },
     Overhang(Option<Mark>),
-    Step { new_mm3: Scalar },
+    Step {
+        new_mm3: Scalar,
+    },
     Steady,
+}
+
+impl Why {
+    /// Where on the graph of what stands on what a contact holding a share of it was put.
+    fn mark(&self) -> Option<Mark> {
+        match self {
+            Self::Island { mark, .. } | Self::Overhang(mark) => *mark,
+            Self::Step { .. } | Self::Steady => None,
+        }
+    }
 }
 
 /// What one layer is put down against: the supports standing so far, the graph of what
@@ -239,18 +265,21 @@ struct Placing<'a> {
 }
 
 /// Why a support goes on a cell that is `on`, touching at `contact`: what a step below
-/// reaches is that step's, whatever leans there; `overhang` marks an overhang's load.
-fn why_of(on: On, zones: &Zones, contact: Vec3, overhang: impl FnOnce() -> Option<Mark>) -> Why {
+/// reaches is that step's, whatever leans there; `mark` places an island's or overhang's load.
+fn why_of(on: On, zones: &Zones, contact: Vec3, mark: impl FnOnce() -> Option<Mark>) -> Why {
     let reached = match on {
         On::Overhang | On::Gentle => zones.reaching(contact),
         On::Island(_) | On::Step(_) | On::Slope => None,
     };
     match (on, reached) {
-        (On::Island(area_mm2), _) => Why::Island { area_mm2 },
+        (On::Island(area_mm2), _) => Why::Island {
+            area_mm2,
+            mark: mark(),
+        },
         (On::Step(new_mm3), _) | (On::Overhang | On::Gentle, Some(new_mm3)) => {
             Why::Step { new_mm3 }
         }
-        (On::Overhang, None) => Why::Overhang(overhang()),
+        (On::Overhang, None) => Why::Overhang(mark()),
         (On::Gentle, None) | (On::Slope, _) => Why::Steady,
     }
 }
@@ -385,7 +414,10 @@ impl Pass<'_> {
         contact_mm: Scalar,
         placed: &mut Vec<(Vec3, Why)>,
     ) {
-        let point = Why::Island { area_mm2: 0.0 };
+        let point = Why::Island {
+            area_mm2: 0.0,
+            mark: None,
+        };
         for (piece, tip) in self.hanging(standing, contact_mm) {
             if self.refuses(tip) {
                 standing.leave(Some(piece));
