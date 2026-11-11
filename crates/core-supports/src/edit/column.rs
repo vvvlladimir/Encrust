@@ -38,7 +38,7 @@ pub(super) fn carry_column(
 
 /// The lowest the top of a column on the plate may stand: over its foot and the shortest
 /// pillar, plate mm.
-fn lowest_top_mm(profile: &SupportProfile) -> Scalar {
+pub(super) fn lowest_top_mm(profile: &SupportProfile) -> Scalar {
     PLATE_Z_MM + profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM
 }
 

@@ -575,7 +575,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   hold Alt to move it level with the plate. The cursor turns to a hand over a part you can
   take. It follows the cursor everywhere; where it would run into the model or lean too far it turns red and the
   cursor says no, and let go there it stays where it last could stand. A tip slides over the
-  model's surface, and a joint moved aside drops as far as its branches need. The trunk, its foot and the joint on top move as one: the trunk
+  model's surface, and a joint moved aside drops as far as its branches need. Before a
+  move is refused, the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk, its foot and the joint on top move as one: the trunk
   stays upright and what it carries leans down to it at 45 degrees, onto the plate or the
   model, and goes no further than that lean reaches; no drag leaves a strut flatter than
   45 degrees. Supports that stand on the one you move go with it.

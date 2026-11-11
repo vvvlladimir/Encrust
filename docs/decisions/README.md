@@ -262,6 +262,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0437](0437-no-edit-leaves-a-strut-flatter-than-forty-five-degrees.md) | Let no edit leave a strut flatter than forty-five degrees | Proposed; sliding by run or rise and refusing a step outright are superseded by 0438 |
 | [0438](0438-a-carried-support-follows-the-cursor-and-stands-only-where-allowed.md) | A carried support follows the cursor, and stands only where it is allowed | Proposed; the level plane and Alt raising are superseded by 0439 |
 | [0439](0439-a-drag-keeps-the-point-taken-under-the-cursor.md) | A drag keeps the point taken under the cursor, and the aim is points of screen at the part's depth | Proposed |
+| [0440](0440-the-joints-beside-a-carried-part-give-way.md) | The joints beside a carried part give way before the carry is refused | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

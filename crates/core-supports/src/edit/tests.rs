@@ -518,7 +518,7 @@ fn a_column_carried_off_the_slab_it_stood_on_stands_on_the_plate() {
 
 /// Two tips close enough to meet and a third further off that joins them lower down, in clear
 /// air: a joint that is not the root, with branches above it.
-fn branched_twice() -> crate::SupportTree {
+pub(super) fn branched_twice() -> crate::SupportTree {
     trees_on(
         &[(10.0, 10.0), (13.0, 10.0), (11.5, 16.0)]
             .map(|(x, y)| SupportPoint::new(Vec3::new(x, y, 20.0))),

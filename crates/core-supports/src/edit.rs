@@ -11,8 +11,10 @@ use crate::placed::Placed;
 use crate::tree::SupportTree;
 
 mod column;
+mod give_way;
 mod joint;
 mod riders;
+pub use give_way::eased;
 pub use riders::{followed, standing_on};
 
 use column::carry_column;
@@ -166,7 +168,8 @@ fn into_model(landing: Landing, inverse: Mat4) -> Landing {
 }
 
 /// `tree` (model space, as the answer) with tip `tip` put down at `to` (plate coordinates, nearest
-/// surface), or `None` if refused; the neck goes with the tip and the rest follows [`carried`].
+/// surface), or `None` if refused; the neck goes with the tip, the rest follows [`carried`] and
+/// the joints beside it give way as [`eased`] lets them.
 pub fn tip_carried(
     tree: &SupportTree,
     tip: usize,
@@ -192,7 +195,7 @@ pub fn tip_carried(
             carried.stand_on(into_model(under, inverse));
         }
     }
-    allowed(tree, &carried, placed, profile).then_some(carried)
+    eased(tree, &carried, placed, profile)
 }
 
 /// Moves one part of `tree`, which is kept in the model's own space while the step is a

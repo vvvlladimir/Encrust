@@ -1,5 +1,5 @@
 //! Carrying held support parts square to the camera, or level with Alt, drawn refused where
-//! `core_supports::allowed` refuses them and kept where they last could stand (ADR 0208, 0438).
+//! `core_supports::eased` finds no room and kept where they last could stand (ADR 0438, 0440).
 
 use std::sync::Arc;
 
@@ -242,21 +242,26 @@ struct Found {
 }
 
 impl Found {
-    /// Takes in the trees `moved` carries on `object`, each held to how it stood in `standing`.
+    /// Takes in the trees `moved` carries on `object`, each held to how it stood in `standing`
+    /// and eased where its neighbouring joints can make room.
     fn take(
         &mut self,
         object: &SceneObject,
-        moved: Moved,
+        mut moved: Moved,
         standing: &[SupportTree],
         placed: &core_supports::Placed,
         profiles: Profiles,
     ) {
         let matrix = object.transform.to_matrix();
-        for (index, tree) in &moved {
+        for (index, tree) in &mut moved {
             let profile = profiles.of(tree.group());
-            self.allowed &= standing
+            let eased = standing
                 .get(*index)
-                .is_some_and(|was| core_supports::allowed(was, tree, placed, profile));
+                .and_then(|was| core_supports::eased(was, tree, placed, profile));
+            self.allowed &= eased.is_some();
+            if let Some(eased) = eased {
+                *tree = eased;
+            }
             self.mesh.append(&core_supports::mesh_alone(
                 &tree.moved(matrix),
                 profiles,
