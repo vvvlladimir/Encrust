@@ -8,6 +8,7 @@ use crate::{Clearances, Shaded, SupportPoint, SupportTree};
 mod build;
 mod frozen;
 mod growth;
+mod lifted;
 mod paint;
 mod points;
 use build::Built;
@@ -35,6 +36,8 @@ pub struct ModelSupports {
     /// The supports the hand has taken hold of, kept as the trees they are, in the
     /// model's own space. Nothing regrows them; see `docs/decisions/0095`.
     frozen: Vec<SupportTree>,
+    /// The frozen trees a hand is carrying, which the meshes leave out (ADR 0438).
+    lifted: Vec<usize>,
     /// The two patches as geometry, apart from the columns so a stroke shows in its own frame;
     /// columns take too long to rebuild per frame.
     patches: Patches,

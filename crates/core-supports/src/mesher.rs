@@ -147,7 +147,7 @@ fn propped(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Su
 }
 
 /// One support on its own, without the braces and the raft it would share with others.
-pub(crate) fn mesh_alone(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Mesh {
+pub fn mesh_alone(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Mesh {
     let mut mesh = Mesh::default();
     mesh_tree(
         &mut Slots(std::slice::from_mut(&mut mesh)),

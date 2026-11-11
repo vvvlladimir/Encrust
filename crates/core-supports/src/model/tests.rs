@@ -475,3 +475,49 @@ fn freezing_a_support_keeps_a_lost_point_named_by_its_new_index() {
     assert_eq!(lost, 0, "the point under it was taken");
     assert_eq!(supports.points()[lost].contact.z, 20.0);
 }
+
+/// How many faces the meshes of `supports` hold between them.
+fn faces_meshed(supports: &ModelSupports) -> usize {
+    supports
+        .meshes()
+        .expect("built")
+        .iter()
+        .map(|mesh| mesh.faces.len())
+        .sum()
+}
+
+#[test]
+fn a_lifted_support_is_left_out_of_the_meshes_and_carried_without_building_again() {
+    let mut supports = with_one_support(Transform::default());
+    supports.freeze(0, Transform::default());
+    refresh(&mut supports, &nothing(), Transform::default());
+    assert!(faces_meshed(&supports) > 0);
+
+    supports.lift(vec![0]);
+    refresh(&mut supports, &nothing(), Transform::default());
+    assert_eq!(
+        faces_meshed(&supports),
+        0,
+        "the hand draws it while it is lifted"
+    );
+
+    let mut moved = supports.frozen()[0].clone();
+    moved.move_landing(Vec3::new(12.0, 10.0, 0.0));
+    supports.carry_to(0, moved.clone());
+    assert!(
+        supports.meshes().is_some(),
+        "nothing was dropped to be built again"
+    );
+    assert_eq!(
+        supports.trees()[0].landing(),
+        moved.landing(),
+        "picking sees where it went"
+    );
+
+    supports.lift(Vec::new());
+    refresh(&mut supports, &nothing(), Transform::default());
+    assert!(
+        faces_meshed(&supports) > 0,
+        "set down, it is meshed with the rest"
+    );
+}

@@ -51,11 +51,13 @@ fn a_support_carried_across_the_plate_takes_the_one_standing_on_it_along() {
     );
     let (index, pillar) = &moved[1];
     assert_eq!(*index, 0);
-    let expected = trees[0].landing().base + step;
+    // The column's trunk now stands upright over its carried foot, under a knee.
+    let (seat, foot) = (pillar.landing().base, column.landing().base);
     assert!(
-        pillar.landing().base.distance(expected) < 1e-3,
-        "the pillar stands where it did on the column, at {expected}, got {}",
-        pillar.landing().base
+        (seat - foot).truncate().length() < 1e-3
+            && seat.z > foot.z
+            && seat.z < column.root().position.z,
+        "the pillar stands on the column's trunk over {foot}, got {seat}"
     );
     assert!(pillar.landing().on_support);
     assert!(
@@ -65,7 +67,7 @@ fn a_support_carried_across_the_plate_takes_the_one_standing_on_it_along() {
 }
 
 #[test]
-fn a_step_that_would_sink_the_support_standing_on_it_is_refused() {
+fn a_support_standing_on_one_carried_into_the_model_may_not_stand_there() {
     let (block, table, trees) = grown();
     let profiles = Profiles::new(&table).expect("two groups");
     let bvh = Bvh::build(&block);
@@ -75,7 +77,15 @@ fn a_step_that_would_sink_the_support_standing_on_it_is_refused() {
     column.move_node(column.root_index(), Vec3::new(5.0, 5.0, 8.0));
     column.move_landing(Vec3::new(5.0, 5.0, 0.0));
 
-    assert!(followed(&trees, 1, &column, &placed, profiles).is_none());
+    let moved = followed(&trees, 1, &column, &placed, profiles).expect("the pillar is seated");
+    let (_, pillar) = moved
+        .iter()
+        .find(|(index, _)| *index == 0)
+        .expect("the pillar goes with the column");
+    assert!(
+        !crate::allowed(&trees[0], pillar, &placed, profiles.of(0)),
+        "its trunk now ends inside the cube"
+    );
 }
 
 #[test]

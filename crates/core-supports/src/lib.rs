@@ -40,13 +40,13 @@ pub use base::{BraceBand, BraceLevel, SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH, br
 pub use branch::grow;
 pub use clearances::Clearances;
 pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
-pub use edit::{carried, fits, followed, on_model, standing_on, tip_carried};
+pub use edit::{allowed, carried, fits, followed, on_model, standing_on, tip_carried};
 pub use generate::generate_supports;
 pub use group::Profiles;
 pub use inline::{INLINE_SPACING_MM, inline};
 pub use lost::{Lost, Unstood, lost};
 pub use low::low_points;
-pub use mesher::{FOOT_TAPER, foot_bevel_mm, mesh_groups, mesh_trees};
+pub use mesher::{FOOT_TAPER, foot_bevel_mm, mesh_alone, mesh_groups, mesh_trees};
 pub use model::{Grown, Growth, ModelSupports};
 pub use need::{Need, Reason};
 pub use pad::{PAD_SECTORS, PadCut};

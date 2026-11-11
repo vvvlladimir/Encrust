@@ -629,13 +629,28 @@ not taken, hover or press: `grab_along` answers how far along the part stands. T
 measured from where the section lets it in, and a cut standing in material is a cap that
 hides what is behind it, so a part inside a cavity the section opens is taken (ADR 0332).
 
-A press picks a part and the same drag carries it, by the step the cursor takes on the
-plane through it facing the camera, measured from where the cursor was pressed and not from
-the part's middle; everything else picked takes the same step. A step the model refuses
-whole is tried again as its run across the plate and then as its rise, so a part slides
-along what it touches instead of stopping. No edit leaves a strut under a head leaning past
-45 degrees or a trunk on the plate off the vertical: `fits` refuses it, and a foot dragged
-further than a 45-degree lean from its knee reaches stops there (ADR 0437).
+A press picks a part and the same drag carries it across the plate, on the level plane
+through it, or up and down with Alt, on an upright plane turned to the camera (ADR 0438).
+Every frame carries from how the supports stood at the press, by where the cursor is on
+that plane less where it was pressed, so taking the cursor back takes them back;
+everything picked takes the same step. What is held follows the cursor whatever the model
+says: drawn in its group's tint where it may stand, in danger's with a no-entry cursor where
+it may not, and the scene keeps it where it last could, which is where a release leaves it.
+No edit leaves a strut under a head leaning past 45 degrees or a trunk on the plate off the
+vertical (ADR 0437).
+
+The root, the trunk and the foot are one handle, the column. Across the plate its foot
+moves, its trunk stands upright over it on a knee what it carries leans down to at 45
+degrees, no further than that lean reaches, and it stands on whatever `landing` finds under
+it, model or plate; up and down its top moves, unless a head hangs there, no higher than its
+branches allow at 45 degrees and no lower than the shortest pillar, and a foot never rises.
+A strut hanging from the root carries the column too. Any other joint or strut moves its own
+nodes, and a joint carried aside drops to the height its branches allow.
+
+While a drag lasts its trees are lifted out of the meshes (`ModelSupports::lift`): what was
+built is built once without them, `carry_to` puts each step in place without building
+anything, and the window meshes only the carried trees, `mesh_alone`, as the ghost. A frame
+costs one carry, one judgement and one mesh per tree carried, whatever else the model holds.
 
 A tip held alone is not slid by a step but aimed, like a new support: `tip_carried` puts
 it where the cursor's ray meets its model, or on the surface nearest the cursor at the
@@ -656,17 +671,17 @@ ones a hand froze included, and **Only** *group* those of the group in hand alon
 leaving the group and every other group's number as they were. Shift only
 adds the part to what is picked or takes it out. The gesture is the support's from the
 press to the release, wherever the cursor goes, so the camera neither turns nor slides
-under it. A node bends what meets there, a strut moves both its ends, and the foot stays on
-the plate.
+under it.
 
-Every step is then held to the rule the automatic run places by, which is what `carried`
-answers with: `on_model` pulls each tip back onto the nearest surface it holds, `fits`
-sweeps the whole tree as beams with the profile's clearance — tip heads apart, since a tip
-is meant to touch, and a trunk standing on the model swept only down to where its rim may
-meet the face it sinks into — and a step that sinks any part of it into the model or lands a tip on a
-blocked face is dropped, cursor and support staying where they were. Which nodes a `Part`
-moves, and that the foot stays on the plate, are settled there too and not in the panel
-that reads the drag (ADR 0208).
+Every step is then judged by the rule the automatic run places by, apart from making it:
+`carried` and `followed` build the moved trees, `on_model` having pulled each tip back onto
+the nearest surface it holds, and `allowed` answers whether they may stand. `fits` sweeps the
+whole tree as beams with the profile's clearance — tip heads apart, since a tip is meant to
+touch, and a trunk standing on the model swept only down to where its rim may meet the face
+it sinks into. A tree that fitted must fit after; one that did not, from an older build, need
+only keep what the carry moved out of the model and within 45 degrees. Which nodes a `Part`
+moves, and that the foot stays on the plate, are settled there too and not in the panel that
+reads the drag (ADR 0208).
 
 ## A line of supports
 

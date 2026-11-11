@@ -570,10 +570,14 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
-  Shift-click adds a part to what is picked, or takes it back out. A foot dragged aside keeps
-  its trunk upright over it and leans what it carries down to it at 45 degrees, and goes no
-  further than that lean reaches; no drag leaves a strut flatter than 45 degrees.
-  Supports that stand on the one you move go with it.
+  Shift-click adds a part to what is picked, or takes it back out. Drag to move what is
+  picked across the plate at its own height, or hold Alt to raise or lower it. It follows the
+  cursor everywhere; where it would run into the model or lean too far it turns red and the
+  cursor says no, and let go there it stays where it last could stand. A tip slides over the
+  model's surface, and a joint moved aside drops as far as its branches need. The trunk, its foot and the joint on top move as one: the trunk
+  stays upright and what it carries leans down to it at 45 degrees, onto the plate or the
+  model, and goes no further than that lean reaches; no drag leaves a strut flatter than
+  45 degrees. Supports that stand on the one you move go with it.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports

@@ -5,8 +5,6 @@ use crate::group::Profiles;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
 
-use super::fits;
-
 /// How far off a host's axis a landing may lie and still be on it, mm: growth puts it
 /// on the axis, and a round trip through model space moves it by float error alone.
 const SEAT_MM: Scalar = 1e-2;
@@ -42,8 +40,8 @@ pub fn standing_on(trees: &[SupportTree], host: usize, profiles: Profiles) -> Ve
 }
 
 /// The trees of `frozen` (model space) standing on `frozen[host]`, seated where they were on it
-/// once it is `carried`, and those on them in turn; `None` when one that fit no longer does.
-/// Answers every tree to put back, `carried` first, with its index.
+/// once it is `carried`, and those on them in turn; [`super::allowed`] says whether each may
+/// stand. Answers every tree to put back, `carried` first, with its index.
 pub fn followed(
     frozen: &[SupportTree],
     host: usize,
@@ -65,12 +63,8 @@ pub fn followed(
             if !seen.insert(rider) {
                 continue;
             }
-            let profile = profiles.of(plate[rider].group());
             let base = seat_point(&after, seat, profiles)?;
             let carried = reseated(&plate[rider], base);
-            if !fits(&carried, placed, profile) && fits(&plate[rider], placed, profile) {
-                return None;
-            }
             moved.push((rider, carried.moved(inverse)));
             hosts.push((plate[rider].clone(), carried));
         }

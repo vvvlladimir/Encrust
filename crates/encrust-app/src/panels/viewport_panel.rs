@@ -39,7 +39,9 @@ use picking::{
     lay_face_under_cursor, mark_part_under_cursor, measure_under_cursor, point_at_face,
     select_under_cursor, takes_the_pick, zoom_anchor,
 };
-use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
+use supports::{
+    drag_support, place_support_under_cursor, remove_support_under_cursor, show_refusal,
+};
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
 /// a little under a full turn.
@@ -80,6 +82,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // A support in hand has the whole gesture, shift and all: it neither turns the camera
     // nor slides it.
     let carrying = !painting && drag_support(window, rect, &pointer);
+    show_refusal(ui.ctx(), window);
     let drag = if carrying { Drag::None } else { gesture.drag };
 
     fly_to_marked(ui, window, rect);
@@ -315,6 +318,7 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
             pan_button_down: input.pointer.button_down(PointerButton::Secondary)
                 || input.pointer.button_down(PointerButton::Middle),
             shift: input.modifiers.shift,
+            alt: input.modifiers.alt,
             command: input.modifiers.command,
             delta: Vec2::new(delta.x, delta.y),
             scroll: input.smooth_scroll_delta.y,

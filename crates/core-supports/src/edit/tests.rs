@@ -157,17 +157,15 @@ fn a_part_carried_into_the_model_is_refused() {
     let tree = beside(&model, 20.0);
 
     // The foot dragged 15 mm back lands under the cube, so the trunk would run
-    // through the solid.
-    assert!(
-        carried(
-            &tree,
-            &[Part::Foot],
-            Vec3::new(-15.0, 0.0, 0.0),
-            &placed,
-            &profile()
-        )
-        .is_none()
+    // through the solid: it has nowhere to stand, or may not stand there.
+    let moved = carried(
+        &tree,
+        &[Part::Foot],
+        Vec3::new(-15.0, 0.0, 0.0),
+        &placed,
+        &profile(),
     );
+    assert!(moved.is_none_or(|moved| !allowed(&tree, &moved, &placed, &profile())));
 }
 
 /// The shelf with a slab on the plate under it, so a column from the shelf lands on
@@ -408,5 +406,238 @@ fn a_support_with_a_strut_lying_flat_does_not_fit() {
         !fits(&tree, &placed, &profile()),
         "a strut 20 mm across for {} mm down is no support",
         root.z - 2.0
+    );
+}
+
+/// Two tips 3 mm apart in clear air, grown into one tree whose root is the joint they meet at.
+fn merged_pair() -> crate::SupportTree {
+    let tree = trees_on(
+        &[
+            SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
+            SupportPoint::new(Vec3::new(13.0, 10.0, 20.0)),
+        ],
+        &Mesh::default(),
+        Transform::default(),
+        Profiles::single(&profile()),
+    )
+    .pop()
+    .expect("two tips in clear air share a trunk");
+    let root = tree.root_index();
+    let children = tree.struts().filter(|(_, parent)| *parent == root).count();
+    assert_eq!(children, 2, "the root is the joint the two meet at");
+    tree
+}
+
+#[test]
+fn a_trunk_carried_aside_stands_on_a_knee_under_the_joint_and_leaves_the_tips() {
+    let empty = Mesh::default();
+    let bvh = Bvh::build(&empty);
+    let placed = Placed::new(&empty, &bvh, Transform::default());
+    let tree = merged_pair();
+    let joint = tree.root().position;
+    let step = Vec3::new(0.0, 2.0, 0.0);
+
+    let moved = carried(&tree, &[Part::Trunk], step, &placed, &profile())
+        .expect("2 mm aside in clear air stands");
+
+    let (knee, base) = (moved.root().position, moved.landing().base);
+    assert!(
+        (base - (tree.landing().base + step)).length() < 1e-4,
+        "the foot took the step, got {base}"
+    );
+    assert!(
+        (knee - base).truncate().length() < 1e-4,
+        "the trunk stands upright"
+    );
+    assert!(
+        ((joint.z - knee.z) - 2.0).abs() < 1e-3,
+        "the joint {joint} leans down to the knee {knee} at 45 degrees"
+    );
+    assert!(
+        moved.contacts().eq(tree.contacts()),
+        "the tips stay where they hold"
+    );
+}
+
+#[test]
+fn a_column_raised_lifts_its_joint_and_leaves_its_foot() {
+    let empty = Mesh::default();
+    let bvh = Bvh::build(&empty);
+    let placed = Placed::new(&empty, &bvh, Transform::default());
+    let tree = merged_pair();
+
+    let moved = carried(
+        &tree,
+        &[Part::Trunk],
+        Vec3::new(0.0, 0.0, -1.0),
+        &placed,
+        &profile(),
+    )
+    .expect("a joint lowered a millimetre leans its branches less");
+
+    let drop = tree.root().position.z - moved.root().position.z;
+    assert!(
+        (drop - 1.0).abs() < 1e-4,
+        "the joint went 1 mm down, went {drop}"
+    );
+    assert_eq!(moved.landing().base, tree.landing().base, "the foot stays");
+}
+
+#[test]
+fn a_column_carried_off_the_slab_it_stood_on_stands_on_the_plate() {
+    let model = shelf_over_a_slab();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    // Near the edge of the shelf, so a 45 degree lean reaches well past the slab under it.
+    let tree = trees_on(
+        &[SupportPoint::new(Vec3::new(9.0, 5.0, 10.0))],
+        &model,
+        Transform::default(),
+        Profiles::single(&profile()),
+    )
+    .pop()
+    .expect("a column under the shelf stands");
+    assert!(tree.landing().on_model, "the slab is under the column");
+
+    // Far enough for the 4 mm pad to clear the slab's edge at x = 10.
+    let moved = carried(
+        &tree,
+        &[Part::Foot],
+        Vec3::new(5.0, 0.0, 0.0),
+        &placed,
+        &profile(),
+    )
+    .expect("5 mm out the pad clears the slab");
+
+    let landing = moved.landing();
+    assert!(
+        !landing.on_model && landing.base.z.abs() < 1e-4 && landing.base.x > 10.0,
+        "it stands on the plate beside the slab, got {landing:?}"
+    );
+}
+
+/// Two tips close enough to meet and a third further off that joins them lower down, in clear
+/// air: a joint that is not the root, with branches above it.
+fn branched_twice() -> crate::SupportTree {
+    trees_on(
+        &[(10.0, 10.0), (13.0, 10.0), (11.5, 16.0)]
+            .map(|(x, y)| SupportPoint::new(Vec3::new(x, y, 20.0))),
+        &Mesh::default(),
+        Transform::default(),
+        Profiles::single(&profile()),
+    )
+    .pop()
+    .expect("the three tips share a trunk")
+}
+
+/// Whether every strut of `tree` under its heads leans no more than 45 degrees.
+fn within_45_degrees(tree: &crate::SupportTree) -> bool {
+    let nodes = tree.nodes();
+    tree.struts()
+        .filter(|(child, _)| !nodes[*child].is_leaf())
+        .all(|(child, parent)| {
+            let lean = nodes[child].position - nodes[parent].position;
+            lean.truncate().length() <= lean.z.abs() + 1e-3
+        })
+}
+
+#[test]
+fn a_joint_carried_aside_drops_as_far_as_its_branches_need() {
+    let empty = Mesh::default();
+    let bvh = Bvh::build(&empty);
+    let placed = Placed::new(&empty, &bvh, Transform::default());
+    let tree = branched_twice();
+    let nodes = tree.nodes();
+    let joint = (0..nodes.len())
+        .find(|node| {
+            *node != tree.root_index()
+                && nodes
+                    .iter()
+                    .filter(|above| above.parent == Some(*node) && !above.is_leaf())
+                    .count()
+                    > 1
+        })
+        .expect("the pair meets at a joint above the root");
+    let step = Vec3::new(0.0, 1.0, 0.0);
+
+    let moved = carried(&tree, &[Part::Node(joint)], step, &placed, &profile())
+        .expect("a joint in clear air is carried");
+
+    let (was, now) = (nodes[joint].position, moved.nodes()[joint].position);
+    assert!(
+        (now.truncate() - (was + step).truncate()).length() < 1e-4,
+        "the joint went the way it was carried, got {now}"
+    );
+    assert!(
+        now.z < was.z,
+        "it dropped from {was} to {now} to keep its branches upright"
+    );
+    assert!(
+        within_45_degrees(&moved),
+        "no branch above it leans past 45 degrees"
+    );
+}
+
+#[test]
+fn a_column_raised_past_its_branches_stops_where_they_lean_45_degrees() {
+    let empty = Mesh::default();
+    let bvh = Bvh::build(&empty);
+    let placed = Placed::new(&empty, &bvh, Transform::default());
+    let tree = merged_pair();
+
+    let moved = carried(&tree, &[Part::Trunk], Vec3::Z * 3.0, &placed, &profile())
+        .expect("a column in clear air is carried");
+
+    assert!(
+        moved.root().position.z <= tree.root().position.z + 1e-4,
+        "the joint already stood as high as its branches let it, got {}",
+        moved.root().position
+    );
+    assert!(allowed(&tree, &moved, &placed, &profile()));
+}
+
+#[test]
+fn a_support_already_out_of_line_may_be_carried_where_what_moves_is_sound() {
+    let empty = Mesh::default();
+    let bvh = Bvh::build(&empty);
+    let placed = Placed::new(&empty, &bvh, Transform::default());
+    let mut tree = merged_pair();
+    let nodes = tree.nodes();
+    let necks: Vec<usize> = (0..nodes.len())
+        .filter(|node| nodes[*node].parent == Some(tree.root_index()))
+        .collect();
+    // One branch lying flat, as a support from an older build may stand.
+    let flat = nodes[necks[0]].position + Vec3::Y * 5.0;
+    tree.move_node(necks[0], flat);
+    assert!(
+        !fits(&tree, &placed, &profile()),
+        "the flat branch does not fit"
+    );
+
+    let other = necks[1];
+    let toward = carried(
+        &tree,
+        &[Part::Node(other)],
+        Vec3::X * -0.5,
+        &placed,
+        &profile(),
+    )
+    .expect("a neck in clear air is carried");
+    let away = carried(
+        &tree,
+        &[Part::Node(other)],
+        Vec3::X * 1.0,
+        &placed,
+        &profile(),
+    )
+    .expect("a neck in clear air is carried");
+
+    assert!(
+        allowed(&tree, &toward, &placed, &profile()),
+        "the other branch, steepened, is sound, whatever the flat one does"
+    );
+    assert!(
+        !allowed(&tree, &away, &placed, &profile()),
+        "flattening the other branch past 45 degrees is not"
     );
 }

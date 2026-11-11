@@ -2695,6 +2695,7 @@ hint-relief-write = a model to write there
 hint-pick-without-writing = pick without writing
 hint-supports-pick = a part of a support to pick it
 hint-supports-carry = carry what is picked
+hint-supports-raise = raise or lower what is picked
 hint-supports-add = add to what is picked
 hint-hollow-solid = the model to keep it solid there
 hint-hollow-rod = a rod on from the last blocker

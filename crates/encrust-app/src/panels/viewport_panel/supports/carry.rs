@@ -1,0 +1,571 @@
+//! Taking hold of support parts and carrying them: across the plate at their own height, or
+//! up and down with Alt (ADR 0438). What is held follows the cursor wherever it goes, drawn
+//! refused where it may not stand, and the scene keeps it where it last could (ADR 0438). The
+//! rule a carried support is held to lives in `core_supports` (ADR 0208).
+
+use std::sync::Arc;
+
+use core_geometry::{Mesh, Transform, Vec3};
+use core_supports::{Blocked, Part, Profiles, SupportTree};
+use printer_profiles::SupportProfile;
+
+use crate::camera::OrbitCamera;
+use crate::panels::Window;
+use crate::pick::ray_through;
+use crate::render::{Ghost, GhostShape};
+use crate::scene::{ObjectId, SceneObject};
+use crate::state::{Doc, Tools};
+use crate::supports::{Carry, Picked};
+use crate::ui::theme;
+use crate::viewport_input::Pointer;
+use crate::workspace::Tool;
+
+use super::super::picking::{grab_under_cursor, surface_under};
+
+/// A ray flatter than this against the drag's plane, as the cosine between them, has no
+/// crossing worth using: the part would shoot off to the horizon.
+const PLANE_GRAZE: f32 = 0.05;
+
+/// The frozen trees of one object a carry moves, each with its index.
+type Moved = Vec<(usize, SupportTree)>;
+
+/// Picks and carries the support parts the Edit mode works on; answers whether it has the
+/// pointer. A press on a part carries it and the picked set; shift toggles; a miss is the camera's.
+pub(in crate::panels::viewport_panel) fn drag_support(
+    window: &mut Window,
+    viewport: egui::Rect,
+    pointer: &Pointer,
+) -> bool {
+    // Whatever tool is in hand by then, a carry ends with the button: nothing stays lifted.
+    if !pointer.primary_down {
+        set_down(window);
+    }
+    if *window.tool != Tool::Supports {
+        return false;
+    }
+    if !pointer.primary_down {
+        window.tools.supports.stroke = false;
+        return false;
+    }
+    let Some(cursor) = pointer.position.map(|at| egui::Pos2::new(at.x, at.y)) else {
+        return window.tools.supports.stroke;
+    };
+
+    if pointer.pressed {
+        // A Cmd press is the click that picks a model, not a hold on a support.
+        let on_plate = pointer.over_viewport && !pointer.command && !window.view.gizmo.is_focused();
+        window.tools.supports.stroke =
+            on_plate && take_hold(window, viewport, cursor, pointer.shift, pointer.alt);
+        return window.tools.supports.stroke;
+    }
+    if !window.tools.supports.stroke {
+        return false;
+    }
+    // A shift press only picks and carries nothing: it must not move the tip left in hand.
+    let Some(rise) = window.tools.supports.carry.as_ref().map(|carry| carry.rise) else {
+        return true;
+    };
+
+    if let Some(tip) = lone_tip(window) {
+        aim_tip(window, viewport, cursor, tip);
+        return true;
+    }
+    if rise != pointer.alt {
+        retake(window, viewport, cursor, pointer.alt);
+    }
+    let Some(carry) = &window.tools.supports.carry else {
+        return true;
+    };
+    let through = carry.from + carry.taken;
+    if let Some(now) = on_drag_plane(&window.view.camera, viewport, cursor, through, carry.rise) {
+        let target = along(now - carry.from, carry.rise);
+        if target != carry.aimed {
+            aim(window, target);
+        }
+    }
+    true
+}
+
+/// What is held where the cursor puts it, while a carry has it lifted: in its group's tint
+/// where it may stand, in danger's where the model refuses it and it stays where it last could.
+pub(in crate::panels::viewport_panel) fn carried_ghost(window: &Window) -> Option<Ghost> {
+    let carry = window.tools.supports.carry.as_ref()?;
+    let colour = if carry.refused {
+        theme::colors().danger
+    } else {
+        theme::support_tint(usize::from(carry.group))
+    };
+    Some(Ghost {
+        shape: GhostShape::Body {
+            mesh: Arc::clone(carry.shown.as_ref()?),
+            transform: Transform::default(),
+        },
+        colour,
+    })
+}
+
+/// Shows a cursor that says no while what is held may not stand where the cursor puts it,
+/// so the refusal does not rest on colour alone.
+pub(in crate::panels::viewport_panel) fn show_refusal(ctx: &egui::Context, window: &Window) {
+    let refused = window
+        .tools
+        .supports
+        .carry
+        .as_ref()
+        .is_some_and(|carry| carry.refused);
+    if refused {
+        ctx.set_cursor_icon(egui::CursorIcon::NotAllowed);
+    }
+}
+
+/// `step` kept to the way a drag goes: up and down alone, or across the plate alone.
+fn along(step: Vec3, rise: bool) -> Vec3 {
+    if rise {
+        Vec3::Z * step.z
+    } else {
+        step.with_z(0.0)
+    }
+}
+
+/// Starts the drag again from where what is held now stands, on the plane `rise` asks for,
+/// so pressing or letting go of Alt mid-drag moves nothing by itself.
+fn retake(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, rise: bool) {
+    let Some(carry) = window.tools.supports.carry.take() else {
+        return;
+    };
+    let through = carry.from + carry.taken;
+    let taken = carry_from(window, viewport, cursor, through, rise).map(|fresh| Carry {
+        shown: carry.shown.clone(),
+        ..fresh
+    });
+    window.tools.supports.carry = taken.or(Some(carry));
+}
+
+/// A drag starting with the cursor on the plane through `through`, plate mm, everything held
+/// as it now stands; `None` when that plane is seen edge-on.
+fn carry_from(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    through: Vec3,
+    rise: bool,
+) -> Option<Carry> {
+    let from = on_drag_plane(&window.view.camera, viewport, cursor, through, rise)?;
+    let before = held_objects(window.tools)
+        .into_iter()
+        .filter_map(|id| Some((id, window.doc.scene.get(id)?.supports.frozen().to_vec())))
+        .collect();
+    let group = window.tools.supports.picked.first().and_then(|picked| {
+        let object = window.doc.scene.get(picked.id)?;
+        Some(object.supports.frozen().get(picked.frozen)?.group())
+    });
+    Some(Carry {
+        from,
+        taken: Vec3::ZERO,
+        aimed: Vec3::NAN,
+        rise,
+        before,
+        shown: None,
+        group: group.unwrap_or_default(),
+        refused: false,
+    })
+}
+
+/// Where the cursor now points on the drag's plane through `through`: level with it, or
+/// upright and turned to the camera when `rise`.
+fn on_drag_plane(
+    camera: &OrbitCamera,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    through: Vec3,
+    rise: bool,
+) -> Option<Vec3> {
+    let normal = if rise {
+        (camera.sight_to(through) - through)
+            .with_z(0.0)
+            .normalize_or_zero()
+    } else {
+        Vec3::Z
+    };
+    crossing(camera, viewport, cursor, through, normal)
+}
+
+/// Where the cursor's ray crosses the plane through `through` square to `normal`, or `None`
+/// when it runs too nearly along it.
+fn crossing(
+    camera: &OrbitCamera,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    through: Vec3,
+    normal: Vec3,
+) -> Option<Vec3> {
+    let ray = ray_through(camera, viewport, cursor)?;
+    let facing = ray.direction.dot(normal);
+    if facing.abs() < PLANE_GRAZE {
+        return None;
+    }
+    Some(ray.at((through - ray.origin).dot(normal) / facing))
+}
+
+/// Carries what is held `target` from where the drag began: drawn there whatever the model
+/// says, and put there in the scene only where it may stand.
+fn aim(window: &mut Window, target: Vec3) {
+    let found = carried_by(
+        &held_on(window),
+        window
+            .tools
+            .supports
+            .carry
+            .as_ref()
+            .map_or(&[][..], |carry| &carry.before),
+        target,
+    );
+    let Some(mut carry) = window.tools.supports.carry.take() else {
+        return;
+    };
+    match found {
+        Some(found) => {
+            carry.aimed = target;
+            carry.refused = !found.allowed;
+            carry.shown = Some(Arc::new(found.mesh));
+            if found.allowed {
+                carry.taken = target;
+                put_back(window, found.moved);
+            } else {
+                lift(window, &found.moved);
+            }
+        }
+        // Nowhere for the column to stand: the last place drawn stays, refused.
+        None => carry.refused = true,
+    }
+    window.tools.supports.carry = Some(carry);
+}
+
+/// What a carry would put where, and whether all of it may stand there.
+struct Found {
+    moved: Vec<(ObjectId, Moved)>,
+    allowed: bool,
+    /// Every tree it moves, plate coordinates, meshed apart from the rest.
+    mesh: Mesh,
+}
+
+impl Found {
+    /// Takes in the trees `moved` carries on `object`, each held to how it stood in `standing`.
+    fn take(
+        &mut self,
+        object: &SceneObject,
+        moved: Moved,
+        standing: &[SupportTree],
+        placed: &core_supports::Placed,
+        profiles: Profiles,
+    ) {
+        let matrix = object.transform.to_matrix();
+        for (index, tree) in &moved {
+            let profile = profiles.of(tree.group());
+            self.allowed &= standing
+                .get(*index)
+                .is_some_and(|was| core_supports::allowed(was, tree, placed, profile));
+            self.mesh.append(&core_supports::mesh_alone(
+                &tree.moved(matrix),
+                profiles,
+                placed,
+            ));
+        }
+        self.moved.push((object.id, moved));
+    }
+}
+
+impl Default for Found {
+    fn default() -> Self {
+        Self {
+            moved: Vec::new(),
+            allowed: true,
+            mesh: Mesh::default(),
+        }
+    }
+}
+
+/// One object something is held on, with what a carry asks of it.
+struct Held<'a> {
+    object: &'a SceneObject,
+    table: Vec<SupportProfile>,
+    keep_out: Option<Blocked>,
+    /// Each frozen tree held, with its parts held.
+    trees: Vec<(usize, Vec<Part>)>,
+}
+
+/// Every object something is held on, each once.
+fn held_on<'a>(window: &'a Window<'_>) -> Vec<Held<'a>> {
+    let picked = &window.tools.supports.picked;
+    held_objects(window.tools)
+        .into_iter()
+        .filter_map(|id| {
+            let object = window.doc.scene.get(id)?;
+            let mut trees: Vec<(usize, Vec<Part>)> = Vec::new();
+            for held in picked.iter().filter(|held| held.id == id) {
+                match trees.iter_mut().find(|(frozen, _)| *frozen == held.frozen) {
+                    Some((_, parts)) => parts.push(held.part),
+                    None => trees.push((held.frozen, vec![held.part])),
+                }
+            }
+            Some(Held {
+                object,
+                table: window.tools.supports.table_for(object),
+                keep_out: object.supports.keep_out(&object.mesh, object.transform),
+                trees,
+            })
+        })
+        .collect()
+}
+
+/// Every support held, and those standing on them, carried `offset` from how they stood in
+/// `before`, or `None` where a column has nothing to stand on.
+fn carried_by(
+    held: &[Held<'_>],
+    before: &[(ObjectId, Vec<SupportTree>)],
+    offset: Vec3,
+) -> Option<Found> {
+    let mut found = Found::default();
+    for held in held {
+        let (_, standing) = before.iter().find(|(id, _)| *id == held.object.id)?;
+        let profiles = Profiles::new(&held.table)?;
+        let placed = held
+            .object
+            .support_placed()
+            .blocking(held.keep_out.as_ref());
+        let mut moved = Vec::new();
+        for (frozen, parts) in &held.trees {
+            let tree = standing.get(*frozen)?;
+            let carried =
+                core_supports::carried(tree, parts, offset, &placed, profiles.of(tree.group()))?;
+            moved.extend(core_supports::followed(
+                standing, *frozen, &carried, &placed, profiles,
+            )?);
+        }
+        found.take(held.object, moved, standing, &placed, profiles);
+    }
+    Some(found)
+}
+
+/// The tip in hand, when a tip is the one thing held: it is carried to where the cursor
+/// points rather than by the step the cursor took.
+fn lone_tip(window: &Window) -> Option<Picked> {
+    let [picked] = window.tools.supports.picked.as_slice() else {
+        return None;
+    };
+    let Part::Node(node) = picked.part else {
+        return None;
+    };
+    let tree = window
+        .doc
+        .scene
+        .get(picked.id)?
+        .supports
+        .frozen()
+        .get(picked.frozen)?;
+    tree.nodes().get(node)?.is_leaf().then_some(*picked)
+}
+
+/// Puts the held tip where the cursor points on its own model, else on the nearest surface
+/// at the tip's depth (ADR 0244); where neither may hold it, it stays and is shown refused.
+fn aim_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip: Picked) {
+    let found = tip_carried(window, viewport, cursor, tip).filter(|found| found.allowed);
+    let Some(mut carry) = window.tools.supports.carry.take() else {
+        return;
+    };
+    carry.refused = found.is_none();
+    if let Some(found) = found {
+        carry.shown = Some(Arc::new(found.mesh));
+        put_back(window, found.moved);
+    }
+    window.tools.supports.carry = Some(carry);
+}
+
+/// The tip and what stands on its support where the cursor puts them, or `None` where the
+/// tip finds no surface to hold.
+fn tip_carried(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    tip: Picked,
+) -> Option<Found> {
+    let Part::Node(node) = tip.part else {
+        return None;
+    };
+    let camera = &window.view.camera;
+    let pointed = surface_under(window, viewport, cursor)
+        .filter(|(id, _)| *id == tip.id)
+        .map(|(_, hit)| hit.point);
+    let beside = part_position(window.doc, tip).and_then(|stood| {
+        let facing = (camera.sight_to(stood) - stood).normalize_or_zero();
+        crossing(camera, viewport, cursor, stood, facing)
+    });
+
+    let object = window.doc.scene.get(tip.id)?;
+    let table = window.tools.supports.table_for(object);
+    let profiles = Profiles::new(&table)?;
+    let frozen = object.supports.frozen();
+    let standing = frozen.get(tip.frozen)?;
+    let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+    let placed = object.support_placed().blocking(keep_out.as_ref());
+    let profile = profiles.of(standing.group());
+    let carried = pointed
+        .into_iter()
+        .chain(beside)
+        .find_map(|to| core_supports::tip_carried(standing, node, to, &placed, profile))?;
+    let moved = core_supports::followed(frozen, tip.frozen, &carried, &placed, profiles)?;
+    let mut found = Found::default();
+    found.take(object, moved, frozen, &placed, profiles);
+    Some(found)
+}
+
+/// Lifts every tree a carry moves out of its object's meshes, so the hand draws them; the
+/// first time builds the rest once without them.
+fn lift(window: &mut Window, moved: &[(ObjectId, Moved)]) {
+    for (id, trees) in moved {
+        let Some(object) = window.doc.scene.get_mut(*id) else {
+            continue;
+        };
+        let mut lifted: Vec<usize> = trees.iter().map(|(index, _)| *index).collect();
+        lifted.sort_unstable();
+        lifted.dedup();
+        if object.supports.lifted() != lifted.as_slice() {
+            object.supports.lift(lifted);
+            let table = window.tools.supports.table_for(object);
+            object.refresh_supports(&table);
+        }
+    }
+}
+
+/// Puts each carried tree in its place among its object's frozen ones, lifted.
+fn put_back(window: &mut Window, moved: Vec<(ObjectId, Moved)>) {
+    lift(window, &moved);
+    for (id, trees) in moved {
+        if let Some(object) = window.doc.scene.get_mut(id) {
+            for (frozen, tree) in trees {
+                object.supports.carry_to(frozen, tree);
+            }
+        }
+    }
+}
+
+/// Ends a carry: what was lifted is set down where it last could stand and meshed with the
+/// rest, once.
+fn set_down(window: &mut Window) {
+    let Some(carry) = window.tools.supports.carry.take() else {
+        return;
+    };
+    for (id, _) in carry.before {
+        if let Some(object) = window.doc.scene.get_mut(id) {
+            object.supports.lift(Vec::new());
+            let table = window.tools.supports.table_for(object);
+            object.refresh_supports(&table);
+        }
+    }
+}
+
+/// Takes hold of the part under the cursor and freezes its support, with those standing on
+/// it, against rebuilds; answers whether the press landed on a support. With `add` the part
+/// is only toggled in the set and nothing is carried.
+fn take_hold(
+    window: &mut Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    add: bool,
+    rise: bool,
+) -> bool {
+    set_down(window);
+    let Some((id, hit)) = grab_under_cursor(window, viewport, cursor) else {
+        if !add {
+            window.tools.supports.picked.clear();
+        }
+        return false;
+    };
+    let Some(picked) = freeze_and_pick(window, id, hit, add) else {
+        return false;
+    };
+
+    // Asked of the frozen tree, which the freeze renumbered, and from the cursor level with
+    // the part: a stick taken by its end must not jump to put its middle under the cursor.
+    if !add {
+        window.tools.supports.carry = part_position(window.doc, picked)
+            .and_then(|part| carry_from(window, viewport, cursor, part, rise));
+        // Drawn by the hand from the press on, so nothing blinks out before the first step.
+        match lone_tip(window) {
+            Some(tip) => aim_tip(window, viewport, cursor, tip),
+            None => aim(window, Vec3::ZERO),
+        }
+    }
+    true
+}
+
+/// Freezes the support `hit` names on `id`, with those standing on it, and picks the part:
+/// alone, or toggled in the set with `add`. Answers what was picked.
+fn freeze_and_pick(
+    window: &mut Window,
+    id: ObjectId,
+    hit: core_supports::Grab,
+    add: bool,
+) -> Option<Picked> {
+    let object = window.doc.scene.get(id)?;
+    let table = window.tools.supports.table_for(object);
+    let profiles = Profiles::new(&table)?;
+    let object = window.doc.scene.get_mut(id)?;
+    let transform = object.transform;
+    let frozen = object
+        .supports
+        .freeze_with_riders(hit.tree, transform, profiles)?;
+    window.doc.scene.select(Some(id));
+
+    let picked = Picked {
+        id,
+        frozen,
+        part: hit.part,
+    };
+    let held = &mut window.tools.supports.picked;
+    let at = held.iter().position(|other| *other == picked);
+    match (add, at) {
+        (true, Some(at)) => {
+            held.remove(at);
+        }
+        (true, None) => held.push(picked),
+        (false, Some(_)) => {}
+        (false, None) => {
+            held.clear();
+            held.push(picked);
+        }
+    }
+    Some(picked)
+}
+
+/// Where a held part stands, in plate coordinates.
+fn part_position(doc: &Doc, picked: Picked) -> Option<Vec3> {
+    let object = doc.scene.get(picked.id)?;
+    let matrix = object.transform.to_matrix();
+    let tree = object.supports.frozen().get(picked.frozen)?;
+    let node = |index: usize| tree.nodes().get(index).map(|node| node.position);
+
+    let local = match picked.part {
+        Part::Node(index) => node(index)?,
+        Part::Strut(child) => {
+            let parent = tree.nodes().get(child)?.parent?;
+            node(child)?.lerp(node(parent)?, 0.5)
+        }
+        Part::Trunk => tree.root().position.lerp(tree.landing().base, 0.5),
+        Part::Foot => tree.landing().base,
+    };
+    Some(matrix.transform_point3(local))
+}
+
+/// Every object something is held on, each once.
+fn held_objects(tools: &Tools) -> Vec<ObjectId> {
+    let mut held: Vec<ObjectId> = tools
+        .supports
+        .picked
+        .iter()
+        .map(|picked| picked.id)
+        .collect();
+    held.sort_unstable();
+    held.dedup();
+    held
+}

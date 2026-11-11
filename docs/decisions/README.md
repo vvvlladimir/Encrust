@@ -237,7 +237,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0339 |
-| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
+| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted; the step on a plane facing the camera is superseded by 0438 |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0335 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted; Auto's spacing and angle are superseded by 0425 and 0426 |
@@ -259,7 +259,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0434](0434-a-part-stands-two-millimetres-up-on-pads-bevelled-at-forty-five-degrees.md) | Lift a part 2 mm, on pads bevelled at forty-five degrees | Proposed |
 | [0435](0435-the-end-of-a-toe-is-held-by-a-support-of-its-own.md) | Hold the end of a toe with a support of its own | Proposed |
 | [0436](0436-a-front-runs-into-a-thicker-support-before-it-joins-another.md) | Run a front into a thicker support before it joins another front | Proposed |
-| [0437](0437-no-edit-leaves-a-strut-flatter-than-forty-five-degrees.md) | Let no edit leave a strut flatter than forty-five degrees | Proposed |
+| [0437](0437-no-edit-leaves-a-strut-flatter-than-forty-five-degrees.md) | Let no edit leave a strut flatter than forty-five degrees | Proposed; sliding by run or rise and refusing a step outright are superseded by 0438 |
+| [0438](0438-a-carried-support-follows-the-cursor-and-stands-only-where-allowed.md) | A carried support follows the cursor, and stands only where it is allowed | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

@@ -69,7 +69,8 @@ impl ModelSupports {
             table: table.to_vec(),
             blocked: self.blocked.clone(),
         });
-        let meshes = self.draw(shaded(mesh_groups(&trees, &placed, profiles)));
+        let meshed = self.meshed_of(&trees, standing);
+        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)));
         self.built = Some(Built {
             meshes,
             trees,
@@ -150,7 +151,8 @@ impl ModelSupports {
         // same way a point does; nothing else is asked of it.
         let trees = with_frozen(&grown_trees, &self.frozen, transform);
 
-        let meshes = self.draw(shaded(mesh_groups(&trees, &placed, profiles)));
+        let meshed = self.meshed_of(&trees, grown);
+        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)));
         self.built = Some(Built {
             meshes,
             trees,
