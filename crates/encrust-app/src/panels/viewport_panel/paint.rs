@@ -3,6 +3,7 @@
 use core_geometry::{Adjacency, Region, Scalar, Vec2};
 use core_supports::Placed;
 
+use crate::orient::shows_clean_surface;
 use crate::panels::Window;
 use crate::repair::{Picking, RepairMode};
 use crate::scene::SceneObject;
@@ -198,11 +199,7 @@ pub(super) fn paints_shown(window: &Window) -> bool {
 /// Draws what is painted as showing while a clean surface is asked for, in Position and
 /// wherever Supports shows its switch; cheap while nothing changed.
 fn refresh_shown(window: &mut Window) {
-    let reached = match *window.tool {
-        Tool::Position | Tool::Supports => true,
-        Tool::Paint => window.tools.supports.placing == Placing::Point,
-        _ => false,
-    };
+    let reached = shows_clean_surface(*window.tool, window.tools.supports.placing);
     let drawn = reached && window.tools.orient.settings.clean_surface;
     for object in window.doc.scene.here_mut() {
         if drawn {

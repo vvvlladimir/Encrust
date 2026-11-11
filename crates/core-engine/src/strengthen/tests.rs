@@ -226,6 +226,22 @@ fn under_one_profile_a_weak_tip_gets_neighbours_on_the_same_underside() {
 }
 
 #[test]
+fn a_tip_weak_round_after_round_is_never_given_the_same_neighbour_twice() {
+    let slab = Slab::new(20.0);
+    let mut needs = slab.middle();
+    strengthen(slab.underside(), &mut needs, &[], &light(), &mut || true).expect("the slab reads");
+    for (index, need) in needs.iter().enumerate() {
+        for other in &needs[index + 1..] {
+            assert!(
+                need.contact.distance(other.contact) > 1e-3,
+                "two needs share the contact {}",
+                need.contact
+            );
+        }
+    }
+}
+
+#[test]
 fn a_tip_with_margin_to_spare_is_left_alone() {
     let slab = Slab::new(1.0);
     let mut needs = slab.middle();
@@ -252,12 +268,14 @@ fn a_run_told_to_stop_strengthens_nothing() {
 fn no_neighbour_seats_after_the_layer_the_tip_is_worst_at() {
     let slab = Slab::new(10.0);
     let tip = Vec3::new(55.0, 55.0, 5.0);
-    let found = neighbour(slab.underside(), tip, 4.9, 1.5);
+    let taken = Buckets::new(1.5);
+    let found = neighbour(slab.underside(), tip, (4.9, 1.5), &taken);
     assert_eq!(
         found, None,
         "the underside at 5 mm is over the worst layer at 4.9 mm"
     );
-    let found = neighbour(slab.underside(), tip, 6.0, 1.5).expect("the underside is all round");
+    let found =
+        neighbour(slab.underside(), tip, (6.0, 1.5), &taken).expect("the underside is all round");
     assert!(
         (found.truncate().distance(tip.truncate()) - 1.5).abs() < 1e-4,
         "expected a point 1.5 mm off the tip, got {found}"

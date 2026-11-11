@@ -1,7 +1,5 @@
-//! Taking hold of support parts and carrying them on the plane square to the camera through
-//! the point taken, or level with the plate with Alt (ADR 0438). What is held follows the cursor wherever it goes, drawn
-//! refused where it may not stand, and the scene keeps it where it last could (ADR 0438). The
-//! rule a carried support is held to lives in `core_supports` (ADR 0208).
+//! Carrying held support parts square to the camera, or level with Alt, drawn refused where
+//! `core_supports::allowed` refuses them and kept where they last could stand (ADR 0208, 0438).
 
 use std::sync::Arc;
 
@@ -327,18 +325,33 @@ fn carried_by(
             .object
             .support_placed()
             .blocking(held.keep_out.as_ref());
-        let mut moved = Vec::new();
+        let mut carried = Vec::new();
         for (frozen, parts) in &held.trees {
             let tree = standing.get(*frozen)?;
-            let carried =
-                core_supports::carried(tree, parts, offset, &placed, profiles.of(tree.group()))?;
-            moved.extend(core_supports::followed(
-                standing, *frozen, &carried, &placed, profiles,
-            )?);
+            let profile = profiles.of(tree.group());
+            carried.push((
+                *frozen,
+                core_supports::carried(tree, parts, offset, &placed, profile)?,
+            ));
+        }
+        let mut moved = carried.clone();
+        for (frozen, tree) in &carried {
+            let riders = core_supports::followed(standing, *frozen, tree, &placed, profiles)?;
+            join_moved(&mut moved, riders);
         }
         found.take(held.object, moved, standing, &placed, profiles);
     }
     Some(found)
+}
+
+/// Adds `more` to `moved` but for the trees already in it: a tree held itself, or standing on
+/// two held, is carried once, as it was first taken.
+fn join_moved<T>(moved: &mut Vec<(usize, T)>, more: Vec<(usize, T)>) {
+    for (index, tree) in more {
+        if moved.iter().all(|(taken, _)| *taken != index) {
+            moved.push((index, tree));
+        }
+    }
 }
 
 /// The tip in hand, when a tip is the one thing held: it is carried to where the cursor
@@ -560,4 +573,22 @@ fn held_objects(tools: &Tools) -> Vec<ObjectId> {
     held.sort_unstable();
     held.dedup();
     held
+}
+
+#[cfg(test)]
+mod tests {
+    use super::join_moved;
+
+    #[test]
+    fn a_tree_held_and_standing_on_another_held_is_carried_once_as_held() {
+        let mut moved = vec![(0, "host carried"), (1, "rider carried")];
+        join_moved(
+            &mut moved,
+            vec![(0, "host"), (1, "rider seated"), (2, "its rider")],
+        );
+        assert_eq!(
+            moved,
+            vec![(0, "host carried"), (1, "rider carried"), (2, "its rider")]
+        );
+    }
 }

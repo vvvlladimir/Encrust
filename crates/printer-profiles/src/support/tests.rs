@@ -456,3 +456,16 @@ fn a_plane_tip_crosses_the_surface_wider_than_its_contact() {
         "a quarter of the way up the cone is 0.3 mm, got {radius}"
     );
 }
+
+#[test]
+fn a_density_too_low_to_mean_anything_spaces_as_the_lowest_that_does() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.density = MIN_DENSITY;
+    let lowest = profile.spacing_mm();
+    profile.density = 0.01;
+    assert_eq!(
+        profile.spacing_mm(),
+        lowest,
+        "placement spaces a density of 0.01 as {MIN_DENSITY}"
+    );
+}

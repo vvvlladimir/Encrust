@@ -1,5 +1,5 @@
 use core_geometry::Scalar;
-use printer_profiles::{IslandSpacing, SupportProfile};
+use printer_profiles::{IslandSpacing, MIN_CONTACT_SPACING_MM, MIN_DENSITY, SupportProfile};
 
 /// Cell size of the grid layers are read on, mm: four times finer than the thinnest head and
 /// coarse enough that a large layer is a few hundred rows (ADR 0032).
@@ -25,13 +25,6 @@ pub const LEAN_BANDS: usize = 4;
 /// A layer whose underside is no higher than this stands on the build plate itself,
 /// millimetres.
 pub const PLATE_CONTACT_MM: Scalar = 1e-3;
-
-/// The lowest density that still means anything. Below it the spacing runs away.
-const MIN_DENSITY: Scalar = 0.1;
-
-/// The closest two contacts are ever put, millimetres: under this they are one contact
-/// on any panel Encrust writes for.
-const MIN_SPACING_MM: Scalar = 0.5;
 
 /// Angles this far from vertical or from a ceiling are clamped: the tangent of a right
 /// angle is not a number, and a wall needs no support however it is asked for.
@@ -78,11 +71,11 @@ impl SampleConfig {
         // Density counts supports over an area, not along a line, so it divides the
         // spacing by its own root. See `docs/decisions/0081`.
         let density = profile.density.max(MIN_DENSITY);
-        let spacing_mm = profile.contact_spacing_mm.max(MIN_SPACING_MM) / density.sqrt();
+        let spacing_mm = profile.spacing_mm();
         let steep_spacing_mm = profile
             .steep_contact_spacing_mm
             .max(profile.contact_spacing_mm)
-            .max(MIN_SPACING_MM)
+            .max(MIN_CONTACT_SPACING_MM)
             / density.sqrt();
         let lean = profile
             .max_overhang_deg
@@ -114,7 +107,7 @@ impl SampleConfig {
             .take_while(|least_mm2| area_mm2 >= **least_mm2)
             .count();
         let share = self.islands.share[reached];
-        (self.spacing_mm * share).max(MIN_SPACING_MM)
+        (self.spacing_mm * share).max(MIN_CONTACT_SPACING_MM)
     }
 
     /// Whether the spacing follows the angle of the face at all.

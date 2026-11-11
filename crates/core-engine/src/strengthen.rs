@@ -2,7 +2,7 @@
 //! built to the next wider size, or given a neighbour at the widest (ADR 0422).
 
 use core_analysis::{Cured, Load, Tip, TipLoads, cure};
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3};
+use core_geometry::{Buckets, Bvh, Mesh, Ray, Scalar, Vec3};
 use core_raster::{Grey, PixelPitch, RasterSettings, Rasterizer, ScanlineRasterizer, Shading};
 use core_slicer::Sliced;
 use core_supports::{Blocked, Need, Reason};
@@ -23,6 +23,8 @@ const PITCH_MM: f32 = 0.05;
 const NEIGHBOUR_SPACINGS: Scalar = 0.5;
 /// The ways around a weak tip a neighbour is looked for.
 const AROUND: [[Scalar; 2]; 4] = [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]];
+/// How near a contact already standing a neighbour may not seat, in its reach: that spot is held.
+const TAKEN_SHARE: Scalar = 0.5;
 
 /// What strengthening changed.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -57,6 +59,12 @@ pub fn strengthen(
     let table = plan.table();
     let placing = plan.placing();
     let reach_mm = placing.spacing_mm() * NEIGHBOUR_SPACINGS;
+    let mut taken = Buckets::new(reach_mm);
+    let standing = needs
+        .iter()
+        .map(|need| need.contact)
+        .chain(held.iter().copied());
+    standing.for_each(|at| taken.insert(at.truncate(), at));
     let mut done = Strengthened::default();
     for _ in 0..MOST_ROUNDS {
         if !keep_going() {
@@ -76,8 +84,10 @@ pub fn strengthen(
             if heavier(plan, &needs[at]) {
                 needs[at].heavier += 1;
                 done.thickened += 1;
-            } else if let Some(contact) = neighbour(model, needs[at].contact, worst_z_mm, reach_mm)
+            } else if let Some(contact) =
+                neighbour(model, needs[at].contact, (worst_z_mm, reach_mm), &taken)
             {
+                taken.insert(contact.truncate(), contact);
                 needs.push(Need {
                     contact,
                     ..needs[at]
@@ -158,10 +168,14 @@ fn heavier(plan: &SupportPlan, need: &Need) -> bool {
     size + 1 < AUTO_SIZES && tip_mm(size + 1) > tip_mm(size)
 }
 
-/// The lowest underside `reach_mm` around `tip` that seats no higher than `worst_z_mm` and
-/// that placement may touch: a neighbour seated over the layer the tip is worst at comes too
-/// late to share it.
-fn neighbour(model: Underside<'_>, tip: Vec3, worst_z_mm: f32, reach_mm: Scalar) -> Option<Vec3> {
+/// The lowest underside `reach_mm` round `tip`, free and held by none of `taken`, seated no
+/// higher than `worst_z_mm`: one over the layer the tip is worst at comes too late to share it.
+fn neighbour(
+    model: Underside<'_>,
+    tip: Vec3,
+    (worst_z_mm, reach_mm): (f32, Scalar),
+    taken: &Buckets<Vec3>,
+) -> Option<Vec3> {
     AROUND
         .iter()
         .filter_map(|[x, y]| {
@@ -173,7 +187,10 @@ fn neighbour(model: Underside<'_>, tip: Vec3, worst_z_mm: f32, reach_mm: Scalar)
             let free = model
                 .blocked
                 .is_none_or(|blocked| !blocked.covers(point, 0.0));
-            (faces_down && free && point.z <= worst_z_mm).then_some(point)
+            let held = taken
+                .around(point.truncate())
+                .any(|other| other.distance(point) < reach_mm * TAKEN_SHARE);
+            (faces_down && free && !held && point.z <= worst_z_mm).then_some(point)
         })
         .min_by(|a, b| a.z.total_cmp(&b.z))
 }

@@ -274,7 +274,10 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
-        draw_aimed(ui, window, rect, pointer);
+        // A press paints what shows while that brush is out: it takes hold of nothing.
+        if !paint::paints_shown(window) {
+            draw_aimed(ui, window, rect, pointer);
+        }
     }
 }
 

@@ -476,6 +476,43 @@ fn freezing_a_support_keeps_a_lost_point_named_by_its_new_index() {
     assert_eq!(supports.points()[lost].contact.z, 20.0);
 }
 
+#[test]
+fn a_frozen_tree_hands_its_tips_as_seeds_unless_its_own_group_grows_again() {
+    // A trunk of group 1 holding a tip of its own and one whose head is group 0's.
+    let node = |x: Scalar, z: Scalar, point: Option<usize>, head: Option<u16>| crate::TreeNode {
+        position: Vec3::new(x, 0.0, z),
+        radius_mm: 0.4,
+        parent: point.map(|_| 0),
+        point,
+        head,
+    };
+    let nodes = vec![
+        node(0.0, 10.0, None, None),
+        node(-2.0, 15.0, Some(0), None),
+        node(2.0, 15.0, Some(1), Some(0)),
+    ];
+    let mut tree = SupportTree::new(nodes, 0, crate::Landing::on_part(Vec3::ZERO));
+    tree.settle(1);
+    let supports =
+        ModelSupports::restore(Vec::new(), Region::default(), Region::default(), vec![tree]);
+
+    let seeds = |groups: &[u16]| {
+        supports
+            .contacts_outside(Transform::default(), groups)
+            .len()
+    };
+    assert_eq!(
+        seeds(&[0]),
+        2,
+        "the tree stands in group 1, which stays whole"
+    );
+    assert_eq!(
+        seeds(&[1]),
+        0,
+        "a tree whose own group grows again goes, every tip with it"
+    );
+}
+
 /// How many faces the meshes of `supports` hold between them.
 fn faces_meshed(supports: &ModelSupports) -> usize {
     supports

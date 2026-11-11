@@ -200,6 +200,48 @@ fn growing_again_grows_the_automatic_supports_anew_and_keeps_a_hand_placed_group
 }
 
 #[test]
+fn growing_again_leaves_what_check_stood_in_an_automatic_shape_to_check() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let (mut tool, mut scene) = held_by_hand();
+    let shapes = tool.check_shapes(&catalogue);
+    tool.groups[1] = SupportGroup {
+        name: ISLANDS_GROUP.to_owned(),
+        profile: shapes[0].clone(),
+        hidden: false,
+    };
+    grown_again(&mut tool, &mut scene);
+    assert_eq!(
+        scene.objects()[0].supports.group_count(1),
+        1,
+        "Check's support stays, and nothing Auto grows stands in Check's group"
+    );
+}
+
+#[test]
+fn a_run_landing_mid_carry_lets_go_of_what_the_hand_lifted() {
+    let mut scene = one_big_cube();
+    let (mut tool, _) = grown_by_auto(&mut scene);
+    let id = scene.objects()[0].id;
+    scene.objects_mut()[0].supports.lift(vec![0]);
+    tool.carry = Some(Carry {
+        from: Vec3::ZERO,
+        taken: Vec3::ZERO,
+        aimed: Vec3::ZERO,
+        level: false,
+        before: vec![(id, Vec::new())],
+        shown: None,
+        group: 0,
+        refused: false,
+    });
+    grown_again(&mut tool, &mut scene);
+    assert!(tool.carry.is_none(), "the trees it held are renumbered");
+    assert!(
+        scene.objects()[0].supports.lifted().is_empty(),
+        "nothing is left out of the meshes for a hand that let go"
+    );
+}
+
+#[test]
 fn growing_the_group_in_hand_again_leaves_the_automatic_ones_standing() {
     let mut scene = one_big_cube();
     let (mut tool, _) = grown_by_auto(&mut scene);

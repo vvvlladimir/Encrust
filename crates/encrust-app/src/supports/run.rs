@@ -135,7 +135,7 @@ impl SupportTool {
     }
 
     /// The groups a run started now grows: every group built to a shape the automatic profile
-    /// sizes into while it is on, else the group in hand.
+    /// sizes into while it is on, else the group in hand; never one Check stood its answers in.
     fn grown_groups(&self) -> Vec<u16> {
         let Some((auto, shapes)) = &self.sizing else {
             return vec![self.active];
@@ -147,8 +147,11 @@ impl SupportTool {
             .collect();
         (0u16..)
             .zip(self.table())
-            .filter(|(_, profile)| names.contains(&profile.name.as_str()))
-            .map(|(group, _)| group)
+            .zip(&self.groups)
+            .filter(|((_, profile), group)| {
+                names.contains(&profile.name.as_str()) && !group.answers_check()
+            })
+            .map(|((group, _), _)| group)
             .collect()
     }
 
@@ -241,8 +244,19 @@ impl SupportTool {
             object.supports.retain_points(|index| !points[index]);
             object.supports.retain_frozen(|index| !frozen[index]);
         }
-        // A frozen tree taken away renumbers the ones after it.
+        self.let_go(scene);
+    }
+
+    /// Lets go of every part picked and of the carry under way: a frozen tree taken away
+    /// renumbers the ones after it, which they name.
+    fn let_go(&mut self, scene: &mut Scene) {
         self.picked.clear();
+        let carried = self.carry.take().map(|carry| carry.before);
+        for (id, _) in carried.unwrap_or_default() {
+            if let Some(object) = scene.get_mut(id) {
+                object.supports.lift(Vec::new());
+            }
+        }
     }
 
     /// Puts what a run placed on `side` of the wall into the scene, sized by `sizing` or in
@@ -275,8 +289,7 @@ impl SupportTool {
         if side == Side::Inside {
             let placed: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
             Self::clear_inside_of(scene, &placed);
-            // A frozen tree taken away renumbers the ones after it.
-            self.picked.clear();
+            self.let_go(scene);
         }
         Self::on_its_side(placements, scene, side)
     }
@@ -312,9 +325,9 @@ impl SupportTool {
         ))
     }
 
-    /// The group each of `shapes` that is wanted is placed into: the one already built to
-    /// a profile of its name, else one nothing stands in, retuned to it, else a new one.
-    /// A shape nothing is sized into is `None`, and is given no group.
+    /// The group each of `shapes` that is wanted is placed into: the one not Check's already
+    /// built to a profile of its name, else one nothing stands in, retuned to it, else a new
+    /// one. A shape nothing is sized into is `None`, and is given no group.
     pub(super) fn groups_for(
         &mut self,
         shapes: [Option<SupportProfile>; SHAPES],
@@ -323,7 +336,8 @@ impl SupportTool {
         let table = self.table();
         let named = shapes.each_ref().map(|shape| {
             let shape = shape.as_ref()?;
-            let group = table.iter().position(|kind| kind.name == shape.name)?;
+            let group = (table.iter().zip(&self.groups))
+                .position(|(kind, group)| kind.name == shape.name && !group.answers_check())?;
             Some(group as u16)
         });
         let mut taken: Vec<u16> = named.iter().flatten().copied().collect();

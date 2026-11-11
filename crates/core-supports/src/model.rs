@@ -123,17 +123,13 @@ impl ModelSupports {
                 .count()
     }
 
-    /// [`Self::contacts`] but for the supports built to any of `groups`: what a run that grows
-    /// those groups again is handed as seeds.
+    /// [`Self::contacts`] but for the points of `groups` and the frozen trees standing in one:
+    /// the seeds of a run that grows those groups again and takes them away.
     pub fn contacts_outside(&self, transform: Transform, groups: &[u16]) -> Vec<Vec3> {
         let matrix = transform.to_matrix();
-        let frozen = self.frozen.iter().flat_map(|tree| {
-            tree.nodes()
-                .iter()
-                .enumerate()
-                .filter(|(node, at)| at.is_leaf() && !groups.contains(&tree.head_group(*node)))
-                .map(|(_, at)| at.position)
-        });
+        let frozen = (self.frozen.iter())
+            .filter(|tree| !groups.contains(&tree.group()))
+            .flat_map(SupportTree::contacts);
         self.points
             .iter()
             .filter(|point| !groups.contains(&point.group))
