@@ -103,7 +103,7 @@ pub use start_page::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
 pub use theme_card::{CardLook, theme_card};
-pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, brush_row, switch, tone};
+pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, switch, switch_with_toggle, tone};
 
 /// `6h36m39s`, as a printer's own screen states it.
 ///

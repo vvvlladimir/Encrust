@@ -1,34 +1,44 @@
-//! The Clean surface brush, one row in Auto-orient and in the Where section of Supports, both
-//! painting the same faces (ADR 0427).
+//! The Clean surface switch and its brush, in Auto-orient and in the Where section of
+//! Supports, both painting the same faces (ADR 0427).
 
-use super::paint::{MAX_BRUSH_MM, MIN_BRUSH_MM};
+use super::paint::{COARSE_STEP, MAX_BRUSH_MM, MIN_BRUSH_MM};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::ui::{brush_row, icon, secondary_button};
+use crate::ui::{icon, number_row, secondary_button, switch_with_toggle};
 
-/// The brush and its size, with the switch that holds Auto-orient to a clean surface where
-/// `with_switch`.
-pub(super) fn brush(ui: &mut egui::Ui, window: &mut Window, with_switch: bool) {
+/// The switch, its brush the toggle while it is on, and the brush's size while it paints;
+/// `about` says what the switch does where it stands. Clear what shows once any is painted.
+pub(super) fn clean_surface(ui: &mut egui::Ui, window: &mut Window, about: &str) {
     let orient = &mut window.tools.orient;
     let paint = tr!("position-paint-shown");
     let brushing = orient.shown_brush.brushing;
-    let switch = with_switch.then_some(&mut orient.settings.clean_surface);
-    let used = brush_row(
+    let toggled = switch_with_toggle(
         ui,
+        &mut orient.settings.clean_surface,
         &tr!("position-clean-surface"),
         (icon::PAINT, &paint, brushing),
-        &mut orient.shown_brush.radius_mm,
-        MIN_BRUSH_MM..=MAX_BRUSH_MM,
-        switch,
     );
-    if used.toggled {
+    if !orient.settings.clean_surface {
+        orient.shown_brush.brushing = false;
+        return;
+    }
+    if toggled {
         orient.shown_brush.brushing = !brushing;
         orient.stop_picking();
     }
-}
-
-/// Clear what shows, once any picked model has a face painted.
-pub(super) fn clear(ui: &mut egui::Ui, window: &mut Window) {
+    crate::ui::describe(ui, about);
+    let brush = &mut orient.shown_brush;
+    if brush.brushing {
+        number_row(
+            ui,
+            &tr!("paint-brush"),
+            &mut brush.radius_mm,
+            &tr!("unit-mm"),
+            COARSE_STEP,
+            MIN_BRUSH_MM..=MAX_BRUSH_MM,
+            2,
+        );
+    }
     let scene = &mut window.doc.scene;
     let painted = scene
         .targets()

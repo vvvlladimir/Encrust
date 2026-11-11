@@ -28,8 +28,9 @@ looking at supports would find it.
 - **Strengthening gives it a neighbour, never a heavier tip.**
 - Only what is painted counts. What shows by the shape alone still steers the orientation
   search and nothing else.
-- **The brush is one row, Clean surface with the brush and its size,** in Auto-orient and in
-  the Where section of Supports. Both paint the same faces. Auto-orient keeps its switch.
+- **The Clean surface switch and its brush stand in Auto-orient and in the Where section of
+  Supports.** It is one switch, and both brushes paint the same faces. Placement reads the
+  painted faces only while it is on.
 
 ## Consequences
 

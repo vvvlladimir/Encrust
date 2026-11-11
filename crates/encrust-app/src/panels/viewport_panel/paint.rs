@@ -195,16 +195,15 @@ pub(super) fn paints_shown(window: &Window) -> bool {
     window.tools.orient.paints_shown(*window.tool, placing)
 }
 
-/// Draws what is painted as showing while a clean surface is asked for in Position or the
-/// brush is in hand, and in Supports, which holds it sparser; cheap while nothing changed.
+/// Draws what is painted as showing while a clean surface is asked for, in Position and
+/// wherever Supports shows its switch; cheap while nothing changed.
 fn refresh_shown(window: &mut Window) {
-    let orient = &window.tools.orient;
-    let drawn = match *window.tool {
-        Tool::Position => orient.settings.clean_surface || orient.shown_brush.brushing,
-        Tool::Supports => true,
+    let reached = match *window.tool {
+        Tool::Position | Tool::Supports => true,
         Tool::Paint => window.tools.supports.placing == Placing::Point,
         _ => false,
     };
+    let drawn = reached && window.tools.orient.settings.clean_surface;
     for object in window.doc.scene.here_mut() {
         if drawn {
             let mesh = std::sync::Arc::clone(&object.mesh);

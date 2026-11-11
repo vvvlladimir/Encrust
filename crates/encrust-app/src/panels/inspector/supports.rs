@@ -130,9 +130,8 @@ fn where_fields(ui: &mut egui::Ui, window: &mut Window) {
             lift_row(ui, &mut window.doc.scene, id);
         }
     });
-    super::shown::brush(ui, window, false);
-    describe(ui, &tr!("supports-clean-surface-about"));
-    super::shown::clear(ui, window);
+    let about = tr!("supports-clean-surface-about");
+    super::shown::clean_surface(ui, window, &about);
 }
 
 /// How far the one picked model stands off the plate, the same number as in Position.
@@ -421,7 +420,7 @@ fn start(window: &mut Window, side: Side) {
         &mut window.doc.scene,
         window.machine.slicing.layer_height_mm(),
         &window.machine.slicing.catalogue,
-        side,
+        (side, window.tools.orient.settings.clean_surface),
     );
     window
         .machine

@@ -174,11 +174,11 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   put the fewest contacts where the model shows — within about one contact — the preset
   takes its best. A pose with a few more contacts on show is offered beside the choice
   when it wins at least a quarter more of the preset, such as a quarter less resin.
-- The **Clean surface** row holds the brush that paints the faces that must stay clean,
-  such as a face, and its size: alt to erase, **Clear what shows** to start again. The same
-  row stands in the Where section of Supports, painting the same faces. While it paints, the
-  move and turn handles are put away, so a stroke over them paints the model. Painted faces
-  are drawn in rose while the switch is on or the brush in hand, and always in Supports. Once
+- The brush in the **Clean surface** row paints the faces that must stay clean, such as a
+  face: alt to erase, **Clear what shows** to start again. The same switch and brush stand in
+  the Where section of Supports, painting the same faces. While it paints, the move and turn
+  handles are put away, so a stroke over them paints the model. Painted faces are drawn in
+  rose while the switch is on. Once
   a model has any face painted, only the painted faces count as showing; with none, what
   shows is found from the shape: open surface with fine detail, while folds, the underside
   and smooth areas take the contacts. Painting is saved with the project and cleared when
@@ -490,7 +490,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
   — gets a few thin **Auto Stabilization** supports about 8 mm apart, on 0.27 mm tips and 0.7 mm pillars, so the part does not
-  rock on the peel. On faces painted with the **Clean surface** brush, Auto puts its
+  rock on the peel. While **Clean surface** is on, on the faces its brush painted Auto puts its
   contacts 1.3 times as far apart, all on Auto Light tips, and where one carries too much it
   adds a neighbour rather than a heavier tip. **Sizes**, at the foot of the shape mode, sets where each heavier shape
   starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,

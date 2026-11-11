@@ -213,7 +213,7 @@ fn on_supports(name: &str) -> SlicerApp {
         &mut window.doc.scene,
         window.machine.slicing.layer_height_mm(),
         &window.machine.slicing.catalogue,
-        crate::supports::Side::Outside,
+        (crate::supports::Side::Outside, false),
     );
     started.expect("supports start on the Crustling");
     // Picked, the whole model is tinted, which hides where the supports meet it.

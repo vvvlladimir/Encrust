@@ -4,7 +4,7 @@ use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportT
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 use anyhow::{Result, bail};
-use core_geometry::Scalar;
+use core_geometry::{Region, Scalar};
 use core_supports::Need;
 use printer_profiles::{AutoProfile, Catalogue, ProfileError, SupportProfile};
 
@@ -87,18 +87,24 @@ impl SupportTool {
 
     /// Starts placement over everything visible, by the group in hand or the automatic profile;
     /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0332).
+    /// The faces painted to be seen are held sparser while `clean` (ADR 0427).
     pub fn start(
         &mut self,
         scene: &mut Scene,
         layer_height_mm: Scalar,
         catalogue: &Catalogue,
-        side: Side,
+        (side, clean): (Side, bool),
     ) -> Result<()> {
         self.sizing = self.sized(catalogue)?;
-        let tasks = match &self.sizing {
+        let mut tasks = match &self.sizing {
             Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
             None => tasks_of(scene, |object| self.profile_for(object).clone()),
         };
+        if !clean {
+            for task in &mut tasks {
+                task.shown = Region::default();
+            }
+        }
         let job = spawn(scene, tasks, (layer_height_mm, side), self.sizing.as_ref())?;
         self.job = Some(job);
         self.side = side;

@@ -54,7 +54,7 @@ fn grown_by_auto(scene: &mut Scene) -> (SupportTool, Status) {
         auto: catalogue.autos().next().map(|entry| entry.profile.clone()),
         ..SupportTool::default()
     };
-    tool.start(scene, 0.05, &catalogue, Side::Outside)
+    tool.start(scene, 0.05, &catalogue, (Side::Outside, false))
         .expect("a model to place under");
     let mut status = Status::default();
     while tool.poll(scene, &mut status) {
@@ -176,7 +176,7 @@ fn a_missing_shape_stops_the_run_before_it_starts() {
         ..SupportTool::default()
     };
     assert!(
-        tool.start(&mut one_cube(), 0.05, &catalogue, Side::Outside)
+        tool.start(&mut one_cube(), 0.05, &catalogue, (Side::Outside, false))
             .is_err()
     );
     assert!(tool.job.is_none());
@@ -1123,7 +1123,7 @@ fn grown(scene: &mut Scene, sides: &[Side]) {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
     for side in sides {
-        tool.start(scene, 0.05, &catalogue, *side)
+        tool.start(scene, 0.05, &catalogue, (*side, false))
             .expect("a model to hold up");
         let mut status = Status::default();
         while tool.poll(scene, &mut status) {
@@ -1210,7 +1210,7 @@ fn a_cavity_run_cancelled_leaves_what_stood_inside_it() {
         .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
-    tool.start(&mut scene, 0.05, &catalogue, Side::Inside)
+    tool.start(&mut scene, 0.05, &catalogue, (Side::Inside, false))
         .expect("a hollow model to hold up");
     assert_eq!(
         scene.objects()[0].supports.point_count(),
@@ -1248,7 +1248,7 @@ fn holding_the_cavity_up_stands_supports_under_its_ceiling_and_nowhere_else() {
     let mut scene = hollow_cube();
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
-    tool.start(&mut scene, 0.05, &catalogue, Side::Inside)
+    tool.start(&mut scene, 0.05, &catalogue, (Side::Inside, false))
         .expect("a hollow model to hold up");
     let mut status = Status::default();
     while tool.poll(&mut scene, &mut status) {
@@ -1309,7 +1309,7 @@ fn a_drilled_hole_is_held_up_inside_like_any_underside() {
 
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
-    tool.start(&mut scene, 0.05, &catalogue, Side::Outside)
+    tool.start(&mut scene, 0.05, &catalogue, (Side::Outside, false))
         .expect("a model to place under");
     let mut status = Status::default();
     while tool.poll(&mut scene, &mut status) {

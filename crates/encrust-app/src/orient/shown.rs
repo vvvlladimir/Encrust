@@ -59,7 +59,7 @@ impl OrientTool {
             Tool::Paint => placing == Placing::Point,
             _ => false,
         };
-        reached && self.shown_brush.brushing && !self.is_running()
+        reached && self.settings.clean_surface && self.shown_brush.brushing && !self.is_running()
     }
 
     /// What the window remembers of the tool.
@@ -71,10 +71,11 @@ impl OrientTool {
         }
     }
 
-    /// Stands the tool under `state`.
+    /// Stands the tool under `state`; a brush in hand is put down where the switch goes off.
     pub fn set_state(&mut self, state: OrientState) {
         self.settings.clean_surface = state.clean_surface;
         self.shown_brush.radius_mm = state.brush_radius_mm;
         self.settings.max_tilt_deg = state.max_tilt_deg;
+        self.shown_brush.brushing &= state.clean_surface;
     }
 }

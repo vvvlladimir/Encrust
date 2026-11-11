@@ -212,7 +212,7 @@ paints from tokens only.
 | `vertical_hairline` | A one pixel rule standing between groups laid out in a row, as on the rail |
 | `Segmented` | Mutually exclusive choices sunk in one bordered track, the chosen one a pill raised in the accent's wash and ringed in `line` |
 | `switch` | A labelled toggle with an animated knob, its label cut to the row and read whole on hover |
-| `brush_row` | A brush on one row: its name, an `icon_toggle` lit while in hand, its radius in an 84 wide box, and the `switch` of what it paints for where there is one |
+| `switch_with_toggle` | A `switch` with an `icon_toggle` before its track while on: a tool for what it turns on |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |

@@ -26,52 +26,31 @@ pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     response
 }
 
-/// How wide a brush's size box stands, points: room for `25.00 mm`.
-const BRUSH_FIELD_W: f32 = 84.0;
-
-/// What a `brush_row` was used for this frame.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct BrushUse {
-    /// The brush was picked up or put down.
-    pub toggled: bool,
-    pub resized: bool,
-}
-
-/// A named brush on one row: its `icon_toggle`, lit while in hand, then its radius in a box,
-/// millimetres, and at the far right the switch of what it paints for, where there is one.
-pub fn brush_row(
+/// A labelled switch with an icon toggle standing before its track while it is on: a tool
+/// that works on what the switch turns on. Answers whether the toggle was clicked.
+pub fn switch_with_toggle(
     ui: &mut Ui,
+    on: &mut bool,
     label: &str,
-    (glyph, tooltip, brushing): (&str, &str, bool),
-    radius_mm: &mut f32,
-    range: std::ops::RangeInclusive<f32>,
-    switch: Option<&mut bool>,
-) -> BrushUse {
+    (glyph, tooltip, toggled): (&str, &str, bool),
+) -> bool {
     let size = vec2(ui.available_width(), theme::ROW_H);
     ui.allocate_ui_with_layout(
         size,
         egui::Layout::right_to_left(egui::Align::Center),
         |ui| {
-            if let Some(on) = switch {
-                let (track, response) = flip(ui, TRACK, on, label);
-                paint_track(ui, &response, track, *on);
+            let (track, response) = flip(ui, TRACK, on, label);
+            paint_track(ui, &response, track, *on);
+            let clicked = *on && {
                 ui.add_space(theme::ITEM_GAP);
-            }
-            let field = super::field::Field {
-                name: label,
-                unit: &crate::i18n::tr!("unit-mm"),
-                width: BRUSH_FIELD_W,
-                flagged: false,
+                super::icon_toggle(ui, glyph, tooltip, toggled).clicked()
             };
-            let resized = super::field::boxed_field(ui, &field, radius_mm, 0.05, range, Some(2));
-            ui.add_space(theme::ITEM_GAP);
-            let toggled = super::icon_toggle(ui, glyph, tooltip, brushing).clicked();
             let room = ui
                 .available_rect_before_wrap()
                 .with_max_x(ui.cursor().right() - theme::ITEM_GAP);
-            let hover = ui.interact(room, ui.id().with(label), Sense::hover());
+            let hover = ui.interact(room, response.id.with("label"), Sense::hover());
             paint_label(ui, &hover, room, label);
-            BrushUse { toggled, resized }
+            clicked
         },
     )
     .inner

@@ -212,9 +212,8 @@ fn tilt(ui: &mut egui::Ui, window: &mut Window) {
 /// The brush that paints where the model shows, and the switch that holds the preset to a
 /// clean surface, which reads what shows off the shape where nothing is painted.
 fn clean_surface(ui: &mut egui::Ui, window: &mut Window) {
-    super::super::shown::brush(ui, window, true);
-    describe(ui, &tr!("position-clean-surface-about"));
-    super::super::shown::clear(ui, window);
+    let about = tr!("position-clean-surface-about");
+    super::super::shown::clean_surface(ui, window, &about);
 }
 
 fn label(preset: OrientPreset) -> String {
