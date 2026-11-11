@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 use crate::clear::{Beam, MIN_BODY_MM, clear};
 use crate::lost::Unstood;
-use crate::mesher::FOOT_BEVEL;
+use crate::mesher::foot_bevel_mm;
 use crate::pad::{PadCut, pad_clear, pad_cut};
 
 mod refit;
@@ -627,7 +627,7 @@ fn pad_offset(
     };
     let reach_mm = if shape.is_round() && !shape.tapers() {
         // Inside the rim the pad meets the plate on, which the bevel pulls in.
-        profile.base_radius_mm() - profile.bottom.platform_thickness_mm * FOOT_BEVEL - inside_mm
+        profile.base_radius_mm() - foot_bevel_mm(profile) - inside_mm
     } else {
         0.0
     };

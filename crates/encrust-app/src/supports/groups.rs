@@ -120,7 +120,7 @@ impl SupportTool {
             .unwrap_or(&self.profile)
     }
 
-    /// The numbers the panel shows and the viewport marks overhangs by: the first picked
+    /// The numbers the panel shows: the first picked
     /// model's own where it keeps them, the plate's otherwise.
     pub fn shown<'a>(&'a self, scene: &'a Scene) -> &'a SupportProfile {
         scene
@@ -128,6 +128,24 @@ impl SupportTool {
             .first()
             .and_then(|id| scene.get(*id))
             .map_or(&self.profile, |object| self.profile_for(object))
+    }
+
+    /// How far a face of `object` may lean before it is held up, degrees: the automatic
+    /// profile's angle while it is in hand, as its run places by it, else the group's.
+    pub fn overhang_deg_for(&self, object: &SceneObject) -> f32 {
+        self.auto.as_ref().map_or_else(
+            || self.profile_for(object).max_overhang_deg,
+            |auto| auto.max_overhang_deg,
+        )
+    }
+
+    /// The angle the viewport marks overhangs by: [`Self::overhang_deg_for`] the first
+    /// picked model, the plate's group where none is picked.
+    pub fn shown_overhang_deg(&self, scene: &Scene) -> f32 {
+        self.auto.as_ref().map_or_else(
+            || self.shown(scene).max_overhang_deg,
+            |auto| auto.max_overhang_deg,
+        )
     }
 
     /// Puts `edited` on every picked model as its own profile of the active group, or

@@ -1,4 +1,6 @@
-use super::foot::{FLARE_RINGS, FOOT_BEVEL, FOOT_BITE, flare, foot, trunk_base_mm, trunk_bottom};
+use super::foot::{
+    FLARE_RINGS, FOOT_BITE, flare, foot, foot_bevel_mm, trunk_base_mm, trunk_bottom,
+};
 use super::*;
 use crate::Landing;
 use crate::SupportPoint;
@@ -266,7 +268,7 @@ fn the_volume_matches_the_cones_and_cylinders_it_is_made_of() {
     let pillar_r = profile.pillar_radius_mm();
     let base_r = profile.base_radius_mm();
     let foot_h = profile.bottom.platform_thickness_mm;
-    let bevel = foot_h * FOOT_BEVEL;
+    let bevel = foot_bevel_mm(&profile);
     let rim_r = base_r - bevel;
     let trunk_bottom = profile.bottom.platform_thickness_mm - foot_h * FOOT_BITE;
 
@@ -1466,10 +1468,34 @@ fn a_plate_with_skates_a_raft_and_bracing_is_still_closed() {
 }
 
 #[test]
+fn a_straight_pads_wall_stands_at_forty_five_degrees_off_the_plate() {
+    let profile = profile();
+    assert!(
+        !profile.bottom.shape.tapers(),
+        "the fixture's pad is straight"
+    );
+    let mesh = one_column(&profile);
+    let axis = Vec2::new(10.0, 10.0);
+    let widest_at = |z: Scalar| {
+        mesh.vertices
+            .iter()
+            .filter(|vertex| (vertex.z - z).abs() < 1e-4)
+            .map(|vertex| (vertex.truncate() - axis).length())
+            .fold(0.0, Scalar::max)
+    };
+    let height = profile.bottom.platform_thickness_mm;
+    let pulled_in = widest_at(height) - widest_at(0.0);
+    assert!(
+        (pulled_in - height).abs() < 1e-3,
+        "a {height} mm pad pulls in {height} mm at 45 degrees, got {pulled_in} mm"
+    );
+}
+
+#[test]
 fn nothing_of_a_support_shows_through_the_bottom_of_its_foot() {
     let profile = profile();
     let mesh = one_column(&profile);
-    let rim = profile.base_radius_mm() - profile.bottom.platform_thickness_mm * FOOT_BEVEL;
+    let rim = profile.base_radius_mm() - foot_bevel_mm(&profile);
     let axis = Vec3::new(10.0, 10.0, 0.0);
 
     for vertex in &mesh.vertices {

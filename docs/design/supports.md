@@ -139,11 +139,11 @@ tube has one side count, and the trunk runs down through it — the same overlap
 every joint (ADR 0041).
 
 Every foot is bevelled at the plate: a round foot is one trapezoid from its rim in to
-`rim - FOOT_BEVEL × height`, a skate's footprint is inset from its top, and the trunk stops
+`rim - height`, its wall at 45 degrees off the plate (ADR 0434), a skate's footprint is inset from its top, and the trunk stops
 `FOOT_BITE` inside the foot rather than showing through the sole. A pad meeting the plate
 on its widest edge is the pad a blade cannot get under (ADR 0044, ADR 0130). A tapering
-foot keeps its rim as a middle ring, so it narrows towards the support and still meets the
-plate on the bevel.
+foot keeps its rim as a middle ring `FOOT_BEVEL × height` up, so it narrows towards the
+support and still meets the plate on a 45-degree bevel.
 
 **The flare.** The pillar widens out into the pad over a quarter-circle fillet, tangent
 to the pillar above and the pad below, that rises as far as it widens (ADR 0341). It leaves the pillar at the pillar's own width, so
@@ -228,8 +228,9 @@ stands a pose on supports, and the command line applies it inside `stand_under`,
 cuts the model, leaving a part that already stands that high where it is. Whether the
 lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
 and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened
-rather than allowed to eat the body's room. Every shipped preset lifts by at least that
-much: all three lift 5 mm (ADR 0237, 0323).
+rather than allowed to eat the body's room. Every shipped preset lifts 2 mm, enough
+for its pad, flare and shortest pillar; a contact lower than its top segment gets a shortened
+neck (ADR 0434).
 
 ## Keeping the mesh closed
 

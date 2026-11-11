@@ -10,9 +10,20 @@ use printer_profiles::{ContactShape, SupportProfile};
 /// closes in past this fraction of its own radius, so the rim stays a rim.
 pub const FOOT_TAPER: Scalar = 0.45;
 
-/// How far the pad's wall pulls in towards the plate, as a fraction of its height: the tangent
-/// of its lean, 0.6 being 59 degrees off the plate; no sharp rim (ADR 0044, 0130).
-pub const FOOT_BEVEL: Scalar = 0.6;
+/// How much of a tapering pad's height its bevel at the plate takes, as a fraction; above it
+/// the pad narrows towards the support (ADR 0044, 0130).
+pub(super) const FOOT_BEVEL: Scalar = 0.6;
+
+/// How far the pad's wall drops and pulls in at the plate, mm: forty-five degrees off it, over
+/// the whole height of a straight pad and `FOOT_BEVEL` of a tapering one (ADR 0434).
+pub fn foot_bevel_mm(profile: &SupportProfile) -> Scalar {
+    let height = profile.bottom.platform_thickness_mm;
+    if profile.bottom.shape.tapers() {
+        height * FOOT_BEVEL
+    } else {
+        height
+    }
+}
 
 /// How far a trunk reaches into the foot under it, as a fraction of the foot's height: enough
 /// to overlap, not enough to show through the bottom of the pad.
@@ -83,7 +94,7 @@ pub(super) fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -
     let top_mm = foot_top_radius_mm(profile, trunk_mm);
 
     let height = profile.bottom.platform_thickness_mm;
-    let bevel = height * FOOT_BEVEL;
+    let bevel = foot_bevel_mm(profile);
     // The pad stands where the landing found room for it, which is under the trunk unless
     // the model was in the way; see `docs/decisions/0239`.
     let centre = landing.pad_centre();
@@ -117,8 +128,7 @@ pub(super) fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -
 /// Radius of the ring the pad meets the plate on, millimetres: its rim pulled in by the
 /// bevel, and never inside the trunk standing in it.
 pub(super) fn plate_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Scalar {
-    let bevel = profile.bottom.platform_thickness_mm * FOOT_BEVEL;
-    (profile.base_radius_mm() - bevel).max(trunk_mm)
+    (profile.base_radius_mm() - foot_bevel_mm(profile)).max(trunk_mm)
 }
 
 /// How many steps the fillet between a pillar and its pad is drawn in.

@@ -92,13 +92,10 @@ pub(super) fn paint_plate(
         .then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
-    let overhang_deg = window.tool.shows_overhangs().then_some(
-        window
-            .tools
-            .supports
-            .shown(&window.doc.scene)
-            .max_overhang_deg,
-    );
+    let overhang_deg = window
+        .tool
+        .shows_overhangs()
+        .then(|| window.tools.supports.shown_overhang_deg(&window.doc.scene));
     crate::render::prime_label(ui.painter());
     ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
     let hidden_groups = window.tools.supports.hidden();

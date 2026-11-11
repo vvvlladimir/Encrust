@@ -586,7 +586,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
   to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy all
   place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
-  lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
+  lift a part 2 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand. In a profile's form every group is there,
   from the tip down, tabs over it scrolling to each; branching, the grid, the raft and

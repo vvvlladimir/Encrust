@@ -228,9 +228,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0119](0119-support-profiles-join-the-catalogue.md) | Support profiles join the catalogue; a group tunes a copy | Accepted |
 | [0124](0124-a-support-standing-on-the-part-ends-in-a-contact.md) | End a support that stands on the part in a contact, and let a profile refuse one | Accepted |
 | [0125](0125-a-tip-leaves-the-surface-along-its-normal.md) | Leave the surface along its normal, and merge from the neck | Accepted; a head past 45 degrees is superseded by 0249 |
-| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0341 |
+| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0341, the pad's 59-degree wall by 0434 |
 | [0131](0131-the-shipped-presets-are-field-measurements.md) | Ship the field's measurements, and the two rules they broke | Accepted; the measurements and the order of the densities are superseded by 0254 |
-| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239 |
+| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239, the 5 mm lift by 0434 |
 | [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted; the dome at the end of every strut is superseded by 0341 |
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
@@ -256,6 +256,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0431](0431-a-support-with-no-room-turns-its-head-or-steps-along-its-face.md) | Turn a head or step a contact along its face before a support is left out, and say why | Accepted |
 | [0432](0432-a-merge-joint-stands-as-high-as-its-branches-are-long-and-holds-three.md) | Stand a merge's joint as high as its branches are long, and hang three branches at most | Accepted |
 | [0433](0433-a-support-standing-on-another-goes-with-it.md) | A support standing on another goes where that one is carried | Proposed |
+| [0434](0434-a-part-stands-two-millimetres-up-on-pads-bevelled-at-forty-five-degrees.md) | Lift a part 2 mm, on pads bevelled at forty-five degrees | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

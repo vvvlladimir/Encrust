@@ -163,6 +163,30 @@ fn sizing_turned_off_and_on_again_keeps_the_numbers_it_was_left_with() {
 }
 
 #[test]
+fn with_sizing_on_overhangs_are_marked_at_the_automatic_profiles_angle() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let scene = one_cube();
+    let mut tool = SupportTool::default();
+    tool.set_automatic(true, &catalogue);
+    let auto = tool
+        .auto
+        .as_mut()
+        .expect("the shipped automatic profile is taken up");
+    auto.max_overhang_deg = tool.profile.max_overhang_deg + 10.0;
+    let wanted = auto.max_overhang_deg;
+
+    for (what, got) in [
+        ("viewport", tool.shown_overhang_deg(&scene)),
+        ("fill", tool.overhang_deg_for(&scene.objects()[0])),
+    ] {
+        assert!(
+            (got - wanted).abs() < f32::EPSILON,
+            "the {what} marks at {got} degrees, not the automatic {wanted}"
+        );
+    }
+}
+
+#[test]
 fn a_missing_shape_stops_the_run_before_it_starts() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut auto = catalogue
