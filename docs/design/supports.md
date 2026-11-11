@@ -57,8 +57,10 @@ itself would report the contact's own face at zero distance.
   `land_on_model` off refuses that hit, and the tip bends a knee or is dropped (ADR 0124).
 - Otherwise it lands on the plate and gets a foot.
 
-Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column. The point is kept — the
-model may move up — and the inspector reports standing against placed.
+Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column; exactly that much stands.
+A contact under the foot and that pillar runs its head into the plate instead: cut flat there,
+no foot, `in_plate` set (ADR 0429). A point under the plate is kept — the model may move up —
+and the inspector reports standing against placed.
 
 A front that cannot stand, nor lean within a merge's reach, searches further before it
 is run onto the model: out to where a 25 mm strut at the profile's lean ends, every
@@ -137,8 +139,9 @@ plate on the bevel.
 **The flare.** The pillar widens out into the pad over a quarter-circle fillet, tangent
 to the pillar above and the pad below, that rises as far as it widens (ADR 0341). It leaves the pillar at the pillar's own width, so
 its height is `(lower - pillar) / 2` rather than a field of its own (ADR 0238), it is drawn with the pillar's facets rather than the pad's, and it sinks
-`FOOT_BITE` into the pad the way the trunk does. It never reaches above the root it widens,
-never narrower than the trunk standing in it, and never wider than the narrowest ring of
+`FOOT_BITE` into the pad the way the trunk does. It is drawn whole over the pillar under a
+head or not at all: a shorter pillar stands plain on its pad (ADR 0429). It never reaches
+above the root it widens, never narrower than the trunk standing in it, and never wider than the narrowest ring of
 the pad under it (ADR 0130).
 
 A skate is a closed box lying flat, elongated along a toe pointing away from the part — the

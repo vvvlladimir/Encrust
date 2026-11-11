@@ -175,6 +175,7 @@ fn two_nodes_in_one_place_on_a_straight_run_are_no_turn() {
         pad_offset: core_geometry::Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let tree = SupportTree::new(
         vec![

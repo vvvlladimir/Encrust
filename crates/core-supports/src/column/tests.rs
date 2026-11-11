@@ -212,14 +212,58 @@ fn a_part_a_millimetre_over_the_plate_stands_on_a_pad_and_a_short_head() {
         diagnose(&mesh).is_closed(),
         "the short support is drawn closed"
     );
+    let over_pad = profile.footing_height_mm() + 0.01;
+    let widest_mm = mesh
+        .vertices
+        .iter()
+        .filter(|vertex| vertex.z > over_pad)
+        .map(|vertex| vertex.truncate().length())
+        .fold(0.0, Scalar::max);
+    assert!(
+        widest_mm <= profile.pillar_radius_mm() + 1e-3,
+        "a straight head onto the pad, no fillet over it: {widest_mm} mm out against the pillar's {}",
+        profile.pillar_radius_mm()
+    );
 }
 
 #[test]
-fn a_contact_with_no_room_under_it_has_no_landing() {
+fn a_part_lower_than_a_pad_stands_on_a_head_sunk_into_the_plate() {
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let profiles = Profiles::single(&profile);
+    for under_mm in [0.1, 0.4, 0.69] {
+        let model = box_mesh(Vec3::new(-3.0, -3.0, under_mm), Vec3::new(3.0, 3.0, 2.0));
+        let points = [SupportPoint::new(Vec3::new(0.0, 0.0, under_mm))];
+        let trees = trees_on(&points, &model, Transform::default(), profiles);
+        let tree = trees.first().expect("a support stands under the part");
+        assert!(
+            tree.landing().in_plate && tree.landing().base.z.abs() < 1e-4,
+            "{under_mm} mm up, the head runs into the plate; landed {:?}",
+            tree.landing()
+        );
+        let mesh = meshed(&trees, profiles);
+        let bounds = mesh.aabb().expect("the support is drawn");
+        assert!(
+            bounds.mins.z.abs() < 1e-3 && diagnose(&mesh).is_closed(),
+            "{under_mm} mm up, a closed cone cut at the plate, from z = {}",
+            bounds.mins.z
+        );
+        assert!(
+            bounds.maxs.x - bounds.mins.x < 2.0 * profile.pillar_radius_mm() + 1e-3,
+            "{under_mm} mm up, no wider than the pillar, no pad: {} mm across",
+            bounds.maxs.x - bounds.mins.x
+        );
+    }
+}
+
+#[test]
+fn a_contact_lower_than_its_foot_lands_in_the_plate() {
     let profile = profile();
-    // The foot alone is taller than this contact stands.
     let contact = Vec3::new(1.0, 1.0, profile.bottom.platform_thickness_mm);
-    assert!(landing_on(&Mesh::default(), Transform::default(), contact, &profile).is_none());
+    let landing = landing_on(&Mesh::default(), Transform::default(), contact, &profile);
+    assert!(
+        landing.is_some_and(|landing| landing.in_plate),
+        "no room for the foot, so the head runs into the plate: {landing:?}"
+    );
 }
 
 #[test]
@@ -398,7 +442,7 @@ fn a_point_with_nowhere_to_stand_keeps_its_place_and_has_no_landing() {
     // Kept rather than thrown away: `grow` is where a tip that cannot stand on its
     // own is carried to a trunk that can, or finally dropped.
     let points = [
-        SupportPoint::new(Vec3::new(1.0, 1.0, 0.05)),
+        SupportPoint::new(Vec3::new(1.0, 1.0, -1.0)),
         SupportPoint::new(Vec3::new(2.0, 2.0, 20.0)),
     ];
     let columns = columns_on(
@@ -409,7 +453,10 @@ fn a_point_with_nowhere_to_stand_keeps_its_place_and_has_no_landing() {
     );
 
     assert_eq!(columns.len(), 2);
-    assert!(columns[0].landing.is_none(), "it stands under its own foot");
+    assert!(
+        columns[0].landing.is_none(),
+        "under the plate, where a part sunk into it has nothing to stand on"
+    );
     assert!(columns[1].landing.is_some());
     assert_eq!(columns[1].point, 1, "every column knows its point");
 }

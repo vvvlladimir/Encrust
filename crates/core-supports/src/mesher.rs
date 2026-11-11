@@ -8,7 +8,7 @@ use crate::base::{braces, skate, toe_of};
 use crate::buttress::buttresses;
 use crate::group::Profiles;
 use crate::raft::raft;
-use crate::tree::SupportTree;
+use crate::tree::{SupportTree, TreeNode};
 
 mod tube;
 
@@ -23,6 +23,7 @@ use foot::{FOOT_BITE, flare, foot, foot_tip, trunk_base_mm, trunk_bottom};
 pub(crate) use head::ground_normal;
 pub(crate) use head::mesh_head;
 use head::{apex_of, head};
+use sound::radius_at;
 pub(crate) use sound::{Fault, bodies, faults, sound};
 
 /// Which set of measurements a support is built from.
@@ -227,7 +228,7 @@ fn append(mesh: &mut Mesh, other: &Mesh) {
 /// Whatever the tree stands on: the flare, then a round foot as rings or a skate; nothing on the
 /// model, no foot on a raft, which the flare stands on instead (ADR 0266).
 fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
-    if tree.landing().on_model {
+    if tree.landing().on_model || tree.landing().in_plate {
         return;
     }
     let style = Style::of(tree, profile);
@@ -287,6 +288,9 @@ fn strut(
 ) -> Tube {
     let nodes = tree.nodes();
     let (from, to) = (nodes[child].position, nodes[parent].position);
+    if tree.landing().in_plate && nodes[child].is_leaf() && parent == tree.root_index() {
+        return into_plate(&nodes[child], to, profile, style);
+    }
     let offset = to - from;
     let length = offset.length();
     if length < RING_EPSILON_MM {
@@ -314,6 +318,31 @@ fn strut(
         sides: profile.facets as usize,
         apex: Some(apex_of(&nodes[child], direction, profile, style, length)),
         tail: Some(tail),
+    }
+}
+
+/// The head of the tip `node` run whole towards `plate`, where it meets the plate, and cut off
+/// flat there: what a part lower than a pad stands on (ADR 0429).
+fn into_plate(node: &TreeNode, plate: Vec3, profile: &SupportProfile, style: Style) -> Tube {
+    let offset = plate - node.position;
+    let length = offset.length();
+    if length < RING_EPSILON_MM {
+        return empty_tube(node.position);
+    }
+    let direction = offset / length;
+    let whole_mm = length.max(profile.top.length_mm);
+    let mut rings = Vec::with_capacity(8);
+    head(&mut rings, node, direction, profile, style, whole_mm);
+    let cut_mm = radius_at(&rings, length);
+    rings.retain(|ring| ring.along_mm < length - RING_EPSILON_MM);
+    push(&mut rings, length, cut_mm);
+    Tube {
+        top: node.position,
+        direction,
+        rings,
+        sides: profile.facets as usize,
+        apex: Some(apex_of(node, direction, profile, style, whole_mm)),
+        tail: None,
     }
 }
 
@@ -362,6 +391,13 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     };
 
     let mut rings = Vec::with_capacity(8);
+    if landing.in_plate {
+        return if root.is_leaf() {
+            into_plate(root, trunk_bottom(tree, profile), profile, style)
+        } else {
+            empty_tube(top)
+        };
+    }
     head(&mut rings, root, direction, profile, style, length);
     let end = TrunkEnd {
         length,

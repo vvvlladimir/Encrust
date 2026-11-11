@@ -56,6 +56,7 @@ pub(super) fn stand_small_pillars_on_supports(
                 pad_offset: Vec2::ZERO,
                 pad_cut: None,
                 on_support: true,
+                in_plate: false,
             });
             if sound(&moved, profiles, placed) {
                 *tree = moved;

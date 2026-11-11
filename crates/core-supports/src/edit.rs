@@ -44,7 +44,9 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
 
     struts
         && clear(placed, &trunk)
-        && (landing.on_model || foot_clear(placed, landing.pad_centre(), profile))
+        && (landing.on_model
+            || landing.in_plate
+            || foot_clear(placed, landing.pad_centre(), profile))
         && sound(tree, Profiles::single(profile), placed)
 }
 

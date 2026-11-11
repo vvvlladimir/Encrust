@@ -581,6 +581,33 @@ fn a_box_floating_over_the_plate_is_an_island_and_is_held_from_underneath() {
 }
 
 #[test]
+fn an_island_lower_than_a_pad_is_held_and_every_support_stands() {
+    let low = box_mesh(Vec3::new(0.0, 0.0, 0.4), Vec3::new(10.0, 10.0, 5.0));
+    let points = supports_for(&low);
+    assert!(
+        !points.is_empty(),
+        "an island 0.4 mm over the plate must be held up"
+    );
+    let profile = profile();
+    let supports: Vec<_> = points
+        .iter()
+        .map(|at| crate::SupportPoint::new(*at))
+        .collect();
+    let trees = crate::fixtures::trees_on(
+        &supports,
+        &low,
+        core_geometry::Transform::default(),
+        crate::Profiles::single(&profile),
+    );
+    let standing: usize = trees.iter().map(crate::SupportTree::tip_count).sum();
+    assert_eq!(
+        standing,
+        points.len(),
+        "each one runs its head into the plate"
+    );
+}
+
+#[test]
 fn an_island_is_held_at_the_spacing_the_profile_asks_for() {
     let floating = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(30.0, 30.0, 20.0));
     let points = supports_for(&floating);

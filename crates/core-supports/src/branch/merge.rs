@@ -194,6 +194,7 @@ impl Forest<'_> {
                 pad_offset: Vec2::ZERO,
                 pad_cut: None,
                 on_support: true,
+                in_plate: false,
             },
         ));
     }

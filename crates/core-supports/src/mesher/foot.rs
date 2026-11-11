@@ -73,7 +73,7 @@ pub(super) fn trunk_bottom(tree: &SupportTree, profile: &SupportProfile) -> Vec3
 /// number of sides from the support above it. `None` when the support lands on the model.
 pub(super) fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tube> {
     let landing = tree.landing();
-    if landing.on_model {
+    if landing.on_model || landing.in_plate {
         return None;
     }
 
@@ -141,9 +141,16 @@ pub(super) fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) 
     let lower_mm = profile.flare_lower_radius_mm().min(widest_mm).max(upper_mm);
 
     let bottom_z = landing.pillar_bottom_z(profile);
-    let room_mm = (tree.root().position.z - bottom_z).max(0.0);
-    let rise_mm = (lower_mm - upper_mm).min(room_mm);
-    if rise_mm < RING_EPSILON_MM {
+    // Only the pillar under a head is filleted, never the head itself.
+    let head_mm = if tree.root().is_leaf() && !style.small {
+        profile.top.length_mm
+    } else {
+        0.0
+    };
+    let room_mm = (tree.root().position.z - bottom_z - head_mm).max(0.0);
+    let rise_mm = lower_mm - upper_mm;
+    // A fillet cut short is a bulge, not a fillet: a pillar shorter than it stands plain.
+    if rise_mm < RING_EPSILON_MM || rise_mm > room_mm {
         return None;
     }
 

@@ -171,6 +171,7 @@ fn under_a_slab(beside: &[Mesh]) -> (Mesh, SupportTree) {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     (model, SupportTree::new(nodes, 1, landing))
 }
@@ -670,6 +671,7 @@ fn strut_end_past_joint(trunk_radii: Scalar) -> Option<Scalar> {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let tree = SupportTree::new(nodes, 1, landing);
     let tube = strut(&tree, 0, 1, &profile, Style::of(&tree, &profile));

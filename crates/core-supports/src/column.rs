@@ -89,6 +89,10 @@ pub struct Landing {
     /// it and no foot is needed. Absent reads as landing on the model (ADR 0248).
     #[serde(default)]
     pub on_support: bool,
+    /// The head runs straight into the plate at `base`, no foot under it: the part is lower than
+    /// a pad and the shortest pillar. Absent reads as standing on a foot (ADR 0429).
+    #[serde(default)]
+    pub in_plate: bool,
 }
 
 impl Landing {
@@ -100,13 +104,14 @@ impl Landing {
             pad_offset: Vec2::ZERO,
             pad_cut: None,
             on_support: false,
+            in_plate: false,
         }
     }
 
     /// Height at which the pillar body ends: the top of the foot or the raft, or the surface
     /// it sank into.
     pub fn pillar_bottom_z(&self, profile: &SupportProfile) -> Scalar {
-        if self.on_support {
+        if self.on_support || self.in_plate {
             // On the axis of the trunk it joins, which is already inside that trunk.
             self.base.z
         } else if self.on_model {
@@ -299,6 +304,10 @@ pub(crate) fn landing_within(
     profile: &SupportProfile,
     steepest_deg: Scalar,
 ) -> Option<Landing> {
+    // A head cut at the plate ends on it; anything under it stands nowhere.
+    if (from.z - PLATE_Z_MM).abs() <= SURFACE_EPSILON_MM {
+        return Some(in_plate(from));
+    }
     let contact = from;
     let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
     let below = placed.raycast(&ray);
@@ -322,6 +331,7 @@ pub(crate) fn landing_within(
                     pad_offset: Vec2::ZERO,
                     pad_cut: None,
                     on_support: false,
+                    in_plate: false,
                 },
                 hit.point.z + touch_mm + SURFACE_EPSILON_MM,
                 radius_mm,
@@ -339,6 +349,7 @@ pub(crate) fn landing_within(
                 pad_offset,
                 pad_cut,
                 on_support: false,
+                in_plate: false,
             };
             let bottom_z = landing.pillar_bottom_z(profile);
             (landing, bottom_z, base_mm)
@@ -357,6 +368,18 @@ pub(crate) fn landing_within(
         to_radius_mm: base_mm,
     };
     stands_clear(placed, &body, profile).then_some(landing)
+}
+
+/// A head ending on the plate at `neck`, sunk into it with no foot (ADR 0429).
+fn in_plate(neck: Vec3) -> Landing {
+    Landing {
+        base: Vec3::new(neck.x, neck.y, PLATE_Z_MM),
+        on_model: false,
+        pad_offset: Vec2::ZERO,
+        pad_cut: None,
+        on_support: false,
+        in_plate: true,
+    }
 }
 
 /// Where the body of a support at `contact` begins: one `[top]` out along the leaned normal
@@ -392,13 +415,17 @@ pub(crate) fn has_head(contact: Vec3, neck: Vec3) -> bool {
     contact.distance(neck) >= MIN_BODY_MM
 }
 
-/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened
-/// rather than allowed to eat the room the body needs above the plate.
+/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened rather than
+/// allowed to eat the room the body needs above the plate, or on the plate with no room for a foot.
 fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 {
     let length_mm = profile.top.length_mm;
     let drop_mm = -direction.z * length_mm;
-    let room_mm =
-        (contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM).max(0.0);
+    let room_mm = contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM;
+    let over_plate_mm = contact.z - PLATE_Z_MM;
+    if room_mm <= 0.0 && over_plate_mm > SURFACE_EPSILON_MM && direction.z < 0.0 {
+        return contact + direction * (over_plate_mm / -direction.z);
+    }
+    let room_mm = room_mm.max(0.0);
     let length_mm = if drop_mm > room_mm {
         length_mm * room_mm / drop_mm
     } else {

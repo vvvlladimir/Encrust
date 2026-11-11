@@ -242,6 +242,7 @@ impl SupportTree {
             pad_offset: Vec2::ZERO,
             pad_cut: None,
             on_support: false,
+            in_plate: false,
         };
     }
 

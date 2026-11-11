@@ -72,6 +72,7 @@ fn a_tree_splits_at_its_lowest_joint_into_the_tips_of_each_branch() {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let tree = SupportTree::new(nodes, 7, landing);
 
@@ -144,6 +145,7 @@ fn a_merged_tree_through_the_model_is_stood_again_tip_by_tip() {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let merged = SupportTree::new(nodes, 4, landing);
     assert!(
@@ -236,6 +238,7 @@ fn a_tip_whose_head_meets_the_model_leaves_the_rest_of_its_tree_merged() {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let merged = SupportTree::new(nodes, 6, landing);
     assert_eq!(
