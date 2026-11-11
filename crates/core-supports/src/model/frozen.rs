@@ -57,6 +57,9 @@ impl ModelSupports {
         for kept in &mut forest.trees {
             kept.close_up_points(taken);
         }
+        for lost in &mut forest.lost {
+            lost.point -= taken.partition_point(|taken| *taken < lost.point);
+        }
     }
 
     /// The frozen tree `frozen`, to be edited in the model's own space.

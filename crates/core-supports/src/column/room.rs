@@ -1,4 +1,4 @@
-use super::{SURFACE_EPSILON_MM, face_normal, has_room};
+use super::{SURFACE_EPSILON_MM, face_normal, has_room, straight_neck};
 use crate::islands::MOVE_REACH_MM;
 use crate::placed::Placed;
 use core_geometry::{Ray, Scalar, Vec3, turns};
@@ -45,6 +45,36 @@ pub(super) fn roomier(placed: &Placed, contact: Vec3, profile: &SupportProfile) 
         }
     }
     roomy
+}
+
+/// How far a support with no room is moved along its face at its height to stand, mm: past
+/// [`MOVE_REACH_MM`], still well inside the spacing of the contacts round it (ADR 0431).
+const MOVE_FAR_MM: Scalar = 1.0;
+
+/// How many spots with room a support with no room is tried at, nearest first.
+const MOVED_TRIES: usize = 24;
+
+/// The nearest spots at `contact`'s height past where [`roomier`] looked, each with the neck of
+/// the straight head it has room for: where a support that stands nowhere else is moved to.
+pub(crate) fn moved<'a>(
+    placed: &'a Placed<'a>,
+    contact: Vec3,
+    profile: &'a SupportProfile,
+) -> impl Iterator<Item = (Vec3, Vec3)> + 'a {
+    spots(placed, contact, MOVE_FAR_MM)
+        .filter(move |spot| spot.distance(contact) > MOVE_REACH_MM && !placed.blocks_at(*spot))
+        .filter(move |spot| along_face(placed, contact, *spot))
+        .filter_map(move |spot| Some((spot, straight_neck(placed, spot, profile).ok()?)))
+        .take(MOVED_TRIES)
+}
+
+/// Whether `spot` is reached from `contact` along the face they sit on, under it by
+/// [`LEVEL_MM`]: a wall hanging between them parts what each holds.
+fn along_face(placed: &Placed, contact: Vec3, spot: Vec3) -> bool {
+    let from = contact - Vec3::Z * LEVEL_MM;
+    let to = spot - Vec3::Z * LEVEL_MM;
+    let ray = Ray::new(from, (to - from).normalize_or_zero());
+    placed.raycast_within(&ray, from.distance(to)).is_none()
 }
 
 /// The spots of faces looking down round `contact`, ring by ring out to `reach_mm`.

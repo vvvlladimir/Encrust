@@ -218,4 +218,14 @@ fn contacts_nothing_can_stand_under_are_located_under_what_they_hold() {
             "a contact with no room lies under the slab, 15..25 mm across, found {contact}"
         );
     }
+    let why = supports["no_room_why"]
+        .as_array()
+        .expect("supports says why each has no room");
+    assert_eq!(why.len(), unheld.len(), "one reason per contact");
+    for why in why {
+        assert!(
+            why == "head-blocked" || why == "no-ground",
+            "2 mm over a block is no room for a head or for a trunk, found {why}"
+        );
+    }
 }

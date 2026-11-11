@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use super::{Built, ModelSupports};
 use crate::{
-    Blocked, Clearances, Placed, Profiles, Shaded, SupportPoint, SupportTree, columns, grow,
-    mesh_groups, shaded,
+    Blocked, Clearances, Lost, Placed, Profiles, Shaded, SupportPoint, SupportTree, columns, grow,
+    lost, mesh_groups, shaded,
 };
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
@@ -30,15 +30,17 @@ impl Growth {
         let placed = Placed::new(surface, bvh, self.transform)
             .blocking(keep_out.as_ref())
             .remembering(&self.clearances);
-        let (trees, meshes) =
+        let (trees, lost, meshes) =
             Profiles::new(&self.table).map_or_else(Default::default, |profiles| {
                 let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
+                let lost = lost(&self.points, &trees, &placed, profiles);
                 let all = with_frozen(&trees, &self.frozen, self.transform);
-                (trees, shaded(mesh_groups(&all, &placed, profiles)))
+                (trees, lost, shaded(mesh_groups(&all, &placed, profiles)))
             });
         Grown {
             forest: Forest {
                 trees,
+                lost,
                 transform: self.transform,
                 table: self.table,
                 blocked: self.blocked,
@@ -76,6 +78,8 @@ pub struct Grown {
 #[derive(Debug, Clone)]
 pub(super) struct Forest {
     pub(super) trees: Vec<SupportTree>,
+    /// The points none of `trees` carries.
+    pub(super) lost: Vec<Lost>,
     pub(super) transform: Transform,
     pub(super) table: Vec<SupportProfile>,
     pub(super) blocked: Region,
@@ -125,6 +129,11 @@ impl ModelSupports {
             self.built = None;
         }
         outgrown
+    }
+
+    /// The points the trees last grown leave without a support, and why.
+    pub fn lost(&self) -> &[Lost] {
+        self.forest.as_ref().map_or(&[], |forest| &forest.lost)
     }
 
     /// What the trees grow from as it last changed; a run grown from another is stale.

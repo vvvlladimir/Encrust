@@ -41,12 +41,14 @@ shaped like the rest. Only the tip may meet the model: the whole head, contact t
 width, is swept from a hair past its pin and past the seat the face rises to under its rim
 (ADR 0428), and a support whose head meets the model there,
 or rises so nearly straight up that a trunk from its neck would come down on its own
-contact, is not placed: `columns` leaves it out and the panel counts it with those that have
-no room to stand (ADR 0339). First it is moved to the nearest spot of a face looking down
+contact, has no straight head (ADR 0339). First it is moved to the nearest spot of a face looking down
 within 0.3 mm across and 0.05 mm up or down where a head has room, on rings 0.05 mm apart
 every 30 degrees — out to its radius and a ring where that brings its whole circle onto its
 face, which a contact with room moves for too (ADR 0339); failing that, in a profile with small pillars it has no head, and `grow`
-holds it with a small pillar or not at all (ADR 0340). Everything below
+holds it with a small pillar (ADR 0340); without them its head is turned 15 or 30 degrees, no
+further than 33 off its face, then cut to 3/4 and 1/2, and failing that its contact steps along
+its face, past no wall, to the nearest spot within 1 mm where a straight head fits (ADR 0431).
+Only then is it left out, and counted by why. Everything below
 is measured from the neck, not from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface
@@ -67,6 +69,11 @@ and the inspector reports standing against placed.
 A front that cannot stand, nor lean within a merge's reach, searches further before it
 is run onto the model: out to where a 25 mm strut at the profile's lean ends, every
 1.5 mm across and 16 ways round, onto a gentle face and then a steeper one (ADR 0338).
+
+A column no tree carries once its family has grown is grown again on its own, from a head
+turned or cut as above, then from a contact stepped along its face, and the first that stands
+sound is kept (`rescue`, ADR 0431). What is still left out is named by `lost`: no room for a
+head, on a face looking up, or nothing to stand on.
 
 ## Checking a body against the model
 

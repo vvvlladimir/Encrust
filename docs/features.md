@@ -522,17 +522,22 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
 - Only the tip touches the model, and its mark is the contact's width, at most 9 % wider on
-  one side under a turned head: a support whose head would run into the part beside its contact, where no small
-  pillar can hold it, or rise from a face looking up with nowhere to come down is not placed — by Grow or by a click —
-  and is counted among those with no room to stand. A tip on a curved or faceted underside
+  one side under a turned head. A support whose head would run into the part beside its
+  contact, and that no small pillar can hold, turns its head up to 33° off its face or a
+  shorter head. Failing that, its contact steps along the face, never past a wall, up to 1 mm
+  to where a head fits. One that still has no room, or that rises from a face looking up with
+  nowhere to come down, is not placed, by Grow or by a click. A tip on a curved or faceted underside
   that rises a little under its rim is seated there, not counted. A part from the pad's
   height and 0.2 mm over the plate stands on its own pad, its head cut short and straight, with
   no bulge at its neck or fillet round it, and a leaning trunk's fillet rings its axis; one lower than that stands on its head alone, run into the plate. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a
   merged one whose trunk meets the part is split into its two halves, each grown again.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
-  A support that still has no room is reported and left out of the print, never forced
-  into the model.
+  A support that still has no room is grown again on its own, from a turned head or a
+  contact stepped up to 1 mm along its face. One that still finds none is left out of the
+  print, never forced into the model. The panel gives one warning line for each reason: no
+  room for its tip, on a face that looks up, or nothing to stand on. `encrust` prints the same
+  counts and lists each reason in `--json`.
 - Supports are drawn round, 12 sides to a pillar shaded smooth, with rounded joints, and
   widen into their pad on a curved fillet.
 - Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,

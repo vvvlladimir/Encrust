@@ -8,6 +8,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use core_engine::SupportPlan;
 use core_geometry::{Mesh, Scalar, Vec3};
+use core_supports::Unstood;
 use core_volume::Drilled;
 
 use crate::hollowing::HollowReport;
@@ -20,8 +21,9 @@ pub struct SupportReport {
     /// Where each contact touches the model, plate coordinates, millimetres.
     pub contacts: Vec<Vec3>,
     pub standing: usize,
-    /// The contacts the run found but could not stand a column under, plate millimetres.
-    pub unheld: Vec<Vec3>,
+    /// The contacts the run found but could not stand a column under, plate millimetres,
+    /// each with why.
+    pub unheld: Vec<(Vec3, Unstood)>,
     pub trees: usize,
     pub faces: usize,
 }
@@ -46,7 +48,22 @@ impl fmt::Display for SupportReport {
         if self.unsupported() > 0 {
             writeln!(f, "  no room for    {}", self.unsupported())?;
         }
+        for why in [Unstood::HeadBlocked, Unstood::FacesUp, Unstood::NoGround] {
+            let count = self.unheld.iter().filter(|(_, lost)| *lost == why).count();
+            if count > 0 {
+                writeln!(f, "    {:<13}{count}", why_named(why).replace('-', " "))?;
+            }
+        }
         writeln!(f)
+    }
+}
+
+/// How the report names why a contact has no support, in the terminal and in `--json`.
+pub fn why_named(why: Unstood) -> &'static str {
+    match why {
+        Unstood::HeadBlocked => "head-blocked",
+        Unstood::FacesUp => "faces-up",
+        Unstood::NoGround => "no-ground",
     }
 }
 
@@ -135,7 +152,7 @@ fn reported(stood: core_engine::Stood) -> (SupportReport, Mesh) {
     let unheld = stood
         .unheld
         .iter()
-        .filter_map(|&contact| stood.contacts.get(contact).copied())
+        .filter_map(|lost| Some((*stood.contacts.get(lost.point)?, lost.why)))
         .collect();
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,

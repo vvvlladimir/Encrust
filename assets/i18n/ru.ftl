@@ -428,11 +428,23 @@ supports-mode-pick = Выбрать поддержки
 supports-mode-place = Расставить поддержки
 supports-mode-area = Закрасить или запретить область
 supports-mode-shape = Форма поддержек
-supports-without-room =
+supports-lost-head-blocked =
     { $count ->
-        [one] { $count } поддержке негде встать
-        [few] { $count } поддержкам негде встать
-       *[many] { $count } поддержкам негде встать
+        [one] { $count } поддержке не хватает места для наконечника
+        [few] { $count } поддержкам не хватает места для наконечника
+       *[many] { $count } поддержкам не хватает места для наконечника
+    }
+supports-lost-faces-up =
+    { $count ->
+        [one] { $count } поддержка стоит на грани, обращённой вверх
+        [few] { $count } поддержки стоят на гранях, обращённых вверх
+       *[many] { $count } поддержек стоят на гранях, обращённых вверх
+    }
+supports-lost-no-ground =
+    { $count ->
+        [one] { $count } поддержке не на что встать
+        [few] { $count } поддержкам не на что встать
+       *[many] { $count } поддержкам не на что встать
     }
 supports-drop-preset =
     { $count ->

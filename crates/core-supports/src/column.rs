@@ -7,10 +7,14 @@ use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
 use crate::clear::{Beam, MIN_BODY_MM, clear};
+use crate::lost::Unstood;
 use crate::mesher::FOOT_BEVEL;
 use crate::pad::{PadCut, pad_clear, pad_cut};
 
+mod refit;
 mod room;
+pub(crate) use refit::refitted_necks;
+pub(crate) use room::moved;
 use room::roomier;
 pub(crate) use room::seat_mm;
 
@@ -202,29 +206,48 @@ pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> 
                 contact,
                 profiles.of(support.group),
             )
+            .ok()
         })
         .collect()
 }
 
 /// The column of point `point` of `group`, touching the model at `contact` in plate
-/// coordinates, or `None` when its head cannot leave its face clear.
+/// coordinates, or why its head cannot leave its face. One with no room for a head even turned
+/// is moved along its face to where it has (ADR 0431).
 pub(crate) fn column(
     placed: &Placed,
     point: usize,
     group: u16,
     contact: Vec3,
     profile: &SupportProfile,
-) -> Option<Column> {
+) -> Result<Column, Unstood> {
     let contact = onto_surface(placed, contact, profile);
     let contact = roomier(placed, contact, profile).unwrap_or(contact);
-    let neck = neck_of(placed, contact, profile)?;
-    Some(Column {
+    let (contact, neck) = match head_of(placed, contact, profile) {
+        Ok(neck) => (contact, neck),
+        Err(Unstood::HeadBlocked) => moved(placed, contact, profile)
+            .next()
+            .ok_or(Unstood::HeadBlocked)?,
+        Err(why) => return Err(why),
+    };
+    Ok(column_at(placed, point, group, (contact, neck), profile))
+}
+
+/// The column of point `point` of `group` leaving `contact` by a head ending at `neck`.
+pub(crate) fn column_at(
+    placed: &Placed,
+    point: usize,
+    group: u16,
+    (contact, neck): (Vec3, Vec3),
+    profile: &SupportProfile,
+) -> Column {
+    Column {
         point,
         group,
         contact,
         neck,
         landing: landing(placed, neck, profile.pillar_radius_mm(), 1, profile),
-    })
+    }
 }
 
 /// The contact a support put down at `contact` holds and the neck of its head off its
@@ -385,20 +408,44 @@ fn in_plate(neck: Vec3) -> Landing {
 /// Where the body of a support at `contact` begins: one `[top]` out along the leaned normal
 /// (ADR 0125, 0339); with no room for a head, the contact for a small pillar (ADR 0340), or `None`.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
+    head_of(placed, contact, profile).ok()
+}
+
+/// [`neck_of`], or why the support at `contact` has no head: a head turned or cut to fit
+/// only where no small pillar holds it instead (ADR 0431).
+fn head_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Result<Vec3, Unstood> {
+    match straight_neck(placed, contact, profile) {
+        Err(Unstood::HeadBlocked) if profile.small_pillar.enabled => Ok(contact),
+        Err(Unstood::HeadBlocked) => refitted_necks(placed, contact, profile)
+            .next()
+            .ok_or(Unstood::HeadBlocked),
+        found => found,
+    }
+}
+
+/// The neck of a head leaving `contact` the way its face sends it, or why there is none.
+fn straight_neck(
+    placed: &Placed,
+    contact: Vec3,
+    profile: &SupportProfile,
+) -> Result<Vec3, Unstood> {
     let (direction, normal) = tip_direction(placed, contact);
     let neck = neck_along(contact, direction, profile);
     let Some(normal) = normal else {
-        return Some(neck);
+        return Ok(neck);
     };
-    if has_head(contact, neck) && head_clear(placed, contact, neck, normal, profile) {
-        return (!over_its_contact(contact, neck, profile)).then_some(neck);
+    if !has_head(contact, neck) || !head_clear(placed, contact, neck, normal, profile) {
+        return Err(Unstood::HeadBlocked);
     }
-    profile.small_pillar.enabled.then_some(contact)
+    if over_its_contact(contact, neck, profile) {
+        return Err(Unstood::FacesUp);
+    }
+    Ok(neck)
 }
 
-/// Whether a head leaving `contact` off its face has room, as [`neck_of`] reads it.
+/// Whether a head leaving `contact` off its face has room the way its face sends it.
 pub(crate) fn has_room(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
-    neck_of(placed, contact, profile).is_some_and(|neck| has_head(contact, neck))
+    straight_neck(placed, contact, profile).is_ok_and(|neck| has_head(contact, neck))
 }
 
 /// Whether a head rises so nearly straight up that the trunk dropped from its neck would
@@ -419,7 +466,16 @@ pub(crate) fn has_head(contact: Vec3, neck: Vec3) -> bool {
 /// allowed to eat the room the body needs above the plate, or with no room for a foot straight
 /// down onto the plate under it, whichever way its face leans (ADR 0429).
 fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 {
-    let length_mm = profile.top.length_mm;
+    neck_along_mm(contact, direction, profile.top.length_mm, profile)
+}
+
+/// [`neck_along`] for a head `length_mm` long rather than the profile's.
+fn neck_along_mm(
+    contact: Vec3,
+    direction: Vec3,
+    length_mm: Scalar,
+    profile: &SupportProfile,
+) -> Vec3 {
     let drop_mm = -direction.z * length_mm;
     let room_mm = contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM;
     if room_mm <= 0.0 && contact.z - PLATE_Z_MM > SURFACE_EPSILON_MM {

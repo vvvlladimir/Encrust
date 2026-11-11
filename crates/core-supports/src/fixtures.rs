@@ -114,6 +114,17 @@ pub fn under_a_gap_over_a_bar() -> Mesh {
     model
 }
 
+/// A slab hanging in the air, its underside at z = 10, and a lip 1.5 mm deep hanging from it
+/// at x = 10.
+pub fn slab_with_lip() -> Mesh {
+    let mut model = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(10.0, 5.0, 12.0));
+    model.append(&box_mesh(
+        Vec3::new(10.0, -5.0, 8.5),
+        Vec3::new(11.0, 5.0, 12.0),
+    ));
+    model
+}
+
 pub fn box_mesh(min: Vec3, max: Vec3) -> Mesh {
     core_geometry::cuboid(min, max)
 }

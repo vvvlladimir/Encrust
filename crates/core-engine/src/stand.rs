@@ -4,8 +4,8 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns, generate_supports,
-    grow, low_points, mesh_trees,
+    Blocked, Lost, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns,
+    generate_supports, grow, lost, low_points, mesh_trees,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
@@ -113,8 +113,8 @@ pub struct Stood {
     pub sized: Vec<usize>,
     /// Contacts a column was stood under.
     pub standing: usize,
-    /// Indices into `contacts` of those no column could stand under.
-    pub unheld: Vec<usize>,
+    /// The contacts no column could stand under, each an index into `contacts` and why.
+    pub unheld: Vec<Lost>,
     pub trees: usize,
     /// The supports themselves, in plate coordinates.
     pub supports: Mesh,
@@ -283,12 +283,6 @@ fn grown(
     let columns = columns(&points, &placed, profiles);
     let trees = grow(&columns, &placed, profiles);
     let facing = facing(surface, bvh, &contacts);
-    let mut held = vec![false; contacts.len()];
-    for point in trees.iter().flat_map(core_supports::SupportTree::points) {
-        if let Some(slot) = held.get_mut(point) {
-            *slot = true;
-        }
-    }
     Ok(Stood {
         lifted_mm,
         contacts,
@@ -298,11 +292,7 @@ fn grown(
             .iter()
             .map(core_supports::SupportTree::tip_count)
             .sum(),
-        unheld: held
-            .iter()
-            .enumerate()
-            .filter_map(|(point, &held)| (!held).then_some(point))
-            .collect(),
+        unheld: lost(&points, &trees, &placed, profiles),
         trees: trees.len(),
         supports: mesh_trees(&trees, &placed, profiles),
     })

@@ -182,6 +182,8 @@ pub struct Supports {
     pub no_room_for: usize,
     /// Where each of those touches the model, plate millimetres.
     pub no_room_at_mm: Vec<[Scalar; 3]>,
+    /// Why each of those has no support, in the same order.
+    pub no_room_why: Vec<&'static str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -282,7 +284,12 @@ impl PartReport {
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
-                no_room_at_mm: report.unheld.iter().map(|at| at.to_array()).collect(),
+                no_room_at_mm: report.unheld.iter().map(|(at, _)| at.to_array()).collect(),
+                no_room_why: report
+                    .unheld
+                    .iter()
+                    .map(|(_, why)| crate::supports::why_named(*why))
+                    .collect(),
             }),
             meets: part
                 .meets

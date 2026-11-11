@@ -89,7 +89,9 @@ left corner as the model prints, after placement and the lift its supports give 
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
 `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
-`supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model.
+`supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model, and
+`supports.no_room_why` why, in the same order: `head-blocked` (its head would run into the
+model), `faces-up` (it sits on a face looking up) or `no-ground` (nothing in reach to stand on).
 No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
 `auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
 `drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,

@@ -15,11 +15,13 @@ mod carriers;
 mod ground;
 mod harvest;
 mod merge;
+mod rescue;
 mod shortcut;
 mod small;
 mod sound;
 mod speculate;
 use carriers::{Carriers, THICKER_BY_MM};
+use rescue::rescue;
 use small::tidy_small_pillars;
 use sound::{only_sound, stand_small_pillars_on_supports};
 
@@ -55,6 +57,7 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
     }
     stand_small_pillars_on_supports(&mut forest, &carriers, placed, profiles);
     tidy_small_pillars(&mut forest, placed, profiles);
+    rescue(&mut forest, columns, placed, profiles, &carriers);
     forest.sort_by_key(SupportTree::group);
     forest
 }

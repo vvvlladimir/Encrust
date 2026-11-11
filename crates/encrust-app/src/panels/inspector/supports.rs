@@ -1,7 +1,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
-use core_supports::{Part, SupportTree};
+use core_supports::{Part, SupportTree, Unstood};
 
 use super::{paint, scope, shape, support_picker};
 use crate::i18n::tr;
@@ -155,23 +155,23 @@ fn lift_row(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// What has no room, then the run's progress, or the cavity's button for a hollow model
-/// over Fill painted areas over Grow (ADR 0336).
+/// Why supports were left out, then the run's progress, or the cavity's button for a hollow
+/// model over Fill painted areas over Grow (ADR 0336).
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
-    let (points, columns) = standing(window.doc);
+    let points = window
+        .doc
+        .scene
+        .targets()
+        .map(|object| object.supports.point_count())
+        .sum();
     // Trees still growing stand nothing yet, which is not a want of room.
     let growing = window
         .doc
         .scene
         .targets()
         .any(SceneObject::supports_pending);
-    if points != columns && !growing {
-        let line = tr!("supports-without-room", count = points - columns);
-        tone(
-            ui,
-            &format!("{} {line}", icon::WARNING),
-            theme::colors().text_mid,
-        );
+    if !growing {
+        lost(ui, window.doc);
     }
     if let Some(job) = window.tools.supports.job.as_ref() {
         running(ui, job);
@@ -180,6 +180,31 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     cavity(ui, window);
     fill(ui, window);
     grow(ui, window, points);
+}
+
+/// A warning line for each reason supports were left out, with how many (ADR 0431).
+fn lost(ui: &mut egui::Ui, doc: &Doc) {
+    for why in [Unstood::HeadBlocked, Unstood::FacesUp, Unstood::NoGround] {
+        let count = doc
+            .scene
+            .targets()
+            .flat_map(|object| object.supports.lost())
+            .filter(|lost| lost.why == why)
+            .count();
+        if count == 0 {
+            continue;
+        }
+        let line = match why {
+            Unstood::HeadBlocked => tr!("supports-lost-head-blocked", count = count),
+            Unstood::FacesUp => tr!("supports-lost-faces-up", count = count),
+            Unstood::NoGround => tr!("supports-lost-no-ground", count = count),
+        };
+        tone(
+            ui,
+            &format!("{} {line}", icon::WARNING),
+            theme::colors().text_mid,
+        );
+    }
 }
 
 fn fill(ui: &mut egui::Ui, window: &mut Window) {
@@ -269,18 +294,6 @@ fn auto_sizes(ui: &mut egui::Ui, window: &mut Window) {
             .map_or_else(|_| id.clone(), |entry| entry.profile.name.clone())
     });
     sizes(ui, auto, shipped.as_ref(), &shapes);
-}
-
-/// How many supports the plate carries, and how many of them have room to stand.
-fn standing(doc: &Doc) -> (usize, usize) {
-    doc.scene
-        .targets()
-        .fold((0, 0), |(points, columns), object| {
-            (
-                points + object.supports.point_count(),
-                columns + object.supports.standing(),
-            )
-        })
 }
 
 /// What the click has picked: how much of it, which groups it belongs to, and the

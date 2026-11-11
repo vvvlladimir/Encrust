@@ -457,3 +457,21 @@ fn a_new_table_alone_is_told_apart_from_other_edits() {
         "nor is a new point"
     );
 }
+
+#[test]
+fn freezing_a_support_keeps_a_lost_point_named_by_its_new_index() {
+    // A cube hanging over the plate: its underside holds a support, its top never does.
+    let model = crate::fixtures::box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(10.0, 10.0, 20.0));
+    let mut supports = ModelSupports::default();
+    supports.add(Vec3::new(5.0, 5.0, 10.0), Transform::default(), 0);
+    supports.add(Vec3::new(5.0, 5.0, 20.0), Transform::default(), 0);
+    refresh(&mut supports, &model, Transform::default());
+    assert_eq!(supports.lost().len(), 1, "the top is lost");
+    assert_eq!(supports.lost()[0].point, 1);
+
+    supports.freeze(0, Transform::default());
+
+    let lost = supports.lost()[0].point;
+    assert_eq!(lost, 0, "the point under it was taken");
+    assert_eq!(supports.points()[lost].contact.z, 20.0);
+}

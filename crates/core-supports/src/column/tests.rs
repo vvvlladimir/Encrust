@@ -1,7 +1,8 @@
 use super::*;
 use crate::Profiles;
 use crate::fixtures::{
-    box_mesh, columns_on, landing_on, meshed, profile, ramp, trees_on, under_a_gap_over_a_bar,
+    box_mesh, columns_on, landing_on, meshed, profile, ramp, slab_with_lip, trees_on,
+    under_a_gap_over_a_bar,
 };
 use core_geometry::{Bvh, Mesh, Quat, Transform, diagnose};
 
@@ -671,29 +672,53 @@ fn a_head_that_would_run_into_a_wall_across_from_it_is_not_placed() {
     );
 }
 
-/// A slab's underside at z = 10, and a lip 1.5 mm deep hanging from it at x = 10.
-fn slab_with_lip() -> Mesh {
-    let mut model = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(10.0, 5.0, 12.0));
-    model.append(&box_mesh(
-        Vec3::new(10.0, -5.0, 8.5),
-        Vec3::new(11.0, 5.0, 12.0),
-    ));
-    model
-}
-
 #[test]
-fn a_head_beside_a_lip_is_not_placed_rather_than_turned() {
+fn a_head_beside_a_lip_turns_away_from_it_within_the_lean_a_steep_face_gets() {
     // Straight down from 0.3 mm short of the lip, the widening head runs into it.
     let model = slab_with_lip();
     let bvh = Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
+    let contact = Vec3::new(9.7, 0.0, 10.0);
 
     let mut fixture = profile();
     fixture.small_pillar.enabled = false;
-    assert_eq!(neck_of(&placed, Vec3::new(9.7, 0.0, 10.0), &fixture), None);
+    let neck = neck_of(&placed, contact, &fixture).expect("a head turned off the lip fits");
+    let axis = (neck - contact).normalize();
+    assert!(
+        neck.x < contact.x,
+        "the head leaves away from the lip, to {neck}"
+    );
+    assert!(
+        axis.dot(-Vec3::Z) >= MAX_HEAD_LEAN_DEG.to_radians().cos() - 1e-4,
+        "turned no more than {MAX_HEAD_LEAN_DEG} degrees off the face, got {axis}"
+    );
     let clear = neck_of(&placed, Vec3::new(5.0, 0.0, 10.0), &profile())
         .expect("away from the lip the underside is open");
     assert!(clear.abs_diff_eq(Vec3::new(5.0, 0.0, 10.0 - profile().top.length_mm), 1e-4));
+}
+
+#[test]
+fn a_contact_no_head_fits_at_is_moved_along_its_face_to_where_one_does() {
+    // A rib 0.4 mm under the contact, 0.8 mm wide: no head clears it, turned or not, within the
+    // 0.3 mm a contact first steps; past its edge the underside is open.
+    let mut model = box_mesh(Vec3::new(-5.0, -5.0, 10.0), Vec3::new(5.0, 5.0, 12.0));
+    model.append(&box_mesh(
+        Vec3::new(-0.4, -5.0, 9.4),
+        Vec3::new(0.4, 5.0, 9.6),
+    ));
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let contact = Vec3::new(0.0, 0.0, 10.0);
+    let mut plain = profile();
+    plain.small_pillar.enabled = false;
+
+    let column = column(&placed, 0, 0, contact, &plain).expect("room within a millimetre");
+    let moved = column.contact - contact;
+    assert!(
+        moved.truncate().length() > 0.3 && moved.length() <= 1.0 + 1e-4 && moved.z.abs() < 1e-3,
+        "moved past the rib, over 0.3 mm and within 1 mm at its height, by {moved}"
+    );
+    assert!(has_head(column.contact, column.neck));
 }
 
 #[test]

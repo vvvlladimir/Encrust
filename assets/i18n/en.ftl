@@ -413,10 +413,20 @@ supports-mode-pick = Pick supports
 supports-mode-place = Place supports
 supports-mode-area = Paint or block an area
 supports-mode-shape = Shape of the supports
-supports-without-room =
+supports-lost-head-blocked =
     { $count ->
-        [one] { $count } support has no room to stand
-       *[other] { $count } supports have no room to stand
+        [one] { $count } support has no room for its tip
+       *[other] { $count } supports have no room for their tips
+    }
+supports-lost-faces-up =
+    { $count ->
+        [one] { $count } support is on a face that looks up
+       *[other] { $count } supports are on faces that look up
+    }
+supports-lost-no-ground =
+    { $count ->
+        [one] { $count } support has nothing to stand on
+       *[other] { $count } supports have nothing to stand on
     }
 supports-drop-preset =
     { $count ->
