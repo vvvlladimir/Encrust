@@ -8,7 +8,8 @@
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, signed_volume};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Clearances, Placed, Profiles, SupportPoint, columns, generate_supports, grow, mesh_trees,
+    Clearances, Placed, Profiles, SupportPoint, SupportTree, columns, generate_supports, grow,
+    mesh_trees,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 use printer_profiles::SupportProfile;
@@ -78,6 +79,47 @@ fn tips_under(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_sup
     )
 }
 
+/// How steady `trees` stand, as one line: joints lower than their longest branch, branches at a
+/// joint, the longest lean, and how far a landing is off the middle of its tips (ADR 0432).
+fn steadiness(trees: &[SupportTree]) -> String {
+    let (mut joints, mut low, mut most_branches, mut longest_lean_mm) = (0, 0, 0, 0.0_f32);
+    let mut offsets_mm = Vec::new();
+    for tree in trees {
+        let nodes = tree.nodes();
+        let mut branches = vec![Vec::new(); nodes.len()];
+        for (child, parent) in tree.struts() {
+            branches[parent].push(child);
+            let strut = nodes[child].position - nodes[parent].position;
+            if strut.truncate().length() > 1e-3 {
+                longest_lean_mm = longest_lean_mm.max(strut.length());
+            }
+        }
+        let ground_z = tree.landing().base.z;
+        for (joint, under) in branches.iter().enumerate().filter(|(_, b)| b.len() >= 2) {
+            let at = nodes[joint].position;
+            let longest_mm = under
+                .iter()
+                .map(|child| nodes[*child].position.distance(at))
+                .fold(0.0, Scalar::max);
+            joints += 1;
+            low += usize::from(at.z - ground_z < longest_mm);
+            most_branches = most_branches.max(under.len());
+        }
+        let tips: Vec<Vec3> = tree.contacts().collect();
+        if tips.len() >= 2 && !tree.landing().on_support {
+            let middle = tips.iter().copied().sum::<Vec3>() / tips.len() as Scalar;
+            offsets_mm.push((middle - tree.landing().base).truncate().length());
+        }
+    }
+    let mean_mm = offsets_mm.iter().sum::<Scalar>() / offsets_mm.len().max(1) as Scalar;
+    let worst_mm = offsets_mm.iter().copied().fold(0.0, Scalar::max);
+    format!(
+        "{low} of {joints} joints lower than their longest branch, at most {most_branches} \
+         branches, longest lean {longest_lean_mm:.1} mm, landing off its tips' middle by \
+         {mean_mm:.1} mm on average and {worst_mm:.1} mm at worst"
+    )
+}
+
 fn branching(c: &mut Criterion) {
     let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let mut straight = profile.clone();
@@ -139,6 +181,7 @@ fn branching(c: &mut Criterion) {
         merged.len(),
         100.0 * (1.0 - merged_mm3 / apart_mm3),
     );
+    println!("branching/40 mm ball, lifted: {}", steadiness(&merged));
 
     c.bench_function("mesh_trees/40 mm ball, lifted", |b| {
         b.iter(|| {
@@ -204,6 +247,12 @@ fn dense(c: &mut Criterion) {
         );
     });
     let trees = grow(&tips, &placed, profiles);
+    println!(
+        "dense: {} trees, {:.0} mm3, {}",
+        trees.len(),
+        signed_volume(&mesh_trees(&trees, &placed, profiles)),
+        steadiness(&trees)
+    );
     group.bench_function("mesh_trees/crowded balls", |b| {
         b.iter(|| mesh_trees(&trees, &placed, profiles));
     });

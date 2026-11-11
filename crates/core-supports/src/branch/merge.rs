@@ -1,15 +1,13 @@
 use super::carriers::{THICKER_BY_MM, meeting_on};
-use super::ground::escape;
 use super::harvest::stands;
 use super::speculate::Judged;
-use super::{Forest, Front, SAME_PLACE_MM};
+use super::{Forest, Front, MOST_BRANCHES, SAME_PLACE_MM};
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{MAX_LANDING_SLOPE_DEG, PLATE_Z_MM, landing, stands_clear};
+use crate::column::{PLATE_Z_MM, stands_clear};
 use crate::placed::Placed;
 use crate::tree::TreeNode;
 use core_geometry::{Scalar, Vec2, Vec3};
-use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
@@ -225,21 +223,14 @@ impl Forest<'_> {
         }
         let reach_per_drop = first.reach_per_drop().min(second.reach_per_drop());
         let (from_one, from_two) = (dropped(one, drop_mm), dropped(two, drop_mm));
-        let meet = meeting_point(from_one, from_two, reach_per_drop);
         let longest_mm = first.max_strut_length_mm.min(second.max_strut_length_mm);
-
-        // Two struts of no length are a merge that has already happened. One is the other
-        // front coming down onto this one, which is a joint unless this one is a contact.
-        let strut_mm = |from: Vec3| (from - meet).length();
-        let onto_contact = |front: &Front, from: Vec3| {
-            strut_mm(from) < SAME_PLACE_MM && self.nodes[front.node].is_leaf()
-        };
-        if strut_mm(from_one).max(strut_mm(from_two)) < SAME_PLACE_MM
-            || onto_contact(one, from_one)
-            || onto_contact(two, from_two)
-            || strut_mm(from_one).max(strut_mm(from_two)) > longest_mm
-            || meet.z <= PLATE_Z_MM
-        {
+        let meet = meeting_point(from_one, from_two, reach_per_drop);
+        if !self.builds(
+            meet,
+            [(one, from_one), (two, from_two)],
+            drop_mm,
+            longest_mm,
+        ) {
             return;
         }
         heap.push(Candidate {
@@ -249,6 +240,30 @@ impl Forest<'_> {
             onto_carrier: false,
             drop_mm,
         });
+    }
+
+    /// Whether a joint at `meet` can be built from `fronts`, each leaning from where it dropped:
+    /// no branch longer than `longest_mm`, nor longer than the joint stands over the plate (0432).
+    fn builds(
+        &self,
+        meet: Vec3,
+        fronts: [(&Front, Vec3); 2],
+        drop_mm: Scalar,
+        longest_mm: Scalar,
+    ) -> bool {
+        // Two branches of no length are a merge that has already happened. One is the other
+        // front coming down onto this one, which is a joint unless it is a contact or full.
+        let branch_mm = |from: Vec3| (from - meet).length();
+        let onto_full = |(front, from): &(&Front, Vec3)| {
+            branch_mm(*from) < SAME_PLACE_MM
+                && (self.nodes[front.node].is_leaf()
+                    || (drop_mm <= 0.0 && front.branches >= MOST_BRANCHES))
+        };
+        let longest_branch_mm = branch_mm(fronts[0].1).max(branch_mm(fronts[1].1));
+        longest_branch_mm >= SAME_PLACE_MM
+            && !fronts.iter().any(onto_full)
+            && longest_branch_mm <= longest_mm
+            && meet.z - PLATE_Z_MM >= longest_branch_mm
     }
 
     /// Whether the two struts of `candidate` can be built: clear of the model, and with
@@ -282,7 +297,17 @@ impl Forest<'_> {
 
         let tips = a.tips + b.tips;
         let under = self.profiles.of(self.profiles.heavier(a.group, b.group));
-        reaches(a) && reaches(b) && stands(candidate.meet, joint_mm, tips, placed, under)
+        let branch_mm = |front: &Front| dropped(front, candidate.drop_mm).distance(candidate.meet);
+        reaches(a)
+            && reaches(b)
+            && stands(
+                candidate.meet,
+                joint_mm,
+                tips,
+                placed,
+                under,
+                branch_mm(a).max(branch_mm(b)),
+            )
     }
 
     /// Hangs both fronts of `candidate` off a new node at the meeting point; the joint keeps the
@@ -321,6 +346,7 @@ impl Forest<'_> {
             tips: a.tips + b.tips,
             group: self.profiles.heavier(a.group, b.group),
             node,
+            branches: onto.map_or(2, |onto| onto.branches + 1),
             alive: true,
         })
     }
@@ -342,56 +368,77 @@ impl Forest<'_> {
         });
         node
     }
-
-    /// Bends every front the model leaves no room under onto a knee, and carries on from
-    /// there. Answers whether any of them moved.
-    pub(super) fn bend_blocked(&mut self, placed: &Placed) -> bool {
-        // Where each front bends is its own question, so they are asked at once.
-        let knees: Vec<(usize, Vec3)> = (0..self.fronts.len())
-            .into_par_iter()
-            .filter_map(|index| Some((index, self.knee(index, placed)?)))
-            .collect();
-        let bent = !knees.is_empty();
-        for (index, knee) in knees {
-            let front = self.fronts[index];
-            let node = self.nodes.len();
-            self.nodes.push(TreeNode {
-                position: knee,
-                radius_mm: front.radius_mm,
-                parent: None,
-                point: None,
-                head: None,
-            });
-            self.nodes[front.node].parent = Some(node);
-            self.fronts[index].alive = false;
-            self.push_front(Front {
-                position: knee,
-                node,
-                alive: true,
-                ..front
-            });
-        }
-        bent
-    }
-
-    /// Where front `index` bends to with no room under it, or `None` if it has room or nowhere.
-    fn knee(&self, index: usize, placed: &Placed) -> Option<Vec3> {
-        let front = self.fronts[index];
-        // A contact with no head stands as a small pillar onto the model under it.
-        if !front.alive || self.nodes[front.node].is_leaf() {
-            return None;
-        }
-        let profile = self.profile(index);
-        if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
-            return None;
-        }
-        escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).map(|(knee, _)| knee)
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::carriers::Carriers;
     use super::*;
+    use crate::fixtures::{box_mesh, profile};
+    use crate::{Profiles, SupportPoint, columns};
+    use core_geometry::{Bvh, Mesh, Transform};
+
+    /// The merges `offer` puts up for the first two tips of `at` in clear air, the first one's
+    /// front holding `branches`.
+    fn offered(at: [Vec3; 2], branches: usize) -> Vec<Candidate> {
+        let profile = profile();
+        let profiles = Profiles::single(&profile);
+        let (model, carriers) = (Mesh::default(), Carriers::new(12.0));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let points = at.map(SupportPoint::new);
+        let mut forest = Forest::seeded(&columns(&points, &placed, profiles), profiles, &carriers);
+        forest.fronts[0].branches = branches;
+        let mut heap = BinaryHeap::new();
+        forest.offer(&mut heap, 0, 1, 0.0);
+        heap.into_vec()
+    }
+
+    #[test]
+    fn a_joint_lower_over_the_plate_than_its_branches_are_long_is_not_offered() {
+        // Necks 2 mm under the tips and 8 mm apart meet 4 mm lower, a millimetre over the
+        // plate on branches 5.7 mm long.
+        let low = [Vec3::new(-4.0, 0.0, 7.0), Vec3::new(4.0, 0.0, 7.0)];
+        let high = low.map(|tip| tip + Vec3::Z * 13.0);
+
+        assert!(offered(low, 1).is_empty(), "a joint 1 mm up is no saving");
+        assert_eq!(
+            offered(high, 1).len(),
+            1,
+            "the same pair 13 mm higher merges"
+        );
+    }
+
+    #[test]
+    fn a_tip_comes_down_onto_a_neck_only_while_it_holds_under_three_branches() {
+        // The higher tip reaches the lower one's column above its neck.
+        let at = [Vec3::new(0.0, 0.0, 20.0), Vec3::new(3.0, 0.0, 25.0)];
+
+        assert_eq!(
+            offered(at, 1).len(),
+            1,
+            "a neck holding its tip takes a branch"
+        );
+        assert!(
+            offered(at, 3).is_empty(),
+            "a joint holding three takes no more"
+        );
+    }
+
+    #[test]
+    fn a_trunk_shorter_over_the_part_under_it_than_its_branches_does_not_stand() {
+        let profile = profile();
+        let shelf = box_mesh(Vec3::new(-10.0, -10.0, 8.0), Vec3::new(10.0, 10.0, 10.0));
+        let bvh = Bvh::build(&shelf);
+        let placed = Placed::new(&shelf, &bvh, Transform::default());
+        let stands_at = |z: Scalar| stands(Vec3::new(0.0, 0.0, z), 0.4, 2, &placed, &profile, 5.0);
+
+        assert!(
+            !stands_at(12.0),
+            "2 mm over the shelf is less than a 5 mm branch"
+        );
+        assert!(stands_at(16.0), "6 mm over it is more");
+    }
 
     #[test]
     fn a_pair_refused_80_mm_up_is_retried_eight_times_before_the_plate() {

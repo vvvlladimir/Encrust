@@ -29,6 +29,10 @@ use sound::{only_sound, stand_small_pillars_on_supports};
 /// carries no information. Well under one pixel of any panel.
 const SAME_PLACE_MM: Scalar = 1e-4;
 
+/// The most branches that meet at one joint: past three a joint is a star of levers on one
+/// point, and the next tip gets a joint of its own lower down (ADR 0432).
+const MOST_BRANCHES: usize = 3;
+
 /// Merges the tips of `columns` (plate coordinates) into shared trunks, highest meeting point
 /// first (ADR 0040); same-width groups grow together, thickest first (ADR 0325, 0248).
 pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<SupportTree> {
@@ -195,6 +199,8 @@ struct Front {
     /// The group of the heaviest head it carries, which what is under it is built to.
     group: u16,
     node: usize,
+    /// How many branches hang at `node`; a joint takes no more than [`MOST_BRANCHES`].
+    branches: usize,
     alive: bool,
 }
 
@@ -262,6 +268,7 @@ impl<'a> Forest<'a> {
                 tips: 1,
                 group: column.group,
                 node,
+                branches: usize::from(headed),
                 alive: true,
             });
         }

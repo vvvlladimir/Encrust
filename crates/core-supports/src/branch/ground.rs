@@ -1,10 +1,12 @@
-use super::{Front, SAME_PLACE_MM, lean_per_drop};
+use super::{Forest, Front, SAME_PLACE_MM, lean_per_drop};
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{MIN_PILLAR_HEIGHT_MM, landing_within};
+use crate::column::{MAX_LANDING_SLOPE_DEG, MIN_PILLAR_HEIGHT_MM, landing, landing_within};
 use crate::placed::Placed;
+use crate::tree::TreeNode;
 use core_geometry::{Scalar, Vec3};
 use printer_profiles::SupportProfile;
+use rayon::prelude::*;
 
 /// How many directions a blocked front leans in and how far apart the reaches, mm, shortest first:
 /// eight is every 45 degrees, a millimetre the least step leaving the model a body's width.
@@ -127,4 +129,52 @@ pub(super) fn lean_for_ground(
         }
     }
     None
+}
+
+impl Forest<'_> {
+    /// Bends every front the model leaves no room under onto a knee, and carries on from
+    /// there. Answers whether any of them moved.
+    pub(super) fn bend_blocked(&mut self, placed: &Placed) -> bool {
+        // Where each front bends is its own question, so they are asked at once.
+        let knees: Vec<(usize, Vec3)> = (0..self.fronts.len())
+            .into_par_iter()
+            .filter_map(|index| Some((index, self.knee(index, placed)?)))
+            .collect();
+        let bent = !knees.is_empty();
+        for (index, knee) in knees {
+            let front = self.fronts[index];
+            let node = self.nodes.len();
+            self.nodes.push(TreeNode {
+                position: knee,
+                radius_mm: front.radius_mm,
+                parent: None,
+                point: None,
+                head: None,
+            });
+            self.nodes[front.node].parent = Some(node);
+            self.fronts[index].alive = false;
+            self.push_front(Front {
+                position: knee,
+                node,
+                branches: 1,
+                alive: true,
+                ..front
+            });
+        }
+        bent
+    }
+
+    /// Where front `index` bends to with no room under it, or `None` if it has room or nowhere.
+    fn knee(&self, index: usize, placed: &Placed) -> Option<Vec3> {
+        let front = self.fronts[index];
+        // A contact with no head stands as a small pillar onto the model under it.
+        if !front.alive || self.nodes[front.node].is_leaf() {
+            return None;
+        }
+        let profile = self.profile(index);
+        if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
+            return None;
+        }
+        escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).map(|(knee, _)| knee)
+    }
 }

@@ -1,11 +1,12 @@
-use super::{Forest, SAME_PLACE_MM};
+use super::{Forest, MOST_BRANCHES, SAME_PLACE_MM};
 use crate::clear::{Beam, clear};
+use crate::column::PLATE_Z_MM;
 use crate::placed::Placed;
 use core_geometry::{Scalar, Vec3};
 
 impl Forest<'_> {
-    /// Runs every branch a joint would lead back the way it came straight on to the joint under
-    /// that one, where the strut stays within every group's lean and length and clear (ADR 0430).
+    /// Runs every branch a joint would lead back straight on to the joint under, within every
+    /// group's lean, length and clearance, onto room and height for it (ADR 0430, 0432).
     pub(super) fn shortcut(&mut self, placed: &Placed) {
         let reach_per_drop = self.strictest(|profile| profile.branching.reach_per_drop());
         let longest_mm = self.strictest(|profile| profile.branching.max_strut_length_mm);
@@ -42,10 +43,12 @@ impl Forest<'_> {
                     from_radius_mm: from.radius_mm,
                     to_radius_mm: from.radius_mm,
                 };
+                let strut_mm = from.position.distance(to);
                 !from.is_leaf()
                     && drop_mm > 0.0
                     && (from.position - to).truncate().length() <= drop_mm * reach_per_drop
-                    && from.position.distance(to) <= longest_mm
+                    && strut_mm <= longest_mm
+                    && to.z - PLATE_Z_MM >= strut_mm
                     && clear(placed, &strut.with_clearance(clearance_mm))
             };
             let skip = |forest: &mut Self, branch: usize, children: &mut [Vec<usize>]| {
@@ -55,7 +58,8 @@ impl Forest<'_> {
             };
             for branch in children[joint].clone() {
                 let from = &self.nodes[branch];
-                if turns_back(from.position, at, to) && reaches(from) {
+                let room = children[under].len() < MOST_BRANCHES;
+                if room && turns_back(from.position, at, to) && reaches(from) {
                     skip(self, branch, &mut children);
                 }
             }
@@ -87,4 +91,66 @@ fn turns_back(from: Vec3, at: Vec3, to: Vec3) -> bool {
     let into = (at - from).truncate();
     let out = (to - at).truncate();
     into.length() >= SAME_PLACE_MM && out.length() >= SAME_PLACE_MM && into.dot(out) < 0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::carriers::Carriers;
+    use super::*;
+    use crate::fixtures::profile;
+    use crate::group::Profiles;
+    use crate::tree::TreeNode;
+    use core_geometry::{Bvh, Mesh, Transform};
+
+    /// Where the branch over a joint at `under_z` + 3 mm hangs once shortcut: a joint at
+    /// `under_z` holds `others` branches beside it, and the branch would lead back 1 mm.
+    fn shortcut_from(under_z: Scalar, others: usize) -> Option<usize> {
+        let profile = profile();
+        let (model, carriers) = (Mesh::default(), Carriers::new(12.0));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let mut forest = Forest::seeded(&[], Profiles::single(&profile), &carriers);
+        let node = |x: Scalar, y: Scalar, up_mm: Scalar, parent: Option<usize>| TreeNode {
+            position: Vec3::new(x, y, under_z + up_mm),
+            radius_mm: 0.4,
+            parent,
+            point: None,
+            head: None,
+        };
+        forest.nodes.push(node(0.0, 0.0, 0.0, None));
+        for other in 0..others {
+            forest.nodes.push(node(-3.0, other as Scalar, 3.0, Some(0)));
+        }
+        let joint = forest.nodes.len();
+        forest.nodes.push(node(2.0, 0.0, 3.0, Some(0)));
+        let back = forest.nodes.len();
+        forest.nodes.push(node(1.0, 0.0, 5.0, Some(joint)));
+        forest.nodes.push(node(4.0, 0.0, 5.0, Some(joint)));
+
+        forest.shortcut(&placed);
+        forest.nodes[back].parent
+    }
+
+    #[test]
+    fn a_branch_led_back_runs_on_to_the_joint_under_only_while_that_has_room() {
+        assert_eq!(
+            shortcut_from(10.0, 1),
+            Some(0),
+            "a joint of two takes a third"
+        );
+        assert_eq!(
+            shortcut_from(10.0, 2),
+            Some(3),
+            "a joint of three takes no fourth"
+        );
+    }
+
+    #[test]
+    fn a_branch_led_back_is_not_run_onto_a_joint_lower_over_the_plate_than_it_is_long() {
+        assert_eq!(
+            shortcut_from(3.0, 1),
+            Some(2),
+            "5.1 mm of branch onto a joint 3 mm up"
+        );
+    }
 }

@@ -453,12 +453,14 @@ Candidates sit in a max-heap on `z`, so the highest meeting point — the merge 
 most — is taken first, and only when the two are within
 `branching.max_merge_distance_mm`, together carry no more than `max_tips_per_trunk` tips,
 neither strut is longer than `max_strut_length_mm`, each strut's body clears the model,
-and the meeting point can land. Where the higher front reaches the lower one's column at
+and the meeting point can land at least as far under it as its longest branch is long: a
+merge saves the height of the trunk under its joint, and a lower one is levers on a point
+(ADR 0432). Where the higher front reaches the lower one's column at
 or above it, the meeting point is the lower front itself and only the higher one leans:
 it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
-at its own height further off (ADR 0338). A pair refused for its bodies or its
+at its own height further off (ADR 0338), unless three branches already hang there (ADR 0432). A pair refused for its bodies or its
 landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
-first, then twice as far each time, until the meeting point reaches the plate: what blocks a strut is
+first, then twice as far each time, until the joint stands lower than its branches are long: what blocks a strut is
 mostly the part right beside the tips, and dropping past it is how two columns under a
 crowded part still share a trunk (ADR 0338). The joint
 keeps the branches' own width; only the trunk under the root widens, as a cone from that
@@ -469,7 +471,8 @@ Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Surv
 a vertical trunk to their landing. A joint is put where its first two branches meet, so a third
 met later beyond one of them would lead that branch back the way it came: once merging is done,
 such a branch runs straight on to the joint under, within the lean, length and clearance every
-group keeps, and a joint left with one branch is straightened the same way (ADR 0430). A merged front that stands on the model is split again
+group keeps, where that joint holds under three and stands over the plate as high as the branch
+is long, and a joint left with one branch is straightened the same way (ADR 0430, 0432). A merged front that stands on the model is split again
 where every tip under it stands on the model as a small pillar of its own — from its neck,
 or straight from its contact — since two thin struts snap off where a joint between two
 faces has to be cut away (ADR 0340). `branching.enabled = false` gives back step 7a's column exactly.

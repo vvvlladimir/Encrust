@@ -510,6 +510,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the least it can, a millimetre at a time. No strut of a merge runs
   longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
   per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
+  Tips merge only where the trunk under them stands at least as tall as their branches are
+  long, and no more than three branches meet at one joint.
   Trunks are cones sized by their height and load, and nothing carrying a load leans more
   than 45°. A tip's head meets its face square on wherever that is within 45° of straight
   down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under

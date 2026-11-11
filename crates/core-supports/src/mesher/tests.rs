@@ -367,12 +367,13 @@ fn a_flare_never_rises_above_the_pillar_it_widens() {
 
 #[test]
 fn a_flare_meets_a_trunk_narrowing_upwards_at_the_trunks_own_width() {
-    // Two tips 8 mm apart merge 4 mm up into a trunk wider at its foot than at its joint.
+    // Two tips 8 mm apart merge 4 mm down into a trunk wider at its foot than at its joint,
+    // high enough over the plate for the merge to be worth it (ADR 0432).
     let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
-    let slab = box_mesh(Vec3::new(-10.0, -10.0, 10.0), Vec3::new(10.0, 10.0, 12.0));
+    let slab = box_mesh(Vec3::new(-10.0, -10.0, 16.0), Vec3::new(10.0, 10.0, 18.0));
     let points = [
-        SupportPoint::new(Vec3::new(-4.0, 0.0, 10.0)),
-        SupportPoint::new(Vec3::new(4.0, 0.0, 10.0)),
+        SupportPoint::new(Vec3::new(-4.0, 0.0, 16.0)),
+        SupportPoint::new(Vec3::new(4.0, 0.0, 16.0)),
     ];
     let trees = trees_on(
         &points,

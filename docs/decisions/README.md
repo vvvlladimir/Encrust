@@ -254,6 +254,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0429](0429-a-part-near-the-plate-stands-on-a-short-head.md) | Stand a part near the plate on a short head, and fillet a trunk at its own width | Accepted |
 | [0430](0430-no-branch-is-led-back-and-a-dragged-trunk-stands-upright.md) | Lead no branch back the way it came, and stand a dragged trunk upright | Accepted |
 | [0431](0431-a-support-with-no-room-turns-its-head-or-steps-along-its-face.md) | Turn a head or step a contact along its face before a support is left out, and say why | Accepted |
+| [0432](0432-a-merge-joint-stands-as-high-as-its-branches-are-long-and-holds-three.md) | Stand a merge's joint as high as its branches are long, and hang three branches at most | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

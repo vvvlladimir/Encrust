@@ -14,14 +14,15 @@ use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-/// Whether a trunk carrying `tips` under `at`, leaving it `radius_mm` wide, has anywhere
-/// to go: straight down, or leaning aside the way a blocked front does.
+/// Whether a trunk carrying `tips` under `at`, `radius_mm` wide, stands: straight down at least
+/// `branch_mm` over its foot (ADR 0432), or leaning aside the way a blocked front does.
 pub(super) fn stands(
     at: Vec3,
     radius_mm: Scalar,
     tips: usize,
     placed: &Placed,
     profile: &SupportProfile,
+    branch_mm: Scalar,
 ) -> bool {
     let front = Front {
         position: at,
@@ -29,10 +30,13 @@ pub(super) fn stands(
         tips,
         group: 0,
         node: 0,
+        branches: 0,
         alive: true,
     };
-    landing(placed, at, radius_mm, tips, profile).is_some()
-        || escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).is_some()
+    match landing(placed, at, radius_mm, tips, profile) {
+        Some(under) => at.z - under.base.z.max(under.pillar_bottom_z(profile)) >= branch_mm,
+        None => escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).is_some(),
+    }
 }
 
 impl Forest<'_> {
@@ -151,6 +155,7 @@ impl Forest<'_> {
                     tips: 1,
                     group,
                     node,
+                    branches: children[node].len(),
                     alive: true,
                 };
                 let small = |trees: Vec<SupportTree>| match &trees[..] {
