@@ -2,29 +2,30 @@ use core_geometry::{Mat4, Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
 
 use super::column::lowest_top_mm;
-use super::{allowed, strut_fits, trunk_fits};
+use super::{Refused, allowed, strut_fit, trunk_fit};
 use crate::column::MAX_LEAN_PER_DROP;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
 
 /// `after`, carried from `before` (both model space), with the joints beside what the carry
-/// moved shifted a little where that lets it stand; `None` where no such shift does (ADR 0440).
+/// moved shifted a little where that lets it stand; where no such shift does, why `after` may
+/// not (ADR 0440, 0441).
 pub fn eased(
     before: &SupportTree,
     after: &SupportTree,
     placed: &Placed,
     profile: &SupportProfile,
-) -> Option<SupportTree> {
-    if allowed(before, after, placed, profile) {
-        return Some(after.clone());
-    }
+) -> Result<SupportTree, Refused> {
+    let Err(refused) = allowed(before, after, placed, profile) else {
+        return Ok(after.clone());
+    };
     let matrix = placed.transform.to_matrix();
-    let inverse = placed.transform.inverse_matrix()?;
+    let inverse = placed.transform.inverse_matrix().ok_or(refused)?;
     let mut eased = after.clone();
-    for joint in giving(before, after, placed, profile, matrix)? {
-        give_way(&mut eased, joint, placed, profile, (matrix, inverse))?;
+    for joint in giving(before, after, placed, profile, matrix).ok_or(refused)? {
+        give_way(&mut eased, joint, placed, profile, (matrix, inverse)).ok_or(refused)?;
     }
-    allowed(before, &eased, placed, profile).then_some(eased)
+    allowed(before, &eased, placed, profile).map(|()| eased)
 }
 
 /// The joints the carry left in place at the far end of a strut it bent out of line, each
@@ -44,7 +45,7 @@ fn giving(
         .struts()
         .filter(|(child, parent)| moved(*child) != moved(*parent))
     {
-        if strut_fits(&now, child, parent, placed, profile) {
+        if strut_fit(&now, child, parent, placed, profile).is_ok() {
             continue;
         }
         let free = if moved(child) { parent } else { child };
@@ -58,16 +59,16 @@ fn giving(
     (!joints.is_empty() && joints.len() <= MOST_JOINTS).then_some(joints)
 }
 
-/// Whether `node` of `tree` may be shifted to make room: a joint, and the root only while its
-/// foot stands on the plate, where the foot can go with it.
+/// Whether `node` of `tree` may be shifted to make room: a joint, the root too unless a head
+/// sunk in the plate ends there; one on the model is only lowered, see [`give_way`].
 fn may_give(tree: &SupportTree, node: usize) -> bool {
-    let landing = tree.landing();
     let is_joint = tree.nodes().get(node).is_some_and(|node| !node.is_leaf());
-    is_joint && (node != tree.root_index() || !(landing.on_model || landing.in_plate))
+    is_joint && (node != tree.root_index() || !tree.landing().in_plate)
 }
 
 /// Moves joint `joint` of `tree` to the nearest place, aside or lower and within
-/// [`MOST_GIVE_MM`], where every strut meeting it fits; `None` when none does.
+/// [`MOST_GIVE_MM`], where every strut meeting it fits; `None` when none does. A root on the
+/// model is only lowered: its trunk shortens over the foot it has (ADR 0441).
 fn give_way(
     tree: &mut SupportTree,
     joint: usize,
@@ -78,7 +79,11 @@ fn give_way(
     let plate = tree.moved(matrix);
     let from = plate.nodes()[joint].position;
     let is_root = joint == plate.root_index();
-    let level = level_shifts(&plate, joint);
+    let level = if is_root && plate.landing().on_model {
+        Vec::new()
+    } else {
+        level_shifts(&plate, joint)
+    };
     // A joint lowered leans every branch above it less.
     let drops = RINGS_MM.map(|drop_mm| Vec3::Z * -drop_mm);
     let lowered = level.iter().map(|shift| *shift - Vec3::Z * shift.length());
@@ -91,7 +96,8 @@ fn give_way(
         holds(&trial, joint, placed, profile)
     })?;
     tree.move_node(joint, inverse.transform_point3(to));
-    if is_root {
+    // A foot on the model stays on it: the root over it was only lowered.
+    if is_root && !tree.landing().on_model {
         let base = matrix.transform_point3(tree.landing().base);
         tree.move_landing(inverse.transform_point3(to.truncate().extend(base.z)));
     }
@@ -125,10 +131,10 @@ fn level_shifts(tree: &SupportTree, joint: usize) -> Vec<Vec3> {
         .collect()
 }
 
-/// Puts joint `joint` of `tree` at `to`, the root's foot under it.
+/// Puts joint `joint` of `tree` at `to`, the root's foot on the plate under it.
 fn shift_joint(tree: &mut SupportTree, joint: usize, to: Vec3) {
     tree.move_node(joint, to);
-    if joint == tree.root_index() {
+    if joint == tree.root_index() && !tree.landing().on_model {
         let base = tree.landing().base;
         tree.move_landing(to.truncate().extend(base.z));
     }
@@ -143,10 +149,11 @@ fn holds(tree: &SupportTree, joint: usize, placed: &Placed, profile: &SupportPro
         .filter(|(child, parent)| *child == joint || *parent == joint)
         .all(|(child, parent)| {
             nodes[child].position.z > nodes[parent].position.z
-                && strut_fits(tree, child, parent, placed, profile)
+                && strut_fit(tree, child, parent, placed, profile).is_ok()
         });
     let column = joint != tree.root_index()
-        || (nodes[joint].position.z >= lowest_top_mm(profile) && trunk_fits(tree, placed, profile));
+        || (nodes[joint].position.z >= lowest_top_mm(&tree.landing(), profile)
+            && trunk_fit(tree, placed, profile).is_ok());
     meeting && column
 }
 

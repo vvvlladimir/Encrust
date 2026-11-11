@@ -3,7 +3,7 @@ use printer_profiles::SupportProfile;
 
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{MAX_LEAN_PER_DROP, foot_clear, has_head, landing, neck_of, swept_bottom_z};
+use crate::column::{MAX_LEAN_PER_DROP, foot_clear, has_head, neck_of, swept_bottom_z};
 use crate::group::Profiles;
 use crate::mesher::sound;
 use crate::pick::Part;
@@ -11,61 +11,87 @@ use crate::placed::Placed;
 use crate::tree::SupportTree;
 
 mod column;
+mod footing;
 mod give_way;
+mod held;
 mod joint;
+mod refused;
 mod riders;
 pub use give_way::eased;
+pub use held::{Carried, carried_held};
+pub use refused::Refused;
 pub use riders::{followed, standing_on};
 
 use column::carry_column;
+use footing::{footing_near, footing_under};
 use joint::{carry_node, settle, shift};
 
 /// Whether every body of `tree` (plate coordinates) keeps out of the model, tip apart: swept as
 /// beams with the profile's clearance (ADR 0077), then drawn bodies are tested too (ADR 0337).
 pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bool {
-    tree.struts()
-        .all(|(child, parent)| strut_fits(tree, child, parent, placed, profile))
-        && trunk_fits(tree, placed, profile)
-        && sound(tree, Profiles::single(profile), placed)
+    fit(tree, placed, profile).is_ok()
+}
+
+/// [`fits`], or the first reason `tree` (plate) does not.
+fn fit(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> Result<(), Refused> {
+    for (child, parent) in tree.struts() {
+        strut_fit(tree, child, parent, placed, profile)?;
+    }
+    trunk_fit(tree, placed, profile)?;
+    if sound(tree, Profiles::single(profile), placed) {
+        Ok(())
+    } else {
+        Err(Refused::Collides)
+    }
 }
 
 /// Whether `after`, carried from `before` (both model space), may stand: it [`fits`], or
-/// `before` did not and nothing the carry moved runs into the model or leans too far (ADR 0438).
+/// `before` did not and nothing the carry moved runs into the model or leans too far (ADR 0438);
+/// else why not (ADR 0441).
 pub fn allowed(
     before: &SupportTree,
     after: &SupportTree,
     placed: &Placed,
     profile: &SupportProfile,
-) -> bool {
+) -> Result<(), Refused> {
     let matrix = placed.transform.to_matrix();
     let (was, now) = (before.moved(matrix), after.moved(matrix));
-    if fits(&now, placed, profile) {
-        return true;
-    }
-    if fits(&was, placed, profile) {
-        return false;
+    let fitted = fit(&now, placed, profile);
+    if fitted.is_ok() || fits(&was, placed, profile) {
+        return fitted;
     }
     let at = |tree: &SupportTree, node: usize| tree.nodes().get(node).map(|node| node.position);
     let moved = |node: usize| at(&was, node) != at(&now, node);
-    let struts = now
+    for (child, parent) in now
         .struts()
         .filter(|(child, parent)| moved(*child) || moved(*parent))
-        .all(|(child, parent)| strut_fits(&now, child, parent, placed, profile));
+    {
+        strut_fit(&now, child, parent, placed, profile)?;
+    }
     let trunk_moved = moved(now.root_index()) || was.landing() != now.landing();
-    struts && (!trunk_moved || trunk_fits(&now, placed, profile))
+    if trunk_moved {
+        trunk_fit(&now, placed, profile)?;
+    }
+    Ok(())
 }
 
 /// Whether the strut from `child` down to `parent` of `tree` (plate) keeps out of the model and,
 /// under a head, leans no further than [`MAX_LEAN_PER_DROP`] (ADR 0437).
-fn strut_fits(
+fn strut_fit(
     tree: &SupportTree,
     child: usize,
     parent: usize,
     placed: &Placed,
     profile: &SupportProfile,
-) -> bool {
+) -> Result<(), Refused> {
     let nodes = tree.nodes();
     let (top, bottom) = (nodes[child], nodes[parent]);
+    let lean = top.position - bottom.position;
+    let upright = top.is_leaf()
+        || lean.truncate().length() <= lean.z.abs() * MAX_LEAN_PER_DROP + LEAN_SLACK_MM;
+    if !upright {
+        return Err(Refused::Leans);
+    }
     let beam = Beam {
         from: top.position,
         to: bottom.position,
@@ -74,17 +100,23 @@ fn strut_fits(
     }
     .with_clearance(profile.clearance_mm)
     .trimmed(if top.is_leaf() { head_mm(profile) } else { 0.0 });
-    let lean = top.position - bottom.position;
-    let upright = top.is_leaf()
-        || lean.truncate().length() <= lean.z.abs() * MAX_LEAN_PER_DROP + LEAN_SLACK_MM;
-    upright && clear(placed, &beam)
+    clear(placed, &beam).then_some(()).ok_or(Refused::Collides)
 }
 
 /// Whether the trunk of `tree` (plate) keeps out of the model, stands straight over a foot on
 /// the plate (ADR 0437), and that foot has room.
-fn trunk_fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bool {
+fn trunk_fit(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> Result<(), Refused> {
     let root = tree.root();
     let landing = tree.landing();
+    let on_plate = !landing.on_model && !landing.in_plate;
+    if on_plate {
+        if (root.position - landing.base).truncate().length() >= LEAN_SLACK_MM {
+            return Err(Refused::Leans);
+        }
+        if !foot_clear(placed, landing.pad_centre(), profile) {
+            return Err(Refused::NoFooting);
+        }
+    }
     let trunk = Beam {
         from: root.position,
         to: landing
@@ -99,10 +131,7 @@ fn trunk_fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> 
     } else {
         0.0
     });
-    let on_plate = !landing.on_model && !landing.in_plate;
-    let upright = (root.position - landing.base).truncate().length() < LEAN_SLACK_MM;
-    (!on_plate || (upright && foot_clear(placed, landing.pad_centre(), profile)))
-        && clear(placed, &trunk)
+    clear(placed, &trunk).then_some(()).ok_or(Refused::Collides)
 }
 
 /// How much of a tip's strut is its head, which is meant to touch the model, mm.
@@ -123,10 +152,12 @@ pub fn on_model(placed: &Placed, at: Vec3) -> Option<Vec3> {
 }
 
 /// `tree` (model space, as the answer) carried by `step`, plate mm, tips pulled back onto the
-/// nearest surface, or `None` when its column has nothing to stand on; [`allowed`] says whether
-/// it may stand there (ADR 0095, 0438).
+/// nearest surface, or `None` when its column has nothing to stand on near there; `last` is
+/// what the foot stood on as the carry last left it. [`allowed`] says whether it may stand there
+/// (ADR 0095, 0438, 0441).
 pub fn carried(
     tree: &SupportTree,
+    last: Landing,
     parts: &[Part],
     step: Vec3,
     placed: &Placed,
@@ -141,58 +172,60 @@ pub fn carried(
     }
     snap_tips(&mut carried, placed, matrix, inverse);
     if carried.landing() != tree.landing() {
-        // A column carried stands on whatever is under it there, the model or the plate.
+        // A column carried stands on whatever is under it there or just beside, as growing would.
         let root = matrix.transform_point3(carried.root().position);
-        let under = landing(
-            placed,
-            root,
-            carried.root().radius_mm,
-            carried.tip_count(),
-            profile,
-        )?;
-        carried.stand_on(into_model(under, inverse));
+        let width = (carried.root().radius_mm, carried.tip_count());
+        let last = landing_through(last, matrix);
+        let (at, under) = footing_near(placed, root, width, profile, last)?;
+        carried.move_node(carried.root_index(), inverse.transform_point3(at));
+        carried.stand_on(landing_through(under, inverse));
     }
     Some(carried)
 }
 
-/// `landing`, found in plate coordinates, in the model's own space through `inverse`.
-fn into_model(landing: Landing, inverse: Mat4) -> Landing {
+/// `landing` moved through `matrix`: between plate coordinates and the model's own space.
+fn landing_through(landing: Landing, matrix: Mat4) -> Landing {
     Landing {
-        base: inverse.transform_point3(landing.base),
-        pad_offset: inverse
+        base: matrix.transform_point3(landing.base),
+        pad_offset: matrix
             .transform_vector3(landing.pad_offset.extend(0.0))
             .truncate(),
-        pad_cut: landing.pad_cut.map(|cut| cut.moved(inverse)),
+        pad_cut: landing.pad_cut.map(|cut| cut.moved(matrix)),
         ..landing
     }
 }
 
 /// `tree` (model space, as the answer) with tip `tip` put down at `to` (plate coordinates, nearest
-/// surface), or `None` if refused; the neck goes with the tip, the rest follows [`carried`] and
-/// the joints beside it give way as [`eased`] lets them.
+/// surface), or why not; the neck goes with the tip, the rest follows [`carried`] and the joints
+/// beside it give way as [`eased`] lets them.
 pub fn tip_carried(
     tree: &SupportTree,
     tip: usize,
     to: Vec3,
     placed: &Placed,
     profile: &SupportProfile,
-) -> Option<SupportTree> {
-    let inverse = placed.transform.inverse_matrix()?;
-    let node = tree.nodes().get(tip).filter(|node| node.is_leaf())?;
-    let contact = on_model(placed, to)?;
-    let neck = neck_of(placed, contact, profile)?;
+) -> Result<SupportTree, Refused> {
+    let inverse = placed.transform.inverse_matrix().ok_or(Refused::NoHold)?;
+    let node = tree
+        .nodes()
+        .get(tip)
+        .filter(|node| node.is_leaf())
+        .ok_or(Refused::NoHold)?;
+    let contact = on_model(placed, to).ok_or(Refused::NoHold)?;
+    let neck = neck_of(placed, contact, profile).ok_or(Refused::Collides)?;
 
     let mut carried = tree.clone();
     carried.move_node(tip, inverse.transform_point3(contact));
     if let Some(parent) = node.parent {
         // A head with no room under it would run through the model.
         if !has_head(contact, neck) {
-            return None;
+            return Err(Refused::Collides);
         }
         carried.move_node(parent, inverse.transform_point3(neck));
         let alone = parent == tree.root_index() && tree.tip_count() == 1;
-        if alone && let Some(under) = landing(placed, neck, tree.root().radius_mm, 1, profile) {
-            carried.stand_on(into_model(under, inverse));
+        let radius_mm = tree.root().radius_mm;
+        if alone && let Some(under) = footing_under(placed, neck, radius_mm, 1, profile) {
+            carried.stand_on(landing_through(under, inverse));
         }
     }
     eased(tree, &carried, placed, profile)

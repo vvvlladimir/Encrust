@@ -16,6 +16,7 @@ mod bounds;
 use bounds::draw_bounds;
 mod gizmo_drag;
 use gizmo_drag::draw_gizmo_drag;
+use refusal::draw_refusal;
 mod hollow;
 mod levels;
 mod marks;
@@ -24,6 +25,7 @@ mod drawing;
 mod overlays;
 mod paint;
 mod picking;
+mod refusal;
 mod repair;
 mod support_ghost;
 mod supports;
@@ -392,6 +394,7 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
         .gizmo
         .show(&over_viewport, viewport, &window.view.camera, &pivots);
     draw_gizmo_drag(&over_viewport, window, viewport);
+    draw_refusal(&over_viewport, window, viewport);
     let Some(moved) = moved else {
         return;
     };

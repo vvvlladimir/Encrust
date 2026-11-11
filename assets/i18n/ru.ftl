@@ -348,6 +348,10 @@ supports-placing-fill = Залить
 supports-placing-block = Запретить
 supports-placing-erase = Стереть
 supports-nothing-visible = На платформе нет видимых моделей, которые нужно поддерживать.
+supports-refused-collides = Касается модели
+supports-refused-leans = Слишком большой наклон
+supports-refused-no-footing = Основанию не на что встать
+supports-refused-no-hold = Наконечнику не за что держаться
 supports-nothing-visible-error = на платформе нет видимых моделей, которые нужно поддерживать
 supports-placed =
     { $count ->

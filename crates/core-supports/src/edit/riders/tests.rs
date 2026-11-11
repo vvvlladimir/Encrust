@@ -39,8 +39,15 @@ fn a_support_carried_across_the_plate_takes_the_one_standing_on_it_along() {
     let bvh = Bvh::build(&block);
     let placed = Placed::new(&block, &bvh, Transform::default());
     let step = Vec3::new(1.0, 2.0, 0.0);
-    let column = carried(&trees[1], &[Part::Trunk], step, &placed, profiles.of(1))
-        .expect("the column has room 1 mm further out");
+    let column = carried(
+        &trees[1],
+        trees[1].landing(),
+        &[Part::Trunk],
+        step,
+        &placed,
+        profiles.of(1),
+    )
+    .expect("the column has room 1 mm further out");
 
     let moved = followed(&trees, 1, &column, &placed, profiles).expect("the pillar fits");
 
@@ -82,8 +89,9 @@ fn a_support_standing_on_one_carried_into_the_model_may_not_stand_there() {
         .iter()
         .find(|(index, _)| *index == 0)
         .expect("the pillar goes with the column");
-    assert!(
-        !crate::allowed(&trees[0], pillar, &placed, profiles.of(0)),
+    assert_eq!(
+        crate::allowed(&trees[0], pillar, &placed, profiles.of(0)),
+        Err(crate::Refused::Collides),
         "its trunk now ends inside the cube"
     );
 }

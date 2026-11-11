@@ -229,9 +229,10 @@ fn a_run_landing_mid_carry_lets_go_of_what_the_hand_lifted() {
         aimed: Vec3::ZERO,
         level: false,
         before: vec![(id, Vec::new())],
+        last: Vec::new(),
         shown: None,
         group: 0,
-        refused: false,
+        refused: None,
     });
     grown_again(&mut tool, &mut scene);
     assert!(tool.carry.is_none(), "the trees it held are renumbered");

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use core_engine::project::{AutoSizing, FillProfiles};
 use core_geometry::{Mesh, Scalar, Vec2, Vec3};
-use core_supports::{Part, ProjectSettings, SupportTree};
+use core_supports::{Part, ProjectSettings, Refused, SupportTree};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
@@ -123,13 +123,16 @@ pub struct Carry {
     pub level: bool,
     /// The frozen supports of each object held on, as they stood when the drag began.
     pub before: Vec<(ObjectId, Vec<SupportTree>)>,
+    /// What the last step moved on each object, each tree with its index, model space: a foot
+    /// keeps to what it stood on there, so a drag does not flicker between plate and model.
+    pub last: Vec<(ObjectId, Vec<(usize, SupportTree)>)>,
     /// What is held where the cursor puts it, plate coordinates, drawn while it is lifted.
     pub shown: Option<Arc<Mesh>>,
     /// The group whose tint `shown` is drawn in.
     pub group: u16,
-    /// The model refuses where the cursor puts it: `shown` is drawn as refused, and the scene
+    /// Why the model refuses where the cursor puts it: `shown` is drawn as refused, and the scene
     /// keeps them where they last could stand.
-    pub refused: bool,
+    pub refused: Option<Refused>,
 }
 
 /// What the Supports tool places with, and the automatic run it has going.

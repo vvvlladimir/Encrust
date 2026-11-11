@@ -332,6 +332,11 @@ supports-placing-fill = Fill
 supports-placing-block = Block
 supports-placing-erase = Erase
 supports-nothing-visible = Nothing visible on the plate to hold up.
+# Beside the cursor while a carried support is refused: what stops it standing there.
+supports-refused-collides = Touches the model
+supports-refused-leans = Leans too far
+supports-refused-no-footing = Nowhere for the foot to stand
+supports-refused-no-hold = No surface for the tip to hold
 supports-nothing-visible-error = nothing visible on the plate to hold up
 supports-placed =
     { $count ->

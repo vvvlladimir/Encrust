@@ -2,12 +2,15 @@ use core_geometry::{Mat4, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
 use super::joint::{highest_under_branches, shift};
-use crate::column::{MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM, PLATE_Z_MM};
+use super::landing_through;
+use crate::Landing;
+use crate::column::{MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM};
 use crate::tree::SupportTree;
 
 /// Carries the column of `tree` by `step`: across the plate its foot, its trunk upright over it
-/// on a knee what it carries leans to at 45 degrees; up and down its top, unless a head hangs
-/// there, no higher than its branches allow and no lower than the shortest pillar.
+/// on a knee what it carries leans to at 45 degrees, or on the model the whole column, its foot
+/// sliding along; up and down its top, unless a head hangs there, no higher than its branches
+/// allow and no lower than the shortest pillar.
 pub(super) fn carry_column(
     tree: &mut SupportTree,
     space: (Mat4, Mat4),
@@ -16,7 +19,9 @@ pub(super) fn carry_column(
 ) {
     let (matrix, inverse) = space;
     let across = step.with_z(0.0);
-    if across != Vec3::ZERO {
+    if across != Vec3::ZERO && tree.landing().on_model {
+        slide_column(tree, space, across);
+    } else if across != Vec3::ZERO {
         // A joint carried rigidly would lean its branches past 45 degrees (ADR 0432, 0437).
         let from = matrix.transform_point3(tree.landing().base);
         move_foot(tree, matrix, inverse, across);
@@ -32,14 +37,23 @@ pub(super) fn carry_column(
     }
     let top = matrix.transform_point3(tree.root().position);
     let highest = highest_under_branches(tree, root, top.truncate(), matrix);
-    let z = (top.z + step.z).min(highest).max(lowest_top_mm(profile));
+    let lowest = lowest_top_mm(&landing_through(tree.landing(), matrix), profile);
+    let z = (top.z + step.z).min(highest).max(lowest);
     shift(tree, root, space, Vec3::Z * (z - top.z));
 }
 
-/// The lowest the top of a column on the plate may stand: over its foot and the shortest
-/// pillar, plate mm.
-pub(super) fn lowest_top_mm(profile: &SupportProfile) -> Scalar {
-    PLATE_Z_MM + profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM
+/// The lowest the top of a column standing on `landing` (plate) may stand: the shortest pillar
+/// over where its body ends, plate mm.
+pub(super) fn lowest_top_mm(landing: &Landing, profile: &SupportProfile) -> Scalar {
+    landing.pillar_bottom_z(profile) + MIN_PILLAR_HEIGHT_MM
+}
+
+/// Carries the column of `tree` standing on the model `across` the plate whole: its trunk
+/// stays upright and `carried` stands it again on whatever is under it there.
+fn slide_column(tree: &mut SupportTree, (matrix, inverse): (Mat4, Mat4), across: Vec3) {
+    shift(tree, tree.root_index(), (matrix, inverse), across);
+    let base = matrix.transform_point3(tree.landing().base) + across;
+    tree.move_landing(inverse.transform_point3(base));
 }
 
 /// Carries a tree's foot by `step`, keeping it on the plate: a foot in the air holds
@@ -73,7 +87,8 @@ fn knee_over_foot(
     }
     // A foot dragged further than a 45-degree lean reaches stops where it does.
     let across = (base - top).truncate();
-    let most_mm = (top.z - lowest_top_mm(profile)).max(0.0) * MAX_LEAN_PER_DROP;
+    let lowest = lowest_top_mm(&landing_through(tree.landing(), matrix), profile);
+    let most_mm = (top.z - lowest).max(0.0) * MAX_LEAN_PER_DROP;
     let across = across.clamp_length_max(most_mm);
     let base = top.truncate() + across;
     tree.move_landing(inverse.transform_point3(base.extend(0.0)));
