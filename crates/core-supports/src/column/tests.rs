@@ -256,6 +256,38 @@ fn a_part_lower_than_a_pad_stands_on_a_head_sunk_into_the_plate() {
 }
 
 #[test]
+fn a_head_run_into_the_plate_stands_straight_up_under_a_leaning_face() {
+    // A 1 mm slab leaning 30 degrees, its underside's middle 0.6 mm up and its low edge 0.35.
+    let slab = box_mesh(Vec3::new(-0.5, -3.0, 0.0), Vec3::new(0.5, 3.0, 1.0));
+    let leaning = Transform {
+        rotation: Quat::from_rotation_y(30.0_f32.to_radians()),
+        translation: Vec3::new(0.0, 0.0, 0.6),
+        ..Transform::default()
+    };
+    let model = core_geometry::transform_mesh(&slab, leaning);
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let contact = Vec3::new(0.0, 0.0, 0.6);
+    let columns = columns_on(
+        &[SupportPoint::new(contact)],
+        &model,
+        Transform::default(),
+        Profiles::single(&profile),
+    );
+    let column = columns.first().expect("the head has room");
+    assert!(
+        column.landing.is_some_and(|landing| landing.in_plate),
+        "no room for a foot: {:?}",
+        column.landing
+    );
+    assert!(
+        (column.neck - Vec3::new(column.contact.x, column.contact.y, 0.0)).length() < 1e-4,
+        "on the plate straight under its contact {}, not along the face's lean: {}",
+        column.contact,
+        column.neck
+    );
+}
+
+#[test]
 fn a_contact_lower_than_its_foot_lands_in_the_plate() {
     let profile = profile();
     let contact = Vec3::new(1.0, 1.0, profile.bottom.platform_thickness_mm);

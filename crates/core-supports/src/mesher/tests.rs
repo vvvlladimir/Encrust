@@ -432,6 +432,37 @@ fn a_lone_tip_shorter_than_its_head_over_its_pad_is_one_cone_with_no_neck() {
 }
 
 #[test]
+fn a_flare_under_a_leaning_trunk_rings_its_axis() {
+    let profile = profile();
+    let mut trees = column_on_plate(10.0, &profile);
+    trees[0].move_landing(Vec3::new(13.0, 10.0, 0.0));
+    let tree = &trees[0];
+    let style = Style::of(tree, &profile);
+    let tube = flare(tree, &profile, style).expect("a tall trunk has room for a fillet");
+    let mesh = meshed(&trees, Profiles::single(&profile));
+    let pad_top = profile.footing_height_mm();
+    // Inside the fillet only its rings have vertices, each ring at one height.
+    for ring in tube.rings.iter().filter(|ring| ring.along_mm > 0.01) {
+        let z = tube.top.z - ring.along_mm;
+        if z <= pad_top + 0.01 {
+            continue;
+        }
+        let at: Vec<Vec3> = mesh
+            .vertices
+            .iter()
+            .filter(|vertex| (vertex.z - z).abs() < 1e-4)
+            .copied()
+            .collect();
+        let centre = at.iter().copied().sum::<Vec3>() / at.len() as Scalar;
+        let axis = trunk_axis_at(tree, &profile, z);
+        assert!(
+            (centre - axis).truncate().length() < 1e-3,
+            "the ring {z} mm up is round the trunk at {axis}, not at {centre}"
+        );
+    }
+}
+
+#[test]
 fn a_straight_pad_is_one_trapezoid_narrowing_to_the_plate() {
     let profile = profile();
     let trees = column_on_plate(20.0, &profile);

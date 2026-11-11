@@ -1,9 +1,12 @@
-use core_geometry::{Mat4, Vec3};
+use core_geometry::{Mat4, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{foot_clear, has_head, landing, neck_of, swept_bottom_z};
+use crate::column::{
+    MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM, PLATE_Z_MM, foot_clear, has_head, landing, neck_of,
+    swept_bottom_z,
+};
 use crate::group::Profiles;
 use crate::mesher::sound;
 use crate::pick::Part;
@@ -73,7 +76,7 @@ pub fn carried(
 
     let mut carried = tree.clone();
     for part in parts {
-        carry_part(&mut carried, *part, matrix, inverse, step);
+        carry_part(&mut carried, *part, (matrix, inverse), step, profile);
     }
     snap_tips(&mut carried, placed, matrix, inverse);
     fits(&carried.moved(matrix), placed, profile).then_some(carried)
@@ -119,7 +122,13 @@ pub fn tip_carried(
 
 /// Moves one part of `tree`, which is kept in the model's own space while the step is a
 /// step across the plate.
-fn carry_part(tree: &mut SupportTree, part: Part, matrix: Mat4, inverse: Mat4, step: Vec3) {
+fn carry_part(
+    tree: &mut SupportTree,
+    part: Part,
+    (matrix, inverse): (Mat4, Mat4),
+    step: Vec3,
+    profile: &SupportProfile,
+) {
     let carried = |tree: &mut SupportTree, node: usize| {
         let Some(from) = tree.nodes().get(node).map(|node| node.position) else {
             return;
@@ -142,7 +151,11 @@ fn carry_part(tree: &mut SupportTree, part: Part, matrix: Mat4, inverse: Mat4, s
             carried(tree, tree.root_index());
             move_foot(tree, matrix, inverse, step);
         }
-        Part::Foot => move_foot(tree, matrix, inverse, step),
+        Part::Foot => {
+            let from = matrix.transform_point3(tree.landing().base);
+            move_foot(tree, matrix, inverse, step);
+            knee_over_foot(tree, (matrix, inverse), from, profile);
+        }
     }
 }
 
@@ -152,6 +165,42 @@ fn move_foot(tree: &mut SupportTree, matrix: Mat4, inverse: Mat4, step: Vec3) {
     let standing = matrix.transform_point3(tree.landing().base) + step;
     tree.move_landing(inverse.transform_point3(Vec3::new(standing.x, standing.y, 0.0)));
 }
+
+/// Stands the trunk of `tree` straight over its foot, moved from `from` (plate mm), on a knee
+/// the rest leans down to at 45 degrees: the knee that stood over `from`, or a new one.
+fn knee_over_foot(
+    tree: &mut SupportTree,
+    (matrix, inverse): (Mat4, Mat4),
+    from: Vec3,
+    profile: &SupportProfile,
+) {
+    let base = matrix.transform_point3(tree.landing().base);
+    let root = tree.root_index();
+    let nodes = tree.nodes();
+    let plate = |node: usize| matrix.transform_point3(nodes[node].position);
+    let mut children = (0..nodes.len()).filter(|node| nodes[*node].parent == Some(root));
+    let only = children.next().filter(|_| children.next().is_none());
+    let knee = only.filter(|child| {
+        !nodes[*child].is_leaf() && (plate(root) - from).truncate().length() < KNEE_OVER_FOOT_MM
+    });
+    let top = knee.map_or_else(|| plate(root), plate);
+    if knee.is_none() {
+        let radius_mm = tree.root().radius_mm;
+        tree.stand_on_knee(tree.root().position, radius_mm);
+    }
+    let reach_mm = (top - base).truncate().length();
+    let lowest_mm = PLATE_Z_MM + profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM;
+    let z = (top.z - reach_mm / MAX_LEAN_PER_DROP)
+        .max(lowest_mm)
+        .min(top.z);
+    tree.move_node(
+        tree.root_index(),
+        inverse.transform_point3(Vec3::new(base.x, base.y, z)),
+    );
+}
+
+/// How near straight over its foot a root must stand to be the knee a drag moves with it, mm.
+const KNEE_OVER_FOOT_MM: Scalar = 1e-3;
 
 /// Pulls every tip back onto the surface it holds up: a support that has stopped touching
 /// the model holds nothing, and one carried into it is not printable.

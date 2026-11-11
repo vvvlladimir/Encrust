@@ -5,7 +5,7 @@ use crate::Landing;
 use crate::SupportPoint;
 use crate::base::braceable;
 use crate::column::Column;
-use crate::fixtures::{box_mesh, profile, ramp};
+use crate::fixtures::{box_mesh, profile, ramp, trees_on};
 use crate::group::Profiles;
 use crate::mesher::{Fault, faults, sound};
 use crate::placed::Placed;
@@ -1218,4 +1218,40 @@ fn a_tall_trunk_standing_alone_leans_into_reach_of_a_brace() {
 #[test]
 fn no_contacts_grow_no_trees() {
     assert!(forest_of(&[], &Mesh::default(), Profiles::single(&profile())).is_empty());
+}
+
+#[test]
+fn no_branch_is_led_back_the_way_it_came() {
+    // The middle tip meets its west neighbour first, and that joint the east one after.
+    let points: Vec<SupportPoint> = [10.0, 13.0, 19.0]
+        .into_iter()
+        .map(|x| SupportPoint::new(Vec3::new(x, 10.0, 20.0)))
+        .collect();
+    let trees = trees_on(
+        &points,
+        &Mesh::default(),
+        Transform::default(),
+        Profiles::single(&profile()),
+    );
+    for tree in &trees {
+        let nodes = tree.nodes();
+        for tip in nodes.iter().filter(|node| node.is_leaf()) {
+            let mut path = vec![tip.position];
+            let mut at = tip.parent;
+            while let Some(node) = at {
+                path.push(nodes[node].position);
+                at = nodes[node].parent;
+            }
+            path.push(tree.landing().base);
+            for three in path.windows(3).skip(1) {
+                let into = (three[1] - three[0]).truncate();
+                let out = (three[2] - three[1]).truncate();
+                assert!(
+                    into.length() < 1e-3 || out.length() < 1e-3 || into.dot(out) >= 0.0,
+                    "the path {path:?} turns back at {}",
+                    three[1]
+                );
+            }
+        }
+    }
 }

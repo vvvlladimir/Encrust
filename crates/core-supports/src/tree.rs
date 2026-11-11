@@ -356,12 +356,12 @@ mod tests {
     use crate::{Profiles, SupportPoint};
     use core_geometry::{Mesh, Transform};
 
-    /// Two tips close enough to share a trunk and a third further off that joins them
-    /// lower down, all 20 mm over the plate.
+    /// Two tips close enough to share a trunk and a third further off to the side that joins
+    /// them lower down, all 20 mm over the plate.
     fn branched() -> SupportTree {
-        let points: Vec<SupportPoint> = [10.0, 13.0, 19.0]
+        let points: Vec<SupportPoint> = [(10.0, 10.0), (13.0, 10.0), (11.5, 16.0)]
             .into_iter()
-            .map(|x| SupportPoint::new(Vec3::new(x, 10.0, 20.0)))
+            .map(|(x, y)| SupportPoint::new(Vec3::new(x, y, 20.0)))
             .collect();
         let mut trees = trees_on(
             &points,

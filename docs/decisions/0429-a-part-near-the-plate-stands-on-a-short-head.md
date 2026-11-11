@@ -21,14 +21,15 @@ pad's height and the shortest pillar there is no room for a foot at all.
 **A fillet meets what stands on it at that one's width.** A trunk narrows going up, so the
 quarter circle ends where `r(top) + rise = lower`, solved in closed form, its top ring the
 trunk's width there; with less room than that it is a smaller whole quarter circle, never one
-cut off. It fillets the pillar under a head, never the head itself.
+cut off. It fillets the pillar under a head, never the head itself, and each level ring
+stands on the trunk's axis at its height, so a leaning trunk keeps its fillet round it.
 
 **A lone tip whose pillar is shorter than its head is one tube**, contact to foot or plate:
 `mesher::drawn` draws it without the joint at its neck, whose dome stood round the head. What
 is saved keeps its neck.
 
-**Under a pad and the shortest pillar the head runs into the plate.** `neck_along` ends the
-head where its axis meets the plate; `landing` answers a `Landing` with `in_plate` set and
+**Under a pad and the shortest pillar the head runs into the plate**, straight down whichever
+way its face leans: `neck_along` ends it on the plate under its contact; `landing` answers a `Landing` with `in_plate` set and
 no pad. The mesher draws the tip and head as for any support, whole `[top]` length, cut flat
 where it meets the plate; no foot, no fillet. `in_plate` is saved in `.encrust` with a
 default of false.

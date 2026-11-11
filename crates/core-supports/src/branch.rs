@@ -15,6 +15,7 @@ mod carriers;
 mod ground;
 mod harvest;
 mod merge;
+mod shortcut;
 mod small;
 mod sound;
 mod speculate;
@@ -116,6 +117,7 @@ fn grow_one(
         if forest.bend_blocked(placed) {
             forest.merge(placed);
         }
+        forest.shortcut(placed);
     }
     forest.harvest(placed)
 }

@@ -58,7 +58,8 @@ itself would report the contact's own face at zero distance.
 - Otherwise it lands on the plate and gets a foot.
 
 Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column; exactly that much stands.
-A contact under the foot and that pillar runs its head into the plate instead: cut flat there,
+A contact under the foot and that pillar runs its head straight down into the plate instead,
+whichever way its face leans: cut flat there,
 no foot, `in_plate` set (ADR 0429). A lone tip whose pillar is shorter than its head is drawn as
 one tube from its contact, with no joint at its neck. A point under the plate is kept — the model may move up —
 and the inspector reports standing against placed.
@@ -458,7 +459,10 @@ width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `car
 `(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
 cross-section, 3 volume, the presets ship 2.5 (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
 Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Survivors drop
-a vertical trunk to their landing. A merged front that stands on the model is split again
+a vertical trunk to their landing. A joint is put where its first two branches meet, so a third
+met later beyond one of them would lead that branch back the way it came: once merging is done,
+such a branch runs straight on to the joint under, within the lean, length and clearance every
+group keeps, and a joint left with one branch is straightened the same way (ADR 0430). A merged front that stands on the model is split again
 where every tip under it stands on the model as a small pillar of its own — from its neck,
 or straight from its contact — since two thin struts snap off where a joint between two
 faces has to be cut away (ADR 0340). `branching.enabled = false` gives back step 7a's column exactly.

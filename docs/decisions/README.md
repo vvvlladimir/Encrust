@@ -252,6 +252,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0427](0427-auto-holds-the-painted-side-sparser-on-its-lightest-tips.md) | Hold the side painted to be seen sparser, on Auto's lightest tips | Accepted |
 | [0428](0428-sweep-a-head-from-past-its-seat.md) | Sweep a head, and test a drawn tip, from past the seat its rim finds | Accepted |
 | [0429](0429-a-part-near-the-plate-stands-on-a-short-head.md) | Stand a part near the plate on a short head, and fillet a trunk at its own width | Accepted |
+| [0430](0430-no-branch-is-led-back-and-a-dragged-trunk-stands-upright.md) | Lead no branch back the way it came, and stand a dragged trunk upright | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

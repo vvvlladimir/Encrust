@@ -319,3 +319,34 @@ fn a_blocked_patch_holds_on_a_surface_numbered_otherwise() {
         "the lid was not painted"
     );
 }
+
+#[test]
+fn a_foot_dragged_aside_stands_its_trunk_straight_on_a_knee_at_45_degrees() {
+    let model = box_mesh(Vec3::new(0.0, 0.0, 20.0), Vec3::new(10.0, 10.0, 22.0));
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = trees_on(
+        &[SupportPoint::new(Vec3::new(5.0, 5.0, 20.0))],
+        &model,
+        Transform::default(),
+        Profiles::single(&profile()),
+    )
+    .pop()
+    .expect("a column under the slab stands");
+    let neck = tree.root().position;
+    // Dragged in two steps, as a hand drags it: the knee follows rather than doubling.
+    let once = carried(&tree, &[Part::Foot], Vec3::X * 4.0, &placed, &profile())
+        .expect("the foot moves clear");
+    let moved = carried(&once, &[Part::Foot], Vec3::X * 4.0, &placed, &profile()).expect("and on");
+
+    let (base, knee) = (moved.landing().base, moved.root().position);
+    assert_eq!(moved.nodes().len(), tree.nodes().len() + 1, "one knee");
+    assert!(
+        (knee - base).truncate().length() < 1e-4,
+        "the trunk stands straight over its foot {base}, from {knee}"
+    );
+    assert!(
+        ((neck.z - knee.z) - (neck - knee).truncate().length()).abs() < 1e-3,
+        "the neck {neck} leans down to the knee {knee} at 45 degrees"
+    );
+}

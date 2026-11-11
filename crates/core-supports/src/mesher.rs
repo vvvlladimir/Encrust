@@ -257,7 +257,16 @@ fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     }
     let style = Style::of(tree, profile);
     if let Some(tube) = flare(tree, profile, style) {
+        let first = mesh.vertices.len();
         sweep(mesh, &tube);
+        // Each ring stays level and follows the trunk's axis, so a leaning trunk keeps its
+        // fillet round it rather than beside it.
+        let base = tree.landing().base;
+        for vertex in &mut mesh.vertices[first..] {
+            let axis = trunk_axis_at(tree, profile, vertex.z);
+            vertex.x += axis.x - base.x;
+            vertex.y += axis.y - base.y;
+        }
     }
     if profile.raft.enabled {
         return;

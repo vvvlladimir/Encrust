@@ -416,14 +416,14 @@ pub(crate) fn has_head(contact: Vec3, neck: Vec3) -> bool {
 }
 
 /// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened rather than
-/// allowed to eat the room the body needs above the plate, or on the plate with no room for a foot.
+/// allowed to eat the room the body needs above the plate, or with no room for a foot straight
+/// down onto the plate under it, whichever way its face leans (ADR 0429).
 fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 {
     let length_mm = profile.top.length_mm;
     let drop_mm = -direction.z * length_mm;
     let room_mm = contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM;
-    let over_plate_mm = contact.z - PLATE_Z_MM;
-    if room_mm <= 0.0 && over_plate_mm > SURFACE_EPSILON_MM && direction.z < 0.0 {
-        return contact + direction * (over_plate_mm / -direction.z);
+    if room_mm <= 0.0 && contact.z - PLATE_Z_MM > SURFACE_EPSILON_MM {
+        return Vec3::new(contact.x, contact.y, PLATE_Z_MM);
     }
     let room_mm = room_mm.max(0.0);
     let length_mm = if drop_mm > room_mm {
