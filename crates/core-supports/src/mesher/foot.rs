@@ -129,7 +129,6 @@ pub(super) const FLARE_RINGS: u32 = 4;
 pub(super) fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tube> {
     let landing = tree.landing();
     let trunk_mm = trunk_base_mm(tree, profile, style);
-    let upper_mm = trunk_mm;
     // Inside the pad at every depth it reaches, so it never shows through its side.
     let widest_mm = if profile.raft.enabled {
         Scalar::INFINITY
@@ -138,21 +137,26 @@ pub(super) fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) 
     } else {
         skate_half_width_mm(profile)
     };
-    let lower_mm = profile.flare_lower_radius_mm().min(widest_mm).max(upper_mm);
+    let lower_mm = profile.flare_lower_radius_mm().min(widest_mm).max(trunk_mm);
 
     let bottom_z = landing.pillar_bottom_z(profile);
+    let root_z = tree.root().position.z;
     // Only the pillar under a head is filleted, never the head itself.
     let head_mm = if tree.root().is_leaf() && !style.small {
         profile.top.length_mm
     } else {
         0.0
     };
-    let room_mm = (tree.root().position.z - bottom_z - head_mm).max(0.0);
-    let rise_mm = lower_mm - upper_mm;
-    // A fillet cut short is a bulge, not a fillet: a pillar shorter than it stands plain.
-    if rise_mm < RING_EPSILON_MM || rise_mm > room_mm {
+    let room_mm = (root_z - bottom_z - head_mm).max(0.0);
+    // The trunk narrows going up, so the fillet meets it where it is that much narrower:
+    // r(top) + rise = lower with r falling `narrowing` per mm, and never past the room.
+    let narrowing = (trunk_mm - super::trunk_radius_at_mm(tree, profile, root_z))
+        / (root_z - bottom_z).max(RING_EPSILON_MM);
+    let rise_mm = ((lower_mm - trunk_mm) / (1.0 - narrowing).max(RING_EPSILON_MM)).min(room_mm);
+    if rise_mm < RING_EPSILON_MM {
         return None;
     }
+    let upper_mm = super::trunk_radius_at_mm(tree, profile, bottom_z + rise_mm);
 
     // A quarter circle, tangent to the pillar at its top and to the pad at its foot, so
     // the joint carries no notch for the peel to start a crack in; see ADR 0341.

@@ -366,6 +366,72 @@ fn a_flare_never_rises_above_the_pillar_it_widens() {
 }
 
 #[test]
+fn a_flare_meets_a_trunk_narrowing_upwards_at_the_trunks_own_width() {
+    // Two tips 8 mm apart merge 4 mm up into a trunk wider at its foot than at its joint.
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let slab = box_mesh(Vec3::new(-10.0, -10.0, 10.0), Vec3::new(10.0, 10.0, 12.0));
+    let points = [
+        SupportPoint::new(Vec3::new(-4.0, 0.0, 10.0)),
+        SupportPoint::new(Vec3::new(4.0, 0.0, 10.0)),
+    ];
+    let trees = trees_on(
+        &points,
+        &slab,
+        Transform::default(),
+        Profiles::single(&profile),
+    );
+    let tree = trees
+        .iter()
+        .find(|tree| tree.tip_count() == 2)
+        .expect("the tips merge");
+    let style = Style::of(tree, &profile);
+    assert!(
+        trunk_base_mm(tree, &profile, style) > tree.root().radius_mm + 0.05,
+        "the trunk widens going down"
+    );
+    let tube = flare(tree, &profile, style).expect("the trunk is tall enough for a fillet");
+    let trunk_mm = trunk_radius_at_mm(tree, &profile, tube.top.z);
+    assert!(
+        (tube.rings[0].radius_mm - trunk_mm).abs() < 1e-4,
+        "no ledge where the fillet ends: {} mm against the trunk's {trunk_mm} mm there",
+        tube.rings[0].radius_mm
+    );
+}
+
+#[test]
+fn a_lone_tip_shorter_than_its_head_over_its_pad_is_one_cone_with_no_neck() {
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let contact_z = 2.5;
+    let part = box_mesh(Vec3::new(-3.0, -3.0, contact_z), Vec3::new(3.0, 3.0, 4.0));
+    let profiles = Profiles::single(&profile);
+    let trees = trees_on(
+        &[SupportPoint::new(Vec3::new(0.0, 0.0, contact_z))],
+        &part,
+        Transform::default(),
+        profiles,
+    );
+    let mesh = meshed(&trees, profiles);
+    let pad_top = profile.footing_height_mm();
+    // The head's cone from the contact's width to the pillar's over the drop to the pad.
+    let cone_mm = |z: Scalar| {
+        let share = (contact_z - z) / (contact_z - pad_top);
+        profile.contact_radius_mm()
+            + (profile.pillar_radius_mm() - profile.contact_radius_mm()) * share
+    };
+    for vertex in mesh
+        .vertices
+        .iter()
+        .filter(|vertex| vertex.z > pad_top + 0.01)
+    {
+        assert!(
+            vertex.truncate().length() <= cone_mm(vertex.z) + 0.02,
+            "nothing bulges out of the cone: {vertex} against {} mm",
+            cone_mm(vertex.z)
+        );
+    }
+}
+
+#[test]
 fn a_straight_pad_is_one_trapezoid_narrowing_to_the_plate() {
     let profile = profile();
     let trees = column_on_plate(20.0, &profile);

@@ -2,6 +2,7 @@ use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
+use std::borrow::Cow;
 
 use crate::Landing;
 use crate::base::{braces, skate, toe_of};
@@ -204,7 +205,30 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
     for body in bodies(tree, profiles, placed) {
         sweep(slots.of(body.group), &body.tube);
     }
-    stand_on(slots.of(tree.group()), tree, profiles.of(tree.group()));
+    let profile = profiles.of(tree.group());
+    stand_on(slots.of(tree.group()), &drawn(tree, profile), profile);
+}
+
+/// `tree` as it is drawn: a lone tip whose pillar is shorter than its head is one tube from the
+/// contact to its foot or the plate, with no joint at its neck to bulge round it (ADR 0429).
+pub(crate) fn drawn<'a>(tree: &'a SupportTree, profile: &SupportProfile) -> Cow<'a, SupportTree> {
+    let landing = tree.landing();
+    let [tip, root] = match tree.nodes() {
+        [a, b] if a.is_leaf() => [a, b],
+        [a, b] if b.is_leaf() => [b, a],
+        _ => return Cow::Borrowed(tree),
+    };
+    let pillar_mm = root.position.z - landing.pillar_bottom_z(profile);
+    if landing.on_model || landing.on_support || pillar_mm >= tip.position.distance(root.position) {
+        return Cow::Borrowed(tree);
+    }
+    let alone = TreeNode {
+        parent: None,
+        ..*tip
+    };
+    let mut drawn = SupportTree::new(vec![alone], 0, landing);
+    drawn.set_group(tree.group());
+    Cow::Owned(drawn)
 }
 
 fn mesh_raft(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
@@ -288,9 +312,6 @@ fn strut(
 ) -> Tube {
     let nodes = tree.nodes();
     let (from, to) = (nodes[child].position, nodes[parent].position);
-    if tree.landing().in_plate && nodes[child].is_leaf() && parent == tree.root_index() {
-        return into_plate(&nodes[child], to, profile, style);
-    }
     let offset = to - from;
     let length = offset.length();
     if length < RING_EPSILON_MM {

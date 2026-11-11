@@ -1,7 +1,7 @@
 use super::foot::trunk_bottom;
 use super::head::ground_normal;
 use super::tube::{RING_EPSILON_MM, Ring, Tube};
-use super::{Style, strut, trunk};
+use super::{Style, drawn, strut, trunk};
 use crate::clear::{Beam, clear};
 use crate::column::{SURFACE_EPSILON_MM, face_normal, seat_mm};
 use crate::group::Profiles;
@@ -30,6 +30,7 @@ pub(crate) struct Body {
 /// [`sound`] tests them; the foot is the pad's, tested where it is placed.
 pub(crate) fn bodies(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Vec<Body> {
     let profile = profiles.of(tree.group());
+    let tree = &*drawn(tree, profile);
     let style = Style::of(tree, profile);
     let nodes = tree.nodes();
     let drawn_in = tree.node_groups(profiles);

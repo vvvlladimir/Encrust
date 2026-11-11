@@ -59,7 +59,8 @@ itself would report the contact's own face at zero distance.
 
 Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column; exactly that much stands.
 A contact under the foot and that pillar runs its head into the plate instead: cut flat there,
-no foot, `in_plate` set (ADR 0429). A point under the plate is kept — the model may move up —
+no foot, `in_plate` set (ADR 0429). A lone tip whose pillar is shorter than its head is drawn as
+one tube from its contact, with no joint at its neck. A point under the plate is kept — the model may move up —
 and the inspector reports standing against placed.
 
 A front that cannot stand, nor lean within a merge's reach, searches further before it
@@ -139,8 +140,9 @@ plate on the bevel.
 **The flare.** The pillar widens out into the pad over a quarter-circle fillet, tangent
 to the pillar above and the pad below, that rises as far as it widens (ADR 0341). It leaves the pillar at the pillar's own width, so
 its height is `(lower - pillar) / 2` rather than a field of its own (ADR 0238), it is drawn with the pillar's facets rather than the pad's, and it sinks
-`FOOT_BITE` into the pad the way the trunk does. It is drawn whole over the pillar under a
-head or not at all: a shorter pillar stands plain on its pad (ADR 0429). It never reaches
+`FOOT_BITE` into the pad the way the trunk does. Its top ring is the trunk's width where it
+ends, which a trunk narrowing upwards makes higher than `(lower - pillar) / 2`; with less room
+it is a smaller whole quarter circle, and it never rises round a head (ADR 0429). It never reaches
 above the root it widens, never narrower than the trunk standing in it, and never wider than the narrowest ring of
 the pad under it (ADR 0130).
 

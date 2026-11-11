@@ -527,7 +527,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   and is counted among those with no room to stand. A tip on a curved or faceted underside
   that rises a little under its rim is seated there, not counted. A part from the pad's
   height and 0.2 mm over the plate stands on its own pad, its head cut short and straight, with
-  no fillet; one lower than that stands on its head alone, run into the plate. A pad beside a part that cannot be moved aside is cut back on that side.
+  no bulge at its neck or fillet round it; one lower than that stands on its head alone, run into the plate. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a
   merged one whose trunk meets the part is split into its two halves, each grown again.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
