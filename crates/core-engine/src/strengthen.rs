@@ -149,7 +149,7 @@ fn heavier(plan: &SupportPlan, need: &Need) -> bool {
     let Some(auto) = plan.sizing() else {
         return false;
     };
-    if need.reason == Reason::Steady {
+    if need.reason == Reason::Steady || need.shown {
         return false;
     }
     let size = need.size_in(auto);

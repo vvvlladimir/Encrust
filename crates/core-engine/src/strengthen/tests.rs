@@ -289,4 +289,12 @@ fn sizes_thicken_up_to_the_widest_and_never_a_steadying_support() {
         !heavier(&light(), &need(point, 0)),
         "one profile has nothing wider"
     );
+    let shown = Need {
+        shown: true,
+        ..need(point, 0)
+    };
+    assert!(
+        !heavier(&plan, &shown),
+        "a tip on the side meant to be seen gets a neighbour"
+    );
 }

@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use core_engine::{SupportPlan, SupportShapes, Underside, strengthen};
 use core_geometry::Region;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, Need, WallSide, generate_supports, low_points};
+use core_supports::{Blocked, Need, Shown, WallSide, generate_supports, low_points};
 use printer_profiles::SupportProfile;
 
 use crate::i18n::tr;
@@ -32,6 +32,8 @@ pub struct SupportTask {
     pub seeds: Vec<Vec3>,
     /// The faces painted out of bounds, which the run puts nothing on or near.
     pub blocked: Region,
+    /// The faces painted as the side meant to be seen, held sparser and on the lightest tips.
+    pub shown: Region,
     /// What this model's supports are placed by: its own profile where it keeps one.
     pub profile: SupportProfile,
     /// The side of a hollow model's wall the run holds up, or `None` for a solid one.
@@ -180,6 +182,7 @@ impl SupportTask {
             transform: object.transform,
             seeds: object.supports.contacts(object.transform),
             blocked: object.supports.blocked().clone(),
+            shown: object.shown_painted.clone(),
             profile,
             side: None,
         }
@@ -260,6 +263,7 @@ fn needs_of(
     let mut last = done;
     let painted = Blocked::new(&task.mesh, &task.blocked, task.transform);
     let blocked = Blocked::keeping(painted, task.side.clone());
+    let shown = Shown::new(&task.mesh, &task.shown, task.transform);
     // A support on the far side of the wall holds up nothing on this one.
     let seeds: Vec<Vec3> = match &task.side {
         Some(side) => task
@@ -279,6 +283,7 @@ fn needs_of(
         &seeds,
         &low_points(&task.surface, task.transform),
         blocked.as_ref(),
+        shown.as_ref(),
         &mut |layer| {
             let fraction = done + layer as f32 / layers * of;
             if fraction - last >= REPORT_STEP {

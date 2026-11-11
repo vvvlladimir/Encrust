@@ -376,6 +376,7 @@ supports-removed-inside =
        *[other] Took { $count } supports out of the cavities
     }
 supports-where = Where
+supports-clean-surface-about = Paint the faces meant to be seen. An automatic run sets the contact spacing wider there and uses its lightest tips.
 supports-picked = Picked
 supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
 supports-stat-parts = Parts

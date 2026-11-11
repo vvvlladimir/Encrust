@@ -391,6 +391,7 @@ impl Run<'_> {
             &[],
             &self.lows,
             blocked.as_ref(),
+            None,
             &mut |_| true,
         );
         if let Some(side) = side {

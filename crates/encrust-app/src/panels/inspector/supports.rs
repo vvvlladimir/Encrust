@@ -114,7 +114,8 @@ pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Where an automatic run puts supports, and the lift of the one model picked.
+/// Where an automatic run puts supports, the lift of the one model picked, and the faces it
+/// holds sparser as the side meant to be seen.
 fn where_fields(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
         if window.tools.supports.auto.is_some() {
@@ -129,6 +130,9 @@ fn where_fields(ui: &mut egui::Ui, window: &mut Window) {
             lift_row(ui, &mut window.doc.scene, id);
         }
     });
+    super::shown::brush(ui, window, false);
+    describe(ui, &tr!("supports-clean-surface-about"));
+    super::shown::clear(ui, window);
 }
 
 /// How far the one picked model stands off the plate, the same number as in Position.

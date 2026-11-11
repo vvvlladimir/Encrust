@@ -9,12 +9,12 @@ use std::sync::Arc;
 
 use core_engine::{Strengthened, SupportPlan, SupportShapes, Underside, strengthen};
 use core_geometry::{
-    Bvh, Mat4, Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate,
-    lift_over_plate, orient_outward, transform_mesh, weld,
+    Bvh, Mat4, Mesh, Prominence, Quat, Region, Scalar, Transform, Vec3, center_over_plate,
+    drop_to_plate, lift_over_plate, orient_outward, transform_mesh, weld,
 };
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, Reason, SupportPoint, SupportTree, WallSide, columns,
+    Blocked, Need, Placed, Profiles, Reason, Shown, SupportPoint, SupportTree, WallSide, columns,
     generate_supports, grow, low_points, mesh_trees,
 };
 use core_volume::{Cancel, HollowSettings, hollow};
@@ -52,6 +52,8 @@ pub struct Supported {
     pub grow_s: f64,
     /// What strengthening changed, unless `--no-strengthen` left it out.
     pub strengthened: Option<Strengthened>,
+    /// Contacts on the side painted to be seen.
+    pub shown: usize,
 }
 
 impl Supported {
@@ -139,6 +141,9 @@ pub struct Sizing {
     /// Build every tip an automatic profile sizes to its lightest shape first, leaving its size
     /// to what strengthening finds it carries.
     pub lightest_first: bool,
+    /// Paint as the side meant to be seen every face that shows at least this much, 0 to 1,
+    /// as the clean surface reads it off the shape.
+    pub shown_from: Option<Scalar>,
 }
 
 /// `model` lifted by the placing profile's lift, hollowed to `wall_mm` where given, and supported
@@ -173,6 +178,7 @@ pub fn supported(
         place_s,
         grow_s: 0.0,
         strengthened,
+        shown: needs.iter().filter(|need| need.shown).count(),
     };
     supported.regrow()?;
     Ok(supported)
@@ -225,6 +231,7 @@ fn needs_under(
         .context("the model cannot be cut for placement")?;
     let lows = low_points(model, Transform::default());
     let blocked = Blocked::keeping(None, side.cloned());
+    let shown = sizing.shown_from.and_then(|least| shown_of(model, least));
     let mut needs = generate_supports(
         &stack,
         layer_mm,
@@ -233,6 +240,7 @@ fn needs_under(
         &[],
         &lows,
         blocked.as_ref(),
+        shown.as_ref(),
         &mut |_| true,
     );
     if let Some(side) = side {
@@ -259,6 +267,15 @@ fn needs_under(
     let added = needs.iter().skip(asked.len()).map(|need| need.reason);
     let reasons = asked.iter().copied().chain(added).collect();
     Ok((needs, reasons, Some(done)))
+}
+
+/// Every face of `model` that shows at least `least`, painted as the side meant to be seen.
+fn shown_of(model: &Mesh, least: Scalar) -> Option<Shown> {
+    let prominence = Prominence::of(model);
+    let painted: Region = (0..model.faces.len())
+        .filter(|&face| prominence.face(face) >= least)
+        .collect();
+    Shown::new(model, &painted, Transform::default())
 }
 
 /// `reason` with nothing to hold, which an automatic profile builds to its lightest shape.

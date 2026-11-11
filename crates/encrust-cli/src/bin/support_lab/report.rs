@@ -46,6 +46,9 @@ pub struct Row {
     /// What strengthening changed, unless `--no-strengthen` left it out.
     #[serde(default)]
     pub strengthened: Option<Strengthened>,
+    /// Contacts on the side painted to be seen.
+    #[serde(default)]
+    pub shown: usize,
     /// Limits the corpus sets for this model that the run broke.
     pub broken: Vec<String>,
     pub seconds: f64,
@@ -310,12 +313,7 @@ pub fn print_row(row: &Row) {
         cure.layers, cure.hardest_pull_n, cure.peels, cure.cups, cure.thins,
     );
     tips::print(&row.tips);
-    if let Some(done) = row.strengthened {
-        println!(
-            "- strengthened: {} rounds, {} tips thickened, {} added",
-            done.rounds, done.thickened, done.added
-        );
-    }
+    print_placement(row);
     print_sweep(row);
     for broken in &row.broken {
         println!("- EXPECTED: {broken}");
@@ -376,6 +374,22 @@ fn print_failures(cure: &CureRow) {
             let all = cure.failures.iter().filter(|f| f.kind == kind).count();
             println!("  - {kind} ×{all}: {}", found.join(", "));
         }
+    }
+}
+
+/// What strengthening changed, and how many contacts stand on the side painted to be seen.
+fn print_placement(row: &Row) {
+    if let Some(done) = row.strengthened {
+        println!(
+            "- strengthened: {} rounds, {} tips thickened, {} added",
+            done.rounds, done.thickened, done.added
+        );
+    }
+    if row.shown > 0 {
+        println!(
+            "- shown: {} contacts on the side painted to be seen",
+            row.shown
+        );
     }
 }
 

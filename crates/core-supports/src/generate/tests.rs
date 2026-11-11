@@ -47,6 +47,7 @@ fn generate_supports(
         seeds,
         lows,
         blocked,
+        None,
         progress,
     )
     .into_iter()
@@ -142,6 +143,7 @@ fn needs_for(mesh: &Mesh) -> Vec<Need> {
         None,
         &[],
         &[],
+        None,
         None,
         &mut |_| true,
     )
@@ -368,6 +370,7 @@ fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
         Some(auto),
         &[],
         &[],
+        None,
         None,
         &mut |_| true,
     )
@@ -1049,4 +1052,49 @@ fn an_empty_stack_produces_nothing() {
         &mut |_| true,
     );
     assert!(points.is_empty());
+}
+
+/// What a run sized by the shipped automatic profile wants under `mesh`, with every face
+/// looking down painted as the side meant to be seen.
+fn sized_needs_shown_under(mesh: &Mesh) -> Vec<Need> {
+    let auto = &shipped_auto();
+    let down: core_geometry::Region = (0..mesh.faces.len())
+        .filter(|&face| {
+            mesh.triangle(face)
+                .is_some_and(|t| t.normal_unnormalized().normalize_or_zero().z < -0.9)
+        })
+        .collect();
+    let shown = crate::region::Shown::new(mesh, &down, core_geometry::Transform::default())
+        .expect("a box has faces looking down");
+    super::generate_supports(
+        &slice(mesh),
+        LAYER_HEIGHT_MM,
+        &auto.placing_with(&profile()),
+        Some(auto),
+        &[],
+        &[],
+        None,
+        Some(&shown),
+        &mut |_| true,
+    )
+}
+
+#[test]
+fn a_ceiling_painted_to_be_seen_is_held_sparser_on_the_lightest_tips() {
+    let ceiling = shelf(0.0);
+    let plain = sized_needs_for(&ceiling);
+    let shown = sized_needs_shown_under(&ceiling);
+    assert!(
+        shown.len() < plain.len(),
+        "{} contacts under a painted ceiling, {} under a plain one",
+        shown.len(),
+        plain.len()
+    );
+    let auto = shipped_auto();
+    let on_ceiling: Vec<&Need> = shown.iter().filter(|need| need.shown).collect();
+    assert!(!on_ceiling.is_empty(), "the shelf's underside is painted");
+    assert!(
+        on_ceiling.iter().all(|need| need.size_in(&auto) == 0),
+        "every contact on the painted side is the lightest"
+    );
 }

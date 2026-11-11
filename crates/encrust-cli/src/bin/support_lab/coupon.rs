@@ -333,6 +333,7 @@ fn supported(profile: &SupportProfile, body: Mesh, points: Vec<Vec3>) -> Result<
         place_s: 0.0,
         grow_s: 0.0,
         strengthened: None,
+        shown: 0,
     })
 }
 

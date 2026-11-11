@@ -177,8 +177,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         return;
     }
     match *window.tool {
-        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
         // A brush stroke has already painted whatever the click landed on.
+        _ if paint::paints_shown(window) => {}
+        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
         Tool::Paint if window.tools.supports.placing.paints() => {}
         Tool::Relief if window.tools.relief.paints() => {}
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
@@ -212,7 +213,6 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             measure_under_cursor(window, rect, cursor, alt);
         }
         // A brush stroke has already painted whatever the click landed on.
-        Tool::Position if window.tools.orient.paints_shown() => {}
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
@@ -265,7 +265,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
         || (*window.tool == Tool::Relief && window.tools.relief.paints())
         || paint::picks_faces(window)
-        || (*window.tool == Tool::Position && window.tools.orient.paints_shown())
+        || paint::paints_shown(window)
     {
         draw_brush(ui, window, rect);
     }
@@ -347,7 +347,7 @@ pub(crate) fn moves_by_hand(window: &Window) -> bool {
 /// Whether Position has its handles out: not while a click lays a face or the brush
 /// paints what shows, which would take the press meant for the model.
 fn handles_out(orient: &crate::orient::OrientTool) -> bool {
-    !orient.picking_face && !orient.paints_shown()
+    !orient.picking_face && !orient.paints_shown(Tool::Position, crate::supports::Placing::Point)
 }
 
 /// Whether the handles are out this frame: the tool moves by hand and no modal covers them.

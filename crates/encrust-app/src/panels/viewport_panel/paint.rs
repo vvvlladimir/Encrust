@@ -65,7 +65,7 @@ fn brush(ui: &egui::Ui, window: &Window) -> (Scalar, egui::Color32) {
     if *window.tool == Tool::Repair {
         return (window.tools.repair.state.brush_radius_mm, erasing(alt));
     }
-    if *window.tool == Tool::Position {
+    if *window.tool == Tool::Position || paints_shown(window) {
         return (window.tools.orient.shown_brush.radius_mm, erasing(alt));
     }
     let colour = match window.tools.supports.placing {
@@ -91,7 +91,7 @@ pub(super) fn paint_stroke(
     if *window.tool == Tool::Repair {
         return repair_stroke(ui, window, viewport, pointer);
     }
-    if *window.tool == Tool::Position {
+    if *window.tool == Tool::Position || paints_shown(window) {
         return shown_stroke(ui, window, viewport, pointer);
     }
     let out = *window.tool == Tool::Paint && window.tools.supports.placing.paints();
@@ -178,7 +178,7 @@ fn shown_stroke(
     let orient = &window.tools.orient;
     let shown = orient.shown_brush;
     let brush = RegionBrush {
-        out: orient.paints_shown(),
+        out: paints_shown(window),
         radius_mm: shown.radius_mm,
         held: (shown.stroke, shown.last_daub),
         region: |object| &mut object.shown_painted,
@@ -189,10 +189,22 @@ fn shown_stroke(
     taken
 }
 
-/// Draws what is painted as showing while a clean surface is asked for in Position, and
-/// puts it away elsewhere; cheap while nothing changed.
+/// Whether a drag over a model paints where it shows, with the tool in hand.
+pub(super) fn paints_shown(window: &Window) -> bool {
+    let placing = window.tools.supports.placing;
+    window.tools.orient.paints_shown(*window.tool, placing)
+}
+
+/// Draws what is painted as showing while a clean surface is asked for in Position or the
+/// brush is in hand, and in Supports, which holds it sparser; cheap while nothing changed.
 fn refresh_shown(window: &mut Window) {
-    let drawn = *window.tool == Tool::Position && window.tools.orient.settings.clean_surface;
+    let orient = &window.tools.orient;
+    let drawn = match *window.tool {
+        Tool::Position => orient.settings.clean_surface || orient.shown_brush.brushing,
+        Tool::Supports => true,
+        Tool::Paint => window.tools.supports.placing == Placing::Point,
+        _ => false,
+    };
     for object in window.doc.scene.here_mut() {
         if drawn {
             let mesh = std::sync::Arc::clone(&object.mesh);

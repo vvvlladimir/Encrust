@@ -65,6 +65,7 @@ fn tips_under(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_sup
         &[],
         &[],
         None,
+        None,
         &mut |_| true,
     )
     .into_iter()

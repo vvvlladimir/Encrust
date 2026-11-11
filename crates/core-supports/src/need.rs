@@ -8,6 +8,9 @@ pub struct Need {
     pub reason: Reason,
     /// Sizes heavier than its reason asks, where what it carries proved too much for that.
     pub heavier: u8,
+    /// On the side the user painted to be seen: built lightest, and given a neighbour
+    /// rather than a heavier tip (ADR 0427).
+    pub shown: bool,
 }
 
 impl Reason {
@@ -25,12 +28,16 @@ impl Need {
             contact,
             reason,
             heavier: 0,
+            shown: false,
         }
     }
 
     /// Which of `auto`'s shapes a support here is built to, lightest first, with
-    /// [`AUTO_SIZES`] for its steadying one.
+    /// [`AUTO_SIZES`] for its steadying one and the lightest on the side meant to be seen.
     pub fn size_in(&self, auto: &AutoProfile) -> usize {
+        if self.shown && self.reason != Reason::Steady {
+            return 0;
+        }
         let asked = match self.reason {
             Reason::Island { share_mm3, .. } | Reason::Overhang { share_mm3 } => {
                 auto.share_size(share_mm3)

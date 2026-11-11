@@ -77,12 +77,39 @@ impl Blocked {
     }
 
     fn near_patch(&self, point: Vec3, radius_mm: Scalar) -> bool {
-        self.patch.as_ref().is_some_and(|patch| {
-            patch
-                .closest(point)
-                .is_some_and(|closest| closest.distance <= radius_mm)
+        self.patch
+            .as_ref()
+            .is_some_and(|patch| near(patch, point, radius_mm))
+    }
+}
+
+/// The faces the user painted as the side meant to be seen, where an automatic run puts its
+/// contacts further apart and lightest (ADR 0427).
+#[derive(Debug)]
+pub struct Shown {
+    patch: Bvh,
+}
+
+impl Shown {
+    /// Builds the question for `region` painted on `model` standing at `transform`, or `None`
+    /// when nothing is painted.
+    pub fn new(model: &Mesh, region: &Region, transform: Transform) -> Option<Self> {
+        let patch = region.submesh(model, transform, 0.0)?;
+        Some(Self {
+            patch: Bvh::build(&patch),
         })
     }
+
+    /// Whether the painted patch comes within `radius_mm` of `point`, plate coordinates.
+    pub fn covers(&self, point: Vec3, radius_mm: Scalar) -> bool {
+        near(&self.patch, point, radius_mm)
+    }
+}
+
+fn near(patch: &Bvh, point: Vec3, radius_mm: Scalar) -> bool {
+    patch
+        .closest(point)
+        .is_some_and(|closest| closest.distance <= radius_mm)
 }
 
 #[cfg(test)]

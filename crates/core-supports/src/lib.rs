@@ -53,7 +53,7 @@ pub use placed::Placed;
 pub use preview::{Preview, preview, stands};
 pub use project::{InfillPattern, ProjectSettings, Projected, project};
 pub use raft::{GRID_BAR_MM, GRID_HOLE_MM, LIP_WIDTH_MM};
-pub use region::{Blocked, WallSide};
+pub use region::{Blocked, Shown, WallSide};
 pub use shaded::{CREASE_DEG, Shaded, shaded};
 pub use trapped::{TrapScan, Trapped};
 pub use tree::{SupportTree, TreeNode};

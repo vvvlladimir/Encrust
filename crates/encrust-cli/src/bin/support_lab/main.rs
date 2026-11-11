@@ -70,6 +70,10 @@ struct Args {
     /// strengthening size it by what it carries.
     #[arg(long)]
     lightest_first: bool,
+    /// Paint as the side meant to be seen every face that shows at least this much, 0 to 1,
+    /// as Clean surface reads it off the shape.
+    #[arg(long)]
+    shown_from: Option<f32>,
     /// Write each supported model and markers at what the bench names into this folder.
     #[arg(long)]
     export: Option<PathBuf>,
@@ -141,6 +145,7 @@ fn main() -> Result<ExitCode> {
         sizing: stand::Sizing {
             strengthening: !args.no_strengthen,
             lightest_first: args.lightest_first,
+            shown_from: args.shown_from,
         },
     };
     let asked = asked(&args, &catalogue)?;
@@ -263,6 +268,7 @@ fn bench(entry: &Entry, id: &str, asked: &SupportPlan, setup: &Setup, args: &Arg
         tips: tips::Tips::default(),
         sweep: Vec::new(),
         strengthened: None,
+        shown: 0,
         broken: Vec::new(),
         seconds: 0.0,
         stages_s: [0.0; 3],
@@ -295,6 +301,7 @@ fn measure(
     row.tips = tips::read(&supported, setup.material.layer_height_mm, setup.neck_mpa)?;
     row.stages_s = [supported.place_s, supported.grow_s, cured.seconds];
     row.strengthened = supported.strengthened.map(Into::into);
+    row.shown = supported.shown;
     row.broken = broken(&entry.expect, &shape);
     if let Some(dir) = &args.export {
         let stem = format!("{}-{}", row.model, row.profile);

@@ -249,6 +249,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0424](0424-an-automatic-support-is-sized-by-its-share-of-what-it-holds.md) | Size each automatic support by its share of the model it holds | Accepted |
 | [0425](0425-auto-places-contacts-as-sparsely-as-a-tip-holds.md) | Place Auto's contacts 3.3 mm apart, past 45 degrees, on 1.0 mm pillars | Accepted; the 3.3 mm under a level face is superseded by 0426 |
 | [0426](0426-auto-holds-a-ceiling-3-mm-apart-and-steadies-on-thin-supports.md) | Hold Auto's ceilings 3.0 mm apart, and steady a part on thin supports | Accepted |
+| [0427](0427-auto-holds-the-painted-side-sparser-on-its-lightest-tips.md) | Hold the side painted to be seen sparser, on Auto's lightest tips | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
@@ -349,7 +350,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted; what the picker lists is superseded by 0284, its default by 0291 |
 | [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted; its band and its cups are superseded by 0410 |
 | [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted; which goals auto weighs is narrowed by 0409 |
-| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410 |
+| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410, step 3 is taken by 0427 |
 | [0410](0410-a-single-goal-minimises-its-own-reading-alone.md) | A single goal minimises its own reading alone, and a clean surface is asked beside any preset | Proposed |
 | [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
 | [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |

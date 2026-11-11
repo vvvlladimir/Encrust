@@ -63,6 +63,7 @@ fn points(mesh: &Mesh, profile: &SupportProfile) -> Vec<SupportPoint> {
         &[],
         &low_points(mesh, Transform::default()),
         None,
+        None,
         &mut |_| true,
     )
     .into_iter()

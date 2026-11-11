@@ -5,6 +5,8 @@ use core_geometry::Vec2;
 use serde::{Deserialize, Serialize};
 
 use super::OrientTool;
+use crate::supports::Placing;
+use crate::workspace::Tool;
 
 /// What Auto-orient keeps between runs beside its preset: whether it holds to a clean
 /// surface, how wide the brush that paints what shows is, and how far a model may tilt.
@@ -49,9 +51,15 @@ impl Default for ShownBrush {
 }
 
 impl OrientTool {
-    /// Whether a drag over a model paints where it shows.
-    pub fn paints_shown(&self) -> bool {
-        self.settings.clean_surface && self.shown_brush.brushing && !self.is_running()
+    /// Whether a drag over a model paints where it shows, in `tool` placing supports as
+    /// `placing`: in Select, and in Supports wherever its Where section stands.
+    pub fn paints_shown(&self, tool: Tool, placing: Placing) -> bool {
+        let reached = match tool {
+            Tool::Position | Tool::Supports => true,
+            Tool::Paint => placing == Placing::Point,
+            _ => false,
+        };
+        reached && self.shown_brush.brushing && !self.is_running()
     }
 
     /// What the window remembers of the tool.
@@ -63,11 +71,10 @@ impl OrientTool {
         }
     }
 
-    /// Stands the tool under `state`; a brush in hand is put down where the switch goes off.
+    /// Stands the tool under `state`.
     pub fn set_state(&mut self, state: OrientState) {
         self.settings.clean_surface = state.clean_surface;
         self.shown_brush.radius_mm = state.brush_radius_mm;
         self.settings.max_tilt_deg = state.max_tilt_deg;
-        self.shown_brush.brushing &= state.clean_surface;
     }
 }

@@ -13,7 +13,7 @@ use crate::field::{Field, Grid, Parts};
 use crate::islands::{grid_of, hold_islands};
 use crate::load::{Load, Mark};
 use crate::need::{Need, Reason};
-use crate::region::Blocked;
+use crate::region::{Blocked, Shown};
 use crate::sample::{sample_piece, sample_stance};
 use crate::step::Zones;
 
@@ -22,6 +22,9 @@ mod standing;
 mod wanted;
 use standing::Standing;
 use wanted::{Flatness, On, Wanted};
+
+/// How much further apart contacts stand on the side meant to be seen, ADR 0427.
+const SHOWN_SPACING: Scalar = 1.3;
 
 /// How many supports a part stands steady on: fewer hold it and let it rock on the peel.
 const STEADY: u8 = 3;
@@ -41,18 +44,24 @@ pub fn generate_supports(
     seeds: &[Vec3],
     lows: &[Vec3],
     blocked: Option<&Blocked>,
+    shown: Option<&Shown>,
     progress: &mut dyn FnMut(usize) -> bool,
 ) -> Vec<Need> {
     let Some(grid) = grid_of(stack, GRID_PITCH_MM) else {
         return Vec::new();
     };
     let config = SampleConfig::for_profile(profile);
-    let pass = Pass::new(&grid, &config, profile, sizing, layer_height_mm, blocked);
+    let mut pass = Pass::new(&grid, &config, profile, sizing, layer_height_mm, blocked);
+    pass.shown = shown;
     let mut run = Run::new(&pass, seeds, lows);
     if run.climb(stack, &pass, progress) {
         run.hold_islands(stack, &pass, seeds, lows);
     }
-    needs(run.placed, &run.load)
+    let mut needs = needs(run.placed, &run.load);
+    for need in &mut needs {
+        need.shown = pass.on_shown(need.contact);
+    }
+    needs
 }
 
 impl<'a> Pass<'a> {
@@ -78,6 +87,7 @@ impl<'a> Pass<'a> {
                 .max(profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM),
             stance_mm: config.spacing_mm,
             blocked,
+            shown: None,
             sizing,
         }
     }
@@ -308,6 +318,7 @@ struct Pass<'a> {
     /// How far across a part has to be before the supports that steady it are put down.
     stance_mm: Scalar,
     blocked: Option<&'a Blocked>,
+    shown: Option<&'a Shown>,
     /// The automatic profile steps are held and sized by, or `None` to hold them as
     /// overhangs.
     sizing: Option<&'a AutoProfile>,
@@ -378,6 +389,11 @@ impl Pass<'_> {
                 standing.leave(piece);
                 continue;
             }
+            let coverage_mm = if self.on_shown(contact) {
+                self.sparser(coverage_mm)
+            } else {
+                coverage_mm
+            };
             let taken = standing.take(piece, at, contact_mm, coverage_mm);
             if let Some(contact) = taken.filter(|_| steadies) {
                 steadied.add(contact, self.steady_mm(), 0.0);
@@ -460,6 +476,19 @@ impl Pass<'_> {
     fn steady_mm(&self) -> Scalar {
         self.sizing
             .map_or(0.0, |auto| self.config.coverage_at(auto.steady_spacing_mm))
+    }
+
+    /// What `coverage_mm` keeps away once the spacing it stands for is [`SHOWN_SPACING`] wider.
+    fn sparser(&self, coverage_mm: Scalar) -> Scalar {
+        let short_mm = self.config.spacing_mm - self.config.coverage_radius_mm;
+        self.config
+            .coverage_at((coverage_mm + short_mm) * SHOWN_SPACING)
+    }
+
+    /// Whether `contact` touches the side the user painted to be seen.
+    fn on_shown(&self, contact: Vec3) -> bool {
+        self.shown
+            .is_some_and(|shown| shown.covers(contact, self.keep_out_mm))
     }
 
     /// Whether the user has painted supports out of where `contact` would touch.
