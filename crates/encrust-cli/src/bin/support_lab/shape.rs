@@ -93,6 +93,9 @@ pub struct Shape {
     pub rim_bare_mm: f32,
     pub rim_gap_max_mm: f32,
     pub findings: Vec<Finding>,
+    /// Where the supports' resin goes; left at none where a coupon reads its supports.
+    #[serde(default)]
+    pub resin: crate::resin::Resin,
 }
 
 /// One place worth looking at, plate millimetres.

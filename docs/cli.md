@@ -813,7 +813,9 @@ tall trunks with nothing to brace them to. A model holds when nothing falls, and
 enough when it holds and no tip carries more than it holds. Each row of the run also lists
 every standing tip: why it stands, its group, the pull on it at its worst height and its
 margin (`docs/design/analysis.md`), the material behind it, its trunk's height and slenderness;
-the block and table give the weakest margin and how many tips keep under ×1.5.
+the block and table give the weakest margin and how many tips keep under ×1.5. The block
+splits the supports' resin into heads, branches, trunks, feet, braces and raft, each body
+counted whole, and counts the trees standing on a foot of their own.
 
 `--profile` names the support profiles to bench, repeated for several, Light when none is
 given. `--auto` names automatic profiles to bench the same way, each support sized by what

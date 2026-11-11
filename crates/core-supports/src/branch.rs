@@ -12,6 +12,7 @@ use crate::group::Profiles;
 use crate::tree::{SupportTree, TreeNode};
 
 mod carriers;
+mod cost;
 mod ground;
 mod harvest;
 mod merge;
@@ -231,7 +232,7 @@ impl<'a> Forest<'a> {
         // A tip leaves the surface along its face's normal, so the contact and the neck are
         // two nodes, and what merges is the neck; see `docs/decisions/0125`.
         for column in columns {
-            let radius_mm = profiles.of(column.group).pillar_radius_mm();
+            let radius_mm = profiles.of(column.group).carrying_radius_mm(0.0, 1);
             let headed = has_head(column.contact, column.neck);
             let contact = forest.nodes.len();
             forest.nodes.push(TreeNode {

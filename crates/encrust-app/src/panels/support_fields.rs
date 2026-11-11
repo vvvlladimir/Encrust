@@ -84,7 +84,7 @@ impl Group {
     /// What a group with a switch does, and what stands in its place while it is off.
     fn help_and_off(self) -> Option<(String, String)> {
         match self {
-            Self::Branching => Some((tr!("support-branching-help"), tr!("support-no-branching"))),
+            Self::Branching => Some((tr!("support-merging-help"), tr!("support-no-branching"))),
             Self::Grid => Some((tr!("support-grid-help"), tr!("support-no-grid"))),
             Self::Raft => Some((tr!("support-raft-help"), tr!("support-no-raft"))),
             Self::Bracing => Some((tr!("support-bracing-help"), tr!("support-no-bracing"))),

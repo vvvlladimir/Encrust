@@ -16,6 +16,7 @@ use tube::{RING_EPSILON_MM, Ring, Tube, empty_tube, push, round_off, sweep};
 
 mod foot;
 mod head;
+mod parts;
 mod sound;
 pub(crate) use foot::footing_radius_mm;
 pub use foot::{FOOT_BEVEL, FOOT_TAPER};
@@ -23,6 +24,7 @@ use foot::{FOOT_BITE, flare, foot, foot_tip, trunk_base_mm, trunk_bottom};
 pub(crate) use head::ground_normal;
 pub(crate) use head::mesh_head;
 use head::{apex_of, head};
+pub use parts::{ResinByPart, resin_by_part};
 pub(crate) use sound::{Fault, bodies, faults, sound};
 
 /// Which set of measurements a support is built from.

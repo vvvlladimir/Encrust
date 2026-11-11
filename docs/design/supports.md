@@ -436,20 +436,24 @@ the case where one front reaches the other's column outright.
 
 Candidates sit in a max-heap on `z`, so the highest meeting point — the merge that saves
 most — is taken first, and only when the two are within
-`branching.max_merge_distance_mm`, together carry no more than `max_tips_per_trunk` tips,
-neither strut is longer than `max_strut_length_mm`, each strut's body clears the model,
-and the meeting point can land. Where the higher front reaches the lower one's column at
+`branching.max_merge_distance_mm`, together carry no more than the widest trunk holds,
+neither strut runs longer than 5 widths of the widest trunk, the merge saves resin, each strut's
+body clears the model, and the meeting point can land. The saving (`branch/cost.rs`) is the
+two trunks and feet left out — cones to the plate and the pad's cylinder — less the two
+struts and the shared trunk and foot, all in closed form (ADR 0424). Where the higher front reaches the lower one's column at
 or above it, the meeting point is the lower front itself and only the higher one leans:
 it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
 at its own height further off (ADR 0338). A pair refused for its bodies or its
 landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
 first, then twice as far each time, until the meeting point reaches the plate: what blocks a strut is
 mostly the part right beside the tips, and dropping past it is how two columns under a
-crowded part still share a trunk (ADR 0338). The joint
-keeps the branches' own width; only the trunk under the root widens, as a cone from that
-width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `carried` folds
-`(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
-cross-section, 3 volume, the presets ship 2.5 (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
+crowded part still share a trunk (ADR 0338). Every strut,
+joint and trunk is as wide as it carries (ADR 0424): `min(cap, max(pillar, r_c √(1.5 n),
+length / s / 2))` for `n` tips of contact radius `r_c` over a strut or trunk that long, `s`
+15 for a trunk and 5 for a leaning strut, so
+its section is half again its tips' and a tip tears before anything under it; the pillar
+is the thinnest, the cap the widest, and a joint is never narrower than a strut coming
+into it. The trunk under the root is a cone from the joint's width to that base (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
 Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Survivors drop
 a vertical trunk to their landing. A merged front that stands on the model is split again
 where every tip under it stands on the model as a small pillar of its own — from its neck,

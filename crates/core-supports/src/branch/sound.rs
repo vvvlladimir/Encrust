@@ -33,7 +33,7 @@ pub(super) fn stand_small_pillars_on_supports(
             .into_iter()
             .map(|index| &carriers.all[index])
             .filter(|carrier| carrier.radius_mm >= radius_mm + THICKER_BY_MM)
-            .filter_map(|carrier| meeting_on(root.position, carrier, profile))
+            .filter_map(|carrier| meeting_on(root.position, tree.tip_count(), carrier, profile))
             .filter(|meet| root.position.distance(*meet) <= own_mm)
             .filter(|meet| {
                 let strut = Beam {

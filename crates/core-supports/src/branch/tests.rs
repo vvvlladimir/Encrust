@@ -290,6 +290,26 @@ fn thinner() -> SupportProfile {
     thin
 }
 
+/// A profile of 0.2 mm tips on a 0.3 mm pillar whose trunks grow no wider than `widest_mm`:
+/// what bounds a strut is then its slenderness, 5 of the widest.
+fn slight(widest_mm: Scalar) -> SupportProfile {
+    let mut slight = profile();
+    slight.tip.contact_diameter_mm = 0.2;
+    slight.middle.diameter_mm = 0.3;
+    slight.branching.max_trunk_diameter_mm = widest_mm;
+    slight
+}
+
+/// A profile whose widest trunk, 1.2 mm, carries two of its 0.62 mm tips half again over and
+/// not three.
+fn two_at_most() -> SupportProfile {
+    let mut fixture = profile();
+    fixture.tip.contact_diameter_mm = 0.62;
+    fixture.branching.max_trunk_diameter_mm = 1.2;
+    assert_eq!(fixture.most_tips(), 2);
+    fixture
+}
+
 /// The trees `points` grow over an empty plate, each built to its group in `table`.
 fn grown_over_plate(points: &[SupportPoint], table: &[SupportProfile]) -> Vec<SupportTree> {
     let model = Mesh::default();
@@ -760,25 +780,23 @@ fn a_strut_into_a_thicker_support_is_no_longer_than_a_strut_of_a_merge() {
 }
 
 #[test]
-fn a_strut_into_a_thicker_support_is_held_to_the_longest_strut() {
+fn a_strut_into_a_thicker_support_is_no_slenderer_than_its_widest_strut() {
     // 4 mm across at 45 degrees from the neck: the strut is 5.7 mm long.
     let points = [
         SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
         SupportPoint::new(Vec3::new(14.0, 10.0, 20.0)).in_group(1),
     ];
-    let mut thin = thinner();
-    thin.branching.max_strut_length_mm = 5.0;
+    let thin = slight(0.3);
     let forest = grown_over_plate(&points, &[profile(), thin]);
     assert!(
         forest.iter().all(|tree| !tree.landing().on_support),
-        "a 5.7 mm strut is past a 5 mm limit, so the thin one stands on the plate"
+        "a 5.7 mm strut is past 5 times a 0.3 mm widest trunk, so the thin one stands on the plate"
     );
 }
 
 #[test]
-fn a_thicker_trunk_takes_on_no_more_tips_than_the_profile_allows() {
-    let mut thick = profile();
-    thick.branching.max_tips_per_trunk = 2;
+fn a_thicker_trunk_takes_on_no_more_tips_than_its_widest_carries() {
+    let thick = two_at_most();
     let points = [
         SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
         SupportPoint::new(Vec3::new(12.0, 10.0, 20.0)),
@@ -1016,9 +1034,8 @@ fn four_tips_in_a_square_end_up_on_one_trunk() {
 }
 
 #[test]
-fn a_trunk_carries_no_more_tips_than_the_profile_allows() {
-    let mut fixture = profile();
-    fixture.branching.max_tips_per_trunk = 2;
+fn a_trunk_carries_no_more_tips_than_its_widest_carries() {
+    let fixture = two_at_most();
     let forest = forest_of(
         &[
             Vec3::new(10.0, 10.0, 30.0),
@@ -1039,18 +1056,16 @@ fn a_trunk_carries_no_more_tips_than_the_profile_allows() {
 }
 
 #[test]
-fn tips_whose_struts_would_run_longer_than_the_profile_allows_stand_apart() {
-    // 8 mm apart at 45 degrees: each strut to the meeting point is 5.7 mm long.
+fn tips_whose_struts_would_be_slenderer_than_the_widest_strut_stand_apart() {
+    // 8 mm apart at 45 degrees: each strut to the meeting point is 5.7 mm long, which a
+    // 1.0 mm widest trunk holds to 5 mm and a 1.2 mm one to 6 mm.
     let contacts = [Vec3::new(10.0, 10.0, 30.0), Vec3::new(18.0, 10.0, 30.0)];
-    let mut fixture = profile();
-    fixture.branching.max_strut_length_mm = 5.0;
     assert_eq!(
-        forest_of(&contacts, &Mesh::default(), Profiles::single(&fixture)).len(),
+        forest_of(&contacts, &Mesh::default(), Profiles::single(&slight(1.0))).len(),
         2
     );
-    fixture.branching.max_strut_length_mm = 6.0;
     assert_eq!(
-        forest_of(&contacts, &Mesh::default(), Profiles::single(&fixture)).len(),
+        forest_of(&contacts, &Mesh::default(), Profiles::single(&slight(1.2))).len(),
         1
     );
 }

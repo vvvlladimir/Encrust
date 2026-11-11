@@ -281,6 +281,7 @@ pub fn print_row(row: &Row) {
         shape.trees,
         row.per_cm2(),
     );
+    shape.resin.print();
     println!(
         "- load: p90 {:.1} mm² a tip against {:.1} by design; use of what a tip holds median {:.2}, p90 {:.2}, max {:.2}; overloaded {}; underside {:.0} mm², {:.0} of it flat, bare {:.1}; flat rim far from tips {:.1} mm (worst {:.1} mm)",
         shape.load_p90_mm2,

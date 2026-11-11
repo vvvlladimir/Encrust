@@ -1,4 +1,5 @@
 use super::carriers::{THICKER_BY_MM, meeting_on};
+use super::cost::{Priced, saving_mm3};
 use super::ground::escape;
 use super::harvest::stands;
 use super::speculate::Judged;
@@ -145,7 +146,7 @@ impl Forest<'_> {
             if carrier.radius_mm < front.radius_mm + THICKER_BY_MM || !self.has_room(a, b) {
                 continue;
             }
-            if let Some(meet) = meeting_on(front.position, carrier, profile) {
+            if let Some(meet) = meeting_on(front.position, front.tips, carrier, profile) {
                 heap.push(Candidate {
                     meet,
                     a,
@@ -155,6 +156,27 @@ impl Forest<'_> {
                 });
             }
         }
+    }
+
+    /// Front `index` as a merge prices it.
+    pub(super) fn priced(&self, index: usize) -> Priced<'_> {
+        let front = &self.fronts[index];
+        Priced {
+            position: front.position,
+            radius_mm: front.radius_mm,
+            tips: front.tips,
+            profile: self.profile(index),
+        }
+    }
+
+    /// How wide the joint of `candidate` is: what both fronts carry asks, and never narrower
+    /// than `struts_mm`, the wider strut coming into it.
+    fn joint_radius_mm(&self, candidate: &Candidate, struts_mm: Scalar) -> Scalar {
+        let (a, b) = (&self.fronts[candidate.a], &self.fronts[candidate.b]);
+        self.profiles
+            .of(self.profiles.heavier(a.group, b.group))
+            .carrying_radius_mm(0.0, a.tips + b.tips)
+            .max(struts_mm)
     }
 
     /// Whether the strut from a front to the carrier it would run into clears the model.
@@ -171,14 +193,13 @@ impl Forest<'_> {
         clear(placed, &strut)
     }
 
-    /// Whether the trunk under `carrier` can take on the tips of front `a` within both
-    /// groups' tips a trunk carries.
+    /// Whether the trunk under `carrier` can take on the tips of front `a` within the most
+    /// its own group carries.
     pub(super) fn has_room(&self, a: usize, carrier: usize) -> bool {
         let tree = self.carriers.all[carrier].tree;
         let (own, most) = self.carriers.trunks[tree];
-        let mine = self.profile(a).branching.max_tips_per_trunk as usize;
         let landed = self.carried.get(&tree).copied().unwrap_or(0);
-        own + landed + self.fronts[a].tips <= most.min(mine)
+        own + landed + self.fronts[a].tips <= most
     }
 
     /// Ends a front on the carrier of `candidate`: it needs no trunk and no foot.
@@ -209,23 +230,24 @@ impl Forest<'_> {
     ) {
         let (one, two) = (&self.fronts[a], &self.fronts[b]);
         let (first, second) = (&self.profile(a).branching, &self.profile(b).branching);
+        let under = self
+            .profiles
+            .of(self.profiles.heavier(one.group, two.group));
         let ground = Vec2::new(
             two.position.x - one.position.x,
             two.position.y - one.position.y,
         );
-        let most_tips = first.max_tips_per_trunk.min(second.max_tips_per_trunk);
         if ground.length()
             > first
                 .max_merge_distance_mm
                 .min(second.max_merge_distance_mm)
-            || one.tips + two.tips > most_tips as usize
+            || !under.can_strut(0.0, one.tips + two.tips)
         {
             return;
         }
         let reach_per_drop = first.reach_per_drop().min(second.reach_per_drop());
         let (from_one, from_two) = (dropped(one, drop_mm), dropped(two, drop_mm));
         let meet = meeting_point(from_one, from_two, reach_per_drop);
-        let longest_mm = first.max_strut_length_mm.min(second.max_strut_length_mm);
 
         // Two struts of no length are a merge that has already happened. One is the other
         // front coming down onto this one, which is a joint unless this one is a contact.
@@ -236,8 +258,15 @@ impl Forest<'_> {
         if strut_mm(from_one).max(strut_mm(from_two)) < SAME_PLACE_MM
             || onto_contact(one, from_one)
             || onto_contact(two, from_two)
-            || strut_mm(from_one).max(strut_mm(from_two)) > longest_mm
+            || !self.profile(a).can_strut(strut_mm(from_one), one.tips)
+            || !self.profile(b).can_strut(strut_mm(from_two), two.tips)
             || meet.z <= PLATE_Z_MM
+            || saving_mm3(
+                (self.priced(a), from_one),
+                (self.priced(b), from_two),
+                meet,
+                under,
+            ) <= 0.0
         {
             return;
         }
@@ -254,12 +283,18 @@ impl Forest<'_> {
     /// room under the meeting point for a trunk to stand.
     pub(super) fn accepts(&self, candidate: &Candidate, placed: &Placed) -> bool {
         let (a, b) = (&self.fronts[candidate.a], &self.fronts[candidate.b]);
-        let joint_mm = a.radius_mm.max(b.radius_mm);
+        let strut_mm = |front: usize| {
+            let from = dropped(&self.fronts[front], candidate.drop_mm);
+            self.priced(front)
+                .strut_radius_mm(from.distance(candidate.meet))
+        };
+        let (strut_a, strut_b) = (strut_mm(candidate.a), strut_mm(candidate.b));
+        let joint_mm = self.joint_radius_mm(candidate, strut_a.max(strut_b));
         let clearance_mm = self
             .profile(candidate.a)
             .clearance_mm
             .max(self.profile(candidate.b).clearance_mm);
-        let reaches = |front: &Front| {
+        let reaches = |front: &Front, strut_mm: Scalar| {
             let from = dropped(front, candidate.drop_mm);
             let drop = Beam {
                 from: front.position,
@@ -270,7 +305,7 @@ impl Forest<'_> {
             let beam = Beam {
                 from,
                 to: candidate.meet,
-                from_radius_mm: front.radius_mm,
+                from_radius_mm: strut_mm,
                 to_radius_mm: joint_mm,
             }
             .with_clearance(clearance_mm);
@@ -281,14 +316,27 @@ impl Forest<'_> {
 
         let tips = a.tips + b.tips;
         let under = self.profiles.of(self.profiles.heavier(a.group, b.group));
-        reaches(a) && reaches(b) && stands(candidate.meet, joint_mm, tips, placed, under)
+        reaches(a, strut_a)
+            && reaches(b, strut_b)
+            && stands(candidate.meet, joint_mm, tips, placed, under)
     }
 
-    /// Hangs both fronts of `candidate` off a new node at the meeting point; the joint keeps the
-    /// branches' width, only the trunk widens (ADR 0242), built to the heavier head.
+    /// Hangs both fronts of `candidate` off a new node at the meeting point, each strut as wide
+    /// as its tips and length ask and the joint as wide as both carry (ADR 0424), built to the
+    /// heavier head.
     pub(super) fn join(&mut self, candidate: &Candidate) -> usize {
+        let struts = [candidate.a, candidate.b].map(|front| {
+            let from = dropped(&self.fronts[front], candidate.drop_mm);
+            self.priced(front)
+                .strut_radius_mm(from.distance(candidate.meet))
+        });
+        for (front, strut_mm) in [candidate.a, candidate.b].into_iter().zip(struts) {
+            self.fronts[front].radius_mm = strut_mm;
+            let node = self.fronts[front].node;
+            self.nodes[node].radius_mm = self.nodes[node].radius_mm.max(strut_mm);
+        }
         let (a, b) = (self.fronts[candidate.a], self.fronts[candidate.b]);
-        let radius_mm = a.radius_mm.max(b.radius_mm);
+        let radius_mm = self.joint_radius_mm(candidate, struts[0].max(struts[1]));
 
         // A front the other comes straight down onto is the joint itself.
         let onto = [a, b].into_iter().find(|front| {

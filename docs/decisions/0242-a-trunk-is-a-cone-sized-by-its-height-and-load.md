@@ -1,6 +1,6 @@
 # 0242. Make a trunk a cone sized by its height and load, and no brace wider than it
 
-- **Status:** Accepted
+- **Status:** Accepted; the load as a tip count through `trunk_exponent` is superseded by 0424
 - **Date:** 2026-10-13
 
 ## Context

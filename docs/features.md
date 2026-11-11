@@ -499,11 +499,12 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps
-  the least it can, a millimetre at a time. No strut of a merge runs
-  longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
-  per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
-  Trunks are cones sized by their height and load, and nothing carrying a load leans more
-  than 45°. A tip's head meets its face square on wherever that is within 45° of straight
+  the least it can, a millimetre at a time. Tips merge only where one shared trunk takes
+  less resin than a column and a foot each. Every branch and trunk is built as wide as the
+  tips it carries need, half again their own section, a trunk no taller than 15 times its
+  width and a leaning branch no longer than 5, from **Least diameter** (0.6 mm in Auto's shapes) up to **Trunk cap**; a trunk takes
+  as many tips as the cap carries, 18 of Auto's 0.30 mm tips, so a tip breaks at the part
+  before anything under it does. Nothing carrying a load leans more than 45°. A tip's head meets its face square on wherever that is within 45° of straight
   down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under
   a wall no longer runs out level. What is under it leans and bends.
 - The trunks are built in the background after every change, so the window keeps
@@ -582,8 +583,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 ### What a profile lets you shape
 - **Tip:** a plane or a sphere contact, with its diameter, contact spacing, how deep it
   bites into the part (nought centres the tip's rounded end on the surface), and clearance.
-- **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
-  longest strut, tips per trunk, maximum length, standing on the model on or off.
+- **Body:** least diameter, trunk cap, overhang angle, branch angle, branching on or off,
+  merge distance, maximum length, standing on the model on or off.
 - **Small pillar:** a separate thin shape for short supports from the part to the part.
   Tips that could each stand as one are not merged into a full support on the part. Each
   end is rounded and meets the part square on, leaving a round mark of the pillar's

@@ -6,6 +6,7 @@ mod coupon;
 mod cure;
 mod export;
 mod report;
+mod resin;
 mod shape;
 mod stand;
 mod tips;
@@ -320,7 +321,8 @@ fn run(
         setup.wall_mm,
         (layer_mm, setup.strengthening),
     )?;
-    let shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
+    let mut shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
+    shape.resin = resin::read(&supported)?;
     let cured = cure::cure(
         &supported.model,
         &supported.supports,

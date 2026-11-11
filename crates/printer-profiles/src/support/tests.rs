@@ -370,27 +370,49 @@ fn the_radii_are_half_the_diameters() {
 }
 
 #[test]
-fn a_trunk_is_thicker_than_either_branch_but_thinner_than_their_sum() {
-    let branching = Branching::default();
-    let merged = branching.merged_radius_mm(0.6, 0.6);
+fn a_strut_carries_its_tips_half_again_over() {
+    let profile = SupportProfile::shipped("auto-light").expect("Auto's light shape ships");
+    let tips = 12;
+    let radius = profile.carrying_radius_mm(0.0, tips);
+    let needed = CARRYING_MARGIN * tips as f32 * profile.contact_radius_mm().powi(2);
     assert!(
-        merged > 0.6 && merged < 1.2,
-        "a trunk carrying two 0.6 mm branches is between one of them and both, got \
-             {merged}"
+        (radius.powi(2) - needed).abs() < 1e-5,
+        "twelve 0.30 mm tips take a section of {needed} mm² over π, got {}",
+        radius.powi(2)
     );
 }
 
 #[test]
-fn a_trunk_never_grows_past_its_cap() {
-    let branching = Branching::default();
-    let mut radius = 0.6;
-    for _ in 0..20 {
-        radius = branching.merged_radius_mm(radius, 0.6);
-    }
-    assert!(
-        (radius - branching.max_trunk_diameter_mm / 2.0).abs() < 1e-5,
-        "twenty merges must stop at the cap, got {radius}"
+fn a_lone_tip_stands_on_the_thinnest_pillar() {
+    let profile = SupportProfile::shipped("auto-light").expect("Auto's light shape ships");
+    assert_eq!(
+        profile.carrying_radius_mm(2.0, 1),
+        profile.pillar_radius_mm(),
+        "one 0.30 mm tip 2 mm up asks for less than the 0.6 mm floor"
     );
+}
+
+#[test]
+fn a_trunk_carries_tips_until_it_would_outgrow_the_widest() {
+    let profile = SupportProfile::shipped("auto-light").expect("Auto's light shape ships");
+    let most = profile.most_tips();
+    assert_eq!(most, 18, "a 1.56 mm trunk over 0.30 mm tips 1.5 times over");
+    assert!(profile.can_strut(0.0, most));
+    assert!(!profile.can_strut(0.0, most + 1));
+}
+
+#[test]
+fn a_leaning_strut_is_held_to_five_of_its_width() {
+    let profile = SupportProfile::shipped("auto-light").expect("Auto's light shape ships");
+    assert!(
+        (profile.strut_radius_mm(5.0, 1) - 0.5).abs() < 1e-6,
+        "a 5 mm strut is 1 mm across whatever it carries"
+    );
+    assert!(
+        profile.can_strut(7.7, 1),
+        "7.7 mm is within five of the 1.56 mm widest"
+    );
+    assert!(!profile.can_strut(7.9, 1));
 }
 
 #[test]
@@ -401,7 +423,7 @@ fn a_trunk_base_widens_with_height_up_to_the_cap() {
     let towering = profile.trunk_base_radius_mm(200.0, 1);
     assert!(
         (short - profile.pillar_radius_mm()).abs() < 1e-6,
-        "5 mm over a slenderness of 15 is under the 1.2 mm pillar, got {short}"
+        "5 mm over a slenderness of 15 is under the 1.3 mm pillar, got {short}"
     );
     assert!(
         (tall - 0.8).abs() < 1e-5,

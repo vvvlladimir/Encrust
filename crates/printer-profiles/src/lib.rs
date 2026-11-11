@@ -48,7 +48,7 @@ pub use stated::{
 };
 pub use store::{DirStore, ProfileStore};
 pub use support::{
-    BottomSegment, BracePattern, BraceZone, Bracing, BracingPreset, Branching, ContactShape, Grid,
-    IslandSpacing, MiddleSegment, PlatformShape, Raft, RaftShape, RaftStyle, STOCK_SUPPORT,
-    SmallPillar, SupportProfile, TipSegment, TopSegment,
+    BottomSegment, BracePattern, BraceZone, Bracing, BracingPreset, Branching, CARRYING_MARGIN,
+    ContactShape, Grid, IslandSpacing, MiddleSegment, PlatformShape, Raft, RaftShape, RaftStyle,
+    STOCK_SUPPORT, SmallPillar, SupportProfile, TipSegment, TopSegment,
 };
