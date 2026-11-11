@@ -1,10 +1,12 @@
 //! Placing a support by hand, taking hold of one and carrying it. The rule a carried
-//! support is held to lives in `core_supports::carried`; see ADR 0095 and 0208.
+//! support is held to lives in `core_supports::carried`; see ADR 0095, 0208 and 0433.
 
 use std::sync::Arc;
 
 use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
-use core_supports::{Part, Profiles, WallSide, inline, preview, stands, support_under};
+use core_supports::{
+    Part, Profiles, SupportTree, WallSide, inline, preview, stands, support_under,
+};
 use core_volume::markers;
 
 use crate::camera::OrbitCamera;
@@ -282,21 +284,37 @@ fn carry_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip:
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
     let placed = object.support_placed().blocking(keep_out.as_ref());
     let profile = profiles.of(standing.group());
-    let Some(carried) = pointed
+    let Some(moved) = pointed
         .into_iter()
         .chain(beside)
         .find_map(|to| core_supports::tip_carried(&standing, node, to, &placed, profile))
         .filter(|carried| *carried != standing)
+        .and_then(|carried| {
+            core_supports::followed(
+                object.supports.frozen(),
+                tip.frozen,
+                &carried,
+                &placed,
+                profiles,
+            )
+        })
     else {
         return false;
     };
-    match object.supports.frozen_mut(tip.frozen) {
-        Some(tree) => {
+    put_back(object, moved)
+}
+
+/// Puts each carried tree back in its place among the object's frozen ones; answers whether
+/// any went in.
+fn put_back(object: &mut SceneObject, moved: Vec<(usize, SupportTree)>) -> bool {
+    let mut put = false;
+    for (frozen, carried) in moved {
+        if let Some(tree) = object.supports.frozen_mut(frozen) {
             *tree = carried;
-            true
+            put = true;
         }
-        None => false,
     }
+    put
 }
 
 /// Carries what is held by `step`, or as much as the model allows: whole, else across the
@@ -321,11 +339,25 @@ fn take_hold(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, add:
         return false;
     };
 
+    let Some(table) = window
+        .doc
+        .scene
+        .get(id)
+        .map(|object| window.tools.supports.table_for(object))
+    else {
+        return false;
+    };
+    let Some(profiles) = Profiles::new(&table) else {
+        return false;
+    };
     let Some(object) = window.doc.scene.get_mut(id) else {
         return false;
     };
     let transform = object.transform;
-    let Some(frozen) = object.supports.freeze(hit.tree, transform) else {
+    let Some(frozen) = object
+        .supports
+        .freeze_with_riders(hit.tree, transform, profiles)
+    else {
         return false;
     };
     window.doc.scene.select(Some(id));
@@ -432,14 +464,19 @@ fn carry_parts(window: &mut Window, step: Vec3) -> bool {
             step,
             &placed,
             profiles.of(standing.group()),
-        ) else {
+        )
+        .and_then(|carried| {
+            core_supports::followed(
+                object.supports.frozen(),
+                frozen,
+                &carried,
+                &placed,
+                profiles,
+            )
+        }) else {
             continue;
         };
-
-        if let Some(tree) = object.supports.frozen_mut(frozen) {
-            *tree = carried;
-            moved = true;
-        }
+        moved |= put_back(object, carried);
     }
     moved
 }

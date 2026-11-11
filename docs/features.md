@@ -569,6 +569,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
   Shift-click adds a part to what is picked, or takes it back out. A foot dragged aside keeps
   its trunk upright over it and leans what it carries down to it at 45 degrees.
+  Supports that stand on the one you move go with it.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports

@@ -1,5 +1,5 @@
 use super::{ModelSupports, next_revision};
-use crate::{Part, SupportPoint, SupportTree};
+use crate::{Part, Profiles, SupportPoint, SupportTree, standing_on};
 use core_geometry::Transform;
 
 impl ModelSupports {
@@ -19,32 +19,73 @@ impl ModelSupports {
     /// Takes a grown tree out of the automatic run so a rebuild cannot undo an edit; returns its
     /// index in [`ModelSupports::frozen`] or `None`; its points go with it.
     pub fn freeze(&mut self, tree: usize, transform: Transform) -> Option<usize> {
-        if let Some(frozen) = self.frozen_of(tree) {
-            return Some(frozen);
-        }
-        let inverse = transform.inverse_matrix()?;
-        let built = self.built.as_ref()?;
-        let standing = built.trees.get(tree)?.clone();
-        let grown = built.grown;
+        self.freeze_all(&[tree], transform)
+            .first()
+            .copied()
+            .flatten()
+    }
 
-        let mut taken: Vec<usize> = standing.points().collect();
+    /// [`Self::freeze`] for `tree` and every support standing on it, which a hand carries
+    /// with it (ADR 0433); answers `tree`'s index in [`ModelSupports::frozen`].
+    pub fn freeze_with_riders(
+        &mut self,
+        tree: usize,
+        transform: Transform,
+        profiles: Profiles,
+    ) -> Option<usize> {
+        let mut trees = vec![tree];
+        trees.extend(standing_on(self.trees(), tree, profiles));
+        self.freeze_all(&trees, transform)
+            .first()
+            .copied()
+            .flatten()
+    }
+
+    /// Freezes each of `trees`, indices into [`ModelSupports::trees`], at once: freezing one
+    /// renumbers the rest. Answers each one's frozen index, in the order asked.
+    fn freeze_all(&mut self, trees: &[usize], transform: Transform) -> Vec<Option<usize>> {
+        let (Some(inverse), Some(built)) = (transform.inverse_matrix(), self.built.as_ref()) else {
+            return vec![None; trees.len()];
+        };
+        let grown = built.grown;
+        let mut lifted: Vec<usize> = trees.iter().copied().filter(|tree| *tree < grown).collect();
+        lifted.sort_unstable();
+        lifted.dedup();
+        if lifted.is_empty() {
+            return trees.iter().map(|tree| self.frozen_of(*tree)).collect();
+        }
+
+        let first = self.frozen.len();
+        let standing: Vec<SupportTree> = lifted
+            .iter()
+            .map(|tree| built.trees[*tree].moved(inverse))
+            .collect();
+        let answer = trees
+            .iter()
+            .map(|tree| match lifted.binary_search(tree) {
+                Ok(at) => Some(first + at),
+                Err(_) => self.frozen_of(*tree),
+            })
+            .collect();
+
+        let mut taken: Vec<usize> = standing.iter().flat_map(SupportTree::points).collect();
         taken.sort_unstable();
+        taken.dedup();
         for point in taken.iter().rev() {
             if *point < self.points.len() {
                 self.points.remove(*point);
             }
         }
-        self.lift_out_of_forest(tree, grown, &taken);
+        self.lift_out_of_forest(&lifted, grown, &taken);
         self.revision = next_revision();
-
-        self.frozen.push(standing.moved(inverse));
+        self.frozen.extend(standing);
         self.built = None;
-        Some(self.frozen.len() - 1)
+        answer
     }
 
-    /// Takes grown tree `tree` out of the forest and renumbers the points the others hold
-    /// past the `taken` ones, so freezing one support leaves every other where it stood.
-    pub(super) fn lift_out_of_forest(&mut self, tree: usize, grown: usize, taken: &[usize]) {
+    /// Takes grown trees `lifted`, sorted, out of the forest and renumbers the points the others
+    /// hold past the `taken` ones, so freezing some supports leaves every other where it stood.
+    pub(super) fn lift_out_of_forest(&mut self, lifted: &[usize], grown: usize, taken: &[usize]) {
         let Some(forest) = self
             .forest
             .as_mut()
@@ -53,7 +94,9 @@ impl ModelSupports {
             self.forest = None;
             return;
         };
-        forest.trees.remove(tree);
+        for tree in lifted.iter().rev() {
+            forest.trees.remove(*tree);
+        }
         for kept in &mut forest.trees {
             kept.close_up_points(taken);
         }

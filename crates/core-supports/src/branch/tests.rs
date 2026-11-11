@@ -5,7 +5,7 @@ use crate::Landing;
 use crate::SupportPoint;
 use crate::base::braceable;
 use crate::column::Column;
-use crate::fixtures::{box_mesh, profile, ramp, trees_on};
+use crate::fixtures::{box_mesh, pillar_beside_column, profile, ramp, slimmer, trees_on};
 use crate::group::Profiles;
 use crate::mesher::{Fault, faults, sound};
 use crate::placed::Placed;
@@ -540,24 +540,11 @@ fn a_contact_inside_the_model_is_not_run_out_through_its_skin() {
     );
 }
 
-/// The fixture with a pillar too slim to grow beside it or to be run into by it.
-fn slimmer() -> SupportProfile {
-    let mut slimmer = profile();
-    slimmer.middle.diameter_mm -= 0.2;
-    slimmer
-}
-
 #[test]
 fn a_small_pillar_stands_on_the_support_beside_it_and_never_the_other_way_round() {
-    // A block with a contact 10 mm over it (a small pillar on the block) and a contact beside it
-    // with plate under it; two groups of two widths so they do not merge, the pillar's first.
-    let block = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
-    let table = [profile(), slimmer()];
-    let points = [
-        SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
-        // Far enough out for its pad to clear the block, so it stands straight.
-        SupportPoint::new(Vec3::new(14.5, 5.0, 20.0)).in_group(1),
-    ];
+    // Two groups of two widths so they do not merge, the pillar's first; the column far enough
+    // out for its pad to clear the block, so it stands straight.
+    let (block, table, points) = pillar_beside_column();
     let bvh = Bvh::build(&block);
     let placed = Placed::new(&block, &bvh, Transform::default());
     let profiles = Profiles::new(&table).expect("two groups");

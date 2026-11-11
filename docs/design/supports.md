@@ -636,6 +636,11 @@ tip's own depth when the ray misses or that place is refused. Its neck goes with
 `[top]` out along the face it now holds, and a support that is one tip on one trunk drops
 its trunk from the neck again, so the whole of it follows the cursor.
 
+A support standing on another — a branch ended on its trunk or a strut, a small pillar run
+into it — is frozen with it when it is taken hold of, and carried with it: `standing_on`
+finds it by its landing lying on one of the axes growth offers, and `followed` seats it
+at the same share of the same axis once the step is taken, its tips staying put (ADR 0433).
+
 **Remove these supports** takes away what is picked and everything it holds up
 (`SupportTree::without`): a strut or a joint goes with the tips above it, a joint left
 holding nothing goes after it, and the support goes whole when no tip is left or its trunk

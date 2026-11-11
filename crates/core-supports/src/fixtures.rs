@@ -57,6 +57,26 @@ pub fn meshed(trees: &[crate::SupportTree], profiles: Profiles) -> Mesh {
     )
 }
 
+/// [`profile`] with a pillar too slim to grow beside it or to be run into by it.
+pub fn slimmer() -> SupportProfile {
+    let mut slimmer = profile();
+    slimmer.middle.diameter_mm -= 0.2;
+    slimmer
+}
+
+/// A 10 mm cube with a contact 10 mm over its top and a thicker column's contact beside it, in
+/// groups 0 and 1: the first grows as a small pillar that stands on the column.
+pub fn pillar_beside_column() -> (Mesh, [SupportProfile; 2], [SupportPoint; 2]) {
+    (
+        box_mesh(Vec3::ZERO, Vec3::splat(10.0)),
+        [profile(), slimmer()],
+        [
+            SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
+            SupportPoint::new(Vec3::new(14.5, 5.0, 20.0)).in_group(1),
+        ],
+    )
+}
+
 /// The profile every test measures against: its own, not a shipped preset, so retuning presets
 /// moves no test. Round numbers, 45 degree branches, nothing braced.
 pub fn profile() -> SupportProfile {

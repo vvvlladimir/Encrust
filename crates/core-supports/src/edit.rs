@@ -13,6 +13,9 @@ use crate::pick::Part;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
 
+mod riders;
+pub use riders::{followed, standing_on};
+
 /// Whether every body of `tree` (plate coordinates) keeps out of the model, tip apart: swept as
 /// beams with the profile's clearance (ADR 0077), then drawn bodies are tested too (ADR 0337).
 pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bool {
