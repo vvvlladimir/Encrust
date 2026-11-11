@@ -35,6 +35,9 @@ const BURIED_PROBE_MM: Scalar = 1e-3;
 const FLAT_COS: Scalar = 0.966;
 /// How finely the rim of a flat underside is walked, millimetres.
 const RIM_STEP_MM: Scalar = 0.25;
+/// The most of what it holds a tip may carry: the coupon's plates held at 1.2 and swayed at
+/// 1.5 (docs/design/analysis.md, "Calibration").
+const MOST_USE: Scalar = 1.2;
 
 /// What a tip is taken to hold, as two prints of plates on tips measured it.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -330,7 +333,7 @@ fn uses(
         .copied()
         .unwrap_or(0.0);
     for (tip, used) in tips.iter().zip(&used) {
-        if *used > 1.0 {
+        if *used > MOST_USE {
             shape.overloaded += 1;
             shape.findings.push(finding(Kind::Overloaded, *tip, *used));
         }

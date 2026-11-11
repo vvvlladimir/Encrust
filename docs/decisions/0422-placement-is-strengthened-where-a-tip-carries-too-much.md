@@ -1,6 +1,6 @@
 # 0422. Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm
 
-- **Status:** Accepted
+- **Status:** Accepted; the steadying shape's 0.30 mm tip is superseded by 0426
 - **Date:** 2026-11-11
 
 ## Context

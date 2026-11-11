@@ -109,7 +109,8 @@ with one resin only the limit over the pull is measured, so the limit carries it
 
 The bench's area rule agrees once a tip holds 120 mm² of flat plate per mm² of its section
 (`--flat-ratio`), and only from two tips up: a plate on one tip tears sooner, which the
-lever reads. A 0.30 mm tip prints but breaks in the wash, so `--min-tip-mm` is 0.4.
+lever reads. Plates held up to 1.2 times that and swayed at 1.5, so a tip is overloaded
+past 1.2. A 0.30 mm tip prints but breaks in the wash, so `--min-tip-mm` is 0.4.
 Reopen with a second resin, another layer height or a straight-pulling vat.
 
 ## Removing islands

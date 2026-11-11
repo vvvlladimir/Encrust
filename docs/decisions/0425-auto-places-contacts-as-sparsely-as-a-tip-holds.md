@@ -1,6 +1,6 @@
 # 0425. Place Auto's contacts 3.3 mm apart, past 45 degrees, on 1.0 mm pillars
 
-- **Status:** Accepted
+- **Status:** Accepted; the 3.3 mm under a level face is superseded by 0426
 - **Date:** 2026-11-11
 
 ## Context

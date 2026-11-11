@@ -9,7 +9,7 @@ shapes = ["auto-light", "auto-medium", "auto-heavy"]
 # Where supports go, as a support profile says it; the shapes' own numbers are not read.
 density = 1.0
 max_overhang_deg = 45.0
-contact_spacing_mm = 3.3
+contact_spacing_mm = 3.0
 steep_contact_spacing_mm = 5.5
 
 # The least island, mm² on the layer it begins on, spaced at the second share of the

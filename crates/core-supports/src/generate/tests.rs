@@ -388,16 +388,28 @@ fn shelf_under_a_lean(shelf: bool) -> Mesh {
     merged(&merged(&base, &slab), &lean)
 }
 
-/// The contacts under the leaning face, above the shelf's edge and within the shipped reach
-/// of its step of some 11 mm³ as measured, with why each is there.
-fn under_the_lean(needs: &[Need]) -> Vec<Reason> {
+/// The contacts under the leaning face, with why each is there. Its first millimetre leans
+/// from the slab's edge, so is left out.
+fn under_the_lean(needs: &[Need]) -> Vec<&Need> {
+    needs
+        .iter()
+        .filter(|need| need.contact.y < -12.3 && need.contact.z > 7.0)
+        .collect()
+}
+
+/// Those of `under_the_lean` within the shipped reach of a contact on the shelf.
+fn reached_from_the_shelf(needs: &[Need]) -> Vec<Reason> {
     let auto = &shipped_auto();
     let size = auto.step_size(11.0).expect("the shelf is held as a step");
     let reach_mm = auto.step_height_mm[size];
-    needs
+    let shelf: Vec<Vec3> = needs
         .iter()
-        .filter(|need| need.contact.y < -12.3 && need.contact.z > 6.2)
-        .filter(|need| need.contact.z - 5.0 <= reach_mm)
+        .filter(|need| need.contact.z < 5.2)
+        .map(|need| need.contact)
+        .collect();
+    under_the_lean(needs)
+        .into_iter()
+        .filter(|need| shelf.iter().any(|at| at.distance(need.contact) <= reach_mm))
         .map(|need| need.reason)
         .collect()
 }
@@ -422,7 +434,7 @@ fn a_shelf_is_held_as_a_step_of_the_resin_it_puts_out() {
 
 #[test]
 fn a_face_leaning_past_a_steps_angle_is_held_where_the_step_reaches_it() {
-    let held = under_the_lean(&sized_needs_for(&shelf_under_a_lean(true)));
+    let held = reached_from_the_shelf(&sized_needs_for(&shelf_under_a_lean(true)));
     assert!(
         !held.is_empty(),
         "the 30 degree face over the shelf is held within the step's reach"
@@ -435,7 +447,7 @@ fn a_face_leaning_past_a_steps_angle_is_held_where_the_step_reaches_it() {
     assert!(
         under_the_lean(&sized_needs_for(&shelf_under_a_lean(false)))
             .iter()
-            .all(|reason| matches!(reason, Reason::Steady)),
+            .all(|need| matches!(need.reason, Reason::Steady)),
         "the same face with no step under it is only steadied"
     );
     assert!(

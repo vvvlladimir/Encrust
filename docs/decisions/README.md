@@ -240,14 +240,15 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0335 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
-| [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted; Auto's spacing and angle are superseded by 0425 |
+| [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted; Auto's spacing and angle are superseded by 0425 and 0426 |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
 | [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0424 |
 | [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted; the steadying shape's 0.18 mm contact is superseded by 0422, Auto's step reach by 0425 |
-| [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted |
+| [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted; the steadying shape's 0.30 mm tip is superseded by 0426 |
 | [0423](0423-an-automatic-tip-starts-lightest-and-is-sized-by-what-it-carries.md) | Build every automatic tip lightest, and size it by what it carries | Superseded by 0424 |
 | [0424](0424-an-automatic-support-is-sized-by-its-share-of-what-it-holds.md) | Size each automatic support by its share of the model it holds | Accepted |
-| [0425](0425-auto-places-contacts-as-sparsely-as-a-tip-holds.md) | Place Auto's contacts 3.3 mm apart, past 45 degrees, on 1.0 mm pillars | Accepted |
+| [0425](0425-auto-places-contacts-as-sparsely-as-a-tip-holds.md) | Place Auto's contacts 3.3 mm apart, past 45 degrees, on 1.0 mm pillars | Accepted; the 3.3 mm under a level face is superseded by 0426 |
+| [0426](0426-auto-holds-a-ceiling-3-mm-apart-and-steadies-on-thin-supports.md) | Hold Auto's ceilings 3.0 mm apart, and steady a part on thin supports | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
