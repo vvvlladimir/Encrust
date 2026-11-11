@@ -373,7 +373,8 @@ pub(super) fn draw_aimed(ui: &egui::Ui, window: &Window, viewport: egui::Rect, p
     let Some(cursor) = pointer.position.map(|at| egui::pos2(at.x, at.y)) else {
         return;
     };
-    let Some((id, hit)) = grab_under_cursor(window, viewport, cursor) else {
+    let Some(super::picking::Aimed { id, hit, .. }) = grab_under_cursor(window, viewport, cursor)
+    else {
         return;
     };
     let Some(tree) = window
@@ -384,6 +385,8 @@ pub(super) fn draw_aimed(ui: &egui::Ui, window: &Window, viewport: egui::Rect, p
     else {
         return;
     };
+    // An open hand says a press here takes hold rather than turning the camera.
+    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
     let colour = theme::colors().picked.gamma_multiply(AIMED_OPACITY);
     // The trees an object hands out for picking already stand in plate coordinates.
     let on_screen = projector(&window.view.camera, viewport);

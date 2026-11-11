@@ -40,7 +40,7 @@ use picking::{
     select_under_cursor, takes_the_pick, zoom_anchor,
 };
 use supports::{
-    drag_support, place_support_under_cursor, remove_support_under_cursor, show_refusal,
+    drag_support, place_support_under_cursor, remove_support_under_cursor, show_carrying,
 };
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
@@ -82,7 +82,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // A support in hand has the whole gesture, shift and all: it neither turns the camera
     // nor slides it.
     let carrying = !painting && drag_support(window, rect, &pointer);
-    show_refusal(ui.ctx(), window);
+    show_carrying(ui.ctx(), window);
     let drag = if carrying { Drag::None } else { gesture.drag };
 
     fly_to_marked(ui, window, rect);

@@ -50,7 +50,7 @@ pub use mesher::{FOOT_TAPER, foot_bevel_mm, mesh_alone, mesh_groups, mesh_trees}
 pub use model::{Grown, Growth, ModelSupports};
 pub use need::{Need, Reason};
 pub use pad::{PAD_SECTORS, PadCut};
-pub use pick::{Grab, Part, grab, grab_along, support_under};
+pub use pick::{Grab, Part, Slack, grab, grab_along, support_under};
 pub use placed::Placed;
 pub use preview::{Preview, preview, stands};
 pub use project::{InfillPattern, ProjectSettings, Projected, project};

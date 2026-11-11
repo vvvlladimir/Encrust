@@ -113,14 +113,14 @@ pub struct Picked {
 /// A drag carrying what is picked, measured from where it was taken hold of (ADR 0438).
 #[derive(Debug, Clone)]
 pub struct Carry {
-    /// Where the cursor met the drag's plane when it was pressed, plate mm.
+    /// The point of the part the cursor took, on the drag's plane, plate mm.
     pub from: Vec3,
     /// How far the supports stand carried in the scene, plate mm: the last place they may stand.
     pub taken: Vec3,
     /// How far the cursor last asked them to go, plate mm; NaN before it has asked.
     pub aimed: Vec3,
-    /// Up and down rather than across the plate: Alt is held.
-    pub rise: bool,
+    /// Level with the plate rather than square to the camera: Alt is held.
+    pub level: bool,
     /// The frozen supports of each object held on, as they stood when the drag began.
     pub before: Vec<(ObjectId, Vec<SupportTree>)>,
     /// What is held where the cursor puts it, plate coordinates, drawn while it is lifted.

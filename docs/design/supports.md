@@ -620,19 +620,21 @@ grown to once the pointer is let go.
 
 `grab` names what a ray met: `Node`, `Strut`, `Trunk` or `Foot`. Nodes and the foot are
 aimed at as balls 1.6 pillars wide and win a tie with the stick they sit on. A ray that
-goes through nothing takes the part it passes nearest, within a slack the viewport sets to
-two points of the screen where the camera is looking: a pillar seen from far away is a
-point wide, and a part the ray does go through always wins over one it only passes.
-The part a press would take is drawn fainter than what is held before the button goes down.
+goes through nothing takes the part it passes nearest on screen, within a `Slack` the
+viewport sets to six points of screen at whatever depth the part stands: a pillar seen from
+far away is a point wide, and a part the ray does go through always wins over one it only
+passes (ADR 0439). The part a press would take is drawn fainter than what is held before the
+button goes down, under an open hand.
 A part met further along the ray than the first printed surface is behind that model and is
 not taken, hover or press: `grab_along` answers how far along the part stands. The ray is
 measured from where the section lets it in, and a cut standing in material is a cap that
 hides what is behind it, so a part inside a cavity the section opens is taken (ADR 0332).
 
-A press picks a part and the same drag carries it across the plate, on the level plane
-through it, or up and down with Alt, on an upright plane turned to the camera (ADR 0438).
-Every frame carries from how the supports stood at the press, by where the cursor is on
-that plane less where it was pressed, so taking the cursor back takes them back;
+A press picks a part and the same drag carries it on the plane square to the camera through
+the point the cursor took, so that point stays under the cursor; with Alt the plane is level
+with the plate, which carries it in depth (ADR 0439). Every frame carries from how the
+supports stood at the press, by where the cursor is on that plane less where it was pressed,
+so taking the cursor back takes them back;
 everything picked takes the same step. What is held follows the cursor whatever the model
 says: drawn in its group's tint where it may stand, in danger's with a no-entry cursor where
 it may not, and the scene keeps it where it last could, which is where a release leaves it.

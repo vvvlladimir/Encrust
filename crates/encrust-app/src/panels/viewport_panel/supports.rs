@@ -12,10 +12,10 @@ use crate::render::{Ghost, GhostShape};
 use crate::scene::{ObjectId, SceneObject};
 use crate::ui::theme;
 
-use super::picking::{aim_slack_mm, grab_under_cursor, surface_under};
+use super::picking::{Aimed, aim_slack, grab_under_cursor, surface_under};
 
 mod carry;
-pub(super) use carry::{carried_ghost, drag_support, show_refusal};
+pub(super) use carry::{carried_ghost, drag_support, show_carrying};
 
 /// Radius of a dot marking where a line of supports would stand, millimetres.
 const LINE_DOT_MM: Scalar = 0.4;
@@ -142,7 +142,7 @@ pub(super) fn remove_support_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = grab_under_cursor(window, viewport, cursor) else {
+    let Some(Aimed { id, hit, .. }) = grab_under_cursor(window, viewport, cursor) else {
         return;
     };
     let Some(object) = window.doc.scene.get_mut(id) else {
@@ -166,8 +166,8 @@ pub(super) fn remove_support_under_cursor(
             let Some(profiles) = Profiles::new(&table) else {
                 return;
             };
-            let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
-            if let Some(point) = support_under(object.supports.trees(), &ray, profiles, slack_mm) {
+            let slack = aim_slack(&window.view.camera, viewport, cursor);
+            if let Some(point) = support_under(object.supports.trees(), &ray, profiles, slack) {
                 object.supports.remove(point);
             }
         }

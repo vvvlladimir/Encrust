@@ -140,7 +140,7 @@ fn pairs(window: &Window, keys: &Keys) -> Option<Vec<(String, String)>> {
         Tool::Supports => vec![
             click(tr!("hint-supports-pick")),
             (keys.drag.clone(), tr!("hint-supports-carry")),
-            (keys.drag_with(&keys.alt), tr!("hint-supports-raise")),
+            (keys.drag_with(&keys.alt), tr!("hint-supports-level")),
             (keys.click_with(&keys.shift), tr!("hint-supports-add")),
         ],
         Tool::Paint => match tools.supports.placing {

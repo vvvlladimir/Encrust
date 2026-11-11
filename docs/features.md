@@ -571,8 +571,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
   Shift-click adds a part to what is picked, or takes it back out. Drag to move what is
-  picked across the plate at its own height, or hold Alt to raise or lower it. It follows the
-  cursor everywhere; where it would run into the model or lean too far it turns red and the
+  picked the way the cursor goes on screen, the point you took staying under the cursor, or
+  hold Alt to move it level with the plate. The cursor turns to a hand over a part you can
+  take. It follows the cursor everywhere; where it would run into the model or lean too far it turns red and the
   cursor says no, and let go there it stays where it last could stand. A tip slides over the
   model's surface, and a joint moved aside drops as far as its branches need. The trunk, its foot and the joint on top move as one: the trunk
   stays upright and what it carries leans down to it at 45 degrees, onto the plate or the

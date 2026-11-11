@@ -23,12 +23,19 @@ fn a_part_is_met_as_far_along_the_ray_as_it_stands() {
     let trees = standing(&[(10.0, 10.0)], &profile);
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 10.0), Vec3::X);
 
-    let (_, along) = grab_along(&trees, &ray, Profiles::single(&profile), 0.0).expect("it is hit");
+    let (_, along) =
+        grab_along(&trees, &ray, Profiles::single(&profile), Slack::default()).expect("it is hit");
     assert!(
         (along - 60.0).abs() < 1e-3,
         "the pillar's axis is 60 mm from where the ray starts, got {along}"
     );
 }
+
+/// Half a millimetre of aim at any depth.
+const HALF_MM: Slack = Slack {
+    mm: 0.5,
+    per_mm: 0.0,
+};
 
 #[test]
 fn a_ray_passing_just_beside_a_pillar_still_takes_hold_of_it() {
@@ -38,12 +45,12 @@ fn a_ray_passing_just_beside_a_pillar_still_takes_hold_of_it() {
     let ray = Ray::new(Vec3::new(-50.0, beside, 10.0), Vec3::X);
 
     assert_eq!(
-        grab(&trees, &ray, Profiles::single(&profile), 0.0),
+        grab(&trees, &ray, Profiles::single(&profile), Slack::default()),
         None,
         "0.3 mm outside the pillar is a miss when nothing is allowed for the aim"
     );
     assert_eq!(
-        grab(&trees, &ray, Profiles::single(&profile), 0.5),
+        grab(&trees, &ray, Profiles::single(&profile), HALF_MM),
         Some(Grab {
             tree: 0,
             part: Part::Trunk
@@ -61,7 +68,7 @@ fn a_part_the_ray_passes_through_wins_over_a_nearer_one_it_only_passes_by() {
     assert_eq!(trees.len(), 2, "20 mm apart is too far to share a trunk");
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 10.0), Vec3::X);
 
-    let held = grab(&trees, &ray, Profiles::single(&profile), 0.5).expect("one is hit");
+    let held = grab(&trees, &ray, Profiles::single(&profile), HALF_MM).expect("one is hit");
     let through = trees
         .iter()
         .position(|tree| (tree.landing().base.x - 30.0).abs() < 1.0)
@@ -78,7 +85,7 @@ fn a_ray_through_the_pillar_finds_its_support() {
     let trees = standing(&[(10.0, 10.0)], &profile);
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 10.0), Vec3::X);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         Some(0)
     );
 }
@@ -94,14 +101,14 @@ fn a_ray_through_a_shared_trunk_takes_hold_of_the_trunk() {
     // they meet on.
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 8.0), Vec3::X);
     assert_eq!(
-        grab(&trees, &ray, Profiles::single(&profile), 0.0),
+        grab(&trees, &ray, Profiles::single(&profile), Slack::default()),
         Some(Grab {
             tree: 0,
             part: Part::Trunk
         })
     );
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         None,
         "a shared trunk belongs to no single support"
     );
@@ -113,7 +120,8 @@ fn a_ray_through_the_strut_under_a_tip_takes_hold_of_that_strut() {
     let trees = standing(&[(10.0, 10.0), (13.0, 10.0)], &profile);
     // Just under the tips, where each still hangs on a strut of its own.
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 19.0), Vec3::X);
-    let held = grab(&trees, &ray, Profiles::single(&profile), 0.0).expect("the strut is there");
+    let held = grab(&trees, &ray, Profiles::single(&profile), Slack::default())
+        .expect("the strut is there");
 
     assert_eq!(held.tree, 0);
     assert!(
@@ -129,7 +137,7 @@ fn a_ray_at_the_plate_takes_hold_of_the_foot() {
     let trees = standing(&[(10.0, 10.0)], &profile);
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 0.2), Vec3::X);
     assert_eq!(
-        grab(&trees, &ray, Profiles::single(&profile), 0.0),
+        grab(&trees, &ray, Profiles::single(&profile), Slack::default()),
         Some(Grab {
             tree: 0,
             part: Part::Foot
@@ -144,7 +152,7 @@ fn a_ray_beside_the_pillar_finds_nothing() {
     // Two millimetres to the side of a pillar one millimetre in radius.
     let ray = Ray::new(Vec3::new(-50.0, 12.0, 10.0), Vec3::X);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         None
     );
 }
@@ -155,7 +163,7 @@ fn the_nearer_of_two_supports_in_line_wins() {
     let trees = standing(&[(50.0, 10.0), (10.0, 10.0)], &profile);
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 10.0), Vec3::X);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         Some(1),
         "the support at x = 10 is met first"
     );
@@ -167,7 +175,7 @@ fn a_ray_pointing_away_from_the_support_finds_nothing() {
     let trees = standing(&[(10.0, 10.0)], &profile);
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 10.0), -Vec3::X);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         None
     );
 }
@@ -179,7 +187,7 @@ fn a_ray_past_the_top_of_the_support_finds_nothing() {
     // The contact is at z = 20; this passes 5 mm over it.
     let ray = Ray::new(Vec3::new(-50.0, 10.0, 25.0), Vec3::X);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         None
     );
 }
@@ -190,7 +198,7 @@ fn a_ray_down_the_supports_own_axis_still_hits_it() {
     let trees = standing(&[(10.0, 10.0)], &profile);
     let ray = Ray::new(Vec3::new(10.0, 10.0, 60.0), -Vec3::Z);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         Some(0)
     );
 }
@@ -204,7 +212,7 @@ fn a_branch_is_picked_by_the_tip_it_carries() {
     // Just under the second tip, where only its own branch runs.
     let ray = Ray::new(Vec3::new(14.0, -50.0, 19.5), Vec3::Y);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         Some(1)
     );
 }
@@ -219,7 +227,7 @@ fn a_ray_through_a_shared_trunk_takes_nothing_away() {
     // material.
     let ray = Ray::new(Vec3::new(12.0, -50.0, trunk_z - 1.0), Vec3::Y);
     assert_eq!(
-        support_under(&trees, &ray, Profiles::single(&profile), 0.0),
+        support_under(&trees, &ray, Profiles::single(&profile), Slack::default()),
         None
     );
 }
@@ -228,7 +236,28 @@ fn a_ray_through_a_shared_trunk_takes_nothing_away() {
 fn nothing_is_under_a_ray_when_there_are_no_supports() {
     let ray = Ray::new(Vec3::ZERO, Vec3::X);
     assert_eq!(
-        support_under(&[], &ray, Profiles::single(&profile()), 0.0),
+        support_under(&[], &ray, Profiles::single(&profile()), Slack::default()),
         None
+    );
+}
+
+#[test]
+fn the_aim_widens_with_depth_so_a_far_pillar_is_caught_as_far_off_on_screen() {
+    let profile = profile();
+    // One millimetre outside the pillar, which stands 60 mm along the ray, then 200 mm.
+    let beside = 10.0 + profile.pillar_radius_mm() + 1.0;
+    let ray = Ray::new(Vec3::new(-50.0, beside, 10.0), Vec3::X);
+    // A hundredth of a millimetre for each one down the ray: 0.6 mm at 60, 2 mm at 200.
+    let slack = Slack {
+        mm: 0.0,
+        per_mm: 0.01,
+    };
+
+    let near = standing(&[(10.0, 10.0)], &profile);
+    assert_eq!(grab(&near, &ray, Profiles::single(&profile), slack), None);
+    let far = standing(&[(150.0, 10.0)], &profile);
+    assert!(
+        grab(&far, &ray, Profiles::single(&profile), slack).is_some(),
+        "the same millimetre off is fewer points of screen 200 mm away"
     );
 }

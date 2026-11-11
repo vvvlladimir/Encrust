@@ -1,5 +1,5 @@
-//! Taking hold of support parts and carrying them: across the plate at their own height, or
-//! up and down with Alt (ADR 0438). What is held follows the cursor wherever it goes, drawn
+//! Taking hold of support parts and carrying them on the plane square to the camera through
+//! the point taken, or level with the plate with Alt (ADR 0438). What is held follows the cursor wherever it goes, drawn
 //! refused where it may not stand, and the scene keeps it where it last could (ADR 0438). The
 //! rule a carried support is held to lives in `core_supports` (ADR 0208).
 
@@ -20,7 +20,7 @@ use crate::ui::theme;
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
-use super::super::picking::{grab_under_cursor, surface_under};
+use super::super::picking::{Aimed, grab_under_cursor, surface_under};
 
 /// A ray flatter than this against the drag's plane, as the cosine between them, has no
 /// crossing worth using: the part would shoot off to the horizon.
@@ -62,7 +62,13 @@ pub(in crate::panels::viewport_panel) fn drag_support(
         return false;
     }
     // A shift press only picks and carries nothing: it must not move the tip left in hand.
-    let Some(rise) = window.tools.supports.carry.as_ref().map(|carry| carry.rise) else {
+    let Some(level) = window
+        .tools
+        .supports
+        .carry
+        .as_ref()
+        .map(|carry| carry.level)
+    else {
         return true;
     };
 
@@ -70,15 +76,15 @@ pub(in crate::panels::viewport_panel) fn drag_support(
         aim_tip(window, viewport, cursor, tip);
         return true;
     }
-    if rise != pointer.alt {
+    if level != pointer.alt {
         retake(window, viewport, cursor, pointer.alt);
     }
     let Some(carry) = &window.tools.supports.carry else {
         return true;
     };
-    let through = carry.from + carry.taken;
-    if let Some(now) = on_drag_plane(&window.view.camera, viewport, cursor, through, carry.rise) {
-        let target = along(now - carry.from, carry.rise);
+    let camera = &window.view.camera;
+    if let Some(now) = on_drag_plane(camera, viewport, cursor, carry.from, carry.level) {
+        let target = now - carry.from;
         if target != carry.aimed {
             aim(window, target);
         }
@@ -104,37 +110,27 @@ pub(in crate::panels::viewport_panel) fn carried_ghost(window: &Window) -> Optio
     })
 }
 
-/// Shows a cursor that says no while what is held may not stand where the cursor puts it,
-/// so the refusal does not rest on colour alone.
-pub(in crate::panels::viewport_panel) fn show_refusal(ctx: &egui::Context, window: &Window) {
-    let refused = window
-        .tools
-        .supports
-        .carry
-        .as_ref()
-        .is_some_and(|carry| carry.refused);
-    if refused {
-        ctx.set_cursor_icon(egui::CursorIcon::NotAllowed);
-    }
-}
-
-/// `step` kept to the way a drag goes: up and down alone, or across the plate alone.
-fn along(step: Vec3, rise: bool) -> Vec3 {
-    if rise {
-        Vec3::Z * step.z
+/// Shows a closed hand while a carry has hold, and one that says no while what is held may not
+/// stand where the cursor puts it, so the refusal does not rest on colour alone.
+pub(in crate::panels::viewport_panel) fn show_carrying(ctx: &egui::Context, window: &Window) {
+    let Some(carry) = &window.tools.supports.carry else {
+        return;
+    };
+    ctx.set_cursor_icon(if carry.refused {
+        egui::CursorIcon::NotAllowed
     } else {
-        step.with_z(0.0)
-    }
+        egui::CursorIcon::Grabbing
+    });
 }
 
-/// Starts the drag again from where what is held now stands, on the plane `rise` asks for,
+/// Starts the drag again from where what is held now stands, on the plane `level` asks for,
 /// so pressing or letting go of Alt mid-drag moves nothing by itself.
-fn retake(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, rise: bool) {
+fn retake(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, level: bool) {
     let Some(carry) = window.tools.supports.carry.take() else {
         return;
     };
     let through = carry.from + carry.taken;
-    let taken = carry_from(window, viewport, cursor, through, rise).map(|fresh| Carry {
+    let taken = carry_from(window, viewport, cursor, through, level).map(|fresh| Carry {
         shown: carry.shown.clone(),
         ..fresh
     });
@@ -148,9 +144,9 @@ fn carry_from(
     viewport: egui::Rect,
     cursor: egui::Pos2,
     through: Vec3,
-    rise: bool,
+    level: bool,
 ) -> Option<Carry> {
-    let from = on_drag_plane(&window.view.camera, viewport, cursor, through, rise)?;
+    let from = on_drag_plane(&window.view.camera, viewport, cursor, through, level)?;
     let before = held_objects(window.tools)
         .into_iter()
         .filter_map(|id| Some((id, window.doc.scene.get(id)?.supports.frozen().to_vec())))
@@ -163,7 +159,7 @@ fn carry_from(
         from,
         taken: Vec3::ZERO,
         aimed: Vec3::NAN,
-        rise,
+        level,
         before,
         shown: None,
         group: group.unwrap_or_default(),
@@ -171,21 +167,19 @@ fn carry_from(
     })
 }
 
-/// Where the cursor now points on the drag's plane through `through`: level with it, or
-/// upright and turned to the camera when `rise`.
+/// Where the cursor now points on the drag's plane through `through`: square to the camera, so
+/// what is held keeps its depth and stays under the cursor, or level with the plate when `level`.
 fn on_drag_plane(
     camera: &OrbitCamera,
     viewport: egui::Rect,
     cursor: egui::Pos2,
     through: Vec3,
-    rise: bool,
+    level: bool,
 ) -> Option<Vec3> {
-    let normal = if rise {
-        (camera.sight_to(through) - through)
-            .with_z(0.0)
-            .normalize_or_zero()
-    } else {
+    let normal = if level {
         Vec3::Z
+    } else {
+        (camera.sight_to(through) - through).normalize_or_zero()
     };
     crossing(camera, viewport, cursor, through, normal)
 }
@@ -472,24 +466,22 @@ fn take_hold(
     viewport: egui::Rect,
     cursor: egui::Pos2,
     add: bool,
-    rise: bool,
+    level: bool,
 ) -> bool {
     set_down(window);
-    let Some((id, hit)) = grab_under_cursor(window, viewport, cursor) else {
+    let Some(Aimed { id, hit, at }) = grab_under_cursor(window, viewport, cursor) else {
         if !add {
             window.tools.supports.picked.clear();
         }
         return false;
     };
-    let Some(picked) = freeze_and_pick(window, id, hit, add) else {
+    if freeze_and_pick(window, id, hit, add).is_none() {
         return false;
-    };
+    }
 
-    // Asked of the frozen tree, which the freeze renumbered, and from the cursor level with
-    // the part: a stick taken by its end must not jump to put its middle under the cursor.
+    // Measured from the point of the part the cursor took, so that point stays under it.
     if !add {
-        window.tools.supports.carry = part_position(window.doc, picked)
-            .and_then(|part| carry_from(window, viewport, cursor, part, rise));
+        window.tools.supports.carry = carry_from(window, viewport, cursor, at, level);
         // Drawn by the hand from the press on, so nothing blinks out before the first step.
         match lone_tip(window) {
             Some(tip) => aim_tip(window, viewport, cursor, tip),

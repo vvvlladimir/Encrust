@@ -1,7 +1,7 @@
 //! What the cursor is over: the model a click selects, the face it lays down or washes, the
 //! corner a measurement snaps to, and the part of a support a ray meets.
 
-use core_supports::{Grab, Profiles, SupportTree, grab_along};
+use core_supports::{Grab, Profiles, Slack, SupportTree, grab_along};
 
 use core_geometry::{Aabb, PlacedHit, Ray, Vec3, ray_aabb};
 
@@ -109,9 +109,9 @@ pub(super) fn measure_under_cursor(
 /// How near the cursor a corner or an edge catches a click, points of the screen.
 const SNAP_PX: f32 = 14.0;
 
-/// How near the cursor a part of a support is caught, points of the screen: enough that
-/// a pillar a point or two wide can be hit, too little to take one the cursor is not on.
-const AIM_PX: f32 = 2.0;
+/// How near the cursor a part of a support is caught, points of the screen: a pillar a point
+/// wide is hit without care, and a part 6 points off is plainly not the one under the cursor.
+const AIM_PX: f32 = 6.0;
 
 /// `points` of the screen as millimetres of the plate at `at`, which the cursor lies
 /// over: a reach is as far on screen however near the model is.
@@ -229,24 +229,39 @@ pub(super) fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
 /// millimetres: parts are met on their axis, and a tip is sunk into its surface.
 const BEHIND_MM: f32 = 1.0;
 
-/// How far a ray through `cursor` may pass a part of a support and still take it,
-/// millimetres, measured on that ray as far off as the camera is looking.
-pub(super) fn aim_slack_mm(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2) -> f32 {
+/// How far a ray through `cursor` may pass a part of a support and still take it: [`AIM_PX`]
+/// of screen at whatever depth the part stands, measured where the camera looks and twice as far.
+pub(super) fn aim_slack(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2) -> Slack {
     let Some(ray) = ray_through(camera, viewport, cursor) else {
-        return 0.0;
+        return Slack::default();
     };
-    let under = ray.at((camera.target - ray.origin).dot(ray.direction));
-    reach_at(camera, viewport, cursor, under, AIM_PX)
+    let depth_mm = (camera.target - ray.origin).dot(ray.direction).max(1.0);
+    let reach = |along_mm: f32| reach_at(camera, viewport, cursor, ray.at(along_mm), AIM_PX);
+    let (near_mm, far_mm) = (reach(depth_mm), reach(2.0 * depth_mm));
+    let per_mm = (far_mm - near_mm) / depth_mm;
+    Slack {
+        mm: near_mm - per_mm * depth_mm,
+        per_mm,
+    }
 }
 
-/// Which part of which support the cursor is on, with the object it belongs to. Objects are searched in the order they were imported.
+/// A part of a support the cursor is on: the object, which part, and the point of the cursor's
+/// ray at that part, plate mm, which a drag keeps under the cursor.
+pub(super) struct Aimed {
+    pub id: crate::scene::ObjectId,
+    pub hit: Grab,
+    pub at: Vec3,
+}
+
+/// Which part of which support the cursor is on. Objects are searched in the order they were
+/// imported.
 pub(super) fn grab_under_cursor(
     window: &Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
-) -> Option<(crate::scene::ObjectId, Grab)> {
+) -> Option<Aimed> {
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
-    let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
+    let slack = aim_slack(&window.view.camera, viewport, cursor);
 
     // Only what is seen can be aimed at: not behind a model, cut away or in a hidden group,
     // but inside a cavity the section opens.
@@ -255,11 +270,14 @@ pub(super) fn grab_under_cursor(
         let table = window.tools.supports.table_for(object);
         let profiles = Profiles::new(&table)?;
         let hidden = window.tools.supports.hidden();
-        let (hit, along_mm) =
-            grab_shown(object.supports.trees(), &hidden, &ray, profiles, slack_mm)?;
+        let (hit, along_mm) = grab_shown(object.supports.trees(), &hidden, &ray, profiles, slack)?;
         (near_mm - BEHIND_MM..=wall_mm + BEHIND_MM)
             .contains(&along_mm)
-            .then_some((object.id, hit))
+            .then_some(Aimed {
+                id: object.id,
+                hit,
+                at: ray.at(along_mm),
+            })
     })
 }
 
@@ -270,7 +288,7 @@ fn grab_shown(
     hidden: &[bool],
     ray: &Ray,
     profiles: Profiles,
-    slack_mm: f32,
+    slack: Slack,
 ) -> Option<(Grab, f32)> {
     let shown: Vec<usize> = (0..trees.len())
         .filter(|tree| {
@@ -280,10 +298,10 @@ fn grab_shown(
         })
         .collect();
     if shown.len() == trees.len() {
-        return grab_along(trees, ray, profiles, slack_mm);
+        return grab_along(trees, ray, profiles, slack);
     }
     let visible: Vec<SupportTree> = shown.iter().map(|tree| trees[*tree].clone()).collect();
-    let (hit, along_mm) = grab_along(&visible, ray, profiles, slack_mm)?;
+    let (hit, along_mm) = grab_along(&visible, ray, profiles, slack)?;
     let tree = *shown.get(hit.tree)?;
     Some((Grab { tree, ..hit }, along_mm))
 }
@@ -316,7 +334,8 @@ mod tests {
         // Level with the middle of both pillars, the first group's nearer the eye.
         let ray = Ray::new(Vec3::new(-50.0, 0.0, 10.0), Vec3::X);
         let group_met = |hidden: &[bool]| {
-            grab_shown(trees, hidden, &ray, profiles, 0.0).map(|(hit, _)| trees[hit.tree].group())
+            grab_shown(trees, hidden, &ray, profiles, Slack::default())
+                .map(|(hit, _)| trees[hit.tree].group())
         };
 
         assert_eq!(group_met(&[false, false]), Some(0), "the nearer one");
@@ -346,18 +365,25 @@ mod tests {
     }
 
     #[test]
-    fn the_aim_reaches_as_far_wherever_on_the_screen_the_cursor_is() {
+    fn the_aim_reaches_as_far_on_screen_wherever_the_cursor_is_and_however_deep() {
         let camera = OrbitCamera::default();
         let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
 
         // 600 points of height show 2 * 300 mm * tan(0.4) = 254 mm, so a point is
-        // 0.42 mm where the camera looks and two of them 0.85 mm.
-        let middle = aim_slack_mm(&camera, viewport, viewport.center());
+        // 0.42 mm where the camera looks, six of them 2.54 mm, and twice as far 5.08 mm.
+        let slack = aim_slack(&camera, viewport, viewport.center());
+        let looked_at = camera.distance_mm;
+        let middle = slack.at(looked_at);
         assert!(
-            (middle - 0.85).abs() < 0.05,
-            "two points at the middle of the view are 0.85 mm, got {middle}"
+            (middle - 2.54).abs() < 0.1,
+            "six points at the middle of the view are 2.54 mm, got {middle}"
         );
-        let corner = aim_slack_mm(&camera, viewport, egui::pos2(40.0, 40.0));
+        let twice = slack.at(2.0 * looked_at);
+        assert!(
+            (twice - 2.0 * middle).abs() < 0.1,
+            "twice as far off they are twice as many millimetres, got {twice}"
+        );
+        let corner = aim_slack(&camera, viewport, egui::pos2(40.0, 40.0)).at(looked_at);
         assert!(
             corner < 2.0 * middle,
             "a cursor far from the middle reaches no further, got {corner} mm"

@@ -33,15 +33,25 @@ pub struct Grab {
     pub part: Part,
 }
 
-/// Which part of which support `ray` passes through, nearest first, else the nearest within
-/// `slack_mm`. Sticks are capsules, joints wider balls that win ties; slack never beats a hit.
-pub fn grab(
-    trees: &[SupportTree],
-    ray: &Ray,
-    profiles: Profiles,
-    slack_mm: Scalar,
-) -> Option<Grab> {
-    grab_along(trees, ray, profiles, slack_mm).map(|(what, _)| what)
+/// How far a ray may pass a part and still take it: `mm` at the ray's origin, widening by
+/// `per_mm` for each millimetre along it, so a reach of a few points of screen holds at any depth.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Slack {
+    pub mm: Scalar,
+    pub per_mm: Scalar,
+}
+
+impl Slack {
+    /// The reach `along_mm` down the ray, mm.
+    pub fn at(self, along_mm: Scalar) -> Scalar {
+        (self.mm + self.per_mm * along_mm).max(0.0)
+    }
+}
+
+/// Which part of which support `ray` passes through, nearest first, else the nearest on screen
+/// within `slack`. Sticks are capsules, joints wider balls that win ties; slack never beats a hit.
+pub fn grab(trees: &[SupportTree], ray: &Ray, profiles: Profiles, slack: Slack) -> Option<Grab> {
+    grab_along(trees, ray, profiles, slack).map(|(what, _)| what)
 }
 
 /// What [`grab`] answers, with how far along `ray` the part was met, millimetres: what
@@ -50,12 +60,15 @@ pub fn grab_along(
     trees: &[SupportTree],
     ray: &Ray,
     profiles: Profiles,
-    slack_mm: Scalar,
+    slack: Slack,
 ) -> Option<(Grab, Scalar)> {
     let near = |what: Grab, radius: Scalar, from: Vec3, to: Vec3| {
         let (along_ray, distance) = closest_approach(ray, from, to);
         let miss = (distance - radius).max(0.0);
-        (miss <= slack_mm.max(0.0)).then_some((what, miss, along_ray, rank(what.part)))
+        let reach = slack.at(along_ray);
+        // Misses compared as the screen sees them: a far part's millimetre is fewer points.
+        let on_screen = if reach > 0.0 { miss / reach } else { miss };
+        (miss <= reach).then_some((what, on_screen, along_ray, rank(what.part)))
     };
     trees
         .iter()
@@ -74,15 +87,15 @@ pub fn grab_along(
         .map(|(what, _, along_ray, _)| (what, along_ray))
 }
 
-/// Which support `ray` passes through or within `slack_mm` of, as the index of its `SupportPoint`;
+/// Which support `ray` passes through or within `slack` of, as the index of its `SupportPoint`;
 /// a shared trunk alone hits nothing, as no one support could be taken away.
 pub fn support_under(
     trees: &[SupportTree],
     ray: &Ray,
     profiles: Profiles,
-    slack_mm: Scalar,
+    slack: Slack,
 ) -> Option<usize> {
-    let hit = grab(trees, ray, profiles, slack_mm)?;
+    let hit = grab(trees, ray, profiles, slack)?;
     let tree = trees.get(hit.tree)?;
     match hit.part {
         Part::Node(node) => tree
