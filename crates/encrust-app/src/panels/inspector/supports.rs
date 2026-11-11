@@ -170,20 +170,23 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         .scene
         .targets()
         .any(SceneObject::supports_pending);
-    if !growing {
-        lost(ui, window.doc);
-    }
+    let lost = if growing {
+        Vec::new()
+    } else {
+        lost(window.doc)
+    };
     if let Some(job) = window.tools.supports.job.as_ref() {
         running(ui, job);
         return;
     }
     cavity(ui, window);
     fill(ui, window);
-    grow(ui, window, points);
+    grow(ui, window, points, &lost);
 }
 
-/// A warning line for each reason supports were left out, with how many (ADR 0431).
-fn lost(ui: &mut egui::Ui, doc: &Doc) {
+/// A line with its count for each reason supports were left out (ADR 0431).
+fn lost(doc: &Doc) -> Vec<String> {
+    let mut reasons = Vec::new();
     for why in [Unstood::HeadBlocked, Unstood::FacesUp, Unstood::NoGround] {
         let count = doc
             .scene
@@ -194,17 +197,13 @@ fn lost(ui: &mut egui::Ui, doc: &Doc) {
         if count == 0 {
             continue;
         }
-        let line = match why {
+        reasons.push(match why {
             Unstood::HeadBlocked => tr!("supports-lost-head-blocked", count = count),
             Unstood::FacesUp => tr!("supports-lost-faces-up", count = count),
             Unstood::NoGround => tr!("supports-lost-no-ground", count = count),
-        };
-        tone(
-            ui,
-            &format!("{} {line}", icon::WARNING),
-            theme::colors().text_mid,
-        );
+        });
     }
+    reasons
 }
 
 fn fill(ui: &mut egui::Ui, window: &mut Window) {
@@ -226,7 +225,7 @@ fn fill(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// Grow, and at its right the bin that takes every support away on a second click.
-fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
+fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize, lost: &[String]) {
     let blocker = (window.tools.supports.blocker(&window.doc.scene))
         .or_else(|| crate::prepare::holding(window.tools));
     let label = if points > 0 {
@@ -234,7 +233,13 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
     } else {
         tr!("supports-grow")
     };
-    let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
+    let what = std::iter::once(tr!(
+        "supports-grow-tooltip",
+        scope = window.doc.scene.scope()
+    ))
+    .chain(lost.iter().map(|line| format!("{} {line}", icon::WARNING)))
+    .collect::<Vec<_>>()
+    .join("\n");
     let mut all = false;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
