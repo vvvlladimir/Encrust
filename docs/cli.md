@@ -822,7 +822,8 @@ built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to
 thick and stands its supports against the shell from outside. `--sweep` also supports each
 model at shares of the profile's density and reports the least that is enough. Every
 row is strengthened as Generate strengthens it; `--no-strengthen` reads placement as it
-put the tips. `--tip-floor-mm`
+put the tips. `--lightest-first` builds every tip of an automatic profile to its lightest
+shape and leaves its size to strengthening, by what it carries. `--tip-floor-mm`
 builds every tip at least that wide, as a print that keeps to what holds would. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
