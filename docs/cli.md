@@ -805,7 +805,8 @@ Each model supported the way Generate supports it, cut and cured as it prints, a
 along three lines: what falls — contacts left with no support, islands, pieces standing on
 nothing, tips thinner than hold at all; what marks the part — the scar the tips leave,
 measured where the surface cuts each tip, tips on faces looking up in the pose the model
-was drawn in, tips on material thinner than a millimetre, feet standing on the model; and
+was drawn in, tips whose mark sits on an edge or a corner, where the surface turns
+past 30°, tips on material thinner than a millimetre, feet standing on the model; and
 what is more or less than needed — how much of what it holds each tip carries, flat
 underside and leaning underside each against its own limit, the rim of flat underside left
 far from every tip, underside no tip reaches and no layer below carries, crowded tips and

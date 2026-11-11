@@ -42,7 +42,10 @@ pub fn write(
                 .map(|r| r.at.extend(r.z_mm)),
         )
         .collect();
-    let marks = at(findings, &[Kind::Visible, Kind::ThinTip, Kind::OnModel]);
+    let marks = at(
+        findings,
+        &[Kind::Visible, Kind::Edge, Kind::ThinTip, Kind::OnModel],
+    );
     let waste = at(
         findings,
         &[Kind::Bare, Kind::RimGap, Kind::Crowded, Kind::Slender],

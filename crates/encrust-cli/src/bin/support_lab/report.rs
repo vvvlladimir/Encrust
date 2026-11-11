@@ -296,9 +296,10 @@ pub fn print_row(row: &Row) {
         shape.rim_gap_max_mm,
     );
     println!(
-        "- marks: {:.1} mm² of scar, {} on the visible side, {} on thin details, {} feet on the model, {} crowded, {} slender",
+        "- marks: {:.1} mm² of scar, {} on the visible side, {} on an edge, {} on thin details, {} feet on the model, {} crowded, {} slender",
         shape.scar_mm2,
         shape.visible,
+        shape.on_edge,
         shape.thin_tips,
         shape.on_model,
         shape.crowded,
@@ -386,6 +387,7 @@ fn print_findings(shape: &Shape) {
         Kind::RimGap,
         Kind::ThinTip,
         Kind::Visible,
+        Kind::Edge,
         Kind::OnModel,
         Kind::Slender,
         Kind::Crowded,
@@ -419,6 +421,7 @@ fn value_of(kind: Kind, value: f32) -> String {
         Kind::Overloaded => format!(" uses {value:.1}× what it holds"),
         Kind::RimGap => format!(" {value:.1} mm from a tip"),
         Kind::ThinTip => format!(" on {value:.2} mm"),
+        Kind::Edge => format!(" turns {value:.0}°"),
         Kind::Slender => format!(" {value:.0}:1"),
         _ => String::new(),
     }
@@ -427,13 +430,13 @@ fn value_of(kind: Kind, value: f32) -> String {
 /// The summary table over every row.
 pub fn print_table(report: &Report) {
     println!(
-        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | margin | <×1.5 | rim mm | bare mm² | visible | thin | specks | knee |"
+        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | margin | <×1.5 | rim mm | bare mm² | visible | edge | thin | specks | knee |"
     );
     println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
     for row in report.rows.iter().filter(|row| row.skipped.is_none()) {
         let shape = &row.shape;
         println!(
-            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {} | {} | {:.0} | {:.0} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {} | {} | {:.0} | {:.0} | {} | {} | {} | {} | {} |",
             row.model,
             row.profile,
             if row.held() { "yes" } else { "**no**" },
@@ -450,6 +453,7 @@ pub fn print_table(report: &Report) {
             shape.rim_bare_mm,
             shape.bare_mm2,
             shape.visible,
+            shape.on_edge,
             shape.thin_tips,
             row.cure.specks,
             row.knee()
@@ -493,10 +497,10 @@ pub fn regressions(kept: &Report, now: &Report) -> Vec<String> {
                 b.supports_ml, n.supports_ml
             ));
         }
-        if n.visible > b.visible || n.thin_tips > b.thin_tips + 1 {
+        if n.visible > b.visible || n.on_edge > b.on_edge || n.thin_tips > b.thin_tips + 1 {
             worse.push(format!(
-                "{name}: marks visible {} → {}, thin {} → {}",
-                b.visible, n.visible, b.thin_tips, n.thin_tips
+                "{name}: marks visible {} → {}, edge {} → {}, thin {} → {}",
+                b.visible, n.visible, b.on_edge, n.on_edge, b.thin_tips, n.thin_tips
             ));
         }
     }

@@ -4,6 +4,7 @@
 mod corpus;
 mod coupon;
 mod cure;
+mod edge;
 mod export;
 mod report;
 mod shape;

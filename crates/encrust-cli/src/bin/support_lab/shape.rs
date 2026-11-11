@@ -10,6 +10,7 @@ use core_supports::SupportTree;
 use printer_profiles::SupportProfile;
 use serde::{Deserialize, Serialize};
 
+use crate::edge::{EDGE_COS, turn_under};
 use crate::stand::Supported;
 
 /// A tip on material thinner than this behind it, millimetres, is on a detail: a finger, an
@@ -72,6 +73,9 @@ pub struct Shape {
     pub scar_mm2: f32,
     /// Tips on a face that looks up in the model's upright pose: the side meant to be seen.
     pub visible: usize,
+    /// Tips whose mark sits where the surface turns past 30°: an edge or a corner.
+    #[serde(default)]
+    pub on_edge: usize,
     pub thin_tips: usize,
     pub crowded: usize,
     pub slender: usize,
@@ -116,6 +120,7 @@ pub enum Kind {
     RimGap,
     ThinTip,
     Visible,
+    Edge,
     Crowded,
     Slender,
     OnModel,
@@ -435,10 +440,18 @@ fn pieces(triangle: &Triangle) -> Vec<(Vec3, Scalar)> {
     pieces
 }
 
-/// Tips on details too thin to lose one, and tips on the side meant to be seen.
+/// Tips on details too thin to lose one, on the side meant to be seen, and on an edge.
 fn tips_on_surface(shape: &mut Shape, model: &Mesh, bvh: &Bvh, tips: &[Vec3], upright: Quat) {
     let back = upright.inverse();
+    let mut found = Vec::new();
     for tip in tips {
+        if let Some(turn) = turn_under(model, bvh, *tip, &mut found)
+            && turn < EDGE_COS
+        {
+            shape.on_edge += 1;
+            let degrees = turn.clamp(-1.0, 1.0).acos().to_degrees();
+            shape.findings.push(finding(Kind::Edge, *tip, degrees));
+        }
         let Some((normal, behind)) = surface_at(model, bvh, *tip) else {
             continue;
         };
