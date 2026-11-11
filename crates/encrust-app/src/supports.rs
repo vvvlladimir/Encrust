@@ -155,6 +155,8 @@ pub struct SupportTool {
     parked_auto: Option<AutoProfile>,
     /// What the run going sizes its supports by, and the shapes it sizes them into.
     sizing: Option<Sizing>,
+    /// The groups the run going grows again: what stands in them goes when it lands.
+    regrowing: Vec<u16>,
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
@@ -190,6 +192,7 @@ impl Default for SupportTool {
             auto: None,
             parked_auto: None,
             sizing: None,
+            regrowing: Vec::new(),
             raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,

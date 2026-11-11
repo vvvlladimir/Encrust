@@ -2,7 +2,9 @@
 //! layer while the view stays as it was left, and the camera sent to them once.
 
 use core_analysis::{Risk, RiskKind};
-use core_engine::{CupVent, Unvented, cup_vents, island_floors, lever_holds, neck_profile};
+use core_engine::{
+    CupVent, Unvented, cup_vents, held_by_shape, island_floors, lever_holds, neck_profile,
+};
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
@@ -66,24 +68,54 @@ pub struct ForRun<'a> {
     pub profiles: &'a [(ObjectId, SupportProfile)],
 }
 
-/// Check's Support them: a support under every island of `risks`, in the islands' group, on
-/// the panel's profile and any model, or for a run on its models and their own profiles;
-/// says how many stood.
+/// Check's Support them: a support under every island of `risks`, in the islands' group, each
+/// built to the lightest of `shapes` that bears it (lightest first), or for a run on its models
+/// and their own profiles; says how many stood.
 pub fn support_islands(
     (scene, supports): (&mut Scene, &mut SupportTool),
     (plan, settings): (&LayerPlan, &RasterSettings),
     risks: &[Risk],
-    run: Option<ForRun>,
+    built: Built,
 ) -> Status {
     let layer_mm = plan.nominal_thickness();
-    let floors = island_floors(risks, plan, &as_seen(settings));
-    let found: Vec<(ObjectId, Vec3)> = island_holds(scene, &floors, layer_mm)
-        .into_iter()
-        .flatten()
-        .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
-        .collect();
-    let stood = stand(scene, supports, &found, run.as_ref());
+    let found = |scene: &Scene, risks: &[Risk], run: Option<&ForRun>| {
+        let floors = island_floors(risks, plan, &as_seen(settings));
+        island_holds(scene, &floors, layer_mm)
+            .into_iter()
+            .flatten()
+            .filter(|(id, _)| run.is_none_or(|run| run.ids.contains(id)))
+            .collect::<Vec<(ObjectId, Vec3)>>()
+    };
+    let stood = match built {
+        Built::Run(run) => {
+            let found = found(scene, risks, Some(&run));
+            supports.support_islands(scene, &found, |id| profile_of(&run, id))
+        }
+        Built::Shapes(shapes) => (0..shapes.len())
+            .map(|shape| {
+                let mine = held_by(risks, shapes, shape);
+                let found = found(scene, &mine, None);
+                supports.support_islands(scene, &found, |_| shapes[shape].clone())
+            })
+            .sum(),
+    };
     Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP))
+}
+
+/// What Check builds the supports it stands to: a recipe run's models and their profiles, or
+/// the shapes, lightest first, each support is sized into by what Check measured.
+pub enum Built<'a> {
+    Run(ForRun<'a>),
+    Shapes(&'a [SupportProfile]),
+}
+
+/// The risks of `risks` whose supports [`held_by_shape`] builds to `shapes[shape]`.
+fn held_by(risks: &[Risk], shapes: &[SupportProfile], shape: usize) -> Vec<Risk> {
+    risks
+        .iter()
+        .filter(|risk| held_by_shape(&risk.kind, shapes) == shape)
+        .copied()
+        .collect()
 }
 
 /// Check's Support them for weak necks: as many and as thick supports under each pulling piece
@@ -92,32 +124,44 @@ pub fn support_levers(
     (scene, supports): (&mut Scene, &mut SupportTool),
     stack: (&LayerPlan, &RasterSettings),
     risks: &[Risk],
-    run: Option<ForRun>,
+    built: Built,
 ) -> Status {
-    let holds = lever_owners(scene, stack, risks, &neck_sizing(supports, run.as_ref()));
-    let found: Vec<(ObjectId, Vec3)> = holds
-        .iter()
-        .flatten()
-        .filter(|(id, _)| run.as_ref().is_none_or(|run| run.ids.contains(id)))
-        .copied()
-        .collect();
-    let left = holds.iter().filter(|hold| hold.is_empty()).count();
-    let stood = supports.support_necks(scene, &found, |id| {
-        run.as_ref().map(|run| profile_of(run, id))
-    });
+    let in_hand = neck_profile(&supports.profile);
+    let (mut stood, mut left) = (0, 0);
+    let mut stand = |risks: &[Risk],
+                     sizing: &SupportProfile,
+                     run: Option<&ForRun>,
+                     base: &dyn Fn(ObjectId) -> SupportProfile| {
+        let holds = lever_owners(scene, stack, risks, sizing);
+        let found: Vec<(ObjectId, Vec3)> = holds
+            .iter()
+            .flatten()
+            .filter(|(id, _)| run.is_none_or(|run| run.ids.contains(id)))
+            .copied()
+            .collect();
+        left += holds.iter().filter(|hold| hold.is_empty()).count();
+        stood += supports.support_necks(scene, &found, base);
+    };
+    match built {
+        Built::Run(run) => {
+            let asked = run
+                .profiles
+                .first()
+                .map(|(_, profile)| neck_profile(profile));
+            let sizing = asked.unwrap_or(in_hand);
+            stand(risks, &sizing, Some(&run), &|id| profile_of(&run, id));
+        }
+        Built::Shapes(shapes) => {
+            for (shape, base) in shapes.iter().enumerate() {
+                let mine = held_by(risks, shapes, shape);
+                stand(&mine, &neck_profile(base), None, &|_| base.clone());
+            }
+        }
+    }
     told(
         tr!("check-stood-levers", count = stood, group = NECKS_GROUP),
         left,
     )
-}
-
-/// The profile a neck's supports are counted by: a run's first, or the panel's, made thick
-/// enough.
-fn neck_sizing(supports: &SupportTool, run: Option<&ForRun>) -> SupportProfile {
-    let asked = run
-        .and_then(|run| run.profiles.first())
-        .map(|(_, profile)| profile);
-    neck_profile(asked.unwrap_or(&supports.profile))
 }
 
 /// Check's Drill them: the shortest hole into the lowest point of each suction cup of `risks`,
@@ -193,19 +237,6 @@ pub fn lever_owners(
             owned.collect()
         })
         .collect()
-}
-
-/// Stands a support at each of `found`, on a run's profiles where there is one.
-fn stand(
-    scene: &mut Scene,
-    supports: &mut SupportTool,
-    found: &[(ObjectId, Vec3)],
-    run: Option<&ForRun>,
-) -> usize {
-    match run {
-        None => supports.support_islands(scene, found),
-        Some(run) => supports.support_islands_to(scene, found, |id| profile_of(run, id)),
-    }
 }
 
 /// The profile `run` stands `id`'s supports to.

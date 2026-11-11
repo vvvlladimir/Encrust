@@ -274,3 +274,59 @@ fn a_tip_thinner_than_a_neck_can_use_is_made_thick_enough() {
     assert!((sturdy.tip.contact_diameter_mm - NECK_TIP_MM).abs() < 1e-6);
     assert!((sturdy.small_pillar.diameter_mm - NECK_TIP_MM).abs() < 1e-6);
 }
+
+/// Three shapes whose tips are 0.3, 0.6 and 1.2 mm across, lightest first.
+fn three_shapes() -> [SupportProfile; 3] {
+    [0.3, 0.6, 1.2].map(|tip_mm| {
+        let mut shape = SupportProfile::default();
+        shape.tip.contact_diameter_mm = tip_mm;
+        shape.small_pillar.diameter_mm = tip_mm;
+        shape
+    })
+}
+
+#[test]
+fn a_small_island_is_held_by_the_lightest_shape_and_a_wide_one_by_a_heavier() {
+    let shapes = three_shapes();
+    let small = RiskKind::Island { area_mm2: 0.5 };
+    assert_eq!(
+        held_by_shape(&small, &shapes),
+        0,
+        "a 0.3 mm tip bears 0.5 mm²"
+    );
+
+    // A 0.3 mm tip bears 0.73 N; a disc of 300 mm² pulls about 1 N, a 0.6 mm tip 2.9 N.
+    let wide = RiskKind::Island { area_mm2: 300.0 };
+    assert_eq!(
+        held_by_shape(&wide, &shapes),
+        1,
+        "300 mm² needs the 0.6 mm tip"
+    );
+
+    let vast = RiskKind::Island { area_mm2: 1.0e5 };
+    assert_eq!(
+        held_by_shape(&vast, &shapes),
+        2,
+        "nothing bears it, so the heaviest"
+    );
+}
+
+#[test]
+fn a_neck_no_count_of_supports_holds_takes_the_heaviest_shape() {
+    let hopeless = RiskKind::Lever {
+        stress_mpa: 1.0e4,
+        lever_mm: 50.0,
+        neck_mm2: 0.01,
+        force_n: 1.0e3,
+        gyration_mm: 1.0,
+    };
+    assert_eq!(held_by_shape(&hopeless, &three_shapes()), 2);
+    let light = RiskKind::Lever {
+        stress_mpa: 14.0,
+        lever_mm: 1.0,
+        neck_mm2: 1.0,
+        force_n: 1.0,
+        gyration_mm: 1.0,
+    };
+    assert_eq!(held_by_shape(&light, &three_shapes()), 0);
+}

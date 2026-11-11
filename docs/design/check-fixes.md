@@ -11,7 +11,8 @@ kind but peel and thin as `assets/recipes/fix-issues.toml` lays them out: ADR 04
 | Meeting | Combine | opens Combine on the pair listed first |
 | Hollow with no drain hole | Drill drain holes | Drain's Auto on those models |
 | Suction cup | Drill them, Auto-orient | `core_engine::cup_vents`, the `auto` preset |
-| Weak neck | Support them, Auto-orient | `core_engine::lever_holds`, the `auto` preset |
+| Island | Support them, Remove them | `core_engine::island_holds`, each support in the lightest automatic shape `held_by_shape` finds bears the island's pull |
+| Weak neck | Support them, Auto-orient | `core_engine::lever_holds` on the lightest automatic shape `held_by_shape` finds holds the neck, the `auto` preset |
 | Hard peel | Reduce peel, Lift settings | the least-peel preset; opens Print settings where the printer leaves the lift to the file |
 | Thin section | none | no operation thickens a model |
 

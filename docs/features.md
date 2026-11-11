@@ -468,6 +468,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 ### Automatic
 - **Grow the supports** for the whole plate, one model or only the parts you picked.
+  **Grow them again** builds the group in hand anew, or every group Auto builds to while
+  Auto is chosen, in place of what stood in it; other groups stay and are grown around.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
 - A point or a needle hanging down is held at its very tip, however thin, and every
@@ -710,7 +712,9 @@ smoothing, not the original model.
 **It lets you:**
 - Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
   on the cut, and the camera flies to it past the models and supports in the way.
-- **Support every island** in one press.
+- **Support every island** in one press. Each support Check stands, under an island or a weak
+  neck, is built to the lightest shape of the automatic profile that bears what it holds,
+  whatever profile the Supports panel holds; a recipe's run keeps its own profiles.
 - **Fix the rest from the same panel:** vent a suction cup through the thinnest wall at its
   bottom, a notch along the plate for one that stands on it, hold a weak neck
   with as many supports, 0.6 mm across at least, as bring it under its limit (in their own

@@ -21,6 +21,12 @@ pub(crate) fn neck_stress_mpa(force_n: f64, lever_mm: f64, neck_mm2: f64) -> f64
     force_n / neck_mm2 + force_n * lever_mm / section_modulus
 }
 
+/// What a support tip of `tip_mm2` holds in tension, newtons: the limit a neck fails at, with the
+/// margin a held neck is brought to.
+pub fn tip_holds_n(tip_mm2: f32) -> f64 {
+    f64::from(tip_mm2) * NECK_LIMIT_MPA * NECK_MARGIN
+}
+
 /// How many supports of tip `tip_mm2` around the piece of `lever` bring its neck under the
 /// limit with a margin to spare, at most [`MOST_NECK_HOLDS`]; none for another kind.
 pub fn holds_for_lever(lever: &RiskKind, tip_mm2: f32) -> usize {

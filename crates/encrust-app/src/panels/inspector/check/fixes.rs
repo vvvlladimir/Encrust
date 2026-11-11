@@ -4,7 +4,8 @@ use core_analysis::{Risk, RiskKind};
 use core_plate::{OrientGoal, OrientPreset};
 
 use crate::check::{
-    IssueKind, cup_owners, drill_cups, lever_owners, only_owner, support_islands, support_levers,
+    Built, IssueKind, cup_owners, drill_cups, lever_owners, only_owner, support_islands,
+    support_levers,
 };
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -124,8 +125,9 @@ pub(super) fn necks(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
     };
     let stack = (plan, &settings);
     if pressed == 0 {
+        let shapes = (window.tools.supports).check_shapes(&window.machine.slicing.catalogue);
         let plate = (&mut window.doc.scene, &mut window.tools.supports);
-        let said = support_levers(plate, stack, risks, None);
+        let said = support_levers(plate, stack, risks, Built::Shapes(&shapes));
         report(window, IssueKind::Necks, said);
     } else {
         let sizing = &window.tools.supports.profile;
@@ -248,7 +250,7 @@ fn island_offers(risks: &[Risk], removing: bool) -> (Vec<IslandFix>, Vec<Offer>)
 }
 
 /// Stands a support under every island the check found, in a group of their own built to
-/// the support numbers in hand.
+/// the lightest automatic shape that bears it.
 fn stand_on_islands(window: &mut Window, risks: &[Risk]) {
     let (Some(settings), Some(plan)) = (
         window.machine.slicing.raster_settings(),
@@ -256,8 +258,9 @@ fn stand_on_islands(window: &mut Window, risks: &[Risk]) {
     ) else {
         return;
     };
+    let shapes = (window.tools.supports).check_shapes(&window.machine.slicing.catalogue);
     let plate = (&mut window.doc.scene, &mut window.tools.supports);
-    let said = support_islands(plate, (plan, &settings), risks, None);
+    let said = support_islands(plate, (plan, &settings), risks, Built::Shapes(&shapes));
     report(window, IssueKind::Islands, said);
 }
 

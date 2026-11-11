@@ -13,7 +13,7 @@ use printer_profiles::{Catalogue, SupportProfile};
 use super::Run;
 use super::step::Ended;
 use super::work::{Batch, CheckFixes, Work};
-use crate::check::{ForRun, IssueKind, drill_cups, support_islands, support_levers};
+use crate::check::{Built, ForRun, IssueKind, drill_cups, support_islands, support_levers};
 use crate::i18n::tr;
 use crate::preview::{as_seen, stack_fingerprint};
 use crate::scene::{ObjectId, Scene};
@@ -129,7 +129,7 @@ impl Run {
             profiles: &profiles,
         };
         let plate = (&mut doc.scene, &mut tools.supports);
-        machine.status = support_islands(plate, stack, &risks, Some(run));
+        machine.status = support_islands(plate, stack, &risks, Built::Run(run));
         self.answered(IssueKind::Islands, &machine.status);
         self.check_again(batch, attempt + 1);
         Ok(())
@@ -146,7 +146,7 @@ impl Run {
         let ids = run.ids;
         if fixes.levers {
             let plate = (&mut doc.scene, &mut tools.supports);
-            *status = support_levers(plate, stack, risks, Some(run));
+            *status = support_levers(plate, stack, risks, Built::Run(run));
             self.answered(IssueKind::Necks, status);
         }
         if fixes.cups {
