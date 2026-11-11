@@ -326,7 +326,8 @@ up and move down, each off at its end. A press on the heading unfolds it,
   changes to Heavy?* over Save (accent), Discard and Cancel. Under it a 52 band of
   `section_tab`s, one a block, *OFF* after a block switched off; a press scrolls to the block
   and the one at the top of the view is lit. A support profile's blocks run Profile, Top,
-  Pillar, Bottom, Small pillar, Branching, Grid, Raft, Cross bracing, Automatic; a switched
+  Pillar, Bottom, Small pillar, Branching, Grid, Raft, Cross bracing, Automatic, an automatic
+  profile's Placing supports (the island areas under it), Steps, Steadying; a switched
   block carries its switch beside its title and, while off, one line of what stands instead.
   Cross bracing: its presets, *Fine-tune* trading them for every number, then the buttress.
   An automatic profile's name is shown, not typed. A 180 title column, the title wrapping in it, beside at most 460 of fields, a hairline under each. A text row's name stands in a 150 column so

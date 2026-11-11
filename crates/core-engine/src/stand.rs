@@ -94,8 +94,10 @@ impl SupportPlan {
 
     /// The group of [`Self::table`] a support holding `need` is built to.
     pub fn group_of(&self, need: &Need) -> u16 {
-        self.sizing()
-            .map_or(0, |auto| u16::try_from(need.size_in(auto)).unwrap_or(0))
+        match self.sizing() {
+            Some(_) => u16::try_from(need.size()).unwrap_or(0),
+            None => 0,
+        }
     }
 }
 

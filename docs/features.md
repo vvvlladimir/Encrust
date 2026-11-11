@@ -479,14 +479,13 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.
 - **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
-  sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
-  than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
-  Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
-  other, and the notice says how many of each were placed. A shelf put out in one layer
-  is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
-  above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
+  builds every support as **Auto Light**, and as **Auto Medium** or **Auto Heavy** only
+  where what it carries asks for it (below). Each shape is a group of its own, tuned like
+  any other, and the notice says how many of each were placed. Faces leaning past 20° just
+  above a shelf put out in one layer are held with it, higher above a larger shelf — from
+  7 mm³ of resin, then 12 mm³. A gentle slope too shallow to sag — past 10° from vertical
   — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
-  rock on the peel. **Sizes**, at the foot of the shape mode, sets where each heavier shape starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
+  rock on the peel. A merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
   **Heavy** or a preset of your own instead, and supports are built to it. The preset in
   hand, the automatic profile and its edited numbers are saved with the project and
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
@@ -494,7 +493,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   added.
 - Every placement then reads what the film pulls on each tip, layer by layer, and
   strengthens a tip left with less than half again what it holds: Auto builds it one size
-  heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
+  heavier, the only way a tip of its leaves the lightest shape, and at its heaviest, or under one preset, puts a second tip beside it on the same
   underside, low enough to share the load before it peaks. Supports you placed are never
   changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.30 mm.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the

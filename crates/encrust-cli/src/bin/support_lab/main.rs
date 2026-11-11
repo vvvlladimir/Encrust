@@ -65,10 +65,6 @@ struct Args {
     /// Generate does.
     #[arg(long)]
     no_strengthen: bool,
-    /// Build every tip an automatic profile sizes to its lightest shape, and let
-    /// strengthening size it by what it carries.
-    #[arg(long)]
-    lightest_first: bool,
     /// Write each supported model and markers at what the bench names into this folder.
     #[arg(long)]
     export: Option<PathBuf>,
@@ -116,7 +112,7 @@ struct Setup {
     limits: shape::Limits,
     neck_mpa: f32,
     wall_mm: Option<f32>,
-    sizing: stand::Sizing,
+    strengthening: bool,
 }
 
 fn main() -> Result<ExitCode> {
@@ -137,10 +133,7 @@ fn main() -> Result<ExitCode> {
         },
         neck_mpa: args.neck_mpa.max(NECK_LIMIT_MPA as f32),
         wall_mm: args.hollow_wall_mm,
-        sizing: stand::Sizing {
-            strengthening: !args.no_strengthen,
-            lightest_first: args.lightest_first,
-        },
+        strengthening: !args.no_strengthen,
     };
     let asked = asked(&args, &catalogue)?;
     if let (Some(path), Some(spec)) = (&args.coupon, &args.coupon_spec) {
@@ -325,7 +318,7 @@ fn run(
         posed.clone(),
         asked,
         setup.wall_mm,
-        (layer_mm, setup.sizing),
+        (layer_mm, setup.strengthening),
     )?;
     let shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
     let cured = cure::cure(

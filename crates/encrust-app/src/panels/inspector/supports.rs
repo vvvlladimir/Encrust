@@ -7,7 +7,7 @@ use super::{paint, scope, shape, support_picker};
 use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
-use crate::panels::support_fields::{held_up, saved_as, sizes};
+use crate::panels::support_fields::{held_up, saved_as};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::Doc;
 use crate::status::Status;
@@ -43,14 +43,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             });
             paint::fill_section(ui, window);
         }
-        Mode::Shape => {
-            shape::sections(ui, window);
-            if window.tools.supports.auto.is_some() {
-                section(ui, &tr!("supports-sizes"), None, |ui| {
-                    auto_sizes(ui, window)
-                });
-            }
-        }
+        Mode::Shape => shape::sections(ui, window),
     }
 }
 
@@ -247,25 +240,6 @@ fn auto_held_up(ui: &mut egui::Ui, window: &mut Window) {
     let mut placing = auto.placing_with(&window.tools.supports.profile);
     held_up(ui, &mut placing, shipped.as_ref());
     auto.take_placing(&placing);
-}
-
-/// Where the automatic profile chosen moves each support to a heavier shape, by the area of
-/// the island it holds and by how much of the model stands over the overhang it holds.
-fn auto_sizes(ui: &mut egui::Ui, window: &mut Window) {
-    let catalogue = &window.machine.slicing.catalogue;
-    let Some(auto) = window.tools.supports.auto.as_mut() else {
-        return;
-    };
-    let shipped = catalogue
-        .autos()
-        .find(|entry| entry.profile.name == auto.name)
-        .map(|entry| entry.profile.clone());
-    let shapes = auto.shapes.each_ref().map(|id| {
-        catalogue
-            .support(id)
-            .map_or_else(|_| id.clone(), |entry| entry.profile.name.clone())
-    });
-    sizes(ui, auto, shipped.as_ref(), &shapes);
 }
 
 /// How many supports the plate carries, and how many of them have room to stand.

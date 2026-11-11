@@ -333,8 +333,8 @@ supports gets one at its middle, where a corner would leave it a lever, so sampl
 returns nothing (ADR 0329). An island is sampled closer
 than an overhang, by its area, as the profile's `[islands]` says: as shipped, under 2.4 mm²
 at 13/18 of the spacing, under 3.2 mm² at 15/18, and at the spacing itself above that, each
-keeping three quarters of its own spacing clear. Automatic sizing takes the two areas from
-its own `island_area_mm2`, so one number picks both a support's size and its spacing. It hangs on the film alone, with no edge of a part to steady it.
+keeping three quarters of its own spacing clear. An automatic profile takes the two areas
+from its own `island_area_mm2`. It hangs on the film alone, with no edge of a part to steady it.
 
 **Clear of the edge.** A head centred on the layer's outline is half off the surface it
 holds: its nearest face is the wall above the edge, so the tip leans out and cures onto
@@ -384,8 +384,9 @@ sample asks nine buckets, and a point more than its own radius below the layer b
 dropped as the run climbs — which is what keeps the run's memory to the supports that can
 still hold something.
 
-**What each contact holds.** Every contact comes back with its `Reason`, which an
-automatic profile sizes it by (ADR 0325): an island with its area on the layer it begins
+**What each contact holds.** Every contact comes back with its `Reason`, which the bench
+reports and nothing sizes by — an automatic tip starts lightest and only strengthening makes
+it heavier (ADR 0423): an island with its area on the layer it begins
 on — a part that begins at a point has none — an overhang with the model above its layer,
 or a support that steadies a part. The model above is known only at the top of the stack,
 so the climb keeps a graph of pieces beside it (`load.rs`): a piece that is the only child
@@ -566,7 +567,8 @@ Under Auto the list shows the shapes it built; in the Shape mode it shows every 
 builds to, since each is edited there like any support profile. Sizing automatically, the
 card's placement and size fields edit the automatic profile's own numbers, which Save
 writes over the shipped one (ADR 0325), and a run is placed by them on its lightest shape;
-each contact then goes into the group built to the shape its `Reason` sizes it into — a
+each contact then goes into the group built to its size — the lightest, or as many sizes
+up as strengthening made it (ADR 0423) — a
 group of that profile's name, else one nothing stands in, retuned, else a new one — and a
 shape nothing is sized into gets no group (ADR 0325).
 

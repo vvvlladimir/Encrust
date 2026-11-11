@@ -12,7 +12,7 @@ mod automatic;
 mod bracing;
 mod sections;
 use automatic::automatic;
-pub use automatic::{held_up, sizes, steadying, steps};
+pub use automatic::{held_up, islands, steadying, steps};
 use bracing::{bracing, bracing_fields};
 use sections::{
     bottom, branching, branching_fields, grid, grid_fields, main, raft, raft_fields, small_pillar,

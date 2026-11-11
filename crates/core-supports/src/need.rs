@@ -1,17 +1,17 @@
 use core_geometry::{Scalar, Vec3};
-use printer_profiles::{AUTO_SIZES, AutoProfile};
+use printer_profiles::AUTO_SIZES;
 
 /// A contact automatic placement wants, and what it holds there.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Need {
     pub contact: Vec3,
     pub reason: Reason,
-    /// Sizes heavier than its reason asks, where what it carries proved too much for that.
+    /// Sizes heavier than the lightest, where what it carries proved too much for that.
     pub heavier: u8,
 }
 
 impl Need {
-    /// A contact at `contact` wanted for `reason`, sized by it alone.
+    /// A contact at `contact` wanted for `reason`, at the lightest size.
     pub fn new(contact: Vec3, reason: Reason) -> Self {
         Self {
             contact,
@@ -20,21 +20,17 @@ impl Need {
         }
     }
 
-    /// Which of `auto`'s shapes a support here is built to, lightest first, with
-    /// [`AUTO_SIZES`] for its steadying one.
-    pub fn size_in(&self, auto: &AutoProfile) -> usize {
-        let asked = match self.reason {
-            Reason::Island { area_mm2 } => auto.island_size(area_mm2),
-            Reason::Overhang { carried_mm3 } => auto.overhang_size(carried_mm3),
-            Reason::Step { new_mm3 } => auto.step_size(new_mm3).unwrap_or(0),
-            Reason::Steady => return AUTO_SIZES,
-        };
-        (asked + usize::from(self.heavier)).min(AUTO_SIZES - 1)
+    /// Which of an automatic profile's shapes a support here is built to, lightest first, with
+    /// [`AUTO_SIZES`] for its steadying one: the lightest until what it carries asks more.
+    pub fn size(&self) -> usize {
+        if self.reason == Reason::Steady {
+            return AUTO_SIZES;
+        }
+        usize::from(self.heavier).min(AUTO_SIZES - 1)
     }
 }
 
-/// Why a contact is wanted, measured by what it holds: what an automatic profile sizes a
-/// support by. See `docs/decisions/0325`.
+/// Why a contact is wanted, measured by what it holds. See `docs/decisions/0325`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Reason {
     /// The first ground of a part nothing holds, an island of `area_mm2` on the layer it
@@ -53,50 +49,42 @@ pub enum Reason {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
 
     #[test]
-    fn a_need_is_sized_by_what_it_holds_and_a_steadying_one_last() {
-        let auto = AutoProfile::from_toml_str(
-            include_str!("../../../assets/profiles/auto/default.toml"),
-            Path::new("auto/default.toml"),
-        )
-        .expect("the shipped profile reads");
+    fn a_need_starts_lightest_whatever_it_holds_and_a_steadying_one_last() {
         let need = |reason| Need::new(Vec3::ZERO, reason);
         assert_eq!(
-            need(Reason::Island { area_mm2: 3.2 }).size_in(&auto),
-            2,
-            "an island of 3.2 mm² reaches the shipped heaviest threshold"
+            need(Reason::Island { area_mm2: 50.0 }).size(),
+            0,
+            "a large island is sized by what it carries, not by its area"
         );
-        assert_eq!(need(Reason::Steady).size_in(&auto), AUTO_SIZES);
+        assert_eq!(
+            need(Reason::Overhang {
+                carried_mm3: 5000.0
+            })
+            .size(),
+            0,
+            "much of the model above is no reason on its own"
+        );
+        assert_eq!(need(Reason::Steady).size(), AUTO_SIZES);
     }
 
     #[test]
     fn a_need_made_heavier_takes_a_heavier_size_but_never_the_steadying_one() {
-        let auto = AutoProfile::from_toml_str(
-            include_str!("../../../assets/profiles/auto/default.toml"),
-            Path::new("auto/default.toml"),
-        )
-        .expect("the shipped profile reads");
         let heavier = |reason, heavier| Need {
             heavier,
             ..Need::new(Vec3::ZERO, reason)
         };
         let point = Reason::Island { area_mm2: 0.0 };
+        assert_eq!(heavier(point, 1).size(), 1, "one size up from the lightest");
         assert_eq!(
-            heavier(point, 1).size_in(&auto),
-            1,
-            "one size up from the lightest"
-        );
-        assert_eq!(
-            heavier(point, 9).size_in(&auto),
+            heavier(point, 9).size(),
             AUTO_SIZES - 1,
             "no further than the heaviest"
         );
         assert_eq!(
-            heavier(Reason::Steady, 1).size_in(&auto),
+            heavier(Reason::Steady, 1).size(),
             AUTO_SIZES,
             "steadying stays so"
         );

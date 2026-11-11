@@ -7,8 +7,8 @@ use crate::{Catalogue, IslandSpacing, ProfileError, SupportProfile};
 /// How many shapes an automatic profile sizes supports into.
 pub const AUTO_SIZES: usize = 3;
 
-/// Automatic placement that sizes each support by what it holds: where supports go, and
-/// which of a few support profiles each one is built to. See `docs/decisions/0325`.
+/// Automatic placement that sizes each support by what it carries: where supports go, and the
+/// support profiles each one is built to, lightest first. See `docs/decisions/0325` and `0423`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AutoProfile {
     pub name: String,
@@ -19,14 +19,11 @@ pub struct AutoProfile {
     pub max_overhang_deg: f32,
     pub contact_spacing_mm: f32,
     pub steep_contact_spacing_mm: f32,
-    /// The least island, mm² on the layer it begins on, held by the second shape and by
-    /// the third, and spaced as [`IslandSpacing`] says from there.
+    /// The least island, mm² on the layer it begins on, spaced at the second share of
+    /// [`IslandSpacing`] and at the third.
     pub island_area_mm2: [f32; AUTO_SIZES - 1],
-    /// The least model standing above an overhang, mm³, held by the second shape and by
-    /// the third.
-    pub overhang_volume_mm3: [f32; AUTO_SIZES - 1],
     /// The least resin a step puts out in its one layer, mm³, to be held as a step at
-    /// all, then by the second shape and by the third. See `docs/decisions/0326`.
+    /// all, then as a step of the second size and of the third. See `docs/decisions/0326`.
     pub step_volume_mm3: [f32; AUTO_SIZES],
     /// How far above a step of each size the faces near it are held as part of it, mm.
     pub step_height_mm: [f32; AUTO_SIZES],
@@ -51,20 +48,14 @@ impl AutoProfile {
         crate::catalogue::shipped_auto(id)
     }
 
-    /// Which shape holds an island of `area_mm2`, as an index into `shapes`.
-    pub fn island_size(&self, area_mm2: f32) -> usize {
-        size_of(&self.island_area_mm2, area_mm2)
-    }
-
-    /// Which shape holds an overhang with `carried_mm3` of model above it.
-    pub fn overhang_size(&self, carried_mm3: f32) -> usize {
-        size_of(&self.overhang_volume_mm3, carried_mm3)
-    }
-
-    /// Which shape holds a step that puts out `new_mm3` in its layer, or `None` for one too
-    /// small to be held as a step.
+    /// The size of a step that puts out `new_mm3` in its layer, an index into
+    /// `step_height_mm`, or `None` for one too small to be held as a step.
     pub fn step_size(&self, new_mm3: f32) -> Option<usize> {
-        let reached = size_of(&self.step_volume_mm3, new_mm3);
+        let reached = self
+            .step_volume_mm3
+            .iter()
+            .take_while(|least| new_mm3 >= **least)
+            .count();
         reached.checked_sub(1)
     }
 
@@ -142,16 +133,10 @@ impl AutoProfile {
         }
         crate::support::overhang_within_right_angle(self.max_overhang_deg)?;
         ascending("island_area_mm2", &self.island_area_mm2)?;
-        ascending("overhang_volume_mm3", &self.overhang_volume_mm3)?;
         ascending("steady_area_mm2", &[self.steady_area_mm2])?;
         ascending("step_volume_mm3", &self.step_volume_mm3)?;
         ascending("step_height_mm", &self.step_height_mm)
     }
-}
-
-/// How many of `least` a measure of `value` reaches, which is the shape it is held by.
-fn size_of(least: &[f32], value: f32) -> usize {
-    least.iter().take_while(|least| value >= **least).count()
 }
 
 /// Thresholds that are not negative and do not fall.
@@ -200,23 +185,6 @@ mod tests {
     }
 
     #[test]
-    fn a_measure_is_held_by_the_last_shape_it_reaches() {
-        let auto = shipped();
-        let sizes: Vec<usize> = [0.0, 2.39, 2.4, 3.1, 3.2, 50.0]
-            .into_iter()
-            .map(|area| auto.island_size(area))
-            .collect();
-        assert_eq!(
-            sizes,
-            [0, 0, 1, 1, 2, 2],
-            "thresholds 2.4 and 3.2 mm² as shipped"
-        );
-        assert_eq!(auto.overhang_size(999.0), 0);
-        assert_eq!(auto.overhang_size(1500.0), 1);
-        assert_eq!(auto.overhang_size(2000.0), 2);
-    }
-
-    #[test]
     fn placing_numbers_go_onto_a_shape_and_come_back() {
         let mut auto = shipped();
         let mut placing =
@@ -235,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn a_step_too_small_is_no_step_and_a_larger_one_takes_a_heavier_shape() {
+    fn a_step_too_small_is_no_step_and_a_larger_one_reaches_further() {
         let auto = shipped();
         let sizes: Vec<Option<usize>> = [0.05, 0.1, 6.9, 7.0, 12.0, 50.0]
             .into_iter()

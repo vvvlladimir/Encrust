@@ -242,9 +242,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
-| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422 |
+| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0423 |
 | [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted; the steadying shape's 0.18 mm contact is superseded by 0422 |
 | [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted |
+| [0423](0423-an-automatic-tip-starts-lightest-and-is-sized-by-what-it-carries.md) | Build every automatic tip lightest, and size it by what it carries | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
