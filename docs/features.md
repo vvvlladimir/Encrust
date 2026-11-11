@@ -485,7 +485,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   500 mm³ **Auto Heavy**, anything less **Auto Light**; so a few supports under much of a
   heavy part are heavy, and the many under a wide base stay light. Auto places contacts
   3.0 mm apart under a face looking straight down and 5.5 mm under a steep one, holds faces
-  leaning past 45°, and stands them on 1.0 mm pillars. Each shape is a group of its own, tuned like any
+  leaning past 45°, and stands them on 1.0 mm pillars. The end of a toe or spike under 2 mm
+  across gets a contact of its own, however near one stands at its root. Each shape is a group of its own, tuned like any
   other, and the notice says how many of each were placed. A shelf put out in one layer
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
@@ -568,7 +569,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
   Shift-click adds a part to what is picked, or takes it back out. A foot dragged aside keeps
-  its trunk upright over it and leans what it carries down to it at 45 degrees.
+  its trunk upright over it and leans what it carries down to it at 45 degrees, and goes no
+  further than that lean reaches; no drag leaves a strut flatter than 45 degrees.
   Supports that stand on the one you move go with it.
 
 ### Groups and profiles
@@ -580,7 +582,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   lists the shapes it built under it. Choosing a group takes its preset in hand.
 - A bin asks twice: the first click turns it red, the second removes. The bin beside the
   preset removes the group in hand with its supports, the one beside **Grow** every support.
-- A thin support may stand on a thicker one from another group. Tips of groups as thick as
+- A thin support may stand on a thicker one from another group, and goes to it directly
+  rather than first joining a thin neighbour. Tips of groups as thick as
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds

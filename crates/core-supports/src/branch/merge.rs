@@ -35,16 +35,15 @@ pub(super) struct Candidate {
     pub(super) drop_mm: Scalar,
 }
 
-// Ordered by meeting-point height so the heap yields the biggest saving first; heights are
-// finite, so `total_cmp` needs no tie-break.
+// A front runs into a thicker support before it meets another front, so it goes straight to it
+// rather than to a joint and back (ADR 0436); then the highest meeting point first.
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.meet
-            .z
-            .total_cmp(&other.meet.z)
+        self.onto_carrier
+            .cmp(&other.onto_carrier)
+            .then_with(|| self.meet.z.total_cmp(&other.meet.z))
             .then_with(|| other.a.cmp(&self.a))
             .then_with(|| other.b.cmp(&self.b))
-            .then_with(|| self.onto_carrier.cmp(&other.onto_carrier))
             .then_with(|| other.drop_mm.total_cmp(&self.drop_mm))
     }
 }

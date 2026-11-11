@@ -257,6 +257,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0432](0432-a-merge-joint-stands-as-high-as-its-branches-are-long-and-holds-three.md) | Stand a merge's joint as high as its branches are long, and hang three branches at most | Accepted |
 | [0433](0433-a-support-standing-on-another-goes-with-it.md) | A support standing on another goes where that one is carried | Proposed |
 | [0434](0434-a-part-stands-two-millimetres-up-on-pads-bevelled-at-forty-five-degrees.md) | Lift a part 2 mm, on pads bevelled at forty-five degrees | Proposed |
+| [0435](0435-the-end-of-a-toe-is-held-by-a-support-of-its-own.md) | Hold the end of a toe with a support of its own | Proposed |
+| [0436](0436-a-front-runs-into-a-thicker-support-before-it-joins-another.md) | Run a front into a thicker support before it joins another front | Proposed |
+| [0437](0437-no-edit-leaves-a-strut-flatter-than-forty-five-degrees.md) | Let no edit leave a strut flatter than forty-five degrees | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
@@ -375,7 +378,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0397](0397-the-next-clicks-size-is-the-windows.md) | The size the next click puts down is the window's, not a model's | Proposed |
 | [0246](0246-a-model-keeps-the-support-profile-it-was-edited-to.md) | Keep an edited support profile on the picked models until it is saved | Accepted; what choosing another profile from the list does is superseded by 0247 |
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
-| [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325 |
+| [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325, the one order of both meetings by 0436 |
 | [0249](0249-nothing-that-carries-a-support-leans-past-45-degrees.md) | Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut | Accepted; the head's 45 degrees is superseded by 0339 |
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted; only a support no further than the part, by 0340 |

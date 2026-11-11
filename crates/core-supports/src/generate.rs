@@ -369,7 +369,9 @@ impl Pass<'_> {
             .into_iter()
             .map(|(cell, area_mm2)| (cell, anywhere, On::Island(area_mm2)));
         let mut stepped = Vec::new();
-        for (cell, coverage_mm, on) in adrift.chain(wanted.cells) {
+        let ends = wanted.ends.into_iter().map(|want| (want, Some(want.1)));
+        let wants = adrift.chain(wanted.cells).map(|want| (want, None));
+        for ((cell, coverage_mm, on), within_mm) in wants.chain(ends) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
             let contact = at.extend(contact_mm);
             let piece = parts.at(cell[0], cell[1]);
@@ -394,7 +396,7 @@ impl Pass<'_> {
             } else {
                 coverage_mm
             };
-            let taken = standing.take(piece, at, contact_mm, coverage_mm);
+            let taken = standing.take(piece, at, contact_mm, coverage_mm, within_mm);
             if let Some(contact) = taken.filter(|_| steadies) {
                 steadied.add(contact, self.steady_mm(), 0.0);
             }

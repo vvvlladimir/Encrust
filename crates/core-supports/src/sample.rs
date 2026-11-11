@@ -12,6 +12,10 @@ const FILL_REACH: (i32, i32) = (3, 4);
 /// How many steps of the grid that fills the lattice's gaps make one spacing.
 const FILL_STEPS: i32 = 4;
 
+/// How thin a part of a piece is to be a toe whose end is held, as a share of the spacing: a
+/// third, so a toe under two thirds of a spacing wide, which the lattice can step over.
+const END_SHARE: i32 = 3;
+
 /// How far the outline has to turn at a point for it to be a corner, as a cosine: 45
 /// degrees, which a square has and a circle wider than a few arms does not.
 const CORNER_TURN_COS: f32 = 0.707;
@@ -55,6 +59,37 @@ pub fn sample_piece(piece: &Field, room: &Field, inset: i32, spacing: i32) -> Ve
         return middle_of(room).into_iter().collect();
     }
     points
+}
+
+/// How far a support at a toe's end holds, in cells, for a piece sampled `spacing` apart: what
+/// [`sample_ends`] counts as thin is under twice this wide.
+pub fn end_reach(spacing: i32) -> i32 {
+    (spacing / END_SHARE).max(1)
+}
+
+/// The end of each toe or spike of one unsupported piece, as cells: a part narrower than twice
+/// [`end_reach`], whose end a support at its root holds only as a lever; see ADR 0435.
+pub fn sample_ends(piece: &Field, room: &Field, inset: i32, spacing: i32) -> Vec<[i32; 2]> {
+    let (clear, narrow) = standing_room(piece, room, inset);
+    ends(piece, &clear.with(&narrow), end_reach(spacing.max(1)))
+}
+
+/// The ends of the parts of `piece` narrower than twice `reach`: what sticks out past one and a
+/// half `reach` from the piece opened by it, which a square's corner does not, each taken at
+/// its cell of `standing` furthest from the piece's middle.
+fn ends(piece: &Field, standing: &Field, reach: i32) -> Vec<[i32; 2]> {
+    let body = piece.shrunk(reach);
+    let Some(middle) = middle_of(piece).filter(|_| !body.is_empty()) else {
+        return Vec::new();
+    };
+    let distance =
+        |[x, y]: [i32; 2]| i64::from(x - middle[0]).pow(2) + i64::from(y - middle[1]).pow(2);
+    let out = piece.uncarried_by(&body, reach * 3 / 2);
+    out.without(&out.without(standing))
+        .pieces()
+        .iter()
+        .filter_map(|toe| cells_of(toe).max_by_key(|cell| distance(*cell)))
+        .collect()
 }
 
 /// The cell of `field` nearest the mean of its cells, or `None` for an empty one.

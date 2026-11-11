@@ -1242,3 +1242,28 @@ fn no_branch_is_led_back_the_way_it_came() {
         }
     }
 }
+
+#[test]
+fn thin_tips_beside_a_thicker_trunk_run_into_it_rather_than_join_each_other_first() {
+    // Two thin tips 1 mm apart, which would meet half a millimetre down, 3 mm from a thick one.
+    let points = [
+        SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),
+        SupportPoint::new(Vec3::new(13.0, 9.5, 20.0)).in_group(1),
+        SupportPoint::new(Vec3::new(13.0, 10.5, 20.0)).in_group(1),
+    ];
+    let forest = grown_over_plate(&points, &[profile(), thinner()]);
+
+    let thin: Vec<&SupportTree> = forest.iter().filter(|tree| tree.group() == 1).collect();
+    assert_eq!(
+        thin.len(),
+        2,
+        "each thin tip goes to the trunk on its own, not to a joint and back"
+    );
+    for tree in thin {
+        assert!(
+            tree.landing().on_support,
+            "it ends on the thick trunk, got {:?}",
+            tree.landing()
+        );
+    }
+}

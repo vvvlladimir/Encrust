@@ -1125,3 +1125,29 @@ fn a_ceiling_painted_to_be_seen_is_held_sparser_on_the_lightest_tips() {
         "every contact on the painted side is the lightest"
     );
 }
+
+#[test]
+fn every_toe_of_a_foot_is_held_near_its_end() {
+    // A 6 mm sole with four toes 1.2 mm wide reaching 3 mm out of it, 1.6 mm apart.
+    let toes: Vec<Scalar> = (0..4).map(|toe| 10.2 + 1.6 * toe as Scalar).collect();
+    let sole = box_mesh(Vec3::new(10.0, 10.0, 2.0), Vec3::new(16.4, 16.0, 3.0));
+    let foot = toes.iter().fold(sole, |foot, x| {
+        merged(
+            &foot,
+            &box_mesh(Vec3::new(*x, 16.0, 2.0), Vec3::new(x + 1.2, 19.0, 3.0)),
+        )
+    });
+    let contacts = supports_for(&foot);
+
+    for x in toes {
+        let end = Vec2::new(x + 0.6, 19.0);
+        let nearest_mm = contacts
+            .iter()
+            .map(|contact| (contact.truncate() - end).length())
+            .fold(Scalar::INFINITY, Scalar::min);
+        assert!(
+            nearest_mm <= 1.0,
+            "the toe at x = {x} mm is held within 1 mm of its end, the nearest is {nearest_mm} mm"
+        );
+    }
+}

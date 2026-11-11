@@ -350,3 +350,63 @@ fn a_foot_dragged_aside_stands_its_trunk_straight_on_a_knee_at_45_degrees() {
         "the neck {neck} leans down to the knee {knee} at 45 degrees"
     );
 }
+
+/// Whether every strut of `tree` under its heads leans no more than 45 degrees, and its trunk
+/// stands straight over its foot.
+fn upright_below_its_heads(tree: &crate::SupportTree) -> bool {
+    let nodes = tree.nodes();
+    let struts = tree
+        .struts()
+        .filter(|(child, _)| !nodes[*child].is_leaf())
+        .all(|(child, parent)| {
+            let lean = nodes[child].position - nodes[parent].position;
+            lean.truncate().length() <= lean.z.abs() + 1e-3
+        });
+    let trunk = tree.root().position - tree.landing().base;
+    struts && trunk.truncate().length() < 1e-3
+}
+
+#[test]
+fn a_foot_dragged_far_leans_its_support_no_more_than_45_degrees() {
+    let model = cube();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = beside(&model, 20.0);
+
+    let moved = carried(
+        &tree,
+        &[Part::Foot],
+        Vec3::new(60.0, 0.0, 0.0),
+        &placed,
+        &profile(),
+    )
+    .expect("a foot dragged into clear air stands as far out as a 45 degree lean reaches");
+
+    assert!(
+        upright_below_its_heads(&moved),
+        "no strut lies flatter than 45 degrees, got {:?}",
+        moved.nodes()
+    );
+    assert!(
+        moved.landing().base.x > tree.landing().base.x + 5.0,
+        "the foot still went the way it was dragged, got {}",
+        moved.landing().base
+    );
+}
+
+#[test]
+fn a_support_with_a_strut_lying_flat_does_not_fit() {
+    let model = cube();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let mut tree = beside(&model, 20.0);
+    let root = tree.root().position;
+    tree.stand_on_knee(Vec3::new(root.x + 20.0, root.y, 2.0), tree.root().radius_mm);
+    tree.move_landing(Vec3::new(root.x + 20.0, root.y, 0.0));
+
+    assert!(
+        !fits(&tree, &placed, &profile()),
+        "a strut 20 mm across for {} mm down is no support",
+        root.z - 2.0
+    );
+}

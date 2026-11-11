@@ -49,12 +49,32 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
     .trimmed(if root.is_leaf() { head_mm } else { 0.0 });
 
     struts
+        && upright(tree)
         && clear(placed, &trunk)
         && (landing.on_model
             || landing.in_plate
             || foot_clear(placed, landing.pad_centre(), profile))
         && sound(tree, Profiles::single(profile), placed)
 }
+
+/// Whether no strut of `tree` under its heads leans past [`MAX_LEAN_PER_DROP`] and a trunk on
+/// the plate stands straight over its foot, as growth builds them (ADR 0437).
+fn upright(tree: &SupportTree) -> bool {
+    let nodes = tree.nodes();
+    let struts = tree
+        .struts()
+        .filter(|(child, _)| !nodes[*child].is_leaf())
+        .all(|(child, parent)| {
+            let lean = nodes[child].position - nodes[parent].position;
+            lean.truncate().length() <= lean.z.abs() * MAX_LEAN_PER_DROP + LEAN_SLACK_MM
+        });
+    let landing = tree.landing();
+    let trunk = (tree.root().position - landing.base).truncate().length();
+    struts && (landing.on_model || landing.in_plate || trunk < LEAN_SLACK_MM)
+}
+
+/// How far past a 45-degree lean a strut may run, mm: float noise from the model's transform.
+const LEAN_SLACK_MM: Scalar = 1e-3;
 
 /// The nearest point of the model to `at`, in plate coordinates, for a tip that must keep touching
 /// what it holds; `None` if nowhere near or the surface is painted out (ADR 0093).
@@ -191,15 +211,15 @@ fn knee_over_foot(
         let radius_mm = tree.root().radius_mm;
         tree.stand_on_knee(tree.root().position, radius_mm);
     }
-    let reach_mm = (top - base).truncate().length();
     let lowest_mm = PLATE_Z_MM + profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM;
-    let z = (top.z - reach_mm / MAX_LEAN_PER_DROP)
-        .max(lowest_mm)
-        .min(top.z);
-    tree.move_node(
-        tree.root_index(),
-        inverse.transform_point3(Vec3::new(base.x, base.y, z)),
-    );
+    // A foot dragged further than a 45-degree lean reaches stops where it does.
+    let across = (base - top).truncate();
+    let most_mm = (top.z - lowest_mm).max(0.0) * MAX_LEAN_PER_DROP;
+    let across = across.clamp_length_max(most_mm);
+    let base = top.truncate() + across;
+    tree.move_landing(inverse.transform_point3(base.extend(0.0)));
+    let z = (top.z - across.length() / MAX_LEAN_PER_DROP).min(top.z);
+    tree.move_node(tree.root_index(), inverse.transform_point3(base.extend(z)));
 }
 
 /// How near straight over its foot a root must stand to be the knee a drag moves with it, mm.

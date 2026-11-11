@@ -345,7 +345,10 @@ grid of a quarter of that into the gaps the rim's supports opened, both keeping 
 quarters of a spacing from what is taken; anchoring is what lets the coverage check thin a
 slope to one support per place rather than one per layer. A piece too small for two
 supports gets one at its middle, where a corner would leave it a lever, so sampling never
-returns nothing (ADR 0329). An island is sampled closer
+returns nothing (ADR 0329). A toe — what of the piece sticks out more than one and a half
+`end_reach` (a third of the spacing) past the piece opened by a disc of that radius — gets
+one more at its cell furthest from the piece's middle, held unless a support stands within
+`end_reach` of it: a support at the toe's root holds its end only as a lever (ADR 0435). An island is sampled closer
 than an overhang, by its area, as the profile's `[islands]` says: as shipped, under 2.4 mm²
 at 13/18 of the spacing, under 3.2 mm² at 15/18, and at the spacing itself above that, each
 keeping three quarters of its own spacing clear. An automatic profile takes the two areas
@@ -551,7 +554,8 @@ Families are grown thickest first, and the struts and trunks a family has stood 
 carriers for the families after it (ADR 0248): while those merge, a front may run into a
 carrier at least 0.05 mm wider than itself — by one strut within its own branch angle and
 half its merge distance, at the highest point it reaches — in the same heap its merges
-with other fronts sit in.
+with other fronts sit in, and ahead of every one of them, so a front goes straight to a
+thicker support rather than to a joint and from there back to it (ADR 0436).
 Such a front is a tree whose `Landing` is that point with `on_support` beside `on_model`,
 so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
 carrier. A tree built as a small pillar carries only as wide as that, and its trunk
@@ -629,7 +633,9 @@ A press picks a part and the same drag carries it, by the step the cursor takes 
 plane through it facing the camera, measured from where the cursor was pressed and not from
 the part's middle; everything else picked takes the same step. A step the model refuses
 whole is tried again as its run across the plate and then as its rise, so a part slides
-along what it touches instead of stopping.
+along what it touches instead of stopping. No edit leaves a strut under a head leaning past
+45 degrees or a trunk on the plate off the vertical: `fits` refuses it, and a foot dragged
+further than a 45-degree lean from its knee reaches stops there (ADR 0437).
 
 A tip held alone is not slid by a step but aimed, like a new support: `tip_carried` puts
 it where the cursor's ray meets its model, or on the surface nearest the cursor at the
