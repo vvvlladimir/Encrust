@@ -250,6 +250,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0425](0425-auto-places-contacts-as-sparsely-as-a-tip-holds.md) | Place Auto's contacts 3.3 mm apart, past 45 degrees, on 1.0 mm pillars | Accepted; the 3.3 mm under a level face is superseded by 0426 |
 | [0426](0426-auto-holds-a-ceiling-3-mm-apart-and-steadies-on-thin-supports.md) | Hold Auto's ceilings 3.0 mm apart, and steady a part on thin supports | Accepted |
 | [0427](0427-auto-holds-the-painted-side-sparser-on-its-lightest-tips.md) | Hold the side painted to be seen sparser, on Auto's lightest tips | Accepted |
+| [0428](0428-sweep-a-head-from-past-its-seat.md) | Sweep a head, and test a drawn tip, from past the seat its rim finds | Accepted |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

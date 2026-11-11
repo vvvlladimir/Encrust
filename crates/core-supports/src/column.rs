@@ -12,6 +12,7 @@ use crate::pad::{PadCut, pad_clear, pad_cut};
 
 mod room;
 use room::roomier;
+pub(crate) use room::seat_mm;
 
 /// Plate coordinates put the plate surface at z = 0; see `docs/architecture.md`.
 pub(crate) const PLATE_Z_MM: Scalar = 0.0;
@@ -345,7 +346,8 @@ pub(crate) fn landing_within(
     };
 
     let height = contact.z - landing.pillar_bottom_z(profile);
-    if height <= MIN_PILLAR_HEIGHT_MM {
+    // A head shortened to the room above the foot leaves exactly the shortest pillar.
+    if height < MIN_PILLAR_HEIGHT_MM - SURFACE_EPSILON_MM {
         return None;
     }
     let body = Beam {
@@ -406,7 +408,7 @@ fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 
 }
 
 /// Whether the head from `contact` to `neck`, its pin then widening to the pillar, meets
-/// nothing once it is a hair off the face with outward normal `normal` it leaves.
+/// nothing once it is a hair past its seat on the face with outward normal `normal` it leaves.
 fn head_clear(
     placed: &Placed,
     contact: Vec3,
@@ -416,7 +418,13 @@ fn head_clear(
 ) -> bool {
     let axis = neck - contact;
     let pin_mm = pin_mm(profile.contact_radius_mm(), axis, normal);
-    let off_mm = pin_mm + 10.0 * SURFACE_EPSILON_MM;
+    // The face may rise under the rim of a seated tip; the head starts past that seat.
+    let seat_mm = seat_mm(placed, contact, normal, profile.contact_radius_mm()).unwrap_or(0.0)
+        / axis
+            .normalize_or_zero()
+            .dot(normal)
+            .max(MAX_HEAD_LEAN_DEG.to_radians().cos());
+    let off_mm = pin_mm + seat_mm + 10.0 * SURFACE_EPSILON_MM;
     let head = Beam {
         from: contact + axis.normalize_or_zero() * off_mm.min(axis.length()),
         to: neck,

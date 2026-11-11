@@ -3,7 +3,7 @@ use super::head::ground_normal;
 use super::tube::{RING_EPSILON_MM, Ring, Tube};
 use super::{Style, strut, trunk};
 use crate::clear::{Beam, clear};
-use crate::column::{SURFACE_EPSILON_MM, face_normal};
+use crate::column::{SURFACE_EPSILON_MM, face_normal, seat_mm};
 use crate::group::Profiles;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
@@ -17,6 +17,8 @@ pub(crate) struct Body {
     pub group: u16,
     pub tube: Tube,
     pub meets_top: Option<Vec3>,
+    /// How far that face rises under the rim of the tip towards the tube, mm (ADR 0428).
+    pub seat_mm: Scalar,
     /// The point whose tip the tube carries from its contact, for a tube that starts at one.
     pub point: Option<usize>,
     /// The face's normal and how far down the axis it is met, millimetres: the tube
@@ -46,6 +48,10 @@ pub(crate) fn bodies(tree: &SupportTree, profiles: Profiles, placed: &Placed) ->
             Body {
                 group: drawn_in[child],
                 meets_top: leaf.then(|| style.face.unwrap_or(tube.direction)),
+                seat_mm: style
+                    .face
+                    .filter(|_| leaf)
+                    .map_or(0.0, |face| seat(placed, &tube, face)),
                 point: nodes[child].point.filter(|_| leaf),
                 meets_bottom: None,
                 tube,
@@ -76,6 +82,10 @@ fn trunk_body(tree: &SupportTree, profile: &SupportProfile, style: Style, placed
     Body {
         group: tree.group(),
         meets_top: root.is_leaf().then(|| style.face.unwrap_or(tube.direction)),
+        seat_mm: style
+            .face
+            .filter(|_| root.is_leaf())
+            .map_or(0.0, |face| seat(placed, &tube, face)),
         point: root.point.filter(|_| root.is_leaf()),
         meets_bottom: (landing.on_model && !landing.on_support).then(|| {
             let ground = style.ground.unwrap_or(-tube.direction);
@@ -83,6 +93,11 @@ fn trunk_body(tree: &SupportTree, profile: &SupportProfile, style: Style, placed
         }),
         tube,
     }
+}
+
+/// How far the face with outward normal `face` rises under the rim of the tip `tube` starts with.
+fn seat(placed: &Placed, tube: &Tube, face: Vec3) -> Scalar {
+    seat_mm(placed, tube.top, face, radius_at(&tube.rings, 0.0)).unwrap_or(0.0)
 }
 
 impl Style {
@@ -144,14 +159,14 @@ pub(super) fn body_clear(placed: &Placed, body: &Body) -> bool {
         .meets_bottom
         .map_or(last.along_mm, |(_, face_mm)| face_mm.min(last.along_mm));
     let from_mm = match body.meets_top {
-        Some(face) => match leaves(rings, body.tube.direction, face, start, end) {
+        Some(face) => match leaves(rings, body.tube.direction, face, (start, end), body.seat_mm) {
             Some(along) => along,
             None => return false,
         },
         None => start,
     };
     let to_mm = match body.meets_bottom {
-        Some((face, _)) => match leaves(rings, -body.tube.direction, face, end, start) {
+        Some((face, _)) => match leaves(rings, -body.tube.direction, face, (end, start), 0.0) {
             Some(along) => along,
             None => return false,
         },
@@ -177,13 +192,13 @@ pub(super) fn body_clear(placed: &Placed, body: &Body) -> bool {
 }
 
 /// How far along the axis, `from_mm` towards `to_mm`, a body leaving the face with outward normal
-/// `face` towards `away` stands a graze off its plane, or `None` if it never does.
+/// `face` towards `away` stands a graze off its plane raised by `seat_mm`, or `None` if it never does.
 pub(super) fn leaves(
     rings: &[Ring],
     away: Vec3,
     face: Vec3,
-    from_mm: Scalar,
-    to_mm: Scalar,
+    (from_mm, to_mm): (Scalar, Scalar),
+    seat_mm: Scalar,
 ) -> Option<Scalar> {
     let off = away.dot(face);
     if off <= 0.0 {
@@ -196,7 +211,7 @@ pub(super) fn leaves(
     while gone <= span {
         let along = toward.mul_add(gone, from_mm);
         let radius_mm = (radius_at(rings, along) - GRAZE_MM).max(0.0);
-        if gone * off >= radius_mm.mul_add(slant, GRAZE_MM) {
+        if gone * off >= radius_mm.mul_add(slant, GRAZE_MM + seat_mm) {
             return Some(along);
         }
         gone += LEAVING_STEP_MM;

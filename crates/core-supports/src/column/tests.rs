@@ -1,6 +1,9 @@
 use super::*;
-use crate::fixtures::{box_mesh, columns_on, landing_on, profile, ramp, under_a_gap_over_a_bar};
-use core_geometry::{Bvh, Mesh, Quat, Transform};
+use crate::Profiles;
+use crate::fixtures::{
+    box_mesh, columns_on, landing_on, meshed, profile, ramp, trees_on, under_a_gap_over_a_bar,
+};
+use core_geometry::{Bvh, Mesh, Quat, Transform, diagnose};
 
 /// A wall filling 0..1 on x, standing on the plate.
 fn wall() -> Mesh {
@@ -187,6 +190,27 @@ fn the_light_preset_stands_a_support_under_a_part_at_its_own_lift() {
         "the pad, the flare and the top segment have to stand inside the {} mm this \
              profile lifts a part by",
         profile.z_lift_mm
+    );
+}
+
+#[test]
+fn a_part_a_millimetre_over_the_plate_stands_on_a_pad_and_a_short_head() {
+    // The head is cut to the room over the foot, which leaves the shortest pillar exactly.
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let model = box_mesh(Vec3::new(-3.0, -3.0, 1.0), Vec3::new(3.0, 3.0, 2.0));
+    let points = [SupportPoint::new(Vec3::new(0.0, 0.0, 1.0))];
+    let profiles = Profiles::single(&profile);
+    let trees = trees_on(&points, &model, Transform::default(), profiles);
+    let tree = trees.first().expect("a support stands under the part");
+    assert!(
+        !tree.landing().on_model,
+        "on its own pad on the plate, landed at {}",
+        tree.landing().base
+    );
+    let mesh = meshed(&trees, profiles);
+    assert!(
+        diagnose(&mesh).is_closed(),
+        "the short support is drawn closed"
     );
 }
 

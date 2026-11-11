@@ -38,7 +38,8 @@ steep, and failing that run on one strut straight onto the model under it — on
 that looks up at it, so a contact inside the model is not run out through its skin. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Only the tip may meet the model: the whole head, contact to pillar
-width, is swept from a hair past its pin, and a support whose head meets the model there,
+width, is swept from a hair past its pin and past the seat the face rises to under its rim
+(ADR 0428), and a support whose head meets the model there,
 or rises so nearly straight up that a trunk from its neck would come down on its own
 contact, is not placed: `columns` leaves it out and the panel counts it with those that have
 no room to stand (ADR 0339). First it is moved to the nearest spot of a face looking down
@@ -71,7 +72,7 @@ wider than its distance to either end, half a radius apart; a ball is measured a
 each face the `Bvh` offers, exactly, on the plate (ADR 0337). Once a family has grown, each
 tree is held to its drawn bodies: `mesher::bodies` hands back the tubes the mesher sweeps,
 and `sound` tests each ring-to-ring frustum, a 0.05 mm graze narrower, from where the
-tube stands that graze off the face its tip — or the foot it stands on the part with —
+tube stands that graze off the face its tip, past its seat (ADR 0428) — or the foot it stands on the part with —
 was built to meet. A merged tree whose own branches fail stands those tips alone and
 grows the rest again; one whose trunk or an inner strut fails is split at its lowest
 joint and each half grown again (ADR 0337), and after three rounds what still fails is
