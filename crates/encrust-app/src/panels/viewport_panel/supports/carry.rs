@@ -108,17 +108,12 @@ pub(in crate::panels::viewport_panel) fn carried_ghost(window: &Window) -> Optio
     })
 }
 
-/// Shows a closed hand while a carry has hold, and one that says no while what is held may not
-/// stand where the cursor puts it, so the refusal does not rest on colour alone.
+/// Shows a closed hand while a carry has hold; a refusal is told by the plate beside the cursor,
+/// which a refusing cursor glyph would cover.
 pub(in crate::panels::viewport_panel) fn show_carrying(ctx: &egui::Context, window: &Window) {
-    let Some(carry) = &window.tools.supports.carry else {
-        return;
-    };
-    ctx.set_cursor_icon(if carry.refused.is_some() {
-        egui::CursorIcon::NotAllowed
-    } else {
-        egui::CursorIcon::Grabbing
-    });
+    if window.tools.supports.carry.is_some() {
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+    }
 }
 
 /// Starts the drag again from where what is held now stands, on the plane `level` asks for,

@@ -574,7 +574,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the way the cursor goes on screen, the point you took staying under the cursor, or hold Alt
   to move it level with the plate. The cursor turns to a hand over a part you can take. It
   follows the cursor everywhere; where it would run into the model or lean too far it turns red
-  and the cursor says no and names why beside it (touches the model, leans too far, no room for
+  and a plate beside the cursor names why (touches the model, leans too far, no room for
   the foot, no surface to hold); let go there it stays where it last could stand. A tip slides
   over the model's surface, and a joint moved aside drops as far as its branches need. A foot
   on the model slides over it as you move, and stands on a face up to 75° as a grown one may; a

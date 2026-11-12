@@ -227,7 +227,8 @@ track. With no stack it reads *No layers*.
   colour (text colour for the circle); for a move, a 3 point dot at the start, a dashed line
   to the pivot, and the arrow's line through the start at 45 %. Size labels clear the rings.
 - **Refused carry:** while a carried support may not stand where the cursor puts it, a
-  plate in `danger` 36 right and 22 below the cursor names why in one short phrase.
+  plate in `danger` 36 right and 22 below the cursor names why in one short phrase; the
+  cursor stays the closed hand, so no glyph covers the plate.
 - **View tools:** Frame the view, Plate grid, See through, As printed, Perspective, as 26
   squares in one card; the on ones washed.
 - **Notices:** each a card 40 tall: glyph in its colour (`warn` warning, `danger`
