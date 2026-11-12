@@ -40,19 +40,22 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect, row: Option<Rect>
     let room = clear;
     let clear = clear.intersect(viewport);
     let cube = view_cube::ui(ui, window, cube_corner(clear, row), clear);
-    // Centred under the tool row, so it keeps clear of the cube on both sides.
-    let inset = (clear.right() - cube.left() + theme::FLOAT_GAP).min(clear.width() / 2.0);
     let beside_mask = *window.mode == Mode::Preview;
-    hint_bar::ui(
-        ui,
-        window,
-        clear.shrink2(egui::vec2(inset, 0.0)),
-        row,
-        beside_mask,
-    );
+    let hints = hint_room(clear, row, cube.left() - theme::FLOAT_GAP);
+    hint_bar::ui(ui, window, hints, row, beside_mask);
     let column = view_column::ui(ui, window, room);
     let beside = room.with_max_x((column.left() - theme::FLOAT_GAP).max(room.left()));
     stage_notice::ui(ui, window, beside, middle(stage));
+}
+
+/// The hint bar's room in `clear`: centred under the tool `row`, which stays put while the
+/// inspector is away, and kept left of `cube_left` on both sides.
+fn hint_room(clear: Rect, row: Option<Rect>, cube_left: f32) -> Rect {
+    let centre = row.map_or(clear.center().x, |row| row.center().x);
+    let half = (centre - clear.left())
+        .min(cube_left.min(clear.right()) - centre)
+        .max(0.0);
+    clear.with_min_x(centre - half).with_max_x(centre + half)
 }
 
 /// The middle of the stage the user sees, the layer strip left out: where notices centre.
@@ -162,6 +165,15 @@ mod tests {
         );
         assert_eq!(cube_corner(clear, row(fits + 1.0)), pos2(800.0, 70.0));
         assert_eq!(cube_corner(clear, None), pos2(800.0, 70.0));
+    }
+
+    #[test]
+    fn hints_centre_under_the_row_with_the_inspector_put_away() {
+        let clear = Rect::from_min_max(pos2(8.0, 70.0), pos2(800.0, 600.0));
+        let row = Rect::from_min_max(pos2(300.0, 8.0), pos2(700.0, 68.0));
+        let hints = hint_room(clear, Some(row), 780.0);
+        assert_eq!(hints.center().x, 500.0, "under the row's centre at 500");
+        assert_eq!(hints.right(), 780.0, "clear of the cube at 780");
     }
 
     #[test]

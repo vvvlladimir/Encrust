@@ -28,7 +28,7 @@ card stands 8 from the stage's edge and from the next card unless a row says oth
 | Plate card | under the models card, standing on the stage's foot | 272, grows upward |
 | Prepare row | 8 over the plate card, in Prepare while the plate holds a model | as wide as the plate card; 32 tall, a run too |
 | Layer strip | the stage's right edge, its full height | 64 |
-| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
+| Hint bar | 8 below the tool row, kept 8 clear of the view cube on both sides: centred under the tool row while it names what each key does, the keys alone flush with the row's left when that does not fit, both staying put while the inspector is put away, always beside the mask | as wide as what it says, at most that room; one line, 28 tall |
 | View cube | 8 left of the models card, Home under it while the pointer is on it: centred on the tool row's height while 8 clear of it, never above the stage, else 8 under it | 80 square; Home 28, 4 under it |
 | View tools | 8 left of the plate card, its foot level with the card's | a column of 26 squares |
 | Notices | centred on the stage left of the layer strip, moved in to stay between the inspector and the view tools, 16 above the foot; in Preview the same, over both halves | at most 440 wide each and never wider than that room, 6 apart, newest nearest the foot |
