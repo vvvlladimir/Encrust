@@ -448,6 +448,8 @@ impl eframe::App for SlicerApp {
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
         }
+        #[cfg(target_os = "macos")]
+        crate::app_menu::follow(ui.ctx(), &mut self.machine);
         #[cfg(not(target_os = "macos"))]
         let _ = frame;
         self.take_files(ui.ctx());

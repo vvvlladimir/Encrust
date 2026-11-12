@@ -3,6 +3,8 @@
 //! is here.
 
 mod app;
+#[cfg(target_os = "macos")]
+mod app_menu;
 mod arrange;
 mod boolean;
 mod camera;

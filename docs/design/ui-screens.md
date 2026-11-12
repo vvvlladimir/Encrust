@@ -43,6 +43,10 @@ buttons; in the centre the printer ring (while a printer prints; idle ones are r
 the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
+On macOS the system's menu under the app's name is AppKit's own, not drawn here (ADR 0444):
+About Encrust · Settings…, Check for Updates… · Services ▸ · Hide Encrust, Hide Others, Show
+All · Quit Encrust.
+
 A menu of the bar is a `menu_row` list 264 wide on `raised` ringed in `line`, the open title
 on `hover`. Rows 28, glyph column 18, keys right in `text_low`; a hairline between groups; a
 row that cannot run is `text_low`, the first of its group with why under it. File: New plate,

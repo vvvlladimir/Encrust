@@ -983,6 +983,9 @@ address in a video player).
 
 - **Find (⌘K):** search every tool, action and model on the plate by name, found under
   those three headings.
+- **macOS menu Encrust:** About Encrust shows the version that runs, also after an update.
+  Settings… and Check for Updates… open Settings, the second on Updates while it looks.
+  Services, Hide, Show All and Quit work as in any Mac app, in the window's language.
 - **Tool row:** sits centred at the top of the stage between the inspector and the models,
   no wider than its tools need, each tool's name under its icon while there is room, icons alone when there is not. Drag
   the inspector's edge to set its width; double-click it to go back to the default. The

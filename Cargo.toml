@@ -123,10 +123,11 @@ transform-gizmo-egui = "0.11"
 meshoptimizer-rs = { version = "0.2", default-features = false, features = ["std"] }
 bytemuck = { version = "1.25", features = ["derive"] }
 rfd = "0.17"
-# The window's own buttons on macOS, moved onto the top bar's centre line (ADR 0217). All
-# three are already in the tree through eframe and winit.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSButton", "NSControl", "NSResponder", "NSView", "NSWindow"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+# The window's own buttons on macOS, moved onto the top bar's centre line (ADR 0217), and its
+# application menu (ADR 0444). All are already in the tree through eframe and winit.
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSEvent", "NSMenu", "NSMenuItem", "NSResponder", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSDictionary", "NSGeometry", "NSString"] }
 raw-window-handle = "0.6"
 winresource = { version = "0.1", default-features = false }
 windows = { version = "0.62", default-features = false, features = ["std", "ApplicationModel", "Foundation_Collections", "Services_Store", "System"] }

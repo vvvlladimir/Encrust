@@ -969,6 +969,18 @@ job-thread-stopped-plugs = the thread cutting the plugs stopped without finishin
 job-thread-stopped-drill = the thread cutting the holes stopped without finishing
 job-model-changed = { $name } changed while it was being worked on, so the result was dropped
 
+## app_menu.rs
+# The menu macOS shows under the app's name; its rows use the words macOS gives them.
+
+app-menu-about = About Encrust
+app-menu-settings = Settings…
+app-menu-check-for-updates = Check for Updates…
+app-menu-services = Services
+app-menu-hide = Hide Encrust
+app-menu-hide-others = Hide Others
+app-menu-show-all = Show All
+app-menu-quit = Quit Encrust
+
 ## panels/title_bar.rs
 
 menu-file = File

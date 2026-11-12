@@ -1009,6 +1009,17 @@ job-thread-stopped-plugs = поток вырезания пробок остан
 job-thread-stopped-drill = поток вырезания отверстий остановился, не закончив
 job-model-changed = пока шла работа, { $name } изменили, поэтому результат отброшен
 
+## app_menu.rs
+
+app-menu-about = О программе Encrust
+app-menu-settings = Настройки…
+app-menu-check-for-updates = Проверить обновления…
+app-menu-services = Службы
+app-menu-hide = Скрыть Encrust
+app-menu-hide-others = Скрыть остальные
+app-menu-show-all = Показать все
+app-menu-quit = Выйти из Encrust
+
 ## panels/title_bar.rs
 
 menu-file = Файл
