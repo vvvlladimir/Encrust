@@ -177,6 +177,8 @@ pub struct Supports {
     /// How far the model was stood off the plate to make room for them, millimetres.
     pub lifted_mm: Scalar,
     pub contacts: usize,
+    /// Where each contact touches the model, plate millimetres: what `--merge-supports` names.
+    pub contacts_at_mm: Vec<[Scalar; 3]>,
     pub standing: usize,
     pub trunks: usize,
     pub no_room_for: usize,
@@ -281,6 +283,7 @@ impl PartReport {
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
                 contacts: report.contacts.len(),
+                contacts_at_mm: report.contacts.iter().map(|at| at.to_array()).collect(),
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),

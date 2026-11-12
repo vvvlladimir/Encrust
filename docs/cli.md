@@ -89,7 +89,9 @@ left corner as the model prints, after placement and the lift its supports give 
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
 `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
-`supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model, and
+`supports.contacts_at_mm` lists where each contact touches the model: the points
+`--merge-supports` names supports by. `supports.no_room_at_mm` lists where each contact
+`no_room_for` counts touches the model, and
 `supports.no_room_why` why, in the same order: `head-blocked` (its head would run into the
 model), `faces-up` (it sits on a face looking up) or `no-ground` (nothing in reach to stand on).
 No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
@@ -367,6 +369,20 @@ A model is stood off the plate by the profile's own `z_lift_mm`, and by its raft
 thickness on top when it has one, before anything is put under it, the way the window's **Lift off the plate** does it: a part sitting on the plate has no
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
+
+`--merge-supports X,Y,Z;X,Y,Z` joins the supports whose contacts lie within half a millimetre
+of those points into one tree on one trunk, as the window's **Merge into one** does, and grows
+the rest again beside it (ADR 0440). Each use is one merge; repeat it for more. The points are
+plate millimetres as `supports.contacts_at_mm` in `--json` lists them, so a first run finds
+them and a second, with the same flags, merges. A point near no contact, points naming one
+support, or a merge the model is in the way of, a strut would lean too far for or the trunk
+has nowhere to stand for, stops the run and says which:
+
+```sh
+encrust estimate model.stl --supports medium --json > found.json
+encrust slice model.stl --printer elegoo-mars-4-ultra --supports medium \
+  --merge-supports "-2.65,-1.75,9.97;-1.75,0.05,9.97" -o model.goo
+```
 
 `--recipe ID|PATH` on `slice`, `estimate` and `batch` takes each model through a recipe step
 by step (`docs/design/recipes.md`, ADR 0403): a built-in one by id, one of yours by file

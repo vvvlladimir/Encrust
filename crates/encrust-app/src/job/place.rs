@@ -323,6 +323,7 @@ fn plan_of(task: &SupportTask, sizing: Option<&Sizing>) -> SupportPlan {
                 shapes: Box::new(shapes.clone()),
             },
             cavity: false,
+            merges: Vec::new(),
         },
         None => SupportPlan::of(task.profile.clone()),
     }

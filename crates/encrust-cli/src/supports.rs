@@ -1,5 +1,5 @@
 //! Supports from the command line, the window's sequence without hand placement: find contacts,
-//! columns, trunks, mesh, merge. See `docs/design/supports.md`.
+//! columns, trunks, mesh, merge, and Merge into one by points. See `docs/design/supports.md`.
 
 use std::fmt;
 use std::ops::Range;
@@ -11,7 +11,20 @@ use core_geometry::{Mesh, Scalar, Vec3};
 use core_supports::Unstood;
 use core_volume::Drilled;
 
-use crate::hollowing::HollowReport;
+use crate::hollowing::{HollowReport, point};
+
+/// The points one `--merge-supports` names supports by, plate mm: two or more.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergePoints(pub Vec<Vec3>);
+
+/// `X,Y,Z;X,Y,Z…` as the points of one merge.
+pub fn merge_points(text: &str) -> Result<MergePoints, String> {
+    let points = text.split(';').map(point).collect::<Result<Vec<_>, _>>()?;
+    if points.len() < 2 {
+        return Err(format!("a merge names two supports or more, got {text:?}"));
+    }
+    Ok(MergePoints(points))
+}
 
 /// What automatic placement put under one model.
 pub struct SupportReport {

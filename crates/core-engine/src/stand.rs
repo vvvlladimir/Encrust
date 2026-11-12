@@ -14,9 +14,12 @@ use crate::error::EngineError;
 use crate::strengthen::{Underside, strengthen};
 
 mod lift;
+mod merge;
 
 use lift::lift_of;
 pub use lift::{Lift, planned_lift};
+pub(crate) use merge::merge_refusal;
+use merge::merged_near;
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -36,6 +39,9 @@ pub enum SupportShapes {
 pub struct SupportPlan {
     pub shapes: SupportShapes,
     pub cavity: bool,
+    /// Each a merge, as the window's Merge into one: points, plate mm, naming the supports by
+    /// their contacts once they stand (ADR 0440).
+    pub merges: Vec<Vec<Vec3>>,
 }
 
 impl SupportPlan {
@@ -44,6 +50,7 @@ impl SupportPlan {
         Self {
             shapes: SupportShapes::One(Box::new(profile)),
             cavity: false,
+            merges: Vec::new(),
         }
     }
 
@@ -56,6 +63,7 @@ impl SupportPlan {
                 shapes: Box::new(shapes),
             },
             cavity: false,
+            merges: Vec::new(),
         })
     }
 
@@ -145,7 +153,7 @@ pub fn stand_under(
     let (lifted_mm, surface, inner) = touched(model, lift_mm)?;
     let bvh = Arc::new(Bvh::build(&surface));
     let needs = needs_under(&surface, &bvh, inner, plan, (layer_height_mm, true))?;
-    grown(lifted_mm, &surface, &bvh, &needs, plan)
+    grown(lifted_mm, &surface, &bvh, (&needs, &plan.merges), plan)
 }
 
 /// A support under each of `contacts` alone, plate mm on the model where it stands, nothing
@@ -162,7 +170,7 @@ pub fn stand_at(
         .iter()
         .map(|contact| Need::new(*contact, Reason::POINT))
         .collect();
-    grown(lifted_mm, &surface, &bvh, &needs, plan)
+    grown(lifted_mm, &surface, &bvh, (&needs, &[]), plan)
 }
 
 /// The same for a model left standing on the plate: supports go only under what hangs
@@ -205,7 +213,7 @@ pub fn stand_seated(
         }
         lifted_mm += up.z;
     }
-    grown(lifted_mm, &surface, &bvh, &needs, plan)
+    grown(lifted_mm, &surface, &bvh, (&needs, &plan.merges), plan)
 }
 
 /// The model lifted `lift_mm` clear of the plate with its cuts, then how far it moved, the
@@ -259,7 +267,7 @@ fn grown(
     lifted_mm: Scalar,
     surface: &Mesh,
     bvh: &Bvh,
-    needs: &[Need],
+    (needs, merges): (&[Need], &[Vec<Vec3>]),
     plan: &SupportPlan,
 ) -> Result<Stood, EngineError> {
     let points: Vec<SupportPoint> = needs
@@ -282,6 +290,7 @@ fn grown(
     let profiles = Profiles::new(&table).ok_or(EngineError::EmptyPlate)?;
     let columns = columns(&points, &placed, profiles);
     let trees = grow(&columns, &placed, profiles);
+    let trees = merged_near(trees, (merges, &contacts), &columns, &placed, profiles)?;
     let facing = facing(surface, bvh, &contacts);
     Ok(Stood {
         lifted_mm,

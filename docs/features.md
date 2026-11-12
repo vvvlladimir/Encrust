@@ -598,6 +598,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Pick two or more supports of one model and **Merge into one** joins them into a single tree
   on one trunk, each tip kept however many there are; where the model is in the way or the
   trunk has nowhere to stand, the supports stay as they were and the stage says why.
+  `encrust --merge-supports` does the same by the contacts `--json` lists.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports

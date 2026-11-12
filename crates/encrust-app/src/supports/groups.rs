@@ -109,6 +109,7 @@ impl SupportTool {
                         shapes: Box::new(shapes.clone()),
                     },
                     cavity: false,
+                    merges: Vec::new(),
                 },
                 None => SupportPlan::of(self.profile_for(object).clone()),
             };

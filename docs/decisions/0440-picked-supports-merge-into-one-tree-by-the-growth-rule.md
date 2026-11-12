@@ -29,6 +29,11 @@ frozen tree of them with `core_supports::merged`:
 
 The tree replaces the picked ones; what stood on them goes back to growth (ADR 0431, 0439).
 
+**The command line merges by points.** `--merge-supports X,Y,Z;X,Y,Z` names supports by the
+contact within 0.5 mm of each point, as `--json` lists contacts; the engine merges them once
+grown, by the same `merged`, and grows the rest again beside the tree (`grow_beside`). A point
+near no contact, points naming one support, or a refusal stops the run with an `EngineError`.
+
 ## Consequences
 
 One click turns a cluster into one support with no stray joint flatter than 45 degrees. A
