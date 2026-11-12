@@ -1,4 +1,4 @@
-# 0436. Run a front into a thicker support before it joins another front
+# 0434. Run a front into a thicker support before it joins another front
 
 - **Status:** Proposed
 - **Date:** 2026-11-11

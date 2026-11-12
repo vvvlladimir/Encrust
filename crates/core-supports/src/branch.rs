@@ -34,7 +34,7 @@ use sound::{only_sound, stand_small_pillars_on_supports};
 const SAME_PLACE_MM: Scalar = 1e-4;
 
 /// The most branches that meet at one joint: past three a joint is a star of levers on one
-/// point, and the next tip gets a joint of its own lower down (ADR 0432).
+/// point, and the next tip gets a joint of its own lower down (ADR 0430).
 const MOST_BRANCHES: usize = 3;
 
 /// Merges the tips of `columns` (plate coordinates) into shared trunks, highest meeting point
@@ -44,7 +44,7 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
 }
 
 /// [`grow`] beside `standing` (plate), frozen supports a thinner front may run into as into a
-/// thicker group's, never grown again (ADR 0444).
+/// thicker group's, never grown again (ADR 0439).
 pub fn grow_beside(
     columns: &[Column],
     standing: &[SupportTree],

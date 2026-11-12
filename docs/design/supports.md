@@ -39,7 +39,7 @@ that looks up at it, so a contact inside the model is not run out through its sk
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Only the tip may meet the model: the whole head, contact to pillar
 width, is swept from a hair past its pin and past the seat the face rises to under its rim
-(ADR 0428), and a support whose head meets the model there,
+(ADR 0426), and a support whose head meets the model there,
 or rises so nearly straight up that a trunk from its neck would come down on its own
 contact, has no straight head (ADR 0339). First it is moved to the nearest spot of a face looking down
 within 0.3 mm across and 0.05 mm up or down where a head has room, on rings 0.05 mm apart
@@ -47,7 +47,7 @@ every 30 degrees — out to its radius and a ring where that brings its whole ci
 face, which a contact with room moves for too (ADR 0339); failing that, in a profile with small pillars it has no head, and `grow`
 holds it with a small pillar (ADR 0340); without them its head is turned 15 or 30 degrees, no
 further than 33 off its face, then cut to 3/4 and 1/2, and failing that its contact steps along
-its face, past no wall, to the nearest spot within 1 mm where a straight head fits (ADR 0431).
+its face, past no wall, to the nearest spot within 1 mm where a straight head fits (ADR 0429).
 Only then is it left out, and counted by why. Everything below
 is measured from the neck, not from the contact.
 
@@ -62,7 +62,7 @@ itself would report the contact's own face at zero distance.
 Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column; exactly that much stands.
 A contact under the foot and that pillar runs its head straight down into the plate instead,
 whichever way its face leans: cut flat there,
-no foot, `in_plate` set (ADR 0429). A lone tip whose pillar is shorter than its head is drawn as
+no foot, `in_plate` set (ADR 0427). A lone tip whose pillar is shorter than its head is drawn as
 one tube from its contact, with no joint at its neck. A point under the plate is kept — the model may move up —
 and the inspector reports standing against placed.
 
@@ -72,7 +72,7 @@ is run onto the model: out to where a 25 mm strut at the profile's lean ends, ev
 
 A column no tree carries once its family has grown is grown again on its own, from a head
 turned or cut as above, then from a contact stepped along its face, and the first that stands
-sound is kept (`rescue`, ADR 0431). What is still left out is named by `lost`: no room for a
+sound is kept (`rescue`, ADR 0429). What is still left out is named by `lost`: no room for a
 head, on a face looking up, or nothing to stand on.
 
 ## Checking a body against the model
@@ -83,7 +83,7 @@ wider than its distance to either end, half a radius apart; a ball is measured a
 each face the `Bvh` offers, exactly, on the plate (ADR 0337). Once a family has grown, each
 tree is held to its drawn bodies: `mesher::bodies` hands back the tubes the mesher sweeps,
 and `sound` tests each ring-to-ring frustum, a 0.05 mm graze narrower, from where the
-tube stands that graze off the face its tip, past its seat (ADR 0428) — or the foot it stands on the part with —
+tube stands that graze off the face its tip, past its seat (ADR 0426) — or the foot it stands on the part with —
 was built to meet. A merged tree whose own branches fail stands those tips alone and
 grows the rest again; one whose trunk or an inner strut fails is split at its lowest
 joint and each half grown again (ADR 0337), and after three rounds what still fails is
@@ -139,7 +139,7 @@ tube has one side count, and the trunk runs down through it — the same overlap
 every joint (ADR 0041).
 
 Every foot is bevelled at the plate: a round foot is one trapezoid from its rim in to
-`rim - height`, its wall at 45 degrees off the plate (ADR 0434), a skate's footprint is inset from its top, and the trunk stops
+`rim - height`, its wall at 45 degrees off the plate (ADR 0432), a skate's footprint is inset from its top, and the trunk stops
 `FOOT_BITE` inside the foot rather than showing through the sole. A pad meeting the plate
 on its widest edge is the pad a blade cannot get under (ADR 0044, ADR 0130). A tapering
 foot keeps its rim as a middle ring `FOOT_BEVEL × height` up, so it narrows towards the
@@ -150,7 +150,7 @@ to the pillar above and the pad below, that rises as far as it widens (ADR 0341)
 its height is `(lower - pillar) / 2` rather than a field of its own (ADR 0238), it is drawn with the pillar's facets rather than the pad's, and it sinks
 `FOOT_BITE` into the pad the way the trunk does. Its top ring is the trunk's width where it
 ends, which a trunk narrowing upwards makes higher than `(lower - pillar) / 2`; with less room
-it is a smaller whole quarter circle, and it never rises round a head (ADR 0429). It never reaches
+it is a smaller whole quarter circle, and it never rises round a head (ADR 0427). It never reaches
 above the root it widens, never narrower than the trunk standing in it, and never wider than the narrowest ring of
 the pad under it (ADR 0130).
 
@@ -230,7 +230,7 @@ lowest contact of a lifted part can stand at all is arithmetic: the pad, the top
 and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened
 rather than allowed to eat the body's room. Every shipped preset lifts 2 mm, enough
 for its pad, flare and shortest pillar; a contact lower than its top segment gets a shortened
-neck (ADR 0434).
+neck (ADR 0432).
 
 ## Keeping the mesh closed
 
@@ -348,7 +348,7 @@ supports gets one at its middle, where a corner would leave it a lever, so sampl
 returns nothing (ADR 0329). A toe — what of the piece sticks out more than one and a half
 `end_reach` (a third of the spacing) past the piece opened by a disc of that radius — gets
 one more at its cell furthest from the piece's middle, held unless a support stands within
-`end_reach` of it: a support at the toe's root holds its end only as a lever (ADR 0435). An island is sampled closer
+`end_reach` of it: a support at the toe's root holds its end only as a lever (ADR 0433). An island is sampled closer
 than an overhang, by its area, as the profile's `[islands]` says: as shipped, under 2.4 mm²
 at 13/18 of the spacing, under 3.2 mm² at 15/18, and at the spacing itself above that, each
 keeping three quarters of its own spacing clear. An automatic profile takes the two areas
@@ -403,7 +403,7 @@ dropped as the run climbs — which is what keeps the run's memory to the suppor
 still hold something.
 
 **What each contact holds.** Every contact comes back with its `Reason`, which an
-automatic profile sizes it by (ADR 0325, 0424): an island with its area on the layer it
+automatic profile sizes it by (ADR 0325, 0423): an island with its area on the layer it
 begins on — a part that begins at a point has none — and an island or overhang with its
 share of the model above its layer, or a support that steadies a part. The model above is known only at the top of the stack,
 so the climb keeps a graph of pieces beside it (`load.rs`): a piece that is the only child
@@ -459,10 +459,10 @@ most — is taken first, and only when the two are within
 neither strut is longer than `max_strut_length_mm`, each strut's body clears the model,
 and the meeting point can land at least as far under it as its longest branch is long: a
 merge saves the height of the trunk under its joint, and a lower one is levers on a point
-(ADR 0432). Where the higher front reaches the lower one's column at
+(ADR 0430). Where the higher front reaches the lower one's column at
 or above it, the meeting point is the lower front itself and only the higher one leans:
 it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
-at its own height further off (ADR 0338), unless three branches already hang there (ADR 0432). A pair refused for its bodies or its
+at its own height further off (ADR 0338), unless three branches already hang there (ADR 0430). A pair refused for its bodies or its
 landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
 first, then twice as far each time, until the joint stands lower than its branches are long: what blocks a strut is
 mostly the part right beside the tips, and dropping past it is how two columns under a
@@ -476,7 +476,7 @@ a vertical trunk to their landing. A joint is put where its first two branches m
 met later beyond one of them would lead that branch back the way it came: once merging is done,
 such a branch runs straight on to the joint under, within the lean, length and clearance every
 group keeps, where that joint holds under three and stands over the plate as high as the branch
-is long, and a joint left with one branch is straightened the same way (ADR 0430, 0432). A merged front that stands on the model is split again
+is long, and a joint left with one branch is straightened the same way (ADR 0428, 0430). A merged front that stands on the model is split again
 where every tip under it stands on the model as a small pillar of its own — from its neck,
 or straight from its contact — since two thin struts snap off where a joint between two
 faces has to be cut away (ADR 0340). `branching.enabled = false` gives back step 7a's column exactly.
@@ -552,11 +552,11 @@ mesh of the heaviest head hanging from it, and the trunk and foot in the tree's.
 
 Families are grown thickest first, and the struts and trunks a family has stood are
 carriers for the families after it (ADR 0248), as are those of every frozen support, which
-`grow_beside` is handed and never grows again (ADR 0444): while those merge, a front may run into a
+`grow_beside` is handed and never grows again (ADR 0439): while those merge, a front may run into a
 carrier at least 0.05 mm wider than itself — by one strut within its own branch angle and
 half its merge distance, at the highest point it reaches — in the same heap its merges
 with other fronts sit in, and ahead of every one of them, so a front goes straight to a
-thicker support rather than to a joint and from there back to it (ADR 0436).
+thicker support rather than to a joint and from there back to it (ADR 0434).
 Such a front is a tree whose `Landing` is that point with `on_support` beside `on_model`,
 so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
 carrier. A tree built as a small pillar carries only as wide as that, and its trunk
@@ -570,7 +570,7 @@ past 45 degrees (ADR 0340). `grow` hands the forest back in group order.
 What a trunk carries is counted across the whole growth: `Carriers` counts the tips of each
 tree it takes on standing on an earlier one, every merge starts from that count, small pillars
 are seated one at a time on the highest seat with room, and a rescue running into a support
-filled before it is grown once more (ADR 0444).
+filled before it is grown once more (ADR 0439).
 
 Any group can be dropped but the last, and the one after the first takes its place and the
 raft with it. A secondary click on a group's row builds the whole group to another saved
@@ -616,7 +616,7 @@ A rebuild then maps it back into plate coordinates and meshes it with the grown 
 `ObjectSupports::trees` hands over the grown trees first and the frozen ones after them,
 and `frozen_of` says which is which. The model keeps the placement its frozen trees last stood
 at: moved, or turned about the plate's up, each foot on the plate stands on it again; tilted or
-resized, they go back to growth with their tips kept as points (`follow`, ADR 0444).
+resized, they go back to growth with their tips kept as points (`follow`, ADR 0439).
 
 Growing is the costly half of a rebuild — about a second for fifteen hundred heavy tips —
 and meshing the cheap one, so the grown trees are kept apart from the meshes and grown again
@@ -630,7 +630,7 @@ aimed at as balls 1.6 pillars wide and win a tie with the stick they sit on. A r
 goes through nothing takes the part it passes nearest on screen, within a `Slack` the
 viewport sets to six points of screen at whatever depth the part stands: a pillar seen from
 far away is a point wide, and a part the ray does go through always wins over one it only
-passes (ADR 0439). The part a press would take is drawn fainter than what is held before the
+passes (ADR 0435). The part a press would take is drawn fainter than what is held before the
 button goes down, under an open hand.
 A part met further along the ray than the first printed surface is behind that model and is
 not taken, hover or press: `grab_along` answers how far along the part stands. The ray is
@@ -639,20 +639,21 @@ hides what is behind it, so a part inside a cavity the section opens is taken (A
 
 A press picks a part and the same drag carries it on the plane square to the camera through
 the point the cursor took, so that point stays under the cursor; with Alt the plane is level
-with the plate, which carries it in depth (ADR 0439). Every frame carries from how the
+with the plate, which carries it in depth (ADR 0435). Every frame carries from how the
 supports stood at the press, by where the cursor is on that plane less where it was pressed,
 so taking the cursor back takes them back;
 everything picked takes the same step. What is held follows the cursor whatever the model
 says: drawn in its group's tint where it may stand, in danger's with a no-entry cursor where
 it may not, and the scene keeps it where it last could, which is where a release leaves it.
 No edit leaves a strut under a head leaning past 45 degrees, a trunk on the plate off the
-vertical (ADR 0437), or a trunk run into a support leaning past 45 degrees (ADR 0443).
+vertical (ADR 0435), or a trunk run into a support leaning past 45 degrees (ADR 0431).
 
 The root, the trunk and the foot are one handle, the column. Across the plate its foot
 moves, its trunk stands upright over it on a knee what it carries leans down to at 45
 degrees, no further than that lean reaches, and it stands on whatever `landing` finds under
 it, model or plate — a column on the model slides whole unless its root is the neck a head
-hangs from, since no edit turns a head off its face but the hand holding it (ADR 0443); up and down its top moves, unless a head hangs there, no higher than its
+hangs from, since no edit turns a head off its face but the hand holding it (ADR 0435); up
+and down its top moves, unless a head hangs there, no higher than its
 branches allow at 45 degrees and no lower than the shortest pillar, and a foot never rises.
 A strut hanging from the root carries the column too. Any other joint or strut moves its own
 nodes, and a joint carried aside drops to the height its branches allow.
@@ -672,9 +673,9 @@ from the neck again, so the whole of it follows the cursor.
 A support standing on another — a branch ended on its trunk or a strut, a small pillar run
 into it — is frozen with it when it is taken hold of, and carried with it: `standing_on`
 finds it by its landing lying on one of the axes growth offers, and `followed` seats it
-at the same share of the same axis once the step is taken, its tips staying put (ADR 0433),
+at the same share of the same axis once the step is taken, its tips staying put (ADR 0431),
 or where that leans past 45 degrees at the highest point of that axis growth would seat it
-(ADR 0443). What it stands on is frozen with it too, and a frozen support left standing on no
+(ADR 0431). What it stands on is frozen with it too, and a frozen support left standing on no
 other frozen one, its host removed or grown again, goes back to growth (`thaw_unseated`).
 
 **Remove these supports** takes away what is picked and everything it holds up

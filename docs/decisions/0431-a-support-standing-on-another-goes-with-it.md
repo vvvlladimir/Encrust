@@ -1,4 +1,4 @@
-# 0433. A support standing on another goes where that one is carried
+# 0431. A support standing on another goes where that one is carried
 
 - **Status:** Proposed
 - **Date:** 2026-11-11
@@ -14,22 +14,32 @@ it where it was: branches ending in the air, or in a trunk that had gone.
 ## Decision
 
 - **Taking hold of a support freezes what stands on it with it**, directly or through
-  another: `ModelSupports::freeze_with_riders`, the riders found by `standing_on`.
+  another, and what it stands on, down to the plate: `ModelSupports::freeze_with_riders`,
+  the riders found by `standing_on`.
 - **The link is found, not stored.** A support stands on another when its landing lies on
   one of that tree's axes, within 0.01 mm: the struts a front may meet and the trunk, as
   `branch::carriers` offers them. It is kept as which axis and how far down it, as a share.
 - **A carried support takes them along.** `followed` puts each at the same share of the same
   axis of the carried tree, then those standing on it in turn. Only its landing moves; its
-  tips and joints stay, so its trunk bends to meet the new seat.
-- **A step that sinks one of them is refused whole**, as a step sinking the carried support
-  is (ADR 0095). One that did not fit before the step does not hold the step back.
+  tips and joints stay, so its trunk bends to meet the new seat. Where that seat would lean
+  its trunk past 45 degrees it is seated instead where growth would seat it on that axis: the
+  highest point within its branch lean, half its merge distance and its longest strut
+  (`branch::meeting_on`).
+- **A frozen support landing on a support, but on no frozen one, goes back to growth**
+  (`ModelSupports::thaw_unseated`), which the window asks after removing, regrowing or
+  growing again a frozen one.
+- **A step that sinks or flattens one of them is refused whole**, as a step sinking the
+  carried support is (ADR 0095). One that did not fit before the step does not hold the
+  step back.
 
 ## Consequences
 
 Carrying a trunk, its foot, a joint or a tip keeps every branch on it attached. A touch
 freezes more than was touched, so those supports no longer regrow with the rest; **Grow these
-again** hands them back as before. A support taken away still leaves what stood on it in the
-air. The link is lost if an axis moves more than 0.01 mm outside a drag.
+again** hands them back as before. A support taken away hands what stood on it back to
+growth, which may stand it elsewhere. A host carried further than its riders can follow
+within growth's reach is refused as `Leans`. The link is lost if an axis moves more than
+0.01 mm outside a drag.
 
 ## Alternatives considered
 

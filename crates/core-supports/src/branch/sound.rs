@@ -12,7 +12,7 @@ use core_geometry::{FastMap, Vec2, Vec3};
 use rayon::prelude::*;
 
 /// Runs every small pillar on the model into a wider support with room in reach, no further off
-/// than the part under it, thin all the way up; asked last of all groups (ADR 0251, 0444).
+/// than the part under it, thin all the way up; asked last of all groups (ADR 0251, 0439).
 pub(super) fn stand_small_pillars_on_supports(
     forest: &mut [SupportTree],
     carriers: &mut Carriers,

@@ -23,7 +23,7 @@ pub struct AutoProfile {
     /// [`IslandSpacing`] and at the third.
     pub island_area_mm2: [f32; AUTO_SIZES - 1],
     /// The least share of the model above it one island or overhang contact holds, mm³, held
-    /// by the second shape and by the third. See `docs/decisions/0424`.
+    /// by the second shape and by the third. See `docs/decisions/0423`.
     #[serde(default = "default_share_mm3")]
     pub share_mm3: [f32; AUTO_SIZES - 1],
     /// The least resin a step puts out in its one layer, mm³, to be held as a step at
@@ -151,7 +151,7 @@ fn default_share_mm3() -> [f32; AUTO_SIZES - 1] {
     [SHARE_MM3[0], SHARE_MM3[1]]
 }
 
-/// Auto's shares as shipped, until a print sets them (ADR 0424).
+/// Auto's shares as shipped, until a print sets them (ADR 0423).
 const SHARE_MM3: [f32; AUTO_SIZES - 1] = [100.0, 500.0];
 
 /// How many of `least` a measure of `value` reaches, which is the shape it is held by.

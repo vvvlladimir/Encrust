@@ -74,7 +74,7 @@ impl ModelSupports {
             kept
         });
         if gone > 0 {
-            // What grew standing on what went grows again (ADR 0444).
+            // What grew standing on what went grows again (ADR 0439).
             self.points_changed();
         }
         gone

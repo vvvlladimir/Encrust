@@ -80,7 +80,7 @@ fn tips_under(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_sup
 }
 
 /// How steady `trees` stand, as one line: joints lower than their longest branch, branches at a
-/// joint, the longest lean, and how far a landing is off the middle of its tips (ADR 0432).
+/// joint, the longest lean, and how far a landing is off the middle of its tips (ADR 0430).
 fn steadiness(trees: &[SupportTree]) -> String {
     let (mut joints, mut low, mut most_branches, mut longest_lean_mm) = (0, 0, 0, 0.0_f32);
     let mut offsets_mm = Vec::new();

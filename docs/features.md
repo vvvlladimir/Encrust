@@ -506,7 +506,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   strengthens a tip left with less than half again what it holds: Auto builds it one size
   heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
   underside, low enough to share the load before it peaks. Supports you placed are never
-  changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.30 mm.
+  changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.27 mm.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps
@@ -540,7 +540,7 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
   A support that still has no room is grown again on its own, from a turned head or a
   contact stepped up to 1 mm along its face. One that still finds none is left out of the
-  print, never forced into the model. The panel gives one warning line for each reason: no
+  print, never forced into the model. The tooltip of Grow gives one line for each reason: no
   room for its tip, on a face that looks up, or nothing to stand on. `encrust` prints the same
   counts and lists each reason in `--json`.
 - Supports are drawn round, 12 sides to a pillar shaded smooth, with rounded joints, and
@@ -570,35 +570,34 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
-- Pick two or more supports of one model and **Merge into one** joins them into a single tree
-  on one trunk, each tip kept; where the model is in the way or the trunk has nowhere to stand,
-  the supports stay as they were and the stage says why.
-  Shift-click adds a part to what is picked, or takes it back out. Drag to move what is
-  picked the way the cursor goes on screen, the point you took staying under the cursor, or
-  hold Alt to move it level with the plate. The cursor turns to a hand over a part you can
-  take. It follows the cursor everywhere; where it would run into the model or lean too far it turns red and the
-  cursor says no and names why beside it (touches the model, leans too far, no room for the
-  foot, no surface to hold); let go there it stays where it last could stand. A tip slides over the
-  model's surface, and a joint moved aside drops as far as its branches need. A foot on the
-  model slides over it as you move, and stands on a face up to 75° as a grown one may; a
+  Shift-click adds a part to what is picked, or takes it back out. Drag to move what is picked
+  the way the cursor goes on screen, the point you took staying under the cursor, or hold Alt
+  to move it level with the plate. The cursor turns to a hand over a part you can take. It
+  follows the cursor everywhere; where it would run into the model or lean too far it turns red
+  and the cursor says no and names why beside it (touches the model, leans too far, no room for
+  the foot, no surface to hold); let go there it stays where it last could stand. A tip slides
+  over the model's surface, and a joint moved aside drops as far as its branches need. A foot
+  on the model slides over it as you move, and stands on a face up to 75° as a grown one may; a
   head never turns off the face it holds, so a column whose head sits on its trunk bends on a
-  knee instead. Over an
-  edge the foot keeps to the plate or the model it stood on until that is 2 mm away, so it
-  switches once instead of jumping back and forth. Before a
-  move is refused, the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk, its foot and the joint on top move as one: the trunk
-  stays upright and what it carries leans down to it at 45 degrees, onto the plate or the
-  model, and goes no further than that lean reaches; no drag leaves a strut flatter than
-  45 degrees. Supports that stand on the one you move go with it, climbing its trunk where
-  they would lean further than 45 degrees, and taking hold of one freezes what it stands on
-  too. Removing a support, or growing it again, grows again the ones that stood on it, so
-  none is left in the air. A tip dragged off a joint other branches share takes a neck of its
-  own and leaves them as they were, and no drag turns a head more than 33° off the face it
-  holds. Supports grown later may stand on the ones you edited, and are grown again if those
-  go. Raising or turning a model keeps its edited supports on the plate; tilting or resizing
-  it grows them again from the same contacts. A small pillar moves by
-  where it touches: whichever part you drag, its tip goes along the face it holds, and it is
+  knee instead. Over an edge the foot keeps to the plate or the model it stood on until that is
+  2 mm away, so it switches once instead of jumping back and forth. Before a move is refused,
+  the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk,
+  its foot and the joint on top move as one: the trunk stays upright and what it carries leans
+  down to it at 45 degrees, onto the plate or the model, and goes no further than that lean
+  reaches; no drag leaves a strut flatter than 45 degrees. Supports that stand on the one you
+  move go with it, climbing its trunk where they would lean further than 45 degrees, and taking
+  hold of one freezes what it stands on too. Removing a support, or growing it again, grows
+  again the ones that stood on it, so none is left in the air. A tip dragged off a joint other
+  branches share takes a neck of its own and leaves them as they were, and no drag turns a head
+  more than 33° off the face it holds. Supports grown later may stand on the ones you edited,
+  and are grown again if those go. Raising or turning a model keeps its edited supports on the
+  plate; tilting or resizing it grows them again from the same contacts. A small pillar moves
+  by where it touches: whichever part you drag, its tip goes along the face it holds, and it is
   built again there as Grow would build it, a small pillar where one fits and a whole support
   where none does, never half of each. Dragged out from under every face, it stays put.
+- Pick two or more supports of one model and **Merge into one** joins them into a single tree
+  on one trunk, each tip kept however many there are; where the model is in the way or the
+  trunk has nowhere to stand, the supports stay as they were and the stage says why.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports

@@ -100,9 +100,8 @@ impl Load {
         total
     }
 
-    /// What each of `marks` carries, cubic millimetres: the model above it shared with every
-    /// contact at or above it on its node and on what grew out of it, split as
-    /// [`Load::totals`] splits resin (ADR 0424).
+    /// What each of `marks` carries, mm³: the model above it shared with the contacts at or above
+    /// it on its node and what grew from it, split as [`Load::totals`] splits resin (ADR 0423).
     pub(crate) fn shares(&self, marks: &[Mark]) -> Vec<Scalar> {
         let totals = self.totals();
         let mut on_node: Vec<Vec<f64>> = vec![Vec::new(); self.nodes.len()];

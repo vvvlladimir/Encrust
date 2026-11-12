@@ -5,7 +5,7 @@ use crate::space::Space;
 use crate::tree::SupportTree;
 
 /// Moves node `node` of `tree` by `step`, plate mm, which bends the struts meeting there, then
-/// settles it as low as its branches need (ADR 0438).
+/// settles it as low as its branches need (ADR 0435).
 pub(super) fn carry_node(tree: &mut SupportTree, node: usize, space: Space, step: Vec3) {
     shift(tree, node, space, step);
     settle(tree, node, space);

@@ -1,4 +1,4 @@
-# 0429. Stand a part near the plate on a short head, and fillet a trunk at its own width
+# 0427. Stand a part near the plate on a short head, and fillet a trunk at its own width
 
 - **Status:** Accepted
 - **Date:** 2026-11-11

@@ -1,4 +1,4 @@
-# 0435. Hold the end of a toe with a support of its own
+# 0433. Hold the end of a toe with a support of its own
 
 - **Status:** Proposed
 - **Date:** 2026-11-11

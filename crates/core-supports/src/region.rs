@@ -84,7 +84,7 @@ impl Blocked {
 }
 
 /// The faces the user painted as the side meant to be seen, where an automatic run puts its
-/// contacts further apart and lightest (ADR 0427).
+/// contacts further apart and lightest (ADR 0425).
 #[derive(Debug)]
 pub struct Shown {
     patch: Bvh,

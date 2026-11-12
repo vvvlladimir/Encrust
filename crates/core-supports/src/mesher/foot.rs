@@ -15,7 +15,7 @@ pub const FOOT_TAPER: Scalar = 0.45;
 pub(super) const FOOT_BEVEL: Scalar = 0.6;
 
 /// How far the pad's wall drops and pulls in at the plate, mm: forty-five degrees off it, over
-/// the whole height of a straight pad and `FOOT_BEVEL` of a tapering one (ADR 0434).
+/// the whole height of a straight pad and `FOOT_BEVEL` of a tapering one (ADR 0432).
 pub fn foot_bevel_mm(profile: &SupportProfile) -> Scalar {
     let height = profile.bottom.platform_thickness_mm;
     if profile.bottom.shape.tapers() {

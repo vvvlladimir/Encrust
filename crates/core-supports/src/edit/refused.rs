@@ -1,4 +1,4 @@
-/// Why a carried support may not stand where the hand put it (ADR 0441).
+/// Why a carried support may not stand where the hand put it (ADR 0437).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Refused {
     /// A body would run into the model or keep less than its clearance from it.

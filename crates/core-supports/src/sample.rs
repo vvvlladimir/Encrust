@@ -68,15 +68,14 @@ pub fn end_reach(spacing: i32) -> i32 {
 }
 
 /// The end of each toe or spike of one unsupported piece, as cells: a part narrower than twice
-/// [`end_reach`], whose end a support at its root holds only as a lever; see ADR 0435.
+/// [`end_reach`], whose end a support at its root holds only as a lever; see ADR 0433.
 pub fn sample_ends(piece: &Field, room: &Field, inset: i32, spacing: i32) -> Vec<[i32; 2]> {
     let (clear, narrow) = standing_room(piece, room, inset);
     ends(piece, &clear.with(&narrow), end_reach(spacing.max(1)))
 }
 
-/// The ends of the parts of `piece` narrower than twice `reach`: what sticks out past one and a
-/// half `reach` from the piece opened by it, which a square's corner does not, each taken at
-/// its cell of `standing` furthest from the piece's middle.
+/// The ends of `piece`'s parts narrower than twice `reach`, sticking out 1.5 `reach` past it opened
+/// by `reach`, each at its `standing` cell furthest from the piece's middle (ADR 0433).
 fn ends(piece: &Field, standing: &Field, reach: i32) -> Vec<[i32; 2]> {
     let body = piece.shrunk(reach);
     let Some(middle) = middle_of(piece).filter(|_| !body.is_empty()) else {

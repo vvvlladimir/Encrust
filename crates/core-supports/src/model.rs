@@ -37,10 +37,10 @@ pub struct ModelSupports {
     /// The supports the hand has taken hold of, kept as the trees they are, in the
     /// model's own space. Nothing regrows them; see `docs/decisions/0095`.
     frozen: Vec<SupportTree>,
-    /// The frozen trees a hand is carrying, which the meshes leave out (ADR 0438).
+    /// The frozen trees a hand is carrying, which the meshes leave out (ADR 0435).
     lifted: Vec<usize>,
     /// Where the model stood when the frozen trees last stood under it, for a rebuild at
-    /// another placement to stand them again (ADR 0444); `None` until a first rebuild.
+    /// another placement to stand them again (ADR 0439); `None` until a first rebuild.
     frozen_at: Option<Transform>,
     /// The two patches as geometry, apart from the columns so a stroke shows in its own frame;
     /// columns take too long to rebuild per frame.

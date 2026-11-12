@@ -55,9 +55,8 @@ fn fit(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> Result<
     }
 }
 
-/// Whether `after`, carried from `before` (both model space), may stand: it [`fits`], or
-/// `before` did not and nothing the carry moved runs into the model or leans too far (ADR 0438);
-/// else why not (ADR 0441).
+/// Whether `after`, carried from `before` (model space), may stand: it [`fits`], or `before` did
+/// not and nothing moved hits the model or leans too far; else why not (ADR 0435, 0437).
 pub fn allowed(
     before: &SupportTree,
     after: &SupportTree,
@@ -87,7 +86,7 @@ pub fn allowed(
 }
 
 /// Whether every head `now` keeps from `was` (plate), same tip on same neck, leans off its face
-/// no further than [`MAX_HEAD_LEAN_DEG`] or than it already did (ADR 0339, 0443).
+/// no further than [`MAX_HEAD_LEAN_DEG`] or than it already did (ADR 0339, 0435).
 fn heads_kept(was: &SupportTree, now: &SupportTree, placed: &Placed) -> Result<(), Refused> {
     let square_cos = |tree: &SupportTree, tip: usize, neck: usize| {
         let (contact, neck) = (tree.nodes()[tip].position, tree.nodes()[neck].position);
@@ -116,7 +115,7 @@ fn heads_kept(was: &SupportTree, now: &SupportTree, placed: &Placed) -> Result<(
 const HEAD_SLACK_COS: Scalar = 1e-4;
 
 /// Whether the strut from `child` down to `parent` of `tree` (plate) keeps out of the model and,
-/// under a head, leans no further than [`MAX_LEAN_PER_DROP`] (ADR 0437).
+/// under a head, leans no further than [`MAX_LEAN_PER_DROP`] (ADR 0435).
 fn strut_fit(
     tree: &SupportTree,
     child: usize,
@@ -144,7 +143,7 @@ fn strut_fit(
 }
 
 /// Whether the trunk of `tree` (plate) keeps out of the model, stands straight over a foot with
-/// room on the plate (ADR 0437) or runs into a support within 45 degrees (ADR 0443).
+/// room on the plate (ADR 0435) or runs into a support within 45 degrees (ADR 0431).
 fn trunk_fit(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> Result<(), Refused> {
     let root = tree.root();
     let landing = tree.landing();
@@ -194,10 +193,8 @@ pub fn on_model(placed: &Placed, at: Vec3) -> Option<Vec3> {
     (!placed.blocks_at(closest)).then_some(closest)
 }
 
-/// `tree` (model space, as the answer) carried by `step`, plate mm, tips pulled back onto the
-/// nearest surface, or `None` when its column has nothing to stand on near there; `last` is
-/// what the foot stood on as the carry last left it. [`allowed`] says whether it may stand there
-/// (ADR 0095, 0438, 0441).
+/// `tree` (model space) carried by `step` (plate mm) from a foot last on `last`, carried tips
+/// back on the surface; `None` with nothing to stand on (ADR 0095, 0435, 0437).
 pub fn carried(
     tree: &SupportTree,
     last: Landing,
@@ -225,7 +222,7 @@ pub fn carried(
 }
 
 /// Tree `index` of `frozen` (model space) with tip `tip` put down at `to` (plate), neck and all,
-/// or why not; a small pillar is grown again there (ADR 0244, 0440, 0442, 0444).
+/// or why not; a small pillar is grown again there (ADR 0244, 0436, 0438, 0439).
 pub fn tip_carried(
     frozen: &[SupportTree],
     index: usize,
@@ -276,7 +273,7 @@ pub fn tip_carried(
 }
 
 /// Moves one part of `tree`, which is kept in the model's own space while the step is a
-/// step across the plate. The root, trunk and foot are one column (ADR 0438).
+/// step across the plate. The root, trunk and foot are one column (ADR 0435).
 fn carry_part(
     tree: &mut SupportTree,
     part: Part,

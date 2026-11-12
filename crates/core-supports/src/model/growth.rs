@@ -146,9 +146,8 @@ impl ModelSupports {
         self.revision
     }
 
-    /// Takes on trees grown from a [`Growth`], and answers whether they were still wanted:
-    /// nothing they grow from has changed since it was taken. Their meshes hold unless the
-    /// frozen trees have been edited meanwhile.
+    /// Takes on trees grown from a [`Growth`] if nothing they grow from changed since; answers
+    /// whether it took them. Their meshes hold unless the frozen trees were edited meanwhile.
     pub fn take_grown(&mut self, grown: Grown) -> bool {
         if grown.revision != self.revision {
             return false;

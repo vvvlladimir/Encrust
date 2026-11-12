@@ -15,7 +15,7 @@ use crate::space::Space;
 use crate::tree::{SupportTree, TreeNode};
 
 /// Trees `picked` of `frozen` (model space) as one support: their trunks joined two at a time,
-/// highest meeting point first, and one trunk from the last joint down (ADR 0445); or why not.
+/// highest meeting point first, and one trunk from the last joint down (ADR 0440); or why not.
 pub fn merged(
     frozen: &[SupportTree],
     picked: &[usize],

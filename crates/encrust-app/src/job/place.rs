@@ -187,6 +187,13 @@ impl SupportTask {
             side: None,
         }
     }
+
+    /// Keeps the faces painted to be seen only while `clean` asks placement to read them (ADR 0425).
+    pub fn shown_only_if(&mut self, clean: bool) {
+        if !clean {
+            self.shown = Region::default();
+        }
+    }
 }
 
 /// Cuts every model of the request and works out where it needs holding up.

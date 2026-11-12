@@ -308,3 +308,23 @@ fn a_support_grown_again_stands_on_a_frozen_one_beside_it_and_off_it_once_that_g
         "and grows again off it once it went"
     );
 }
+
+#[test]
+fn a_flattened_model_thaws_nothing_and_the_check_ends() {
+    let (mut supports, table, _, column) = held_on_the_cube();
+    let profiles = Profiles::new(&table).expect("two groups");
+    let column = supports
+        .freeze_with_riders(column, Transform::default(), profiles)
+        .expect("the column is there to freeze");
+    supports.remove_frozen(column);
+    let flat = Transform {
+        scale: core_geometry::Vec3::new(1.0, 1.0, 0.0),
+        ..Transform::default()
+    };
+
+    assert_eq!(
+        supports.thaw_unseated(flat, profiles),
+        0,
+        "no tip can be taken back into a model scaled flat"
+    );
+}

@@ -9,7 +9,7 @@ pub struct Need {
     /// Sizes heavier than its reason asks, where what it carries proved too much for that.
     pub heavier: u8,
     /// On the side the user painted to be seen: built lightest, and given a neighbour
-    /// rather than a heavier tip (ADR 0427).
+    /// rather than a heavier tip (ADR 0425).
     pub shown: bool,
 }
 
@@ -57,7 +57,7 @@ pub enum Reason {
     /// begins on, `share_mm3` as an overhang's; a part that begins at a point has neither.
     Island { area_mm2: Scalar, share_mm3: Scalar },
     /// An overhang, with `share_mm3` the model above the contact's layer shared out among the
-    /// contacts holding it, its own and every one above it (ADR 0424).
+    /// contacts holding it, its own and every one above it (ADR 0423).
     Overhang { share_mm3: Scalar },
     /// A step, or a face its reach takes in above it, with `new_mm3` the resin the step put out in
     /// its one layer; only a run sizing its supports asks for steps apart (ADR 0326).

@@ -1,4 +1,4 @@
-# 0427. Hold the side painted to be seen sparser, on Auto's lightest tips
+# 0425. Hold the side painted to be seen sparser, on Auto's lightest tips
 
 - **Status:** Accepted
 - **Date:** 2026-11-11
@@ -11,7 +11,7 @@ a pose, was left open: a contact on the painted face still took the spacing and 
 would take anywhere else.
 
 Every contact leaves a mark. How large depends on the tip, and how many on the spacing. Auto
-sizes a tip by its share of the model above it (ADR 0424) and strengthens a tip whose pull
+sizes a tip by its share of the model above it (ADR 0423) and strengthens a tip whose pull
 margin falls under ×1.5 by making it heavier (ADR 0422). Both make the marks on a face larger.
 
 The brush sat in Position, under Auto-orient, behind the Clean surface switch, where nobody

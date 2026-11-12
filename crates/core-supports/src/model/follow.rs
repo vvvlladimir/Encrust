@@ -13,7 +13,7 @@ const UPRIGHT: Scalar = 1e-5;
 
 impl ModelSupports {
     /// Stands the frozen trees again as `transform` now places the model: moved or turned about
-    /// up, feet back on the plate; tilted or resized, back to growth (ADR 0444).
+    /// up, feet back on the plate; tilted or resized, back to growth (ADR 0439).
     pub(super) fn follow(&mut self, transform: Transform, profiles: Profiles) {
         let Some(was) = self.frozen_at.replace(transform) else {
             return;

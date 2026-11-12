@@ -1,6 +1,6 @@
 # 0237. Fit a pad to the room it has, and lift a part by what its support needs
 
-- **Status:** Accepted; the fitting of a pad is superseded by 0239, the 5 mm lift by 0434
+- **Status:** Accepted; the fitting of a pad is superseded by 0239, the 5 mm lift by 0432
 - **Date:** 2026-10-12
 
 ## Context

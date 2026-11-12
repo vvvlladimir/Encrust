@@ -7,10 +7,8 @@ use crate::column::{MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM};
 use crate::space::Space;
 use crate::tree::SupportTree;
 
-/// Carries the column of `tree` by `step`: across the plate its foot, its trunk upright over it
-/// on a knee what it carries leans to at 45 degrees, or on the model the whole column, its foot
-/// sliding along; up and down its top, unless a head hangs there, no higher than its branches
-/// allow and no lower than the shortest pillar.
+/// Carries the column of `tree` by `step`: across, its foot with the trunk upright on a 45-degree
+/// knee, or whole on the model; up and down, its top within its branches and the shortest pillar.
 pub(super) fn carry_column(
     tree: &mut SupportTree,
     space: Space,
@@ -22,7 +20,7 @@ pub(super) fn carry_column(
     if across != Vec3::ZERO && tree.landing().on_model && !holds_a_head(tree) {
         slide_column(tree, space, across);
     } else if across != Vec3::ZERO {
-        // A joint carried rigidly would lean its branches past 45 degrees (ADR 0432, 0437).
+        // A joint carried rigidly would lean its branches past 45 degrees (ADR 0430, 0435).
         let from = space.plate(tree.landing().base);
         move_foot(tree, space, across);
         knee_over_foot(tree, space, from, profile);

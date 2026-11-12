@@ -210,7 +210,7 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
 }
 
 /// `tree` as it is drawn: a lone tip whose pillar is shorter than its head is one tube from the
-/// contact to its foot or the plate, with no joint at its neck to bulge round it (ADR 0429).
+/// contact to its foot or the plate, with no joint at its neck to bulge round it (ADR 0427).
 pub(crate) fn drawn<'a>(tree: &'a SupportTree, profile: &SupportProfile) -> Cow<'a, SupportTree> {
     let landing = tree.landing();
     let [tip, root] = match tree.nodes() {
@@ -352,7 +352,7 @@ fn strut(
 }
 
 /// The head of the tip `node` run whole towards `plate`, where it meets the plate, and cut off
-/// flat there: what a part lower than a pad stands on (ADR 0429).
+/// flat there: what a part lower than a pad stands on (ADR 0427).
 fn into_plate(node: &TreeNode, plate: Vec3, profile: &SupportProfile, style: Style) -> Tube {
     let offset = plate - node.position;
     let length = offset.length();

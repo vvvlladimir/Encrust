@@ -1,4 +1,4 @@
-# 0434. Lift a part 2 mm, on pads bevelled at forty-five degrees
+# 0432. Lift a part 2 mm, on pads bevelled at forty-five degrees
 
 - **Status:** Proposed
 - **Date:** 2026-11-11

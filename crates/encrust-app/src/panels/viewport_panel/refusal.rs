@@ -1,4 +1,4 @@
-//! Why a carried support may not stand where the cursor puts it, beside the cursor (ADR 0441).
+//! Why a carried support may not stand where the cursor puts it, beside the cursor (ADR 0437).
 
 use core_supports::Refused;
 
@@ -34,7 +34,7 @@ pub(super) fn draw_refusal(ui: &egui::Ui, window: &Window, viewport: egui::Rect)
 }
 
 /// What `why` says to the hand.
-pub(crate) fn refusal_reason(why: Refused) -> String {
+fn refusal_reason(why: Refused) -> String {
     match why {
         Refused::Collides => tr!("supports-refused-collides"),
         Refused::Leans => tr!("supports-refused-leans"),

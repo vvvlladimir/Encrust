@@ -1,4 +1,4 @@
-# 0430. Lead no branch back the way it came, and stand a dragged trunk upright
+# 0428. Lead no branch back the way it came, and stand a dragged trunk upright
 
 - **Status:** Accepted
 - **Date:** 2026-11-11

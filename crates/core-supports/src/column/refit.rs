@@ -19,7 +19,7 @@ const SHARES: [Scalar; 3] = [1.0, 0.75, 0.5];
 const NOISE: Scalar = 1e-4;
 
 /// The necks of the heads off `contact` that fit when the one its face sends it along does not,
-/// nearest that one first (ADR 0431).
+/// nearest that one first (ADR 0429).
 pub(crate) fn refitted_necks<'a>(
     placed: &'a Placed<'a>,
     contact: Vec3,
@@ -38,7 +38,7 @@ pub(crate) fn refitted_necks<'a>(
 }
 
 /// The ways and lengths, mm, a head refused along `direction` off a face with outward normal
-/// `normal` is tried at: turned, then shorter, none further off its face or the plumb (ADR 0431).
+/// `normal` is tried at: turned, then shorter, none further off its face or the plumb (ADR 0429).
 fn refits(
     direction: Vec3,
     normal: Vec3,

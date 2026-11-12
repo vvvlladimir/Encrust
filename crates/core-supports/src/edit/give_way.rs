@@ -1,4 +1,4 @@
-use core_geometry::{Scalar, Vec2, Vec3};
+use core_geometry::{Scalar, Vec3, turns};
 use printer_profiles::SupportProfile;
 
 use super::column::lowest_top_mm;
@@ -8,9 +8,8 @@ use crate::placed::Placed;
 use crate::space::Space;
 use crate::tree::SupportTree;
 
-/// `after`, carried from `before` (both model space), with the joints beside what the carry
-/// moved shifted a little where that lets it stand; where no such shift does, why `after` may
-/// not (ADR 0440, 0441).
+/// `after`, carried from `before` (model space), its joints beside what moved shifted where that
+/// lets it stand; else why it may not (ADR 0436, 0437).
 pub fn eased(
     before: &SupportTree,
     after: &SupportTree,
@@ -70,9 +69,8 @@ fn may_give(tree: &SupportTree, node: usize) -> bool {
     is_joint && !is_neck && (node != tree.root_index() || !tree.landing().in_plate)
 }
 
-/// Moves joint `joint` of `tree` to the nearest place, aside or lower and within
-/// [`MOST_GIVE_MM`], where every strut meeting it fits; `None` when none does. A root on the
-/// model is only lowered: its trunk shortens over the foot it has (ADR 0441).
+/// Moves joint `joint` of `tree` within [`MOST_GIVE_MM`] to the nearest place every strut at it
+/// fits, a root on the model only lower; `None` when none does (ADR 0437).
 fn give_way(
     tree: &mut SupportTree,
     joint: usize,
@@ -124,10 +122,7 @@ fn level_shifts(tree: &SupportTree, joint: usize) -> Vec<Vec3> {
             (node.position.truncate() + across - at.truncate()).extend(0.0)
         });
     let rings = RINGS_MM.iter().flat_map(|radius_mm| {
-        (0..RING_DIRECTIONS).map(move |step| {
-            let turn = std::f32::consts::TAU * step as Scalar / RING_DIRECTIONS as Scalar;
-            (Vec2::from_angle(turn) * *radius_mm).extend(0.0)
-        })
+        turns(RING_DIRECTIONS).map(move |way| (way * *radius_mm).extend(0.0))
     });
     leaning
         .chain(rings)

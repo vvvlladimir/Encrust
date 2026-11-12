@@ -1,4 +1,4 @@
-# 0431. Turn a head or step a contact along its face before a support is left out, and say why
+# 0429. Turn a head or step a contact along its face before a support is left out, and say why
 
 - **Status:** Accepted
 - **Date:** 2026-11-11
@@ -20,7 +20,7 @@ lay on the face. A contact stepped at most 0.3 mm (ADR 0329) to find room.
   carries: `HeadBlocked`, where no head fits, turned or not, and a headless tip found nothing;
   `FacesUp`, on a face looking up; `NoGround`, a head that fits with nothing within reach under
   it. `ModelSupports::lost` keeps them with the trees, the engine's `Stood::unheld` carries
-  them, the panel prints one warning line per reason, and the command line prints and
+  them, the tooltip of Grow gives one line per reason, and the command line prints and
   `--json`s them as `no_room_why`.
 - **A refused head is turned, then cut.** `refitted_necks` tries the head 15 and 30 degrees off
   the way its face sends it, every 45 degrees round, then at 3/4 and 1/2 of `[top]`. No head
@@ -43,7 +43,7 @@ This continues ADR 0339's head and its 0.3 mm step, which still come first.
 On the six models the left-out supports fall from 30 to 11, and two models lose none. All 11
 that are left are `HeadBlocked`: faces looking down 0.3 to 0.5 mm over a 78-degree face of the
 same model, where no head fits within a millimetre. Run times stay within noise, 1.3 to 5.5 s a
-model, because `rescue` runs only for what is lost. Each lost tip costs at most 48 head sweeps
+model, because `rescue` runs only for what is lost. Each lost tip costs at most 50 head sweeps
 and 24 spots, each grown and checked once.
 
 A turned head marks its face as a steep face's head already does, up to 9 per cent wider on one

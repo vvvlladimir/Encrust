@@ -3,7 +3,7 @@ use crate::SupportTree;
 
 impl ModelSupports {
     /// Lifts frozen trees `frozen` out of the meshes while a hand carries them, so a step
-    /// meshes only what moved (ADR 0438); none sets them down again, meshed with the rest.
+    /// meshes only what moved (ADR 0435); none sets them down again, meshed with the rest.
     pub fn lift(&mut self, frozen: Vec<usize>) {
         if self.lifted != frozen {
             self.lifted = frozen;

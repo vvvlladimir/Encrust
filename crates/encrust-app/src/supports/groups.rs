@@ -54,7 +54,7 @@ impl SupportTool {
     }
 
     /// Hands back to the automatic run every frozen support of `object` that a removal or a
-    /// regrowth left standing on nothing (ADR 0443); answers how many.
+    /// regrowth left standing on nothing (ADR 0431); answers how many.
     pub fn thaw_unseated(&self, object: &mut SceneObject) -> usize {
         let table = self.table_for(object);
         core_supports::Profiles::new(&table).map_or(0, |profiles| {

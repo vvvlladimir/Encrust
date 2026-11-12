@@ -1,5 +1,5 @@
 # Supports sized by what each one holds: a light one where many share little, a heavy one
-# where a few hold much of the model. See ADR 0325 and 0424.
+# where a few hold much of the model. See ADR 0325 and 0423.
 
 name = "Auto"
 

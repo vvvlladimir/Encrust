@@ -1,6 +1,6 @@
 # 0422. Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm
 
-- **Status:** Accepted; the steadying shape's 0.30 mm tip is superseded by 0426
+- **Status:** Accepted
 - **Date:** 2026-11-11
 
 ## Context
@@ -29,7 +29,7 @@ both, for its lightest and its steadying shapes (ADR 0325, 0326).
   spacing away on an underside facing down, seated no higher than its worst layer and off
   anything blocked. At most three rounds; a round that changes nothing ends it. Supports
   already standing are read as tips of the placing profile and never changed.
-- **Auto's tips** are 0.30, 0.35 and 0.40 mm, its steadying shape 0.30, small pillars alike.
+- **Auto's tips** are 0.30, 0.35 and 0.40 mm, small pillars alike; its steadying shape is thinner (ADR 0424).
   Light stays at 0.30.
 
 ## Consequences

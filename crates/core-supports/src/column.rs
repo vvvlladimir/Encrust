@@ -94,7 +94,7 @@ pub struct Landing {
     #[serde(default)]
     pub on_support: bool,
     /// The head runs straight into the plate at `base`, no foot under it: the part is lower than
-    /// a pad and the shortest pillar. Absent reads as standing on a foot (ADR 0429).
+    /// a pad and the shortest pillar. Absent reads as standing on a foot (ADR 0427).
     #[serde(default)]
     pub in_plate: bool,
 }
@@ -211,9 +211,8 @@ pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> 
         .collect()
 }
 
-/// The column of point `point` of `group`, touching the model at `contact` in plate
-/// coordinates, or why its head cannot leave its face. One with no room for a head even turned
-/// is moved along its face to where it has (ADR 0431).
+/// The column of point `point` of `group` touching the model at `contact` (plate), moved along
+/// its face where no head fits even turned, or why its head cannot leave it (ADR 0429).
 pub(crate) fn column(
     placed: &Placed,
     point: usize,
@@ -393,7 +392,7 @@ pub(crate) fn landing_within(
     stands_clear(placed, &body, profile).then_some(landing)
 }
 
-/// A head ending on the plate at `neck`, sunk into it with no foot (ADR 0429).
+/// A head ending on the plate at `neck`, sunk into it with no foot (ADR 0427).
 fn in_plate(neck: Vec3) -> Landing {
     Landing {
         base: Vec3::new(neck.x, neck.y, PLATE_Z_MM),
@@ -412,7 +411,7 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Opti
 }
 
 /// [`neck_of`], or why the support at `contact` has no head: a head turned or cut to fit
-/// only where no small pillar holds it instead (ADR 0431).
+/// only where no small pillar holds it instead (ADR 0429).
 pub(crate) fn head_of(
     placed: &Placed,
     contact: Vec3,
@@ -466,9 +465,8 @@ pub(crate) fn has_head(contact: Vec3, neck: Vec3) -> bool {
     contact.distance(neck) >= MIN_BODY_MM
 }
 
-/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened rather than
-/// allowed to eat the room the body needs above the plate, or with no room for a foot straight
-/// down onto the plate under it, whichever way its face leans (ADR 0429).
+/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened to leave the
+/// body its room over the plate, or straight down into the plate where no foot fits (ADR 0427).
 fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 {
     neck_along_mm(contact, direction, profile.top.length_mm, profile)
 }

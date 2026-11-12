@@ -23,7 +23,7 @@ mod wanted;
 use standing::Standing;
 use wanted::{Flatness, On, Wanted};
 
-/// How much further apart contacts stand on the side meant to be seen, ADR 0427.
+/// How much further apart contacts stand on the side meant to be seen, ADR 0425.
 const SHOWN_SPACING: Scalar = 1.3;
 
 /// How many supports a part stands steady on: fewer hold it and let it rock on the peel.

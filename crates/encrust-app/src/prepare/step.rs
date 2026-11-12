@@ -80,7 +80,8 @@ impl Going {
             // Drilled where it is decided, in one frame, by `drill_points`.
             Work::DrainPoints { .. } => return Ok(None),
             Work::Supports { profile, side } => {
-                return Self::supports(ids, (profile, *side), doc, machine);
+                let clean = tools.orient.settings.clean_surface;
+                return Self::supports(ids, (profile, *side, clean), doc, machine);
             }
             Work::Scan if hollow.is_empty() => return Ok(None),
             Work::Scan => Self::Scan(DrainTool::scan_on(scene, &hollow, layer_mm)?),
@@ -129,7 +130,7 @@ impl Going {
     /// to hold up inside.
     fn supports(
         ids: &[ObjectId],
-        (profile, side): (&str, Side),
+        (profile, side, clean): (&str, Side, bool),
         doc: &Doc,
         machine: &Machine,
     ) -> Result<Option<Self>> {
@@ -147,7 +148,7 @@ impl Going {
         }
         let built = BuiltTo::of(profile, &slicing.catalogue)?;
         let layer_mm = slicing.layer_height_mm();
-        let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), side)?;
+        let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), (side, clean))?;
         Ok(Some(Self::Supports(job, side, Box::new(built))))
     }
 

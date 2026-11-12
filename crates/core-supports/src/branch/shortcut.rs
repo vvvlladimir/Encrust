@@ -6,7 +6,7 @@ use core_geometry::{Scalar, Vec3};
 
 impl Forest<'_> {
     /// Runs every branch a joint would lead back straight on to the joint under, within every
-    /// group's lean, length and clearance, onto room and height for it (ADR 0430, 0432).
+    /// group's lean, length and clearance, onto room and height for it (ADR 0428, 0430).
     pub(super) fn shortcut(&mut self, placed: &Placed) {
         let reach_per_drop = self.strictest(|profile| profile.branching.reach_per_drop());
         let longest_mm = self.strictest(|profile| profile.branching.max_strut_length_mm);

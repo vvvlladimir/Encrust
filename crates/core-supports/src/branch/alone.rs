@@ -8,7 +8,7 @@ use crate::placed::Placed;
 use crate::tree::SupportTree;
 
 /// What growing builds for point `point` of `group` at `contact` beside `standing`, both plate:
-/// a whole support or a small pillar, never a mix (ADR 0442, 0444).
+/// a whole support or a small pillar, never a mix (ADR 0438, 0439).
 pub(crate) fn grown_alone(
     contact: Vec3,
     point: usize,

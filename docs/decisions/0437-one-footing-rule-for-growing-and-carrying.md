@@ -1,4 +1,4 @@
-# 0441. Growing and carrying stand a foot by one rule, and a refusal says why
+# 0437. Growing and carrying stand a foot by one rule, and a refusal says why
 
 - **Status:** Proposed
 - **Date:** 2026-11-12
@@ -10,7 +10,7 @@ the plate. A carried foot or trunk looked for its footing by the rule growing tr
 (a face no steeper than 45 degrees), while growing falls back to 75 degrees when nothing else
 is left. On a rough surface a step of 1 mm met a steeper face and the support turned red:
 65% of the refusals of a dragged foot or trunk. A joint carried aside could give way only
-when the trunk stood on the plate, so a trunk on the model had nothing to yield (ADR 0440).
+when the trunk stood on the plate, so a trunk on the model had nothing to yield (ADR 0436).
 Seven of 29 freshly grown supports did not pass the check a hand edit applies. And a red ghost
 did not say which check refused it.
 
@@ -25,15 +25,17 @@ did not say which check refused it.
   on it, at the place nearest where it was. Across an edge it switches once, 2 mm past it,
   rather than back and forth every frame.
 - **A foot on the model slides.** The column carried across the plate stays whole and its
-  trunk upright, and takes the footing found under it there.
+  trunk upright, and takes the footing found under it there. A column whose root is the neck
+  a head hangs from is carried as one on the plate is, on a knee its head leans down to at 45
+  degrees.
 - **A root on the model may be lowered.** It joins the joints that give way, down only, over
   the foot it has; the pillar may be no shorter than the shortest one over that foot.
 - **A host is eased before what stands on it is seated.** `carried_held` carries the held
   trees, eases each, then seats the supports standing on them on the eased trees: seated on
   the tree before its joints gave way, such a support hung in the air.
 - **A refusal has a reason.** `allowed`, `eased` and `tip_carried` return `Refused`:
-  `Collides`, `Leans`, `NoFooting` or `NoHold`. The window writes it beside the cursor while
-  the carry is refused.
+  `Collides`, `Leans`, `NoFooting` or `NoHold`, a tip carried onto a face looking up being
+  `NoHold`. The window writes it beside the cursor while the carry is refused.
 
 ## Consequences
 

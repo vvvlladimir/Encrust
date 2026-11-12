@@ -1,6 +1,6 @@
 # 0325. Size each support by what it holds, through an automatic profile over groups
 
-- **Status:** Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0424
+- **Status:** Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0423
 - **Date:** 2026-10-24
 
 ## Context

@@ -1,4 +1,4 @@
-# 0428. Sweep a head, and test a drawn tip, from past the seat its rim finds
+# 0426. Sweep a head, and test a drawn tip, from past the seat its rim finds
 
 - **Status:** Accepted
 - **Date:** 2026-11-11

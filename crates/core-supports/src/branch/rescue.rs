@@ -9,7 +9,7 @@ use core_geometry::FastSet;
 use rayon::prelude::*;
 
 /// Grows again alone each of `columns` no tree of `forest` carries, from a turned or cut head,
-/// then a moved contact; the first sound one with room on what it stands on is kept (0431, 0444).
+/// then a moved contact; the first sound one with room on what it stands on is kept (0429, 0439).
 pub(super) fn rescue(
     forest: &mut Vec<SupportTree>,
     columns: &[Column],

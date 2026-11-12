@@ -1,4 +1,4 @@
-use core_geometry::{Scalar, Vec2, Vec3};
+use core_geometry::{Scalar, Vec3, turns};
 use printer_profiles::SupportProfile;
 
 use crate::Landing;
@@ -6,7 +6,7 @@ use crate::column::{LAST_RESORT_SLOPE_DEG, MAX_LANDING_SLOPE_DEG, landing_within
 use crate::placed::Placed;
 
 /// What a carried trunk of `radius_mm` carrying `tips`, dropped from `from` (plate), stands on:
-/// a face growing would choose, else one it takes as a last resort, as growing does (ADR 0441).
+/// a face growing would choose, else one it takes as a last resort, as growing does (ADR 0437).
 pub(super) fn footing_under(
     placed: &Placed,
     from: Vec3,
@@ -21,9 +21,8 @@ pub(super) fn footing_under(
         })
 }
 
-/// [`footing_under`] `from`, else around it within [`NEARBY_MM`], with the point the trunk then
-/// drops from. What the foot `last` stood on (plate) is kept while one is in reach, the place
-/// nearest it taken, so a drag across an edge switches once rather than every frame (ADR 0441).
+/// [`footing_under`] `from`, else within [`NEARBY_MM`], with where the trunk drops from; what the
+/// foot `last` stood on (plate) is kept while in reach, so an edge is crossed once (ADR 0437).
 pub(super) fn footing_near(
     placed: &Placed,
     from: Vec3,
@@ -32,10 +31,7 @@ pub(super) fn footing_near(
     last: Landing,
 ) -> Option<(Vec3, Landing)> {
     let rings = NEARBY_MM.iter().flat_map(|radius_mm| {
-        (0..NEARBY_DIRECTIONS).map(move |step| {
-            let turn = std::f32::consts::TAU * step as Scalar / NEARBY_DIRECTIONS as Scalar;
-            (Vec2::from_angle(turn) * *radius_mm).extend(0.0)
-        })
+        turns(NEARBY_DIRECTIONS).map(move |way| (way * *radius_mm).extend(0.0))
     });
     let mut found = Vec::new();
     for at in std::iter::once(from).chain(rings.map(|shift| from + shift)) {

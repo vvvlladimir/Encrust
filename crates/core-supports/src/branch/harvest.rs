@@ -15,7 +15,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 
 /// Whether a trunk carrying `tips` under `at`, `radius_mm` wide, stands: straight down at least
-/// `branch_mm` over its foot (ADR 0432), or leaning aside the way a blocked front does.
+/// `branch_mm` over its foot (ADR 0430), or leaning aside the way a blocked front does.
 pub(super) fn stands(
     at: Vec3,
     radius_mm: Scalar,

@@ -110,7 +110,7 @@ pub struct Picked {
     pub part: Part,
 }
 
-/// A drag carrying what is picked, measured from where it was taken hold of (ADR 0438).
+/// A drag carrying what is picked, measured from where it was taken hold of (ADR 0435).
 #[derive(Debug, Clone)]
 pub struct Carry {
     /// The point of the part the cursor took, on the drag's plane, plate mm.

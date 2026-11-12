@@ -1,4 +1,4 @@
-# 0445. Merge picked supports into one tree by the rule growth joins two fronts by
+# 0440. Merge picked supports into one tree by the rule growth joins two fronts by
 
 - **Status:** Proposed
 - **Date:** 2026-11-12
@@ -27,7 +27,7 @@ frozen tree of them with `core_supports::merged`:
   pair left apart is `Collides`, a joint with nowhere to stand `NoFooting`; the stage says so
   and the supports stay as they were.
 
-The tree replaces the picked ones; what stood on them goes back to growth (ADR 0443, 0444).
+The tree replaces the picked ones; what stood on them goes back to growth (ADR 0431, 0439).
 
 ## Consequences
 
@@ -35,6 +35,8 @@ One click turns a cluster into one support with no stray joint flatter than 45 d
 merge cost grows with the square of the supports picked, as a heap of pairs, and one clearance
 sweep per pair tried; a hand picks tens at most. A tree whose tips are far apart joins low and
 may lean long struts; reopen if those print badly, by capping strut length as growth does.
+The trunk carries every tip picked, past its group's `max_tips_per_trunk`: the hand chose
+how many to join.
 
 ## Alternatives considered
 

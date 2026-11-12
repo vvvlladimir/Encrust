@@ -1,5 +1,5 @@
 //! Carrying held support parts square to the camera, or level with Alt, drawn refused where
-//! `core_supports::eased` finds no room and kept where they last could stand (ADR 0438, 0440).
+//! `core_supports::eased` finds no room and kept where they last could stand (ADR 0435, 0436).
 
 use std::sync::Arc;
 
@@ -439,7 +439,7 @@ fn held_point(doc: &Doc, tip: Picked) -> Option<usize> {
 }
 
 /// Names the held tip by its place in its tree as carried: a small pillar grown again from its
-/// contact may be built of other nodes (ADR 0442).
+/// contact may be built of other nodes (ADR 0438).
 fn follow_tip(window: &mut Window, tip: Picked, point: Option<usize>) {
     let Some(point) = point else {
         return;
@@ -460,7 +460,7 @@ fn follow_tip(window: &mut Window, tip: Picked, point: Option<usize>) {
 }
 
 /// Names each part picked on a tree the carry built again by its tip: a small pillar grown
-/// again from its contact is built of other nodes than `before` named (ADR 0442).
+/// again from its contact is built of other nodes than `before` named (ADR 0438).
 fn repick(window: &mut Window, before: &[(ObjectId, Vec<SupportTree>)]) {
     let scene = &window.doc.scene;
     for picked in &mut window.tools.supports.picked {

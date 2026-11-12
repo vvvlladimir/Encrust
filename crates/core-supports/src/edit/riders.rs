@@ -21,7 +21,7 @@ struct Seat {
 }
 
 /// Every tree of `trees` (plate coordinates) standing on `host`, directly or on one that
-/// does, `host` left out: what goes with it when a hand takes hold of it (ADR 0433).
+/// does, `host` left out: what goes with it when a hand takes hold of it (ADR 0431).
 pub fn standing_on(trees: &[SupportTree], host: usize, profiles: Profiles) -> Vec<usize> {
     let mut found = Vec::new();
     let mut seen = FastSet::default();
@@ -76,9 +76,8 @@ pub(crate) fn unseated(trees: &[SupportTree], profiles: Profiles) -> Vec<usize> 
         .collect()
 }
 
-/// The trees of `frozen` (model space) standing on `frozen[host]`, seated where they were on it
-/// once it is `carried`, and those on them in turn; [`super::allowed`] says whether each may
-/// stand. Answers every tree to put back, `carried` first, with its index.
+/// Every tree to put back, `carried` first, with its index: `frozen[host]` (model space) as
+/// `carried`, then those standing on it, in turn, seated where they were on it (ADR 0431).
 pub fn followed(
     frozen: &[SupportTree],
     host: usize,
@@ -160,7 +159,7 @@ fn axes<'a>(
 }
 
 /// `rider` (plate) seated as growth seats it on `seat`'s axis of `host` where the seat it kept
-/// leans past 45 degrees (ADR 0443); `None` where it does not, or no point is in reach.
+/// leans past 45 degrees (ADR 0431); `None` where it does not, or no point is in reach.
 fn within_lean(
     rider: &SupportTree,
     host: &SupportTree,

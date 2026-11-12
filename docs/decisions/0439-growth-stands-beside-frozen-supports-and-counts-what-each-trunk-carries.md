@@ -1,4 +1,4 @@
-# 0444. Growth stands beside frozen supports, counts what each trunk carries, and frozen supports follow their model
+# 0439. Growth stands beside frozen supports, counts what each trunk carries, and frozen supports follow their model
 
 - **Status:** Proposed
 - **Date:** 2026-11-12
@@ -9,11 +9,11 @@ A frozen support (ADR 0095) is kept in the model's own space and meshed beside t
 ones, but growth knew nothing of it:
 
 - A thin tip beside a frozen thick column could not run into it (ADR 0248), as it would into a
-  grown one. A small pillar grown again by a carry (ADR 0442) stood on nothing but the part or
+  grown one. A small pillar grown again by a carry (ADR 0438) stood on nothing but the part or
   the plate, never on a support beside it.
 - `max_tips_per_trunk` was counted only within one family's merge. The next family began at
   nought on the same carriers, and neither small pillars run into supports (ADR 0251) nor
-  rescued columns (ADR 0431) counted at all: on a column allowed two tips, three small pillars
+  rescued columns (ADR 0429) counted at all: on a column allowed two tips, three small pillars
   stood.
 - Moved, the model carried its frozen supports with it. Raised by a lift, their feet stood in
   the air; tilted, their trunks leaned and their feet left the plate.

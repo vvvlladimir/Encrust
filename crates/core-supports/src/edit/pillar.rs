@@ -11,7 +11,7 @@ use crate::space::Space;
 use crate::tree::SupportTree;
 
 /// Whether `tree` (model space) is a small pillar, which a hand moves by its contact alone and
-/// growing builds again from there (ADR 0442).
+/// growing builds again from there (ADR 0438).
 pub(super) fn is_pillar(tree: &SupportTree, placed: &Placed, profiles: Profiles) -> bool {
     is_small(
         &tree.moved(placed.transform.to_matrix()),
@@ -20,7 +20,7 @@ pub(super) fn is_pillar(tree: &SupportTree, placed: &Placed, profiles: Profiles)
 }
 
 /// Small pillar `index` of `frozen` (model space) grown again from `contact` (plate) beside the
-/// other frozen trees: a small pillar where one stands, else a whole support (ADR 0442, 0444).
+/// other frozen trees: a small pillar where one stands, else a whole support (ADR 0438, 0439).
 pub(super) fn regrown(
     (frozen, index): (&[SupportTree], usize),
     contact: Vec3,

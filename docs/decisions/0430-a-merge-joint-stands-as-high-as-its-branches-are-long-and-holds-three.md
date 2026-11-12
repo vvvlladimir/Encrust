@@ -1,4 +1,4 @@
-# 0432. Stand a merge's joint as high as its branches are long, and hang three branches at most
+# 0430. Stand a merge's joint as high as its branches are long, and hang three branches at most
 
 - **Status:** Accepted
 - **Date:** 2026-11-11
@@ -10,7 +10,7 @@ was dropped 1, 2, 4 … mm until it met, so under a crowded part tips met a mill
 foot on 6 mm branches. That is a fan of levers on one point, and it saves nothing: printed
 layer by layer, a merge saves the height of the one trunk under its joint. Each lean adds
 length on top of that. A tip could also come down onto a neck or joint that already held
-others, and `shortcut` (ADR 0430) moved branches onto the joint under. So one point could
+others, and `shortcut` (ADR 0428) moved branches onto the joint under. So one point could
 hold six branches. On the crowded-balls bench, 19 of 198 joints stood lower over their landing
 than their longest branch was long, and one held six branches.
 

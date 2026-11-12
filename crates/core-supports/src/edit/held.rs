@@ -14,10 +14,8 @@ pub struct Carried {
     pub refused: Option<Refused>,
 }
 
-/// The trees of `standing` (model space) held, each its index with its parts, carried by `step`
-/// (plate mm) and eased, those on them seated on them as eased; `None` where a column has
-/// nothing to stand on. `last` is what the previous step moved, which a foot keeps to
-/// (ADR 0440, 0441).
+/// The held trees of `standing` (model space) carried by `step` (plate mm) from `last` and eased,
+/// their riders seated on them; `None` where a column has nothing to stand on (ADR 0436, 0437).
 pub fn carried_held(
     standing: &[SupportTree],
     last: &[(usize, SupportTree)],
@@ -49,7 +47,7 @@ pub fn carried_held(
 }
 
 /// Tree `host` of `standing` (model space) as a hand put it, `carried`, with those standing on
-/// it seated on it as eased; `None` where one loses its seat (ADR 0433, 0440).
+/// it seated on it as eased; `None` where one loses its seat (ADR 0431, 0436).
 pub fn with_riders(
     standing: &[SupportTree],
     host: usize,

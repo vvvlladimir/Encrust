@@ -8,7 +8,6 @@ use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as, sizes};
-use crate::panels::viewport_panel::refusal_reason;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::Doc;
 use crate::status::Status;
@@ -185,7 +184,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     grow(ui, window, points, &lost);
 }
 
-/// A line with its count for each reason supports were left out (ADR 0431).
+/// A line with its count for each reason supports were left out (ADR 0429).
 fn lost(doc: &Doc) -> Vec<String> {
     let mut reasons = Vec::new();
     for why in [Unstood::HeadBlocked, Unstood::FacesUp, Unstood::NoGround] {
@@ -382,7 +381,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Joins the picked supports of model `id` into one tree, or says on the stage why not (ADR 0445).
+/// Joins the picked supports of model `id` into one tree, or says on the stage why not (ADR 0440).
 fn merge(
     window: &mut Window,
     id: ObjectId,
@@ -408,9 +407,18 @@ fn merge(
             window.tools.supports.picked.clear();
         }
         Err(why) => {
-            let why = refusal_reason(why);
-            window.machine.status = Status::Info(tr!("supports-merge-refused", why = why));
+            window.machine.status = Status::Info(merge_refused(why));
         }
+    }
+}
+
+/// Why the picked supports could not be merged, as the stage says it.
+fn merge_refused(why: core_supports::Refused) -> String {
+    match why {
+        core_supports::Refused::Collides => tr!("supports-merge-refused-collides"),
+        core_supports::Refused::Leans => tr!("supports-merge-refused-leans"),
+        core_supports::Refused::NoFooting => tr!("supports-merge-refused-no-footing"),
+        core_supports::Refused::NoHold => tr!("supports-merge-refused-no-hold"),
     }
 }
 

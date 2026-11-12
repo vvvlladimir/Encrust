@@ -4,7 +4,7 @@ use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportT
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 use anyhow::{Result, bail};
-use core_geometry::{Region, Scalar};
+use core_geometry::Scalar;
 use core_supports::Need;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
@@ -87,7 +87,7 @@ impl SupportTool {
 
     /// Starts placement over everything visible, by the group in hand or the automatic profile;
     /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0332).
-    /// The faces painted to be seen are held sparser while `clean` (ADR 0427). What stands in
+    /// The faces painted to be seen are held sparser while `clean` (ADR 0425). What stands in
     /// the groups it grows is grown again, not added to: it goes when the run lands.
     pub fn start(
         &mut self,
@@ -107,9 +107,7 @@ impl SupportTool {
             Side::Inside => Vec::new(),
         };
         for task in &mut tasks {
-            if !clean {
-                task.shown = Region::default();
-            }
+            task.shown_only_if(clean);
             if let Some(object) = scene.get(task.id) {
                 task.seeds = object
                     .supports
@@ -158,22 +156,19 @@ impl SupportTool {
     }
 
     /// Placement on `ids` alone, built to `built` whatever the panel holds, handed back
-    /// rather than kept: what Prepare stands a model on.
+    /// rather than kept: what Prepare stands a model on. Painted faces count while `clean`.
     pub fn start_built_on(
         scene: &Scene,
         ids: &[ObjectId],
         (layer_height_mm, built): (Scalar, &BuiltTo),
-        side: Side,
+        (side, clean): (Side, bool),
     ) -> Result<SupportJob> {
         let sizing = match built {
             BuiltTo::Sized(sizing) => Some(&**sizing),
             BuiltTo::Alone(_) => None,
         };
         let profile = built.islands_profile();
-        let tasks = scene
-            .named(ids)
-            .map(|object| SupportTask::of(object, profile.clone()))
-            .collect();
+        let tasks = built_tasks(scene, ids, &profile, clean);
         spawn(scene, tasks, (layer_height_mm, side), sizing)
     }
 
@@ -258,6 +253,8 @@ impl SupportTool {
         for (id, _) in carried.unwrap_or_default() {
             if let Some(object) = scene.get_mut(id) {
                 object.supports.lift(Vec::new());
+                let table = self.table_for(object);
+                object.refresh_supports(&table);
             }
         }
     }
@@ -383,6 +380,21 @@ impl SupportTool {
 }
 
 /// Spawns the run over `tasks`, each held up on `side` of its wall.
+/// A task for each of `ids` built to `profile`, its painted faces read only while `clean`.
+pub(super) fn built_tasks(
+    scene: &Scene,
+    ids: &[ObjectId],
+    profile: &SupportProfile,
+    clean: bool,
+) -> Vec<SupportTask> {
+    let task = |object| {
+        let mut task = SupportTask::of(object, profile.clone());
+        task.shown_only_if(clean);
+        task
+    };
+    scene.named(ids).map(task).collect()
+}
+
 fn spawn(
     scene: &Scene,
     mut tasks: Vec<SupportTask>,

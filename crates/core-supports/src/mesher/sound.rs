@@ -17,7 +17,7 @@ pub(crate) struct Body {
     pub group: u16,
     pub tube: Tube,
     pub meets_top: Option<Vec3>,
-    /// How far that face rises under the rim of the tip towards the tube, mm (ADR 0428).
+    /// How far that face rises under the rim of the tip towards the tube, mm (ADR 0426).
     pub seat_mm: Scalar,
     /// The point whose tip the tube carries from its contact, for a tube that starts at one.
     pub point: Option<usize>,

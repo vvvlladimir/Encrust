@@ -1,5 +1,5 @@
 //! The Clean surface switch and its brush, in Auto-orient and in the Where section of
-//! Supports, both painting the same faces (ADR 0427).
+//! Supports, both painting the same faces (ADR 0425).
 
 use super::paint::{COARSE_STEP, MAX_BRUSH_MM, MIN_BRUSH_MM};
 use crate::i18n::tr;

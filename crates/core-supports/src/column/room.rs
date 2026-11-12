@@ -48,7 +48,7 @@ pub(super) fn roomier(placed: &Placed, contact: Vec3, profile: &SupportProfile) 
 }
 
 /// How far a support with no room is moved along its face at its height to stand, mm: past
-/// [`MOVE_REACH_MM`], still well inside the spacing of the contacts round it (ADR 0431).
+/// [`MOVE_REACH_MM`], still well inside the spacing of the contacts round it (ADR 0429).
 const MOVE_FAR_MM: Scalar = 1.0;
 
 /// How many spots with room a support with no room is tried at, nearest first.
@@ -100,7 +100,7 @@ fn seated(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
 }
 
 /// How far the face under the rim of a tip of `radius_mm` at `contact` rises towards its body
-/// along `normal`, mm, none below the contact; `None` when the rim leaves that face (ADR 0428).
+/// along `normal`, mm, none below the contact; `None` when the rim leaves that face (ADR 0426).
 pub(crate) fn seat_mm(
     placed: &Placed,
     contact: Vec3,

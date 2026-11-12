@@ -26,7 +26,7 @@ impl ModelSupports {
             .flatten()
     }
 
-    /// [`Self::freeze`] for `tree`, what stands on it (ADR 0433) and what it stands on (ADR 0443);
+    /// [`Self::freeze`] for `tree`, what stands on it (ADR 0431) and what it stands on (ADR 0431);
     /// answers `tree`'s index in [`ModelSupports::frozen`].
     pub fn freeze_with_riders(
         &mut self,
@@ -131,8 +131,11 @@ impl ModelSupports {
     }
 
     /// Hands every frozen support standing on no other frozen one back to the automatic run, so
-    /// none is left in the air (ADR 0443); answers how many.
+    /// none is left in the air (ADR 0431); answers how many.
     pub fn thaw_unseated(&mut self, transform: Transform, profiles: Profiles) -> usize {
+        if transform.inverse_matrix().is_none() {
+            return 0;
+        }
         let matrix = transform.to_matrix();
         let mut thawed = 0;
         // Each round thaws at least one tree or stops, so it ends within as many as there are.
@@ -154,7 +157,7 @@ impl ModelSupports {
     pub fn remove_frozen(&mut self, frozen: usize) {
         if frozen < self.frozen.len() {
             self.frozen.remove(frozen);
-            // What grew standing on it grows again (ADR 0444).
+            // What grew standing on it grows again (ADR 0439).
             self.points_changed();
         }
     }
@@ -171,7 +174,7 @@ impl ModelSupports {
             }
         }
         self.frozen.push(tree);
-        // What grew standing on what went grows again (ADR 0444).
+        // What grew standing on what went grows again (ADR 0439).
         self.points_changed();
         self.frozen.len() - 1
     }
@@ -194,7 +197,7 @@ impl ModelSupports {
             .collect();
         let left = if whole { None } else { tree.without(&cut) };
 
-        // What grew standing on what went grows again (ADR 0444).
+        // What grew standing on what went grows again (ADR 0439).
         self.points_changed();
         if let Some(left) = left {
             self.frozen[frozen] = left;

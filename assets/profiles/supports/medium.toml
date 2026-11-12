@@ -11,7 +11,7 @@ facets = 12
 density = 1.0
 
 # How far the lowest point of a part should stand clear of the plate: room for the pad
-# and the flare under its lowest contact, a low tip's neck cut short, see ADR 0434.
+# and the flare under its lowest contact, a low tip's neck cut short, see ADR 0432.
 z_lift_mm = 2.0
 
 # How much clear air a support's body keeps between itself and the model.

@@ -100,8 +100,9 @@ fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
     assert!(tool.auto.is_none(), "the panel builds to the group in hand");
 
     let built = BuiltTo::of("auto", &catalogue).expect("the catalogue ships an automatic profile");
-    let mut job = SupportTool::start_built_on(&scene, &[floating], (0.05, &built), Side::Outside)
-        .expect("a model to place under");
+    let mut job =
+        SupportTool::start_built_on(&scene, &[floating], (0.05, &built), (Side::Outside, false))
+            .expect("a model to place under");
     let placements = loop {
         match job.poll() {
             Some(crate::job::SupportOutcome::Placed(placements)) => break placements,
@@ -1620,5 +1621,27 @@ fn check_sizes_its_supports_into_the_automatic_shapes_whatever_the_panel_holds()
             .collect::<Vec<_>>(),
         wanted,
         "the lightest automatic shape first, not the heavy preset in hand"
+    );
+}
+
+#[test]
+fn prepare_reads_painted_faces_only_while_clean_surface_is_on() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut scene = one_cube();
+    let id = scene.objects()[0].id;
+    scene.objects_mut()[0].shown_painted.set(0, true);
+    let built = BuiltTo::of("auto", &catalogue).expect("the catalogue ships an automatic profile");
+    let profile = built.islands_profile();
+
+    let off = run::built_tasks(&scene, &[id], &profile, false);
+    let on = run::built_tasks(&scene, &[id], &profile, true);
+
+    assert!(
+        off[0].shown.is_empty(),
+        "with Clean surface off no face is held sparser"
+    );
+    assert!(
+        !on[0].shown.is_empty(),
+        "with Clean surface on the painted face is read"
     );
 }

@@ -36,7 +36,7 @@ pub(super) struct Candidate {
 }
 
 // A front runs into a thicker support before it meets another front, so it goes straight to it
-// rather than to a joint and back (ADR 0436); then the highest meeting point first.
+// rather than to a joint and back (ADR 0434); then the highest meeting point first.
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> Ordering {
         self.onto_carrier
@@ -242,7 +242,7 @@ impl Forest<'_> {
     }
 
     /// Whether a joint at `meet` can be built from `fronts`, each leaning from where it dropped:
-    /// no branch longer than `longest_mm`, nor longer than the joint stands over the plate (0432).
+    /// no branch longer than `longest_mm`, nor longer than the joint stands over the plate (0430).
     fn builds(
         &self,
         meet: Vec3,

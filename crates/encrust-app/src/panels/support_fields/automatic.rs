@@ -85,7 +85,7 @@ pub fn islands(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&AutoP
 }
 
 /// Where an automatic profile moves between shapes (`shapes`, lightest first) against its
-/// shipped profile; a heavier shape never starts below a lighter one. See ADR 0325, 0424.
+/// shipped profile; a heavier shape never starts below a lighter one. See ADR 0325, 0423.
 pub fn sizes(
     ui: &mut egui::Ui,
     auto: &mut AutoProfile,

@@ -4,7 +4,7 @@ use crate::placed::Placed;
 use crate::{SupportPoint, SupportTree};
 use rayon::prelude::*;
 
-/// Why a support point has no support under it (ADR 0431).
+/// Why a support point has no support under it (ADR 0429).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Unstood {
     /// Its head would run into the model beside its contact.

@@ -26,7 +26,6 @@ mod overlays;
 mod paint;
 mod picking;
 mod refusal;
-pub(super) use refusal::refusal_reason;
 mod repair;
 mod support_ghost;
 mod supports;
@@ -281,6 +280,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
         if !paint::paints_shown(window) {
             draw_aimed(ui, window, rect, pointer);
         }
+        draw_refusal(ui, window, rect);
     }
 }
 
@@ -395,7 +395,6 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
         .gizmo
         .show(&over_viewport, viewport, &window.view.camera, &pivots);
     draw_gizmo_drag(&over_viewport, window, viewport);
-    draw_refusal(&over_viewport, window, viewport);
     let Some(moved) = moved else {
         return;
     };
