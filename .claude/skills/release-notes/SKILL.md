@@ -1,6 +1,6 @@
 ---
 name: release-notes
-description: Write short, warm, user-facing notes for a release and the command to publish them.
+description: Write short complete, warm, user-facing notes for a release and the command to publish them.
 argument-hint: "[tag]"
 disable-model-invocation: true
 context: fork
@@ -14,19 +14,24 @@ Write the notes of Encrust release `$ARGUMENTS` for people who print with it, in
 
 1. Tag: the one given, else the newest draft in `gh release list --json tagName,isDraft`, else
    the newest release. `git fetch --tags` first. The previous tag is the release before it.
-2. `git log --format='%B%n----' <previous>..<tag>`; a squash commit's body lists its PR's commits.
+2. `git log --format='%B%n----' <previous>..<tag>`; a squash commit's body lists its PR's
+   commits — read every line of it, a PR title hides most of what it ships.
 3. `gh pr view <n> --json body,author` for each `(#n)`, and `gh release view <tag> --json body`.
-4. Where a line does not say what a user sees, read the diff or ADR. Never guess.
+4. `git diff --word-diff=plain <previous> <tag> -- docs/features.md docs/cli.md`: every added
+   or changed sentence is something a user sees. This is the inventory; the log only adds to it.
+5. Where a line does not say what a user sees, read the diff or ADR. Never guess.
 
-## Pick
+## Cover everything
 
-Readers skim a card in the window, so choose before you write.
+The notes are the release's whole changelog, not a teaser.
 
-- **Three to five highlights**: what a user will notice first or has been asking for.
-- The rest only if a user would miss it; a pile of small things becomes one line,
-  e.g. "Plus plenty of smaller polish across supports and the slicer."
-- Fixed: the three to five bugs people actually hit. Never tests, refactors, CI or bumps.
-- Budget: about 200 words, at most 15 bullets, at most four areas. Over it, cut, don't squeeze.
+- Every user-visible change goes in: each inventory item and each `feat`/`fix` commit is a
+  bullet, or is named in a "Plus …" line of small polish. Nothing seen by a user is left out.
+- Leave out only what no user sees: tests, refactors, CI, release bumps, internal tooling.
+- Lead with what a user notices first; as many areas as the release has.
+- Length follows the release: about 200 words is a guide for a small one, never a reason to cut.
+- Before handing back, tick the inventory and the commit list off against the notes; name
+  what was left out and why.
 
 ## Voice
 
