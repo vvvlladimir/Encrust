@@ -18,7 +18,7 @@ mod joint;
 mod refused;
 mod riders;
 pub use give_way::eased;
-pub use held::{Carried, carried_held};
+pub use held::{Carried, carried_held, with_riders};
 pub use refused::Refused;
 pub use riders::{followed, standing_on};
 

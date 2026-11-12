@@ -37,24 +37,51 @@ pub fn carried_held(
         let now = out.ease(was, now, placed, profile);
         out.moved.push((*index, now));
     }
-    let hosts = out.moved.clone();
-    for (host, now) in &hosts {
-        // A rider is seated on the host as it stands once eased, or it hangs where it was.
-        for (rider, seated) in followed(standing, *host, now, placed, profiles)?
-            .into_iter()
-            .skip(1)
-        {
-            if out.moved.iter().all(|(taken, _)| *taken != rider) {
-                let was = &standing[rider];
-                let seated = out.ease(was, seated, placed, profiles.of(was.group()));
-                out.moved.push((rider, seated));
-            }
-        }
+    for (host, now) in out.moved.clone() {
+        out.seat_riders(standing, host, &now, placed, profiles)?;
     }
     Some(out)
 }
 
+/// Tree `host` of `standing` (model space) as a hand put it, `carried`, with those standing on
+/// it seated on it as eased; `None` where one loses its seat (ADR 0433, 0440).
+pub fn with_riders(
+    standing: &[SupportTree],
+    host: usize,
+    carried: &SupportTree,
+    placed: &Placed,
+    profiles: Profiles,
+) -> Option<Carried> {
+    let mut out = Carried {
+        moved: vec![(host, carried.clone())],
+        refused: None,
+    };
+    out.seat_riders(standing, host, carried, placed, profiles)?;
+    Some(out)
+}
+
 impl Carried {
+    /// Seats those of `standing` on `host`, now `now`, on it as eased, each not yet moved.
+    fn seat_riders(
+        &mut self,
+        standing: &[SupportTree],
+        host: usize,
+        now: &SupportTree,
+        placed: &Placed,
+        profiles: Profiles,
+    ) -> Option<()> {
+        // A rider is seated on the host as it stands once eased, or it hangs where it was.
+        let riders = followed(standing, host, now, placed, profiles)?;
+        for (rider, seated) in riders.into_iter().skip(1) {
+            if self.moved.iter().all(|(taken, _)| *taken != rider) {
+                let was = &standing[rider];
+                let seated = self.ease(was, seated, placed, profiles.of(was.group()));
+                self.moved.push((rider, seated));
+            }
+        }
+        Some(())
+    }
+
     /// `now`, carried from `was`, eased where it may be; else as it is, its refusal kept.
     fn ease(
         &mut self,

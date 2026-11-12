@@ -75,7 +75,16 @@ pub fn strengthen(
             .map(|need| tip(need.contact, table_radius(&table, plan.group_of(need))))
             .chain(held.iter().map(|at| tip(*at, placing.surface_radius_mm())))
             .collect();
-        let loads = carried(model.stack, model.surface, model.layer_mm, &tips)?;
+        let Some(loads) = carried(
+            model.stack,
+            model.surface,
+            model.layer_mm,
+            &tips,
+            keep_going,
+        )?
+        else {
+            break;
+        };
         let before = done;
         for at in 0..needs.len() {
             let Some(worst_z_mm) = weak(&loads[at]) else {
@@ -103,19 +112,24 @@ pub fn strengthen(
     Ok(done)
 }
 
-/// What each of `tips` carries as `surface`, cut into `stack` of `layer_mm`, prints.
+/// What each of `tips` carries as `surface`, cut into `stack` of `layer_mm`, prints; `None`
+/// once `keep_going`, asked between batches of layers, says stop.
 pub fn carried(
     stack: &Sliced,
     surface: &Mesh,
     layer_mm: Scalar,
     tips: &[Tip],
-) -> Result<Vec<Load>, EngineError> {
+    keep_going: &mut dyn FnMut() -> bool,
+) -> Result<Option<Vec<Load>>, EngineError> {
     let Some(bounds) = surface.aabb() else {
-        return Ok(vec![Load::default(); tips.len()]);
+        return Ok(Some(vec![Load::default(); tips.len()]));
     };
     let panel = panel_over(bounds.maxs.x, bounds.maxs.y);
     let mut fold = TipLoads::new(tips, layer_mm);
     for layers in stack.layers.chunks(rayon::current_num_threads().max(1)) {
+        if !keep_going() {
+            return Ok(None);
+        }
         let cured: Vec<Cured> = layers
             .par_iter()
             .map(|layer| {
@@ -129,7 +143,7 @@ pub fn carried(
             fold.push(layer.z, cured);
         }
     }
-    Ok(fold.loads())
+    Ok(Some(fold.loads()))
 }
 
 fn tip(at: Vec3, radius_mm: f32) -> Tip {

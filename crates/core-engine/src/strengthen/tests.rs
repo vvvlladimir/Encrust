@@ -21,7 +21,9 @@ fn sliced(mesh: &Mesh) -> Sliced {
 }
 
 fn loads(mesh: &Mesh, tips: &[Tip]) -> Vec<Load> {
-    carried(&sliced(mesh), mesh, LAYER_MM, tips).expect("a box reads")
+    carried(&sliced(mesh), mesh, LAYER_MM, tips, &mut || true)
+        .expect("a box reads")
+        .expect("nothing stops the read")
 }
 
 fn seat(x: f32, y: f32, z: f32, radius_mm: f64) -> Tip {
@@ -314,5 +316,43 @@ fn sizes_thicken_up_to_the_widest_and_never_a_steadying_support() {
     assert!(
         !heavier(&plan, &shown),
         "a tip on the side meant to be seen gets a neighbour"
+    );
+}
+
+#[test]
+fn a_run_stopped_while_it_reads_the_stack_strengthens_nothing() {
+    let slab = Slab::new(20.0);
+    let mut needs = slab.middle();
+    let mut asked = 0;
+    let mut first_only = || {
+        asked += 1;
+        asked == 1
+    };
+    let done = strengthen(slab.underside(), &mut needs, &[], &sized(), &mut first_only)
+        .expect("a read stopped part way is no error");
+    assert_eq!(
+        done,
+        Strengthened::default(),
+        "the round never finished reading"
+    );
+    assert_eq!(needs, slab.middle());
+}
+
+#[test]
+fn tips_held_beside_a_weak_one_share_its_slab_and_spare_it() {
+    let slab = Slab::new(20.0);
+    let mut needs = slab.middle();
+    let middle = needs[0].contact;
+    let held: Vec<Vec3> = (-2..=2)
+        .flat_map(|x| (-2..=2).map(move |y| (x, y)))
+        .filter(|at| *at != (0, 0))
+        .map(|(x, y)| middle + Vec3::new(x as f32 * 4.0, y as f32 * 4.0, 0.0))
+        .collect();
+    let done = strengthen(slab.underside(), &mut needs, &held, &light(), &mut || true)
+        .expect("the slab reads");
+    assert_eq!(
+        done,
+        Strengthened::default(),
+        "24 tips standing beside it carry the slab with it"
     );
 }

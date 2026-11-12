@@ -218,6 +218,20 @@ fn growing_again_leaves_what_check_stood_in_an_automatic_shape_to_check() {
 }
 
 #[test]
+fn growing_with_checks_group_in_hand_leaves_what_check_stood() {
+    let (mut tool, mut scene) = held_by_hand();
+    tool.auto = None;
+    tool.groups[1].name = ISLANDS_GROUP.to_owned();
+    tool.active = 1;
+    let stood = scene.objects()[0].supports.points()[0];
+    grown_again(&mut tool, &mut scene);
+    assert!(
+        scene.objects()[0].supports.points().contains(&stood),
+        "Check's support is not grown again with the group in hand"
+    );
+}
+
+#[test]
 fn a_run_landing_mid_carry_lets_go_of_what_the_hand_lifted() {
     let mut scene = one_big_cube();
     let (mut tool, _) = grown_by_auto(&mut scene);

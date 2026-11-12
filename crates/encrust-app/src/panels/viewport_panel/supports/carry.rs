@@ -344,10 +344,18 @@ fn lone_tip(window: &Window) -> Option<Picked> {
 /// Puts the held tip where the cursor points on its own model, else on the nearest surface
 /// at the tip's depth (ADR 0244); where neither may hold it, it stays and is shown refused.
 fn aim_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip: Picked) {
-    let found = tip_carried(window, viewport, cursor, tip);
+    let targets = tip_targets(window, viewport, cursor, tip);
+    // NaN where nothing is pointed at, which never matches: a refusal is cheap to ask again.
+    let aimed = targets.first().copied().unwrap_or(Vec3::NAN);
+    let carry = window.tools.supports.carry.as_ref();
+    if carry.is_some_and(|carry| carry.aimed == aimed) {
+        return;
+    }
+    let found = tip_carried(window, tip, &targets);
     let Some(mut carry) = window.tools.supports.carry.take() else {
         return;
     };
+    carry.aimed = aimed;
     match found {
         Ok(found) => {
             carry.refused = found.refused;
@@ -361,17 +369,14 @@ fn aim_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip: P
     window.tools.supports.carry = Some(carry);
 }
 
-/// The tip and what stands on its support where the cursor puts them, or why the tip finds no
-/// surface to hold there.
-fn tip_carried(
+/// Where the cursor asks the held tip to go, plate mm, first wanted first: the point of its own
+/// model under the cursor, then the cursor at the tip's depth.
+fn tip_targets(
     window: &Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
     tip: Picked,
-) -> Result<Found, Refused> {
-    let Part::Node(node) = tip.part else {
-        return Err(Refused::NoHold);
-    };
+) -> Vec<Vec3> {
     let camera = &window.view.camera;
     let pointed = surface_under(window, viewport, cursor)
         .filter(|(id, _)| *id == tip.id)
@@ -380,7 +385,15 @@ fn tip_carried(
         let facing = (camera.sight_to(stood) - stood).normalize_or_zero();
         crossing(camera, viewport, cursor, stood, facing)
     });
+    pointed.into_iter().chain(beside).collect()
+}
 
+/// The tip and what stands on its support at the first of `targets` that takes it, or why the
+/// tip finds no surface to hold there.
+fn tip_carried(window: &Window, tip: Picked, targets: &[Vec3]) -> Result<Found, Refused> {
+    let Part::Node(node) = tip.part else {
+        return Err(Refused::NoHold);
+    };
     let gone = Refused::NoHold;
     let object = window.doc.scene.get(tip.id).ok_or(gone)?;
     let table = window.tools.supports.table_for(object);
@@ -392,8 +405,8 @@ fn tip_carried(
     let profile = profiles.of(standing.group());
     let mut why = gone;
     let mut carried = None;
-    for to in pointed.into_iter().chain(beside) {
-        match core_supports::tip_carried(standing, node, to, &placed, profile) {
+    for to in targets {
+        match core_supports::tip_carried(standing, node, *to, &placed, profile) {
             Ok(tree) => {
                 carried = Some(tree);
                 break;
@@ -402,14 +415,10 @@ fn tip_carried(
         }
     }
     let carried = carried.ok_or(why)?;
-    let moved = core_supports::followed(frozen, tip.frozen, &carried, &placed, profiles)
+    let carried = core_supports::with_riders(frozen, tip.frozen, &carried, &placed, profiles)
         .ok_or(Refused::NoFooting)?;
-    let refused = moved.iter().skip(1).find_map(|(index, tree)| {
-        let was = frozen.get(*index)?;
-        core_supports::allowed(was, tree, &placed, profiles.of(was.group())).err()
-    });
     let mut found = Found::default();
-    found.take(object, Carried { moved, refused }, &placed, profiles);
+    found.take(object, carried, &placed, profiles);
     Ok(found)
 }
 

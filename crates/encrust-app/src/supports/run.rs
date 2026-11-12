@@ -138,7 +138,9 @@ impl SupportTool {
     /// sizes into while it is on, else the group in hand; never one Check stood its answers in.
     fn grown_groups(&self) -> Vec<u16> {
         let Some((auto, shapes)) = &self.sizing else {
-            return vec![self.active];
+            let check = (self.groups.get(usize::from(self.active)))
+                .is_none_or(|group| group.answers_check());
+            return if check { Vec::new() } else { vec![self.active] };
         };
         let names: Vec<&str> = shapes
             .iter()

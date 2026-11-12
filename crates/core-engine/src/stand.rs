@@ -339,7 +339,6 @@ fn needs_under(
         layer_height_mm,
         plan,
         lows: low_points(surface, Transform::default()),
-        strengthening,
     };
     let inner = inner.filter(|inner| !inner.is_empty());
     let side = |inside| {
@@ -350,10 +349,21 @@ fn needs_under(
             inside,
         })
     };
-    let mut needs = run.place(side(false))?;
-    if plan.cavity && inner.is_some() {
-        needs.extend(run.place(side(true))?);
+    let mut needs = run.place(side(false));
+    let mut inside = if plan.cavity && inner.is_some() {
+        run.place(side(true))
+    } else {
+        Vec::new()
+    };
+    if strengthening {
+        // Both sides hold the one shell, so each is read with the other's tips standing.
+        let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
+        run.strengthen(side(false), &mut needs, &contacts(&inside))?;
+        if !inside.is_empty() {
+            run.strengthen(side(true), &mut inside, &contacts(&needs))?;
+        }
     }
+    needs.extend(inside);
     Ok(needs)
 }
 
@@ -365,13 +375,11 @@ struct Run<'a> {
     layer_height_mm: Scalar,
     plan: &'a SupportPlan,
     lows: Vec<Vec3>,
-    /// Whether weak tips are strengthened: not for a probe asking only whether any is wanted.
-    strengthening: bool,
 }
 
 impl Run<'_> {
     /// What automatic placement touches, kept to `side` of the wall where there is one.
-    fn place(&self, side: Option<WallSide>) -> Result<Vec<Need>, EngineError> {
+    fn place(&self, side: Option<WallSide>) -> Vec<Need> {
         let blocked = Blocked::keeping(None, side.clone());
         let mut needs = generate_supports(
             self.stack,
@@ -387,17 +395,25 @@ impl Run<'_> {
         if let Some(side) = side {
             needs.retain(|need| side.keeps(need.contact));
         }
-        if self.strengthening {
-            let underside = Underside {
-                stack: self.stack,
-                layer_mm: self.layer_height_mm,
-                surface: self.surface,
-                bvh: self.bvh,
-                blocked: blocked.as_ref(),
-            };
-            strengthen(underside, &mut needs, &[], self.plan, &mut || true)?;
-        }
-        Ok(needs)
+        needs
+    }
+
+    /// Strengthens `needs`, placed on `side` of the wall, with `held` standing beside them.
+    fn strengthen(
+        &self,
+        side: Option<WallSide>,
+        needs: &mut Vec<Need>,
+        held: &[Vec3],
+    ) -> Result<(), EngineError> {
+        let blocked = Blocked::keeping(None, side);
+        let underside = Underside {
+            stack: self.stack,
+            layer_mm: self.layer_height_mm,
+            surface: self.surface,
+            bvh: self.bvh,
+            blocked: blocked.as_ref(),
+        };
+        strengthen(underside, needs, held, self.plan, &mut || true).map(|_| ())
     }
 }
 

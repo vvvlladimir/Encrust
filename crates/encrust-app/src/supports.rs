@@ -117,7 +117,8 @@ pub struct Carry {
     pub from: Vec3,
     /// How far the supports stand carried in the scene, plate mm: the last place they may stand.
     pub taken: Vec3,
-    /// How far the cursor last asked them to go, plate mm; NaN before it has asked.
+    /// How far the cursor last asked them to go, or where for a lone tip, plate mm; NaN before
+    /// it has asked.
     pub aimed: Vec3,
     /// Level with the plate rather than square to the camera: Alt is held.
     pub level: bool,

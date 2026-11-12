@@ -300,7 +300,8 @@ fn needs_of(
         bvh: &Bvh::build(&placed),
         blocked: blocked.as_ref(),
     };
-    strengthen(underside, &mut needs, &seeds, &plan, &mut || {
+    // Tips beyond the wall hold the same shell, so they share its pull all the same.
+    strengthen(underside, &mut needs, &task.seeds, &plan, &mut || {
         !cancel.load(Ordering::Relaxed)
     })?;
     Ok(needs)

@@ -99,7 +99,8 @@ pub fn read(supported: &Supported, layer_mm: f32, neck_mpa: f32) -> Result<Tips>
     let stack = PlaneSliceEngine
         .slice(&supported.model, &settings)
         .context("the model cannot be cut for its tips")?;
-    let loads = carried(&stack, &supported.model, layer_mm, &seats)?;
+    let loads = carried(&stack, &supported.model, layer_mm, &seats, &mut || true)?
+        .context("nothing stops the read")?;
     let bvh = Bvh::build(&supported.model);
     let trunks = trunks(supported);
     let tips: Vec<TipRow> = standing
