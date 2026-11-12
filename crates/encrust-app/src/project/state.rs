@@ -233,17 +233,18 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
     not_here
 }
 
-/// Takes the printer and resin of these ids where the catalogue has them, and answers the
-/// ones it does not: the window keeps its own in their place.
+/// Takes the printer of this id where it is among the user's machines, and the resin where
+/// the catalogue has it; answers the ones not here: the window keeps its own in their place.
 fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Slicing) -> NotHere {
     let mut not_here = NotHere::default();
     if let Some(id) = printer {
+        // A shipped machine the user never added is still in the library, but not theirs.
         match slicing.catalogue.printer(&id) {
-            Ok(entry) => {
+            Ok(entry) if crate::settings::installed(&entry.source) => {
                 let profile = entry.profile.clone();
                 slicing.set_printer(profile, Some(id));
             }
-            Err(_) => not_here.printer = Some(id),
+            _ => not_here.printer = Some(id),
         }
     }
     if let Some(id) = resin {
@@ -256,6 +257,8 @@ fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Sl
             Err(_) => not_here.resin = Some(id),
         }
     }
+    // A resin not set up on the machine in hand gives way to one that is, or to none.
+    slicing.reload_resin();
     not_here
 }
 

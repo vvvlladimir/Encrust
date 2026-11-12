@@ -169,6 +169,20 @@ pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<St
     stand_on(window, plate);
 }
 
+/// Redraws the plate under the printer in hand and binds the network to it; the models
+/// stay where they stand.
+pub fn plate_follows_printer(window: &mut Window) {
+    let slicing = &window.machine.slicing;
+    let Some(profile) = slicing.printer.as_ref() else {
+        return;
+    };
+    window.doc.plate = BuildPlate::from_profile(profile);
+    window
+        .machine
+        .network
+        .bind_to(slicing.printer_id.clone(), Some(profile));
+}
+
 /// Follows a saved edit of `profile`, the printer in use: an edit that moves the plate stands
 /// everything on it again; any other redraws the plate, the models staying where they stand.
 pub fn printer_edited(window: &mut Window, profile: PrinterProfile, id: String) {
@@ -181,9 +195,8 @@ pub fn printer_edited(window: &mut Window, profile: PrinterProfile, id: String) 
         apply_printer(window, profile, Some(id));
         return;
     }
-    window.doc.plate = BuildPlate::from_profile(&profile);
-    window.machine.network.bind_to(Some(id), Some(&profile));
     window.machine.slicing.printer = Some(profile);
+    plate_follows_printer(window);
 }
 
 /// Takes the machine out from under the plate: the default envelope, nothing bound and

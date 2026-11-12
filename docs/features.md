@@ -917,7 +917,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   put away for the session; it comes back if another file breaks.
 - Export and import any profile as a file. An import never overwrites one you already have.
 - Profile forms have undo.
-- A project names its printer and resin by id, so it opens with your own profiles.
+- A project names its printer and resin by id, so it opens with your own profiles. When you
+  have its printer among your machines, the plate, the layers and the send target all switch
+  to it; when you do not, the printer in hand stays and the stage says which one it named.
 
 ---
 
@@ -966,6 +968,8 @@ address in a video player).
   its printer's and resin's.
 - It reopens instantly, without rebuilding anything, and the command line can slice it
   directly.
+- Opening a project, from the menu, the recent list or by dropping it on the window, over
+  models that are not saved asks first: save them, let them go, or keep working.
 
 ---
 

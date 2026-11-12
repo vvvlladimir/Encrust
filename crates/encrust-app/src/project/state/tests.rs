@@ -30,10 +30,6 @@ fn summary() -> ImportSummary {
 }
 
 /// A plate with one model on it carrying something from every tool the file records.
-#[allow(
-    clippy::field_reassign_with_default,
-    reason = "Slicing keeps a private field"
-)]
 struct Bench {
     scene: Scene,
     slicing: Slicing,
@@ -152,10 +148,19 @@ fn bench() -> Bench {
 }
 
 const SATURN: &str = "elegoo-saturn-4-ultra";
+const MARS: &str = "elegoo-mars-4-ultra";
 
-/// A window with the shipped Saturn in hand, as it starts from the profiles.
-fn on_saturn() -> Slicing {
+/// A window whose catalogue holds the Saturn among the user's machines, with no printer
+/// in hand yet.
+fn with_saturn_added() -> Slicing {
     let mut slicing = Slicing::default();
+    slicing.catalogue = crate::project::tests::with_machines(&[SATURN]);
+    slicing
+}
+
+/// A window with the user's Saturn in hand.
+fn on_saturn() -> Slicing {
+    let mut slicing = with_saturn_added();
     let printer = slicing
         .catalogue
         .printer(SATURN)
@@ -169,7 +174,7 @@ fn on_saturn() -> Slicing {
 /// Writes a plate and reads it back into an empty window.
 fn round_trip(saved: &Bench) -> Bench {
     let (back, not_here) = reopened(capture(saved.plate()));
-    assert_eq!(not_here, NotHere::default(), "the shipped printer is here");
+    assert_eq!(not_here, NotHere::default(), "the user's printer is here");
     back
 }
 
@@ -182,7 +187,7 @@ fn reopened(project: Project) -> (Bench, NotHere) {
 
     let mut back = Bench {
         scene: Scene::default(),
-        slicing: Slicing::default(),
+        slicing: with_saturn_added(),
         tools: Tools::default(),
     };
     let not_here = apply(read, back.plate_mut());
@@ -224,6 +229,25 @@ fn a_printer_not_here_leaves_the_windows_printer_and_slicing() {
         back.scene.objects().len(),
         1,
         "the plate opens all the same"
+    );
+}
+
+#[test]
+fn a_shipped_printer_the_user_never_added_is_not_taken() {
+    let mut project = capture(bench().plate());
+    project.manifest.printer = Some(MARS.to_owned());
+    let mut window = Bench {
+        slicing: on_saturn(),
+        ..bench()
+    };
+
+    let not_here = apply(project, window.plate_mut());
+
+    assert_eq!(not_here.printer.as_deref(), Some(MARS), "named as not here");
+    assert_eq!(
+        window.slicing.printer_id.as_deref(),
+        Some(SATURN),
+        "the machine in hand stays"
     );
 }
 
