@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.8.0](https://github.com/vvvlladimir/Encrust/compare/v0.7.0...v0.8.0) (2026-11-12)
+
+
+### ✨ New
+
+* **app:** let an import be cancelled and show its progress ([01ddf29](https://github.com/vvvlladimir/Encrust/commit/01ddf298c4df4cc634f1b7709fbace2ffff0a38f))
+* **app:** Measure takes a point on a support as well as on a model ([20e4159](https://github.com/vvvlladimir/Encrust/commit/20e4159f57a29c952c193ad6518014f605884706))
+* **app:** send a file sliced earlier to the plate's printer from the ([c3cba7a](https://github.com/vvvlladimir/Encrust/commit/c3cba7aa88e7788b6e8253e0c97584d063738b3f))
+* **app:** zoom towards the point under the cursor ([01fca9e](https://github.com/vvvlladimir/Encrust/commit/01fca9e802dbbbcf543a0fab574c3d8b44a3ed32))
+* **check:** Enhance and optimise check features ([#259](https://github.com/vvvlladimir/Encrust/issues/259)) ([07b1e46](https://github.com/vvvlladimir/Encrust/commit/07b1e4625d1067e0b2b4f0d74ea7b114c21e5fc0))
+* **inspector:** step Move and Rotate along the model's own axes in ([96c72ce](https://github.com/vvvlladimir/Encrust/commit/96c72ce6c9ec820cc53d9637a03458906bb019f2))
+* **measure:** measure along a model's surface ([c748577](https://github.com/vvvlladimir/Encrust/commit/c748577e97911f7848fd558d16b7cc1b17e3e88c))
+* **recipe:** Refactor and enhance recipe handling, CLI, and add auto-pipeline feature ([#258](https://github.com/vvvlladimir/Encrust/issues/258)) ([8730279](https://github.com/vvvlladimir/Encrust/commit/873027944594354186899cc2152621633e2f7220))
+* **support:** Enhance support structures and automatic tip sizing features ([#260](https://github.com/vvvlladimir/Encrust/issues/260)) ([d4b387e](https://github.com/vvvlladimir/Encrust/commit/d4b387ec9702712ffa782f27688c17cdc0cd6441))
+* **thumbnails:** Enhance preview handling and rendering for thumbnails ([#257](https://github.com/vvvlladimir/Encrust/issues/257)) ([5743d0e](https://github.com/vvvlladimir/Encrust/commit/5743d0ea0e4b8343428599c1d464fad16c99a58c))
+* **web:** add loading progress and instant updates for browser build ([6671d8c](https://github.com/vvvlladimir/Encrust/commit/6671d8cc78e69ff83259ae487b01fd4c3579d456))
+
+
+### 🐛 Fixed
+
+* **anycubic:** state the SUBIMGS table's whole length at revision 518 ([95d4553](https://github.com/vvvlladimir/Encrust/commit/95d45534799183ad97124f9454c40556248c2473))
+* **app:** an opened project stands the plate under the printer it names ([984bede](https://github.com/vvvlladimir/Encrust/commit/984bede05d1817c08f78e8a298618d83f8cebe5f))
+* **app:** no line under the plate card's primary; notices fit a split ([c1bf8f7](https://github.com/vvvlladimir/Encrust/commit/c1bf8f7ed4a890e8e7b00ce6443600f5c864d90b))
+* **app:** only scan network when a printer is selected ([67deb3a](https://github.com/vvvlladimir/Encrust/commit/67deb3a611031b40a81ab3074889d571e4712f4d))
+* **app:** the hint bar stays centred under the tool row with the ([404f9d0](https://github.com/vvvlladimir/Encrust/commit/404f9d01d9a300e9931bc0abe6280e50696e02a9))
+* **creality:** write each .cxdlpv4 machine the layer codec it reads ([46889e3](https://github.com/vvvlladimir/Encrust/commit/46889e3ca7d38e6123a61af657ea5f9dd2d233ea))
+* **drain:** a hole cuts the raft and never a support tree ([9ff36ee](https://github.com/vvvlladimir/Encrust/commit/9ff36eed5b508568cd951c517232b084da9fd5a0))
+* **drain:** a hole takes away the supports whose tips it drills out ([5a4e64f](https://github.com/vvvlladimir/Encrust/commit/5a4e64fc097102dfe836f6f46bc2cef175cbc4bf))
+* **drain:** stop a hole set by hand at its depth on a hollow model ([7bc5cc0](https://github.com/vvvlladimir/Encrust/commit/7bc5cc0c8ab92d31427669c8f2a508998484bd6b))
+* **picker:** name the file a machine is sliced into ([8b087ca](https://github.com/vvvlladimir/Encrust/commit/8b087ca81dd3347365b30f1f8ff1343cfafecbee))
+* **summary:** time the plate from its floor, lift included ([c802de8](https://github.com/vvvlladimir/Encrust/commit/c802de81e515ffc97fa32a19702e56dd6b879501))
+* **supports:** carry the drawn columns and patches with a model moved ([c037073](https://github.com/vvvlladimir/Encrust/commit/c037073d83003a0475844a0f04d7d0f10be7e31d))
+
 ## [0.7.0](https://github.com/vvvlladimir/Encrust/compare/v0.6.0...v0.7.0) (2026-11-04)
 
 
