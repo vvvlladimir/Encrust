@@ -116,7 +116,7 @@ pub fn land(scene: &mut Scene, found: Vec<Proposed>) -> Landed {
             continue;
         }
         for hole in proposed.holes {
-            object.hollow.add_hole(hole);
+            object.drill_hole(hole);
             landed.holes += 1;
         }
         landed.trapped += proposed.trapped.len();

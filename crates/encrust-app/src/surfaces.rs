@@ -166,6 +166,48 @@ mod tests {
     }
 
     #[test]
+    fn a_hole_takes_the_tips_it_drills_out_as_it_is_drilled_and_a_kept_surface_none() {
+        let (mut scene, id) = hollow_block();
+        let object = scene.get_mut(id).expect("the block is on the plate");
+        let transform = object.transform;
+        object.supports.add(Vec3::new(5.0, 5.0, 0.0), transform, 0);
+        object.supports.add(Vec3::new(2.0, 2.0, 0.0), transform, 0);
+        // 3 mm wide and 0.5 mm deep, shy of the 1 mm wall: its floor is printed.
+        let size = core_volume::HoleSize::round(3.0, 0.5, 1.0);
+        let hole = core_volume::DrainHole {
+            kind: core_volume::HoleKind::AtDepth,
+            ..core_volume::DrainHole::sized(Vec3::new(5.0, 5.0, 0.0), Vec3::Z, size, 0.05)
+        };
+        assert!(object.drill_hole(hole), "the underside takes a hole");
+        let contacts = |scene: &Scene| -> Vec<Vec3> {
+            let object = scene.get(id).expect("the block is on the plate");
+            object
+                .supports
+                .points()
+                .iter()
+                .map(|point| point.contact)
+                .collect()
+        };
+        assert_eq!(
+            contacts(&scene),
+            [Vec3::new(2.0, 2.0, 0.0)],
+            "the tip in the 3 mm hole goes with the click, the one 4 mm off it stays"
+        );
+
+        // A tip set on the hole's floor afterwards stands on what prints, and an undo of the
+        // drilling is not undone again once its surface is kept.
+        let floor = Vec3::new(5.0, 5.0, 0.5);
+        let object = scene.get_mut(id).expect("the block is on the plate");
+        object.supports.add(floor, transform, 0);
+        settle(&mut SupportSurfaces::default(), &mut scene);
+        assert_eq!(
+            contacts(&scene),
+            [Vec3::new(2.0, 2.0, 0.0), floor],
+            "keeping the drilled surface takes no support away"
+        );
+    }
+
+    #[test]
     fn a_model_solid_again_lets_its_shell_go_on_the_next_frame() {
         let (mut scene, id) = hollow_block();
         let mut surfaces = SupportSurfaces::default();

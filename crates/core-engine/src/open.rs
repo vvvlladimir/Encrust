@@ -140,6 +140,7 @@ fn model(
     let bvh = Bvh::build(surface);
     let supports = supports_of(
         &object.supports,
+        hollow.drains(),
         &meshes.source,
         surface,
         &bvh,

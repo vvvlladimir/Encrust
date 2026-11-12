@@ -83,7 +83,7 @@ pub(super) fn place_drain_under_cursor(
         .get(id)
         .and_then(|object| hole_under(window, object, printed, &hit));
     if let (Some(hole), Some(object)) = (hole, window.doc.scene.get_mut(id)) {
-        object.hollow.add_hole(hole);
+        object.drill_hole(hole);
     }
 }
 

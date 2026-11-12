@@ -369,3 +369,15 @@ fn boxed(mins: Vec3, maxs: Vec3) -> Mesh {
     ];
     Mesh::new(vertices, faces)
 }
+
+#[test]
+fn a_hole_drills_out_the_surface_inside_its_mouth_and_a_raft_hole_none() {
+    // The 2 mm hole drilled down from the origin: its mouth is the disc of radius 1 there.
+    assert!(drilled_out(&[hole()], Vec3::new(0.9, 0.0, 0.0)));
+    assert!(!drilled_out(&[hole()], Vec3::new(1.1, 0.0, 0.0)));
+    let raft = DrainHole {
+        kind: HoleKind::Support,
+        ..hole()
+    };
+    assert!(!drilled_out(&[raft], Vec3::ZERO));
+}

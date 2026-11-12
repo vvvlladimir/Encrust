@@ -328,6 +328,7 @@ fn restore_objects(
         let (surface, surface_bvh) = (Arc::clone(surface), Arc::clone(surface_bvh));
         object.supports = supports_of(
             &state.supports,
+            object.hollow.drains(),
             &meshes.source,
             &surface,
             &surface_bvh,

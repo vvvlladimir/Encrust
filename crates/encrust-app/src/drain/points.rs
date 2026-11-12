@@ -28,7 +28,7 @@ pub fn drill_at_fractions(object: &mut SceneObject, points: &[[Scalar; 3]], size
         let point = to_plate.transform_point3(near.point);
         let (mesh, bvh, transform) = (&object.mesh, &object.bvh, object.transform);
         if let Some(hole) = ModelHollow::drain_at(mesh, bvh, point, normal, size, transform) {
-            object.hollow.add_hole(hole);
+            object.drill_hole(hole);
         }
     }
 }

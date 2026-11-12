@@ -103,6 +103,32 @@ impl ModelSupports {
             .collect();
     }
 
+    /// Takes away every point, and every tip of a frozen tree, whose contact (model space)
+    /// `gone` answers true for; a tree left with no tip goes. Answers how many went.
+    pub fn clear_contacts(&mut self, gone: impl Fn(Vec3) -> bool) -> usize {
+        let before = self.point_count();
+        self.points.retain(|point| !gone(point.contact));
+        self.frozen = std::mem::take(&mut self.frozen)
+            .into_iter()
+            .filter_map(|tree| {
+                let tips: Vec<usize> = (tree.nodes().iter().enumerate())
+                    .filter(|(_, node)| node.is_leaf() && gone(node.position))
+                    .map(|(tip, _)| tip)
+                    .collect();
+                if tips.is_empty() {
+                    Some(tree)
+                } else {
+                    tree.without(&tips)
+                }
+            })
+            .collect();
+        let taken = before - self.point_count();
+        if taken > 0 {
+            self.points_changed();
+        }
+        taken
+    }
+
     /// Takes every support away: the points and the trees a hand has frozen alike.
     pub fn clear(&mut self) {
         self.points.clear();
@@ -115,5 +141,50 @@ impl ModelSupports {
         self.forest = None;
         self.built = None;
         self.revision = next_revision();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SupportTree;
+    use crate::fixtures::profile;
+    use core_geometry::{Bvh, Mesh};
+
+    #[test]
+    fn a_contact_taken_away_goes_from_the_points_and_from_a_frozen_tree() {
+        // Two tips 4 mm apart in open air share one trunk.
+        let nothing = Mesh::default();
+        let mut supports = ModelSupports::default();
+        for x in [10.0, 14.0] {
+            supports.add(Vec3::new(x, 10.0, 20.0), Transform::default(), 0);
+        }
+        let table = [profile()];
+        supports.refresh(
+            &nothing,
+            &Bvh::build(&nothing),
+            Transform::default(),
+            &table,
+        );
+        supports
+            .freeze(0, Transform::default())
+            .expect("the one tree is there to freeze");
+        assert_eq!(
+            supports.frozen()[0].tip_count(),
+            2,
+            "one tree carries both tips"
+        );
+        supports.add(Vec3::new(10.0, 14.0, 20.0), Transform::default(), 0);
+
+        let taken = supports.clear_contacts(|contact| contact.x > 12.0 || contact.y > 12.0);
+
+        assert_eq!(taken, 2, "the frozen tip at x 14 and the point at y 14 go");
+        assert!(supports.points().is_empty());
+        let left: Vec<Vec3> = supports
+            .frozen()
+            .iter()
+            .flat_map(SupportTree::contacts)
+            .collect();
+        assert_eq!(left, [Vec3::new(10.0, 10.0, 20.0)], "the tip at x 10 stays");
     }
 }

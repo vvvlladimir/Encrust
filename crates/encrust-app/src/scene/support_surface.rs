@@ -1,6 +1,7 @@
 use super::object::SceneObject;
 use core_geometry::{Bvh, Mesh, Vec3};
 use core_supports::{Placed, WallSide};
+use core_volume::{DrainHole, drilled_out};
 use printer_profiles::SupportProfile;
 use std::ops::Range;
 use std::sync::Arc;
@@ -147,5 +148,19 @@ impl SceneObject {
     pub(super) fn surface_kept(&self) -> Option<&SupportShell> {
         let kept = self.support_shell.as_ref()?;
         Arc::ptr_eq(&kept.mesh, self.support_surface().0).then_some(kept)
+    }
+
+    /// Drills `hole`, model space, as [`core_volume::ModelHollow::add_hole`] does, and takes
+    /// away in the same edit every support whose tip it drills out (ADR 0443).
+    pub fn drill_hole(&mut self, hole: DrainHole) -> bool {
+        if !self.hollow.add_hole(hole) {
+            return false;
+        }
+        let drilled = self.hollow.drains().last().map(std::slice::from_ref);
+        if let Some(drilled) = drilled {
+            self.supports
+                .clear_contacts(|contact| drilled_out(drilled, contact));
+        }
+        true
     }
 }

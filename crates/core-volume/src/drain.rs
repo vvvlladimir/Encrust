@@ -200,6 +200,14 @@ impl DrainHole {
     }
 }
 
+/// Whether one of `holes` drilled into the model takes away the surface at `point`, all in
+/// the model's own space; a hole in the raft takes nothing of the model (ADR 0443).
+pub fn drilled_out(holes: &[DrainHole], point: Vec3) -> bool {
+    (holes.iter())
+        .filter(|hole| hole.kind != HoleKind::Support)
+        .any(|hole| hole.holds(point))
+}
+
 /// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space, round
 /// or a polygon turned `turn_deg` from the level about each leg. A file without the outline
 /// reads a round one (ADR 0313).
