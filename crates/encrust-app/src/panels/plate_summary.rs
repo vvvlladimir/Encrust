@@ -281,7 +281,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
             .to_cols_array()
             .map(f32::to_bits)
             .hash(&mut hasher);
-        for supports in object.supports.meshes().unwrap_or_default() {
+        for supports in object.supports.every_mesh() {
             Arc::as_ptr(supports).hash(&mut hasher);
         }
     }

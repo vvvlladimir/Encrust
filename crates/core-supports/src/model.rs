@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 
-use crate::{Clearances, Shaded, SupportPoint, SupportTree};
+use crate::{Clearances, Shaded, ShadedSupports, SupportPoint, SupportTree};
 
 mod build;
 mod follow;
@@ -51,7 +51,7 @@ pub struct ModelSupports {
     built: Option<Built>,
     /// The column meshes as they were last built. `built` is dropped by every edit and
     /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
-    drawn: Vec<Shaded>,
+    drawn: ShadedSupports,
     /// Where the model stood when `drawn` was built; see [`Self::drawn_shift`].
     drawn_at: Transform,
     /// How much of the height the model stands at is its raft's doing, millimetres: what
@@ -175,15 +175,35 @@ impl ModelSupports {
     }
 
     /// The column meshes, one per group and in plate coordinates, or `None` until they
-    /// have been built.
+    /// have been built; the raft is [`Self::raft`].
     pub fn meshes(&self) -> Option<&[Arc<Mesh>]> {
         self.built.as_ref().map(|built| built.meshes.as_slice())
+    }
+
+    /// The raft the columns stand on, in plate coordinates, once built with one.
+    pub fn raft(&self) -> Option<&Arc<Mesh>> {
+        self.built.as_ref().and_then(|built| built.raft.as_ref())
+    }
+
+    /// Every mesh built, the columns and the raft: all that prints of the supports.
+    pub fn every_mesh(&self) -> impl Iterator<Item = &Arc<Mesh>> {
+        self.meshes().unwrap_or_default().iter().chain(self.raft())
     }
 
     /// The column meshes to draw: the ones last built, left standing until the rebuild an edit
     /// follows with; drawing [`Self::meshes`] instead blinks every support out for a frame.
     pub fn drawn(&self) -> &[Shaded] {
-        &self.drawn
+        &self.drawn.groups
+    }
+
+    /// The raft drawn under [`Self::drawn`], by the same rule.
+    pub fn drawn_raft(&self) -> Option<&Shaded> {
+        self.drawn.raft.as_ref()
+    }
+
+    /// Every mesh drawn, the columns and the raft.
+    pub fn drawn_every(&self) -> impl Iterator<Item = &Shaded> {
+        self.drawn.groups.iter().chain(self.drawn_raft())
     }
 
     /// Where the model stood when [`Self::drawn`] was built.
@@ -192,12 +212,20 @@ impl ModelSupports {
     }
 
     /// Draws `shaded`, built with the model at `transform`, from now on and answers its
-    /// meshes, for [`Built`] to keep.
-    fn draw(&mut self, shaded: Vec<Shaded>, transform: Transform) -> Vec<Arc<Mesh>> {
-        let meshes = shaded.iter().map(|group| Arc::clone(&group.mesh)).collect();
+    /// column meshes and its raft, for [`Built`] to keep.
+    fn draw(
+        &mut self,
+        shaded: ShadedSupports,
+        transform: Transform,
+    ) -> (Vec<Arc<Mesh>>, Option<Arc<Mesh>>) {
+        let meshes = shaded.groups.iter().map(|group| Arc::clone(&group.mesh));
+        let built = (
+            meshes.collect(),
+            shaded.raft.as_ref().map(|raft| Arc::clone(&raft.mesh)),
+        );
         self.drawn = shaded;
         self.drawn_at = transform;
-        meshes
+        built
     }
 }
 

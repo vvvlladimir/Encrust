@@ -20,7 +20,7 @@ use crate::hollowing::{HollowReport, pierced};
 use crate::pipeline::OrientSummary;
 use crate::report::{FitCheck, ImportReport};
 use crate::stage::{Found, Part, Shaping, standing_of};
-use crate::supports::{Printed, SupportReport};
+use crate::supports::{Printed, Standing, SupportReport};
 
 /// One model on its way through a recipe, in plate coordinates throughout.
 pub(super) struct Piece {
@@ -42,7 +42,7 @@ pub(super) struct Piece {
     /// A plug for each hole a drain step asked plugs for, with the hole as it was cut then.
     pub plugs: Vec<(Mesh, DrainHole)>,
     /// The supports standing under it and what stood them, with the plan they were built to.
-    pub supports: Option<(SupportReport, Mesh)>,
+    pub supports: Option<(SupportReport, Standing)>,
     pub plan: Option<SupportPlan>,
     pub import: ImportReport,
     pub oriented: Option<OrientSummary>,
@@ -100,7 +100,7 @@ impl Piece {
     pub(super) fn moved(&mut self, transform: Transform) {
         self.mesh = transform_mesh(&self.mesh, transform);
         if let Some((_, supports)) = &mut self.supports {
-            *supports = transform_mesh(supports, transform);
+            supports.moved(transform);
         }
         let matrix = transform.to_matrix();
         for hole in &mut self.holes {
@@ -133,16 +133,18 @@ impl Piece {
     /// The model as a run cuts it, its supports under it.
     pub(super) fn model(&self) -> Result<Model> {
         let cuts = self.cuts()?;
+        let (supports, raft) = self
+            .supports
+            .as_ref()
+            .map(|(_, standing)| standing.parts())
+            .unwrap_or_default();
         Ok(Model {
             mesh: Arc::new(self.mesh.clone()),
             transform: Transform::default(),
             drilled: self.printed().drilled(&self.mesh, cuts.as_ref()),
             cuts: cuts.map(Arc::new),
-            supports: self
-                .supports
-                .iter()
-                .map(|(_, supports)| Arc::new(supports.clone()))
-                .collect(),
+            supports,
+            raft,
         })
     }
 
@@ -171,13 +173,16 @@ impl Piece {
                 cuts: None,
                 drilled: None,
                 supports: Vec::new(),
+                raft: None,
             })
             .collect()
     }
 
     /// The box it and its supports stand in.
     pub(super) fn bounds(&self) -> Option<Aabb> {
-        let supports = self.supports.iter().filter_map(|(_, mesh)| mesh.aabb());
+        let supports = (self.supports.iter())
+            .flat_map(|(_, standing)| standing.meshes())
+            .filter_map(Mesh::aabb);
         placed_aabb(&self.mesh, Transform::default())
             .into_iter()
             .chain(supports)
@@ -186,10 +191,12 @@ impl Piece {
 
     /// The resin in its supports, millilitres.
     pub(super) fn support_ml(&self) -> Scalar {
-        let mm3 = self
-            .supports
-            .as_ref()
-            .map_or(0.0, |(_, mesh)| signed_volume(mesh).abs());
+        let mm3 = self.supports.as_ref().map_or(0.0, |(_, standing)| {
+            standing
+                .meshes()
+                .map(|mesh| signed_volume(mesh).abs())
+                .sum()
+        });
         mm3 / 1000.0
     }
 
@@ -232,6 +239,7 @@ impl Piece {
         }
         let model = Model {
             supports: Vec::new(),
+            raft: None,
             ..self.model()?
         };
         let baked = bake(&[model], &Compensation::default()).context("nothing to scan")?;

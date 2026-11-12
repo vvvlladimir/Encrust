@@ -52,7 +52,7 @@ pub(super) fn moved_of(turned: &Turned, id: ObjectId) -> Transform {
 
 /// The box across the plate the model stands in with its supports, those moved by `moved`.
 pub(super) fn standing_rect(object: &SceneObject, moved: Transform) -> Option<Rect> {
-    let supports = object.supports.drawn().iter();
+    let supports = object.supports.drawn_every();
     let bounds = object
         .world_bounds()
         .into_iter()
@@ -69,7 +69,8 @@ fn outline(object: &SceneObject) -> Vec<Vec2> {
         .vertices
         .par_iter()
         .map(|vertex| matrix.transform_point3(*vertex).truncate());
-    let supports = object.supports.drawn().par_iter().flat_map(|group| {
+    let drawn: Vec<_> = object.supports.drawn_every().collect();
+    let supports = drawn.into_par_iter().flat_map(|group| {
         group
             .mesh
             .vertices

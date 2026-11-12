@@ -21,6 +21,7 @@ pub fn models_of(scene: &Scene, plate: u32) -> Vec<Model> {
                 .drilled(object.uncut())
                 .map(|drilled| std::sync::Arc::clone(&drilled.mesh)),
             supports: object.supports.meshes().unwrap_or_default().to_vec(),
+            raft: object.supports.raft().cloned(),
         })
         .collect()
 }

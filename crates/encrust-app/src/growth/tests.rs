@@ -61,7 +61,7 @@ fn a_model_moved_while_its_trees_grow_holds_its_supports_pending() {
 }
 
 #[test]
-fn columns_carried_while_their_trees_regrow_are_drilled_where_they_were_built() {
+fn a_raft_carried_while_its_trees_regrow_is_drilled_where_it_was_built() {
     let mut scene = supported_cube();
     let table = [SupportProfile::shipped("medium").expect("the medium preset ships")];
     let mut growth = SupportGrowth::default();
@@ -75,7 +75,7 @@ fn columns_carried_while_their_trees_regrow_are_drilled_where_they_were_built() 
     assert!(object.supports.outgrown(object.transform, &table));
     assert_eq!(object.supports_under().transform, built_at);
     assert!(
-        object.supports_built().is_none(),
+        object.raft_built().is_none(),
         "nothing built elsewhere is picked or drilled"
     );
 }

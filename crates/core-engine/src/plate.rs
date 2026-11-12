@@ -19,14 +19,16 @@ pub struct Model {
     /// Where the model stands on the plate.
     pub transform: Transform,
     /// Drain holes and channels as `core_volume::drill` lays them, in the model's own space:
-    /// taken out of the model and its supports exactly, or by the winding rule where the
-    /// engine cannot read it (ADR 0322).
+    /// taken out of the model and its raft exactly, or by the winding rule where the
+    /// engine cannot read it (ADR 0322, 0441).
     pub cuts: Option<Arc<Mesh>>,
     /// `mesh` with `cuts` already taken out exactly, where a front end has it to hand;
     /// `bake` takes them out itself otherwise.
     pub drilled: Option<Arc<Mesh>>,
     /// The support trees standing under it, already in plate coordinates.
     pub supports: Vec<Arc<Mesh>>,
+    /// The raft they stand on, in plate coordinates: what of the supports its cuts reach.
+    pub raft: Option<Arc<Mesh>>,
 }
 
 impl Model {
@@ -38,7 +40,13 @@ impl Model {
             cuts: None,
             drilled: None,
             supports: Vec::new(),
+            raft: None,
         }
+    }
+
+    /// Every mesh of its supports: the trees, then the raft.
+    pub fn support_meshes(&self) -> impl Iterator<Item = &Arc<Mesh>> {
+        self.supports.iter().chain(&self.raft)
     }
 }
 

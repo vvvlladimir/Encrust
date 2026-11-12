@@ -335,7 +335,7 @@ impl Scene {
             Arc::as_ptr(object.printed()).hash(&mut hasher);
             let placed = object.transform.to_matrix().to_cols_array();
             placed.map(f32::to_bits).hash(&mut hasher);
-            for group in object.supports.drawn() {
+            for group in object.supports.drawn_every() {
                 Arc::as_ptr(&group.mesh).hash(&mut hasher);
             }
         }

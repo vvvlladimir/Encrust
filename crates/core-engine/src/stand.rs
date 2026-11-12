@@ -5,7 +5,7 @@ use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
     Blocked, Lost, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns,
-    generate_supports, grow, lost, low_points, mesh_trees,
+    generate_supports, grow, lost, low_points, mesh_groups,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
@@ -124,8 +124,10 @@ pub struct Stood {
     /// The contacts no column could stand under, each an index into `contacts` and why.
     pub unheld: Vec<Lost>,
     pub trees: usize,
-    /// The supports themselves, in plate coordinates.
+    /// The support trees themselves, in plate coordinates.
     pub supports: Mesh,
+    /// The raft they stand on, in plate coordinates, where the plan builds one.
+    pub raft: Option<Mesh>,
 }
 
 /// A model to stand supports under, in plate coordinates: its mesh, which of its faces
@@ -292,6 +294,11 @@ fn grown(
     let trees = grow(&columns, &placed, profiles);
     let trees = merged_near(trees, (merges, &contacts), &columns, &placed, profiles)?;
     let facing = facing(surface, bvh, &contacts);
+    let meshed = mesh_groups(&trees, &placed, profiles);
+    let mut supports = Mesh::default();
+    for group in &meshed.groups {
+        supports.append(group);
+    }
     Ok(Stood {
         lifted_mm,
         contacts,
@@ -303,7 +310,8 @@ fn grown(
             .sum(),
         unheld: lost(&points, &trees, &placed, profiles),
         trees: trees.len(),
-        supports: mesh_trees(&trees, &placed, profiles),
+        supports,
+        raft: meshed.raft,
     })
 }
 

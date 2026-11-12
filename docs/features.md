@@ -409,13 +409,13 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Undo with **Make solid again**.
 
 ### Drain
-- **Drill** a hole, with size, depth and taper, wherever you click: into a model, its
-  supports or its raft. A click on a hole already drilled at least as wide adds nothing; a
-  wider hole over it is drilled, and so is one drilled on from its floor or wall, a narrower
-  step for instance. A hole in the supports gets no plug.
-- A hole or a channel cuts only the model it was made in, and the supports and raft under
-  it, which the viewport shows open as they print: a model set down in another's hole is
-  printed whole. The cut is made for real in the
+- **Drill** a hole, with size, depth and taper, wherever you click: into a model or its
+  raft. A click passes through a support tree. A click on a hole already drilled at least as
+  wide adds nothing; a wider hole over it is drilled, and so is one drilled on from its floor
+  or wall, a narrower step for instance. A hole in the raft gets no plug.
+- A hole or a channel cuts only the model it was made in and the raft under it, which the
+  viewport shows open as they print, and never a support tree: a model set down in another's
+  hole is printed whole. The cut is made for real in the
   background a moment after each change; a model that cannot be read as a solid, even
   mended, keeps an approximate cut that also reaches what stands in it, and the window
   says so.

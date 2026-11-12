@@ -448,6 +448,7 @@ fn put_down(
             cuts: None,
             drilled: None,
             supports: Vec::new(),
+            raft: None,
         })
         .collect();
     watch.stop.check()?;
@@ -462,16 +463,13 @@ fn put_down(
         .filter(|(report, _)| !seated || !report.contacts.is_empty());
     let lifted_mm = stood.as_ref().map_or(0.0, |(report, _)| report.lifted_mm);
     check_lift(lifted_mm, ground, &shaping.hollow)?;
-    if !shaping.hollow.drain_support_at.is_empty() {
-        let Some((_, columns)) = &stood else {
-            bail!("--drain-support-at drills into the supports, and none stand under the model");
-        };
-        let drilled = support_holes(columns, &shaping.hollow)?;
-        cuts.get_or_insert_default().append(&drilled);
-    }
-    let (supports, columns) = match stood {
-        Some((report, mesh)) => (Some(report), vec![Arc::new(mesh)]),
-        None => (None, Vec::new()),
+    let raft = stood
+        .as_ref()
+        .and_then(|(_, standing)| standing.raft.as_ref());
+    drill_the_raft(raft, &shaping.hollow, &mut cuts)?;
+    let (supports, (columns, raft)) = match stood {
+        Some((report, standing)) => (Some(report), standing.parts()),
+        None => (None, (Vec::new(), None)),
     };
     if watch.talk
         && let Some(report) = &supports
@@ -486,6 +484,7 @@ fn put_down(
         cuts: cuts.map(Arc::new),
         drilled,
         supports: columns,
+        raft,
     };
     Ok(PutDown {
         model,
@@ -496,9 +495,22 @@ fn put_down(
     })
 }
 
+/// Adds to `cuts` the holes `--drain-support-at` drills into `raft`, refused with no raft.
+fn drill_the_raft(raft: Option<&Mesh>, hollow: &HollowArgs, cuts: &mut Option<Mesh>) -> Result<()> {
+    if hollow.drain_support_at.is_empty() {
+        return Ok(());
+    }
+    let Some(raft) = raft else {
+        bail!("--drain-support-at drills into the raft, and none stands under the model");
+    };
+    cuts.get_or_insert_default()
+        .append(&support_holes(raft, hollow)?);
+    Ok(())
+}
+
 /// The box `model` and its supports stand in, plate millimetres.
 pub(crate) fn bounds(model: &Model) -> Option<Aabb> {
-    let supports = model.supports.iter().filter_map(|mesh| mesh.aabb());
+    let supports = model.support_meshes().filter_map(|mesh| mesh.aabb());
     placed_aabb(&model.mesh, model.transform)
         .into_iter()
         .chain(supports)

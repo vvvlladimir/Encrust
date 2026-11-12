@@ -101,6 +101,7 @@ fn a_cut_standing_over_the_model_adds_no_layer_to_the_stack() {
         ))),
         drilled: None,
         supports: Vec::new(),
+        raft: None,
     };
 
     let baked = bake(std::slice::from_ref(&model), &Compensation::default())
@@ -172,23 +173,43 @@ fn a_hole_leaves_a_model_standing_in_it_whole() {
     );
 }
 
-#[test]
-fn a_support_standing_in_a_hole_is_drilled_with_its_model() {
-    let pillar = Arc::new(box_mesh(
+/// A 1 by 1 by 6 mm block standing in the slab's bore, its top 1 mm up in it and its foot
+/// 3 mm under where the hole ends.
+fn in_the_bore() -> Arc<Mesh> {
+    Arc::new(box_mesh(
         Vec3::new(9.5, 9.5, -5.0),
         Vec3::new(10.5, 10.5, 1.0),
-    ));
+    ))
+}
+
+#[test]
+fn a_support_tree_standing_in_a_hole_is_left_whole() {
     let model = Model {
-        supports: vec![pillar],
+        supports: vec![in_the_bore()],
         ..drilled_slab()
     };
     let baked = bake(&[model], &Compensation::default()).expect("geometry");
     let volume = signed_volume(&baked.solid.mesh);
-    // The slab less its bore, and the 6 mm3 pillar less the 3 mm3 of it the hole reaches,
+    // The slab less its 40 mm3 bore, and the whole 6 mm3 tree.
+    assert!(
+        (volume - (3960.0 + 6.0)).abs() < 1e-2,
+        "a hole never cuts a tree, got {volume} mm3"
+    );
+}
+
+#[test]
+fn a_raft_standing_in_a_hole_is_drilled_with_its_model() {
+    let model = Model {
+        raft: Some(in_the_bore()),
+        ..drilled_slab()
+    };
+    let baked = bake(&[model], &Compensation::default()).expect("geometry");
+    let volume = signed_volume(&baked.solid.mesh);
+    // The slab less its bore, and the 6 mm3 raft less the 3 mm3 of it the hole reaches,
     // down to its tip 2 mm under the slab.
     assert!(
         (volume - (3960.0 + 3.0)).abs() < 1e-2,
-        "the pillar's top is taken out of the hole, got {volume} mm3"
+        "the raft's top is taken out of the hole, got {volume} mm3"
     );
 }
 
@@ -222,6 +243,7 @@ fn a_support_goes_in_where_it_already_stands() {
             Vec3::new(4.0, 4.0, 0.0),
             Vec3::new(6.0, 6.0, 10.0),
         ))],
+        raft: None,
     };
 
     let merged = bake(std::slice::from_ref(&model), &Compensation::default())
@@ -507,6 +529,7 @@ fn lifted_pair(mesh: impl Fn() -> Arc<Mesh>) -> [Model; 2] {
             Vec3::new(pillar_x, 1.5, 0.0),
             Vec3::new(pillar_x + 1.0, 2.5, 1.0),
         ))],
+        raft: None,
     };
     [lifted(1.0, 1.5), lifted(6.0, 4.5)]
 }

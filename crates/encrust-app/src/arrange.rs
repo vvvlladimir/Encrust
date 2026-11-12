@@ -38,7 +38,7 @@ fn pack(
         .iter()
         .filter_map(|object| {
             let moved = moved_of(turned, object.id);
-            let supports = object.supports.drawn().iter();
+            let supports = object.supports.drawn_every();
             let parts: Vec<(&Mesh, Transform)> = std::iter::once((&*object.mesh, object.transform))
                 .chain(supports.map(|group| (&*group.mesh, moved)))
                 .collect();

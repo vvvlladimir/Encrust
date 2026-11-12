@@ -277,11 +277,12 @@ the shape, not a drain. `sleeves` keeps the cavity a wall off it, from its mouth
 as it does a channel; `pierce` leaves its depth, and its plug is as deep as the hole.
 Clearing one from a hollow model rebuilds the shell, as clearing a channel does.
 
-A hole in the supports (ADR 0347) is kept with the model in its space, takes no plug and is
-never deepened or walled. The Drain tool meets what prints: the model's surface drilled and
-hollowed, and its support groups as they print, each with a hierarchy built on a worker
-(`PrintedSupports`). A click adds nothing only where its hole would lie wholly inside one
-drilled at least as wide, so a click on a hole's floor drills on through it.
+A hole in the raft (ADR 0347, 0441) is kept with the model in its space, takes no plug and is
+never deepened or walled. No hole cuts a support tree. The Drain tool meets what prints: the
+model's surface drilled and hollowed, and its raft as it prints, with a hierarchy built on a
+worker (`PrintedSupports`); a ray passes through the trees. A click adds nothing only where
+its hole would lie wholly inside one drilled at least as wide, so a click on a hole's floor
+drills on through it.
 
 A polygon's corners lie on the hole's diameter and its turn is measured from the level line
 `frame` lays the first corner on wherever the axis is not upright, so a user turns a corner
@@ -350,7 +351,7 @@ never kept, and in a browser they make way for a field being built or a plate be
 (ADR 0260).
 
 The window drills each model on a worker a moment after its cuts or mesh change, and its
-support groups on another — only those a body's box reaches are cut and shaded again — and
+raft on another — only the pieces a body's box reaches are cut and shaded again — and
 draws what it gets with the cavity's faces found again on it — those within a micrometre of the
 shell's cavity — and hands it to `bake`, which otherwise drills the model itself. Until it
 lands, and on a model the engine refuses, the cut is drawn as follows. Nothing meshes the

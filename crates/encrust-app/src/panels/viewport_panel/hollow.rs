@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, PlacedHit, Transform};
+use core_geometry::{PlacedHit, Transform};
 use core_volume::{Blocker, DrainHole, ModelHollow, PENDING_MARKER_MM, across_mm, blocker_markers};
 
 use crate::panels::Window;
@@ -66,7 +66,7 @@ pub(super) fn remove_blocker_under_cursor(
 }
 
 /// Drills a drain hole straight into the printed surface under the cursor — a model's, an
-/// earlier hole's floor or wall among it, or its supports' — and selects the model.
+/// earlier hole's floor or wall among it, or its raft's — and selects the model.
 pub(super) fn place_drain_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
@@ -101,20 +101,11 @@ fn hole_under(
             let (surface, bvh) = object.support_surface();
             ModelHollow::drain_at(surface, bvh, point, normal, size, transform)
         }
-        Printed::Supports(group) => {
-            let (mesh, bvh) = support_group(object, group)?;
-            ModelHollow::support_drain_at(&mesh, &bvh, point, normal, size, transform)
+        Printed::Raft => {
+            let (raft, bvh) = object.raft_built()?;
+            ModelHollow::support_drain_at(&raft.mesh, bvh, point, normal, size, transform)
         }
     }
-}
-
-/// Support group `group` of `object` as it prints, and its hierarchy, once built.
-fn support_group(object: &SceneObject, group: usize) -> Option<(Arc<Mesh>, Arc<Bvh>)> {
-    let (groups, bvhs) = object.supports_built()?;
-    Some((
-        Arc::clone(&groups.get(group)?.mesh),
-        Arc::clone(bvhs.get(group)?),
-    ))
 }
 
 /// Adds a point to the channel being laid out on the model under the cursor.
@@ -178,7 +169,7 @@ pub(super) fn drain_ghost(
         .filter(|hole| !object.hollow.has_hole_over(hole))?;
     let into = match printed {
         Printed::Model => None,
-        Printed::Supports(group) => Some(support_group(object, group)?.0),
+        Printed::Raft => Some(Arc::clone(&object.raft_built()?.0.mesh)),
     };
     Some(Ghost {
         shape: GhostShape::Hole {

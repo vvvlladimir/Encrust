@@ -43,7 +43,7 @@ fn bodies_of(model: &Model, owner: usize) -> impl Iterator<Item = Body<'_>> {
         bvh: None,
         transform: model.transform,
     };
-    let supports = model.supports.iter().map(move |mesh| Body {
+    let supports = model.support_meshes().map(move |mesh| Body {
         owner,
         kind: BodyKind::Supports,
         mesh,

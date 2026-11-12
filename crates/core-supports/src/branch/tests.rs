@@ -415,7 +415,7 @@ fn a_merged_tip_is_drawn_with_its_own_group_down_to_the_joint() {
     let model = Mesh::default();
     let bvh = Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
-    let meshes = crate::mesh_groups(&forest, &placed, Profiles::new(&table).expect("two"));
+    let meshes = crate::mesh_groups(&forest, &placed, Profiles::new(&table).expect("two")).groups;
     let joint = forest[0].root().position;
     let light_tip = |mesh: &Mesh| {
         mesh.vertices

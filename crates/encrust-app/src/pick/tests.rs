@@ -378,28 +378,30 @@ fn on_a_raft(scene: &mut Scene) -> ObjectId {
     let raft = core_supports::shaded(vec![core_geometry::cuboid(
         Vec3::new(-5.0, -5.0, 0.0),
         Vec3::new(6.0, 6.0, 1.0),
-    )]);
-    let bvhs = vec![Arc::new(core_geometry::Bvh::build(&raft[0].mesh))];
+    )])
+    .pop()
+    .expect("one mesh shades");
+    let bvh = Arc::new(core_geometry::Bvh::build(&raft.mesh));
     let object = scene.get_mut(id).expect("the cube");
-    // Built for no groups of its own, so it stands for whatever the tool built.
+    // Built for no raft of its own, so it stands for whatever the tool built.
     let from = crate::drilling::BuiltFrom::of(crate::drilling::SupportsUnder {
-        groups: &[],
+        raft: None,
         cuts: None,
         transform: object.transform,
     });
-    object.printed_supports.keep(from, raft, bvhs);
+    object.printed_supports.keep(from, raft, bvh);
     id
 }
 
 #[test]
-fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
+fn a_raft_beside_its_model_is_pointed_at_as_its_raft() {
     let mut scene = Scene::default();
     let id = on_a_raft(&mut scene);
 
     let beside = straight_down_on(Vec3::new(-3.0, -3.0, 1.0));
     let (hit_id, printed, hit) =
         pick_printed(&scene, &beside, VIEWPORT, center(), Shown::default()).expect("the raft");
-    assert_eq!((hit_id, printed), (id, Printed::Supports(0)));
+    assert_eq!((hit_id, printed), (id, Printed::Raft));
     assert!(
         (hit.point.z - 1.0).abs() < 1e-3,
         "on the raft's top, got {hit:?}"
@@ -412,6 +414,41 @@ fn a_raft_beside_its_model_is_pointed_at_as_its_supports() {
         printed,
         Printed::Model,
         "the model in front of the raft is met first"
+    );
+}
+
+#[test]
+fn a_support_tree_is_passed_through_as_nothing_to_drill() {
+    let mut scene = Scene::default();
+    let id = add(&mut scene, "cube", Vec3::new(0.0, 0.0, 10.0));
+    let table = [printer_profiles::SupportProfile::shipped("medium").expect("medium ships")];
+    let object = scene.get_mut(id).expect("the cube");
+    let transform = object.transform;
+    object.supports.add(Vec3::new(0.5, 0.5, 10.0), transform, 0);
+    object.refresh_supports(&table);
+    assert_eq!(
+        object.supports.standing(),
+        1,
+        "a trunk stands under the cube"
+    );
+
+    let level = OrbitCamera {
+        target: Vec3::new(0.5, 0.5, 5.0),
+        distance_mm: 40.0,
+        pitch_rad: 0.0,
+        ..OrbitCamera::default()
+    };
+    let ray = ray_through(&level, VIEWPORT, center()).expect("the centre casts a ray");
+    let trunk = &scene.get(id).expect("the cube").supports.drawn()[0].mesh;
+    let bvh = core_geometry::Bvh::build(trunk);
+    assert!(
+        raycast_placed(trunk, &bvh, Transform::default(), &ray).is_some(),
+        "the ray meets the trunk, or this proves nothing"
+    );
+    assert_eq!(
+        pick_printed(&scene, &level, VIEWPORT, center(), Shown::default()),
+        None,
+        "the trunk halfway up is no surface a hole is drilled into"
     );
 }
 

@@ -271,6 +271,27 @@ fn a_tree_the_file_keeps_stands_down_to_the_plate() {
 }
 
 #[test]
+fn a_raft_the_profile_lays_opens_apart_from_the_trees() {
+    let mut saved = project();
+    saved.manifest.supports.groups[0].profile.raft.enabled = true;
+    let lifted = Transform::from_translation(Vec3::new(30.0, 30.0, 10.0));
+    let object = &mut saved.manifest.objects[0];
+    object.transform = lifted;
+    object.supports.grown =
+        grown_under(&saved.models[0].source, lifted, Vec3::new(40.0, 40.0, 10.0));
+
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
+    let model = &plate.models[0];
+    let raft = model.raft.as_ref().expect("the profile lays a raft");
+    let column = model.supports[0].aabb().expect("the column has geometry");
+    assert!(
+        raft.aabb()
+            .is_some_and(|raft| raft.maxs.z <= column.mins.z + 1.0),
+        "the raft lies under the tree, not in its mesh"
+    );
+}
+
+#[test]
 fn a_point_without_a_tree_grows_nothing() {
     let mut saved = project();
     saved.manifest.objects[0].supports.points = vec![SupportPoint::new(Vec3::new(10.0, 10.0, 0.0))];

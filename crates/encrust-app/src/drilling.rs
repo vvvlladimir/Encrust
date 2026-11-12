@@ -1,5 +1,5 @@
-//! Every model's cuts taken out of it and its supports exactly, off the drawing thread
-//! (ADR 0322).
+//! Every model's cuts taken out of it and its raft exactly, off the drawing thread
+//! (ADR 0322, 0441).
 
 use std::sync::{Arc, Weak};
 
@@ -21,7 +21,7 @@ mod supports;
 pub use reads::ModelReads;
 pub use supports::{BuiltFrom, PrintedSupports, SupportsUnder};
 
-/// The cuts being taken out, one run a model and one for its supports at a time.
+/// The cuts being taken out, one run a model and one for its raft at a time.
 #[derive(Debug, Default)]
 pub struct Drilling {
     runs: Vec<Run>,
@@ -30,7 +30,7 @@ pub struct Drilling {
     pub reads: ModelReads,
 }
 
-/// A run for one model's printed supports, and what it was started for.
+/// A run for one model's printed raft, and what it was started for.
 #[derive(Debug)]
 struct SupportRun {
     model: ObjectId,
@@ -83,20 +83,23 @@ impl Drilling {
         self.start_supports(scene);
     }
 
-    /// Starts building the printed supports of every model whose groups, cuts or placement
-    /// changed since they last were and that has no such run under way.
+    /// Starts building the printed raft of every model whose raft, cuts or placement changed
+    /// since it last was and that has no such run under way.
     fn start_supports(&mut self, scene: &Scene) {
         for object in scene.objects() {
             let under = object.supports_under();
             let busy = self.support_runs.iter().any(|run| run.model == object.id);
-            if busy || !object.printed_supports.wants(under) {
+            let Some(raft) = under
+                .raft
+                .filter(|_| !busy && object.printed_supports.wants(under))
+            else {
                 continue;
-            }
+            };
             self.support_runs.push(SupportRun {
                 model: object.id,
                 from: BuiltFrom::of(under),
                 job: spawn_printed_supports(PrintedSupportsRequest {
-                    groups: under.groups.to_vec(),
+                    raft: raft.clone(),
                     cuts: under.cuts.cloned(),
                     transform: under.transform,
                 }),
@@ -104,8 +107,8 @@ impl Drilling {
         }
     }
 
-    /// Keeps what each supports run that has ended built, where its model still stands as it
-    /// was started for. A lost run is noted, and not started again for the same groups.
+    /// Keeps what each raft run that has ended built, where its model still stands as it was
+    /// started for. A lost run is noted, and not started again for the same raft.
     fn poll_supports(&mut self, scene: &mut Scene) {
         let mut index = 0;
         while index < self.support_runs.len() {
@@ -121,7 +124,7 @@ impl Drilling {
                 continue;
             }
             match outcome {
-                Some((shaded, bvhs)) => object.printed_supports.keep(run.from, shaded, bvhs),
+                Some((raft, bvh)) => object.printed_supports.keep(run.from, raft, bvh),
                 None => object.printed_supports.lose(run.from),
             }
         }

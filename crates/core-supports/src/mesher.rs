@@ -121,9 +121,18 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
     mesh
 }
 
-/// The same supports as [`mesh_trees`], one mesh per group in group order for drawing apart;
-/// a strut goes with its heaviest head, a trunk and foot with the tree, a brace with its group.
-pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
+/// A model's supports meshed apart: the columns of each group and the raft they stand on.
+#[derive(Debug, Clone, Default)]
+pub struct GroupMeshes {
+    /// One mesh per group, in group order.
+    pub groups: Vec<Mesh>,
+    pub raft: Option<Mesh>,
+}
+
+/// The same supports as [`mesh_trees`], one mesh per group in group order for drawing apart,
+/// and the raft on its own; a strut goes with its heaviest head, a trunk and foot with the
+/// tree, a brace with its group.
+pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> GroupMeshes {
     let trees = &propped(trees, placed, profiles);
     let mut meshes = in_groups(trees, profiles.groups().count(), profiles, placed);
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
@@ -134,8 +143,10 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
             &brace(from, to, radius_mm, profiles.of(group)),
         );
     }
-    mesh_raft(&mut meshes[0], trees, placed, profiles);
-    meshes
+    GroupMeshes {
+        groups: meshes,
+        raft: raft(trees, placed, profiles),
+    }
 }
 
 /// `trees` and the buttresses they want, which are meshed, braced and stood on the raft

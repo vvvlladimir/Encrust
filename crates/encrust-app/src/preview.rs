@@ -158,7 +158,7 @@ pub fn plate_fingerprint(scene: &Scene) -> u64 {
             .cut_bodies()
             .map(Arc::as_ptr)
             .hash(&mut hasher);
-        for supports in object.supports.meshes().unwrap_or_default() {
+        for supports in object.supports.every_mesh() {
             Arc::as_ptr(supports).hash(&mut hasher);
         }
         let transform = object.transform;

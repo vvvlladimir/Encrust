@@ -145,7 +145,7 @@ pub enum HoleKind {
     /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
     /// keeps a wall around it and it keeps its depth and its plug.
     Walled,
-    /// Drilled into the supports or raft under the model: no plug, no wall, never deepened.
+    /// Drilled into the raft under the model: no plug, no wall, never deepened (ADR 0441).
     Support,
 }
 

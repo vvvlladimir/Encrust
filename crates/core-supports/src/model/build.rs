@@ -1,6 +1,8 @@
 use super::ModelSupports;
 use super::growth::{Forest, with_frozen};
-use crate::{Placed, Profiles, SupportTree, columns, grow_beside, lost, mesh_groups, shaded};
+use crate::{
+    Placed, Profiles, ShadedSupports, SupportTree, columns, grow_beside, lost, mesh_groups,
+};
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
 use std::sync::Arc;
@@ -15,6 +17,8 @@ pub(super) struct Built {
     pub(super) grown: usize,
     /// One mesh per group, in group order, so that each is drawn in a colour of its own.
     pub(super) meshes: Vec<Arc<Mesh>>,
+    /// The raft under them, apart: a hole cuts it and never a column (ADR 0441).
+    pub(super) raft: Option<Arc<Mesh>>,
     pub(super) transform: Transform,
     /// The profile of every group as it stood when this was built.
     pub(super) table: Vec<SupportProfile>,
@@ -71,9 +75,11 @@ impl ModelSupports {
             blocked: self.blocked.clone(),
         });
         let meshed = self.meshed_of(&trees, standing);
-        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)), transform);
+        let shaded = ShadedSupports::of(mesh_groups(&meshed, &placed, profiles));
+        let (meshes, raft) = self.draw(shaded, transform);
         self.built = Some(Built {
             meshes,
+            raft,
             trees,
             grown: standing,
             transform,
@@ -156,9 +162,11 @@ impl ModelSupports {
         let trees = with_frozen(&grown_trees, &self.frozen, transform);
 
         let meshed = self.meshed_of(&trees, grown);
-        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)), transform);
+        let shaded = ShadedSupports::of(mesh_groups(&meshed, &placed, profiles));
+        let (meshes, raft) = self.draw(shaded, transform);
         self.built = Some(Built {
             meshes,
+            raft,
             trees,
             grown,
             transform,

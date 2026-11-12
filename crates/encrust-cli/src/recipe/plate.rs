@@ -327,7 +327,9 @@ fn quiet<'a>(ctx: &Ctx<'a>) -> Watch<'a> {
 fn standing_mesh(piece: &Piece) -> Mesh {
     let mut mesh = piece.mesh.clone();
     if let Some((_, supports)) = &piece.supports {
-        mesh.append(supports);
+        for supports in supports.meshes() {
+            mesh.append(supports);
+        }
     }
     mesh
 }

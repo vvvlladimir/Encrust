@@ -85,7 +85,7 @@ fn each_group_is_meshed_apart_and_together_they_are_the_whole() {
     let placed = Placed::new(&model, &bvh, Transform::default());
     let trees = trees_on(&points, &model, Transform::default(), profiles);
 
-    let groups = mesh_groups(&trees, &placed, profiles);
+    let groups = mesh_groups(&trees, &placed, profiles).groups;
     let whole = mesh_trees(&trees, &placed, profiles);
     assert_eq!(groups.len(), 2);
     assert!(
@@ -96,6 +96,37 @@ fn each_group_is_meshed_apart_and_together_they_are_the_whole() {
         groups.iter().map(|mesh| mesh.faces.len()).sum::<usize>(),
         whole.faces.len(),
         "split by group, nothing added and nothing lost"
+    );
+}
+
+#[test]
+fn the_raft_is_meshed_apart_from_every_group() {
+    let mut profile = profile();
+    profile.raft.enabled = true;
+    let profiles = Profiles::single(&profile);
+    let trees = column_on_plate(20.0, &profile);
+    let model = Mesh::default();
+    let bvh = core_geometry::Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+
+    let meshed = mesh_groups(&trees, &placed, profiles);
+    let raft = meshed.raft.expect("a column on the plate stands on a raft");
+    let floor = |mesh: &Mesh| mesh.aabb().expect("it has geometry").mins.z;
+    assert!(
+        floor(&raft).abs() < 1e-4,
+        "the raft lies on the plate at 0 mm"
+    );
+    let lowest = floor(&meshed.groups[0]);
+    assert!(
+        lowest >= profile.raft.thickness_mm * (1.0 - FOOT_BITE) - 1e-4,
+        "the column bites into the raft's top and holds none of it, lowest at {lowest} mm"
+    );
+    let whole = mesh_trees(&trees, &placed, profiles);
+    let columns: usize = meshed.groups.iter().map(|mesh| mesh.faces.len()).sum();
+    assert_eq!(
+        columns + raft.faces.len(),
+        whole.faces.len(),
+        "the groups and the raft are the whole"
     );
 }
 
@@ -123,7 +154,7 @@ fn a_brace_is_meshed_with_the_group_it_ties() {
     let placed = Placed::new(&model, &bvh, Transform::default());
     let trees = trees_on(&points, &model, Transform::default(), profiles);
 
-    let groups = mesh_groups(&trees, &placed, profiles);
+    let groups = mesh_groups(&trees, &placed, profiles).groups;
     assert!(
         groups[0].is_empty(),
         "the first group holds nothing, so nothing is drawn in its colour"

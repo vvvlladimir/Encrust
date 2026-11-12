@@ -64,7 +64,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         drainage(ui, window)
     });
     section(ui, &tr!("drain-opening"), None, |ui| {
-        describe(ui, &tr!("drain-opening-note"));
+        describe(ui, &tr!("drain-raft-opening-note"));
         placing(ui, window);
         scope::editing(window, own, &scoped, |window| {
             sizes(ui, window.tools);

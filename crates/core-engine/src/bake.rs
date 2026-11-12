@@ -131,6 +131,7 @@ fn repeat(
 ) {
     let bare = Model {
         supports: Vec::new(),
+        raft: None,
         ..first.clone()
     };
     let mut body = placed(&bare);
@@ -167,8 +168,8 @@ fn repeat(
     }
 }
 
-/// `model`'s supports into the mesh, shrunk with the model they stand under, and drilled by
-/// its cuts where `drill` says the model was.
+/// `model`'s supports into the mesh, shrunk with the model they stand under, its raft
+/// drilled by its cuts where `drill` says the model was.
 fn add_supports(
     model: &Model,
     drill: bool,
@@ -181,11 +182,15 @@ fn add_supports(
         .as_ref()
         .filter(|_| drill)
         .map(|cuts| transform_mesh(cuts, model.transform));
-    for supports in &model.supports {
-        let mut supports = match &cuts {
-            Some(cuts) => drilled_pieces(supports, cuts),
-            None => supports.as_ref().clone(),
-        };
+    let raft = model.raft.as_ref().map(|raft| match &cuts {
+        Some(cuts) => drilled_pieces(raft, cuts),
+        None => raft.as_ref().clone(),
+    });
+    let trees = model
+        .supports
+        .iter()
+        .map(|supports| supports.as_ref().clone());
+    for mut supports in trees.chain(raft) {
         corrected(&mut supports, matrix);
         extent.take(&supports);
         solid.mesh.append(&supports);
@@ -195,7 +200,10 @@ fn add_supports(
 /// The box a copy's material fills: the body's, moved by `moved`, and its own supports.
 fn footprint(model: &Model, body: &Aabb, moved: Vec3) -> Aabb {
     let mut bounds = Aabb::new(body.mins + moved, body.maxs + moved);
-    for supports in model.supports.iter().filter_map(|supports| supports.aabb()) {
+    for supports in model
+        .support_meshes()
+        .filter_map(|supports| supports.aabb())
+    {
         bounds.take_point(supports.mins);
         bounds.take_point(supports.maxs);
     }
@@ -207,7 +215,7 @@ struct Placed {
     material: Mesh,
     /// What the winding rule still has to take out: nothing once the model is drilled.
     cuts: Mesh,
-    /// Whether the cuts were taken out of the model and its supports exactly.
+    /// Whether the cuts were taken out of the model and its raft exactly.
     drilled: bool,
 }
 
@@ -224,9 +232,12 @@ fn placed(model: &Model) -> Placed {
         None => Mesh::default(),
     };
     for supports in &model.supports {
+        material.append(supports);
+    }
+    if let Some(raft) = &model.raft {
         match drilled {
-            Some(_) => material.append(&drilled_pieces(supports, &cuts)),
-            None => material.append(supports),
+            Some(_) => material.append(&drilled_pieces(raft, &cuts)),
+            None => material.append(raft),
         }
     }
     Placed {
@@ -258,7 +269,7 @@ pub fn parts(models: &[Model]) -> Vec<(Arc<Mesh>, Transform, Look)> {
     for model in models {
         let mesh = model.drilled.as_ref().unwrap_or(&model.mesh);
         parts.push((Arc::clone(mesh), model.transform, Look::Model));
-        for supports in &model.supports {
+        for supports in model.support_meshes() {
             parts.push((Arc::clone(supports), Transform::default(), Look::Support));
         }
     }

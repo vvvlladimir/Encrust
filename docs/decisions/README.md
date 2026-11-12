@@ -318,7 +318,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
 | [0412](0412-a-model-is-read-once-for-its-drill-and-its-plugs.md) | Read a model into the engine once for its drill and its plugs, and build its shell on that read | Proposed |
 | [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted; a hole clicked into a hollow model keeps its depth since 0414 |
-| [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
+| [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted; a hole cutting a support tree is superseded by 0441 |
+| [0441](0441-a-hole-cuts-the-raft-and-never-a-support-tree.md) | A hole cuts the raft and never a support tree | Accepted |
 | [0414](0414-a-hole-set-by-hand-stops-at-its-depth.md) | A hole set by hand stops at its depth | Accepted |
 | [0415](0415-checks-buttons-answer-what-it-finds.md) | Check's buttons answer what it finds, through the calls the command line makes | Accepted |
 | [0416](0416-check-lays-out-its-issues-as-cards-and-fixes-them-by-a-recipe.md) | Check lays out its issues as cards and fixes them all by a built-in recipe | Accepted |

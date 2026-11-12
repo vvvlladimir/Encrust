@@ -190,11 +190,11 @@ impl SceneObject {
         self.hollow.shell().unwrap_or(&self.mesh)
     }
 
-    /// What its printed supports are built from: its groups, its cuts and where it stood when
-    /// the groups were built, so columns drawn while trees regrow are drilled where they stand.
+    /// What its printed raft is built from: its raft, its cuts and where it stood when the
+    /// raft was built, so a raft drawn while trees regrow is drilled where it stands.
     pub fn supports_under(&self) -> SupportsUnder<'_> {
         SupportsUnder {
-            groups: self.supports.drawn(),
+            raft: self.supports.drawn_raft(),
             cuts: self.hollow.cut_bodies(),
             transform: self.drawn_at(),
         }
@@ -209,15 +209,15 @@ impl SceneObject {
         }
     }
 
-    /// The support groups as they print: drilled by the model's cuts where that has been
-    /// done, as they stand otherwise.
-    pub fn supports_shown(&self) -> &[core_supports::Shaded] {
+    /// The raft as it prints: drilled by the model's cuts where that has been done, as it
+    /// stands otherwise.
+    pub fn raft_shown(&self) -> Option<&core_supports::Shaded> {
         self.printed_supports.shown(self.supports_under())
     }
 
-    /// The support groups as they print and their hierarchies, once built for them where the
-    /// model stands; none while columns built elsewhere are carried to it.
-    pub fn supports_built(&self) -> Option<(&[core_supports::Shaded], &[Arc<Bvh>])> {
+    /// The raft as it prints and its hierarchy, once built for it where the model stands;
+    /// none while a raft built elsewhere is carried to it.
+    pub fn raft_built(&self) -> Option<(&core_supports::Shaded, &Arc<Bvh>)> {
         if self.drawn_at() != self.transform {
             return None;
         }
@@ -226,8 +226,8 @@ impl SceneObject {
 
     /// The resin its supports as last built come to, mm³; none until they are built.
     pub fn supports_mm3(&self) -> Scalar {
-        let meshes = self.supports.meshes().unwrap_or_default();
-        meshes.iter().map(|mesh| signed_volume(mesh).abs()).sum()
+        let meshes = self.supports.every_mesh();
+        meshes.map(|mesh| signed_volume(mesh).abs()).sum()
     }
 
     /// The mesh the model prints as: its cuts taken out exactly where they have been, its

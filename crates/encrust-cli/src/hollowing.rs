@@ -125,8 +125,8 @@ pub struct HollowArgs {
     #[arg(long = "drain-walled")]
     pub walled: bool,
 
-    /// Drill a hole into the supports or raft nearest this point, plate mm, as they stand
-    /// once built, sized as --drain asks; needs supports. Repeat for more holes.
+    /// Drill a hole into the raft nearest this point, plate mm, as it stands once built, sized
+    /// as --drain asks; needs supports on a raft. Repeat for more holes.
     #[arg(long = "drain-support-at", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
     pub drain_support_at: Vec<Vec3>,
 
@@ -500,23 +500,23 @@ pub fn cut(
     ))
 }
 
-/// The bodies a hole into the supports nearest each `--drain-support-at` takes out, wound
-/// inward like the model's own cuts so the two append (ADR 0071, 0347).
-pub fn support_holes(supports: &Mesh, args: &HollowArgs) -> Result<Mesh> {
-    let bvh = Bvh::build(supports);
+/// The bodies a hole into the raft nearest each `--drain-support-at` takes out, wound
+/// inward like the model's own cuts so the two append (ADR 0071, 0347, 0441).
+pub fn support_holes(raft: &Mesh, args: &HollowArgs) -> Result<Mesh> {
+    let bvh = Bvh::build(raft);
     let holes = args
         .drain_support_at
         .iter()
         .map(|near| {
-            hole_at(supports, &bvh, *near, args.hole_size())
+            hole_at(raft, &bvh, *near, args.hole_size())
                 .map(|hole| DrainHole {
                     kind: HoleKind::Support,
                     ..hole
                 })
-                .with_context(|| format!("no support near {near} to drill a hole into"))
+                .with_context(|| format!("no raft near {near} to drill a hole into"))
         })
         .collect::<Result<Vec<_>>>()?;
-    drill(&holes, &[]).context("drilling the supports")
+    drill(&holes, &[]).context("drilling the raft")
 }
 
 /// What the cuts took out of the model.

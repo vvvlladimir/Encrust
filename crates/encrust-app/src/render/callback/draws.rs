@@ -266,11 +266,14 @@ impl Draws {
             }
         }
 
-        let groups = object.supports_shown();
+        let groups = object.supports.drawn();
         let shift = object.supports.drawn_shift(object.transform);
+        // The raft is built to the first group's profile, so it is drawn and hidden with it.
+        let raft = object.raft_shown().map(|raft| (0, raft));
         for (group, shaded) in groups
             .iter()
             .enumerate()
+            .chain(raft)
             .filter(|(group, shaded)| !shaded.mesh.is_empty() && hidden.get(*group) != Some(&true))
         {
             // A column holds nothing up but the model, so marking its own overhangs would

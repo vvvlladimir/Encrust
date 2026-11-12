@@ -153,5 +153,6 @@ fn model(
         cuts: hollow.cut_bodies().cloned(),
         drilled,
         supports: supports.meshes().unwrap_or_default().to_vec(),
+        raft: supports.raft().cloned(),
     }
 }

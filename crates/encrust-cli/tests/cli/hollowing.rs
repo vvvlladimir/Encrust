@@ -1,6 +1,7 @@
 //! Hollowing a model from the command line: the cavity, its infill, the drain holes
 //! drilled into it and the resin it would trap without them.
 
+use std::fs;
 use std::path::PathBuf;
 
 use crate::support::*;
@@ -585,17 +586,30 @@ fn a_square_hole_turned_on_its_corner_takes_a_plug() {
     );
 }
 
+/// The shipped medium support profile with its raft turned on, written where a run reads it.
+fn medium_on_a_raft(name: &str) -> PathBuf {
+    let medium = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/profiles/supports/medium.toml");
+    let text = fs::read_to_string(medium).expect("the medium preset ships");
+    let rafted = text.replacen("[raft]\nenabled = false", "[raft]\nenabled = true", 1);
+    assert_ne!(text, rafted, "the medium preset names its raft off");
+    let path = std::env::temp_dir().join(format!("encrust-cli-{name}-supports.toml"));
+    fs::write(&path, rafted).expect("the temporary folder takes a file");
+    path
+}
+
 /// The first layer of a 12 mm block stood on supports and a raft, with whatever follows.
 fn raft_layer(name: &str, extra: &[&str]) -> Vec<u8> {
     let path = write_boxes_stl(name, &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
     let out = output_dir(name);
     let panel = test_panel();
+    let supports = medium_on_a_raft(name);
     let mut args = vec![
         path.to_str().unwrap(),
         "--profile",
         panel.to_str().unwrap(),
-        "--supports",
-        "medium",
+        "--support-profile",
+        supports.to_str().unwrap(),
         "--layer-height",
         "0.5",
         "-o",
@@ -631,6 +645,24 @@ fn a_hole_into_supports_with_none_asked_for_is_refused() {
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("--drain-support-at"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_hole_into_supports_with_no_raft_is_refused() {
+    let path = write_boxes_stl("no-raft-to-drill", &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--drain-support-at",
+        "14,6,-1",
+    ]);
+    assert!(!output.status.success(), "a tree is never drilled");
+    assert!(
+        stderr(&output).contains("drills into the raft"),
         "{}",
         stderr(&output)
     );
