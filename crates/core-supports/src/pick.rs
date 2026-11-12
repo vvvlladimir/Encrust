@@ -87,6 +87,13 @@ pub fn grab_along(
         .map(|(what, _, along_ray, _)| (what, along_ray))
 }
 
+/// The axis `part` of `tree` is aimed along, plate mm: a joint, a tip or the foot is one point.
+pub fn axis_of(tree: &SupportTree, profile: &SupportProfile, part: Part) -> Option<(Vec3, Vec3)> {
+    parts_of(tree, profile)
+        .find(|(each, ..)| *each == part)
+        .map(|(_, _, from, to)| (from, to))
+}
+
 /// Which support `ray` passes through or within `slack` of, as the index of its `SupportPoint`;
 /// a shared trunk alone hits nothing, as no one support could be taken away.
 pub fn support_under(

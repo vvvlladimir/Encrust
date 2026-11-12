@@ -275,6 +275,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Distance between two points, angle, or the gap between two flat faces.
 - Snap to a corner, an edge or the exact spot (hold Alt for free placement). It can also show
   dX, dY and dZ in the view.
+- Measure from a support as well as a model: a click on a tip, a joint or the foot takes
+  that point, one on a strut or the trunk the nearest point of its axis, or its nearer end
+  when snapping to corners.
 - **Measure along the surface:** the shortest way over the model between the two points,
   drawn on it and read beside the straight distance. Both points must be on one model. A
   long search shows its progress at the foot of the view, with Cancel.

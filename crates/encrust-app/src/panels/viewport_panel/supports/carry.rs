@@ -540,7 +540,7 @@ fn take_hold(
     level: bool,
 ) -> bool {
     set_down(window);
-    let Some(Aimed { id, hit, at }) = grab_under_cursor(window, viewport, cursor) else {
+    let Some(Aimed { id, hit, at, .. }) = grab_under_cursor(window, viewport, cursor) else {
         if !add {
             window.tools.supports.picked.clear();
         }

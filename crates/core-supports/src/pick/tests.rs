@@ -261,3 +261,26 @@ fn the_aim_widens_with_depth_so_a_far_pillar_is_caught_as_far_off_on_screen() {
         "the same millimetre off is fewer points of screen 200 mm away"
     );
 }
+
+#[test]
+fn a_tip_is_aimed_at_its_contact_and_the_trunk_along_its_axis() {
+    let profile = profile();
+    let trees = standing(&[(10.0, 10.0)], &profile);
+    let tree = &trees[0];
+    let tip = tree
+        .nodes()
+        .iter()
+        .position(crate::tree::TreeNode::is_leaf)
+        .expect("one support has one tip");
+
+    let (from, to) = axis_of(tree, &profile, Part::Node(tip)).expect("the tip is a part");
+    assert!(
+        from.abs_diff_eq(Vec3::new(10.0, 10.0, 20.0), 1e-4) && from == to,
+        "a tip is the one point where it touches, (10, 10, 20), got {from}..{to}"
+    );
+    let (top, bottom) = axis_of(tree, &profile, Part::Trunk).expect("the trunk is a part");
+    assert!(
+        (top.x - 10.0).abs() < 1e-4 && (bottom.x - 10.0).abs() < 1e-4 && top.z > bottom.z,
+        "the trunk stands upright under (10, 10), got {top}..{bottom}"
+    );
+}

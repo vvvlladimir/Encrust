@@ -1,7 +1,7 @@
 //! What the cursor is over: the model a click selects, the face it lays down or washes, the
 //! corner a measurement snaps to, and the part of a support a ray meets.
 
-use core_supports::{Grab, Profiles, Slack, SupportTree, grab_along};
+use core_supports::{Grab, Profiles, Slack, SupportTree, axis_of, grab_along};
 
 use core_geometry::{Aabb, PlacedHit, Ray, Vec3, ray_aabb};
 
@@ -11,7 +11,7 @@ use crate::panels::{Window, section};
 use crate::pick::{
     Printed, pick, pick_material, pick_printed, pick_surface, ray_through, seen_along,
 };
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// The model under the cursor through the section this frame shows; see [`pick`].
 pub(super) fn object_under(
@@ -71,28 +71,37 @@ pub(super) fn zoom_anchor(
     ray_aabb(&ray, &footprint).map(|t| ray.at(t))
 }
 
-/// Takes the flat face the click landed on, or the point, snapped the way the tool is set
-/// unless `alt` is held.
+/// Takes the flat face the click landed on, or the point on a model or a support, snapped
+/// the way the tool is set unless `alt` is held.
 pub(super) fn measure_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
     alt: bool,
 ) {
-    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
-        return;
-    };
-    let Some(object) = window.doc.scene.get(id) else {
-        return;
-    };
-    let adjacency = window.tools.measure_edges.of(&object.mesh);
-    let measure = &mut window.tools.measure;
-    if measure.target == measure::Target::Planes {
+    let surface = surface_under(window, viewport, cursor);
+    if window.tools.measure.target == measure::Target::Planes {
+        let Some((object, hit)) = on_model(&window.doc.scene, surface) else {
+            return;
+        };
+        let adjacency = window.tools.measure_edges.of(&object.mesh);
         if let Some(plane) = measure::Plane::of(object, &adjacency, hit.face) {
-            measure.pick_plane(plane);
+            window.tools.measure.pick_plane(plane);
         }
         return;
     }
+    let snap = window.tools.measure.snap_now(alt);
+    let support = support_point_under(window, viewport, cursor, snap)
+        // Free on the model a tip stands in, unless the support is in front of it.
+        .filter(|(_, along_mm)| !alt || surface.is_none_or(|(_, hit)| *along_mm < hit.distance));
+    if let Some(((point, snapped), _)) = support {
+        window.tools.measure.pick(point, snapped, None);
+        return;
+    }
+    let Some((object, hit)) = on_model(&window.doc.scene, surface) else {
+        return;
+    };
+    let adjacency = window.tools.measure_edges.of(&object.mesh);
     let reach_mm = reach_at(&window.view.camera, viewport, cursor, hit.point, SNAP_PX);
     let (point, snapped) = measure::snap(
         &object.mesh,
@@ -101,9 +110,40 @@ pub(super) fn measure_under_cursor(
         object.transform,
         hit.point,
         reach_mm,
-        measure.snap_now(alt),
+        snap,
     );
-    measure.pick(point, snapped, measure::Anchor::of(object, point));
+    let anchor = measure::Anchor::of(object, point);
+    window.tools.measure.pick(point, snapped, anchor);
+}
+
+/// The model `surface` was met on, with where.
+fn on_model(
+    scene: &Scene,
+    surface: Option<(ObjectId, PlacedHit)>,
+) -> Option<(&SceneObject, PlacedHit)> {
+    surface.and_then(|(id, hit)| Some((scene.get(id)?, hit)))
+}
+
+/// The point of the support part under the cursor a measurement takes, and how far along
+/// the cursor's ray the part was met, mm.
+fn support_point_under(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    snap: measure::Snap,
+) -> Option<((Vec3, measure::Snapped), f32)> {
+    let Aimed {
+        id,
+        hit,
+        at,
+        along_mm,
+    } = grab_under_cursor(window, viewport, cursor)?;
+    let object = window.doc.scene.get(id)?;
+    let tree = object.supports.trees().get(hit.tree)?;
+    let table = window.tools.supports.table_for(object);
+    let profile = Profiles::new(&table)?.of(tree.group());
+    let axis = axis_of(tree, profile, hit.part)?;
+    Some((measure::snap_to_support(axis, at, snap), along_mm))
 }
 
 /// How near the cursor a corner or an edge catches a click, points of the screen.
@@ -251,6 +291,8 @@ pub(super) struct Aimed {
     pub id: crate::scene::ObjectId,
     pub hit: Grab,
     pub at: Vec3,
+    /// How far along the cursor's ray `at` lies, mm.
+    pub along_mm: f32,
 }
 
 /// Which part of which support the cursor is on. Objects are searched in the order they were
@@ -277,6 +319,7 @@ pub(super) fn grab_under_cursor(
                 id: object.id,
                 hit,
                 at: ray.at(along_mm),
+                along_mm,
             })
     })
 }
@@ -307,137 +350,4 @@ fn grab_shown(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::*;
-
-    #[test]
-    fn a_hidden_support_is_not_in_the_way_of_the_one_behind_it() {
-        let table = vec![printer_profiles::SupportProfile::default(); 2];
-        let mut supports = core_supports::ModelSupports::default();
-        supports.add(
-            Vec3::new(0.0, 0.0, 20.0),
-            core_geometry::Transform::default(),
-            0,
-        );
-        supports.add(
-            Vec3::new(30.0, 0.0, 20.0),
-            core_geometry::Transform::default(),
-            1,
-        );
-        let nothing = core_geometry::Mesh::default();
-        let bvh = core_geometry::Bvh::build(&nothing);
-        supports.refresh(&nothing, &bvh, core_geometry::Transform::default(), &table);
-        let trees = supports.trees();
-        let profiles = Profiles::new(&table).expect("two profiles");
-        // Level with the middle of both pillars, the first group's nearer the eye.
-        let ray = Ray::new(Vec3::new(-50.0, 0.0, 10.0), Vec3::X);
-        let group_met = |hidden: &[bool]| {
-            grab_shown(trees, hidden, &ray, profiles, Slack::default())
-                .map(|(hit, _)| trees[hit.tree].group())
-        };
-
-        assert_eq!(group_met(&[false, false]), Some(0), "the nearer one");
-        assert_eq!(group_met(&[true, false]), Some(1), "the one behind it");
-        assert_eq!(group_met(&[true, true]), None);
-    }
-
-    /// BUG: the cap was no surface, so the zoom closed on the plate under it and a notch
-    /// carried the eye through the cap the cursor was on.
-    #[test]
-    fn a_scroll_over_a_cut_zooms_towards_its_cap() {
-        let mut doc = crate::state::Doc::default();
-        let (low, high) = (Vec3::new(50.0, 20.0, 0.0), Vec3::new(100.0, 60.0, 20.0));
-        doc.scene = crate::scene::fixtures::scene_of_boxes(&[(low, high)]);
-        let mut parts = crate::panels::fixtures::Parts::of(doc, crate::workspace::Tool::Position);
-        parts.view.section.height_mm = Some(10.0);
-        parts.view.camera.target = Vec3::new(75.0, 40.0, 10.0);
-        parts.view.camera.distance_mm = 200.0;
-        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
-
-        let anchor = zoom_anchor(&parts.window(), viewport, viewport.center())
-            .expect("the middle of the view is on the cut box");
-        assert!(
-            anchor.abs_diff_eq(Vec3::new(75.0, 40.0, 10.0), 1e-2),
-            "the cap at 10 mm where the camera looks, got {anchor}"
-        );
-    }
-
-    #[test]
-    fn the_aim_reaches_as_far_on_screen_wherever_the_cursor_is_and_however_deep() {
-        let camera = OrbitCamera::default();
-        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
-
-        // 600 points of height show 2 * 300 mm * tan(0.4) = 254 mm, so a point is
-        // 0.42 mm where the camera looks, six of them 2.54 mm, and twice as far 5.08 mm.
-        let slack = aim_slack(&camera, viewport, viewport.center());
-        let looked_at = camera.distance_mm;
-        let middle = slack.at(looked_at);
-        assert!(
-            (middle - 2.54).abs() < 0.1,
-            "six points at the middle of the view are 2.54 mm, got {middle}"
-        );
-        let twice = slack.at(2.0 * looked_at);
-        assert!(
-            (twice - 2.0 * middle).abs() < 0.1,
-            "twice as far off they are twice as many millimetres, got {twice}"
-        );
-        let corner = aim_slack(&camera, viewport, egui::pos2(40.0, 40.0)).at(looked_at);
-        assert!(
-            corner < 2.0 * middle,
-            "a cursor far from the middle reaches no further, got {corner} mm"
-        );
-    }
-
-    #[test]
-    fn a_click_outside_the_selection_only_aims_the_tool() {
-        let mut scene = Scene::default();
-        let cube = Arc::new(core_geometry::Mesh::new(
-            vec![Vec3::ZERO, Vec3::X, Vec3::Y],
-            vec![[0, 1, 2]],
-        ));
-        let summary = crate::scene::ImportSummary {
-            vertices_merged: 0,
-            faces_removed: 0,
-            orientation: core_geometry::Orientation {
-                flipped_faces: 0,
-                inverted_shells: 0,
-                orientable: true,
-            },
-            diagnostics: core_geometry::diagnose(&cube),
-        };
-        let first = scene.insert(crate::scene::Imported::new(
-            "first".to_owned(),
-            Arc::clone(&cube),
-            core_geometry::Transform::default(),
-            summary.clone(),
-        ));
-        let second = scene.insert(crate::scene::Imported::new(
-            "second".to_owned(),
-            cube,
-            core_geometry::Transform::default(),
-            summary,
-        ));
-
-        scene.select(Some(first));
-        assert!(
-            aims_elsewhere(&scene, Some(second)),
-            "the click lands on a model the tool is not working on"
-        );
-        assert!(
-            !aims_elsewhere(&scene, Some(first)),
-            "a second click on what is picked is the tool's"
-        );
-        assert!(
-            !aims_elsewhere(&scene, None),
-            "a click on empty plate is not an aim"
-        );
-
-        scene.clear_selection();
-        assert!(
-            !aims_elsewhere(&scene, Some(second)),
-            "with nothing picked the tool has the whole plate"
-        );
-    }
-}
+mod tests;

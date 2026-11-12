@@ -8,8 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::i18n::tr;
 use crate::scene::{ObjectId, SceneObject};
 
+mod support;
 mod surface;
 
+pub use support::snap_to_support;
 pub use surface::{Anchor, Walk, Walking};
 
 /// The most triangles a snap looks through around the click: a reach that takes in more
