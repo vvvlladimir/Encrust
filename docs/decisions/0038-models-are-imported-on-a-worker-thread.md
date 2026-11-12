@@ -1,6 +1,6 @@
 # 0038. Import models on a worker thread
 
-- **Status:** Accepted
+- **Status:** Accepted; an import that cannot be cancelled is superseded by 0442
 - **Date:** 2026-09-18
 
 ## Context

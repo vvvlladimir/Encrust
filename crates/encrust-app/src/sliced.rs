@@ -12,7 +12,7 @@ use printer_profiles::{Catalogue, Mirror, PrinterProfile};
 
 use crate::files::Handed;
 use crate::i18n::tr;
-use crate::job::ImportStage;
+use crate::job::{ImportStage, ImportWatch};
 use crate::scene::{ImportSummary, Imported};
 
 /// The containers a reader claims, which open as a model would.
@@ -103,11 +103,12 @@ fn oriented(printer: &PrinterProfile, panel_px: (u32, u32)) -> Option<((f32, f32
 }
 
 /// Builds the file's layers back into a model, named after the file and standing where its
-/// pixels stood. `stage` is called before each part of the work starts.
+/// pixels stood, telling `stage` and `watch` how far it has got and asking `watch` to stop.
 pub fn prepare(
     file: &Handed,
     placement: Placement,
     stage: &mut dyn FnMut(ImportStage),
+    watch: &ImportWatch,
 ) -> Result<Imported> {
     let name = file.path().file_name().map_or_else(
         || file.path().display().to_string(),
@@ -124,6 +125,10 @@ pub fn prepare(
     let mut field = StackField::new(placement.panel, voxel_mm);
     let mut bottom_mm = 0.0;
     for (index, entry) in facts.layers.iter().enumerate() {
+        if watch.stopped() {
+            anyhow::bail!(tr!("job-thread-stopped-import"));
+        }
+        watch.layers(index, facts.layers.len());
         let top_mm =
             layer_top_mm(entry.z_mm, bottom_mm, facts.layer_height_mm).with_context(|| {
                 tr!(
@@ -148,8 +153,15 @@ pub fn prepare(
         bottom_mm = top_mm;
     }
 
-    stage(ImportStage::Repairing);
-    let mut mesh = extract(&field.finish(), Cancel::never());
+    stage(ImportStage::Surfacing);
+    let stopped = || watch.stopped();
+    let mut mesh = extract(
+        &field.finish(),
+        Cancel::when(&stopped).reporting(&watch.surface),
+    );
+    if watch.stopped() {
+        anyhow::bail!(tr!("job-thread-stopped-import"));
+    }
     unmirror(&mut mesh, placement);
     if mesh.faces.is_empty() {
         anyhow::bail!(tr!("sliced-no-pixel", name = name));
@@ -224,6 +236,25 @@ mod tests {
             Mirror::Normal
         };
         printer
+    }
+
+    #[test]
+    fn a_rebuild_counts_its_layers_then_its_surface_to_the_end() {
+        let file = Handed::Path(crate::preview::tests::written_goo("sliced-counted", 3));
+        let placement = placement(&file, &Catalogue::default(), None).expect("a goo places");
+        let watch = ImportWatch::default();
+        assert_eq!(watch.share(), None, "nothing counted before it starts");
+        prepare(&file, placement, &mut |_| {}, &watch).expect("the block rebuilds");
+        assert_eq!(watch.share(), Some(1.0), "every layer and the surface done");
+    }
+
+    #[test]
+    fn a_stopped_rebuild_brings_no_model() {
+        let file = Handed::Path(crate::preview::tests::written_goo("sliced-stopped", 3));
+        let placement = placement(&file, &Catalogue::default(), None).expect("a goo places");
+        let watch = ImportWatch::default();
+        watch.stop();
+        assert!(prepare(&file, placement, &mut |_| {}, &watch).is_err());
     }
 
     #[test]

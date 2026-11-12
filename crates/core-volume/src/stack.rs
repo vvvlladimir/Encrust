@@ -9,11 +9,16 @@ use core_geometry::{
 };
 use rayon::prelude::*;
 
-use crate::grid::{TILE, VoxelGrid, index_in_tile};
+use crate::grid::{TILE, VoxelGrid};
 use crate::sdf::{Quantised, Sdf, TILE_VALUES, encode};
 
 /// Cover of a cell held as a byte; only an exact edge of it is wholly empty or wholly lit.
 const FULL: u8 = u8::MAX;
+
+/// Cells, or lattice points, along a side of a block: a tile wide, so a block of points is
+/// the foot of one tile column and a slab is touched only where its blocks are lit.
+const BLOCK: usize = TILE as usize;
+const BLOCK_POINTS: usize = BLOCK * BLOCK;
 
 /// The panel a stack was exposed on.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,17 +35,17 @@ pub struct StackField {
     grid: VoxelGrid,
     cells: Cells,
     /// Cover of the cell slab being filled, a fraction of each cell, which slab it is and
-    /// the cells it lights.
+    /// the blocks of cells it lights, sorted.
     filling: Vec<f32>,
-    filling_area: Option<Area>,
+    filling_lit: Vec<usize>,
     filling_at: i32,
-    /// The slab below it, finished, and the cells it lights.
+    /// The slab below it, finished, and the blocks it lights.
     below: Vec<u8>,
-    below_area: Option<Area>,
+    below_lit: Vec<usize>,
     /// A cleared slab, which the next one to finish is written into.
     spare: Vec<u8>,
-    /// Lattice planes of the tile row being built, the lowest first; `None` where unlit.
-    planes: Vec<Option<Plane>>,
+    /// Lattice planes of the tile row being built, the lowest first.
+    planes: Vec<Plane>,
     tiles: HashMap<IVec3, Box<[Quantised]>>,
     solid: HashMap<IVec2, Vec<(i32, i32)>>,
 }
@@ -90,6 +95,27 @@ impl Cells {
             .partition_point(|cell| (*cell as usize) < cell_row);
         first..first + self.count_y[cell_row] as usize
     }
+
+    /// Blocks of cells across the panel.
+    fn blocks_across(&self) -> usize {
+        self.across.div_ceil(BLOCK)
+    }
+
+    /// Blocks of lattice points across and along the panel, one point past its last cell.
+    fn point_blocks(&self) -> (usize, usize) {
+        (
+            (self.across + 1).div_ceil(BLOCK),
+            (self.along + 1).div_ceil(BLOCK),
+        )
+    }
+
+    /// The cover of cell `(x - 1, y - 1)` of `slab`, nothing off the panel.
+    fn cover(&self, slab: &[u8], x: usize, y: usize) -> u32 {
+        if x == 0 || y == 0 || x > self.across || y > self.along {
+            return 0;
+        }
+        u32::from(slab[(y - 1) * self.across + (x - 1)])
+    }
 }
 
 /// The cell of each of `count` pixels of `pitch_mm`, and how many pixels each cell holds.
@@ -115,12 +141,12 @@ impl StackField {
             grid: VoxelGrid::new(voxel_mm),
             cells,
             filling: vec![0.0; size],
-            filling_area: None,
+            filling_lit: Vec::new(),
             filling_at: 0,
             below: vec![0; size],
-            below_area: None,
+            below_lit: Vec::new(),
             spare: vec![0; size],
-            planes: Vec::with_capacity(TILE as usize),
+            planes: Vec::with_capacity(BLOCK),
             tiles: HashMap::new(),
             solid: HashMap::new(),
         }
@@ -160,58 +186,85 @@ impl StackField {
     }
 
     /// Spreads a layer's runs over the cells their pixels fall in, `weight` of a slab deep,
-    /// each row of cells on its own thread.
+    /// each row of blocks on its own thread.
     fn add(&mut self, runs: &[(u32, u8)], weight: f32) {
         let cells = &self.cells;
         let starts = row_starts(runs, cells.width_px, cells.of_y.len());
-        let spans: Vec<Option<Area>> = self
+        let blocks_across = cells.blocks_across();
+        let lit: Vec<Vec<usize>> = self
             .filling
-            .par_chunks_mut(cells.across)
+            .par_chunks_mut(BLOCK * cells.across)
             .enumerate()
-            .map(|(cell_row, filling)| {
-                let rows = cells.rows_of(cell_row);
-                let mut lit = None;
-                for row in rows {
-                    let (first_run, skipped) = starts[row];
-                    for (first, last, grey) in lit_spans(runs, first_run, skipped, cells.width_px) {
-                        spread(filling, cells, cell_row, (first, last), grey, weight);
-                        let (x0, x1) = (cells.of_x[first as usize], cells.of_x[last as usize]);
-                        let span = Area::new((x0, cell_row as u32), (x1, cell_row as u32));
-                        lit = Some(span.joined(lit));
+            .map(|(row, filling)| {
+                let mut lit = vec![false; blocks_across];
+                for (in_row, filling) in filling.chunks_mut(cells.across).enumerate() {
+                    let cell_row = row * BLOCK + in_row;
+                    for pixel_row in cells.rows_of(cell_row) {
+                        let (first_run, skipped) = starts[pixel_row];
+                        for (first, last, grey) in
+                            lit_spans(runs, first_run, skipped, cells.width_px)
+                        {
+                            spread(filling, cells, cell_row, (first, last), grey, weight);
+                            let first = cells.of_x[first as usize] as usize / BLOCK;
+                            let last = cells.of_x[last as usize] as usize / BLOCK;
+                            lit[first..=last].fill(true);
+                        }
                     }
                 }
-                lit
+                let at = row * blocks_across;
+                (0..blocks_across)
+                    .filter(|block| lit[*block])
+                    .map(|block| at + block)
+                    .collect()
             })
             .collect();
-        for span in spans.into_iter().flatten() {
-            self.filling_area = Some(span.joined(self.filling_area));
+        // A slab thicker than the layer takes several, each lighting blocks the others may.
+        let merge = !self.filling_lit.is_empty();
+        self.filling_lit.extend(lit.into_iter().flatten());
+        if merge {
+            self.filling_lit.sort_unstable();
+            self.filling_lit.dedup();
         }
     }
 
     /// Finishes the slab being filled and the lattice plane at its foot, touching only the
-    /// cells either slab lights.
+    /// blocks either slab lights.
     fn close_slab(&mut self) {
-        let lit = self.filling_area.take();
-        let across = self.cells.across;
-        for index in lit.iter().flat_map(|area| area.indices(across)) {
-            self.spare[index] = as_byte(self.filling[index]);
-            self.filling[index] = 0.0;
-        }
-        let either = lit
-            .map(|area| area.joined(self.below_area))
-            .or(self.below_area);
-        let plane = either.map(|area| lattice_plane(&self.cells, &self.below, &self.spare, area));
+        let (across, blocks_across) = (self.cells.across, self.cells.blocks_across());
+        let lit = &self.filling_lit;
+        self.filling
+            .par_chunks_mut(BLOCK * across)
+            .zip(self.spare.par_chunks_mut(BLOCK * across))
+            .enumerate()
+            .for_each(|(row, (filling, spare))| {
+                for index in lit_cells(lit, row, blocks_across, across, filling.len()) {
+                    spare[index] = as_byte(filling[index]);
+                    filling[index] = 0.0;
+                }
+            });
+        let plane = lattice_plane(
+            &self.cells,
+            [&self.below, &self.spare],
+            [&self.below_lit, &self.filling_lit],
+        );
 
         // The slab below is done with; cleared, its buffer takes the next slab.
-        for index in self.below_area.iter().flat_map(|area| area.indices(across)) {
-            self.below[index] = 0;
-        }
+        let lit = &self.below_lit;
+        self.below
+            .par_chunks_mut(BLOCK * across)
+            .enumerate()
+            .for_each(|(row, below)| {
+                for index in lit_cells(lit, row, blocks_across, across, below.len()) {
+                    below[index] = 0;
+                }
+            });
         std::mem::swap(&mut self.below, &mut self.spare);
-        self.below_area = lit;
+        std::mem::swap(&mut self.below_lit, &mut self.filling_lit);
+        self.filling_lit.clear();
 
         self.planes.push(plane);
         self.filling_at += 1;
-        if self.planes.len() == TILE as usize {
+        if self.planes.len() == BLOCK {
             self.flush_row();
         }
     }
@@ -219,25 +272,20 @@ impl StackField {
     /// Turns the planes of one tile row into stored tiles and solid runs.
     fn flush_row(&mut self) {
         let row = (self.filling_at - 1).div_euclid(TILE);
-        let reach = self
+        let mut columns: Vec<usize> = self
             .planes
             .iter()
-            .flatten()
-            .map(|plane| plane.area)
-            .reduce(|one, other| one.joined(Some(other)));
-        let Some(reach) = reach else {
-            self.planes.clear();
-            return;
-        };
-        let (x0, x1) = (tile_of_point(reach.x0), tile_of_point(reach.x1));
-        let columns: Vec<IVec2> = (tile_of_point(reach.y0)..=tile_of_point(reach.y1))
-            .flat_map(|y| (x0..=x1).map(move |x| IVec2::new(x, y)))
+            .flat_map(|plane| plane.blocks.iter().map(|(index, _)| *index))
             .collect();
-        let made: Vec<(IVec2, Tile)> = columns
+        columns.sort_unstable();
+        columns.dedup();
+        let across = self.cells.point_blocks().0;
+        let made: Vec<(usize, Tile)> = columns
             .par_iter()
-            .map(|column| (*column, tile(&self.planes, *column, row, self.grid)))
+            .map(|&index| (index, tile(&self.planes, index, self.grid.voxel_mm)))
             .collect();
-        for (column, made) in made {
+        for (index, made) in made {
+            let column = IVec2::new(as_tile(index % across), as_tile(index / across));
             match made {
                 Tile::Outside => {}
                 Tile::Inside => extend_run(self.solid.entry(column).or_default(), row),
@@ -250,64 +298,39 @@ impl StackField {
     }
 }
 
-/// The tile a lattice point's index along one axis falls in. A panel's pixel count is
-/// bounded well inside `i32`, so the saturation is never reached.
-fn tile_of_point(point: usize) -> i32 {
-    i32::try_from(point / TILE as usize).unwrap_or(i32::MAX)
+/// A block's place along one axis as a tile's. A panel's pixel count is bounded well inside
+/// `i32`, so the saturation is never reached.
+fn as_tile(block: usize) -> i32 {
+    i32::try_from(block).unwrap_or(i32::MAX)
 }
 
-/// An inclusive rectangle of cells or of lattice points.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Area {
-    x0: usize,
-    y0: usize,
-    x1: usize,
-    y1: usize,
+/// Where in a block row `row` of cells, `rows` cells long, the cells of its lit blocks
+/// sit; `lit` holds every lit block of the slab, sorted.
+fn lit_cells(
+    lit: &[usize],
+    row: usize,
+    blocks_across: usize,
+    across: usize,
+    rows: usize,
+) -> impl Iterator<Item = usize> {
+    let first = lit.partition_point(|block| *block < row * blocks_across);
+    let last = lit.partition_point(|block| *block < (row + 1) * blocks_across);
+    lit[first..last].iter().flat_map(move |block| {
+        let x0 = block % blocks_across * BLOCK;
+        let x1 = (x0 + BLOCK).min(across);
+        (0..rows / across).flat_map(move |y| (x0..x1).map(move |x| y * across + x))
+    })
 }
 
-impl Area {
-    fn new((x0, y0): (u32, u32), (x1, y1): (u32, u32)) -> Self {
-        Self {
-            x0: x0 as usize,
-            y0: y0 as usize,
-            x1: x1 as usize,
-            y1: y1 as usize,
-        }
-    }
-
-    /// The smallest area holding this one and `other`.
-    fn joined(self, other: Option<Self>) -> Self {
-        other.map_or(self, |other| Self {
-            x0: self.x0.min(other.x0),
-            y0: self.y0.min(other.y0),
-            x1: self.x1.max(other.x1),
-            y1: self.y1.max(other.y1),
-        })
-    }
-
-    fn width(self) -> usize {
-        self.x1 - self.x0 + 1
-    }
-
-    /// Where each of its cells sits in a buffer `across` wide.
-    fn indices(self, across: usize) -> impl Iterator<Item = usize> {
-        (self.y0..=self.y1).flat_map(move |y| (self.x0..=self.x1).map(move |x| y * across + x))
-    }
-}
-
-/// One lattice plane, held only over the points a lit cell touches.
+/// One lattice plane, held only over the blocks of points a lit cell touches, sorted.
 struct Plane {
-    area: Area,
-    values: Vec<u8>,
+    blocks: Vec<(usize, [u8; BLOCK_POINTS])>,
 }
 
 impl Plane {
-    fn at(&self, x: usize, y: usize) -> u8 {
-        let area = self.area;
-        if x < area.x0 || x > area.x1 || y < area.y0 || y > area.y1 {
-            return 0;
-        }
-        self.values[(y - area.y0) * area.width() + (x - area.x0)]
+    fn block(&self, index: usize) -> Option<&[u8; BLOCK_POINTS]> {
+        let at = self.blocks.binary_search_by_key(&index, |(at, _)| *at);
+        at.ok().map(|at| &self.blocks[at].1)
     }
 }
 
@@ -391,42 +414,49 @@ fn as_byte(cover: f32) -> u8 {
     }
 }
 
-/// Cover at the lattice points around the cells `lit`: the mean of the eight cells about
-/// each point, so a surface never passes between two saturated points.
-fn lattice_plane(cells: &Cells, below: &[u8], above: &[u8], lit: Area) -> Plane {
-    // A point touches the cells at and before it, so one more on the far side.
-    let area = Area {
-        x1: lit.x1 + 1,
-        y1: lit.y1 + 1,
-        ..lit
-    };
-    let cell = |slab: &[u8], x: usize, y: usize| -> u32 {
-        if x == 0 || y == 0 || x > cells.across || y > cells.along {
-            return 0;
-        }
-        u32::from(slab[(y - 1) * cells.across + (x - 1)])
-    };
-    let mut values = vec![0; area.width() * (area.y1 - area.y0 + 1)];
-    values
-        .par_chunks_mut(area.width())
-        .enumerate()
-        .for_each(|(row, points)| {
-            let y = area.y0 + row;
-            for (column, point) in points.iter_mut().enumerate() {
-                let x = area.x0 + column;
-                let sum: u32 = [below, above]
+/// Cover at the lattice points about the lit blocks of `slabs`, below then above: the mean
+/// of the eight cells about each point, so a surface never passes between two saturated ones.
+fn lattice_plane(cells: &Cells, slabs: [&[u8]; 2], lit: [&[usize]; 2]) -> Plane {
+    let blocks_across = cells.blocks_across();
+    let (across, along) = cells.point_blocks();
+    // A point touches the cells at and before it, so a lit block reaches one block further.
+    let mut wanted: Vec<usize> = lit
+        .iter()
+        .flat_map(|lit| lit.iter())
+        .flat_map(|block| {
+            let (x, y) = (block % blocks_across, block / blocks_across);
+            [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)]
+        })
+        .filter(|&(x, y)| x < across && y < along)
+        .map(|(x, y)| y * across + x)
+        .collect();
+    wanted.sort_unstable();
+    wanted.dedup();
+    let blocks = wanted
+        .par_iter()
+        .filter_map(|&index| {
+            let (x0, y0) = (index % across * BLOCK, index / across * BLOCK);
+            let mut values = [0; BLOCK_POINTS];
+            for (local, point) in values.iter_mut().enumerate() {
+                let (x, y) = (x0 + local % BLOCK, y0 + local / BLOCK);
+                let sum: u32 = slabs
                     .iter()
                     .map(|slab| {
-                        cell(slab, x, y)
-                            + cell(slab, x + 1, y)
-                            + cell(slab, x, y + 1)
-                            + cell(slab, x + 1, y + 1)
+                        cells.cover(slab, x, y)
+                            + cells.cover(slab, x + 1, y)
+                            + cells.cover(slab, x, y + 1)
+                            + cells.cover(slab, x + 1, y + 1)
                     })
                     .sum();
                 *point = mean_of_eight(sum);
             }
-        });
-    Plane { area, values }
+            values
+                .iter()
+                .any(|point| *point > 0)
+                .then_some((index, values))
+        })
+        .collect();
+    Plane { blocks }
 }
 
 /// The mean of eight bytes summing to `sum`, full or empty only when all eight are.
@@ -445,32 +475,30 @@ enum Tile {
     Stored(Box<[Quantised]>),
 }
 
-/// The tile over `column` in tile row `row`, from that row's lattice planes.
-fn tile(planes: &[Option<Plane>], column: IVec2, row: i32, grid: VoxelGrid) -> Tile {
-    let base = column.extend(row) * TILE;
-    let cover = |local: IVec3| -> u8 {
-        match planes.get(local.z as usize) {
-            Some(Some(plane)) => plane.at((base.x + local.x) as usize, (base.y + local.y) as usize),
-            _ => 0,
+/// The tile over the block of points `index` in the row `planes` make, a voxel `band_mm`.
+fn tile(planes: &[Plane], index: usize, band_mm: Scalar) -> Tile {
+    // A block's points run along X then Y, as a tile's do within each of its planes.
+    let mut covers = [0; TILE_VALUES];
+    for (plane, covers) in planes.iter().zip(covers.as_chunks_mut::<BLOCK_POINTS>().0) {
+        if let Some(block) = plane.block(index) {
+            covers.copy_from_slice(block);
         }
-    };
-    let locals = (0..TILE)
-        .flat_map(|z| (0..TILE).flat_map(move |y| (0..TILE).map(move |x| IVec3::new(x, y, z))));
-    let (mut lit, mut dark) = (false, false);
-    let mut values = vec![0; TILE_VALUES];
-    let band_mm = grid.voxel_mm;
-    for local in locals {
-        let cover = cover(local);
-        lit |= cover > 0;
-        dark |= cover < FULL;
-        // A box two voxels wide: half lit is the surface, saturation a voxel either side.
-        let distance = (0.5 - f32::from(cover) / f32::from(FULL)) * 2.0 * band_mm;
-        values[index_in_tile(base + local)] = encode(distance, band_mm);
     }
+    let lit = covers.iter().any(|cover| *cover > 0);
+    let dark = covers.iter().any(|cover| *cover < FULL);
     match (lit, dark) {
         (false, _) => Tile::Outside,
         (true, false) => Tile::Inside,
-        (true, true) => Tile::Stored(values.into_boxed_slice()),
+        (true, true) => Tile::Stored(
+            covers
+                .iter()
+                // A box two voxels wide: half lit is the surface, saturation a voxel either side.
+                .map(|cover| {
+                    let distance = (0.5 - f32::from(*cover) / f32::from(FULL)) * 2.0 * band_mm;
+                    encode(distance, band_mm)
+                })
+                .collect(),
+        ),
     }
 }
 

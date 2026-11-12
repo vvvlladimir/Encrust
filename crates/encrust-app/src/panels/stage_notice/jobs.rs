@@ -20,6 +20,13 @@ pub(super) fn jobs(stack: &mut Stack, window: &mut Window) {
     if job_card(stack, "preview", preview) {
         window.machine.preview.cancel();
     }
+    let imports = &window.doc.imports;
+    let shown = imports
+        .label()
+        .map(|label| (label, imports.fraction(), false));
+    if job_card(stack, "import", shown) {
+        window.doc.imports.cancel(&mut window.machine.status);
+    }
     let slicing = window.machine.slicing.job.as_ref();
     let shown = slicing.map(|job| (job.label(), job.fraction(), job.is_cancelling()));
     if job_card(stack, "slicing", shown) {

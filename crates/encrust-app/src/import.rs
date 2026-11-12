@@ -63,6 +63,25 @@ impl Imports {
         !self.jobs.is_empty()
     }
 
+    /// Gives up every import under way: a sliced file's rebuild stops, a mesh's read is
+    /// thrown away when it ends.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.jobs.is_empty() {
+            return;
+        }
+        self.jobs.clear();
+        *status = Status::Info(tr!("import-cancelled"));
+    }
+
+    /// The share of the one import under way that is done; `None` for several, or for one
+    /// that cannot count its work.
+    pub fn fraction(&self) -> Option<f32> {
+        match self.jobs.as_slice() {
+            [job] => job.fraction(),
+            _ => None,
+        }
+    }
+
     /// What the stage notice says while files are being read.
     pub fn label(&self) -> Option<String> {
         let first = self.jobs.first()?;

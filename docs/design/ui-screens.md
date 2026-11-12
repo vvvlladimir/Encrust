@@ -235,7 +235,10 @@ track. With no stack it reads *No layers*.
   warning-octagon, a turning circle-notch for a job), the words, at most one action as a
   small button washed in the accent, and a close square. A job carries its `progress_bar`
   and percent and a quiet Cancel instead of the close. Measure's walk along the surface shows
-  its card only once it has run 0.3 s, so a short one does not flash. Prepare for print's is
+  its card only once it has run 0.3 s, so a short one does not flash. An import is its
+  stage (*Reading*, *Repairing*, *Surfacing*, *Indexing*) and the file's name, with *and N
+  more* for several; a sliced file's rebuild counts its layers then its surface, a mesh's
+  read runs its bar, and Cancel drops every import under way. Prepare for print's is
   *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown.
   Drain holes taken out and plugs cut are one card: *Reading the model for its holes and
   plugs*, then *Cutting N plugs*, then *Drilling the holes*, at the share of whichever is least

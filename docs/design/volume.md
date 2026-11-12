@@ -297,8 +297,12 @@ fall linearly with distance, so `(0.5 − cover) · 2v` is the signed distance w
 of the surface and saturates beyond it. Every crossing therefore has an unsaturated point
 beside it, whose tile is stored, and the extraction's growth reaches the rest.
 
-Only two slabs, one tile row of planes and the lit bounding box of each are held; a tile
-row is turned into tiles on every core and dropped. Runs are spread a cell row per core.
+Only two slabs and one tile row of planes are held. Each slab keeps the 8 × 8 blocks of
+cells it lights and each plane only the blocks of points those touch, a tile column's foot
+apiece, so a plate of small parts far apart costs their area, not the panel's. A tile row
+is turned into tiles on every core and dropped; runs are spread a block row per core.
+Six 10 mm parts spread over a 16K plate, 64 layers (`cargo bench -p core-volume --bench
+stack`): 2.27 s over the bounding box, 0.19 s by blocks.
 
 ## What it costs
 

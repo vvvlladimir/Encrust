@@ -123,7 +123,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 
 | # | Decision | Status |
 |---|---|---|
-| [0038](0038-models-are-imported-on-a-worker-thread.md) | Models are imported on a worker thread | Accepted |
+| [0038](0038-models-are-imported-on-a-worker-thread.md) | Models are imported on a worker thread | Accepted; an import that cannot be cancelled is superseded by 0442 |
+| [0442](0442-an-import-can-be-cancelled-and-a-rebuild-stops.md) | Let an import be cancelled, and stop a sliced file's rebuild | Accepted |
 | [0111](0111-parse-obj-with-tobj.md) | OBJ is parsed with `tobj`, not by hand | Accepted |
 | [0112](0112-resolve-the-3mf-graph-ourselves.md) | 3MF is parsed with `threemf2`, and its graph resolved here | Superseded by 0395 |
 | [0395](0395-read-3mf-with-quick-xml-and-the-workspace-zip.md) | 3MF is read with `quick-xml` and the workspace's `zip` | Proposed |

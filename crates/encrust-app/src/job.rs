@@ -41,7 +41,7 @@ pub use hollow::{
     HollowJob, HollowOutcome, HollowRequest, HollowTask, SharedFields, again_tasks, hollow_tasks,
     lock as lock_fields, rebuild_tasks,
 };
-pub use import::{ImportJob, ImportOutcome, ImportStage};
+pub use import::{ImportJob, ImportOutcome, ImportStage, ImportWatch};
 pub use measure::{MeasureJob, MeasureOutcome};
 pub use meeting::{MeetingBody, MeetingJob, spawn_meeting};
 pub use orient::{

@@ -255,6 +255,24 @@ fn a_sliced_file_opens_as_a_model_where_its_pixels_stood() {
 }
 
 #[test]
+fn a_cancelled_sliced_file_never_reaches_the_plate() {
+    let path = crate::preview::tests::written_goo("app-cancelled", 3);
+    let mut app = SlicerApp::default();
+    app.open_model(Handed::Path(path));
+    app.doc.imports.cancel(&mut app.machine.status);
+
+    let busy = app.doc.imports.poll(
+        &mut app.doc.scene,
+        &app.doc.plate,
+        &mut app.view.camera,
+        &mut app.machine.status,
+    );
+    assert!(!busy, "nothing is left to open");
+    assert!(app.doc.scene.is_empty());
+    assert!(!app.machine.status.is_error(), "{:?}", app.machine.status);
+}
+
+#[test]
 fn a_file_no_reader_claims_is_opened_as_a_model() {
     assert!(!core_pipeline::reads_sliced_file(Path::new("cube.stl")));
     assert!(core_pipeline::reads_sliced_file(Path::new("plate.ctb")));

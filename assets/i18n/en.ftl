@@ -2272,6 +2272,7 @@ controls-camera = Camera stream
 
 import-opening = Opening { $path }
 import-and-more = { $first }, and { $count } more
+import-cancelled = Opening cancelled
 import-no-extension = { $name } has no file extension
 import-cannot-load = cannot load { $name }
 import-no-vertices = { $name } has no vertices
@@ -2486,6 +2487,7 @@ job-hollow-shaping = Finishing the shell
 job-thread-stopped-import = the import thread stopped without finishing
 import-stage-reading = Reading
 import-stage-repairing = Repairing
+import-stage-surfacing = Surfacing
 import-stage-indexing = Indexing
 import-stage = { $stage } { $name }
 

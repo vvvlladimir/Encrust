@@ -2333,6 +2333,7 @@ controls-camera = Поток с камеры
 
 import-opening = Открытие { $path }
 import-and-more = { $first } и ещё { $count }
+import-cancelled = Открытие отменено
 import-no-extension = у { $name } нет расширения файла
 import-cannot-load = не удалось загрузить { $name }
 import-no-vertices = в { $name } нет вершин
@@ -2558,6 +2559,7 @@ job-hollow-shaping = Завершение оболочки
 job-thread-stopped-import = поток импорта остановился, не закончив
 import-stage-reading = Чтение
 import-stage-repairing = Починка
+import-stage-surfacing = Построение поверхности
 import-stage-indexing = Индексация
 import-stage = { $stage } { $name }
 
