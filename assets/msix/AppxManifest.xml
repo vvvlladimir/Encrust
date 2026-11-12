@@ -4,10 +4,11 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap5 desktop4 rescap">
+  IgnorableNamespaces="uap uap3 uap5 desktop4 rescap">
 
   <Identity
     Name="VladimirVarvorkin.Encrust"
@@ -53,6 +54,15 @@
             <uap5:ExecutionAlias Alias="encrust.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
+        <!-- A project opens in the window, its path the one argument (ADR 0445). -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="encrust" Parameters="&quot;%1&quot;">
+            <uap:DisplayName>Encrust project</uap:DisplayName>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.encrust</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap3:FileTypeAssociation>
+        </uap:Extension>
       </Extensions>
     </Application>
   </Applications>

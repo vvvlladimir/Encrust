@@ -51,6 +51,8 @@ mod state;
 mod status;
 mod supports;
 mod surfaces;
+#[cfg(target_os = "macos")]
+mod system_open;
 mod text;
 mod tool_settings;
 #[cfg(target_os = "macos")]

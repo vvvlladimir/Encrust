@@ -14,11 +14,17 @@ pub fn run(initial_model: Option<&std::path::Path>) -> anyhow::Result<()> {
         ..Default::default()
     };
     crate::render::ask_for_timestamps(&mut options.wgpu_options);
+    #[cfg(target_os = "macos")]
+    crate::system_open::listen();
 
     eframe::run_native(
         "Encrust",
         options,
-        Box::new(move |cc| Ok(Box::new(SlicerApp::new(cc, initial_model)))),
+        Box::new(move |cc| {
+            #[cfg(target_os = "macos")]
+            crate::system_open::wake(&cc.egui_ctx);
+            Ok(Box::new(SlicerApp::new(cc, initial_model)))
+        }),
     )
     .map_err(|e| anyhow::anyhow!("cannot start the window: {e}"))
 }

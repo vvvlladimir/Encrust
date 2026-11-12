@@ -520,6 +520,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262, the caret by 0348 |
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231, the jobs top centre by 0263 |
 | [0444](0444-the-macos-app-menu-is-the-windows-own.md) | Build the macOS application menu in the window, and date About by the binary | Accepted |
+| [0445](0445-a-project-opens-from-the-system.md) | Register `.encrust` with each system, and take the files macOS hands over | Accepted |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336, Export and the column of tools by 0348 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |

@@ -30,6 +30,10 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   material, which the Relief tool uses.
 - Open an **`.encrust` project**. It opens exactly as it was saved, with its supports and
   cavities already built, so nothing is recalculated.
+- **Double-click an `.encrust` project** to open it in Encrust: after the macOS app, the Windows
+  installer or Store copy, or the `.deb` is installed. On macOS an open window takes the project,
+  and a drop on the Dock icon or `open` does the same. On Windows and Linux it opens in a window of
+  its own. The `.AppImage` and the archives register nothing; use Open With.
 - Open **any sliced file** Encrust can read, whoever made it, as a model: its layers are
   built back into a mesh that stands where it stood on the plate, so you can move it,
   support it again or cut it for another printer. Its supports and raft come back as part

@@ -141,6 +141,9 @@ category = "GraphicsAndDesign"
 # The .icns is the squircled macOS grid (ADR 0135); Linux takes the PNG, Windows the .ico.
 icons = ["../../assets/icon/encrust.icns", "../../assets/icon/encrust-256.png", "../../assets/icon/encrust.ico"]
 binaries = [{ path = "encrust-gui", main = true }, { path = "encrust" }]
+# A project opens in the window: the Windows installer writes it to the registry and the .deb to
+# its desktop entry. macOS takes its own declaration from the Info.plist below (ADR 0445).
+file-associations = [{ extensions = ["encrust"], mime-type = "application/x-encrust", name = "Encrust.Project", description = "Encrust project" }]
 
 [package.metadata.packager.macos]
 minimum-system-version = "11.0"
@@ -154,3 +157,5 @@ installer-mode = "currentUser"
 
 [package.metadata.packager.deb]
 depends = ["libgtk-3-0 | libgtk-3-0t64", "libxkbcommon0"]
+# The project's MIME type; the shared-mime-info package's trigger rebuilds the database.
+files = { "../../assets/linux/encrust.xml" = "/usr/share/mime/packages/encrust.xml" }

@@ -26,6 +26,17 @@ the plate, there for whatever lists the file before opening it (ADR 0261): grey 
 alpha the coverage, tinted when shown (ADR 0385). A file without one reads, and a plate with
 nothing on it has none.
 
+## How a system knows it
+
+| | Name | Declared in |
+|---|---|---|
+| MIME type | `application/x-encrust`, a subclass of `application/zip` | `assets/linux/encrust.xml`, `crates/encrust-app/Cargo.toml` |
+| macOS UTI | `app.encrust.project`, conforming to `public.data` and `public.content` | `assets/macos/Info.plist` |
+| Windows ProgID | `Encrust.Project` | `crates/encrust-app/Cargo.toml` |
+| Store file type | `encrust` | `assets/msix/AppxManifest.xml` |
+
+Each installer registers the window as the file's owner (ADR 0445).
+
 ## `project.json`
 
 `version` is read on its own before anything else. This build writes version 7. Version 6

@@ -219,10 +219,13 @@ pub fn file_name(path: &Path) -> String {
 )]
 pub const SIBLINGS: [&str; 6] = ["mtl", "png", "jpg", "jpeg", "bmp", "tga"];
 
-/// Something a browser's dialog or download came back with.
+/// Something a browser's dialog or download came back with, or a file macOS handed over.
 #[cfg_attr(
     not(target_arch = "wasm32"),
-    allow(dead_code, reason = "only a browser hands over bytes, and only later")
+    allow(
+        dead_code,
+        reason = "beyond a browser, only macOS hands over files, and only paths"
+    )
 )]
 #[derive(Debug)]
 pub enum Arrived {
@@ -312,14 +315,18 @@ pub fn save_text(name: &str, _wanted: Wanted, text: &str) -> anyhow::Result<Opti
     Ok(Some(PathBuf::from(name)))
 }
 
-/// What a browser's dialogs and downloads came back with since the last frame. Always
-/// empty at the desk, where a dialog answers at once.
+/// What a browser's dialogs and downloads came back with since the last frame, or the files
+/// macOS asked the window to open. Otherwise empty: a dialog at the desk answers at once.
 pub fn arrived() -> Vec<Arrived> {
     #[cfg(target_arch = "wasm32")]
     {
         crate::web::files::arrived()
     }
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(target_os = "macos")]
+    {
+        crate::system_open::taken()
+    }
+    #[cfg(not(any(target_arch = "wasm32", target_os = "macos")))]
     {
         Vec::new()
     }
