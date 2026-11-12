@@ -245,6 +245,7 @@ impl SupportTool {
                 .collect();
             object.supports.retain_points(|index| !points[index]);
             object.supports.retain_frozen(|index| !frozen[index]);
+            self.thaw_unseated(object);
         }
         self.let_go(scene);
     }

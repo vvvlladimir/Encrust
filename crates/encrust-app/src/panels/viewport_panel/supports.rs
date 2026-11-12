@@ -154,9 +154,13 @@ pub(super) fn remove_support_under_cursor(
     match object.supports.frozen_of(hit.tree) {
         Some(frozen) => {
             object.supports.remove_frozen(frozen);
-            window.tools.supports.picked.retain(|picked| {
-                picked.id != id || (picked.frozen != frozen && picked.frozen < frozen)
-            });
+            // What stood on it goes back to the automatic run, which renumbers every frozen one.
+            let thawed = window.tools.supports.thaw_unseated(object) > 0;
+            window
+                .tools
+                .supports
+                .picked
+                .retain(|picked| picked.id != id || (!thawed && picked.frozen < frozen));
         }
         None => {
             let Some(ray) = ray_through(&window.view.camera, viewport, cursor) else {

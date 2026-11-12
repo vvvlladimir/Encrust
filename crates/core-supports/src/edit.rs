@@ -3,8 +3,9 @@ use printer_profiles::SupportProfile;
 
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{MAX_LEAN_PER_DROP, foot_clear, has_head, neck_of, swept_bottom_z};
+use crate::column::{MAX_LEAN_PER_DROP, foot_clear, has_head, head_of, swept_bottom_z};
 use crate::group::Profiles;
+use crate::lost::Unstood;
 use crate::mesher::sound;
 use crate::pick::Part;
 use crate::placed::Placed;
@@ -21,6 +22,7 @@ mod riders;
 pub use give_way::eased;
 pub use held::{Carried, carried_held, with_riders};
 pub use refused::Refused;
+pub(crate) use riders::{carrying, unseated};
 pub use riders::{followed, standing_on};
 
 use column::carry_column;
@@ -106,10 +108,15 @@ fn strut_fit(
 }
 
 /// Whether the trunk of `tree` (plate) keeps out of the model, stands straight over a foot on
-/// the plate (ADR 0437), and that foot has room.
+/// the plate (ADR 0437) or runs into a support within 45 degrees (ADR 0443), and that foot has
+/// room.
 fn trunk_fit(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> Result<(), Refused> {
     let root = tree.root();
     let landing = tree.landing();
+    let lean = root.position - landing.base;
+    if landing.on_support && lean.truncate().length() > lean.z * MAX_LEAN_PER_DROP + LEAN_SLACK_MM {
+        return Err(Refused::Leans);
+    }
     let on_plate = !landing.on_model && !landing.in_plate;
     if on_plate {
         if (root.position - landing.base).truncate().length() >= LEAN_SLACK_MM {
@@ -172,7 +179,7 @@ pub fn carried(
     for part in parts {
         carry_part(&mut carried, *part, (matrix, inverse), step, profile);
     }
-    snap_tips(&mut carried, placed, matrix, inverse);
+    snap_tips(&mut carried, tree, placed, matrix, inverse);
     if carried.landing() != tree.landing() {
         // A column carried stands on whatever is under it there or just beside, as growing would.
         let root = matrix.transform_point3(carried.root().position);
@@ -218,7 +225,10 @@ pub fn tip_carried(
         return regrown(tree, contact, placed, profiles);
     }
     let profile = profiles.of(tree.group());
-    let neck = neck_of(placed, contact, profile).ok_or(Refused::Collides)?;
+    let neck = head_of(placed, contact, profile).map_err(|why| match why {
+        Unstood::FacesUp => Refused::NoHold,
+        Unstood::HeadBlocked | Unstood::NoGround => Refused::Collides,
+    })?;
 
     let mut carried = tree.clone();
     carried.move_node(tip, inverse.transform_point3(contact));
@@ -227,7 +237,14 @@ pub fn tip_carried(
         if !has_head(contact, neck) {
             return Err(Refused::Collides);
         }
-        carried.move_node(parent, inverse.transform_point3(neck));
+        let shared =
+            (tree.nodes().iter()).any(|other| other.parent == Some(parent) && other != node);
+        if shared {
+            // A neck other branches hang from is their joint: the tip takes a neck of its own.
+            carried.bend_under(tip, inverse.transform_point3(neck), node.radius_mm);
+        } else {
+            carried.move_node(parent, inverse.transform_point3(neck));
+        }
         let alone = parent == tree.root_index() && tree.tip_count() == 1;
         let radius_mm = tree.root().radius_mm;
         if alone && let Some(under) = footing_under(placed, neck, radius_mm, 1, profile) {
@@ -270,14 +287,23 @@ fn carry_part(
     }
 }
 
-/// Pulls every tip back onto the surface it holds up: a support that has stopped touching
-/// the model holds nothing, and one carried into it is not printable.
-fn snap_tips(tree: &mut SupportTree, placed: &Placed, matrix: Mat4, inverse: Mat4) {
+/// Pulls every tip the carry moved from where it stood in `was` back onto the surface it holds
+/// up: a support that has stopped touching the model holds nothing, and one carried into it is
+/// not printable.
+fn snap_tips(
+    tree: &mut SupportTree,
+    was: &SupportTree,
+    placed: &Placed,
+    matrix: Mat4,
+    inverse: Mat4,
+) {
     let tips: Vec<(usize, Vec3)> = tree
         .nodes()
         .iter()
         .enumerate()
-        .filter(|(_, node)| node.is_leaf())
+        .filter(|(index, node)| {
+            node.is_leaf() && was.nodes().get(*index).map(|was| was.position) != Some(node.position)
+        })
         .map(|(index, node)| (index, node.position))
         .collect();
     for (index, position) in tips {

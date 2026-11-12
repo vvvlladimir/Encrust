@@ -1,4 +1,5 @@
 use super::{ModelSupports, next_revision};
+use crate::edit::{carrying, unseated};
 use crate::{Part, Profiles, SupportPoint, SupportTree, standing_on};
 use core_geometry::Transform;
 
@@ -25,8 +26,9 @@ impl ModelSupports {
             .flatten()
     }
 
-    /// [`Self::freeze`] for `tree` and every support standing on it, which a hand carries
-    /// with it (ADR 0433); answers `tree`'s index in [`ModelSupports::frozen`].
+    /// [`Self::freeze`] for `tree`, every support standing on it, which a hand carries with it
+    /// (ADR 0433), and every one it stands on, which a regrowth must not move from under it
+    /// (ADR 0443); answers `tree`'s index in [`ModelSupports::frozen`].
     pub fn freeze_with_riders(
         &mut self,
         tree: usize,
@@ -35,6 +37,7 @@ impl ModelSupports {
     ) -> Option<usize> {
         let mut trees = vec![tree];
         trees.extend(standing_on(self.trees(), tree, profiles));
+        trees.extend(carrying(self.trees(), tree, profiles));
         self.freeze_all(&trees, transform)
             .first()
             .copied()
@@ -125,6 +128,27 @@ impl ModelSupports {
             self.points.push(SupportPoint::new(contact).in_group(group));
         }
         self.points_changed();
+    }
+
+    /// Hands every frozen support standing on no other frozen one back to the automatic run,
+    /// so none is left in the air once what it stood on went or regrew (ADR 0443); answers how
+    /// many went back.
+    pub fn thaw_unseated(&mut self, transform: Transform, profiles: Profiles) -> usize {
+        let matrix = transform.to_matrix();
+        let mut thawed = 0;
+        // Each round thaws at least one tree or stops, so it ends within as many as there are.
+        loop {
+            let plate: Vec<SupportTree> =
+                self.frozen.iter().map(|tree| tree.moved(matrix)).collect();
+            let lost = unseated(&plate, profiles);
+            if lost.is_empty() {
+                return thawed;
+            }
+            for frozen in lost.iter().rev() {
+                self.thaw(*frozen, transform);
+            }
+            thawed += lost.len();
+        }
     }
 
     /// Takes a frozen support away for good.

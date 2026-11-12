@@ -80,10 +80,11 @@ fn a_foot_on_the_model_carried_off_its_edge_slides_back_onto_it() {
         base.x <= 10.0 && (base.z - 10.0).abs() < 1e-3,
         "on the cube's top at z = 10, got {base}"
     );
+    let neck = tree.root_index();
     assert_eq!(
-        moved.nodes().len(),
-        tree.nodes().len(),
-        "the column slid whole, on no knee"
+        moved.nodes()[neck].position,
+        tree.nodes()[neck].position,
+        "the neck the head hangs from stays, so the head stays square to its face"
     );
 }
 

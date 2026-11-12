@@ -19,7 +19,8 @@ pub(super) fn carry_column(
 ) {
     let (matrix, inverse) = space;
     let across = step.with_z(0.0);
-    if across != Vec3::ZERO && tree.landing().on_model {
+    // A head hangs from a root that is its neck: slid whole, it would turn off its face.
+    if across != Vec3::ZERO && tree.landing().on_model && !holds_a_head(tree) {
         slide_column(tree, space, across);
     } else if across != Vec3::ZERO {
         // A joint carried rigidly would lean its branches past 45 degrees (ADR 0432, 0437).
@@ -27,19 +28,25 @@ pub(super) fn carry_column(
         move_foot(tree, matrix, inverse, across);
         knee_over_foot(tree, space, from, profile);
     }
-    let root = tree.root_index();
-    let holds_a_head = tree
-        .nodes()
-        .iter()
-        .any(|node| node.parent == Some(root) && node.is_leaf());
-    if step.z == 0.0 || holds_a_head || tree.root().is_leaf() {
+    if step.z == 0.0 || holds_a_head(tree) {
         return;
     }
+    let root = tree.root_index();
     let top = matrix.transform_point3(tree.root().position);
     let highest = highest_under_branches(tree, root, top.truncate(), matrix);
     let lowest = lowest_top_mm(&landing_through(tree.landing(), matrix), profile);
     let z = (top.z + step.z).min(highest).max(lowest);
     shift(tree, root, space, Vec3::Z * (z - top.z));
+}
+
+/// Whether the root of `tree` is a tip, or the neck a tip's head hangs from.
+fn holds_a_head(tree: &SupportTree) -> bool {
+    let root = tree.root_index();
+    tree.root().is_leaf()
+        || tree
+            .nodes()
+            .iter()
+            .any(|node| node.parent == Some(root) && node.is_leaf())
 }
 
 /// The lowest the top of a column standing on `landing` (plate) may stand: the shortest pillar

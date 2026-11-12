@@ -413,7 +413,11 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Opti
 
 /// [`neck_of`], or why the support at `contact` has no head: a head turned or cut to fit
 /// only where no small pillar holds it instead (ADR 0431).
-fn head_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Result<Vec3, Unstood> {
+pub(crate) fn head_of(
+    placed: &Placed,
+    contact: Vec3,
+    profile: &SupportProfile,
+) -> Result<Vec3, Unstood> {
     match straight_neck(placed, contact, profile) {
         Err(Unstood::HeadBlocked) if profile.small_pillar.enabled => Ok(contact),
         Err(Unstood::HeadBlocked) => refitted_necks(placed, contact, profile)

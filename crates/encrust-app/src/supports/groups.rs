@@ -53,6 +53,15 @@ impl SupportTool {
         with_own(self.table(), &object.own, self.raft)
     }
 
+    /// Hands back to the automatic run every frozen support of `object` that a removal or a
+    /// regrowth left standing on nothing (ADR 0443); answers how many.
+    pub fn thaw_unseated(&self, object: &mut SceneObject) -> usize {
+        let table = self.table_for(object);
+        core_supports::Profiles::new(&table).map_or(0, |profiles| {
+            object.supports.thaw_unseated(object.transform, profiles)
+        })
+    }
+
     /// Makes `raft` the plate's, or the picked models' own while the panel shows one. A
     /// model whose raft is the plate's again keeps none of its own; see ADR 0291.
     pub fn keep_raft(&mut self, raft: Raft, scene: &mut Scene) {

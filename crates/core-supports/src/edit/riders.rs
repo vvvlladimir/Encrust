@@ -1,6 +1,8 @@
 use core_geometry::{FastSet, Scalar, Vec3};
 
 use crate::Landing;
+use crate::branch::{Carrier, meeting_on};
+use crate::column::{MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM};
 use crate::group::Profiles;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
@@ -39,6 +41,40 @@ pub fn standing_on(trees: &[SupportTree], host: usize, profiles: Profiles) -> Ve
     found
 }
 
+/// Every tree of `trees` (plate coordinates) that `rider` stands on, directly or through one
+/// that does: what must stay as it is for `rider` to keep its seat.
+pub(crate) fn carrying(trees: &[SupportTree], rider: usize, profiles: Profiles) -> Vec<usize> {
+    let mut found = Vec::new();
+    let mut at = rider;
+    // Each tree is taken once, so the walk ends within as many steps as there are trees.
+    while let Some(seated) = trees.get(at).filter(|tree| tree.landing().on_support) {
+        let base = seated.landing().base;
+        let Some(host) = (0..trees.len()).find(|host| {
+            *host != rider
+                && !found.contains(host)
+                && seat_of(base, &trees[*host], profiles).is_some()
+        }) else {
+            break;
+        };
+        found.push(host);
+        at = host;
+    }
+    found
+}
+
+/// The trees of `trees` (plate coordinates) standing on a support that none of the others is:
+/// what was under them has gone or moved.
+pub(crate) fn unseated(trees: &[SupportTree], profiles: Profiles) -> Vec<usize> {
+    (0..trees.len())
+        .filter(|rider| {
+            let base = trees[*rider].landing().base;
+            trees[*rider].landing().on_support
+                && !(trees.iter().enumerate())
+                    .any(|(host, tree)| host != *rider && seat_of(base, tree, profiles).is_some())
+        })
+        .collect()
+}
+
 /// The trees of `frozen` (model space) standing on `frozen[host]`, seated where they were on it
 /// once it is `carried`, and those on them in turn; [`super::allowed`] says whether each may
 /// stand. Answers every tree to put back, `carried` first, with its index.
@@ -65,6 +101,7 @@ pub fn followed(
             }
             let base = seat_point(&after, seat, profiles)?;
             let carried = reseated(&plate[rider], base);
+            let carried = within_lean(&carried, &after, seat, profiles).unwrap_or(carried);
             moved.push((rider, carried.moved(inverse)));
             hosts.push((plate[rider].clone(), carried));
         }
@@ -120,6 +157,36 @@ fn axes<'a>(
         .with_z(landing.pillar_bottom_z(profiles.of(host.group())));
     let trunk = (!root.is_leaf()).then_some((None, root.position, bottom));
     struts.chain(trunk)
+}
+
+/// `rider` seated where growth would seat it on `seat`'s axis of `host`, all plate coordinates:
+/// the highest point it reaches leaning no further than growth leans, where the seat it kept
+/// leans past 45 degrees (ADR 0443); `None` where it leans no further or no point is reached.
+fn within_lean(
+    rider: &SupportTree,
+    host: &SupportTree,
+    seat: Seat,
+    profiles: Profiles,
+) -> Option<SupportTree> {
+    let from = rider.root().position;
+    let lean = from - rider.landing().base;
+    if lean.truncate().length() <= lean.z * MAX_LEAN_PER_DROP {
+        return None;
+    }
+    let (_, top, bottom) = axes(host, profiles).find(|(strut, _, _)| *strut == seat.strut)?;
+    let carrier = Carrier {
+        top,
+        bottom,
+        radius_mm: host.root().radius_mm,
+        floor_mm: if seat.strut.is_none() {
+            MIN_PILLAR_HEIGHT_MM
+        } else {
+            0.0
+        },
+        tree: 0,
+    };
+    let meet = meeting_on(from, &carrier, profiles.of(rider.group()))?;
+    Some(reseated(rider, meet))
 }
 
 /// `rider` standing at `base` on its host, plate coordinates, the rest of it where it was.

@@ -728,3 +728,168 @@ fn a_support_already_out_of_line_may_be_carried_where_what_moves_is_sound() {
         "flattening the other branch past 45 degrees is not"
     );
 }
+
+/// A tip at the origin 20 mm up and a higher one whose branch came straight down onto the
+/// first one's neck, grown in clear air: that neck is the joint both hang from.
+fn onto_a_neck() -> crate::SupportTree {
+    let tree = trees_on(
+        &[
+            SupportPoint::new(Vec3::new(0.0, 0.0, 20.0)),
+            SupportPoint::new(Vec3::new(2.0, 0.0, 23.0)),
+        ],
+        &Mesh::default(),
+        Transform::default(),
+        Profiles::single(&profile()),
+    )
+    .pop()
+    .expect("the two tips share a trunk");
+    let nodes = tree.nodes();
+    let neck = nodes[tip_holding(&tree, 0)].parent;
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node.parent == neck && !node.is_leaf()),
+        "the higher tip's branch hangs from the lower tip's neck"
+    );
+    tree
+}
+
+/// The tip of `tree` holding point `point`.
+fn tip_holding(tree: &crate::SupportTree, point: usize) -> usize {
+    tree.nodes()
+        .iter()
+        .position(|node| node.point == Some(point))
+        .expect("the tree holds the point")
+}
+
+#[test]
+fn a_tip_carried_from_a_neck_others_hang_from_leaves_their_branches_alone() {
+    // A block whose underside, at z = 20, the lower tip is carried onto, clear of the other.
+    let model = box_mesh(Vec3::new(-8.0, -3.0, 20.0), Vec3::new(-2.0, 3.0, 25.0));
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = onto_a_neck();
+    let other = tip_holding(&tree, 1);
+    let other_neck = tree.nodes()[other].parent.expect("a headed tip has a neck");
+
+    let moved = tip_carried(
+        &tree,
+        tip_holding(&tree, 0),
+        Vec3::new(-4.0, 0.0, 15.0),
+        &placed,
+        Profiles::single(&profile()),
+    )
+    .expect("the joint drops until the new neck leans onto it at 45 degrees");
+
+    for node in [other, other_neck] {
+        assert_eq!(
+            moved.nodes()[node].position,
+            tree.nodes()[node].position,
+            "the other tip's head stays where it was grown"
+        );
+    }
+    assert!(within_45_degrees(&moved), "no strut leans past 45 degrees");
+}
+
+#[test]
+fn a_column_on_the_model_carried_across_keeps_its_head_square() {
+    let model = shelf_over_a_slab();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = under_the_shelf(&model);
+    let tip = tip_of(&tree);
+    let neck = tree.nodes()[tip].parent.expect("a headed tip has a neck");
+
+    let moved = carried(
+        &tree,
+        tree.landing(),
+        &[Part::Trunk],
+        Vec3::new(1.0, 0.0, 0.0),
+        &placed,
+        &profile(),
+    )
+    .expect("a millimetre aside the slab is still under it");
+
+    assert_eq!(
+        moved.nodes()[neck].position,
+        tree.nodes()[neck].position,
+        "the head still leaves its face along the normal"
+    );
+    let base = moved.landing().base;
+    assert!(
+        moved.landing().on_model && (base.x - 6.0).abs() < 1e-4,
+        "the column stands on the slab a millimetre over, got {base}"
+    );
+    assert!(allowed(&tree, &moved, &placed, &profile()).is_ok());
+}
+
+#[test]
+fn a_merged_column_on_the_model_carried_across_turns_no_head() {
+    // Without small pillars, which two tips standing on the part would otherwise be split into.
+    let mut solid = profile();
+    solid.small_pillar.enabled = false;
+    let model = shelf_over_a_slab();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = trees_on(
+        &[
+            SupportPoint::new(Vec3::new(4.0, 5.0, 10.0)),
+            SupportPoint::new(Vec3::new(6.0, 5.0, 10.0)),
+        ],
+        &model,
+        Transform::default(),
+        Profiles::single(&solid),
+    )
+    .pop()
+    .expect("the two tips share a trunk on the slab");
+    assert!(tree.landing().on_model && tree.tip_count() == 2);
+    let necks: Vec<usize> = (0..2)
+        .filter_map(|point| tree.nodes()[tip_holding(&tree, point)].parent)
+        .collect();
+
+    let moved = eased(
+        &tree,
+        &carried(
+            &tree,
+            tree.landing(),
+            &[Part::Trunk],
+            Vec3::new(1.0, 0.0, 0.0),
+            &placed,
+            &solid,
+        )
+        .expect("a millimetre aside the slab is still under it"),
+        &placed,
+        &solid,
+    )
+    .expect("the joint drops as far as its branches need");
+
+    for neck in necks {
+        assert_eq!(
+            moved.nodes()[neck].position,
+            tree.nodes()[neck].position,
+            "a head stays square to the face it holds"
+        );
+    }
+    assert!(within_45_degrees(&moved), "no strut leans past 45 degrees");
+}
+
+#[test]
+fn a_tip_carried_onto_a_face_looking_up_holds_nothing() {
+    let model = shelf();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = under_the_shelf(&model);
+
+    assert_eq!(
+        tip_carried(
+            &tree,
+            tip_of(&tree),
+            Vec3::new(5.0, 5.0, 22.0),
+            &placed,
+            Profiles::single(&profile())
+        )
+        .err(),
+        Some(Refused::NoHold),
+        "the shelf's top looks up: nothing hangs there to hold"
+    );
+}

@@ -59,11 +59,16 @@ fn giving(
     (!joints.is_empty() && joints.len() <= MOST_JOINTS).then_some(joints)
 }
 
-/// Whether `node` of `tree` may be shifted to make room: a joint, the root too unless a head
-/// sunk in the plate ends there; one on the model is only lowered, see [`give_way`].
+/// Whether `node` of `tree` may be shifted to make room: a joint no head hangs from, since a
+/// neck moved turns its head off the face; the root too unless a head sunk in the plate ends
+/// there; one on the model is only lowered, see [`give_way`].
 fn may_give(tree: &SupportTree, node: usize) -> bool {
-    let is_joint = tree.nodes().get(node).is_some_and(|node| !node.is_leaf());
-    is_joint && (node != tree.root_index() || !tree.landing().in_plate)
+    let nodes = tree.nodes();
+    let is_joint = nodes.get(node).is_some_and(|node| !node.is_leaf());
+    let is_neck = nodes
+        .iter()
+        .any(|above| above.parent == Some(node) && above.is_leaf());
+    is_joint && !is_neck && (node != tree.root_index() || !tree.landing().in_plate)
 }
 
 /// Moves joint `joint` of `tree` to the nearest place, aside or lower and within

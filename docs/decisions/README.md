@@ -265,6 +265,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0440](0440-the-joints-beside-a-carried-part-give-way.md) | The joints beside a carried part give way before the carry is refused | Proposed |
 | [0441](0441-one-footing-rule-for-growing-and-carrying.md) | Growing and carrying stand a foot by one rule, and a refusal says why | Proposed |
 | [0442](0442-a-carried-small-pillar-is-grown-again-from-its-contact.md) | A carried small pillar is grown again from its contact | Proposed |
+| [0443](0443-an-edit-keeps-every-head-square-and-every-rider-seated.md) | An edit keeps every head square to its face and every support standing on another seated | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |

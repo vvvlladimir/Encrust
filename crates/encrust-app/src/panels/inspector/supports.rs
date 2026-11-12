@@ -350,6 +350,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
                 object.supports.thaw(*frozen, transform);
             }
         }
+        settle_riders(window, &supports);
         window.tools.supports.picked.clear();
     }
     if remove {
@@ -364,7 +365,19 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
                 object.supports.remove_parts(*frozen, &parts);
             }
         }
+        settle_riders(window, &supports);
         window.tools.supports.picked.clear();
+    }
+}
+
+/// Hands back to the automatic run what stood on the supports `edited` named, once they went.
+fn settle_riders(window: &mut Window, edited: &std::collections::BTreeSet<(ObjectId, usize)>) {
+    let mut ids: Vec<ObjectId> = edited.iter().map(|(id, _)| *id).collect();
+    ids.dedup();
+    for id in ids {
+        if let Some(object) = window.doc.scene.get_mut(id) {
+            window.tools.supports.thaw_unseated(object);
+        }
     }
 }
 

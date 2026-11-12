@@ -638,13 +638,14 @@ so taking the cursor back takes them back;
 everything picked takes the same step. What is held follows the cursor whatever the model
 says: drawn in its group's tint where it may stand, in danger's with a no-entry cursor where
 it may not, and the scene keeps it where it last could, which is where a release leaves it.
-No edit leaves a strut under a head leaning past 45 degrees or a trunk on the plate off the
-vertical (ADR 0437).
+No edit leaves a strut under a head leaning past 45 degrees, a trunk on the plate off the
+vertical (ADR 0437), or a trunk run into a support leaning past 45 degrees (ADR 0443).
 
 The root, the trunk and the foot are one handle, the column. Across the plate its foot
 moves, its trunk stands upright over it on a knee what it carries leans down to at 45
 degrees, no further than that lean reaches, and it stands on whatever `landing` finds under
-it, model or plate; up and down its top moves, unless a head hangs there, no higher than its
+it, model or plate — a column on the model slides whole unless its root is the neck a head
+hangs from, since no edit turns a head off its face but the hand holding it (ADR 0443); up and down its top moves, unless a head hangs there, no higher than its
 branches allow at 45 degrees and no lower than the shortest pillar, and a foot never rises.
 A strut hanging from the root carries the column too. Any other joint or strut moves its own
 nodes, and a joint carried aside drops to the height its branches allow.
@@ -657,13 +658,17 @@ costs one carry, one judgement and one mesh per tree carried, whatever else the 
 A tip held alone is not slid by a step but aimed, like a new support: `tip_carried` puts
 it where the cursor's ray meets its model, or on the surface nearest the cursor at the
 tip's own depth when the ray misses or that place is refused. Its neck goes with it, one
-`[top]` out along the face it now holds, and a support that is one tip on one trunk drops
-its trunk from the neck again, so the whole of it follows the cursor.
+`[top]` out along the face it now holds — a neck other branches hang from stays as their
+joint and the tip takes a new one — and a support that is one tip on one trunk drops its trunk
+from the neck again, so the whole of it follows the cursor.
 
 A support standing on another — a branch ended on its trunk or a strut, a small pillar run
 into it — is frozen with it when it is taken hold of, and carried with it: `standing_on`
 finds it by its landing lying on one of the axes growth offers, and `followed` seats it
-at the same share of the same axis once the step is taken, its tips staying put (ADR 0433).
+at the same share of the same axis once the step is taken, its tips staying put (ADR 0433),
+or where that leans past 45 degrees at the highest point of that axis growth would seat it
+(ADR 0443). What it stands on is frozen with it too, and a frozen support left standing on no
+other frozen one, its host removed or grown again, goes back to growth (`thaw_unseated`).
 
 **Remove these supports** takes away what is picked and everything it holds up
 (`SupportTree::without`): a strut or a joint goes with the tips above it, a joint left

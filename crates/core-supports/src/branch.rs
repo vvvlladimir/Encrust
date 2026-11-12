@@ -22,6 +22,7 @@ mod small;
 mod sound;
 mod speculate;
 pub(crate) use alone::grown_alone;
+pub(crate) use carriers::{Carrier, meeting_on};
 use carriers::{Carriers, THICKER_BY_MM};
 use rescue::rescue;
 use small::tidy_small_pillars;

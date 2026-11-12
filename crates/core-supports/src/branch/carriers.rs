@@ -13,14 +13,14 @@ pub(super) const THICKER_BY_MM: Scalar = 0.05;
 /// A strut or a trunk a thicker group has already stood, which a thinner tree may run
 /// into, from its upper end to its lower.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Carrier {
-    pub(super) top: Vec3,
-    pub(super) bottom: Vec3,
-    pub(super) radius_mm: Scalar,
+pub(crate) struct Carrier {
+    pub(crate) top: Vec3,
+    pub(crate) bottom: Vec3,
+    pub(crate) radius_mm: Scalar,
     /// How far above `bottom` it has to be met: the foot under a trunk is not the trunk.
-    pub(super) floor_mm: Scalar,
+    pub(crate) floor_mm: Scalar,
     /// The tree it is part of, an index into [`Carriers::trunks`].
-    pub(super) tree: usize,
+    pub(crate) tree: usize,
 }
 
 /// Every carrier stood so far, bucketed by the squares of plate it passes over, so a
@@ -107,7 +107,7 @@ pub(super) const MEETING_HALVINGS: u32 = 16;
 
 /// The highest point on `carrier` a strut from `from` reaches within `profile`'s branch lean, or
 /// `None` when out of reach or it would come in under what the carrier stands on.
-pub(super) fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option<Vec3> {
+pub(crate) fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option<Vec3> {
     let (top, bottom) = (carrier.top, carrier.bottom);
 
     // How much steeper than it has to be the strut to a point of the carrier comes in:

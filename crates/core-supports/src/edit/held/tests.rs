@@ -5,24 +5,26 @@ use crate::fixtures::{profile, trees_on};
 use crate::{Landing, SupportPoint};
 use core_geometry::{Bvh, Mesh, Transform, Vec3};
 
-/// `host` and a column in clear air beside it standing on its trunk, `share` of the way down.
+/// `host` and a column in clear air beside it standing on its trunk, `share` of the way down,
+/// its neck 3 mm across from that seat and higher, so it leans onto it within 45 degrees.
 fn with_rider(host: &SupportTree, share: f32) -> Vec<SupportTree> {
+    let bottom = host
+        .landing()
+        .base
+        .with_z(host.landing().pillar_bottom_z(&profile()));
+    let seat = host.root().position.lerp(bottom, share);
     let mut rider = trees_on(
-        &[SupportPoint::new(Vec3::new(25.0, 10.0, 20.0))],
+        &[SupportPoint::new(seat.with_z(20.0) + Vec3::X * 3.0)],
         &Mesh::default(),
         Transform::default(),
         Profiles::single(&profile()),
     )
     .pop()
     .expect("a column in clear air stands");
-    let bottom = host
-        .landing()
-        .base
-        .with_z(host.landing().pillar_bottom_z(&profile()));
     rider.stand_on(Landing {
         on_model: true,
         on_support: true,
-        ..Landing::on_part(host.root().position.lerp(bottom, share))
+        ..Landing::on_part(seat)
     });
     vec![host.clone(), rider]
 }

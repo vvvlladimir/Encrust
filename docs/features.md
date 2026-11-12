@@ -577,13 +577,19 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   cursor says no and names why beside it (touches the model, leans too far, no room for the
   foot, no surface to hold); let go there it stays where it last could stand. A tip slides over the
   model's surface, and a joint moved aside drops as far as its branches need. A foot on the
-  model slides over it as you move, and stands on a face up to 75° as a grown one may. Over an
+  model slides over it as you move, and stands on a face up to 75° as a grown one may; a
+  head never turns off the face it holds, so a column whose head sits on its trunk bends on a
+  knee instead. Over an
   edge the foot keeps to the plate or the model it stood on until that is 2 mm away, so it
   switches once instead of jumping back and forth. Before a
   move is refused, the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk, its foot and the joint on top move as one: the trunk
   stays upright and what it carries leans down to it at 45 degrees, onto the plate or the
   model, and goes no further than that lean reaches; no drag leaves a strut flatter than
-  45 degrees. Supports that stand on the one you move go with it. A small pillar moves by
+  45 degrees. Supports that stand on the one you move go with it, climbing its trunk where
+  they would lean further than 45 degrees, and taking hold of one freezes what it stands on
+  too. Removing a support, or growing it again, grows again the ones that stood on it, so
+  none is left in the air. A tip dragged off a joint other branches share takes a neck of its
+  own and leaves them as they were. A small pillar moves by
   where it touches: whichever part you drag, its tip goes along the face it holds, and it is
   built again there as Grow would build it, a small pillar where one fits and a whole support
   where none does, never half of each. Dragged out from under every face, it stays put.

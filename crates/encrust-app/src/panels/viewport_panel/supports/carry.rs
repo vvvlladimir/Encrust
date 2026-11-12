@@ -127,6 +127,7 @@ fn retake(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, level: 
     let Some(carry) = window.tools.supports.carry.take() else {
         return;
     };
+    repick(window, &carry.before);
     let through = carry.from + carry.taken;
     let taken = carry_from(window, viewport, cursor, through, level).map(|fresh| Carry {
         shown: carry.shown.clone(),
@@ -361,7 +362,9 @@ fn aim_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip: P
             carry.refused = found.refused;
             if found.refused.is_none() {
                 carry.shown = Some(Arc::new(found.mesh));
+                let point = held_point(window.doc, tip);
                 put_back(window, found.moved);
+                follow_tip(window, tip, point);
             }
         }
         Err(why) => carry.refused = Some(why),
@@ -421,6 +424,71 @@ fn tip_carried(window: &Window, tip: Picked, targets: &[Vec3]) -> Result<Found, 
     Ok(found)
 }
 
+/// The point the held tip holds, which names it whatever its place in its tree.
+fn held_point(doc: &Doc, tip: Picked) -> Option<usize> {
+    let Part::Node(node) = tip.part else {
+        return None;
+    };
+    let object = doc.scene.get(tip.id)?;
+    object
+        .supports
+        .frozen()
+        .get(tip.frozen)?
+        .nodes()
+        .get(node)?
+        .point
+}
+
+/// Names the held tip by its place in its tree as carried: a small pillar grown again from its
+/// contact may be built of other nodes (ADR 0442).
+fn follow_tip(window: &mut Window, tip: Picked, point: Option<usize>) {
+    let Some(point) = point else {
+        return;
+    };
+    let node = window
+        .doc
+        .scene
+        .get(tip.id)
+        .and_then(|object| object.supports.frozen().get(tip.frozen))
+        .and_then(|tree| {
+            tree.nodes()
+                .iter()
+                .position(|node| node.point == Some(point))
+        });
+    if let (Some(node), Some(held)) = (node, window.tools.supports.picked.first_mut()) {
+        held.part = Part::Node(node);
+    }
+}
+
+/// Names each part picked on a tree the carry built again by its tip: a small pillar grown
+/// again from its contact is built of other nodes than `before` named (ADR 0442).
+fn repick(window: &mut Window, before: &[(ObjectId, Vec<SupportTree>)]) {
+    let scene = &window.doc.scene;
+    for picked in &mut window.tools.supports.picked {
+        let was = before
+            .iter()
+            .find(|(id, _)| *id == picked.id)
+            .and_then(|(_, trees)| trees.get(picked.frozen));
+        let now = scene
+            .get(picked.id)
+            .and_then(|object| object.supports.frozen().get(picked.frozen));
+        let (Some(was), Some(now)) = (was, now) else {
+            continue;
+        };
+        let kept = was.nodes().len() <= now.nodes().len()
+            && (was.nodes().iter().zip(now.nodes())).all(|(a, b)| a.point == b.point);
+        if !kept && let Some(tip) = now.nodes().iter().position(|node| node.is_leaf()) {
+            picked.part = Part::Node(tip);
+        }
+    }
+    let mut seen = Vec::new();
+    window.tools.supports.picked.retain(|picked| {
+        let first = !seen.contains(picked);
+        seen.push(*picked);
+        first
+    });
+}
+
 /// Lifts every tree a carry moves out of its object's meshes, so the hand draws them; the
 /// first time builds the rest once without them.
 fn lift(window: &mut Window, moved: &[(ObjectId, Moved)]) {
@@ -457,6 +525,7 @@ fn set_down(window: &mut Window) {
     let Some(carry) = window.tools.supports.carry.take() else {
         return;
     };
+    repick(window, &carry.before);
     for (id, _) in carry.before {
         if let Some(object) = window.doc.scene.get_mut(id) {
             object.supports.lift(Vec::new());
