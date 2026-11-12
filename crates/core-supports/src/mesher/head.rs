@@ -37,6 +37,7 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let tree = SupportTree::new(nodes, 1, landing);
     let mut mesh = Mesh::default();

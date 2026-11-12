@@ -175,13 +175,14 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   takes its best. A pose with a few more contacts on show is offered beside the choice
   when it wins at least a quarter more of the preset, such as a quarter less resin.
 - The brush in the **Clean surface** row paints the faces that must stay clean, such as a
-  face: alt to erase, **Clear what shows** to start again. While it paints, the move and
-  turn handles are put away, so a stroke over them paints the model. Painted faces are
-  drawn in rose while the switch is on. Once a model has any face painted, only the painted
-  faces count as showing; with none, what shows is found from the shape: open surface with
-  fine detail, while folds, the underside and smooth areas take the contacts. Painting is
-  saved with the project and cleared when the model is reshaped. Support placement does not
-  yet avoid it within a pose.
+  face: alt to erase, **Clear what shows** to start again. The same switch and brush stand in
+  the Where section of Supports, painting the same faces. While it paints, the move and turn
+  handles are put away, so a stroke over them paints the model. Painted faces are drawn in
+  rose while the switch is on. Once
+  a model has any face painted, only the painted faces count as showing; with none, what
+  shows is found from the shape: open surface with fine detail, while folds, the underside
+  and smooth areas take the contacts. Painting is saved with the project and cleared when
+  the model is reshaped.
 - **Auto** balances supports, pull and print time for each model. It never lets one of
   supports, pull or print time go far worse for the sake of the others. Where some pose is
   about as good as the best on all three, it takes that one. Otherwise it takes the pose
@@ -467,6 +468,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 ### Automatic
 - **Grow the supports** for the whole plate, one model or only the parts you picked.
+  **Grow them again** builds the group in hand anew, or every group Auto builds to while
+  Auto is chosen, in place of what stood in it; other groups stay and are grown around.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
 - A point or a needle hanging down is held at its very tip, however thin, and every
@@ -479,25 +482,39 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.
 - **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
-  sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
-  than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
-  Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
+  sizes every support by what it holds: the model above an island or overhang shared among
+  the supports holding it, each one's share from 100 mm³ taking **Auto Medium**, from
+  500 mm³ **Auto Heavy**, anything less **Auto Light**; so a few supports under much of a
+  heavy part are heavy, and the many under a wide base stay light. Auto places contacts
+  3.0 mm apart under a face looking straight down and 5.5 mm under a steep one, holds faces
+  leaning past 45°, and stands them on 1.0 mm pillars. The end of a toe or spike under 2 mm
+  across gets a contact of its own, however near one stands at its root. Each shape is a group of its own, tuned like any
   other, and the notice says how many of each were placed. A shelf put out in one layer
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
-  — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
-  rock on the peel. **Sizes**, at the foot of the shape mode, sets where each heavier shape starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
+  — gets a few thin **Auto Stabilization** supports about 8 mm apart, on 0.27 mm tips and 0.7 mm pillars, so the part does not
+  rock on the peel. While **Clean surface** is on, on the faces its brush painted Auto puts its
+  contacts 1.3 times as far apart, all on Auto Light tips, and where one carries too much it
+  adds a neighbour rather than a heavier tip. **Sizes**, at the foot of the shape mode, sets where each heavier shape
+  starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
   **Heavy** or a preset of your own instead, and supports are built to it. The preset in
   hand, the automatic profile and its edited numbers are saved with the project and
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
   one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
   added.
+- Every placement then reads what the film pulls on each tip, layer by layer, and
+  strengthens a tip left with less than half again what it holds: Auto builds it one size
+  heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
+  underside, low enough to share the load before it peaks. Supports you placed are never
+  changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.27 mm.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps
   the least it can, a millimetre at a time. No strut of a merge runs
   longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
   per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
+  Tips merge only where the trunk under them stands at least as tall as their branches are
+  long, and no more than three branches meet at one joint.
   Trunks are cones sized by their height and load, and nothing carrying a load leans more
   than 45°. A tip's head meets its face square on wherever that is within 45° of straight
   down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under
@@ -510,14 +527,22 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
 - Only the tip touches the model, and its mark is the contact's width, at most 9 % wider on
-  one side under a turned head: a support whose head would run into the part beside its contact, where no small
-  pillar can hold it, or rise from a face looking up with nowhere to come down is not placed — by Grow or by a click —
-  and is counted among those with no room to stand. A pad beside a part that cannot be moved aside is cut back on that side.
+  one side under a turned head. A support whose head would run into the part beside its
+  contact, and that no small pillar can hold, turns its head up to 33° off its face or a
+  shorter head. Failing that, its contact steps along the face, never past a wall, up to 1 mm
+  to where a head fits. One that still has no room, or that rises from a face looking up with
+  nowhere to come down, is not placed, by Grow or by a click. A tip on a curved or faceted underside
+  that rises a little under its rim is seated there, not counted. A part from the pad's
+  height and 0.2 mm over the plate stands on its own pad, its head cut short and straight, with
+  no bulge at its neck or fillet round it, and a leaning trunk's fillet rings its axis; one lower than that stands on its head alone, run into the plate. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a
   merged one whose trunk meets the part is split into its two halves, each grown again.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
-  A support that still has no room is reported and left out of the print, never forced
-  into the model.
+  A support that still has no room is grown again on its own, from a turned head or a
+  contact stepped up to 1 mm along its face. One that still finds none is left out of the
+  print, never forced into the model. The tooltip of Grow gives one line for each reason: no
+  room for its tip, on a face that looks up, or nothing to stand on. `encrust` prints the same
+  counts and lists each reason in `--json`.
 - Supports are drawn round, 12 sides to a pillar shaded smooth, with rounded joints, and
   widen into their pad on a curved fillet.
 - Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
@@ -545,7 +570,35 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
-  Shift-click adds a part to what is picked, or takes it back out.
+  Shift-click adds a part to what is picked, or takes it back out. Drag to move what is picked
+  the way the cursor goes on screen, the point you took staying under the cursor, or hold Alt
+  to move it level with the plate. The cursor turns to a hand over a part you can take. It
+  follows the cursor everywhere; where it would run into the model or lean too far it turns red
+  and the cursor says no and names why beside it (touches the model, leans too far, no room for
+  the foot, no surface to hold); let go there it stays where it last could stand. A tip slides
+  over the model's surface, and a joint moved aside drops as far as its branches need. A foot
+  on the model slides over it as you move, and stands on a face up to 75° as a grown one may; a
+  head never turns off the face it holds, so a column whose head sits on its trunk bends on a
+  knee instead. Over an edge the foot keeps to the plate or the model it stood on until that is
+  2 mm away, so it switches once instead of jumping back and forth. Before a move is refused,
+  the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk,
+  its foot and the joint on top move as one: the trunk stays upright and what it carries leans
+  down to it at 45 degrees, onto the plate or the model, and goes no further than that lean
+  reaches; no drag leaves a strut flatter than 45 degrees. Supports that stand on the one you
+  move go with it, climbing its trunk where they would lean further than 45 degrees, and taking
+  hold of one freezes what it stands on too. Removing a support, or growing it again, grows
+  again the ones that stood on it, so none is left in the air. A tip dragged off a joint other
+  branches share takes a neck of its own and leaves them as they were, and no drag turns a head
+  more than 33° off the face it holds. Supports grown later may stand on the ones you edited,
+  and are grown again if those go. Raising or turning a model keeps its edited supports on the
+  plate; tilting or resizing it grows them again from the same contacts. A small pillar moves
+  by where it touches: whichever part you drag, its tip goes along the face it holds, and it is
+  built again there as Grow would build it, a small pillar where one fits and a whole support
+  where none does, never half of each. Dragged out from under every face, it stays put.
+- Pick two or more supports of one model and **Merge into one** joins them into a single tree
+  on one trunk, each tip kept however many there are; where the model is in the way or the
+  trunk has nowhere to stand, the supports stay as they were and the stage says why.
+  `encrust --merge-supports` does the same by the contacts `--json` lists.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports
@@ -556,13 +609,15 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   lists the shapes it built under it. Choosing a group takes its preset in hand.
 - A bin asks twice: the first click turns it red, the second removes. The bin beside the
   preset removes the group in hand with its supports, the one beside **Grow** every support.
-- A thin support may stand on a thicker one from another group. Tips of groups as thick as
+- A thin support may stand on a thicker one from another group, and goes to it directly
+  rather than first joining a thin neighbour, never past the tips the thicker one's trunk
+  may carry. Tips of groups as thick as
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
   to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy all
   place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
-  lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
+  lift a part 2 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand. In a profile's form every group is there,
   from the tip down, tabs over it scrolling to each; branching, the grid, the raft and
@@ -675,14 +730,17 @@ smoothing, not the original model.
 **It finds:**
 - **Islands:** parts that start in mid-air with nothing under them.
 - **Suction cups:** closed hollows that pull on the film.
-- **Thin sections and weak necks:** places too thin to hold.
+- **Thin sections and weak necks:** places too thin to hold. A neck is weak past the stress
+  printed support tips were measured to tear at.
 - **Hard peel:** the layers that pull the film hardest, the widest step and the levers. A
   section's pull follows its area, less for a thin strip than for a disc of the same area.
 
 **It lets you:**
 - Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
   on the cut, and the camera flies to it past the models and supports in the way.
-- **Support every island** in one press.
+- **Support every island** in one press. Each support Check stands, under an island or a weak
+  neck, is built to the lightest shape of the automatic profile that bears what it holds,
+  whatever profile the Supports panel holds; a recipe's run keeps its own profiles.
 - **Fix the rest from the same panel:** vent a suction cup through the thinnest wall at its
   bottom, a notch along the plate for one that stands on it, hold a weak neck
   with as many supports, 0.6 mm across at least, as bring it under its limit (in their own

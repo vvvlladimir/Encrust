@@ -8,7 +8,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::jump::{self, Tab};
 use crate::panels::settings::{form_card, report};
-use crate::panels::support_fields::{held_up, sizes, steadying, steps};
+use crate::panels::support_fields::{held_up, islands, sizes, steadying, steps};
 use crate::settings::Draft;
 use crate::state::Machine;
 use crate::ui::{row_name, title_line};
@@ -52,7 +52,10 @@ impl Card {
         shapes: &[String; AUTO_SIZES],
     ) {
         match self {
-            Self::Placing => placing(ui, auto, saved),
+            Self::Placing => {
+                placing(ui, auto, saved);
+                islands(ui, auto, saved);
+            }
             Self::Sizes => sizes(ui, auto, saved, shapes),
             Self::Steps => steps(ui, auto, saved, shapes),
             Self::Steadying => steadying(ui, auto, saved),

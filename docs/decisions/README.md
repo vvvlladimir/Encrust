@@ -228,22 +228,41 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0119](0119-support-profiles-join-the-catalogue.md) | Support profiles join the catalogue; a group tunes a copy | Accepted |
 | [0124](0124-a-support-standing-on-the-part-ends-in-a-contact.md) | End a support that stands on the part in a contact, and let a profile refuse one | Accepted |
 | [0125](0125-a-tip-leaves-the-surface-along-its-normal.md) | Leave the surface along its normal, and merge from the neck | Accepted; a head past 45 degrees is superseded by 0249 |
-| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0341 |
+| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0341, the pad's 59-degree wall by 0432 |
 | [0131](0131-the-shipped-presets-are-field-measurements.md) | Ship the field's measurements, and the two rules they broke | Accepted; the measurements and the order of the densities are superseded by 0254 |
-| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239 |
+| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239, the 5 mm lift by 0432 |
 | [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted; the dome at the end of every strut is superseded by 0341 |
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0339 |
-| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
+| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted; the step on a plane facing the camera and the slack where the camera looks are superseded by 0435 |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0335 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
-| [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted |
+| [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted; Auto's spacing and angle are superseded by 0424 |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
-| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted |
-| [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted |
+| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0423 |
+| [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted; the steadying shape's 0.18 mm contact is superseded by 0422, Auto's step reach by 0424 |
+| [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted |
+| [0423](0423-an-automatic-support-is-sized-by-its-share-of-what-it-holds.md) | Size each automatic support by its share of the model it holds | Accepted |
+| [0424](0424-auto-places-contacts-3-mm-apart-and-steadies-on-thin-supports.md) | Place Auto's contacts 3.0 mm apart, past 45 degrees, on 1.0 mm pillars, and steady a part on thin supports | Accepted |
+| [0425](0425-auto-holds-the-painted-side-sparser-on-its-lightest-tips.md) | Hold the side painted to be seen sparser, on Auto's lightest tips | Accepted |
+| [0426](0426-sweep-a-head-from-past-its-seat.md) | Sweep a head, and test a drawn tip, from past the seat its rim finds | Accepted |
+| [0427](0427-a-part-near-the-plate-stands-on-a-short-head.md) | Stand a part near the plate on a short head, and fillet a trunk at its own width | Accepted |
+| [0428](0428-no-branch-is-led-back-and-a-dragged-trunk-stands-upright.md) | Lead no branch back the way it came, and stand a dragged trunk upright | Accepted |
+| [0429](0429-a-support-with-no-room-turns-its-head-or-steps-along-its-face.md) | Turn a head or step a contact along its face before a support is left out, and say why | Accepted |
+| [0430](0430-a-merge-joint-stands-as-high-as-its-branches-are-long-and-holds-three.md) | Stand a merge's joint as high as its branches are long, and hang three branches at most | Accepted |
+| [0431](0431-a-support-standing-on-another-goes-with-it.md) | A support standing on another goes where that one is carried | Proposed |
+| [0432](0432-a-part-stands-two-millimetres-up-on-pads-bevelled-at-forty-five-degrees.md) | Lift a part 2 mm, on pads bevelled at forty-five degrees | Proposed |
+| [0433](0433-the-end-of-a-toe-is-held-by-a-support-of-its-own.md) | Hold the end of a toe with a support of its own | Proposed |
+| [0434](0434-a-front-runs-into-a-thicker-support-before-it-joins-another.md) | Run a front into a thicker support before it joins another front | Proposed |
+| [0435](0435-a-carried-support-follows-the-cursor-and-stands-only-where-allowed.md) | A carried support follows the cursor from the point taken, and stands only where growth would let it | Proposed |
+| [0436](0436-the-joints-beside-a-carried-part-give-way.md) | The joints beside a carried part give way before the carry is refused | Proposed |
+| [0437](0437-one-footing-rule-for-growing-and-carrying.md) | Growing and carrying stand a foot by one rule, and a refusal says why | Proposed |
+| [0438](0438-a-carried-small-pillar-is-grown-again-from-its-contact.md) | A carried small pillar is grown again from its contact | Proposed |
+| [0439](0439-growth-stands-beside-frozen-supports-and-counts-what-each-trunk-carries.md) | Growth stands beside frozen supports, counts what each trunk carries, and frozen supports follow their model | Proposed |
+| [0440](0440-picked-supports-merge-into-one-tree-by-the-growth-rule.md) | Merge picked supports into one tree by the rule growth joins two fronts by | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
@@ -344,7 +363,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted; what the picker lists is superseded by 0284, its default by 0291 |
 | [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted; its band and its cups are superseded by 0410 |
 | [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted; which goals auto weighs is narrowed by 0409 |
-| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410 |
+| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410, step 3 is taken by 0425 |
 | [0410](0410-a-single-goal-minimises-its-own-reading-alone.md) | A single goal minimises its own reading alone, and a clean surface is asked beside any preset | Proposed |
 | [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
 | [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |
@@ -362,7 +381,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0397](0397-the-next-clicks-size-is-the-windows.md) | The size the next click puts down is the window's, not a model's | Proposed |
 | [0246](0246-a-model-keeps-the-support-profile-it-was-edited-to.md) | Keep an edited support profile on the picked models until it is saved | Accepted; what choosing another profile from the list does is superseded by 0247 |
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
-| [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325 |
+| [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325, the one order of both meetings by 0434 |
 | [0249](0249-nothing-that-carries-a-support-leans-past-45-degrees.md) | Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut | Accepted; the head's 45 degrees is superseded by 0339 |
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted; only a support no further than the part, by 0340 |

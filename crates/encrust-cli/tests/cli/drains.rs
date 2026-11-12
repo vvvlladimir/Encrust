@@ -144,8 +144,8 @@ fn a_trapped_point_the_report_gives_drains_the_pocket_fed_back_to_drain_at() {
     let found = sliced(&model, "drain-round-trip-found", &shaped);
     let lifted_mm = found["supports"]["lifted_mm"].as_f64().expect("a lift");
     assert!(
-        (lifted_mm - 5.0).abs() < 1e-4,
-        "medium stands a box on the plate 5 mm up, got {lifted_mm}"
+        (lifted_mm - 2.0).abs() < 1e-4,
+        "medium stands a box on the plate 2 mm up, got {lifted_mm}"
     );
     let at: Vec<String> = found["slicing"]["trapped"][0]["at_mm"]
         .as_array()

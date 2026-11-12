@@ -92,7 +92,7 @@ impl SupportTool {
             object.supports.painted(),
             &self.fill,
             &standing,
-            self.profile_for(object).max_overhang_deg,
+            self.overhang_deg_for(object),
         )
     }
 

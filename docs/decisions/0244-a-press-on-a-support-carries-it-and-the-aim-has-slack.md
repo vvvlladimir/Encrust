@@ -1,6 +1,6 @@
 # 0244. Carry a support by the press that picks it, and give the aim slack
 
-- **Status:** Accepted
+- **Status:** Accepted; the step on a plane facing the camera and the slack where the camera looks are superseded by 0435
 - **Date:** 2026-10-13
 
 ## Context

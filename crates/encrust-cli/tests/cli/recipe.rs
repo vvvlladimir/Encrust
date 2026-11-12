@@ -499,12 +499,12 @@ fn a_check_drills_a_cup_on_the_plate_through_its_wall() {
     );
 }
 
-/// A slab 16 mm long at 6 to 10 mm, held by one 1.5 mm column at its end.
+/// A slab 16 mm long at 6 to 10 mm, held by one 0.8 mm column at its end.
 fn slab_on_a_neck(name: &str) -> PathBuf {
     write_boxes_stl(
         name,
         &[
-            ([0.0, 0.0, 0.0], [1.5, 1.5, 6.0]),
+            ([0.0, 0.0, 0.0], [0.8, 0.8, 6.0]),
             ([0.0, 0.0, 6.0], [16.0, 6.0, 10.0]),
         ],
     )
@@ -520,7 +520,7 @@ fn a_check_asked_to_hold_weak_necks_stands_a_support_under_the_piece() {
         .expect("the report counts levers");
     assert!(
         levers > 0,
-        "a 16 mm slab on a 1.5 mm column is a lever: {:#}",
+        "a 16 mm slab on a 0.8 mm column is a lever: {:#}",
         before["cured"]
     );
     let holding = "name = \"Hold\"\n[[step]]\ndo = \"check\"\nset = { hold_levers = true }\n";

@@ -348,6 +348,10 @@ supports-placing-fill = Залить
 supports-placing-block = Запретить
 supports-placing-erase = Стереть
 supports-nothing-visible = На платформе нет видимых моделей, которые нужно поддерживать.
+supports-refused-collides = Касается модели
+supports-refused-leans = Слишком большой наклон
+supports-refused-no-footing = Основанию не на что встать
+supports-refused-no-hold = Наконечнику не за что держаться
 supports-nothing-visible-error = на платформе нет видимых моделей, которые нужно поддерживать
 supports-placed =
     { $count ->
@@ -391,21 +395,30 @@ supports-removed-inside =
        *[many] Из полостей убрано { $count } поддержек
     }
 supports-where = Где
+supports-clean-surface-about = Закрасьте грани, которые должны быть на виду. Автоматика делает там шаг контактов шире и ставит самые лёгкие наконечники.
 supports-picked = Выбрано
-supports-picked-help = «Построить заново» возвращает выбранные поддержки автоматике, и при следующем построении они создаются заново. «В группу» строит их по профилю текущей группы.
+supports-picked-help = «Построить заново» возвращает выбранные поддержки автоматике, и при следующем построении они создаются заново. «В группу» строит их по профилю текущей группы. «Слить в одну» соединяет поддержки одной модели в одно дерево на общем стволе.
 supports-stat-parts = Части
 supports-stat-supports = Поддержки
 supports-move-to-group = В группу
 supports-grow-these-again = Построить заново
+supports-merge-these = Слить в одну
+supports-merge-refused-collides = Не удалось слить поддержки: мешает модель.
+supports-merge-refused-leans = Не удалось слить поддержки: у ветви был бы слишком большой наклон.
+supports-merge-refused-no-footing = Не удалось слить поддержки: стволу негде встать.
+supports-merge-refused-no-hold = Не удалось слить поддержки: наконечнику не за что держаться.
 supports-remove-these = Удалить эти поддержки
 supports-grow-again = Построить заново
 supports-grow = Построить поддержки
 supports-grow-tooltip = Нарезает на слои { $scope } и ищет то, что нависает над пустотой.
 supports-placing = Расстановка поддержек
 supports-sizes = Размеры
+support-sizes-help = Поддержка строится тяжелее там, где держит больше. Доля поддержки — объём модели над её наконечником под островом или нависанием, разделённый между ней и всеми поддержками выше; размер уступа — объём смолы, который он добавляет за один слой. Каждое значение — наименьшее, при котором поддержка строится в этой форме.
+support-islands-help = Под малым островом наконечники стоят чаще, чем задаёт шаг контактов. От первой площади ниже они расходятся шире, от второй — встают с полным шагом.
+support-island-wider = Шаг на острове шире от
+support-island-full = Полный шаг на острове от
 supports-place = Расстановка
-support-size-island = Остров для { $shape }
-support-size-load = Нагрузка для { $shape }
+support-size-share = Доля для { $shape }
 support-size-step = Уступ для { $shape }
 support-group-steps = Уступы
 support-group-steadying = Стабилизация
@@ -424,11 +437,23 @@ supports-mode-pick = Выбрать поддержки
 supports-mode-place = Расставить поддержки
 supports-mode-area = Закрасить или запретить область
 supports-mode-shape = Форма поддержек
-supports-without-room =
+supports-lost-head-blocked =
     { $count ->
-        [one] { $count } поддержке негде встать
-        [few] { $count } поддержкам негде встать
-       *[many] { $count } поддержкам негде встать
+        [one] { $count } поддержке не хватает места для наконечника
+        [few] { $count } поддержкам не хватает места для наконечника
+       *[many] { $count } поддержкам не хватает места для наконечника
+    }
+supports-lost-faces-up =
+    { $count ->
+        [one] { $count } поддержка стоит на грани, обращённой вверх
+        [few] { $count } поддержки стоят на гранях, обращённых вверх
+       *[many] { $count } поддержек стоят на гранях, обращённых вверх
+    }
+supports-lost-no-ground =
+    { $count ->
+        [one] { $count } поддержке не на что встать
+        [few] { $count } поддержкам не на что встать
+       *[many] { $count } поддержкам не на что встать
     }
 supports-drop-preset =
     { $count ->
@@ -2765,6 +2790,7 @@ hint-relief-write = по модели, чтобы сделать надпись
 hint-pick-without-writing = выбрать, не создавая надпись
 hint-supports-pick = по части поддержки, чтобы выбрать её
 hint-supports-carry = перенести выбранное
+hint-supports-level = перенести по платформе
 hint-supports-add = добавить к выбранному
 hint-hollow-solid = по модели, чтобы оставить там сплошную стенку
 hint-hollow-rod = стержень от последнего блокиратора

@@ -10,9 +10,9 @@ facets = 12
 # counted over an area: doubling it puts down twice as many.
 density = 1.0
 
-# How far the lowest point of a part should stand clear of the plate: room for the pad,
-# the flare and a whole top segment under its lowest contact, see ADR 0237.
-z_lift_mm = 5.0
+# How far the lowest point of a part should stand clear of the plate: room for the pad
+# and the flare under its lowest contact, a low tip's neck cut short, see ADR 0432.
+z_lift_mm = 2.0
 
 # How much clear air a support's body keeps between itself and the model.
 clearance_mm = 0.5
@@ -29,14 +29,14 @@ steep_contact_spacing_mm = 3.3
 [tip]
 # sphere or plane.
 shape = "plane"
-contact_diameter_mm = 0.3
+contact_diameter_mm = 0.35
 contact_depth_mm = 0.0
 
 [top]
 length_mm = 2.0
 
 [middle]
-diameter_mm = 1.2
+diameter_mm = 1.0
 
 [bottom]
 # cylinder, cone, prism or cube.
@@ -52,7 +52,7 @@ lower_diameter_mm = 3.0
 # than down to the plate. Both of its ends meet a surface.
 [small_pillar]
 enabled = true
-diameter_mm = 0.3
+diameter_mm = 0.35
 upper_depth_mm = 0.0
 lower_depth_mm = 0.0
 # The longest it runs before it keeps the regular pillar's width instead.

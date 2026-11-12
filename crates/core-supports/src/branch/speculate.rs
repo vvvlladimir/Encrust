@@ -31,8 +31,9 @@ impl Forest<'_> {
         while batch.len() < AHEAD
             && let Some(next) = heap.pop()
         {
-            let live = self.fronts[next.a].alive && self.fronts[next.b].alive;
-            if !next.onto_carrier && live && !judged.contains_key(&key(&next)) {
+            // A merge onto a carrier names the carrier as `b`, not a front.
+            let live = || self.fronts[next.a].alive && self.fronts[next.b].alive;
+            if !next.onto_carrier && live() && !judged.contains_key(&key(&next)) {
                 batch.push(next);
             }
             taken.push(next);
@@ -51,4 +52,42 @@ impl Forest<'_> {
 
 fn key(candidate: &Candidate) -> (usize, usize, u32) {
     (candidate.a, candidate.b, candidate.drop_mm.to_bits())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::SupportPoint;
+    use crate::branch::grow;
+    use crate::fixtures::profile;
+    use crate::group::Profiles;
+    use crate::placed::Placed;
+    use core_geometry::{Bvh, Mesh, Transform, Vec3};
+
+    #[test]
+    fn a_merge_judged_beside_one_onto_a_carrier_reads_no_carrier_as_a_front() {
+        // Eight thick supports 40 mm apart, out of each other's reach, are eight carriers;
+        // two thin tips beside the last one have two fronts and a merge to judge.
+        let mut thin = profile();
+        thin.middle.diameter_mm *= 0.5;
+        let table = [profile(), thin];
+        let mut points: Vec<SupportPoint> = (0..8)
+            .map(|at| SupportPoint::new(Vec3::new(40.0 * at as f32, 10.0, 20.0)))
+            .collect();
+        points.extend(
+            [283.0, 285.0].map(|x| SupportPoint::new(Vec3::new(x, 10.0, 20.0)).in_group(1)),
+        );
+        let model = Mesh::default();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let profiles = Profiles::new(&table).expect("two groups");
+
+        let forest = grow(
+            &crate::columns(&points, &placed, profiles),
+            &placed,
+            profiles,
+        );
+
+        let held: usize = forest.iter().map(|tree| tree.points().count()).sum();
+        assert_eq!(held, 10, "every tip stands");
+    }
 }

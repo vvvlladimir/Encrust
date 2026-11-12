@@ -54,7 +54,7 @@ fn grown_by_auto(scene: &mut Scene) -> (SupportTool, Status) {
         auto: catalogue.autos().next().map(|entry| entry.profile.clone()),
         ..SupportTool::default()
     };
-    tool.start(scene, 0.05, &catalogue, Side::Outside)
+    tool.start(scene, 0.05, &catalogue, (Side::Outside, false))
         .expect("a model to place under");
     let mut status = Status::default();
     while tool.poll(scene, &mut status) {
@@ -100,8 +100,9 @@ fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
     assert!(tool.auto.is_none(), "the panel builds to the group in hand");
 
     let built = BuiltTo::of("auto", &catalogue).expect("the catalogue ships an automatic profile");
-    let mut job = SupportTool::start_built_on(&scene, &[floating], (0.05, &built), Side::Outside)
-        .expect("a model to place under");
+    let mut job =
+        SupportTool::start_built_on(&scene, &[floating], (0.05, &built), (Side::Outside, false))
+            .expect("a model to place under");
     let placements = loop {
         match job.poll() {
             Some(crate::job::SupportOutcome::Placed(placements)) => break placements,
@@ -126,6 +127,166 @@ fn an_automatic_start_on_named_models_sizes_them_whatever_the_panel_holds() {
     assert!(
         tool.auto.is_none(),
         "and the panel's choice is left as it was"
+    );
+}
+
+/// Runs placement again with `tool` as it was left, to its end.
+fn grown_again(tool: &mut SupportTool, scene: &mut Scene) {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    tool.start(scene, 0.05, &catalogue, (Side::Outside, false))
+        .expect("a model to place under");
+    let mut status = Status::default();
+    while tool.poll(scene, &mut status) {
+        std::thread::yield_now();
+    }
+}
+
+/// The unit cube 10 mm across and 5 mm up, so that Auto stands more than one support under it.
+fn one_big_cube() -> Scene {
+    let mut scene = one_cube();
+    let object = &mut scene.objects_mut()[0];
+    object.transform.scale = Vec3::splat(10.0);
+    object.transform.translation.z = 5.0;
+    scene
+}
+
+/// [`one_big_cube`] with one support placed by hand at a corner in a group of its own, and the
+/// tool that holds that group with the shipped automatic profile in hand.
+fn held_by_hand() -> (SupportTool, Scene) {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut tool = SupportTool {
+        auto: catalogue.autos().next().map(|entry| entry.profile.clone()),
+        ..SupportTool::default()
+    };
+    tool.groups.push(SupportGroup {
+        name: "By hand".to_owned(),
+        profile: tool.profile.clone(),
+        hidden: false,
+    });
+    let mut scene = one_big_cube();
+    let object = &mut scene.objects_mut()[0];
+    let transform = object.transform;
+    object.supports.add(Vec3::new(0.5, 0.5, 5.0), transform, 1);
+    (tool, scene)
+}
+
+/// [`held_by_hand`] grown at each of `densities` in turn: the supports on the cube after.
+fn grown_at(densities: &[Scalar]) -> core_supports::ModelSupports {
+    let (mut tool, mut scene) = held_by_hand();
+    for density in densities {
+        tool.auto.as_mut().expect("sizing is on").density = *density;
+        grown_again(&mut tool, &mut scene);
+    }
+    scene.objects()[0].supports.clone()
+}
+
+#[test]
+fn growing_again_grows_the_automatic_supports_anew_and_keeps_a_hand_placed_group() {
+    let regrown = grown_at(&[4.0, 0.5]);
+    let fresh = grown_at(&[0.5]);
+    assert!(
+        grown_at(&[4.0]).point_count() > fresh.point_count(),
+        "four times the density stands more supports"
+    );
+    assert_eq!(
+        regrown.point_count(),
+        fresh.point_count(),
+        "a sparser run takes the place of the denser one, as many as it stands alone"
+    );
+    assert_eq!(
+        regrown.group_count(1),
+        1,
+        "the support placed by hand in a group Auto does not build to stays"
+    );
+}
+
+#[test]
+fn growing_again_leaves_what_check_stood_in_an_automatic_shape_to_check() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let (mut tool, mut scene) = held_by_hand();
+    let shapes = tool.check_shapes(&catalogue);
+    tool.groups[1] = SupportGroup {
+        name: ISLANDS_GROUP.to_owned(),
+        profile: shapes[0].clone(),
+        hidden: false,
+    };
+    grown_again(&mut tool, &mut scene);
+    assert_eq!(
+        scene.objects()[0].supports.group_count(1),
+        1,
+        "Check's support stays, and nothing Auto grows stands in Check's group"
+    );
+}
+
+#[test]
+fn growing_with_checks_group_in_hand_leaves_what_check_stood() {
+    let (mut tool, mut scene) = held_by_hand();
+    tool.auto = None;
+    tool.groups[1].name = ISLANDS_GROUP.to_owned();
+    tool.active = 1;
+    let stood = scene.objects()[0].supports.points()[0];
+    grown_again(&mut tool, &mut scene);
+    assert!(
+        scene.objects()[0].supports.points().contains(&stood),
+        "Check's support is not grown again with the group in hand"
+    );
+}
+
+#[test]
+fn a_run_landing_mid_carry_lets_go_of_what_the_hand_lifted() {
+    let mut scene = one_big_cube();
+    let (mut tool, _) = grown_by_auto(&mut scene);
+    let id = scene.objects()[0].id;
+    scene.objects_mut()[0].supports.lift(vec![0]);
+    tool.carry = Some(Carry {
+        from: Vec3::ZERO,
+        taken: Vec3::ZERO,
+        aimed: Vec3::ZERO,
+        level: false,
+        before: vec![(id, Vec::new())],
+        last: Vec::new(),
+        shown: None,
+        group: 0,
+        refused: None,
+    });
+    grown_again(&mut tool, &mut scene);
+    assert!(tool.carry.is_none(), "the trees it held are renumbered");
+    assert!(
+        scene.objects()[0].supports.lifted().is_empty(),
+        "nothing is left out of the meshes for a hand that let go"
+    );
+}
+
+#[test]
+fn growing_the_group_in_hand_again_leaves_the_automatic_ones_standing() {
+    let mut scene = one_big_cube();
+    let (mut tool, _) = grown_by_auto(&mut scene);
+    let automatic = scene.objects()[0].supports.point_count();
+    let medium = SupportProfile::shipped("medium").expect("the medium preset ships");
+    tool.auto = None;
+    tool.groups.push(SupportGroup {
+        name: medium.name.clone(),
+        profile: medium.clone(),
+        hidden: false,
+    });
+    let group = (tool.groups.len() - 1) as u16;
+    tool.groups[tool.active as usize].profile = tool.profile.clone();
+    (tool.active, tool.profile) = (group, medium);
+    grown_again(&mut tool, &mut scene);
+    let in_hand = scene.objects()[0].supports.group_count(group);
+    assert!(in_hand > 0, "medium stood supports of its own");
+
+    grown_again(&mut tool, &mut scene);
+    let supports = &scene.objects()[0].supports;
+    assert_eq!(
+        supports.group_count(group),
+        in_hand,
+        "the group in hand is grown anew"
+    );
+    assert_eq!(
+        supports.point_count() - in_hand,
+        automatic,
+        "what Auto stood in its own groups stays"
     );
 }
 
@@ -163,6 +324,30 @@ fn sizing_turned_off_and_on_again_keeps_the_numbers_it_was_left_with() {
 }
 
 #[test]
+fn with_sizing_on_overhangs_are_marked_at_the_automatic_profiles_angle() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let scene = one_cube();
+    let mut tool = SupportTool::default();
+    tool.set_automatic(true, &catalogue);
+    let auto = tool
+        .auto
+        .as_mut()
+        .expect("the shipped automatic profile is taken up");
+    auto.max_overhang_deg = tool.profile.max_overhang_deg + 10.0;
+    let wanted = auto.max_overhang_deg;
+
+    for (what, got) in [
+        ("viewport", tool.shown_overhang_deg(&scene)),
+        ("fill", tool.overhang_deg_for(&scene.objects()[0])),
+    ] {
+        assert!(
+            (got - wanted).abs() < f32::EPSILON,
+            "the {what} marks at {got} degrees, not the automatic {wanted}"
+        );
+    }
+}
+
+#[test]
 fn a_missing_shape_stops_the_run_before_it_starts() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut auto = catalogue
@@ -176,7 +361,7 @@ fn a_missing_shape_stops_the_run_before_it_starts() {
         ..SupportTool::default()
     };
     assert!(
-        tool.start(&mut one_cube(), 0.05, &catalogue, Side::Outside)
+        tool.start(&mut one_cube(), 0.05, &catalogue, (Side::Outside, false))
             .is_err()
     );
     assert!(tool.job.is_none());
@@ -956,7 +1141,10 @@ fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
     let floor = Vec3::new(0.5, 0.5, 5.0);
 
     let found = held(&scene, &[floor]);
-    assert_eq!(tool.support_islands(&mut scene, &found), 1);
+    assert_eq!(
+        tool.support_islands(&mut scene, &found, |_| SupportProfile::default()),
+        1
+    );
     assert_eq!(tool.groups.len(), 2);
     assert_eq!(tool.groups[1].name, ISLANDS_GROUP);
     assert_eq!(tool.active, 0, "the group in hand stays in hand");
@@ -972,7 +1160,7 @@ fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
     );
 
     let found = held(&scene, &[floor]);
-    tool.support_islands(&mut scene, &found);
+    tool.support_islands(&mut scene, &found, |_| SupportProfile::default());
     assert_eq!(tool.groups.len(), 2, "a second press joins the same group");
 }
 
@@ -984,7 +1172,10 @@ fn an_island_with_nothing_over_its_centre_stands_nothing_and_adds_no_group() {
     let far_under = Vec3::new(0.5, 0.5, 2.0);
 
     let found = held(&scene, &[beside, far_under]);
-    assert_eq!(tool.support_islands(&mut scene, &found), 0);
+    assert_eq!(
+        tool.support_islands(&mut scene, &found, |_| SupportProfile::default()),
+        0
+    );
     assert_eq!(tool.groups.len(), 1);
 }
 /// The cube 20 mm a side, 5 mm over the plate, hollowed to a cavity 12 mm a side in its
@@ -1032,10 +1223,7 @@ fn hollow_cube() -> Scene {
 /// 21 mm up, and one under the cube's own underside at 5 mm.
 fn inside_and_out(scene: &Scene) -> Vec<Placement> {
     let object = &scene.objects()[0];
-    let need = |z: Scalar| Need {
-        contact: Vec3::new(10.0, 10.0, z),
-        reason: Reason::Steady,
-    };
+    let need = |z: Scalar| Need::new(Vec3::new(10.0, 10.0, z), Reason::Steady);
     vec![Placement {
         id: object.id,
         transform: object.transform,
@@ -1126,7 +1314,7 @@ fn grown(scene: &mut Scene, sides: &[Side]) {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
     for side in sides {
-        tool.start(scene, 0.05, &catalogue, *side)
+        tool.start(scene, 0.05, &catalogue, (*side, false))
             .expect("a model to hold up");
         let mut status = Status::default();
         while tool.poll(scene, &mut status) {
@@ -1213,7 +1401,7 @@ fn a_cavity_run_cancelled_leaves_what_stood_inside_it() {
         .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
-    tool.start(&mut scene, 0.05, &catalogue, Side::Inside)
+    tool.start(&mut scene, 0.05, &catalogue, (Side::Inside, false))
         .expect("a hollow model to hold up");
     assert_eq!(
         scene.objects()[0].supports.point_count(),
@@ -1235,10 +1423,7 @@ fn a_solid_model_has_nothing_inside() {
     let placements = vec![Placement {
         id: object.id,
         transform: object.transform,
-        needs: vec![Need {
-            contact: Vec3::new(0.5, 0.5, 0.5),
-            reason: Reason::Steady,
-        }],
+        needs: vec![Need::new(Vec3::new(0.5, 0.5, 0.5), Reason::Steady)],
     }];
     assert!(!object.supported_inside());
     let outside = SupportTool::on_its_side(placements, &scene, Side::Outside);
@@ -1254,7 +1439,7 @@ fn holding_the_cavity_up_stands_supports_under_its_ceiling_and_nowhere_else() {
     let mut scene = hollow_cube();
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
-    tool.start(&mut scene, 0.05, &catalogue, Side::Inside)
+    tool.start(&mut scene, 0.05, &catalogue, (Side::Inside, false))
         .expect("a hollow model to hold up");
     let mut status = Status::default();
     while tool.poll(&mut scene, &mut status) {
@@ -1315,7 +1500,7 @@ fn a_drilled_hole_is_held_up_inside_like_any_underside() {
 
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
-    tool.start(&mut scene, 0.05, &catalogue, Side::Outside)
+    tool.start(&mut scene, 0.05, &catalogue, (Side::Outside, false))
         .expect("a model to place under");
     let mut status = Status::default();
     while tool.poll(&mut scene, &mut status) {
@@ -1410,4 +1595,53 @@ fn a_profile_built_to_alone_stands_islands_on_itself_and_a_sizing_on_its_lightes
         panic!("auto is a sizing");
     };
     assert_eq!(sized.islands_profile(), sizing.0.placing_with(&sizing.1[0]));
+}
+
+#[test]
+fn check_sizes_its_supports_into_the_automatic_shapes_whatever_the_panel_holds() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let tool = SupportTool {
+        profile: SupportProfile::shipped("heavy").expect("the heavy preset ships"),
+        ..SupportTool::default()
+    };
+    let auto = catalogue
+        .autos()
+        .next()
+        .expect("an automatic profile ships");
+    let shapes = tool.check_shapes(&catalogue);
+    let wanted: Vec<String> = auto.profile.shapes_in(&catalogue).expect("its shapes ship")
+        [..printer_profiles::AUTO_SIZES]
+        .iter()
+        .map(|shape| shape.name.clone())
+        .collect();
+    assert_eq!(
+        shapes
+            .iter()
+            .map(|shape| shape.name.clone())
+            .collect::<Vec<_>>(),
+        wanted,
+        "the lightest automatic shape first, not the heavy preset in hand"
+    );
+}
+
+#[test]
+fn prepare_reads_painted_faces_only_while_clean_surface_is_on() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut scene = one_cube();
+    let id = scene.objects()[0].id;
+    scene.objects_mut()[0].shown_painted.set(0, true);
+    let built = BuiltTo::of("auto", &catalogue).expect("the catalogue ships an automatic profile");
+    let profile = built.islands_profile();
+
+    let off = run::built_tasks(&scene, &[id], &profile, false);
+    let on = run::built_tasks(&scene, &[id], &profile, true);
+
+    assert!(
+        off[0].shown.is_empty(),
+        "with Clean surface off no face is held sparser"
+    );
+    assert!(
+        !on[0].shown.is_empty(),
+        "with Clean surface on the painted face is read"
+    );
 }

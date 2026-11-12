@@ -1,6 +1,6 @@
 use super::ModelSupports;
 use super::growth::{Forest, with_frozen};
-use crate::{Placed, Profiles, SupportTree, columns, grow, mesh_groups, shaded};
+use crate::{Placed, Profiles, SupportTree, columns, grow_beside, lost, mesh_groups, shaded};
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
 use std::sync::Arc;
@@ -54,22 +54,24 @@ impl ModelSupports {
         let Some(profiles) = Profiles::new(table) else {
             return;
         };
+        self.frozen_at = Some(transform);
         let matrix = transform.to_matrix();
         let standing = grown.len();
         let stood: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
         let trees = with_frozen(&stood, &self.frozen, transform);
+        let keep_out = self.keep_out(model, transform);
+        let placed = Placed::new(surface, bvh, transform)
+            .blocking(keep_out.as_ref())
+            .remembering(&self.clearances);
         self.forest = Some(Forest {
+            lost: lost(&self.points, &stood, &placed, profiles),
             trees: stood,
             transform,
             table: table.to_vec(),
             blocked: self.blocked.clone(),
         });
-
-        let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(surface, bvh, transform)
-            .blocking(keep_out.as_ref())
-            .remembering(&self.clearances);
-        let meshes = self.draw(shaded(mesh_groups(&trees, &placed, profiles)));
+        let meshed = self.meshed_of(&trees, standing);
+        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)));
         self.built = Some(Built {
             meshes,
             trees,
@@ -115,6 +117,7 @@ impl ModelSupports {
         let Some(profiles) = Profiles::new(table) else {
             return;
         };
+        self.follow(transform, profiles);
         let fresh = self.built.as_ref().is_some_and(|built| {
             built.transform == transform
                 && built.table == table
@@ -134,8 +137,11 @@ impl ModelSupports {
                 forest.trees.clone()
             }
             _ => {
-                let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
+                let columns = columns(&self.points, &placed, profiles);
+                let standing = with_frozen(&[], &self.frozen, transform);
+                let trees = grow_beside(&columns, &standing, &placed, profiles);
                 self.forest = Some(Forest {
+                    lost: lost(&self.points, &trees, &placed, profiles),
                     trees: trees.clone(),
                     transform,
                     table: table.to_vec(),
@@ -149,7 +155,8 @@ impl ModelSupports {
         // same way a point does; nothing else is asked of it.
         let trees = with_frozen(&grown_trees, &self.frozen, transform);
 
-        let meshes = self.draw(shaded(mesh_groups(&trees, &placed, profiles)));
+        let meshed = self.meshed_of(&trees, grown);
+        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)));
         self.built = Some(Built {
             meshes,
             trees,

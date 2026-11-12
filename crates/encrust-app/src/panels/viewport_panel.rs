@@ -16,6 +16,7 @@ mod bounds;
 use bounds::draw_bounds;
 mod gizmo_drag;
 use gizmo_drag::draw_gizmo_drag;
+use refusal::draw_refusal;
 mod hollow;
 mod levels;
 mod marks;
@@ -24,6 +25,7 @@ mod drawing;
 mod overlays;
 mod paint;
 mod picking;
+mod refusal;
 mod repair;
 mod support_ghost;
 mod supports;
@@ -39,7 +41,9 @@ use picking::{
     lay_face_under_cursor, mark_part_under_cursor, measure_under_cursor, point_at_face,
     select_under_cursor, takes_the_pick, zoom_anchor,
 };
-use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
+use supports::{
+    drag_support, place_support_under_cursor, remove_support_under_cursor, show_carrying,
+};
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
 /// a little under a full turn.
@@ -80,6 +84,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // A support in hand has the whole gesture, shift and all: it neither turns the camera
     // nor slides it.
     let carrying = !painting && drag_support(window, rect, &pointer);
+    show_carrying(ui.ctx(), window);
     let drag = if carrying { Drag::None } else { gesture.drag };
 
     fly_to_marked(ui, window, rect);
@@ -177,8 +182,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         return;
     }
     match *window.tool {
-        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
         // A brush stroke has already painted whatever the click landed on.
+        _ if paint::paints_shown(window) => {}
+        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
         Tool::Paint if window.tools.supports.placing.paints() => {}
         Tool::Relief if window.tools.relief.paints() => {}
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
@@ -212,7 +218,6 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             measure_under_cursor(window, rect, cursor, alt);
         }
         // A brush stroke has already painted whatever the click landed on.
-        Tool::Position if window.tools.orient.paints_shown() => {}
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
@@ -265,13 +270,17 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
         || (*window.tool == Tool::Relief && window.tools.relief.paints())
         || paint::picks_faces(window)
-        || (*window.tool == Tool::Position && window.tools.orient.paints_shown())
+        || paint::paints_shown(window)
     {
         draw_brush(ui, window, rect);
     }
     if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
-        draw_aimed(ui, window, rect, pointer);
+        // A press paints what shows while that brush is out: it takes hold of nothing.
+        if !paint::paints_shown(window) {
+            draw_aimed(ui, window, rect, pointer);
+        }
+        draw_refusal(ui, window, rect);
     }
 }
 
@@ -315,6 +324,7 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
             pan_button_down: input.pointer.button_down(PointerButton::Secondary)
                 || input.pointer.button_down(PointerButton::Middle),
             shift: input.modifiers.shift,
+            alt: input.modifiers.alt,
             command: input.modifiers.command,
             delta: Vec2::new(delta.x, delta.y),
             scroll: input.smooth_scroll_delta.y,
@@ -347,7 +357,7 @@ pub(crate) fn moves_by_hand(window: &Window) -> bool {
 /// Whether Position has its handles out: not while a click lays a face or the brush
 /// paints what shows, which would take the press meant for the model.
 fn handles_out(orient: &crate::orient::OrientTool) -> bool {
-    !orient.picking_face && !orient.paints_shown()
+    !orient.picking_face && !orient.paints_shown(Tool::Position, crate::supports::Placing::Point)
 }
 
 /// Whether the handles are out this frame: the tool moves by hand and no modal covers them.

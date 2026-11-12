@@ -517,7 +517,7 @@ impl Measured {
         let offset_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
         // The film lets go from one edge, so at the worst moment the pull is carried by
         // what is still stuck: half the piece, off its own centre by its gyration.
-        let lever_mm = offset_mm + f64::from(piece.gyration_mm) / 2.0;
+        let lever_mm = offset_mm + f64::from(piece.gyration_mm()) / 2.0;
         let stress_mpa = neck_stress_mpa(force_n, lever_mm, neck.area_mm2);
         if stress_mpa < NECK_LIMIT_MPA {
             return;
@@ -530,7 +530,7 @@ impl Measured {
                 lever_mm: lever_mm as f32,
                 neck_mm2: neck.area_mm2 as f32,
                 force_n: piece.pull_n,
-                gyration_mm: piece.gyration_mm,
+                gyration_mm: piece.gyration_mm(),
             },
         };
         let worse = |held: &Risk| severity(&risk) > severity(held);

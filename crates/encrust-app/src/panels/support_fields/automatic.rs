@@ -64,17 +64,12 @@ pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&S
     );
 }
 
-/// Where an automatic profile moves between shapes (`shapes`, lightest first) against its
-/// shipped profile; a heavier shape never starts below a lighter one. See `docs/decisions/0325`.
-pub fn sizes(
-    ui: &mut egui::Ui,
-    auto: &mut AutoProfile,
-    shipped: Option<&AutoProfile>,
-    shapes: &[String; AUTO_SIZES],
-) {
-    let heavier = &shapes[1..];
+/// From which areas an island is held at a wider share of the contact spacing, against the
+/// shipped profile; a wider share never starts below a narrower one. See ADR 0325.
+pub fn islands(ui: &mut egui::Ui, auto: &mut AutoProfile, shipped: Option<&AutoProfile>) {
+    describe(ui, &tr!("support-islands-help"));
     let island = Measure {
-        label: |shape| tr!("support-size-island", shape = shape),
+        label: |label| label,
         unit: tr!("unit-mm2"),
         step: COARSE_STEP,
         max: MAX_ISLAND_MM2,
@@ -82,13 +77,25 @@ pub fn sizes(
     };
     island.show(
         ui,
-        heavier,
+        &[tr!("support-island-wider"), tr!("support-island-full")],
         0.0,
         &mut auto.island_area_mm2,
         shipped.map(|auto| &auto.island_area_mm2[..]),
     );
+}
+
+/// Where an automatic profile moves between shapes (`shapes`, lightest first) against its
+/// shipped profile; a heavier shape never starts below a lighter one. See ADR 0325, 0423.
+pub fn sizes(
+    ui: &mut egui::Ui,
+    auto: &mut AutoProfile,
+    shipped: Option<&AutoProfile>,
+    shapes: &[String; AUTO_SIZES],
+) {
+    describe(ui, &tr!("support-sizes-help"));
+    let heavier = &shapes[1..];
     let load = Measure {
-        label: |shape| tr!("support-size-load", shape = shape),
+        label: |shape| tr!("support-size-share", shape = shape),
         unit: tr!("unit-mm3"),
         step: LOAD_STEP,
         max: MAX_LOAD_MM3,
@@ -98,8 +105,8 @@ pub fn sizes(
         ui,
         heavier,
         0.0,
-        &mut auto.overhang_volume_mm3,
-        shipped.map(|auto| &auto.overhang_volume_mm3[..]),
+        &mut auto.share_mm3,
+        shipped.map(|auto| &auto.share_mm3[..]),
     );
     // The first is the least step held as one at all, which stays in the profile's file.
     let step = Measure {

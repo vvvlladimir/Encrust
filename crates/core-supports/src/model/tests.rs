@@ -457,3 +457,154 @@ fn a_new_table_alone_is_told_apart_from_other_edits() {
         "nor is a new point"
     );
 }
+
+#[test]
+fn freezing_a_support_keeps_a_lost_point_named_by_its_new_index() {
+    // A cube hanging over the plate: its underside holds a support, its top never does.
+    let model = crate::fixtures::box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(10.0, 10.0, 20.0));
+    let mut supports = ModelSupports::default();
+    supports.add(Vec3::new(5.0, 5.0, 10.0), Transform::default(), 0);
+    supports.add(Vec3::new(5.0, 5.0, 20.0), Transform::default(), 0);
+    refresh(&mut supports, &model, Transform::default());
+    assert_eq!(supports.lost().len(), 1, "the top is lost");
+    assert_eq!(supports.lost()[0].point, 1);
+
+    supports.freeze(0, Transform::default());
+
+    let lost = supports.lost()[0].point;
+    assert_eq!(lost, 0, "the point under it was taken");
+    assert_eq!(supports.points()[lost].contact.z, 20.0);
+}
+
+#[test]
+fn a_frozen_tree_hands_its_tips_as_seeds_unless_its_own_group_grows_again() {
+    // A trunk of group 1 holding a tip of its own and one whose head is group 0's.
+    let node = |x: Scalar, z: Scalar, point: Option<usize>, head: Option<u16>| crate::TreeNode {
+        position: Vec3::new(x, 0.0, z),
+        radius_mm: 0.4,
+        parent: point.map(|_| 0),
+        point,
+        head,
+    };
+    let nodes = vec![
+        node(0.0, 10.0, None, None),
+        node(-2.0, 15.0, Some(0), None),
+        node(2.0, 15.0, Some(1), Some(0)),
+    ];
+    let mut tree = SupportTree::new(nodes, 0, crate::Landing::on_part(Vec3::ZERO));
+    tree.settle(1);
+    let supports =
+        ModelSupports::restore(Vec::new(), Region::default(), Region::default(), vec![tree]);
+
+    let seeds = |groups: &[u16]| {
+        supports
+            .contacts_outside(Transform::default(), groups)
+            .len()
+    };
+    assert_eq!(
+        seeds(&[0]),
+        2,
+        "the tree stands in group 1, which stays whole"
+    );
+    assert_eq!(
+        seeds(&[1]),
+        0,
+        "a tree whose own group grows again goes, every tip with it"
+    );
+}
+
+/// How many faces the meshes of `supports` hold between them.
+fn faces_meshed(supports: &ModelSupports) -> usize {
+    supports
+        .meshes()
+        .expect("built")
+        .iter()
+        .map(|mesh| mesh.faces.len())
+        .sum()
+}
+
+#[test]
+fn a_lifted_support_is_left_out_of_the_meshes_and_carried_without_building_again() {
+    let mut supports = with_one_support(Transform::default());
+    supports.freeze(0, Transform::default());
+    refresh(&mut supports, &nothing(), Transform::default());
+    assert!(faces_meshed(&supports) > 0);
+
+    supports.lift(vec![0]);
+    refresh(&mut supports, &nothing(), Transform::default());
+    assert_eq!(
+        faces_meshed(&supports),
+        0,
+        "the hand draws it while it is lifted"
+    );
+
+    let mut moved = supports.frozen()[0].clone();
+    moved.move_landing(Vec3::new(12.0, 10.0, 0.0));
+    supports.carry_to(0, moved.clone());
+    assert!(
+        supports.meshes().is_some(),
+        "nothing was dropped to be built again"
+    );
+    assert_eq!(
+        supports.trees()[0].landing(),
+        moved.landing(),
+        "picking sees where it went"
+    );
+
+    supports.lift(Vec::new());
+    refresh(&mut supports, &nothing(), Transform::default());
+    assert!(
+        faces_meshed(&supports) > 0,
+        "set down, it is meshed with the rest"
+    );
+}
+
+#[test]
+fn a_frozen_support_stands_on_the_plate_again_when_its_model_rises() {
+    let mut supports = with_one_support(Transform::default());
+    supports
+        .freeze(0, Transform::default())
+        .expect("the one tree is there to freeze");
+    let risen = Transform {
+        translation: Vec3::new(3.0, 0.0, 2.0),
+        rotation: Quat::from_rotation_z(FRAC_PI_2),
+        ..Transform::default()
+    };
+
+    refresh(&mut supports, &nothing(), risen);
+
+    let tree = &supports.trees()[0];
+    assert!(
+        tree.landing().base.z.abs() < 1e-4,
+        "its foot is back on the plate, got {}",
+        tree.landing().base
+    );
+    assert!(
+        (tree.root().position.truncate() - tree.landing().base.truncate()).length() < 1e-4,
+        "its trunk stands upright over it"
+    );
+}
+
+#[test]
+fn a_frozen_support_goes_back_to_growth_when_its_model_tilts() {
+    let mut supports = with_one_support(Transform::default());
+    supports
+        .freeze(0, Transform::default())
+        .expect("the one tree is there to freeze");
+    let tilted = Transform {
+        rotation: Quat::from_rotation_x(0.3),
+        ..Transform::default()
+    };
+
+    refresh(&mut supports, &nothing(), tilted);
+
+    assert!(
+        supports.frozen().is_empty(),
+        "a tilted trunk is no hand's shape"
+    );
+    assert_eq!(supports.points().len(), 1, "its tip is grown again");
+    assert!(
+        supports.trees()[0].landing().base.z.abs() < 1e-4,
+        "and stands on the plate"
+    );
+}

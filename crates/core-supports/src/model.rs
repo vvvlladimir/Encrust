@@ -6,8 +6,10 @@ use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 use crate::{Clearances, Shaded, SupportPoint, SupportTree};
 
 mod build;
+mod follow;
 mod frozen;
 mod growth;
+mod lifted;
 mod paint;
 mod points;
 use build::Built;
@@ -35,6 +37,11 @@ pub struct ModelSupports {
     /// The supports the hand has taken hold of, kept as the trees they are, in the
     /// model's own space. Nothing regrows them; see `docs/decisions/0095`.
     frozen: Vec<SupportTree>,
+    /// The frozen trees a hand is carrying, which the meshes leave out (ADR 0435).
+    lifted: Vec<usize>,
+    /// Where the model stood when the frozen trees last stood under it, for a rebuild at
+    /// another placement to stand them again (ADR 0439); `None` until a first rebuild.
+    frozen_at: Option<Transform>,
     /// The two patches as geometry, apart from the columns so a stroke shows in its own frame;
     /// columns take too long to rebuild per frame.
     patches: Patches,
@@ -118,6 +125,22 @@ impl ModelSupports {
                 .flat_map(SupportTree::tip_groups)
                 .filter(|tip| *tip == group)
                 .count()
+    }
+
+    /// [`Self::contacts`] but for the points of `groups` and the frozen trees standing in one:
+    /// the seeds of a run that grows those groups again and takes them away.
+    pub fn contacts_outside(&self, transform: Transform, groups: &[u16]) -> Vec<Vec3> {
+        let matrix = transform.to_matrix();
+        let frozen = (self.frozen.iter())
+            .filter(|tree| !groups.contains(&tree.group()))
+            .flat_map(SupportTree::contacts);
+        self.points
+            .iter()
+            .filter(|point| !groups.contains(&point.group))
+            .map(|point| point.contact)
+            .chain(frozen)
+            .map(|contact| matrix.transform_point3(contact))
+            .collect()
     }
 
     /// Where every support touches the model, in plate coordinates: the points and the

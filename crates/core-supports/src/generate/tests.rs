@@ -47,6 +47,7 @@ fn generate_supports(
         seeds,
         lows,
         blocked,
+        None,
         progress,
     )
     .into_iter()
@@ -143,6 +144,7 @@ fn needs_for(mesh: &Mesh) -> Vec<Need> {
         &[],
         &[],
         None,
+        None,
         &mut |_| true,
     )
 }
@@ -163,12 +165,12 @@ fn shelf(tower_mm: Scalar) -> Mesh {
     )
 }
 
-/// The model above every overhang contact under `mesh`, mm³.
+/// Each overhang contact's share of the model above it under `mesh`, mm³.
 fn carried(mesh: &Mesh) -> Vec<Scalar> {
     needs_for(mesh)
         .into_iter()
         .filter_map(|need| match need.reason {
-            Reason::Overhang { carried_mm3 } => Some(carried_mm3),
+            Reason::Overhang { share_mm3 } => Some(share_mm3),
             Reason::Island { .. } | Reason::Step { .. } | Reason::Steady => None,
         })
         .collect()
@@ -181,7 +183,7 @@ fn a_floating_slab_is_held_as_an_island_of_its_own_area() {
     let islands: Vec<Scalar> = needs
         .iter()
         .filter_map(|need| match need.reason {
-            Reason::Island { area_mm2 } => Some(area_mm2),
+            Reason::Island { area_mm2, .. } => Some(area_mm2),
             Reason::Overhang { .. } | Reason::Step { .. } | Reason::Steady => None,
         })
         .collect();
@@ -199,21 +201,24 @@ fn a_floating_slab_is_held_as_an_island_of_its_own_area() {
 }
 
 #[test]
-fn an_overhang_carries_the_model_above_it() {
+fn an_overhang_shares_the_model_above_it_among_its_contacts() {
     let alone = carried(&shelf(0.0));
     let under_tower = carried(&shelf(20.0));
     assert!(!alone.is_empty() && !under_tower.is_empty());
     // The slab is 100 mm³ less its post and the layer the contacts are cut under; the
-    // tower adds 2000 mm³ more.
+    // tower adds 2000 mm³ more. Its contacts all sit on one layer, so they share it evenly.
+    let total = |shares: &[Scalar]| shares.iter().sum::<Scalar>();
     assert!(
-        alone.iter().all(|mm3| (90.0..=100.0).contains(mm3)),
-        "a bare shelf carries itself, got {alone:?}"
+        (90.0..=100.0).contains(&total(&alone)),
+        "a bare shelf's contacts carry the shelf between them, got {alone:?}"
     );
     assert!(
-        under_tower
-            .iter()
-            .all(|mm3| (2090.0..=2100.0).contains(mm3)),
+        (2090.0..=2100.0).contains(&total(&under_tower)),
         "a shelf under a 20 mm tower carries the tower too, got {under_tower:?}"
+    );
+    assert!(
+        alone.iter().all(|share| (share - alone[0]).abs() < 1e-3),
+        "contacts of one layer share alike, got {alone:?}"
     );
 }
 
@@ -343,14 +348,20 @@ fn steps(step: Scalar, rise: Scalar) -> Mesh {
     merged(&lower, &upper)
 }
 
-/// What a run sized by the shipped automatic profile wants under `mesh`.
-fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
+/// The automatic profile that ships.
+fn shipped_auto() -> printer_profiles::AutoProfile {
     let catalogue = printer_profiles::Catalogue::bundled().expect("the shipped catalogue");
-    let auto = &catalogue
+    catalogue
         .autos()
         .next()
         .expect("an automatic profile ships")
-        .profile;
+        .profile
+        .clone()
+}
+
+/// What a run sized by the shipped automatic profile wants under `mesh`.
+fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
+    let auto = &shipped_auto();
     super::generate_supports(
         &slice(mesh),
         LAYER_HEIGHT_MM,
@@ -359,6 +370,7 @@ fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
         Some(auto),
         &[],
         &[],
+        None,
         None,
         &mut |_| true,
     )
@@ -379,11 +391,28 @@ fn shelf_under_a_lean(shelf: bool) -> Mesh {
     merged(&merged(&base, &slab), &lean)
 }
 
-/// The contacts under the leaning face, above the shelf's edge, with why each is there.
-fn under_the_lean(needs: &[Need]) -> Vec<Reason> {
+/// The contacts under the leaning face, with why each is there. Its first millimetre leans
+/// from the slab's edge, so is left out.
+fn under_the_lean(needs: &[Need]) -> Vec<&Need> {
     needs
         .iter()
-        .filter(|need| need.contact.y < -12.3 && need.contact.z > 6.2)
+        .filter(|need| need.contact.y < -12.3 && need.contact.z > 7.0)
+        .collect()
+}
+
+/// Those of `under_the_lean` within the shipped reach of a contact on the shelf.
+fn reached_from_the_shelf(needs: &[Need]) -> Vec<Reason> {
+    let auto = &shipped_auto();
+    let size = auto.step_size(11.0).expect("the shelf is held as a step");
+    let reach_mm = auto.step_height_mm[size];
+    let shelf: Vec<Vec3> = needs
+        .iter()
+        .filter(|need| need.contact.z < 5.2)
+        .map(|need| need.contact)
+        .collect();
+    under_the_lean(needs)
+        .into_iter()
+        .filter(|need| shelf.iter().any(|at| at.distance(need.contact) <= reach_mm))
         .map(|need| need.reason)
         .collect()
 }
@@ -408,10 +437,10 @@ fn a_shelf_is_held_as_a_step_of_the_resin_it_puts_out() {
 
 #[test]
 fn a_face_leaning_past_a_steps_angle_is_held_where_the_step_reaches_it() {
-    let held = under_the_lean(&sized_needs_for(&shelf_under_a_lean(true)));
+    let held = reached_from_the_shelf(&sized_needs_for(&shelf_under_a_lean(true)));
     assert!(
         !held.is_empty(),
-        "the 30 degree face over the shelf is held"
+        "the 30 degree face over the shelf is held within the step's reach"
     );
     assert!(
         held.iter()
@@ -421,7 +450,7 @@ fn a_face_leaning_past_a_steps_angle_is_held_where_the_step_reaches_it() {
     assert!(
         under_the_lean(&sized_needs_for(&shelf_under_a_lean(false)))
             .iter()
-            .all(|reason| matches!(reason, Reason::Steady)),
+            .all(|need| matches!(need.reason, Reason::Steady)),
         "the same face with no step under it is only steadied"
     );
     assert!(
@@ -549,6 +578,33 @@ fn a_box_floating_over_the_plate_is_an_island_and_is_held_from_underneath() {
             "{point} is not on the underside of the island"
         );
     }
+}
+
+#[test]
+fn an_island_lower_than_a_pad_is_held_and_every_support_stands() {
+    let low = box_mesh(Vec3::new(0.0, 0.0, 0.4), Vec3::new(10.0, 10.0, 5.0));
+    let points = supports_for(&low);
+    assert!(
+        !points.is_empty(),
+        "an island 0.4 mm over the plate must be held up"
+    );
+    let profile = profile();
+    let supports: Vec<_> = points
+        .iter()
+        .map(|at| crate::SupportPoint::new(*at))
+        .collect();
+    let trees = crate::fixtures::trees_on(
+        &supports,
+        &low,
+        core_geometry::Transform::default(),
+        crate::Profiles::single(&profile),
+    );
+    let standing: usize = trees.iter().map(crate::SupportTree::tip_count).sum();
+    assert_eq!(
+        standing,
+        points.len(),
+        "each one runs its head into the plate"
+    );
 }
 
 #[test]
@@ -1023,4 +1079,75 @@ fn an_empty_stack_produces_nothing() {
         &mut |_| true,
     );
     assert!(points.is_empty());
+}
+
+/// What a run sized by the shipped automatic profile wants under `mesh`, with every face
+/// looking down painted as the side meant to be seen.
+fn sized_needs_shown_under(mesh: &Mesh) -> Vec<Need> {
+    let auto = &shipped_auto();
+    let down: core_geometry::Region = (0..mesh.faces.len())
+        .filter(|&face| {
+            mesh.triangle(face)
+                .is_some_and(|t| t.normal_unnormalized().normalize_or_zero().z < -0.9)
+        })
+        .collect();
+    let shown = crate::region::Shown::new(mesh, &down, core_geometry::Transform::default())
+        .expect("a box has faces looking down");
+    super::generate_supports(
+        &slice(mesh),
+        LAYER_HEIGHT_MM,
+        &auto.placing_with(&profile()),
+        Some(auto),
+        &[],
+        &[],
+        None,
+        Some(&shown),
+        &mut |_| true,
+    )
+}
+
+#[test]
+fn a_ceiling_painted_to_be_seen_is_held_sparser_on_the_lightest_tips() {
+    let ceiling = shelf(0.0);
+    let plain = sized_needs_for(&ceiling);
+    let shown = sized_needs_shown_under(&ceiling);
+    assert!(
+        shown.len() < plain.len(),
+        "{} contacts under a painted ceiling, {} under a plain one",
+        shown.len(),
+        plain.len()
+    );
+    let auto = shipped_auto();
+    let on_ceiling: Vec<&Need> = shown.iter().filter(|need| need.shown).collect();
+    assert!(!on_ceiling.is_empty(), "the shelf's underside is painted");
+    assert!(
+        on_ceiling.iter().all(|need| need.size_in(&auto) == 0),
+        "every contact on the painted side is the lightest"
+    );
+}
+
+#[test]
+fn every_toe_of_a_foot_is_held_near_its_end() {
+    // A 6 mm sole with four toes 1.2 mm wide reaching 3 mm out of it, 1.6 mm apart.
+    let toes: Vec<Scalar> = (0..4).map(|toe| 10.2 + 1.6 * toe as Scalar).collect();
+    let sole = box_mesh(Vec3::new(10.0, 10.0, 2.0), Vec3::new(16.4, 16.0, 3.0));
+    let foot = toes.iter().fold(sole, |foot, x| {
+        merged(
+            &foot,
+            &box_mesh(Vec3::new(*x, 16.0, 2.0), Vec3::new(x + 1.2, 19.0, 3.0)),
+        )
+    });
+    let contacts = supports_for(&foot);
+
+    for x in toes {
+        let end = Vec2::new(x + 0.6, 19.0);
+        let nearest_mm = contacts
+            .iter()
+            .map(|contact| (contact.truncate() - end).length())
+            .fold(Scalar::INFINITY, Scalar::min);
+        assert!(
+            nearest_mm <= 1.0,
+            "the toe at x = {x} mm is held within 1 mm of its end, the nearest is {nearest_mm} mm"
+        );
+    }
 }

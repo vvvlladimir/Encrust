@@ -1,7 +1,7 @@
 //! What a measured stack shows, answered: where a support stands under an island or a weak
 //! neck, and where a hole lets the air into a suction cup. See `docs/design/check-fixes.md`.
 
-use core_analysis::{Risk, RiskKind, holds_for_lever};
+use core_analysis::{MOST_NECK_HOLDS, Risk, RiskKind, holds_for_lever, pull_n, tip_holds_n};
 use core_geometry::{
     Bvh, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Vec3, raycast_placed_within,
 };
@@ -104,6 +104,29 @@ pub fn neck_profile(profile: &SupportProfile) -> SupportProfile {
     sturdy.tip.contact_diameter_mm = sturdy.tip.contact_diameter_mm.max(NECK_TIP_MM);
     sturdy.small_pillar.diameter_mm = sturdy.small_pillar.diameter_mm.max(NECK_TIP_MM);
     sturdy
+}
+
+/// Which of `shapes`, lightest first, a support Check stands under the risk `kind` is built to:
+/// the lightest whose tip bears an island's pull on the film, or whose neck-thick supports hold
+/// a weak neck within [`MOST_NECK_HOLDS`]; the heaviest where none does.
+pub fn held_by_shape(kind: &RiskKind, shapes: &[SupportProfile]) -> usize {
+    let holds = |shape: &SupportProfile| match *kind {
+        RiskKind::Island { area_mm2 } | RiskKind::Floating { area_mm2 } => {
+            let tip_mm = shape.tip.contact_diameter_mm;
+            let tip_mm2 = std::f32::consts::PI * (tip_mm / 2.0).powi(2);
+            // Pulled as a disc of its area, whose polar moment is the area squared over 2π.
+            let area = f64::from(area_mm2);
+            tip_holds_n(tip_mm2) >= pull_n(area, area * area / std::f64::consts::TAU)
+        }
+        RiskKind::Lever { .. } => {
+            holds_for_lever(kind, neck_tip_mm2(&neck_profile(shape))) < MOST_NECK_HOLDS
+        }
+        _ => true,
+    };
+    shapes
+        .iter()
+        .position(holds)
+        .unwrap_or(shapes.len().saturating_sub(1))
 }
 
 /// The section `profile` adds to a neck per support, mm²: the narrower of a tip and a small

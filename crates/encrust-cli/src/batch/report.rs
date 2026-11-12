@@ -177,11 +177,15 @@ pub struct Supports {
     /// How far the model was stood off the plate to make room for them, millimetres.
     pub lifted_mm: Scalar,
     pub contacts: usize,
+    /// Where each contact touches the model, plate millimetres: what `--merge-supports` names.
+    pub contacts_at_mm: Vec<[Scalar; 3]>,
     pub standing: usize,
     pub trunks: usize,
     pub no_room_for: usize,
     /// Where each of those touches the model, plate millimetres.
     pub no_room_at_mm: Vec<[Scalar; 3]>,
+    /// Why each of those has no support, in the same order.
+    pub no_room_why: Vec<&'static str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -279,10 +283,16 @@ impl PartReport {
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
                 contacts: report.contacts.len(),
+                contacts_at_mm: report.contacts.iter().map(|at| at.to_array()).collect(),
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
-                no_room_at_mm: report.unheld.iter().map(|at| at.to_array()).collect(),
+                no_room_at_mm: report.unheld.iter().map(|(at, _)| at.to_array()).collect(),
+                no_room_why: report
+                    .unheld
+                    .iter()
+                    .map(|(_, why)| crate::supports::why_named(*why))
+                    .collect(),
             }),
             meets: part
                 .meets

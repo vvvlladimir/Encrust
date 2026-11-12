@@ -82,6 +82,15 @@ fn merged(mut found: Vec<Contact>) -> Vec<Contact> {
     merged
 }
 
+/// Every pair of pieces, above then below, sharing a pixel between `layer` and the layer `below`:
+/// what following a part up a stack joins.
+pub fn standing_on(layer: &Cured, below: &Cured) -> Vec<(u32, u32)> {
+    contacts(layer, below)
+        .into_iter()
+        .map(|contact| (contact.above, contact.below))
+        .collect()
+}
+
 /// Which pieces of `layer` stand on nothing in the layer `below`, one flag a piece.
 pub fn islands(layer: &Cured, below: &Cured) -> Vec<bool> {
     let mut held = vec![false; layer.pieces().len()];
@@ -116,6 +125,16 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].pixels, 2, "columns 2 and 3 are shared");
         assert!((found[0].x_px / 2.0 - 3.0).abs() < 1e-9, "centred on x = 3");
+    }
+
+    #[test]
+    fn a_piece_on_two_pieces_stands_on_both() {
+        let above = cure(&paint(9, 1, |_, _| 255), UNIT);
+        let below = cure(
+            &paint(9, 1, |x, _| u8::from(!(3..=5).contains(&x)) * 255),
+            UNIT,
+        );
+        assert_eq!(standing_on(&above, &below), vec![(0, 0), (0, 1)]);
     }
 
     #[test]

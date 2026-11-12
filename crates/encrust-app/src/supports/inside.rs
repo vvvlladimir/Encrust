@@ -8,34 +8,16 @@ use printer_profiles::SupportProfile;
 
 impl SupportTool {
     /// Stands a support at each of `found`, a model and the plate point of its underside an
-    /// island hangs from, in the islands' group, and answers how many; a ring or a crescent
-    /// is left to the hand.
-    pub fn support_islands(&mut self, scene: &mut Scene, found: &[(ObjectId, Vec3)]) -> usize {
-        self.stand_islands(scene, found, |_| None)
-    }
-
-    /// The same, each support to the profile `profile_of` names for its model: what a
-    /// recipe's run builds islands to, not the panel's.
-    pub fn support_islands_to(
+    /// island hangs from, in the islands' group of the profile `profile_of` names for its model,
+    /// and answers how many; a ring or a crescent is left to the hand.
+    pub fn support_islands(
         &mut self,
         scene: &mut Scene,
         found: &[(ObjectId, Vec3)],
         profile_of: impl Fn(ObjectId) -> SupportProfile,
     ) -> usize {
-        self.stand_islands(scene, found, |id| Some(profile_of(id)))
-    }
-
-    /// Stands a support at each of `found`, under a weak neck, in the necks' group: each to
-    /// `profile_of`'s for its model, or the panel's, made thick enough to carry the pull.
-    pub fn support_necks(
-        &mut self,
-        scene: &mut Scene,
-        found: &[(ObjectId, Vec3)],
-        profile_of: impl Fn(ObjectId) -> Option<SupportProfile>,
-    ) -> usize {
         for (id, contact) in found {
-            let base = profile_of(*id).unwrap_or_else(|| self.profile.clone());
-            let group = self.answer_group(NECKS_GROUP, Some(&neck_profile(&base)));
+            let group = self.answer_group(ISLANDS_GROUP, &profile_of(*id));
             if let Some(object) = scene.get_mut(*id) {
                 let transform = object.transform;
                 object.supports.add(*contact, transform, group);
@@ -44,14 +26,16 @@ impl SupportTool {
         found.len()
     }
 
-    fn stand_islands(
+    /// Stands a support at each of `found`, under a weak neck, in the necks' group: each to
+    /// `profile_of`'s for its model, made thick enough to carry the pull.
+    pub fn support_necks(
         &mut self,
         scene: &mut Scene,
         found: &[(ObjectId, Vec3)],
-        profile_of: impl Fn(ObjectId) -> Option<SupportProfile>,
+        profile_of: impl Fn(ObjectId) -> SupportProfile,
     ) -> usize {
         for (id, contact) in found {
-            let group = self.answer_group(ISLANDS_GROUP, profile_of(*id).as_ref());
+            let group = self.answer_group(NECKS_GROUP, &neck_profile(&profile_of(*id)));
             if let Some(object) = scene.get_mut(*id) {
                 let transform = object.transform;
                 object.supports.add(*contact, transform, group);
@@ -136,25 +120,15 @@ impl SupportTool {
         gone
     }
 
-    /// The group named `name` for what Check answers: the one of `profile` when one is asked,
-    /// else the panel's numbers in hand the first time.
-    pub(super) fn answer_group(&mut self, name: &str, profile: Option<&SupportProfile>) -> u16 {
-        let held = |group: &SupportGroup| {
-            group.name == name && profile.is_none_or(|asked| group.profile == *asked)
-        };
+    /// The group named `name` built to `profile` for what Check answers, made the first time.
+    pub(super) fn answer_group(&mut self, name: &str, profile: &SupportProfile) -> u16 {
+        let held = |group: &SupportGroup| group.name == name && group.profile == *profile;
         if let Some(group) = self.groups.iter().position(held) {
             return group as u16;
         }
-        let profile = match profile {
-            Some(asked) => asked.clone(),
-            None => {
-                self.groups[self.active as usize].profile = self.profile.clone();
-                self.profile.clone()
-            }
-        };
         self.groups.push(SupportGroup {
             name: name.to_owned(),
-            profile,
+            profile: profile.clone(),
             hidden: false,
         });
         (self.groups.len() - 1) as u16

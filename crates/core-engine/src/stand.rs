@@ -4,18 +4,22 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns, generate_supports,
-    grow, low_points, mesh_trees,
+    Blocked, Lost, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns,
+    generate_supports, grow, lost, low_points, mesh_trees,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
+use crate::strengthen::{Underside, strengthen};
 
 mod lift;
+mod merge;
 
 use lift::lift_of;
 pub use lift::{Lift, planned_lift};
+pub(crate) use merge::merge_refusal;
+use merge::merged_near;
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -35,6 +39,9 @@ pub enum SupportShapes {
 pub struct SupportPlan {
     pub shapes: SupportShapes,
     pub cavity: bool,
+    /// Each a merge, as the window's Merge into one: points, plate mm, naming the supports by
+    /// their contacts once they stand (ADR 0440).
+    pub merges: Vec<Vec<Vec3>>,
 }
 
 impl SupportPlan {
@@ -43,6 +50,7 @@ impl SupportPlan {
         Self {
             shapes: SupportShapes::One(Box::new(profile)),
             cavity: false,
+            merges: Vec::new(),
         }
     }
 
@@ -55,6 +63,7 @@ impl SupportPlan {
                 shapes: Box::new(shapes),
             },
             cavity: false,
+            merges: Vec::new(),
         })
     }
 
@@ -112,8 +121,8 @@ pub struct Stood {
     pub sized: Vec<usize>,
     /// Contacts a column was stood under.
     pub standing: usize,
-    /// Indices into `contacts` of those no column could stand under.
-    pub unheld: Vec<usize>,
+    /// The contacts no column could stand under, each an index into `contacts` and why.
+    pub unheld: Vec<Lost>,
     pub trees: usize,
     /// The supports themselves, in plate coordinates.
     pub supports: Mesh,
@@ -143,8 +152,8 @@ pub fn stand_under(
     let lift_mm = plan.placing().lift_mm();
     let (lifted_mm, surface, inner) = touched(model, lift_mm)?;
     let bvh = Arc::new(Bvh::build(&surface));
-    let needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
-    grown(lifted_mm, &surface, &bvh, &needs, plan)
+    let needs = needs_under(&surface, &bvh, inner, plan, (layer_height_mm, true))?;
+    grown(lifted_mm, &surface, &bvh, (&needs, &plan.merges), plan)
 }
 
 /// A support under each of `contacts` alone, plate mm on the model where it stands, nothing
@@ -159,12 +168,9 @@ pub fn stand_at(
     // An island of no area, which an automatic profile builds to its lightest shape.
     let needs: Vec<Need> = contacts
         .iter()
-        .map(|contact| Need {
-            contact: *contact,
-            reason: Reason::Island { area_mm2: 0.0 },
-        })
+        .map(|contact| Need::new(*contact, Reason::POINT))
         .collect();
-    grown(lifted_mm, &surface, &bvh, &needs, plan)
+    grown(lifted_mm, &surface, &bvh, (&needs, &[]), plan)
 }
 
 /// The same for a model left standing on the plate: supports go only under what hangs
@@ -192,7 +198,7 @@ pub fn stand_seated(
     };
     let (mut lifted_mm, mut surface, inner) = touched(seated, 0.0)?;
     let mut bvh = Arc::new(Bvh::build(&surface));
-    let mut needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    let mut needs = needs_under(&surface, &bvh, inner, plan, (layer_height_mm, true))?;
     if raft.enabled && !needs.is_empty() {
         let up = Vec3::Z * raft.thickness_mm;
         let moved = Transform::from_translation(up);
@@ -207,7 +213,7 @@ pub fn stand_seated(
         }
         lifted_mm += up.z;
     }
-    grown(lifted_mm, &surface, &bvh, &needs, plan)
+    grown(lifted_mm, &surface, &bvh, (&needs, &plan.merges), plan)
 }
 
 /// The model lifted `lift_mm` clear of the plate with its cuts, then how far it moved, the
@@ -261,7 +267,7 @@ fn grown(
     lifted_mm: Scalar,
     surface: &Mesh,
     bvh: &Bvh,
-    needs: &[Need],
+    (needs, merges): (&[Need], &[Vec<Vec3>]),
     plan: &SupportPlan,
 ) -> Result<Stood, EngineError> {
     let points: Vec<SupportPoint> = needs
@@ -284,13 +290,8 @@ fn grown(
     let profiles = Profiles::new(&table).ok_or(EngineError::EmptyPlate)?;
     let columns = columns(&points, &placed, profiles);
     let trees = grow(&columns, &placed, profiles);
+    let trees = merged_near(trees, (merges, &contacts), &columns, &placed, profiles)?;
     let facing = facing(surface, bvh, &contacts);
-    let mut held = vec![false; contacts.len()];
-    for point in trees.iter().flat_map(core_supports::SupportTree::points) {
-        if let Some(slot) = held.get_mut(point) {
-            *slot = true;
-        }
-    }
     Ok(Stood {
         lifted_mm,
         contacts,
@@ -300,11 +301,7 @@ fn grown(
             .iter()
             .map(core_supports::SupportTree::tip_count)
             .sum(),
-        unheld: held
-            .iter()
-            .enumerate()
-            .filter_map(|(point, &held)| (!held).then_some(point))
-            .collect(),
+        unheld: lost(&points, &trees, &placed, profiles),
         trees: trees.len(),
         supports: mesh_trees(&trees, &placed, profiles),
     })
@@ -327,13 +324,13 @@ fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
 
 /// Where `surface`, standing where it is, needs holding up: what automatic placement would
 /// touch from outside its wall, then inside its cavity where the plan asks, each contact
-/// with what it holds.
+/// with what it holds, strengthened where `strengthening` asks.
 fn needs_under(
     surface: &Mesh,
     bvh: &Arc<Bvh>,
     inner: Option<Range<usize>>,
     plan: &SupportPlan,
-    layer_height_mm: Scalar,
+    (layer_height_mm, strengthening): (Scalar, bool),
 ) -> Result<Vec<Need>, EngineError> {
     let stack = PlaneSliceEngine
         .slice(
@@ -346,9 +343,10 @@ fn needs_under(
         .map_err(EngineError::Supports)?;
     let run = Run {
         stack: &stack,
+        surface,
+        bvh,
         layer_height_mm,
-        placing: plan.placing(),
-        sizing: plan.sizing(),
+        plan,
         lows: low_points(surface, Transform::default()),
     };
     let inner = inner.filter(|inner| !inner.is_empty());
@@ -361,18 +359,30 @@ fn needs_under(
         })
     };
     let mut needs = run.place(side(false));
-    if plan.cavity && inner.is_some() {
-        needs.extend(run.place(side(true)));
+    let mut inside = if plan.cavity && inner.is_some() {
+        run.place(side(true))
+    } else {
+        Vec::new()
+    };
+    if strengthening {
+        // Both sides hold the one shell, so each is read with the other's tips standing.
+        let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
+        run.strengthen(side(false), &mut needs, &contacts(&inside))?;
+        if !inside.is_empty() {
+            run.strengthen(side(true), &mut inside, &contacts(&needs))?;
+        }
     }
+    needs.extend(inside);
     Ok(needs)
 }
 
 /// One cut stack and what placement on it is asked with.
 struct Run<'a> {
     stack: &'a Sliced,
+    surface: &'a Mesh,
+    bvh: &'a Bvh,
     layer_height_mm: Scalar,
-    placing: SupportProfile,
-    sizing: Option<&'a AutoProfile>,
+    plan: &'a SupportPlan,
     lows: Vec<Vec3>,
 }
 
@@ -383,17 +393,36 @@ impl Run<'_> {
         let mut needs = generate_supports(
             self.stack,
             self.layer_height_mm,
-            &self.placing,
-            self.sizing,
+            &self.plan.placing(),
+            self.plan.sizing(),
             &[],
             &self.lows,
             blocked.as_ref(),
+            None,
             &mut |_| true,
         );
         if let Some(side) = side {
             needs.retain(|need| side.keeps(need.contact));
         }
         needs
+    }
+
+    /// Strengthens `needs`, placed on `side` of the wall, with `held` standing beside them.
+    fn strengthen(
+        &self,
+        side: Option<WallSide>,
+        needs: &mut Vec<Need>,
+        held: &[Vec3],
+    ) -> Result<(), EngineError> {
+        let blocked = Blocked::keeping(None, side);
+        let underside = Underside {
+            stack: self.stack,
+            layer_mm: self.layer_height_mm,
+            surface: self.surface,
+            bvh: self.bvh,
+            blocked: blocked.as_ref(),
+        };
+        strengthen(underside, needs, held, self.plan, &mut || true).map(|_| ())
     }
 }
 

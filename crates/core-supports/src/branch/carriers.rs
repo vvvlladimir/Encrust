@@ -3,24 +3,28 @@ use crate::column::MIN_PILLAR_HEIGHT_MM;
 use crate::group::Profiles;
 use crate::mesher::is_small;
 use crate::tree::SupportTree;
-use core_geometry::{Buckets, Scalar, Vec3};
+use core_geometry::{Buckets, FastMap, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
 /// How much wider a carrier has to be than what joins it, millimetres: under this the
 /// two are one width, and neither is the other's base.
 pub(super) const THICKER_BY_MM: Scalar = 0.05;
 
+/// How far off a carrier's axis a tree's landing may lie and still stand on it, mm: growth puts
+/// it on the axis, and a round trip through model space moves it by float error alone.
+const SEATED_MM: Scalar = 1e-2;
+
 /// A strut or a trunk a thicker group has already stood, which a thinner tree may run
 /// into, from its upper end to its lower.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Carrier {
-    pub(super) top: Vec3,
-    pub(super) bottom: Vec3,
-    pub(super) radius_mm: Scalar,
+pub(crate) struct Carrier {
+    pub(crate) top: Vec3,
+    pub(crate) bottom: Vec3,
+    pub(crate) radius_mm: Scalar,
     /// How far above `bottom` it has to be met: the foot under a trunk is not the trunk.
-    pub(super) floor_mm: Scalar,
+    pub(crate) floor_mm: Scalar,
     /// The tree it is part of, an index into [`Carriers::trunks`].
-    pub(super) tree: usize,
+    pub(crate) tree: usize,
 }
 
 /// Every carrier stood so far, bucketed by the squares of plate it passes over, so a
@@ -29,6 +33,8 @@ pub(super) struct Carriers {
     pub(super) all: Vec<Carrier>,
     /// The tips each tree stood so far carries, and the most its group lets it carry.
     pub(super) trunks: Vec<(usize, usize)>,
+    /// The tips of trees stood on each tree of [`Self::trunks`], on top of its own.
+    pub(super) landed: FastMap<usize, usize>,
     pub(super) grid: Buckets<usize>,
 }
 
@@ -38,6 +44,7 @@ impl Carriers {
         Self {
             all: Vec::new(),
             trunks: Vec::new(),
+            landed: FastMap::default(),
             grid: Buckets::new(cell_mm),
         }
     }
@@ -47,6 +54,9 @@ impl Carriers {
     pub(super) fn take(&mut self, trees: &[SupportTree], profiles: Profiles) {
         for tree in trees {
             let profile = profiles.of(tree.group());
+            if let Some(host) = self.host_of(tree) {
+                *self.landed.entry(host).or_default() += tree.tip_count();
+            }
             let small = is_small(tree, profile);
             let index = self.trunks.len();
             self.trunks.push((
@@ -92,6 +102,31 @@ impl Carriers {
         self.all.push(carrier);
     }
 
+    /// The tree of [`Self::trunks`] that `tree` stands on, if it stands on one.
+    pub(super) fn host_of(&self, tree: &SupportTree) -> Option<usize> {
+        let at = tree.landing().base;
+        if !tree.landing().on_support {
+            return None;
+        }
+        self.near(at)
+            .into_iter()
+            .map(|index| &self.all[index])
+            .find_map(|carrier| {
+                let along = carrier.bottom - carrier.top;
+                let share = ((at - carrier.top).dot(along)
+                    / along.length_squared().max(Scalar::EPSILON))
+                .clamp(0.0, 1.0);
+                (at.distance(carrier.top + along * share) <= SEATED_MM).then_some(carrier.tree)
+            })
+    }
+
+    /// Whether tree `host` can take on `tips` more within the most it carries and `most`.
+    pub(super) fn has_room(&self, host: usize, tips: usize, most: usize) -> bool {
+        let (own, carries) = self.trunks[host];
+        let landed = self.landed.get(&host).copied().unwrap_or(0);
+        own + landed + tips <= carries.min(most)
+    }
+
     /// Every carrier passing over the nine buckets around `at`, each once.
     pub(super) fn near(&self, at: Vec3) -> Vec<usize> {
         let mut found: Vec<usize> = self.grid.around(at.truncate()).copied().collect();
@@ -107,7 +142,7 @@ pub(super) const MEETING_HALVINGS: u32 = 16;
 
 /// The highest point on `carrier` a strut from `from` reaches within `profile`'s branch lean, or
 /// `None` when out of reach or it would come in under what the carrier stands on.
-pub(super) fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option<Vec3> {
+pub(crate) fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option<Vec3> {
     let (top, bottom) = (carrier.top, carrier.bottom);
 
     // How much steeper than it has to be the strut to a point of the carrier comes in:

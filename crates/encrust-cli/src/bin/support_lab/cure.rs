@@ -90,7 +90,7 @@ fn on_plate(at_mm: [f32; 2]) -> Vec2 {
     Vec2::from(at_mm)
 }
 
-fn plate_of(
+pub fn plate_of(
     model: &Mesh,
     supports: &Mesh,
     printer: &PrinterProfile,

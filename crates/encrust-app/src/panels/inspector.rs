@@ -14,6 +14,7 @@ mod repair;
 mod scope;
 mod select;
 mod shape;
+mod shown;
 mod support_picker;
 mod supports;
 mod text;

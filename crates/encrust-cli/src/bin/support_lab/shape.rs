@@ -6,9 +6,11 @@ use core_geometry::{
     diagnose, signed_volume,
 };
 use core_plate::LOOKS_UP;
-use printer_profiles::{ContactShape, SupportProfile};
+use core_supports::SupportTree;
+use printer_profiles::SupportProfile;
 use serde::{Deserialize, Serialize};
 
+use crate::edge::{EDGE_COS, turn_under};
 use crate::stand::Supported;
 
 /// A tip on material thinner than this behind it, millimetres, is on a detail: a finger, an
@@ -34,6 +36,9 @@ const BURIED_PROBE_MM: Scalar = 1e-3;
 const FLAT_COS: Scalar = 0.966;
 /// How finely the rim of a flat underside is walked, millimetres.
 const RIM_STEP_MM: Scalar = 0.25;
+/// The most of what it holds a tip may carry: the coupon's plates held at 1.2 and swayed at
+/// 1.5 (docs/design/analysis.md, "Calibration").
+const MOST_USE: Scalar = 1.2;
 
 /// What a tip is taken to hold, as two prints of plates on tips measured it.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -68,6 +73,9 @@ pub struct Shape {
     pub scar_mm2: f32,
     /// Tips on a face that looks up in the model's upright pose: the side meant to be seen.
     pub visible: usize,
+    /// Tips whose mark sits where the surface turns past 30°: an edge or a corner.
+    #[serde(default)]
+    pub on_edge: usize,
     pub thin_tips: usize,
     pub crowded: usize,
     pub slender: usize,
@@ -112,6 +120,7 @@ pub enum Kind {
     RimGap,
     ThinTip,
     Visible,
+    Edge,
     Crowded,
     Slender,
     OnModel,
@@ -125,11 +134,11 @@ pub fn read(
     limits: &Limits,
     upright: Quat,
 ) -> Shape {
-    let spacing = profile.contact_spacing_mm / profile.density.max(1e-3).sqrt();
+    let spacing = profile.spacing_mm();
     let standing = standing(supported);
     let tips: Vec<Vec3> = standing.iter().map(|&at| supported.contacts[at]).collect();
     let section =
-        |profile: &SupportProfile| std::f32::consts::PI * surface_radius_mm(profile).powi(2);
+        |profile: &SupportProfile| std::f32::consts::PI * profile.surface_radius_mm().powi(2);
     let sections: Vec<Scalar> = standing
         .iter()
         .map(|&at| section(supported.profile_of(at)))
@@ -160,22 +169,8 @@ pub fn read(
     shape
 }
 
-/// How wide a tip is where it crosses the part's surface, mm: the surface cuts a plane tip wider
-/// than its contact disc (ADR 0243); that section is what the peel pulls through.
-pub fn surface_radius_mm(profile: &SupportProfile) -> Scalar {
-    let contact = profile.contact_radius_mm();
-    match profile.tip.shape {
-        ContactShape::Plane => {
-            let top = profile.top.length_mm.max(1e-3);
-            let bite = profile.tip.contact_depth_mm.min(top);
-            contact + (profile.pillar_radius_mm() - contact) * bite / top
-        }
-        ContactShape::Sphere => contact,
-    }
-}
-
 /// Indices of the contacts some tree carries.
-fn standing(supported: &Supported) -> Vec<usize> {
+pub fn standing(supported: &Supported) -> Vec<usize> {
     let mut held: Vec<usize> = supported
         .trees
         .iter()
@@ -343,7 +338,7 @@ fn uses(
         .copied()
         .unwrap_or(0.0);
     for (tip, used) in tips.iter().zip(&used) {
-        if *used > 1.0 {
+        if *used > MOST_USE {
             shape.overloaded += 1;
             shape.findings.push(finding(Kind::Overloaded, *tip, *used));
         }
@@ -445,28 +440,42 @@ fn pieces(triangle: &Triangle) -> Vec<(Vec3, Scalar)> {
     pieces
 }
 
-/// Tips on details too thin to lose one, and tips on the side meant to be seen.
+/// Tips on details too thin to lose one, on the side meant to be seen, and on an edge.
 fn tips_on_surface(shape: &mut Shape, model: &Mesh, bvh: &Bvh, tips: &[Vec3], upright: Quat) {
     let back = upright.inverse();
+    let mut found = Vec::new();
     for tip in tips {
-        let Some(closest) = bvh.closest(*tip) else {
+        if let Some(turn) = turn_under(model, bvh, *tip, &mut found)
+            && turn < EDGE_COS
+        {
+            shape.on_edge += 1;
+            let degrees = turn.clamp(-1.0, 1.0).acos().to_degrees();
+            shape.findings.push(finding(Kind::Edge, *tip, degrees));
+        }
+        let Some((normal, behind)) = surface_at(model, bvh, *tip) else {
             continue;
         };
-        let Some(triangle) = model.triangle(closest.face) else {
-            continue;
-        };
-        let normal = triangle.normal_unnormalized().normalize_or_zero();
         if (back * normal).z > LOOKS_UP {
             shape.visible += 1;
             shape.findings.push(finding(Kind::Visible, *tip, 0.0));
         }
-        if let Some(thickness) = thickness(bvh, closest.point, normal)
+        if let Some(thickness) = behind
             && thickness < THIN_DETAIL_MM
         {
             shape.thin_tips += 1;
             shape.findings.push(finding(Kind::ThinTip, *tip, thickness));
         }
     }
+}
+
+/// The way the surface nearest `tip` faces and the material behind it there.
+pub fn surface_at(model: &Mesh, bvh: &Bvh, tip: Vec3) -> Option<(Vec3, Option<Scalar>)> {
+    let closest = bvh.closest(tip)?;
+    let normal = model
+        .triangle(closest.face)?
+        .normal_unnormalized()
+        .normalize_or_zero();
+    Some((normal, thickness(bvh, closest.point, normal)))
 }
 
 /// How much material stands behind `surface` along `-normal`, millimetres, or `None` where
@@ -491,6 +500,17 @@ fn crowding(shape: &mut Shape, tips: &[Vec3], spacing: Scalar) {
     }
 }
 
+/// How tall `tree` stands off what it lands on, millimetres, and that over its root's width.
+pub fn trunk(tree: &SupportTree) -> (Scalar, Scalar) {
+    let top = tree
+        .nodes()
+        .iter()
+        .map(|node| node.position.z)
+        .fold(Scalar::MIN, Scalar::max);
+    let height = top - tree.landing().base.z;
+    (height, height / (2.0 * tree.root().radius_mm).max(1e-3))
+}
+
 fn trees(shape: &mut Shape, supported: &Supported, profile: &SupportProfile) {
     let roots: Vec<Vec3> = supported
         .trees
@@ -505,13 +525,7 @@ fn trees(shape: &mut Shape, supported: &Supported, profile: &SupportProfile) {
                 .findings
                 .push(finding(Kind::OnModel, landing.base, 0.0));
         }
-        let top = tree
-            .nodes()
-            .iter()
-            .map(|node| node.position.z)
-            .fold(Scalar::MIN, Scalar::max);
-        let width = 2.0 * tree.root().radius_mm;
-        let ratio = (top - landing.base.z) / width.max(1e-3);
+        let (_, ratio) = trunk(tree);
         let braced = profile.bracing.enabled
             && roots.iter().enumerate().any(|(other, root)| {
                 other != at
@@ -530,22 +544,6 @@ fn trees(shape: &mut Shape, supported: &Supported, profile: &SupportProfile) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_plane_tip_crosses_the_surface_wider_than_its_contact() {
-        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
-        profile.tip.shape = ContactShape::Plane;
-        profile.tip.contact_diameter_mm = 0.4;
-        profile.tip.contact_depth_mm = 0.5;
-        profile.top.length_mm = 2.0;
-        profile.middle.diameter_mm = 1.2;
-        let radius = surface_radius_mm(&profile);
-        // The cone runs 0.2 to 0.6 mm over 2 mm and is sunk a quarter of that.
-        assert!(
-            (radius - 0.3).abs() < 1e-6,
-            "a quarter of the way up the cone is 0.3 mm, got {radius}"
-        );
-    }
 
     #[test]
     fn a_face_cut_into_pieces_keeps_its_area() {

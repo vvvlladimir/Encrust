@@ -89,7 +89,11 @@ left corner as the model prints, after placement and the lift its supports give 
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
 `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
-`supports.no_room_at_mm` lists where each contact `no_room_for` counts touches the model.
+`supports.contacts_at_mm` lists where each contact touches the model: the points
+`--merge-supports` names supports by. `supports.no_room_at_mm` lists where each contact
+`no_room_for` counts touches the model, and
+`supports.no_room_why` why, in the same order: `head-blocked` (its head would run into the
+model), `faces-up` (it sits on a face looking up) or `no-ground` (nothing in reach to stand on).
 No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
 `auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
 `drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,
@@ -338,7 +342,8 @@ its shape, as painting what shows is done in the window (ADR 0410); and
 `--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
-into the automatic profile's shapes, as the window's **Auto** does (ADR 0325), and
+into the automatic profile's shapes, as the window's **Auto** does (ADR 0325); either way a
+tip carrying too much is strengthened as the window's Grow does (ADR 0422); and
 `--support-cavity` holds up the cavity `--hollow`, or a plate file's `hollow`, leaves as well
 as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
@@ -364,6 +369,20 @@ A model is stood off the plate by the profile's own `z_lift_mm`, and by its raft
 thickness on top when it has one, before anything is put under it, the way the window's **Lift off the plate** does it: a part sitting on the plate has no
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
+
+`--merge-supports X,Y,Z;X,Y,Z` joins the supports whose contacts lie within half a millimetre
+of those points into one tree on one trunk, as the window's **Merge into one** does, and grows
+the rest again beside it (ADR 0440). Each use is one merge; repeat it for more. The points are
+plate millimetres as `supports.contacts_at_mm` in `--json` lists them, so a first run finds
+them and a second, with the same flags, merges. A point near no contact, points naming one
+support, or a merge the model is in the way of, a strut would lean too far for or the trunk
+has nowhere to stand for, stops the run and says which:
+
+```sh
+encrust estimate model.stl --supports medium --json > found.json
+encrust slice model.stl --printer elegoo-mars-4-ultra --supports medium \
+  --merge-supports "-2.65,-1.75,9.97;-1.75,0.05,9.97" -o model.goo
+```
 
 `--recipe ID|PATH` on `slice`, `estimate` and `batch` takes each model through a recipe step
 by step (`docs/design/recipes.md`, ADR 0403): a built-in one by id, one of yours by file
@@ -804,23 +823,34 @@ Each model supported the way Generate supports it, cut and cured as it prints, a
 along three lines: what falls — contacts left with no support, islands, pieces standing on
 nothing, tips thinner than hold at all; what marks the part — the scar the tips leave,
 measured where the surface cuts each tip, tips on faces looking up in the pose the model
-was drawn in, tips on material thinner than a millimetre, feet standing on the model; and
+was drawn in, tips whose mark sits on an edge or a corner, where the surface turns
+past 30°, tips on material thinner than a millimetre, feet standing on the model; and
 what is more or less than needed — how much of what it holds each tip carries, flat
 underside and leaning underside each against its own limit, the rim of flat underside left
 far from every tip, underside no tip reaches and no layer below carries, crowded tips and
 tall trunks with nothing to brace them to. A model holds when nothing falls, and has
-enough when it holds and no tip carries more than it holds.
+enough when it holds and no tip carries more than 1.2 times what it holds, where the
+calibration coupon's plates still held. Each row of the run also lists
+every standing tip: why it stands, its group, the pull on it at its worst height and its
+margin (`docs/design/analysis.md`), the material behind it, its trunk's height and slenderness;
+the block and table give the weakest margin and how many tips keep under ×1.5.
 
 `--profile` names the support profiles to bench, repeated for several, Light when none is
 given. `--auto` names automatic profiles to bench the same way, each support sized by what
 it holds as Generate does with Automatic on, and each tip read against the shape it was
 built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
 thick and stands its supports against the shell from outside. `--sweep` also supports each
-model at shares of the profile's density and reports the least that is enough. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
+model at shares of the profile's density and reports the least that is enough. Every
+row is strengthened as Generate strengthens it; `--no-strengthen` reads placement as it
+put the tips. `--lightest-first` builds every tip of an automatic profile to its lightest
+shape and leaves its size to strengthening, by what it carries. `--shown-from 0.5` paints
+as the side meant to be seen every face that shows at least that much, as Clean surface
+reads it off the shape, and counts the contacts on it. `--tip-floor-mm`
+builds every tip at least that wide, as a print that keeps to what holds would. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
-printed in them — balls, flat plates and leant plates on so many tips — with what the bench
-expects of each specimen. `--corpus FILE` reads a
+printed in them — balls, flat plates and leant plates on so many tips, each block tied
+into one piece on the plate when it sets `tied = true` — with what the bench expects of each specimen. `--corpus FILE` reads a
 TOML list of models with how each stands — the axis that points up, the height it prints
 at, its lean — and what a person expects of it. `--export DIR` writes each supported model
 and markers at every place the run names; `--json FILE` keeps the run, and `--baseline

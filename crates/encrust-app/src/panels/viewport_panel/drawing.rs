@@ -1,10 +1,11 @@
-//! The plate drawn each frame, and the ghost of what a click would place.
+//! The plate drawn each frame, and the ghost of what a click would place or a drag carries.
 
 use super::hollow::{blocker_ghost, channel_point_ghost, drain_ghost};
 use super::marks::marked;
 use super::overlays::{cut_line, draw_axis_letters};
 use super::picking::{aims_elsewhere, material_under, printed_under, surface_under};
 use super::support_ghost::cached_support_ghost;
+use super::supports::carried_ghost;
 use super::{GHOST_OPACITY, levels, picks_instead, text};
 use crate::drain::Placing;
 use crate::panels::{Window, section};
@@ -24,6 +25,9 @@ pub(super) fn ghost(
     rect: egui::Rect,
     pointer: &Pointer,
 ) -> Option<Ghost> {
+    if let Some(carried) = carried_ghost(window) {
+        return Some(carried);
+    }
     let removing = ui.input(|input| input.modifiers.alt) || picks_instead(ui);
     let line = ui.input(|input| input.modifiers.shift);
     let resting = !pointer.primary_down && !pointer.pan_button_down;
@@ -92,13 +96,10 @@ pub(super) fn paint_plate(
         .then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
-    let overhang_deg = window.tool.shows_overhangs().then_some(
-        window
-            .tools
-            .supports
-            .shown(&window.doc.scene)
-            .max_overhang_deg,
-    );
+    let overhang_deg = window
+        .tool
+        .shows_overhangs()
+        .then(|| window.tools.supports.shown_overhang_deg(&window.doc.scene));
     crate::render::prime_label(ui.painter());
     ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
     let hidden_groups = window.tools.supports.hidden();

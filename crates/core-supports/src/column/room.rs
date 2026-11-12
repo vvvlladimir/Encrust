@@ -1,4 +1,4 @@
-use super::{SURFACE_EPSILON_MM, face_normal, has_room};
+use super::{SURFACE_EPSILON_MM, face_normal, has_room, straight_neck};
 use crate::islands::MOVE_REACH_MM;
 use crate::placed::Placed;
 use core_geometry::{Ray, Scalar, Vec3, turns};
@@ -47,6 +47,36 @@ pub(super) fn roomier(placed: &Placed, contact: Vec3, profile: &SupportProfile) 
     roomy
 }
 
+/// How far a support with no room is moved along its face at its height to stand, mm: past
+/// [`MOVE_REACH_MM`], still well inside the spacing of the contacts round it (ADR 0429).
+const MOVE_FAR_MM: Scalar = 1.0;
+
+/// How many spots with room a support with no room is tried at, nearest first.
+const MOVED_TRIES: usize = 24;
+
+/// The nearest spots at `contact`'s height past where [`roomier`] looked, each with the neck of
+/// the straight head it has room for: where a support that stands nowhere else is moved to.
+pub(crate) fn moved<'a>(
+    placed: &'a Placed<'a>,
+    contact: Vec3,
+    profile: &'a SupportProfile,
+) -> impl Iterator<Item = (Vec3, Vec3)> + 'a {
+    spots(placed, contact, MOVE_FAR_MM)
+        .filter(move |spot| spot.distance(contact) > MOVE_REACH_MM && !placed.blocks_at(*spot))
+        .filter(move |spot| along_face(placed, contact, *spot))
+        .filter_map(move |spot| Some((spot, straight_neck(placed, spot, profile).ok()?)))
+        .take(MOVED_TRIES)
+}
+
+/// Whether `spot` is reached from `contact` along the face they sit on, under it by
+/// [`LEVEL_MM`]: a wall hanging between them parts what each holds.
+fn along_face(placed: &Placed, contact: Vec3, spot: Vec3) -> bool {
+    let from = contact - Vec3::Z * LEVEL_MM;
+    let to = spot - Vec3::Z * LEVEL_MM;
+    let ray = Ray::new(from, (to - from).normalize_or_zero());
+    placed.raycast_within(&ray, from.distance(to)).is_none()
+}
+
 /// The spots of faces looking down round `contact`, ring by ring out to `reach_mm`.
 fn spots<'a>(
     placed: &'a Placed<'_>,
@@ -64,19 +94,29 @@ fn spots<'a>(
 /// Whether the contact's circle round `contact` lies wholly on the face it sits on: a tip half
 /// over an edge cures onto the wall past it.
 fn seated(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
-    let Some(normal) = face_normal(placed, contact) else {
-        return true;
-    };
-    let radius_mm = profile.contact_radius_mm();
+    face_normal(placed, contact).is_none_or(|normal| {
+        seat_mm(placed, contact, normal, profile.contact_radius_mm()).is_some()
+    })
+}
+
+/// How far the face under the rim of a tip of `radius_mm` at `contact` rises towards its body
+/// along `normal`, mm, none below the contact; `None` when the rim leaves that face (ADR 0426).
+pub(crate) fn seat_mm(
+    placed: &Placed,
+    contact: Vec3,
+    normal: Vec3,
+    radius_mm: Scalar,
+) -> Option<Scalar> {
     let depth_mm = RIM_DEPTH * radius_mm;
     let across = normal.any_orthonormal_vector();
     let along = normal.cross(across);
-    turns(RIM_POINTS).all(|turn| {
+    turns(RIM_POINTS).try_fold(0.0, |seat_mm: Scalar, turn| {
         let rim = contact + (across * turn.x + along * turn.y) * radius_mm;
         let ray = Ray::new(rim + normal * depth_mm, -normal);
-        placed
+        let hit = placed
             .raycast_within(&ray, 2.0 * depth_mm)
-            .is_some_and(|hit| hit.normal.dot(normal) >= RIM_SAME_FACE_COS)
+            .filter(|hit| hit.normal.dot(normal) >= RIM_SAME_FACE_COS)?;
+        Some(seat_mm.max(depth_mm - hit.distance))
     })
 }
 
@@ -89,3 +129,6 @@ fn face_under(placed: &Placed, at: Vec3) -> Option<Vec3> {
         .filter(|hit| hit.normal.z < 0.0)
         .map(|hit| hit.point)
 }
+
+#[cfg(test)]
+mod tests;

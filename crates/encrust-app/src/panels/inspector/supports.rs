@@ -1,7 +1,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
-use core_supports::{Part, SupportTree};
+use core_supports::{Part, SupportTree, Unstood};
 
 use super::{paint, scope, shape, support_picker};
 use crate::i18n::tr;
@@ -114,7 +114,8 @@ pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Where an automatic run puts supports, and the lift of the one model picked.
+/// Where an automatic run puts supports, the lift of the one model picked, and the faces it
+/// holds sparser as the side meant to be seen.
 fn where_fields(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
         if window.tools.supports.auto.is_some() {
@@ -129,6 +130,8 @@ fn where_fields(ui: &mut egui::Ui, window: &mut Window) {
             lift_row(ui, &mut window.doc.scene, id);
         }
     });
+    let about = tr!("supports-clean-surface-about");
+    super::shown::clean_surface(ui, window, &about);
 }
 
 /// How far the one picked model stands off the plate, the same number as in Position.
@@ -152,31 +155,55 @@ fn lift_row(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// What has no room, then the run's progress, or the cavity's button for a hollow model
-/// over Fill painted areas over Grow (ADR 0336).
+/// Why supports were left out, then the run's progress, or the cavity's button for a hollow
+/// model over Fill painted areas over Grow (ADR 0336).
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
-    let (points, columns) = standing(window.doc);
+    let points = window
+        .doc
+        .scene
+        .targets()
+        .map(|object| object.supports.point_count())
+        .sum();
     // Trees still growing stand nothing yet, which is not a want of room.
     let growing = window
         .doc
         .scene
         .targets()
         .any(SceneObject::supports_pending);
-    if points != columns && !growing {
-        let line = tr!("supports-without-room", count = points - columns);
-        tone(
-            ui,
-            &format!("{} {line}", icon::WARNING),
-            theme::colors().text_mid,
-        );
-    }
+    let lost = if growing {
+        Vec::new()
+    } else {
+        lost(window.doc)
+    };
     if let Some(job) = window.tools.supports.job.as_ref() {
         running(ui, job);
         return;
     }
     cavity(ui, window);
     fill(ui, window);
-    grow(ui, window, points);
+    grow(ui, window, points, &lost);
+}
+
+/// A line with its count for each reason supports were left out (ADR 0429).
+fn lost(doc: &Doc) -> Vec<String> {
+    let mut reasons = Vec::new();
+    for why in [Unstood::HeadBlocked, Unstood::FacesUp, Unstood::NoGround] {
+        let count = doc
+            .scene
+            .targets()
+            .flat_map(|object| object.supports.lost())
+            .filter(|lost| lost.why == why)
+            .count();
+        if count == 0 {
+            continue;
+        }
+        reasons.push(match why {
+            Unstood::HeadBlocked => tr!("supports-lost-head-blocked", count = count),
+            Unstood::FacesUp => tr!("supports-lost-faces-up", count = count),
+            Unstood::NoGround => tr!("supports-lost-no-ground", count = count),
+        });
+    }
+    reasons
 }
 
 fn fill(ui: &mut egui::Ui, window: &mut Window) {
@@ -198,7 +225,7 @@ fn fill(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// Grow, and at its right the bin that takes every support away on a second click.
-fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
+fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize, lost: &[String]) {
     let blocker = (window.tools.supports.blocker(&window.doc.scene))
         .or_else(|| crate::prepare::holding(window.tools));
     let label = if points > 0 {
@@ -206,7 +233,13 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
     } else {
         tr!("supports-grow")
     };
-    let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
+    let what = std::iter::once(tr!(
+        "supports-grow-tooltip",
+        scope = window.doc.scene.scope()
+    ))
+    .chain(lost.iter().map(|line| format!("{} {line}", icon::WARNING)))
+    .collect::<Vec<_>>()
+    .join("\n");
     let mut all = false;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
@@ -268,18 +301,6 @@ fn auto_sizes(ui: &mut egui::Ui, window: &mut Window) {
     sizes(ui, auto, shipped.as_ref(), &shapes);
 }
 
-/// How many supports the plate carries, and how many of them have room to stand.
-fn standing(doc: &Doc) -> (usize, usize) {
-    doc.scene
-        .targets()
-        .fold((0, 0), |(points, columns), object| {
-            (
-                points + object.supports.point_count(),
-                columns + object.supports.standing(),
-            )
-        })
-}
-
 /// What the click has picked: how much of it, which groups it belongs to, and the
 /// three things that can be done to it without the mouse.
 fn editing(ui: &mut egui::Ui, window: &mut Window) {
@@ -311,6 +332,17 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         let tip = tr!("supports-remove-these");
         remove = bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, true);
     });
+    let one_model = supports
+        .first()
+        .map(|(id, _)| *id)
+        .filter(|id| supports.len() >= 2 && supports.iter().all(|(other, _)| other == id));
+    if let Some(id) = one_model {
+        ui.add_space(theme::BUTTON_GAP);
+        let width = ui.available_width();
+        if compact_button(ui, &tr!("supports-merge-these"), width).clicked() {
+            merge(window, id, &supports);
+        }
+    }
     if regroup {
         let active = window.tools.supports.active;
         for (id, frozen) in &supports {
@@ -329,6 +361,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
                 object.supports.thaw(*frozen, transform);
             }
         }
+        settle_riders(window, &supports);
         window.tools.supports.picked.clear();
     }
     if remove {
@@ -343,7 +376,60 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
                 object.supports.remove_parts(*frozen, &parts);
             }
         }
+        settle_riders(window, &supports);
         window.tools.supports.picked.clear();
+    }
+}
+
+/// Joins the picked supports of model `id` into one tree, or says on the stage why not (ADR 0440).
+fn merge(
+    window: &mut Window,
+    id: ObjectId,
+    picked: &std::collections::BTreeSet<(ObjectId, usize)>,
+) {
+    let Some(object) = window.doc.scene.get(id) else {
+        return;
+    };
+    let frozen: Vec<usize> = picked.iter().map(|(_, frozen)| *frozen).collect();
+    let table = window.tools.supports.table_for(object);
+    let Some(profiles) = core_supports::Profiles::new(&table) else {
+        return;
+    };
+    let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+    let placed = object.support_placed().blocking(keep_out.as_ref());
+    let merged = core_supports::merged(object.supports.frozen(), &frozen, &placed, profiles);
+    match merged {
+        Ok(tree) => {
+            if let Some(object) = window.doc.scene.get_mut(id) {
+                object.supports.replace_frozen(&frozen, tree);
+            }
+            settle_riders(window, picked);
+            window.tools.supports.picked.clear();
+        }
+        Err(why) => {
+            window.machine.status = Status::Info(merge_refused(why));
+        }
+    }
+}
+
+/// Why the picked supports could not be merged, as the stage says it.
+fn merge_refused(why: core_supports::Refused) -> String {
+    match why {
+        core_supports::Refused::Collides => tr!("supports-merge-refused-collides"),
+        core_supports::Refused::Leans => tr!("supports-merge-refused-leans"),
+        core_supports::Refused::NoFooting => tr!("supports-merge-refused-no-footing"),
+        core_supports::Refused::NoHold => tr!("supports-merge-refused-no-hold"),
+    }
+}
+
+/// Hands back to the automatic run what stood on the supports `edited` named, once they went.
+fn settle_riders(window: &mut Window, edited: &std::collections::BTreeSet<(ObjectId, usize)>) {
+    let mut ids: Vec<ObjectId> = edited.iter().map(|(id, _)| *id).collect();
+    ids.dedup();
+    for id in ids {
+        if let Some(object) = window.doc.scene.get_mut(id) {
+            window.tools.supports.thaw_unseated(object);
+        }
     }
 }
 
@@ -417,7 +503,7 @@ fn start(window: &mut Window, side: Side) {
         &mut window.doc.scene,
         window.machine.slicing.layer_height_mm(),
         &window.machine.slicing.catalogue,
-        side,
+        (side, window.tools.orient.settings.clean_surface),
     );
     window
         .machine

@@ -16,7 +16,7 @@ use crate::status::{Reading, Status};
 
 mod shown;
 
-pub use shown::{OrientState, ShownBrush};
+pub use shown::{OrientState, ShownBrush, shows_clean_surface};
 
 /// A turn this small is the model already standing the way it should.
 const SETTLED_DEG: f32 = 0.5;

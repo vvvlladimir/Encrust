@@ -1,5 +1,5 @@
 //! Supports from the command line, the window's sequence without hand placement: find contacts,
-//! columns, trunks, mesh, merge. See `docs/design/supports.md`.
+//! columns, trunks, mesh, merge, and Merge into one by points. See `docs/design/supports.md`.
 
 use std::fmt;
 use std::ops::Range;
@@ -8,9 +8,23 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use core_engine::SupportPlan;
 use core_geometry::{Mesh, Scalar, Vec3};
+use core_supports::Unstood;
 use core_volume::Drilled;
 
-use crate::hollowing::HollowReport;
+use crate::hollowing::{HollowReport, point};
+
+/// The points one `--merge-supports` names supports by, plate mm: two or more.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergePoints(pub Vec<Vec3>);
+
+/// `X,Y,Z;X,Y,Z…` as the points of one merge.
+pub fn merge_points(text: &str) -> Result<MergePoints, String> {
+    let points = text.split(';').map(point).collect::<Result<Vec<_>, _>>()?;
+    if points.len() < 2 {
+        return Err(format!("a merge names two supports or more, got {text:?}"));
+    }
+    Ok(MergePoints(points))
+}
 
 /// What automatic placement put under one model.
 pub struct SupportReport {
@@ -20,8 +34,9 @@ pub struct SupportReport {
     /// Where each contact touches the model, plate coordinates, millimetres.
     pub contacts: Vec<Vec3>,
     pub standing: usize,
-    /// The contacts the run found but could not stand a column under, plate millimetres.
-    pub unheld: Vec<Vec3>,
+    /// The contacts the run found but could not stand a column under, plate millimetres,
+    /// each with why.
+    pub unheld: Vec<(Vec3, Unstood)>,
     pub trees: usize,
     pub faces: usize,
 }
@@ -46,7 +61,22 @@ impl fmt::Display for SupportReport {
         if self.unsupported() > 0 {
             writeln!(f, "  no room for    {}", self.unsupported())?;
         }
+        for why in [Unstood::HeadBlocked, Unstood::FacesUp, Unstood::NoGround] {
+            let count = self.unheld.iter().filter(|(_, lost)| *lost == why).count();
+            if count > 0 {
+                writeln!(f, "    {:<13}{count}", why_named(why).replace('-', " "))?;
+            }
+        }
         writeln!(f)
+    }
+}
+
+/// How the report names why a contact has no support, in the terminal and in `--json`.
+pub fn why_named(why: Unstood) -> &'static str {
+    match why {
+        Unstood::HeadBlocked => "head-blocked",
+        Unstood::FacesUp => "faces-up",
+        Unstood::NoGround => "no-ground",
     }
 }
 
@@ -135,7 +165,7 @@ fn reported(stood: core_engine::Stood) -> (SupportReport, Mesh) {
     let unheld = stood
         .unheld
         .iter()
-        .filter_map(|&contact| stood.contacts.get(contact).copied())
+        .filter_map(|lost| Some((*stood.contacts.get(lost.point)?, lost.why)))
         .collect();
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,

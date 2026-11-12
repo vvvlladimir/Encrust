@@ -332,6 +332,11 @@ supports-placing-fill = Fill
 supports-placing-block = Block
 supports-placing-erase = Erase
 supports-nothing-visible = Nothing visible on the plate to hold up.
+# Beside the cursor while a carried support is refused: what stops it standing there.
+supports-refused-collides = Touches the model
+supports-refused-leans = Leans too far
+supports-refused-no-footing = Nowhere for the foot to stand
+supports-refused-no-hold = No surface for the tip to hold
 supports-nothing-visible-error = nothing visible on the plate to hold up
 supports-placed =
     { $count ->
@@ -376,21 +381,30 @@ supports-removed-inside =
        *[other] Took { $count } supports out of the cavities
     }
 supports-where = Where
+supports-clean-surface-about = Paint the faces meant to be seen. An automatic run sets the contact spacing wider there and uses its lightest tips.
 supports-picked = Picked
-supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
+supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand. Merge joins supports of one model into a single tree on one trunk.
 supports-stat-parts = Parts
 supports-stat-supports = Supports
 supports-move-to-group = To the group
 supports-grow-these-again = Grow again
+supports-merge-these = Merge into one
+supports-merge-refused-collides = These supports cannot be merged: the model is in the way.
+supports-merge-refused-leans = These supports cannot be merged: a strut would lean too far.
+supports-merge-refused-no-footing = These supports cannot be merged: the trunk has nowhere to stand.
+supports-merge-refused-no-hold = These supports cannot be merged: a tip has no surface to hold.
 supports-remove-these = Remove these supports
 supports-grow-again = Grow them again
 supports-grow = Grow the supports
 supports-grow-tooltip = Cuts { $scope } to find what hangs over nothing.
 supports-placing = Placing supports
 supports-sizes = Sizes
+support-sizes-help = A support is built heavier where it holds more. A support's share is the volume of model above its tip under an island or overhang, divided among it and every support above it; a step is sized by the resin it puts out in one layer. Each value is the least at which a support is built to that shape.
+support-islands-help = Tips under a small island stand closer together than the contact spacing. From the first area below they stand wider apart, and from the second at the full spacing.
+support-island-wider = Wider island spacing from
+support-island-full = Full island spacing from
 supports-place = Place
-support-size-island = Island for { $shape }
-support-size-load = Load for { $shape }
+support-size-share = Share for { $shape }
 support-size-step = Step for { $shape }
 support-group-steps = Steps
 support-group-steadying = Steadying
@@ -409,10 +423,20 @@ supports-mode-pick = Pick supports
 supports-mode-place = Place supports
 supports-mode-area = Paint or block an area
 supports-mode-shape = Shape of the supports
-supports-without-room =
+supports-lost-head-blocked =
     { $count ->
-        [one] { $count } support has no room to stand
-       *[other] { $count } supports have no room to stand
+        [one] { $count } support has no room for its tip
+       *[other] { $count } supports have no room for their tips
+    }
+supports-lost-faces-up =
+    { $count ->
+        [one] { $count } support is on a face that looks up
+       *[other] { $count } supports are on faces that look up
+    }
+supports-lost-no-ground =
+    { $count ->
+        [one] { $count } support has nothing to stand on
+       *[other] { $count } supports have nothing to stand on
     }
 supports-drop-preset =
     { $count ->
@@ -2681,6 +2705,7 @@ hint-relief-write = a model to write there
 hint-pick-without-writing = pick without writing
 hint-supports-pick = a part of a support to pick it
 hint-supports-carry = carry what is picked
+hint-supports-level = carry across the plate
 hint-supports-add = add to what is picked
 hint-hollow-solid = the model to keep it solid there
 hint-hollow-rod = a rod on from the last blocker

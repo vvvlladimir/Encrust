@@ -306,20 +306,21 @@ impl Standing {
     }
 
     /// Puts a support at `at` under `piece` at height `z`, holding a ball of `reach_mm`, unless
-    /// one under the same piece holds that place; returns the contact placed.
+    /// one under the same piece holds that place, within `within_mm` of it where given.
     pub(super) fn take(
         &mut self,
         piece: Option<u32>,
         at: Vec2,
         z: Scalar,
         reach_mm: Scalar,
+        within_mm: Option<Scalar>,
     ) -> Option<Vec3> {
         let contact = at.extend(z);
         let Some(piece) = piece.filter(|piece| (*piece as usize) < self.held.len()) else {
             return Some(contact);
         };
         let held = &mut self.held[piece as usize];
-        if held.holds(at, z, self.above_mm) {
+        if held.holds(at, z, self.above_mm, within_mm.unwrap_or(Scalar::INFINITY)) {
             return None;
         }
         held.add(contact, reach_mm);

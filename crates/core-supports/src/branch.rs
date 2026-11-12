@@ -11,14 +11,21 @@ use crate::column::{Column, MAX_LEAN_PER_DROP, has_head, landing};
 use crate::group::Profiles;
 use crate::tree::{SupportTree, TreeNode};
 
+mod alone;
 mod carriers;
 mod ground;
 mod harvest;
 mod merge;
+mod rescue;
+mod shortcut;
 mod small;
 mod sound;
 mod speculate;
+pub(crate) use alone::grown_alone;
+pub(crate) use carriers::{Carrier, meeting_on};
 use carriers::{Carriers, THICKER_BY_MM};
+pub(crate) use merge::{lower, meeting_point};
+use rescue::rescue;
 use small::tidy_small_pillars;
 use sound::{only_sound, stand_small_pillars_on_supports};
 
@@ -26,15 +33,31 @@ use sound::{only_sound, stand_small_pillars_on_supports};
 /// carries no information. Well under one pixel of any panel.
 const SAME_PLACE_MM: Scalar = 1e-4;
 
+/// The most branches that meet at one joint: past three a joint is a star of levers on one
+/// point, and the next tip gets a joint of its own lower down (ADR 0430).
+const MOST_BRANCHES: usize = 3;
+
 /// Merges the tips of `columns` (plate coordinates) into shared trunks, highest meeting point
 /// first (ADR 0040); same-width groups grow together, thickest first (ADR 0325, 0248).
 pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<SupportTree> {
+    grow_beside(columns, &[], placed, profiles)
+}
+
+/// [`grow`] beside `standing` (plate), frozen supports a thinner front may run into as into a
+/// thicker group's, never grown again (ADR 0439).
+pub fn grow_beside(
+    columns: &[Column],
+    standing: &[SupportTree],
+    placed: &Placed,
+    profiles: Profiles,
+) -> Vec<SupportTree> {
     let reach_mm = profiles
         .groups()
         .map(|(_, profile)| profile.branching.max_merge_distance_mm)
         .fold(SAME_PLACE_MM, Scalar::max);
 
     let mut carriers = Carriers::new(reach_mm);
+    carriers.take(standing, profiles);
     let mut forest = Vec::new();
     for family in families(profiles) {
         let mine: Vec<Column> = columns
@@ -52,8 +75,9 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
         carriers.take(&trees, profiles);
         forest.extend(trees);
     }
-    stand_small_pillars_on_supports(&mut forest, &carriers, placed, profiles);
+    stand_small_pillars_on_supports(&mut forest, &mut carriers, placed, profiles);
     tidy_small_pillars(&mut forest, placed, profiles);
+    rescue(&mut forest, columns, placed, profiles, &mut carriers);
     forest.sort_by_key(SupportTree::group);
     forest
 }
@@ -116,6 +140,7 @@ fn grow_one(
         if forest.bend_blocked(placed) {
             forest.merge(placed);
         }
+        forest.shortcut(placed);
     }
     forest.harvest(placed)
 }
@@ -190,6 +215,8 @@ struct Front {
     /// The group of the heaviest head it carries, which what is under it is built to.
     group: u16,
     node: usize,
+    /// How many branches hang at `node`; a joint takes no more than [`MOST_BRANCHES`].
+    branches: usize,
     alive: bool,
 }
 
@@ -203,7 +230,7 @@ struct Forest<'a> {
     /// The fronts that ran into a carrier, each with where: trees with no trunk of their
     /// own.
     landed: Vec<(usize, Landing)>,
-    /// Tips landed on each tree of `carriers` so far, on top of its own.
+    /// Tips this forest landed on each tree of `carriers`, on top of what trees stood before it did.
     carried: FastMap<usize, usize>,
     /// Fronts bucketed by plate square so a new one asks nine buckets; dead fronts stay and are
     /// skipped, so entries never exceed twice the number of tips.
@@ -257,6 +284,7 @@ impl<'a> Forest<'a> {
                 tips: 1,
                 group: column.group,
                 node,
+                branches: usize::from(headed),
                 alive: true,
             });
         }
@@ -287,7 +315,7 @@ impl<'a> Forest<'a> {
 
 /// Ground a leaning trunk (a knee or a strut into a thicker support) covers per mm it descends:
 /// the profile's branch angle, never past 45 degrees (ADR 0249).
-fn lean_per_drop(profile: &SupportProfile) -> Scalar {
+pub(crate) fn lean_per_drop(profile: &SupportProfile) -> Scalar {
     profile.branching.reach_per_drop().min(MAX_LEAN_PER_DROP)
 }
 

@@ -1,6 +1,6 @@
 # 0339. Let only a tip meet the model: a half ball seated on its face, its head square on or behind a pin
 
-- **Status:** Accepted
+- **Status:** Accepted; a head with no room is turned within 33 degrees or its contact stepped up to 1 mm by 0429
 - **Date:** 2026-10-24
 
 ## Context

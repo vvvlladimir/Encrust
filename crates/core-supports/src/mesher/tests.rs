@@ -1,4 +1,6 @@
-use super::foot::{FLARE_RINGS, FOOT_BEVEL, FOOT_BITE, flare, foot, trunk_base_mm, trunk_bottom};
+use super::foot::{
+    FLARE_RINGS, FOOT_BITE, flare, foot, foot_bevel_mm, trunk_base_mm, trunk_bottom,
+};
 use super::*;
 use crate::Landing;
 use crate::SupportPoint;
@@ -171,6 +173,7 @@ fn under_a_slab(beside: &[Mesh]) -> (Mesh, SupportTree) {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     (model, SupportTree::new(nodes, 1, landing))
 }
@@ -265,7 +268,7 @@ fn the_volume_matches_the_cones_and_cylinders_it_is_made_of() {
     let pillar_r = profile.pillar_radius_mm();
     let base_r = profile.base_radius_mm();
     let foot_h = profile.bottom.platform_thickness_mm;
-    let bevel = foot_h * FOOT_BEVEL;
+    let bevel = foot_bevel_mm(&profile);
     let rim_r = base_r - bevel;
     let trunk_bottom = profile.bottom.platform_thickness_mm - foot_h * FOOT_BITE;
 
@@ -362,6 +365,104 @@ fn a_flare_never_rises_above_the_pillar_it_widens() {
         diagnose(&meshed(&trees, Profiles::single(&profile))).boundary_edges,
         0
     );
+}
+
+#[test]
+fn a_flare_meets_a_trunk_narrowing_upwards_at_the_trunks_own_width() {
+    // Two tips 8 mm apart merge 4 mm down into a trunk wider at its foot than at its joint,
+    // high enough over the plate for the merge to be worth it (ADR 0430).
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let slab = box_mesh(Vec3::new(-10.0, -10.0, 16.0), Vec3::new(10.0, 10.0, 18.0));
+    let points = [
+        SupportPoint::new(Vec3::new(-4.0, 0.0, 16.0)),
+        SupportPoint::new(Vec3::new(4.0, 0.0, 16.0)),
+    ];
+    let trees = trees_on(
+        &points,
+        &slab,
+        Transform::default(),
+        Profiles::single(&profile),
+    );
+    let tree = trees
+        .iter()
+        .find(|tree| tree.tip_count() == 2)
+        .expect("the tips merge");
+    let style = Style::of(tree, &profile);
+    assert!(
+        trunk_base_mm(tree, &profile, style) > tree.root().radius_mm + 0.05,
+        "the trunk widens going down"
+    );
+    let tube = flare(tree, &profile, style).expect("the trunk is tall enough for a fillet");
+    let trunk_mm = trunk_radius_at_mm(tree, &profile, tube.top.z);
+    assert!(
+        (tube.rings[0].radius_mm - trunk_mm).abs() < 1e-4,
+        "no ledge where the fillet ends: {} mm against the trunk's {trunk_mm} mm there",
+        tube.rings[0].radius_mm
+    );
+}
+
+#[test]
+fn a_lone_tip_shorter_than_its_head_over_its_pad_is_one_cone_with_no_neck() {
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let contact_z = 2.5;
+    let part = box_mesh(Vec3::new(-3.0, -3.0, contact_z), Vec3::new(3.0, 3.0, 4.0));
+    let profiles = Profiles::single(&profile);
+    let trees = trees_on(
+        &[SupportPoint::new(Vec3::new(0.0, 0.0, contact_z))],
+        &part,
+        Transform::default(),
+        profiles,
+    );
+    let mesh = meshed(&trees, profiles);
+    let pad_top = profile.footing_height_mm();
+    // The head's cone from the contact's width to the pillar's over the drop to the pad.
+    let cone_mm = |z: Scalar| {
+        let share = (contact_z - z) / (contact_z - pad_top);
+        profile.contact_radius_mm()
+            + (profile.pillar_radius_mm() - profile.contact_radius_mm()) * share
+    };
+    for vertex in mesh
+        .vertices
+        .iter()
+        .filter(|vertex| vertex.z > pad_top + 0.01)
+    {
+        assert!(
+            vertex.truncate().length() <= cone_mm(vertex.z) + 0.02,
+            "nothing bulges out of the cone: {vertex} against {} mm",
+            cone_mm(vertex.z)
+        );
+    }
+}
+
+#[test]
+fn a_flare_under_a_leaning_trunk_rings_its_axis() {
+    let profile = profile();
+    let mut trees = column_on_plate(10.0, &profile);
+    trees[0].move_landing(Vec3::new(13.0, 10.0, 0.0));
+    let tree = &trees[0];
+    let style = Style::of(tree, &profile);
+    let tube = flare(tree, &profile, style).expect("a tall trunk has room for a fillet");
+    let mesh = meshed(&trees, Profiles::single(&profile));
+    let pad_top = profile.footing_height_mm();
+    // Inside the fillet only its rings have vertices, each ring at one height.
+    for ring in tube.rings.iter().filter(|ring| ring.along_mm > 0.01) {
+        let z = tube.top.z - ring.along_mm;
+        if z <= pad_top + 0.01 {
+            continue;
+        }
+        let at: Vec<Vec3> = mesh
+            .vertices
+            .iter()
+            .filter(|vertex| (vertex.z - z).abs() < 1e-4)
+            .copied()
+            .collect();
+        let centre = at.iter().copied().sum::<Vec3>() / at.len() as Scalar;
+        let axis = trunk_axis_at(tree, &profile, z);
+        assert!(
+            (centre - axis).truncate().length() < 1e-3,
+            "the ring {z} mm up is round the trunk at {axis}, not at {centre}"
+        );
+    }
 }
 
 #[test]
@@ -670,6 +771,7 @@ fn strut_end_past_joint(trunk_radii: Scalar) -> Option<Scalar> {
         pad_offset: Vec2::ZERO,
         pad_cut: None,
         on_support: false,
+        in_plate: false,
     };
     let tree = SupportTree::new(nodes, 1, landing);
     let tube = strut(&tree, 0, 1, &profile, Style::of(&tree, &profile));
@@ -1366,10 +1468,34 @@ fn a_plate_with_skates_a_raft_and_bracing_is_still_closed() {
 }
 
 #[test]
+fn a_straight_pads_wall_stands_at_forty_five_degrees_off_the_plate() {
+    let profile = profile();
+    assert!(
+        !profile.bottom.shape.tapers(),
+        "the fixture's pad is straight"
+    );
+    let mesh = one_column(&profile);
+    let axis = Vec2::new(10.0, 10.0);
+    let widest_at = |z: Scalar| {
+        mesh.vertices
+            .iter()
+            .filter(|vertex| (vertex.z - z).abs() < 1e-4)
+            .map(|vertex| (vertex.truncate() - axis).length())
+            .fold(0.0, Scalar::max)
+    };
+    let height = profile.bottom.platform_thickness_mm;
+    let pulled_in = widest_at(height) - widest_at(0.0);
+    assert!(
+        (pulled_in - height).abs() < 1e-3,
+        "a {height} mm pad pulls in {height} mm at 45 degrees, got {pulled_in} mm"
+    );
+}
+
+#[test]
 fn nothing_of_a_support_shows_through_the_bottom_of_its_foot() {
     let profile = profile();
     let mesh = one_column(&profile);
-    let rim = profile.base_radius_mm() - profile.bottom.platform_thickness_mm * FOOT_BEVEL;
+    let rim = profile.base_radius_mm() - foot_bevel_mm(&profile);
     let axis = Vec3::new(10.0, 10.0, 0.0);
 
     for vertex in &mesh.vertices {

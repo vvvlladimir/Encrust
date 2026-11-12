@@ -21,8 +21,6 @@ const EXPOSURE_LEVEL: usize = 1;
 /// How much an open face shows with no detail at all: a scar on a smooth face still shows.
 const SMOOTH_SHOWS: Scalar = 1.0 / 3.0;
 
-// TODO(step-3): `core-supports` placement moves contacts off prominent faces (ADR 0409).
-
 /// How much each face of a mesh shows on the finished model, from 0 hidden in a fold to 1
 /// open and finely detailed: where a support's scar costs most. See `docs/design/prominence.md`.
 #[derive(Debug, Clone, Default, PartialEq)]

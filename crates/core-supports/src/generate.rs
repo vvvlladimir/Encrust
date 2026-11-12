@@ -13,7 +13,7 @@ use crate::field::{Field, Grid, Parts};
 use crate::islands::{grid_of, hold_islands};
 use crate::load::{Load, Mark};
 use crate::need::{Need, Reason};
-use crate::region::Blocked;
+use crate::region::{Blocked, Shown};
 use crate::sample::{sample_piece, sample_stance};
 use crate::step::Zones;
 
@@ -22,6 +22,9 @@ mod standing;
 mod wanted;
 use standing::Standing;
 use wanted::{Flatness, On, Wanted};
+
+/// How much further apart contacts stand on the side meant to be seen, ADR 0425.
+const SHOWN_SPACING: Scalar = 1.3;
 
 /// How many supports a part stands steady on: fewer hold it and let it rock on the peel.
 const STEADY: u8 = 3;
@@ -41,18 +44,24 @@ pub fn generate_supports(
     seeds: &[Vec3],
     lows: &[Vec3],
     blocked: Option<&Blocked>,
+    shown: Option<&Shown>,
     progress: &mut dyn FnMut(usize) -> bool,
 ) -> Vec<Need> {
     let Some(grid) = grid_of(stack, GRID_PITCH_MM) else {
         return Vec::new();
     };
     let config = SampleConfig::for_profile(profile);
-    let pass = Pass::new(&grid, &config, profile, sizing, layer_height_mm, blocked);
+    let mut pass = Pass::new(&grid, &config, profile, sizing, layer_height_mm, blocked);
+    pass.shown = shown;
     let mut run = Run::new(&pass, seeds, lows);
     if run.climb(stack, &pass, progress) {
         run.hold_islands(stack, &pass, seeds, lows);
     }
-    needs(run.placed, &run.load)
+    let mut needs = needs(run.placed, &run.load);
+    for need in &mut needs {
+        need.shown = pass.on_shown(need.contact);
+    }
+    needs
 }
 
 impl<'a> Pass<'a> {
@@ -78,6 +87,7 @@ impl<'a> Pass<'a> {
                 .max(profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM),
             stance_mm: config.spacing_mm,
             blocked,
+            shown: None,
             sizing,
         }
     }
@@ -190,28 +200,39 @@ impl Run {
         for ((contact, _), moved) in self.placed.iter_mut().zip(contacts) {
             *contact = moved;
         }
-        let islands = added
-            .into_iter()
-            .map(|(at, area_mm2)| (at, Why::Island { area_mm2 }));
+        let islands = added.into_iter().map(|(at, area_mm2)| {
+            (
+                at,
+                Why::Island {
+                    area_mm2,
+                    mark: None,
+                },
+            )
+        });
         self.placed.extend(islands);
     }
 }
 
-/// What was placed, with the model above each overhang contact now that all of it is known.
+/// What was placed, with each overhang contact's share of the model above it now that all of
+/// it is known.
 fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
-    let totals = load.totals();
+    let marks: Vec<Mark> = placed.iter().filter_map(|(_, why)| why.mark()).collect();
+    let mut shares = load.shares(&marks).into_iter();
     placed
         .into_iter()
-        .map(|(contact, why)| Need {
-            contact,
-            reason: match why {
-                Why::Island { area_mm2 } => Reason::Island { area_mm2 },
+        .map(|(contact, why)| {
+            let reason = match why {
+                Why::Island { area_mm2, mark } => Reason::Island {
+                    area_mm2,
+                    share_mm3: mark.and_then(|_| shares.next()).unwrap_or(0.0),
+                },
                 Why::Overhang(mark) => Reason::Overhang {
-                    carried_mm3: mark.map_or(0.0, |mark| mark.above_mm3(&totals)),
+                    share_mm3: mark.and_then(|_| shares.next()).unwrap_or(0.0),
                 },
                 Why::Step { new_mm3 } => Reason::Step { new_mm3 },
                 Why::Steady => Reason::Steady,
-            },
+            };
+            Need::new(contact, reason)
         })
         .collect()
 }
@@ -219,10 +240,25 @@ fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
 /// Why a contact was put down, while what stands above it is still being read.
 #[derive(Debug, Clone, Copy)]
 enum Why {
-    Island { area_mm2: Scalar },
+    Island {
+        area_mm2: Scalar,
+        mark: Option<Mark>,
+    },
     Overhang(Option<Mark>),
-    Step { new_mm3: Scalar },
+    Step {
+        new_mm3: Scalar,
+    },
     Steady,
+}
+
+impl Why {
+    /// Where on the graph of what stands on what a contact holding a share of it was put.
+    fn mark(&self) -> Option<Mark> {
+        match self {
+            Self::Island { mark, .. } | Self::Overhang(mark) => *mark,
+            Self::Step { .. } | Self::Steady => None,
+        }
+    }
 }
 
 /// What one layer is put down against: the supports standing so far, the graph of what
@@ -239,18 +275,21 @@ struct Placing<'a> {
 }
 
 /// Why a support goes on a cell that is `on`, touching at `contact`: what a step below
-/// reaches is that step's, whatever leans there; `overhang` marks an overhang's load.
-fn why_of(on: On, zones: &Zones, contact: Vec3, overhang: impl FnOnce() -> Option<Mark>) -> Why {
+/// reaches is that step's, whatever leans there; `mark` places an island's or overhang's load.
+fn why_of(on: On, zones: &Zones, contact: Vec3, mark: impl FnOnce() -> Option<Mark>) -> Why {
     let reached = match on {
         On::Overhang | On::Gentle => zones.reaching(contact),
         On::Island(_) | On::Step(_) | On::Slope => None,
     };
     match (on, reached) {
-        (On::Island(area_mm2), _) => Why::Island { area_mm2 },
+        (On::Island(area_mm2), _) => Why::Island {
+            area_mm2,
+            mark: mark(),
+        },
         (On::Step(new_mm3), _) | (On::Overhang | On::Gentle, Some(new_mm3)) => {
             Why::Step { new_mm3 }
         }
-        (On::Overhang, None) => Why::Overhang(overhang()),
+        (On::Overhang, None) => Why::Overhang(mark()),
         (On::Gentle, None) | (On::Slope, _) => Why::Steady,
     }
 }
@@ -279,6 +318,7 @@ struct Pass<'a> {
     /// How far across a part has to be before the supports that steady it are put down.
     stance_mm: Scalar,
     blocked: Option<&'a Blocked>,
+    shown: Option<&'a Shown>,
     /// The automatic profile steps are held and sized by, or `None` to hold them as
     /// overhangs.
     sizing: Option<&'a AutoProfile>,
@@ -329,7 +369,9 @@ impl Pass<'_> {
             .into_iter()
             .map(|(cell, area_mm2)| (cell, anywhere, On::Island(area_mm2)));
         let mut stepped = Vec::new();
-        for (cell, coverage_mm, on) in adrift.chain(wanted.cells) {
+        let ends = wanted.ends.into_iter().map(|want| (want, Some(want.1)));
+        let wants = adrift.chain(wanted.cells).map(|want| (want, None));
+        for ((cell, coverage_mm, on), within_mm) in wants.chain(ends) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
             let contact = at.extend(contact_mm);
             let piece = parts.at(cell[0], cell[1]);
@@ -349,7 +391,12 @@ impl Pass<'_> {
                 standing.leave(piece);
                 continue;
             }
-            let taken = standing.take(piece, at, contact_mm, coverage_mm);
+            let coverage_mm = if self.on_shown(contact) {
+                self.sparser(coverage_mm)
+            } else {
+                coverage_mm
+            };
+            let taken = standing.take(piece, at, contact_mm, coverage_mm, within_mm);
             if let Some(contact) = taken.filter(|_| steadies) {
                 steadied.add(contact, self.steady_mm(), 0.0);
             }
@@ -385,7 +432,10 @@ impl Pass<'_> {
         contact_mm: Scalar,
         placed: &mut Vec<(Vec3, Why)>,
     ) {
-        let point = Why::Island { area_mm2: 0.0 };
+        let point = Why::Island {
+            area_mm2: 0.0,
+            mark: None,
+        };
         for (piece, tip) in self.hanging(standing, contact_mm) {
             if self.refuses(tip) {
                 standing.leave(Some(piece));
@@ -428,6 +478,19 @@ impl Pass<'_> {
     fn steady_mm(&self) -> Scalar {
         self.sizing
             .map_or(0.0, |auto| self.config.coverage_at(auto.steady_spacing_mm))
+    }
+
+    /// What `coverage_mm` keeps away once the spacing it stands for is [`SHOWN_SPACING`] wider.
+    fn sparser(&self, coverage_mm: Scalar) -> Scalar {
+        let short_mm = self.config.spacing_mm - self.config.coverage_radius_mm;
+        self.config
+            .coverage_at((coverage_mm + short_mm) * SHOWN_SPACING)
+    }
+
+    /// Whether `contact` touches the side the user painted to be seen.
+    fn on_shown(&self, contact: Vec3) -> bool {
+        self.shown
+            .is_some_and(|shown| shown.covers(contact, self.keep_out_mm))
     }
 
     /// Whether the user has painted supports out of where `contact` would touch.

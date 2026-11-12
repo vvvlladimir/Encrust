@@ -25,6 +25,8 @@ pub struct Pointer {
     /// The secondary or middle button, either of which pans.
     pub pan_button_down: bool,
     pub shift: bool,
+    /// Option on a Mac, Alt elsewhere.
+    pub alt: bool,
     /// Cmd on a Mac, Ctrl elsewhere: a click with it held picks the model in every tool.
     pub command: bool,
     pub delta: Vec2,
@@ -42,6 +44,7 @@ impl Pointer {
             primary_down: false,
             pan_button_down: false,
             shift: false,
+            alt: false,
             command: false,
             delta: Vec2::ZERO,
             scroll: 0.0,

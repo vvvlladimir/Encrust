@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use core_engine::project::{AutoSizing, FillProfiles};
-use core_geometry::{Scalar, Vec2, Vec3};
-use core_supports::{Part, ProjectSettings, SupportTree};
+use core_geometry::{Mesh, Scalar, Vec2, Vec3};
+use core_supports::{Part, ProjectSettings, Refused, SupportTree};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
@@ -108,6 +110,32 @@ pub struct Picked {
     pub part: Part,
 }
 
+/// A drag carrying what is picked, measured from where it was taken hold of (ADR 0435).
+#[derive(Debug, Clone)]
+pub struct Carry {
+    /// The point of the part the cursor took, on the drag's plane, plate mm.
+    pub from: Vec3,
+    /// How far the supports stand carried in the scene, plate mm: the last place they may stand.
+    pub taken: Vec3,
+    /// How far the cursor last asked them to go, or where for a lone tip, plate mm; NaN before
+    /// it has asked.
+    pub aimed: Vec3,
+    /// Level with the plate rather than square to the camera: Alt is held.
+    pub level: bool,
+    /// The frozen supports of each object held on, as they stood when the drag began.
+    pub before: Vec<(ObjectId, Vec<SupportTree>)>,
+    /// What the last step moved on each object, each tree with its index, model space: a foot
+    /// keeps to what it stood on there, so a drag does not flicker between plate and model.
+    pub last: Vec<(ObjectId, Vec<(usize, SupportTree)>)>,
+    /// What is held where the cursor puts it, plate coordinates, drawn while it is lifted.
+    pub shown: Option<Arc<Mesh>>,
+    /// The group whose tint `shown` is drawn in.
+    pub group: u16,
+    /// Why the model refuses where the cursor puts it: `shown` is drawn as refused, and the scene
+    /// keeps them where they last could stand.
+    pub refused: Option<Refused>,
+}
+
 /// What the Supports tool places with, and the automatic run it has going.
 #[derive(Debug)]
 pub struct SupportTool {
@@ -121,9 +149,8 @@ pub struct SupportTool {
     /// The parts the Edit mode is working on. Several at once: a drag carries all of
     /// them by the same step.
     pub picked: Vec<Picked>,
-    /// Where the part under the cursor stood when the drag began, in plate coordinates,
-    /// so that every step is measured from the same place.
-    pub anchor: Option<Vec3>,
+    /// The drag carrying what is picked, while one is going.
+    pub carry: Option<Carry>,
     pub placing: Placing,
     /// Radius of the brush, millimetres of plate.
     pub brush_radius_mm: Scalar,
@@ -155,6 +182,8 @@ pub struct SupportTool {
     parked_auto: Option<AutoProfile>,
     /// What the run going sizes its supports by, and the shapes it sizes them into.
     sizing: Option<Sizing>,
+    /// The groups the run going grows again: what stands in them goes when it lands.
+    regrowing: Vec<u16>,
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
@@ -175,7 +204,7 @@ impl Default for SupportTool {
             }],
             active: 0,
             picked: Vec::new(),
-            anchor: None,
+            carry: None,
             placing: Placing::default(),
             brush_radius_mm: 2.0,
             flood_angle_deg: 30.0,
@@ -190,6 +219,7 @@ impl Default for SupportTool {
             auto: None,
             parked_auto: None,
             sizing: None,
+            regrowing: Vec::new(),
             raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,

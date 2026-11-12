@@ -32,6 +32,8 @@ const BUMP_MM: f32 = 1.0;
 const BUMP_PITCH_MM: f32 = 1.6;
 /// A block's number stands past its corner in bumps twice as tall as a row's.
 const BLOCK_BUMP_MM: f32 = 2.0;
+/// Each tie along a row, millimetres: wide enough to meet every pad of the row.
+const TIE_MM: f32 = 3.0;
 
 /// A coupon as its spec file states it.
 #[derive(Debug, Clone, Deserialize)]
@@ -41,6 +43,10 @@ pub struct Spec {
     pub shapes: Vec<TipShape>,
     #[serde(rename = "block")]
     pub blocks: Vec<Block>,
+    /// Whether each row's pads are tied to its block's rail by a bar as thin as a pad, so the
+    /// block leaves the plate whole and each specimen keeps its place.
+    #[serde(default)]
+    pub tied: bool,
 }
 
 /// One way of making a tip: a row of every block that names it.
@@ -200,19 +206,55 @@ pub fn build(
 pub fn coupon(spec: &Spec, built: &[Built], centre: Vec2) -> Result<Mesh> {
     let specimens = layout(spec, centre);
     let mut whole = Mesh::default();
-    for built in built {
-        append(&mut whole, &built.supported.model);
-        append(&mut whole, &built.supported.supports);
-    }
     for (index, block) in spec.blocks.iter().enumerate() {
+        let mut part = Mesh::default();
+        for (_, built) in specimens
+            .iter()
+            .zip(built)
+            .filter(|(specimen, _)| specimen.block == index)
+        {
+            append(&mut part, &built.supported.model);
+            append(&mut part, &built.supported.supports);
+        }
         let first = specimens
             .iter()
             .find(|specimen| specimen.block == index)
             .context("every block has a specimen")?;
         let size = (spec.rows(block).len(), block.holders.len());
-        append(&mut whole, &rulers(first.at, size, index + 1));
+        append(&mut part, &rulers(first.at, size, index + 1));
+        if spec.tied {
+            let pad_mm = built
+                .first()
+                .context("a block has a specimen")?
+                .profile
+                .bottom
+                .platform_thickness_mm;
+            let rows: Vec<f32> = (0..size.0)
+                .map(|row| first.at.y + row as f32 * PITCH_MM)
+                .collect();
+            let last = first.at.x + PITCH_MM * (size.1 as f32 - 1.0);
+            for [low, high] in ties(first.at.x - RULER_OFFSET_MM, last, &rows) {
+                append(&mut part, &cuboid(low.extend(0.0), high.extend(pad_mm)));
+            }
+        }
+        append(&mut whole, &part);
     }
     Ok(whole)
+}
+
+/// The ties of a block on the plate, each its corners: one along every row from the rail at
+/// `rail_x` to its last specimen at `last_x`. Nothing joins two rows, so no ring cures on the
+/// plate to hold the film like a cup.
+fn ties(rail_x: f32, last_x: f32, rows: &[f32]) -> Vec<[Vec2; 2]> {
+    let half = TIE_MM / 2.0;
+    rows.iter()
+        .map(|&y| {
+            [
+                Vec2::new(rail_x, y - half),
+                Vec2::new(last_x + half, y + half),
+            ]
+        })
+        .collect()
 }
 
 /// `base` with its tip made to `shape`, and nothing that would tie two specimens together.
@@ -225,7 +267,7 @@ fn profile_for(base: &SupportProfile, shape: &TipShape) -> SupportProfile {
     profile.tip.contact_depth_mm = shape.bite_mm;
     profile.top.length_mm = shape.cone_mm;
     profile.middle.diameter_mm = shape.join_mm;
-    profile.bottom.lower_diameter_mm = profile.bottom.lower_diameter_mm.max(shape.join_mm);
+    profile.bottom.lower_diameter_mm = profile.bottom.lower_diameter_mm.max(2.0 * shape.join_mm);
     profile
 }
 
@@ -283,12 +325,15 @@ fn supported(profile: &SupportProfile, body: Mesh, points: Vec<Vec3>) -> Result<
     Ok(Supported {
         model: body,
         groups: vec![0; points.len()],
+        reasons: Vec::new(),
         contacts: points,
         profiles: vec![profile.clone()],
         trees,
         supports,
         place_s: 0.0,
         grow_s: 0.0,
+        strengthened: None,
+        shown: 0,
     })
 }
 
@@ -454,6 +499,67 @@ mod tests {
                 "{holders} tips must hold the edge that cures first"
             );
         }
+    }
+
+    #[test]
+    fn ties_reach_every_specimen_and_never_join_two_rows() {
+        let rows = [0.0, PITCH_MM];
+        let bars = ties(-RULER_OFFSET_MM, PITCH_MM, &rows);
+        let covered = |at: Vec2| {
+            bars.iter()
+                .any(|[low, high]| at.cmpge(*low).all() && at.cmple(*high).all())
+        };
+        let middles = [0.0, PITCH_MM].map(|x| rows.map(|y| Vec2::new(x, y)));
+        assert!(
+            middles.iter().flatten().all(|&at| covered(at)),
+            "a tie must run under each specimen's middle"
+        );
+        assert!(
+            covered(Vec2::new(-RULER_OFFSET_MM, 0.0)),
+            "each tie must start on the rail"
+        );
+        assert!(
+            !covered(Vec2::new(0.0, PITCH_MM / 2.0))
+                && !covered(Vec2::new(PITCH_MM, PITCH_MM / 2.0)),
+            "nothing may join two rows, or the ties close a ring on the plate"
+        );
+    }
+
+    #[test]
+    fn tied_specimens_stand_on_the_plate_as_untied_ones_do() {
+        let ball = "[[shape]]\nname = \"t\"\ntip_mm = 0.4\njoin_mm = 1.0\ncone_mm = 2.0\nbite_mm = 0.0\n\
+            [[block]]\nname = \"b\"\nbody = \"ball\"\nholders = [1]\n";
+        let bounds = |tied: bool| {
+            let mut spec: Spec = toml::from_str(ball).expect("the spec is well formed");
+            spec.tied = tied;
+            let built = build(&spec, &SupportProfile::default(), 0.05, Vec2::splat(50.0))
+                .expect("a ball on one tip always stands");
+            let mesh = coupon(&spec, &built, Vec2::splat(50.0)).expect("one block has rails");
+            let bounds = mesh.aabb().expect("a coupon has parts");
+            (bounds.mins.z, bounds.maxs.z)
+        };
+        assert_eq!(
+            bounds(true),
+            bounds(false),
+            "ties must lie on the plate under the pads, lifting nothing"
+        );
+    }
+
+    #[test]
+    fn a_coupon_pillar_flares_to_twice_its_width_at_the_foot() {
+        let shape = TipShape {
+            name: "t".to_owned(),
+            tip_mm: 0.6,
+            join_mm: 1.6,
+            cone_mm: 2.0,
+            bite_mm: 0.0,
+        };
+        let profile = profile_for(&SupportProfile::default(), &shape);
+        assert!(
+            profile.bottom.lower_diameter_mm >= 3.2,
+            "a 1.6 mm pillar must flare to 3.2 mm, so it breaks at the tip, not the foot; got {}",
+            profile.bottom.lower_diameter_mm
+        );
     }
 
     #[test]

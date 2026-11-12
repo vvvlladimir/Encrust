@@ -125,8 +125,8 @@ fn contacts_over_a_body_that_may_not_be_stood_on_are_named_unheld() {
         stood.contacts.len() - stood.standing,
         "every contact is either held or named"
     );
-    for &contact in &stood.unheld {
-        let at = stood.contacts[contact];
+    for lost in &stood.unheld {
+        let at = stood.contacts[lost.point];
         assert!(
             (14.0..=26.0).contains(&at.x) && (14.0..=26.0).contains(&at.y),
             "an unheld contact lies under the slab, 15..25 mm across, found {at}"

@@ -74,6 +74,45 @@ the risks are read this way: ADR 0164.
 The first island is where a print fails, since nothing cured over nothing comes up with
 the plate; failing that, the most stressed neck, then the hardest peel.
 
+## What each tip carries
+
+`TipLoads` reads the model alone up the stack, joining pieces that touch into parts, so
+a part is held only by the tips under it so far. A tip seats on the piece within 0.15 mm of
+it, on its own layer or within a millimetre above. A part on the plate is the plate's.
+
+Each layer's pull on a part goes through its tips read as **one section of separate discs**,
+area `A = Σ a_i`, second moments `I = Σ (a_i d_i d_iᵀ + a_i r_i² / 4)` about their centre. The
+highest stress in tip `i` is
+
+`F / A + κ·d_i + |κ| r_i + |P I⁻¹ d_i| + r_i σ_max(I⁻¹ P)`, with `κ = I⁻¹ M`
+
+`M` the pull's moment about that centre and `P = Σ F_p (J_p / 2)^½` the peel lever of each
+piece `p`, `J_p` its second moments about its own centre over its area: the film's last grip
+lies on that ellipse, far along a strip and near across it, at half the polar gyration on a
+disc or a square, as for a neck. The peel is taken the way worst for that tip. One tip is
+exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this stress. It is
+rigid-body sharing: a thin arm is not softer than the body, and the film is not followed as
+it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below.
+
+Placement mends what it reads (ADR 0422): a tip under ×1.5 is built one size heavier where
+its plan has a wider tip; at the widest it gets a neighbour, which helps only if it seats
+before the tip's worst layer. Three rounds at most, read on 0.05 mm pixels.
+
+## Calibration
+
+One print of a `support-lab --coupon` set the numbers: flat 8 × 8 × 1.2 mm plates on 1, 2, 4,
+9 or 16 tips of 0.30 to 0.80 mm, pillars 1.6 mm flaring to 3.2 mm so only tips tear, in
+Anycubic ABS-Like Pro 2 at 0.05 mm and 2.5 s on a tilting vat. Every plate read past the
+old 5 MPa that held stood at 13.0 MPa or under, every one that tore at 17.1 or over; one at
+27.7 held loose. `NECK_LIMIT_MPA` is the most that held, 13 MPa. The pull law is unchanged:
+with one resin only the limit over the pull is measured, so the limit carries it.
+
+The bench's area rule agrees once a tip holds 120 mm² of flat plate per mm² of its section
+(`--flat-ratio`), and only from two tips up: a plate on one tip tears sooner, which the
+lever reads. Plates held up to 1.2 times that and swayed at 1.5, so a tip is overloaded
+past 1.2. A 0.30 mm tip prints but breaks in the wash, so `--min-tip-mm` is 0.4.
+Reopen with a second resin, another layer height or a straight-pulling vat.
+
 ## Removing islands
 
 A fold that removes islands takes every piece touching nothing below out of its layer,

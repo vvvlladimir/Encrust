@@ -1,6 +1,6 @@
 # 0409. Orient for a clean surface: supports off what shows, read from the shape
 
-- **Status:** Proposed; the preset and its policy are superseded by 0410
+- **Status:** Proposed; the preset and its policy are superseded by 0410, step 3 is taken by 0425
 - **Date:** 2026-11-06
 
 ## Context

@@ -4,10 +4,12 @@
 mod corpus;
 mod coupon;
 mod cure;
+mod edge;
 mod export;
 mod report;
 mod shape;
 mod stand;
+mod tips;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -60,6 +62,18 @@ struct Args {
     /// holds. Slow: a full cure each.
     #[arg(long)]
     sweep: bool,
+    /// Leave tips under the wanted margin as placement put them, rather than strengthen them as
+    /// Generate does.
+    #[arg(long)]
+    no_strengthen: bool,
+    /// Build every tip an automatic profile sizes to its lightest shape, and let
+    /// strengthening size it by what it carries.
+    #[arg(long)]
+    lightest_first: bool,
+    /// Paint as the side meant to be seen every face that shows at least this much, 0 to 1,
+    /// as Clean surface reads it off the shape.
+    #[arg(long)]
+    shown_from: Option<f32>,
     /// Write each supported model and markers at what the bench names into this folder.
     #[arg(long)]
     export: Option<PathBuf>,
@@ -70,19 +84,23 @@ struct Args {
     #[arg(long)]
     baseline: Option<PathBuf>,
     /// Flat underside a tip holds per square millimetre of its section, as the coupons
-    /// measured it.
-    #[arg(long, default_value_t = 50.0)]
+    /// measured it (docs/design/analysis.md, "Calibration").
+    #[arg(long, default_value_t = 120.0)]
     flat_ratio: f32,
     /// The same for underside that leans.
     #[arg(long, default_value_t = 150.0)]
     slope_ratio: f32,
     /// The thinnest tip that holds at all, millimetres: a property of the resin and its
     /// exposure.
-    #[arg(long, default_value_t = 0.3)]
+    #[arg(long, default_value_t = 0.4)]
     min_tip_mm: f32,
     /// The furthest a flat rim may stand from every tip, millimetres.
     #[arg(long, default_value_t = 1.5)]
     rim_gap_mm: f32,
+    /// Build every tip at least this wide, millimetres, as a print would that keeps to what
+    /// holds; the profiles as shipped when not given.
+    #[arg(long)]
+    tip_floor_mm: Option<f32>,
     /// The stress a neck of green resin tears at, megapascals, once the coupon has measured
     /// it; no lower than the stack's own warning level, which it never names below.
     #[arg(long, default_value_t = NECK_LIMIT_MPA as f32)]
@@ -103,6 +121,7 @@ struct Setup {
     limits: shape::Limits,
     neck_mpa: f32,
     wall_mm: Option<f32>,
+    sizing: stand::Sizing,
 }
 
 fn main() -> Result<ExitCode> {
@@ -123,6 +142,11 @@ fn main() -> Result<ExitCode> {
         },
         neck_mpa: args.neck_mpa.max(NECK_LIMIT_MPA as f32),
         wall_mm: args.hollow_wall_mm,
+        sizing: stand::Sizing {
+            strengthening: !args.no_strengthen,
+            lightest_first: args.lightest_first,
+            shown_from: args.shown_from,
+        },
     };
     let asked = asked(&args, &catalogue)?;
     if let (Some(path), Some(spec)) = (&args.coupon, &args.coupon_spec) {
@@ -190,6 +214,13 @@ fn asked(args: &Args, catalogue: &Catalogue) -> Result<Vec<(String, SupportPlan)
             .clone();
         asked.push((format!("auto:{id}"), SupportPlan::sized(auto, catalogue)?));
     }
+    if let Some(floor_mm) = args.tip_floor_mm {
+        for (_, plan) in &mut asked {
+            for profile in plan.profiles_mut() {
+                profile.tip.contact_diameter_mm = profile.tip.contact_diameter_mm.max(floor_mm);
+            }
+        }
+    }
     Ok(asked)
 }
 
@@ -234,7 +265,10 @@ fn bench(entry: &Entry, id: &str, asked: &SupportPlan, setup: &Setup, args: &Arg
         skipped: entry.skip.clone(),
         shape: shape::Shape::default(),
         cure: CureRow::default(),
+        tips: tips::Tips::default(),
         sweep: Vec::new(),
+        strengthened: None,
+        shown: 0,
         broken: Vec::new(),
         seconds: 0.0,
         stages_s: [0.0; 3],
@@ -264,7 +298,10 @@ fn measure(
     }
     let (supported, shape, cured) = run(&posed, asked, leant, setup)?;
     row.cure = CureRow::of(&cured, setup.neck_mpa);
+    row.tips = tips::read(&supported, setup.material.layer_height_mm, setup.neck_mpa)?;
     row.stages_s = [supported.place_s, supported.grow_s, cured.seconds];
+    row.strengthened = supported.strengthened.map(Into::into);
+    row.shown = supported.shown;
     row.broken = broken(&entry.expect, &shape);
     if let Some(dir) = &args.export {
         let stem = format!("{}-{}", row.model, row.profile);
@@ -292,7 +329,12 @@ fn run(
     setup: &Setup,
 ) -> Result<(stand::Supported, shape::Shape, cure::Cured)> {
     let layer_mm = setup.material.layer_height_mm;
-    let supported = stand::supported(posed.clone(), asked, setup.wall_mm, layer_mm)?;
+    let supported = stand::supported(
+        posed.clone(),
+        asked,
+        setup.wall_mm,
+        (layer_mm, setup.sizing),
+    )?;
     let shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
     let cured = cure::cure(
         &supported.model,

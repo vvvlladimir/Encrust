@@ -171,10 +171,10 @@ pub(super) fn foot_stations(
     foot: f32,
     plate: f32,
 ) -> (f32, Vec<Station>) {
-    use core_supports::{FOOT_BEVEL, FOOT_TAPER, SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH};
+    use core_supports::{FOOT_TAPER, SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH, foot_bevel_mm};
     let shape = profile.bottom.shape;
     let rim = profile.base_radius_mm();
-    let bevel = profile.bottom.platform_thickness_mm * FOOT_BEVEL;
+    let bevel = foot_bevel_mm(profile);
     let flare = profile.flare_lower_radius_mm();
     if shape == PlatformShape::Skate {
         let lower = flare.min(rim * SKATE_WIDTH * (1.0 - SKATE_BEVEL)).max(base);

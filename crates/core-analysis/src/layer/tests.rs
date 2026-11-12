@@ -170,12 +170,44 @@ fn a_disc_gyrates_about_its_centre_as_its_radius_over_root_two() {
         let (dx, dy) = (f64::from(x) + 0.5 - 200.0, f64::from(y) + 0.5 - 200.0);
         u8::from(dx * dx + dy * dy <= 200.0 * 200.0) * 255
     });
-    let gyration = cure(&disc, pitch).pieces()[0].gyration_mm;
+    let gyration = cure(&disc, pitch).pieces()[0].gyration_mm();
     let expected = 10.0 / std::f32::consts::SQRT_2;
     assert!(
         (gyration - expected).abs() / expected < 0.01,
         "{gyration} against R / sqrt(2) = {expected}"
     );
+}
+
+#[test]
+fn a_strip_spreads_along_its_length_and_not_across_it() {
+    // A w by L rectangle about its centre: L^2 / 12 along, w^2 / 12 across, nothing mixed.
+    let spread = cure(&rectangle(120, 6), UNIT).pieces()[0].spread_mm2;
+    let want = [120.0 * 120.0 / 12.0, 0.0, 6.0 * 6.0 / 12.0];
+    for (got, want) in spread.into_iter().zip(want) {
+        assert!(
+            (got - want).abs() < 1e-3 * want.max(1.0),
+            "{spread:?} against {want:?}"
+        );
+    }
+}
+
+#[test]
+fn a_strip_on_the_diagonal_mixes_its_spread() {
+    // The same strip turned 45 degrees: (L^2 + w^2) / 24 on each axis, (L^2 - w^2) / 24 mixed.
+    let (length, width) = (200.0_f64, 10.0_f64);
+    let diagonal = paint(200, 200, |x, y| {
+        let (dx, dy) = (f64::from(x) + 0.5 - 100.0, f64::from(y) + 0.5 - 100.0);
+        let (along, across) = ((dx + dy) / 2.0_f64.sqrt(), (dx - dy) / 2.0_f64.sqrt());
+        u8::from(along.abs() <= length / 2.0 && across.abs() <= width / 2.0) * 255
+    });
+    let [xx, xy, yy] = cure(&diagonal, UNIT).pieces()[0].spread_mm2.map(f64::from);
+    let (both, mixed) = (
+        (length.powi(2) + width.powi(2)) / 24.0,
+        (length.powi(2) - width.powi(2)) / 24.0,
+    );
+    for (got, want) in [(xx, both), (yy, both), (xy, mixed)] {
+        assert!((got - want).abs() < 0.03 * want, "{got} against {want}");
+    }
 }
 
 #[test]
@@ -186,4 +218,23 @@ fn the_runs_of_a_piece_are_its_own_pixels() {
     let lit: Vec<bool> = second.to_mask().pixels().iter().map(|p| *p > 0).collect();
     let expected: Vec<bool> = (0..12).map(|i| i % 6 >= 3).collect();
     assert_eq!(lit, expected);
+}
+
+#[test]
+fn a_point_finds_the_nearest_piece_within_its_reach_and_no_further() {
+    let cured = cure(
+        &paint(12, 3, |x, _| u8::from(!(3..8).contains(&x)) * 255),
+        UNIT,
+    );
+    assert_eq!(
+        cured.piece_near([1.5, 1.5], 0.5),
+        Some(0),
+        "inside the first"
+    );
+    assert_eq!(
+        cured.piece_near([6.0, 1.5], 3.0),
+        Some(1),
+        "2.5 from the second, 3.5 from the first"
+    );
+    assert_eq!(cured.piece_near([5.5, 1.5], 1.0), None, "3 from either");
 }

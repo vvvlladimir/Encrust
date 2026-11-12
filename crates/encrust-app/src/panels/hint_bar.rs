@@ -120,7 +120,9 @@ fn pairs(window: &Window, keys: &Keys) -> Option<Vec<(String, String)>> {
             };
             vec![click(first), remove()]
         }
-        Tool::Position if tools.orient.paints_shown() => brush(keys, tr!("hint-paint-shown")),
+        tool if tools.orient.paints_shown(tool, tools.supports.placing) => {
+            brush(keys, tr!("hint-paint-shown"))
+        }
         _ if moves_by_hand(window) && !window.doc.scene.selection().is_empty() => {
             vec![(keys.drag_with(&keys.shift), tr!("hint-gizmo-steps"))]
         }
@@ -138,6 +140,7 @@ fn pairs(window: &Window, keys: &Keys) -> Option<Vec<(String, String)>> {
         Tool::Supports => vec![
             click(tr!("hint-supports-pick")),
             (keys.drag.clone(), tr!("hint-supports-carry")),
+            (keys.drag_with(&keys.alt), tr!("hint-supports-level")),
             (keys.click_with(&keys.shift), tr!("hint-supports-add")),
         ],
         Tool::Paint => match tools.supports.placing {

@@ -5,9 +5,9 @@ use std::f64::consts::PI;
 
 use crate::stack::RiskKind;
 
-/// Stress a neck of green resin is taken to fail at, megapascals. Not measured: a warning
-/// level.
-pub const NECK_LIMIT_MPA: f64 = 5.0;
+/// Stress a neck of green resin fails at, megapascals: the most a printed tip held, one resin
+/// at 0.05 mm (see docs/design/analysis.md, "Calibration").
+pub const NECK_LIMIT_MPA: f64 = 13.0;
 /// The share of the limit a held neck is brought to: tips cure a little under their drawn area.
 const NECK_MARGIN: f64 = 0.8;
 /// The most supports a single neck is given.
@@ -19,6 +19,12 @@ pub(crate) fn neck_stress_mpa(force_n: f64, lever_mm: f64, neck_mm2: f64) -> f64
     let radius_mm = (neck_mm2 / PI).sqrt();
     let section_modulus = PI * radius_mm.powi(3) / 4.0;
     force_n / neck_mm2 + force_n * lever_mm / section_modulus
+}
+
+/// What a support tip of `tip_mm2` holds in tension, newtons: the limit a neck fails at, with the
+/// margin a held neck is brought to.
+pub fn tip_holds_n(tip_mm2: f32) -> f64 {
+    f64::from(tip_mm2) * NECK_LIMIT_MPA * NECK_MARGIN
 }
 
 /// How many supports of tip `tip_mm2` around the piece of `lever` bring its neck under the

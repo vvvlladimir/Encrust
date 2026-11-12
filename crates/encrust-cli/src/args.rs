@@ -3,7 +3,7 @@
 use std::num::NonZeroU8;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use core_engine::SupportPlan;
 use core_format::ExposureRange;
 use core_geometry::{
@@ -22,6 +22,7 @@ use crate::profiles::Selection;
 use crate::raster_report::parse_grey_range;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
 use crate::sliced_file::CtbRevision;
+use crate::supports::{MergePoints, merge_points};
 
 /// Which printer to check against and which resin to expose with.
 #[derive(Debug, Default, clap::Args)]
@@ -272,6 +273,11 @@ pub struct SupportArgs {
     /// Hold up the cavity --hollow leaves as well as the outside.
     #[arg(long)]
     pub support_cavity: bool,
+
+    /// Merge the supports whose contacts are nearest these points into one, as the window's
+    /// Merge into one does: X,Y,Z;X,Y,Z, plate mm as `--json` lists them. Repeatable.
+    #[arg(long = "merge-supports", value_name = "X,Y,Z;X,Y,Z", value_parser = merge_points, allow_hyphen_values = true)]
+    pub merge_supports: Vec<MergePoints>,
 }
 
 impl SupportArgs {
@@ -287,8 +293,16 @@ impl SupportArgs {
                 .map(crate::profiles::plan_of)
                 .transpose()?
         };
+        if plan.is_none() && !self.merge_supports.is_empty() {
+            bail!("--merge-supports merges the supports --supports stands, and none is asked for");
+        }
         Ok(plan.map(|plan| SupportPlan {
             cavity: self.support_cavity,
+            merges: self
+                .merge_supports
+                .iter()
+                .map(|merge| merge.0.clone())
+                .collect(),
             ..plan
         }))
     }

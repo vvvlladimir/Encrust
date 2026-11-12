@@ -146,6 +146,7 @@ fn placing(c: &mut Criterion) {
                 &[],
                 &[],
                 None,
+                None,
                 &mut |_| true,
             )
         });
@@ -170,6 +171,7 @@ fn placing(c: &mut Criterion) {
                 &[],
                 &[],
                 None,
+                None,
                 &mut |_| true,
             )
         });
@@ -188,6 +190,7 @@ fn placing(c: &mut Criterion) {
                 &[],
                 &[],
                 None,
+                None,
                 &mut |_| true,
             )
         });
@@ -204,6 +207,7 @@ fn placing(c: &mut Criterion) {
                 None,
                 &[],
                 &[],
+                None,
                 None,
                 &mut |_| true,
             )
@@ -222,6 +226,7 @@ fn placing(c: &mut Criterion) {
                 None,
                 &[],
                 &[],
+                None,
                 None,
                 &mut |_| true,
             )
