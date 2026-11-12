@@ -159,6 +159,23 @@ impl ModelSupports {
         }
     }
 
+    /// Puts `tree` (model space), what [`crate::merged`] built, in place of the frozen supports
+    /// `taken`; answers its index in [`ModelSupports::frozen`].
+    pub fn replace_frozen(&mut self, taken: &[usize], tree: SupportTree) -> usize {
+        let mut taken = taken.to_vec();
+        taken.sort_unstable();
+        taken.dedup();
+        for frozen in taken.iter().rev() {
+            if *frozen < self.frozen.len() {
+                self.frozen.remove(*frozen);
+            }
+        }
+        self.frozen.push(tree);
+        // What grew standing on what went grows again (ADR 0444).
+        self.points_changed();
+        self.frozen.len() - 1
+    }
+
     /// Takes `parts` of a frozen support away with what they hold up, all of it if nothing is left
     /// to hold or its trunk or foot was named; returns whether it is still there.
     pub fn remove_parts(&mut self, frozen: usize, parts: &[Part]) -> bool {

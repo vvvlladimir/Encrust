@@ -24,6 +24,7 @@ mod speculate;
 pub(crate) use alone::grown_alone;
 pub(crate) use carriers::{Carrier, meeting_on};
 use carriers::{Carriers, THICKER_BY_MM};
+pub(crate) use merge::{lower, meeting_point};
 use rescue::rescue;
 use small::tidy_small_pillars;
 use sound::{only_sound, stand_small_pillars_on_supports};
@@ -314,7 +315,7 @@ impl<'a> Forest<'a> {
 
 /// Ground a leaning trunk (a knee or a strut into a thicker support) covers per mm it descends:
 /// the profile's branch angle, never past 45 degrees (ADR 0249).
-fn lean_per_drop(profile: &SupportProfile) -> Scalar {
+pub(crate) fn lean_per_drop(profile: &SupportProfile) -> Scalar {
     profile.branching.reach_per_drop().min(MAX_LEAN_PER_DROP)
 }
 

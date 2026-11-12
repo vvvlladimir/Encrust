@@ -42,8 +42,8 @@ pub use branch::{grow, grow_beside};
 pub use clearances::Clearances;
 pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
 pub use edit::{
-    Carried, Refused, allowed, carried, carried_held, eased, fits, followed, on_model, standing_on,
-    tip_carried, with_riders,
+    Carried, Refused, allowed, carried, carried_held, eased, fits, followed, merged, on_model,
+    standing_on, tip_carried, with_riders,
 };
 pub use generate::generate_supports;
 pub use group::Profiles;

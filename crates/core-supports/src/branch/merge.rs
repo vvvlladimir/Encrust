@@ -17,7 +17,7 @@ pub(super) const DROP_STEP_MM: Scalar = 1.0;
 
 /// The drop a refused merge at `drop_mm` is tried again at: doubling, so a pair standing
 /// `h` mm up is retried about log₂ h times before it meets the plate.
-fn lower(drop_mm: Scalar) -> Scalar {
+pub(crate) fn lower(drop_mm: Scalar) -> Scalar {
     (2.0 * drop_mm).max(DROP_STEP_MM)
 }
 
@@ -69,7 +69,7 @@ pub(super) fn dropped(front: &Front, drop_mm: Scalar) -> Vec3 {
 
 /// The highest point both `a` and `b` reach within `reach_per_drop`, the ground a strut covers
 /// per mm of descent, solved in the vertical plane through them.
-pub(super) fn meeting_point(a: Vec3, b: Vec3, reach_per_drop: Scalar) -> Vec3 {
+pub(crate) fn meeting_point(a: Vec3, b: Vec3, reach_per_drop: Scalar) -> Vec3 {
     let offset = Vec2::new(b.x - a.x, b.y - a.y);
     let ground = offset.length();
     if ground < SAME_PLACE_MM {

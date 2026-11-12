@@ -27,14 +27,14 @@ pub(super) fn draw_refusal(ui: &egui::Ui, window: &Window, viewport: egui::Rect)
         figure_plate(
             &painter,
             cursor + REASON_OFFSET,
-            reason(why),
+            refusal_reason(why),
             theme::colors().danger,
         );
     }
 }
 
 /// What `why` says to the hand.
-fn reason(why: Refused) -> String {
+pub(crate) fn refusal_reason(why: Refused) -> String {
     match why {
         Refused::Collides => tr!("supports-refused-collides"),
         Refused::Leans => tr!("supports-refused-leans"),

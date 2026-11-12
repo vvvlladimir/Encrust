@@ -26,6 +26,7 @@ mod overlays;
 mod paint;
 mod picking;
 mod refusal;
+pub(super) use refusal::refusal_reason;
 mod repair;
 mod support_ghost;
 mod supports;

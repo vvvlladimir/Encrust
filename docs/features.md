@@ -570,6 +570,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
+- Pick two or more supports of one model and **Merge into one** joins them into a single tree
+  on one trunk, each tip kept; where the model is in the way or the trunk has nowhere to stand,
+  the supports stay as they were and the stage says why.
   Shift-click adds a part to what is picked, or takes it back out. Drag to move what is
   picked the way the cursor goes on screen, the point you took staying under the cursor, or
   hold Alt to move it level with the plate. The cursor turns to a hand over a part you can

@@ -8,6 +8,7 @@ use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as, sizes};
+use crate::panels::viewport_panel::refusal_reason;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::Doc;
 use crate::status::Status;
@@ -332,6 +333,17 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         let tip = tr!("supports-remove-these");
         remove = bin_button(ui, theme::BUTTON_H, SquareLook::Quiet, &tip, true);
     });
+    let one_model = supports
+        .first()
+        .map(|(id, _)| *id)
+        .filter(|id| supports.len() >= 2 && supports.iter().all(|(other, _)| other == id));
+    if let Some(id) = one_model {
+        ui.add_space(theme::BUTTON_GAP);
+        let width = ui.available_width();
+        if compact_button(ui, &tr!("supports-merge-these"), width).clicked() {
+            merge(window, id, &supports);
+        }
+    }
     if regroup {
         let active = window.tools.supports.active;
         for (id, frozen) in &supports {
@@ -367,6 +379,38 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         }
         settle_riders(window, &supports);
         window.tools.supports.picked.clear();
+    }
+}
+
+/// Joins the picked supports of model `id` into one tree, or says on the stage why not (ADR 0445).
+fn merge(
+    window: &mut Window,
+    id: ObjectId,
+    picked: &std::collections::BTreeSet<(ObjectId, usize)>,
+) {
+    let Some(object) = window.doc.scene.get(id) else {
+        return;
+    };
+    let frozen: Vec<usize> = picked.iter().map(|(_, frozen)| *frozen).collect();
+    let table = window.tools.supports.table_for(object);
+    let Some(profiles) = core_supports::Profiles::new(&table) else {
+        return;
+    };
+    let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+    let placed = object.support_placed().blocking(keep_out.as_ref());
+    let merged = core_supports::merged(object.supports.frozen(), &frozen, &placed, profiles);
+    match merged {
+        Ok(tree) => {
+            if let Some(object) = window.doc.scene.get_mut(id) {
+                object.supports.replace_frozen(&frozen, tree);
+            }
+            settle_riders(window, picked);
+            window.tools.supports.picked.clear();
+        }
+        Err(why) => {
+            let why = refusal_reason(why);
+            window.machine.status = Status::Info(tr!("supports-merge-refused", why = why));
+        }
     }
 }
 
